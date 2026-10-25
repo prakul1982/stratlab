@@ -6361,12 +6361,12 @@ def market_status(region: str) -> dict:
 @app.post("/admin/audit/market")
 def admin_market_audit_set(req: MarketAuditReq, _=Depends(admin.admin_profile)):
     """Start or pause the whole-market audit, reset it and check every company again from nothing, re-read the
-    exchange's list now, re-check the companies not checked yet or one company, or switch the daily pass."""
+    exchange's list now, re-check the companies not checked yet or one company, or switch the monthly check."""
     m = market_for(req.region)
     if req.on is not None:
         m.set_enabled(req.on)
-    if req.daily is not None:
-        m.set_daily(req.daily)
+    if req.monthly is not None:
+        m.set_monthly(req.monthly)
     if req.reset:                     # every result cleared; the list read again so it starts from today's market
         m.reset()
         threading.Thread(target=m.refresh_list, kwargs={"force": True}, daemon=True).start()

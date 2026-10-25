@@ -869,7 +869,8 @@ RETRY_GAP = 1
 RETRY_GAP_MAX = 24             # ...doubled (up to a day) each time a whole batch is turned away again
 TRANSIENT_AREAS = {"Company page", "Prices", "Audit", "New listing"}      # errors from a source being unreachable, not from the data
 BLOCKING_AREAS = {"Company page", "Audit"}                 # the whole check failed: slow down. Documents alone don't
-NEW_DAYS = 30                  # listed (or first seen on the list) within this many days: checked, then again every day
+NEW_DAYS = 30                  # listed (or first seen on the list) within this many days: checked once if not yet
+NEW_DAILY_DAYS = 10            # ...and again every day for this many days of its listing: a handful of companies, so it stays light
 LIST_EVERY = 6 * 3600          # re-read the exchange's list of companies every six hours, so a listing is found the day it lists
 NEW_BULK = 40                  # more than this many companies new to the list at once is the list changing, not listings (MS1-005)
 LIST_MIN = 100                 # ...checked once the list is a market's, not a handful of companies
@@ -940,14 +941,9 @@ def _retry_forever(row: dict) -> bool:
 
 
 def india_tz():
-    """India time: the daily pass is a new one at midnight there."""
+    """India time: the monthly check runs on the 1st there."""
     from zoneinfo import ZoneInfo
     return ZoneInfo("Asia/Kolkata")
-
-
-def next_day_start(now: datetime) -> str:
-    """The day after `now`, as "2026-10-26"."""
-    return (now.date() + timedelta(days=1)).isoformat()
 
 
 def next_month_start(now: datetime) -> str:
@@ -967,13 +963,13 @@ class AuditNotLoaded(RuntimeError):
 class MarketAudit:
     """Every listed company, checked in the background. The exchange's list is read every six hours; a company that
     listed (or first showed up on the list) in the last NEW_DAYS days is checked the day it appears and again every day
-    of its first weeks, a delisted company is dropped, and a check a source turned away is tried again in small hourly
-    batches (slower while the source keeps refusing). A pass over every company starts each day (India time), or when
-    started by hand, taking the problems still standing first and then whoever was checked longest ago; a reset clears
-    every result and starts one from nothing. Each result is saved as it finishes, so a restart carries on where it
-    stopped, and the day's pass is marked in the database so a restart doesn't repeat it. Gives way while a hand-started
-    audit runs, and waits while the price feed is offline (`ready_fn`): a company checked then would only come back
-    "not checked yet"."""
+    of its first 10 days, a delisted company is dropped, and a check a source turned away is tried again in small hourly
+    batches (slower while the source keeps refusing). A full check of every company runs on the 1st of each month (India
+    time), or when started by hand: companies never checked first, then the problems still standing, then whoever was
+    checked longest ago; a reset clears every result and starts one from nothing. Each result is saved as it finishes,
+    so a restart carries on where it stopped, and the month's run is marked in the database so a restart doesn't repeat
+    it. Gives way while a hand-started audit runs, and waits while the price feed is offline (`ready_fn`): a company
+    checked then would only come back "not checked yet"."""
 
     def __init__(self, list_fn, check_fn, busy_fn=lambda: False, pause: float = 3.0, key: str = MARKET, ready_fn=lambda: True,
                  date_fn=None):
@@ -1044,7 +1040,7 @@ class MarketAudit:
 
     def reset(self):
         """Clear every stored result and start a full check from nothing, switched on. The list stays (the caller
-        re-reads it); the daily marker stays, so this doesn't start another pass today."""
+        re-reads it); the monthly marker stays, so this doesn't move the next monthly check."""
         import json
         with self.lock:
             self._load()
@@ -1067,32 +1063,29 @@ class MarketAudit:
         if not started:
             self.start_full(everything=False)
 
-    def set_daily(self, on: bool):
+    def set_monthly(self, on: bool):
         with self.lock:
             self._load()
-            self.state["daily"] = bool(on)
+            self.state["monthly"] = bool(on)
             self._save("state")
 
-    def _daily_on(self) -> bool:
-        return bool(self.state.get("daily", self.state.get("monthly", True)))      # the switch was once "monthly"
-
-    def daily(self, now: datetime | None = None) -> bool:
-        """Every day (India time), start a pass over every company, once: the day it ran is saved, so a restart that day
-        doesn't start it again. A pass takes the day's problems first and then whoever was checked longest ago, and one
-        that isn't through by the next day carries on where it was (MS1-004). True when it started one."""
-        day = (now or datetime.now(india_tz())).strftime("%Y-%m-%d")
+    def monthly(self, now: datetime | None = None) -> bool:
+        """On the 1st of each month (India time), start a full check of every company, once: the month it ran is
+        saved, so a restart that day doesn't start it again. The very first time it only marks this month, so a
+        deploy mid-month doesn't start one straight away. True when it started one."""
+        month = (now or datetime.now(india_tz())).strftime("%Y-%m")
         with self.lock:
             self._load()
-            if not self._daily_on():
+            if not self.state.get("monthly", True):
                 return False
-            last = self.state.get("daily_run")
-            if (last or "") >= day:
+            last = self.state.get("monthly_run")
+            if last and last >= month:
                 return False
-            self.state["daily_run"] = day
-            if not last and not self.state.get("monthly_run"):     # an audit that has only just begun: its first full check covers today
+            self.state["monthly_run"] = month
+            if not last:
                 self._save("state")
                 return False
-            self._begin_full(everything=True)       # (an audit run monthly until now starts its first daily pass at once)
+            self._begin_full(everything=True)
             return True
 
     def _full_left(self) -> list[str]:
@@ -1103,8 +1096,8 @@ class MarketAudit:
             return sorted(s for s in self.listing if _transient(self.rows.get(s) or {}) and (self.rows[s].get("at") or "") < since)
         if not self.state.get("full_all", True):
             return sorted(s for s in self.listing if not (self.rows.get(s) or {}).get("at"))
-        # never checked first, then yesterday's problems (oldest first: they show whether a fix worked), then everyone else
-        # by how long ago they were checked
+        # never checked first, then the problems still standing (oldest first: they show whether a fix worked), then
+        # everyone else by how long ago they were checked
         rest = [s for s in self.listing if ((self.rows.get(s) or {}).get("at") or "") < since]
         return sorted(rest, key=lambda s: (bool((self.rows.get(s) or {}).get("at")), not _open(self.rows.get(s) or {}),
                                            (self.rows.get(s) or {}).get("at") or "", s))
@@ -1180,6 +1173,14 @@ class MarketAudit:
         with self.lock:
             return self._is_new(sym, datetime.now(timezone.utc).date())
 
+    def _listed_days(self, sym: str, today) -> int | None:
+        """Days since `sym` listed (or first showed up on the list); None when unknown."""
+        info = self.listing.get(sym) or {}
+        try:
+            return (today - datetime.fromisoformat(info.get("listed") or info.get("seen")).date()).days
+        except (TypeError, ValueError):
+            return None
+
     def _is_new(self, sym: str, today) -> bool:
         info = self.listing.get(sym) or {}
         d = info.get("listed") or info.get("seen")
@@ -1238,7 +1239,7 @@ class MarketAudit:
             at = (self.rows.get(sym) or {}).get("at")
             if not at:                                   # a listing is checked the day it appears...
                 new.append((info.get("listed") or info.get("seen") or "", sym))
-            elif at[:10] < today.isoformat():            # ...and again each day of its first weeks (MS1-006)
+            elif at[:10] < today.isoformat() and (self._listed_days(sym, today) or 0) <= NEW_DAILY_DAYS:     # ...and again each day of its first 10 (MS1-006)
                 again.append((info.get("listed") or info.get("seen") or "", sym))
         first = [s for _, s in sorted(new, reverse=True)] + [s for _, s in sorted(again, reverse=True)] + self._retries_now(now)
         taken = set(first)
@@ -1299,9 +1300,9 @@ class MarketAudit:
     def step(self) -> str | None:
         """Check one due company; returns its symbol, or None when there's nothing to do right now."""
         try:
-            self.daily()
+            self.monthly()
         except Exception as e:
-            print("market audit: couldn't start the daily check:", e)
+            print("market audit: couldn't start the monthly check:", e)
         with self.lock:
             self._load()
             if not self.state.get("enabled"):
@@ -1398,7 +1399,7 @@ class MarketAudit:
             enabled = bool(self.state.get("enabled"))
             r = self._retry()
             waiting = sum(1 for x in rows if _transient(x))
-            on = self._daily_on()
+            on = bool(self.state.get("monthly", True))
             ages = _ages(rows, now)
             return {**{k: self.state.get(k) for k in ("enabled", "list_at", "list_tried_at", "list_error", "reset_at")},
                     "paused": "off" if not enabled else "busy" if busy else "offline" if offline else "cooling" if self.cool else None,
@@ -1407,8 +1408,8 @@ class MarketAudit:
                              "done_at": self.state.get("full_done"), "left": left,
                              "checked": len(self.listing) - left if self.state.get("full_since") else None,
                              "everything": bool(self.state.get("full_all", True)), "pending_only": bool(self.state.get("full_pending"))},
-                    "daily": {"on": on, "last": self.state.get("daily_run"),
-                              "next": next_day_start(datetime.now(india_tz())) if on else None},
+                    "monthly": {"on": on, "last": self.state.get("monthly_run"),
+                                "next": next_month_start(datetime.now(india_tz())) if on else None},
                     "ages": ages,
                     "retry": {"waiting": waiting, "due": len(self.waiting(now)), "next": r.get("next"),
                               "gap_hours": r.get("gap") or RETRY_GAP, "batch": RETRY_BATCH, "last": r.get("last")},

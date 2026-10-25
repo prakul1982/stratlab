@@ -102,7 +102,7 @@ interface MarketState {
   paused?: "off" | "busy" | "offline" | "cooling" | "loading" | null; cool_minutes?: number; rate_per_hour?: number;
   list_at: string | null; list_error: string | null; reset_at?: string | null;
   full?: { running: boolean; since: string | null; done_at: string | null; left: number; checked: number | null; everything?: boolean; pending_only?: boolean };
-  daily?: { on: boolean; last: string | null; next: string | null };
+  monthly?: { on: boolean; last: string | null; next: string | null };
   /** how long the findings that aren't facts have stood: counts by age, and the oldest in days (MS1-004) */
   ages?: { open: number; today: number; days_1_2: number; days_3_7: number; over_a_week: number; oldest_days: number };
   retry?: { waiting: number; due: number; next: string | null; gap_hours: number; batch: number };
@@ -129,8 +129,9 @@ const PAUSED: Record<"off" | "busy" | "offline" | "cooling" | "loading", string>
 };
 
 /** Every company listed in India (NSE, plus those only on BSE) or filing with the SEC, checked in the background
- * while started: new listings first (the day they list, and every day of their first weeks), a pass over every company
- * each day (the problems still standing first), and a reset to check everything again from nothing. */
+ * while started: new listings first (the day they list, and every day of their first 10 days), a full check of every
+ * company on the 1st of each month (never-checked companies and the problems still standing first), and a reset to check
+ * everything again from nothing. */
 export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
   const { fail } = useApp();
   const us = region === "US";
@@ -157,9 +158,9 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
     <Card label={`Whole market: ${name}`}>
       <CardHead title={`Whole market: ${name}`}
         info={<>{us
-          ? "Every company that files with the SEC (common stock only: preferred shares, warrants, units and rights are left out). The SEC's list is read every six hours; a new company is checked the day it appears."
+          ? "Every company that files with the SEC (common stock only: preferred shares, warrants, units and rights are left out). The SEC's list is read every six hours; a new company is checked the day it appears and each day of its first 10 days."
           : "Every company listed in India: all of NSE, plus those listed only on BSE (shown as BSE: and their code). The lists are read every six hours; a new listing is checked the day it appears and delisted companies drop off."}
-          {" "}Every company is checked again every day, the problems still standing first, and a new listing each day of its first weeks. A check a source turned away is tried again in small batches every hour.</>}
+          {" "}A full check of every company runs on the 1st of each month, the problems still standing first; between those, new listings are checked the day they appear and each day of their first 10 days. A check a source turned away is tried again in small batches every hour.</>}
         actions={m && !m.loading ? (
           <>
             <Badge tone={m.enabled && !m.paused ? "live" : "warn"}>{m.enabled ? (m.paused ? "Waiting" : "Running") : "Paused"}</Badge>
@@ -207,8 +208,8 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
             <button type="button" className="btn quiet sm" disabled={busy} onClick={() => send({ read_list: true })}>Read the list now</button>
           </div>
           <div className="k-row">
-            <CheckField label="Check every company every day" checked={!!m.daily?.on} disabled={busy} onChange={(on) => send({ daily: on })} />
-            <span className="k-small k-muted">{m.daily?.on && m.daily.next ? `Next pass starts ${dayMonth(m.daily.next)}` : "Only new listings, until you reset"}</span>
+            <CheckField label="Full re-check on the 1st of each month" checked={!!m.monthly?.on} disabled={busy} onChange={(on) => send({ monthly: on })} />
+            <span className="k-small k-muted">{m.monthly?.on && m.monthly.next ? `Next full check: ${dayMonth(m.monthly.next)}` : "Only new listings, until you reset"}</span>
           </div>
           {!!m.ages?.open && (
             <p className="k-small" data-testid="audit-ages">
