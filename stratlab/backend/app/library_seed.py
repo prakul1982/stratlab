@@ -109,8 +109,7 @@ STRATEGIES: dict[str, dict] = {
         "body": {"entry": [_c(PRICE, "xa", {"t": "supertrend", "p": 10, "m": 3})],
                  "exit": [_c(PRICE, "xb", {"t": "supertrend", "p": 10, "m": 3})], "risk": {"sl": 12}}},
 }
-NOTE = ("Run by StratLab on its own rules, with its own tests, on every stock in the group over the period shown. The verdict is "
-        "what the tests found about the past; it says nothing about the future.")
+NOTE = library.SEED_NOTE        # said once on the library page, no longer at the end of every entry's description (DA-037)
 
 
 class SeedError(Exception):
@@ -190,7 +189,7 @@ def publish(slug: str, spec: dict, market: str, preset: dict, rec: dict, group: 
     old = library.load(eid)
     nb = {"id": None, "name": f"{spec['name']} · {preset['name']}",
           "question": f"How did {spec['name']} do on {preset['name']}?", "group": group}
-    e = library.entry(nb, rec, OWNER, AUTHOR, f"{spec['text']} {risk_text(spec, group)} {NOTE}", entry_id=eid)
+    e = library.entry(nb, rec, OWNER, AUTHOR, f"{spec['text']} {risk_text(spec, group)}", entry_id=eid)
     e["verdict"]["summary"] = plain(e["verdict"].get("summary") or "")
     e.update(official=True, badge=BADGE, seed={"slug": slug, "version": SEED_VERSION, "universe": preset["id"], "market": market,
                                               "days": rec.get("days"), "from": (rec.get("range") or {}).get("from"),
@@ -227,6 +226,23 @@ def seed(registry, only: list[str] | None = None, now: str | None = None, sleep=
 
 def seeded() -> list[dict]:
     return [e for e in library.all_entries(everything=True) if e.get("official")]
+
+
+STALE_DAYS = 7
+
+
+def stale(entries: list[dict], now: datetime | None = None) -> bool:
+    """Whether StratLab's own entries were last tested more than a week ago (DA-038: "tested … to 13 Oct" on 24 Oct, and a
+    copy re-tested to that day's prices didn't match its card). An entry with no dates says nothing either way."""
+    ends = [str((e.get("range") or {}).get("to") or "")[:10] for e in entries]
+    ends = [d for d in ends if d]
+    if not ends:
+        return False
+    try:
+        last = datetime.fromisoformat(max(ends)).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return False
+    return ((now or datetime.now(timezone.utc)) - last).days > STALE_DAYS
 
 
 if __name__ == "__main__":          # python -m app.library_seed

@@ -256,17 +256,22 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
         </div>
       )}
       {shown.length === 0 && <EmptyState title={`No notebooks match "${q}"`}>Try a stock symbol or a word from the question.</EmptyState>}
-      <div className="k-cards">
+      {/* each card: the notebook's name as its title, its question in two lines under it (whole in its tooltip), what it was
+          last tested on, a pin that says what it does, and one height per row (DA-032: the long question in large serif was cut
+          mid-quote, the name was tiny caps below, the pin had no words and the cards' heights differed) */}
+      <div className="k-cards nb-cards">
         {shown.map((n) => {
-          const inst = n.instrument && "symbol" in n.instrument ? n.instrument.symbol : "No instrument yet";
+          const inst = n.instrument && "symbol" in n.instrument ? n.instrument.symbol : null;
           const count = n.summary?.experiments ?? 0;
+          const question = n.question && n.question.trim() !== n.name.trim() ? n.question : "";
           return (
             <Card key={n.id} label={n.name}>
-              <CardHead title={<Link to={`/n/${n.id}`} className="k-title-link">{n.question || n.name}</Link>}
+              <CardHead title={<Link to={`/n/${n.id}`} className="k-title-link">{n.name}</Link>}
                 actions={<button type="button" className={`k-pin${n.pinned ? " on" : ""}`} aria-pressed={!!n.pinned} aria-label={n.pinned ? `Unpin ${n.name}` : `Pin ${n.name} to the top`}
-                  title={n.pinned ? "Unpin" : "Pin to the top"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /></button>} />
-              <span className="k-eyebrow">{n.name} · {inst}</span>
-              <div className="k-spread">
+                  title={n.pinned ? "Unpin it" : "Keep it at the top of the list"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /><span aria-hidden="true">{n.pinned ? "Pinned" : "Pin"}</span></button>} />
+              {question && <p className="k-small k-muted nb-question" title={question}>{question}</p>}
+              <span className="k-note">{inst ? `Tested on ${inst}` : "No instrument picked yet"}</span>
+              <div className="k-spread k-push">
                 <VerdictBadge v={n.summary?.last_verdict} />
                 <span className="k-note">{count} experiment{count === 1 ? "" : "s"} · {ago(n.updated_at)}</span>
               </div>

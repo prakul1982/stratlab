@@ -55,7 +55,9 @@ test("experiment page: one next-step block, counts that add up, forex decimals a
   const unseen = exp.verdict.checks.find((c: { id: string }) => c.id === "unseen").data;
   expect(unseen.built_trades + unseen.unseen_trades).toBe(closed);
 
-  // forex quoted to 5 decimals, and no volume for spot forex
+  // forex quoted to 5 decimals, and no volume for spot forex (a phone's short trade cards show every figure on a tap, DA-027)
+  const full = trades.getByRole("radio", { name: "Every detail" });
+  if (await full.isVisible()) await full.click();
   await expect(trades.locator("td").filter({ hasText: /^\$\d\.\d{5}$/ }).first()).toBeVisible();
   const chart = page.locator(".pc-foot").first();
   await expect(chart.getByRole("button", { name: "Vol" })).toHaveCount(0);

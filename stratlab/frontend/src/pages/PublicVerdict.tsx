@@ -24,22 +24,50 @@ interface Snapshot {
     checks: { id: string; title: string; status: CheckStatus; detail: string }[] };
   stats: Stats; series: { t: string[]; equity: (number | null)[]; buy_hold: (number | null)[]; split: number | null; indexed?: boolean };
   group: { name: string; max_open: number; members: { symbol: string; trades: number; win: number | null; buy_hold: number | null }[] } | null;
+  /** the link keeps its own card picture (/v/<token>.png) */
+  image?: boolean;
 }
 type Member = NonNullable<Snapshot["group"]>["members"][number];
 
 const d = (iso: string) => { const t = asDate(iso); return `${monthShort(t)} ${t.getFullYear()}`; };
+
+/** True the first time this tab finds a link gone (then it is sent to the shared address's real 404), false after. */
+function goneOnce(token: string): boolean {
+  try {
+    const k = `stratlab.gone.${token}`;
+    if (sessionStorage.getItem(k)) return false;
+    sessionStorage.setItem(k, "1");
+    return true;
+  } catch { return false; }       // no storage: say it here instead of risking a loop
+}
 
 /** A verdict someone shared: readable without an account, with no rules and no owner details. */
 export function PublicVerdict({ token }: { token: string }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [gone, setGone] = useState<string | null>(null);
   useEffect(() => {
-    publicGet<Snapshot>(`/public/v/${encodeURIComponent(token)}`).then(setSnap).catch((e: ApiError) => { setGone(e.message); document.title = "Verdict not available · StratLab"; });
+    publicGet<Snapshot>(`/public/v/${encodeURIComponent(token)}`).then(setSnap).catch((e: ApiError) => {
+      // a link turned off (or never made) goes to the shared address itself, which answers with a real 404 (DA-035: this page
+      // said "isn't available" with a 200); once per link, so a stale copy of that address can never send it round in a loop
+      if (e.status === 404 && goneOnce(token)) { location.replace(`/v/${encodeURIComponent(token)}`); return; }
+      setGone(e.message); document.title = "Verdict not available · StratLab";
+    });
   }, [token]);
 
   const v = snap?.verdict;
   const cur = snap?.instrument.currency || (snap?.instrument.market === "IN" ? "INR" : "");
-  useEffect(() => { if (snap) document.title = `${snap.verdict.headline} ${snap.name} · StratLab`; }, [snap]);
+  useEffect(() => {
+    if (!snap) return;
+    document.title = `${snap.verdict.headline} ${snap.name} · StratLab`;
+    // the address bar shows the shared address, whose preview is this verdict's own card: a copy of /verdict/… previewed as the
+    // site's generic picture (DA-034). The page names the card as its picture too, for a reader that runs the page.
+    const shared = `/v/${encodeURIComponent(token)}`;
+    try { if (location.pathname !== shared) history.replaceState(history.state, "", shared + location.search + location.hash); } catch { /* not allowed here */ }
+    if (snap.image) {
+      const img = `${location.origin}${shared}.png`;
+      for (const [attr, key] of [["property", "og:image"], ["name", "twitter:image"]] as const) document.head.querySelector(`meta[${attr}="${key}"]`)?.setAttribute("content", img);
+    }
+  }, [snap, token]);
 
   const cols: Column<Member>[] = [
     { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },

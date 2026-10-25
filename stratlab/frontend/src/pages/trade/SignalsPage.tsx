@@ -10,6 +10,7 @@ import { Earlier } from "../../components/Earlier";
 import { capitalField, stoppable, testQty, testSignalId, upDown } from "../../lib/tradeUi";
 import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
 import { LockedPreview } from "../../components/LockedPreview";
+import { INDIA_FEED, offlineLine } from "../../lib/dataBack";
 import "./trade.css";
 import "./paper.css";
 
@@ -92,10 +93,13 @@ function UrlCard({ ov, reload }: { ov: Overview; reload: () => void }) {
 }
 
 function NewSession({ onStarted }: { onStarted: (id: string) => void }) {
-  const { markets, fail } = useApp();
-  const live = markets.filter((m) => m.status === "live" && m.id !== "CSV");
+  const { markets, fail, me } = useApp();
+  // every market that has data, offline ones too (named so): India went missing from the list on a weekend while the
+  // notes below spoke of F&O lots (DA-039); an offline one says when its data is back instead of searching
+  const live = markets.filter((m) => (m.status === "live" || m.status === "offline") && m.id !== "CSV");
   const [mid, setMid] = useState("IN");
   const market = live.find((m) => m.id === mid) ?? live[0];
+  const offline = market?.status === "offline";
   const [inst, setInst] = useState<Instrument | null>(null);
   const [name, setName] = useState("");
   const [capital, setCapital] = useState("");
@@ -118,11 +122,13 @@ function NewSession({ onStarted }: { onStarted: (id: string) => void }) {
       <div className="k-stack">
         {live.length > 1 && (
           <FormGrid label="Pick the instrument">
-            <Field label="Market">{(id) => <Select id={id} value={market?.id ?? ""} onChange={(v) => { setMid(v); setInst(null); }} options={live.map((m) => ({ value: m.id, label: m.name }))} />}</Field>
+            <Field label="Market">{(id) => <Select id={id} value={market?.id ?? ""} onChange={(v) => { setMid(v); setInst(null); }} options={live.map((m) => ({ value: m.id, label: `${m.name}${m.status === "offline" ? " (offline)" : ""}` }))} />}</Field>
           </FormGrid>
         )}
         {inst ? (
           <div className="k-row"><Badge tone="ok">{inst.symbol}</Badge><button type="button" className="btn quiet sm" onClick={() => setInst(null)}>Pick another</button></div>
+        ) : market && offline ? (
+          <Notice tone="warn">{INDIA_FEED.has(market.id) ? offlineLine(market.name, me?.data_note) : `Market data for ${market.name} is offline right now. Try again later.`}</Notice>
         ) : market ? <InstrumentSearch market={market} compact onPick={setInst} /> : <p className="k-small k-muted">Market data is offline right now.</p>}
         <FormGrid label="Session settings" onSubmit={(e) => { e.preventDefault(); void start(); }}>
           <Field label="Name" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="My breakout alert" />
@@ -135,6 +141,21 @@ function NewSession({ onStarted }: { onStarted: (id: string) => void }) {
         </FormGrid>
         <p className="k-note">Each session counts toward your plan's paper sessions. For F&amp;O and Indian commodity or currency futures, a signal's qty counts lots.</p>
       </div>
+    </Card>
+  );
+}
+
+/** The steps for a TradingView alert, in order (DA-039: the page never said what to do with the URL, outside its lock note). */
+function HowTo() {
+  return (
+    <Card label="Connect a TradingView alert">
+      <CardHead level={3} title="Connect a TradingView alert" />
+      <ol className="k-list">
+        <li>Make your URL above and copy it. Start a session for the instrument the alert is on.</li>
+        <li>In TradingView, create an alert on that chart. Under Notifications, tick Webhook URL and paste your URL.</li>
+        <li>In the alert's Message box, put the message below with your session's id, and <code>buy</code>, <code>sell</code> or <code>exit</code> as the action.</li>
+        <li>When the alert fires, the signal shows in the session's log with its fill. Chartink alerts work the same way, with the URL as their webhook.</li>
+      </ol>
     </Card>
   );
 }
@@ -315,12 +336,14 @@ export function SignalsPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title="Forward test"
-        lede="A forward test tries a strategy on days that have not happened yet: your alerts are filled on paper at live prices, and every one is logged."
+        // what it is for, in the line itself and not only in the lock note (DA-039)
+        lede="A forward test tries a strategy on days that have not happened yet: connect your TradingView or Chartink alerts, and each one is filled on paper at StratLab's live price, with charges, and logged."
         infoLabel="How this works"
         info="Point your TradingView or Chartink alerts at a secret URL. Each signal fills at StratLab's own live price with charges, every signal is logged, and the verdict's checks run once there are enough trades. Paper only: no real orders. Facts, not advice." />
       {failed && !ov ? <ErrorState title="Your signal sessions couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
         : !ov ? <Card><Skeleton label="Opening signal sessions" /></Card> : !ov.allowed ? (
-        <LockedPreview title="Forward test" points={[
+        // the lock note above already offers the plans: one "See plans", not two (DA-040)
+        <LockedPreview title="Forward test" actions={false} points={[
           "A secret webhook address for your TradingView or Chartink alerts.",
           "Each alert fills on paper at StratLab's own live price, with charges, never as a real order.",
           "Every signal is logged with what was filled and why one was skipped.",
@@ -345,6 +368,7 @@ export function SignalsPage() {
                 <NewSession onStarted={(id) => { refreshMe(); load(); nav(`/trade/signals/${id}`); }} />
               </div>
               {!ov.sessions.length && <EmptyState title="No signal sessions yet">Start one above, then put its session id and your URL into an alert.</EmptyState>}
+              <HowTo />
               <Format format={ov.format} ov={ov} />
               <Earlier label="Signals that reached no session" count={ov.misses.length}>
                 <ul className="k-list">

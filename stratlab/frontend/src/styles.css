@@ -259,6 +259,7 @@ a.link { margin-inline: -2px; }
 .nb-pin { flex: none; display: inline-flex; color: var(--muted); }
 .side-list a.nb-more { padding-left: 34px; font-size: 13px; color: var(--muted); }
 .side-list a.nb-more:hover { color: var(--ink); }
+.side-list .nb-key { padding-left: 34px; font-size: 12px; }
 .side-note { display: flex; align-items: center; height: 28px; padding-left: 34px; }
 
 .side-foot { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px 8px; border-top: 1px solid var(--line); }
@@ -1257,9 +1258,10 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 /* ---------- charts (components/chart) ---------- */
 /* series colours in a fixed order, validated with the dataviz palette checks against --card and --paper in each theme
  * (lightness band, chroma, colour-blind and normal-vision separation of neighbours, 3:1 contrast) */
-:root { --series-1: #1F4FB5; --series-2: #B4500F; --series-3: #138A62; --series-4: #6A3FB0; }
-:root[data-theme="dark"] { --series-1: #6A8EE4; --series-2: #D9773A; --series-3: #2FA877; --series-4: #9479E0; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme]) { --series-1: #6A8EE4; --series-2: #D9773A; --series-3: #2FA877; --series-4: #9479E0; } }
+/* --heat-floor: the least of a series colour a heat cell shows; on the dark card a quarter of it read as the card (DA-026) */
+:root { --series-1: #1F4FB5; --series-2: #B4500F; --series-3: #138A62; --series-4: #6A3FB0; --heat-floor: 25%; }
+:root[data-theme="dark"] { --series-1: #6A8EE4; --series-2: #D9773A; --series-3: #2FA877; --series-4: #9479E0; --heat-floor: 50%; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) { --series-1: #6A8EE4; --series-2: #D9773A; --series-3: #2FA877; --series-4: #9479E0; --heat-floor: 50%; } }
 .ch { position: relative; min-width: 0; max-width: 100%; }
 .ch-plot { position: relative; border-radius: 6px; }
 .ch-plot:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

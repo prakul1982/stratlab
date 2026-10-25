@@ -23,8 +23,9 @@ const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: bo
 /** The one table: a header row, right-aligned numbers, a hover row, and its own horizontal scroll box so a wide table
  * never makes the page scroll sideways. `label` names the table for screen readers. `rowNote` turns a row into its
  * first cell plus one line of words across the rest (a stock with no data). An empty list shows `empty` in one row. */
-/** Whether the page is at phone width (where a `stack` table is a list of cards). */
-function usePhone(): boolean {
+/** Whether the page is at phone width (where a `stack` table is a list of cards). A page offering a shorter card on a
+ * phone reads it too (DA-027). */
+export function usePhone(): boolean {
   const q = "(max-width: 640px)";
   const [on, setOn] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.(q).matches);
   useEffect(() => {
