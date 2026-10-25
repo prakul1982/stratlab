@@ -240,7 +240,8 @@ def test_each_source_has_its_share_and_the_shares_add_up():
 
 def test_the_breakdown_and_steps_are_plain():
     e = est(regime="old", other=9 * L, deductions=50000, intraday=-2000, business=3000)
-    assert e["lines"][-1]["kind"] == "total" and e["lines"][-1]["amount"] == e["total"]
+    total = next(ln for ln in e["lines"] if ln["kind"] == "total")            # then the return's rounding (DH-004)
+    assert total["amount"] == e["total"] and e["lines"][-1]["kind"] == "rounded" and e["lines"][-1]["amount"] == e["rounded"]["tax"]
     assert all(isinstance(s, str) and s.endswith(".") for s in e["steps"])
     text = " ".join(e["steps"]).lower()
     for word in ("you should", "we suggest", "better", "recommend", "choose", "switch"):

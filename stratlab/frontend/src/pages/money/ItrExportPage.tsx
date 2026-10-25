@@ -20,6 +20,8 @@ type Sheet = { key: string; title: string; count: number; columns?: string[]; ro
 type View = {
   fy: number; label: string; ay: string; label_text: string; check: string; locked: boolean; plan: string; summary: { label: string; value: string }[];
   sources: string[]; assumptions: string[]; years: number[]; tables: Sheet[];
+  /** what the return needs that these files don't have (DH-011) */
+  not_covered?: string[];
 };
 type Format = "xlsx" | "zip" | "pdf";
 /** A year with anything in its schedules. */
@@ -101,7 +103,7 @@ export function ItrExportPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Money · Tax" title="Your year, laid out for the return"
-        lede={<>The figures from your <Link className="link" to="/tax-report">tax report</Link>, <Link className="link" to="/money/tax-tools">tax tools</Link> and <Link className="link" to="/money/us-tax">US stocks</Link>, shaped like the ITR-2 and ITR-3 schedules, to download as a spreadsheet or one PDF for your CA.</>}
+        lede={<>The figures from your <Link className="link" to="/tax-report">tax report</Link>, <Link className="link" to="/money/tax-tools">tax tools</Link> and <Link className="link" to="/money/us-tax">US stocks</Link>, shaped like the ITR-2 and ITR-3 schedules they cover, to download as a spreadsheet or one PDF for your CA. What the return needs beyond them is listed under the schedules.</>}
         info="Schedule 112A scrip by scrip, Schedule CG, dividends, intraday and F&O turnover, tax paid, foreign income and Schedule FA. Only you can see these figures." infoLabel="What is in the schedules" />
       <Notice label="Not a filed return"><b>Not a filed return.</b> {v?.label_text ?? "Prepared by StratLab from your files to help you or your CA fill the return. This is not a filed return, and StratLab files nothing for you."} {v?.check}</Notice>
 
@@ -161,6 +163,13 @@ export function ItrExportPage() {
               </Card>
             ))}
           </section>
+
+          {!!v.not_covered?.length && (
+            <Card label="Not covered here">
+              <CardHead title="Not covered here" info="Parts of the return these files can't fill: they need figures StratLab doesn't have, or the portal works them out." />
+              <ul className="k-list" aria-label="Not covered here" data-testid="itr-not-covered">{v.not_covered.map((s, i) => <li key={i}>{s}</li>)}</ul>
+            </Card>
+          )}
 
           <Card>
             <CardHead title="Where the figures come from" />

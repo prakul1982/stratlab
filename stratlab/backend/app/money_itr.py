@@ -5,12 +5,17 @@ Prepared from the user's own files to help them or their CA fill the return; it 
 nothing (filing for someone needs ERI registration with the Income Tax Department; an export doesn't).
 
 The layouts follow the ITR-2 and ITR-3 forms for AY 2026-27 (FY 2025-26), checked on 4 Oct 2026:
-- Schedule 112A, columns 1a to 14 in the form's order, 1a "BE"/"AE" for acquired on or before / after 31 Jan 2018 and
-  1b (added from AY 2025-26 for the 23 Jul 2024 rate change) for transferred before / on or after 23 Jul 2024. For
+- Schedule 112A, columns 1a to 14 in the form's order, 1a "BE"/"AE" for acquired on or before / after 31 Jan 2018.
+  Column 1b (transferred before / on or after 23 Jul 2024) was on the AY 2025-26 (FY 2024-25) form only, the one year
+  that straddles the rate change; it is gone from AY 2026-27, so it is in the files for FY 2024-25 alone (DH-010). For
   "AE" holdings the portal's CSV upload takes one consolidated row (ISIN INNOTREQUIRD, name CONSOLIDATED), so that
-  file is made too. Sources: the portal's 112A/115AD CSV instructions,
-  https://static.incometax.gov.in/iec/foservices/assets/itr-shared/documents/112A_115AD_CSV_Instructions.pdf, and
-  https://github.com/ankitkr/india-itr-skills/blob/main/skills/itr-112a-csv/SKILL.md (AY 2026-27 portal notes).
+  file is made too, with the template's header word for word (PORTAL_112A) and the money columns in whole rupees as
+  its instructions ask. Sources, checked 25 Oct 2026: the portal's 112A/115AD CSV instructions (columns, codes,
+  rounding, no special characters),
+  https://static.incometax.gov.in/iec/foservices/assets/itr-shared/documents/112A_115AD_CSV_Instructions.pdf; the
+  template's header as printed by https://freefincal.com/how-to-upload-equity-mf-share-ltcg-transactions-in-itr2-itr3-schedule-112a/
+  and casparser's July 2026 change for the AY 2026-27 utility (https://github.com/codereverser/casparser/pull/144),
+  which agree word for word; the utility itself couldn't be fetched, so the sheet says to check it against the template.
 - Schedule CG: the full value of consideration, cost, expenditure on transfer and gain by section (111A, 112A, 112,
   slab), and Table F, the gains by the period they arose (to 15 Jun, 16 Jun-15 Sep, 16 Sep-15 Dec, 16 Dec-15 Mar,
   16 Mar-31 Mar) for section 234C; the table takes no negative cells. ITR-2 validation rules AY 2026-27,
@@ -30,13 +35,13 @@ import csv
 import io
 import re
 import zipfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
 from . import instrument_kinds, money_advance_tax as adv, money_dividends as divs, money_routes, money_us_routes
-from . import money_us_tax as us, tax_lots, xlsx_write
+from . import money_us_tax as us, tax_due, tax_lots, tax_total, xlsx_write
 from .auth import current_profile
 from .plans import FEATURE_PLAN, PLANS, allows
 from .tax_lots import GF_DATE, RATE_CHANGE, fy_label, money
@@ -100,7 +105,15 @@ def gather(profile, fy: int) -> dict:
     src = (dyear or {}).get("source") or "none"
     lines = [r for r in (stored["rows"] if src == "files" else est) if tax_lots.fy_of(r["d"]) == fy and r["cur"] == "INR"]
     saved = adv.load(uid)["years"].get(fy) or adv.clean_year({})
-    return {"fy": fy, "y": y, "rows": [r for r in equity if r["fy"] == fy], "unit_rows": [r for r in unit_rows if r["fy"] == fy], "names": c["names"], "files": i["data"]["files"],
+    try:                          # the interest lines of Part B-TTI (DH-003), from Tax tools' own working
+        a = money_routes._advance_year(profile, fy, i)
+    except Exception as e:
+        print("ITR interest lines:", type(e).__name__)
+        a = {}
+    business = bool(y["business"]["segments"]) or y["intraday"]["count"] > 0
+    return {"fy": fy, "y": y, "payable": a.get("payable"), "schedule": a.get("schedule"),
+            "audit": tax_total.audit_applies(fy, y.get("turnover") or 0, business), "business": business,
+            "fno_lines": int(sum(b["trades"] for b in i["business"] if b["fy"] == fy)), "rows": [r for r in equity if r["fy"] == fy], "unit_rows": [r for r in unit_rows if r["fy"] == fy], "names": c["names"], "files": i["data"]["files"],
             "fmv_src": i["fmv_src"], "div_lines": lines, "div_source": src, "div_year": dyear,
             "us_div": money_us_routes.us_dividends(profile, fy, y), "fa": money_us_routes.fa_for(profile, fy),
             "us_count": usr["count"], "us_allowed": usr["allowed"], "us_warning": ((usr.get("years") or {}).get(fy) or {}).get("warning"),
@@ -109,8 +122,9 @@ def gather(profile, fy: int) -> dict:
 
 
 # ---------- the schedules, as tables ----------
-def table(key: str, title: str, columns: list[str], rows: list[list], notes: list[str] | None = None) -> dict:
-    return {"key": key, "title": title, "columns": columns, "rows": rows, "notes": notes or []}
+def table(key: str, title: str, columns: list[str], rows: list[list], notes: list[str] | None = None, sheet: str | None = None) -> dict:
+    """`sheet`: the Excel sheet's name when the title, shortened, would be cut at 31 characters (DH-010)."""
+    return {"key": key, "title": title, "columns": columns, "rows": rows, "notes": notes or [], "sheet": sheet}
 
 
 def _name(names: dict, key: str) -> tuple[str, str]:
@@ -157,27 +171,51 @@ def rows_112a(rows: list[dict], names: dict) -> list[dict]:
     return lines
 
 
-COLS_112A = ["Share/Unit acquired (1a)", "Share/Unit transferred (1b)", "ISIN Code (2)", "Name of the Share/Unit (3)",
+COL_1B = "Share/Unit transferred (1b)"
+COLS_112A = ["Share/Unit acquired (1a)", "ISIN Code (2)", "Name of the Share/Unit (3)",
              "No. of Shares/Units (4)", "Sale-price per Share/Unit (5)", "Full Value of Consideration (6) = 4 x 5",
              "Cost of acquisition without indexation (7) = higher of 8 and 9", "Cost of acquisition (8)",
              "If acquired before 01.02.2018, lower of 6 and 11 (9)", "Fair Market Value per share/unit as on 31 Jan 2018 (10)",
              "Total Fair Market Value as on 31 Jan 2018 (11) = 4 x 10", "Expenditure wholly and exclusively in connection with transfer (12)",
              "Total deductions (13) = 7 + 12", "Balance (14) = 6 - 13", "Sold on (for your records)"]
+# the portal template's own header, word for word (its instructions: "its header must match exactly"); 1b only for FY 2024-25
+PORTAL_112A = ["Share/Unit acquired(1a)", "ISIN Code(2)", "Name of the Share/Unit(3)", "No. of Shares/Units(4)",
+               "Sale-price per Share/Unit(5)", "Full Value of Consideration(Total Sale Value)(6) = 4 * 5",
+               "Cost of acquisition without indexation(7)", "Cost of acquisition(8)",
+               "If the long term capital asset was acquired before 01.02.2018(9)",
+               "Fair Market Value per share/unit as on 31st January 2018(10)",
+               "Total Fair Market Value of capital asset as per section 55(2)(ac)(11) = 4 * 10",
+               "Expenditure wholly and exclusively in connection with transfer(12)", "Total deductions(13) = 7 + 12",
+               "Balance(14) = 6 - 13"]
+PORTAL_1B = "Share/Unit Transferred(1b)"
+ONE_B_FY = 2024                   # the only year whose form has column 1b
+
+
+def _fy(g: dict) -> int | None:
+    return g.get("fy") or (tax_lots.fy_of(g["rows"][0]["sold"]) if g.get("rows") else None)
+
+
+def _with_1b(cols: list[str], fy: int | None, name: str) -> list[str]:
+    return cols[:1] + [name] + cols[1:] if fy == ONE_B_FY else list(cols)
 
 
 def t_112a(g: dict) -> dict:
+    fy = _fy(g)
+    one_b = fy == ONE_B_FY
     lines = rows_112a(g["rows"], g["names"])
-    rows = [[v["1a"], v["1b"], v["isin"], v["name"], round(v["qty"], 4), r2(v["price"]), r2(v["gross"]), r2(v["col7"]), r2(v["cost8"]),
+    rows = [[v["1a"]] + ([v["1b"]] if one_b else []) + [v["isin"], v["name"], round(v["qty"], 4), r2(v["price"]), r2(v["gross"]), r2(v["col7"]), r2(v["cost8"]),
              r2(v["col9"]) if v["1a"] == "BE" else None, r2(v["fmv_each"]) if v["1a"] == "BE" else None,
              r2(v["fmv"]) if v["1a"] == "BE" else None, r2(v["exp"]), r2(v["col13"]), r2(v["col14"]), v["sold"]] for v in lines]
     if lines:
-        rows.append(["Total", "", "", "", None, None, r2(sum(v["gross"] for v in lines)), r2(sum(v["col7"] for v in lines)),
+        rows.append(["Total"] + ([""] if one_b else []) + ["", "", None, None, r2(sum(v["gross"] for v in lines)), r2(sum(v["col7"] for v in lines)),
                      r2(sum(v["cost8"] for v in lines)), r2(sum(v["col9"] for v in lines if v["1a"] == "BE")), None, None,
                      r2(sum(v["exp"] for v in lines)), r2(sum(v["col13"] for v in lines)), r2(sum(v["col14"] for v in lines)), ""])
     notes = ["Long-term sales of listed shares and equity mutual fund units on which STT was paid (section 112A). Short-term "
              "sales are reported as totals in Schedule CG, not scrip by scrip.",
-             "1a: BE = acquired on or before 31 Jan 2018, AE = after. 1b: BE = transferred before 23 Jul 2024, AE = on or "
-             "after (every sale in FY 2025-26 is AE). Check the codes against the current year's template on the portal.",
+             ("1a: BE = acquired on or before 31 Jan 2018, AE = after. 1b (on the FY 2024-25 form only): BE = transferred "
+              "before 23 Jul 2024, AE = on or after." if one_b else
+              "1a: BE = acquired on or before 31 Jan 2018, AE = after. The form for this year has no column 1b (it was on "
+              "the FY 2024-25 form only, for the 23 Jul 2024 rate change)."),
              "Column 9 for shares bought on or before 31 Jan 2018 is the lower of the sale value and the 31 Jan 2018 value, "
              "so the cost (7) is the higher of the actual cost and that, worked out lot by lot.",
              "Full value (6) is before the selling charges; those charges are the expenditure on transfer (12). STT isn't "
@@ -185,26 +223,40 @@ def t_112a(g: dict) -> dict:
     if any(v["gf_missing"] for v in lines):
         notes.append("Some lines bought before 1 Feb 2018 have no 31 Jan 2018 price, so their column 9 is 0 and the actual cost "
                      "is used. Enter the price in the tax report to grandfather them.")
-    return table("112a", "Schedule 112A (scrip-wise long-term gains)", COLS_112A, rows, notes)
+    return table("112a", "Schedule 112A (scrip-wise long-term gains)", _with_1b(COLS_112A, fy, COL_1B), rows, notes, sheet="112A")
 
 
 def t_112a_portal(g: dict) -> dict:
     """The portal's upload file: lines for shares acquired on or before 31 Jan 2018 scrip-wise, and everything
-    acquired after as one consolidated line."""
+    acquired after as one consolidated line, under the template's own header (DH-010). The money columns are whole
+    rupees as the instructions ask (6, 11, 13 and 14 "rounded off to the nearest unit"), each worked from the rounded
+    ones before it, so 6 = 4 x 5, 7 = higher of 8 and 9, 9 = lower of 6 and 11, 13 = 7 + 12 and 14 = 6 - 13 hold exactly."""
+    fy = _fy(g)
+    one_b = fy == ONE_B_FY
     lines = rows_112a(g["rows"], g["names"])
     be = [v for v in lines if v["1a"] == "BE"]
     ae = [v for v in lines if v["1a"] == "AE"]
-    rows = [[v["1a"], v["1b"], v["isin"], _plain(v["name"]), round(v["qty"], 4), r2(v["price"]), r2(v["gross"]), r2(v["col7"]),
-             r2(v["cost8"]), r2(v["col9"]), r2(v["fmv_each"]), r2(v["fmv"]), r2(v["exp"]), r2(v["col13"]), r2(v["col14"])] for v in be]
-    for code in sorted({v["1b"] for v in ae}):
-        part = [v for v in ae if v["1b"] == code]
-        gross, cost, exp = sum(v["gross"] for v in part), sum(v["col7"] for v in part), sum(v["exp"] for v in part)
-        rows.append(["AE", code, "INNOTREQUIRD", "CONSOLIDATED", None, None, r2(gross), r2(cost), r2(cost), None, None, None,
-                     r2(exp), r2(cost + exp), r2(gross - cost - exp)])
-    return table("112a_portal", "Schedule 112A, the portal's upload layout", COLS_112A[:15], rows,
+    rows = []
+    for v in be:
+        qty, price = round(v["qty"], 4), round(v["price"], 4)
+        gross = round(qty * price)
+        fmv_each = round(v["fmv_each"], 4) if v["fmv_each"] is not None else None
+        fmv = round(qty * fmv_each) if fmv_each is not None else None
+        cost8, exp = round(v["cost8"]), round(v["exp"])
+        col9 = min(gross, fmv) if fmv is not None else round(v["col9"])
+        col7 = max(cost8, col9)
+        rows.append([v["1a"]] + ([v["1b"]] if one_b else []) + [v["isin"], _plain(v["name"]), qty, price, gross, col7, cost8, col9,
+                                                                 fmv_each, fmv, exp, col7 + exp, gross - col7 - exp])
+    for code in sorted({v["1b"] for v in ae}) if one_b else (["AE"] if ae else []):
+        part = [v for v in ae if not one_b or v["1b"] == code]
+        gross, cost, exp = round(sum(v["gross"] for v in part)), round(sum(v["col7"] for v in part)), round(sum(v["exp"] for v in part))
+        rows.append(["AE"] + ([code] if one_b else []) + ["INNOTREQUIRD", "CONSOLIDATED", None, None, gross, cost, cost, None, None, None,
+                                                          exp, cost + exp, gross - cost - exp])
+    return table("112a_portal", "Schedule 112A, the portal's upload layout", _with_1b(PORTAL_112A, fy, PORTAL_1B), rows,
                  ["The portal takes shares acquired after 31 Jan 2018 as one consolidated line (ISIN INNOTREQUIRD, name "
-                  "CONSOLIDATED) and those acquired on or before it scrip by scrip. Download the current template from the "
-                  "portal and copy these figures into it: its header must match exactly."])
+                  "CONSOLIDATED) and those acquired on or before it scrip by scrip. The header is the template's own, word "
+                  "for word; the amounts are in whole rupees. Check it against the template the portal's utility gives for "
+                  "the year before you upload: its header must match exactly."], sheet="112A upload layout")
 
 
 def _plain(s: str) -> str:
@@ -315,7 +367,10 @@ def t_os(g: dict) -> dict:
         rows.append(["Total", "", ""] + [r2(x) for x in totals] + [r2(sum(totals)), None, ""])
     src = {"files": "your dividend files", "estimated": "an estimate from your holdings and the dividends declared (upload your "
            "broker's dividend statement for the actual figures)", "none": "none found"}[g["div_source"] if g["div_source"] in ("files", "estimated") else "none"]
-    notes = [f"Indian dividends from {src}. Gross amounts, before TDS; dividends are taxed at your slab rate.",
+    # DH-013: a year with none said as a sentence, not "Indian dividends from none found."
+    notes = [(f"Indian dividends from {src}." if g["div_source"] in ("files", "estimated") else
+              "No Indian dividends in your dividend files or holdings for the year.") + " Gross amounts, before TDS; dividends "
+             "are taxed at your slab rate.",
              "TDS shown is what the 10% rule gives (once a company's dividends to you pass ₹10,000 in FY 2025-26; ₹5,000 "
              "before) unless your file gave it; Form 26AS and the AIS have what was actually cut.",
              "The five periods are the return's quarterly breakup of dividends for section 234C."]
@@ -330,14 +385,15 @@ def t_business(g: dict) -> dict:
     intra = y["intraday"]
     biz = y["business"]
     rows = []
+    # turnover in whole rupees, as the form takes it (DH-007: "39,55,74,093.5")
     if intra["count"]:
-        rows.append(["Intraday trading (speculative business, section 43(5))", intra["count"], r2(intra["turnover"]), None,
+        rows.append(["Intraday trading (speculative business, section 43(5))", intra["count"], round(intra["turnover"]), None,
                      r2(intra["sell"] - intra["buy"]), 0.0, r2(intra["pnl"])])
     for s in biz["segments"]:
-        rows.append([f"{s['label']} (non-speculative business)", s["trades"], r2(s["turnover"]), r2(s["turnover_contract"]), r2(s["pnl"]),
+        rows.append([f"{s['label']} (non-speculative business)", s["trades"], round(s["turnover"]), round(s["turnover_contract"]), r2(s["pnl"]),
                      r2(s["charges"]), r2(s["net"])])
     if biz["segments"]:
-        rows.append(["F&O, commodity and currency together", biz["trades"], r2(biz["turnover"]), r2(biz["turnover_contract"]), r2(biz["pnl"]),
+        rows.append(["F&O, commodity and currency together", biz["trades"], round(biz["turnover"]), round(biz["turnover_contract"]), r2(biz["pnl"]),
                      r2(biz["charges"]), r2(biz["net"])])
     notes = ["ITR-3 for AY 2026-27 asks, in Part A Trading Account, for the turnover and the income of intraday trading and of "
              "futures and options separately.",
@@ -347,7 +403,7 @@ def t_business(g: dict) -> dict:
              "Income before charges is the profit or loss on the trades; the charges in your broker's file (including STT and "
              "CTT, which business income can deduct) are taken off to get the net."] + list(y.get("filing") or [])
     return table("business", "Business income for ITR-3 (intraday and F&O)",
-                 ["Activity", "Trades", "Turnover (sum of absolute profit and loss)", "Turnover netted per contract",
+                 ["Activity", "Exit lines (intraday: round trips)", "Turnover (sum of absolute profit and loss)", "Turnover netted per contract",
                   "Profit or loss before charges", "Charges", "Net profit or loss"], rows, notes)
 
 
@@ -370,6 +426,105 @@ def t_tax_paid(g: dict) -> dict:
                   "tax. Fill the BSR code and challan serial number from each challan (the AIS's 'Payment of taxes' section has "
                   "them); the portal's prefill often misses advance tax challans.",
                   "TDS needs each deductor's TAN and amounts from Form 26AS for Schedule TDS; only the total you entered is here."])
+
+
+CF_UNTIL = {"st": 8, "lt": 8, "speculative": 4, "business": 8}
+CF_NAMES = {"st": "Short-term capital loss", "lt": "Long-term capital loss", "business": "Business loss (non-speculative: F&O, "
+            "commodity, currency)", "speculative": "Speculative business loss (intraday)"}
+
+
+def t_cfl(g: dict) -> dict:
+    """Schedule CFL: the losses carried forward after this year, by the year each arose and kind (DH-011: the ₹59 carried
+    was only in a note). From the tax report's set-off: capital losses from year(), business ones from the estimate."""
+    y, fy = g["y"], g["fy"]
+    t = y.get("total") or {}
+    left = [(p["fy"], p["kind"], p["left"]) for p in y.get("brought_forward") or []]
+    left += [(p["fy"], p["kind"], p["left"]) for p in (t.get("brought_forward") or []) if t.get("available")]
+    left += [(fy, k, y["carry_forward"][k]) for k in ("st", "lt")]
+    own = t.get("carry_forward") if t.get("available") else {"speculative": max(0.0, -y["intraday"]["pnl"]), "business": max(0.0, -y["business"]["net"])}
+    left += [(fy, k, own[k]) for k in ("speculative", "business")]
+    rows = [[f"AY {f + 1}-{str(f + 2)[2:]} (FY {f}-{str(f + 1)[2:]})", CF_NAMES[k], r2(a), f"AY {f + 1 + CF_UNTIL[k]}-{str(f + 2 + CF_UNTIL[k])[2:]}"]
+            for f, k, a in sorted(left) if a > 0.5]
+    return table("cfl", "Schedule CFL (losses carried forward)", ["Year the loss arose", "Kind", "Left to carry forward",
+                                                                   "Can be set off up to"], rows,
+                 ["Losses left after this year's set-off, as the tax report works them out from your files (losses from years "
+                  "not in your files aren't here). A loss carries forward only when the return of the year it arose was filed "
+                  "by its due date (section 80).",
+                  "Capital losses and business losses carry forward 8 years, intraday (speculative) losses 4 years."], sheet="CFL")
+
+
+def t_setoff(g: dict) -> dict:
+    """Schedules CYLA and BFLA: this year's business loss set off against other heads, and the losses brought forward
+    that were used this year (DH-011). Set-off within capital gains is in Schedule CG."""
+    y = g["y"]
+    t = y.get("total") or {}
+    rows = [["CYLA (this year's loss)", "Business loss (F&O, commodity, currency)", x["against"], r2(x["amount"])]
+            for x in (t.get("set_off") or []) if t.get("available") and x["amount"] > 0.005]
+    rows += [["BFLA (brought forward)", f"{CF_NAMES[p['kind']]} of FY {p['fy']}-{str(p['fy'] + 1)[2:]}",
+              "Capital gains of the year" if p["kind"] in ("st", "lt") else "Intraday profit" if p["kind"] == "speculative" else "Business income of the year",
+              r2(p["used"])] for p in list(y.get("brought_forward") or []) + list(t.get("brought_forward") or []) if p["used"] > 0.005]
+    return table("setoff", "Schedules CYLA and BFLA (set-off of losses)", ["Schedule", "Loss", "Set off against", "Amount"], rows,
+                 ["A business loss can be set off against any income except salary in the same year; capital losses only "
+                  "against capital gains (in Schedule CG); intraday losses only against intraday profit."], sheet="CYLA BFLA")
+
+
+def t_general(g: dict) -> dict:
+    """Part A-General's audit fields for an audited year (DH-011): whether section 44AB applies on these figures, the
+    dates, and the fields only the audit report has."""
+    fy = g["fy"]
+    rows = []
+    if g.get("business"):
+        if g.get("audit"):
+            rows = [["Liable to audit under section 44AB?", "Yes: turnover " + money(g["y"].get("turnover") or 0) + " is above the ₹10 crore limit"],
+                    ["Due date of the audit report", tax_due.said(fy, "audit_report")],
+                    ["Due date of the return", tax_due.said(fy, "audit")],
+                    ["Date of the audit report", "From the audit report (Form 3CA or 3CB, with 3CD)"],
+                    ["Acknowledgement number of the audit report", "From the e-filing portal, once the auditor uploads it"],
+                    ["Auditor's name, membership number and firm registration number", "From the audit report"]]
+        else:
+            rows = [["Liable to audit under section 44AB?", "Not on these figures alone: turnover " + money(g["y"].get("turnover") or 0)
+                     + ". Between ₹1 crore and ₹10 crore it depends on the share of cash receipts and payments."]]
+    return table("general", "Part A-General (audit information)", ["Field", "What to fill"], rows,
+                 ["An audited case fills Part A-BS (balance sheet) and Part A-P&L in full from the audited accounts; the "
+                  "'no account case' lines can't be used." if g.get("audit") else
+                  "Shown for a year with business income (intraday or F&O)."] + ([tax_due.PENALTY_271B] if g.get("audit") else []),
+                 sheet="Part A-General")
+
+
+def t_tti(g: dict) -> dict:
+    """Part B-TTI's tax, paid and interest lines (DH-003: the export had no interest at all): the tax as the return
+    rounds it, TDS and tax paid, and the interest under sections 234A, 234B and 234C from Tax tools' working."""
+    p = g.get("payable")
+    rows = [[x["label"], r2(x["amount"])] for x in (p or {}).get("lines") or []]
+    notes = ["From Tax tools: the payments and TDS you entered there, the instalments and the interest worked out on them."]
+    if p:
+        notes.append(("Worked out as if the tax is paid and the return filed by its due date, " + tax_due.day(date.fromisoformat(p["due"]))
+                      if not p["past_due"] else f"The due date, {tax_due.day(date.fromisoformat(p['due']))}, has passed: worked out "
+                      "as if paid and filed today") + "; interest under sections 234A and 234B grows by 1% a month of the tax unpaid after that.")
+        if p["refund"] > 0.5:
+            notes.append(f"TDS and tax paid are more than the tax by {money(p['refund'])}: a refund, before any interest.")
+    elif g["fy"] >= tax_lots.fy_of(money_routes.today().isoformat()):
+        notes.append("The year is still running: the interest is worked out once it has ended.")
+    return table("tti", "Part B-TTI (tax, tax paid and interest)", ["Line", "Amount"], rows, notes, sheet="Part B-TTI")
+
+
+def not_covered(g: dict) -> list[str]:
+    """What the return needs that isn't in these files (DH-011: "laid out for the return" read as all of it)."""
+    y = g["y"]
+    t = y.get("total") or {}
+    income = (t.get("income") or {}).get("total") or 0.0
+    out = []
+    if income > 1e7:
+        out.append(f"Schedule AL (assets and liabilities at the end of the year): needed when total income is over ₹1 crore; "
+                   f"this year's estimate is {money(income)}.")
+    if g.get("audit"):
+        out.append("Part A-BS and Part A-P&L in full, from the audited accounts (an audited case can't use the 'no account "
+                   "case' lines), and the audit report itself.")
+    out += ["Schedules S (salary), HP (house property) and VI-A (deductions), and Schedule TDS deductor by deductor: from Form 16, "
+            "Form 26AS and the AIS.",
+            "Schedule BP's adjustments beyond the trading results (depreciation, disallowances), and Schedule SI and the tax "
+            "computation, which the portal works out from the schedules."]
+    return out
 
 
 def t_foreign(g: dict) -> dict:
@@ -434,8 +589,8 @@ def fa_table(fa: dict | None) -> dict:
 
 
 def tables(g: dict) -> list[dict]:
-    return [t_112a(g), t_112a_portal(g), t_cg(g), t_cg_periods(g), t_os(g), t_business(g), t_tax_paid(g), t_foreign(g), t_form67(g),
-            fa_table(g["fa"])]
+    return [t_112a(g), t_112a_portal(g), t_cg(g), t_cg_periods(g), t_os(g), t_business(g), t_general(g), t_setoff(g), t_cfl(g),
+            t_tax_paid(g), t_tti(g), t_foreign(g), t_form67(g), fa_table(g["fa"])]
 
 
 IN_ONLY = ", Indian shares and funds"       # beside the US shares' own lines
@@ -472,11 +627,21 @@ def summary(g: dict) -> list[tuple[str, str]]:
         out.append(("Foreign tax credit (lower of US tax and Indian tax on it)", money(g["us_div"]["ftc"]["credit"])))
     if t.get("available"):
         out.append(("Total tax estimate (" + ("new" if t["regime"] == "new" else "old") + " regime, with cess)", money(t["total"])))
+        if t.get("rounded"):          # the way the return rounds them (DH-004)
+            out.append(("Total income, rounded to ₹10 (section 288A)", money(t["rounded"]["income"])))
+            out.append(("Tax, rounded to ₹10 (section 288B)", money(t["rounded"]["tax"])))
     advance, later = adv.split_paid(g["fy"], g["paid"])
     out.append(("Advance tax entered", money(sum(p["amount"] for p in advance))))
     if later:
         out.append(("Self-assessment tax entered", money(sum(p["amount"] for p in later))))
     out.append(("TDS entered", money(g["tds"])))
+    p = g.get("payable")
+    if p:                             # DH-003: the year's tax, what's paid and the interest, as one figure
+        out.append(("Interest under sections 234A, 234B and 234C", money(p["interest_234a"] + p["interest_234b"] + p["interest_234c"])))
+        out.append(("Payable now, with the interest" + (" and late fee" if p["fee_234f"] else ""), money(p["total"])))
+    if g.get("audit"):
+        out.append(("Tax audit (section 44AB)", "Applies: report by " + tax_due.day(tax_due.due(g["fy"], "audit_report")["date"])
+                    + ", return by " + tax_due.day(tax_due.due(g["fy"], "audit")["date"])))
     if g["fa"]:
         out.append((f"Schedule FA lines (calendar year {g['fy']})", str(len(g["fa"]["rows"]))))
     return out
@@ -485,7 +650,11 @@ def summary(g: dict) -> list[tuple[str, str]]:
 def sources(g: dict) -> list[str]:
     out = []
     for f in g["files"][-20:]:
-        out.append(f"Your file {f.get('name')} ({f.get('broker') or 'broker'}, {f.get('trades', 0)} trades, uploaded {_day(str(f.get('at') or '')[:10])}).")
+        # DH-007: the F&O lines a file brought are said too (it read "38 trades" beside 1,11,202 F&O lines), and "1 trade"
+        n, fno = int(f.get("trades") or 0), int(f.get("fno_lines") or 0)
+        what = ", ".join(x for x in (f"{n:,} trade{'' if n == 1 else 's'}" if n or not fno else "",
+                                     f"{fno:,} F&O, commodity and currency line{'' if fno == 1 else 's'}" if fno else "") if x)
+        out.append(f"Your file {f.get('name')} ({f.get('broker') or 'broker'}, {what}, uploaded {_day(str(f.get('at') or '')[:10])}).")
     if g["mf_count"]:
         out.append(f"Your mutual fund statement (CAS): {g['mf_count']} realised sales in all years.")
     if g["us_count"]:
@@ -549,17 +718,19 @@ def _safe(v):
 def to_xlsx(g: dict) -> bytes:
     y = g["y"]
     read = [[f"ITR-ready schedules, {y['label']}"], [LABEL], [CHECK], [], ["Summary"]] + [[a, b] for a, b in summary(g)]
+    read += [[], ["Not covered here"]] + [[s] for s in not_covered(g)]
     read += [[], ["Where the figures come from"]] + [[s] for s in sources(g)] + [[], ["Assumptions"]] + [[s] for s in assumptions(g)]
     sheets = [("Read me", read, {0, 4})]
     for t in tables(g):
         rows = [[t["title"]], [LABEL], t["columns"]] + t["rows"] + [[]] + [["Note", n] for n in t["notes"]]
-        sheets.append((t["title"].split(" (")[0].replace("Schedule ", "")[:31], rows, {0, 2}))
+        sheets.append(((t.get("sheet") or t["title"].split(" (")[0].replace("Schedule ", ""))[:31], rows, {0, 2}))
     return xlsx_write.workbook(sheets)
 
 
 FILE_NAMES = {"112a": "schedule-112A.csv", "112a_portal": "schedule-112A-portal-upload.csv", "cg": "schedule-CG.csv",
               "cg_periods": "schedule-CG-table-F.csv", "os": "schedule-OS-dividends.csv", "business": "ITR-3-business-income.csv",
               "tax_paid": "schedule-IT-tax-paid.csv", "foreign": "schedules-FSI-TR.csv", "form67": "form-67-workings.csv",
+              "general": "part-A-general-audit.csv", "setoff": "schedules-CYLA-BFLA.csv", "cfl": "schedule-CFL.csv", "tti": "part-B-TTI-interest.csv",
               "fa": "schedule-FA-A3.csv"}
 
 
@@ -567,6 +738,7 @@ def to_zip(g: dict) -> bytes:
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("README.txt", "\r\n".join([f"ITR-ready schedules, {g['y']['label']}", LABEL, CHECK, ""] + [f"{a}: {b}" for a, b in summary(g)]
+                                              + ["", "Not covered here:"] + not_covered(g)
                                               + ["", "Where the figures come from:"] + sources(g)))
         for t in tables(g):
             z.writestr(FILE_NAMES[t["key"]], (portal_csv(t) if t["key"] == "112a_portal" else csv_text(t)).encode("utf-8-sig"))
@@ -603,8 +775,8 @@ def to_pdf(g: dict) -> bytes:
     def fmt(v):
         if v is None:
             return ""
-        if isinstance(v, float):
-            return f"{v:,.2f}"
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return indian(v)          # DH-007: Indian grouping, as everywhere else (it printed 395,574,093.50)
         return str(v)
 
     def tbl(t: dict) -> list:
@@ -623,23 +795,51 @@ def to_pdf(g: dict) -> bytes:
         out += [Paragraph("• " + escape(n), small) for n in t["notes"]]
         return out
 
+    # DH-013: a cover a CA can file it by: name and PAN to fill in (StratLab keeps neither), the assessment year
+    cover = [["Name", "(fill in)"], ["PAN", "(fill in)"], ["Assessment year", f"{g['fy'] + 1}-{str(g['fy'] + 2)[2:]}"],
+             ["Financial year", y["label"]], ["Return that fits", form_fits(g)]]
     story = [Paragraph(f"Pack for your CA, {escape(y['label'])}", head), Paragraph(escape(LABEL), label), Paragraph(escape(CHECK), small),
+             Spacer(1, 6), Table(cover, colWidths=[50 * mm, 150 * mm], style=TableStyle([("FONT", (0, 0), (-1, -1), "Body", 10),
+                                                                                       ("FONT", (0, 0), (0, -1), "Body-Bold", 10),
+                                                                                       ("LINEBELOW", (0, 0), (-1, -1), 0.3, HexColor("#DDE3EA"))])),
              Spacer(1, 6), Paragraph("Summary", h2),
              Table([[a, b] for a, b in summary(g)], colWidths=[120 * mm, 80 * mm],
                    style=TableStyle([("FONT", (0, 0), (-1, -1), "Body", 9), ("LINEBELOW", (0, 0), (-1, -1), 0.3, HexColor("#DDE3EA"))]))]
     t = y.get("total") or {}
     if t.get("available") and t.get("steps"):
         story += [Paragraph("How the total tax estimate was worked out", h2)] + [Paragraph(f"{i}. " + escape(s), body) for i, s in enumerate(t["steps"], 1)]
+    empty = []
     for x in tables(g):
         if x["key"] == "112a_portal":
             continue
+        if not x["rows"]:             # DH-013: the empty schedules share one line, not a page each (7 of 11 pages were)
+            empty.append(x["title"])
+            continue
         story += [PageBreak()] + tbl(x)
-    story += [PageBreak(), Paragraph("Where the figures come from", h2)] + [Paragraph("• " + escape(s), body) for s in sources(g)]
+    story += [PageBreak()]
+    if empty:
+        story += [Paragraph("Nothing this year from your files in", h2), Paragraph(escape(" · ".join(empty)) + ".", body)]
+    story += [Paragraph("Not covered here", h2)] + [Paragraph("• " + escape(s), body) for s in not_covered(g)]
+    story += [Paragraph("Where the figures come from", h2)] + [Paragraph("• " + escape(s), body) for s in sources(g)]
     story += [Paragraph("Assumptions", h2)] + [Paragraph("• " + escape(s), body) for s in assumptions(g)]
     story += [Paragraph("Set-off rules", h2)] + [Paragraph("• " + escape(s), body) for s in tax_lots.SETOFF_RULES]
     story += [Spacer(1, 8), Paragraph(f"Made by StratLab on {_day(g['made'])}. " + escape(LABEL), small)]
-    doc.build(story)
+
+    def number(canvas, d):            # DH-007: page numbers
+        canvas.setFont("Body", 7)
+        canvas.setFillColor(HexColor("#5B6475"))
+        canvas.drawRightString(page[0] - 12 * mm, 6 * mm, f"Page {d.page} · Pack for your CA, {y['label']}")
+    doc.build(story, onFirstPage=number, onLaterPages=number)
     return buf.getvalue()
+
+
+def indian(v: float) -> str:
+    """A number with Indian digit grouping (1,23,45,678.50), whole numbers without decimals."""
+    neg, v = v < 0, abs(float(v))
+    whole, frac = (f"{v:.2f}".split(".") if not float(v).is_integer() else (f"{int(v)}", ""))
+    if len(whole) > 3:
+        whole = re.sub(r"(\d)(?=(\d{2})+$)", r"\1,", whole[:-3]) + "," + whole[-3:]
+    return ("-" if neg else "") + whole + (f".{frac}" if frac else "")
 
 
 # ---------- routes ----------
@@ -652,7 +852,7 @@ def preview(profile, fy: int) -> dict:
     cur = tax_lots.fy_of(money_routes.today().isoformat())
     return {"fy": fy, "label": g["y"]["label"], "ay": f"{fy + 1}-{str(fy + 2)[2:]}", "label_text": LABEL, "check": CHECK,
             "locked": not full, "plan": PLANS[FEATURE_PLAN["itr_export"]]["name"], "summary": [{"label": a, "value": b} for a, b in summary(g)],
-            "sources": sources(g), "assumptions": assumptions(g),
+            "sources": sources(g), "assumptions": assumptions(g), "not_covered": not_covered(g),
             "years": [x for x in range(cur, cur - 6, -1)],
             "tables": [{"key": x["key"], "title": x["title"], "count": len([r for r in x["rows"] if r and r[0] not in ("Total",)]),
                         **({"columns": x["columns"], "rows": x["rows"][:200], "notes": x["notes"]} if full else {})} for x in ts]}

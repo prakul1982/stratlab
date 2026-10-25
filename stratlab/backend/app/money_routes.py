@@ -8,13 +8,14 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
-from . import corp_actions, holdings, holdings_file, instrument_kinds, tax_lots, tax_total
+from . import corp_actions, holdings, holdings_file, instrument_kinds, tax_due, tax_lots, tax_total
 from . import money_advance_tax as adv
 from . import money_dividends as divs
 from . import money_ltcg as ltcg
 from .auth import current_profile
 from .kite_service import IST
 from .plans import FEATURE_PLAN, PLANS, allows
+from .tax_lots import money
 
 router = APIRouter(prefix="/money", tags=["money"])
 US_LOOKUPS = 15                   # US holdings whose dividend history is read while the page waits
@@ -184,12 +185,34 @@ def tax_computed(profile, i: dict) -> tuple[dict, list[dict], list[dict]]:
     return c, equity, units
 
 
-def advance_view(profile, fy: int | None = None) -> dict:
-    """The year's instalments: dates for everyone, amounts on Pro."""
-    M = _m()
+def advance_view(profile, fy: int | None = None, i: dict | None = None) -> dict:
+    """The year's instalments: dates for everyone, amounts on Pro. With no year asked for, Pro opens on the year before
+    when its tax is still unpaid (DH-020: it opened on FY 2026-27's "None due" while FY 2025-26 had ₹77.6 lakh to pay);
+    a year still owing beside the one shown is named in `owed`. `i`: the tax report's inputs, when already read."""
     t = today()
-    fy = fy or tax_lots.fy_of(t.isoformat())
+    cur = tax_lots.fy_of(t.isoformat())
     full = allows(profile["_plan"], "tax_tools")
+    i = i or _m().tax_inputs(profile)
+    if not full:
+        return _advance_year(profile, fy or cur, None, i)
+    last = _advance_year(profile, cur - 1, i)
+    owing = (last.get("payable") or {}).get("total", 0) > 0.5 and t <= tax_due.revise_by(cur - 1)
+    if fy is None and owing:
+        return {**last, "opened_on_owed": True}
+    out = last if fy == cur - 1 else _advance_year(profile, fy or cur, i)
+    if owing and out["fy"] != cur - 1:
+        p = last["payable"]
+        out["owed"] = {"fy": p["fy"], "label": p["label"], "total": p["total"], "balance": p["balance"], "due": p["due"]}
+    return out
+
+
+def _advance_year(profile, fy: int, i: dict | None, plain: dict | None = None) -> dict:
+    """One year's advance tax view (advance_view); `i` None on a plan without the amounts, which gets `plain` (the
+    tax report's inputs) for the shares of the year's tax by each date: the tax report shows that total on every plan,
+    so locking 15%, 45%, 75% and 100% of it hid only arithmetic (DH-021); the TDS and payments, what is still due and
+    the interest stay on Pro."""
+    t = today()
+    full = i is not None
     # the reminders are the money calendar's (Basic), as Plans lists them: a plan without them never shows them on (DP2-004)
     can_remind = allows(profile["_plan"], "money_reminders")
     saved = adv.load(profile["id"])
@@ -199,8 +222,17 @@ def advance_view(profile, fy: int | None = None) -> dict:
            "locked": not full, "as_of": t.isoformat(), "assumptions": adv.ASSUMPTIONS, "threshold": adv.THRESHOLD,
            "current_fy": tax_lots.fy_of(t.isoformat())}
     if not full:
+        if plain is not None:
+            try:
+                c, equity, units = tax_computed(profile, plain)
+                y = tax_lots.years_with_total([fy], equity, c["intraday"], instrument_kinds.bucket_rows(units, c["names"]), units,
+                                              c["names"], plain["business"], plain["income"], dividends_for_tax(profile), limit=0)[fy]
+                tax = (y["total"].get("total") or 0.0) if y["total"].get("available") else 0.0
+                out["plain"] = {"tax": round(tax, 2), "due": tax >= adv.THRESHOLD,
+                                "rows": [{**d, "amount": round(tax * d["pct"], 2)} for d in adv.due_dates(fy)]}
+            except Exception as e:
+                print("advance tax shares:", type(e).__name__)
         return out
-    i = M.tax_inputs(profile)
     c, equity, units = tax_computed(profile, i)
     stored, est, ahead, rate = dividend_parts(profile["id"], fetch=False)
     dv = divs.view(stored, est, ahead, rate, t)
@@ -208,6 +240,8 @@ def advance_view(profile, fy: int | None = None) -> dict:
     inputs = i["income"].get(fy)
 
     earlier = divs.for_total(dv)
+
+    whole: dict = {}
 
     def tax_by(cut: str | None) -> float:
         """The year's total tax as the report works it out (years_with_total, with the losses brought forward), on the
@@ -217,17 +251,93 @@ def advance_view(profile, fy: int | None = None) -> dict:
         div = sum(a for d, a in div_events if cut is None or d <= cut)
         y = tax_lots.years_with_total([fy], rows, c["intraday"], instrument_kinds.bucket_rows(other, c["names"]), other, c["names"],
                                       i["business"], i["income"], {**earlier, fy: div}, limit=0)[fy]
+        if cut is None:
+            whole.update(y["total"])
         return (y["total"].get("total") or 0.0) if y["total"].get("available") else 0.0
     full_tax = tax_by(None)
     upto = [tax_by(d["date"]) for d in adv.due_dates(fy)]       # the last, to 15 March: the 234C proviso covers later gains
     business = any(b["fy"] == fy for b in i["business"]) or any(x["fy"] == fy for x in c["intraday"])
     turnover = tax_lots.business_year(fy, i["business"])["turnover"] + sum(x.get("turnover") or 0 for x in c["intraday"] if x["fy"] == fy)
-    audit = tax_total.audit_applies(fy, turnover, business)      # the tax report's 31 October, not 31 July / August (R29B-015)
-    out.update({"schedule": adv.schedule(fy, full_tax, upto, mine["tds"], mine["paid"], t, business, audit), "inputs": mine,
+    audit = tax_total.audit_applies(fy, turnover, business)      # the audit case's date, as extended (R29B-015, DH-001)
+    s = adv.schedule(fy, full_tax, upto, mine["tds"], mine["paid"], t, business, audit)
+    rounded = (whole.get("rounded") or {}).get("tax")
+    out.update({"schedule": s, "inputs": mine,
+                # DH-003: the year's tax with the interest on it and what's paid taken off, as one figure
+                "payable": adv.payable(fy, s, full_tax if rounded is None else rounded, (whole.get("income") or {}).get("total") or 0.0,
+                                       mine["paid"], t, business, audit),
+                "return_due": tax_due.due(fy, tax_due.return_kind(business, audit))["date"].isoformat(), "audit": audit,
                 "dividends_in_estimate": round(sum(a for _, a in div_events), 2),
                 "dividend_tds": next((y["tds"]["expected"] for y in dv["years"] if y["fy"] == fy), 0.0),
                 "income_saved": bool(inputs)})
     return out
+
+
+WHEN = ("first", "second", "third", "last")
+
+
+def calendar_dates(uid: str, days: int = 90, frm: date | None = None) -> list[dict]:
+    """The money calendar's own tax items (its hook, money_calendar.HOOKS), for a plan with the advance tax amounts and
+    tax files: this year's instalments with the amount still due by each, or that none is due when the estimate is under
+    the threshold (DH-043: a generic 75% item for an estimate of ₹0), and the year before's tax still unpaid, on its
+    return's due date (DH-040: no item said there was tax to pay before filing). Each instalment stands in for the plain
+    one of its date (its kind has "advance" in it)."""
+    from . import db
+    from .plans import plan_of
+    profile = db.get_profile(uid)
+    if not profile:
+        return []
+    profile = {**profile, "_plan": plan_of(profile)}
+    data = tax_lots.load(uid)
+    if not allows(profile["_plan"], "tax_tools") or not (data["trades"] or data["business"]):
+        return []
+    t = today()
+    cur = tax_lots.fy_of(t.isoformat())
+    i = _m().tax_inputs(profile)
+    out = []
+    now = _advance_year(profile, cur, i)
+    s = now.get("schedule")
+    for r in (s or {}).get("instalments") or []:
+        if r["status"] == "passed":
+            continue
+        n = WHEN[r["n"]]
+        if not s["due"]:
+            out.append({"date": r["date"], "kind": "advance_none", "id": f"adv{r['n']}{cur}",
+                        "title": f"Advance tax, {n} instalment: none due for {now['label']}",
+                        "detail": f"Your {now['label']} estimate, less TDS, is {money(s['net'])}: below {money(s['threshold'])}, so no "
+                                  "advance tax is due (section 208). It changes when your files or income for the year do.",
+                        "url": "/money/tax-tools?tab=advance"})
+        else:
+            out.append({"date": r["date"], "kind": "advance_due", "id": f"adv{r['n']}{cur}", "amount": r["to_pay"],
+                        "title": f"Advance tax, {n} instalment ({r['pct'] * 100:g}%): {money(r['to_pay'])} still due",
+                        "detail": f"{r['pct'] * 100:g}% of {now['label']}'s estimated tax less TDS is {money(r['required'])} by "
+                                  f"{r['label']}; paid by then so far {money(r['paid'])}. From your figures in Tax tools.",
+                        "url": "/money/tax-tools?tab=advance"})
+    last = _advance_year(profile, cur - 1, i)
+    p = last.get("payable")
+    if p and p["total"] > 0.5 and t <= tax_due.belated(cur - 1):
+        on = date.fromisoformat(p["due"]) if not p["past_due"] else tax_due.belated(cur - 1)
+        out.append({"date": on.isoformat(), "kind": "self_assessment", "id": f"sa{cur - 1}", "amount": p["total"],
+                    "title": f"{p['label']} tax still unpaid: {money(p['total'])}",
+                    "detail": (f"Self-assessment tax is paid before the return is filed (section 140A). The figure is the tax "
+                               f"less TDS and payments entered, with interest under sections 234A, 234B and 234C, as if paid by "
+                               f"{tax_due.day(on)}. The return's due date is {tax_due.day(date.fromisoformat(p['due']))}"
+                               + (f"; a belated return can be filed until {tax_due.day(on)}." if p["past_due"] else ".")),
+                    "url": "/money/tax-tools?tab=advance"})
+    return out
+
+
+def payable_for_report(profile, i: dict) -> dict | None:
+    """The year being filed, for the tax report's headline (DH-003): the amount payable with the interest on Pro (it
+    needs the TDS and payments entered in Tax tools), the plan that has it otherwise. Never stops the report."""
+    fy = tax_lots.fy_of(today().isoformat()) - 1
+    if not allows(profile["_plan"], "tax_tools"):
+        return {"fy": fy, "locked": True, "plan": PLANS[FEATURE_PLAN["tax_tools"]]["name"]}
+    try:
+        p = _advance_year(profile, fy, i).get("payable")
+        return {**p, "locked": False} if p else None
+    except Exception as e:
+        print("payable for the tax report:", type(e).__name__)
+        return None
 
 
 @router.get("/advance-tax")

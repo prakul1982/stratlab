@@ -73,16 +73,16 @@ def test_a_rule_against_a_multiple_of_the_price_becomes_a_target_or_a_stop():
 
 
 # ---------- R29B-015: 234B's due date is the tax report's 31 October when an audit applies ----------
-def test_234b_runs_to_31_october_when_an_audit_applies():
+def test_234b_runs_to_the_audit_cases_due_date():
     from app import money_advance_tax as adv, tax_total
     from datetime import date
-    assert adv.return_due(2025, True, True) == date(2026, 10, 31)
+    assert adv.return_due(2025, True, True) == date(2026, 11, 21)            # as CBDT Circular 7/2026 extended it (DH-001)
     assert adv.return_due(2025, True, False) == date(2026, 8, 31)
     assert adv.return_due(2025, False, False) == date(2026, 7, 31)
     assert tax_total.audit_applies(2025, 39.7e7, True) and not tax_total.audit_applies(2025, 39.7e7, False)
     assert not tax_total.audit_applies(2025, 5e7, True)            # between 1 and 10 crore: depends on cash receipts
     s = adv.schedule(2025, 100000.0, [0, 0, 0, 100000.0], 0.0, [], date(2026, 10, 15), True, True)
-    assert [v for k, v in s.items() if isinstance(v, dict) and "return_by" in v][0]["return_by"] == "2026-10-31"
+    assert [v for k, v in s.items() if isinstance(v, dict) and "return_by" in v][0]["return_by"] == "2026-11-21"
 
 
 # ---------- R29B-016: the weekly brief's headlines are from the week it covers ----------

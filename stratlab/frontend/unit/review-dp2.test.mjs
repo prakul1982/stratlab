@@ -34,7 +34,8 @@ test("DP2-004, DP2-012, DP2-013: Tax tools words each tab's lock at its top; rem
   const p = read("src/pages/money/TaxToolsPage.tsx");
   assert.match(p, /<div className="k-page" data-plan-notes="own">/);
   assert.match(read("src/components/PageLock.tsx"), /main \.plan-note:not\(\.page-lock\), main \[data-plan-notes\]/);
-  for (const note of ["Dividends by company, with the TDS expected", "The amounts due by each date", "Each open lot's long-term gain"]) assert.equal(p.split(note).length - 1, 1, note);
+  // DH-021 reworded the advance tax lock to what Pro adds (the shares of the tax are shown on every plan)
+  for (const note of ["Dividends by company, with the TDS expected", "the amount still due by each date", "Each open lot's long-term gain"]) assert.equal(p.split(note).length - 1, 1, note);
   assert.match(p, /\{v\.remind_locked\s*\? <p className="k-small k-muted" data-testid="advance-remind-locked">/);
   assert.match(p, /<FieldGroup label="Reminders" infoLabel="About advance tax reminders"/);
   assert.match(p, /\{d\.date < today \? <span className="k-note"> · passed<\/span> : d\.n === nextDue \? <span className="k-note"> · next<\/span> : null\}/);

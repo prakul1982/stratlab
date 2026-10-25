@@ -1108,6 +1108,9 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-more { font-size: 11px; color: var(--muted); }
 .mc-own { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .mc-own > li { padding: 6px 0; border-top: 1px solid var(--line); }
+/* DH-042: every row's Change and Delete sit on its own line end, whatever the length of the name before them */
+.mc-own > li.mc-own-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.mc-own-row > .k-row { flex-wrap: nowrap; }
 .mc-url { width: 100%; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
 .mc-grid { align-items: start; }
 @media (max-width: 760px) {

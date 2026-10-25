@@ -3842,7 +3842,9 @@ def tax_view(profile) -> dict:
             "business_lines": int(sum(b["trades"] for b in i["business"])),
             "prices": i["live"], "prices_at": _prices_at([q for q in i["quotes"].values() if q]) if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},
-            "max_trades": tax_lots.MAX_TRADES}
+            "max_trades": tax_lots.MAX_TRADES,
+            # DH-003: the year being filed as one "payable now" figure, with the interest (Pro: it needs Tax tools' payments)
+            "payable": money_routes.payable_for_report(profile, i) if rep["years"] else None}
 
 
 @app.get("/tax")
