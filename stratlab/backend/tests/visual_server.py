@@ -64,6 +64,9 @@ def build():
     fake_ipo.seed()                          # the IPO lists, as the job would have kept them
     mp.setattr(ipo.job, "read", lambda market, now, perf=False: {"rows": 0, "problems": []})    # the browser tests never read the exchanges' pages
     mp.setattr(ipo, "live_refresh", lambda row, now: False)
+    # nor read offer documents or write their summaries in the background: a summary written by the job mid-test (with no
+    # AI keys, so with nothing that could be checked) raced the page's "isn't written yet" (PR 300's CI run)
+    mp.setattr(ipo.job, "read_docs", lambda now, limit=0: 0)
     from tests import fake_market_events
     fake_market_events.seed()                # the market events calendar's sources, as the morning read would have kept them
     # ...and its twice-a-day read (and Admin's Run now) answered by the same made-up sources, never the real sites
