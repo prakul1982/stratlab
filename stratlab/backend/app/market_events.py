@@ -51,7 +51,9 @@ VIEW_BACK, VIEW_AHEAD = 180, 400     # what the page shows around today
 BADGE_AFTER = 30                     # an index badge stays this long after the change takes effect
 PAUSE = 1.5                          # seconds between two requests to one site
 PDF_PAGES = 60
-INDEX_PDFS_PER_RUN, FIGURE_PDFS_PER_RUN, STATEMENTS_PER_RUN = 3, 3, 2
+INDEX_PDFS_PER_RUN, FIGURE_PDFS_PER_RUN, STATEMENTS_PER_RUN = 6, 3, 2
+FIGURE_DAYS, FIGURE_TRIES = 200, 3     # how far back a release's figure is read, and how many runs try one that wasn't
+INDEX_READER = 2                     # the notice reader's version: a notice an older one read to nothing is read again (DC-013)
 
 RBI_LIST = "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx"
 RBI_PR = "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx?prid={}"
@@ -70,7 +72,9 @@ NOTE = ("Dates are as each body publishes them: the central bank's MPC schedule 
         "ministry's advance release calendar and press releases, the US Fed's FOMC calendar and statements, the US "
         "labour statistics bureau's release schedule and the index provider's press releases. A data release set for a "
         "weekend comes on the next working day; any date can change, and the body's own page has the last word. "
-        "Figures are the published ones, never a forecast. Facts, not advice.")
+        "Figures are the published ones, never a forecast: the repo rate, the Fed's target range and India's CPI, IIP "
+        "and GDP once read from the release; the US CPI and jobs reports are dates only, with a link to the release. "
+        "Facts, not advice.")
 
 # the indices whose changes are kept (the provider's own names), the first ones first on a company's badge
 MAIN_INDICES = ("Nifty 50", "Nifty Next 50", "Nifty Bank", "Nifty Financial Services", "Nifty Midcap Select", "Nifty IT",
@@ -325,7 +329,8 @@ def read_fomc(html_text: str) -> list[dict]:
 
 def read_fed_statement(text: str) -> dict | None:
     """{"low": 3.75, "high": 4.0, "move": "raised" | "cut" | "unchanged"} from an FOMC statement."""
-    t = plain(text)
+    # some statements write "3‑1/2" with a non-breaking hyphen (DC-015: the March and April decisions showed no range)
+    t = re.sub("[\u2010-\u2015\u2212]", "-", plain(text))
     m = re.search(r"target range for the federal funds rate[^.]{0,120}?\b(?:at|to)\s+(\d+(?:-\d/\d)?)\s+to\s+(\d+(?:-\d/\d)?)\s+percent", t, re.I)
     if not m:
         return None
@@ -515,13 +520,21 @@ def refresh_india(web, st: dict, today: date) -> dict:
     for r in sorted(released, key=lambda r: r["date"], reverse=True):
         rid = _id(r["kind"], r["date"])
         d = _day(r["date"])
-        if rid in figures or not r.get("pdf") or not d or (today - d).days > 60:
+        kept = figures.get(rid) or {}
+        # a release whose figure wasn't read is tried again (three runs), and the year's releases are read, not only the
+        # last 60 days' (DC-015: May, June and July's CPI and IIP showed no figure)
+        if (kept and (kept.get("figure") or kept.get("tries", 1) >= FIGURE_TRIES)) or not r.get("pdf") or not d or (today - d).days > FIGURE_DAYS:
             continue
         if not budget:
             break
         budget -= 1
-        fig = read_india_figure(r["kind"], web.pdf_text(r["pdf"], pages=4))
-        figures[rid] = {"id": rid, "kind": r["kind"], "date": r["date"], "pdf": r["pdf"], "figure": fig}
+        try:
+            fig = read_india_figure(r["kind"], web.pdf_text(r["pdf"], pages=4))
+        except (SourceError, ValueError) as e:            # one release unread never loses the calendar
+            print("market events: India release unread:", str(e)[:120])
+            fig = None
+        figures[rid] = {"id": rid, "kind": r["kind"], "date": r["date"], "pdf": r["pdf"], "figure": fig,
+                        "tries": (kept.get("tries", 1) + 1) if kept and not fig else 1}
     part["releases"] = sorted(released, key=lambda r: r["date"])[-80:]
     cut = (today - timedelta(days=KEEP_BACK)).isoformat()
     part["figures"] = sorted((f for f in figures.values() if f["date"] >= cut), key=lambda f: f["date"])
@@ -562,45 +575,87 @@ def _effective(text: str, title: str = "") -> date | None:
 
 
 def _index_name(raw: str) -> str | None:
-    name = re.sub(r"\s+", " ", raw).strip(" :")
+    """The provider's name for an index heading: a main index's own spelling, else any other Nifty index as written
+    (DC-013: notices about the other indices were dropped whole, and read as "nothing changed")."""
+    name = re.sub(r"\s+", " ", raw).strip(" :.-")
+    name = re.sub(r"\s+index$", "", name, flags=re.I)
     for n in MAIN_INDICES:
         if name.lower() == n.lower() or name.lower() == n.lower().replace(" index", ""):
             return n
+    if re.match(r"nifty", name, re.I) and 5 < len(name) <= 60 and not re.search(r"[.;,]|\b(?:the|will|shall|be|being|is|are|following|stocks?|compan(?:y|ies))\b", name, re.I):
+        return re.sub(r"^nifty", "Nifty", name, flags=re.I)
     return None
 
 
+# a line that is only an index's name: "1) Nifty 50", "2. Nifty Midcap 150 index", "Index Name: NIFTY Smallcap 250", "Nifty Bank:"
+_HEAD = re.compile(r"^(?:\d{1,2}\s*[\).]\s*|index(?: name)?\s*[:\-]\s*)?(Nifty[\w &\-]*?)\s*(?:index)?\s*:?\s*$", re.I)
+_OUT = re.compile(r"\b(?:being|are|is|to be|will be|shall be)\s+(?:excluded|removed|dropped)\b|^(?:stocks?|compan(?:y|ies)|scrips?|securit(?:y|ies))?\s*(?:\(s\)\s*)?(?:excluded|exclusions?|removed|deleted)\b", re.I)
+_IN = re.compile(r"\b(?:being|are|is|to be|will be|shall be)\s+(?:included|added)\b|^(?:stocks?|compan(?:y|ies)|scrips?|securit(?:y|ies))?\s*(?:\(s\)\s*)?(?:included|inclusions?|added)\b", re.I)
+_ROW = re.compile(r"^\d{1,3}\.?\s+(.+?)\s+([A-Z0-9][A-Z0-9&\-]{1,19})$")                         # "1 Wipro Ltd. WIPRO"
+# "BSE BSE Limited Excluded": the symbol in capitals (not case-blind: "Stock being excluded" is a heading, not a row)
+_ACTION_ROW = re.compile(r"^([A-Z0-9][A-Z0-9&\-]{1,19})\s+(.+?)\s+(Included|Excluded|INCLUDED|EXCLUDED|Inclusion|Exclusion)$")
+
+
 def read_index_changes(text: str, title: str = "") -> dict:
-    """{"effective", "sections": [{"index", "in": [[symbol, name]], "out": [...]}]} from a press release's text, for
-    the main indices (MAIN_INDICES); the rest are left out."""
-    sections, cur, mode = [], None, None
+    """{"effective", "sections": [{"index", "in": [[symbol, name]], "out": [...]}]} from a notice's text, for every Nifty
+    index it names. Reads the periodic review's layout ("1) Nifty 50", then the companies "being excluded" and "being
+    included"), an ad hoc notice's ("Index Name: Nifty Smallcap 250", or no heading when the title names the one index)
+    and the table of symbol, company and "Included" / "Excluded" (DC-013: 9 of 12 notices read to nothing)."""
+    sections, cur, mode, naming = [], None, None, False
+    by_name: dict[str, dict] = {}
+
+    def section(name):
+        if name not in by_name:
+            by_name[name] = {"index": name, "in": [], "out": []}
+            sections.append(by_name[name])
+        return by_name[name]
+
+    def add(sec, way, pair):
+        if sec is not None and pair not in sec[way] and len(sec[way]) < 150:
+            sec[way].append(pair)
+    titled = [n for n in (_index_name(m) for m in re.findall(r"Nifty[\w &\-]*?(?=\s+(?:index|indices)\b|$|,|\s+and\s)", title or "", re.I)) if n]
     for line in (text or "").splitlines():
         s = line.strip()
-        h = re.match(r"^\d{1,2}\)\s+(Nifty[\w &\-]*?)\s*(?:index)?\s*$", s, re.I)
-        if h:
-            name = _index_name(h.group(1))
-            cur = {"index": name, "in": [], "out": []} if name else None
-            if cur:
-                sections.append(cur)
-            mode = None
+        if not s:
             continue
+        h = _HEAD.match(s)
+        name = _index_name(h.group(1)) if h else None
+        if name:
+            cur, mode, naming = section(name), None, True
+            continue
+        if naming and cur is not None and not cur["in"] and not cur["out"] and re.fullmatch(r"[\w &\-]{1,20}", s) and len(s.split()) <= 3 \
+                and not _ROW.match(s) and not _ACTION_ROW.match(s) and not _OUT.search(s) and not _IN.search(s) and _index_name(cur["index"] + " " + s):
+            # a table cell broken over two lines ("Nifty India FPI" / "150")
+            full = _index_name(cur["index"] + " " + s)
+            sections.remove(cur)
+            by_name.pop(cur["index"], None)
+            cur = section(full)
+            continue
+        naming = False
         if re.match(r"^[A-Z]\.\s", s):
             cur, mode = None, None
             continue
         low = s.lower()
-        if "being excluded" in low or "are excluded" in low:
-            mode = "out"
-            continue
-        if "being included" in low or "are included" in low:
-            mode = "in"
-            continue
         if low.startswith("note"):
             mode = None
             continue
-        r = re.match(r"^\d{1,3}\s+(.+?)\s+([A-Z0-9][A-Z0-9&\-]{1,19})$", s)
+        a = _ACTION_ROW.match(s)
+        if a and cur is not None and not a.group(2).lower().startswith("company name"):
+            add(cur, "out" if a.group(3).lower().startswith("exclu") else "in", [a.group(1), a.group(2)[:80].strip()])
+            continue
+        if _OUT.search(low) and len(s) < 160:
+            mode = "out"
+            if cur is None and len(titled) == 1:
+                cur = section(titled[0])
+            continue
+        if _IN.search(low) and len(s) < 160:
+            mode = "in"
+            if cur is None and len(titled) == 1:
+                cur = section(titled[0])
+            continue
+        r = _ROW.match(s)
         if cur is not None and mode and r and not r.group(1).lower().startswith("company name"):
-            pair = [r.group(2), r.group(1)[:80]]
-            if pair not in cur[mode] and len(cur[mode]) < 150:
-                cur[mode].append(pair)
+            add(cur, mode, [r.group(2), r.group(1)[:80]])
     eff = _effective(text, title)
     return {"effective": _iso(eff), "sections": [s for s in sections if s["in"] or s["out"]]}
 
@@ -611,8 +666,9 @@ def refresh_index(web, st: dict, today: date) -> dict:
     tried = {k: v for k, v in (part.get("tried") or {}).items() if isinstance(v, int)}
     items = [i for i in read_index_list(web.text(INDEX_LIST)) if (today - date.fromisoformat(i["date"])).days <= 120]
     budget = INDEX_PDFS_PER_RUN
-    for it in items:
-        if it["url"] in changes or tried.get(it["url"], 0) >= 3 or not budget:
+    for it in sorted(items, key=lambda i: i["date"], reverse=True):        # the newest notices first
+        kept = changes.get(it["url"])
+        if (kept and (kept.get("sections") or kept.get("reader", 1) >= INDEX_READER)) or tried.get(it["url"], 0) >= 3 or not budget:
             continue
         budget -= 1
         try:
@@ -623,7 +679,7 @@ def refresh_index(web, st: dict, today: date) -> dict:
             continue
         changes[it["url"]] = {"id": hashlib.sha1(it["url"].encode()).hexdigest()[:12], "url": it["url"], "title": it["title"],
                               "announced": it["date"], "effective": got["effective"] or _iso(_effective("", it["title"])),
-                              "sections": got["sections"]}
+                              "sections": got["sections"], "reader": INDEX_READER}
     cut = (today - timedelta(days=KEEP_BACK)).isoformat()
     part["changes"] = sorted((c for c in changes.values() if (c.get("effective") or c["announced"]) >= cut),
                              key=lambda c: (c.get("effective") or c["announced"], c["announced"]))
@@ -810,6 +866,8 @@ def fed_events(part: dict, today: date, now: datetime | None = None) -> list[dic
 
 US_TITLES = {"us_cpi": ("US consumer prices (CPI)", "The US consumer price index for the month before."),
              "us_jobs": ("US jobs report", "US employment and unemployment for the month before (the Employment Situation).")}
+# the bureau's page for each release, with every past one linked: the figures are there, not copied here (DC-015)
+US_PAGES = {"us_cpi": "https://www.bls.gov/schedule/news_release/cpi.htm", "us_jobs": "https://www.bls.gov/schedule/news_release/empsit.htm"}
 
 
 def us_events(part: dict, today: date, now: datetime | None = None) -> list[dict]:
@@ -820,8 +878,9 @@ def us_events(part: dict, today: date, now: datetime | None = None) -> list[dict
             continue
         day, at = ist_time(d, r.get("time") or "08:30", NY)
         title, what = US_TITLES[r["kind"]]
-        out.append(_ev("us", day, title, f"{what} Released at {r.get('time') or '08:30'} New York time, {at} India time.",
-                       eid=_id(r["kind"], d), time_ist=at, status="released" if _passed(day, at, today, now) else "scheduled"))
+        out.append(_ev("us", day, title, f"{what} Released at {r.get('time') or '08:30'} New York time, {at} India time. The date "
+                       "only: the figures are in the bureau's release, linked here.",
+                       eid=_id(r["kind"], d), time_ist=at, url=US_PAGES[r["kind"]], status="released" if _passed(day, at, today, now) else "scheduled"))
     return out
 
 
@@ -857,7 +916,8 @@ def india_events(part: dict, today: date) -> list[dict]:
         if r["kind"] == "gdp":
             title = "India GDP: " + re.sub(r"^(?:o\s+)?", "", r.get("title") or "estimates")[:90]
         status = "released" if (actual or fig) and day <= today else "scheduled" if day >= today else "awaiting"
-        out.append(_ev("india", day, title, f"{r.get('title') or title}. Press release at 4:00 pm.{moved}", eid=_id(r["kind"], planned),
+        unread = " The figure couldn't be read from the press release here." if status == "released" and not fig else ""
+        out.append(_ev("india", day, title, f"{r.get('title') or title}. Press release at 4:00 pm.{moved}{unread}", eid=_id(r["kind"], planned),
                        time_ist="16:00", figure=fig, previous=prev, url=fig_row.get("pdf") if fig_row else None, status=status))
     return out
 
@@ -866,7 +926,13 @@ def index_events(part: dict, today: date) -> list[dict]:
     out = []
     for c in part.get("changes") or []:
         eff = _day(c.get("effective")) or _day(c.get("announced"))
-        if not eff or not c.get("sections"):
+        if not eff:
+            continue
+        if not c.get("sections"):           # a notice not read into stocks still shows, with its link (DC-013)
+            out.append(_ev("index", eff, f"Index notice: {c.get('title') or 'index changes'}"[:160],
+                           f"Announced on {nice(c['announced'])}" + (f", from the start of {nice(eff)}" if c.get("effective") else "")
+                           + ". The stocks in it couldn't be read here; the press release has the list.", eid=_id("index", c["id"]),
+                           url=c.get("url"), status="released" if eff <= today else "scheduled", change=c["id"], symbols=[]))
             continue
         names = [s["index"] for s in c["sections"]]
         lines = []
@@ -1000,6 +1066,44 @@ def holiday_events(today: date, frm: date | None = None, to: date | None = None)
             pass
         out.append(_ev("holiday", d, f"Exchange holiday{': ' + name if name else ''}", "The exchanges are closed for equities and F&O.",
                        eid=_id("hol", d), status="released" if d < today else "scheduled"))
+    return out + special_sessions(today, frm, to)
+
+
+def special_sessions(today: date, frm: date, to: date) -> list[dict]:
+    """Diwali's Muhurat trading (DC-014: the Sunday session was on no calendar, only the weekday holiday after it): from
+    the exchange's F&O circular about it, with its times, or else from the exchange's holiday list, which marks the
+    day with a "*" for a special session."""
+    from .data import calendar as tc
+    from . import fo_changes
+    out, days = [], set()
+    try:
+        circs = [e for e in fo_changes.load_events() if e.get("source") == "circular" and isinstance(e.get("session"), dict)]
+    except Exception:
+        circs = []
+    for c in circs:
+        ses, d = c["session"], _day(c["session"].get("day"))
+        if not d or not frm <= d <= to or d in days:
+            continue
+        days.add(d)
+        at = (f" The F&O normal market runs {ses['start']} to {ses['end']} IST." if ses.get("start") and ses.get("end") else "")
+        no = f" {c['no']}" if c.get("no") else ""
+        out.append(_ev("holiday", d, "Muhurat trading session (Diwali)", f"A special trading session on a {d:%A}, as the exchange's "
+                       f"circular{no} sets it.{at} Trades in it settle like any other day's.",
+                       eid=_id("muhurat", d), time_ist=ses.get("start"), url=c.get("url") or None,
+                       status="released" if d < today else "scheduled", session=True))
+    try:
+        names = (tc.auto_status("IN").get("names") or {})
+    except Exception:
+        names = {}
+    for iso, name in sorted(names.items()):
+        d = _day(iso)
+        if not d or d in days or d.weekday() < 5 or "*" not in str(name) or not frm <= d <= to:
+            continue
+        days.add(d)
+        clean = str(name).replace("*", "").strip()
+        out.append(_ev("holiday", d, f"Special trading session: {clean}", f"The exchange's holiday list marks {clean} on this {d:%A} for a "
+                       "special trading session (Diwali's Muhurat trading); its circular gives the times.", eid=_id("muhurat", d),
+                       status="released" if d < today else "scheduled", session=True))
     return out
 
 
@@ -1038,8 +1142,10 @@ def events(today: date | None = None, listed=None, frm: date | None = None, to: 
 
 
 def index_changes(today: date | None = None) -> list[dict]:
-    """Each kept index change in full, newest effective date first: [{id, url, title, announced, effective, sections}]."""
-    return sorted((load_state().get("index") or {}).get("changes") or [], key=lambda c: c.get("effective") or c["announced"], reverse=True)
+    """Each kept index change in full, the latest first (by the day it takes effect, then the day it was announced):
+    [{id, url, title, announced, effective, sections}]. A notice not read into stocks is kept too, with no sections."""
+    return sorted((load_state().get("index") or {}).get("changes") or [],
+                  key=lambda c: (c.get("effective") or c["announced"], c["announced"]), reverse=True)
 
 
 def badges(today: date | None = None) -> dict[str, list[dict]]:
@@ -1079,7 +1185,8 @@ def sources() -> list[dict]:
     out = []
     for k, label in SOURCES.items():
         p = st.get(k) if isinstance(st.get(k), dict) else {}
-        out.append({"id": k, "label": label, "as_of": p.get("as_of"), "checked": p.get("checked"), "failed": bool(p.get("error"))})
+        out.append({"id": k, "label": label, "as_of": p.get("as_of"), "checked": p.get("checked"), "failed": bool(p.get("error")),
+                    "unread": sum(1 for c in p.get("changes") or [] if isinstance(c, dict) and not c.get("sections")) if k == "index" else 0})
     return out
 
 

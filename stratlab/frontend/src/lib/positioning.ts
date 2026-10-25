@@ -93,6 +93,8 @@ export type ChainFacts = {
   lot?: number | null; unit?: "lots" | "shares"; pcr_all?: number | null; near_strikes?: number;
   /** how many strikes the PCR and max pain count: the window of `near_strikes` either side of the money (fewer at a chain's edge) */
   window_strikes?: number;
+  /** DC-003: the open interest is the exchange's end-of-day figure (its F&O file), not a recording read from the feed in the day */
+  final?: boolean;
 };
 
 /** The strikes each chain figure counts, as the server works them out: the PCR and max pain over the window around the
@@ -102,7 +104,8 @@ export function chainCounts(c: Pick<ChainFacts, "near_strikes" | "window_strikes
   const window = c.window_strikes ?? 2 * near + 1;
   const read = c.strikes_counted ?? c.rows.length;
   return {
-    maxPain: `over the ${window} strikes around the money, as the PCR`,
+    // DB-012: worked out over the window only, so it is near-the-money max pain; the full chain can give another strike
+    maxPain: `near-the-money max pain: over the ${window} strikes around the money, as the PCR, not the whole chain`,
     note: `The PCR and max pain count the ${window} strikes around the money (${near} either side, as StratLab's history keeps); `
       + `the most call and put open interest are over all ${read} strikes read; the chart shows the ${c.rows.length} nearest.`,
   };
@@ -121,9 +124,34 @@ export function unitLine(c: Pick<ChainFacts, "unit" | "lot">): string {
 export type PartPoint = { day: string } & Record<"client" | "dii" | "fii" | "pro", Record<string, number | null>>;
 export type CashPoint = { day: string; fii: number | null; dii: number | null };
 export type ChainPoint = { day: string; expiry: string | null; pcr_oi: number | null; pcr_vol: number | null; max_pain: number | null;
-  atm_iv: number | null; spot: number | null };
+  atm_iv: number | null; spot: number | null; final?: boolean };
 
-export const PARTICIPANTS: [PRow["id"], string][] = [["client", "Client"], ["dii", "DII"], ["fii", "FII"], ["pro", "Pro"]];
+/** What the chain's open interest is (DC-003): the exchange's end-of-day figure, or a recording read from the feed during the
+ * day, which the exchange's final open interest can differ from by several percent a strike. Empty for a live chain. */
+export function oiBasis(c: Pick<ChainFacts, "source" | "final" | "as_of">): string {
+  if (c.final) return "Open interest, its change and volume are the exchange's end-of-day figures, from its F&O file for the day.";
+  if (c.source === "live") return "";
+  return `An intraday recording (${istTime(c.as_of)}): its open interest was read from the feed before the exchange's end-of-day figures, `
+    + "so it can differ from them. The day's chain is read again from the exchange's F&O file each evening.";
+}
+
+/** How many of the history's days use the exchange's end-of-day open interest, and how many an intraday recording (DC-003). */
+export function historyBasis(points: Pick<ChainPoint, "final">[]): string {
+  const fin = points.filter((p) => p.final).length;
+  if (!points.length) return "";
+  if (fin === points.length) return "Every day uses the exchange's end-of-day open interest.";
+  const rest = points.length - fin;
+  return `${fin} of ${points.length} days use the exchange's end-of-day open interest; the other ${rest} use StratLab's intraday recording of the chain, which can differ from it.`;
+}
+
+/** The IV percentile tile's wait, counted down (DC-008: "17 of the 20 earlier recorded days needed so far"). */
+export function ivWait(days: number, need: number): string {
+  const left = Math.max(0, need - days);
+  return left === 1 ? "Needs 1 more recorded day" : `Needs ${left} more recorded days`;
+}
+
+// the exchange's "Pro" (brokers' own trading) is "Prop desks" here: "Pro" read as the account's plan beside it (DC-006)
+export const PARTICIPANTS: [PRow["id"], string][] = [["client", "Client"], ["dii", "DII"], ["fii", "FII"], ["pro", "Prop desks"]];
 export const RANGES: [string, string][] = [["3m", "3M"], ["6m", "6M"], ["1y", "1Y"], ["all", "All"]];
 
 /** A count of contracts, Indian grouping: 1,23,456. */
@@ -178,9 +206,10 @@ export const LIVE_CHAIN_FOR_MS = 2 * 60 * 1000;
 
 /** What a chain is, in words ("live chain", "chain at 11:39 IST", "chain at the close", "recorded chain"), against the time
  * `now` (ms). A chain from the live feed older than LIVE_CHAIN_FOR_MS says its time instead of "live". */
-export function chainWords(c: { source?: string | null; at_close?: boolean; as_of?: string | null }, now: number = Date.now()): string {
+export function chainWords(c: { source?: string | null; at_close?: boolean; as_of?: string | null; final?: boolean }, now: number = Date.now()): string {
+  if (c.final) return "the exchange's end-of-day chain";
   if (c.at_close) return "chain at the close";
-  if (c.source !== "live") return "recorded chain";
+  if (c.source !== "live") return "intraday recording";
   const at = c.as_of ? Date.parse(c.as_of) : NaN;
   if (Number.isFinite(at) && now - at > LIVE_CHAIN_FOR_MS) {
     const hm = new Date(at).toLocaleTimeString("en-GB", { timeZone: IST, hour: "2-digit", minute: "2-digit", hour12: false });
@@ -191,7 +220,9 @@ export function chainWords(c: { source?: string | null; at_close?: boolean; as_o
 
 /** The chain's words with its time, naming the time once: an aging live chain's words already carry it (R65-005: "Chain at
  * 12:29 IST, 19 Oct, 12:29 IST"). */
-export function chainWithTime(c: { source?: string | null; at_close?: boolean; as_of?: string | null }, time: string | null | undefined, now: number = Date.now()): string {
+export function chainWithTime(c: { source?: string | null; at_close?: boolean; as_of?: string | null; final?: boolean }, time: string | null | undefined, now: number = Date.now()): string {
+  // the end-of-day chain's day is what counts, not the stamp it is kept under
+  if (c.final) return `${chainWords(c, now)}${c.as_of ? `, ${fmtDate(c.as_of.slice(0, 10), { year: false })}` : ""}`;
   const words = chainWords(c, now);
   return / at \d/.test(words) || !time ? words : `${words}, ${time}`;
 }

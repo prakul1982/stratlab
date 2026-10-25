@@ -132,8 +132,13 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     }
   }, []);
 
+  // the newest ask's answer is the one kept: an older list landing after it put a renamed notebook's old name back in the
+  // sidebar until a reload (DB-024)
+  const nbSeq = useRef(0);
   const refreshNotebooks = useCallback(async () => {
-    try { setNotebooks(await api<NotebookItem[]>("/notebooks")); setNotebooksFailed(false); } catch (e) { setNotebooks((n) => n ?? []); setNotebooksFailed(true); fail(e); }
+    const n = ++nbSeq.current;
+    try { const got = await api<NotebookItem[]>("/notebooks"); if (n === nbSeq.current) { setNotebooks(got); setNotebooksFailed(false); } }
+    catch (e) { if (n !== nbSeq.current) return; setNotebooks((x) => x ?? []); setNotebooksFailed(true); fail(e); }
   }, [fail]);
 
   useEffect(() => {

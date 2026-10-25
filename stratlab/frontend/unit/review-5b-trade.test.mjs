@@ -198,7 +198,7 @@ test("R5B-009: plan-locked choices say their plan before Start, with the server'
   const opt = read("src/pages/OptionsPage.tsx");
   assert.match(opt, /const signalOk = feats \? !!feats\.options_signal : true;/);
   assert.match(opt, /label: `When a notebook's rules say so\$\{signalOk \? "" : " \(Pro\)"\}`, disabled: !signalOk && !ruleMode/);
-  assert.match(opt, /disabled=\{starting \|\| !!offline \|\| !canStart \|\| \(ruleMode && \(!s\.signal \|\| !signalOk\)\)\}/);
+  assert.match(opt, /disabled=\{starting \|\| !!offline \|\| !canStart \|\| \(ruleMode && \(!s\.signal \|\| !signalOk\)\) \|\| timeIssues\.length > 0 \|\| notes\.length > 0\}/);
   const nb = read("src/pages/NotebookPage.tsx");
   assert.match(nb, /const groupOk = feats \? !!feats\.group_live : true, fastOk = feats \? !!feats\.fast_entries : true;/);
   assert.match(nb, /if \(!groupOk\) \{ plansToast\("Paper trading a group is on the Basic plan\."\); return; \}/);

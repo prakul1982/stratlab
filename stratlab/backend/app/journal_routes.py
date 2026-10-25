@@ -306,8 +306,13 @@ def set_note(tid: str, req: NoteReq, profile=Depends(current_profile)):
     _edit(profile)
     tid = tid[:40]
     j = J.load(profile["id"])
-    _find(profile, j, tid)
+    t = _find(profile, j, tid)
     note = J.clean_note(req.model_dump())
+    # a stop or target on the wrong side of the entry is refused, not saved and ignored (DB-043: a short at 3,000 took a stop
+    # of 2,950, and R stayed blank)
+    why = J.plan_problem(note.get("side") or t.get("side"), t["entry"], note.get("stop"), note.get("target"))
+    if why:
+        _m().err(400, "bad_plan", why)
     j["notes"].pop(tid, None)
     if note:
         if len(j["notes"]) >= J.MAX_NOTES:

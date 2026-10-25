@@ -151,6 +151,25 @@ def check_orders(orders, first: int, cursor: int) -> list[dict]:
     return out
 
 
+# the most one practice order may be worth at the candle it's placed on, in the instrument's currency: about ten million
+# dollars (DB-032: 1,000,000,000 ETH, $4.59 trillion, was accepted). The page holds the same limits (lib/replay.ts).
+MAX_VALUE = {"INR": 1e9, "JPY": 1.5e9}
+MAX_VALUE_OTHER = 1e7
+
+
+def max_value(currency: str | None) -> float:
+    return MAX_VALUE.get(currency or "INR", MAX_VALUE_OTHER)
+
+
+def too_big(orders: list[dict], bars: list[dict], currency: str | None) -> str | None:
+    """Why an order is too big to be a practice trade (its value at that candle's close over max_value), else None."""
+    cap = max_value(currency)
+    for o in orders:
+        if o["action"] in ("long", "short") and 0 <= o["i"] < len(bars) and o["qty"] * float(bars[o["i"]]["c"]) > cap:
+            return f"An order is worth more than {cap:,.0f} in {currency or 'INR'} at that candle. Use a smaller quantity."
+    return None
+
+
 def _pos_num(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0
 

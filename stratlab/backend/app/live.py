@@ -508,7 +508,7 @@ class LiveSession:
             if not self.equity_curve or self.equity_curve[-1]["eq"] != eq:
                 self.equity_curve.append({"t": (now or datetime.now(IST)).isoformat(timespec="seconds"), "eq": eq})
         d = self.state()
-        d["bars"] = [{k: b[k] for k in ("t", "o", "h", "l", "c")} for b in self.bars[-150:]]
+        d["bars"] = [chart_bar(b) for b in self.bars[-150:]]
         return d
 
     def snapshot(self) -> dict:
@@ -525,7 +525,7 @@ class LiveSession:
                 "strategy": self.strategy.model_dump(), "started_at": self.started_at,
                 "last_price": px, "last_tick_at": self.last_tick_at,
                 "feed_connected": self.poll_ok if self.polled else self.mgr.hub.connected,
-                "bars": [{k: b[k] for k in ("t", "o", "h", "l", "c")} for b in view],
+                "bars": [chart_bar(b) for b in view],
                 "forming": None if not forming else {"t": forming["start"].isoformat(), "c": forming["c"]},
                 "overlays": overlays, "oscillators": osc,
                 "events": e.events[-200:],
@@ -545,6 +545,15 @@ class LiveSession:
                     "emptied_on": e.emptied_on,
                 },
             }
+
+
+def chart_bar(b: dict) -> dict:
+    """A candle as the session's chart gets it, with its volume when the feed gave one (DB-022: the chart's table had a
+    Volume column of dashes)."""
+    out = {k: b[k] for k in ("t", "o", "h", "l", "c")}
+    if isinstance(b.get("v"), (int, float)) and not isinstance(b.get("v"), bool):
+        out["v"] = b["v"]
+    return out
 
 
 def stopped_snapshot(row: dict) -> dict:

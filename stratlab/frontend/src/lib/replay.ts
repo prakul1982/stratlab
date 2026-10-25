@@ -125,3 +125,26 @@ export function simulate(bars: RBar[], orders: ROrder[], first: number, cursor: 
   }
   return { trades, fills, position, skipped };
 }
+
+/** The most one practice order may be worth at the candle it's placed on, in the instrument's currency: about ten million
+ * dollars, as the server holds it (replay.py MAX_VALUE; DB-032: 1,000,000,000 ETH, $4.59 trillion, was accepted). */
+export const MAX_VALUE: Record<string, number> = { INR: 1e9, JPY: 1.5e9 };
+export const MAX_VALUE_OTHER = 1e7;
+export const maxValue = (currency: string) => MAX_VALUE[currency] ?? MAX_VALUE_OTHER;
+
+/** A typed quantity: digits with an optional decimal point (commas allowed as grouping), never "1e3" or "abc". */
+export function parseQty(text: string): number | null {
+  const t = text.replace(/,/g, "").trim();
+  return /^\d+(\.\d+)?$|^\.\d+$/.test(t) ? Number(t) : null;
+}
+
+/** What's wrong with a practice quantity at a price, in plain words, said under the box; null when it can be traded.
+ * `money` writes an amount in the instrument's currency. */
+export function qtyProblem(text: string, price: number, currency: string, money: (v: number) => string): string | null {
+  const q = parseQty(text);
+  if (q == null) return "Enter a number, such as 10 or 0.5.";
+  if (q <= 0) return "Enter a quantity above 0.";
+  const cap = maxValue(currency);
+  if (q * price > cap) return `That's ${money(q * price)} at the last close; one practice order can be worth up to ${money(cap)}.`;
+  return null;
+}

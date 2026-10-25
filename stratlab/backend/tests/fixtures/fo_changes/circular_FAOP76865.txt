@@ -1,0 +1,37 @@
+ 
+National Stock Exchange of India Limited 
+ 
+ 
+Circular 
+Department: FUTURES & OPTIONS SEGMENT 
+Download Ref No: NSE/FAOP/76865  Date: October 12, 2026 
+Circular Ref. No: 139/2026  
+ 
+ 
+All Members, 
+ 
+Exclusion of Futures and Options contract on POLYCAB 
+This is in continuation to Exchange circular no. NSE/SURV/76858 dated October 12, 2026 regarding Derivatives 
+contracts in Polycab India Limited (POLYCAB). Members are requested to note that the following security shall 
+be excluded from Equity Derivatives segment.  
+Sr. No Symbol   Security Name 
+01 POLYCAB POLYCAB INDIA LIMITED 
+ 
+Accordingly, the contracts for new expiry months in the above security will not be issued on expiry of existing 
+contract months. 
+However, the existing unexpired contracts of expiry months  October 2026, November 2026 and December 
+2026 would continue to be available for trading till their respective expiry  date and new strikes would also be 
+introduced in the existing contract months. 
+ 
+Accordingly, no contracts shall be available for trading in the above mentioned securit y with effect from 
+December 30, 2026. 
+ 
+ 
+For and on behalf of 
+National Stock Exchange of India Limited 
+ 
+Khushal Shah 
+Associate Vice President 
+ 
+Toll Free No Email id 
+1800-266-0050 (Option 1) msm@nse.co.in 

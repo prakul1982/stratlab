@@ -126,7 +126,8 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
         before = [v for d, v in sorted(closes.items()) if d < today]
         start_of_day = cap + before[-1] if before else cap
         cur = _currency(s)
-        session = session_of(cur, today)
+        # crypto trades every day: its day is today, never "Last session (Fri)" from the US calendar (DB-023)
+        session = today if (s.get("instrument") or {}).get("market") == "CRYPTO" else session_of(cur, today)
         # the latest session's result, for a day the market doesn't trade (a weekend, a holiday): "today" is then a day with
         # no session, not an empty one, and the page names the session instead (R41A: "Today ₹0" on a Saturday)
         s_before = [v for d, v in sorted(closes.items()) if d < session]
@@ -177,8 +178,10 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
             "currency": cur, "sessions": len(rows), "capital": round(cap, 2),
             "equity": round(sum(r["equity"] for r in rows), 2), "pnl": round(sum(r["pnl"] for r in rows), 2),
             "today": round(sum(r["today"] for r in rows), 2), "open_value": round(sum(r["open_value"] for r in rows), 2),
-            "session": rows[0]["session"] if rows else today,
-            "session_pnl": round(sum(r["session_pnl"] or 0 for r in rows), 2) if rows and rows[0]["session_pnl"] is not None else None,
+            # the last session's figure only when every session in the currency is shut today: one crypto session among
+            # them moves today, so the day is "Today" (DB-023)
+            "session": max(r["session"] for r in rows) if rows else today,
+            "session_pnl": round(sum(r["session_pnl"] or 0 for r in rows), 2) if rows and all(r["session_pnl"] is not None for r in rows) else None,
             "worst_day": {"date": worst[0], "pnl": worst[1]} if worst and worst[1] < 0 else None,
             "best_day": {"date": best[0], "pnl": best[1]} if best and best[1] > 0 else None,
             "max_drawdown_pct": round(fall["pct"] * 100, 2) if fall else 0.0,

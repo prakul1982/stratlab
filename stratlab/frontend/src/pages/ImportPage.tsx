@@ -8,7 +8,7 @@ import "./trade/trade.css";
 const ROUTES: [string, string][] = [
   ["Rules on one stock, index, coin or pair", "A notebook you can backtest, check for luck, then paper trade."],
   ["Rules that scan a list of stocks", "A notebook set up on that group (NIFTY 50, F&O stocks, your own list), sharing one pot of capital, and paper-traded as a group."],
-  ["An option structure", "Straddles, strangles, condors or any legs open in the Options tab for live paper trading."],
+  ["An option structure", "Straddles, strangles, condors or any legs open in the options builder for live paper trading."],
 ];
 
 export function ImportPage() {

@@ -119,9 +119,50 @@ export function TradeHome() {
       {/* the checklist's first step is a first test: one guide at a time, so "Start here" waits until it's gone */}
       <NextIdea hideStart={steps} />
       <ToolStrip label="Trade tools" tools={tools} />
+      <MarketStrip />
       <p className="k-small k-muted" data-testid="positioning-link">FII and DII flows, futures positions, PCR and India VIX are on <Link className="link tap-link" to="/trade/positioning">Positioning</Link>.</p>
       <Explore title="More you can do" hide={TRADE_LINKED} order="trade" />
     </div>
+  );
+}
+
+type Brief = { cash?: { as_of: string | null; fii?: { net: number | null } }; fo_ban?: string[] };
+type VixBrief = { value: number | null; value_day?: string | null };
+
+/** Trade home's market strip (DC-001: the page had no market data, only a sentence pointing to Positioning): India VIX, the
+ * FIIs' cash market net, the next F&O expiry and the stocks in the F&O ban period, each linking to its page. Each figure
+ * shows its own day; one that can't be read says so and the others stay. */
+function MarketStrip() {
+  const [b, setB] = useState<Brief | null | "none">(null);
+  const [vix, setVix] = useState<VixBrief | null | "none">(null);
+  useEffect(() => { api<Brief>("/trade/positioning?brief=true&pcr=false").then(setB).catch(() => setB("none")); }, []);
+  useEffect(() => { api<VixBrief>("/trade/vix").then(setVix).catch(() => setVix("none")); }, []);
+  const ev = useEvents();
+  const today = istToday();
+  const expiry = ev?.events.find((e) => e.kind === "expiry" && e.date >= today && !e.title.startsWith("SENSEX"));
+  const fii = b && b !== "none" ? b.cash?.fii?.net ?? null : null;
+  const ban = b && b !== "none" ? b.fo_ban ?? [] : null;
+  const crore = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} cr`;
+  const tiles: { to: string; k: string; v: ReactNode; note: string; id: string }[] = [
+    { id: "vix", to: "/trade/positioning#india-vix", k: "India VIX", v: vix === null ? null : vix === "none" || vix.value == null ? "–" : vix.value.toFixed(2),
+      note: vix && vix !== "none" && vix.value_day ? fmtDate(vix.value_day, { year: false }) : vix === "none" ? "couldn't be read" : "" },
+    { id: "fii", to: "/trade/positioning#pos-cash", k: "FII/FPI cash, net", v: b === null ? null : fii == null ? "–" : <span className={signCls(fii)}>{crore(fii)}</span>,
+      note: b && b !== "none" && b.cash?.as_of ? fmtDate(b.cash.as_of, { year: false }) : b === "none" ? "couldn't be read" : "" },
+    { id: "expiry", to: "/trade/events", k: "Next F&O expiry", v: ev === null ? null : expiry ? fmtDate(expiry.date, { weekday: true, year: false }) : "–",
+      note: expiry ? expiry.title : "" },
+    { id: "ban", to: "/trade/positioning/stocks", k: "In the F&O ban", v: ban === null ? (b === "none" ? "–" : null) : String(ban.length),
+      note: ban && ban.length ? ban.slice(0, 3).join(", ") + (ban.length > 3 ? ` and ${ban.length - 3} more` : "") : ban ? "no stock" : "" },
+  ];
+  return (
+    <nav className="trade-market" aria-label="Market today" data-testid="trade-market">
+      {tiles.map((t) => (
+        <Link key={t.id} to={t.to} className="k-linkcard space-card" data-tile={t.id}>
+          <span className="small muted">{t.k}</span>
+          {t.v === null ? <span className="space-card-foot" aria-hidden="true"><span className="skel" /></span> : <b className="num">{t.v}</b>}
+          <span className="small muted space-card-line">{t.note}</span>
+        </Link>
+      ))}
+    </nav>
   );
 }
 

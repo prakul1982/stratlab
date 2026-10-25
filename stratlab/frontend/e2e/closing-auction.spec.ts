@@ -64,7 +64,7 @@ test("Closing auction: stocks by gap, indices, timetable, search and the history
 
   const idx = page.getByRole("region", { name: "Indices" });
   await expect(idx.locator("tr[data-cas-index='NIFTY 50']")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Today's timetable" })).toContainText("futures and options to");
+  await expect(page.getByRole("region", { name: /timetable/ })).toContainText("futures and options to");   // DC-010: "today's" only on a trading day
 
   const hist = page.getByRole("region", { name: "Past auctions" });
   await expect(hist.locator("tr[data-cas-day]")).toHaveCount(5);

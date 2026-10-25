@@ -66,7 +66,12 @@ def overview(profile=Depends(current_profile)):
     j = J.load(uid)
     practice = [t for t in J.trades(uid, j, today())["trades"] if t["src"] == "practice"]
     return _m().ok({"allowed": allows(profile["_plan"], "chart_replay"), "plan": PLANS[FEATURE_PLAN["chart_replay"]]["name"],
-                    "sessions": [{"id": s["id"], "label": R.label(s), "tf": s["tf"], "created": s["created"], "hidden": bool(s.get("hidden"))} for s in rows],
+                    # the symbol, start and length apart, so the page can write the date its way and say how far each one
+                    # got (DB-033: two identical "BTC/USD from 2025-09-19" rows)
+                    "sessions": [{"id": s["id"], "label": R.label(s), "tf": s["tf"], "created": s["created"], "hidden": bool(s.get("hidden")),
+                                  "symbol": None if s.get("hidden") else s["inst"].get("symbol"), "start": None if s.get("hidden") else s["start"],
+                                  "first": s["first"], "candles": max(0, len(s["bars"]) - s["first"]),
+                                  "currency": s["inst"].get("currency") or "INR"} for s in rows],
                     "practice": {**R.summary(practice), "last": practice[-1]["exit_t"][:10] if practice else None},
                     "tfs": list(R.TFS), "note": R.NOTE})
 
@@ -154,6 +159,9 @@ def finish(rid: str, req: FinishReq, profile=Depends(current_profile)):
     except R.ReplayError as e:
         _fail(e)
     inst = s["inst"]
+    big = R.too_big(orders, bars, inst.get("currency") or "INR")
+    if big:
+        M.err(400, "too_big", big)
     brokerage = _brokerage(uid, inst, s["tf"])
     got = R.simulate(bars, orders, first, req.cursor, R.cost_kind(inst), R.qty_step(inst), brokerage)
     trades = got["trades"]

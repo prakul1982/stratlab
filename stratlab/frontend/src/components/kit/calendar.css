@@ -26,6 +26,9 @@
 .k-cal-cell.today .k-cal-n { color: var(--blue-ink); }
 .k-cal-dots { display: flex; gap: 3px; flex-wrap: wrap; min-height: 8px; }
 .k-cal-count { position: absolute; top: 6px; right: 8px; font-size: 11px; color: var(--muted); }
+/* a day's first kind of event in words, beside its dots (DC-016); left out where the cell is too narrow */
+.k-cal-tag { font-size: 11px; line-height: 1.2; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-cal-now .k-cal-date { border-bottom-style: dashed; }
 .k-cal-panel { display: flex; flex-direction: column; gap: var(--s2); min-height: 48px; padding-top: var(--s2); border-top: 1px solid var(--line); }
 .k-cal-days { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s4); }
 .k-cal-date { font-size: var(--t-body); padding-bottom: 6px; border-bottom: 1px solid var(--line); }
@@ -43,5 +46,6 @@
 @media (max-width: 640px) {
   .k-cal-cell { min-height: 46px; padding: 4px 5px; }
   .k-cal-count { display: none; }
+  .k-cal-tag { display: none; }
   .k-cal-ev { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }

@@ -1,0 +1,71 @@
+ 
+National Stock Exchange of India Limited 
+Page 1 of 2 
+ 
+Circular 
+Department: FUTURES & OPTIONS 
+Download Ref No: NSE/FAOP/76657 Date: September 30, 2026 
+Circular Ref. No: 134/2026  
+ 
+All Members, 
+ 
+Revision in Market Lot of Derivative Contracts on Individual Stocks   
+ 
+In pursuance of SEBI guidelines for periodic revision of lot sizes for derivatives contracts specified in the SEBI 
+circular SEBI/HO/MRD-PoD2/CIR/P/2024/00181 dated December 30, 2024 , the market lots of derivatives 
+contracts shall be revised as follows: 
+Sr. 
+No 
+ 
+Underlying whose Derivative 
+contract size shall be 
+Count of 
+Underlying 
+Effective date Annexure Number 
+1 Revised Downwards 7 
+October 28, 202 6 
+(for November 2026 
+& later expiries) 
+1 
+2 Revised Upwards 27 
+October 28, 202 6 
+(for January 2027 & 
+later expiries) 
+2 
+3 Unchanged 167 - 3 
+4 Revised Downwards but new lot 
+size is not a multiple of old lot size 9 
+October 28, 202 6 
+(for January 2027 & 
+later expiries) 
+4 
+Note: Following securities BAJAJHLDNG, IEX and IREDA were not part of review of lot size due to exclusion 
+from Futures and Options segment w.e.f from October 28, 2026. 
+To avoid operational complexities, in case of Annexure 2 and 4 above, following will be applicable: 
+1. Contracts with maturity of November 2026 and December 2026 would continue to have the existing 
+market lot. All subsequent contracts i.e. January 2027 expiry and beyond will have revised market lot. 
+2. Day spread order book will not be available for the combination contract of December 2026 – January 
+2027 expiry. 
+ 
+National Stock Exchange of India Limited 
+Page 2 of 2 
+For the purpose of the computation, the average of the closing price of the underlying has been taken for one 
+month period of September 01st – September 30th 2026. 
+Members are advised to load the updated contract.gz , spd_contract.gz, NSE_FO_contract_ddmmyyyy.csv.gz 
+and NSE_FO_spdcontract_ddmmyyyy.csv.gz file in the trading application before trading on October 28, 2026. 
+This file can be obtained from the directory faoftp/faocommon on the Extranet server . 
+ 
+This circular shall come into effect from October 28, 2026. 
+ 
+For and on behalf of 
+National Stock Exchange of India Limited 
+ 
+Aarti Surve 
+Chief Manager 
+ 
+ 
+ 
+ 
+ 
+Toll Free No Email id 
+1800-266-0050 (Option 1) msm@nse.co.in 

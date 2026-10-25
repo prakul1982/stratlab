@@ -45,8 +45,8 @@ SOURCE = "the exchange's F&O contract file and circulars"
 NOTE = ("From the exchange's F&O market lots file and its circulars. Expiry dates come from the listed contracts, or "
         "for months not yet listed, from the exchange's expiry rule (the last Tuesday of the month, earlier when that "
         "is a holiday). The exchange's circulars have the full details.")
-KINDS = {"exit": "Leaving F&O", "entry": "Entering F&O", "lot": "Lot size", "expiry": "Expiry and sessions",
-         "circular": "Other circulars"}
+KINDS = {"exit": "Leaving F&O", "entry": "Entering F&O", "lot": "Lot size", "rename": "Name changes",
+         "expiry": "Expiry and sessions", "circular": "Other circulars"}
 INDEX_NAMES = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "SENSEX", "BANKEX"}
 MONTHS = {m.upper(): i for i, m in enumerate(calendar.month_abbr) if m}
 
@@ -54,6 +54,8 @@ MONTHS = {m.upper(): i for i, m in enumerate(calendar.month_abbr) if m}
 FO_WORDS = re.compile(r"F\s*&\s*O|\bFO\b|derivative|futures|options|contract|lot size|market lot|expiry|trading hours|"
                       r"market timing|pre-open", re.I)
 CIRCULAR_KINDS = (
+    # a new name and symbol for the same contracts (DC-017: ICICIPRULI to ICICILIFE read as one stock leaving, one entering)
+    ("rename", re.compile(r"change (?:in|of) (?:the )?(?:underlying )?(?:name|symbol)|name\s*(?:&|and)\s*symbol", re.I)),
     ("exit", re.compile(r"exclu(?:sion|ded|de)|removal|cease|discontinu|no (?:fresh|new) contracts", re.I)),
     ("entry", re.compile(r"introduc|inclusion|includ|new (?:stocks|securities|underlyings?)|eligib|launch", re.I)),
     ("lot", re.compile(r"lot size|market lot|\blots?\b", re.I)),
@@ -62,6 +64,9 @@ CIRCULAR_KINDS = (
 FO_DEPT = re.compile(r"^FAOP$|^futures\s*&\s*options trading$", re.I)
 MOCK = re.compile(r"\bmock trading\b", re.I)          # the weekly test session: no change to any contract
 DERIVATIVES = re.compile(r"F\s*&\s*O|\bFO\b|derivative|futures|options|contracts?", re.I)
+# the department code in a circular's number ("NSE/FAOP/77091"): FAOP is the equity F&O desk. Commodity (COM), clearing
+# (NCL/...), SME lots (CMTR), debt (DS) and gold receipts (EGR) circulars also say "derivatives" or "market lot" (DC-021)
+CIRC_DEPT = re.compile(r"^(?:[A-Z]+/)?([A-Z]+)/\d+$")
 
 _cache = TTLCache(max_items=20)
 _lock = threading.Lock()
@@ -306,6 +311,12 @@ def diff(old: dict, new: dict, day: str, expiry) -> list[dict]:
 
 
 # ---------- reading the circulars ----------
+def equity_fo(no) -> bool:
+    """Whether a circular's number is the equity F&O desk's ("NSE/FAOP/77091"), or says no department at all."""
+    m = CIRC_DEPT.match(str(no or "").strip().upper())
+    return not m or m.group(1) == "FAOP"
+
+
 def read_circulars(data, known: set[str] | None = None) -> list[dict]:
     """The exchange's circulars about F&O contracts as changes: each sorted into exit, entry, lot, expiry (expiry days
     and sessions) or another F&O circular, with the F&O symbols its subject names (of those in `known`)."""
@@ -320,6 +331,8 @@ def read_circulars(data, known: set[str] | None = None) -> list[dict]:
         if c["id"] in seen or MOCK.search(subject):
             continue
         if by_dept and not FO_DEPT.search(c["dept"]):
+            continue
+        if not equity_fo(c.get("no")):
             continue
         if not by_dept and not FO_WORDS.search(subject):
             continue
@@ -337,6 +350,277 @@ def read_circulars(data, known: set[str] | None = None) -> list[dict]:
     return out
 
 
+# ---------- reading a circular's own file ----------
+DETAIL_KINDS = ("exit", "entry", "lot", "rename")   # the circulars whose file names the stocks, lots and dates
+DETAILS_PER_RUN = 6                  # circular files read on each run
+DETAIL_TRIES = 3                     # a file that can't be read is tried this many runs, then left
+MAX_FILE = 6_000_000                 # bytes: a circular's PDF or zip, and each file inside a zip
+MONTH_WORD = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
+_DAY = rf"({MONTH_WORD}\s+\d{{1,2}},?\s+\d{{4}})"
+SYM = r"([A-Z0-9][A-Z0-9&\-]{1,19})"
+ROW_SYMBOL_NAME = re.compile(rf"^\s*\d{{1,3}}\.?\s+{SYM}\s+([A-Z][A-Za-z].*)$")            # "1 COROMANDEL Coromandel International Limited"
+ROW_NAME_SYMBOL_LOT = re.compile(rf"^\s*\d{{1,3}}\.?\s+(.+?)\s+{SYM}\s+(\d[\d,]*)\s*$")     # "1 Anand Rathi Wealth Limited ANANDRATHI 250"
+ROW_RENAME = re.compile(rf"^\s*(?:\d{{1,3}}\.?\s+)?{SYM}\s+{SYM}\s+[A-Z]")                  # "ICICIPRULI ICICILIFE ICICI Prudential ..."
+NOT_SYMBOLS = {"NSE", "SEBI", "BSE", "SR", "NO", "FO", "CM", "ISIN"}
+MUHURAT = re.compile(r"muhurat", re.I)
+
+
+def _xlsx_sheets(data: bytes) -> dict[str, list[list[str]]]:
+    """{sheet name: rows of cell text} from an xlsx file (the exchange's annexures), read with the standard library."""
+    import io
+    import zipfile
+    import xml.etree.ElementTree as ET
+    ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    rel_ns = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+    z = zipfile.ZipFile(io.BytesIO(data))
+
+    def part(name):
+        info = z.getinfo(name)
+        if info.file_size > MAX_FILE:
+            raise ValueError("An annexure is too large to read.")
+        return z.read(name)
+    names = set(z.namelist())
+    shared = []
+    if "xl/sharedStrings.xml" in names:
+        for si in ET.fromstring(part("xl/sharedStrings.xml")).iter(ns + "si"):
+            shared.append("".join(t.text or "" for t in si.iter(ns + "t")))
+    rels = {}
+    if "xl/_rels/workbook.xml.rels" in names:
+        for r in ET.fromstring(part("xl/_rels/workbook.xml.rels")):
+            rels[r.get("Id")] = "xl/" + r.get("Target", "").lstrip("/").removeprefix("xl/")
+    out = {}
+    for sh in ET.fromstring(part("xl/workbook.xml")).iter(ns + "sheet"):
+        target = rels.get(sh.get(rel_ns + "id"))
+        if target not in names:
+            continue
+        rows = []
+        for row in ET.fromstring(part(target)).iter(ns + "row"):
+            cells = []
+            for c in row.iter(ns + "c"):
+                v, t = c.find(ns + "v"), c.get("t")
+                if t == "s" and v is not None and v.text and v.text.isdigit() and int(v.text) < len(shared):
+                    cells.append(shared[int(v.text)].strip())
+                elif t == "inlineStr":
+                    cells.append("".join(x.text or "" for x in c.iter(ns + "t")).strip())
+                else:
+                    cells.append((v.text or "").strip() if v is not None else "")
+            rows.append(cells)
+        out[sh.get("name") or target] = rows[:2000]
+    return out
+
+
+def _pdf_text(data: bytes) -> str:
+    import io
+    from pypdf import PdfReader
+    try:
+        return "\n".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(data)).pages[:20])
+    except Exception as e:
+        raise ValueError(f"The circular's PDF couldn't be read ({type(e).__name__}).") from None
+
+
+def circular_file(data: bytes) -> tuple[str, dict[str, list[list[str]]]]:
+    """(the text, {annexure sheet: rows}) of a circular's file: a PDF, or a zip of the PDF and its xlsx annexures."""
+    import io
+    import zipfile
+    data = data or b""
+    if len(data) > MAX_FILE:
+        raise ValueError("The circular's file is too large to read.")
+    if data.startswith(b"%PDF"):
+        return _pdf_text(data), {}
+    if not data.startswith(b"PK"):
+        raise ValueError("The circular's file is neither a PDF nor a zip.")
+    z = zipfile.ZipFile(io.BytesIO(data))
+    text, sheets = [], {}
+    for info in z.infolist()[:20]:
+        if info.file_size > MAX_FILE:
+            continue
+        low = info.filename.lower()
+        if low.endswith(".pdf"):
+            text.append(_pdf_text(z.read(info)))
+        elif low.endswith(".xlsx"):
+            try:
+                sheets.update(_xlsx_sheets(z.read(info)))
+            except Exception as e:      # one unreadable annexure (a bad zip, odd XML) never loses the PDF
+                print("fo changes: annexure unread:", type(e).__name__)
+    if not text and not sheets:
+        raise ValueError("Nothing readable in the circular's zip.")
+    return "\n".join(text), sheets
+
+
+def _flat(text: str) -> str:
+    """One line of the text, with the PDF's split years mended ("October 28, 202 6")."""
+    t = re.sub(r"\s+", " ", text or "")
+    return re.sub(r"\b(20\d) (\d)\b", r"\1\2", t)
+
+
+def _iso_words(words: str) -> str | None:
+    """"2026-10-28" from "October 28, 2026" or "October 28 2026"."""
+    m = re.fullmatch(rf"({MONTH_WORD})\s+(\d{{1,2}}),?\s+(\d{{4}})", (words or "").strip(), re.I)
+    if not m:
+        return None
+    mo = MONTHS.get(m.group(1)[:3].upper())
+    try:
+        return date(int(m.group(3)), mo, int(m.group(2))).isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
+def _month_words(words: str) -> str | None:
+    """"2026-12" from "December 2026"."""
+    m = re.fullmatch(rf"({MONTH_WORD})\s+(\d{{4}})", (words or "").strip(), re.I)
+    return f"{int(m.group(2)):04d}-{MONTHS[m.group(1)[:3].upper()]:02d}" if m else None
+
+
+def _series_from(day: str, expiry, sym: str) -> str:
+    """The monthly series that is the near month on `day`: the day's month, or the next once its expiry has passed."""
+    month = day[:7]
+    return month if expiry(sym, month).isoformat() >= day else _next_month(month)
+
+
+def _table_symbols(text: str) -> list[tuple[str, str, int | None]]:
+    """[(symbol, name, lot or None)] from a circular's table of securities."""
+    out, seen = [], set()
+    for line in (text or "").splitlines():
+        m = ROW_NAME_SYMBOL_LOT.match(line)
+        got = (m.group(2), m.group(1).strip(), int(m.group(3).replace(",", ""))) if m else None
+        if not got:
+            m = ROW_SYMBOL_NAME.match(line)
+            got = (m.group(1), m.group(2).strip(), None) if m else None
+        if got and got[0] not in NOT_SYMBOLS and not got[0].isdigit() and got[0] not in seen:
+            seen.add(got[0])
+            out.append(got)
+    return out[:60]
+
+
+def _annexure_dates(text: str) -> dict[int, tuple[str, str]]:
+    """{annexure number: (effective day, first series)} from a lot revision's table ("October 28, 2026 (for November
+    2026 & later expiries) 1")."""
+    out = {}
+    for m in re.finditer(rf"({MONTH_WORD}\s+\d{{1,2}},?\s+\d{{4}})\s*\(\s*for\s+({MONTH_WORD}\s+\d{{4}})\s*(?:&|and)\s*later expiries\s*\)\s*(\d)\b",
+                         _flat(text), re.I):
+        day, series = _iso_words(m.group(1)), _month_words(m.group(2))
+        if day and series:
+            out[int(m.group(3))] = (day, series)
+    return out
+
+
+def _sheet_lots(rows: list[list[str]]) -> list[tuple[str, int, int]]:
+    """[(symbol, present lot, revised lot)] from one annexure sheet with Symbol, Present and Revised columns."""
+    head = next((i for i, r in enumerate(rows[:10]) if any(c.lower() == "symbol" for c in r)), None)
+    if head is None:
+        return []
+    cols = [c.lower() for c in rows[head]]
+    try:
+        si = cols.index("symbol")
+        wi = next(i for i, c in enumerate(cols) if "present" in c or "existing" in c or "old" in c)
+        ni = next(i for i, c in enumerate(cols) if "revised" in c or "new" in c)
+    except (ValueError, StopIteration):
+        return []
+    out = []
+    for r in rows[head + 1:]:
+        try:
+            sym, was, now = r[si].strip().upper(), int(float(r[wi])), int(float(r[ni]))
+        except (IndexError, ValueError):
+            continue
+        if re.fullmatch(r"[A-Z0-9][A-Z0-9&\-]{0,19}", sym) and 0 < was < 10_000_000 and 0 < now < 10_000_000 and was != now:
+            out.append((sym, was, now))
+    return out
+
+
+def circular_changes(c: dict, text: str, sheets: dict, known: set[str], expiry) -> list[dict]:
+    """The stock-by-stock changes a circular's own file gives (DC-017 to DC-020): the stocks leaving (their last series
+    and the day no contract is left), entering (the day, the first series and the lot when it is given), each lot
+    revision (was, now, and the series it applies from) and a rename (the old and the new symbol). Each one points to
+    the circular (`circ`)."""
+    kind, cid, flat = c.get("kind"), c["id"], _flat(text)
+    out = []
+    if kind == "exit":
+        until = _iso_words((re.search(rf"no contracts? shall be available for trading.{{0,80}}?with effect from\s+({MONTH_WORD}\s+\d{{1,2}},?\s+\d{{4}})", flat, re.I) or [None, ""])[1])
+        months = re.search(rf"expiry months?\s+((?:{MONTH_WORD}\s+\d{{4}}\s*(?:,|and|&)?\s*)+)", flat, re.I)
+        last = None
+        if months:
+            got = [_month_words(m) for m in re.findall(rf"{MONTH_WORD}\s+\d{{4}}", months.group(1), re.I)]
+            last = max((g for g in got if g), default=None)
+        if not last and until:
+            last = _series_from(until, expiry, "")
+            last = _next_month(last, -1) if expiry("", last).isoformat() >= until else last
+        for sym, _name, _lot in _table_symbols(text):
+            if last and sym in known:
+                out.append(_event("exit", sym, segment="stock", series=last, expiry=expiry(sym, last).isoformat(), until=until,
+                                  id=f"exit:{sym}:{last}", circ=cid))
+    elif kind == "entry":
+        eff = _iso_words((re.search(rf"(?:w\.?\s?e\.?\s?f\.?|with effect from|available for trading (?:from|on))\s*({MONTH_WORD}\s+\d{{1,2}},?\s+\d{{4}})", flat, re.I) or [None, ""])[1])
+        for sym, _name, lot in _table_symbols(text):
+            if eff:
+                series = _series_from(eff, expiry, sym)
+                out.append(_event("entry", sym, segment="stock", series=series, effective=eff, lot=lot, id=f"entry:{sym}:{series}", circ=cid))
+    elif kind == "lot":
+        dates = _annexure_dates(text)
+        whole = _iso_words((re.search(rf"(?:come into effect from|w\.?\s?e\.?\s?f\.?|with effect from)\s*({MONTH_WORD}\s+\d{{1,2}},?\s+\d{{4}})", flat, re.I) or [None, ""])[1])
+        for name, rows in sheets.items():
+            n = re.search(r"annexure[\s\-_]*(\d)", name, re.I)
+            eff, series = dates.get(int(n.group(1))) if n and int(n.group(1)) in dates else (whole, None)
+            if not eff:
+                continue
+            for sym, was, now in _sheet_lots(rows):
+                s = series or _series_from(eff, expiry, sym)
+                out.append(_event("lot", sym, segment="stock", series=s, was=was, now=now, effective=eff,
+                                  id=f"lot:{sym}:{s}:{was}>{now}", circ=cid))
+    elif kind == "rename":
+        eff = _iso_words((re.search(rf"(?:w\.?\s?e\.?\s?f\.?|with effect from)\s*({MONTH_WORD}\s+\d{{1,2}},?\s+\d{{4}})", flat, re.I) or [None, ""])[1])
+        for line in (text or "").splitlines():
+            m = ROW_RENAME.match(line)
+            if m and m.group(1) != m.group(2) and (m.group(1) in known or m.group(2) in known) and not {m.group(1), m.group(2)} & NOT_SYMBOLS:
+                out.append({"kind": "rename", "symbol": m.group(2), "was_symbol": m.group(1), "segment": "stock",
+                            "effective": eff or c.get("date"), "id": f"rename:{m.group(1)}>{m.group(2)}", "circ": cid})
+    return out
+
+
+def muhurat_session(text: str) -> dict | None:
+    """{"day", "start", "end"} of a Muhurat trading circular's F&O normal market (DC-014: the Diwali session on a
+    Sunday was on no calendar)."""
+    flat = _flat(text)
+    day = re.search(rf"held on\s+(?:\w+day\s*,?\s*)?({MONTH_WORD}\s+\d{{1,2}},?\s+\d{{4}})", flat, re.I) \
+        or re.search(rf"Session on\s+(?:\w+day\s*,?\s*)?({MONTH_WORD}\s+\d{{1,2}},?\s+\d{{4}})", flat, re.I)
+    hours = re.search(r"Normal Market[^0-9]{0,80}?(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})", flat, re.I)
+    iso = _iso_words(day.group(1)) if day else None
+    if not iso:
+        return None
+    return {"day": iso, "start": hours.group(1).zfill(5) if hours else None, "end": hours.group(2).zfill(5) if hours else None}
+
+
+def read_details(feed, circs: list[dict], done: dict, known: set[str], expiry, budget: int = DETAILS_PER_RUN) -> tuple[list[dict], dict, list[str]]:
+    """Read the files of the F&O desk's exit, entry, lot and rename circulars not read yet (a few a run, newest
+    first): (the changes they give, the circulars' read state {id: "ok" | tries}, problems)."""
+    fetch = getattr(getattr(feed, "nse", None), "_surv_bytes", None)
+    done = dict(done or {})
+    found, problems = [], []
+    if not fetch:
+        return found, done, problems
+    for c in sorted(circs, key=lambda c: str(c.get("date") or c.get("seen") or ""), reverse=True):
+        state = done.get(c["id"])
+        wanted = c.get("kind") in DETAIL_KINDS or MUHURAT.search(str(c.get("subject") or ""))
+        if not wanted or not c.get("url") or state == "ok" or (isinstance(state, int) and state >= DETAIL_TRIES):
+            continue
+        if not budget:
+            break
+        budget -= 1
+        try:
+            text, sheets = circular_file(fetch(c["url"]))
+            got = circular_changes(c, text, sheets, known, expiry)
+        except (SourceError, ValueError, TypeError, AttributeError, KeyError) as e:
+            done[c["id"]] = (state if isinstance(state, int) else 0) + 1
+            problems.append(f"circular {c.get('no') or c['id']}: {str(e)[:120]}")
+            continue
+        done[c["id"]] = "ok"
+        if MUHURAT.search(str(c.get("subject") or "")):
+            c["session"] = muhurat_session(text)
+        c["symbols"] = sorted({e["symbol"] for e in got} | {e["was_symbol"] for e in got if e.get("was_symbol")})[:60] or c.get("symbols") or []
+        c["read"] = True
+        found += got
+    return found, done, problems
+
+
 # ---------- the dated list ----------
 def _when(e: dict) -> str:
     """The date a change is listed under: the last expiry for a stock leaving, the day a new lot or entry applies,
@@ -349,15 +633,32 @@ def text_of(e: dict, today: date | None = None) -> str:
     k, sym = e.get("kind"), e.get("symbol") or ""
     series = series_name(e.get("series") or "")
     if e.get("source") == "circular":
-        return f"Exchange circular{' ' + e['no'] if e.get('no') else ''}: {e.get('subject')}"
+        ses = e.get("session") or {}
+        times = f", F&O normal market {ses['start']} to {ses['end']} IST" if ses.get("start") and ses.get("end") else ""
+        extra = f" A special trading session on {_day(ses['day'])}{times}." if ses.get("day") else ""
+        return f"Exchange circular{' ' + e['no'] if e.get('no') else ''}: {e.get('subject')}{extra}"
+    if k == "rename":
+        return (f"{e.get('was_symbol')} is renamed {sym} from {_day(e.get('effective'))}: the same F&O contracts trade under the "
+                f"new symbol. This is not a stock leaving or entering F&O.")
+    if k == "exit" and e.get("circ"):       # from the exclusion circular itself (DC-019): the last series and the day none is left
+        gone = today and _when(e) < today.isoformat()
+        tail = f" No {sym} contracts trade from {_day(e['until'])}." if e.get("until") else ""
+        return (f"{sym} {'left' if gone else 'leaves'} F&O. The {series} series, {'which expired' if gone else 'expiring'} "
+                f"{_day(e.get('expiry'))}, {'was' if gone else 'is'} its last; the exchange lists no new months.{tail}")
     if k == "exit" and today and _when(e) < today.isoformat():
         return (f"{sym} left F&O. The {series} series, which expired {_day(e.get('expiry'))}, was the last one the contract "
                 f"file listed.")
     if k == "exit":
         return (f"{sym} leaves F&O. The {series} series, expiring {_day(e.get('expiry'))}, is the last one the contract "
                 f"file lists.")
+    if k == "entry" and e.get("circ"):      # from the introduction circular (DC-018): the day it trades, the lot once given
+        lot = f", with a lot of {e['lot']:,}." if e.get("lot") else ". The exchange hasn't published its lot size yet."
+        return f"{sym} enters F&O on {_day(e.get('effective'))}, from the {series} series{lot}"
     if k == "entry":
-        return f"{sym} enters F&O from the {series} series, with a lot of {e.get('lot'):,}."
+        return f"{sym} enters F&O from the {series} series" + (f", with a lot of {e['lot']:,}." if e.get("lot") else ".")
+    if k == "lot" and e.get("circ"):        # from the revision circular's annexures (DC-020): was, now, and from which series
+        return (f"{sym}'s lot size goes from {e.get('was'):,} to {e.get('now'):,} from the {series} series on (the "
+                f"exchange's revision, effective {_day(e.get('effective'))}); earlier series keep {e.get('was'):,}.")
     if k == "lot" and e.get("within"):
         return f"{sym}'s lot for the {series} series changed from {e.get('was'):,} to {e.get('now'):,}."
     if k == "lot":
@@ -425,12 +726,15 @@ def still_leaving(events: list[dict], st: dict) -> list[dict]:
     going = leavers({"months": months, "rows": rows})
     out = []
     for e in events:
-        if e.get("kind") == "exit" and e.get("source") != "circular" and e.get("symbol") in rows and going.get(e["symbol"]) != e.get("series"):
+        # an exit the exclusion circular gives stays: the file lists the stock to the far month until its last expiry
+        if (e.get("kind") == "exit" and e.get("source") != "circular" and not e.get("circ") and e.get("symbol") in rows
+                and going.get(e["symbol"]) != e.get("series")):
             continue
         out.append(e)
     return out
 
 
+BACKFILL_DAYS = 120                   # how far back a run reads circulars to date the ones kept without a date
 SOURCE_DAYS = (150, 10)               # a circular is the source of a change published up to this long before it applies (and a few days after)
 
 
@@ -442,10 +746,13 @@ def sources_for(e: dict, circs: list[dict]) -> list[dict]:
     except ValueError:
         return []
     out, nameless = [], []
+    own = [c for c in circs if e.get("circ") and c["id"] == e["circ"]]
     for c in circs:
-        if c["kind"] != e.get("kind"):
+        if c["kind"] != e.get("kind") or c in own:
             continue
         named = set(c.get("symbols") or [])
+        if not named and c.get("read"):         # its file was read and named no stock: it is no stock's source (DC-017)
+            continue
         if named and e.get("symbol") not in named:
             continue
         try:
@@ -454,13 +761,44 @@ def sources_for(e: dict, circs: list[dict]) -> list[dict]:
             continue
         if when - timedelta(days=SOURCE_DAYS[0]) <= d <= when + timedelta(days=SOURCE_DAYS[1]):
             (out if named else nameless).append(c)
-    if not out and len(nameless) == 1:      # a circular naming no stock covers this one only when it is the sole candidate
+    if not out and not own and len(nameless) == 1:      # a circular naming no stock covers this one only when it is the sole candidate
         out = nameless
-    return sorted(out, key=lambda c: c["date"], reverse=True)[:3]
+    return own + sorted(out, key=lambda c: str(c.get("date") or ""), reverse=True)[:3 - len(own)]
 
 
 def source_of(c: dict) -> dict:
     return {"no": c.get("no") or "", "subject": c.get("subject") or "", "url": c.get("url") or "", "date": c.get("date")}
+
+
+def tidy(events: list[dict], file_rows: dict) -> list[dict]:
+    """The kept changes as the page shows them: only the equity F&O desk's circulars (DC-021: commodity, SME-lot and debt
+    circulars were listed), one line a circular (the dated copy when an older run kept it without its date), a rename
+    as a rename (DC-017: the old symbol's "exit" and the new one's "entry" the contract file shows are dropped, and the
+    old symbol's other changes are shown under the new one), and a new stock's lot from the file once it lists it."""
+    by_no: dict[str, dict] = {}
+    for e in events:
+        if e.get("source") == "circular" and e.get("no"):
+            have = by_no.get(e["no"])
+            if not have or (not have.get("date") and e.get("date")):
+                by_no[e["no"]] = e
+    renamed = {e["was_symbol"]: e for e in events if e.get("kind") == "rename" and e.get("was_symbol") and e.get("symbol")}
+    new_names = {e["symbol"] for e in renamed.values()}
+    out = []
+    for e in events:
+        if e.get("source") == "circular":
+            if not equity_fo(e.get("no")) or (e.get("no") and by_no.get(e["no"]) is not e):
+                continue
+        elif not e.get("circ") and ((e.get("kind") == "exit" and e.get("symbol") in renamed)
+                                    or (e.get("kind") == "entry" and e.get("symbol") in new_names)):
+            continue
+        elif e.get("symbol") in renamed and e.get("kind") != "rename":
+            e = {**e, "symbol": renamed[e["symbol"]]["symbol"], "was_symbol": e["symbol"]}
+        if e.get("kind") == "entry" and not e.get("lot") and e.get("series"):
+            lot = ((file_rows.get(e.get("symbol")) or {}).get("lots") or {}).get(e["series"])
+            if lot:
+                e = {**e, "lot": lot}
+        out.append(e)
+    return out
 
 
 def view(today: date | None = None) -> dict:
@@ -469,14 +807,14 @@ def view(today: date | None = None) -> dict:
     shows is a source of that line, not a second line; one about expiry days, sessions or anything else is its own."""
     today = today or ist_now().date()
     st = load_state()
-    events = still_leaving(load_events(), st)
-    circs = [e for e in events if e.get("source") == "circular"]
     lots = st.get("lots") if isinstance(st.get("lots"), dict) else {}
+    events = tidy(still_leaving(load_events(), st), lots.get("rows") or {})
+    circs = [e for e in events if e.get("source") == "circular"]
     file_source = {"no": "", "subject": "The exchange's F&O contract file", "url": "", "date": lots.get("as_of")}
     used, rows, badges = set(), [], {}
     for e in events:
         row = {k: e.get(k) for k in ("id", "kind", "symbol", "symbols", "segment", "series", "expiry", "effective", "was", "now",
-                                     "lot", "seen", "source", "no", "subject", "within")}
+                                     "lot", "seen", "source", "no", "subject", "within", "until", "was_symbol")}
         row.update(date=_when(e), text=text_of(e, today), series_label=series_name(e["series"]) if e.get("series") else None)
         row["upcoming"] = row["date"] >= today.isoformat()
         if e.get("source") == "circular":
@@ -490,7 +828,7 @@ def view(today: date | None = None) -> dict:
         if b:
             badges.setdefault(e["symbol"], []).append(b)
     # a circular of a kind the contract file reports shows once, as a source, when some line already rests on it
-    rows = [r for r in rows if not (r.get("source") == "circular" and r["kind"] in ("exit", "entry", "lot") and r["id"] in used)]
+    rows = [r for r in rows if not (r.get("source") == "circular" and r["kind"] in DETAIL_KINDS and r["id"] in used)]
     rows.sort(key=lambda r: (r["date"], r["id"]), reverse=True)
     for sym, bs in badges.items():
         bs.sort(key=lambda b: ({"exit": 0, "lot": 1, "entry": 2}.get(b["kind"], 3), b["date"]))
@@ -543,30 +881,55 @@ def refresh(feed, today: date | None = None, now: datetime | None = None, expiry
             st["lots"] = {**old, "error": str(e)[:200], "tried": stamp}
         known = set((st.get("lots") or {}).get("rows") or {}) | INDEX_NAMES
         circ = st.get("circulars") if isinstance(st.get("circulars"), dict) else {}
+        log = db.json_value(db.get_setting(EVENTS_KEY), [])
+        log = [e for e in log if isinstance(e, dict) and e.get("id")] if isinstance(log, list) else []
         try:
             frm = (today - timedelta(days=CIRCULAR_DAYS)).strftime("%d-%m-%Y")
+            # a circular an earlier run kept without its own date (DC-021: 24 lines dated the day they were first read)
+            # is read again from a window that reaches back to it, so it gets its real date
+            undated = [e["seen"] for e in log if e.get("source") == "circular" and not e.get("date") and e.get("seen")]
+            if undated:
+                back = min(date.fromisoformat(min(undated)[:10]) - timedelta(days=CIRCULAR_DAYS), today - timedelta(days=CIRCULAR_DAYS))
+                frm = max(back, today - timedelta(days=BACKFILL_DAYS)).strftime("%d-%m-%Y")
             data = _retrying(lambda: feed.nse._get("/api/circulars", {"fromDate": frm, "toDate": today.strftime("%d-%m-%Y")},
                                                    referer=CIRCULARS_PAGE, circuit="fochanges"), sleep)
             got = read_circulars(data, known)
             found += got
-            st["circulars"] = {"as_of": today.isoformat(), "checked": stamp, "count": len(got), "error": None}
+            st["circulars"] = {"as_of": today.isoformat(), "checked": stamp, "count": len(got), "error": None,
+                               "details": circ.get("details") or {}}
         except (SourceError, ValueError, TypeError, AttributeError) as e:
             problems.append(f"circulars: {str(e)[:160]}")
             st["circulars"] = {**circ, "error": str(e)[:200], "tried": stamp}
+        fresh = {e["id"]: e for e in found if e.get("source") == "circular"}
+        for e in log:                                   # a circular kept before its link or date was read gets them
+            f = fresh.get(e["id"]) if e.get("source") == "circular" else None
+            for k in ("url", "date"):
+                if f and not e.get(k) and f.get(k):
+                    e[k] = f[k]
+        # the F&O desk's exit, entry, lot and rename circulars are read in full: the stocks, lots and dates they give
+        kept_circs = {e["id"]: e for e in log if e.get("source") == "circular"}
+        kept_circs.update({k: v for k, v in fresh.items() if k not in kept_circs})
+        try:
+            details, read_state, trouble = read_details(feed, list(kept_circs.values()), circ.get("details") or {}, known, expiry)
+        except Exception as e:                          # a file reader's surprise never loses the run
+            details, read_state, trouble = [], circ.get("details") or {}, [f"circular files: {type(e).__name__}"]
+        st.setdefault("circulars", {})["details"] = {k: v for k, v in read_state.items() if k in kept_circs}
+        for t in trouble:
+            print("fo changes:", t)
+        found += details
         st["last_run"] = stamp
         db.set_setting(KEY, json.dumps(st, separators=(",", ":")))
-        log = db.json_value(db.get_setting(EVENTS_KEY), [])
-        log = [e for e in log if isinstance(e, dict) and e.get("id")] if isinstance(log, list) else []
-        have = {e["id"] for e in log}
-        links = {e["id"]: e.get("url") for e in found if e.get("source") == "circular" and e.get("url")}
-        for e in log:                                   # a circular kept before its link was read gets the link
-            if e.get("source") == "circular" and not e.get("url") and links.get(e["id"]):
-                e["url"] = links[e["id"]]
+        have = {e["id"]: e for e in log}
         new = []
         for e in found:
             if e["id"] in have:
+                old_e = have[e["id"]]
+                if e.get("circ"):                       # the contract file saw it first: the circular adds its day and link
+                    for k in ("circ", "until", "lot", "effective"):
+                        if old_e.get(k) is None and e.get(k) is not None:
+                            old_e[k] = e[k]
                 continue
-            have.add(e["id"])
+            have[e["id"]] = e
             e["seen"] = today.isoformat()
             new.append(e)
         cut = (today - timedelta(days=KEEP_DAYS)).isoformat()

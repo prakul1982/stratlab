@@ -3,6 +3,7 @@ import { notebookTitle, useDocTitle } from "../lib/title";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
+import { fillsLine } from "../lib/paperText";
 import { currencySymbol, dateOnly, money, pct, periodName, TF_NAME } from "../lib/format";
 import { isAutoNotebookName, rebuiltRisk, riskForCurrency, statedIn, usesPro } from "../lib/rules";
 import { runCopy, runTime } from "../lib/notebookText";
@@ -512,7 +513,9 @@ function NotebookView() {
       {paperAsk && inst && (
         <ConfirmDialog title={`Paper trade on ${inst.symbol}?`} confirmLabel="Start paper trading" danger={false} onConfirm={() => void startSingle()} onClose={() => setPaperAsk(false)}>
           <span className="k-stack k-tight">
-            <span>The rules of "{nb.name}" on {TF_NAME[s.tf]} candles, live, with {money(s.risk.capital, currency)} of fake money. Orders fill at live prices; nothing real is ever placed.</span>
+            {/* how fills and fees really work, not "at live prices" (DB-021) */}
+            <span>The rules of "{nb.name}" on {TF_NAME[s.tf]} candles, live, with {money(s.risk.capital, currency)} of fake money. Nothing real is ever placed.</span>
+            <span className="k-note" data-testid="paper-fills">{fillsLine(s.risk, markets.find((m) => m.id === inst.market)?.costs, money(s.risk.brokerage, currency, 2))}</span>
             <span className="k-note">It runs until you stop it and counts as one of your plan's paper sessions. A message for each paper trade is {me?.alerts.enabled ? "on" : "off"} in Settings (Notifications).</span>
           </span>
         </ConfirmDialog>

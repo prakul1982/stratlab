@@ -74,6 +74,9 @@ const tone = (v: number | null | undefined): "up" | "down" | undefined => (v == 
 const day = (iso: string) => fmtDate(iso.slice(0, 10));
 const when = (iso: string) => (iso.length > 10 ? `${day(iso)} ${iso.slice(11, 16)}` : day(iso));
 const qtyText = (q: number) => q.toLocaleString("en-IN", { maximumFractionDigits: 4 });
+/** An R-multiple with a true minus, as every other figure here (DB-041: "average -2.21R"). */
+const rText = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v)}R`;
+const trades = (n: number) => `${n.toLocaleString("en-IN")} trade${n === 1 ? "" : "s"}`;
 const fyLabel = (fy: number) => `FY ${fy}-${String(fy + 1).slice(2)}`;
 const MAX_MB = 20;
 
@@ -300,8 +303,14 @@ export function JournalPage() {
           </div>
         </section>
 
-        {editing && <NoteEditor j={j} t={editing} onClose={() => setEditing(null)} onSaved={(x) => { adopt(x); setEditing(null); }} />}
-        {adding && <AddTrade onClose={() => setAdding(false)} onSaved={(x) => { adopt(x); setAdding(false); notify("Trade added."); }} />}
+        {editing && <NoteEditor j={j} t={editing} onClose={() => setEditing(null)} onSaved={(x, said) => { adopt(x); setEditing(null); if (said) notify(said); }} />}
+        {/* a trade added in another market opens that market's tab, so it is seen (DB-044: "Trade added." and nothing changed) */}
+        {adding && <AddTrade onClose={() => setAdding(false)} onSaved={(x, seg) => {
+          const to = seg === "us" || seg === "crypto" ? seg : "in";
+          const label = j.markets.find((m) => m.id === to)?.label ?? x.markets.find((m) => m.id === to)?.label ?? "India";
+          if (to !== j.market) { setMarket(to); setSegment("all"); } else adopt(x);
+          setAdding(false); notify(to !== j.market ? `Trade added to ${label}; showing ${label}.` : "Trade added.");
+        }} />}
         {setup && <Settings j={j} onClose={() => setSetup(false)} onSaved={(x) => { adopt(x); setSetup(false); notify("Saved. Charges and drawdowns are worked out again."); }} />}
         {askDelete && (
           <ConfirmDialog title="Delete my journal?" confirmLabel="Delete my journal" onConfirm={remove} onClose={() => setAskDelete(false)}>
@@ -319,9 +328,13 @@ function Locked({ plan, what }: { plan: string; what: string }) {
 
 function Curve({ s }: { s: Summary }) {
   const { m, compact } = useMoney();
+  // the line starts at 0 on the first trade's entry, so one trade is a line from 0 to its result, not a lone point the
+  // axis left off (DB-042: one +₹566 trade drew a flat line at ₹0 under an axis to ₹400)
+  const first = s.first && s.equity.length && s.first < s.equity[0].t ? [{ t: s.first, v: 0 }] : [];
+  const pts = [...first, ...s.equity];
   return (
-    <XYChart series={[{ values: s.equity.map((p) => p.v), color: "var(--series-1)", label: "P&L after charges", area: { base: 0, pos: "var(--series-1)", neg: "var(--series-2)" } }]}
-      times={s.equity.map((p) => p.t)} format={(v) => m(v)} signedTip axisFormat={compact} testId="journal-curve"
+    <XYChart series={[{ values: pts.map((p) => p.v), color: "var(--series-1)", label: "P&L after charges", area: { base: 0, pos: "var(--series-1)", neg: "var(--series-2)" } }]}
+      times={pts.map((p) => p.t)} format={(v) => m(v)} signedTip axisFormat={compact} testId="journal-curve"
       refs={[{ v: 0, strong: true }]} ariaLabel={`Running P&L after charges over ${s.n} trades, ending at ${m(s.net)}`} />
   );
 }
@@ -365,6 +378,7 @@ function VerdictView({ v, n, totals }: { v: NonNullable<Journal["verdict"]>; n: 
       <section className="j-verdict" aria-label="Verdict on your real trades">
         <div className="k-stack j-verdict-main">
           <span className="k-eyebrow">Verdict on your real trades</span>
+          {/* "too few to judge" isn't a verdict: it's said in smaller type (DB-044: about 100px) */}
           <h2 className={`verdict-head j-verdict-head ${v.verdict}`}>{v.headline}</h2>
           <p className="j-verdict-sum">{v.summary}</p>
           {/* the tax report's yearly F&O totals aren't trades it can judge: say what the verdict covers (R61-004: "Only 11
@@ -397,7 +411,7 @@ function Halves({ a, b, an, bn }: { a: number; b: number; an: number; bn: number
       </div>
     </div>
   );
-  return <div className="k-stack">{bar(a, `Earlier ${an} trades`)}{bar(b, `Later ${bn} trades`)}</div>;
+  return <div className="k-stack">{bar(a, `Earlier ${trades(an)}`)}{bar(b, `Later ${trades(bn)}`)}</div>;
 }
 
 function CheckCard({ c }: { c: Check }) {
@@ -440,7 +454,7 @@ function BreakdownTable({ rows, label }: { rows: Row[]; label: string }) {
     { key: "avg", header: "Avg", numeric: true, cell: (r) => <span className={upDown(r.avg)}>{signed(r.avg)}</span> },
   ];
   return <DataTable stack label={`P&L by ${label.toLowerCase()}`} columns={cols} rows={rows} rowKey={(r) => r.key}
-    rowAttrs={(r) => ({ title: `${r.label ?? r.key}: ${r.n} trades, ${signed(r.net)} after ${m(r.charges)} of charges` })} />;
+    rowAttrs={(r) => ({ title: `${r.label ?? r.key}: ${trades(r.n)}, ${signed(r.net)} after ${m(r.charges)} of charges` })} />;
 }
 
 function Breakdowns({ b, r, market }: { b: Record<string, Row[]>; r: Journal["r"]; market: string }) {
@@ -475,7 +489,7 @@ function RChart({ r }: { r: NonNullable<Journal["r"]> }) {
               </div>
             ))}
           </div>
-          <p className="k-small k-muted">{r.n} of {r.of} trades have a planned stop; average {r.avg}R.{r.planned_rr != null ? ` Planned reward to risk from your targets: ${r.planned_rr} to 1 (${r.planned_n} trades); ${r.hit_target} reached the target.` : ""}</p>
+          <p className="k-small k-muted">{r.n} of {trades(r.of)} {r.n === 1 ? "has" : "have"} a planned stop; average {r.avg != null ? rText(r.avg) : "–"}.{r.planned_rr != null ? ` Planned reward to risk from your targets: ${r.planned_rr} to 1 (${trades(r.planned_n)}); ${r.hit_target} reached the target.` : ""}</p>
         </>
       )}
     </div>
@@ -549,7 +563,7 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
         {t.expired && <span className="k-note">Expired: counted at {money(0, t.currency)}</span>}
       </div>) },
     { key: "net", header: "Net", numeric: true, cell: (t) => <span className={upDown(t.net)}>{signed(t.net)}</span> },
-    { key: "r", header: "R", numeric: true, cell: (t) => (t.r == null ? "–" : <Signed value={t.r}>{`${t.r > 0 ? "+" : ""}${t.r}R`}</Signed>) },
+    { key: "r", header: "R", numeric: true, cell: (t) => (t.r == null ? "–" : <Signed value={t.r}>{rText(t.r)}</Signed>) },
     { key: "exit", header: "Exit", numeric: true, cell: (t) => <>{when(t.exit_t)}<span className="k-sub-line">{holdText(t)}</span></> },
     { key: "qty", header: "Qty", numeric: true, cell: (t) => qtyText(t.qty) },
     { key: "px", header: "Entry → exit", numeric: true, cell: (t) => `${t.entry.toLocaleString("en-IN", { maximumFractionDigits: 2 })} → ${t.exit.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` },
@@ -600,7 +614,7 @@ function OpenList({ j }: { j: Journal }) {
   );
 }
 
-function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose: () => void; onSaved: (x: Journal) => void }) {
+function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose: () => void; onSaved: (x: Journal, said?: string) => void }) {
   const { fail } = useApp();
   const { m, signed } = useMoney();
   const n = t.note;
@@ -617,12 +631,20 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
   const toggle = (list: string[], set: (x: string[]) => void, v: string) => set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   const num = (v: string) => { const x = Number(v.replace(/,/g, "")); return v.trim() && Number.isFinite(x) && x > 0 ? x : null; };
   const own = t.src === "manual" || t.src === "practice";
+  // a stop or target on the wrong side of the entry is said under its box, not saved and ignored (DB-043); the server
+  // checks the same (journal.plan_problem)
+  const dir = side || t.side;
+  const at = t.entry.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  const sv = num(stop), tv = num(target);
+  const stopBad = sv != null && dir && (dir === "long" ? sv >= t.entry : sv <= t.entry) ? `A ${dir}'s planned stop goes ${dir === "long" ? "below" : "above"} its entry of ${at}.` : null;
+  const tgtBad = tv != null && dir && (dir === "long" ? tv <= t.entry : tv >= t.entry) ? `A ${dir}'s planned target goes ${dir === "long" ? "above" : "below"} its entry of ${at}.` : null;
   const save = async () => {
+    if (stopBad || tgtBad) return;
     setBusy(true);
     try {
       onSaved(await api<Journal>(`/trade/journal/trades/${encodeURIComponent(t.id)}/note`, { method: "PUT", body: {
         tag, notes, links: links.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 5), emotions: emo, mistakes: mis,
-        stop: num(stop), target: num(target), side: side || null } }));
+        stop: sv, target: tv, side: side || null } }), "Saved.");     // said once it's kept (DB-043: no word after Save)
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   const del = async () => {
@@ -641,8 +663,8 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
             <Field label="Long or short">{(id) => <Select id={id} value={side} onChange={(v) => setSide(v as "" | "long" | "short")}
               options={[{ value: "", label: "Not in the file" }, { value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
           )}
-          <Field label="Planned stop" inputMode="decimal" value={stop} placeholder={String(Math.round(t.entry * 0.98 * 100) / 100)} onChange={(e) => setStop(e.target.value)} />
-          <Field label="Planned target" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} />
+          <Field label="Planned stop" inputMode="decimal" value={stop} error={stopBad} placeholder={String(Math.round(t.entry * (dir === "short" ? 1.02 : 0.98) * 100) / 100)} onChange={(e) => setStop(e.target.value)} />
+          <Field label="Planned target" inputMode="decimal" value={target} error={tgtBad} onChange={(e) => setTarget(e.target.value)} />
         </FormGrid>
         <datalist id="j-tags">{j.tags.map((x) => <option key={x} value={x} />)}</datalist>
         <Field label="Notes" wide>{(id) => <textarea id={id} className="k-textarea" value={notes} maxLength={2000} onChange={(e) => setNotes(e.target.value)} placeholder="Why you took it, what happened" />}</Field>
@@ -656,7 +678,7 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
           <ChipSet label="Mistakes" options={j.mistakes.map((x) => ({ value: x, label: x }))} on={mis} onToggle={(v) => toggle(mis, setMis, v)} />
         </div>
         <div className="k-row j-spread">
-          <button type="button" className="btn" disabled={busy} onClick={save}>Save</button>
+          <button type="button" className="btn" disabled={busy || !!stopBad || !!tgtBad} onClick={save}>Save</button>
           <button type="button" className="btn quiet sm danger" onClick={() => setAsking(true)}><Trash size={16} />{own ? "Delete trade" : "Remove trade"}</button>
         </div>
       </div>
@@ -680,9 +702,12 @@ function moveSegment<T extends { segment: string; entry_date: string; exit_date:
   return { ...f, segment, entry_date: f.entry_date === was ? now : f.entry_date, exit_date: f.exit_date === was ? now : f.exit_date };
 }
 
-function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Journal) => void }) {
+function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Journal, segment: string) => void }) {
   const { fail, notify } = useApp();
-  const today = istToday();     // the Indian segments come first; picking US stocks or crypto moves a still-default date to that market's day
+  // the Indian segments come first; picking US stocks or crypto moves a still-default date to that market's day. Never a
+  // day ahead of the reader's own (DB-044: on a Saturday evening outside India it offered Sunday, "tomorrow")
+  const local = dayIn(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone) ?? istToday();
+  const today = [istToday(), local].sort()[0];
   const [f, setF] = useState({ symbol: "", segment: "eq", side: "long", entry_date: today, entry_time: "", exit_date: today, exit_time: "", qty: "", entry_price: "", exit_price: "", charges: "" });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
@@ -702,14 +727,16 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
     try {
       onSaved(await api<Journal>("/trade/journal/trades", { method: "POST", body: {
         ...f, qty: n(f.qty), entry_price: n(f.entry_price), exit_price: n(f.exit_price), charges: f.charges.trim() ? n(f.charges) : null,
-        entry_time: f.entry_time || null, exit_time: f.exit_time || null } }));
+        entry_time: f.entry_time || null, exit_time: f.exit_time || null } }), f.segment);
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   return (
     <Modal title="Add a trade" onClose={onClose}>
       <div className="k-stack">
         <FormGrid>
-          <Field label="Symbol" error={bad.symbol} value={f.symbol} maxLength={40} placeholder={abroad ? (f.segment === "us" ? "AAPL" : "BTCUSD") : "INFY or NIFTY26OCT25000CE"} onChange={set("symbol")} />
+          {/* a short example in the box, the option's form in the (i) (DB-044: the placeholder was cut off) */}
+          <Field label="Symbol" error={bad.symbol} value={f.symbol} maxLength={40} placeholder={abroad ? (f.segment === "us" ? "AAPL" : "BTCUSD") : "INFY"}
+            infoLabel="How to write a contract" info={abroad ? undefined : "A share's symbol (INFY), or a contract's as your broker writes it: NIFTY26OCT25000CE for an option, NIFTY26OCTFUT for a future."} onChange={set("symbol")} />
           <Field label="Segment">{(id) => <Select id={id} value={f.segment} onChange={(v) => setF(moveSegment(f, v))} options={ADD_SEGMENTS} />}</Field>
           <Field label="Long or short">{(id) => <Select id={id} value={f.side} onChange={(v) => setF({ ...f, side: v })} options={[{ value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
           <Field label="Quantity" error={bad.qty} inputMode="decimal" value={f.qty} onChange={set("qty")} />
@@ -748,7 +775,9 @@ function Settings({ j, onClose, onSaved }: { j: Journal; onClose: () => void; on
       <div className="k-stack">
         {field("Trading capital (₹)", cap, setCap, { optional: true, placeholder: "5,00,000", info: "Shows the deepest fall and the bad-luck drawdown as a % of it." })}
         {field("Brokerage on a delivery order (₹)", del, setDel)}
-        {field("Brokerage on an intraday, F&O, commodity or currency order (₹)", oth, setOth, { info: "Counted on each line of a tradebook. Tax P&L lines keep the charges your broker listed." })}
+        {field("Brokerage on an intraday, F&O, commodity or currency order (₹)", oth, setOth, { info: "A flat amount on each line of a tradebook, whatever its size. A broker that charges 0.03% up to ₹20 charges less on a small order: enter what you usually pay. Tax P&L lines keep the charges your broker listed." })}
+        {/* DB-044: these are rupees for Indian trades; US stocks and crypto keep the charges entered with them */}
+        <p className="k-note">These apply to your Indian trades. A delivery sale also pays the depository (DP) charge of ₹15.34 a stock a day. US stocks and crypto use the charges you enter with each trade.</p>
         <div><button type="button" className="btn" onClick={save}>Save</button></div>
       </div>
     </Modal>

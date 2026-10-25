@@ -1029,13 +1029,20 @@ class NSEFilings:
     def _surv_text(self, url: str) -> str:
         """One of the exchange's daily files, with the surveillance breaker: three outages in a row and it rests a
         minute."""
+        return self._surv_get(url, "text/csv,text/plain,*/*").text
+
+    def _surv_bytes(self, url: str) -> bytes:
+        """One of the exchange's files as it came (a circular's PDF or zip), behind the same breaker (DC-019)."""
+        return self._surv_get(url, "application/pdf,application/zip,*/*").content
+
+    def _surv_get(self, url: str, accept: str):
         fails, down = self._circuits.get("surveillance", (0, 0.0))
         if time.time() < down:
             raise SourceError(self.name, "The exchange's files aren't answering right now. Try again in a minute.", busy=True)
         busy = True
         try:
             try:
-                r = self.http.get(url, headers={"Accept": "text/csv,text/plain,*/*"})
+                r = self.http.get(url, headers={"Accept": accept})
             except httpx.HTTPError as e:
                 raise SourceError(self.name, f"Couldn't reach the exchange's files ({e.__class__.__name__}).", busy=True) from None
             busy = r.status_code == 429 or r.status_code >= 500
@@ -1047,7 +1054,7 @@ class NSEFilings:
                 self._circuits["surveillance"] = (0, time.time() + 60) if fails >= 3 else (fails, 0.0)
             raise
         self._circuits["surveillance"] = (0, 0.0)
-        return r.text
+        return r
 
     def asm_list(self) -> dict[str, dict[str, int | None]]:
         """The Additional Surveillance Measure lists: {"lt": {symbol: stage}, "st": {symbol: stage}}."""

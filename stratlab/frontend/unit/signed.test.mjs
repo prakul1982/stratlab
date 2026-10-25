@@ -62,7 +62,8 @@ test("the Signed component writes the class signCls gives, and keeps the text (a
 
 test("the positioning page's change and net cells are drawn with Signed", () => {
   const src = readFileSync(new URL("../src/pages/PositioningPage.tsx", import.meta.url), "utf8");
-  assert.match(src, /<span className="k-sub-line"><Sgn v=\{v\} \/><\/span>/, "the change line under each cell");
+  // DC-005: a change in a long or a short count is in the text colour (more shorts read green); the nets keep Signed
+  assert.match(src, /<span className="k-sub-line k-muted num" data-testid="pos-chg">\{signed\(v\)\}<\/span>/, "the change line under each cell");
   assert.match(src, /k\.endsWith\("_net"\) \? <Sgn v=/, "the net futures column");
   assert.match(src, /tone=\{signTone\(n\(fii, `fut_\$\{seg\}_net`\)\)\}/, "the headline net");
 });

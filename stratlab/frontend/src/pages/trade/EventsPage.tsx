@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { asOf, safeHref } from "../../lib/format";
-import { evDay, evWhen, happened, istHm, loadEvents, type EvKind, type EvPrefs, type EventsView, type IndexChange, type MarketEvent } from "../../lib/marketEvents";
+import { evDay, evWhen, failedLine, happened, istHm, loadEvents, type EvKind, type EvPrefs, type EventsView, type IndexChange, type MarketEvent } from "../../lib/marketEvents";
 import { Info } from "../../components/ui";
 import { Calendar, type CalEvent, Card, CardHead, CheckField, ChipBar, ChipSet, type Column, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, PageHeader, Select, Skeleton } from "../../components/kit";
 import "./trade.css";
@@ -36,6 +36,8 @@ function Detail({ e }: { e: MarketEvent }) {
 function RemindCard({ v, onSave }: { v: EventsView; onSave: (p: Partial<EvPrefs>) => void }) {
   const p = v.prefs;
   const kinds = Object.keys(v.kinds) as EvKind[];
+  // a kind with nothing on the calendar says so (DC-016: "Budget and government" with no event, no Union Budget yet)
+  const none = (k: EvKind) => !v.events.some((e) => e.kind === k);
   return (
     <Card label="Reminders and your calendar">
       <CardHead level={2} title="Reminders and your calendar" />
@@ -47,7 +49,7 @@ function RemindCard({ v, onSave }: { v: EventsView; onSave: (p: Partial<EvPrefs>
         <p className="k-small">Reminders of these events are on the {p.plan} plan. <Link className="link" to="/plans">See the {p.plan} plan</Link></p>
       )}
       {p.allowed && p.remind && !p.channels.length && <p className="k-note">Nowhere to send them yet: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>}
-      <ChipSet label="Kinds of event" options={kinds.map((k) => ({ value: k, label: v.kinds[k] }))} on={p.kinds}
+      <ChipSet label="Kinds of event" options={kinds.map((k) => ({ value: k, label: none(k) ? `${v.kinds[k]} (none yet)` : v.kinds[k] }))} on={p.kinds}
         onToggle={(k) => onSave({ kinds: p.kinds.includes(k as EvKind) ? p.kinds.filter((x) => x !== k) : [...p.kinds, k as EvKind] })} />
       {p.allowed && (
         <Field label="When" wide>{(id) => <Select id={id} label="When to remind" value={p.days} onChange={(d) => onSave({ days: Number(d) })} options={DAY_OPTS} />}</Field>
@@ -60,7 +62,9 @@ function RemindCard({ v, onSave }: { v: EventsView; onSave: (p: Partial<EvPrefs>
 
 function IndexChanges({ rows }: { rows: IndexChange[] }) {
   const shown = rows.filter((c) => c.sections.length);
-  if (!shown.length) return null;
+  // a notice whose stocks couldn't be read is still listed, with its link, never dropped (DC-013: 9 of 12 hidden)
+  const unread = rows.filter((c) => !c.sections.length);
+  if (!shown.length && !unread.length) return null;
   const names = (list: [string, string][]) => list.length
     // each comma stays with the name before it, so a wrapped line never starts with one (R54-011)
     ? list.map(([sym, name], j) => <span key={sym}><span className="nowrap"><Link className="link tap" to={`/research/IN/${encodeURIComponent(sym)}`} title={name}>{sym}</Link>{j < list.length - 1 ? "," : ""}</span>{j < list.length - 1 ? " " : ""}</span>)
@@ -82,6 +86,18 @@ function IndexChanges({ rows }: { rows: IndexChange[] }) {
   return (
     <section className="k-stack" aria-labelledby="ev-idx-h">
       <h2 id="ev-idx-h" className="k-sub">Index changes</h2>
+      {unread.length > 0 && (
+        <Card testId="ev-index-unread" label="Index notices not read into stocks">
+          <CardHead level={3} title={`Notices not read into stocks here (${unread.length})`} />
+          <ul className="k-list plain">
+            {unread.slice(0, 8).map((c) => (
+              <li key={c.id} className="k-small">{c.effective ? `From ${evDay(c.effective, true)}: ` : ""}{c.title} · announced {asOf(c.announced)} ·{" "}
+                <a className="link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">Press release ↗</a></li>
+            ))}
+          </ul>
+          <p className="k-note">The press release has the stocks going in and out; they couldn't be read from it here.</p>
+        </Card>
+      )}
       {shown.slice(0, 1).map((c) => card(c, 0))}
       {/* the newest announcement open; the earlier ones folded, so the page isn't three full tables long on a phone
           (R70-013, R71-009: 27,000 px) */}
@@ -176,13 +192,14 @@ export function EventsPage() {
   return (
     <div className="k-page ev-page">
       <PageHeader eyebrow="Trade · F&O desk" title="Market events"
-        lede="RBI policy, India's data releases, the US Fed and US data, index changes, F&O expiries and exchange holidays on one calendar, with the published figure once it is out. Dates and figures only, never a forecast. Facts, not advice."
+        lede="RBI policy, India's data releases, the US Fed and US data, index changes, F&O expiries and exchange holidays on one calendar. The repo rate, the Fed's range and India's CPI, IIP and GDP once published; the US reports as dates with a link. Never a forecast. Facts, not advice."
         info={v ? <span data-testid="ev-asof">{v.sources.map((s) => `${s.label} ${s.as_of ? `as of ${asOf(s.as_of)}` : "not read yet"}${s.failed ? " (couldn't be refreshed since)" : ""}`).join(" · ")}</span> : undefined}
         infoLabel="Where this comes from" />
       {error ? <ErrorState title="The market events couldn't be read" action={{ label: "Try again", onClick: () => { setError(null); reload(); } }}>{error}</ErrorState>
         : !v ? <Card><Skeleton label="Reading the market events" /></Card>
         : (
           <>
+            {failedLine(v.sources, (d) => asOf(d) ?? d) && <p className="k-callout k-small" role="status" data-testid="ev-failed">{failedLine(v.sources, (d) => asOf(d) ?? d)}</p>}
             <div className="k-two">
               <Card label="The next seven days">
                 <CardHead level={2} title="The next seven days" />

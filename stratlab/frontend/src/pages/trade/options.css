@@ -38,3 +38,12 @@
 .key-line.put { background: var(--pos-put); }
 .k-table tr[data-closed] td, .k-table tr[data-closed] th { opacity: .55; }
 .opt-charge-lines .k-tbl-wrap { max-width: 460px; }
+
+/* DB-005: on a phone the legs are cards (DataTable stack); the strike rule needs the card's full width */
+@media (max-width: 640px) {
+  .opt-legs .k-tbl-wrap.stack .k-table td[data-label="Strike by"] { grid-column: 1 / -1; }
+  .opt-legs .k-tbl-wrap.stack .k-leg-pick { flex-wrap: wrap; }
+  .opt-legs .k-tbl-wrap.stack .k-table td .k-select, .opt-legs .k-tbl-wrap.stack .k-table td select { width: 100%; min-width: 0; }
+}
+.k-in.num.bad { border-color: var(--down); }
+.k-note.k-bad { color: var(--down); }

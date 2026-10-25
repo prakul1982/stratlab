@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import {
-  atmIvLabel, chainUnit, chainWithTime, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
+  atmIvLabel, chainUnit, chainWithTime, contracts, contractsShort, crore, dayName, historyBasis, istTime, ivWait, NEAR_STRIKES, oiBasis, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
   chainCounts, pcrNote, pcrStrikes, rangeFrom, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
@@ -37,9 +37,10 @@ const n = (r: PRow, k: string) => (r[k] as number | null | undefined) ?? null;
  * contracts has a direction (net long or short, more or fewer than the day before), and that direction is the fact. */
 const Sgn = ({ v }: { v: number | null }) => <Signed value={v} fmt={signed} />;
 
-/** A change under a number: the same colour as any other change. */
+/** A change under a number, in the text's own colour with its sign: green for "more shorts" read as good news (DC-005:
+ * "Futures short +2,921" green, "Futures long −56" red). A change in a long or a short count has no good or bad side. */
 function Chg({ v }: { v: number | null }) {
-  return v == null ? null : <span className="k-sub-line"><Sgn v={v} /></span>;
+  return v == null ? null : <span className="k-sub-line k-muted num" data-testid="pos-chg">{signed(v)}</span>;
 }
 
 type Segment = "idx" | "stk";
@@ -118,7 +119,7 @@ function Participants({ s }: { s: Summary }) {
   return (
     <Card id="pos-part" label="Participant-wise open interest">
       <CardHead title="Participant-wise open interest" infoLabel="About participant-wise open interest"
-        info="The exchange's daily count of futures and options contracts each kind of participant held open (or traded that day), long and short, for index and for stock contracts. Clients are individuals and firms trading for themselves; DIIs are domestic institutions (mutual funds, insurers, banks); FIIs are foreign portfolio investors; Pro is brokers trading their own money. Long / short is each side's share of the futures held. The small line under each number is the change from the trading day before."
+        info="The exchange's daily count of futures and options contracts each kind of participant held open (or traded that day), long and short, for index and for stock contracts. Clients are individuals and firms trading for themselves; DIIs are domestic institutions (mutual funds, insurers, banks); FIIs are foreign portfolio investors; prop desks (the exchange's “Pro”) are brokers trading their own money. Long / short is each side's share of the futures held. The small line under each number is the change from the trading day before."
         actions={<>
           <Seg label="Index or stock contracts" value={seg} onChange={(v) => setSeg(v as Segment)} options={[{ value: "idx", label: "Index F&O" }, { value: "stk", label: "Stock F&O" }]} />
           <Seg label="Open interest or volume" value={kind} onChange={(v) => setKind(v as "oi" | "vol")} options={[{ value: "oi", label: "Open interest" }, { value: "vol", label: "Volume" }]} />
@@ -144,31 +145,14 @@ function Participants({ s }: { s: Summary }) {
           </StatRow>
         </div>
       )}
-      {s.full && kind === "oi" && <FiiTrend seg={seg} />}
       {rows.length ? <ParticipantTable rows={rows} kind={kind} seg={seg} split={more.on} /> : <EmptyState title={`No ${kind === "oi" ? "open interest" : "volume"} file stored yet`}>It appears here once the exchange's file for a trading day is read.</EmptyState>}
       <p className="k-note">Contracts, as the exchange counts them. {kind === "vol" ? "Volume is what each participant bought and sold that day; open interest is what they held at the close." : "Open interest is what each participant held at the close; Volume shows what they bought and sold that day."}</p>
     </Card>
   );
 }
 
-/** The headline over time: the FIIs' long share of their futures, day by day for three months, above the full grid of
- * numbers (R1-034). A fact line, not a signal: where it sits is for the reader to read. */
-function FiiTrend({ seg }: { seg: Segment }) {
-  const h = useHistory<PartPoint>("participants", "3m");
-  const key = `fut_${seg}_long_pct`;
-  if (h === null) return <Skeleton label="Reading the FIIs' last three months" lines={2} />;
-  if (h === "error" || h.points.length < 2) return null;
-  const pts = h.points;
-  const vals = pts.map((p) => p.fii?.[key] ?? null);
-  return (
-    <div className="k-stack pos-chart" data-testid="fii-trend">
-      <b className="k-sub">FII {SEG_WORD[seg]} futures: long share, last 3 months</b>
-      <LineChart lines={[{ values: vals, color: "var(--pos-call)", width: 2, label: "Long share" }]} labels={pts.map((p) => dayName(p.day))} times={pts.map((p) => p.day.slice(0, 10))}
-        ranges={false} format={(v) => `${v.toFixed(1)}% long · ${(100 - v).toFixed(1)}% short`} axisFormat={(v) => `${v.toFixed(0)}%`} height={160}
-        ariaLabel={`FII ${SEG_WORD[seg]} futures long share by day, last three months`} />
-    </div>
-  );
-}
+/* DC-007: the FIIs' long share over three months was drawn here and again under History (the same line twice on a
+ * 5,000 px page); History draws it for every participant and range, so it is drawn there only. */
 
 function Cash({ s }: { s: Summary }) {
   const c = s.cash;
@@ -304,7 +288,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
             <StatRow label="Option chain figures">
               <Stat label="PCR (open interest)" value={ratio(c.pcr?.oi)} note={[`${c.near_strikes ?? NEAR_STRIKES} strikes either side of the money`, `volume ${ratio(c.pcr?.vol)}`,
                 strikesRead(c.strikes_counted, c.near_strikes, c.pcr_all, ratio)].filter(Boolean).join(" · ")} />
-              <Stat label="Max-pain strike" value={strike(c.max_pain)} note={chainCounts(c).maxPain} />
+              <Stat label="Max pain, near the money" value={strike(c.max_pain)} note={chainCounts(c).maxPain} />
               <Stat label="Most call open interest" value={strike(c.top?.call?.strike)} note={c.top?.call ? `${contracts(c.top.call.oi)} ${unit}` : undefined} />
               <Stat label="Most put open interest" value={strike(c.top?.put?.strike)} note={c.top?.put ? `${contracts(c.top.put.oi)} ${unit}` : undefined} />
               <Stat label={atmIvLabel(c.atm, strike)} value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(2)}%`} note={`StratLab's model, from this chain's prices, ${istTime(c.as_of)}${!expiringToday(c) ? "" : c.atm_iv == null ? EXPIRED_IV : EXPIRING_IV}`} />
@@ -320,6 +304,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
               <StrikeChart rows={c.rows} mode={mode} spot={c.spot} unit={unit} label={`${name} ${mode === "oi" ? "open interest" : "change in open interest"} by strike, calls and puts, in ${unit}`} />
             )}
             <p className="k-note" data-testid="chain-unit">{unitLine(c)}</p>
+            {oiBasis(c) && <p className="k-note" data-testid="chain-basis">{oiBasis(c)}</p>}
             {c.change_from && <p className="k-note">Change since the recording of {istTime(c.change_from)}.</p>}
             <Disclosure summary="Show the strikes as a table">
               <DataTable label={`${name} open interest, change and volume by strike, in ${unit}`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
@@ -348,7 +333,7 @@ function IvFig({ c, full, plan }: { c: ChainFacts; full: boolean; plan: string }
   const why = expiringToday(c) ? "Not given on the day these options expire: their last hours aren't comparable with the recorded days. Pick the next expiry for it."
     : "Given for the nearest expiry only, as the recorded days are that expiry's.";
   if (!s || s.percentile == null)
-    return <Stat label="IV percentile and rank" value="–" note={s ? `${s.days} of the ${s.need} earlier recorded days needed so far (today is the day compared with them, so it isn't counted)` : why} />;
+    return <Stat label="IV percentile and rank" value="–" note={s ? `${ivWait(s.days, s.need)} (${s.days} of ${s.need} so far; today is the day compared with them, so it isn't counted)` : why} />;
   return <Stat label="IV percentile · rank" value={`${s.percentile.toFixed(0)} · ${s.rank == null ? "–" : s.rank.toFixed(0)}`}
     note={`Over ${s.days} recorded days (${s.low?.toFixed(1)}%–${s.high?.toFixed(1)}%)`} />;
 }
@@ -446,7 +431,7 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
               emptyText={`${cash.length ? "One day" : "No days"} so far: the exchange shows only its latest day, so this chart grows a day at a time from when StratLab started reading the numbers.`}>
               <LineChart lines={[{ values: cash.map((p) => p.fii), color: "var(--pos-call)", width: 2, label: "FII/FPI" },
                 { values: cash.map((p) => p.dii), color: "var(--pos-put)", width: 2, label: "DII" }]}
-                labels={label(cash)} times={days(cash)} sync="pos-history" ranges={false} legend format={(v) => crore(v, true)} signedTip axisFormat={(v) => contractsShort(v)} baseline={0} height={200}
+                labels={label(cash)} times={days(cash)} sync="pos-history" ranges={false} legend format={(v) => crore(v, true)} signedTip axisFormat={(v) => crore(v)} baseline={0} height={200}
                 ariaLabel="FII and DII net cash market flows by day" />
             </ChartBox>
             <div className="k-stack">
@@ -455,7 +440,7 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
                 : chain === "error" || chainH === "error" ? <p className="k-small k-muted">The recorded days couldn't be read.</p>
                 : (
                   <>
-                    <Source testId="chain-history-source">{recordedLine(name, chainH.recorded)}</Source>
+                    <Source testId="chain-history-source">{recordedLine(name, chainH.recorded)} {historyBasis(chain)}</Source>
                     <div className="k-two">
                       <ChartBox title={`${name} PCR, near the money`} empty={chain.length < 2} emptyText={`Not enough recorded days of ${name} to draw yet.`}>
                         <LineChart lines={[{ values: chain.map((p) => p.pcr_oi), color: "var(--pos-call)", width: 2, label: "Open interest" },
