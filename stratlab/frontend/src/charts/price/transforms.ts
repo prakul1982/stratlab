@@ -86,6 +86,31 @@ export function aggregate(bars: Bar[], unit: "week" | "month"): Bar[] {
   return out;
 }
 
+/** How far a single candle must stand from both its neighbours to be read as bad data, not a move (DD-043). */
+export const SPIKE_X = 3;
+
+/** Monthly (or weekly) candles with a lone bad print taken out, conservatively (DD-043: RELIANCE's 2005 month with a
+ *  high of ₹218 among months of ₹40–60, the source's own error). A high more than SPIKE_X times the candle's open, its
+ *  close and both neighbours' closes comes down to the top of the candle's body, and a low under a SPIKE_X-th of them
+ *  up to its bottom. A candle whose close alone is SPIKE_X times off both neighbours, which agree within 30%, is left
+ *  out. A real month is never this: a high three times its own body and both neighbours, or a close that triples and
+ *  comes straight back. */
+export function dropSpikes(bars: Bar[]): Bar[] {
+  if (bars.length < 3) return bars;
+  const out: Bar[] = [];
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i], p = bars[i - 1], n = bars[i + 1];
+    if (!p || !n) { out.push(b); continue; }
+    const near = Math.max(p.c, n.c) / Math.min(p.c, n.c) <= 1.3;
+    if (near && (b.c > SPIKE_X * Math.max(p.c, n.c) || b.c * SPIKE_X < Math.min(p.c, n.c))) continue;
+    const top = Math.max(b.o, b.c), bottom = Math.min(b.o, b.c);
+    const hi = b.h > SPIKE_X * Math.max(top, p.c, n.c) ? top : b.h;
+    const lo = b.l * SPIKE_X < Math.min(bottom, p.c, n.c) ? bottom : b.l;
+    out.push(hi === b.h && lo === b.l ? b : { ...b, h: hi, l: lo });
+  }
+  return out;
+}
+
 /** Merge newer bars into a series, by time: a bar with a time already there replaces it (the live candle
  *  growing), later ones are appended. Returns how the series changed, so a chart can patch rather than redraw. */
 export function merge(bars: Bar[], next: Bar[]): { bars: Bar[]; kind: "same" | "patch" | "append" | "reset" } {

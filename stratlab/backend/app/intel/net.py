@@ -281,6 +281,10 @@ class Source:
             shared.update(value=(value, at), done=time.monotonic())
             return (value, at) if with_time else value
 
+    def peek(self, path: str, params: dict | None = None, ttl: float = 300, kind: str = "json"):
+        """The cached answer `fetch` would give, or None: never a call upstream."""
+        return self.cache.get((path, tuple(sorted((params or {}).items())), kind), max_age=ttl)
+
     def _stale(self, key, e: SourceError) -> tuple | None:
         """The last good answer and when it was sent, for a call that failed because the source can't be asked right
         now; None for a real answer such as "no such thing", or when there's no copy."""

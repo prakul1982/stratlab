@@ -7,8 +7,8 @@ import { HELP } from "../lib/help";
 import { marketState } from "../lib/marketHours";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, SETTLING, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
-  type Company, type CompareAI, type Idea, type IndexLevel, type PulseAI, type PulseData, type Quote, type Region, type SectorAI,
+  REGION_NAME, SETTLING, holderRowName, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
+  type Company, type CompareAI, type Idea, type IndexLevel, type PulseAI, type PulseData, type Quote, type Region, type SectorAI, type WatchItem,
 } from "../lib/research";
 import { askAgain, PULSE_PENDING_EVERY_MS, PULSE_SLOW_MS, pulseLoad } from "../lib/pulseLoad";
 import { bseTwinMoved, delistedLine, regionOf } from "../lib/researchFormat";
@@ -21,6 +21,7 @@ import { loadSurveillance } from "../lib/surveillance";
 import { loadEtfGaps } from "../lib/etfGaps";
 import { loadFoChanges } from "../lib/foChanges";
 import { AlertButton } from "../components/AlertForm";
+import { alertsApi } from "../lib/alerts";
 import { Trash } from "../components/Icons";
 import { liveQuote, useLiveRefresh } from "../lib/liveRefresh";
 import { useShareCompany } from "../components/ShareCompany";
@@ -139,6 +140,8 @@ function PulseLevels({ p }: { p: ReturnType<typeof usePulse> }) {
 }
 
 /* ================= Companies (home) ================= */
+/** "Look up a company": finding a company, with the market's levels and headlines beside it. It is not a second home:
+ * themes and tools are on the Invest home and in the menu (DD-002). */
 export function ResearchHome() {
   const [region, setRegion] = useRegion();
   // ?q= (Ctrl K's "deep dive …" for a name it couldn't place): the box opens with it typed, its matches listed
@@ -149,7 +152,7 @@ export function ResearchHome() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research")} title="Look up a company"
-        lede="Search any Indian or US company for its price, valuation, growth, news and an AI read. Your watchlist, results days and red flags are on the Invest home." />
+        lede={<>Search any Indian or US company for its price, valuation, growth, news and an AI read. Your watchlist, results days and red flags are on the <Link to="/invest" className="link">Invest home</Link>.</>} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card>
         <CardHead title="Find a company" />
@@ -162,12 +165,6 @@ export function ResearchHome() {
       <Card>
         <CardHead title={`${REGION_NAME[region]} today`} info={HELP.researchPulse} actions={<Link to={`/research/pulse?region=${region}`} className="btn quiet sm">Full market pulse →</Link>} />
         <PulseLevels p={p} />
-      </Card>
-      <Card>
-        <CardHead title="Explore a theme" info={HELP.researchThemes} actions={<Link to={`/research/themes?region=${region}`} className="btn quiet sm">Themes →</Link>} />
-        <div className="k-row">
-          {THEME_IDEAS[region].map((t) => <Link key={t} to={`/research/themes?region=${region}&q=${encodeURIComponent(t)}`} className="btn quiet sm">{t}</Link>)}
-        </div>
       </Card>
       {pulse && pulse.headlines.length > 0 && <Card><CardHead title="Market headlines" /><NewsList items={pulse.headlines} limit={6} /></Card>}
     </div>
@@ -334,6 +331,9 @@ function CompanyView() {
               <FoBadges region={region} symbol={c.symbol} />
               <IndexBadges region={region} symbol={c.symbol} />
             </div>
+            {/* a company that no longer trades says so first, and offers nothing that needs a live share (DD-012) */}
+            {c.delisted && <p className="k-small" role="status" data-testid="delisted">{delistedLine(c.name, c.delisted, (d) => fmtDate(d))}
+              {c.delisted.into_symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(c.delisted.into_symbol)}`}>{c.delisted.into ?? c.delisted.into_symbol} →</Link></>}</p>}
           </div>
           <div className="k-stack inv-head-price">
             <Change q={c.quote} currency={ccy} closed={c.market_open === false} preOpen={c.phase === "pre_open"} settling={c.phase === "settling"}
@@ -348,24 +348,22 @@ function CompanyView() {
               ? <a className="link k-small" href={safeHref(results.last.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.last.out.at)} ↗</a>
               : <Link className="link k-small" to={`/research/results?region=${region}`}>Results filed {resultDay(results.last.out.at)}</Link>)}
           </div>
-        </div>
-        {/* a company that no longer trades says so first, and offers nothing that needs a live share (DD-012) */}
-        {c.delisted && <p className="k-small" role="status" data-testid="delisted">{delistedLine(c.name, c.delisted, (d) => fmtDate(d))}
-          {c.delisted.into_symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(c.delisted.into_symbol)}`}>{c.delisted.into ?? c.delisted.into_symbol} →</Link></>}</p>}
-        {/* one main action (what this person came for), Watch and an alert; the rest under More */}
-        <div className="k-row">
-          {/* the page's two main paths are both buttons: the one this person came for first and solid, the other beside it */}
-          {!c.delisted && (lead === "deep" ? deep("") : <button className="btn sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>)}
-          {!c.delisted && (lead === "deep" ? (c.testable && <button className="btn quiet sm" onClick={() => test(c)}>Test a strategy</button>) : deep("quiet"))}
-          {!c.delisted && <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${encodeURIComponent(c.symbol)}`}>Compare</Link>}
-          {!c.delisted && <StarButton region={region} symbol={c.symbol} name={c.name} />}
-          {!c.delisted && <AlertButton region={region} symbol={c.symbol} />}
-          <MoreMenu items={[
-            { label: share.busy ? "Making the card…" : "Share", run: () => { void share.run(); } },
-            ...(region === "IN" ? [{ label: "Test a SIP", run: () => nav(`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`) }] : []),
-            ...c.links.map((l) => ({ label: `${linkLabel(l)} ↗`, run: () => openOut(l.url) })),
-            ...(c.website ? [{ label: "Company website ↗", run: () => openOut(c.website!) }] : []),
-          ]} />
+          {/* one main action (what this person came for), Watch and an alert; the rest under More. Inside the head, under the
+              market value, so the left side has no empty block while the price column runs on (DD-019) */}
+          <div className="k-row inv-actions">
+            {/* the page's two main paths are both buttons: the one this person came for first and solid, the other beside it */}
+            {!c.delisted && (lead === "deep" ? deep("") : <button className="btn sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>)}
+            {!c.delisted && (lead === "deep" ? (c.testable && <button className="btn quiet sm" onClick={() => test(c)}>Test a strategy</button>) : deep("quiet"))}
+            {!c.delisted && <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${encodeURIComponent(c.symbol)}`}>Compare</Link>}
+            {!c.delisted && <StarButton region={region} symbol={c.symbol} name={c.name} />}
+            {!c.delisted && <AlertButton region={region} symbol={c.symbol} />}
+            <MoreMenu items={[
+              { label: share.busy ? "Making the card…" : "Share", run: () => { void share.run(); } },
+              ...(region === "IN" ? [{ label: "Test a SIP", run: () => nav(`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`) }] : []),
+              ...c.links.map((l) => ({ label: `${linkLabel(l)} ↗`, run: () => openOut(l.url) })),
+              ...(c.website ? [{ label: "Company website ↗", run: () => openOut(c.website!) }] : []),
+            ]} />
+          </div>
         </div>
       </Card>
       <SourcesNote sources={c.sources} />
@@ -405,7 +403,7 @@ function CompanyView() {
               { key: "p", header: `${trend.t.profit_label} (${trend.prof.unit})`, numeric: true, cell: (x) => (x.profit == null ? "–" : trendValue(x.profit, trend.prof.unit)) }] }}>
           <div className="k-cols">
             <TrendBars points={trend.rev.points} label={trend.t.revenue_label} unit={trend.rev.unit} />
-            <TrendBars points={trend.prof.points} label={trend.t.profit_label} unit={trend.prof.unit} tone="blue"
+            <TrendBars points={trend.prof.points} label={trend.t.profit_label} unit={trend.prof.unit}
               baseSales={trend.rev.points.find((p) => p.y === trend.prof.points[0]?.y)?.v ?? null} />
           </div>
         </ChartFrame>
@@ -604,7 +602,14 @@ export function PulsePage() {
             <span className="k-small k-muted">No AI read of the mood right now{aiReason(aiErr)} The index levels and headlines don't depend on it.</span>
             {!aiLimited(aiErr) && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Asking…" : "Ask again"}</button>}
           </div>
-        ) : !ai ? <Skeleton label="Reading the tape" lines={2} /> : <p className="inv-summary">{ai.tone}</p>}
+        ) : !ai ? <Skeleton label="Reading the tape" lines={2} /> : (
+          <>
+            {/* the mood and the main story first, worked out from the moves and headlines; then the read (DD-001) */}
+            {ai.mood && <p className="inv-summary" data-testid="pulse-mood"><b>{ai.mood}</b></p>}
+            <p className="inv-summary">{ai.tone}</p>
+            {ai.flows_source && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
+          </>
+        )}
       </Card>
       {ai && (ai.hot.length > 0 || ai.flows.length > 0) && (
         <div className="k-cols">
@@ -662,6 +667,7 @@ export function ComparePage() {
   const a = params.get("a") ?? "", b = params.get("b") ?? "";
   const [res, setRes] = useState<{ a: Company; b: Company; ai: CompareAI } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sameMsg, setSameMsg] = useState<string | null>(null);        // the server found the two to be one company (DD-061)
   // "Asking…" is the pair's it was pressed for: another pair or market never shows it, and never gets its answer
   const [asking, setAsking] = useState<string | null>(null);
   const shownKey = pairKey(region, a, b);
@@ -676,14 +682,20 @@ export function ComparePage() {
     setRegionState(r);
     const p = new URLSearchParams(window.location.search); p.set("region", r); p.delete("a"); p.delete("b"); setParams(p, { replace: true });
   };
+  // the same company in both boxes is a slip, said kindly, and never sent to the server (DD-061)
+  const same = !!a && !!b && canonTicker(region, a) === canonTicker(region, b);
   useEffect(() => {
     setAsking(null);
-    if (!a || !b) { setRes(null); setError(null); return; }
+    setSameMsg(null);
+    if (!a || !b || same) { setRes(null); setError(null); return; }
     let live = true;
     setRes(null); setError(null);
-    researchApi.compare(region, a, b).then((x) => live && setRes(x)).catch((e) => live && setError((e as Error).message));
+    researchApi.compare(region, a, b).then((x) => live && setRes(x)).catch((e) => {
+      if (!live) return;
+      if ((e as ApiError).code === "same_symbol") setSameMsg((e as Error).message); else setError((e as Error).message);
+    });
     return () => { live = false; };
-  }, [a, b, region]);
+  }, [a, b, region, same]);
   // only the AI's part is asked again; the numbers already on the page stay. The answer is put on the page only while
   // the same pair is shown (a late answer for an earlier pair is dropped)
   const askAgain = () => {
@@ -702,6 +714,9 @@ export function ComparePage() {
   const sections = Array.from(new Set(groups.map((g) => g.title)))
     .map((t) => ({ title: t, labels: Array.from(new Set(groups.filter((g) => g.title === t).flatMap((g) => g.items.map((i) => i.label)))) }));
   const ra = res ? rows(res.a) : {}, rb = res ? rows(res.b) : {};
+  // who owns each, by the holder groups either company's latest shareholding pattern names (DD-060)
+  const owners = res ? Array.from(new Set([res.a, res.b].flatMap((c) => c.shareholding?.rows.map((r) => r.label) ?? []))) : [];
+  const held = (c: Company, l: string) => { const r = c.shareholding?.rows.find((x) => x.label === l); return r ? `${r.value.toFixed(1)}%` : "–"; };
   // each figure as its company page writes it (₹3.7 lakh cr, 0.44, 9.7%), never a bare number without its unit
   // a figure that compares two periods names them under it ("Jun 2026 vs Jun 2025"): the two companies' latest quarters
   // can differ, and a bare "Latest YoY" read as one period for both (R50-003)
@@ -718,9 +733,11 @@ export function ComparePage() {
           <Field label="Second company">{(id) => <StockPicker id={id} market={region} value={b} placeholder={b ? `Change ${b}…` : "Name or symbol, e.g. Infosys"} onPick={(s) => setSide("b", s)} />}</Field>
         </FormGrid>
       </Card>
+      {same && <EmptyState title={`${a.toUpperCase()} is in both boxes`}>Pick a different company in one of them to line the two up.</EmptyState>}
+      {sameMsg && <EmptyState title="That's one company twice">{sameMsg}</EmptyState>}
       {error && <ErrorState title="The two couldn't be compared">{error}</ErrorState>}
       {(!a || !b) && !error && <EmptyState title="Pick two companies">Type a name in each box above. Their numbers line up here.</EmptyState>}
-      {a && b && !res && !error && <Card><Skeleton label={`Comparing ${a} and ${b}`} lines={4} /></Card>}
+      {a && b && !same && !sameMsg && !res && !error && <Card><Skeleton label={`Comparing ${a} and ${b}`} lines={4} /></Card>}
       {res && (
         <>
           <Card>
@@ -741,19 +758,26 @@ export function ComparePage() {
           <div className="k-cols">
             {([["a", res.a], ["b", res.b]] as const).map(([k, c]) => (
               <Card key={k}>
-                <CardHead title={c.name} actions={<>
-                  <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}>Open →</Link>
-                  <StarButton region={region} symbol={c.symbol} name={c.name} /></>} />
+                {/* both cards the same: the name, the two figures, then the same two buttons in a row (DD-060) */}
+                <CardHead title={c.name} />
                 <StatRow>
                   <Stat label={priceLabel(c, today, dayText).label ?? "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
                     delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={priceLabel(c, today, dayText).since || undefined} />
                   <Stat label="Market value" value={bigMoney(c.market_cap, c.currency)} note={c.symbol} />
                 </StatRow>
+                <div className="k-row">
+                  <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}>Open {c.symbol} →</Link>
+                  <StarButton region={region} symbol={c.symbol} name={c.name} />
+                </div>
               </Card>
             ))}
           </div>
+          {/* the two prices on one % scale, from the start of the range shown (DD-060) */}
+          <Card id="cmp-chart"><PriceChart region={region} symbol={res.a.symbol} currency={res.a.currency} price={res.a.quote?.price} compareWith={res.b.symbol} /></Card>
           <Card>
             <CardHead title="The numbers side by side" />
+            {/* every section's columns line up: the same widths in each table, so TCS and INFY never shift (DD-060) */}
+            <div className="k-stack cmp-sections">
             {sections.map((sec) => (
               <div key={sec.title} className="k-stack">
                 <span className="k-eyebrow">{sec.title}</span>
@@ -763,6 +787,17 @@ export function ComparePage() {
                     { key: "b", header: res.b.symbol, numeric: true, cell: (l) => show(rb[key(sec.title, l)], res.b) }]} />
               </div>
             ))}
+            {owners.length > 0 && (
+              <div className="k-stack" data-testid="cmp-owners">
+                <span className="k-eyebrow">Who owns it</span>
+                <DataTable stack label="Who owns each company" rows={owners} rowKey={(l) => l}
+                  columns={[{ key: "m", header: "Holder", rowHeader: true, cell: (l) => holderRowName(l) },
+                    { key: "a", header: res.a.symbol, numeric: true, cell: (l) => held(res.a, l) },
+                    { key: "b", header: res.b.symbol, numeric: true, cell: (l) => held(res.b, l) }]} />
+                <span className="k-note">From each company's latest shareholding pattern: {[res.a, res.b].map((c) => `${c.symbol} as of ${c.shareholding?.as_of ?? "–"}`).join(", ")}.</span>
+              </div>
+            )}
+            </div>
           </Card>
         </>
       )}
@@ -773,7 +808,7 @@ export function ComparePage() {
 /* ================= Watchlist ================= */
 export function WatchlistPage() {
   const [region, setRegion] = useRegion();
-  const { items, toggle, has, failed, retry } = useWatchlist();
+  const { items, toggle, has, failed, retry, save } = useWatchlist();
   const { fail, notify, markets } = useApp();
   const [quotes, setQuotes] = useState<Record<string, Quote | null> | null>(null);
   // between the US close and its settle point the prices are the day's last prints, said as the company header says it (R13-005)
@@ -793,6 +828,32 @@ export function WatchlistPage() {
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region, key]);
+  // beside each price: its P/E and where it sits under its 52-week high (the screener's daily figures), and how many of
+  // your alerts watch it, so the list says more than the day's move (DD-072)
+  const [facts, setFacts] = useState<Record<string, { pe: number | null; from_high: number | null }> | null>(null);
+  const [alertCount, setAlertCount] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let live = true;
+    setFacts(null);
+    if (!mine.length) return;
+    api<{ facts: Record<string, { pe: number | null; from_high: number | null }> }>(`/research/watchlist/facts?region=${region}&symbols=${encodeURIComponent(mine.map((w) => w.symbol).join(","))}`)
+      .then((r) => live && setFacts(r.facts)).catch(() => live && setFacts({}));
+    alertsApi.list().then((r) => {
+      if (!live) return;
+      const n: Record<string, number> = {};
+      for (const x of r.active) if (x.region === region) n[x.symbol] = (n[x.symbol] ?? 0) + 1;
+      setAlertCount(n);
+    }).catch(() => undefined);
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region, key]);
+  const factText = (sym: string) => {
+    const f = facts?.[sym];
+    if (!f) return null;
+    const parts = [f.pe != null ? `P/E ${f.pe.toFixed(1)}` : null,
+      f.from_high != null ? (f.from_high > -0.5 ? "near its 52-week high" : `${Math.abs(f.from_high).toFixed(1)}% below its 52-week high`) : null].filter(Boolean);
+    return parts.length ? parts.join(" · ") : null;
+  };
   // read again each minute while the prices are live, each row kept until its new price comes
   useLiveRefresh(!!quotes && Object.values(quotes).some((q) => liveQuote(q?.at)), () => {
     void quotesInBatches((syms) => researchApi.quotes(region, syms), mine.map((w) => w.symbol),
@@ -801,6 +862,17 @@ export function WatchlistPage() {
   const add = (symbol: string, r: Region, name?: string) => {
     if (has(r, symbol)) { notify(watchNote(symbol, true, false)); return; }
     toggle({ region: r, symbol, name: name?.slice(0, 120) ?? null }, true).then((changed) => notify(watchNote(symbol, true, changed))).catch(fail);
+  };
+  // a removal takes effect at once, with Undo in its message: it puts the company back where it was (DD-025)
+  const remove = (w: WatchItem) => {
+    const same = (x: WatchItem) => x.region === w.region && x.symbol === w.symbol;
+    const at = Math.max(0, (items ?? []).findIndex(same));
+    toggle(w, false).then((changed) => {
+      if (!changed) return;
+      notify(`${w.symbol} removed from your watchlist.`, { label: "Undo", run: () => {
+        save((cur) => (cur.some(same) ? cur : [...cur.slice(0, at), w, ...cur.slice(at)])).then(() => notify(`${w.symbol} is back on your watchlist.`)).catch(fail);
+      } });
+    }).catch(fail);
   };
   return (
     <div className="k-page">
@@ -824,6 +896,8 @@ export function WatchlistPage() {
                 // the flags sit under the name, not in a column of their own, so a phone fits the row and its Remove (R63-003)
                 <><Link className="link" to={`/research/${w.region}/${encodeURIComponent(w.symbol)}`}><b>{w.symbol}</b></Link>
                   {w.name && <span className="k-sub-line">{w.name}</span>}
+                  {factText(w.symbol) && <span className="k-sub-line k-muted" data-testid="watch-facts">{factText(w.symbol)}</span>}
+                  {alertCount[w.symbol] ? <span className="k-sub-line"><Link className="link" to="/alerts">{alertCount[w.symbol]} alert{alertCount[w.symbol] === 1 ? "" : "s"} on</Link></span> : null}
                   <span className="k-sub-line"><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></span></>) },
               // the day's change sits under the price, not in a column of its own, so a 400px phone fits the row with its
               // Remove (R64-001: 440px of table in a 334px box, Remove and "Today" cut off)
@@ -840,7 +914,7 @@ export function WatchlistPage() {
                   {x != null && <span className="k-sub-line"><Delta value={x}>{pct(x, 2)}</Delta>{d && <span data-testid="watch-change-day"> · {fmtDate(d, { weekday: true, year: false })}</span>}</span>}
                   {at && <span className="k-sub-line">{at}</span>}{settling && <span className="k-sub-line" data-testid="watch-settling">{SETTLING}</span>}</>;
               } },
-              { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm icon-only" aria-label={`Remove ${w.symbol} from your watchlist`} title="Remove" onClick={() => toggle(w, false).catch(fail)}><Trash size={16} /></button> },
+              { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm icon-only" aria-label={`Remove ${w.symbol} from your watchlist`} title="Remove" onClick={() => remove(w)}><Trash size={16} /></button> },
             ]} />
         </Card>
       )}

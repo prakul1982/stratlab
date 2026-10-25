@@ -249,8 +249,9 @@ export class PriceChartEngine {
   private legend: Box | null = null;
   setLegendBox(box: Box | null): void {
     if (box?.w === this.legend?.w && box?.h === this.legend?.h) return;
+    const taller = (box?.h ?? 0) !== (this.legend?.h ?? 0);
     this.legend = box;
-    this.invalidate(false);
+    this.invalidate(taller);            // a taller or shorter legend moves the candles' top margin (DD-040)
   }
 
   setClipFuture(on: boolean): void { this.clipFuture = on; this.invalidate(false); }
@@ -723,7 +724,10 @@ export class PriceChartEngine {
     }
     if (!Number.isFinite(lo)) { lo = 0; hi = 1; }
     if (this.price.mode === "log" && lo <= 0) lo = Math.max(hi * 1e-3, 1e-9);
-    this.price.fit(lo, hi, 0.1, this.volume ? 0.22 : 0.08);
+    // the candles start under the legend, not behind it: the top margin is the legend's height when that is more than a
+    // tenth of the price pane (DD-040: with three indicators the legends sat on the candles); at most 45%
+    const legendTop = this.legend && this.price.height > 0 ? (this.legend.h + 6) / this.price.height : 0;
+    this.price.fit(lo, hi, Math.min(0.45, Math.max(0.1, legendTop)), this.volume ? 0.22 : 0.08);
   }
 
   private compareBase(from: number): number {

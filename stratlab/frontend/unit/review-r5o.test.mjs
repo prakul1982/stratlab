@@ -217,7 +217,8 @@ test("no data provider's name on the company and lending pages (R5O-020)", () =>
   assert.match(page, /Read the full entry ↗/);
   assert.doesNotMatch(read("src/pages/StockLendingPage.tsx"), /bhavcopy/i);
   // a headline with no publisher shows its time alone, without a stray " · "
-  assert.match(read("src/components/Research.tsx"), /\{\[n\.source, n\.at \? ago\(n\.at\) : null, old\]\.filter\(Boolean\)\.join\(" · "\)\} ↗/);
+  // (one time style for every headline since DD-022)
+  assert.match(read("src/components/Research.tsx"), /\{\[n\.source, newsWhen\(n\.at\)\]\.filter\(Boolean\)\.join\(" · "\)\} ↗/);
 });
 
 test("the scan page counts what it skipped and words a one-candle rule properly (R5O-023)", () => {

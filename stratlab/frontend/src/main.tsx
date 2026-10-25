@@ -17,7 +17,8 @@ import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
 import { endsAt, endsAtShort } from "./lib/offer";
 import { importWithRetry } from "./lib/lazyRetry";
-import { reconnectAt } from "./lib/dataBack";
+import { closedLine, nextOpenAt, reconnectAt } from "./lib/dataBack";
+import type { Market } from "./lib/types";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
@@ -137,25 +138,25 @@ function warmFirstPage(path: string) {
 }
 warmFirstPage(location.pathname);
 
-/** Indian data is offline: say why in plain words. On a weekend or holiday that's expected, not a fault. */
-function DataBanner({ note }: { note: { closed: "weekend" | "holiday" | null; back_at: string | null } | null }) {
+/** Indian data is offline: say why in plain words, on one short line. On a weekend or holiday that's expected, not a
+ * fault: the line says when the market opens again, not when the data login runs (DD-006, DC-002, DP2-036). */
+function DataBanner({ note, market }: { note: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; market?: Market }) {
   // the day and the time in India, where the login happens, and in the reader's own clock when that is another zone
   // (R46-011: "02:30 your time" on a Saturday was Monday's; R48-003: "your time" was UTC and never said IST); the market
   // picker and the questions about an idea say it from the same place (DA-004)
   const back = reconnectAt(note);
-  const others = <span className="banner-more"> Crypto, the other markets and your own data work as usual.</span>;
   if (note?.closed) {
-    const why = note.closed === "weekend" ? "closed for the weekend" : "closed today for an exchange holiday";
+    const line = closedLine(note.closed, nextOpenAt(market));
     return (
-      <div className="banner">
-        <span>Indian markets are {why}. {back ? `Indian price data reconnects on ${back}.` : "Indian price data reconnects with the next daily login."}{others}</span>
+      <div className="banner data-banner" role="status">
+        <span><span className="banner-full">{line.full}</span><span className="banner-short">{line.short}</span></span>
       </div>
     );
   }
-  if (back) return <div className="banner"><span>Indian price data reconnects on {back}, before the market opens.{others}</span></div>;
+  if (back) return <div className="banner data-banner" role="status"><span>Indian price data reconnects on {back}, before the market opens.</span></div>;
   return (
-    <div className="banner">
-      <span>Indian market data is offline: today's data login hasn't completed.{others}</span>
+    <div className="banner data-banner" role="status">
+      <span>Indian market data is offline: today's data login hasn't completed.</span>
       <Link to="/settings#check" className="btn sm quiet">Run a connection check</Link>
     </div>
   );
@@ -192,7 +193,7 @@ function Redirect({ to }: { to: string }) {
 }
 
 function Routed() {
-  const { session, ready, dataOffline, meError, me } = useApp();
+  const { session, ready, dataOffline, meError, me, markets } = useApp();
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => { pageview(loc.pathname); }, [loc.pathname]);    // usage analytics: off without a key
@@ -219,7 +220,7 @@ function Routed() {
     <Shell>
       <ViewAsBanner />{/* the owner is viewing the app as another plan: on every page until it is turned off */}
       {meError && <div className="banner" role="alert"><span>StratLab couldn't load your account: {meError}</span><AccountRetry /></div>}
-      {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
+      {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} market={markets.find((m) => m.id === "IN")} />}
       {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
       <PageLock />{/* a paid feature this plan lacks: said at the top, honestly (the server refuses it either way) */}
       {/* a page whose code is still on its way still has its one heading (axe page-has-heading-one, R7O-010) */}

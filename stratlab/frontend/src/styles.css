@@ -421,6 +421,11 @@ td.num, .num { font-family: var(--sans); }
 .banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: 12px; background: var(--orange-soft); color: var(--orange-ink); font-size: 14.5px; margin-bottom: 20px; }
 /* on a phone the data note keeps to its one fact: when Indian data comes back (R48-003: five lines above the page) */
 @media (max-width: 560px) { .banner { padding: 8px 12px; font-size: 13.5px; margin-bottom: 12px; } .banner .banner-more { display: none; } }
+/* the offline line: one thin line, not a block above every page (DD-006, DC-002); the phone gets its short form */
+.banner.data-banner { padding: 6px 14px; font-size: 13.5px; margin-bottom: 14px; flex-wrap: nowrap; }
+.banner.data-banner > span { min-width: 0; }
+.data-banner .banner-short { display: none; }
+@media (max-width: 720px) { .data-banner .banner-full { display: none; } .data-banner .banner-short { display: inline; } }
 .results { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20; background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); max-height: 360px; overflow-y: auto; }
 .results button { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 8px 14px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; }
 .results button:last-child { border-bottom: 0; }
@@ -1568,6 +1573,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-tbl-wrap.stack .k-table td[data-label]::before { content: attr(data-label) / ""; display: block; color: var(--muted); font-size: var(--t-note); font-weight: 400; }
   .k-tbl-wrap.stack .k-table td.k-act, .k-tbl-wrap.stack .k-table td.k-row-note, .k-tbl-wrap.stack .k-table td.k-empty-row { grid-column: 1 / -1; }
   .k-tbl-wrap.stack .k-table td.k-act { text-align: right; }
+  /* a business update's card: the filing's own words stay in the link's tooltip, not three lines of every card (DD-051) */
+  .biz-updates .k-tbl-wrap.stack .inv-clamp { display: none; }
   /* a heat cell fills a table cell edge to edge; on a card it is a chip that stays inside its figure (R88-003) */
   .k-tbl-wrap.stack .inv-heat-cell { display: inline-block; margin: 0; padding: 2px 8px; border-radius: 6px; }
 }

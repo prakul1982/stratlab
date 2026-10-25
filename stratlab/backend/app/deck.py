@@ -110,12 +110,23 @@ def _cr(v) -> str:
     return ("-" if v < 0 and digits.strip("0,") else "") + digits      # a tiny loss rounds to 0, never "-0"
 
 
+# a spreadsheet number format for Indian grouping: 1,23,45,678 from a crore, 1,23,456 from a lakh (DD-053)
+INDIAN_FORMAT = "[>=10000000]##\\,##\\,##\\,##0;[>=100000]##\\,##\\,##0;##,##0"
+
+
 def _plain(x, k: int, dp: int) -> str:
     """A figure divided by `k` to `dp` decimals with Western grouping; one that rounds to zero never prints as "-0"."""
     if x is None:
         return "–"
     text = f"{x / k:,.{dp}f}"
     return text.lstrip("-") if float(text.replace(",", "")) == 0 else text
+
+
+def cap_inr(cr: float) -> str:
+    """A market value in crore as the company page writes it ("₹16.1 lakh cr", "₹4,512 cr"): DD-053's cover tile said
+    "₹16.10 lakh cr" and wrapped, beside "₹16.1" on the page."""
+    from .intel.grounding import crore_text
+    return crore_text(cr)
 
 
 def _pc(v, signed=False) -> str:
@@ -181,14 +192,15 @@ def plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     lev = (("Dividend yield", _pc(snap.get("div_yield"))) if bank
            else ("Debt / equity", "–" if snap.get("debt_equity") is None else f"{snap['debt_equity']:.2f}"))
     cap = snap.get("market_cap_cr")              # the market value is in dollars whatever the filings' currency
-    tiles = [("Market cap", ("Unavailable" if snap.get("cap_note") else "–") if cap is None else money(cap, "$ million") if us else amt(cap)), val, ret, lev,
+    tiles = [("Market cap", ("Unavailable" if snap.get("cap_note") else "–") if cap is None else money(cap, "$ million") if us else cap_inr(cap)), val, ret, lev,
              ("Sales growth, 3y", _pc(n["growth"].get("sales_cagr_3y"), True)),
              ("Profit growth, 3y", _pc(n["growth"].get("profit_cagr_3y"), True))]
     slides: list[Slide] = []
 
     # 1. title
     s = Slide(name, f"{'US' if us else 'NSE'}: {sym} · Company deep dive", dark=True)
-    s.add("text", (M, 2.55, 8.6, 2.1), paras=[sentences(v.get("about") or "", 430)], size=15, floor=11, color=ICE)
+    # the cover's description is the company page's first paragraph (`cover`, DD-053), else the deep dive's profile
+    s.add("text", (M, 2.55, 8.6, 2.1), paras=[sentences(v.get("cover") or v.get("about") or "", 430)], size=15, floor=11, color=ICE)
     s.add("stats", (M, 5.15, W_IN - 2 * M, 1.25), items=tiles, dark=True)
     s.add("text", (M, 6.62, W_IN - 2 * M, 0.3), paras=[f"Prepared {today} with StratLab. {DISCLAIMER}"], size=10, floor=9, color=ICE)
     slides.append(s)
@@ -214,11 +226,17 @@ def plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
 
     # 3. sales and profit
     if years:
-        k, word, _ = fig_for([y["sales"] for y in years] + [y["profit"] for y in years])
-        s = Slide("Revenue and net profit" if bank else "Sales and net profit", f"{word}, financial years ending {month}")
-        s.add("columns", (M, 1.6, 8.7, 5.1), cats=[y["year"].replace("Mar ", "FY") for y in years],
-              series=[("Revenue" if bank else "Sales", [y["sales"] / k for y in years], NAVY),
-                      ("Net profit", [None if y["profit"] is None else y["profit"] / k for y in years], TEAL)])
+        # sales and profit side by side, each on its own scale: on one axis a profit a tenth of sales was a row of slivers
+        # (DD-053); Indian figures grouped the Indian way, as the tables are
+        sales_name = "Revenue" if bank else "Sales"
+        ks, word_s, _ = fig_for([y["sales"] for y in years])
+        kp, word_p, _ = fig_for([y["profit"] for y in years if y["profit"] is not None])
+        s = Slide(f"{sales_name} and net profit", f"Each on its own scale, financial years ending {month}")
+        cats = [y["year"].replace("Mar ", "FY") for y in years]
+        s.add("columns", (M, 1.6, 4.25, 5.1), cats=cats, inr=not us,
+              series=[(f"{sales_name} ({word_s})", [y["sales"] / ks for y in years], NAVY)])
+        s.add("columns", (M + 4.45, 1.6, 4.25, 5.1), cats=cats, inr=not us,
+              series=[(f"Net profit ({word_p})", [None if y["profit"] is None else y["profit"] / kp for y in years], TEAL)])
         g = n["growth"]
         s.add("stack", (9.75, 1.75, W_IN - M - 9.75, 4.9), items=[
             ("Sales growth a year, 3 years", _pc(g.get("sales_cagr_3y"), True)), ("Sales growth a year, 5 years", _pc(g.get("sales_cagr_5y"), True)),
@@ -531,7 +549,9 @@ class PptxRenderer:
         plot.has_data_labels = True
         dl = plot.data_labels
         dl.font.size, dl.font.color.rgb = Pt(8), self.rgb(SLATE)
-        dl.number_format, dl.number_format_is_linked = "#,##0.0;-#,##0.0" if max(abs(v) for _, vs, _ in b["series"] for v in vs if v is not None) < 100 else "#,##0", False
+        small = max((abs(v) for _, vs, _ in b["series"] for v in vs if v is not None), default=0) < 100
+        # Indian figures grouped as the tables are (12,34,567), never 1,234,567 (DD-053)
+        dl.number_format, dl.number_format_is_linked = ("#,##0.0;-#,##0.0" if small else INDIAN_FORMAT if b.get("inr") else "#,##0"), False
         dl.position = XL_LABEL_POSITION.OUTSIDE_END
         for series, (_, _, color) in zip(ch.series, b["series"]):
             series.format.fill.solid()
@@ -542,6 +562,8 @@ class PptxRenderer:
         va.major_gridlines.format.line.color.rgb = self.rgb(RULE)
         va.format.line.fill.background()
         va.tick_labels.font.size, va.tick_labels.font.color.rgb = Pt(9), self.rgb(SLATE)
+        if b.get("inr") and not small:
+            va.tick_labels.number_format, va.tick_labels.number_format_is_linked = INDIAN_FORMAT, False
         ca = ch.category_axis
         ca.tick_labels.font.size, ca.tick_labels.font.color.rgb = Pt(10), self.rgb(SLATE)
         ca.format.line.color.rgb = self.rgb(RULE)
@@ -794,16 +816,17 @@ class PdfRenderer:
         ch = VerticalBarChart()
         ch.x, ch.y, ch.width, ch.height = 40, 26, w * 72 - 52, h * 72 - 64
         ch.data = [list(vs) for _, vs, _ in b["series"]]
-        small = max(abs(v) for _, vs, _ in b["series"] for v in vs if v is not None) < 100
+        small = max((abs(v) for _, vs, _ in b["series"] for v in vs if v is not None), default=0) < 100
         self._chart_axes(ch, b["cats"])
-        ch.valueAxis.labelTextFormat = (lambda v: f"{v:,.1f}") if small else (lambda v: f"{v:,.0f}")
+        whole = _cr if b.get("inr") else (lambda v: f"{v:,.0f}")          # Indian grouping for Indian figures (DD-053)
+        ch.valueAxis.labelTextFormat = (lambda v: f"{v:,.1f}") if small else whole
         if min(v for _, vs, _ in b["series"] for v in vs if v is not None) >= 0:
             ch.valueAxis.valueMin = 0
         ch.groupSpacing, ch.barSpacing = 8, 1
         for i, (_, _, color) in enumerate(b["series"]):
             ch.bars[i].fillColor = self.col(color)
             ch.bars[i].strokeColor = None
-        ch.barLabelFormat = (lambda v: f"{v:,.1f}") if small else (lambda v: f"{v:,.0f}")
+        ch.barLabelFormat = (lambda v: f"{v:,.1f}") if small else whole
         ch.barLabels.fontName, ch.barLabels.fontSize = "Body", 6.5
         ch.barLabels.fillColor = self.col(SLATE)
         ch.barLabels.nudge = 7

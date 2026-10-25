@@ -2198,6 +2198,14 @@ def list_stock_alerts(profile=Depends(current_profile)):
     return ok(alerts_page(profile))
 
 
+@app.get("/alerts/fits")
+def stock_alert_fits(region: str = "IN", symbol: str = "", profile=Depends(current_profile)):
+    """Whether a symbol is an ETF and whether it has stock futures: the alert form offers only the kinds that fit (DD-024)."""
+    if not re.match(r"^[A-Za-z0-9&._-]{1,20}$", symbol or ""):
+        err(400, "bad_symbol", "That doesn't look like a ticker.")
+    return ok(stock_alerts.fits(region, symbol))
+
+
 @app.post("/alerts")
 def create_stock_alert(req: StockAlertReq, profile=Depends(current_profile)):
     throttle(profile, "stock_alert", 60, 3600, "That's a lot of alerts in an hour. Try again later.")
@@ -3665,6 +3673,20 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
                     headers={"Content-Disposition": f'attachment; filename="{name}.csv"'})
 
 
+def deck_cover(sym: str, base: dict) -> str:
+    """The deck cover's description: the first paragraph of the one the company page leads "What they do" with (its
+    encyclopedia entry, as the page last read it), else the first of the filed profile (DD-053: the cover opened with the
+    profile's history paragraph, the page's second). Never a fresh call to the encyclopedia while the deck is made."""
+    p = base.get("p") or {}
+    try:
+        w = research_hub.wiki.company(p.get("name") or sym, cached=True)
+    except Exception:
+        w = None
+    text = str((w or {}).get("extract") or p.get("about") or "")
+    first = next((x.strip() for x in re.split(r"\n\s*\n|\n", text) if len(x.strip()) > 30), text.strip())
+    return first[:1200]
+
+
 @app.get("/research/deep/{symbol}/deck")
 def deep_dive_deck(symbol: str, region: str = "IN", format: str = "pptx", profile=Depends(current_profile)):
     """The deep dive as a deck, PowerPoint or PDF (the same slides): numbers, business, plans, report card and
@@ -3677,7 +3699,7 @@ def deep_dive_deck(symbol: str, region: str = "IN", format: str = "pptx", profil
         if mark:
             db.add_usage(profile["id"], k)
             db.add_usage(profile["id"], mark)
-    view = deep_view(sym, base)
+    view = {**deep_view(sym, base), "cover": deck_cover(sym, base)}
     if format == "pdf":
         return Response(deck.build_pdf(view), media_type="application/pdf",
                         headers={"Content-Disposition": f'attachment; filename="{sym}-deep-dive.pdf"'})

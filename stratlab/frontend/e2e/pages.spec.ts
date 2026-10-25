@@ -86,7 +86,7 @@ async function barsAroundZero(page: Page) {
 }
 
 const PAGES: [string, string][] = [
-  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Your research desk"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
+  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Invest home"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "Briefs"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
@@ -1170,7 +1170,8 @@ test("deals and insider trades: a dated table on the company page and the deep d
 
   errors = await open(page, "/research/IN/RELIANCE/deep", "Growth and margins");
   await expect(page.getByText("Promoter and insider buying and selling, 6 months").first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator(".deals-table").first()).toContainText("Pension Plan Two");
+  // the deals are the company page's own table, linked from the deep dive rather than shown twice (DD-054)
+  await expect(page.getByTestId("deep-holders-deals").getByRole("link", { name: "deals and insider trades" })).toHaveAttribute("href", "/research/IN/RELIANCE#deals");
   if (phone) await touchable(page);
   await sane(page, errors);
 });

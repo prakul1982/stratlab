@@ -306,8 +306,11 @@ test("drawings follow a timeframe change and survive being signed in elsewhere",
   else await chart.getByRole("group", { name: "Timeframe" }).getByRole("button", { name: "1 hour", exact: true }).click();
   await expect(chart).toHaveAttribute("data-loaded", "1h", { timeout: 20_000 });
   await count(chart, 1);                                                // still anchored after the timeframe change
-  await expect.poll(async () => (await saved(request)).layout?.tf, { timeout: 8000 }).toBe("1h");
   expect((await saved(request)).drawings[0].points[0].t).toBe(t(mid));
+  // the timeframe picked isn't kept: the next visit opens on the page's own daily candles, the drawing still there (DD-041)
+  await page.reload();
+  await expect(chart).toHaveAttribute("data-loaded", "1d", { timeout: 20_000 });
+  await count(chart, 1);
   void phone;
 });
 

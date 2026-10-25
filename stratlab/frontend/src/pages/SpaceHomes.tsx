@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, fmtDate, istToday, money, pct, signCls } from "../lib/format";
@@ -18,10 +18,8 @@ import { Panel, QuoteGrid } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
-import { typingFirst } from "../lib/typingFirst";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { Explore } from "../components/Explore";
-import { CompanySearch } from "../components/CompanySearch";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
@@ -217,26 +215,21 @@ const INVEST_STRIP: Record<string, Omit<Tool, "to">> = {
 };
 
 export function InvestHome() {
-  const nav = useNavigate();
   const [region, setRegion] = useState<Region>(homeRegion);
-  const popular = region === "IN" ? ["RELIANCE", "HDFCBANK", "TCS", "TITAN", "LT"] : ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL"];
   // every card and link opens its page on the market picked here (review 5c)
   const tools: Tool[] = investStrip(region).map((t) => ({ ...INVEST_STRIP[t.key], to: t.to }));
+  // the one Invest home: what you follow and the market around it. Looking up a company is its own page (Look up a company,
+  // the menu's main button), so this page has no second search box (DD-002)
   return (
     <div className="space-home">
-      <Head eyebrow="Invest · your research desk" title="Your research desk">
-        What your watchlist, results days and red flags say today, and the market around them. Facts, not tips.
+      <Head eyebrow="Invest" title="Invest home">
+        What your watchlist, results days and red flags say today, and the market around them. Facts, not tips. To open any
+        company, use <Link to={`/research?region=${region}`} className="link">Look up a company</Link>.
       </Head>
       <Top compact />
-      <Card className="space-next" label="Jump to a company">
+      <div className="k-toolbar" aria-label="Market">
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />
-        {/* not on a touch screen: focusing it there raises the keyboard over the page (R58-014) */}
-        <CompanySearch region={region} autoFocus={typingFirst()} />
-        <div className="k-row">
-          <span className="k-small k-muted">Popular:</span>
-          {popular.map((p) => <button key={p} className="chip" onClick={() => nav(`/research/${region}/${p}`)}>{p}</button>)}
-        </div>
-      </Card>
+      </div>
       <ToolStrip label="Invest tools" tools={tools} />
       <NextEvents region={region} />
       <div className="grid2 space-panels">

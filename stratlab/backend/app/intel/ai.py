@@ -373,7 +373,8 @@ figures, in rupees crore, with their date), with their direction exactly as the 
 Return ONLY this JSON:
 Give a reason for a move only when a headline reports that reason as having happened; never infer one (earnings,
 data, rates) from a headline that previews it or from the moves themselves.
-{{"tone": "3-4 sentences on how the market moved today, giving every index in the FACTS with its level and its change in percent, and what the headlines report",
+{{"driver": "the subject most of today's headlines are about, in 2-4 plain words as the headlines put it (like \"crude oil\" or \"bank results\"), or \"\"",
+ "tone": "3-4 sentences on how the market moved today: what the headlines report as the reason for the move (only when one does), then every index in the FACTS with its level and its change in percent",
  "hot": [{{"name": "", "ticker": "", "why": "2 sentences: what the headlines report about it"}}],
  "flows": [{{"title": "", "detail": "2 sentences, as the headlines report it", "direction": "INFLOW" | "OUTFLOW" | "ROTATION" | ""}}],
  "themes": [{{"theme": "", "detail": "2 sentences", "example": "ticker"}}]}}
@@ -411,9 +412,17 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     out = grounding.closed_words(out) if closed else out
     if before_close or settling:     # the model's own wording is not trusted with it
         out = {**out, "tone": re.sub(r"\b(closed|ended|finished) at\b", "stood at", str(out.get("tone") or ""), flags=re.I)}
-    # numbers the page's way (R7O-001), and a day as the app writes it (R70-010: "as of 2026‑10‑16")
-    tidy = lambda t: grounding.app_dates(grounding.tidy_numbers(t, region))          # noqa: E731
-    return {**out, "tone": tidy(out.get("tone")),
+    # numbers the page's way (R7O-001), index levels as the cards show them (DE-017), and a day as the app writes it
+    # (R70-010: "as of 2026‑10‑16")
+    tidy = lambda t: grounding.app_dates(grounding.card_levels(grounding.tidy_numbers(t, region), indices))          # noqa: E731
+    # the mood from the moves and the day's main story from the headlines, both worked out in code, so the read says how
+    # the market felt and what it was about, not only the levels (DD-001); where the FII/DII figures come from whenever
+    # the read quotes them
+    titles = [str(h.get("headline") or "") for h in headlines[:14]]
+    mood = " ".join(x for x in (grounding.mood_line(indices, sectors), grounding.main_story(str(r.get("driver") or ""), titles)) if x)
+    quoted = grounding.flow_text(" ".join([str(out.get("tone") or "")] + [f.get("title", "") + " " + f.get("detail", "") for f in out.get("flows") or []]))
+    return {**out, "tone": tidy(out.get("tone")), "mood": mood,
+            "flows_source": grounding.flows_source(cash_facts) if cash_facts and quoted else "",
             **{k: [{**x, f: tidy(x.get(f))} for x in out.get(k) or []] for k, f in (("hot", "why"), ("flows", "detail"), ("themes", "detail"))}}
 
 
@@ -436,7 +445,8 @@ period, never a fiscal year, and when the two companies' periods differ, say so.
     lender = bool(a.get("bank") or b.get("bank"))
 
     def keep(t):
-        return grounding.plain_sentences(grounding.keep_sentences(t, pool, lambda s: not grounding.JUDGE.search(s)),
+        # "slightly ahead" held to the figures it sizes (DD-061)
+        return grounding.plain_sentences(grounding.keep_sentences(t, pool, lambda s: not grounding.JUDGE.search(s) and grounding.degree_ok(s)),
                                          lender, a.get("region") or "IN")
     verdict = grounding.whole_sentences(keep(verdict), 700)
     if not verdict:

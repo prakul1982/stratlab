@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { inr, safeHref, fmtDate } from "../lib/format";
 import { Badge, DataTable, EmptyState, ErrorState, Seg, Skeleton } from "./kit";
+import { afterText, pairDeals } from "../lib/dealRows";
 
 export type DealKind = "insider" | "sast" | "bulk" | "block";
 export interface Deal {
@@ -21,6 +22,9 @@ const SHOW: [string, string, DealKind[]][] = [
   ["all", "All", ["insider", "sast", "bulk", "block"]], ["insider", "Promoters and insiders", ["insider", "sast"]],
   ["deals", "Bulk and block deals", ["bulk", "block"]],
 ];
+
+/** A deal row as shown: a bulk or block deal's two sides as one row, the buyer "from" the seller (DD-021). */
+export type DealRow = Deal & { from?: string };
 
 function day(iso: string) {
   const s = fmtDate(iso.slice(0, 10));
@@ -56,7 +60,7 @@ export function DealsPanel({ symbol }: { symbol: string }) {
   if (error) return <ErrorState title="The disclosures couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>;
   if (!rep) return <Skeleton label="Reading the exchange disclosures" lines={3} />;
   const kinds = (SHOW.find((s) => s[0] === show) ?? SHOW[0])[2];
-  const rows = rep.items.filter((d) => kinds.includes(d.kind));
+  const rows: DealRow[] = pairDeals(rep.items.filter((d) => kinds.includes(d.kind)));
   const list = more ? rows : rows.slice(0, 12);
   return (
     <div className="k-stack deals">
@@ -66,15 +70,16 @@ export function DealsPanel({ symbol }: { symbol: string }) {
       <Seg label="Which disclosures" value={show} onChange={(v) => { setShow(v); setMore(false); }} options={SHOW.map(([id, label]) => ({ value: id, label }))} />
       {rows.length === 0 ? <EmptyState title="Nothing disclosed">None disclosed in the last year.</EmptyState> : (
         <div className="deals-table">
-          <DataTable label={`${symbol} deals and insider trades`} rows={list} rowKey={(d) => d.id} stack sticky={list.length > 14}
+          <DataTable label={`${symbol} deals and insider trades`} rows={list} rowKey={(d: DealRow) => d.id} stack sticky={list.length > 14}
             columns={[
-              { key: "who", header: "Who", rowHeader: true, wrap: true, cell: (d) => <><span className="deal-who">{d.who}</span>{d.relation && <span className="k-sub-line">{RELATION[d.relation]}</span>}</> },
+              { key: "who", header: "Who", rowHeader: true, wrap: true, cell: (d) => <><span className="deal-who">{d.who}</span>{d.from ? <span className="k-sub-line">from {d.from}</span>
+                : d.relation && d.relation !== "other" && <span className="k-sub-line">{RELATION[d.relation]}</span>}</> },
               { key: "side", header: "Bought or sold", cell: (d) => <Badge tone="plain" dot={false}>{SIDE[d.side] ?? d.side}</Badge> },
               { key: "qty", header: "Shares", numeric: true, cell: (d) => (d.qty == null ? "–" : Math.round(d.qty).toLocaleString("en-IN")) },
               { key: "val", header: "Value", numeric: true, cell: (d) => <>{rupees(d.value)}{d.kind !== "insider" && d.kind !== "sast" && d.price != null && <span className="k-sub-line">at {inr(d.price, d.price < 100 ? 2 : 0)}</span>}</> },
               { key: "date", header: "Date", cell: (d) => day(d.date) },
-              { key: "what", header: "What", wrap: true, cell: (d) => <>{d.label}{d.kind === "insider" || d.kind === "sast" ? <span className="k-sub-line">{MODE[d.mode] ?? d.mode}{d.pct_after != null ? ` · ${d.pct_after.toFixed(2)}% after` : ""}</span>
-                : d.pct_after != null ? <span className="k-sub-line">{d.pct_after.toFixed(2)}% after</span> : null}</> },
+              { key: "what", header: "What", wrap: true, cell: (d) => <>{d.label}{d.kind === "insider" || d.kind === "sast" ? <span className="k-sub-line">{MODE[d.mode] ?? d.mode}{afterText(d.pct_after) ? ` · ${afterText(d.pct_after)}` : ""}</span>
+                : afterText(d.pct_after) ? <span className="k-sub-line">{afterText(d.pct_after)}</span> : null}</> },
               { key: "src", header: "Source", cell: (d) => <a className="link" href={safeHref(d.url)} target="_blank" rel="noopener noreferrer">Disclosure ↗</a> },
             ]} />
         </div>

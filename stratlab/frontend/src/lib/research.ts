@@ -165,6 +165,10 @@ export interface PulseAI {
   tone: string; hot: { name: string; ticker: string; why: string }[];
   flows: { title: string; detail: string; direction: "INFLOW" | "OUTFLOW" | "ROTATION" | "" }[];
   themes: { theme: string; detail: string; example: string }[]; generated_at: number; levels_at?: string | null;
+  /** The mood worked out from the day's moves, and the headlines' main story (DD-001); absent on an older read. */
+  mood?: string;
+  /** Where the FII/DII figures the read quotes come from, when it quotes them (DD-001). */
+  flows_source?: string;
 }
 export interface CompareAI {
   verdict: string; differences: string[];
@@ -302,7 +306,7 @@ export function useWatchlist() {
 /* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. Units for groups of amounts,
  * trend values and metric figures: researchFormat.ts (no browser needed, so the unit tests read them). */
 export { bigMoney } from "./format";
-export { focusParam, holderRowName, linkLabel, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, screenCap, screenNum, staleQuarter, trendShort, trendValue, usdAmount, type Scale } from "./researchFormat";
+export { focusParam, holderRowName, linkLabel, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, newsWhen, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, screenCap, screenNum, staleQuarter, trendShort, trendValue, usdAmount, type Scale } from "./researchFormat";
 
 /* ---------- where a number sits in a typical range (from Hindsight) ----------
  * [floor, weak edge, strong edge, ceiling, higher-is-better]. Loose large-cap defaults,

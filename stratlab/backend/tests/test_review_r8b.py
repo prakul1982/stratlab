@@ -256,7 +256,7 @@ def test_the_mood_never_says_all_sectors_rose_when_one_fell(monkeypatch):
     idx = [{"name": "NIFTY 50", "price": 22520.45, "change_pct": 1.3, "high52": 26373.2, "low52": 21743.65}]
     sectors = {"up": 15, "down": 1, "unchanged": 0, "of": 16, "rows": []}
     out = A.pulse("IN", "", idx, [], (None, None), closed=True, sectors=sectors)
-    assert "all sectoral" not in out["tone"] and "22,520.45" in out["tone"]
+    assert "all sectoral" not in out["tone"] and "22,520," in out["tone"]          # the level as the card writes it (DE-017)
     assert '"sectors": {"up": 15, "down": 1, "unchanged": 0, "of": 16}' in seen["facts"]
     assert "sectors\" counts" in seen["system"]
     # with no count of StratLab's own, no count is kept; with one that bears it out, it is

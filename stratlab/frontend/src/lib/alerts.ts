@@ -74,8 +74,26 @@ export const conditionKey = (a: { kind: AlertKind; op: AlertOp }) =>
 
 export const CHANNEL_NAME: Record<string, string> = { push: "phone", telegram: "Telegram", email: "email" };
 
+/** Whether a symbol is an ETF and whether it has stock futures; null where that isn't known yet. */
+export type AlertFits = { etf: boolean | null; fo: boolean | null };
+
+/** The conditions that fit an instrument (DD-024: a plain stock offered an ETF's NAV gap and MWPL use): the NAV gap only
+ * for an ETF, MWPL only for a stock with futures, a company's insider trades and business updates never for an ETF.
+ * Unknown (null) leaves a choice in; `keep` (the alert being edited) always stays. */
+export function fittingConditions(region: Region, fits: AlertFits | null, keep?: string) {
+  return CONDITIONS.filter((x) => {
+    if (x.key === keep) return true;
+    if (x.india && region !== "IN") return false;
+    if (x.kind === "etfgap") return fits?.etf !== false;
+    if (x.kind === "mwpl") return fits?.fo !== false;
+    if (x.kind === "insider" || x.kind === "bizupdate") return fits?.etf !== true;
+    return true;
+  });
+}
+
 export const alertsApi = {
   list: () => api<AlertsPage>("/alerts"),
+  fits: (region: Region, symbol: string) => api<AlertFits>(`/alerts/fits?region=${region}&symbol=${encodeURIComponent(symbol)}`),
   create: (b: AlertBody) => api<AlertsPage & { alert: StockAlert; note: string | null }>("/alerts", { method: "POST", body: b })
     .then((r) => { track("alert created", { region: b.region, kind: b.kind }); return r; }),
   update: (id: string, b: AlertBody) => api<AlertsPage & { alert: StockAlert; note: string | null }>(`/alerts/${id}`, { method: "PUT", body: b }),

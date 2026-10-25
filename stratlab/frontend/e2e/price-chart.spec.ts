@@ -222,9 +222,16 @@ test("price chart on a company page: types, indicators, drawings, zoom, full scr
   await chart.getByRole("radio", { name: "5Y" }).click();
   await expect(chart).toHaveAttribute("data-tf", "1w");
   // compare with another company on a % scale
-  await chart.getByRole("button", { name: "Compare" }).click();
-  await page.getByLabel("Symbol to compare").fill("TCS");
-  await page.getByRole("button", { name: "Compare on a % scale" }).click();
+  await chart.getByRole("button", { name: "Compare", exact: true }).click();
+  const box = page.getByRole("form", { name: "Compare with another symbol" });
+  // the fake world prices any symbol; the real one has no candles for a symbol that isn't listed
+  await page.route("**/research/chart/IN/ZZZZ*", (r) => r.fulfill({ status: 404, contentType: "application/json",
+    body: JSON.stringify({ detail: { code: "not_found", message: "No such company." } }) }));
+  await box.getByLabel("Symbol to compare").fill("ZZZZ");
+  await box.getByRole("button", { name: "Compare", exact: true }).click();
+  await expect(box.getByRole("alert")).toContainText("No prices found for ZZZZ", { timeout: 20_000 });     // said in the box (DD-042)
+  await box.getByLabel("Symbol to compare").fill("TCS");
+  await box.getByRole("button", { name: "Compare", exact: true }).click();
   await expect(chart).toHaveAttribute("data-mode", "percent");
   await expect(chart.locator(".pc-legend")).toContainText("TCS");
   await noOverflow(page);
