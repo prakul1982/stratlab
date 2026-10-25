@@ -1580,7 +1580,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-tbl-wrap.stack .k-table th[scope="row"] { grid-column: 1 / -1; color: var(--ink); font-size: var(--t-body); }
   .k-tbl-wrap.stack .k-table td[data-label]::before { content: attr(data-label) / ""; display: block; color: var(--muted); font-size: var(--t-note); font-weight: 400; }
   .k-tbl-wrap.stack .k-table td.k-act, .k-tbl-wrap.stack .k-table td.k-row-note, .k-tbl-wrap.stack .k-table td.k-empty-row { grid-column: 1 / -1; }
-  .k-tbl-wrap.stack .k-table td.k-act { text-align: right; }
+  .k-tbl-wrap.stack .k-table td.k-act { text-align: right; width: auto; }   /* the whole card's width: 1% of a grid cell put the Edit and remove buttons off the card (DP2-007) */
   /* a business update's card: the filing's own words stay in the link's tooltip, not three lines of every card (DD-051) */
   .biz-updates .k-tbl-wrap.stack .inv-clamp { display: none; }
   /* a column marked `lead` (the scan's signal, a red flag's label) sits under the name, across the card (DE-004, DE-035) */

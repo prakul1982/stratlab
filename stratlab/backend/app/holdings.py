@@ -199,7 +199,9 @@ class Matcher:
         if kept:
             return kept, None
         if not self.online:
-            return None, "Market data is offline, so only NSE stocks could be checked. Try again later."
+            # DG-004: said as what was checked, so a made-up symbol (ZZZNOTREAL) isn't blamed on the market data alone
+            return None, ("No NSE company on the stored list matches this line. BSE-only companies can be checked once "
+                          "market data is back; try again later.")
         if row.get("isin") and not row["isin"].startswith("INE"):
             return None, "Not a company's shares (a fund, bond or other security)."
         return None, "No listed company on NSE or BSE matches this line."
@@ -259,6 +261,8 @@ def merge(rows: list[dict]) -> list[dict]:
         if bool(cur.get("via")) != bool(r.get("via")):
             out[k] = _add_part(cur, r) if cur.get("via") else _add_part(r, cur)
             continue
+        if r.get("file_close"):            # the later file's close stands (DG-002)
+            cur["file_close"], cur["file_close_day"] = r["file_close"], r.get("file_close_day")
         q = cur["qty"] + r["qty"]
         if cur.get("avg") and r.get("avg"):
             cur["avg"] = (cur["avg"] * cur["qty"] + r["avg"] * r["qty"]) / q
@@ -321,8 +325,9 @@ def cap(items: list[dict], before: list[dict], limit: int) -> tuple[list[dict], 
     return old + new[:room], [i["symbol"] for i in new[room:]]
 
 
-def match_all(rows: list[dict], matcher: Matcher) -> tuple[list[dict], list[dict]]:
-    """(holdings, unmatched lines) for a file's rows."""
+def match_all(rows: list[dict], matcher: Matcher, close_day: str | None = None) -> tuple[list[dict], list[dict]]:
+    """(holdings, unmatched lines) for a file's rows. `close_day`: the session a close in the file is of (the latest
+    completed one when it was uploaded: a "previous closing price" read on a Saturday is Friday's)."""
     found, missed = [], []
     for r in rows:
         hit, why = matcher.match(r)
@@ -331,8 +336,11 @@ def match_all(rows: list[dict], matcher: Matcher) -> tuple[list[dict], list[dict
                            "symbol": r.get("symbol"), "isin": r.get("isin"), "reason": why})
             continue
         kind = instrument_kinds.classify(hit["symbol"], r.get("isin"), r.get("name") or hit.get("name"))
+        # the file's own close is kept with the day it is of, for while live prices are off (DG-002)
+        close = {"file_close": round(float(r["close"]), 4), "file_close_day": close_day} if r.get("close") and close_day else {}
         found.append({**hit, "isin": r.get("isin") or None, "qty": round(float(r["qty"]), 4),
-                      "avg": round(float(r["avg"]), 4) if r.get("avg") else None, **({"kind": kind} if instrument_kinds.base(kind) != "stock" else {})})
+                      "avg": round(float(r["avg"]), 4) if r.get("avg") else None, **({"kind": kind} if instrument_kinds.base(kind) != "stock" else {}),
+                      **close})
     return merge(found), missed
 
 
@@ -411,10 +419,10 @@ def _position(i: dict, q: dict) -> dict:
     return {"symbol": i["symbol"], "exchange": i.get("exchange") or ("US" if us else "NSE"), "name": i.get("name") or i["symbol"],
             "market": "US" if us else "IN", "currency": "USD" if us else "INR", "kind": kind,
             "kind_label": None if kind == "stock" else instrument_kinds.label(code),
-            "sector": instrument_kinds.SECTORS.get(kind) or sector_name(i.get("sector")), "qty": qty, "avg": _r(avg), "price": _r(price),
+            "sector": instrument_kinds.sector(code) or sector_name(i.get("sector")), "qty": qty, "avg": _r(avg), "price": _r(price),
             "value": _r(val), "invested": _r(inv), "pnl": _r(pnl), "pnl_pct": _r(pnl / inv * 100) if pnl is not None and inv else None,
             "day": _r(chg), "day_pct": _r(q.get("change_pct")), "session": session_day(q, "US" if us else "IN") if price else None,
-            "via": i.get("via")}
+            "via": i.get("via"), "price_from": q.get("from") if price else None}
 
 
 def _counted(r: dict) -> bool:
@@ -447,9 +455,12 @@ def _totals(rows: list[dict], rate, session: str | None = None) -> dict:
             day += fx * r["day"]
             before += fx * (r["value"] - r["day"])
     day_total = day if days else None
+    priced = sum(1 for r in rows if r["price"] is not None and rate(r) is not None and _counted(r))
+    # DG-001: a gain or loss of some of the lines (the others at cost, with no price) is said to be of those lines, never
+    # passed off as the whole portfolio's (AAPL's +131.8% stood for 9 lines, 8 of them unpriced)
     return {"value": _r(value), "invested": _r(cost), "pnl": _r(pnl), "pnl_pct": _r(pnl / cost_priced * 100) if pnl is not None and cost_priced else None,
             "day": _r(day_total), "day_pct": _r(day_total / before * 100) if day_total is not None and before else None,
-            "count": n, "priced": sum(1 for r in rows if r["price"] is not None and rate(r) is not None and _counted(r))}
+            "count": n, "priced": priced, "pnl_partial": {"priced": priced, "lines": n} if pnl is not None and priced < n else None}
 
 
 def day_session(rows: list[dict]) -> str | None:

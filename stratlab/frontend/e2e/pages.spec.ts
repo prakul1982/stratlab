@@ -1505,7 +1505,7 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await expect(page.getByText(/That password didn't open the PDF/)).toBeVisible({ timeout: 30_000 });
   await page.getByLabel("PDF password").fill("ABCDE1234F");
   await page.getByRole("button", { name: "Read my funds" }).click();
-  await expect(page.getByText(/7 transactions added/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/5 transactions and 2 stamp duty or tax lines added/)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("Costs are being read; check back shortly.")).toBeVisible();
   await expect(page.getByLabel("PDF password")).toHaveCount(0);              // the password field goes with the file
 

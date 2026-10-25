@@ -24,6 +24,8 @@ export function limitText(v: number, unit = ""): string {
 export function numberProblem(text: string, lim: Limits = {}): string | null {
   const t = text.trim().replace(/,/g, "");
   if (!t) return lim.optional ? null : "Fill this in.";
+  // DP2-005: "1e5" read as 1,00,000; a number is typed in digits
+  if (/[eE]/.test(t) && /\d/.test(t)) return "Type the number in digits, like 100000.";
   const n = Number(t);
   if (!Number.isFinite(n)) return "Enter a number, like 10.";
   if (lim.whole && !Number.isInteger(n)) return "Enter a whole number.";

@@ -164,7 +164,7 @@ def test_plain_words():
     t = S.words(plan(step_up=0.1, rule="only_dips", dip=0.08, lookback=60), [a, b])
     assert t.startswith("On day 1 of every month (or the next trading day), invest ₹10,000 in 70% NIFTYBEES, 30% GOLDBEES")
     assert "Raise the amount by 10% each year." in t and "8% below the highest close of the last 60 trading days" in t
-    assert S.words(plan(mode="qty", qty=2, freq="weekly", weekday=2), [leg({}, "INFY")]).startswith("Every Wednesday (or the next trading day), purchase 2 shares in INFY.")
+    assert S.words(plan(mode="qty", qty=2, freq="weekly", weekday=2), [leg({}, "INFY")]).startswith("Every Wednesday (or the next trading day), purchase 2 shares of INFY.")   # "of", not "in" (DG-034)
 
 
 # ---------- the route ----------

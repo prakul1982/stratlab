@@ -159,13 +159,17 @@ export function MoneyCalendarPage() {
 
   const saveEvent = async () => {
     const amount = form.amount.trim() ? Number(form.amount.replace(/,/g, "")) : null;
-    if (!form.date || !form.title.trim() || (amount != null && !(amount >= 0))) { notify("Enter a date and a name; the amount is optional."); return; }
+    // DP2-016: each problem said as itself (a negative amount was answered "Enter a date and a name")
+    if (!form.date || !form.title.trim()) { notify("Enter a date and a name; the amount is optional."); return; }
+    if (amount != null && !(amount >= 0)) { notify("The amount can't be below 0. Leave it empty if there's none."); return; }
     setBusy(true);
     try {
       const body = { date: form.date, title: form.title.trim(), note: form.note.trim(), amount, repeat: form.repeat };
       if (form.id) await api(`/money/calendar/events/${form.id}`, { method: "PUT", body });
       else { await api("/money/calendar/events", { method: "POST", body }); track("money calendar event added", { repeat: form.repeat }); }
-      notify(form.id ? "Saved." : `${form.title.trim()} added to your calendar.`);
+      // DP2-016: a one-off date already gone says where it went (a 2020 date was taken with no word)
+      const past = form.repeat === "none" && form.date < today ? " It's in the past, so it's listed under your past dates." : "";
+      notify((form.id ? "Saved." : `${form.title.trim()} added to your calendar.`) + past);
       setForm(blank);
       await load();
     } catch (e) { fail(e); } finally { setBusy(false); }

@@ -25,12 +25,13 @@ TIMEOUT = 30.0
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
 
 # the policy repo rate from each MPC decision (effective the day announced), checked against the RBI's monetary policy
-# statements; 5.25% from 5 Dec 2025 is what the home page shows on 5 Oct 2026
+# statements; 5.25% from 5 Dec 2025, then 5.50% from 7 Oct 2026 (DG-013: the MPC's resolution of 5 to 7 Oct 2026, press
+# release 63742, "increase the policy repo rate ... by 25 bps to 5.50 per cent"; the home page shows 5.50% on 25 Oct 2026)
 REPO_HISTORY = [
     ("2019-02-07", 6.25), ("2019-04-04", 6.00), ("2019-06-06", 5.75), ("2019-08-07", 5.40), ("2019-10-04", 5.15),
     ("2020-03-27", 4.40), ("2020-05-22", 4.00), ("2022-05-04", 4.40), ("2022-06-08", 4.90), ("2022-08-05", 5.40),
     ("2022-09-30", 5.90), ("2022-12-07", 6.25), ("2023-02-08", 6.50), ("2025-02-07", 6.25), ("2025-04-09", 6.00),
-    ("2025-06-06", 5.50), ("2025-12-05", 5.25),
+    ("2025-06-06", 5.50), ("2025-12-05", 5.25), ("2026-10-07", 5.50),
 ]
 SOURCE = "Reserve Bank of India, Current Rates on rbi.org.in, and the Monetary Policy Committee's resolutions"
 
@@ -82,6 +83,8 @@ def parse(page: str) -> dict:
         tbills[m.group(1)] = float(m.group(2))
     if tbills:
         out["tbills"] = tbills
+    elif re.search(r"\b(91|182|364) day T-bills\s*:\s*-\s*%", t, re.I):
+        out["tbills_blank"] = True          # the page lists them with no figure ("91 day T-bills : -%*"), as on 25 Oct 2026
     gsecs = []
     for m in re.finditer(r"(\d{1,2}\.\d{2})% GS (20\d\d)\s*:\s*(\d{1,2}\.\d{1,4})\s*%", t):
         gsecs.append({"name": f"{m.group(1)}% GS {m.group(2)}", "year": int(m.group(2)), "yield": float(m.group(3))})
@@ -123,6 +126,7 @@ def current() -> dict:
         rates = parse(fetch_text())
         if not rates:
             raise ValueError("no rates on the page")
+        rates = _with_last_tbills(rates, now)
     except Exception as e:
         print("RBI rates unavailable:", type(e).__name__)
         with _lock:
@@ -135,6 +139,23 @@ def current() -> dict:
     except Exception as e:
         print("RBI rates not saved:", type(e).__name__)
     return {"rates": rates, "read_at": _iso(now)}
+
+
+def _with_last_tbills(rates: dict, now: float) -> dict:
+    """The rates with the T-bill cut-offs' date, and while the page shows none, the last ones read with theirs (DG-040: the
+    rows went with no word, while the card promised Treasury bills)."""
+    if rates.get("tbills"):
+        return {**rates, "tbills_at": _iso(now)}
+    with _lock:
+        old = _mem["rates"]
+    if not old:
+        got = db.json_value(db.get_setting(KEY), {})
+        old = got.get("rates") if isinstance(got, dict) and isinstance(got.get("rates"), dict) else {}
+        if old.get("tbills") and not old.get("tbills_at"):
+            old = {**old, "tbills_at": _iso(float(got.get("at") or 0))}
+    if old.get("tbills"):
+        return {**rates, "tbills_last": {"rates": old["tbills"], "at": old.get("tbills_at")}}
+    return {**rates, "tbills_last": old["tbills_last"]} if old.get("tbills_last") else rates
 
 
 def _iso(t: float) -> str | None:

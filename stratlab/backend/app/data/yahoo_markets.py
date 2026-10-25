@@ -6,6 +6,7 @@ Instrument ids use Yahoo's own symbols: "US:AAPL", "UK:VOD.L", "EU:SAP.DE", "JP:
 Global commodities are the front-month futures series (Yahoo rolls it to the next contract as each expires),
 sized per unit of the quote (an ounce, a barrel, a bushel) rather than per exchange contract."""
 import math
+from datetime import datetime
 import threading
 
 from ..intel.net import SourceError
@@ -66,6 +67,24 @@ def fits(market: str, q: dict) -> bool:
     if market == "JP":
         return sym.endswith(".T")
     return False
+
+
+def saturday_close(bars: list[dict]) -> list[dict]:
+    """Daily candles with a last one dated Saturday folded into Friday's. The source's daily candle of a currency pair
+    holds the price at its start of day until the day is over, and Friday's close comes as an extra point stamped Saturday
+    (USD/INR on 24 Oct 2026: the 23 Oct candle 94.71, Thursday's close, then 94.94 at Sat 04:30 London). The weekend filter
+    dropped that point, so the tile showed Thursday's close and move as "23 Oct" (DP2-040)."""
+    if len(bars) < 2:
+        return bars
+    last, prev = bars[-1], bars[-2]
+    try:
+        d, p = datetime.fromisoformat(str(last["t"])[:10]).date(), datetime.fromisoformat(str(prev["t"])[:10]).date()
+    except ValueError:
+        return bars
+    if d.weekday() != 5 or p.weekday() != 4 or (d - p).days != 1:
+        return bars
+    merged = {**prev, "c": last["c"], "h": max(prev["h"], last["h"]), "l": min(prev["l"], last["l"]), "v": (prev.get("v") or 0) + (last.get("v") or 0)}
+    return [*bars[:-2], merged]
 
 
 class YahooProvider:
@@ -175,7 +194,7 @@ class YahooProvider:
         except SourceError as e:
             raise DataError(str(e)) from None
         k = self._scale(inst, c["meta"])
-        bars = trading_bars(self.market, c["candles"], tf)      # never a weekend candle for a weekday market
+        bars = trading_bars(self.market, saturday_close(c["candles"]) if tf == "1d" else c["candles"], tf)   # never a weekend candle for a weekday market
         if k == 1.0:
             return bars
         return [{**b, "o": b["o"] * k, "h": b["h"] * k, "l": b["l"] * k, "c": b["c"] * k} for b in bars]

@@ -61,13 +61,14 @@ def test_gap_to_the_statement_rate_and_what_each_change_did():
     assert first["date"] == "2025-04-01" and first["emi_before"] == pytest.approx(nw.emi(5000000, 8.5, 240), abs=0.01)
     assert first["emi_change"] < 0 and first["months_change"] < 0                     # a cut: a lower EMI, or fewer months
     assert first["interest_if_same_emi"] < first["interest_before"] and first["interest_if_new_emi"] < first["interest_before"]
-    assert c["emis_paid"] == 30 and c["left"] == 210
+    # the EMI kept through the cuts: the months left are those it takes at today's rate (DG-011), fewer than the 210 sanctioned
+    assert c["emis_paid"] == 30 and c["left"] == nw.loan_state(5000000, 8.5, 240, date(2024, 4, 1), AT, c["changes"])["left"] < 210
     same = L.check(home(current_rate=7.25), AT, H)
     assert same["gap"]["matches"] is True and same["gap"]["rupees_year"] == 0
 
 
 def test_a_rise_lengthens_the_loan():
-    hist = H + [("2026-08-01", 6.25)]
+    hist = [h for h in H if h[0] < "2026-08-01"] + [("2026-08-01", 6.25)]
     c = L.check(home(current_rate=8.25), AT, hist)
     last = c["changes"][-1]
     # the EMI was kept through the cuts, so the balance fell faster: the same EMI now takes more months than before
@@ -113,7 +114,7 @@ def test_route_and_plan_gate(w, paid):
                                                                 "tenure_months": 240, "start": "2024-04-01", "benchmark": "repo",
                                                                 "current_rate": 7.65}).status_code == 200
     d = c.get("/money/loans/check", headers=BASIC).json()
-    assert d["full"] is True and d["floating"] == 1 and d["repo"]["now"] == 5.25 and len(d["checks"]) == 1
+    assert d["full"] is True and d["floating"] == 1 and d["repo"]["now"] == 5.5 and len(d["checks"]) == 1    # the 7 Oct 2026 hike (DG-013)
     assert d["checks"][0]["expected"] is not None and d["draft"]["status"].startswith("Draft")
     d = c.get("/money/loans/check", headers=FREE).json()
     assert d["full"] is False and d["checks"] == [] and d["plan"] == "Basic" and d["floating"] == 1

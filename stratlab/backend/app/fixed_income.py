@@ -75,6 +75,18 @@ NOTES = [
 DISCLAIMER = "Rates as published, and arithmetic at your tax rate. Not a recommendation of any deposit, bond or scheme."
 
 
+COMPOUNDS = {"compounded quarterly": 4, "compounded yearly": 1, "compounded half-yearly": 2, "compounded monthly": 12}
+
+
+def effective(rate: float, how: str) -> float | None:
+    """The yearly rate a compounding rate comes to (DG-042: 7.5% compounded quarterly is 7.71% a year), so rates that compound
+    differently compare; None when the interest is paid out or compounds once a year."""
+    n = next((v for k, v in COMPOUNDS.items() if k in how.lower()), None)
+    if not n or n == 1:
+        return None
+    return round(((1 + rate / 100 / n) ** n - 1) * 100, 2)
+
+
 def slab_rate(slab: float) -> float:
     """A slab picked on the page, with cess, as a fraction."""
     return slab / 100 * (1 + CESS)
@@ -168,15 +180,22 @@ def view(profile: dict, slab: float | None, own: bool) -> dict:
     if r.get("repo") is not None:
         market.append({"key": "repo", "name": "Policy repo rate", "rate": r["repo"], "tax": "reference", "after_tax": None,
                        "how": "Set by the Monetary Policy Committee", "as_of": rbi["read_at"]})
-    for days, y in sorted((r.get("tbills") or {}).items(), key=lambda x: int(x[0])):
+    # DG-040: while the Reserve Bank's page shows no cut-offs, the last ones read, dated; or a line that says none are shown
+    last = r.get("tbills_last") if not r.get("tbills") else None
+    bills = r.get("tbills") or (last or {}).get("rates") or {}
+    for days, y in sorted(bills.items(), key=lambda x: int(x[0])):
         market.append({"key": f"tbill{days}", "name": f"{days}-day Treasury bill", "rate": y, "tax": "discount",
-                       "after_tax": after(y, "taxable", t), "how": "Cut-off yield at the last auction", "as_of": rbi["read_at"]})
+                       "after_tax": after(y, "taxable", t), "how": "Cut-off yield at the last auction" + (", as last read" if last else ""),
+                       "as_of": (last or {}).get("at") if last else r.get("tbills_at") or rbi["read_at"]})
+    tbill_note = None
+    if not r.get("tbills") and (r.get("tbills_blank") or last):
+        tbill_note = ("The Reserve Bank's page shows no Treasury bill cut-offs right now" + (", so the last ones read are shown with their date." if last else "."))
     for g in r.get("gsecs") or []:
         market.append({"key": f"gs{g['year']}", "name": f"Government bond, {g['name']}", "rate": g["yield"], "tax": "taxable",
                        "after_tax": after(g["yield"], "taxable", t), "how": "Market yield", "as_of": r.get("gsec_date") or rbi["read_at"]})
     ss = SMALL_SAVINGS
-    small = [{"key": k, "name": n, "rate": rate, "how": how, "tax": tax, "c80": c80, "after_tax": after(rate, tax, t)}
-             for k, n, rate, how, tax, c80 in ss["rows"]]
+    small = [{"key": k, "name": n, "rate": rate, "how": how, "tax": tax, "c80": c80, "after_tax": after(rate, tax, t),
+              "effective": effective(rate, how)} for k, n, rate, how, tax, c80 in ss["rows"]]
     nsc = next(x["rate"] for x in small if x["key"] == "nsc")
     frb = round(nsc + FRB_SPREAD, 2)
     bonds = [{"key": "frb", "name": "RBI Floating Rate Savings Bonds, 2020 (Taxable)", "rate": frb, "tax": "taxable",
@@ -185,7 +204,7 @@ def view(profile: dict, slab: float | None, own: bool) -> dict:
     return {"full": full, "plan": PLANS[FEATURE_PLAN["rates_slab"]]["name"], "tax_rate": round(t * 100, 2), "basis": basis,
             "slab": slab if basis == "slab" else None, "mine": mine,
             "inputs_saved": saved_inputs(profile["id"], fy) is not None, "slabs": list(SLABS), "fy": fy,
-            "market": market, "market_read_at": rbi["read_at"], "market_available": bool(r),
+            "market": market, "market_read_at": rbi["read_at"], "market_available": bool(r), "tbill_note": tbill_note,
             "small_savings": {"quarter": ss["quarter"], "from": ss["from"], "to": ss["to"], "notified": ss["notified"],
                               "source": ss["source"], "rows": small},
             "bonds": bonds, "deposits": deposits(profile["id"], t, at), "tax_text": TAX_TEXT, "notes": NOTES,

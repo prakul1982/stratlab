@@ -4,7 +4,7 @@ import { api, dataUrl, type ApiError } from "../lib/api";
 import { numberProblem, problems, type Limits } from "../lib/validate";
 import { useApp } from "../lib/app";
 import { usTodayNote } from "../lib/marketHours";
-import { ago, dateOnly, fmtDate, inr, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
+import { ago, dateOnly, fmtDate, inr, istToday, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
 import { Trash } from "../components/Icons";
 import { track } from "../lib/analytics";
@@ -15,7 +15,7 @@ import { useMoreColumns } from "../components/MoreColumns";
 import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Signed, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
-import { dollarRate, editChange, syncedNote, unpricedNote, type Change, type Mkt } from "../lib/holdingsEdit";
+import { dayLabel, dollarRate, editChange, pnlLabel, priceNote, syncedNote, type Change, type Closes, type Mkt } from "../lib/holdingsEdit";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
  * mix, dividends and corporate actions, from a broker file or typed in. Facts, not advice. Built from the kit
@@ -27,13 +27,15 @@ type Row = {
   weight: number | null; market?: "IN" | "US"; currency?: string; session?: string | null;
   kind?: "stock" | "etf" | "reit" | "invit" | "sgb"; kind_label?: string | null;   // ETFs, REITs, InvITs and gold bonds get a badge
   via?: string | null;   // the broker or statement that syncs it (kite, ibkr, cas)
+  price_from?: "close" | "file" | null;   // live prices off: the exchange's last close, or the close in the uploaded file
 };
 type UsTotals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; in_total: boolean };
 type View = {
   rows: Row[]; allocation: { sector: string; value: number; pct: number | null; count: number }[];
   totals: { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced: number;
+    pnl_partial?: { priced: number; lines: number } | null;
     no_cost?: { count: number; symbols: string[]; value: number } | null; session?: string | null; other_session?: string[] };
-  source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; limit: number; facts_max: number;
+  source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; closes?: Closes; limit: number; facts_max: number;
   us?: UsTotals | null; usd_inr?: number | null; usd_inr_at?: string | null; us_prices?: boolean | null;
   /** the connected Zerodha account's last read (R7M-009); absent when it isn't connected */
   zerodha?: ZerodhaRead | null;
@@ -184,10 +186,11 @@ export function HoldingsPage() {
     { key: "value", header: "Value", numeric: true, cell: (r) => money(r.value ?? r.invested, cur(r), 0) },
     // a missing figure says why, so a dash is never a puzzle (R1-053)
     { key: "pnl", header: "Unrealised P&L", numeric: true, cell: (r) => (r.pnl == null
-      ? <>–<span className="k-sub-line">{r.price == null ? "no price today" : "no average price"}</span></>
+      ? <>–<span className="k-sub-line">{r.price == null ? "no price yet" : "no average price"}</span></>
       : <><span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}</span><span className="k-sub-line"><Signed value={r.pnl}>{pct(r.pnl_pct)}</Signed></span></>) },
     // a price from another session (a US stock's last session, seen during India's) says which day its change is from
-    { key: "day", header: "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <><span className={tone(r.day)}>{money(r.day, cur(r), 0)}</span><span className="k-sub-line"><Signed value={r.day}>{pct(r.day_pct, 2)}</Signed></span>
+    // the column says whose move it is in a word (the totals above name the day), so the table still fits a laptop
+    { key: "day", header: t?.session && t.session < istToday() ? "Last session" : "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <><span className={tone(r.day)}>{money(r.day, cur(r), 0)}</span><span className="k-sub-line"><Signed value={r.day}>{pct(r.day_pct, 2)}</Signed></span>
       {r.session && t?.session && r.session !== t.session && <span className="k-sub-line">{fmtDate(r.session, { year: false })} session</span>}</>) },
     { key: "weight", header: "Weight", numeric: true, cell: (r) => (r.weight == null ? "–" : `${r.weight.toFixed(1)}%`) },
     // what a broker's holdings page shows first: the quantity with its average cost and the last price under it
@@ -260,12 +263,13 @@ export function HoldingsPage() {
             <StatRow>
               <Stat label="Current value" value={inr(t.value)} />
               <Stat label="Invested" value={inr(t.invested)} />
-              <Stat label="Unrealised P&L" value={t.pnl == null ? "–" : inr(t.pnl)} tone={signTone(t.pnl)} delta={t.pnl == null ? undefined : <Delta value={t.pnl}>{pct(t.pnl_pct)}</Delta>} />
-              <Stat label="Today" value={t.day == null ? "–" : inr(t.day)} tone={signTone(t.day)} delta={t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta>} />
+              <Stat label={pnlLabel("Unrealised P&L", t.pnl_partial)} value={t.pnl == null ? "–" : inr(t.pnl)} tone={signTone(t.pnl)} delta={t.pnl == null ? undefined : <Delta value={t.pnl}>{pct(t.pnl_pct)}</Delta>}
+                note={t.pnl_partial ? `On the ${t.pnl_partial.priced} with a price; the rest are at cost` : undefined} />
+              <Stat label={dayLabel(t.session, istToday(), (d) => fmtDate(d, { weekday: true, year: false }))} value={t.day == null ? "–" : inr(t.day)} tone={signTone(t.day)} delta={t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta>} />
             </StatRow>
             <p className="k-note">
               {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${sourceWords(view.source)}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
-              {unpricedNote(view.prices, rows) && " · Live prices are offline right now, so values are shown at cost."}
+              {(() => { const n = priceNote(view.prices, view.closes, rows, (d) => fmtDate(d, { weekday: true, year: false })); return n && ` · ${n}`; })()}
             </p>
             {t.no_cost && (
               <p className="k-note">
@@ -295,8 +299,9 @@ export function HoldingsPage() {
         <>
           <Card>
             <CardHead title="By sector" />
-            <BarList label="Holdings by sector" footnote="Share of the current value, by the exchange's sector for each company."
-              rows={view.allocation.map((a) => ({ key: a.sector, name: a.sector, note: `${a.count} stock${a.count === 1 ? "" : "s"}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
+            {/* a fund's line is what it holds (DG-003), so a count is of holdings, not "stocks"; a line with no price is at cost */}
+            <BarList label="Holdings by sector" footnote={`Share of the current value${rows.some((r) => r.value == null) ? " (at cost where there's no price)" : ""}, by the exchange's sector for each company and by what each fund holds.`}
+              rows={view.allocation.map((a) => ({ key: a.sector, name: a.sector, note: `${a.count} holding${a.count === 1 ? "" : "s"}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
           </Card>
 
           <Card id="h-positions" label="Positions">
