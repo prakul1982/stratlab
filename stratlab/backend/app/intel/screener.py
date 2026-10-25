@@ -246,10 +246,18 @@ def drop_impossible_margins(p: dict) -> dict:
     the annual and quarterly tables, so no page shows it. Changes `p` and returns it."""
     for name in ("quarters", "pl"):
         rows = (p.get(name) or {}).get("rows") or {}
+        cols = (p.get(name) or {}).get("cols") or []
         sales = _find(rows, "sales", "revenue")
         for key in [k for k in rows if str(k).lower().startswith(("opm", "financing margin"))]:
-            rows[key] = [None if isinstance(m, (int, float)) and (m > 100 or (sales and i < len(rows[sales]) and isinstance(rows[sales][i], (int, float)) and rows[sales][i] <= 0)) else m
-                         for i, m in enumerate(rows[key])]
+            gone = [i for i, m in enumerate(rows[key]) if isinstance(m, (int, float)) and (m > 100 or (sales and i < len(rows[sales]) and isinstance(rows[sales][i], (int, float)) and rows[sales][i] <= 0))]
+            rows[key] = [None if i in gone else m for i, m in enumerate(rows[key])]
+            if name == "pl" and gone:
+                # said on the page and recorded by the audit as a fact, not left as a silent blank (MS1-009)
+                years = [str(cols[i]) for i in gone if i < len(cols) and str(cols[i]).upper() != "TTM"]
+                if years:
+                    p["margin_left_out"] = years
+                    p.setdefault("margin_note", f"Operating margin isn't shown for {', '.join(years[-4:])}: operating profit came out above "
+                                                "sales, or sales were nil or negative, so it isn't a margin.")
     return p
 
 

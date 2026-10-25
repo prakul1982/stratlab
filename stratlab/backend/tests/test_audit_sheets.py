@@ -117,7 +117,9 @@ def test_stored_refusals_and_short_histories_are_restated():
     assert got[0]["detail"].startswith("Not checked yet: the exchange feed refused the request (403)")
     assert got[3]["detail"].startswith("Only 2 years of annual results so far")
     assert "need more history" in got[4]["detail"]
-    assert audit.restate(audit._issue("gap", "Numbers", "Only 0 years of annual results"))["level"] == "gap"   # no results at all
+    zero = audit.restate(audit._issue("gap", "Numbers", "Only 0 years of annual results"))
+    assert zero["level"] == "pending" and zero["then"]["level"] == "fact"        # no results at all: asked again before it stands (MS1-002)
+    assert audit.restate(audit._issue("gap", "Numbers", "Only 0 years of annual results"), us=True)["level"] == "gap"
     us = {"issues": [audit._issue("gap", "Documents", "No annual report (10-K) filed in the last two years"),
                      audit._issue("gap", "Documents", "No quarterly report (10-Q) filed in the last two years")]}
     assert audit.restate_row(us, us=True) == [audit._issue("fact", "Documents", audit.STOPPED_FILING)]
@@ -276,9 +278,12 @@ def test_checks_a_short_history_explains_are_a_fact():
     assert [i["level"] for i in got] == ["fact"] and "need more history" in got[0]["detail"]
     view["checklist"]["checks"] = [{"label": x, "state": "na"} for x in ("Return on capital employed", "Total debt / equity",
                                                                          "EBITDA margin holding up", "Insider buying and selling, 6 months")]
-    view["numbers"]["years"] = years * 3
+    view["numbers"]["years"] = [{**y, "debt": 1.0, "opm": 5.0} for y in years * 3]       # the figures are there: a missing check is ours
     got = audit.check_view(view)
     assert got[0]["level"] == "gap" and got[0]["detail"].startswith("3 checks couldn't be judged")   # insiders: "None" is an answer
+    view["numbers"]["years"] = years * 3                                                 # no borrowings or margin in the data: facts (MS1-007)
+    got = audit.check_view(view)
+    assert [i["level"] for i in got] == ["fact", "fact"] and any("isn't in the company's filed data" in i["detail"] for i in got)
 
 
 def test_valuation_says_why_when_ebitda_or_net_worth_is_negative():

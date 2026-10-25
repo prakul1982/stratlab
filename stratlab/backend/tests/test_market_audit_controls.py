@@ -1,5 +1,5 @@
 """The whole-market audit's controls from the admin page: reset and check everything again, start and pause with the
-reason it is paused, the monthly full check (marked in the database so a restart doesn't repeat it), one company
+reason it is paused, the daily pass over every company (marked in the database so a restart doesn't repeat it), one company
 re-checked by hand, and the slow hourly retries while BSE turns this server away. Also the platform check's BSE and
 F&O ban fixes, and the US list without preferred shares."""
 from datetime import date, datetime, timedelta, timezone
@@ -65,22 +65,22 @@ def test_paused_says_why(w):
     assert a.status()["paused"] == "busy"
 
 
-def test_admin_routes_reset_pause_monthly_and_recheck(w):
+def test_admin_routes_reset_pause_daily_and_recheck(w):
     from tests import world as W
     h = W.headers("admin-token")
     c = w["client"]
     m = main.market_audit
     m.refresh_list(force=True)
     r = c.post("/admin/audit/market", headers=h, json={"on": True}).json()
-    assert r["enabled"] and r["paused"] is None and r["monthly"]["on"] and r["monthly"]["next"]
+    assert r["enabled"] and r["paused"] is None and r["daily"]["on"] and r["daily"]["next"]
     m.start_full()
     assert m.step()
     r = c.post("/admin/audit/market", headers=h, json={"on": False}).json()
     assert r["paused"] == "off" and r["checked"] == 1
     r = c.post("/admin/audit/market", headers=h, json={"reset": True}).json()
     assert r["enabled"] and r["checked"] == 0 and r["full"]["running"] and r["full"]["checked"] == 0
-    r = c.post("/admin/audit/market", headers=h, json={"monthly": False}).json()
-    assert r["monthly"] == {"on": False, "last": r["monthly"]["last"], "next": None}
+    r = c.post("/admin/audit/market", headers=h, json={"daily": False}).json()
+    assert r["daily"] == {"on": False, "last": r["daily"]["last"], "next": None}
     sym = sorted(m.listing)[0]
     r = c.post("/admin/audit/market", headers=h, json={"recheck": sym}).json()
     assert r["checked"] == 1 and m.rows[sym]["at"]
@@ -103,36 +103,107 @@ def test_recheck_replaces_one_companys_result(w):
     assert a.recheck("BBB")["issues"][0]["area"] == "Audit"
 
 
-# ---------- the monthly full check ----------
-def test_monthly_full_check_runs_on_the_first_once(w):
+# ---------- the daily pass over every company ----------
+def test_daily_pass_runs_each_day_once_and_survives_a_restart(w):
     ist = audit.india_tz()
     listing = _old("AAA", "BBB")
     a = audit.MarketAudit(lambda: listing, _clean, pause=0)
     a.refresh_list(force=True)
-    oct4 = datetime(2026, 10, 4, 9, tzinfo=ist)
-    assert a.monthly(oct4) is False and a.state["monthly_run"] == "2026-10"           # first time: marks the month only
+    d1 = datetime(2026, 10, 25, 9, tzinfo=ist)
+    assert a.daily(d1) is False and a.state["daily_run"] == "2026-10-25"              # a new audit: its first full check covers today
     assert not a.status()["full"]["running"]
-    assert a.monthly(datetime(2026, 10, 31, 23, 59, tzinfo=ist)) is False
-    nov1 = datetime(2026, 11, 1, 0, 5, tzinfo=ist)                                     # just after midnight in India
-    assert a.monthly(nov1) is True and a.status()["full"]["running"] and a.status()["full"]["everything"]
+    assert a.daily(datetime(2026, 10, 25, 23, 59, tzinfo=ist)) is False
+    d2 = datetime(2026, 10, 26, 0, 5, tzinfo=ist)                                      # just after midnight in India
+    assert a.daily(d2) is True and a.status()["full"]["running"] and a.status()["full"]["everything"]
     b = audit.MarketAudit(lambda: listing, _clean, pause=0)                            # the server restarted that day
-    assert b.monthly(nov1) is False and b.state["monthly_run"] == "2026-11"
-    b.set_monthly(False)
-    assert b.monthly(datetime(2026, 12, 1, 1, tzinfo=ist)) is False and b.status()["monthly"]["next"] is None
-    assert audit.next_month_start(datetime(2026, 12, 15)) == "2027-01-01"
-    assert audit.next_month_start(oct4) == "2026-11-01"
+    assert b.daily(d2) is False and b.state["daily_run"] == "2026-10-26"
+    assert b.status()["full"]["running"]                                              # and carries on with the pass in the database
+    assert b.daily(datetime(2026, 10, 27, 0, 1, tzinfo=ist)) is True                  # the next day: another pass
+    b.set_daily(False)
+    assert b.daily(datetime(2026, 10, 28, 1, tzinfo=ist)) is False and b.status()["daily"]["next"] is None
+    assert audit.next_day_start(datetime(2026, 12, 31)) == "2027-01-01"
 
 
-def test_monthly_check_starts_even_while_paused_and_runs_when_started(w):
+def test_an_audit_run_monthly_until_now_starts_its_first_daily_pass_at_once(w):
     ist = audit.india_tz()
     a = audit.MarketAudit(lambda: _old("AAA"), _clean, pause=0)
     a.refresh_list(force=True)
-    a.monthly(datetime(2026, 10, 2, tzinfo=ist))
+    a.state["monthly_run"] = "2026-10"                                                 # what the live audit has stored
+    a.state["monthly"] = False                                                         # ...with its old switch honoured
+    assert a.daily(datetime(2026, 10, 25, 9, tzinfo=ist)) is False
+    a.state["monthly"] = True
+    assert a.daily(datetime(2026, 10, 25, 9, tzinfo=ist)) is True and a.status()["full"]["running"]
+
+
+def test_daily_pass_starts_even_while_paused_and_runs_when_started(w):
+    ist = audit.india_tz()
+    a = audit.MarketAudit(lambda: _old("AAA"), _clean, pause=0)
+    a.refresh_list(force=True)
+    a.daily(datetime(2026, 10, 2, tzinfo=ist))
     a.rows["AAA"] = {**_clean("AAA"), "at": "2026-10-02T00:00:00+00:00"}
-    a.monthly(datetime(2026, 11, 1, tzinfo=ist))
+    a.daily(datetime(2026, 10, 3, tzinfo=ist))
     assert a.step() is None and a.status()["full"]["left"] == 1                       # paused: waits, isn't lost
     a.set_enabled(True)
     assert a.step() == "AAA"
+
+
+def test_the_pass_takes_yesterdays_problems_first_then_whoever_waited_longest(w):
+    """MS1-004: a problem is looked at again first, to see whether a fix worked; then the companies by how long ago they
+    were checked, never alphabetically (a pass cut short by the next day would otherwise never reach the Zs)."""
+    ist = audit.india_tz()
+    listing = _old("AAA", "BBB", "CCC", "DDD", "EEE")
+    a = audit.MarketAudit(lambda: listing, _clean, pause=0)
+    a.refresh_list(force=True)
+    a.daily(datetime(2026, 10, 24, tzinfo=ist))
+    bad = [audit._issue("gap", "Numbers", "x")]
+    a.rows.update({"AAA": {**_clean("AAA"), "at": "2026-10-24T09:00:00+00:00"},
+                   "BBB": {**_clean("BBB"), "at": "2026-10-20T09:00:00+00:00"},
+                   "CCC": {**_clean("CCC"), "at": "2026-10-23T09:00:00+00:00", "issues": bad},
+                   "DDD": {**_clean("DDD"), "at": "2026-10-22T09:00:00+00:00", "issues": bad}})      # EEE: never checked
+    a.daily(datetime(2026, 10, 26, tzinfo=ist))
+    assert a._full_left() == ["EEE", "DDD", "CCC", "BBB", "AAA"]
+
+
+def test_a_finding_keeps_the_day_it_was_first_found_and_the_panel_counts_their_ages(w):
+    """MS1-004: anything still wrong after a fix shows its age (the numbers in its words changing doesn't reset it)."""
+    now = datetime.now(timezone.utc)
+    seen = [now - timedelta(days=9)]
+    listing = _old("AAA")
+    a = audit.MarketAudit(lambda: listing, lambda s: {**_clean(s), "issues": [audit._issue("gap", "Numbers", f"Revenue missing for Mar {2020 + len(seen)}"),
+                                                                           audit._issue("fact", "Prices", "Listed recently")]}, pause=0)
+    a.refresh_list(force=True)
+    a.rows["AAA"] = {**_clean("AAA"), "at": seen[0].isoformat(), "issues": [audit._issue("gap", "Numbers", "Revenue missing for Mar 2020")]}
+    a.recheck("AAA")
+    row = a.rows["AAA"]
+    gap = next(i for i in row["issues"] if i["level"] == "gap")
+    assert gap["since"] == seen[0].isoformat()                                         # first found nine days ago, still the same finding
+    assert "since" not in next(i for i in row["issues"] if i["level"] == "fact")        # a fact has no age: nothing is wrong
+    ages = a.status()["ages"]
+    assert ages["open"] == 1 and ages["over_a_week"] == 1 and ages["oldest_days"] == 9
+
+
+def test_a_check_that_settles_into_a_finding_is_asked_again_first(w):
+    """MS1-002: 245 Indian companies were left as "no filings came back" gaps by one empty answer. Asked again; the same on
+    a later check (or three in a row) it stands as what it is, the same next day without a round of waiting."""
+    state = {"empty": True}
+    then = audit._issue("fact", "Documents", audit.NO_FILINGS_FEED)
+    a = audit.MarketAudit(lambda: _old("AAA"), lambda s: {**_clean(s), "issues": [audit._later("Documents", "no filings came back", then)] if state["empty"] else []}, pause=0)
+    a.refresh_list(force=True)
+    a.recheck("AAA")
+    assert a.rows["AAA"]["issues"][0]["level"] == "pending" and a.rows["AAA"]["tries"] == 1
+    assert a.status()["pending"] == 1
+    a.rows["AAA"]["at"] = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    assert a.waiting() == ["AAA"]                                                      # retried at the hourly pace, not forever
+    a.recheck("AAA")
+    assert a.rows["AAA"]["issues"][0]["level"] == "pending" and a.rows["AAA"]["tries"] == 2
+    a.recheck("AAA")
+    assert [i["level"] for i in a.rows["AAA"]["issues"]] == ["fact"] and a.rows["AAA"]["tries"] == 1    # three in a row: settled
+    assert a.waiting() == [] and a.status()["pending"] == 0
+    a.recheck("AAA")                                                                   # the same again the next day: no new round of waiting
+    assert [i["level"] for i in a.rows["AAA"]["issues"]] == ["fact"]
+    state["empty"] = False
+    a.recheck("AAA")
+    assert a.rows["AAA"]["issues"] == []                                               # the feed answers: the fact goes
 
 
 # ---------- slow retries while BSE refuses ----------

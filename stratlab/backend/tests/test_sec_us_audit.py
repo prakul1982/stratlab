@@ -52,7 +52,7 @@ def test_no_results_says_why_in_plain_words(subs, symbol, key):
 
 
 def test_annual_figures_filed_but_unread_is_our_gap_not_a_fact():
-    facts = {"us-gaap": {"Assets": {"units": {"USD": [_i(100)]}}}}
+    facts = {"us-gaap": {"NetIncomeLoss": {"units": {"USD": [_i(100)]}}}}      # an income statement line, tagged a way we can't read
     why = sec.no_results(_subs(["10-K"]), facts, "XYZ")
     assert why == sec.UNREAD and not any(x in why for x in audit.NOT_COVERED)
     q = {"us-gaap": {"NetIncomeLoss": {"units": {"USD": [_f(-5, "2025-03-31", "2025-01-01", "10-Q")]}}}}
@@ -202,11 +202,11 @@ def test_a_year_whose_report_has_no_revenue_line_is_a_fact_not_a_gap():
 def test_a_missing_revenue_figure_in_a_report_that_tags_revenue_stays_a_gap():
     rev = [_yr(2020, 5e6), _yr(2021, 8e6), _yr(2023, 9e6)]
     ni = [_yr(y, -50e6) for y in range(2020, 2025)]
-    cost = [_yr(2022, 3e6)]                                          # a cost of sales that year: there were sales, unread
+    other = [_yr(2022, 4e6)]                                         # a revenue line that year under a name we don't read
     facts = {"facts": {"us-gaap": {"Revenues": {"units": {"USD": rev}}, "NetIncomeLoss": {"units": {"USD": ni}},
-                                   "CostOfGoodsAndServicesSold": {"units": {"USD": cost}}}}}
+                                   "RevenueFromWidgetSales": {"units": {"USD": other}}}}}
     p = sec.build(facts, _subs(["10-K"]))
-    assert "Dec 2022" not in p["no_revenue"]                         # its report tags a sales line that year: not read
+    assert "Dec 2022" not in p["no_revenue"] and "Dec 2022" not in p["sales_untagged"]       # tagged, not read: ours to look into
     found = audit.check_numbers(p, deepdive.numbers(p), {})
     assert any(i["level"] == "gap" and "Dec 2022" in i["detail"] for i in found)
 
@@ -331,3 +331,143 @@ def test_a_report_with_cost_of_sales_has_a_revenue_line():
     facts = {"facts": {"us-gaap": {"Revenues": {"units": {"USD": [_yr(2022, 50e6)]}}, "NetIncomeLoss": {"units": {"USD": ni}},
                                    "CostOfRevenue": {"units": {"USD": [_yr(2023, 30e6)]}}}}}      # revenue tagged a way not read
     assert "Dec 2023" not in sec.build(facts, _subs(["10-K"]))["no_revenue"]
+
+
+# ---------- MS1: the readers' root causes (companies the whole-market audit left as gaps on 25 Oct) ----------
+def test_annual_reports_with_no_income_statement_in_the_data_are_a_fact(MS1=True):
+    """MS1-013: AIB, DAVI, MMTRS and WBQNL file annual reports whose data holds notes and a cash flow but no income
+    statement line at all: the results aren't in the data, which the page says, not an unread figure (error before)."""
+    facts = {"us-gaap": {"ManagementFeeExpense": {"units": {"USD": [_f(284000)]}}, "Assets": {"units": {"USD": [_i(100)]}}}}
+    why = sec.no_results(_subs(["10-K"]), facts, "AIB")
+    assert why == sec.NO_RESULTS["untagged"] and any(x in why for x in audit.NOT_COVERED)
+    assert "XBRL" in why and "EDGAR" not in why
+
+
+def test_a_loss_before_tax_is_the_profit_when_nothing_else_is_tagged():
+    """MS1-013: Micromem's 20-F tags ProfitLossBeforeTax and no net profit; a loss with no tax is that loss."""
+    pre = [_yr(y, v) for y, v in ((2023, -3.0e6), (2024, -0.7e6))]
+    rev = [_yr(2023, 0.0), _yr(2024, 0.0)]
+    facts = {"facts": {"ifrs-full": {"ProfitLossBeforeTax": {"units": {"USD": pre}}, "Revenue": {"units": {"USD": rev}}}}}
+    p = sec.build(facts, _subs(["20-F"]))
+    assert p["pl"]["rows"]["Net Profit"][-2:] == [-3.0, -0.7]
+
+
+def test_a_concept_in_both_taxonomies_reads_both(MS1=True):
+    """MS1-010: Alcon filed US GAAP up to 2010 and IFRS from 2017: ProfitLoss is in both, and only the first was read, so
+    2017 to 2022 had sales and no profit."""
+    old = [_yr(2009, 2.0e9), _yr(2010, 2.2e9)]
+    new = [_yr(2021, 3.7e8), _yr(2022, 3.3e8), _yr(2023, 9.7e8)]
+    rev = [_yr(y, 7e9) for y in (2009, 2010, 2021, 2022, 2023)]
+    facts = {"facts": {"us-gaap": {"ProfitLoss": {"units": {"USD": old}}, "Revenues": {"units": {"USD": rev}}},
+                       "ifrs-full": {"ProfitLoss": {"units": {"USD": new}}}}}
+    p = sec.build(facts, _subs(["20-F"]))
+    assert p["pl"]["rows"]["Net Profit"] == [2000.0, 2200.0, 370.0, 330.0, 970.0]
+    assert p["profit_untagged"] == []
+
+
+def test_a_later_report_filing_a_figure_a_thousand_times_too_big_does_not_win():
+    """MS1-009: Coherent's 2025 annual report tags 2023 depreciation 681,687,000,000 where the others say 681,687,000: an
+    operating margin of 13,000%. The value most filings agree on stands; a tie goes to the concept's usual scale."""
+    def dep(y, v, filed):
+        return {**_yr(y, v), "filed": filed, "accn": f"0001-{filed}"}
+    rows = [dep(2022, 600e6, "2023-08-18"), dep(2023, 681687000, "2023-08-18"), dep(2023, 681687000, "2024-08-16"),
+            dep(2023, 681687000000, "2025-08-15"), dep(2023, 681687000, "2025-12-16"), dep(2024, 560e6, "2025-08-15")]
+    facts = {"us-gaap": {"DepreciationAndAmortization": {"units": {"USD": rows}}}}
+    got = sec.drop_scale_slips(facts)["us-gaap"]["DepreciationAndAmortization"]["units"]["USD"]
+    assert sorted(f["val"] for f in got if f["end"] == "2023-12-31") == [681687000] * 3
+    tie = [dep(2021, 150e3, "2022-03-01"), dep(2022, 188000, "2023-03-01"), dep(2022, 188000000, "2024-03-01"), dep(2023, 160e3, "2024-03-01")]
+    got = sec.drop_scale_slips({"us-gaap": {"DepreciationAndAmortization": {"units": {"USD": tie}}}})["us-gaap"]["DepreciationAndAmortization"]["units"]["USD"]
+    assert [f["val"] for f in got if f["end"] == "2022-12-31"] == [188000]                  # the scale of its other years
+    shares = [{**_yr(2023, 4401), "filed": "2026-04-30"}, {**_yr(2023, 158436534), "filed": "2024-04-30"}]
+    same = sec.drop_scale_slips({"us-gaap": {"WeightedAverageNumberOfDilutedSharesOutstanding": {"units": {"shares": shares}}}})
+    assert len(same["us-gaap"]["WeightedAverageNumberOfDilutedSharesOutstanding"]["units"]["shares"]) == 2     # a reverse split restates counts
+
+
+def test_depreciation_larger_than_the_whole_business_is_not_added_back():
+    """MS1-009: InspireMD's depreciation of $188 million beside $5 million of sales (a unit slip in every report) gave an
+    operating margin of 3,000%; with no usable depreciation there is no EBITDA, not a wrong one."""
+    rev = [_yr(y, 5e6) for y in (2022, 2023, 2024)]
+    op = [_yr(y, -19e6) for y in (2022, 2023, 2024)]
+    dep = [_yr(y, 188e6) for y in (2022, 2023, 2024)]
+    ni = [_yr(y, -18e6) for y in (2022, 2023, 2024)]
+    facts = {"facts": {"us-gaap": {"Revenues": {"units": {"USD": rev}}, "OperatingIncomeLoss": {"units": {"USD": op}},
+                                   "DepreciationAndAmortization": {"units": {"USD": dep}}, "NetIncomeLoss": {"units": {"USD": ni}}}}}
+    p = sec.build(facts, _subs(["10-K"]))
+    assert p["pl"]["rows"]["OPM %"] == [None, None, None] and "margin_left_out" not in p
+
+
+def test_an_operating_margin_above_100_percent_is_left_out_and_said_so():
+    """MS1-009: a gain inside operating profit (Anterix 2026: $6.5 million of sales, $94 million of operating profit) or
+    nil or negative sales is no margin; the page leaves it out and says so, as the Indian pages do."""
+    rev = [_yr(2024, 6.0e6), _yr(2025, 6.5e6), _yr(2026, -0.07e6)]
+    op = [_yr(2024, -11e6), _yr(2025, 94.4e6), _yr(2026, -10e6)]
+    dep = [_yr(y, 0.4e6) for y in (2024, 2025, 2026)]
+    ni = [_yr(y, v) for y, v in ((2024, -11e6), (2025, 90.6e6), (2026, -10e6))]
+    facts = {"facts": {"us-gaap": {"Revenues": {"units": {"USD": rev}}, "OperatingIncomeLoss": {"units": {"USD": op}},
+                                   "DepreciationAndAmortization": {"units": {"USD": dep}}, "NetIncomeLoss": {"units": {"USD": ni}}}}}
+    p = sec.build(facts, _subs(["10-K"]))
+    assert p["pl"]["rows"]["OPM %"][0] is not None and p["pl"]["rows"]["OPM %"][1:] == [None, None]
+    assert p["margin_left_out"] == ["Dec 2025", "Dec 2026"] and "Dec 2025" in p["margin_note"]
+    nums = deepdive.numbers(p)
+    assert nums["margin_left_out"] == p["margin_left_out"] and p["margin_note"] in nums["notes"]
+    out = audit.check_numbers(p, nums, {})
+    assert [i["level"] for i in out if "margin" in i["detail"]] == ["fact"] and "gap" not in [i["level"] for i in out]
+
+
+def test_a_loss_year_with_no_revenue_figure_of_any_kind_is_a_year_without_sales():
+    """MS1-011: a development-stage company's report tags a gross profit of nil or a total since it began; no revenue-like
+    figure above nil for the year is no sales that year, not a figure missed."""
+    rev = [_yr(2022, 4e6)]
+    ni = [_yr(y, -2e6) for y in (2022, 2023, 2024)]
+    gp = [_f(0, "2023-12-31", "2023-01-01", filed="2024-02-20", accn="0001-2024-9"), _f(0.0, "2024-12-31", "2024-01-01", filed="2025-02-20", accn="0001-2025-9")]
+    since = [_f(14059, "2024-12-31", "2012-05-11", filed="2025-02-20", accn="0001-2025-9")]          # a total since inception: not a year
+    facts = {"facts": {"us-gaap": {"Revenues": {"units": {"USD": rev + since}}, "NetIncomeLoss": {"units": {"USD": ni}}, "GrossProfit": {"units": {"USD": gp}}}}}
+    p = sec.build(facts, _subs(["10-K"]))
+    assert p["no_revenue"] == ["Dec 2023", "Dec 2024"] and p["sales_untagged"] == []
+
+
+def test_a_sales_line_the_company_labels_itself_is_a_fact_about_the_data():
+    """MS1-011: Intrepid Potash's sales for 2018 to 2022 aren't tagged with any standard label, while its operating profit
+    is: not a figure we missed, and the page says the data has no sales for those years."""
+    ni = [_yr(y, 5e6) for y in (2022, 2023, 2024)]
+    op = [_yr(y, 8e6) for y in (2022, 2023, 2024)]
+    rev = [_yr(2022, 240e6), _yr(2024, 255e6)]
+    facts = {"facts": {"us-gaap": {"Revenues": {"units": {"USD": rev}}, "NetIncomeLoss": {"units": {"USD": ni}}, "OperatingIncomeLoss": {"units": {"USD": op}}}}}
+    p = sec.build(facts, _subs(["10-K"]))
+    assert p["sales_untagged"] == ["Dec 2023"] and p["no_revenue"] == []
+    nums = deepdive.numbers(p)
+    out = audit.check_numbers(p, nums, {})
+    assert [i["level"] for i in out if i["detail"].startswith("Sales for Dec 2023")] == ["fact"]
+    assert "gap" not in [i["level"] for i in out]
+
+
+def test_no_capex_line_in_the_cash_flow_statements_is_a_fact():
+    """MS1-012: a company whose last three cash flow statements show no purchase of plant and equipment spent none."""
+    ni = [_yr(y, -1e6) for y in (2022, 2023, 2024)]
+    rev = [_yr(y, 1e6) for y in (2022, 2023, 2024)]
+    cfo = [_yr(y, -0.5e6) for y in (2022, 2023, 2024)]
+    ppe = [_i(4e6, "2024-12-31", filed="2025-02-20", accn="0001-2025-1")]       # plant on the books only in the last year (an acquisition)
+    facts = {"facts": {"us-gaap": {"Revenues": {"units": {"USD": rev}}, "NetIncomeLoss": {"units": {"USD": ni}},
+                                   "NetCashProvidedByUsedInOperatingActivities": {"units": {"USD": cfo}},
+                                   "PropertyPlantAndEquipmentNet": {"units": {"USD": ppe}}}}}
+    p = sec.build(facts, _subs(["10-K"]))
+    assert p["capex_untagged"] is True
+    nums = deepdive.numbers(p)
+    got = [(i["level"], i["area"]) for i in audit.check_numbers(p, nums, {}) if i["area"] == "Capex"]
+    assert got == [("fact", "Capex")]
+
+
+def test_royalty_clinic_and_data_service_revenue_are_read_but_equity_method_and_discontinued_revenue_are_not():
+    """MS1-011: 14 companies whose only revenue line is a royalty, a clinic's patient revenue or a data service were left with
+    sales "missing"; the revenue of an equity-method investee or of a discontinued business is not the company's own."""
+    ni = [_yr(y, -2e6) for y in (2022, 2023, 2024)]
+    royalty = [_yr(y, 8e6) for y in (2022, 2023, 2024)]
+    investee = [_yr(y, 40e6) for y in (2022, 2023, 2024)]
+    facts = {"facts": {"us-gaap": {"RoyaltyRevenue": {"units": {"USD": royalty}}, "NetIncomeLoss": {"units": {"USD": ni}},
+                                   "EquityMethodInvestmentSummarizedFinancialInformationRevenue": {"units": {"USD": investee}}}}}
+    p = sec.build(facts, _subs(["10-K"]))
+    assert p["pl"]["rows"]["Sales"] == [8.0, 8.0, 8.0] and p["sales_untagged"] == []
+    only = {"facts": {"us-gaap": {"DisposalGroupIncludingDiscontinuedOperationRevenue": {"units": {"USD": investee}},
+                                  "NetIncomeLoss": {"units": {"USD": ni}}, "OperatingIncomeLoss": {"units": {"USD": ni}}}}}
+    p = sec.build(only, _subs(["10-K"]))
+    assert p["pl"]["rows"]["Sales"] == [None] * 3 and p["no_revenue"] == ["Dec 2022", "Dec 2023", "Dec 2024"]       # a loss and no sales of its own

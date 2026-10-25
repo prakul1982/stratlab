@@ -801,11 +801,18 @@ class NSEFilings:
         if hit is not None:
             return hit
         to = ist_now()
-        data = self._get("/api/corporate-announcements", {
-            "index": "equities", "symbol": symbol,
-            "from_date": (to - timedelta(days=days)).strftime("%d-%m-%Y"), "to_date": to.strftime("%d-%m-%Y")})
+        params = {"index": "equities", "symbol": symbol,
+                  "from_date": (to - timedelta(days=days)).strftime("%d-%m-%Y"), "to_date": to.strftime("%d-%m-%Y")}
+        data = self._get("/api/corporate-announcements", params)
         rows = data.get("data") if isinstance(data, dict) else data
         items = normalise(rows or [])
+        if not items:
+            # an empty list can be the bot guard's answer to cookies it no longer knows, not the company's: asked once more
+            # with fresh ones before it is called empty (MS1-002: 245 companies were recorded as having filed nothing)
+            self._prime(force=True)
+            data = self._get("/api/corporate-announcements", params)
+            rows = data.get("data") if isinstance(data, dict) else data
+            items = normalise(rows or [])
         self.cache.set(key, items, 1800)
         return items
 

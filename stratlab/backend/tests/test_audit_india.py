@@ -115,7 +115,7 @@ def test_meetings_tell_earnings_calls_from_investor_meetings():
              _item("2026-07-01T10:00", "XYZ Ltd has informed the Exchange about Schedule of meet"),
              _item("2026-06-01T10:00", "Outcome of board meeting: financial results", subject="Outcome of Board Meeting"),
              _item("2023-01-01T10:00", "Audio recording of the earnings call")]                 # before the window
-    assert deepdive.meetings(items, "2024-10-05T00:00") == {"meets": 2, "calls": 0, "calls_due": 0, "shareholder": 0, "filed": 3}
+    assert deepdive.meetings(items, "2024-10-05T00:00") == {"meets": 2, "calls": 0, "calls_due": 0, "calls_old": 0, "shareholder": 0, "filed": 3}
     items.insert(0, _item("2026-08-12T10:00", "XYZ Ltd has informed the Exchange about Audio Recording"))
     assert deepdive.meetings(items, "2024-10-05T00:00")["calls"] == 1
 
@@ -130,7 +130,8 @@ def test_only_investor_meetings_and_no_decks_are_facts():
 def test_no_filings_at_all_is_ours_to_look_into_unless_the_shares_are_idle():
     view = {"region": "IN", "documents": [], "checklist": {"checks": [], "industry": {"path": ["x"]}}, "valuation": {"value": 1}}
     nothing = {"meets": 0, "calls": 0, "filed": 0}
-    assert audit.check_view(view, nothing) == [audit._issue("gap", "Documents", audit.NO_FILINGS_READ)]
+    got = audit.check_view(view, nothing)                  # asked again before it stands (MS1-002)
+    assert [(i["level"], i["then"]) for i in got] == [("pending", audit._issue("fact", "Documents", audit.NO_FILINGS_FEED))]
     assert audit.check_view(view, nothing, "untraded") == [audit._issue("fact", "Documents", audit.NOTHING_FILED)]
 
 
@@ -186,8 +187,11 @@ def test_checks_a_company_without_sales_cant_judge_are_a_fact():
             "checklist": {"checks": checks, "industry": {"path": ["x"]}}, "valuation": {"value": 1}}
     got = audit.check_view(view)
     assert got == [audit._issue("fact", "Checklist", "3 checks can't be judged without sales (none in a year compared): "
-                                                     "Sales growth, 3 years, Latest quarter sales vs a year ago, EBITDA margin holding up")]
+                                                     "Sales growth, 3 years, Latest quarter sales vs a year ago, EBITDA margin holding up"),
+                   audit._issue("fact", "Checklist", "1 check can't be judged: the figure behind it isn't in the company's filed data: "
+                                                     "Return on capital employed")]       # no borrowings figure in the data (MS1-007)
     years[-1]["sales"] = years[-4]["sales"] = 9                       # sales there: a missing number is still ours
+    years[-1]["opm"] = years[-4]["opm"] = 5
     quarters[-1]["sales"] = quarters[-5]["sales"] = None
     assert audit.check_view(view)[0]["level"] == "gap"
 
@@ -250,7 +254,8 @@ def test_a_new_listing_or_dvr_without_results_or_classification_is_a_fact():
     assert audit.check_view(view, None, "new")[0]["level"] == "fact"
     assert audit.check_numbers({"name": "Jain Irrigation Systems Ltd-DVR"}, {}, {}) == [audit._issue("fact", "Numbers", audit.NO_RESULTS_DVR)]
     assert audit.check_numbers({}, {}, {}, young=True) == [audit._issue("fact", "Numbers", audit.NO_RESULTS_YET)]
-    assert audit.check_numbers({}, {}, {})[0]["level"] == "gap"
+    zero = audit.check_numbers({}, {}, {})                  # a company page that came back without its results: asked again first
+    assert zero[0]["level"] == "pending" and zero[0]["then"] == audit._issue("fact", "Numbers", audit.NO_RESULTS_YET)
 
 
 def test_an_etf_or_trust_the_broker_names_otherwise_is_not_checked_as_a_company():
