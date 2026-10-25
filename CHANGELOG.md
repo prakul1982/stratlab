@@ -4,6 +4,11 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 25 October 2026: memory peaks, and the IPO lists
+
+- **Memory (`memguard.py`):** the heavy background jobs (the whole-market audits, the screens index, the page price refresh, breadth, positioning, the library seed, offer-document and filing reads, corporate-action reads) take turns on one fair lock, each hands its memory back when it is through, and malloc is told to keep two arenas and to give back blocks of 1 MB and more (a test with eight threads building and dropping 100 MB each kept 385 MB before and 44 MB after). The price refresh no longer holds every due page parsed (144 MB for 15,000 pages, now 3 MB), the caches stay under one 256 MB budget with expired entries swept, a source's last-good copy is capped at 16 MB, and the mutual fund history kept in memory is the latest 80 schemes. Admin: `/admin/memory`.
+- **IPO lists:** an issue the exchange names withdrawn, postponed or cancelled sits in its own fold with that word, not in the Closed tab, with the note off its name and no alerts; a Social Stock Exchange fund raise is labelled as not an IPO in a fold of its own. An issue with a fresh part in rupees and an offer for sale in shares shows "Fresh ₹X cr + offer for sale of N shares", and its total at the top of the price band once the band is known.
+
 ### 25 October 2026: IPOs
 
 - **IPOs** (`/invest/ipos`, `/invest/ipos/:id`): India from NSE's and BSE's public-issue pages and SEBI's DRHP and RHP lists; the US from the public IPO calendar and the SEC's S-1, F-1 and prospectus filings. Tabs per market, the bids by category while an issue is open, the offer document's facts, and listing price against issue price. Plans: the lists, pages, bids and listing performance are free; the offer-document summary (`ipo_summary`) and the alerts (`ipo_alerts`) are Basic and up.

@@ -3,7 +3,10 @@
 import { api } from "./api";
 
 export type Market = "IN" | "US";
-export type Stage = "filed" | "upcoming" | "open" | "closed" | "listed";
+/* "withdrawn" holds the issues the exchange names withdrawn, postponed or cancelled (issue_status says which) and "social" the Social
+ * Stock Exchange fund raises, which are not IPOs: neither is a stage an issue passes through, so neither is a tab. */
+export type Stage = "filed" | "upcoming" | "open" | "closed" | "listed" | "withdrawn" | "social";
+export type IssueStatus = "withdrawn" | "postponed" | "cancelled";
 export type EventKind = "open" | "close" | "allotment" | "listing";
 
 export interface Perf { listing_price?: number; listing_change_pct?: number; latest?: number; change_pct?: number; latest_date?: string; at?: string }
@@ -13,6 +16,9 @@ export interface IpoRow {
   low?: number; high?: number; price?: number; lot?: number; min_amount?: number; min_basis?: string; size?: number; size_basis?: string;
   exchanges?: string[]; exchange?: string; expected?: string; priced?: string; filed?: string; shares?: number; currency: string;
   docs?: string[]; sub_times?: number; sub_as_of?: string; perf?: Perf;
+  issue_status?: IssueStatus;
+  /** A book-built issue with one part in rupees and one in shares: the parts, shown instead of a size until the price band gives a total. */
+  size_parts?: { fresh_cr?: number; ofs_cr?: number; fresh?: number; ofs?: number };
 }
 export interface AlertPrefs { on: boolean; events: EventKind[]; markets: Market[]; sme: boolean; allowed: boolean; plan: string; channels: string[]; event_names: Record<EventKind, string> }
 export interface IpoList {

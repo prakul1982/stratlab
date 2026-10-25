@@ -46,7 +46,7 @@ from . import user_data
 from .connect import routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
 from . import drawings_routes
-from . import maindb, market_store, storage, usage_slots
+from . import maindb, market_store, memguard, storage, usage_slots
 from . import official_close
 from . import last_session
 from . import money_itr, money_us_routes
@@ -414,6 +414,7 @@ def start_jobs():
     _start("holders_job", holders_job.start)
     _start("ipo.job", ipo.job.start)                    # IPOs: the exchanges' and regulators' pages, the bids through the day, the alerts
     _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
+    _start("memory-janitor", lambda: threading.Thread(target=memguard.janitor, daemon=True, name="memory-janitor").start())   # expired cache entries out, the heap trimmed (MEM-001)
 
 
 log = logging.getLogger("stratlab")
@@ -4604,7 +4605,8 @@ def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str] | None:
         if only is not None and region not in only:
             continue
         try:
-            stock_pages.save_list(region, [{"symbol": r["symbol"], "name": r.get("name")} for r in fn()])
+            with memguard.heavy("stock-list"):            # a whole market's list, read and saved: one heavy job at a time (MEM-001)
+                stock_pages.save_list(region, [{"symbol": r["symbol"], "name": r.get("name")} for r in fn()])
         except Exception as e:
             print(f"stock list {region} failed:", str(e)[:160])
             failed.append(region)
@@ -6337,6 +6339,12 @@ market_audit_us = audit.MarketAudit(lambda: _sec_companies(), lambda s: audit_on
 
 def market_for(region: str):
     return market_audit_us if region == "US" else market_audit
+
+
+@app.get("/admin/memory")
+def admin_memory(_=Depends(admin.admin_profile)):
+    """The server's memory: what it holds now, which heavy background job has its turn and how many wait, and the caches' size."""
+    return memguard.status()
 
 
 @app.get("/admin/audit/market")

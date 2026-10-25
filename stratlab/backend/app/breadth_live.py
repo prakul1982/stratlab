@@ -15,7 +15,7 @@ import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import breadth, db, leader
+from . import breadth, db, leader, memguard
 
 LIVE_KEY = "breadth:live:"           # breadth:live:<group> = {"day", "fields", "points": [[HH:MM, ...], ...]}
 LIVE_STATUS_KEY = "breadth:livestatus"
@@ -270,7 +270,8 @@ class LiveJob:
             slot = self.due(region, now)
             if slot is None:
                 continue
-            res = self.live.round(region, now)
+            with memguard.heavy("breadth-live", force_release=True):      # every stock's quote and the day's base: one heavy job at a time (MEM-001)
+                res = self.live.round(region, now)
             self.status.update(last_tick=now.isoformat(timespec="seconds"), last_slot=slot, last_ok=bool(res.get("ok")))
             ran += 1 if res.get("ok") else 0
         return ran

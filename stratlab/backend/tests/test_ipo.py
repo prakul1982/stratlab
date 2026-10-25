@@ -551,3 +551,82 @@ def test_alert_settings_are_part_of_a_persons_data(w):
     assert db.get_setting(I.USER_KEY + "u-basic")
     assert user_data._alerts("u-basic") >= 1                                                  # deleting an account deletes them
     assert not db.get_setting(I.USER_KEY + "u-basic")
+
+
+# ---------- issues that did not go ahead, Social Stock Exchange raises, and a size with a part in shares (MEM1 B) ----------
+def test_the_exchanges_note_on_an_issue_is_read_off_its_name():
+    assert S.classify("Zenith Foods Limited-Issue Withdrawn") == ("Zenith Foods Limited", "withdrawn", False)
+    assert S.classify("Acme Ltd - Issue postponed") == ("Acme Ltd", "postponed", False)
+    assert S.classify("Acme Ltd (Issue Cancelled)") == ("Acme Ltd", "cancelled", False)
+    assert S.classify("Rays of Belief Limited- For Profit Social Enterprise (FPSE)") == ("Rays of Belief Limited", None, True)
+    assert S.classify("Plain Company Limited") == ("Plain Company Limited", None, False)
+    assert S.classify("Social Stock Exchange Ltd")[2] is False                    # only a note at the end of the name counts
+    rows = S.bse_issues({"Table": [{"Scrip_cd": 9001, "Scrip_Name": "Zenith Foods Limited-Issue Withdrawn", "IR_flag": "IPO", "Status": "F",
+                                    "eXCHANGE_PLATFORM": "MainBoard", "Start_Dt": "2026-11-02T00:00:00", "End_Dt": "2026-11-04T00:00:00",
+                                    "Price_Band": "100.00 - 110.00"}]})
+    assert rows[0]["name"] == "Zenith Foods Limited" and rows[0]["issue_status"] == "withdrawn" and "social" not in rows[0]
+    plain = S.bse_issues({"Table": [{**{"Scrip_cd": 9002, "Scrip_Name": "Other Limited", "IR_flag": "IPO", "eXCHANGE_PLATFORM": "SME"}}]})
+    assert "issue_status" not in plain[0]
+
+
+def _row(**kw):
+    return {"id": "in-x", "market": "IN", "name": "X Ltd", "symbol": "X", "segment": "mainboard", "currency": "INR", "open": "2026-10-20", "close": "2026-10-22",
+            "low": 100.0, "high": 110.0, **kw}
+
+
+def test_a_withdrawn_or_social_issue_is_in_no_stage_and_has_no_dates_or_alerts():
+    for extra, stage in (({"issue_status": "withdrawn"}, "withdrawn"), ({"issue_status": "postponed"}, "withdrawn"), ({"social": True}, "social")):
+        r = _row(**extra)
+        assert I.stage_of(r, NOW) == stage
+        pub = I.public(r, NOW)
+        assert pub["stage"] == stage and not pub["allotment_expected"] and not pub["listing_expected"]
+        assert I.events_on([r], "IN", date(2026, 10, 22), NOW) == []                       # no "closes today" message for it
+    assert I.stage_of(_row(), NOW) == "closed"
+
+
+def test_the_list_keeps_withdrawn_postponed_and_social_issues_out_of_the_closed_tab(w, monkeypatch):
+    read_all(w)
+    rows = I.load("IN")["rows"]
+    keep = [dict(r) for r in rows]
+    bon = next(r for r in keep if r["id"] == "in-bonfig")
+    mk = next(r for r in keep if r["id"] == "in-mksons")
+    bon["issue_status"], mk["issue_status"] = "withdrawn", "postponed"
+    shares = next(r for r in keep if r["id"] == "in-ravita")
+    shares["social"] = True
+    I.save("IN", keep, I.load("IN")["checked"], as_of=I.load("IN")["as_of"])
+    d = w["client"].get("/invest/ipos?market=IN", headers=headers("free-token")).json()
+    ids = lambda tab: {x["id"] for x in d["tabs"][tab]}      # noqa: E731
+    assert {"in-bonfig", "in-mksons"} <= ids("withdrawn") and "in-ravita" in ids("social")
+    for tab in ("upcoming", "open", "closed", "listed"):
+        assert not ({"in-bonfig", "in-mksons", "in-ravita"} & ids(tab))
+    assert d["counts"]["withdrawn"] == len(d["tabs"]["withdrawn"]) >= 2 and d["counts"]["social"] >= 1
+    assert {x["id"]: x["issue_status"] for x in d["tabs"]["withdrawn"]}["in-mksons"] == "postponed"
+    one = w["client"].get("/invest/ipos/in-bonfig", headers=headers("free-token")).json()["ipo"]
+    assert one["stage"] == "withdrawn" and one["issue_status"] == "withdrawn"
+
+
+def test_a_note_the_exchange_stops_giving_is_dropped_at_the_next_read():
+    nse = {"past": [], "current": [], "upcoming": [{"symbol": "ZENITH", "name": "Zenith Foods Limited", "series": "EQ", "segment": "mainboard", "open": "2026-11-02",
+                                                   "close": "2026-11-04", "low": 100.0, "high": 110.0, "size_shares": None, "issue_status": "postponed"}]}
+    first = I.merge_india([], nse, [], [], [], [], TODAY)
+    assert first[0]["issue_status"] == "postponed"
+    nse["upcoming"][0].pop("issue_status")                              # announced again, without the note
+    again = I.merge_india(first, nse, [], [], [], [], TODAY)
+    assert not again[0]["issue_status"] and I.stage_of(again[0], NOW) == "upcoming"
+
+
+def test_a_part_in_rupees_and_a_part_in_shares_is_not_the_size():
+    r = _row(fresh_cr=500.0, ofs=1_00_00_000, high=None, low=None)
+    got = I.public(r, NOW)
+    assert got["size"] is None and got["size_parts"] == {"fresh_cr": 500.0, "ofs": 10000000}        # no band yet: both parts, no total
+    banded = I.public(_row(fresh_cr=500.0, ofs=1_00_00_000, low=95.0, high=100.0), NOW)
+    assert banded["size"] == 600.0 and banded["size_basis"] == "at the top of the price band"       # 500 + 1 crore shares x 100
+    assert banded["size_parts"] == {"fresh_cr": 500.0, "ofs": 10000000}
+    priced = I.public(_row(fresh_cr=500.0, ofs=1_00_00_000, low=95.0, high=100.0, price=98.0), NOW)
+    assert priced["size"] == 598.0 and priced["size_basis"] == "at the issue price"
+    flip = I.public(_row(ofs_cr=200.0, fresh=50_00_000, low=95.0, high=100.0), NOW)
+    assert flip["size"] == 250.0 and flip["size_parts"] == {"ofs_cr": 200.0, "fresh": 5000000}
+    # the other cases keep their words
+    assert I.public(_row(fresh_cr=500.0, ofs_cr=100.0), NOW)["size"] == 600.0
+    assert I.public(_row(fresh_cr=500.0), NOW)["size"] == 500.0 and "size_parts" not in I.public(_row(fresh_cr=500.0), NOW)
+    assert I.public(_row(size_shares=1_00_00_000), NOW)["size_basis"] == "shares at the top of the price band"

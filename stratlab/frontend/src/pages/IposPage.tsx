@@ -6,7 +6,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { fmtDate, marketTz, pct, price } from "../lib/format";
 import { useLiveRefresh } from "../lib/liveRefresh";
 import { ipoApi, type AlertPrefs, type EventKind, type IpoList, type IpoRow, type Market, type Stage } from "../lib/ipo";
-import { TAB_LINE, bandText, expectedText, minText, segmentWord, sharesText, sizeText, spanText, tabsFor, timesText } from "../lib/ipoText";
+import { TAB_LINE, badgeOf, bandText, expectedText, minText, segmentWord, sharesText, sizeText, spanText, tabsFor, timesText } from "../lib/ipoText";
 import { Badge, Card, CardHead, CheckField, ChipSet, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Signed, Skeleton, type Column } from "../components/kit";
 import "./ipo.css";
 
@@ -26,6 +26,23 @@ function Company({ r }: { r: IpoRow }) {
       <Link className="link" to={`/invest/ipos/${encodeURIComponent(r.id)}`}><b>{r.name}</b></Link>
       <span className="k-sub-line">{[r.symbol, seg === "SME" ? "SME platform" : seg === "Mainboard" ? "Main board" : r.exchange].filter(Boolean).join(" · ")}</span>
     </>
+  );
+}
+
+/* Issues that did not go ahead (withdrawn, postponed or cancelled, as the exchange names them) and the Social Stock Exchange's fund
+ * raises are not in the stages: the first sit in a fold of their own with the word the exchange used, the second in another that
+ * says they are not IPOs. */
+function Aside({ rows, label, note, testId }: { rows: IpoRow[]; label: string; note: string; testId: string }) {
+  if (!rows.length) return null;
+  return (
+    <Disclosure summary={`${label} (${rows.length})`} testId={testId}>
+      <DataTable stack label={label} rows={rows} rowKey={(r) => r.id} rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })}
+        columns={[{ key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Company r={r} /> },
+          { key: "s", header: "Status", cell: (r) => <Badge tone={badgeOf(r).tone}>{badgeOf(r).word}</Badge> },
+          { key: "d", header: "Bidding was to be", cell: (r) => (r.open || r.close ? spanText(r.open, r.close) : "–") },
+          { key: "b", header: "Price band", numeric: true, cell: (r) => bandText(r) }]} />
+      <p className="k-note">{note}</p>
+    </Disclosure>
   );
 }
 
@@ -173,6 +190,10 @@ export function IposPage() {
             {market === "US" && <p className="k-note" data-testid="ipo-us-note">A US offering has no public bidding window, so there is no Open tab: the price is set the evening before trading starts.</p>}
           </Card>
           {now === "upcoming" && <Filed rows={d.tabs.filed} m={market} />}
+          <Aside rows={d.tabs.withdrawn ?? []} label="Withdrawn, postponed or cancelled" testId="ipo-withdrawn"
+            note="The exchange names these issues withdrawn, postponed or cancelled in its list. They are not open, closed or listed, and no allotment or listing date applies." />
+          <Aside rows={d.tabs.social ?? []} label="Social Stock Exchange fund raises, not IPOs" testId="ipo-social"
+            note="The Social Stock Exchange lists fund raises by social enterprises beside the IPOs. They are not offers of shares to the public in the sense the stages above describe." />
           <AlertsCard p={d.prefs} onSave={save} />
           <p className="k-note">{d.note}</p>
         </>

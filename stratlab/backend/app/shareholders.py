@@ -26,7 +26,7 @@ from xml.etree import ElementTree
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from . import db, leader
+from . import db, leader, memguard
 from .auth import current_profile
 from .intel.net import SourceError, TTLCache
 from .plans import FEATURE_PLAN, PLANS, allows, plan_of
@@ -859,7 +859,8 @@ class Job:
         for item in list(queue[:limit]):
             sym, q, rec, url, filed, name = item
             try:
-                parsed = parse_xbrl(fetch_xbrl(nse, url))
+                with memguard.heavy("holders"):          # one filing read and parsed in its turn (MEM-001)
+                    parsed = parse_xbrl(fetch_xbrl(nse, url))
             except SourceError as e:
                 if e.busy:
                     self.status["last_error"] = str(e)[:200]
