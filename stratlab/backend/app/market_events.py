@@ -76,6 +76,13 @@ NOTE = ("Dates are as each body publishes them: the central bank's MPC schedule 
         "and GDP once read from the release; the US CPI and jobs reports are dates only, with a link to the release. "
         "Facts, not advice.")
 
+# what is missing from the events while a source is unread (DJ-021), by its name in SOURCES
+MISSING = {"Central bank (MPC)": "RBI policy dates and the repo rate may be out of date",
+           "Statistics ministry": "India's CPI, IIP and GDP release dates and figures may be out of date",
+           "US Fed (FOMC)": "Fed meeting dates and its target range may be out of date",
+           "US labour statistics": "US CPI and jobs report dates may be out of date",
+           "Index provider": "Index rebalance dates (stocks going in and out of the Nifty indices) may be missing"}
+
 # the indices whose changes are kept (the provider's own names), the first ones first on a company's badge
 MAIN_INDICES = ("Nifty 50", "Nifty Next 50", "Nifty Bank", "Nifty Financial Services", "Nifty Midcap Select", "Nifty IT",
                 "Nifty 100", "Nifty 200", "Nifty Midcap 50", "Nifty Midcap 100", "Nifty Midcap 150", "Nifty Smallcap 50",

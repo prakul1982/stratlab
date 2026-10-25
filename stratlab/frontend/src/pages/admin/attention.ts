@@ -1,6 +1,7 @@
 import type { HealthState } from "../../components/kit";
-import { IST, ago, dateOnly, istToday, quoteAt } from "../../lib/format";
+import { IST, ago, dateOnly, fmtDate, istToday, quoteAt } from "../../lib/format";
 import { aiCountText } from "../../lib/connection";
+import { reconnectAt } from "../../lib/dataBack";
 import type { AIRow, InvoiceSeller, JobRow, Overview, Reported } from "./AdminContext";
 
 /* One reading of the server's status for all of Admin: Overview's lights and "Needs your attention", the rows on Data and
@@ -13,7 +14,9 @@ export type Attention = { text: string; to: string; label: string; bad: boolean;
 export function oneLine(text: string, max = 120): { text: string; full?: string } {
   const flat = String(text ?? "").replace(/\s+/g, " ").trim();
   const first = flat.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? flat;
-  const cut = first.length > max ? `${first.slice(0, max - 1).trimEnd()}…` : first;
+  // cut at a word, never inside one (DJ-007: "…currently experie…")
+  const head = first.slice(0, max - 1), space = head.lastIndexOf(" ");
+  const cut = first.length > max ? `${(space > max / 2 ? head.slice(0, space) : head).replace(/[\s,;:(]+$/, "")}…` : first;
   return cut === flat ? { text: flat } : { text: cut, full: flat };
 }
 /** A job's raw network error as one plain line, the raw text kept in `full` for the tooltip (R18-010: "HTTPSConnectionPool(host='api.kite.trade'…) Read timed out"). */
@@ -100,25 +103,58 @@ export function invoiceWarning(s: InvoiceSeller | undefined): string | null {
       : "Until the GSTIN is set, every invoice is a plain one that says the supplier isn't registered under GST and charges none, and the Plans page says no GST is added. If you are registered, fill the details in before the first payment.");
 }
 
+/** The next automatic data login with its day, as the top banner says it: "Sun 25 Oct, 08:00 IST" (DJ-003: "08:00 IST"
+ * didn't say which day). */
+export const loginAt = (iso: string): string => reconnectAt({ closed: null, back_at: iso }, "Asia/Kolkata") ?? quoteAt(iso, IST);
+
+/** The alert-email row's words, without promising Telegram when the server has none (DJ-033). */
+export function mailFix(fix: string | undefined, telegram: boolean | undefined): string | undefined {
+  if (!fix || telegram !== false) return fix;
+  return fix.replace(", plus your phone or Telegram if set in Account.", ", plus your phone if set in Account (Telegram isn't set up on the server).")
+    .replace("Until then alerts reach only your phone or Telegram.", "Until then alerts reach only your phone.");
+}
+
+/** Brevo's sends today against what its plan has left today (DJ-034), or null when Brevo said nothing. `low`: under a
+ * tenth of the day's sends left. */
+export function quotaLine(q: NonNullable<Overview["server"]["admin_alerts"]>["quota"]): { text: string; sent: string | null; left: string | null; low: boolean } | null {
+  if (!q || (q.sent_today == null && q.left_today == null)) return null;
+  const sent = q.sent_today != null ? `${plural(q.sent_today, "email")} sent today` : null;
+  const left = q.left_today != null ? `${q.left_today.toLocaleString("en-IN")} left of today's limit${q.plan ? ` (Brevo's ${q.plan} plan)` : ""}` : null;
+  const total = (q.sent_today ?? 0) + (q.left_today ?? 0);
+  return { text: [sent, left].filter(Boolean).join(", "), sent, left, low: q.left_today != null && total > 0 && q.left_today < total / 10 };
+}
+
+/** Invoiced revenue by currency in one line: "₹6,990 · $16" (DJ-004). */
+export function revenueText(by: Record<string, number>, fmt: (v: number, c: string) => string = (v, c) => `${c} ${v.toLocaleString("en-IN")}`): string {
+  const rows = Object.entries(by).sort(([a], [b]) => (a === "INR" ? -1 : b === "INR" ? 1 : a.localeCompare(b)));
+  return rows.length ? rows.map(([c, v]) => fmt(v, c)).join(" · ") : fmt(0, "INR");
+}
+
 /** Every service's light, worded once. */
 export function services(ov: Overview | null, jobs: JobRow[] | null = null): Service[] {
   if (!ov) return [];
   const sv = ov.server;
   const out: Service[] = [];
+  // India shut today anyway (a weekend or an exchange holiday): a logged-out broker is expected, said as the top banner
+  // says it, not an amber Check that teaches the owner to ignore amber (DJ-003)
+  const closed = !sv.kite_ready ? sv.data_note?.closed ?? null : null;
+  const shut = closed ? `Markets closed ${closed === "weekend" ? "for the weekend" : "today for an exchange holiday"}${sv.auto_login_next ? `; next login ${loginAt(sv.auto_login_next)}` : ""}.` : "";
   // before today's automatic login the data is offline every morning (Zerodha's own reset ends yesterday's login): that is
   // a wait, not a Problem to fix (R49-008: "Problem … Not logged in today" at 06:48, logged in by itself at 08:03)
   const dueToday = !sv.kite_ready && !!sv.auto_login_next && sv.auto_login_next.slice(0, 10) === istToday() && sv.auto_login.ok !== false;
-  out.push({ key: "kite", label: "Broker data (India)", state: sv.kite_ready ? "ok" : dueToday ? "warn" : "bad", to: "/admin/data",
+  out.push({ key: "kite", label: "Broker data (India)", state: sv.kite_ready || closed ? "ok" : dueToday ? "warn" : "bad", to: "/admin/data",
     detail: sv.kite_ready ? `Logged in${sv.kite_token_day ? ` for ${dateOnly(sv.kite_token_day)}` : ""}`
+      : closed ? shut
       : dueToday ? `Not logged in yet today. The automatic login at ${quoteAt(sv.auto_login_next!, IST)} logs in again; nothing to do.`
       : sv.kite_invalid ? sv.kite_invalid : "Not logged in today, so Indian prices and paper trading are offline." });
   out.push(feedTile(sv));
   // a login that worked but was cancelled by Zerodha since is not "OK" beside the broker's Problem (R46-001)
   const undone = !!sv.kite_invalid && sv.auto_login.ok === true;
-  const next = sv.auto_login_next ? ` Next automatic login: ${quoteAt(sv.auto_login_next, IST)}.` : "";
+  const next = sv.auto_login_next ? ` Next automatic login: ${loginAt(sv.auto_login_next)}.` : "";
   out.push({ key: "auto", label: "Automatic daily login", to: "/admin/data",
-    state: !sv.auto_login_configured ? "warn" : sv.auto_login.ok === false ? "bad" : undone ? "warn" : sv.auto_login.ok ? "ok" : "warn",
+    state: !sv.auto_login_configured ? "warn" : sv.auto_login.ok === false ? "bad" : undone && !closed ? "warn" : sv.auto_login.ok ? "ok" : "warn",
     detail: !sv.auto_login_configured ? "Off"
+      : undone && closed ? `OK: ${shut}`
       : undone ? `Logged in${sv.auto_login.at ? ` ${ago(sv.auto_login.at)}` : ""}, but Zerodha has cancelled that login since.${next}`
       // the next run is said every time, as every other job's is (R60-010)
       : `${`${sv.auto_login.message}${sv.auto_login.at ? ` (${ago(sv.auto_login.at)})` : ""}`.replace(/\.$/, "")}${next ? `.${next}` : ""}`,
@@ -126,9 +162,10 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
   out.push(aiTile(sv.ai));
   if (sv.admin_alerts) {
     const a = sv.admin_alerts;
-    out.push({ key: "mail", label: "Alert emails", state: a.email_ready ? "ok" : "bad", to: "/admin/system",
-      detail: a.email_ready ? (a.via ? `Sent through ${a.via}` : "Ready") : "Not set up: no email service on the server",
-      fix: a.email_ready ? `Emailed to ${a.to.join(", ")}${a.via ? ` through ${a.via}` : ""}, plus your phone or Telegram if set in Account.`
+    const quota = quotaLine(a.quota);
+    out.push({ key: "mail", label: "Alert emails", state: !a.email_ready ? "bad" : quota?.low ? "warn" : "ok", to: "/admin/system",
+      detail: a.email_ready ? `${a.via ? `Sent through ${a.via}` : "Ready"}${quota ? ` · ${quota.text}` : ""}` : "Not set up: no email service on the server",
+      fix: a.email_ready ? `Emailed to ${a.to.join(", ")}${a.via ? ` through ${a.via}` : ""}${quota ? ` (${quota.text})` : ""}, plus your phone or Telegram if set in Account.`
         : "No email service is set up on the server. Add one in Railway: RESEND_API_KEY (a free account at resend.com made with this address), "
           + "or BREVO_API_KEY, or SMTP_HOST, SMTP_USER and SMTP_PASSWORD. Until then alerts reach only your phone or Telegram." });
   }
@@ -174,7 +211,16 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   if (!aiKeys.length) out.push({ text: "No AI keys are set, so the idea builder and research reads are off.", to: "/admin/system", label: "System", bad: true });
   // one line per provider that can't answer, with the provider's own reason (status code and message), so a rejected
   // key reads differently from a fault on our side (R5O-016)
-  for (const a of aiDown) {
+  // a provider out of its free quota or paused resets on its own: one line for them all, nothing to do (DJ-002: four such
+  // lines buried the items the owner must act on); a failing one keeps its own line, with its own reason
+  const waits = aiDown.filter((a) => a.result === "quota" || a.result === "paused" || (a.result === undefined && a.quota_used));
+  const act = aiDown.filter((a) => !waits.includes(a));
+  if (waits.length && waits.length < aiKeys.length) {
+    const working = aiKeys.filter((a) => (a.result ? a.result === "working" : aiUp(a))).length;
+    out.push({ text: `AI: ${plural(waits.length, "provider")} paused for now (free quota used up, or resting), ${working} working; ${waits.length === 1 ? "it resets" : "they reset"} on ${waits.length === 1 ? "its" : "their"} own, nothing to do.`,
+      full: waits.map((a) => `${a.label}: ${a.state_text || a.last_error || "paused"}`).join(" · "), to: "/admin/system", label: "System", bad: false });
+  }
+  for (const a of act) {
     const why = oneLine(a.state_text || a.last_error || "not answering");
     out.push({ text: `AI, ${a.label}: ${why.text}`, ...(why.full ? { full: `AI, ${a.label}: ${why.full}` } : {}), to: "/admin/system", label: "System", bad: false });
   }
@@ -195,7 +241,8 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   // feeds on "Check": never run, or only partly read (R5O-016: seven sat on "Not run yet" without a word here). A job
   // switched off on purpose isn't listed.
   const waiting = (jobs ?? []).filter((j) => j.state === "warn" && j.schedule !== "Off" && !holidaysDown(j));
-  if (waiting.length) out.push({ text: `${plural(waiting.length, "data feed")} on Check: ${waiting.map((j) => `${j.name} (${jobDetail(j).toLowerCase()})`).join(", ")}.`,
+  // each feed's words as Data and jobs writes them, not lowercased (DJ-007: "not read: index provider:")
+  if (waiting.length) out.push({ text: `${plural(waiting.length, "data feed")} on Check: ${waiting.map((j) => `${j.name} (${jobDetail(j)})`).join("; ")}.`,
     to: "/admin/data", label: "Data and jobs", bad: false });
   // said once: when the holidays job's line above already speaks for them, not again here (R45A-017)
   const holidaysSaid = out.some((o) => o.text.startsWith("Exchange holidays"));
@@ -208,7 +255,11 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   if (rw?.pending.length) out.push({ text: `Rate and rule sources changed, waiting for a look: ${rw.pending.join(", ")}.`, to: "/admin/quality", label: "Quality", bad: false });
   // the whole-market audit's companies with a number that disagrees with its source (R50-008)
   const mm = sv.audit_mismatches ?? {};
-  const mmText = (["IN", "US"] as const).filter((r) => mm[r]).map((r) => `${mm[r]} in ${r === "IN" ? "India" : "the US"}`);
+  // with when those rows were checked: a mismatch from weeks ago isn't today's (DJ-026)
+  const checkedOn = (r: "IN" | "US") => { const c = sv.audit_checked?.[r]; if (!c) return "";
+    const a = fmtDate(c.oldest, { year: false, tz: IST }), b = fmtDate(c.newest, { year: false, tz: IST });
+    return a === b ? ` (checked ${a})` : ` (checked ${a} to ${b})`; };
+  const mmText = (["IN", "US"] as const).filter((r) => mm[r]).map((r) => `${mm[r]} in ${r === "IN" ? "India" : "the US"}${checkedOn(r)}`);
   if (mmText.length) out.push({ text: `The whole-market audit has companies whose numbers disagree with their source: ${mmText.join(", ")}.`, to: "/admin/quality", label: "Quality", bad: false });
   const invoice = invoiceWarning(sv.invoice_seller);
   if (invoice) out.push({ text: invoice, to: "/admin/money", label: "Money", bad: sv.billing_enabled });
@@ -250,3 +301,31 @@ export function lights(ov: Overview | null, jobs: JobRow[] | null): { services: 
 }
 
 export { jobDetail };
+
+/** The server errors as groups (DJ-035: 22 of 24 rows the same "RemoteProtocolError … contextlib.py:158 in __exit__"): one row
+ * per kind of error and place, newest first, with how many and the newest's ref; a known upstream fault said in plain words. */
+export type ErrorGroup = { key: string; count: number; at: string; ref: string; path: string; error: string; where: string; plain: string | null };
+export function groupErrors(rows: { ref: string; at: string; method: string; path: string; error: string; where: string }[]): ErrorGroup[] {
+  const by = new Map<string, ErrorGroup>();
+  for (const e of rows) {
+    const kind = String(e.error ?? "").split(":")[0].trim();
+    const key = `${kind}|${e.where}`;
+    const g = by.get(key);
+    if (!g) by.set(key, { key, count: 1, at: e.at, ref: e.ref, path: `${e.method} ${e.path}`, error: e.error, where: e.where, plain: plainServerError(e.error) });
+    else {
+      g.count += 1;
+      if (Date.parse(e.at) > Date.parse(g.at)) Object.assign(g, { at: e.at, ref: e.ref, path: `${e.method} ${e.path}`, error: e.error });
+    }
+  }
+  return [...by.values()].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+}
+
+/** A known upstream fault in words, or null: the raw text stays beside it. */
+export function plainServerError(text: string): string | null {
+  const t = String(text ?? "");
+  if (/RemoteProtocolError|Server disconnected|ConnectionResetError|connection (was )?(reset|closed)/i.test(t))
+    return "A connection to an outside service (usually the database) dropped in the middle of a request; the user was asked to try again.";
+  if (/ReadTimeout|timed out/i.test(t)) return "An outside service (usually the database) didn't answer in time.";
+  if (/PoolTimeout/i.test(t)) return "Every database connection was busy, so the request waited too long.";
+  return null;
+}

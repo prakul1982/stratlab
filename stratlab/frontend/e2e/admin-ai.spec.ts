@@ -103,6 +103,9 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
   const errors = await open(page, "/admin/system", "Who is asked, in order");
   const panel = page.locator("section[aria-label='AI']");
   const groq = panel.locator(".ai-provider", { hasText: "Groq" });
+  // each provider is one line until opened (DJ-036)
+  await expect(groq.getByTestId("ai-details-groq")).not.toHaveAttribute("open", /.*/);
+  await groq.getByTestId("ai-details-groq").locator("summary").click();
   await expect(groq.getByText("llama-3.3-70b-versatile").first()).toBeVisible();
   await expect(groq.getByText("96% of 25 answered well").first()).toBeVisible();
   await expect(groq.getByText(/last problem: empty reply/)).toBeVisible();

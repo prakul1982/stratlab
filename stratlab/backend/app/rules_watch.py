@@ -158,18 +158,24 @@ def _expected_ppf(today: date):
 SOURCES = [
     {"id": "nse_lots", "name": "NSE index lot sizes", "area": "market_rules", "how": "nse_file",
      "url": "https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv", "read": read_lots, "expected": None,
-     "where": "read from the broker each day; for the record"},
+     "where": "read from the broker each day; for the record",
+     # plain words for Admin (DJ-029: code paths and bare numbers in the owner's page)
+     "used": "Read from the broker each day; kept here for the record", "unit": "",
+     "note": "Index names as NSE's contract file writes them: NIFTYNXT50 is the Nifty Next 50, MIDCPNIFTY the Nifty Midcap Select."},
     {"id": "sec_fee", "name": "SEC fee rate", "area": "trading_costs", "how": "sec",
      "url": "https://www.sec.gov/rules-regulations/fee-rate-advisories", "read": read_sec_fee, "expected": _expected_sec,
-     "where": "engine/costs.py US_SEC_FEE ($ a million)"},
+     "where": "engine/costs.py US_SEC_FEE ($ a million)",
+     "used": "US trading costs in backtests and paper trading", "unit": " dollars a million on sells", "note": None},
     {"id": "ppf", "name": "PPF rate", "area": "interest_rates", "how": "web",
      # the table page, over http: the https site sends a certificate chain that can't be checked (R84-007), and Id_Pk=79
      # was the scheme's rules, whose first rate is 1968's 4.8%
      "url": "http://www.nsiindia.gov.in/InternalPage.aspx?Id_Pk=178", "read": read_ppf, "expected": _expected_ppf,
-     "where": "money_networth.py PPF_RATE (% a year)"},
+     "where": "money_networth.py PPF_RATE (% a year)",
+     "used": "PPF growth in Net worth", "unit": "% a year", "note": None},
     {"id": "nse_circulars", "name": "NSE circulars on charges and contract rules", "area": "market_rules", "how": "nse_circulars",
      "url": "https://www.nseindia.com/resources/exchange-communication-circulars", "read": read_circulars, "expected": None,
-     "where": "engine/costs.py, options/data.py"},
+     "where": "engine/costs.py, options/data.py",
+     "used": "Indian trading costs and options contract rules", "unit": "", "note": None},
 ]
 
 
@@ -219,6 +225,7 @@ def state() -> dict:
     for src in SOURCES:
         s = have.get(src["id"]) or {}
         out.append({"id": src["id"], "name": src["name"], "area": src["area"], "url": src["url"], "where": src["where"],
+                    "used": src.get("used"), "unit": src.get("unit") or "", "note": src.get("note"),
                     "checked": s.get("checked"), "value": s.get("value"), "shown": s.get("shown"),
                     "expected": s.get("expected"), "error": _plain_error(s.get("error")), "fails": int(s.get("fails") or 0),
                     "pending": _added_only(_once(s.get("pending"))), "alerted": s.get("alerted"), "seen": s.get("seen") or []})

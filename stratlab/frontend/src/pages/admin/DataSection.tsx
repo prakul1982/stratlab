@@ -89,7 +89,8 @@ export function DataSection() {
     { key: "do", header: <span className="sr-only">Run now and log</span>, action: true, cell: (j) => (
       <span className="k-row">
         {j.run.map((r) => (
-          <button key={r.path} type="button" className="btn sm" disabled={j.running || busy === `${j.id}:${r.path}`} onClick={() => runJob(j, r.label, r.path)}
+          // quiet, not solid black: the actions that start work shouldn't be the loudest thing on the page (DJ-023)
+          <button key={r.path} type="button" className="btn quiet sm" disabled={j.running || busy === `${j.id}:${r.path}`} onClick={() => runJob(j, r.label, r.path)}
             aria-label={`${r.label}: ${j.name}`}>{busy === `${j.id}:${r.path}` ? "Running…" : r.label}</button>
         ))}
         <button type="button" className="btn quiet sm" onClick={() => setLog(j.id)} aria-label={`Log of ${j.name}`}>Log</button>
@@ -101,7 +102,7 @@ export function DataSection() {
     <>
       <Card label="Background jobs">
         <CardHead title="Background jobs" info="Each job runs on its own clock; Next run says when. Run now starts it at once where the job has a manual trigger (a job without a button runs on its clock only). A job that reads from the exchange can take a minute or two." />
-        {!jobs ? <Skeleton label="Loading the jobs" /> : <DataTable label="Background jobs" rows={jobs} rowKey={(j) => j.id} columns={cols} />}
+        {!jobs ? <Skeleton label="Loading the jobs" /> : <DataTable label="Background jobs" rows={jobs} rowKey={(j) => j.id} columns={cols} stack />}
       </Card>
 
       <Card label="India broker data">

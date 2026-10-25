@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, safeHref, fmtDate } from "../../lib/format";
 import { Badge, Card, CardHead, ConfirmDialog, Disclosure, Light, Skeleton } from "../../components/kit";
-import { blockedLine } from "./aiBlocks";
+import { blockedLine, providerWord } from "./aiBlocks";
 import { aiCountText } from "../../lib/connection";
 import { shortLinks } from "./attention";
 
@@ -55,9 +55,6 @@ function until(t: number | null) {
   if (s < 86400) return `in ${Math.round(s / 3600)} h`;
   return `on ${fmtDate(t * 1000, { year: false })}`;
 }
-const STATE: Record<Provider["state"], ["ok" | "warn" | "bad" | null, string]> = {
-  ok: ["ok", "OK"], warn: ["warn", "Check"], fail: ["bad", "Problem"], idle: [null, "Not tested"], off: [null, "No key"],
-};
 const SKIPPED: Record<string, string> = {
   "not a chat model": "not chat models", "not English-first": "built for another language", "too small": "too small",
   specialist: "code or maths specialists", "thinks too long": "slow reasoners", "not free": "not free", "not for this job": "not for this job",
@@ -225,8 +222,7 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
   p: Provider; test?: TestRow; busy: string | null; rerank: (name: string) => void;
   pin: (p: Provider, model: string | null) => void; block: (p: Provider, model: string, on: boolean) => void;
 }) {
-  const [light, stateWord] = STATE[p.state];
-  const word = p.state === "idle" && p.ranked_at ? "Measured" : stateWord;
+  const [light, word] = providerWord(p);
   const skipped = Object.entries(p.skipped || {}).map(([why, n]) => `${n} ${SKIPPED[why] ?? why}`).join(", ");
   const left = p.quota.remaining;
   // how soon that allowance fills again: a per-minute token allowance "nearly gone" is full again a minute later, so the
@@ -248,6 +244,15 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
       <span className="k-small k-muted"><Said text={p.state_text} /></span>
       {test && <span className="k-small" role="status">Test: {test.ok ? `answered with ${test.model} in ${(test.ms / 1000).toFixed(1)} s` : <Said text={test.error} />}</span>}
       {p.quota.limited && p.quota.reset_at && <span className="k-small">Free quota resets {until(p.quota.reset_at)}.</span>}
+      {p.pinned && (
+        <span className="k-small k-row">
+          <span>Pinned to <span className="adm-mono">{p.pinned}</span>{p.pinned_by === "railway" ? ` by ${p.model_variable} in Railway` : ""}.</span>
+          {p.pinned_by === "admin" && <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => pin(p, null)}>Unpin</button>}
+        </span>
+      )}
+      {/* one line per provider until opened (DJ-036: System was 23 phone screens, mostly model rows) */}
+      <Disclosure summary={`Models, limits and controls (${p.models.length} model${p.models.length === 1 ? "" : "s"})`} testId={`ai-details-${p.name}`}>
+      <div className="k-stack">
       {left && (left.requests != null || left.tokens != null) && (
         <span className="k-small k-muted">Left this period: {[left.requests != null && `${left.requests.toLocaleString("en-IN")} requests${refill(left.requests_reset)}`, left.tokens != null && `${left.tokens.toLocaleString("en-IN")} tokens${refill(left.tokens_reset)}`].filter(Boolean).join(", ")}
           {p.quota.remaining_at ? ` (as of ${ago(iso(p.quota.remaining_at))})` : ""}</span>
@@ -260,12 +265,6 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
           : p.ranked_at ? `Measured ${ago(iso(p.ranked_at))}${p.discovered != null ? `: ${p.discovered} models listed${skipped ? `, left out ${skipped}` : ""}` : ""}.` : "Not measured yet: its known-good models are used until then."}
         {p.rank_error ? <> <Said text={p.rank_error} />.</> : ""}
       </span>
-      {p.pinned && (
-        <span className="k-small k-row">
-          <span>Pinned to <span className="adm-mono">{p.pinned}</span>{p.pinned_by === "railway" ? ` by ${p.model_variable} in Railway` : ""}.</span>
-          {p.pinned_by === "admin" && <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => pin(p, null)}>Unpin</button>}
-        </span>
-      )}
       <div className="k-stack" aria-label={`${p.label} models`}>
         {p.models.map((m) => (
           <div key={m.id} className="ai-model">
@@ -299,6 +298,8 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
           </div>
         ))}
       </div>
+      </div>
+      </Disclosure>
     </div>
   );
 }

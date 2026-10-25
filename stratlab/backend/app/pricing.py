@@ -40,6 +40,7 @@ CURRENCIES = {
 # price at 24 Oct's rates and rounded; dollars, euros and pounds priced like comparable apps abroad. The admin can still
 # change any of them in Admin → Prices. None follows the exchange rate any more.
 FIXED = set(CURRENCIES) - {"INR"}
+FIXED_ON = "2026-10-24"        # the day those fixed prices were set, for Admin's label "Fixed (set 24 Oct)" (DJ-015)
 
 # countries that use each currency (ISO 3166 codes); anywhere else outside India sees US dollars
 COUNTRIES = {
@@ -203,6 +204,9 @@ def table() -> dict:
         # is only the built-in default (R7M-003: "SAR 22" for a ₹699 charge that is about SAR 27). Visitors aren't shown
         # it (public()); Admin flags it. A price the admin typed in, and dollars, euros and pounds, never need a rate.
         row["no_rate"] = bool(code != "INR" and code not in FIXED and row["auto"] and not row.get("rate"))
+        # how the price is set, for Admin's label (DJ-015: every currency read "Automatic" after they were all fixed):
+        # "default" is the fixed price set on FIXED_ON, "owner" one typed in Admin, "follows" one that follows the rupee price
+        row["price_set"] = "owner" if not row["auto"] else "default" if code in FIXED else "follows"
         out[code] = {**row, "symbol": symbol, "name": name, "charged_in": code if own else "INR",
                      "yearly_charged_in": code if code == "INR" or (row.get("plan_basic_year") and row.get("plan_pro_year")) else "INR"}
     return out
@@ -213,7 +217,7 @@ def public() -> dict:
     server. Each currency shows the admin price table's amount ($8 and $20 for dollars, the owner's choice, 7 Oct);
     `charged_in` says when a card is still charged the rupee price instead."""
     shown = {c: r for c, r in table().items() if not r.get("no_rate")}
-    return {"currencies": {c: {**{k: v for k, v in r.items() if k not in PLAN_FIELDS + ("rate", "auto", "no_rate")}, **charge_about(c, r)}
+    return {"currencies": {c: {**{k: v for k, v in r.items() if k not in PLAN_FIELDS + ("rate", "auto", "no_rate", "price_set")}, **charge_about(c, r)}
                            for c, r in shown.items()},
             "countries": {k: c for k, c in COUNTRIES.items() if c in shown}}
 

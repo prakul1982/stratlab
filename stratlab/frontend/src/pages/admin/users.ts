@@ -1,4 +1,4 @@
-import { dateOnly } from "../../lib/format";
+import { dateOnly, fmtDate } from "../../lib/format";
 import type { Plan } from "./AdminContext";
 
 /* Admin → Users: the words for a user's plan, and the typed confirmation before their data is deleted. No React here,
@@ -7,16 +7,32 @@ import type { Plan } from "./AdminContext";
 export interface UserRow {
   id: string; email: string | null; created_at: string | null; plan: Plan; plan_set: string; plan_status: string | null;
   plan_until: string | null; cancel_at_period_end?: boolean; paying: boolean; experiments: number; ai_builds: number; referrals?: number; free_months?: number;
+  /** a test account (DJ-001), the last sign-in, and the later of it and the last experiment or AI build (DJ-009) */
+  test?: boolean; last_sign_in?: string | null; last_active?: string | null; sign_ins_unread?: boolean;
 }
+
+const istDay = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+/** A given plan's end in words, by the India day (DJ-011: "until 24 Oct 2026" on 25 Oct in India, still on Pro by the
+ * day's grace): "until 6 Nov 2026", "ends today", or "ended 24 Oct 2026". */
+export function untilWords(iso: string, now: Date = new Date()): string {
+  const end = new Date(iso);
+  if (Number.isNaN(end.getTime())) return `until ${dateOnly(iso)}`;
+  if (end.getTime() <= now.getTime()) return `ended ${dateOnly(iso)}`;
+  return istDay(end) === istDay(now) ? "ends today" : `until ${dateOnly(iso)}`;
+}
+
+/** The month the Experiments and AI builds columns count, for their headers (DJ-012): "Oct". */
+export const monthShort = (now: Date = new Date()): string => fmtDate(now, { year: false, tz: "Asia/Kolkata" }).replace(/^\d+\s*/, "");
 
 export const PLAN_NAME: Record<Plan, string> = { free: "Free", basic: "Basic", pro: "Pro" };
 
 /** How a paid plan came and how long it runs: "Razorpay", "Razorpay · renews 5 Nov 2026", "Razorpay · ends 5 Nov 2026" (cancelled), "Given · until 6 Nov 2026",
  * "Given · no end date". Empty for Free. */
-export function planNote(u: Pick<UserRow, "plan" | "plan_until" | "paying" | "cancel_at_period_end">): string {
+export function planNote(u: Pick<UserRow, "plan" | "plan_until" | "paying" | "cancel_at_period_end">, now: Date = new Date()): string {
   if (u.plan === "free") return "";
   if (u.paying) return u.plan_until ? `Razorpay · ${u.cancel_at_period_end ? "ends" : "renews"} ${dateOnly(u.plan_until)}` : "Razorpay";
-  return u.plan_until ? `Given · until ${dateOnly(u.plan_until)}` : "Given · no end date";
+  return u.plan_until ? `Given · ${untilWords(u.plan_until, now)}` : "Given · no end date";
 }
 
 /** What has to be typed before a user's data is deleted: their email (their id when there is none). */
@@ -29,7 +45,7 @@ export const PLAN_FILTERS: { value: PlanFilter; label: string }[] = [
   { value: "all", label: "All" }, { value: "free", label: "Free" }, { value: "basic", label: "Basic" }, { value: "pro", label: "Pro" },
 ];
 
-/** The address that lists users: the email search and the plan. */
-export function usersPath(q: string, plan: PlanFilter): string {
-  return `/admin/users?q=${encodeURIComponent(q)}${plan === "all" ? "" : `&plan=${plan}`}`;
+/** The address that lists users: the email search, the plan, and the test accounts when shown (DJ-001). */
+export function usersPath(q: string, plan: PlanFilter, test = false): string {
+  return `/admin/users?q=${encodeURIComponent(q)}${plan === "all" ? "" : `&plan=${plan}`}${test ? "&test=1" : ""}`;
 }

@@ -66,6 +66,56 @@ def international_status(key: str = "", secret: str = "") -> dict:
             "detail": f"Check in {INTERNATIONAL_WHERE}. Razorpay's API doesn't report this setting."}
 
 
+LAST_WEBHOOK = "billing:last-webhook"       # {"at", "event"}: the last signed event Razorpay delivered
+
+
+def mode() -> str:
+    key = settings.RAZORPAY_KEY_ID or ""
+    return "live" if key.startswith("rzp_live_") else "test" if key.startswith("rzp_test_") else "unknown"
+
+
+def _when(ts) -> str | None:
+    try:
+        return datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat(timespec="seconds") if ts else None
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def activity(count: int = 50) -> dict:
+    """Admin → Money (DJ-016, DJ-017), read from Razorpay and nothing changed: the newest subscriptions, refunds and
+    failed payments, the key's mode, when the last webhook arrived, and which currencies have their own plans. Each list
+    says its own error when Razorpay didn't answer it."""
+    out: dict = {"mode": mode(), "enabled": enabled(), "last_webhook": db.json_value(db.get_setting(LAST_WEBHOOK), {}) or None,
+                 "currency_plans": sorted({cur for cur, _, _ in pricing.all_plan_ids().values()}),
+                 "subscriptions": [], "refunds": [], "failed": [], "errors": {}}
+    if not (settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET):
+        out["errors"]["all"] = "Razorpay's keys aren't set on the server."
+        return out
+    c = client()
+    try:
+        subs = (c.subscription.all({"count": count}) or {}).get("items") or []
+        out["subscriptions"] = [{"id": x.get("id"), "status": x.get("status"), "plan": plan_for(x), "plan_id": x.get("plan_id"),
+                                 "created_at": _when(x.get("created_at")), "current_end": _when(x.get("current_end")),
+                                 "paid_count": x.get("paid_count")} for x in subs]
+    except Exception as e:
+        out["errors"]["subscriptions"] = (str(e) or e.__class__.__name__)[:200]
+    try:
+        refs = (c.refund.all({"count": count}) or {}).get("items") or []
+        out["refunds"] = [{"id": x.get("id"), "payment_id": x.get("payment_id"), "amount": (x.get("amount") or 0) / 100,
+                           "currency": x.get("currency") or "INR", "status": x.get("status"), "created_at": _when(x.get("created_at"))}
+                          for x in refs]
+    except Exception as e:
+        out["errors"]["refunds"] = (str(e) or e.__class__.__name__)[:200]
+    try:
+        pays = (c.payment.all({"count": 100}) or {}).get("items") or []
+        out["failed"] = [{"id": x.get("id"), "amount": (x.get("amount") or 0) / 100, "currency": x.get("currency") or "INR",
+                          "created_at": _when(x.get("created_at")), "why": x.get("error_description") or x.get("error_reason")}
+                         for x in pays if x.get("status") == "failed"][:count]
+    except Exception as e:
+        out["errors"]["failed"] = (str(e) or e.__class__.__name__)[:200]
+    return out
+
+
 def check_setup() -> dict:
     """Ask Razorpay whether the keys work and each plan exists, for the admin's "Check payments setup" button.
     Nothing secret is returned: the key ID is shortened and the secret only reported by length."""
@@ -336,6 +386,11 @@ def handle_webhook(body: bytes, signature: str, event_id: str = ""):
         raise SignatureVerificationError("Webhook secret is not configured.")
     client().utility.verify_webhook_signature(body.decode(errors="replace"), _sig(signature), settings.RAZORPAY_WEBHOOK_SECRET)
     event = json.loads(body)
+    try:                                # when Razorpay last reached us, for Admin's Payments row (DJ-017)
+        db.set_setting(LAST_WEBHOOK, json.dumps({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                                 "event": str(event.get("event") or "")[:60]}))
+    except Exception as e:
+        print("could not record the webhook's time:", str(e)[:160])
     # The event id is a header Razorpay doesn't sign, so the signed body's hash is always a key too; either one seen skips it.
     keys = ["rzp-body:" + hashlib.sha256(body).hexdigest()]
     if event_id:

@@ -6,8 +6,10 @@ import { Badge, Card, CardHead, EmptyState, ErrorState, Seg, Skeleton } from "..
 import { useAdmin } from "./AdminContext";
 import { sendErrorLine, sentLine } from "./testSend";
 
-type Item = { kind: string; name: string; group: string; subject?: string; unsubscribe?: boolean; transactional?: boolean; error?: string };
-type Full = { kind: string; name: string; group: string; subject: string; html: string; text: string; unsubscribe: boolean; transactional: boolean };
+/** `sample`: made-up details (every email but a market brief with a stored issue), watermarked so its real-looking dates
+ * aren't read as real events (DJ-038) */
+type Item = { kind: string; name: string; group: string; subject?: string; unsubscribe?: boolean; transactional?: boolean; error?: string; sample?: boolean };
+type Full = { kind: string; name: string; group: string; subject: string; html: string; text: string; unsubscribe: boolean; transactional: boolean; sample?: boolean };
 type View = "desktop" | "phone" | "text";
 const VIEWS = [{ value: "desktop", label: "Desktop" }, { value: "phone", label: "Phone" }, { value: "text", label: "Text" }];
 
@@ -29,6 +31,7 @@ function List({ items }: { items: Item[] }) {
                 <Link className="adm-mail-row" to={`/admin/emails/${r.kind}`}>
                   <span><b>{r.name}</b><span className="k-note k-muted">{r.error ? `Couldn't build this sample: ${r.error}` : r.subject}</span></span>
                   <span className="k-row">
+                    {r.sample && <Badge tone="warn" dot={false}>Sample</Badge>}
                     {r.transactional && <Badge dot={false}>Always sent</Badge>}
                     {r.unsubscribe && <Badge dot={false}>One-click unsubscribe</Badge>}
                   </span>
@@ -83,6 +86,7 @@ function One({ kind }: { kind: string }) {
       </>} />
       {sendable && busy && <p className="k-small k-muted" role="status">Sending the test email…</p>}
       {sendable && !busy && result && <p className={`k-small${result.ok ? "" : " k-warn-text"}`} role={result.ok ? "status" : "alert"} data-testid="test-send-result">{result.text}</p>}
+      {mail.sample && <p className="k-small adm-warn-t" data-testid="sample-note"><b>Sample:</b> made-up details and dates, not a real event or a real person's email.</p>}
       <p className="k-small"><b>Subject:</b> {mail.subject}</p>
       <div className="k-toolbar">
         <Seg label="Email view" options={VIEWS} value={view} onChange={(v) => setView(v as View)} />
@@ -92,9 +96,9 @@ function One({ kind }: { kind: string }) {
         </span>
       </div>
       {view === "text"
-        ? <pre className="adm-mail-text" aria-label="Plain text of the email">{mail.text}</pre>
+        ? <pre className={`adm-mail-text${mail.sample ? " sample" : ""}`} aria-label="Plain text of the email">{mail.sample ? `[SAMPLE: made-up details]\n\n${mail.text}` : mail.text}</pre>
         : (
-          <div className="adm-mail-stage">
+          <div className={`adm-mail-stage${mail.sample ? " sample" : ""}`}>
             {/* srcdoc with an empty sandbox: the email runs no scripts, opens no links of its own and is cut off from this page */}
             <iframe className={`adm-mail-frame ${view}`} title={`Preview: ${mail.subject}`} sandbox="" srcDoc={mail.html} />
           </div>

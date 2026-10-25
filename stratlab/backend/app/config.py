@@ -129,6 +129,10 @@ class Settings:
     MARKET_DATABASE_URL = _env("MARKET_DATABASE_URL")
     # the main database's size limit in MB (Supabase's free plan: 500), for the warning in Admin and the daily check
     DB_LIMIT_MB = int(_env("DB_LIMIT_MB", "500") or 500)
+    # the size of the Railway Postgres volume in MB, when set: the server can't read it (it is the volume's, not the
+    # database's), so without it Admin links to Railway, where the volume's size and disk use are shown (DJ-020)
+    RAILWAY_VOLUME_MB = int(_env("RAILWAY_VOLUME_MB", "0") or 0)
+    RAILWAY_PROJECT_ID = _env("RAILWAY_PROJECT_ID")              # set by Railway on every service: the dashboard link
     # phone and browser notifications: generate a pair with `python -m app.push keys`
     VAPID_PUBLIC_KEY = _env("VAPID_PUBLIC_KEY")
     VAPID_PRIVATE_KEY = _env("VAPID_PRIVATE_KEY")

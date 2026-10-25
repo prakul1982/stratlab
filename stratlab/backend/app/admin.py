@@ -112,16 +112,19 @@ def _count_since(kind: str, since_iso: str) -> int:
     return r.count or 0
 
 
-def _usage_since(since_iso: str, ids: list[str]) -> dict[str, Counter]:
-    """usage_events since a time for the given users, as {user_id: Counter(kind)} (only their rows are read)."""
+def _usage_since(since_iso: str, ids: list[str], last: dict | None = None) -> dict[str, Counter]:
+    """usage_events since a time for the given users, as {user_id: Counter(kind)} (only their rows are read). `last`, when
+    given, is filled with each user's newest event time (for Last active, DJ-009)."""
     rows = []
     for i in range(0, len(ids), 100):
         part = ids[i:i + 100]
-        rows += _paged(lambda: db.sb().table("usage_events").select("id,user_id,kind").in_("user_id", part)
+        rows += _paged(lambda: db.sb().table("usage_events").select("id,user_id,kind,created_at").in_("user_id", part)
                        .in_("kind", ["backtest", "ai"]).gte("created_at", since_iso))
     out: dict[str, Counter] = defaultdict(Counter)
     for r in rows:
         out[r["user_id"]][r["kind"]] += 1
+        if last is not None and r.get("created_at") and str(r["created_at"]) > str(last.get(r["user_id"]) or ""):
+            last[r["user_id"]] = str(r["created_at"])
     return out
 
 
@@ -163,6 +166,46 @@ def mark_granted(uid: str, on: bool) -> None:
     db.update_setting(GRANTED_KEY, change)
 
 
+# Test accounts (DJ-001): the "+sl-" aliases of an admin's own address that POST /admin/test-account makes, and every id
+# that endpoint recorded. They are left out of every growth and plan count (seven reviewer accounts made one day read as
+# "Sign-ups today 7"); Admin's "Show test accounts" puts them back.
+TEST_ACCOUNTS = "test-accounts"
+
+
+def _base(email: str) -> tuple[str, str]:
+    local, _, domain = (email or "").strip().lower().partition("@")
+    return local.split("+", 1)[0], domain
+
+
+def is_test_email(email: str | None) -> bool:
+    """An address on a "+sl-" alias of an admin's own address ("owner+sl-free@x.com")."""
+    e = (email or "").strip().lower()
+    local = e.partition("@")[0]
+    if "+sl-" not in local:
+        return False
+    return _base(e) in {_base(a) for a in admin_emails()}
+
+
+def recorded_tests() -> set:
+    """The ids POST /admin/test-account recorded."""
+    try:
+        d = db.json_value(db.get_setting(TEST_ACCOUNTS), {})
+        return set(d) if isinstance(d, dict) else set()
+    except Exception as e:             # the counts still show; test accounts may be counted meanwhile
+        print("admin test accounts read failed:", str(e)[:160])
+        return set()
+
+
+def _count_since_for(kind: str, since_iso: str, ids: list[str]) -> int:
+    """usage_events of one kind since a time for these users only (the test accounts', taken off the month's count)."""
+    n = 0
+    for i in range(0, len(ids), 100):
+        r = (db.sb().table("usage_events").select("id", count="exact").eq("kind", kind).in_("user_id", ids[i:i + 100])
+             .gte("created_at", since_iso).limit(1).execute())
+        n += r.count or 0
+    return n
+
+
 def _paying(r: dict, given: set = frozenset()) -> bool:
     """On a paid plan by a live subscription, not one the owner gave by hand (set_plan) after it ended."""
     return bool(r.get("razorpay_subscription_id")) and r.get("plan_status") == "active" and r.get("id") not in given
@@ -175,19 +218,64 @@ def _at(s) -> datetime | None:
         return None
 
 
-def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -> list[dict]:
+# The sign-in service's own record of every account (Supabase's auth.users): when each last signed in, and the accounts
+# that signed in but have no profile here (DJ-009, DJ-010). Read a page of 1000 at a time, kept a few minutes.
+SIGN_INS_FOR = 300.0
+_sign_ins: dict = {"at": 0.0, "map": None, "error": None, "client": None}
+_sign_ins_lock = threading.Lock()
+
+
+def sign_ins(fresh: bool = False) -> tuple[dict, str | None]:
+    """({user id: {"email", "created_at", "last_sign_in_at"}}, error): every account the sign-in service has."""
+    with _sign_ins_lock:
+        if (not fresh and _sign_ins["map"] is not None and _sign_ins["client"] == id(db.sb())
+                and time.monotonic() - _sign_ins["at"] < SIGN_INS_FOR):
+            return _sign_ins["map"], _sign_ins["error"]
+    out, error = {}, None
+    try:
+        api = db.sb().auth.admin
+        page = 1
+        while page <= 50:                      # 50,000 accounts: far past StratLab's size, so a loop can't run away
+            got = api.list_users(page=page, per_page=1000) or []
+            for u in got:
+                iso = lambda v: v.isoformat() if hasattr(v, "isoformat") else (str(v) if v else None)   # noqa: E731
+                out[str(u.id)] = {"email": getattr(u, "email", None), "created_at": iso(getattr(u, "created_at", None)),
+                                  "last_sign_in_at": iso(getattr(u, "last_sign_in_at", None))}
+            if len(got) < 1000:
+                break
+            page += 1
+    except Exception as e:                     # the users still list; Last active then says the sign-in service didn't answer
+        error = f"The sign-in service didn't answer: {str(e)[:160]}"
+    with _sign_ins_lock:
+        _sign_ins.update(at=time.monotonic(), map=out if not error else {}, error=error, client=id(db.sb()))
+        return _sign_ins["map"], error
+
+
+def _later(*times) -> str | None:
+    got = [str(t) for t in times if t]
+    return max(got, key=lambda t: _at(t) or datetime.min.replace(tzinfo=timezone.utc)) if got else None
+
+
+def users(q: str, month_start: str, limit: int = 200, plan: str | None = None, include_test: bool = False) -> list[dict]:
     """The newest `limit` users: those whose email contains `q`, and on `plan` when given (the plan they have now, so
-    a paid plan that ended counts as Free)."""
+    a paid plan that ended counts as Free). Test accounts (DJ-001) are left out unless `include_test`; each row says
+    whether it is one. `last_active` is the later of the last sign-in and the last experiment or AI build (DJ-009)."""
     cols = "id,email,plan,plan_status,current_period_end,cancel_at_period_end,razorpay_subscription_id,created_at"
+    tests = recorded_tests()
+    is_test = lambda r: r["id"] in tests or is_test_email(r.get("email"))    # noqa: E731
     if plan in PLANS:
         rows = sorted(_profiles(cols, plan, q), key=lambda r: r.get("created_at") or "", reverse=True)
-        rows = [r for r in rows if effective_plan(r) == plan][:limit]
+        rows = [r for r in rows if effective_plan(r) == plan and (include_test or not is_test(r))][:limit]
     else:
         query = db.sb().table("profiles").select(cols)
         if q:
             query = query.ilike("email", f"%{q.strip()}%")
-        rows = query.order("created_at", desc=True).limit(limit).execute().data
-    usage = _usage_since(month_start, [r["id"] for r in rows])
+        # a few more than the page, so leaving the test accounts out still lists `limit` real users
+        rows = query.order("created_at", desc=True).limit(limit + (0 if include_test else len(tests) + 10)).execute().data
+        rows = [r for r in rows if include_test or not is_test(r)][:limit]
+    last: dict = {}
+    usage = _usage_since(month_start, [r["id"] for r in rows], last)
+    seen, seen_error = sign_ins()
     try:
         invited = referrals.counts()
     except Exception as e:           # invite counts are extra: the list still shows without them
@@ -204,10 +292,60 @@ def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -
         "id": r["id"], "email": r.get("email"), "created_at": r.get("created_at"),
         "plan": effective_plan(r), "plan_set": r.get("plan"), "plan_status": r.get("plan_status"),
         "plan_until": r.get("current_period_end"), "cancel_at_period_end": bool(r.get("cancel_at_period_end")),
-        "paying": _paying(r, given),
+        "paying": _paying(r, given), "test": is_test(r),
+        "last_sign_in": (seen.get(r["id"]) or {}).get("last_sign_in_at"),
+        "last_active": _later((seen.get(r["id"]) or {}).get("last_sign_in_at"), last.get(r["id"])),
+        "sign_ins_unread": bool(seen_error),
         "experiments": usage[r["id"]]["backtest"], "ai_builds": usage[r["id"]]["ai"], "referrals": invited.get(r["id"], 0),
         "free_months": months.get(r["id"], 0),
     } for r in rows]
+
+
+ENDING_DAYS = 7          # a plan given by hand that ends within this many days (or ended this many days ago) is listed
+
+
+def accounts_view(include_test: bool = False) -> dict:
+    """What Users and growth lists beside the users (DJ-010, DJ-011): accounts that signed in but have no profile here,
+    and plans given by hand that end within ENDING_DAYS days or have ended in the last ENDING_DAYS."""
+    seen, error = sign_ins()
+    profiles = {r["id"]: r for r in _profiles("id,email,plan,plan_status,current_period_end,razorpay_subscription_id")}
+    orphans = sorted(({"id": uid, "email": u.get("email"), "created_at": u.get("created_at"), "last_sign_in": u.get("last_sign_in_at")}
+                      for uid, u in seen.items() if uid not in profiles and (include_test or not is_test_email(u.get("email")))),
+                     key=lambda x: x["created_at"] or "")
+    now = datetime.now(timezone.utc)
+    given, tests = granted(), recorded_tests()
+    ending = []
+    for r in profiles.values():
+        end = _at(r.get("current_period_end")) if r.get("current_period_end") else None
+        if (not end or r.get("plan") not in ("basic", "pro") or r.get("plan_status") != "active" or _paying(r, given)
+                or not include_test and (r["id"] in tests or is_test_email(r.get("email")))):
+            continue
+        if now - timedelta(days=ENDING_DAYS) <= end <= now + timedelta(days=ENDING_DAYS):
+            ending.append({"id": r["id"], "email": r.get("email"), "plan": r["plan"], "until": r["current_period_end"],
+                           "ended": end <= now, "plan_now": effective_plan(r)})
+    return {"orphans": orphans, "ending": sorted(ending, key=lambda x: x["until"]), "sign_ins_error": error,
+            "accounts": len(seen) if not error else None}
+
+
+def active_users(days: int = 7, include_test: bool = False) -> int | None:
+    """People active in the last `days` days (DJ-004): signed in, or ran an experiment or an AI build, in that time. None
+    when neither could be read."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    seen, error = sign_ins()
+    ids = {uid for uid, u in seen.items() if (t := _at(u.get("last_sign_in_at") or "")) and t >= since}
+    try:
+        rows = _paged(lambda: db.sb().table("usage_events").select("id,user_id").in_("kind", ["backtest", "ai", "research_ai"])
+                      .gte("created_at", since.isoformat()))
+        ids |= {r["user_id"] for r in rows if r.get("user_id")}
+    except Exception as e:
+        print("admin active users read failed:", str(e)[:160])
+        if error:
+            return None
+    if not include_test:
+        tests = recorded_tests()
+        emails = {uid: u.get("email") for uid, u in seen.items()}
+        ids = {i for i in ids if i not in tests and not is_test_email(emails.get(i))}
+    return len(ids)
 
 
 _COUNT_COLS = "id,plan,plan_status,current_period_end,created_at,razorpay_subscription_id"
@@ -230,21 +368,49 @@ def _paid_profiles() -> list[dict]:
     return _paged(build)
 
 
-def stats(month_start: str, extra: dict | None = None) -> dict:
+def _test_rows() -> list[dict]:
+    """The test accounts' profiles for the counts, in one small read (there are at most a handful): the recorded ids and
+    the "+sl-" aliases. Never fails the counts: on an error none are left out."""
+    try:
+        cols = _COUNT_COLS + ",email"
+        rows = {r["id"]: r for r in (db.sb().table("profiles").select(cols).ilike("email", "%+sl-%").limit(1000).execute().data or [])
+                if is_test_email(r.get("email"))}
+        ids = sorted(i for i in recorded_tests() if i not in rows)
+        if ids:
+            for r in db.sb().table("profiles").select(cols).in_("id", ids).limit(1000).execute().data or []:
+                rows[r["id"]] = r
+        return list(rows.values())
+    except Exception as e:
+        print("admin test accounts read failed:", str(e)[:160])
+        return []
+
+
+def stats(month_start: str, extra: dict | None = None, include_test: bool = False) -> dict:
     """Overview's counts. Everyone is counted in the database, not read: only the profiles with a paid plan set are read,
     for the plan they have now; Free is everyone else. The reads go at once (one after another was 10 to 13 round
-    trips, R11E), with `extra` {name: fn} beside them, added to the result."""
+    trips, R11E), with `extra` {name: fn} beside them, added to the result. The test accounts are left out of every
+    count (DJ-001) unless `include_test`; `test_accounts` says how many there are."""
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
     today = now.astimezone(IST).replace(hour=0, minute=0, second=0, microsecond=0)     # the India day
     jobs = {"users": (_count_profiles, ()), "new_7d": (_count_profiles, (week_ago.isoformat(),)),
             "signups_today": (_count_profiles, (today.isoformat(),)), "paid": (_paid_profiles, ()), "given": (granted, ()),
             "experiments_month": (_count_since, ("backtest", month_start)), "ai_month": (_count_since, ("ai", month_start)),
-            "ai_reads_month": (_count_since, ("research_ai", month_start)),
+            "ai_reads_month": (_count_since, ("research_ai", month_start)), "tests": (_test_rows, ()),
             **{k: (fn, ()) for k, fn in (extra or {}).items()}}
     futures = {k: _stats_pool.submit(fn, *args) for k, (fn, args) in jobs.items()}
     got = {k: f.result() for k, f in futures.items()}
-    rows, given = got["paid"], got["given"]
+    tests = got["tests"]
+    out_ids = set() if include_test else {r["id"] for r in tests}
+    if out_ids:
+        made = [t for t in (_at(r.get("created_at")) for r in tests) if t]
+        got["users"] -= len(tests)
+        got["new_7d"] -= sum(1 for t in made if t >= week_ago)
+        got["signups_today"] -= sum(1 for t in made if t >= today)
+        ids = sorted(out_ids)
+        for key, kind in (("experiments_month", "backtest"), ("ai_month", "ai"), ("ai_reads_month", "research_ai")):
+            got[key] -= _count_since_for(kind, month_start, ids)
+    rows, given = [r for r in got["paid"] if r.get("id") not in out_ids], got["given"]
     plans = Counter(effective_plan(r) for r in rows)
     plans["free"] = got["users"] - plans.get("basic", 0) - plans.get("pro", 0)
     # on a paid plan by paying (a subscription), or given by the owner by hand: Overview tells them apart
@@ -254,19 +420,22 @@ def stats(month_start: str, extra: dict | None = None) -> dict:
             "paying": {p: paying.get(p, 0) for p in ("basic", "pro")},
             "given": {p: plans.get(p, 0) - paying.get(p, 0) for p in ("basic", "pro")},
             "experiments_month": got["experiments_month"], "ai_month": got["ai_month"],
-            "ai_reads_month": got["ai_reads_month"], **{k: got[k] for k in extra or {}}}
+            "ai_reads_month": got["ai_reads_month"], "test_accounts": len(tests), **{k: got[k] for k in extra or {}}}
 
 
 def week_stats(since: datetime) -> dict:
-    """Users joined since a time, everyone so far, paid users by plan, and experiments and AI builds since then."""
-    rows = _profiles(_COUNT_COLS)
+    """Users joined since a time, everyone so far, paid users by plan, and experiments and AI builds since then. The test
+    accounts are left out (DJ-001), as on Overview."""
+    tests = {r["id"] for r in _test_rows()}
+    rows = [r for r in _profiles(_COUNT_COLS) if r.get("id") not in tests]
     plans = Counter(effective_plan(r) for r in rows)
     # paying (a subscription) apart from given by the owner, as Overview counts them (R6V-010)
     given = granted()
     paying = Counter(effective_plan(r) for r in rows if _paying(r, given))
     new = sum(1 for r in rows if (t := _at(r.get("created_at"))) and t >= since)
     since_iso = since.astimezone(timezone.utc).isoformat()
-    usage = {"backtest": _count_since("backtest", since_iso), "ai": _count_since("ai", since_iso)}
+    ids = sorted(tests)
+    usage = {k: _count_since(k, since_iso) - (_count_since_for(k, since_iso, ids) if ids else 0) for k in ("backtest", "ai")}
     paid = [p for p in PLANS if p != "free"]
     return {"users": len(rows), "new": new, "paid": {p: plans[p] for p in paid if plans[p]},
             "paying": {p: paying[p] for p in paid if paying[p]}, "given": {p: plans[p] - paying[p] for p in paid if plans[p] - paying[p]},
