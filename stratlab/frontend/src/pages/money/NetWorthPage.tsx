@@ -8,7 +8,7 @@ import { asOf, axisInr, dateOnly, inr, inrCompact, istToday, pctPlain, signedInr
 import { netWorthDelta, restatedNote, sinceNote } from "../../lib/networth";
 import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
-import { Download, Trash } from "../../components/Icons";
+import { Download, Plus, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, TilePicker, type Choice, type Column, type TileGroup } from "../../components/kit";
 
@@ -125,6 +125,9 @@ const TILES: TileGroup[] = [
   { title: "What you owe and cover", tiles: [
     { value: "loan", title: "Loan or card", sub: "Balance left", icon: ic.loan }, { value: "policy", title: "Insurance policy", sub: "Cover and premium", icon: ic.shield }] },
 ];
+
+/** The kinds most people add, as one-tap chips under the totals (MO-2); every other kind is behind "Something else". */
+const QUICK: Kind[] = ["cash", "fd", "epf", "ppf", "gold", "property", "loan"];
 
 function blank(kind: Kind): Record<string, string> {
   const out: Record<string, string> = {};
@@ -331,6 +334,11 @@ export function NetWorthPage() {
       setAdding(false); setStep("pick");
     }
   };
+  // straight to a kind's boxes (the quick-add chips), or to the picker of every kind
+  const openAdd = (k?: Kind) => {
+    if (k) { setKind(k); setAddStart(fresh(k)); setStep("form"); } else setStep("pick");
+    setFieldErrs(null); setAdding(true);
+  };
   const startEdit = (e: Entry) => {
     const k = e.kind;
     const form = blank(k);
@@ -451,7 +459,9 @@ export function NetWorthPage() {
     <div className="k-page">
       <PageHeader eyebrow="Money · What you own" title="Net worth" asOf={priced ? view?.as_of : undefined} asOfLabel="Prices as of"
         lede="What you own minus what you owe: your stocks from My Holdings and mutual funds from your statement (both added on their own), plus the deposits, provident funds, gold, property and loans you add here."
-        info="Each value shows how it's worked out and the date it's as of. Arithmetic on what you enter, not advice. Only you can see it, and you can delete it at any time." infoLabel="How this is worked out" />
+        info="Each value shows how it's worked out and the date it's as of. Arithmetic on what you enter, not advice. Only you can see it, and you can delete it at any time." infoLabel="How this is worked out"
+        // MO-2 (owner, 25 Oct): adding is the page's main action, so a full-size button at the top, not a small one in a card
+        actions={view ? <button type="button" className="btn" onClick={() => openAdd()}><Plus size={16} />Add an entry</button> : undefined} />
 
       {!view && (error
         ? <ErrorState title="Your net worth couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>{error}</ErrorState>
@@ -459,8 +469,7 @@ export function NetWorthPage() {
       {view && t && (
         <>
           <Card label="Totals">
-            <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined}
-              actions={<button type="button" className="btn sm" onClick={() => setAdding(true)}>Add an entry</button>} />
+            <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined} />
             <StatRow>
               <Stat label="Net worth" value={inr(t.net)} delta={move ? <Delta value={move.change}>{signedInrCompact(move.change)}</Delta> : undefined} note={move ? sinceNote(move, day, inrCompact) : restatedNote(hist, view?.valuation, day) ?? undefined} />
               <Stat label="Assets" value={inr(t.assets)} />
@@ -478,8 +487,19 @@ export function NetWorthPage() {
               : hist.length < 2 && !empty && <p className="k-note">History: a snapshot is taken on the 1st of each month and whenever you change an entry; the chart starts at the second{hist.length === 1 ? ` (the first is from ${day(hist[0].d)})` : ""}.</p>}
           </Card>
 
+          {/* MO-2 (owner, 25 Oct): one tap to the usual kinds, so adding a deposit, EPF, gold or a loan is never hunted for */}
+          {!empty && !full && (
+            <Card label="Add to your net worth">
+              <CardHead title="Add to your net worth" />
+              <div className="chip-row nw-quick" role="group" aria-label="Add to your net worth">
+                {QUICK.map((k) => <button key={k} type="button" className="chip" onClick={() => openAdd(k)}><Plus size={14} />{FORM[k].title}</button>)}
+                <button type="button" className="chip" onClick={() => openAdd()}>Something else…</button>
+              </div>
+            </Card>
+          )}
+
           {empty && (
-            <EmptyState title="Nothing added yet" action={{ label: "Add an entry", onClick: () => setAdding(true) }}>
+            <EmptyState title="Nothing added yet" action={{ label: "Add an entry", onClick: () => openAdd() }}>
               Add your savings, deposits, EPF or a loan. Stocks in <Link className="link" to="/holdings">My Holdings</Link> are added to the total on their own once you have some there.
             </EmptyState>
           )}
