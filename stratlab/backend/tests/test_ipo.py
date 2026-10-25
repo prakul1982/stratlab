@@ -136,7 +136,8 @@ def test_india_rows_from_the_exchanges_and_sebi(w):
     # SEBI's red herring document is attached by company name; a draft with no dates stays a "filed" row
     assert {d["kind"]: d["source"] for d in ids["in-sfctech"]["docs"]} == {"RHP": "sebi"}
     filed = [r for r in rows if I.stage_of(r, NOW) == "filed"]
-    assert len(filed) >= 15 and all(r["docs"][0]["kind"] == "DRHP" and r["docs"][0]["url"].startswith("https://www.sebi.gov.in/") for r in filed)
+    # (a draft, or a red herring prospectus that no exchange list names yet: IPO-001)
+    assert len(filed) >= 15 and all(r["docs"][0]["kind"] in ("DRHP", "RHP") and r["docs"][0]["url"].startswith("https://www.sebi.gov.in/") for r in filed)
     assert any(r["name"] == "Hunger Pangs Limited" for r in filed)
 
 
@@ -171,7 +172,9 @@ def test_us_rows_from_the_calendar_and_the_sec(w):
     assert problems == [] and w["cal"].months == ["2026-08", "2026-09", "2026-10", "2026-11"]
     ids = {r["id"]: r for r in rows}
     stage = {r["id"]: I.stage_of(r, NOW) for r in rows}
-    assert sum(1 for v in stage.values() if v == "listed") == 20 and sum(1 for v in stage.values() if v == "filed") == 55
+    # (two offerings priced in September that the calendar also lists as filed, and Lycia, "filed" on it with its final prospectus on file
+    # with the SEC: priced, IPO-003)
+    assert sum(1 for v in stage.values() if v == "listed") == 23 and sum(1 for v in stage.values() if v == "filed") == 52
     iam = ids["us-1273626-119431"]
     assert (iam["name"], iam["symbol"], iam["priced"], iam["price"], iam["shares"], iam["cik"]) == ("Iambic Therapeutics, Inc.", "IAM", "2026-10-15", 16.0, 9375000, "1997038")
     assert [d["kind"] for d in iam["docs"]] == ["424B4", "S-1/A", "S-1"] and iam["docs"][0]["link"].endswith("-index.htm")
@@ -397,7 +400,7 @@ def test_the_list_is_free_and_has_every_stage(w):
     r = c.get("/invest/ipos?market=IN", headers=headers("free-token"))
     assert r.status_code == 200
     d = r.json()
-    assert d["counts"]["upcoming"] == 5 and d["counts"]["open"] == 1 and d["counts"]["listed"] == 54 and d["counts"]["filed"] >= 15
+    assert d["counts"]["upcoming"] == 5 and d["counts"]["open"] == 1 and d["counts"]["listed"] == 65 and d["counts"]["filed"] >= 15
     up = d["tabs"]["upcoming"]
     assert [x["id"] for x in up][:2] == ["in-edelalts", "in-sfctech"] or up[0]["open"] <= up[-1]["open"]                  # soonest first
     mk = next(x for x in up if x["id"] == "in-mksons")
@@ -410,7 +413,7 @@ def test_the_list_is_free_and_has_every_stage(w):
     assert d["prefs"]["allowed"] is False and d["prefs"]["plan"] == "Basic" and "GMP" not in json.dumps(d)
     assert "grey" not in json.dumps(d).lower()
     us = c.get("/invest/ipos?market=US", headers=headers("free-token")).json()
-    assert us["counts"]["listed"] == 20 and us["tabs"]["listed"][0]["priced"] >= us["tabs"]["listed"][-1]["priced"] and "no public bidding window" in us["note"]
+    assert us["counts"]["listed"] == 23 and us["tabs"]["listed"][0]["priced"] >= us["tabs"]["listed"][-1]["priced"] and "no public bidding window" in us["note"]
     assert c.get("/invest/ipos?market=UK", headers=headers("free-token")).status_code == 404
     assert c.get("/invest/ipos").status_code in (401, 403)
 

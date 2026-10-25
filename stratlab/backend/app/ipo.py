@@ -46,6 +46,13 @@ LIVE_FROM, LIVE_TO = "09:55", "17:30"      # the subscription is read this often
 LIVE_EVERY = 900                      # seconds between two reads of the bids of an open issue
 FINAL_AT = "19:20"                    # the exchange completes a day's bid figures about 19:00: read the final ones after it
 MAX_SENT = 600
+SEBI_KEY = "ipo:sebi:"                # ipo:sebi:<draft|red_herring> = {"entries": [...], "next": page, "done": bool, "at"}: SEBI's list as read so far
+SEBI_BACK_DAYS = 400                  # how far back SEBI's draft list is read (a draft is linked to its red herring prospectus up to a year later)
+SEBI_BACKFILL = 4                     # older pages of it read per run until it reaches that far back
+RHP_ROW_DAYS = 45                     # a red herring prospectus no exchange list names yet stays a row this long after it was filed
+PROBE_DAYS, PROBE_ROWS = 21, 2        # such a row's issue page is looked for for this many days, for this many rows a run
+CHECK_DAYS = 60                       # the completeness check compares the exchanges' lists over this many days
+CATCH_LISTED_DAYS = 60                # an issue BSE's table says listed, that no issue list gave, becomes a row for this many days
 EVENTS = {"open": "Opens for bidding", "close": "Closes for bidding", "allotment": "Allotment", "listing": "Listing"}
 SMALL = 3                             # offer documents the job reads per pass (each is a download and a long read)
 AI_PER_DAY = 120                      # summaries the AI writes a day across everyone (each document is summarised once)
@@ -200,6 +207,50 @@ def public(row: dict, now: datetime | None = None) -> dict:
     return out
 
 
+# ---------- SEBI's lists, kept ----------
+def sebi_index(sebi, kind: str, today: date, problems: list[str], sleep=time.sleep, pace: float = 0.6, backfill: int = SEBI_BACKFILL) -> list[dict]:
+    """SEBI's list of draft ("draft") or red herring ("red_herring") offer documents as read over the runs. It is long (the draft list
+    has 90 pages of 25) and the site shows one page at a time, newest first, so one page a run kept only the last weeks (a draft filed
+    in June, like Jio Platforms', never showed). Each run reads the newest two pages; the draft list's older pages are read a few
+    a run, until it reaches SEBI_BACK_DAYS back, and are kept (IPO-001)."""
+    label = "draft offer documents" if kind == "draft" else "red herring documents"
+    key = SEBI_KEY + kind
+    got = db.json_value(db.get_setting(key), {})
+    entries = {e["url"]: e for e in got.get("entries") or [] if isinstance(e, dict) and e.get("url") and e.get("date")}
+    nxt, done = max(2, int(got.get("next") or 2)), bool(got.get("done")) or kind != "draft"
+    cutoff = (today - timedelta(days=SEBI_BACK_DAYS)).isoformat()
+    before = len(entries), nxt, done
+
+    def take(rows: list[dict]):
+        for e in rows:
+            entries[e["url"]] = {"date": e["date"], "url": e["url"], "title": e["title"][:140], "company": e["company"], "kind": e["kind"]}
+
+    for page in (0, 1):
+        rows = _try(problems, label if page == 0 else f"{label} (page 2)", lambda page=page: sebi.listing(kind, page), None)
+        if rows is None:
+            if page == 0:
+                backfill = 0              # SEBI isn't answering: the older pages wait for another run
+            continue
+        take(rows)
+        sleep(pace)
+    total = (getattr(sebi, "pages", None) or {}).get(kind)
+    n = 0
+    while not done and n < backfill:
+        rows = _try(problems, f"{label} (page {nxt + 1})", lambda: sebi.listing(kind, nxt), None)
+        if rows is None:
+            break
+        take(rows)
+        n += 1
+        nxt += 1
+        if not rows or min(e["date"] for e in rows) < cutoff or (total and nxt >= total):
+            done = True
+        sleep(pace)
+    kept = sorted((e for e in entries.values() if e["date"] >= cutoff), key=lambda e: (e["date"], e["url"]), reverse=True)
+    if (len(kept), nxt, done) != before or kept != got.get("entries"):
+        db.set_setting(key, json.dumps({"entries": kept, "next": nxt, "done": done, "at": _now().isoformat(timespec="seconds")}, separators=(",", ":"), ensure_ascii=False))
+    return kept
+
+
 # ---------- merging the sources ----------
 def _keep_old(old: dict | None, new: dict) -> dict:
     """A row read again: the new facts over the old, but a fact the source didn't give this time is kept."""
@@ -270,8 +321,31 @@ def merge_india(old_rows: list[dict], nse: dict, bse: list[dict], bse_perf: list
                 r["price"] = p["issue_price"]
             if not r.get("listing") and p.get("listed"):
                 r["listing"] = p["listed"]
-    # SEBI's offer documents by company name; a filing with no dates stays a "filed" row
-    nkeys = {r["nkey"]: r["id"] for r in out.values() if r.get("nkey")}
+    # an issue BSE says has listed that no issue list gave (it closed and listed between two reads, or NSE's past list was down): a
+    # listed row from BSE's table, so no issue is missing from "recently listed" for want of one list (IPO-002)
+    cutoff_catch = (today - timedelta(days=CATCH_LISTED_DAYS)).isoformat()
+    have = {r.get("nkey") for r in out.values()} | {r.get("nkey") for r in old_rows if r.get("open") or r.get("listing")}
+    for key, p in perf.items():
+        code = re.search(r"/(\d{5,6})/?$", p.get("url") or "")
+        if key in have or not code or not p.get("listed") or p["listed"] < cutoff_catch or p["listed"] > today.isoformat():
+            continue
+        row = {"id": india_id(None, code.group(1)), "market": "IN", "segment": None, "name": p["name"].title() if p["name"].isupper() else p["name"], "symbol": None, "bse_code": code.group(1), "listing": p["listed"],
+               "price": p.get("issue_price"), "exchanges": ["BSE"], "currency": "INR", "nkey": key,
+               "bse_perf": {k: p[k] for k in ("issue_price", "listed", "day_close", "latest", "url") if p.get(k) is not None}}
+        put(row)
+    # an issue row stored earlier that no list names now stays for its window: the exchanges' lists drop an issue when it closes, and NSE's
+    # past list takes it up only after allotment, so for those days the stored row is the only record (a read that failed must not empty the list)
+    cutoff_listed = (today - timedelta(days=KEEP_LISTED_DAYS)).isoformat()
+    cutoff_filed = (today - timedelta(days=KEEP_FILED_DAYS)).isoformat()
+    for rid, r in by_id.items():
+        if rid in out or not (r.get("open") or r.get("listing")):
+            continue
+        if r.get("listing") and r["listing"] < cutoff_listed:
+            continue
+        out[rid] = r
+    # SEBI's offer documents by company name; a filing with no dates stays a "filed" row. A draft is linked to the issue row of the same
+    # company whenever it is found (the draft list is kept over many days, and an older draft is attached when the issue comes) (IPO-001)
+    nkeys = {r["nkey"]: r["id"] for r in out.values() if r.get("nkey") and (r.get("open") or r.get("listing") or not r["id"].startswith("in-f-"))}
     for kind, rows in (("DRHP", sebi_draft), ("RHP", sebi_rhp)):
         for e in rows:
             if e["kind"] not in ("drhp", "rhp", "udrhp", "addendum", "prospectus"):
@@ -282,25 +356,29 @@ def merge_india(old_rows: list[dict], nse: dict, bse: list[dict], bse_perf: list
                    "label": e["title"], "url": e["url"], "date": e["date"], "source": "sebi"}
             target = out.get(nkeys.get(key, "")) or out.get(india_id(None, None, fid.group(1) if fid else None))
             if target is None:
-                if e["kind"] not in ("drhp", "udrhp") or e["date"] < (today - timedelta(days=KEEP_FILED_DAYS)).isoformat():
+                # a draft with no dates stays a row for 150 days; a red herring prospectus that no exchange list names yet (the issue opens within
+                # days of it) for 45, so an issue the lists have missed is still on ours, and the job looks for its page
+                days = KEEP_FILED_DAYS if e["kind"] in ("drhp", "udrhp") else RHP_ROW_DAYS if e["kind"] in ("rhp", "prospectus") else 0
+                if not days or e["date"] < (today - timedelta(days=days)).isoformat():
                     continue
                 target = put({"id": india_id(None, None, fid.group(1) if fid else key[:20]), "market": "IN", "segment": None, "name": e["company"],
                               "symbol": None, "exchanges": [], "currency": "INR", "nkey": key, "filed": e["date"]})
+                nkeys.setdefault(key, target["id"])
             docs_ = [d for d in target.get("docs") or [] if d["url"] != doc["url"]]
             target["docs"] = docs_ + [doc]
             target.setdefault("sebi_url", e["url"])
-    # old rows not seen this time stay for their window (a read that failed must not empty the list)
-    cutoff_listed = (today - timedelta(days=KEEP_LISTED_DAYS)).isoformat()
-    cutoff_filed = (today - timedelta(days=KEEP_FILED_DAYS)).isoformat()
+    # old filings no longer on SEBI's pages stay for their window; one whose company now has an issue row hands its documents to that row
+    issue_keys = {r["nkey"]: r for r in out.values() if r.get("nkey") and (r.get("open") or r.get("listing"))}
     for rid, r in by_id.items():
         if rid in out:
             continue
-        if r.get("listing") and r["listing"] < cutoff_listed:
+        if (r.get("filed") or "9999") < cutoff_filed:
             continue
-        if not r.get("open") and (r.get("filed") or "9999") < cutoff_filed:
-            continue
-        # a filing that now has its own issue row (matched by name) is that row
-        if not r.get("open") and r.get("nkey") in {x.get("nkey") for x in out.values() if x.get("open")}:
+        mate = issue_keys.get(r.get("nkey"))
+        if mate is not None and mate["id"] != rid:
+            have_urls = {d["url"] for d in mate.get("docs") or []}
+            mate["docs"] = (mate.get("docs") or []) + [d for d in r.get("docs") or [] if d["url"] not in have_urls]
+            mate.setdefault("filed", r.get("filed"))
             continue
         out[rid] = r
     for r in out.values():
@@ -328,6 +406,11 @@ def merge_us(old_rows: list[dict], cal: list[dict], today: date) -> list[dict]:
         merged = _keep_old(prev, row)
         if c["stage"] != "priced" and prev and prev.get("priced"):
             merged["priced"] = prev["priced"]
+        # the calendar lists a deal under every stage it has been through (its "filed" line beside its "priced" one): the priced line is the
+        # deal's, whichever comes second (an offering priced in September showed as filed, IPO-003)
+        same = out.get(rid)
+        if c["stage"] != "priced" and same and same.get("priced"):
+            merged.update(priced=same["priced"], price=same.get("price"), expected=None)
         out[rid] = merged
     # one row per company: the furthest along wins (a filing, then an expected date, then priced)
     best: dict[str, dict] = {}
@@ -397,8 +480,10 @@ def _try(problems: list[str], what: str, fn, default=None):
     return default
 
 
-def refresh_india(feed, sebi, today: date, now: datetime | None = None, details: int = 30, pace: float = 0.6, sleep=time.sleep) -> tuple[list[dict], list[str]]:
-    """Read India's sources and rebuild the rows. Returns (rows, problems); a source that fails leaves its part as it was."""
+def refresh_india(feed, sebi, today: date, now: datetime | None = None, details: int = 30, pace: float = 0.6, sleep=time.sleep,
+                  check: list | None = None) -> tuple[list[dict], list[str]]:
+    """Read India's sources and rebuild the rows. Returns (rows, problems); a source that fails leaves its part as it was. `check`, a list,
+    is filled with what the exchanges' lists have that the rows don't (see india_gaps)."""
     now = now or _now()
     problems: list[str] = []
     old = load("IN")["rows"]
@@ -407,11 +492,14 @@ def refresh_india(feed, sebi, today: date, now: datetime | None = None, details:
            "past": S.nse_past(_try(problems, "past issues", lambda: feed.nse.ipo_past(now - timedelta(days=PAST_DAYS), now), []))}
     bse = S.bse_issues(_try(problems, "the second exchange's issues", feed.bse.ipo_issues, {}))
     perf = S.bse_performance(_try(problems, "listed issues' trading", lambda: feed.bse.ipo_listed(today.year), {}))
-    draft = _try(problems, "draft offer documents", lambda: sebi.listing("draft"), [])
-    red = _try(problems, "red herring documents", lambda: sebi.listing("red_herring"), [])
+    draft = sebi_index(sebi, "draft", today, problems, sleep, pace)
+    red = sebi_index(sebi, "red_herring", today, problems, sleep, pace)
     if len(problems) >= 5 and not any(nse.values()) and not bse:        # nothing read at all: keep what is stored
         return old, problems
     rows = merge_india(old, nse, bse, perf, draft, red, today)
+    # an issue only SEBI's red herring prospectus names (the exchanges' lists drop an issue when it closes and take it up again after its
+    # allotment): its own page on the exchange, found by the company's name (IPO-002)
+    rows = find_issue_pages(rows, feed, now, problems, sleep, pace)
     # each issue's own page: terms, the offer document and the bids, for the issues that are near or on their dates
     todo = [r for r in rows if r.get("symbol") and r.get("series") and _wants_detail(r, now)][:details]
     for r in todo:
@@ -419,7 +507,81 @@ def refresh_india(feed, sebi, today: date, now: datetime | None = None, details:
         if got:
             apply_detail(r, got)
         sleep(pace)
+    if check is not None:
+        check += india_gaps(rows, nse, bse, perf, red, today, now)
     return rows, problems
+
+
+def find_issue_pages(rows: list[dict], feed, now: datetime, problems: list[str], sleep=time.sleep, pace: float = 0.6, limit: int = PROBE_ROWS) -> list[dict]:
+    """A row that is only a red herring prospectus SEBI lists (no exchange list names the issue, so there is no symbol or date): the
+    issue's page on NSE is looked for under the symbols the company's name suggests ("Jio Platforms Limited" is JPL) and accepted only when
+    the page names the same company. Found, the row is the issue's row from then on (dates, price band, lot, bids). A row is tried once a
+    day, for PROBE_DAYS after the prospectus was filed, a few rows a run."""
+    today = now.astimezone(IST).date()
+    tried = 0
+    for i, r in enumerate(list(rows)):
+        rhp = [d for d in r.get("docs") or [] if d.get("kind") in ("RHP", "Prospectus") and d.get("source") == "sebi"]
+        if tried >= limit:
+            break
+        if r["market"] != "IN" or r.get("symbol") or r.get("open") or r.get("bse_code") or not rhp or not r["id"].startswith("in-f-"):
+            continue
+        filed = max(d.get("date") or "" for d in rhp)
+        if filed < (today - timedelta(days=PROBE_DAYS)).isoformat() or (r.get("probe_at") or "") >= today.isoformat():
+            continue
+        tried += 1
+        r["probe_at"] = today.isoformat()
+        for guess in S.symbol_guesses(r["name"]):
+            got = _try(problems, f"{guess}", lambda guess=guess: S.nse_detail(feed.nse.ipo_detail(guess, "EQ")))
+            sleep(pace)
+            if got and got.get("open") and S.name_key(got.get("company")) == r.get("nkey"):
+                sym = got.get("symbol") or guess
+                row = {**r, "id": india_id(sym, None), "symbol": sym, "series": "EQ", "segment": "mainboard", "exchanges": ["NSE"]}
+                row.pop("probe_at", None)
+                apply_detail(row, got)
+                rows[rows.index(r)] = row
+                break
+    return rows
+
+
+def india_gaps(rows: list[dict], nse: dict, bse: list[dict], perf: list[dict], red: list[dict], today: date, now: datetime) -> list[str]:
+    """What the exchanges' own lists and SEBI's have, for the last CHECK_DAYS, that our rows do not: an issue on NSE's upcoming, open or past
+    list or BSE's issue list (main board and SME) with no row, or a row without its dates; an issue BSE's table says listed that is not marked
+    listed; a red herring prospectus filed more than three days ago for which no row has dates. Each is a line for Admin (IPO-002): a gap
+    between two lists is seen the day it happens."""
+    by_key = {r["nkey"]: r for r in rows if r.get("nkey")}
+    since = (today - timedelta(days=CHECK_DAYS)).isoformat()
+    out: list[str] = []
+
+    def lacks(name: str, key: str, where: str, dates: bool = True):
+        row = by_key.get(key)
+        if row is None:
+            out.append(f"{name} is on {where}, not in our list.")
+        elif dates and not row.get("open") and not (row.get("listing") and stage_of(row, now) == "listed"):
+            out.append(f"{name} is on {where}; our row has no dates.")
+
+    for kind in ("upcoming", "current", "past"):
+        for r in nse.get(kind) or []:
+            if r.get("issue_status") or r.get("social") or (r.get("close") or r.get("open") or "9999") < since:
+                continue
+            lacks(r["name"], S.name_key(r["name"]), f"NSE's {'past' if kind == 'past' else 'open' if kind == 'current' else 'upcoming'} issues")
+    for b in bse:
+        if b.get("issue_status") or b.get("social") or (b.get("close") or b.get("open") or "9999") < since:
+            continue
+        lacks(b["name"], S.name_key(b["name"]), f"BSE's {'SME' if b['segment'] == 'sme' else 'main board'} issues")
+    for p in perf:
+        if p.get("listed") and since <= p["listed"] <= today.isoformat():
+            row = by_key.get(S.name_key(p["name"]))
+            if row is None:
+                out.append(f"{p['name']} is listed on BSE ({p['listed']}), not in our list.")
+            elif stage_of(row, now) != "listed" and not row.get("issue_status") and not row.get("social"):
+                out.append(f"{p['name']} is listed on BSE ({p['listed']}); our row is not marked listed.")
+    late = (today - timedelta(days=3)).isoformat()
+    for e in red:
+        if e["kind"] in ("rhp", "prospectus") and since <= e["date"] <= late:
+            row = by_key.get(S.name_key(e["company"]))
+            if row is None or not row.get("open"):
+                out.append(f"{e['company']} filed a red herring prospectus with SEBI on {e['date']}; no exchange list names the issue and our row has no dates.")
+    return list(dict.fromkeys(out))
 
 
 def _wants_detail(r: dict, now: datetime) -> bool:
@@ -437,8 +599,10 @@ def _wants_detail(r: dict, now: datetime) -> bool:
     return False
 
 
-def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookups: int = 10) -> tuple[list[dict], list[str]]:
-    """Read the US calendar (last two months, this and the next) and the SEC's filings for the offerings that have a date."""
+def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookups: int = 10, check: list | None = None) -> tuple[list[dict], list[str]]:
+    """Read the US calendar (last two months, this and the next) and the SEC's filings for the offerings that have a date, then the
+    final prospectuses the SEC took in over the last 30 days against the rows (see add_final_prospectuses). `check`, a list, is filled
+    with the IPOs that have a final prospectus and no row."""
     now = now or _now()
     problems: list[str] = []
     old = load("US")["rows"]
@@ -449,6 +613,8 @@ def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookup
     if not cal and len(problems) >= 3:
         return old, problems
     rows = merge_us(old, cal, today)
+    finals = _try(problems, "final prospectuses", lambda: edgar.final_prospectuses(today - timedelta(days=FINALS_DAYS), today), [])
+    add_final_prospectuses(rows, finals, edgar, today, problems, check)
     n = 0
     for r in rows:
         if n >= lookups:
@@ -467,6 +633,53 @@ def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookup
             r["cik"], r["industry"] = got["cik"], got.get("industry") or r.get("industry")
             r["symbol"] = r.get("symbol") or got.get("symbol")
     return rows, problems
+
+
+FINALS_DAYS = 30                       # the SEC's final prospectuses are compared with the US rows over this many days
+FIRST_KEY = "ipo:us:first"             # {cik: 1 (its final prospectus was the company's first offering) or 0}: asked of the SEC once per company
+FIRST_LOOKUPS = 30                    # (the first run asks about every company in the month; after it, the day's new ones)
+
+
+def add_final_prospectuses(rows: list[dict], finals: list[dict], edgar, today: date, problems: list[str], check: list | None = None) -> int:
+    """The SEC's final prospectuses (424B4, 424B1) of the last 30 days against the US rows. The calendar lists an offering as priced late or
+    never (one filed on 5 Oct was still "filed" when its final prospectus was on file on 23 Oct; others were not on it at all), so a company
+    whose final prospectus is its first offering (no annual or quarterly report before it) and whose row is not priced is priced from that
+    filing's day, and has a row when it had none (IPO-003). A company that is already reporting is selling more shares, not going public.
+    Returns how many rows it changed; `check` gets the ones it could not settle."""
+    by_key = {r["nkey"]: r for r in rows if r.get("nkey")}
+    first = db.json_value(db.get_setting(FIRST_KEY), {})
+    asked, changed = 0, 0
+    for f in sorted(finals, key=lambda f: f["date"], reverse=True):
+        key = S.name_key(f["name"])
+        row = by_key.get(key)
+        if (row and row.get("priced")) or not key:
+            continue
+        verdict = first.get(f["cik"])
+        if verdict is None:
+            if asked >= FIRST_LOOKUPS:
+                if check is not None:
+                    check.append(f"{f['name']} filed a final prospectus with the SEC on {f['date']}; not yet checked whether it is a first offering.")
+                continue
+            asked += 1
+            sub = _try(problems, f"SEC filings of {f['name'][:30]}", lambda f=f: edgar.filings(f["cik"]))
+            if sub is None:
+                continue
+            verdict = int(S.first_offering(sub, f["date"]))
+            first[f["cik"]] = verdict
+        if not verdict:
+            continue
+        if row:
+            row.update(priced=f["date"], expected=None, priced_from="sec", symbol=row.get("symbol") or f.get("symbol"))
+        else:
+            row = {"id": f"us-sec-{f['cik']}", "market": "US", "segment": None, "name": f["name"], "symbol": f.get("symbol"), "exchange": None, "currency": "USD",
+                   "priced": f["date"], "priced_from": "sec", "nkey": key, "seen": today.isoformat()}
+            rows.append(row)
+            by_key[key] = row
+        changed += 1
+    if asked:
+        db.set_setting(FIRST_KEY, json.dumps(dict(list(first.items())[-400:]), separators=(",", ":")))
+    rows.sort(key=lambda r: (r.get("priced") or r.get("expected") or r.get("filed") or "", r["id"]), reverse=True)
+    return changed
 
 
 # ---------- listing performance ----------
@@ -815,22 +1028,28 @@ class Job:
     def read(self, market: str, now: datetime, perf: bool = False) -> dict:
         """Read one market's sources and keep the rows; with `perf`, also how each recently listed issue has traded since."""
         today = now.astimezone(IST).date() if market == "IN" else now.astimezone(NY).date()
+        missing: list[str] = []
         if market == "IN":
             feed = _wire["feed"]()
-            rows, problems = refresh_india(feed, _wire["sebi"](), today, now, sleep=self.sleep)
+            rows, problems = refresh_india(feed, _wire["sebi"](), today, now, sleep=self.sleep, check=missing)
         else:
-            rows, problems = refresh_us(_wire["calendar"](), _wire["edgar"](), today, now)
+            rows, problems = refresh_us(_wire["calendar"](), _wire["edgar"](), today, now, check=missing)
         if perf:
             attach_perf(rows, now)
         load_ = load(market)
-        checked = {**load_["checked"], "read": now.isoformat(timespec="seconds"), "problems": problems[:6]}
-        if rows is not load_["rows"] or problems:
+        # (the check compares with what the lists said this read; when they weren't read, nothing is compared)
+        checked = {**load_["checked"], "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "missing": missing[:12]}
+        if rows is not load_["rows"] or problems or missing:
             save(market, rows, checked, as_of=now.isoformat(timespec="seconds") if len(problems) < 4 else load_["as_of"])
         st = state()
-        st[market] = {**(st.get(market) or {}), "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "rows": len(rows)}
+        st[market] = {**(st.get(market) or {}), "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "missing": missing[:12], "rows": len(rows)}
         save_state(st)
-        self.status.update(last_run=now.isoformat(timespec="seconds"), read=market, problems=problems[:5], last_error=problems[0][:200] if problems else None)
-        return {"rows": len(rows), "problems": problems}
+        # Admin shows a gap the same day: what a list has that ours doesn't, from both markets' last reads, as the job's problems (IPO-002)
+        gaps = [f"Missing ({'India' if m == 'IN' else 'US'}): {x}" for m in ("IN", "US") for x in (st.get(m) or {}).get("missing", [])[:6]]
+        self.status.update(last_run=now.isoformat(timespec="seconds"), read=market, problems=(gaps + problems[:5])[:10],
+                           last_error=(f"{len(gaps)} issue{'s' if len(gaps) != 1 else ''} on the exchanges' or regulators' lists {'is' if len(gaps) == 1 else 'are'} missing from ours."
+                                       if gaps else problems[0][:200] if problems else None))
+        return {"rows": len(rows), "problems": problems, "missing": missing}
 
     def read_open(self, now: datetime, final: bool = False) -> int:
         """The bids of the Indian issues open now (or, after 19:20, the issues that closed in the last two days): their own pages."""

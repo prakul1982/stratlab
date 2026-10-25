@@ -29,8 +29,9 @@ def pages_of(name: str) -> list[str]:
 
 
 class NSE:
-    def __init__(self, down: set | None = None):
-        self.down, self.calls = down or set(), []
+    def __init__(self, down: set | None = None, past: str = "nse_past.json", current: str | None = None):
+        self.down, self.calls, self.past, self.current = down or set(), [], past, current
+        self.hidden = set()                       # symbols whose issue page the exchange does not have (yet)
 
     def _check(self, what):
         self.calls.append(what)
@@ -43,15 +44,15 @@ class NSE:
 
     def ipo_current(self):
         self._check("current")
-        return []
+        return file(self.current) if self.current else []
 
     def ipo_past(self, frm, to):
         self._check("past")
-        return file("nse_past.json")
+        return file(self.past)
 
     def ipo_detail(self, symbol, series="EQ"):
         self._check(f"detail:{symbol}")
-        if not (DIR / f"nse_detail_{symbol}.json").exists():
+        if not (DIR / f"nse_detail_{symbol}.json").exists() or symbol in self.hidden:
             return {"companyName": symbol, "metaInfo": {}, "bidDetails": [{"category": "Total", "noOfSharesOffered": "0.0", "noOfTime": "0.00", "noOfsharesBid": "0.0", "srNo": None}],
                     "issueInfo": {"dataList": []}}
         return file(f"nse_detail_{symbol}.json")
@@ -73,18 +74,27 @@ class BSE:
 
 
 class Feed:
-    def __init__(self, down: set | None = None):
-        self.nse, self.bse = NSE(down), BSE(down)
+    def __init__(self, down: set | None = None, **nse):
+        self.nse, self.bse = NSE(down, **nse), BSE(down)
 
 
 class Sebi:
-    def __init__(self, down: set | None = None):
-        self.down = down or set()
+    """SEBI's lists: the first page of each as saved, and the draft list's pages 2 to 14 (the ones its "next" links give)."""
 
-    def listing(self, kind):
+    def __init__(self, down: set | None = None):
+        self.down, self.calls = down or set(), []
+        self.pages = {"draft": 91, "red_herring": 52}
+
+    def listing(self, kind, page=0):
+        self.calls.append((kind, page))
         if "sebi" in self.down:
             raise SourceError("SEBI", "SEBI isn't answering.", busy=True)
-        return S.sebi_listing(file("sebi_draft_list.html" if kind == "draft" else "sebi_red_herring_list.html"))
+        if page == 0:
+            return S.sebi_listing(file("sebi_draft_list.html" if kind == "draft" else "sebi_red_herring_list.html"))
+        if kind == "draft":
+            got = json.load(gzip.open(DIR / "sebi_draft_pages.json.gz", "rt", encoding="utf8"))
+            return S.sebi_listing(got[str(page)]) if str(page) in got else []
+        return []
 
     def pdf(self, page_url):
         if "sfc" in page_url:
@@ -106,7 +116,23 @@ class Calendar:
 
 class Edgar:
     def __init__(self, down: set | None = None):
-        self.down, self.names = down or set(), []
+        self.down, self.names, self.ciks, self.finals = down or set(), [], [], 0
+
+    def final_prospectuses(self, since, until):
+        self.finals += 1
+        if "edgar" in self.down:
+            raise SourceError("The SEC", "The SEC isn't answering.", busy=True)
+        return [h for h in S.efts_hits(file("edgar_424b4_30d.json")) if since.isoformat() <= h["date"] <= until.isoformat()]
+
+    def filings(self, cik, ttl=0):
+        self.ciks.append(cik)
+        if "edgar" in self.down:
+            raise SourceError("The SEC", "The SEC isn't answering.", busy=True)
+        name = {"1806540": "lycia", "1402328": "sunshine", "1997038": "iambic"}.get(str(cik))
+        if name:
+            return file(f"edgar_submissions_{name}.json")
+        others = file("edgar_submissions_others.json")
+        return others.get(str(cik)) or {"cik": cik, "filings": {"recent": {"form": ["10-K"], "filingDate": ["2025-03-01"]}}}      # (an unknown company: one already reporting)
 
     def docs_for(self, name, today):
         self.names.append(name)

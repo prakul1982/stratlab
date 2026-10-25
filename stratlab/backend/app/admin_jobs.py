@@ -369,7 +369,7 @@ def rows() -> list[dict]:
         at, why = _ran(st, "last_run", data=lambda: max(filter(None, ((ipo.state().get(r) or {}).get("read") for r in ("IN", "US"))), default=None))
         return _row("ipo", "IPOs", "India 7:40 AM and 8:10 PM IST, US 8:30 AM and 9:30 PM IST; bids every 15 minutes from 9:55 AM to 5:30 PM IST while an issue is open; "
                     "alerts 8:00 AM (India) and 7:00 PM (US dates) IST", at, st.get("last_error"), _problems(st) + why,
-                    [{"label": "Run now", "path": "/admin/ipos/refresh"}], note="Offer documents are read and summarised a few at a time between the reads.")
+                    [{"label": "Run now", "path": "/admin/ipos/refresh"}], note="Offer documents are read and summarised a few at a time between the reads. After each read the lists are checked against the exchanges' and the regulators' own: an issue they have that ours does not is a Problem line here.")
     add("IPOs", ipos)
 
     def fo():

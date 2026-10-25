@@ -15,12 +15,14 @@ import html as htmllib
 import re
 from datetime import date, datetime
 
-from .net import BROWSER_UA, Source, SourceError, num
+import httpx
+
+from .net import BROWSER_UA, Source, SourceError, num, rate_wait
 
 SEC_UA = "StratLab research (contact@stratlab.studio)"      # the SEC asks automated users to say who they are
 SEBI_LISTING = "/sebiweb/home/HomeAction.do"
 SEBI_KINDS = {"draft": 10, "red_herring": 11}               # the listings' own numbers (smid) for the two lists read here
-SERIES_SEGMENT = {"EQ": "mainboard", "BE": "mainboard", "SME": "sme"}      # NSE's series; DEBT and the like are not shares
+SERIES_SEGMENT = {"EQ": "mainboard", "BE": "mainboard", "SME": "sme", "SM": "sme", "ST": "sme"}      # NSE's series (SM and ST: an SME issue's trading series, once it has one); DEBT and the like are not shares
 OFFER_FORMS = ("S-1", "S-1/A", "F-1", "F-1/A", "424B4", "424B1", "424B3", "424B5")      # the filings an IPO's documents are among
 DOC_RANK = {"424B4": 5, "424B1": 5, "424B3": 4, "424B5": 4, "S-1/A": 3, "F-1/A": 3, "S-1": 2, "F-1": 2}   # which is the one to read
 
@@ -248,7 +250,8 @@ def issue_split(text) -> dict:
     and {total_cr} when they give a total ("aggregating to 4,283.02 lakhs")."""
     t = clean(text)
     out = {"fresh": None, "ofs": None, "fresh_cr": None, "ofs_cr": None, "total_cr": None}
-    fresh = re.search(r"fresh issue\b(.{0,90}?)(?=offer for sale|offer-for-sale|\bofs\b|$)", t, re.I)
+    # (up to 90 characters after "fresh issue", stopping at a sale: a longer text with its sale far off, or none, still gives its fresh part)
+    fresh = re.search(r"fresh issue\b((?:(?!offer for sale|offer-for-sale|\bofs\b).){0,90})", t, re.I)
     sale = re.search(r"(?:offer for sale|offer-for-sale|\bofs\b)\b(.{0,120})", t, re.I)
     for key, m in (("fresh", fresh), ("ofs", sale)):
         part = m.group(1) if m else ""
@@ -265,7 +268,8 @@ def issue_split(text) -> dict:
             out["ofs"] = whole(m.group(1))
         elif m and re.search(r"fresh", t, re.I) and not re.search(r"offer for sale|\bofs\b", t, re.I):
             out["fresh"] = whole(m.group(1))
-        tot = re.search(r"aggregating (?:up ?to |to )?(?:Rs\.?\s*)?([\d,]+(?:\.\d+)?)\s*(million|mn|lakhs?|lacs?|crores?|cr)\b", t, re.I)
+        # (a part in brackets is a portion of the issue, "including an employee reservation aggregating up to Rs. 5,000 million", not its total)
+        tot = re.search(r"aggregating (?:up ?to |to )?(?:Rs\.?\s*)?([\d,]+(?:\.\d+)?)\s*(million|mn|lakhs?|lacs?|crores?|cr)\b", re.sub(r"\([^)]*(?:\)|$)", " ", t), re.I)
         if tot:
             out["total_cr"] = _crore(tot)
         if m and out["fresh"] is None and out["ofs"] is None and re.search(r"initial public offer", t, re.I):
@@ -275,7 +279,7 @@ def issue_split(text) -> dict:
 
 def nse_detail(raw) -> dict:
     """One issue's own page on NSE, read into facts. {} when it is not an issue page.
-    Keys: isin, industry, listing (ISO day), open, close, low, high, face_value, lot, retail_max, issue_text, fresh, ofs,
+    Keys: company, symbol, isin, industry, listing (ISO day), open, close, low, high, face_value, lot, retail_max, issue_text, fresh, ofs,
     issue_type, lead_managers, registrar, docs [{kind, label, url}], subscription (None until bids are in)."""
     if not isinstance(raw, dict) or not ((raw.get("issueInfo") or {}).get("dataList")):
         return {}
@@ -284,7 +288,11 @@ def nse_detail(raw) -> dict:
     for r in ((raw.get("issueInfo") or {}).get("dataList") or []):
         if isinstance(r, dict) and r.get("title"):
             info[clean(r["title"]).lower()] = clean(r.get("value")).strip('"').strip()
-    out = {"isin": meta.get("isin") or None, "industry": meta.get("industry") or None, "listing": iso(day_of(meta.get("listingDate")))}
+    first = next((r for r in ((raw.get("issueInfo") or {}).get("dataList") or []) if isinstance(r, dict)), {})
+    # the company's name: the page's first line (a main-board page names the company there, empty value), else the exchange's meta
+    company = clean(first.get("title")) if first.get("title") and not clean(first.get("value")) and clean(first.get("title")).lower() != "symbol" else clean(meta.get("companyName"))
+    out = {"company": company or None, "symbol": info.get("symbol") or meta.get("symbol") or None,
+           "isin": meta.get("isin") or None, "industry": meta.get("industry") or None, "listing": iso(day_of(meta.get("listingDate")))}
     period = re.findall(r"\d{1,2}-[A-Za-z]{3}-\d{4}", info.get("issue period", ""))
     out["open"] = iso(day_of(period[0])) if period else None
     out["close"] = iso(day_of(period[1])) if len(period) > 1 else None
@@ -317,6 +325,24 @@ def nse_detail(raw) -> dict:
         out["subscription"]["as_of"] = _as_of(((raw.get("demandGraphALL") or {}).get("timestamp")) or ((raw.get("demandGraph") or {}).get("timestamp")))
     if out["subscription"]:
         out["subscription"]["as_of"] = _as_of(out["subscription"]["as_of"]) or out["subscription"]["as_of"]
+    return out
+
+
+NAME_NOISE = {"limited", "ltd", "private", "pvt", "public", "the", "and", "of"}
+
+
+def symbol_guesses(name) -> list[str]:
+    """The symbols NSE may have given a company, from its name: the initials of its words ("Jio Platforms Limited" is JPL), the
+    first ten letters of the name without "Limited", its first word. NSE's list of issues names the symbol, so these are only
+    for an issue none of the lists names; each guess is checked against the company's name on the issue's own page."""
+    words = re.findall(r"[A-Za-z0-9]+", re.sub(r"\(.*?\)", " ", str(name or "")))
+    core = [w for w in words if w.lower() not in NAME_NOISE]
+    guesses = ["".join(w[0] for w in words), "".join(w[0] for w in core), "".join(core)[:10], core[0] if core else "", "".join(core)[:9]]
+    out = []
+    for g in guesses:
+        g = g.upper()
+        if 2 <= len(g) <= 10 and g not in out:
+            out.append(g)
     return out
 
 
@@ -366,7 +392,8 @@ def sebi_listing(page: str) -> list[dict]:
     """SEBI's list of offer documents filed with it (one page of it): [{date, url, title, company, kind}]. kind: drhp, rhp,
     addendum, udrhp, prospectus or other."""
     out = []
-    for m in re.finditer(r"<td>\s*([A-Z][a-z]{2} \d{1,2}, \d{4})\s*</td>\s*<td>\s*<a href=\"([^\"]+)\"[^>]*?title=\"([^\"<]*)", page or ""):
+    # (the first page is the site's own page, with double-quoted attributes; the later pages come from its list request, with single quotes)
+    for m in re.finditer(r"<td>\s*([A-Z][a-z]{2} \d{1,2}, \d{4})\s*</td>\s*<td>\s*<a href=[\"']([^\"']+)[\"'][^>]*?title=\"([^\"<]*)", page or ""):
         d, url, title = day_of(m.group(1)), m.group(2), clean(m.group(3))
         if not d or not url.startswith("https://www.sebi.gov.in/"):
             continue
@@ -378,6 +405,15 @@ def sebi_listing(page: str) -> list[dict]:
         company = re.sub(r"\s*(?:-|–)?\s*(?:Addendum|Corrigendum)\b.*$", "", company, flags=re.I)
         out.append({"date": d.isoformat(), "url": url, "title": title, "company": clean(company), "kind": kind})
     return out
+
+
+def sebi_pages(page: str) -> int | None:
+    """How many pages SEBI's list has (25 entries a page), from the first page's "Last" link or a later page's own count."""
+    m = re.search(r"searchFormNewsList\('n',\s*'(\d+)'\);?\"\s*title=.Last", page or "") or re.search(r"name=.totalpage. value=(\d+)", page or "")
+    if m:
+        return int(m.group(1)) + (1 if "Last" in m.group(0) else 0)
+    m = re.search(r"of ([\d,]+) records", page or "")
+    return -(-int(m.group(1).replace(",", "")) // 25) if m else None
 
 
 def sebi_entry_pdf(page: str) -> str | None:
@@ -426,6 +462,19 @@ def offering_docs(sub: dict) -> dict:
             "industry": clean((sub or {}).get("sicDescription")) or None, "docs": docs}
 
 
+SEEN_BEFORE = {"10-K", "10-K/A", "10-KT", "10-Q", "10-Q/A", "20-F", "20-F/A", "40-F", "10-KSB", "10-QSB"}      # a company's annual and quarterly reports
+
+
+def first_offering(sub: dict, final_on: str) -> bool:
+    """Whether a final prospectus filed on `final_on` was the company's first public offering: its filing list holds no annual or
+    quarterly report from before that day (a company already reporting is selling more shares, not going public)."""
+    rec = ((sub or {}).get("filings") or {}).get("recent") or {}
+    forms, days = rec.get("form") or [], rec.get("filingDate") or []
+    if not forms:
+        return False
+    return not any(f in SEEN_BEFORE and d < final_on for f, d in zip(forms, days))
+
+
 def filing_index(cik: str, accession: str) -> str:
     return f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession.replace('-', '')}/"
 
@@ -434,18 +483,44 @@ def filing_index(cik: str, accession: str) -> str:
 class Sebi(Source):
     name = "SEBI"
     STALE_FOR = 5
+    LIST_AJAX = "/sebiweb/ajax/home/getnewslistinfo.jsp"
 
     def __init__(self, transport=None):
         super().__init__("https://www.sebi.gov.in", per_minute=20, burst=4, transport=transport, timeout=25,
                          headers={"User-Agent": BROWSER_UA, "Accept": "text/html,application/xhtml+xml,*/*;q=0.8"})
+        self.pages: dict[str, int] = {}            # how many pages each list has, as of the last page read
 
-    def listing(self, kind: str, ttl: float = 3 * 3600) -> list[dict]:
-        """The newest page of SEBI's draft ("draft") or red herring ("red_herring") offer documents."""
-        got = self.fetch(SEBI_LISTING, {"doListing": "yes", "sid": 3, "s": "", "ssid": 15, "smid": SEBI_KINDS[kind]}, ttl=ttl, kind="text")
+    def listing(self, kind: str, page: int = 0, ttl: float = 3 * 3600) -> list[dict]:
+        """One page (25 entries, newest first; the first is page 0) of SEBI's draft ("draft") or red herring ("red_herring") offer
+        documents. Later pages come from the list's own page request, the one its "next" links make."""
+        if page == 0:
+            got = self.fetch(SEBI_LISTING, {"doListing": "yes", "sid": 3, "s": "", "ssid": 15, "smid": SEBI_KINDS[kind]}, ttl=ttl, kind="text")
+        else:
+            got = self._page(kind, page, ttl)
         rows = sebi_listing(got)
-        if not rows and "sample_1" not in str(got):
+        if not rows and "sample_1" not in str(got) and "records</p>" not in str(got):
             raise SourceError(self.name, "SEBI sent something that isn't its list of offer documents.", busy=True)
+        if (n := sebi_pages(got)):
+            self.pages[kind] = n
         return rows
+
+    def _page(self, kind: str, page: int, ttl: float) -> str:
+        key = ("sebi-page", kind, page)
+        hit = self.cache.get(key, max_age=ttl)
+        if hit is not None:
+            return hit
+        if not self.limit.take(max_wait=rate_wait()):
+            raise SourceError(self.name, "SEBI is busy (our rate limit). Try again in a minute.", busy=True)
+        form = {"nextValue": 1, "next": "n", "search": "", "fromDate": "", "toDate": "", "fromYear": "", "toYear": "", "deptId": -1, "sid": 3, "ssid": 15,
+                "smid": SEBI_KINDS[kind], "ssidhidden": 15, "intmid": -1, "sText": "Filings", "smText": "", "doDirect": page}
+        try:
+            r = self.http.post(self.LIST_AJAX, data=form, headers={"X-Requested-With": "XMLHttpRequest",
+                                                                   "Referer": f"https://www.sebi.gov.in{SEBI_LISTING}?doListing=yes&sid=3&s=&ssid=15&smid={SEBI_KINDS[kind]}"})
+            self.check(r)
+        except httpx.HTTPError as e:
+            raise SourceError(self.name, f"Couldn't reach SEBI ({e.__class__.__name__}).", busy=True) from None
+        self.cache.set(key, r.text, ttl, size=len(r.content) + 200)
+        return r.text
 
     def pdf(self, page_url: str, ttl: float = 24 * 3600) -> str | None:
         """The offer document's address on one of SEBI's filing pages."""
@@ -465,6 +540,14 @@ class Edgar(Source):
     def search(self, name: str, since: date, until: date, ttl: float = 6 * 3600) -> list[dict]:
         got = self.fetch("/LATEST/search-index", {"q": f'"{name}"', "forms": ",".join(OFFER_FORMS), "dateRange": "custom",
                                                   "startdt": since.isoformat(), "enddt": until.isoformat()}, ttl=ttl)
+        if not isinstance(got, dict) or "hits" not in got:
+            raise SourceError(self.name, "The SEC sent something that isn't its search answer.", busy=True)
+        return efts_hits(got)
+
+    def final_prospectuses(self, since: date, until: date, ttl: float = 3 * 3600) -> list[dict]:
+        """Every final prospectus (424B4, 424B1) filed between two days, by any company: an IPO's last filing, whether or not a
+        calendar lists the offering."""
+        got = self.fetch("/LATEST/search-index", {"forms": "424B4,424B1", "dateRange": "custom", "startdt": since.isoformat(), "enddt": until.isoformat()}, ttl=ttl)
         if not isinstance(got, dict) or "hits" not in got:
             raise SourceError(self.name, "The SEC sent something that isn't its search answer.", busy=True)
         return efts_hits(got)
