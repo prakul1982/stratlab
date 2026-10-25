@@ -35,11 +35,12 @@ def red_flags(region: str = "IN", scope: str = "all", flag: str = "", frm: str =
 
 
 @router.get("/research/holders-us")
-def us_holders_list(symbol: str = "", form: str = "", page: int = 1, size: int = redflags.PAGE, profile=Depends(current_profile)):
+def us_holders_list(symbol: str = "", form: str = "", page: int = 1, size: int = redflags.PAGE, holder: str = "", profile=Depends(current_profile)):
     """US holders above 5%: the Schedule 13D and 13G filings of one company (any plan) or of every S&P 500 company
-    (Basic and up), newest first, with the holder's name and share of the class as the cover page gives them."""
-    if not symbol.strip():
+    (Basic and up), newest first, with the holder's name and share of the class as the cover page gives them. `holder`
+    finds one holder's filings across companies (DF-018), Basic and up as the cross-company list is."""
+    if not symbol.strip() or holder.strip():
         _need(profile, "holders", "The latest 13D and 13G filings across companies")
-    out = redflags.holders_listing(symbol, form, page, size)
+    out = redflags.holders_listing(symbol, form, page, size, holder=holder)
     return ok({**out, "note": "Filed by anyone holding more than 5% of a company's shares: a 13D when the stake is active, a 13G when it is passive, "
                               "and an amendment when it changes. Names and percentages are as the filer's cover page states them. Not advice."})

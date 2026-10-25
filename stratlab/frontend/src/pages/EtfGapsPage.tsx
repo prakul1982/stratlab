@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { asOf, dayIn, fmtDate, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { FUND_NAME, gapShort, loadEtfGaps, type EtfGap, type EtfGaps, type Fund } from "../lib/etfGaps";
+import { FUND_NAME, dayCount, gapShort, loadEtfGaps, type EtfGap, type EtfGaps, type Fund } from "../lib/etfGaps";
 import { EtfGapDetailView } from "../components/EtfGap";
 import { Badge, Card, CardHead, ChipBar, DataTable, ErrorState, Field, FieldGroup, FormGrid, PageHeader, Select, Skeleton, StockPicker, type Column } from "../components/kit";
 
@@ -13,6 +13,13 @@ type Sort = "wide" | "above" | "below";
 const SORTS: { value: Sort; label: string }[] = [{ value: "wide", label: "Widest gap" }, { value: "above", label: "Most above" }, { value: "below", label: "Most below" }];
 const FUNDS: (Fund | "all")[] = ["all", "equity", "gold", "silver", "debt", "intl"];
 const TOP = 50;
+
+/** The last trade's own day ("23 Oct"), or that it's older than the days kept. */
+function lastTradeDay(r: EtfGap): string {
+  if (!r.price_at) return "";
+  if (r.price_day === undefined) return fmtDate(dayIn(r.price_at) ?? r.price_at, { year: false });
+  return r.price_day ? fmtDate(r.price_day, { year: false }) : "an earlier day";
+}
 
 export function EtfGapsPage() {
   const [params, setParams] = useSearchParams();
@@ -55,26 +62,33 @@ export function EtfGapsPage() {
         <span className="k-sub-line">{r.name}</span></>) },
     // the price with its day, so it is never read against the close the gap uses (R6O-018)
     // the last trade, which can differ from the exchange's official close the gap uses (R57-005: 317.46 against a 316.61 close)
-    { key: "px", header: "Last trade", numeric: true, cell: (r) => <>{price(r.price, "INR")}{r.price_at && <span className="k-sub-line">{fmtDate(dayIn(r.price_at) ?? r.price_at, { year: false })}</span>}</> },
+    // its own day: an ETF with no units traded on the day read last traded earlier (DF-005: GSEC10ABSL's 19 Oct trade read "23 Oct")
+    { key: "px", header: "Last trade", numeric: true, cell: (r) => <>{price(r.price, "INR")}{r.price_at && <span className="k-sub-line">{lastTradeDay(r)}</span>}</> },
     ...(hasInav ? [
       { key: "inav", header: "iNAV", numeric: true, cell: (r: EtfGap) => (r.inav == null ? "–" : price(r.inav, "INR")) },
       { key: "ig", header: "Gap to iNAV", numeric: true, cell: (r: EtfGap) => gapShort(r.inav_gap) }] : []),
-    { key: "nav", header: "Last NAV", numeric: true, cell: (r) => <>{r.nav == null ? "–" : price(r.nav, "INR")}{r.nav_date && <span className="k-sub-line">{asOf(r.nav_date)}</span>}</> },
+    { key: "nav", header: "Last NAV", numeric: true, cell: (r) => <>{r.nav == null ? "–" : price(r.nav, "INR")}{r.nav_date && <span className="k-sub-line">{asOf(r.nav_date)}</span>}
+      {/* a NAV dated a day with no trading has no close to set against it (DF-006); an overseas fund's NAV is of later prices (DF-008) */}
+      {r.nav_closed_day ? <span className="k-sub-line">a day with no trading</span> : r.fund === "intl" && r.nav != null ? <span className="k-sub-line">from overseas closes</span> : null}</> },
     // one day's close against that day's NAV: never today's price against yesterday's NAV (the day's market move)
     { key: "ng", header: "Close vs NAV", numeric: true, cell: (r) => (r.nav_gap != null
       // the close the gap is worked out from, with its day: its direction agrees with the close and NAV it names (R6O-018)
-      ? <>{gapShort(r.nav_gap)}{r.nav_price_day && <span className="k-sub-line">{r.nav_price != null ? `${price(r.nav_price, "INR")}, ` : ""}{fmtDate(r.nav_price_day, { year: false })} close</span>}</>
+      ? <>{gapShort(r.nav_gap)}{r.nav_price_day && <span className="k-sub-line">{r.nav_price != null ? `${price(r.nav_price, "INR")}, ` : ""}{fmtDate(r.nav_price_day, { year: false })} close</span>}
+        {/* never dropped for being wide: said so, with what it usually means (DF-001) */}
+        {r.nav_wide && <span className="k-sub-line">beyond 50%: usually a fund not making new units</span>}</>
       : r.nav_doubtful ? <>–<span className="k-sub-line">left out: the close and the latest price disagree</span></>
+      : r.nav_mismatch ? <>–<span className="k-sub-line">left out: the price is 3 or more times the NAV, a NAV of another unit</span></>
       : r.nav_waiting && r.nav_date ? <>–<span className="k-sub-line">no close of {fmtDate(r.nav_date, { year: false })}</span></> : "–") },
-    { key: "d30", header: "30 trading days", numeric: true, wrap: true, cell: (r) => (r.days
-      ? <>{r.days.low === r.days.high ? gapShort(r.days.low) : <>{gapShort(r.days.low)} to {gapShort(r.days.high)}</>}<span className="k-sub-line">avg {gapShort(r.days.avg)}</span></> : "–") },
+    // the days really used, never a promised 30 (DF-003: the most kept was 14)
+    { key: "d30", header: "Up to 30 trading days", numeric: true, wrap: true, cell: (r) => (r.days
+      ? <>{r.days.low === r.days.high ? gapShort(r.days.low) : <>{gapShort(r.days.low)} to {gapShort(r.days.high)}</>}<span className="k-sub-line">avg {gapShort(r.days.avg)} · {dayCount(r.days)}</span></> : "–") },
   ];
 
   return (
     <div className="k-page etf-gaps">
       <PageHeader eyebrow={eyebrowOf("/invest/etf-gaps")} title="ETF price against NAV" asOf={data?.as_of} asOfLabel="Prices as of"
         info={data ? <>{data.nav_as_of ? `NAVs of ${asOf(data.nav_as_of)}. ` : ""}{data.count} ETFs. {data.note}</> : undefined} infoLabel="What the numbers are"
-        lede="How far each ETF's close is from what one unit holds: that day's published NAV, as a percent above or below. Through the day the gap is the last close's, as the new NAV comes out each evening. The last trade can differ from the official close, which the exchange works out from the session's final trades. Facts with their dates, not a view on any fund." />
+        lede={<>How far each ETF's close is from what one unit holds: that day's published NAV, as a percent above or below. Through the day the gap is the last close's, as the new NAV comes out each evening. Each row shows two prices: the last trade, and the official close the gap uses, which the exchange works out from the session's final trades.{!hasInav && data ? " An indicative NAV (the fund house's estimate through the day) isn't shown: the exchange's list doesn't carry one." : ""} Facts with their dates, not a view on any fund.</>} />
 
       {pick && <EtfGapDetailView key={pick} symbol={pick} />}
 

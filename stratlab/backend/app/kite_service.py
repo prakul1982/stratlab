@@ -50,6 +50,35 @@ def bse_only_rows(raw: list[dict], nse_rows: list[dict]) -> list[dict]:
         if not_company(x.get("name")):
             continue                            # ETFs, mutual fund units, REITs and InvITs trade like shares but aren't companies
         out.append(x)
+    # one row per scrip code: the broker's list can carry a company twice, once under its trading symbol and once under its
+    # bare code (RHFL and 540709, both 540709), which made two suggestions with one key and left a stale one in the list
+    # under every later search (DD-004); the one with a real trading symbol stays
+    by_code: dict[str, dict] = {}
+    for x in out:
+        code = str(x["exchange_token"])
+        had = by_code.get(code)
+        if had is None or (str(had["tradingsymbol"]) == code and str(x["tradingsymbol"]) != code):
+            by_code[code] = x
+    return [x for x in out if by_code[str(x["exchange_token"])] is x]
+
+
+def bse_twin_codes(raw: list[dict], nse_rows: list[dict]) -> dict[str, str]:
+    """{NSE symbol: its BSE scrip code} for the companies listed on both exchanges, from the broker's full BSE list: the
+    same trading symbol, else the same company name (one NSE company only). bse_only_rows leaves these out of the list,
+    so a BSE code typed for such a company (500325 for RELIANCE) found nothing (DD-003)."""
+    nse = {r["symbol"].upper(): r for r in nse_rows if r["exchange"] == "NSE" and r["type"] == "EQ"}
+    by_name: dict[str, list[str]] = {}
+    for sym, r in nse.items():
+        by_name.setdefault(norm_name(r["name"]), []).append(sym)
+    out: dict[str, str] = {}
+    for x in raw or []:
+        ts, code = str(x.get("tradingsymbol") or "").upper(), str(x.get("exchange_token") or "")
+        if x.get("instrument_type") != "EQ" or x.get("segment") != "BSE" or not ts or not code.isdigit() or int(code) >= 600000:
+            continue
+        names = by_name.get(norm_name(x.get("name")), [])
+        sym = ts if ts in nse else names[0] if len(names) == 1 else None
+        if sym:
+            out.setdefault(sym, code)
     return out
 
 

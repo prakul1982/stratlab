@@ -85,10 +85,11 @@ test("named holders: search a name, see each company alphabetically, follow", as
   await expect(rows.nth(2)).toContainText("3.91%");
   await card.getByRole("button", { name: "Follow this holder" }).click();
   await expect(page.getByRole("region", { name: "Holders you follow" })).toContainText("Ashish Kacholia");
-  await expect(card.getByRole("button", { name: "Following · stop" })).toBeVisible();
+  await expect(card.getByText("Following", { exact: true })).toBeVisible();                 // said plainly, with its own way to stop (DF-019)
+  await expect(card.getByRole("button", { name: "Stop following" })).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/holders-${info.project.name}.png`, fullPage: true });
   await sane(page, errors);
-  await card.getByRole("button", { name: "Following · stop" }).click();
+  await card.getByRole("button", { name: "Stop following" }).click();
   await expect(page.getByRole("region", { name: "Holders you follow" })).toHaveCount(0);
   // the page sits in Invest › Company news, in the breadcrumb at the top
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
@@ -96,6 +97,9 @@ test("named holders: search a name, see each company alphabetically, follow", as
   await expect(crumb.getByRole("button", { name: /Named holders/ })).toBeVisible();
   // a name nobody holds
   await page.getByLabel("Holder's name").fill("zzzz nobody");
+  // the Search button sits beside the box, never under the open list of names (DF-019)
+  const box = await page.getByLabel("Holder's name").boundingBox(), btn = await page.getByRole("button", { name: "Search", exact: true }).boundingBox();
+  if (!phone && box && btn) expect(btn.x, "Search sits to the right of the box").toBeGreaterThan(box.x + box.width - 1);
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByText("No holder above 1% by that name")).toBeVisible();
 });

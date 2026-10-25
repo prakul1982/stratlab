@@ -27,12 +27,14 @@ from .newsletter import job as news_job
 from .plans import allows
 from .responses import err, ok
 
+NAV_DAY_KEY = "etfnav:navday:"     # etfnav:navday:<YYYY-MM-DD> = {isin: that trading day's NAV} (DF-006)
 LIVE_KEY = "etfnav:live"           # {"read", "as_of", "rows": {symbol: [name, isin, price, inav, underlying, nav, nav date, volume]}}
 DAY_KEY = "etfnav:day:"            # etfnav:day:<YYYY-MM-DD> = {symbol: [close, that day's NAV or None, 1 when the close is the exchange's official one]}
 KEEP_DAYS = 30                     # trading days of history kept
 FILL_DAYS = 5                      # days back whose missing NAVs are still looked for
 IST = timezone(timedelta(hours=5, minutes=30))
-MAX_GAP = 50.0                     # a bigger gap means a mismatched NAV (another plan, a split), not a real one
+WIDE_GAP = 50.0                    # a gap beyond this is shown, said to be that wide (DF-001): an overseas fund at its limit
+MISMATCH = 3.0                     # a price 3x its NAV or more (or a third of it): a NAV of another unit, left out and said so
 DOUBT_MOVE = 2.0                   # %: a close this far from the latest price, while the latest price sits near the NAV, is doubted
 LIVE_EVERY = 240                   # seconds between reads of the exchange's list while the market is open
 RETRY = 1800                       # with nothing stored, wait this long between tries outside market hours
@@ -44,15 +46,20 @@ NOTE = ("Price is the last traded price on the exchange. The NAV is the fund hou
         "too far apart to both be right. Through the day, before that day's NAV is out, the gap shown is the last close's "
         "against its NAV, so the day's market move is never read as a gap. A gap of more than a few percent usually means "
         "few units trade, or the fund has stopped making new units: an overseas fund at the overseas investment limit "
-        "can trade 40% or more above its NAV for months. One beyond 50% is left out as a mismatched NAV. "
-        "Figures as of the times shown.")
+        "can trade 40% or more above its NAV for months, and one beyond 50% is shown and said to be that wide. A price "
+        "three or more times its NAV (or under a third of it) is a NAV of another unit (another plan, a split), so that "
+        "gap is left out and said so. An international fund's NAV is worked out from overseas closing prices, which come "
+        "hours after the Indian close, so its gap also holds the overseas market's move in between. Figures as of the times shown.")
+# DF-007: the exchange's list gives no indicative NAV, and no other source is read for one, so the note says it isn't shown
+NO_INAV_NOTE = (" An indicative NAV, the fund house's own estimate through the day, isn't shown: the exchange's ETF list "
+                "doesn't carry one.")
 # said only when a source gave a real indicative NAV (the exchange's list gives none)
 INAV_NOTE = (" The indicative NAV (iNAV) is the estimate of what one unit holds, worked out through market hours from "
              "the holdings' prices; a gap to it is shown too.")
 
 
 def note(has_inav: bool) -> str:
-    return NOTE + (INAV_NOTE if has_inav else "")
+    return NOTE + (INAV_NOTE if has_inav else NO_INAV_NOTE)
 
 _cache = TTLCache(max_items=50)
 _lock = threading.Lock()
@@ -68,6 +75,8 @@ def forget():
     """Drop the copies in memory (between tests)."""
     _cache.clear()
     _feed["tried"] = 0.0
+    for k in [k for k in _feed if isinstance(k, tuple)]:
+        del _feed[k]                   # the history report's last tries (fill_day_navs)
 
 
 # ---------- the arithmetic and the words ----------
@@ -93,14 +102,22 @@ def volume_of(v) -> float | None:
     return x if 0 <= x < 1e12 else None
 
 
+def mismatched(price, ref) -> bool:
+    """A price MISMATCH times its reference value or more (or under 1/MISMATCH of it): a NAV of another unit (another
+    plan, a split), not a premium any fund trades at."""
+    p, r = num(price), num(ref)
+    return p is not None and r is not None and not (1 / MISMATCH < p / r < MISMATCH)
+
+
 def gap(price, ref) -> float | None:
     """How far the price is from a reference value, as a percent of it (above is positive), to two places. None when
-    either is missing, or when the gap is too big to be real (a NAV that belongs to another unit)."""
+    either is missing, or when the two are mismatched (a NAV that belongs to another unit). A wide gap is a real one:
+    MONQ50 closed at 220.17 against a NAV of 118.37 on 23 Oct 2026, 86% above, and leaving it out made the 45.9% of
+    the next ETF read as the widest (DF-001)."""
     p, r = num(price), num(ref)
-    if p is None or r is None:
+    if p is None or r is None or mismatched(p, r):
         return None
-    g = (p / r - 1) * 100
-    return round(g, 2) if abs(g) <= MAX_GAP else None
+    return round((p / r - 1) * 100, 2)
 
 
 def pct(g: float) -> str:
@@ -221,13 +238,95 @@ def navs() -> dict:
     return money_mf_nav.daily()
 
 
-def nav_of(row: dict, data: dict) -> dict | None:
+def trading(day: str | None) -> bool:
+    """An Indian trading day (weekends and the exchange's holidays aren't)."""
+    try:
+        from .data.calendar import is_trading_day
+        return bool(day) and is_trading_day("IN", date.fromisoformat(str(day)[:10]))
+    except (ImportError, ValueError):
+        return True
+
+
+def trading_day_before(day: str) -> str:
+    """The last trading day on or before `day`."""
+    from . import exchange_days
+    d = date.fromisoformat(day[:10])
+    return d.isoformat() if trading(d.isoformat()) else exchange_days.prev_trading(d).isoformat()
+
+
+def day_navs(day: str) -> dict:
+    """The NAVs of a trading day kept for the ETFs whose daily file is dated a day with no trading ({isin: nav})."""
+    hit = _cache.get(("navday", day))
+    if hit is not None:
+        return hit
+    try:
+        got = db.json_value(db.get_setting(NAV_DAY_KEY + day), {})
+    except Exception:
+        got = {}
+    got = got if isinstance(got, dict) else {}
+    _cache.set(("navday", day), got, 600)
+    return got
+
+
+def nav_of(row: dict, data: dict, sym: str | None = None) -> dict | None:
     """The ETF's scheme in the NAV file, by its ISIN only (a name can match another plan of the same fund); else the
-    last NAV the exchange's list gave, with its date."""
+    last NAV the exchange's list gave, with its date.
+
+    A liquid fund publishes a NAV for every calendar day, so on a weekend the file's is dated a Sunday, a day with no
+    close to set it against (DF-006: 20 liquid ETFs read "Last NAV 25 Oct 2026" and "no close of 25 Oct"). Then the
+    NAV of the last trading day is used: the one kept from the industry body's history report (fill_day_navs), else
+    the exchange list's when it is of that day, else the one stored with that day's close. Only with none of them is
+    the file's NAV shown, marked `closed_day`."""
     sch = money_mf_nav.find(data, isin=row.get("isin") or "") if row.get("isin") else None
     if sch is None and row.get("nav") and row.get("nav_date"):
         sch = {"nav": row["nav"], "date": row["nav_date"]}
+    if sch and sch.get("date") and not trading(sch["date"]):
+        day = trading_day_before(sch["date"])
+        kept = (_days().get(day) or {}).get(sym) if sym else None
+        nav = (day_navs(day).get(row.get("isin") or "") if row.get("isin") else None) \
+            or (row.get("nav") if row.get("nav_date") == day else None) \
+            or (num(kept[1]) if isinstance(kept, list) and len(kept) > 1 else None)
+        sch = {**sch, "nav": nav, "date": day} if nav else {**sch, "closed_day": True}
     return sch
+
+
+HISTORY_URL = "https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx?frmdt={d}&todt={d}"
+
+
+def history_text(day: str) -> str:
+    """The industry body's NAV history report for one day, every scheme. Tests replace this."""
+    return money_mf_nav.fetch_text(HISTORY_URL.format(d=date.fromisoformat(day).strftime("%d-%b-%Y")))
+
+
+def fill_day_navs(data: dict) -> int:
+    """For the ETFs whose daily-file NAV is dated a day with no trading, keep the NAV of the trading day before it from
+    the history report, read once per day (and again after RETRY when it isn't out). Returns how many were kept."""
+    want: dict[str, set] = {}
+    for r in load_live()["rows"].values():
+        sch = money_mf_nav.find(data, isin=r.get("isin") or "") if r.get("isin") else None
+        if sch and sch.get("date") and not trading(sch["date"]):
+            want.setdefault(trading_day_before(sch["date"]), set()).add(r["isin"])
+    kept = 0
+    for day, isins in want.items():
+        have = day_navs(day)
+        if isins <= set(have) or time.time() - _feed.get(("hist", day), 0.0) < RETRY:
+            continue
+        _feed[("hist", day)] = time.time()
+        try:
+            parsed = money_mf_nav.parse(history_text(day))
+        except Exception as e:
+            print("NAV history unavailable:", type(e).__name__)
+            continue
+        got = dict(have)
+        for i in isins:
+            s = money_mf_nav.find(parsed, isin=i)
+            if s and s.get("date") == day:
+                got[i] = s["nav"]
+        if len(got) > len(have):
+            db.set_setting(NAV_DAY_KEY + day, json.dumps(got, separators=(",", ":")))
+            kept += len(got) - len(have)
+            _cache.clear()
+    return kept
 
 
 # ---------- the history ----------
@@ -249,6 +348,14 @@ def _days() -> dict[str, dict]:
     return out
 
 
+def whole_market(official: dict, symbols) -> bool:
+    """A day's official closes for the whole market, ETFs included (the bhavcopy lists a few thousand securities, most
+    ETFs among them), so an ETF missing from them didn't trade that day; a short list, or one without ETFs, proves
+    nothing."""
+    symbols = list(symbols)
+    return len(official or {}) >= 500 and sum(1 for x in symbols if x in official) >= max(1, len(symbols) // 2)
+
+
 def official_closes(day: str) -> dict:
     """The exchange's official closes of a day (the cash bhavcopy, via official_close), {} while they aren't out."""
     try:
@@ -265,12 +372,16 @@ def record_close(day: date | str, live: dict, data: dict) -> int:
     KEEP_DAYS days. Returns how many ETFs were stored."""
     day = str(day)[:10]
     official = official_closes(day)
+    covers = whole_market(official, live["rows"])
     rows = {}
     for s, r in live["rows"].items():
-        sch = nav_of(r, data)
+        sch = nav_of(r, data, s)
         nav = sch["nav"] if sch and sch.get("date") == day else None
         if official.get(s):
             rows[s] = [official[s], nav, 1]
+            continue
+        if covers:
+            rows[s] = [None, nav, 0]           # not in the day's bhavcopy: it didn't trade that day (DF-005)
             continue
         # no units traded that day: its last price is an older day's, so there's no close of this day to keep (R6O-018)
         rows[s] = [None if r.get("volume") == 0 else r["price"], nav]
@@ -294,15 +405,20 @@ def fill_navs(data: dict, today: date) -> int:
         changed = False
         if any(isinstance(v, list) and len(v) < 3 for v in rows.values()):
             official = official_closes(day)
+            covers = whole_market(official, rows)
             for s, v in rows.items():
                 if isinstance(v, list) and len(v) >= 2 and len(v) < 3 and official.get(s):
                     v[0] = official[s]
                     v.append(1)
                     changed = True
+                elif isinstance(v, list) and len(v) == 2 and covers:
+                    v[0] = None                # the bhavcopy is out and the ETF isn't in it: no trade that day (DF-005)
+                    v.append(0)
+                    changed = True
         for s, v in rows.items():
             if not isinstance(v, list) or len(v) < 2 or v[1] is not None or s not in live:
                 continue
-            sch = nav_of(live[s], data)
+            sch = nav_of(live[s], data, s)
             if sch and sch.get("date") == day:
                 v[1] = sch["nav"]
                 changed = True
@@ -323,24 +439,31 @@ def prune():
         _cache.clear()
 
 
-def history(symbol: str) -> list[dict]:
+def history(symbol: str, doubtful_day: str | None = None) -> list[dict]:
     """One ETF's stored days, oldest first: {"day", "close", "nav", "gap", "official"} (gap and nav None until that
-    day's NAV is out; `official` when the close is the exchange's own)."""
+    day's NAV is out; `official` when the close is the exchange's own). `doubtful_day` is the day whose gap the row
+    leaves out (its close and the latest price disagree): it is left out of the history too, marked `doubtful`, so the
+    range never holds the gap the row says it left out (DF-004: GROWWN200's "left out" gap was in its range)."""
     out = []
     for day, rows in sorted(_days().items())[-KEEP_DAYS:]:
         v = rows.get(symbol)
         if not isinstance(v, list) or len(v) < 2:
             continue
-        out.append({"day": day, "close": num(v[0]), "nav": num(v[1]), "gap": gap(v[0], v[1]), **({"official": True} if len(v) > 2 and v[2] else {})})
+        g = None if day == doubtful_day else gap(v[0], v[1])
+        out.append({"day": day, "close": num(v[0]), "nav": num(v[1]), "gap": g, **({"official": True} if len(v) > 2 and v[2] else {}),
+                    **({"doubtful": True} if day == doubtful_day else {}),
+                    **({"mismatch": True} if g is None and day != doubtful_day and mismatched(v[0], v[1]) else {})})
     return out
 
 
 def summary(hist: list[dict]) -> dict | None:
-    """The stored days' gaps in brief: how many, the average, the lowest and the highest."""
+    """The stored days' gaps in brief: how many, the average, the lowest and the highest. Every day with a gap counts,
+    the widest included (DF-002: MASPTOP50's 14 days ran 45.9% to 65.6% above, but the days beyond 50% were dropped
+    and two days read 45.9% to 48.3%); `stored` is how many days were kept at all, so the page can say the days used."""
     gs = [h["gap"] for h in hist if h["gap"] is not None]
     if not gs:
         return None
-    return {"days": len(gs), "avg": round(sum(gs) / len(gs), 2), "low": min(gs), "high": max(gs),
+    return {"days": len(gs), "stored": len(hist), "avg": round(sum(gs) / len(gs), 2), "low": min(gs), "high": max(gs),
             "from": next(h["day"] for h in hist if h["gap"] is not None), "to": [h["day"] for h in hist if h["gap"] is not None][-1]}
 
 
@@ -366,6 +489,8 @@ def same_day(sym: str, price, price_day: str | None, nav_day: str | None, volume
     close = (_days().get(nav_day) or {}).get(sym)
     if isinstance(close, list) and len(close) > 2 and close[2] and num(close[0]) is not None:
         return num(close[0]), nav_day                 # the exchange's official close of that day comes first (R7O-007)
+    if isinstance(close, list) and len(close) > 2 and not close[2] and close[0] is None:
+        return None, None                             # the bhavcopy says it didn't trade that day (DF-005)
     if price_day == nav_day and volume != 0:
         return num(price), nav_day
     if isinstance(close, list) and close and num(close[0]) is not None:
@@ -386,14 +511,35 @@ def doubtful(close, latest, nav) -> bool:
     return abs(c / p - 1) * 100 > DOUBT_MOVE and abs(g_latest) < abs(g_close) / 2
 
 
-def row_view(sym: str, r: dict, data: dict, as_of: str | None) -> dict:
+def last_trade_day(sym: str, r: dict, as_of: str | None, official: dict | None = None, covers: bool | None = None) -> str | None:
+    """The day of the list's last price: the read's own day, unless no units traded that day (the list says none, or
+    the day's bhavcopy is out without it), when it is the newest stored day the ETF did trade, or None when no stored
+    day says (DF-005: GSEC10ABSL read "Last trade 23 Oct" for its 19 Oct trade, absent from the 23 Oct bhavcopy)."""
+    today = day_of(as_of)
+    if not today:
+        return None
+    official = official_closes(today) if official is None else official
+    covers = whole_market(official, load_live()["rows"]) if covers is None else covers
+    if r.get("volume") != 0 and not (covers and not official.get(sym)):
+        return today
+    for day, rows in sorted(_days().items(), reverse=True):
+        v = rows.get(sym)
+        if day >= today or not isinstance(v, list) or not v or num(v[0]) is None:
+            continue
+        if len(v) < 3 or v[2]:
+            return day
+    return None
+
+
+def row_view(sym: str, r: dict, data: dict, as_of: str | None, official: dict | None = None, covers: bool | None = None) -> dict:
     """One ETF: its price, iNAV and last NAV, the gap to each, and the headline gap in words (to the iNAV when the
     exchange gave one, else to the last NAV). The NAV gap is of one day: that day's close (or the list's price, when it
     is of the NAV's day) against that day's NAV; `nav_price` and `nav_price_day` say which price, and `nav_waiting`
     that there is a NAV but no price of its day to set against it."""
-    sch = nav_of(r, data)
+    sch = nav_of(r, data, sym)
     nav, nav_day = (sch["nav"], sch.get("date")) if sch else (None, None)
-    vs, vs_day = same_day(sym, r["price"], day_of(as_of), nav_day, r.get("volume"))
+    price_day = last_trade_day(sym, r, as_of, official, covers)
+    vs, vs_day = same_day(sym, r["price"], price_day, nav_day, r.get("volume"))
     doubt = doubtful(vs, r["price"], nav)
     inav_gap, nav_gap = gap(r["price"], r.get("inav")), (None if doubt else gap(vs, nav))
     basis = "iNAV" if inav_gap is not None else "NAV" if nav_gap is not None else None
@@ -402,10 +548,13 @@ def row_view(sym: str, r: dict, data: dict, as_of: str | None) -> dict:
     # the exchange's list names the underlying ("Gold"); the NAV file names the fund ("Nippon India ETF Gold BeES")
     name = (sch or {}).get("name") or r.get("name") or sym
     return {"symbol": sym, "name": name, "underlying": r.get("underlying"), "fund": fund,
-            "fund_label": instrument_kinds.FUND_LABELS.get(fund, "ETF"), "price": r["price"], "price_at": as_of,
+            "fund_label": instrument_kinds.FUND_LABELS.get(fund, "ETF"), "price": r["price"], "price_at": as_of, "price_day": price_day,
             "inav": r.get("inav"), "inav_gap": inav_gap, "nav": nav, "nav_date": nav_day, "nav_gap": nav_gap,
             "nav_price": vs if nav_gap is not None else None, "nav_price_day": vs_day if nav_gap is not None else None,
             "nav_waiting": bool(nav_day and vs is None), "nav_doubtful": doubt,
+            # beyond WIDE_GAP: shown, and said to be that wide; mismatched: left out, with the reason (DF-001)
+            "nav_wide": nav_gap is not None and abs(nav_gap) > WIDE_GAP, "nav_mismatch": bool(not doubt and vs and nav and mismatched(vs, nav)),
+            "nav_closed_day": bool((sch or {}).get("closed_day")),
             "gap": g, "basis": basis, "text": _text(sym, g, basis, vs_day, day_of(as_of)) if basis else None}
 
 
@@ -426,10 +575,12 @@ def table() -> dict:
     live = load_live()
     data = navs()
     days = _days()
+    official = official_closes(day_of(live["as_of"])) if day_of(live["as_of"]) else {}
+    covers = whole_market(official, live["rows"])
     rows = []
     for s, r in live["rows"].items():
-        v = row_view(s, r, data, live["as_of"])
-        v["days"] = summary(history(s)) if days else None
+        v = row_view(s, r, data, live["as_of"], official, covers)
+        v["days"] = summary(history(s, v["nav_date"] if v["nav_doubtful"] else None)) if days else None
         rows.append(v)
     rows.sort(key=lambda v: (v["gap"] is None, -abs(v["gap"] or 0), v["symbol"]))
     nav_days = sorted({v["nav_date"] for v in rows if v["nav_date"]})
@@ -447,8 +598,9 @@ def detail(symbol: str) -> dict | None:
     r = live["rows"].get(sym)
     if not r:
         return None
-    h = history(sym)
-    return {"row": row_view(sym, r, navs(), live["as_of"]), "history": h, "days": summary(h), "note": note(r.get("inav") is not None)}
+    row = row_view(sym, r, navs(), live["as_of"])
+    h = history(sym, row["nav_date"] if row["nav_doubtful"] else None)
+    return {"row": row, "history": h, "days": summary(h), "note": note(r.get("inav") is not None)}
 
 
 def known(symbol: str) -> bool:
@@ -468,7 +620,7 @@ def gap_now(symbol: str, price) -> dict | None:
     if inav_g is not None:
         return {"gap": inav_g, "basis": "iNAV",
                 "text": f"{symbol} {words(inav_g, 'indicative NAV')} (price {money(float(price), 'IN')}, iNAV {money(r['inav'], 'IN')})"}
-    sch = nav_of(r, navs())
+    sch = nav_of(r, navs(), str(symbol).upper())
     # only a NAV of the price's own day: through the day the last NAV is yesterday's, and a live price against it is the
     # market's move, not a gap (the list's read stands for the day of the price)
     if not sch or sch.get("date") != day_of(load_live().get("as_of")):
@@ -523,7 +675,9 @@ class Job(news_job.Job):
             self._refresh(now)
         local = now.astimezone(IST).date()
         try:
-            self.status["filled"] = fill_navs(navs(), local)
+            data = navs()
+            fill_day_navs(data)
+            self.status["filled"] = fill_navs(data, local)
         except Exception as e:
             self.status["last_error"] = str(e)[:200]
         return 0

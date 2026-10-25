@@ -397,6 +397,7 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     main._corp_tried.clear()                    # a calendar build another test tried a moment ago
     main._results.clear()                      # shared scan and rotation answers from an earlier test
     main._bse_map.clear()                       # the BSE-only list another test loaded
+    main._twins.update(day=None, map={})        # the BSE codes of NSE companies another test read (DD-003)
     from app import stock_pages
     stock_pages._companies.clear()              # public company pages: the list and built pages another test made
     main.stock_page_store.mem.clear()

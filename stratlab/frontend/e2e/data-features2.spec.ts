@@ -103,24 +103,25 @@ test("business updates: my stocks first, more sectors, month by month with the c
   await expect(rows.nth(0)).toContainText("2,36,013 units");
   await expect(rows.nth(1)).toHaveAttribute("data-company", "TVSMOTOR");            // then the watchlist
   await expect(rows.nth(1)).toContainText("Watchlist");
-  await expect(rows.nth(2)).toHaveAttribute("data-company", "ULTRACEMCO");
+  await expect(rows.nth(2)).toHaveAttribute("data-company", "JSWSTEEL");
   await expect(mine.getByText(/Not read yet: TCS/)).toBeVisible();                   // a holding with nothing read is named
   await expect(rows.nth(0).getByRole("link", { name: /NSE/ })).toHaveAttribute("href", /nsearchives\.nseindia\.com/);   // each figure links to its filing
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/business-updates-mine-${info.project.name}.png`, fullPage: true });
 
-  // the sectors offered
-  for (const name of ["Cement: volumes", "Airlines and airports: traffic", "Power: generation and sales", "Telecom: quarterly operating numbers",
+  // the sectors offered: only lists whose companies file such updates (DF-013: no cement, telecom or airline list)
+  for (const name of ["Ports and airports: traffic", "Power: capacity and generation",
     "Metals and mining: production and sales", "Retail: quarterly business updates", "Banks' and lenders' quarterly updates"]) {
     await expect(page.getByRole("button", { name })).toBeVisible();
   }
-  await page.getByRole("button", { name: "Cement: volumes" }).click();
-  await expect(page.getByRole("table", { name: "Cement: volumes", exact: true }).locator("tbody tr")).toHaveCount(2);
+  for (const name of ["Cement: volumes", "Telecom: quarterly operating numbers"]) await expect(page.getByRole("button", { name })).toHaveCount(0);
+  await page.getByRole("button", { name: "Metals and mining: production and sales" }).click();
+  await expect(page.getByRole("table", { name: "Metals and mining: production and sales", exact: true }).locator("tbody tr")).toHaveCount(2);
   // month by month: each company's own column, alphabetical, with the change on the same month a year earlier
   const cmp = page.getByTestId("biz-compare");
-  const table = cmp.getByRole("table", { name: "Cement: volumes, month by month" });
+  const table = cmp.getByRole("table", { name: "Metals and mining: production and sales, month by month" });
   await expect(table.locator("thead th")).toHaveCount(3);
-  await expect(table.locator("thead th").nth(1)).toContainText("Ambuja Cements");
-  await expect(table.locator("thead th").nth(2)).toContainText("UltraTech Cement");
+  await expect(table.locator("thead th").nth(1)).toContainText("JSW Steel");
+  await expect(table.locator("thead th").nth(2)).toContainText("NMDC");
   await expect(table.locator("tbody tr")).toHaveCount(13);
   const sep = table.locator("tbody tr").first();
   await expect(sep).toContainText("Sep 2026");
@@ -134,7 +135,7 @@ test("business updates: my stocks first, more sectors, month by month with the c
   await sane(page, errors);
 
   // a sector with nothing read says so
-  await page.getByRole("button", { name: "Power: generation and sales" }).click();
+  await page.getByRole("button", { name: "Power: capacity and generation" }).click();
   await expect(page.getByText("No update in this list has been read into numbers yet.")).toBeVisible();
   await expect(page.getByText("No month to compare yet")).toBeVisible();
   await sane(page, errors);

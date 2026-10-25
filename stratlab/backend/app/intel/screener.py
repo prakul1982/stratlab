@@ -197,6 +197,19 @@ def fix_lender_margins(p: dict) -> dict:
     return p
 
 
+def pe_basis(p: dict) -> str | None:
+    """What _pe divides the price by: "ttm" (the trailing twelve months' EPS), "year" (the latest year's) or None (the
+    source's own P/E), so the page can say which period its P/E is on (DD-015)."""
+    pl = p.get("pl") or {}
+    eps = next((v for k, v in (pl.get("rows") or {}).items() if str(k).upper().startswith("EPS")), None)
+    if p.get("region") == "US" or not eps:
+        return None
+    pairs = [(str(c).strip().upper(), num(v)) for c, v in zip(pl.get("cols") or [], eps)]
+    if any(c == "TTM" and v is not None for c, v in pairs):
+        return "ttm"
+    return "year" if any(c != "TTM" and v is not None for c, v in pairs) else None
+
+
 def _pe(p: dict, price: float | None) -> float | None:
     """P/E as the page's own numbers give it: the price over the trailing twelve months' earnings per share (the EPS
     row's TTM column: profit that belongs to the shareholders), else over the latest year's; none for a loss. The
@@ -325,6 +338,9 @@ def summary(p: dict) -> dict:
                       "of": f"Year to {y_now} vs year to {y_prev}" if y_now and y_prev else None}
     return {
         "latest_yoy": latest_yoy,
+        # the periods the ratios are of, so each says it (DD-015: P/E on the last 12 months beside margins of the last year)
+        "fy": year_name(latest), "pe_basis": pe_basis(p),
+        "book_as_of": (str(bal["cols"][-1]).strip() or None) if (bal or {}).get("cols") else None,
         "market_cap_cr": market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face), "price": price,
         "high52": hi_lo[0], "low52": hi_lo[1] if len(hi_lo) > 1 else None,
         "pe": _pe(p, price), "book_value": book, "pb": (price / book) if price and book and book > 0 else None,

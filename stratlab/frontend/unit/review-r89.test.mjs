@@ -80,7 +80,8 @@ test("R89-003: the tile's long 'closing prints settling' words wrap inside the t
 
 test("R89-005: the previous close shows after the close and while prints settle, not only while the market trades", () => {
   const src = read("src/components/Research.tsx");
-  assert.match(src, /\{!preOpen && q\.change != null && <span className="k-note" data-testid="price-prev">Previous close \{price\(q\.price - q\.change, currency\)\}<\/span>\}/);
+  // (a new listing's first session says "Issue price" there instead, DD-010)
+  assert.match(src, /\{!preOpen && q\.change != null && <span className="k-note" data-testid="price-prev">\{q\.ref === "issue" \? "Issue price" : "Previous close"\} \{price\(q\.price - q\.change, currency\)\}/);
   assert.doesNotMatch(src, /!closed && !preOpen && !settling && q\.change != null && <span className="k-note" data-testid="price-prev">/);
 });
 

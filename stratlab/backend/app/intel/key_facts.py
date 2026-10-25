@@ -37,11 +37,28 @@ def _metric(c: dict, group: str, label: str) -> float | None:
     return None
 
 
+def _metric_dp(c: dict, group: str, label: str) -> int | None:
+    """The decimals the page shows a Key numbers figure with ("dp" 0: the source gives it in whole percent)."""
+    for g in c.get("metrics") or []:
+        if g.get("title") == group:
+            for i in g.get("items") or []:
+                if i.get("label") == label:
+                    return i.get("dp")
+    return None
+
+
 def _first(*vals):
     return next((v for v in vals if v is not None), None)
 
 
-def _a_year(v) -> str | None:
+def _a_year(v, nm: dict | None = None, unit: str = "") -> str | None:
+    """A yearly growth rate; "n/m" with its base when it starts from a tiny one (DD-018: TONBO's "+268.4% a year" from ₹1 cr)."""
+    if nm:
+        base = nm.get("from")
+        if not isinstance(base, (int, float)):
+            return "n/m"
+        cur, _, word = unit.partition(" ")
+        return f"n/m (from a base of {cur}{base:,.0f} {word} in {nm.get('year')})".replace("  ", " ")
     return f"{_pct(v)} a year" if v is not None else None
 
 
@@ -49,6 +66,9 @@ def _a_year(v) -> str | None:
 def growth(c: dict, nums: dict | None) -> dict | None:
     """Sales and profit growth, compounded over three and five reported years."""
     g = (nums or {}).get("growth") or {}
+    nm = (nums or {}).get("growth_nm") or {}
+    u = (nums or {}).get("unit") or ""
+    a = lambda v, k: _a_year(v, nm.get(k), u)          # noqa: E731
     sales3 = _first(g.get("sales_cagr_3y"), _metric(c, "Sales growth", "3Y CAGR"), _metric(c, "Growth", "Revenue 3Y"))
     sales5 = _first(g.get("sales_cagr_5y"), _metric(c, "Sales growth", "5Y CAGR"), _metric(c, "Growth", "Revenue 5Y"))
     # never compounded again from the page's profit trend: it leaves blank years out, so three of its points can span
@@ -56,8 +76,8 @@ def growth(c: dict, nums: dict | None) -> dict | None:
     profit3 = _first(g.get("profit_cagr_3y"), _metric(c, "Profit growth", "3Y CAGR"))
     profit5 = _first(g.get("profit_cagr_5y"), _metric(c, "Profit growth", "5Y CAGR"))
     return _row("growth", "Growth",
-                _item("Sales, 3 years", _a_year(sales3)), _item("Sales, 5 years", _a_year(sales5)),
-                _item("Net profit, 3 years", _a_year(profit3)), _item("Net profit, 5 years", _a_year(profit5)))
+                _item("Sales, 3 years", a(sales3, "sales_cagr_3y")), _item("Sales, 5 years", a(sales5, "sales_cagr_5y")),
+                _item("Net profit, 3 years", a(profit3, "profit_cagr_3y")), _item("Net profit, 5 years", a(profit5, "profit_cagr_5y")))
 
 
 # ---------- the price ----------
@@ -75,11 +95,24 @@ def _year_ago(bars: list[dict]) -> float | None:
     return num(on_or_before[-1].get("c"))
 
 
-def price_trend(bars: list[dict], page_1y: float | None = None) -> dict | None:
+def stage_now(closes: list[float]) -> int | None:
+    """The Stage on the latest close, from the 150-day average and its 20-day slope: the one computation the company page
+    and the watchlist's At a glance both use (DD-071)."""
+    if len(closes) < 50:
+        return None
+    s = stage(pd.Series(closes), 150, 20).iloc[-1]
+    return None if pd.isna(s) else int(s)
+
+
+def closes_of(bars: list[dict] | None) -> list[float]:
+    return [x for x in (num(b.get("c")) for b in bars or []) if x is not None and x > 0]
+
+
+def price_trend(bars: list[dict], page_1y: float | None = None, page_1y_dp: int | None = None) -> dict | None:
     """Where the price sits against its 50- and 200-day averages, its change over a year, and its Stage. The year's
     change is the page's own Key numbers figure when it has one, so the page shows one 1-year return (R6O-008:
     Eni's "1Y return +59.7%" beside "1-year price change +56.8%")."""
-    closes = [x for x in (num(b.get("c")) for b in bars or []) if x is not None and x > 0]
+    closes = closes_of(bars)
     if len(closes) < 50:
         return None
     last = closes[-1]
@@ -93,12 +126,13 @@ def price_trend(bars: list[dict], page_1y: float | None = None) -> dict | None:
             return "level with it"         # beside its own label ("Price vs 200-day average"), not said twice (R45A-015)
         return f"{_pct(abs(d))} {'above' if d >= 0 else 'below'}"
     ago = _year_ago(bars)
-    s = stage(pd.Series(closes), 150, 20).iloc[-1]
-    stage_now = None if pd.isna(s) else int(s)
+    # the year's change to the page's own decimals: a whole-percent figure stays whole, never "-17.0%" beside "-17%" (DD-017)
+    year = (f"{page_1y:+.{page_1y_dp}f}%" if page_1y_dp is not None else _pct(page_1y, True)) if page_1y is not None \
+        else _pct((last / ago - 1) * 100, True) if ago else None
     return _row("price", "Price trend",
                 _item("Price vs 50-day average", vs(50)), _item("Price vs 200-day average", vs(200)),
-                _item("1-year price change", _pct(page_1y, True) if page_1y is not None else _pct((last / ago - 1) * 100, True) if ago else None),
-                _item("Stage (150-day average)", STAGE.get(stage_now)))
+                _item("1-year price change", year),
+                _item("Stage (150-day average)", STAGE.get(stage_now(closes))))
 
 
 # ---------- debt and cash ----------
@@ -162,7 +196,7 @@ def margins_and_returns(c: dict, nums: dict | None, s: dict) -> dict | None:
     trend, label = None, "Operating margin"
     if not (nums or {}).get("bank") and len(years) >= 2:
         trend = " → ".join(_pct(y["opm"]).replace(".0%", "%") for y in years) + f" ({years[0]['year']} to {years[-1]['year']})"
-        label = "EBITDA margin, 5 years"
+        label = f"EBITDA margin, {len(years)} years"          # as many years as it gives (DD-018: "5 years" over four)
     elif (opm := _metric(c, "Profitability", "Operating margin")) is not None:
         trend = f"{_pct(opm)} (last twelve months)"
     roce = _first(s.get("roce"), _metric(c, "Returns and quality", "ROCE"))
@@ -182,7 +216,8 @@ def build(c: dict, reported: dict | None, bars: list[dict] | None) -> list[dict]
     s = summary(reported) if reported else (c.get("summary") or {})
     rows = []
     page_1y = _first(_metric(c, "Per share and returns", "1Y return"), _metric(c, "Stock price CAGR", "1Y"))
-    for make in (lambda: growth(c, nums), lambda: price_trend(bars or [], page_1y),
+    dp = _metric_dp(c, "Per share and returns", "1Y return") if _metric(c, "Per share and returns", "1Y return") is not None else _metric_dp(c, "Stock price CAGR", "1Y")
+    for make in (lambda: growth(c, nums), lambda: price_trend(bars or [], page_1y, dp),
                  lambda: debt_and_cash(c, reported, nums, s), lambda: margins_and_returns(c, nums, s)):
         try:
             r = make()

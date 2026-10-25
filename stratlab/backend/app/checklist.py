@@ -128,7 +128,9 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
         opm_then = years[-4]["opm"] if len(years) >= 4 and years[-4].get("opm") is not None else None
         d_opm = opm_now - opm_then if opm_now is not None and opm_then is not None else None
         if grp != "reit":         # depreciation and property sales swing a REIT's operating profit: no margin to judge
-            add("Quality", "Operating margin holding up", _state(d_opm, -1, -4),
+            # the yearly margin is before depreciation, an EBITDA margin, and named so (DD-052: NVDA's "Operating margin
+            # holding up 61.7%" beside the page's 65.2% operating margin)
+            add("Quality", "EBITDA margin holding up", _state(d_opm, -1, -4),
                 f"{_pct(opm_now, False)}, from {_pct(opm_then, False)}" if d_opm is not None else "–",
                 "Pass if within 1 point of three years ago or better; fail if down more than 4 points.", soft=grp == "cyclical" or realty)
 

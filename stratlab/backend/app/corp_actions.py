@@ -150,10 +150,17 @@ def row(region: str, symbol: str, action: dict, ex: date, *, record: date | None
     """One action on one company as a calendar row. The id stays the same when the feed is read again."""
     symbol = symbol.upper()
     return {"id": f"{symbol}|{action['kind']}|{ex.isoformat()}|{action.get('sub') or ''}"[:80], "region": region, "symbol": symbol,
-            "name": name or None, "kind": action["kind"], "label": action["label"], "text": action["text"], "short": action.get("short") or action["label"],
+            "name": name or None, "kind": action["kind"], "sub": action.get("sub") or "", "label": action["label"], "text": action["text"], "short": action.get("short") or action["label"],
             "amount": action.get("amount"), "ratio": action.get("ratio"), "factor": action.get("factor"), "premium": action.get("premium"),
             "currency": "INR" if region == "IN" else "USD", "ex_date": ex.isoformat(), "record_date": record.isoformat() if record else None,
             "purpose": str(purpose or "")[:200], "src": src}
+
+
+def is_special(d: dict) -> bool:
+    """Whether a dividend row is a special dividend: by its kind's detail ("sub"), and for a row stored before rows kept
+    it, by its label or id (DD-014: TCS's ₹46 special was counted in its yield without a word, the stored rows having no
+    "sub")."""
+    return d.get("sub") == "special" or str(d.get("label") or "").lower().startswith("special") or str(d.get("id") or "").endswith("|special")
 
 
 def _rows(region, symbol, purpose, ex, record, name, fv=None, src="exchange") -> list[dict]:
@@ -1038,12 +1045,39 @@ def company(region: str, symbol: str, sources: dict | None, today: date | None =
         rows = sorted(rows + home_listing_dividends(symbol, rows, sources["us"], today), key=lambda r: r["ex_date"])
     t = today.isoformat()
     year_ago = (today - timedelta(days=365)).isoformat()
+    rows = in_todays_shares(region, rows, t)
     divs = [r for r in rows if r["kind"] == "dividend" and r.get("amount") and year_ago < r["ex_date"] <= t]
     strip = lambda r: {k: v for k, v in r.items() if k != "fresh"}
+    # the year's total in today's shares: a dividend declared before a bonus is per share of the old, fewer shares (DD-013)
+    total = sum(r.get("now_amount") or r["amount"] for r in divs)
     return {"region": region, "symbol": symbol.upper(), "today": t, "ahead": [strip(r) for r in rows if r["ex_date"] > t],
             "past": [strip(r) for r in sorted((r for r in rows if r["ex_date"] <= t), key=lambda r: r["ex_date"], reverse=True)[:30]],
-            "dividends_12m": {"amount": round(sum(r["amount"] for r in divs), 4), "count": len(divs), "currency": CUR[region]} if divs else None,
+            "dividends_12m": {"amount": round(total, 4), "count": len(divs), "currency": CUR[region],
+                              **({"adjusted": True} if any(r.get("now_amount") for r in divs) else {})} if divs else None,
             "ahead_known": region == "IN", "note": NOTE}
+
+
+def in_todays_shares(region: str, rows: list[dict], today: str | None = None) -> list[dict]:
+    """India's dividends with their amount in today's shares beside the declared one, when a bonus or split came after
+    them: "now_amount" and "now_note" (DD-013: HDFC Bank's "₹22 (Jun 2025)" then "₹13 (Jun 2026)" read as a cut, though
+    after its 1:1 bonus the ₹22 is ₹11 a share and the ₹13 a rise). The US history is adjusted already."""
+    if region != "IN":
+        return rows
+    # only a bonus or split already gone ex changes today's shares; one still ahead hasn't yet
+    later = sorted(((r["ex_date"], r) for r in rows if adjusts(r) and (today is None or r["ex_date"] <= today)), key=lambda x: x[0])
+    if not later:
+        return rows
+    out = []
+    for r in rows:
+        after = [a for ex, a in later if ex > r["ex_date"]]
+        f = math.prod(a["factor"] for a in after) if after else 1.0
+        if r["kind"] == "dividend" and r.get("amount") and after and abs(f - 1) > 1e-9:
+            day = lambda iso: (lambda d: f"{d.day} {d:%b %Y}")(date.fromisoformat(iso[:10]))     # noqa: E731
+            what = " and ".join(f"the {a.get('short') or a['label'].lower()} of {day(a['ex_date'])}" for a in after)
+            r = {**r, "now_amount": round(r["amount"] / f, 4),
+                 "now_note": f"{money(r['amount'] / f, CUR[region])} a share in today's shares, after {what}"}
+        out.append(r)
+    return out
 
 
 # ---------- open paper positions ----------

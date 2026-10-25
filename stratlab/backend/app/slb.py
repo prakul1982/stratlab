@@ -194,8 +194,30 @@ def for_symbol(symbol: str, with_days: bool = True) -> dict:
     return out
 
 
+def market(rec: tuple[str, dict] | None = None) -> dict | None:
+    """The whole segment on its newest stored day, one row per stock that had lending trades: shares lent, fee paid,
+    trades and the share-weighted annualised fee, most shares lent first (DF-022: with no holdings or watchlist the page
+    had nothing to show). Facts of one day, not what lending would fetch."""
+    rec = rec if rec is not None else DESK.store.latest()
+    if not rec:
+        return None
+    day, data = rec
+    rows = []
+    for sym, row in (data.get("rows") or {}).items():
+        lines, anns = row.get("l") or [], row.get("a") or []
+        shares = sum(int(ln[6] or 0) for ln in lines)
+        if not shares:
+            continue
+        weighted = [(a, int(ln[6] or 0)) for ln, a in zip(lines, anns) if a is not None]
+        rows.append({"symbol": sym, "shares": shares, "fee_paid": round(sum(ln[7] or 0 for ln in lines), 2), "trades": sum(int(ln[8] or 0) for ln in lines),
+                     "series": len(lines), "price": row.get("p"),
+                     "ann": round(sum(a * q for a, q in weighted) / sum(q for _, q in weighted), 2) if weighted and sum(q for _, q in weighted) else None})
+    rows.sort(key=lambda r: (-r["shares"], r["symbol"]))
+    return {"day": day, "rows": rows, "stocks": len(rows)}
+
+
 def table(symbols: list[str]) -> dict:
-    return {"rows": [for_symbol(s, with_days=False) for s in symbols], "status": X.status(DESK), "note": NOTE,
+    return {"rows": [for_symbol(s, with_days=False) for s in symbols], "status": X.status(DESK), "note": NOTE, "market": market(),
             "source": SOURCE, "facts": [{"title": t, "text": x} for t, x in FACTS], "windows": list(WINDOWS),
             "coverage": {"days": len(DESK.store.days()), "first": (DESK.store.days() or [None])[0]}}
 

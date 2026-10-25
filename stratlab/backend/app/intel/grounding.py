@@ -1625,6 +1625,13 @@ def class_move(shareholding) -> dict | None:
     return {"classes": classes, "note": str(note)} if classes else None
 
 
+def to_fixed(v: float, dp: int) -> str:
+    """A number to `dp` decimals as the page's JavaScript writes it (toFixed: the exact value of the float, a half rounded
+    up), not Python's round-half-even: NVDA's yield of 0.25 read "0.3%" on the page and "0.2%" in its AI read (DD-033)."""
+    from decimal import ROUND_HALF_UP, Decimal
+    return str(Decimal(v).quantize(Decimal(1).scaleb(-dp), rounding=ROUND_HALF_UP))
+
+
 def page_value(v, unit: str = "x", dp: int | None = None):
     """A Key numbers figure as the page writes it (lib/researchFormat.ts metricText): "0.9%", "+17.3%", "2.56", "₹527",
     so the model reads, and copies, the page's own figure (R7O-001)."""
@@ -1632,7 +1639,7 @@ def page_value(v, unit: str = "x", dp: int | None = None):
         return v
     if unit in ("%", "%±"):
         d = dp if dp is not None else (2 if v != 0 and abs(v) < 0.05 else 1)
-        s = f"{abs(v):.{d}f}%"
+        s = f"{to_fixed(abs(v), d)}%"
         return (("+" if v > 0 else "-" if v < 0 else "") if unit == "%±" else ("-" if v < 0 else "")) + s
     if unit == "money":
         return round(float(v), 2)

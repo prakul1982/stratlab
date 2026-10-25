@@ -200,13 +200,14 @@ def holders_and_updates(mp):
         B.save(sym, item["id"], B.read_one(sym, item, docs, None, []))
     mp.setattr(main.biz_job, "start", lambda: None)
     mp.setattr(main.holders_job, "start", lambda: None)
-    # more sectors: a made-up year for two cement makers; the browser tests' Basic users' holdings and watchlist for My stocks
-    fake_biz.seed(("ULTRACEMCO", "AMBUJACEM"))
+    # more sectors: a made-up year for two metals makers (no cement list: DF-013); the browser tests' Basic users' holdings and
+    # watchlist for My stocks
+    fake_biz.seed(("JSWSTEEL", "NMDC"))
     import json
     from app import db, holdings
     for uid in ("u-load-289", "u-load-292"):
         holdings.save(uid, [{"symbol": "MARUTI", "qty": 10, "avg": 11000.0}, {"symbol": "TCS", "qty": 5, "avg": 3500.0}], "manual")
-        db.set_setting(f"watchlist:{uid}", json.dumps({"items": [{"symbol": "TVSMOTOR", "region": "IN"}, {"symbol": "ULTRACEMCO", "region": "IN"},
+        db.set_setting(f"watchlist:{uid}", json.dumps({"items": [{"symbol": "TVSMOTOR", "region": "IN"}, {"symbol": "JSWSTEEL", "region": "IN"},
                                                                   {"symbol": "MARUTI", "region": "IN"}, {"symbol": "AAPL", "region": "US"}]}))
 
 

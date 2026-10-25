@@ -11,6 +11,8 @@ export type HolderChange = "new" | "up" | "down" | "same" | "dropped" | null;
 export interface NamedHolder {
   name: string; kind: string; group: "promoter" | "public"; shares: number; pct: number;
   prev_pct: number | null; prev_shares: number | null; change: HolderChange; pct_change: number | null;
+  /** the name it was filed under the quarter before: the same holder, renamed in the filing (DF-016) */
+  was_named?: string;
 }
 export interface CompanyHolders {
   symbol: string; name: string; quarter: string; prev_quarter: string | null; filed: string | null; url: string | null;
@@ -79,7 +81,8 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
       {v.holders.length === 0 ? <p className="k-small k-muted">The filing names no holder above 1%.</p> : (
         <DataTable label={`${v.symbol} named holders`} rows={list} rowKey={(h) => `${h.group}-${h.name}`} stack sticky={list.length > 14} rowAttrs={(h) => ({ "data-holder": h.name })}
           columns={[
-            { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (h) => <>{h.name}<span className="k-sub-line">{h.group === "promoter" ? "Promoter group · " : ""}{h.kind}</span></> },
+            { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (h) => <>{h.name}<span className="k-sub-line">{h.group === "promoter" ? "Promoter group · " : ""}{h.kind}</span>
+              {h.was_named && <span className="k-sub-line">filed last quarter as {h.was_named}</span>}</> },
             { key: "s", header: "Shares", numeric: true, cell: (h) => shares(h.shares) },
             { key: "p", header: "Stake", numeric: true, cell: (h) => `${h.pct.toFixed(2)}%` },
             { key: "c", header: "Since last quarter", numeric: true, cell: (h) => <><ChangeText c={h.change} d={h.pct_change} />{h.prev_pct != null && h.change !== "same" && <span className="k-sub-line">was {h.prev_pct.toFixed(2)}%</span>}</> },

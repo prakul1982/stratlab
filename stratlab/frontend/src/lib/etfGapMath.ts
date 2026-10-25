@@ -24,8 +24,9 @@ export function gapWords(g: number | null | undefined, basis: string): string {
 
 /** The row as it stands at a price the page already shows (a holding's last price, a company page's quote) instead of
  * the exchange list's own price from its last read: the gap is that price against the iNAV (when a source gave one) or
- * the last NAV, to two places, the list's own arithmetic, so a badge never contradicts the price beside it. A gap of
- * more than 50% is a NAV of another unit, not a real gap (as in the list). With no usable price, the row stays as the
+ * the last NAV, to two places, the list's own arithmetic, so a badge never contradicts the price beside it. A price
+ * three or more times the NAV (or under a third of it) is a NAV of another unit, not a real gap (as in the list); a
+ * wide gap short of that is real and shown (DF-001: MONQ50 at 86% above). With no usable price, the row stays as the
  * list has it.
  *
  * A NAV is of one day, so the shown price is set against it only when `day` (the price's day) is the NAV's own day;
@@ -36,12 +37,17 @@ export function gapAtPrice(r: EtfGap, p: number | null | undefined, day?: string
   if (r.inav == null && (!day || day !== r.nav_date)) return r;
   const gapTo = (ref: number | null): number | null => {
     if (ref == null || !(ref > 0)) return null;
-    const g = (p / ref - 1) * 100;
-    return Math.abs(g) <= 50 ? Math.round(g * 100) / 100 : null;
+    const ratio = p / ref;
+    return ratio > 1 / 3 && ratio < 3 ? Math.round((ratio - 1) * 100 * 100) / 100 : null;
   };
   const inav_gap = gapTo(r.inav), nav_gap = gapTo(r.nav);
   const basis = inav_gap != null ? "iNAV" : nav_gap != null ? "NAV" : null;
   const gap = basis === "iNAV" ? inav_gap : nav_gap;
   return { ...r, price: p, price_at: null, inav_gap, nav_gap, gap, basis,
     text: basis ? `${r.symbol} ${gapWords(gap, basis === "iNAV" ? "indicative NAV" : "last NAV")}` : null };
+}
+
+/** "14 days", or "13 of 14 days" when a kept day had no gap to count (DF-003: the column said 30 days and never how many). */
+export function dayCount(d: { days: number; stored?: number }): string {
+  return d.stored && d.stored > d.days ? `${d.days} of ${d.stored} days` : `${d.days} day${d.days === 1 ? "" : "s"}`;
 }

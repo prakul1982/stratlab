@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
-import { useApp } from "../lib/app";
+import { axisCrore, costProblems, RANGE_DAYS, rangesFor } from "../lib/mtfCost";
 import { eyebrowOf } from "../lib/eyebrow";
-import { axisInr, CRORE, inr, inrCompact, pct, pctPlain, signedInrCompact } from "../lib/format";
+import { CRORE, inr, inrCompact, pct, pctPlain, signedInrCompact } from "../lib/format";
 import { dayText, desksApi, sharesShort, type CostIn, type CostOut, type MtfChange, type MtfOne, type MtfPage } from "../lib/stockDesks";
 import { LineChart } from "../components/Charts";
 import { AlertButton } from "../components/AlertForm";
@@ -22,14 +22,11 @@ const chg = (c: MtfChange | undefined) => (c ? `${signedInrCompact(c.crore * CRO
 const exact = (crore: number | null | undefined) => (crore == null ? "–" : `${inr(crore, 2)} cr`);
 const cr = (crore: number | null | undefined) => (crore == null ? "–" : inrCompact(crore * CRORE));
 
-const RANGE_DAYS: [string, string, number][] = [["1m", "1M", 31], ["3m", "3M", 93], ["1y", "1Y", 366]];
-
-/** The range switch for a daily history: 1M / 3M / 1Y only where the stored days cover them, always "All". Slices by date. */
 function useRange(days: string[]) {
   const [pick, setPick] = useState<string | null>(null);
   const span = days.length > 1 ? (Date.parse(days[days.length - 1]) - Date.parse(days[0])) / 86_400_000 : 0;
   const choices: Choice[] = useMemo(() => {
-    const fit = RANGE_DAYS.filter(([, , d]) => span > d).map(([value, label]) => ({ value, label }));
+    const fit = rangesFor(span).map(([value, label]) => ({ value, label }));
     return fit.length ? [...fit, { value: "all", label: "All" }] : [];
   }, [span]);
   const range = choices.some((c) => c.value === pick) ? pick! : choices.some((c) => c.value === "3m") ? "3m" : "all";
@@ -61,7 +58,7 @@ function Market({ p }: { p: MtfPage }) {
   else if (h.length < 2) body = <EmptyState title="Not enough days to draw yet">The chart appears once two days of the exchange's disclosure are in.</EmptyState>;
   else body = (
     <LineChart lines={[{ values: shown.map((x) => x.end), color: "var(--pos-call)", width: 2, label: "MTF book" }]} labels={shown.map((x) => dayText(x.day))} times={shown.map((x) => x.day)}
-      ranges={false} table={false} format={exact} axisFormat={(v) => axisInr(v * CRORE)} height={180} ariaLabel="The market's margin-funded book by day, in rupees crore" />
+      ranges={false} table={false} format={exact} axisFormat={axisCrore} height={180} ariaLabel="The market's margin-funded book by day, in rupees crore" />
   );
   const canTable = !!m.as_of && p.full && h.length >= 2;
   return (
@@ -118,7 +115,7 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
       {!d.full ? <p className="k-small k-muted" data-testid="mtf-locked">A year of {symbol}'s margin funding, and an alert when it crosses a level, are on the <Link className="link" to="/plans">{d.plan_needed} plan</Link>.</p>
         : h.length < 2 ? <EmptyState title="Not enough days to draw yet">The chart appears once two days of the exchange's disclosure are in.</EmptyState>
         : <LineChart lines={[{ values: shown.map((x) => x.crore), color: "var(--pos-call)", width: 2, label: "Funded" }]} labels={shown.map((x) => dayText(x.day))} times={shown.map((x) => x.day)}
-            ranges={false} table={false} format={exact} axisFormat={(v) => axisInr(v * CRORE)} height={180} ariaLabel={`${symbol}'s margin-funded amount by day, in rupees crore`} />}
+            ranges={false} table={false} format={exact} axisFormat={axisCrore} height={180} ariaLabel={`${symbol}'s margin-funded amount by day, in rupees crore`} />}
     </ChartFrame>
   );
 }
@@ -126,40 +123,59 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
 const START: Record<keyof CostIn, string> = { buy: "1000", qty: "100", margin_pct: "25", rate_pct: "15", days: "30", charges: "", price: "", maint_pct: "" };
 
 function Calculator() {
-  const { fail } = useApp();
   const [f, setF] = useState(START);
-  const [out, setOut] = useState<CostOut | null>(null);
+  // the answer with the days it was worked out for, so its words never read another day count than its figures
+  const [out, setOut] = useState<(CostOut & { for_days: number }) | null>(null);
   const [busy, setBusy] = useState(false);
-  const set = (k: keyof CostIn) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const [touched, setTouched] = useState<Partial<Record<keyof CostIn, boolean>>>({});
+  const [server, setServer] = useState<Record<string, string>>({});
+  const [failed, setFailed] = useState<string | null>(null);
+  const errs = costProblems(f);
+  const bad = Object.keys(errs).length > 0;
+  const shownErr = (k: keyof CostIn) => (touched[k] ? errs[k] : undefined) ?? server[k];
+  const set = (k: keyof CostIn) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setF((x) => ({ ...x, [k]: v })); setTouched((t) => ({ ...t, [k]: true })); setServer({}); setFailed(null);
+    setOut(null);                  // the old answer is for the old figures: it goes as soon as one changes
+  };
   const run = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const quiet = !e;
-    const n = (k: keyof CostIn) => (f[k].trim() === "" ? null : Number(f[k]));
+    if (bad) { setTouched(Object.fromEntries(Object.keys(START).map((k) => [k, true]))); setOut(null); return; }
+    const n = (k: keyof CostIn) => (f[k].trim() === "" ? null : Number(f[k].replace(/,/g, "")));
     const body = { buy: n("buy"), qty: n("qty"), margin_pct: n("margin_pct"), rate_pct: n("rate_pct"), days: n("days"), charges: n("charges") ?? 0,
       price: n("price"), maint_pct: n("maint_pct") ?? 0 } as CostIn;
     setBusy(true);
-    try { setOut(await desksApi.cost(body)); } catch (err) { if (!quiet) fail(err); } finally { setBusy(false); }
+    try { setOut({ ...(await desksApi.cost(body)), for_days: body.days }); }
+    catch (err) {
+      setOut(null);
+      const fields = err instanceof ApiError ? (err as ApiError & { fields?: Record<string, string> }).fields : undefined;
+      if (fields && Object.keys(fields).length) setServer(fields);
+      else setFailed(err instanceof Error ? err.message : "That couldn't be worked out just now.");
+    } finally { setBusy(false); }
   };
   // the example position is worked out on arrival, so the card opens with an answer rather than an empty form
   useEffect(() => { void run(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
-  const days = Number(f.days) || 0;
+  const days = out?.for_days ?? 0;
   return (
     <Card id="mtf-cost">
       <CardHead title="What your MTF position costs" info="Enter your own position. Interest is worked out daily on the funded amount, as most brokers charge it. Check your broker's contract note for the exact figures." />
       <FormGrid onSubmit={run} label="Your MTF position">
-        <Field label="Buy price" unit="₹" inputMode="decimal" placeholder="1000" value={f.buy} onChange={set("buy")} info="The price you pay for each share." />
-        <Field label="Shares" inputMode="numeric" placeholder="100" value={f.qty} onChange={set("qty")} />
-        <Field label="Your margin" unit="%" inputMode="decimal" value={f.margin_pct} onChange={set("margin_pct")} info="The part of the buy value you pay yourself. The broker funds the rest." />
-        <Field label="Interest" unit="% / yr" inputMode="decimal" value={f.rate_pct} onChange={set("rate_pct")} info="The broker's yearly interest rate on the funded amount, charged daily." />
-        <Field label="Days held" inputMode="numeric" value={f.days} onChange={set("days")} info="How many days the funding stays open." />
-        <Field label="Charges" optional unit="₹" inputMode="decimal" placeholder="0" value={f.charges} onChange={set("charges")} info="Pledge charges, brokerage and anything else, all told for the whole holding period." />
-        <Field label="Price now" optional unit="₹" inputMode="decimal" value={f.price} onChange={set("price")} info="Add today's price to see the position's profit or loss after interest and charges, and the margin left." />
-        <Field label="Margin to keep" optional unit="%" inputMode="decimal" value={f.maint_pct} onChange={set("maint_pct")} info="The margin your broker asks you to keep, as a percent of the position's value. Add it to see the price where your margin falls under it." />
+        <Field label="Buy price" unit="₹" inputMode="decimal" placeholder="1000" value={f.buy} onChange={set("buy")} error={shownErr("buy")} info="The price you pay for each share." />
+        <Field label="Shares" inputMode="numeric" placeholder="100" value={f.qty} onChange={set("qty")} error={shownErr("qty")} />
+        <Field label="Your margin" unit="%" inputMode="decimal" value={f.margin_pct} onChange={set("margin_pct")} error={shownErr("margin_pct")} rule="More than 0, less than 100" info="The part of the buy value you pay yourself. The broker funds the rest." />
+        <Field label="Interest" unit="% / yr" inputMode="decimal" value={f.rate_pct} onChange={set("rate_pct")} error={shownErr("rate_pct")} rule="0 to 60" info="The broker's yearly interest rate on the funded amount, charged daily." />
+        <Field label="Days held" inputMode="numeric" value={f.days} onChange={set("days")} error={shownErr("days")} rule="0 to 3,650" info="How many days the funding stays open." />
+        <Field label="Charges" optional unit="₹" inputMode="decimal" placeholder="0" value={f.charges} onChange={set("charges")} error={shownErr("charges")} info="Pledge charges, brokerage and anything else, all told for the whole holding period." />
+        <Field label="Price now" optional unit="₹" inputMode="decimal" value={f.price} onChange={set("price")} error={shownErr("price")} info="Add today's price to see the position's profit or loss after interest and charges, and the margin left." />
+        <Field label="Margin to keep" optional unit="%" inputMode="decimal" value={f.maint_pct} onChange={set("maint_pct")} error={shownErr("maint_pct")} info="The margin your broker asks you to keep, as a percent of the position's value. Add it to see the price where your margin falls under it." />
         <FormActions>
           <button className="btn" disabled={busy}>{busy ? "Working it out…" : "Work it out"}</button>
           <span className="k-small k-muted">Arithmetic on the numbers you enter, not advice.</span>
         </FormActions>
       </FormGrid>
+      {!out && !busy && (bad ? <p className="k-small k-muted" data-testid="mtf-cost-wait">Fix the figures marked above to see what the position costs.</p>
+        : failed ? <p className="k-small k-muted" role="alert">{failed}</p>
+        : <p className="k-small k-muted" data-testid="mtf-cost-wait">Press Work it out for these figures.</p>)}
       {out && (
         <ResultBlock testId="mtf-cost-out" label={`Holding for ${days} day${days === 1 ? "" : "s"} costs`} big={inr(out.costs, 2)}
           note={`${out.cost_pct_own != null ? `${pctPlain(out.cost_pct_own, 2)} of your own money · ` : ""}${inr(out.interest_day, 2)} a day in interest`}

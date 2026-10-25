@@ -11,6 +11,7 @@ import {
   type Company, type CompareAI, type Idea, type IndexLevel, type PulseAI, type PulseData, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import { askAgain, PULSE_PENDING_EVERY_MS, PULSE_SLOW_MS, pulseLoad } from "../lib/pulseLoad";
+import { bseTwinMoved, delistedLine, regionOf } from "../lib/researchFormat";
 import {
   AIRead, aiLimited, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
   Shareholding, SourcesNote, StarButton, TrendBars,
@@ -205,9 +206,34 @@ function NoSuchCompany({ region, sym, eyebrow }: { region: Region; sym: string; 
     </div>
   );
 }
+/** A market research doesn't cover (/research/XX/TCS): said so, with the two markets it does, never India's page
+ * opened silently (DD-005). */
+function NoSuchMarket({ market, sym }: { market: string; sym: string }) {
+  return (
+    <div className="k-page">
+      <PageHeader eyebrow={eyebrowOf("/research")} title={`No market called ${market.toUpperCase().slice(0, 12)}`} />
+      <Card>
+        <EmptyState title="Research covers India and the US">
+          Company pages are at /research/IN/ for India and /research/US/ for the US.
+        </EmptyState>
+        {sym && <div className="k-row">
+          <Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(sym)}`}>{sym.toUpperCase()} in India</Link>
+          <Link className="btn quiet sm" to={`/research/US/${encodeURIComponent(sym)}`}>{sym.toUpperCase()} in the US</Link>
+        </div>}
+      </Card>
+    </div>
+  );
+}
+
 export function CompanyPage() {
   const { region: r = "IN", symbol = "" } = useParams();
-  const region: Region = r.toUpperCase() === "US" ? "US" : "IN";
+  if (!regionOf(r)) return <NoSuchMarket market={r} sym={symbol.slice(0, 20)} />;
+  return <CompanyView />;
+}
+
+function CompanyView() {
+  const { region: r = "IN", symbol = "" } = useParams();
+  const region: Region = regionOf(r) ?? "IN";
   // BRK.B is BRK-B's page, at BRK-B's address (R13-001): the server answers either, the address says one
   const sym = canonTicker(region, symbol);
   const moved = sym !== symbol.toUpperCase();
@@ -239,6 +265,8 @@ export function CompanyPage() {
     // fill in behind them, so a slow one holds up only its own card (R10O-009: company pages settled in 9 to 30 s)
     researchApi.company(region, sym, true).then((x) => {
       if (!live) return;
+      // a BSE code of a company NSE lists too opens its one page, at the NSE symbol's address (DD-003: 500325 is RELIANCE)
+      if (bseTwinMoved(sym, x)) { nav(`/research/${region}/${encodeURIComponent(x.symbol)}${window.location.search}`, { replace: true }); return; }
       setC(x);
       // the results calendar under the page's own symbol (ZOMATO's page is ETERNAL's), not the one in the address
       api<{ next: ResultRow | null; last: ResultRow | null }>(`/research/results/${region}/${encodeURIComponent(x.symbol || sym)}`)
@@ -310,7 +338,7 @@ export function CompanyPage() {
           <div className="k-stack inv-head-price">
             <Change q={c.quote} currency={ccy} closed={c.market_open === false} preOpen={c.phase === "pre_open"} settling={c.phase === "settling"}
               quoteDay={c.quote_day} today={dayIn(new Date(), marketTz(region)) ?? undefined} />
-            <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} currency={ccy} compact />
+            <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} since={c.range52.since} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
             {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
             {filedNow && (results?.next?.out?.url
@@ -321,14 +349,17 @@ export function CompanyPage() {
               : <Link className="link k-small" to={`/research/results?region=${region}`}>Results filed {resultDay(results.last.out.at)}</Link>)}
           </div>
         </div>
+        {/* a company that no longer trades says so first, and offers nothing that needs a live share (DD-012) */}
+        {c.delisted && <p className="k-small" role="status" data-testid="delisted">{delistedLine(c.name, c.delisted, (d) => fmtDate(d))}
+          {c.delisted.into_symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(c.delisted.into_symbol)}`}>{c.delisted.into ?? c.delisted.into_symbol} →</Link></>}</p>}
         {/* one main action (what this person came for), Watch and an alert; the rest under More */}
         <div className="k-row">
           {/* the page's two main paths are both buttons: the one this person came for first and solid, the other beside it */}
-          {lead === "deep" ? deep("") : <button className="btn sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
-          {lead === "deep" ? (c.testable && <button className="btn quiet sm" onClick={() => test(c)}>Test a strategy</button>) : deep("quiet")}
-          <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${encodeURIComponent(c.symbol)}`}>Compare</Link>
-          <StarButton region={region} symbol={c.symbol} name={c.name} />
-          <AlertButton region={region} symbol={c.symbol} />
+          {!c.delisted && (lead === "deep" ? deep("") : <button className="btn sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>)}
+          {!c.delisted && (lead === "deep" ? (c.testable && <button className="btn quiet sm" onClick={() => test(c)}>Test a strategy</button>) : deep("quiet"))}
+          {!c.delisted && <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${encodeURIComponent(c.symbol)}`}>Compare</Link>}
+          {!c.delisted && <StarButton region={region} symbol={c.symbol} name={c.name} />}
+          {!c.delisted && <AlertButton region={region} symbol={c.symbol} />}
           <MoreMenu items={[
             { label: share.busy ? "Making the card…" : "Share", run: () => { void share.run(); } },
             ...(region === "IN" ? [{ label: "Test a SIP", run: () => nav(`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`) }] : []),
@@ -338,11 +369,11 @@ export function CompanyPage() {
         </div>
       </Card>
       <SourcesNote sources={c.sources} />
-      <PageNav items={[{ id: "co-chart", label: "Price chart" }, { id: "co-numbers", label: "Key numbers" },
+      <PageNav items={[...(c.delisted ? [] : [{ id: "co-chart", label: "Price chart" }]), { id: "co-numbers", label: "Key numbers" },
         ...(c.shareholding && c.shareholding.rows.length > 0 ? [{ id: "co-owners", label: "Who owns it" }] : []),
         ...(region === "IN" ? [{ id: "filings", label: "Filings" }, { id: "deals", label: "Deals" }] : []),
         { id: "corporate-actions", label: "Corporate actions" }, { id: "co-news", label: "News" }]} />
-      <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>
+      {!c.delisted && <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>}
       {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} quiet />}
 
       <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
@@ -374,13 +405,14 @@ export function CompanyPage() {
               { key: "p", header: `${trend.t.profit_label} (${trend.prof.unit})`, numeric: true, cell: (x) => (x.profit == null ? "–" : trendValue(x.profit, trend.prof.unit)) }] }}>
           <div className="k-cols">
             <TrendBars points={trend.rev.points} label={trend.t.revenue_label} unit={trend.rev.unit} />
-            <TrendBars points={trend.prof.points} label={trend.t.profit_label} unit={trend.prof.unit} tone="blue" />
+            <TrendBars points={trend.prof.points} label={trend.t.profit_label} unit={trend.prof.unit} tone="blue"
+              baseSales={trend.rev.points.find((p) => p.y === trend.prof.points[0]?.y)?.v ?? null} />
           </div>
         </ChartFrame>
       )}
 
       <div className="k-cols">
-        {c.earnings.length > 1 && <Card><CardHead title="Results versus expectations" info={HELP.researchEarnings} /><EarningsBars rows={c.earnings} /></Card>}
+        {c.earnings.length > 1 && <Card><CardHead title="Results versus expectations" info={HELP.researchEarnings} /><EarningsBars rows={c.earnings} basis={c.earnings_basis} /></Card>}
         {c.shareholding && c.shareholding.rows.length > 0 && <Card id="co-owners"><CardHead title="Who owns it" info={HELP.researchHolding} /><Shareholding s={c.shareholding} /></Card>}
         {c.insider && c.insider.rows.length > 0 && (
           <Card>

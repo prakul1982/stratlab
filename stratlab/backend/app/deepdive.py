@@ -107,6 +107,28 @@ def _cagr(vals: list, years: int) -> float | None:
     return ((new / old) ** (1 / years) - 1) * 100
 
 
+TINY_BASE = 20                 # the latest figure this many times the first or more, at 100% a year or faster: a tiny base
+
+
+TINY_MARGIN = 0.03             # ...and, for a profit, a base under this share of that year's sales
+
+
+def tiny_base(vals: list, years: int, sales: list | None = None) -> int | None:
+    """The index of the starting figure when a growth rate over `years` years starts from a base so small the rate says
+    more about the base than the business (TONBO's profit: ₹1 cr on ₹97 cr of sales in FY23, to ₹50 cr: "+268.4% a year"),
+    else None (DD-018). With `sales` (a profit's), the base must also be a sliver of that year's sales: NVIDIA's FY23
+    profit of $4.4 billion on $27 billion is a low year, not a tiny base."""
+    if len(vals) <= years:
+        return None
+    i = len(vals) - 1 - years
+    new, old = vals[-1], vals[i]
+    if new is None or old is None or old <= 0 or new <= 0:
+        return None
+    if sales is not None and not (i < len(sales) and sales[i] and old / sales[i] < TINY_MARGIN):
+        return None
+    return i if new / old >= TINY_BASE and ((new / old) ** (1 / years) - 1) * 100 >= 100 else None
+
+
 def _year_key(col: str) -> str:
     """A year column without its short-period tag: the results table writes a company's first, part-year report as
     "Mar 2024 3m" where its balance sheet and cash flow say "Mar 2024"."""
@@ -200,6 +222,10 @@ def numbers(p: dict) -> dict:
         "growth": {"sales_cagr_3y": _cagr(full(sales), 3), "sales_cagr_5y": _cagr(full(sales), 5),
                    "profit_cagr_3y": _cagr(full(profit), 3), "profit_cagr_5y": _cagr(full(profit), 5),
                    "eps_cagr_3y": _cagr(full(eps), 3), "eps_cagr_5y": _cagr(full(eps), 5)},
+        # a rate from a tiny base is not a meaningful growth rate: {key: {"from", "year"}} for the pages to say n/m (DD-018)
+        "growth_nm": {f"{k}_cagr_{y}y": {"from": vals[i], "year": ycols[i]}
+                      for k, vals, scale in (("sales", full(sales), None), ("profit", full(profit), sales), ("eps", full(eps), None))
+                      for y in (3, 5) if (i := tiny_base(vals, y, scale)) is not None and (k != "eps" or tiny_base(full(profit), y, sales) is not None)},
         "capex_3y_total": round(sum(recent_capex), 1) if recent_capex else None, "capex_years": len(recent_capex),     # of the last 3
         "unit": p.get("unit") or "₹ crore", "fye": _fye(p), "capex_reported": any(v is not None for v in reported), "bank": bank, "basis": p.get("basis"), "notes": notes,
         "no_revenue": list(p.get("no_revenue") or []),
