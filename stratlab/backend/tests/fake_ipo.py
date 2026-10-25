@@ -150,6 +150,13 @@ def seed(today: date | None = None):
          "price": 700.0, "lot": 21, "size_shares": 12174046, "ofs": 12174046,
          "sub": {"rows": [{"label": "Total", "sr": "total", "offered": 12174046, "bid": 1654000000, "times": 135.9}], "times": 135.9, "as_of": f"{d(-12)} 19:00"},
          "perf": {"issue_price": 700.0, "listing_price": 1160.0, "listing_change_pct": 65.71, "day_close": 1190.0, "day_change_pct": 70.0, "latest": 1135.0, "change_pct": 62.14, "listed": d(-9), "latest_date": d(-1), "at": fresh, "basis": "prices"}},
+        # the exchanges' notes on issues that did not go ahead, and a Social Stock Exchange raise: none of them is in a stage
+        {**base, "id": "in-zenith", "name": "Zenith Foods Limited", "symbol": None, "series": None, "exchanges": ["BSE"], "nkey": "zenith", "open": d(-2), "close": d(1), "low": 100.0,
+         "high": 110.0, "bse_code": "4911", "issue_status": "withdrawn"},
+        {**base, "id": "in-orbit", "name": "Orbit Textiles Limited", "symbol": None, "series": None, "exchanges": ["BSE"], "nkey": "orbit", "open": d(6), "close": d(8), "low": 50.0,
+         "high": 55.0, "bse_code": "4912", "issue_status": "postponed"},
+        {**base, "id": "in-momsbelief", "name": "Rays of Belief Limited", "symbol": "MOMSBELIEF", "nkey": "raysofbelief", "open": d(-30), "close": d(-28), "low": 227.0, "high": 239.0,
+         "social": True},
         {"id": "in-f-105347", "market": "IN", "segment": None, "name": "Hunger Pangs Limited", "symbol": None, "nkey": "hungerpangs", "exchanges": [], "currency": "INR", "filed": d(-4),
          "docs": [{"kind": "DRHP", "label": "Hunger Pangs Limited – DRHP", "url": "https://www.sebi.gov.in/filings/public-issues/oct-2026/hunger-pangs-limited-drhp_105347.html", "date": d(-4), "source": "sebi"}], "seen": d(-4)},
     ]

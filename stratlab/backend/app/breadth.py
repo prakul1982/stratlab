@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from . import db, official_close, rotation, scan_presets, sector_members, universes
+from . import db, memguard, official_close, rotation, scan_presets, sector_members, universes
 from .engine.indicators import stage
 from .data import calendar
 from . import deals  # noqa: F401  (before the newsletter job, which imports it back while loading)
@@ -485,6 +485,7 @@ class Runner:
         finally:
             self.running = None
             self.lock.release()
+            memguard.release_memory(force=True)      # the run's candles and counts are done with
 
     def _run(self, region: str, now: datetime, full: bool | None) -> dict:
         groups = [g for g, v in GROUPS.items() if v["region"] == region]
@@ -517,8 +518,9 @@ class Runner:
             if i and self.gap:
                 self.sleep(self.gap)                     # leave the source room for people using the app
             try:
-                bars = self.load(region, sym, days)
-                flags = stock_flags(bars, through)
+                with memguard.heavy("breadth"):          # a stock's candles in their turn, not through the pause between stocks (MEM-001)
+                    bars = self.load(region, sym, days)
+                    flags = stock_flags(bars, through)
                 streak = 0
             except LookupError:
                 unlisted += 1               # not on the exchange's list any more: left out, not a failed read

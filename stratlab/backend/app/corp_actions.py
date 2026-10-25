@@ -22,7 +22,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import db, leader, results, run_marks
+from . import db, leader, memguard, results, run_marks
 from .intel.net import SourceError, TTLCache
 from .results import REGIONS, TZ, dates_in, local_today, parse_day
 
@@ -585,7 +585,8 @@ def refresh_universe(sources: dict, tracked=(), today: date | None = None, pace:
         if i and pace:
             sleep(pace)
         try:
-            got = fetch_history(region, sym, sources, today)
+            with memguard.heavy("corp-actions-universe"):      # a company's history in its turn, not through the pause between companies (MEM-001)
+                got = fetch_history(region, sym, sources, today)
         except SourceError as e:
             problems.append(f"{sym}: {str(e)[:100]}")
             busy = busy + 1 if getattr(e, "busy", False) else 0
@@ -600,6 +601,7 @@ def refresh_universe(sources: dict, tracked=(), today: date | None = None, pace:
         got = [{**r, "name": r.get("name") or names.get(sym)} for r in got]
         hist_save(region, sym, got)
         rows += [r for r in got if frm.isoformat() <= r["ex_date"] <= to.isoformat()]
+    memguard.release_memory(force=True)                  # the whole universe's histories were read one after another
     if not done:
         return {"rows": None, "read": 0, "failed": len(problems), "problems": problems[:10]}
     with _lock:
@@ -625,7 +627,8 @@ def refresh_histories(region: str, sources: dict, symbols: set[str], today: date
             continue
         n += 1
         try:
-            hist_save(region, sym, fetch_history(region, sym, sources, today or local_today(region)))
+            with memguard.heavy("corp-actions"):
+                hist_save(region, sym, fetch_history(region, sym, sources, today or local_today(region)))
         except (SourceError, AttributeError, KeyError, TypeError) as e:
             if getattr(e, "busy", False):
                 break
@@ -903,7 +906,8 @@ class Job:
             for at in REFRESH_AT[region]:
                 day, run = self.claim(f"refresh-{region}-{at}", now, region, at)
                 if day:
-                    out = self.refresh(region, who(), day)
+                    with memguard.heavy("corp-actions", force_release=True):      # a region's whole calendar read (MEM-001)
+                        out = self.refresh(region, who(), day)
                     ran = True
                     if out["rows"] is None:      # every feed failed: not done, so the slot is resumed once its beat is stale
                         continue

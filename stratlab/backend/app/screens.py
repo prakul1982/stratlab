@@ -20,7 +20,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import db, deals, leader, sector_members, stock_pages, surveillance
+from . import db, deals, leader, memguard, sector_members, stock_pages, surveillance
 from .newsletter import job as news_job
 
 INDEX_KEY = "screens:index:"          # screens:index:IN = {"at", "rows": [...]}
@@ -879,18 +879,22 @@ class Indexer:
         warmed = 0
         for region in REGIONS:
             try:
-                index = build_index(region, store=False)
+                with memguard.heavy("screens-index"):         # every stored page of the market gathered: one heavy job at a time (MEM-001)
+                    index = build_index(region, store=False)
+                index = {k: v for k, v in index.items() if k != "rows"}      # only the pages' ages are needed through the warming pauses
                 if self.warm:
                     for i, (sym, co) in enumerate(self._due(region, index["_ages"], index.get("_empty"), index.get("_old"))):
                         if i:
                             sleep(self.gap)              # leave room in the ration for people opening pages
                         try:
-                            self.warm(region, sym, co)
+                            with memguard.heavy("screens-index"):     # a page is built in its turn, not through the pause between pages
+                                self.warm(region, sym, co)
                             warmed += 1
                         except Exception as e:           # busy or down: next run
                             self.status["last_error"] = f"{region} {sym}: {str(e)[:120] or e.__class__.__name__}"
                             break
-                index = build_index(region)
+                with memguard.heavy("screens-index", force_release=True):
+                    index = build_index(region)
                 self.status["rows"][region] = len(index["rows"])
             except Exception as e:
                 self.status["last_error"] = f"{region}: {str(e)[:160]}"

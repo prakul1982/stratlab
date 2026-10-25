@@ -24,7 +24,7 @@ import zipfile
 import zlib
 from datetime import date, datetime, timedelta
 
-from . import db
+from . import db, memguard
 from .intel.net import SourceError, TTLCache, num
 from .newsletter import job as news_job
 from .positioning import IST, Feed, ist_now
@@ -624,7 +624,8 @@ class Job(news_job.Job):
                 behind = exp is not None and (not days or days[-1] < exp.isoformat())
                 if behind and time.time() - self._tried.get(name, 0.0) >= RETRY_MINUTES * 60:
                     self._tried[name] = time.time()
-                    self.status["desks"][name] = {"catch_up": self.runner.catch_up(desk, now), "at": now.isoformat()}
+                    with memguard.heavy("stock-desks", force_release=True):        # the evening's exchange files, one heavy job at a time (MEM-001)
+                        self.status["desks"][name] = {"catch_up": self.runner.catch_up(desk, now), "at": now.isoformat()}
                     continue
                 if exp is not None and desk.store.get(exp.isoformat()) and desk.store.state().get("fired") != exp.isoformat():
                     try:                    # a stored day whose alerts are owed; the walk back goes on whatever comes of them
@@ -632,7 +633,8 @@ class Job(news_job.Job):
                     except Exception as e:
                         self.status["last_error"] = f"{name}: {str(e)[:180]}"
                 if not (QUIET[0] <= hhmm <= QUIET[1]) and not (desk.store.state().get("backfill") or {}).get("done"):
-                    self.status["desks"].setdefault(name, {})["backfill"] = self.runner.backfill(desk, local.date())
+                    with memguard.heavy("stock-desks", force_release=True):
+                        self.status["desks"].setdefault(name, {})["backfill"] = self.runner.backfill(desk, local.date())
             except Exception as e:
                 self.status["last_error"] = f"{name}: {str(e)[:180]}"
         self.status["last_run"] = now.isoformat()

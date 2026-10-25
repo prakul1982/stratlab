@@ -30,7 +30,7 @@ from html import escape as e
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from . import db, instrument_kinds, sector_members, site_pages, universes
+from . import db, instrument_kinds, memguard, sector_members, site_pages, universes
 from .branding import public_text
 from .config import settings
 from .intel.net import TTLCache
@@ -1461,45 +1461,51 @@ class Pages:
         if self.tries.get(region, ("", {}))[0] != day.isoformat():
             self.tries[region] = (day.isoformat(), {})            # each close starts its own count of tries
         tries = self.tries[region][1]
-        for key, raw in rows:
-            stored = db.json_value(raw, {}) if not isinstance(raw, dict) else raw
-            f = stored.get("facts") or {}
-            symbol = key[len(prefix):]
-            # a page read at today's close before the exchange's official close was known: that close now, with no read
-            # of prices (R7O-004)
-            if f and official and str(f.get("price_at") or "") == day.isoformat() and not f.get("price_official"):
-                c = official(symbol, day.isoformat())
-                if c is not None:
-                    _put(key, {**stored, "facts": with_official_close(f, c)})
-                    self.mem.pop(key)
-                    self.mem.pop(f"html:{region}:{symbol}")
-                    swapped += 1
-                    continue
-            at_close = str(f.get("price_at") or "") >= day.isoformat() and is_close(f)
-            if not f or at_close or (stored.get("price_ts") or 0) >= settled:
-                continue
-            if tries.get(symbol, 0) >= self.MAX_TRIES:           # the source has no newer close for it today
-                continue
-            due.append((symbol, stored))
-        # the largest companies first, and a page the source had no newer close for at an earlier try after the rest; a
-        # page whose own last close is weeks old (a suspended or delisted company) after those a close or two behind: the
-        # tries start again at every deploy, and such pages took every pass (R90-002: "0 updated" for 17 hours, the pages
-        # read being 504375 and IDREAM at 29 Sep, WBD at 5 Oct, ICICIPRULI and QRVO with no candles at all)
+
         def long_stale(stored: dict) -> int:
             try:
                 return int((day - date.fromisoformat(str(stored["facts"].get("price_at") or "")[:10])).days > LONG_STALE_DAYS)
             except ValueError:
                 return 1
-        due.sort(key=lambda x: (tries.get(x[0], 0), long_stale(x[1]), -(shown_cap(x[1]["facts"]) or 0)))
+        with memguard.heavy("page-prices"):         # the pass parses every stored page of the market, one after another
+            for key, raw in rows:
+                stored = db.json_value(raw, {}) if not isinstance(raw, dict) else raw
+                f = stored.get("facts") or {}
+                symbol = key[len(prefix):]
+                # a page read at today's close before the exchange's official close was known: that close now, with no read
+                # of prices (R7O-004)
+                if f and official and str(f.get("price_at") or "") == day.isoformat() and not f.get("price_official"):
+                    c = official(symbol, day.isoformat())
+                    if c is not None:
+                        _put(key, {**stored, "facts": with_official_close(f, c)})
+                        self.mem.pop(key)
+                        self.mem.pop(f"html:{region}:{symbol}")
+                        swapped += 1
+                        continue
+                at_close = str(f.get("price_at") or "") >= day.isoformat() and is_close(f)
+                if not f or at_close or (stored.get("price_ts") or 0) >= settled:
+                    continue
+                if tries.get(symbol, 0) >= self.MAX_TRIES:           # the source has no newer close for it today
+                    continue
+                # only the sort key and the stored text are kept: parsed, thousands of due pages were some 70 MB held for the few
+                # hundred a run reads (MEM-001); a page is parsed again when its turn comes
+                due.append(((tries.get(symbol, 0), long_stale(stored), -(shown_cap(stored["facts"]) or 0)), symbol, raw))
+        # the largest companies first, and a page the source had no newer close for at an earlier try after the rest; a
+        # page whose own last close is weeks old (a suspended or delisted company) after those a close or two behind: the
+        # tries start again at every deploy, and such pages took every pass (R90-002: "0 updated" for 17 hours, the pages
+        # read being 504375 and IDREAM at 29 Sep, WBD at 5 Oct, ICICIPRULI and QRVO with no candles at all)
+        due.sort(key=lambda x: x[0])
         done = failed = errors = 0     # errors: reads that raised, of the failed (the rest had no newer close yet)
         behind: list[str] = []         # a few pages read with no newer close: "SYMBOL (last candle 2026-10-21)", for Admin
         stopped = 0             # pages not tried because the source is down for every one of them
         ok: set[str] = set()
-        for i, (symbol, stored) in enumerate(due[:limit]):
+        for i, (_, symbol, raw) in enumerate(due[:limit]):
             if i and gap:
                 sleep(gap)
+            stored = db.json_value(raw, {}) if not isinstance(raw, dict) else raw
             try:
-                bars = closed_bars(bars_of(region, symbol) or [], region, now)
+                with memguard.heavy("page-prices"):       # a page's candles are read in its turn, not through the pause between pages
+                    bars = closed_bars(bars_of(region, symbol) or [], region, now)
             except Exception as ex:                   # no prices for this one today: tried again at its next build
                 failed += 1
                 errors += 1
@@ -1527,7 +1533,7 @@ class Pages:
             _put(prefix + symbol, stored)
             self.mem.pop(prefix + symbol)
             self.mem.pop(f"html:{region}:{symbol}")
-        retry = sum(1 for s, _ in due[:limit] if s not in ok and 0 < tries.get(s, 0) < self.MAX_TRIES)
+        retry = sum(1 for _, s, _raw in due[:limit] if s not in ok and 0 < tries.get(s, 0) < self.MAX_TRIES)
         if not stopped and len(due) <= limit and not retry and (official_ready is None or official_ready(day.isoformat())):
             self.prices_done[region] = day.isoformat()            # a page still behind is tried again at its next build
         return {"refreshed": done, "left": max(0, len(due) - limit) + stopped, "failed": failed, "errors": errors,

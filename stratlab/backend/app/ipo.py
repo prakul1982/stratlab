@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from . import admin, alerts as alerts_mod, db, docs, ipo_docs as D, job_status, leader
+from . import admin, alerts as alerts_mod, db, docs, ipo_docs as D, job_status, leader, memguard
 from .ai_providers import AIError, complete, extract_json
 from .auth import current_profile
 from .data.calendar import is_trading_day
@@ -108,8 +108,14 @@ def next_working(d: date, n: int) -> date:
 
 
 def stage_of(row: dict, now: datetime | None = None) -> str:
-    """filed (an offer document, no dates yet), upcoming, open, closed (awaiting listing) or listed."""
+    """filed (an offer document, no dates yet), upcoming, open, closed (awaiting listing) or listed; "withdrawn" for an issue the
+    exchange names withdrawn, postponed or cancelled (row["issue_status"] says which), "social" for a Social Stock Exchange fund
+    raise, which is not an IPO: neither sits in the stages, an issue that did not go ahead has no bidding, allotment or listing."""
     now = now or _now()
+    if row.get("social"):
+        return "social"
+    if row.get("issue_status"):
+        return "withdrawn"
     if row["market"] == "US":
         if row.get("priced"):
             return "listed" if row["priced"] <= now.astimezone(NY).date().isoformat() else "closed"
@@ -132,7 +138,7 @@ def stage_of(row: dict, now: datetime | None = None) -> str:
 def timeline(row: dict, now: datetime | None = None) -> dict:
     """The allotment and listing days: the exchange's own when it has published them, else SEBI's timetable (marked expected)."""
     out = {"allotment": row.get("allotment"), "allotment_expected": False, "listing": row.get("listing"), "listing_expected": False}
-    if row["market"] != "IN" or not row.get("close"):
+    if row["market"] != "IN" or not row.get("close") or row.get("issue_status") or row.get("social"):
         return out
     try:
         close = date.fromisoformat(row["close"])
@@ -154,14 +160,23 @@ def sizes(row: dict) -> dict:
         amount = row.get("amount") or (round(shares * price, 0) if shares and price else None)
         return {"amount": amount, "basis": "stated" if row.get("amount") else "shares at the offer price" if amount else None}
     stated = None
-    if row.get("fresh_cr") or row.get("ofs_cr"):
-        stated = round((row.get("fresh_cr") or 0) + (row.get("ofs_cr") or 0), 2)
+    top = row.get("price") or row.get("high")
+    fresh_cr, ofs_cr, fresh_sh, ofs_sh = row.get("fresh_cr"), row.get("ofs_cr"), row.get("fresh"), row.get("ofs")
+    # a book-built issue with one part in rupees and the other in shares (fresh ₹X crore, offer for sale of N shares): the rupee part
+    # alone is not the size. Both parts are shown, and the total once the band says what the shares are worth, at its top
+    if (fresh_cr and not ofs_cr and ofs_sh) or (ofs_cr and not fresh_cr and fresh_sh):
+        parts = {"fresh_cr": fresh_cr, "ofs_cr": ofs_cr, "fresh": None if fresh_cr else fresh_sh, "ofs": None if ofs_cr else ofs_sh}
+        if top:
+            total = (fresh_cr or 0) + (ofs_cr or 0) + ((ofs_sh if fresh_cr else fresh_sh) * top / 1e7)
+            return {"amount": round(total, 2), "basis": "at the top of the price band" if not row.get("price") else "at the issue price", "parts": parts}
+        return {"amount": None, "basis": None, "parts": parts}
+    if fresh_cr or ofs_cr:
+        stated = round((fresh_cr or 0) + (ofs_cr or 0), 2)
     elif row.get("total_cr"):
         stated = row["total_cr"]
     if stated:
         return {"amount": stated, "basis": "stated"}
     shares = row.get("size_shares") or ((row.get("fresh") or 0) + (row.get("ofs") or 0)) or None
-    top = row.get("price") or row.get("high")
     if shares and top:
         return {"amount": round(shares * top / 1e7, 2), "basis": "shares at the top of the price band"}
     return {"amount": None, "basis": None}
@@ -175,6 +190,8 @@ def public(row: dict, now: datetime | None = None) -> dict:
     out.update(timeline(row, now))
     sz = sizes(row)
     out["size"], out["size_basis"] = sz["amount"], sz["basis"]
+    if sz.get("parts"):
+        out["size_parts"] = {k: v for k, v in sz["parts"].items() if v}
     if row["market"] == "IN" and row.get("lot") and (row.get("high") or row.get("price")):
         out["min_amount"] = round(row["lot"] * (row.get("price") or row["high"]), 2)
         out["min_basis"] = "lot at the issue price" if row.get("price") else "lot at the top of the price band"
@@ -211,6 +228,9 @@ def merge_india(old_rows: list[dict], nse: dict, bse: list[dict], bse_perf: list
 
     def put(row: dict) -> dict:
         got = _keep_old(by_id.get(row["id"]), row)
+        # the exchange's note on the issue is what it says now: an issue postponed and announced again loses it (a fact the source
+        # doesn't give is otherwise kept)
+        got["issue_status"], got["social"] = row.get("issue_status"), bool(row.get("social")) or None
         out[row["id"]] = got
         return got
 
@@ -218,7 +238,8 @@ def merge_india(old_rows: list[dict], nse: dict, bse: list[dict], bse_perf: list
         for r in nse.get(kind) or []:
             row = {"id": india_id(r["symbol"], None), "market": "IN", "segment": r["segment"], "name": r["name"], "symbol": r["symbol"],
                    "series": r.get("series"), "open": r.get("open"), "close": r.get("close"), "low": r.get("low"), "high": r.get("high"),
-                   "size_shares": r.get("size_shares"), "exchanges": ["NSE"], "currency": "INR", "nkey": S.name_key(r["name"])}
+                   "size_shares": r.get("size_shares"), "exchanges": ["NSE"], "currency": "INR", "nkey": S.name_key(r["name"]),
+                   "issue_status": r.get("issue_status"), "social": r.get("social")}
             if kind == "past":
                 row.update(listing=r.get("listing"), price=r.get("price"))
                 if not r.get("listing"):
@@ -232,10 +253,13 @@ def merge_india(old_rows: list[dict], nse: dict, bse: list[dict], bse_perf: list
             row["exchanges"] = sorted(set(row.get("exchanges", []) + ["BSE"]))
             row["bse_code"] = b["code"]
             row.setdefault("face_value", b.get("face_value"))
+            row["issue_status"] = row.get("issue_status") or b.get("issue_status")       # either exchange's note stands
+            row["social"] = row.get("social") or b.get("social") or None
             continue
         put({"id": india_id(None, b["code"]), "market": "IN", "segment": b["segment"], "name": b["name"].title() if b["name"].isupper() else b["name"],
              "symbol": None, "bse_code": b["code"], "open": b.get("open"), "close": b.get("close"), "low": b.get("low"), "high": b.get("high"),
-             "face_value": b.get("face_value"), "size_shares": b.get("size_shares"), "exchanges": ["BSE"], "currency": "INR", "nkey": key})
+             "face_value": b.get("face_value"), "size_shares": b.get("size_shares"), "exchanges": ["BSE"], "currency": "INR", "nkey": key,
+             "issue_status": b.get("issue_status"), "social": b.get("social")})
     # BSE's table of how its listed issues have traded: the issue price and listing day for the BSE-only ones, and a cross-check
     perf = {S.name_key(p["name"]): p for p in bse_perf}
     for r in out.values():
@@ -332,6 +356,8 @@ def apply_detail(row: dict, d: dict) -> dict:
     for k in ("open", "close", "low", "high", "fresh", "ofs", "fresh_cr", "ofs_cr", "total_cr"):
         if d.get(k) is not None:
             row[k] = d[k]
+    if re.search(r"zero[- ]coupon|social stock exchange", f"{d.get('issue_type') or ''} {d.get('issue_text') or ''}", re.I):
+        row["social"] = True                      # a Social Stock Exchange fund raise: not an IPO
     if d.get("listing"):
         row["listing"] = d["listing"]
     if d.get("lead_managers"):
@@ -517,6 +543,11 @@ def read_doc(row: dict, d: dict, sebi=None) -> dict:
     """Download and read one offer document: the facts the rules find, and the excerpt the summary is written from. Stored for
     everyone under the document's id; raises SourceError when it can't be fetched."""
     url = d["url"]
+    with memguard.heavy("ipo-document", force_release=True):       # the document (up to 40 MB) and its pages: one heavy job at a time, then dropped (MEM-001)
+        return _read_doc(row, d, url, sebi)
+
+
+def _read_doc(row: dict, d: dict, url: str, sebi=None) -> dict:
     if row["market"] == "US":
         text = D.html_text(D.download(url, head=D.HTML_HEAD))
         facts = {"kind": d.get("form") or d.get("kind"), "url": url, "us": D.us_facts(text)}
@@ -597,7 +628,7 @@ def events_on(rows: list[dict], market: str, day: date, now: datetime) -> list[d
     expected allotment or listing counts, and says so)."""
     out = []
     for r in rows:
-        if r.get("market") != market:
+        if r.get("market") != market or r.get("issue_status") or r.get("social"):      # an issue that did not go ahead has no events
             continue
         pub = public(r, now)
         name = r["name"]
@@ -913,8 +944,8 @@ def list_row(row: dict, now: datetime) -> dict:
     sub = row.get("sub") or {}
     perf = row.get("perf")
     keys = ("id", "market", "segment", "name", "symbol", "stage", "open", "close", "allotment", "allotment_expected", "listing", "listing_expected",
-            "low", "high", "price", "lot", "min_amount", "min_basis", "size", "size_basis", "exchanges", "exchange", "expected", "priced", "filed",
-            "shares", "currency")
+            "low", "high", "price", "lot", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status", "exchanges", "exchange",
+            "expected", "priced", "filed", "shares", "currency")
     out = {k: pub.get(k) for k in keys if pub.get(k) is not None}
     out["docs"] = sorted({d["kind"] for d in doc_links(row) if d["kind"]})
     if sub.get("times") is not None:
@@ -926,7 +957,8 @@ def list_row(row: dict, now: datetime) -> dict:
 
 ORDER = {"upcoming": (lambda r: r.get("open") or r.get("expected") or "9999", False), "open": (lambda r: r.get("close") or "", False),
          "closed": (lambda r: r.get("listing") or r.get("close") or "", False), "listed": (lambda r: r.get("listing") or r.get("priced") or "", True),
-         "filed": (lambda r: r.get("filed") or "", True)}
+         "filed": (lambda r: r.get("filed") or "", True),
+         "withdrawn": (lambda r: r.get("close") or r.get("open") or "", True), "social": (lambda r: r.get("close") or r.get("open") or "", True)}
 
 
 def channels_of(profile: dict) -> list[str]:
@@ -1060,7 +1092,7 @@ def ipo_detail(rid: str, profile=Depends(current_profile)):
     if pub["stage"] == "listed" and not perf:
         perf = perf_for(row) or row.get("perf")
     keys = ("id", "market", "segment", "name", "symbol", "stage", "isin", "industry", "exchanges", "exchange", "open", "close", "allotment", "allotment_expected",
-            "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis",
+            "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status",
             "fresh", "ofs", "fresh_cr", "ofs_cr", "size_shares", "issue_type", "issue_text", "lead_managers", "registrar", "expected", "priced", "filed",
             "shares", "amount", "currency", "industry")
     ipo = {k: pub.get(k) for k in keys if pub.get(k) is not None}

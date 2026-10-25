@@ -86,6 +86,14 @@ test("IPO lists: every stage in India, the US without an Open tab, the open issu
   await expect(page.getByTestId("ipo-filed").getByText("Hunger Pangs Limited").first()).toBeVisible();
   await expect(page.getByTestId("ipo-filed")).toContainText("DRHP");
 
+  // a Social Stock Exchange fund raise is not an IPO: in its own fold with the exchange's note off its name, never in the Closed tab
+  await page.getByTestId("ipo-social").locator("summary").click();
+  await expect(page.getByTestId("ipo-social").getByText("Rays of Belief Limited").first()).toBeVisible();
+  await expect(page.getByTestId("ipo-social")).not.toContainText("FPSE");
+  await page.getByTestId("ipo-withdrawn").locator("summary").click();
+  await expect(page.getByTestId("ipo-withdrawn").locator("[data-ipo=in-zenith]").filter({ visible: true }).first()).toContainText("Withdrawn");
+  await expect(page.getByTestId("ipo-withdrawn").locator("[data-ipo=in-orbit]").filter({ visible: true }).first()).toContainText("Postponed");
+
   await stage.getByRole("radio", { name: /^Closed/ }).click();
   const core = page.locator("[data-ipo=in-bse-4902]").filter({ visible: true }).first();
   await expect(core).toContainText("Core4 Engineers Limited");

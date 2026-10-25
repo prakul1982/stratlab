@@ -27,7 +27,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from . import db
+from . import db, memguard
 from .intel.net import SourceError, TTLCache, num
 from .data.expiries import cycle as expiry_cycle, fits as expiry_fits
 from .newsletter import job as news_job
@@ -1513,7 +1513,8 @@ class Job(news_job.Job):
         day = self.due("positioning", now, "Asia/Kolkata", PUBLISH_FROM, region="IN")
         if day and time.time() - self._tried >= RETRY_MINUTES * 60:
             self._tried = time.time()
-            res = self.runner.run_day(day, now)
+            with memguard.heavy("positioning", force_release=True):      # the evening's files and option chains: one heavy job at a time (MEM-001)
+                res = self.runner.run_day(day, now)
             self.status.update(last_run=now.isoformat(), last_result=res, last_error=None)
             finished = res["participants"] == "ok" and res["cash"] == "ok"
             if finished or local.strftime("%H:%M") >= PUBLISH_UNTIL:
@@ -1522,15 +1523,18 @@ class Job(news_job.Job):
         # any other time (a weekend, a holiday, after a restart), fill in what the evening run missed, every twenty minutes
         if not day and time.time() - self._caught >= RETRY_MINUTES * 60 and self._behind(now):
             self._caught = time.time()
-            self.status["catch_up"] = self.runner.catch_up(now)
+            with memguard.heavy("positioning", force_release=True):
+                self.status["catch_up"] = self.runner.catch_up(now)
             return 0
         hhmm = local.strftime("%H:%M")
         if not ("09:00" <= hhmm <= "15:45") and not (state().get("backfill") or {}).get("done"):
-            self.status["backfill"] = self.runner.backfill(local.date())
+            with memguard.heavy("positioning", force_release=True):
+                self.status["backfill"] = self.runner.backfill(local.date())
         elif not ("09:00" <= hhmm <= "18:30") and time.time() - self._finals >= RETRY_MINUTES * 60:
             self._finals = time.time()
             try:
-                self.status["final_backfill"] = self.runner.final_backfill(local.date())
+                with memguard.heavy("positioning", force_release=True):
+                    self.status["final_backfill"] = self.runner.final_backfill(local.date())
             except Exception as e:                 # one day's surprise never stops the job
                 print("positioning: end-of-day chains", str(e)[:120])
         return 0

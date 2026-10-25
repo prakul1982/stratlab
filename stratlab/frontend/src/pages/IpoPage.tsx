@@ -6,7 +6,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { asOf, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
 import { useLiveRefresh } from "../lib/liveRefresh";
 import { ipoApi, type DocLink, type Facts, type IpoDetail, type Statement, type Summary } from "../lib/ipo";
-import { STAGE_BADGE, bandText, croreText, expectedText, minText, sharesText, sizeText, spanText, timesText } from "../lib/ipoText";
+import { badgeOf, bandText, croreText, expectedText, minText, partsText, sharesText, sizeText, spanText, timesText } from "../lib/ipoText";
 import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { LockedPreview } from "../components/LockedPreview";
 import "./ipo.css";
@@ -52,7 +52,7 @@ function Terms({ d }: { d: IpoDetail }) {
       <StatRow label="Terms of the issue">
         <Stat label={us ? "Price" : "Price band"} value={bandText(r)} note={us && r.stage === "upcoming" ? "range not final" : undefined} />
         {!us && <Stat label="Lot" value={r.lot ? `${sharesText(r.lot)} shares` : "–"} note={r.lot ? `minimum ${minText(r)}` : undefined} />}
-        <Stat label="Issue size" value={sizeText(r)} note={r.size_basis && r.size_basis !== "stated" ? r.size_basis : undefined} />
+        <Stat label="Issue size" value={sizeText(r)} note={r.size != null && r.size_parts ? `${partsText(r.size_parts)}, ${r.size_basis}` : r.size_basis && r.size_basis !== "stated" ? r.size_basis : undefined} />
         {us && r.shares != null && <Stat label="Shares offered" value={sharesText(r.shares, "US")} />}
       </StatRow>
       <dl className="ipo-facts">
@@ -77,7 +77,7 @@ function Terms({ d }: { d: IpoDetail }) {
 function Bids({ d }: { d: IpoDetail }) {
   const s = d.subscription;
   if (!s) {
-    return d.ipo.market === "IN" && d.ipo.stage !== "listed" ? (
+    return d.ipo.market === "IN" && d.ipo.stage !== "listed" && d.ipo.stage !== "withdrawn" && d.ipo.stage !== "social" ? (
       <Card compact label="Bids received" testId="ipo-bids">
         <p className="k-small k-muted">{d.ipo.stage === "upcoming" ? "Bidding has not opened. The bids received by category show here, refreshed through the day, once it does." : "The exchange has no bids to show for this issue."}</p>
       </Card>
@@ -270,7 +270,7 @@ export function IpoPage() {
   };
 
   const r = d?.ipo;
-  const badge = r ? STAGE_BADGE[r.stage] : null;
+  const badge = r ? badgeOf(r) : null;
   return (
     <div className="k-page ipo-page">
       <PageHeader eyebrow={eyebrowOf("/invest/ipos")} title={r?.name ?? "IPO"}
@@ -280,6 +280,8 @@ export function IpoPage() {
       {error ? <ErrorState title="This IPO couldn't be read" action={{ label: "Try again", onClick: () => load() }}>{error}</ErrorState>
         : !d ? <Card><Skeleton label="Reading the issue" lines={5} /></Card> : (
         <>
+          {d.ipo.stage === "withdrawn" && <p className="k-callout k-small" role="status" data-testid="ipo-not-gone-ahead">The exchange lists this issue as {(d.ipo.issue_status ?? "withdrawn")}. The dates and price band below are the ones announced before; no bidding, allotment or listing follows from them.</p>}
+          {d.ipo.stage === "social" && <p className="k-callout k-small" role="status" data-testid="ipo-social-note">This is a fund raise on the Social Stock Exchange, not an IPO of shares. It is listed here only because the exchange lists it beside the IPOs.</p>}
           <Terms d={d} />
           <Bids d={d} />
           <Listing d={d} />

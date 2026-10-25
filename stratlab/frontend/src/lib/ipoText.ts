@@ -27,8 +27,17 @@ export function bandText(r: Pick<IpoRow, "low" | "high" | "price" | "currency">)
   return one != null ? p(one) : "–";
 }
 
-/** The issue's size: ₹ crore in India, dollars in the US ("₹275 cr", "$150 million"). */
-export function sizeText(r: Pick<IpoRow, "size" | "currency" | "market">): string {
+/** "Fresh ₹500 cr + offer for sale of 1,00,00,000 shares": an issue with one part in rupees and the other in shares. */
+export function partsText(p: NonNullable<IpoRow["size_parts"]>): string {
+  const fresh = p.fresh_cr != null ? inrCompact(p.fresh_cr * 1e7) : p.fresh != null ? `${sharesText(p.fresh)} shares` : null;
+  const ofs = p.ofs_cr != null ? inrCompact(p.ofs_cr * 1e7) : p.ofs != null ? `${sharesText(p.ofs)} shares` : null;
+  return [fresh && `Fresh ${fresh}`, ofs && `${fresh ? "offer for sale of" : "Offer for sale of"} ${ofs}`].filter(Boolean).join(" + ");
+}
+
+/** The issue's size: ₹ crore in India, dollars in the US ("₹275 cr", "$150 million"). With a part in shares and no price band yet,
+ *  the parts instead of the rupee part alone ("Fresh ₹500 cr + offer for sale of 1,00,00,000 shares"). */
+export function sizeText(r: Pick<IpoRow, "size" | "currency" | "market"> & Partial<Pick<IpoRow, "size_parts">>): string {
+  if (r.size == null && r.size_parts) return partsText(r.size_parts);
   if (r.size == null) return "–";
   if (r.market === "US") return r.size >= 1e9 ? `$${(r.size / 1e9).toLocaleString("en-US", { maximumFractionDigits: 2 })} billion` : `$${(r.size / 1e6).toLocaleString("en-US", { maximumFractionDigits: 1 })} million`;
   return inrCompact(r.size * 1e7);
@@ -67,6 +76,15 @@ export const croreText = (v: number | null | undefined) => (v == null ? "–" : 
 export const STAGE_BADGE: Record<Stage, { word: string; tone: "ok" | "warn" | "plain" | "live" }> = {
   filed: { word: "Filed, no dates yet", tone: "plain" }, upcoming: { word: "Upcoming", tone: "ok" }, open: { word: "Open for bidding", tone: "live" },
   closed: { word: "Closed, not listed yet", tone: "plain" }, listed: { word: "Listed", tone: "plain" },
+  withdrawn: { word: "Withdrawn", tone: "warn" }, social: { word: "Social Stock Exchange raise, not an IPO", tone: "plain" },
 };
+
+/** What the exchange says happened to an issue that did not go ahead: "Withdrawn", "Postponed" or "Cancelled". */
+export const STATUS_WORD: Record<NonNullable<IpoRow["issue_status"]>, string> = { withdrawn: "Withdrawn", postponed: "Postponed", cancelled: "Cancelled" };
+
+/** The badge of an issue: its stage's, but an issue that did not go ahead says which way (withdrawn, postponed or cancelled). */
+export function badgeOf(r: Pick<IpoRow, "stage" | "issue_status">) {
+  return r.stage === "withdrawn" && r.issue_status ? { ...STAGE_BADGE.withdrawn, word: STATUS_WORD[r.issue_status] } : STAGE_BADGE[r.stage];
+}
 
 export const segmentWord = (r: Pick<IpoRow, "segment" | "market">) => (r.market === "US" ? "" : r.segment === "sme" ? "SME" : r.segment === "mainboard" ? "Mainboard" : "");

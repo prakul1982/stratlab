@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends
 
 from . import db, money_mf as mf
 from .auth import current_profile
+from .intel.net import SizedDict
 from .plans import FEATURE_PLAN, PLANS, allows
 from .responses import ok
 
@@ -57,7 +58,9 @@ ASSUMPTIONS = [
 ]
 
 _lock = threading.Lock()
-_mem: dict[str, dict] = {}         # code -> the stored history, once read from the database
+# code -> the stored history, once read from the database: the most recent 80 schemes (a history is some 1 MB), not every
+# scheme anyone ever opened (MEM-001)
+_mem = SizedDict(max_items=80, max_bytes=48 * 1024 * 1024)
 _tried: dict[str, float] = {}      # code -> when a read last failed
 _queue: list[tuple[str, str, str]] = []
 _running = {"on": False}
@@ -115,8 +118,9 @@ def chunks(start: str, end: str) -> list[tuple[str, str]]:
 
 def stored(code: str) -> dict | None:
     with _lock:
-        if code in _mem:
-            return _mem[code]
+        hit = _mem.get(code)
+        if hit is not None:
+            return hit
     got = db.json_value(db.get_setting(HIST_KEY + code), {})
     if not (isinstance(got, dict) and isinstance(got.get("p"), list) and got.get("from") and got.get("to")):
         return None

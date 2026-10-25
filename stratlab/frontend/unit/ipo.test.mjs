@@ -98,3 +98,27 @@ test("the pages are built from the kit and keep the product rules", () => {
   assert.match(one, /useLiveRefresh\(d\?\.ipo\.stage === "open"/);                                 // the bids move while the issue is open
   assert.match(one, /The document's words/);                                                          // each summary statement shows its quote
 });
+
+test("an issue that did not go ahead says which way, and has no stage of its own among the tabs (MEM1 B)", () => {
+  assert.deepEqual(ipo.tabsFor("IN").map((t) => t.value), ["upcoming", "open", "closed", "listed"]);
+  assert.equal(ipo.badgeOf({ stage: "withdrawn", issue_status: "postponed" }).word, "Postponed");
+  assert.equal(ipo.badgeOf({ stage: "withdrawn", issue_status: "cancelled" }).word, "Cancelled");
+  assert.equal(ipo.badgeOf({ stage: "withdrawn" }).word, "Withdrawn");
+  assert.match(ipo.badgeOf({ stage: "social" }).word, /not an IPO/);
+  assert.equal(ipo.badgeOf({ stage: "closed" }).word, "Closed, not listed yet");
+  const page = read("src/pages/IposPage.tsx");
+  assert.match(page, /d\.tabs\.withdrawn/);
+  assert.match(page, /d\.tabs\.social/);
+  assert.match(read("src/pages/IpoPage.tsx"), /badgeOf\(r\)/);
+});
+
+test("a size with a part in rupees and a part in shares shows both parts, then the total at the top of the band (MEM1 B)", () => {
+  const parts = { fresh_cr: 500, ofs: 10000000 };
+  assert.equal(ipo.partsText(parts), "Fresh ₹500 cr + offer for sale of 1,00,00,000 shares");
+  assert.equal(ipo.partsText({ ofs_cr: 200, fresh: 5000000 }), "Fresh 50,00,000 shares + offer for sale of ₹200 cr");
+  // no band yet: no total, so the parts stand where the size would be; the rupee part alone is never the size
+  assert.equal(ipo.sizeText({ currency: "INR", market: "IN", size_parts: parts }), "Fresh ₹500 cr + offer for sale of 1,00,00,000 shares");
+  // the band known: the server's total shows as the size, the parts under it
+  assert.equal(ipo.sizeText({ size: 600, currency: "INR", market: "IN", size_parts: parts }), "₹600 cr");
+  assert.match(read("src/pages/IpoPage.tsx"), /partsText\(r\.size_parts\)\}, \$\{r\.size_basis\}/);
+});

@@ -13,7 +13,7 @@ data source's own limits."""
 import time
 from datetime import datetime, timezone
 
-from . import library, research, universes
+from . import library, memguard, research, universes
 from .models import Strategy
 
 OWNER = library.OFFICIAL_OWNER
@@ -216,7 +216,8 @@ def seed(registry, only: list[str] | None = None, now: str | None = None, sleep=
                 sleep(gap)
             try:
                 preset = preset_of(market, pid)
-                rec, group = run_group(registry, strat, market, preset, now, max_open if spec["tf"] == "1d" else 5)
+                with memguard.heavy("library-seed", force_release=True):      # a group's backtest in its turn, its candles dropped after (MEM-001)
+                    rec, group = run_group(registry, strat, market, preset, now, max_open if spec["tf"] == "1d" else 5)
                 e = publish(slug, spec, market, preset, rec, group)
                 out.append({"id": e["id"], "name": e["name"], "verdict": e["verdict"]["verdict"], "trades": (e["stats"] or {}).get("trades")})
             except Exception as ex:                                  # one group's trouble never stops the rest

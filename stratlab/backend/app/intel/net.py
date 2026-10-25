@@ -5,6 +5,7 @@ browser never hits a third-party site directly."""
 import contextvars
 import threading
 import time
+import weakref
 from collections import OrderedDict
 
 import httpx
@@ -55,11 +56,46 @@ def approx_size(value, _budget: list | None = None) -> int:
     return size
 
 
+# Every cache below, so memguard can sweep the expired entries and keep their total under one budget (MEM-001): a cache
+# only forgot an expired entry when it was asked for it, and a dozen caches at their own 48 MB limit are half a gigabyte.
+_REGISTRY: "weakref.WeakSet" = weakref.WeakSet()
+
+
+def caches() -> list:
+    return list(_REGISTRY)
+
+
+def sweep_caches() -> int:
+    """Drop every expired entry from every cache; the bytes given back (approximate)."""
+    return sum(c.sweep() for c in caches() if hasattr(c, "sweep"))
+
+
+def cache_bytes() -> int:
+    return sum(c.bytes for c in caches())
+
+
+def shrink_caches(budget: int) -> int:
+    """Past `budget` bytes in all, drop the least recently used entries of the fattest caches until it is met; the bytes
+    dropped. Nothing is lost but a repeat read."""
+    freed, total = 0, cache_bytes()
+    while total > budget:
+        fat = max(caches(), key=lambda c: c.bytes, default=None)
+        if fat is None or fat.bytes <= 0:
+            break
+        got = fat.shrink(max(0, fat.bytes - max(256 * 1024, (total - budget) // 2)))
+        if got <= 0:
+            break
+        freed += got
+        total -= got
+    return freed
+
+
 class TTLCache:
     """Least-recently-used with a time to live, bounded by both an item count and an approximate memory size, so a
     long walk over every company (the whole-market audit) can't fill memory with large responses."""
 
     def __init__(self, max_items: int = 3000, max_bytes: int = 48 * 1024 * 1024):
+        _REGISTRY.add(self)
         self._d: OrderedDict = OrderedDict()
         self._lock = threading.Lock()
         self.max = max_items
@@ -118,12 +154,32 @@ class TTLCache:
             self._d.clear()
             self.bytes = 0
 
+    def sweep(self) -> int:
+        """Forget every expired entry (they otherwise stay until asked for, or pushed out); the bytes freed."""
+        now = time.time()
+        with self._lock:
+            dead = [k for k, v in self._d.items() if v[0] < now]
+            before = self.bytes
+            for k in dead:
+                self._drop(k)
+            return before - self.bytes
+
+    def shrink(self, to_bytes: int) -> int:
+        """Drop the least recently used entries until at most `to_bytes` are held; the bytes freed."""
+        with self._lock:
+            before = self.bytes
+            while self._d and self.bytes > to_bytes:
+                _, old = self._d.popitem(last=False)
+                self.bytes -= old[2]
+            return before - self.bytes
+
 
 class SizedDict:
     """A plain dict-like store (get, [key] = value, pop, len, iter) that drops its oldest entries past a memory size
     or item count. For caches written as dicts of (time, value)."""
 
     def __init__(self, max_items: int = 300, max_bytes: int = 64 * 1024 * 1024):
+        _REGISTRY.add(self)
         self._d: OrderedDict = OrderedDict()
         self._sizes: dict = {}
         self._lock = threading.Lock()
@@ -158,6 +214,15 @@ class SizedDict:
             self._d.clear()
             self._sizes.clear()
             self.bytes = 0
+
+    def shrink(self, to_bytes: int) -> int:
+        """Drop the oldest entries until at most `to_bytes` are held; the bytes freed."""
+        with self._lock:
+            before = self.bytes
+            while self._d and self.bytes > to_bytes:
+                k, _ = self._d.popitem(last=False)
+                self.bytes -= self._sizes.pop(k, 0)
+            return before - self.bytes
 
     def __len__(self):
         return len(self._d)
@@ -244,7 +309,8 @@ class Source:
                                  headers={"User-Agent": UA, **(headers or {})})
         self.limit = RateLimit(per_minute, burst)
         self.cache = TTLCache()
-        self.stale = TTLCache()              # the last good answer per key, for when the source can't be asked
+        # the last good answer per key, for when the source can't be asked: a fallback only, so far smaller than the cache (MEM-001)
+        self.stale = TTLCache(max_items=1000, max_bytes=16 * 1024 * 1024)
         self._flights = Flights()            # one upstream call per key at a time; the others wait and share it
         self._fails, self._down_until = 0, 0.0
         self._lock = threading.Lock()

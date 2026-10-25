@@ -6,7 +6,7 @@ import re
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import db, leader, sector_members, universes
+from . import db, leader, memguard, sector_members, universes
 from .kite_service import not_company
 
 KEY = "audit:last"
@@ -842,7 +842,8 @@ class Runner:
                     self.state["cancelled"] = True
                 break
             try:
-                row = check(sym)
+                with memguard.heavy("audit-run"):            # one company at a time, taking turns with the other heavy jobs (MEM-001)
+                    row = check(sym)
             except Exception as e:                # one company failing never stops the run, or leaves it "running"
                 row = {"symbol": sym, "name": sym, "seconds": 0, "issues": [_issue("error", "Audit", str(e)[:200] or e.__class__.__name__)]}
             with self.lock:
@@ -856,6 +857,8 @@ class Runner:
             db.set_setting(KEY, json.dumps(result))
         except Exception as e:
             print("could not save the audit:", e)
+        del result
+        memguard.release_memory(force=True)            # the run's candles, pages and documents are done with (MEM-001)
 
 
 MARKET = "audit:market"        # settings keys: the switch and list state, the list itself, and results in shards
@@ -1117,7 +1120,8 @@ class MarketAudit:
                 return False
             self.state["list_tried_at"] = datetime.now(timezone.utc).isoformat()
         try:
-            got = self.list_fn()
+            with memguard.heavy(f"{self.key}-list"):         # the whole market's list: read, then dropped
+                got = self.list_fn()
         except Exception as e:
             with self.lock:
                 self.state["list_error"] = str(e)[:200]
@@ -1321,7 +1325,8 @@ class MarketAudit:
                 return None
             sym = self.current = due[0]
         try:
-            row = self.check_fn(sym)
+            with memguard.heavy(self.key):        # one company's check at a time across the heavy jobs (MEM-001)
+                row = self.check_fn(sym)
         except Exception as e:                # stored as a finding and retried at the batches' pace: never the same
             row = {"symbol": sym, "name": sym, "seconds": 0,      # company every minute, holding up the rest
                    "issues": [_issue("error", "Audit", _plain(e)[:200] or e.__class__.__name__)]}

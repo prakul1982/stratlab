@@ -72,6 +72,40 @@ def clean(s) -> str:
     return " ".join(htmllib.unescape(str(s or "")).split())
 
 
+# an exchange names an issue that did not go ahead in its list: "ABC Limited-Issue Withdrawn", "ABC Limited - Issue postponed"
+ISSUE_STATUS = re.compile(r"\s*[-–—:]?\s*\(?\s*(?:issue\s+)?(withdrawn|postponed|deferred|cancell?ed)\s*\)?\s*$", re.I)
+# the Social Stock Exchange's fund raises are listed beside the IPOs: a zero coupon, zero principal instrument of a "For Profit
+# Social Enterprise" or a "Not for Profit Organisation", not shares
+SOCIAL = re.compile(r"\s*[-–—:]?\s*\(?\s*(?:(?:for[- ]profit social enterprise|not[- ]for[- ]profit organi[sz]ation|social stock exchange)"
+                    r"\s*(?:\(\s*(?:FPSE|NPO|SSE)\s*\))?|(?:FPSE|NPO))\s*\)?\s*$", re.I)
+STATUS_WORD = {"withdrawn": "withdrawn", "postponed": "postponed", "deferred": "postponed", "cancelled": "cancelled", "canceled": "cancelled"}
+
+
+def classify(name) -> tuple[str, str | None, bool]:
+    """(the company's name without the exchange's note, "withdrawn" / "postponed" / "cancelled" or None, whether the listing is a
+    Social Stock Exchange fund raise): "Zenith Foods Limited-Issue Withdrawn" is ("Zenith Foods Limited", "withdrawn", False)."""
+    n, status, social = clean(name), None, False
+    for _ in range(2):                       # a note may stand behind another ("... (FPSE) - Issue Withdrawn")
+        m = ISSUE_STATUS.search(n)
+        if m and m.start() > 0:
+            status, n = status or STATUS_WORD[m.group(1).lower()], n[:m.start()].rstrip(" -–—:,")
+            continue
+        m = SOCIAL.search(n)
+        if m and m.start() > 0:
+            social, n = True, n[:m.start()].rstrip(" -–—:,")
+            continue
+        break
+    return n, status, social
+
+
+def _note(row: dict, status: str | None, social: bool) -> None:
+    """The exchange's note on an issue onto its row, only when there is one (a normal issue's row is unchanged)."""
+    if status:
+        row["issue_status"] = status
+    if social:
+        row["social"] = True
+
+
 # ---------- NSE ----------
 def nse_upcoming(raw) -> list[dict]:
     """NSE's list of issues still to open: [{symbol, name, series, segment, open, close, low, high, size_shares}]. An empty
@@ -84,9 +118,11 @@ def nse_upcoming(raw) -> list[dict]:
         low, high = band(r.get("issuePrice"))
         if seg is None:
             continue
-        out.append({"symbol": str(r["symbol"]).strip().upper(), "name": clean(r.get("companyName")), "series": r.get("series"),
+        name, status, social = classify(r.get("companyName"))
+        out.append({"symbol": str(r["symbol"]).strip().upper(), "name": name, "series": r.get("series"),
                     "segment": seg, "open": iso(day_of(r.get("issueStartDate"))), "close": iso(day_of(r.get("issueEndDate"))),
                     "low": low, "high": high, "size_shares": whole(r.get("issueSize"))})
+        _note(out[-1], status, social)
     return out
 
 
@@ -101,9 +137,11 @@ def nse_current(raw) -> list[dict]:
         low, high = band(r.get("issuePrice") or r.get("priceBand"))
         if seg is None:
             continue
-        out.append({"symbol": str(r["symbol"]).strip().upper(), "name": clean(r.get("companyName")), "series": r.get("series"),
+        name, status, social = classify(r.get("companyName"))
+        out.append({"symbol": str(r["symbol"]).strip().upper(), "name": name, "series": r.get("series"),
                     "segment": seg, "open": iso(day_of(r.get("issueStartDate"))), "close": iso(day_of(r.get("issueEndDate"))),
                     "low": low, "high": high, "size_shares": whole(r.get("issueSize") or r.get("noOfSharesOffered"))})
+        _note(out[-1], status, social)
     return out
 
 
@@ -119,10 +157,12 @@ def nse_past(raw) -> list[dict]:
             continue
         low, high = band(r.get("priceRange"))
         price = num(r.get("issuePrice"))
-        out.append({"symbol": str(r["symbol"]).strip().upper(), "name": clean(r.get("company")), "series": r.get("securityType"),
+        name, status, social = classify(r.get("company"))
+        out.append({"symbol": str(r["symbol"]).strip().upper(), "name": name, "series": r.get("securityType"),
                     "segment": seg, "open": iso(day_of(r.get("ipoStartDate"))), "close": iso(day_of(r.get("ipoEndDate"))),
                     "listing": iso(day_of(r.get("listingDate"))), "low": low, "high": high or price,
                     "price": price if price and price > 0 else None})
+        _note(out[-1], status, social)
     return out
 
 
@@ -300,10 +340,12 @@ def bse_issues(raw) -> list[dict]:
         if seg is None or not r.get("Scrip_cd"):
             continue
         low, high = band(r.get("Price_Band"))
-        out.append({"code": str(r["Scrip_cd"]), "name": clean(r.get("LONG_NAME") or r.get("Scrip_Name")), "segment": seg,
+        name, status, social = classify(r.get("LONG_NAME") or r.get("Scrip_Name"))
+        out.append({"code": str(r["Scrip_cd"]), "name": name, "segment": seg,
                     "open": iso(day_of(r.get("Start_Dt"))), "close": iso(day_of(r.get("End_Dt"))), "low": low, "high": high,
                     "face_value": num(r.get("Face_Val")), "size_shares": whole(r.get("IssueSize")), "status": str(r.get("Status") or ""),
                     "ipo_no": r.get("IPO_NO")})
+        _note(out[-1], status, social)
     return out
 
 

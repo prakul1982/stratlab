@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 
-from . import db, docs, leader
+from . import db, docs, leader, memguard
 from .ai_providers import AIError, complete, extract_json
 from .auth import current_profile
 from .intel.net import SourceError, TTLCache
@@ -912,7 +912,8 @@ class Job:
                 continue
             try:
                 short = len({r.get("period") for r in stored(sym).values() if r.get("period")}) < BACKFILL_MONTHS
-                got = read_new(sym, items, docs_api, ai, limit=2 if short else 3, since=None if short else since)
+                with memguard.heavy("biz-updates"):          # a company's new filings read (PDFs, then the AI) in their turn (MEM-001)
+                    got = read_new(sym, items, docs_api, ai, limit=2 if short else 3, since=None if short else since)
             except Exception as e:                          # the AI being down mustn't stop the alerts on filings
                 got = {"read": 0, "problems": [str(e)[:120]]}
             read += got["read"]
