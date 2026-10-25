@@ -3,8 +3,10 @@ messages to the people who track them.
 
 India: board meetings called to consider financial results, from the exchange's board-meeting list. Companies listed
 only on BSE (and everyone, when that list is down) are read from the board-meeting notices in their announcements.
-US: the earnings dates in the US company data; once a company has reported, the same feed carries the reported EPS
-and revenue, and the SEC's filing list has the earnings release (8-K, item 2.02).
+US: the companies reporting each day, from the US market calendar (with the session they announced: before the open
+or after the close), and the earnings dates in the US company data; once a company has reported, the SEC's filing
+search has its earnings release (8-K, item 2.02) for the whole market, and the company data carries the reported EPS
+and revenue (DE-025: the company data alone came back empty in the middle of the reporting season).
 
 Each region's calendar is stored as results:cal:<region>, a rolling window from a week back to four weeks ahead,
 refreshed in the background. Facts only: a date, the company's own stated purpose and, once results are filed, a
@@ -86,9 +88,25 @@ def row(region: str, symbol: str, day: date, purpose: str, *, name=None, when=No
             "purpose": purpose[:160], "url": url if str(url or "").startswith("https://") else None, "src": src, "period": period}
 
 
+GENERIC = re.compile(r"^(?:board meeting(?: intimation)?|intimation|prior intimation)?$", re.I)
+
+
+def purpose_of(purpose: str, desc: str) -> str:
+    """The meeting's purpose as the exchange's list names it ("Financial Results/Dividend"). A notice filed under the
+    bare "Board Meeting Intimation" heading says what the meeting is for in its text: it is named from that (DE-027:
+    71 results meetings, NTPC's among them, read "Board Meeting Intimation")."""
+    if purpose and not GENERIC.match(purpose.strip()):
+        return purpose
+    parts = ["Financial Results"] + [w for w, rx in (("Dividend", r"dividend"), ("Fund Raising", r"fund rais|raising of funds"),
+                                                      ("Bonus", r"\bbonus\b"), ("Stock Split", r"split|sub-?division"))
+                                     if re.search(rx, desc, re.I)]
+    return "/".join(parts)
+
+
 def india_rows(raw: list) -> list[dict]:
-    """The exchange's board meetings that are about financial results."""
-    out = []
+    """The exchange's board meetings that are about financial results, one per company and day: a company that filed
+    both the bare intimation and the itemised notice for the same meeting is listed once, under the itemised one."""
+    out: dict = {}
     for r in raw if isinstance(raw, list) else []:
         if not isinstance(r, dict):
             continue
@@ -98,9 +116,12 @@ def india_rows(raw: list) -> list[dict]:
         day = parse_day(r.get("bm_date") or r.get("date"))
         if not sym or not day or not RESULTS.search(f"{purpose} {desc}"):
             continue
-        out.append(row("IN", sym, day, purpose or "Financial results", name=str(r.get("sm_name") or r.get("company") or "").strip() or None,
-                       url=r.get("attachment") or r.get("bm_attachment")))
-    return out
+        x = row("IN", sym, day, purpose_of(purpose, desc), name=str(r.get("sm_name") or r.get("company") or "").strip() or None,
+                url=r.get("attachment") or r.get("bm_attachment"))
+        have = out.get((sym, x["date"]))
+        if have is None or (GENERIC.match(have.get("_said") or "") and not GENERIC.match(purpose)):
+            out[(sym, x["date"])] = {**x, "_said": purpose}
+    return [{k: v for k, v in x.items() if k != "_said"} for x in out.values()]
 
 
 def from_announcements(symbol: str, items: list[dict], today: date) -> list[dict]:
@@ -140,6 +161,68 @@ def us_rows(raw: list) -> list[dict]:
             x["reported"] = rep
         out.append(x)
     return out
+
+
+def _quarter(p: str | None) -> str | None:
+    """"Sep/2026" (a fiscal quarter's last month) as "Sep 2026"."""
+    m = re.fullmatch(r"([A-Za-z]{3})/(\d{4})", str(p or "").strip())
+    return f"{m.group(1).title()} {m.group(2)}" if m else None
+
+
+def us_name(name: str | None) -> str | None:
+    """A US company's name for the list: the SEC's filing name in capitals ("INTERNATIONAL BUSINESS MACHINES CORP") in
+    title case, and a listing's share-class tail ("Common Stock") left out."""
+    from .stock_pages import proper_name
+    name = re.sub(r"\s+(?:Class [A-Z] )?(?:Common Stock|Common Shares|Ordinary Shares|American Depositary Shares)\b.*$", "", str(name or "").strip())
+    return proper_name(name) or None
+
+
+def calendar_rows(raw: list, names: dict | None = None) -> list[dict]:
+    """The companies reporting each day as the US market calendar lists them, with the session they announced (DE-025).
+    Names: the S&P 500 list's where it has one."""
+    names = names or {}
+    out = []
+    for r in raw if isinstance(raw, list) else []:
+        sym, day = str((r or {}).get("symbol") or "").upper(), parse_day((r or {}).get("date"))
+        if not sym or not day:
+            continue
+        q = _quarter(r.get("period"))
+        out.append(row("US", sym, day, "Quarterly results" + (f" (quarter ended {q})" if q else ""), when=WHEN.get(str(r.get("hour") or "")),
+                       name=names.get(sym) or us_name(r.get("name")), src="market calendar", period=q))
+    return out
+
+
+def with_filings(rows: list[dict], filed: list[dict], today: date, names: dict | None = None) -> list[dict]:
+    """The earnings releases filed with the SEC (8-K, item 2.02) put on the calendar (DE-025): on the company's row for
+    that results day (or the three days before it, for a release filed the day after a late call), else as a row of
+    its own on the filing day. A release filed in the last OUT_DAYS days is marked for its people to be told."""
+    names = names or {}
+    by_sym: dict = {}
+    for r in rows:
+        if r["region"] == "US":
+            by_sym.setdefault(r["symbol"], []).append(r)
+    for f in filed:
+        day = parse_day(f.get("at"))
+        if not day or not f.get("symbol"):
+            continue
+        out = {"at": day.isoformat(), "title": "Earnings release (8-K)", "url": f.get("url") if str(f.get("url") or "").startswith("https://") else None,
+               "numbers": []}
+        told = {"told": False} if day >= today - timedelta(days=OUT_DAYS) else {}
+        near = [r for r in by_sym.get(f["symbol"], []) if (day - timedelta(days=3)).isoformat() <= r["date"] <= day.isoformat()]
+        if near:
+            r = max(near, key=lambda r: r["date"])
+            if not r.get("out"):
+                r.update(out=out, **told)
+            continue
+        x = row("US", f["symbol"], day, "Quarterly results", name=names.get(f["symbol"]) or us_name(f.get("name")), src="filing")
+        x.update(out=out, **told)
+        rows.append(x)
+        by_sym.setdefault(f["symbol"], []).append(x)
+    return rows
+
+
+def weekdays(frm: date, to: date) -> list[date]:
+    return [frm + timedelta(days=i) for i in range((to - frm).days + 1) if (frm + timedelta(days=i)).weekday() < 5]
 
 
 def reported(r: dict) -> list[dict]:
@@ -270,7 +353,7 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
     {"rows": n, "problems": [...]}; the stored calendar is left alone when every source failed."""
     today = today or local_today(region)
     frm, to = today - timedelta(days=BEHIND_DAYS), today + timedelta(days=AHEAD_DAYS)
-    tracked, rows, problems, whole = set(tracked or ()), [], [], False
+    tracked, rows, problems, whole, unread = set(tracked or ()), [], [], False, set()
     if region == "IN":
         feed = sources.get("in")
         try:
@@ -286,18 +369,7 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
             except SourceError as e:
                 problems.append(f"{sym}: {str(e)[:120]}")
     else:
-        fh = sources.get("us")
-        try:
-            rows += us_rows(fh.earnings_between(frm, to))
-            whole = True
-        except (SourceError, AttributeError) as e:
-            problems.append(str(e)[:160])
-        if not whole:
-            for sym in sorted(tracked)[:MAX_LOOKUPS]:
-                try:
-                    rows += us_rows(fh.earnings_calendar(sym))
-                except (SourceError, AttributeError) as e:
-                    problems.append(f"{sym}: {str(e)[:120]}")
+        rows, whole, unread = us_refresh(sources, tracked, frm, to, today, problems)
     if not whole and not rows:
         return {"rows": None, "problems": problems}
     with _lock:
@@ -305,9 +377,68 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
         if not whole:                    # only some companies were asked: keep everyone else's dates as they were
             asked = {r["symbol"] for r in rows} | tracked
             rows += [r for r in old if r["symbol"] not in asked and r["date"] >= frm.isoformat()]
+        elif unread:                     # a day of the calendar that didn't answer keeps the dates it had
+            have = {r["symbol"] for r in rows}
+            rows += [r for r in old if r["date"] in unread and r["symbol"] not in have]
         merged = merge(old, rows, frm, today)
         save(region, merged)
     return {"rows": len(merged), "problems": problems}
+
+
+def us_refresh(sources: dict, tracked: set[str], frm: date, to: date, today: date, problems: list) -> tuple[list[dict], bool, set[str]]:
+    """The US window's rows: (rows, whether they cover every company, the days whose calendar didn't answer).
+
+    The market calendar for each weekday of the window, the company data's whole-market list on top, and the SEC's
+    earnings releases of the days gone by (DE-025: the company data answered an empty list for the whole window in the
+    middle of the reporting season, and an empty answer was stored as "no company reports"; an empty list now counts
+    as not answering). Only when neither list answered are the tracked companies asked one by one."""
+    from . import universes
+    names = universes.sp500_names()
+    fh, cal, sec = sources.get("us"), sources.get("cal"), sources.get("sec")
+    rows, whole, unread = [], False, set()
+    try:
+        got = us_rows(fh.earnings_between(frm, to))
+        if got:
+            rows, whole = got, True
+        else:
+            problems.append("The US company data's results calendar came back empty.")
+    except (SourceError, AttributeError) as e:
+        problems.append(str(e)[:160])
+    if cal is not None:
+        listed, answered = [], 0
+        for d in weekdays(frm, to):
+            try:
+                listed += calendar_rows(cal.earnings(d), names)
+                answered += 1
+            except (SourceError, AttributeError) as e:
+                unread.add(d.isoformat())
+                problems.append(f"{d.isoformat()}: {str(e)[:120]}")
+        if listed:
+            # the calendar names the session; the company data's row for the same company and day keeps its numbers
+            mine = {(r["symbol"], r["date"]): r for r in rows}
+            for r in listed:
+                k = (r["symbol"], r["date"])
+                mine[k] = {**r, **({"reported": mine[k]["reported"]} if mine.get(k, {}).get("reported") else {})}
+            rows = list(mine.values())
+            whole = whole or answered > 0
+        if not whole:
+            unread = set()
+    if sec is not None:
+        filed = []
+        for d in weekdays(frm, min(to, today)):
+            try:
+                filed += sec.earnings_filed(d)
+            except (SourceError, AttributeError) as e:
+                problems.append(f"filings {d.isoformat()}: {str(e)[:120]}")
+        rows = with_filings(rows, filed, today, names)
+    if not whole:
+        fh_ok = fh is not None and getattr(fh, "ready", lambda: True)()
+        for sym in sorted(tracked)[:MAX_LOOKUPS] if fh_ok else []:
+            try:
+                rows += us_rows(fh.earnings_calendar(sym))
+            except (SourceError, AttributeError) as e:
+                problems.append(f"{sym}: {str(e)[:120]}")
+    return rows, whole, (unread if whole else set())
 
 
 # ---------- results are out ----------
@@ -643,12 +774,20 @@ class Job:
 
 
 # ---------- the page ----------
-def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | None = None, limit: int = 400) -> dict:
-    """This week and next, Monday to Sunday: the user's own stocks, or every company in the calendar."""
+DAY_ROWS = 40          # rows a day shows at first on "All companies"; the rest of that day opens on request (DE-026)
+
+
+def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | None = None, limit: int = DAY_ROWS,
+         day: str | None = None) -> dict:
+    """This week and next, Monday to Sunday: the user's own stocks, or every company in the calendar, day by day.
+    Every day is listed with how many companies it has; on "All companies" a day shows its first `limit` rows (the
+    user's own first) and says how many more it has, and `day` (ISO) asks for one day in full. DE-026: a cut at the
+    400th row of the week dropped all of Saturday 31 Oct (NTPC among them) under "And 66 more"."""
     today = today or local_today(region)
     cal = load(region)
     mine = set(my_stocks(uid, region))
     q = re.sub(r"[^A-Z0-9&.\- ]", "", (q or "").upper()).strip()[:30]
+    day = day if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(day or "")) else None
     weeks, more = [], 0
     for label, start in (("This week", week_of(today)[0]), ("Next week", week_of(today)[0] + timedelta(days=7))):
         end = start + timedelta(days=6)
@@ -656,8 +795,14 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
                 and (scope == "all" or r["symbol"] in mine)
                 and (not q or q in r["symbol"] or q in str(r.get("name") or "").upper())]
         rows.sort(key=lambda r: (r["date"], r["symbol"] not in mine, r["symbol"]))
-        more += max(0, len(rows) - limit)
-        weeks.append({"label": label, "from": start.isoformat(), "to": end.isoformat(),
-                      "rows": [{**r, "mine": r["symbol"] in mine} for r in rows[:limit]]})
+        days, shown = [], []
+        for d in sorted({r["date"] for r in rows}):
+            on = [r for r in rows if r["date"] == d]
+            cap = len(on) if scope != "all" or d == day else max(1, limit)
+            shown += on[:cap]
+            days.append({"date": d, "count": len(on), "shown": min(cap, len(on))})
+            more += max(0, len(on) - cap)
+        weeks.append({"label": label, "from": start.isoformat(), "to": end.isoformat(), "days": days,
+                      "rows": [{**r, "mine": r["symbol"] in mine} for r in shown]})
     return {"region": region, "scope": scope, "today": today.isoformat(), "updated_at": cal["at"], "weeks": weeks,
-            "more": more, "mine_count": len(mine), "alerts": alerts_on(uid), "note": NOTE}
+            "more": more, "day_rows": limit, "mine_count": len(mine), "alerts": alerts_on(uid), "note": NOTE}

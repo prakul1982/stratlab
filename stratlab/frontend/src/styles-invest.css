@@ -150,7 +150,8 @@ a.inv-theme:hover { border-color: var(--ink); }
 .inv-sticky { position: static; }
 .inv-toggle { display: none; }
 @media (max-width: 1360px) { .inv-toggle { display: inline-flex; } }
-.inv-bounds { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--s2); align-items: end; }
+/* the unit's column is one width for "%" and "times", so every row's boxes line up (DE-012) */
+.inv-bounds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2.75rem; gap: var(--s2); align-items: end; }
 .inv-bounds .k-unit { padding-bottom: 12px; color: var(--muted); font-size: var(--t-note); }
 
 /* sector rotation chart bits */

@@ -871,6 +871,7 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .rot-axis { font: 12px var(--sans); fill: var(--muted); }
 .rot-quad { font: 600 12px var(--sans); fill: var(--ink-2); letter-spacing: .02em; }
 .rot-label { font: 12px var(--sans); fill: var(--ink); paint-order: stroke; stroke: var(--card); stroke-width: 3px; stroke-linejoin: round; }
+@media (max-width: 640px) { .rot-label { font-size: 11px; } }
 .rot-tip { position: absolute; z-index: 2; display: flex; flex-direction: column; gap: 3px; min-width: 180px; max-width: 216px;
   padding: 8px 10px; background: var(--card); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: var(--shadow); pointer-events: none; font-size: 13px; }
 .q-tag { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -1575,6 +1576,10 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-tbl-wrap.stack .k-table td.k-act { text-align: right; }
   /* a business update's card: the filing's own words stay in the link's tooltip, not three lines of every card (DD-051) */
   .biz-updates .k-tbl-wrap.stack .inv-clamp { display: none; }
+  /* a column marked `lead` (the scan's signal, a red flag's label) sits under the name, across the card (DE-004, DE-035) */
+  .k-tbl-wrap.stack.has-lead .k-table th[scope="row"] { order: -2; }
+  .k-tbl-wrap.stack.has-lead .k-table td.k-lead { order: -1; grid-column: 1 / -1; }
+  .k-tbl-wrap.stack.has-lead .k-table td.k-lead::before { display: none; }
   /* a heat cell fills a table cell edge to edge; on a card it is a chip that stays inside its figure (R88-003) */
   .k-tbl-wrap.stack .inv-heat-cell { display: inline-block; margin: 0; padding: 2px 8px; border-radius: 6px; }
 }

@@ -43,6 +43,8 @@ export interface ScreenResult {
   stale?: { symbol: string; name?: string | null; price_at: string }[];
   /** after the close, the session whose closes aren't in the list yet (R8B-008) */
   pending?: { day: string; due: string | null } | null;
+  /** companies that meet every other condition but have no value for this one, so it leaves them out (DE-009) */
+  no_value?: Record<string, number>;
 }
 
 export interface SavedScreen {

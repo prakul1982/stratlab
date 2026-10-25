@@ -89,7 +89,8 @@ def test_endpoints_are_pro_and_use_the_watchlist(monkeypatch, store):
         who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
         r = c.post("/research/scan", json={"region": "US", "set": "watchlist"}).json()
         assert r["name"] == "Your watchlist" and r["rows"][0]["symbol"] == "AAA" and r["rows"][0]["signal"] == "fresh"
-        assert c.put("/research/scan/alerts", json={"on": True}).json() == {"alerts": True} and scan.alert_on("u1")
+        # where it would go comes back too, so the page can say when nothing reaches the person (DE-008)
+        assert c.put("/research/scan/alerts", json={"on": True}).json()["alerts"] is True and scan.alert_on("u1")
     finally:
         main.app.dependency_overrides.clear()
 

@@ -14,9 +14,11 @@ export type Column<R> = {
   sortable?: boolean;                        // the header is a button that sorts by this column (needs the table's `sort`)
   cell: (row: R) => ReactNode;
   cardLabel?: string;                        // the figure's name on a phone card when the header isn't plain text (R88-003)
+  lead?: boolean;                            // on a phone card (`stack`), this cell comes right under the row's name, across the card: the answer first (DE-004, DE-035)
 };
 
-const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean }) => [c.numeric && "k-num", c.wrap && "k-wrap", c.action && "k-act"].filter(Boolean).join(" ") || undefined;
+const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: boolean }) =>
+  [c.numeric && "k-num", c.wrap && "k-wrap", c.action && "k-act", c.lead && "k-lead"].filter(Boolean).join(" ") || undefined;
 
 /** The one table: a header row, right-aligned numbers, a hover row, and its own horizontal scroll box so a wide table
  * never makes the page scroll sideways. `label` names the table for screen readers. `rowNote` turns a row into its
@@ -64,7 +66,7 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   const left = allRows.length - rows.length;
   return (
     <>
-    <div ref={box} className={`k-tbl-wrap${stack ? " stack" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
+    <div ref={box} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
           <tr role={stack ? "row" : undefined}>{columns.map((c) => {

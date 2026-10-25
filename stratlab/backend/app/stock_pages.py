@@ -700,7 +700,10 @@ def with_new_close(f: dict, bars: list[dict], analyse=None) -> dict:
     if analyse:
         try:
             t = analyse(bars) or {}
-            out.update({k: t.get(k) for k in ("stage", "stage_days", "st_up", "st_days")})
+            # a read with too few candles for the 150-day average has no Stage: the page's own stays rather than going
+            # blank (DE-009: TCS and INFY had no Stage in the screens, while their candles give Stage 1)
+            if t.get("stage") is not None or f.get("stage") is None:
+                out.update({k: t.get(k) for k in ("stage", "stage_days", "st_up", "st_days")})
         except Exception:                 # too few candles for the trend: the old one stays
             pass
     return out

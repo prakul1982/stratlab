@@ -95,31 +95,118 @@ def _stems(text: str | None) -> set[str]:
 
 
 def tidy_text(t):
-    """A doubled full stop ("...partnerships..") made single; an ellipsis stays (R6O-017)."""
-    return re.sub(r"(?<!\.)\.\.(?!\.)", ".", t) if isinstance(t, str) else t
+    """A doubled full stop ("...partnerships..") made single; an ellipsis stays (R6O-017). A comma or semicolon left
+    before a full stop ("strategic offset mandates,.") goes (DE-014)."""
+    if not isinstance(t, str):
+        return t
+    t = re.sub(r"\s*[,;:]+\s*(?=\.(?!\.))", "", t)
+    return re.sub(r"(?<!\.)\.\.(?!\.)", ".", t)
+
+
+def exchange_list(out: dict, rows: list[dict], cap: int = 40) -> dict:
+    """The listed companies the exchange's own classification puts in the theme's industries (DE-013: Bharat Dynamics,
+    BEML, Data Patterns and Solar Industries were missing from an "India defence" map): an industry counts when two
+    or more of the map's listed companies are in it, or when it shares a word with the theme. `rows`: the screener's
+    stored index ({symbol, name, industry}). {"industries", "companies" (A to Z, at most `cap`), "total"}; the map's own
+    companies are marked `named`. None when no industry qualifies."""
+    ind = {r.get("symbol"): r.get("industry") for r in rows or [] if r.get("symbol") and r.get("industry")}
+    mapped = {x.get("ticker") for x in out.get("screen") or []}
+    for group in (out.get("clusters") or []) + (out.get("value_chain") or []):
+        mapped |= {c.get("ticker") for c in group.get("companies") or []}
+    mapped.discard("")
+    mapped.discard(None)
+    counts: dict[str, int] = {}
+    for t in mapped:
+        if ind.get(t):
+            counts[ind[t]] = counts.get(ind[t], 0) + 1
+    theme = _stems(out.get("sector"))
+    keep = sorted(i for i, n in counts.items() if n >= 2 or (_stems(i) & theme))
+    if not keep:
+        return {}
+    found = sorted((r for r in rows if r.get("industry") in keep and r.get("symbol")), key=lambda r: str(r.get("name") or r["symbol"]).lower())
+    return {"industries": keep, "total": len(found),
+            "companies": [{"ticker": r["symbol"], "name": listed_name(r.get("name"), r["symbol"]), "industry": r["industry"],
+                           "named": r["symbol"] in mapped} for r in found[:cap]]}
+
+
+_THEME_WORDS = {"ai", "ev", "evs", "it", "5g", "ipo", "psu", "psus", "fmcg", "capex", "defence", "defense", "railways", "rail", "solar",
+                "wind", "power", "energy", "green", "hydrogen", "data", "centers", "centres", "cloud", "chips", "semiconductors", "banks",
+                "banking", "fintech", "insurance", "pharma", "healthcare", "hospitals", "tourism", "travel", "retail", "consumer",
+                "electrification", "grid", "nuclear", "water", "cement", "steel", "metals", "mining", "gold", "oil", "gas", "auto",
+                "autos", "batteries", "lithium", "robotics", "cybersecurity", "software", "telecom", "media", "gaming", "space",
+                "shipbuilding", "infrastructure", "housing", "real", "estate", "chemicals", "fertilisers", "fertilizers", "agri",
+                "agriculture", "textiles", "logistics", "drones", "aviation", "airlines", "biotech", "glp", "obesity", "india", "us"}
+
+
+def vocabulary(rows: list[dict]) -> set[str]:
+    """Every word in the listed companies' names, sectors and industries, and the usual theme words: what a theme typed
+    is checked against before an AI read is spent on it (DE-015)."""
+    words = set(_THEME_WORDS)
+    for r in rows or []:
+        for f in ("name", "sector", "industry"):
+            words |= {w for w in re.findall(r"[a-z0-9]+", str(r.get(f) or "").lower()) if len(w) > 1}
+    return words
+
+
+def _gibberish(w: str) -> bool:
+    """A typed word that can't be a word: three of one letter in a row, five consonants in a row, or no vowel in a word
+    longer than four letters ("zzz", "asdkjh", "qwrtpl")."""
+    return bool(re.search(r"(.)\1\1", w) or re.search(r"[bcdfghjklmnpqrstvwxz]{5}", w) or (len(w) > 4 and not re.search(r"[aeiouy]", w)))
+
+
+def looks_like_theme(q: str, vocab: set[str]) -> bool:
+    """Whether a typed theme reads as words: one of them is a word the listed companies or the usual themes use, or most of
+    them look like words. "asdkjh qwe zzz" doesn't; "India defence", "grid electrification" and "GLP-1 drugs" do."""
+    words = [w for w in re.findall(r"[a-z0-9]+", str(q or "").lower()) if w]
+    if not words:
+        return False
+    if any(w in vocab or (len(w) > 3 and w.rstrip("s") in vocab) for w in words):
+        return True
+    return sum(1 for w in words if not _gibberish(w)) > len(words) / 2 and any(len(w) > 3 for w in words)
+
+
+def listed_only(out: dict) -> dict:
+    """A map kept from before DE-013 as today's would be: no company that isn't on the list, none named twice."""
+    def only(cos):
+        seen, keep = set(), []
+        for c in cos or []:
+            if c.get("ticker") and c.get("listed", True) and c["ticker"] not in seen:
+                seen.add(c["ticker"])
+                keep.append(c)
+        return keep
+    out = dict(out)
+    out["clusters"] = [c for c in ({**c, "companies": only(c.get("companies"))} for c in out.get("clusters") or []) if c["companies"]]
+    out["value_chain"] = [{**v, "companies": only(v.get("companies"))} for v in out.get("value_chain") or []]
+    return out
+
+
+def listed_name(name: str | None, fallback: str | None = None) -> str:
+    """A company's name as the exchange's list writes it, in title case when the list has it in capitals."""
+    from ..stock_pages import proper_name
+    return proper_name(str(name or fallback or "").strip()) or str(fallback or "")
 
 
 def ground_sector(out: dict, region: str, lookup) -> dict:
-    """A theme map with only tickers that are real and belong to the company named (R5O-008):
-    - "Listed companies across the chain": a row whose company can't be found is dropped;
-    - "Who's in it" and the value chain: the company stays by name, without a ticker (it isn't on the list);
+    """A theme map of listed companies only, each under the name the exchange lists it by (R5O-008, DE-013):
+    - every company, in "Listed companies across the chain", "Who's in it" and the value chain, is looked up in the
+      market's list by its ticker and name; one that can't be found is dropped, not shown as "not listed" (the AI
+      called Larsen & Toubro Infotech, listed as LTM, "not listed");
+    - a company found is named as the list names it, so a unit put under its parent's ticker reads as the listed parent
+      ("Larsen & Toubro Defence" under LT is Larsen & Toubro), and each listed company shows once per group;
     - "Funds to track": a fund that can't be found is dropped.
     A doubled full stop in the text is made single (R6O-017); drop_unrelated then checks each company's industry."""
     res = Resolver(lookup, region)
 
-    def fix(c: dict) -> dict:
-        if not c.get("ticker"):
-            return {**c, "ticker": "", "listed": False}
-        got = res.resolve(c.get("name"), c.get("ticker"))
-        return {**c, "ticker": got["symbol"] if got else "", "listed": bool(got)}
+    def fix(c: dict) -> dict | None:
+        got = res.resolve(c.get("name"), c.get("ticker")) if c.get("name") or c.get("ticker") else None
+        return {**c, "ticker": got["symbol"], "name": listed_name(got.get("name"), c.get("name")), "listed": True} if got else None
 
     def fix_all(cos: list[dict]) -> list[dict]:
         seen, keep = set(), []
         for c in cos:
             f = fix(c)
-            k = f["ticker"] or f.get("name")
-            if k not in seen:
-                seen.add(k)
+            if f and f["ticker"] not in seen:
+                seen.add(f["ticker"])
                 keep.append(f)
         return keep
 
@@ -128,7 +215,7 @@ def ground_sector(out: dict, region: str, lookup) -> dict:
     for s in out.get("screen") or []:
         got = res.resolve(s.get("name"), s.get("ticker"))
         if got and got["symbol"] not in {x["ticker"] for x in screen}:
-            screen.append({**s, "ticker": got["symbol"]})
+            screen.append({**s, "ticker": got["symbol"], "name": listed_name(got.get("name"), s.get("name"))})
     out["screen"] = screen
     out["clusters"] = [{**c, "companies": fix_all(c.get("companies") or [])} for c in out.get("clusters") or []]
     out["value_chain"] = [{**v, "companies": fix_all(v.get("companies") or [])} for v in out.get("value_chain") or []]

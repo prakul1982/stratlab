@@ -217,8 +217,8 @@ test("no data provider's name on the company and lending pages (R5O-020)", () =>
   assert.match(page, /Read the full entry ↗/);
   assert.doesNotMatch(read("src/pages/StockLendingPage.tsx"), /bhavcopy/i);
   // a headline with no publisher shows its time alone, without a stray " · "
-  // (one time style for every headline since DD-022)
-  assert.match(read("src/components/Research.tsx"), /\{\[n\.source, newsWhen\(n\.at\)\]\.filter\(Boolean\)\.join\(" · "\)\} ↗/);
+  // (one time style for every headline since DD-022; near-repeats folded since DE-017)
+  assert.match(read("src/components/Research.tsx"), /\{\[n\.source, newsWhen\(n\.at\), n\.similar [^\]]+\]\.filter\(Boolean\)\.join\(" · "\)\} ↗/);
 });
 
 test("the scan page counts what it skipped and words a one-candle rule properly (R5O-023)", () => {
@@ -298,9 +298,10 @@ test("polish: Help's title, candle colours, card heights, option tiles, the menu
   assert.match(read("src/components/Shell.tsx"), /className="side-more"/);
 });
 
-test("the theme map says a company without a checked ticker isn't listed, not 'private' (R5O-008)", () => {
+test("the theme map names no company it couldn't find on the list, as 'not listed' or 'private' (R5O-008, DE-013)", () => {
   const r = read("src/pages/Research.tsx");
-  assert.match(r, /\{co\.name\} \(not listed\)/);
+  // DE-013: "Larsen & Toubro Infotech (not listed)" was listed (as LTM); a company not found is left out instead
+  assert.doesNotMatch(r, /\(not listed\)/);
   assert.doesNotMatch(r, /\(private\)/);
 });
 

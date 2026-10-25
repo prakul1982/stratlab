@@ -317,7 +317,9 @@ test("R5C-017: a brief's links to the app open in the app, whatever the address'
 test("R5C-018: \"Find a company by name\" is said only where there is a box to find one in", () => {
   for (const p of ["src/pages/ResultsPage.tsx", "src/pages/CorpActionsPage.tsx"]) {
     const src = read(p);
-    assert.match(src, /And \{data\.more\} more\.\{scope === "all" \? " Find a company by name to narrow the list\." : ""\}/, p);
+    // the results list is cut by day now (DE-026): its note says each day's rows are a click away, or find one by name
+    if (p.endsWith("ResultsPage.tsx")) assert.match(src, /more are a click away under their day, or find a company by name/, p);
+    else assert.match(src, /And \{data\.more\} more\.\{scope === "all" \? " Find a company by name to narrow the list\." : ""\}/, p);
     assert.match(src, /\{scope === "all" && \(\n\s*<Field key=\{region\} label="Find a company">/, p);
   }
 });

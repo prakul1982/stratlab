@@ -67,6 +67,12 @@ function sessionOf(q: { change_day?: string | null; at?: string | null } | null 
   return d && today && d < today ? d : null;
 }
 
+/** An index level as the exchange states it, to two decimals (22,600.00; 73,123.83): the same figure the mood's text
+ * quotes, not a rounded one beside it (DE-017: the cards said 22,600 and 73,124 while the text said 73,123.83). */
+export function indexLevel(name: string, price: number): string {
+  return price.toLocaleString(name.includes("NIFTY") || name === "SENSEX" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export function IndexStrip({ indices, missing }: { indices: IndexLevel[] | null; missing?: string[] }) {
   if (!indices) return <Skeleton label="Loading the market" lines={2} />;
   if (!indices.length) return <EmptyState title="Index levels are unavailable right now">They come back on their own; this page checks again when you open it.</EmptyState>;
@@ -74,9 +80,9 @@ export function IndexStrip({ indices, missing }: { indices: IndexLevel[] | null;
     <>
     <StatRow label="Index levels">
       {indices.map((i) => (
-        <Stat key={i.name} item label={i.name} value={Math.round(i.price).toLocaleString(i.name.includes("NIFTY") || i.name === "SENSEX" ? "en-IN" : "en-US")}
+        <Stat key={i.name} item label={i.name} value={indexLevel(i.name, i.price)}
           delta={i.change_pct != null ? <Delta value={i.change_pct} tone={i.stale ? "neutral" : "auto"}>{pct(i.change_pct, 2)}</Delta> : undefined}
-          note={<span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{indexWhen(i, (d) => fmtDate(d, { year: false }))}{i.from_high_pct != null && ` · ${i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its 52-week high`}`}</span>} />
+          note={<span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{indexWhen(i, (d) => fmtDate(d, { year: false }))}{i.from_high_pct != null && <> · <span className="nowrap">{i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its 52-week high`}</span></>}</span>} />
       ))}
     </StatRow>
     {!!missing?.length && <p className="k-small k-muted" data-testid="index-missing">{missing.join(", ")} couldn't load.</p>}
@@ -523,7 +529,7 @@ export function ThemesPage() {
           )}
           {r.clusters.length > 0 && (
             <Card>
-              <CardHead title="Who's in it" info="Groups of companies involved in the theme. Every ticker is checked against the exchange lists; a company without one isn't listed there. Tap a ticker to open the company." />
+              <CardHead title="Who's in it" info="Groups of listed companies involved in the theme. Every company is checked against the exchange's list and named as the exchange lists it; one the list doesn't have is left out. Tap a ticker to open the company." />
               {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
               <div className="inv-clusters">
                 {r.clusters.map((cl) => (
@@ -531,7 +537,7 @@ export function ThemesPage() {
                     <b className="k-small">{cl.name}</b>
                     <div className="k-row">{cl.companies.map((co) => co.ticker
                       ? <Link key={co.name} className="inv-chip" to={coLink(co.ticker)}><b>{co.ticker}</b> {co.name}</Link>
-                      : <span key={co.name} className="inv-chip off">{co.name} (not listed)</span>)}</div>
+                      : <span key={co.name} className="inv-chip off">{co.name}</span>)}</div>
                   </div>
                 ))}
               </div>
@@ -553,12 +559,21 @@ export function ThemesPage() {
               </ol>
             </Card>
           )}
+          {r.exchange && r.exchange.companies.length > 0 && (
+            <Card>
+              <CardHead title="On the exchange's list for these industries" info="Every listed company the exchange classifies under the same industries as the map's companies, A to Z, from StratLab's list of listed companies. Ticked ones are named in the map above; the rest are in the same industry and the map doesn't name them." />
+              <p className="k-small k-muted">{r.exchange.industries.join(" · ")}: {r.exchange.total.toLocaleString("en-IN")} compan{r.exchange.total === 1 ? "y" : "ies"}{r.exchange.total > r.exchange.companies.length ? `, the first ${r.exchange.companies.length} A to Z` : ""}.</p>
+              <div className="k-row">{r.exchange.companies.map((co) => (
+                <Link key={co.ticker} className={`inv-chip${co.named ? "" : " off"}`} to={coLink(co.ticker)}>{co.named ? "✓ " : ""}<b>{co.ticker}</b> {co.name}</Link>
+              ))}</div>
+            </Card>
+          )}
           <div className="k-cols">
             {r.sub_themes.length > 0 && <Card><CardHead title="Sub-themes" />{r.sub_themes.map((s) => <div key={s.name} className="k-stack"><b>{s.name}</b><span className="k-small k-muted">{s.detail}</span></div>)}</Card>}
             {r.tailwinds.length > 0 && <Card><CardHead title="Tailwinds" /><ul className="k-list">{r.tailwinds.map((t) => <li key={t}>{t}</li>)}</ul></Card>}
             {r.risks.length > 0 && <Card><CardHead title="Risks" /><ul className="k-list">{r.risks.map((t) => <li key={t}>{t}</li>)}</ul></Card>}
           </div>
-          <p className="k-note">Written by AI from its general knowledge: check the numbers at the source before relying on them.</p>
+          <p className="k-note">Written by AI from its general knowledge, with no figures: there's no source here to check a budget, size or growth rate against. Companies are checked against the exchange's list.</p>
         </>
       )}
     </div>

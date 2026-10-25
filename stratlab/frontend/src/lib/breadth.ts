@@ -21,7 +21,18 @@ export type History = {
   highs: number[]; lows: number[]; net_highs: number[]; up4: number[]; down4: number[]; stage2: (number | null)[];
   mcclellan: number[]; summation: number[]; thrust: number[]; trin: (number | null)[]; index: (number | null)[];
 };
-export type SectorTable = { columns: { label: string; day: string }[]; rows: { sector: string; stocks: number; values: (number | null)[] }[] };
+export type SectorTable = { columns: { label: string; day: string }[]; rows: { sector: string; stocks: number; values: (number | null)[] }[];
+  /** sectors with too few stocks to show a share, named so the table adds up (DE-024) */
+  small?: { sector: string; stocks: number }[]; min_stocks?: number };
+
+/** A cap for a chart whose rare spike would flatten every other day (DE-022: one TRIN near 10 among values around 1):
+ * 1.5 times the 95th percentile, never under `floor`; null when nothing goes above it. */
+export function spikeCap(values: (number | null)[], floor = 3): number | null {
+  const v = values.filter((x): x is number => x != null && Number.isFinite(x)).sort((a, b) => a - b);
+  if (v.length < 10) return null;
+  const cap = Math.max(floor, v[Math.floor(0.95 * (v.length - 1))] * 1.5);
+  return v[v.length - 1] > cap ? Math.round(cap * 10) / 10 : null;
+}
 export type BreadthView = {
   group: Group; groups: Group[]; today: Today | null; as_of: string | null; since: string | null; range: RangeId;
   help: Record<string, string>; status: string | null; locked: boolean; plan_needed: string;

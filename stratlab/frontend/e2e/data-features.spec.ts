@@ -68,15 +68,16 @@ test("trend scan: pick a preset rule set, scan NIFTY 500 and the S&P 500, each m
   for (const name of ["52-week high breakout", "Golden cross (50/200)", "RSI oversold bounce", "Near 52-week low", "Pullback in an uptrend", "Stage 2 + Supertrend"]) {
     await chips.getByRole("button", { name, exact: true }).click();
     await page.getByRole("button", { name: "Scan", exact: true }).click();
-    if (name === "Stage 2 + Supertrend") {                       // the same stored answer, in the preset table
-      await expect(page.getByRole("heading", { name: /Stage 2 \+ Supertrend: NIFTY 500/ })).toBeVisible();
+    const st2 = name === "Stage 2 + Supertrend";
+    if (st2) {                       // the same stored answer, in the layout every group's Stage 2 + Supertrend scan has (DE-003)
+      await expect(page.getByRole("heading", { name: "NIFTY 500", exact: true })).toBeVisible();
     } else {
       await expect(page.getByRole("heading", { name: new RegExp(`${name.replace(/[()/]/g, ".")}: NIFTY 500`) })).toBeVisible();
     }
     await expect(page.getByText("Stocks checked").first().locator("xpath=..")).toContainText(String(checked));
-    const table = page.getByRole("table", { name: new RegExp(`NIFTY 500: ${name.slice(0, 6)}`) });
+    const table = page.getByRole("table", { name: st2 ? "NIFTY 500: stage and Supertrend" : new RegExp(`NIFTY 500: ${name.slice(0, 6)}`) });
     const rows = await table.locator("tbody tr").count();
-    const none = await table.getByText("No stock matches this rule right now.").count();
+    const none = await table.getByText(/No stock matches this rule right now\.|Nothing matches right now\./).count();
     found += none ? 0 : rows;
     if (!none && rows && !shotTaken) { shotTaken = true; await shot(page, "scan-india", info); }
   }
@@ -169,10 +170,11 @@ test("red flags across every company: newest first, paged, filtered by type and 
   await sane(page, errors);
 });
 
-test("red flags: your watchlist in the US reads the same stored list", async ({ page }, info) => {
+test("red flags: your stocks in the US read the same stored list", async ({ page }, info) => {
   const errors = await open(page, "/research/filings?region=US", "Filings and red flags", user(info));
-  await expect(page.getByText(/watchlist is empty|filings? on your watchlist/).first()).toBeVisible();
-  await expect(page.getByRole("radio", { name: "Your watchlist" })).toBeChecked();
+  await expect(page.getByText(/No United States stocks yet|filings? of your stocks/).first()).toBeVisible();
+  // one name for the tab in both markets (DE-036)
+  await expect(page.getByRole("radio", { name: "Your stocks" })).toBeChecked();
   await sane(page, errors);
 });
 

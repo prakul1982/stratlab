@@ -701,14 +701,18 @@ def sector_table(group: str) -> dict | None:
         return None
     back = [("Today", 0), ("1 week ago", 5), ("1 month ago", 21), ("3 months ago", 63)]
     cols = [(label, len(days) - 1 - k) for label, k in back if len(days) - 1 - k >= 0]
-    rows = []
+    rows, small = [], []
     for name, v in (raw.get("sectors") or {}).items():
         a, n = v.get("a") or [], v.get("n") or []
-        if len(a) != len(days) or len(n) != len(days) or not n[-1] or n[-1] < MIN_SECTOR:
+        if len(a) != len(days) or len(n) != len(days) or not n[-1]:
+            continue
+        if n[-1] < MIN_SECTOR:          # too few stocks for a share to mean much: named under the table, not dropped silently (DE-024)
+            small.append({"sector": name, "stocks": n[-1]})
             continue
         rows.append({"sector": name, "stocks": n[-1], "values": [_pct(a[i], n[i]) if a[i] is not None and n[i] else None for _, i in cols]})
     rows.sort(key=lambda x: x["sector"].lower())
-    return {"columns": [{"label": label, "day": days[i]} for label, i in cols], "rows": rows}
+    return {"columns": [{"label": label, "day": days[i]} for label, i in cols], "rows": rows,
+            "small": sorted(small, key=lambda x: x["sector"].lower()), "min_stocks": MIN_SECTOR}
 
 
 def groups_list() -> list[dict]:
