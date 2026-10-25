@@ -25,7 +25,8 @@ export const LIMITS: Record<PlanId, Limits> = {
       "event_reminders",
       "biz_updates", "holders",
       "stock_futures", "mtf",
-      "mf_behaviour", "sip_luck", "rates_slab", "loan_check"] },
+      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
+      "ipo_summary", "ipo_alerts"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null, ai_reads_per_day: null,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
@@ -36,7 +37,8 @@ export const LIMITS: Record<PlanId, Limits> = {
       "biz_updates", "holders",
       "assistant",
       "stock_futures", "mtf",
-      "mf_behaviour", "sip_luck", "rates_slab", "loan_check"] },
+      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
+      "ipo_summary", "ipo_alerts"] },
 };
 
 // Free has every market and the core tools, not every tool: Replay, Forward test, the scans and the full journal are paid (DP1-021)
@@ -67,8 +69,8 @@ export const FEATURES: Record<PlanId, string[]> = {
     `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month, with all 20+ indicators: MACD, Supertrend, VWAP and more`,
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups on intraday candles and options at set times, with trade notifications and a daily report`,
     "Trading tools: full trade journal, positioning history, stock futures history, closing auction history, chart replay practice, an India VIX entry filter, SIP dip rules",
-    "Alerts: F&O change alerts, ETF gap alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email",
-    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} company slide decks a month, business updates in numbers and named-holder search`,
+    "Alerts: F&O change alerts, ETF gap alerts, IPO alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email",
+    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} company slide decks a month, business updates in numbers, named-holder search and IPO offer document summaries`,
     "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags (and each holding's filings and results date), Watchlist at a glance, market breadth charts, margin funding history",
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, deposit rates after your own tax, a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings`],
@@ -123,7 +125,9 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["mf_behaviour", "Fund behaviour: your return against each fund's in rupees, your SIP record and redemptions after a fall"],
   ["sip_luck", "SIP test: dip rules, and the same SIP from every start month"],
   ["rates_slab", "Fixed-income rates after tax at the rate from your own tax estimate"],
-  ["loan_check", "Floating-rate loans: is your rate following its benchmark, and what each change did"]];
+  ["loan_check", "Floating-rate loans: is your rate following its benchmark, and what each change did"],
+  ["ipo_summary", "IPO offer document summaries: what the company does, its figures, what the money is for, the main risk factors and the promoters"],
+  ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Options builder: charges to open and close, breakevens and the most it can make or lose after them", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
@@ -139,7 +143,8 @@ export const EVERYONE = ["Every market, and your own CSV",
   "Weekly Market Brief and My Stocks emails", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history",
   "Named holders above 1% and the business-update filings on every company page",
   "Stock futures today: OI buildup, rollover, basis and MWPL use for every F&O stock", "Stock lending fees that traded for your holdings",
-  "Margin-funded positions per stock today, and your own MTF cost worked out"];
+  "Margin-funded positions per stock today, and your own MTF cost worked out",
+  "IPOs in India and the US: dates, price bands, lot sizes, the bids by category while an issue is open, the offer documents' key facts, and listings against the issue price"];
 
 /** The cheapest plan that includes a feature flag ("free" when neither paid list names it). */
 export function planOf(feature: string): PlanId {

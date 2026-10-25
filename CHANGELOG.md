@@ -4,6 +4,11 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 25 October 2026: IPOs
+
+- **IPOs** (`/invest/ipos`, `/invest/ipos/:id`): India from NSE's and BSE's public-issue pages and SEBI's DRHP and RHP lists; the US from the public IPO calendar and the SEC's S-1, F-1 and prospectus filings. Tabs per market, the bids by category while an issue is open, the offer document's facts, and listing price against issue price. Plans: the lists, pages, bids and listing performance are free; the offer-document summary (`ipo_summary`) and the alerts (`ipo_alerts`) are Basic and up.
+- **Job** (`ipo.py`): India 07:40 and 20:10 IST, US 08:30 and 21:30 IST, the bids every 15 minutes from 09:55 to 17:30 IST while an issue is open, the final bids after 19:20, then offer documents and their summaries a few at a time; alerts 08:00 IST (India) and 19:00 IST (US dates). Admin: Data and jobs → IPOs.
+
 ### 8 October 2026: Admin "View as" a plan
 
 - **View as Free / Basic / Pro / Off (site owner only):** the app reads as that plan's user would see it, with its locks, upgrade prompts and monthly limits, on the live site. Choose it in the account menu ("View as:") or on Admin → Overview; a banner on every page says "Viewing as Free. Your real plan is unchanged." with a Turn off button, and the choice stays on this device across reloads until turned off.

@@ -17,7 +17,7 @@ test("the map has the owner's groups, in order", () => {
   assert.deepEqual(NAV.money.groups.map((g) => g.label), ["What you own", "Tax", "Plan"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-view").pages.map((p) => p.label),
     ["Market pulse", "Market breadth", "Sector rotation", "ETF vs NAV", "Margin funding", "Stock lending fees"]);
-  assert.equal(ALL_PAGES.length, 41);
+  assert.equal(ALL_PAGES.length, 42);
 });
 
 test("each page has one address, a one-liner and a place", () => {

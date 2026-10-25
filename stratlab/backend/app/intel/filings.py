@@ -1152,6 +1152,25 @@ class NSEFilings:
         """The F&O indices on the CAS page: value, previous close and the indicative close during the auction."""
         return self._get("/api/NextApi/apiClient/casApi", {"functionName": "getAllFnoIndexData"}, referer=self.CAS_PAGE, circuit="cas")
 
+    IPO_PAGE = "https://www.nseindia.com/market-data/all-upcoming-issues-ipo"
+
+    def ipo_upcoming(self):
+        """The public issues still to open, as the exchange's upcoming-issues page lists them (ipo.py reads it). A breaker of its own."""
+        return self._get("/api/all-upcoming-issues", {"category": "ipo"}, referer=self.IPO_PAGE, circuit="ipo")
+
+    def ipo_current(self):
+        """The public issues open for bidding now."""
+        return self._get("/api/ipo-current-issue", {}, referer=self.IPO_PAGE, circuit="ipo")
+
+    def ipo_past(self, frm: datetime, to: datetime):
+        """The issues that have closed between two days, with their listing dates."""
+        return self._get("/api/public-past-issues", {"from_date": frm.strftime("%d-%m-%Y"), "to_date": to.strftime("%d-%m-%Y"), "security_type": "all"},
+                         referer=self.IPO_PAGE, circuit="ipo")
+
+    def ipo_detail(self, symbol: str, series: str = "EQ"):
+        """One issue's own page: its terms, its offer document and the bids received by category (both exchanges' together)."""
+        return self._get("/api/ipo-detail", {"symbol": symbol, "series": series}, referer=self.IPO_PAGE, circuit="ipo")
+
 
 ETF_SECURITIES_URL = "https://nsearchives.nseindia.com/content/equities/eq_etfseclist.csv"
 
@@ -1386,6 +1405,14 @@ class BSEFilings:
         rows = [x for x in rows if isinstance(x, dict)] if isinstance(rows, list) else []
         self.cache.set(("actions", code), rows, 3600)
         return rows
+
+    def ipo_issues(self) -> dict:
+        """BSE's public-issue list ({"Table": [...]}: the issues open or still to open on its main board and SME platform)."""
+        return self._call("/GetPublicIssue_par_updated/w", {"flag": 1, "status": "", "exchange": "", "ir_flag": "IPO"})
+
+    def ipo_listed(self, year: int) -> dict:
+        """How BSE's listed issues of a year have traded since their listing ({"Table": [...]})."""
+        return self._call("/MoreCompanyN/w", {"Fromdt": year, "company": "", "flag": 1, "type": 2})
 
 
 class IndiaFilings:

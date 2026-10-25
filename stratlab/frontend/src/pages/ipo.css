@@ -1,0 +1,10 @@
+/* IPOs: the list and an issue's page. */
+.ipo-page .k-sub-line { white-space: normal; }
+.ipo-facts dt { color: var(--muted); font-size: var(--t-label); }
+.ipo-facts dd { margin: 0 0 var(--s2); }
+.ipo-facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); column-gap: var(--s5); }
+.ipo-dates { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--s3); margin: 0; padding: 0; list-style: none; }
+.ipo-dates li { display: flex; flex-direction: column; gap: 2px; }
+.ipo-statement { margin: 0 0 var(--s3); }
+.ipo-statement blockquote { margin: var(--s1) 0 0; padding-left: var(--s3); border-left: 2px solid var(--line); color: var(--muted); font-size: var(--t-note); overflow-wrap: anywhere; }
+.ipo-docs li { overflow-wrap: anywhere; }

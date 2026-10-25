@@ -87,6 +87,8 @@ ROUTES = [
     ("holders", "get", "/invest/holders?q=life", None),
     ("money_reminders", "put", "/money/calendar/reminders", {"on": True, "days": 3}),
     ("journal", "get", "/trade/journal/compare?tag=x&session=s1", None),
+    ("ipo_alerts", "put", "/invest/ipos/alerts", {"on": True, "events": ["open"], "markets": ["IN"], "sme": False}),
+    ("ipo_summary", "post", "/invest/ipos/in-none/summary", None),
 ]
 
 
