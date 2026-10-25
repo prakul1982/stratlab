@@ -1,0 +1,38 @@
+ 
+National Stock Exchange of India Limited 
+ 
+ 
+ 
+Circular 
+Department: FUTURES & OPTIONS SEGMENT 
+Download Ref No: NSE/FAOP/77091 Date: October 23, 2026 
+Circular Ref. No: 145/2026  
+ 
+All Members, 
+ 
+Exclusion of Futures and Options contracts on INOXWIND 
+This is in reference to SEBI Circular Ref. No: SEBI/HO/MRD-PoD2/CIR/P/2024/00181 dated December 30, 
+2024 and chapter 3.5 of Exchange circular No. NSE/FAOP/73928 dated April 28, 2026 regarding eligibility 
+criteria of stocks. 
+Members are requested to note that the contracts for new expiry months in the following securit y will not be 
+issued on expiry of existing contract months:  
+Sr. No Symbol Security Name 
+1 INOXWIND Inox Wind Limited 
+ 
+However, the existing unexpired contracts of expiry months October 2026, November 2026 and December 
+2026 would continue to be available for trading till their respective expiry and new strikes would also be 
+introduced in the existing contract months. 
+Accordingly, no contracts shall be available for trading in the above -mentioned securi ty with effect from 
+December 30, 2026. 
+ 
+ 
+For and on behalf of 
+National Stock Exchange of India Limited 
+ 
+Khushal Shah 
+Associate Vice President 
+ 
+ 
+ 
+Toll Free No Email id 
+1800-266-0050 (Option 1) msm@nse.co.in  

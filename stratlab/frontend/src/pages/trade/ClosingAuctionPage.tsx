@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { asOf, safeHref, fmtTime, IST, money, price } from "../../lib/format";
 import { upDown } from "../../lib/tradeUi";
-import { gapText, LIVE_PHASES, PHASE_TEXT, qtyText, steps, type CasDay, type CasHistory, type CasPosition, type CasStock, type CasView } from "../../lib/closingAuction";
+import { aboveBelow, anyValue, gapText, LIVE_PHASES, PHASE_TEXT, qtyExact, qtyText, steps, type CasDay, type CasHistory, type CasPosition, type CasStock, type CasView } from "../../lib/closingAuction";
 import { Earlier } from "../../components/Earlier";
 import { Search } from "../../components/Icons";
 import { Badge, Card, CardHead, DataTable, EmptyState, ErrorState, PageHeader, Signed, Skeleton, type Column } from "../../components/kit";
@@ -42,9 +42,10 @@ function Status({ v }: { v: CasView }) {
 
 function Timeline({ v }: { v: CasView }) {
   const s = steps(v.timetable, v.phase);
+  // "today's" only on a trading day (DC-010: "Today's timetable" on a Saturday)
   return (
-    <Card label="Today's timetable">
-      <CardHead title="Today's timetable" />
+    <Card label="Auction timetable">
+      <CardHead title={v.trading_day ? "Today's timetable" : "The auction's timetable, each trading day"} />
       {s.length > 0 && (
         <ol className="cas-steps">
           {s.map((x) => (
@@ -104,13 +105,16 @@ function Expiry({ v }: { v: CasView }) {
 function Indices({ v }: { v: CasView }) {
   if (!v.indices.length) return null;
   const done = v.phase === "closed" || !!v.from_stored || !v.fresh;
-  const cols: Column<CasView["indices"][number]>[] = [
-    { key: "name", header: "Index", rowHeader: true, cell: (i) => <b>{i.name}</b> },
-    { key: "value", header: done ? "Close" : "Value", numeric: true, cell: (i) => (i.value == null ? "–" : price(i.value)) },
-    { key: "ind", header: "Indicative close", numeric: true, cell: (i) => (i.indicative == null ? "–" : price(i.indicative)) },
-    { key: "gap", header: "Gap", numeric: true, cell: (i) => <Gap g={i.gap} /> },
-    { key: "start", header: "At 15:15", numeric: true, cell: (i) => (i.start == null ? "–" : price(i.start)) },
-  ];
+  type I = CasView["indices"][number];
+  const cols: Column<I>[] = ([
+    { key: "name", header: "Index", rowHeader: true, cell: (i: I) => <b>{i.name}</b> },
+    { key: "value", header: done ? "Close" : "Value", numeric: true, cell: (i: I) => (i.value == null ? "–" : price(i.value)) },
+    { key: "ind", header: "Indicative close", numeric: true, cell: (i: I) => (i.indicative == null ? "–" : price(i.indicative)), has: (i: I) => i.indicative },
+    { key: "gap", header: "Gap", numeric: true, cell: (i: I) => <Gap g={i.gap} />, has: (i: I) => i.gap },
+    { key: "start", header: "At 15:15", numeric: true, cell: (i: I) => (i.start == null ? "–" : price(i.start)), has: (i: I) => i.start },
+  ] as (Column<I> & { has?: (i: I) => number | null })[])
+    // a column no index has a figure for is left out (DC-010: six cards with dashes in three of four fields)
+    .filter((c) => !c.has || anyValue(v.indices, c.has));
   return (
     <Card label="Indices">
       <CardHead title="Indices" />
@@ -127,7 +131,9 @@ function Stocks({ v }: { v: CasView }) {
     const t = q.trim().toUpperCase();
     return t ? v.stocks.filter((r) => r.symbol.includes(t)) : v.stocks;
   }, [v.stocks, q]);
-  const shown = rows.slice(0, 40), rest = rows.slice(40);
+  // one table, more rows on a click (DC-011: the "More stocks" table had other column widths than the first)
+  const [limit, setLimit] = useState(40);
+  const shown = rows.slice(0, q.trim() ? rows.length : limit);
   const final = v.phase === "closed" || !!v.from_stored || !v.fresh || (v.stocks.length > 0 && v.stocks.every((r) => r.final_out));      // "final" only once the auction is over
   // the final price and its gap right after the stock, so a phone shows them without scrolling sideways; the reference
   // and its band come after (R8B-010: at 400 px only "Stock" and "Reference (band)" fitted on a list sorted by the gap)
@@ -137,9 +143,13 @@ function Stocks({ v }: { v: CasView }) {
     { key: "gap", header: "Gap to reference", numeric: true, cell: (r) => <Gap g={r.gap} /> },
     { key: "ref", header: "Reference (band)", numeric: true, cell: (r) => <>{r.ref == null ? "–" : price(r.ref, "INR")}
       {r.lower != null && r.upper != null && <span className="k-sub-line">{price(r.lower, "INR")}–{price(r.upper, "INR")}</span>}</> },
-    { key: "qty", header: final ? "Quantity" : "Indicative quantity", numeric: true, cell: (r) => qtyText(r.final_out ? r.final_qty : r.ieq) },
-    { key: "bid", header: "Bid / ask quantity", numeric: true, cell: (r) => `${qtyText(r.buy_qty)} / ${qtyText(r.sell_qty)}` },
-    { key: "imb", header: "Unmatched", numeric: true, cell: (r) => qtyText(r.imbalance) },
+    { key: "qty", header: final ? "Quantity" : "Indicative quantity", numeric: true, cell: (r) => qtyExact(r.final_out ? r.final_qty : r.ieq) },
+    // the order book's sides and what is left unmatched only while there is something to show: after the auction the
+    // unmatched quantity was 0 on all 213 rows (DC-011), and each phone card was 250 px tall (DC-010)
+    ...(anyValue(v.stocks, (r) => r.buy_qty) || anyValue(v.stocks, (r) => r.sell_qty)
+      ? [{ key: "bid", header: "Bid / ask quantity", numeric: true, cell: (r: CasStock) => `${qtyExact(r.buy_qty)} / ${qtyExact(r.sell_qty)}` }] : []),
+    ...(anyValue(v.stocks, (r) => r.imbalance, false)
+      ? [{ key: "imb", header: "Unmatched", numeric: true, cell: (r: CasStock) => qtyExact(r.imbalance) }] : []),
   ];
   const attrs = (r: CasStock) => ({ "data-cas-stock": r.symbol });
   return (
@@ -156,9 +166,10 @@ function Stocks({ v }: { v: CasView }) {
       {!rows.length ? <EmptyState title={v.stocks.length ? "No stock matches that." : "No auction recorded yet"}>{v.stocks.length ? "Try another symbol." : "Each trading day's auction shows here once it has run."}</EmptyState> : (
         <>
           <DataTable label="F&O stocks in the closing auction" columns={cols} rows={shown} rowKey={(r) => r.symbol} rowAttrs={attrs} stack phonePage={30} />
-          <Earlier key={q.trim() ? "find" : "all"} label="More stocks" count={rest.length} open={!!q.trim()}>
-            <DataTable label="More F&O stocks in the closing auction" columns={cols} rows={rest} rowKey={(r) => r.symbol} rowAttrs={attrs} stack />
-          </Earlier>
+          {rows.length > shown.length && (
+            <div className="k-row"><button type="button" className="btn quiet sm" data-testid="cas-more" onClick={() => setLimit((x) => x + 60)}>
+              Show {Math.min(60, rows.length - shown.length)} more stocks ({rows.length - shown.length} not shown)</button></div>
+          )}
         </>
       )}
     </Card>
@@ -177,7 +188,7 @@ function History({ v }: { v: CasView }) {
     { key: "day", header: "Day", rowHeader: true, cell: (d) => asOf(d.day) },
     { key: "n", header: "Stocks", numeric: true, cell: (d) => d.stocks },
     { key: "avg", header: "Average gap (either way)", numeric: true, cell: (d) => (d.avg_abs_gap == null ? "–" : `${d.avg_abs_gap.toFixed(2)}%`) },
-    { key: "ud", header: "Above / below", numeric: true, cell: (d) => `${d.up} / ${d.down}` },
+    { key: "ud", header: "Against the reference", numeric: true, cell: (d) => aboveBelow(d) },
     { key: "wide", header: "Widest", numeric: true, cell: (d) => (d.widest ? <>{d.widest.symbol} <Gap g={d.widest.gap} /></> : "–") },
     { key: "n50", header: "NIFTY 50 close", numeric: true, cell: (d) => { const n50 = d.indices.find((i) => i.name === "NIFTY 50"); return n50 ? <>{n50.close == null ? "–" : price(n50.close)}<span className="k-sub-line"><Gap g={n50.gap} /> from 15:15</span></> : "–"; } },
   ];
@@ -191,7 +202,9 @@ function History({ v }: { v: CasView }) {
         <EmptyState title="No auctions recorded yet">Each trading day's auction is saved after 15:40.</EmptyState>
       ) : (
         <>
-          <p className="k-note">Each day: the final prices against the reference prices (VWAP of 15:00–15:15).</p>
+          <p className="k-note">Each day: the final prices against the reference prices (VWAP of 15:00–15:15).
+            {/* DC-012: 13 days shown although the auctions began on 3 Aug: say from when they are kept */}
+            {" "}Kept from {asOf(h.days[h.days.length - 1].day)}, when StratLab began saving each day's auction ({h.days.length} day{h.days.length === 1 ? "" : "s"} so far); the auctions before that weren't saved here.</p>
           <DataTable stack label="Past auctions" columns={cols} rows={recent} rowKey={(d) => d.day} rowAttrs={attrs} />
           <Earlier label="Earlier auctions" count={older.length}>
             <DataTable stack label="Earlier auctions" columns={cols} rows={older} rowKey={(d) => d.day} rowAttrs={attrs} />
@@ -237,10 +250,13 @@ export function ClosingAuctionPage() {
           {stale && <p className="k-note" role="status" data-testid="cas-stale">The latest update didn't come through, so this is the last one received. It tries again every {REFRESH_MS / 1000} seconds.</p>}
           <Status v={v} />
           <Expiry v={v} />
-          <Timeline v={v} />
-          <Indices v={v} />
+          {/* while the auction isn't running the stocks come first and the timetable after them (DC-010: the "Market
+              closed" card and the timetable pushed the table about 900 px down) */}
+          {LIVE_PHASES.includes(v.phase) && <Timeline v={v} />}
           <Stocks v={v} />
+          <Indices v={v} />
           <History v={v} />
+          {!LIVE_PHASES.includes(v.phase) && <Timeline v={v} />}
           <Coming v={v} />
           <p className="k-note">Rules: SEBI circular of 16 Jan 2026 and the exchange's circulars of 29 May 2026 on the closing auction. The same timetable
             runs StratLab's paper trading: F&amp;O stocks stop continuous fills at 15:15, and a square-off after that fills at the auction's closing price.</p>

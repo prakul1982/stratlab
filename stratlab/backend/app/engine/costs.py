@@ -24,6 +24,15 @@ IN_CDS_OPTIONS = {"stt_sell": 0.0, "exchange": 0.000311, "sebi": 0.000001, "stam
 IN_RATES = {"in_eq": IN_EQUITY, "in_eq_mis": IN_EQUITY_MIS, "in_fut": IN_FUTURES, "in_opt": IN_OPTIONS, "in_bse_opt": IN_BSE_OPTIONS,
             "in_mcx_opt": IN_MCX_OPTIONS, "in_mcx_fut": IN_MCX_FUTURES, "in_cds_fut": IN_CDS_FUTURES, "in_cds_opt": IN_CDS_OPTIONS}
 GST = 0.18
+# The depository (DP) charge on a sale of delivered shares: once per stock sold from a demat account on a day, whatever the
+# quantity: CDSL's ₹3.50 plus a discount broker's ₹9.50 (the ₹0-delivery, ₹20-an-order broker the defaults follow), plus
+# GST, ₹15.34 (DB-040: a delivery sale's charges left it out, about 30% under on a small trade). Intraday and F&O have none.
+IN_DP_SELL = 13.0
+
+
+def dp_charge() -> float:
+    """The DP charge on one stock's delivery sales of a day, GST included."""
+    return round(IN_DP_SELL * (1 + GST), 2)
 IN_STCG, IN_LTCG, IN_LTCG_EXEMPT = 0.20, 0.125, 125000
 
 US_SEC_FEE = 0.0000206           # on sells: $20.60 a million from 4 Apr 2026 (SEC fee rate advisory, fiscal 2026)

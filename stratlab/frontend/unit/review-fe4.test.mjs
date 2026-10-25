@@ -166,7 +166,7 @@ test("the journal's hour breakdown names the market's zone, and 'today' follows 
   const j = read("src/pages/trade/JournalPage.tsx");
   assert.match(j, /by the hour they were entered \(\{tzLabel\(marketTz\(market\.toUpperCase\(\)\)\)\}\)/);
   assert.match(j, /<Breakdowns b=\{j\.breakdowns\} r=\{j\.r\} market=\{j\.market\} \/>/);
-  assert.match(j, /const today = istToday\(\);/);
+  assert.match(j, /const today = \[istToday\(\), local\]\.sort\(\)\[0\];/);      // India's day, never ahead of the reader's (DB-044)
   assert.doesNotMatch(j, /toISOString\(\)\.slice\(0, 10\)/);
   assert.match(read("src/pages/money/NetWorthPage.tsx"), /const today = \(\) => istToday\(\);/);
   assert.match(read("src/pages/money/UsTaxPage.tsx"), /const today = \(\) => dayIn\(new Date\(\), ET\) \?\? "";/);

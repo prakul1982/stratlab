@@ -35,7 +35,7 @@ async function groupFor(u: NonNullable<ImportOut["universe"]>, market: string): 
 /** The most a pasted or chosen strategy can hold. A StratLab export of a large notebook is 20-30 KB. */
 export const MAX_IMPORT = 60000;
 const ACCEPT = ".json,.pine,.txt,.py,.afl,.mq4,.mq5,.md";
-const HELP_TEXT = "Bring in a strategy you already have. A StratLab export loads exactly as it was. TradingView Pine Script, Python (Backtrader, backtesting.py and the like), MetaTrader, AmiBroker or a written description are translated into StratLab rules by the AI; Pine Script also works without it. Anything that can't be translated is listed on the notebook so you can decide what to do. Option structures (straddles, strangles, condors and the like) open in the Options tab instead.";
+const HELP_TEXT = "Bring in a strategy you already have. A StratLab export loads exactly as it was. TradingView Pine Script, Python (Backtrader, backtesting.py and the like), MetaTrader, AmiBroker or a written description are translated into StratLab rules by the AI; Pine Script also works without it. Anything that can't be translated is listed on the notebook so you can decide what to do. Option structures (straddles, strangles, condors and the like) open in the options builder (Trade → Options builder) instead.";
 
 /** Import a strategy from a file or pasted text, then hand it over like an idea the AI built. */
 export function ImportStrategy({ onBuilt, market }: {
@@ -69,9 +69,9 @@ export function ImportStrategy({ onBuilt, market }: {
       const out = await api<ImportOut>("/import/strategy", { method: "POST", body: { text, filename: file } });
       if (out.used_ai) refreshMe();
       if (out.kind === "options") {
-        // option structures run in the Options tab
+        // option structures open in the options builder; there's no Options tab (DB-009)
         try { sessionStorage.setItem(IMPORTED, JSON.stringify({ strategy: out.strategy, notes: out.notes || [] })); } catch { /* storage off */ }
-        notify("That's an options structure, so it opened in the Options tab.");
+        notify(out.notes?.length ? "That's an options structure, so it opened in the options builder. Check the notes at the top before you start." : "That's an options structure, so it opened in the options builder.");
         nav("/options");
         return;
       }

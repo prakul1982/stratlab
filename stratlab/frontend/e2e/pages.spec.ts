@@ -1738,7 +1738,7 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   const wide = await main.locator("[data-testid=part-table], [data-testid=pcr-table]").evaluateAll((ts) => ts.map((t) => t.parentElement!.scrollWidth - t.parentElement!.clientWidth));
   if (info.project.name === "desktop") expect(wide.every((w) => w <= 1), `tables wider than their cards: ${wide}`).toBe(true);
   const facts = main.getByTestId("chain-facts");
-  await expect(facts.getByText("Max-pain strike")).toBeVisible({ timeout: 30_000 });
+  await expect(facts.getByText("Max pain, near the money")).toBeVisible({ timeout: 30_000 });   // DB-012
   await expect(facts.getByText(/IV percentile/)).toBeVisible();
   await expect(facts.locator(".strike-chart svg path").first()).toBeVisible();
   await expect(facts).toContainText("IST");

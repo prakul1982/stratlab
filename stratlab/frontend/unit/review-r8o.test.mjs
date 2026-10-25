@@ -135,7 +135,7 @@ test("R8O-012: a chain from the live feed over two minutes old says its time, no
   assert.equal(chainWords({ source: "live", as_of: asOf }, t + 30_000), "live chain");
   assert.equal(chainWords({ source: "live", as_of: asOf }, Date.parse("2026-10-09T11:49:08+05:30")), "chain at 11:39 IST");
   assert.equal(chainWords({ source: "live", at_close: true, as_of: asOf }, t + 3_600_000), "chain at the close");
-  assert.equal(chainWords({ source: "recorded", as_of: asOf }, t), "recorded chain");
+  assert.equal(chainWords({ source: "recorded", as_of: asOf }, t), "intraday recording");   // DC-003
   assert.match(read("src/pages/PositioningPage.tsx"), /\{chainWithTime\(c, istTime\(c\.as_of\)\)\}/);
   assert.match(read("src/components/VixPanel.tsx"), /upperFirst\(chainWithTime\(ivNow, vixTime\(ivNow\.as_of\)\)\)/);
 });

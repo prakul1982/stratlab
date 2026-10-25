@@ -27,6 +27,18 @@ type Filter = "all" | Buildup | "mwpl" | "roll";
 type SortKey = "symbol" | "pc" | "oc" | "m" | "r" | "ba";
 const SORTS: [SortKey, string][] = [["symbol", "Stock (A–Z)"], ["pc", "Price change"], ["oc", "OI change"], ["m", "MWPL use"], ["r", "Rollover"], ["ba", "Basis, annualised"]];
 const BUILDUPS: Buildup[] = ["LB", "SB", "SC", "LU"];
+/** Rows shown before "Show more" (DC-009: 213 rows in one 14,815 px scroll). */
+export const SF_PAGE = 50;
+
+/** A stock's open interest in contracts (lots), as the participant table and the option chain count them (DC-009: shares
+ * with the lot beside them); null without a lot. */
+export const oiLots = (r: Pick<FutRow, "oi" | "lot">) => (r.oi != null && r.lot ? Math.round(r.oi / r.lot) : null);
+
+/** The days to the near expiry, once for the table when every row shares them, else null (each row then says its own). */
+export function commonDays(rows: Pick<FutRow, "td" | "e">[]): { td: number; e: string | null } | null {
+  const tds = new Set(rows.map((r) => r.td));
+  return rows.length && tds.size === 1 && rows[0].td != null ? { td: rows[0].td, e: rows[0].e } : null;
+}
 
 function BuildupTag({ b, labels, streak }: { b: Buildup | null; labels: Record<Buildup, string>; streak?: number | null }) {
   if (!b) return <span className="k-muted k-small">No change</span>;
@@ -145,10 +157,12 @@ export function StockFuturesPage() {
   const [sort, setSort] = useState<SortKey>("symbol");
   const [desc, setDesc] = useState(true);
   const [q, setQ] = useState("");
+  const [limit, setLimit] = useState(SF_PAGE);
   useEffect(() => {
     setError(null);
     desksApi.futures().then(setT).catch((e) => setError(e instanceof ApiError ? e.message : "The stock futures couldn't be read."));
   }, [again]);
+  useEffect(() => { setLimit(SF_PAGE); }, [filter, sort, desc, q]);
   const rows = useMemo(() => {
     const s = q.trim().toUpperCase();
     const out = (t?.rows ?? []).filter((r) => (!s || r.symbol.includes(s))
@@ -164,15 +178,21 @@ export function StockFuturesPage() {
   }, [t, filter, sort, desc, q]);
   const count = (f: Filter) => (t?.rows ?? []).filter((r) => (f === "all" || (f === "mwpl" ? (r.m ?? 0) >= (t?.watch_at ?? 80) : f === "roll" ? r.roll_window : r.b === f))).length;
   const open = (s: string | null) => { const p = new URLSearchParams(params); if (s) p.set("s", s); else p.delete("s"); setParams(p); };
+  // the days to expiry once, above the table, when every stock shares them (DC-009: "2d to expiry" on all 213 rows)
+  const same = commonDays(t?.rows ?? []);
+  // a filter that keeps every stock (or none) filters nothing: the expiry-week chip shows only when it narrows (DC-009)
+  const filters = (["all", ...BUILDUPS, "mwpl", "roll"] as Filter[]).filter((f) => f !== "roll" || (count(f) > 0 && count(f) < (t?.rows.length ?? 0)));
+  const shown = rows.slice(0, limit);
 
   const cols: Column<FutRow>[] = t ? [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <>
       <a className="link" href={`?s=${r.symbol}`} onClick={(e) => { e.preventDefault(); open(r.symbol); window.scrollTo({ top: 0 }); }}><b>{r.symbol}</b></a>
       <span className="k-sub-line">lot {r.lot?.toLocaleString("en-IN") ?? "–"}</span></> },
     { key: "px", header: "Futures price", numeric: true, cell: (r) => <>{r.px?.toLocaleString("en-IN", { maximumFractionDigits: 2 }) ?? "–"}<span className="k-sub-line"><Signed value={r.pc}>{signedPct(r.pc)}</Signed></span></> },
-    { key: "oi", header: "Open interest", info: t.about.oi, numeric: true, cell: (r) => <>{sharesShort(r.oi)}<span className="k-sub-line"><Signed value={r.oc}>{signedPct(r.oc)}</Signed></span></> },
+    { key: "oi", header: "Open interest", info: `${t.about.oi} Shown in contracts (lots), with the shares under them.`, numeric: true, cell: (r) => <>{oiLots(r) != null ? `${oiLots(r)!.toLocaleString("en-IN")} lots` : sharesShort(r.oi)}
+      <span className="k-sub-line">{oiLots(r) != null ? `${sharesShort(r.oi)} shares · ` : ""}<Signed value={r.oc}>{signedPct(r.oc)}</Signed></span></> },
     { key: "b", header: "Buildup", info: BUILDUPS.map((b) => `${t.labels[b]}: ${t.about[b]}`).join(" "), cell: (r) => <BuildupTag b={r.b} labels={t.labels} streak={r.streak} /> },
-    { key: "r", header: "Later expiries", info: t.about.rollover, numeric: true, cell: (r) => <>{plainPct(r.r)}<span className="k-sub-line">{r.td != null ? `${r.td}d to expiry` : ""}</span></> },
+    { key: "r", header: "Later expiries", info: t.about.rollover, numeric: true, cell: (r) => <>{plainPct(r.r)}<span className="k-sub-line">{r.td != null && !same ? `${r.td}d to expiry` : ""}</span></> },
     { key: "ba", header: "Basis", info: t.about.basis, numeric: true, cell: (r) => <>{signedPct(r.bp)}<span className="k-sub-line">{signedPct(r.ba)} a yr</span></> },
     { key: "m", header: "MWPL use", info: t.about.mwpl, cell: (r) => <Mwpl r={r} ban={t.ban_at} /> },
   ] : [];
@@ -193,14 +213,19 @@ export function StockFuturesPage() {
           {!t.rows.length ? <EmptyState title="Nothing yet">{t.status.reason ?? "The exchange's evening files appear here once they are read."}</EmptyState> : (
             <>
               <ChipBar label="Show" value={filter} onChange={(v) => setFilter(v as Filter)}
-                options={(["all", ...BUILDUPS, "mwpl", "roll"] as Filter[]).map((f) => ({ value: f, label: `${f === "all" ? "All" : f === "mwpl" ? `MWPL ${t.watch_at}%+` : f === "roll" ? "Expiry week" : t.labels[f]} (${count(f)})` }))} />
+                options={filters.map((f) => ({ value: f, label: `${f === "all" ? "All" : f === "mwpl" ? `MWPL ${t.watch_at}%+` : f === "roll" ? "Expiry week" : t.labels[f]} (${count(f)})` }))} />
               <div className="k-toolbar">
                 <Select small label="Sort by" value={sort} onChange={(v) => setSort(v as SortKey)} options={SORTS.map(([value, label]) => ({ value, label }))} />
                 {sort !== "symbol" && <button type="button" className="btn quiet sm" onClick={() => setDesc(!desc)} aria-label="Order">{desc ? "Highest first" : "Lowest first"}</button>}
                 <label className="k-search sf-search"><Search size={16} /><input type="search" aria-label="Find a stock" placeholder="Find a stock" value={q} onChange={(e) => setQ(e.target.value)} /></label>
                 <span className="k-note">{rows.length} of {t.rows.length} stocks</span>
               </div>
-              <DataTable label="Stock futures by stock" columns={cols} rows={rows} rowKey={(r) => r.symbol} rowAttrs={(r): Record<string, string> => ({ "data-stock": r.symbol, ...(pick === r.symbol ? { "data-on": "1" } : {}) })} empty="No stock matches that." />
+              {same && <p className="k-note" data-testid="sf-expiry">Every stock's near futures expire {same.e ? dayText(same.e) : "on the same day"}: {same.td} trading day{same.td === 1 ? "" : "s"} to go{same.td <= t.roll_window ? ", so the share in later expiries is read as the rollover" : ""}.</p>}
+              <DataTable label="Stock futures by stock" columns={cols} rows={shown} rowKey={(r) => r.symbol} rowAttrs={(r): Record<string, string> => ({ "data-stock": r.symbol, ...(pick === r.symbol ? { "data-on": "1" } : {}) })} empty="No stock matches that." />
+              {rows.length > shown.length && (
+                <div className="k-row"><button type="button" className="btn quiet sm" data-testid="sf-more" onClick={() => setLimit((n) => n + SF_PAGE)}>
+                  Show {Math.min(SF_PAGE, rows.length - shown.length)} more ({rows.length - shown.length} not shown)</button></div>
+              )}
               <p className="k-note">
                 {t.full ? <>Pick a stock for its history and an alert when its MWPL use crosses 80%.</>
                   : <>Each stock's history and MWPL alerts are on the <Link className="link" to="/plans">{t.plan_needed} plan</Link>.</>}

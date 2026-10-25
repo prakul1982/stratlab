@@ -70,7 +70,8 @@ export function legRule(l: OptLeg, unit: "strikes" | "points"): string {
     case "delta_range": return `Δ ${(l.delta ?? 0.2).toFixed(2)}–${(l.deltaTo ?? 0.3).toFixed(2)}`;
     case "premium": return `${{ near: "≈", gte: "≥", lte: "≤" }[l.premiumOp ?? "near"]} ₹${l.premium ?? 50}`;
     case "straddle_pct": return `${l.pct ?? 20}% of straddle`;
-    default: return l.offset === 0 ? "ATM" : `${Math.abs(l.offset)}${unit === "points" ? " pts" : ""} ${l.offset > 0 ? "OTM" : "ITM"}`;
+    // the unit named either way (DB-006: "4 OTM" read the same in strikes and in points)
+    default: return l.offset === 0 ? "ATM" : `${Math.abs(l.offset)}${unit === "points" ? " pts" : Math.abs(l.offset) === 1 ? " strike" : " strikes"} ${l.offset > 0 ? "OTM" : "ITM"}`;
   }
 }
 
@@ -97,9 +98,11 @@ export const STRUCTURES: { id: string; name: string; hint: string; unit: "strike
   { id: "buy_put", name: "Buy a put", hint: "One bought put", unit: "strikes", legs: [{ side: "buy", opt: "PE", offset: 0, lots: 1 }] },
 ];
 
+/** The chips before the list of underlyings has come: the server's first five (options/data.py POPULAR), so MIDCPNIFTY is
+ * one of them, as the backtesting note says it is recorded (DB-008: a fixed CRUDEOIL chip stood in its place). */
 export const POPULAR_FALLBACK = [
   { exchange: "NFO", name: "NIFTY" }, { exchange: "NFO", name: "BANKNIFTY" }, { exchange: "BFO", name: "SENSEX" },
-  { exchange: "NFO", name: "FINNIFTY" }, { exchange: "MCX", name: "CRUDEOIL" }, { exchange: "CDS", name: "USDINR" },
+  { exchange: "NFO", name: "FINNIFTY" }, { exchange: "NFO", name: "MIDCPNIFTY" }, { exchange: "MCX", name: "CRUDEOIL" }, { exchange: "CDS", name: "USDINR" },
 ] as const;
 
 /** Whether a structure's name is one the builder made up ("NIFTY iron condor", "NIFTY options on 7 EMA cross") rather
@@ -272,4 +275,48 @@ export function costsLine(costs: string, orders: { slices?: number }[]): string 
   const n = sent.length, slices = sent.reduce((a, o) => a + (o.slices ?? 1), 0);
   return `Costs so far ${costs} over the ${n} order${n === 1 ? "" : "s"} in this trade`
     + (slices > n ? ` (sent as ${slices} exchange orders, split at the exchange's limit per order)` : "") + ".";
+}
+
+/* ---------- review DB (24 Oct 2026) ---------- */
+
+/** What is wrong with a structure's times, in plain words (DB-004: 16:00 entry, 08:00 last entry and 09:00 square-off were
+ * written back as a plan with no warning). `open`/`close` are the exchange's hours ("09:15", "15:40"), when known. Empty
+ * when the times work. */
+export function timingIssues(t: { entry: string; lastEntry: string; squareoff: string }, open?: string | null, close?: string | null): string[] {
+  const out: string[] = [];
+  const inHours = (x: string) => !open || !close || (x >= open && x <= close);
+  if (open && close) {
+    for (const [v, what] of [[t.entry, "The entry time"], [t.lastEntry, "The last entry"], [t.squareoff, "The square-off"]] as const)
+      if (!inHours(v)) out.push(`${what}, ${v}, is outside the market's hours (${open} to ${close}).`);
+  }
+  if (t.lastEntry < t.entry) out.push(`The last entry (${t.lastEntry}) is before the first (${t.entry}), so it would never enter.`);
+  if (t.squareoff <= t.entry || t.squareoff < t.lastEntry) out.push(`The square-off (${t.squareoff}) has to come after the entries.`);
+  return out;
+}
+
+/** A number box's range in words, for the line under it: "1 to 50", "a whole number from −100 to 100". */
+export function rangeText(min: number, max: number | undefined, whole: boolean): string {
+  const n = (v: number) => `${v < 0 ? "−" : ""}${Math.abs(v).toLocaleString("en-IN")}`;
+  const span = max == null ? `${n(min)} or more` : `${n(min)} to ${n(max)}`;
+  return whole ? `A whole number, ${span}.` : `From ${span}.`;
+}
+
+/** A typed number held to a box's range (DB-007: 999 lots went back to 1; now it is 50, and said): the value it becomes on
+ * leaving the box, or null when the text isn't a number. */
+export function clampTyped(text: string, min: number, max: number | undefined, whole: boolean): number | null {
+  const t = text.replace(/,/g, "").trim();
+  if (!/^[−-]?\d*\.?\d+$/.test(t)) return null;
+  let v = Number(t.replace("−", "-"));
+  if (whole) v = Math.round(v);
+  return Math.min(max ?? Infinity, Math.max(min, v));
+}
+
+/** The expiry a choice names, for its button: "Nearest · 27 Oct" (DB-008: the choices never named a date). */
+export function expiryChoiceLabel(name: string, date: string | undefined, fmt: (d: string) => string): string {
+  return date ? `${name} · ${fmt(date)}` : name;
+}
+
+/** The line over a structure priced on a recording, not live quotes (DB-001). `at` is the recording's time, written. */
+export function recordedLine(at: string): string {
+  return `Priced on the last recorded option chain, as of ${at} (the last close), because live quotes are offline: bids and asks as recorded then, else last trades. Not a live price; the broker's margin and paper trading need the live feed.`;
 }

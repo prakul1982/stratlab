@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money, price, TF_NAME, fmtDate } from "../../lib/format";
+import { money, price, qty as qtyText, TF_NAME, fmtDate, fmtDateTime } from "../../lib/format";
 import { upDown } from "../../lib/tradeUi";
 import { CANDLE_LIMITS, CANDLE_SIZES, CANDLE_UNITS, candleCheck } from "../../lib/intervals";
 import type { Instrument } from "../../lib/types";
-import { simulate, type Action, type RBar, type ROrder, type Rates } from "../../lib/replay";
+import { parseQty, qtyProblem, simulate, type Action, type RBar, type ROrder, type Rates } from "../../lib/replay";
 import { PriceChart, type Tf } from "../../charts/price/lazy";
 import type { PriceLevel } from "../../charts/price/engine";
 import { InstrumentSearch } from "../../components/InstrumentSearch";
@@ -28,7 +28,7 @@ type Session = {
 };
 type Overview = {
   allowed: boolean; plan: string; note: string; tfs: string[];
-  sessions: { id: string; label: string; tf: string; created: string; hidden: boolean }[];
+  sessions: { id: string; label: string; tf: string; created: string; hidden: boolean; symbol?: string | null; start?: string | null; first?: number; candles?: number; currency?: string }[];
   practice: { n: number; wins: number; net: number; charges: number; last: string | null };
 };
 type Finished = {
@@ -54,21 +54,30 @@ const signed = (v: number, cur: string) => `${v > 0 ? "+" : v < 0 ? "−" : ""}$
 const dayText = (iso: string) => fmtDate(iso.slice(0, 10));
 
 const tone = (n: number) => (n === 0 ? undefined : n > 0 ? ("up" as const) : ("down" as const));
+/** The journal keeps rupees: a replay in another currency isn't saved to it, and the page says so up front (DB-031). */
+const JOURNAL_RUPEES = "The journal keeps trades in rupees, so a replay in another currency isn't saved to it; you still see its result.";
+/** A quantity grouped the way its currency's money is (DB-032: "Long 1,00,00,00,000" for dollars). */
+const qtyIn = (q: number, cur: string) => qtyText(q, undefined, cur === "INR" ? "IN" : "US");
 
 function Setup({ ov, onStart }: { ov: Overview; onStart: (s: Session) => void }) {
   const { markets, fail, me } = useApp();
   const live = markets.filter((m) => m.status === "live" && m.id !== "CSV");
   const [mid, setMid] = useState("IN");
   const market = live.find((m) => m.id === mid) ?? live[0];
+  // a random replay is a NIFTY 50 stock: with India's data offline it can't start, and the button says why (DB-030)
+  const indiaLive = live.some((m) => m.id === "IN");
+  const [problem, setProblem] = useState<string | null>(null);
+  const rupees = (market?.currency ?? "INR") === "INR";
   const [inst, setInst] = useState<Instrument | null>(null);
   const [tf, setTf] = useState("1d");
   const [start, setStart] = useState(() => new Date(Date.now() - 400 * 86400_000).toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
   const go = async (random: boolean) => {
     setBusy(true);
+    setProblem(null);
     try {
       onStart(await api<Session>("/trade/replay", { method: "POST", body: random ? { random: true, tf } : { instrument: inst?.id, tf, start } }));
-    } catch (e) { fail(e); } finally { setBusy(false); }
+    } catch (e) { setProblem((e as Error)?.message || "The replay couldn't start. Try again in a minute."); fail(e); } finally { setBusy(false); }
   };
   const sizes = CANDLE_SIZES.filter((c) => ov.tfs.includes(c.value));
   return (
@@ -80,9 +89,11 @@ function Setup({ ov, onStart }: { ov: Overview; onStart: (s: Session) => void })
             custom={{ storageKey: `stratlab.chips.replay.${me?.id ?? "anon"}`, units: CANDLE_UNITS, defaultUnit: "min", validate: candleCheck(ov.tfs) }} />
         </FieldGroup>
         <div className="k-row">
-          <button type="button" className="btn outline" disabled={busy} onClick={() => go(true)}>Random stock and date</button>
+          <button type="button" className="btn outline" disabled={busy || !indiaLive} onClick={() => go(true)}>Random stock and date</button>
           <Info>A NIFTY 50 stock on a random past date. The symbol and the dates stay hidden until you finish, so you can't remember what happened next.</Info>
         </div>
+        {!indiaLive && <p className="k-note" data-testid="rp-random-off">A random replay picks a NIFTY 50 stock, and India's market data is offline right now, so it can't start. Pick an instrument from another market below.</p>}
+        {problem && <p className="k-note k-bad" role="alert" data-testid="rp-problem">{problem}</p>}
         <span className="k-small k-muted">Or pick one yourself</span>
         <FormGrid label="Pick a stock and a date" onSubmit={(e) => { e.preventDefault(); void go(false); }}>
           {live.length > 1 && (
@@ -93,6 +104,7 @@ function Setup({ ov, onStart }: { ov: Overview; onStart: (s: Session) => void })
               <div className="k-row"><Badge tone="ok">{inst.symbol}</Badge><button type="button" className="btn quiet sm" onClick={() => setInst(null)}>Pick another</button></div>
             ) : market ? <InstrumentSearch market={market} compact onPick={setInst} /> : <p className="k-small k-muted">Market data is offline right now.</p>}
           </FieldGroup>
+          {!rupees && <p className="k-note" data-testid="rp-not-saved">{JOURNAL_RUPEES}</p>}
           <DateField label="Start date" value={start} max={new Date(Date.now() - 86400_000).toISOString().slice(0, 10)} onChange={setStart} />
           <FormActions>
             <button type="submit" className="btn" disabled={busy || !inst || !start}>{busy ? "Loading candles…" : "Start replay"}</button>
@@ -155,11 +167,15 @@ function Player({ s, onDone, onDiscard }: { s: Session; onDone: (f: Finished) =>
   const atEnd = cursor >= last;
 
   const act = (action: Action, extra: Partial<ROrder> = {}) => setOrders((o) => [...o, { i: cursor, action, ...extra }]);
+  // a number only ("1e3" and "abc" refused), above 0 and worth no more than one practice order may be, said under the box
+  // with Long and Short off until it is (DB-032)
+  const qtyBad = qtyProblem(qty, closePx, cur, (v) => money(v, cur));
   const trade = (action: "long" | "short") => {
-    const q = Number(qty.replace(/,/g, ""));
-    if (!Number.isFinite(q) || q <= 0) { notify("Enter a quantity above 0."); return; }
+    const q = parseQty(qty);
+    if (qtyBad || q == null) { notify(qtyBad ?? "Enter a quantity above 0."); return; }
     act(action, { qty: q });
   };
+  const saves = cur === "INR";
   const setLine = (kind: "stop" | "target", p: number) => {
     if (!pos) { notify("There's no open position to protect."); return; }
     const long = pos.side === "long";
@@ -192,10 +208,11 @@ function Player({ s, onDone, onDiscard }: { s: Session; onDone: (f: Finished) =>
         </div>
         <span className="k-small k-muted" data-testid="rp-progress">Candle {Math.max(0, cursor - s.first + 1)} of {last - s.first + 1}</span>
       </div>
-      <PriceChart symbol={s.hidden ? "Hidden" : s.symbol ?? ""} storageKey={`REPLAY-${s.id}`.slice(0, 40)} currency={cur} bars={shown} tf={s.tf} replay hideDates={s.hidden}
+      {/* taller on a phone, where the chart was small (DB-033) */}
+      <div className="rp-chart"><PriceChart symbol={s.hidden ? "Hidden" : s.symbol ?? ""} storageKey={`REPLAY-${s.id}`.slice(0, 40)} currency={cur} bars={shown} tf={s.tf} replay hideDates={s.hidden}
         timeframes={[s.tf]} markers={markers} levels={levels} height={380}
         onPickPrice={picking ? (p) => setLine(picking, p) : null}
-        note={picking ? `Click the chart at the ${picking} price, or type it below.` : "Future candles are hidden. Orders fill at the last close shown."} />
+        note={picking ? `Click the chart at the ${picking} price, or type it below.` : "Future candles are hidden. Orders fill at the last close shown."} /></div>
 
       <Card label="Replay controls">
         <CardHead level={3} title="Replay controls" actions={<Seg label="Speed" options={SPEEDS.map((x) => ({ value: String(x), label: `${x}×` }))} value={String(speed)} onChange={(v) => setSpeed(Number(v))} />} />
@@ -204,10 +221,11 @@ function Player({ s, onDone, onDiscard }: { s: Session; onDone: (f: Finished) =>
           <button type="button" className="btn outline" onClick={() => setCursor((c) => Math.min(c + 1, last))} disabled={atEnd || playing} aria-keyshortcuts="ArrowRight" title="Next candle (→)">Next candle</button>
         </div>
         <FormGrid label="Practice order" onSubmit={(e) => e.preventDefault()}>
-          <Field label={s.fno ? "Quantity (units)" : "Quantity"} aria-label="Quantity" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
+          <Field label={s.fno ? "Quantity (units)" : "Quantity"} aria-label="Quantity" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)}
+            error={qty.trim() ? qtyBad : null} />
           <FormActions>
-            <button type="button" className="btn outline" onClick={() => trade("long")}>Long</button>
-            <button type="button" className="btn outline" onClick={() => trade("short")}>Short</button>
+            <button type="button" className="btn outline" disabled={!!qtyBad} onClick={() => trade("long")}>Long</button>
+            <button type="button" className="btn outline" disabled={!!qtyBad} onClick={() => trade("short")}>Short</button>
             <button type="button" className="btn outline" onClick={() => act("flat")} disabled={!pos}>Flat</button>
           </FormActions>
           <Field label="Stop or target" aria-label="Stop or target price" inputMode="decimal" value={level} onChange={(e) => setLevel(e.target.value)} placeholder={price(closePx, cur)} />
@@ -225,16 +243,19 @@ function Player({ s, onDone, onDiscard }: { s: Session; onDone: (f: Finished) =>
       <Card label="Practice account">
         <CardHead level={3} title="Practice account" />
         <StatRow label="Practice account">
-          <Stat item label="Position" value={<span data-testid="rp-position">{pos ? `${pos.side === "long" ? "Long" : "Short"} ${pos.qty.toLocaleString("en-IN", { maximumFractionDigits: 4 })} at ${price(pos.avg, cur)}` : "None"}</span>} />
+          <Stat item label="Position" value={<span data-testid="rp-position">{pos ? `${pos.side === "long" ? "Long" : "Short"} ${qtyIn(pos.qty, cur)} at ${price(pos.avg, cur)}` : "None"}</span>} />
           <Stat item label={<>Open P&amp;L<Info>The open position at the last close, before the charges to close it.</Info></>} value={pos ? signed(pos.unrealised, cur) : "–"} tone={pos ? tone(pos.unrealised) : undefined} />
           <Stat item label="Closed trades" value={<span data-testid="rp-closed">{sim.trades.length} ({sim.trades.filter((t) => t.net > 0).length} won)</span>} />
           <Stat item label="Closed P&L after charges" value={signed(closedNet, cur)} tone={tone(closedNet)} />
         </StatRow>
         {s.index && <p className="k-note">An index can't be traded itself, so no charges are counted on it.</p>}
         {sim.skipped.length > 0 && <p className="k-note">{sim.skipped.length} order{sim.skipped.length === 1 ? "" : "s"} did nothing ({sim.skipped[sim.skipped.length - 1].why.toLowerCase()}).</p>}
+        {!saves && <p className="k-note" data-testid="rp-not-saved">{JOURNAL_RUPEES}</p>}
         <div className="k-row">
-          <button type="button" className="btn" disabled={busy} onClick={() => finish(true)}>{busy ? "Finishing…" : "Finish and save to journal"}</button>
-          <button type="button" className="btn quiet" disabled={busy} onClick={() => finish(false)}>Finish without saving</button>
+          {saves ? <>
+            <button type="button" className="btn" disabled={busy} onClick={() => finish(true)}>{busy ? "Finishing…" : "Finish and save to journal"}</button>
+            <button type="button" className="btn quiet" disabled={busy} onClick={() => finish(false)}>Finish without saving</button>
+          </> : <button type="button" className="btn" disabled={busy} onClick={() => finish(false)}>{busy ? "Finishing…" : "Finish"}</button>}
           <button type="button" className="btn quiet danger" disabled={busy} onClick={() => setDiscarding(true)}>Discard</button>
         </div>
       </Card>
@@ -249,7 +270,7 @@ function Result({ f, onNew }: { f: Finished; onNew: () => void }) {
   type T = Finished["trades"][number];
   const cols: Column<T>[] = [
     { key: "side", header: "Side", cell: (t) => (t.side === "long" ? "Long" : "Short") },
-    { key: "qty", header: "Qty", numeric: true, cell: (t) => t.qty.toLocaleString("en-IN", { maximumFractionDigits: 4 }) },
+    { key: "qty", header: "Qty", numeric: true, cell: (t) => qtyIn(t.qty, cur) },
     { key: "px", header: "Entry → exit", numeric: true, cell: (t) => `${price(t.entry, cur)} → ${price(t.exit, cur)}` },
     { key: "why", header: "Closed by", wrap: true, cell: (t) => t.why },
     { key: "ch", header: "Charges", numeric: true, cell: (t) => money(t.charges, cur, 2) },
@@ -292,7 +313,7 @@ export function ReplayPage() {
   return (
     <div className="k-page" ref={top}>
       <PageHeader eyebrow="Trade · Practise" title="Chart replay"
-        lede="Step through a past chart one candle at a time with the future hidden, place practice orders, and see the result after charges. Finished sessions go to your journal as practice. A historical simulation: facts, not advice." />
+        lede="Step through a past chart one candle at a time with the future hidden, place practice orders, and see the result after charges. Finished replays in rupees (India, MCX and NSE currency) go to your journal as practice; the journal keeps rupees only. A historical simulation: facts, not advice." />
       {failed && !ov ? <ErrorState title="Chart replay couldn't be opened" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
         : !ov ? <Card><Skeleton label="Opening chart replay" /></Card> : !ov.allowed ? (
         <EmptyState title="Chart replay practice" action={plansAction}>It is on the {ov.plan} plan.</EmptyState>
@@ -304,19 +325,22 @@ export function ReplayPage() {
               <Card label="Unfinished">
                 <CardHead title="Unfinished" />
                 <ul className="k-list plain">
-                  {ov.sessions.map((x) => (
+                  {/* the date written as dates are, when it was opened and how far it got, so two replays of one start tell
+                      apart (DB-033) */}
+                  {ov.sessions.map((x) => { const at = saved(x.id); const done = at && x.first != null ? Math.max(0, at.cursor - x.first + 1) : 0; return (
                     <li key={x.id} className="k-spread">
-                      <span className="k-small">{x.label} · {TF_NAME[x.tf] ?? x.tf} candles</span>
+                      <span className="k-small">{x.symbol && x.start ? `${x.symbol} from ${dayText(x.start)}` : x.label} · {TF_NAME[x.tf] ?? x.tf} candles
+                        <span className="k-note"> · opened {fmtDateTime(x.created, { year: false })}{x.candles ? ` · candle ${done} of ${x.candles}` : ""}{at?.orders.length ? ` · ${at.orders.length} order${at.orders.length === 1 ? "" : "s"}` : ""}</span></span>
                       <button type="button" className="btn sm outline" onClick={() => open(x.id)}>Continue</button>
                     </li>
-                  ))}
+                  ); })}
                 </ul>
               </Card>
             )}
             <Setup ov={ov} onStart={(x) => { setS(x); setDone(null); top.current?.scrollIntoView({ block: "start" }); }} />
             {ov.practice.n > 0 ? (
               <p className="k-small k-muted" data-testid="rp-practice">{ov.practice.n} practice trade{ov.practice.n === 1 ? "" : "s"} in your <Link className="link" to="/trade/journal">journal</Link>, <Signed value={ov.practice.net}>{signed(ov.practice.net, "INR")}</Signed> after charges{ov.practice.last ? `, the latest closed ${dayText(ov.practice.last)}` : ""}.</p>
-            ) : <EmptyState title="No practice trades yet">Finish a replay and its trades show in your journal, where the verdict's checks can run on them.</EmptyState>}
+            ) : <EmptyState title="No practice trades yet">Finish a replay of an Indian market (India, MCX or NSE currency) and its trades show in your journal, where the verdict's checks can run on them. Replays in other currencies show their result but aren't saved to the rupee journal.</EmptyState>}
             <Disclosure summary="How practice orders fill">
               <p className="k-small k-muted">{ov.note} A long's stop fills when a candle's low reaches it (at the open if it opened below), its target when the high does; when one candle reaches both, the stop counts first. What's open when you finish closes at the last candle shown.</p>
             </Disclosure>

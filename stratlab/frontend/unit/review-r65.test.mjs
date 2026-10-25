@@ -26,7 +26,7 @@ test("R65-005: a chain's time is named once", async () => {
   const { chainWithTime } = await import("../src/lib/positioning.ts");
   const asOf = "2026-10-19T12:29:00+05:30", t = Date.parse(asOf);
   assert.equal(chainWithTime({ source: "live", as_of: asOf }, "19 Oct, 12:29 IST", t + 10 * 60_000), "chain at 12:29 IST");
-  assert.equal(chainWithTime({ source: "recorded", as_of: asOf }, "19 Oct, 12:29 IST", t), "recorded chain, 19 Oct, 12:29 IST");
+  assert.equal(chainWithTime({ source: "recorded", as_of: asOf }, "19 Oct, 12:29 IST", t), "intraday recording, 19 Oct, 12:29 IST");   // DC-003: a recording is named apart from the end-of-day chain
 });
 
 test("R65-004, R65-005, R65-007: a visitor picks the currency; the VIX card names its chain's time once; breadth says what's locked", () => {

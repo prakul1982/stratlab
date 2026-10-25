@@ -18,10 +18,11 @@ import "./fo.css";
  * Basic. Facts only. Built from the kit (components/kit). */
 
 type Filter = "all" | FoKind;
-const FILTERS: [Filter, string][] = [["all", "All"], ["exit", "Leaving"], ["entry", "Entering"], ["lot", "Lot sizes"], ["expiry", "Expiry and sessions"],
-  ["circular", "Other circulars"]];
-const TAG: Record<FoKind, string> = { exit: "Leaving F&O", entry: "Entering F&O", lot: "Lot size", expiry: "Expiry or session", circular: "Circular" };
-const TONE: Record<FoKind, "warn" | "ok" | "plain"> = { exit: "warn", entry: "ok", lot: "plain", expiry: "plain", circular: "plain" };
+const FILTERS: [Filter, string][] = [["all", "All"], ["exit", "Leaving"], ["entry", "Entering"], ["lot", "Lot sizes"], ["rename", "Name changes"],
+  ["expiry", "Expiry and sessions"], ["circular", "Other circulars"]];
+// a rename is its own kind (DC-017: ICICIPRULI's new symbol read as one stock leaving and another entering)
+const TAG: Record<FoKind, string> = { exit: "Leaving F&O", entry: "Entering F&O", lot: "Lot size", rename: "Name change", expiry: "Expiry or session", circular: "Circular" };
+const TONE: Record<FoKind, "warn" | "ok" | "plain"> = { exit: "warn", entry: "ok", lot: "plain", rename: "plain", expiry: "plain", circular: "plain" };
 
 const longDay = (iso: string) => asOf(iso.slice(0, 10)) ?? iso;
 
@@ -38,6 +39,7 @@ function Row({ e, mine }: { e: FoEvent; mine: Set<string> }) {
         <Badge tone={TONE[e.kind]} dot={false}>{TAG[e.kind]}</Badge>
         {syms.map((s) => e.segment === "index" ? <b key={s}>{s}</b>
           : <Link key={s} className="link" to={`/research/IN/${encodeURIComponent(s)}`}><b>{s}</b></Link>)}
+        {e.was_symbol && <span className="k-note">was {e.was_symbol}</span>}
         {yours && <Badge tone="ok" dot={false}>Your watchlist or sessions</Badge>}
       </div>
       <p className="k-small">{e.text}</p>
@@ -118,6 +120,13 @@ export function FoChangesPage() {
         : !v || !a ? <Card><Skeleton label="Reading the exchange's changes" /></Card>
         : (
           <>
+            {/* a source that couldn't be read is said on the page, not only under the (i) (DC-013, DC-021) */}
+            {v.sources.some((s) => s.failed) && (
+              <p className="k-callout k-small" role="status" data-testid="fo-failed">
+                {v.sources.filter((s) => s.failed).map((s) => s.label).join(" and ")} couldn't be read at the last check, so changes
+                {" "}published since {v.sources.filter((s) => s.failed).map((s) => s.as_of ? longDay(s.as_of) : "then").join(" / ")} may be missing here.
+              </p>
+            )}
             <Card label="Alert" compact>
               <CardHead title="Alert" />
               {a.allowed ? (

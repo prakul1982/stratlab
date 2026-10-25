@@ -17,7 +17,19 @@ export interface MarketEvent {
 export interface IndexSection { index: string; in: [string, string][]; out: [string, string][] }
 export interface IndexChange { id: string; url: string; title: string; announced: string; effective: string | null; sections: IndexSection[] }
 export interface IndexBadge { short: string; text: string; date: string; index: string; way: "in" | "out" }
-export interface EvSource { id: string; label: string; as_of: string | null; checked: string | null; failed: boolean }
+export interface EvSource { id: string; label: string; as_of: string | null; checked: string | null; failed: boolean;
+  /** DC-013: the index provider's notices kept whose stocks couldn't be read */
+  unread?: number }
+
+/** The sentence a page shows when a source failed at its last read (DC-013: the index provider's source was flagged failed
+ * in the data, with nothing said on the page), or null when every source read. */
+export function failedLine(sources: Pick<EvSource, "label" | "as_of" | "failed">[], day: (iso: string) => string): string | null {
+  const bad = sources.filter((s) => s.failed);
+  if (!bad.length) return null;
+  const names = bad.map((s) => `${s.label}${s.as_of ? ` (last read ${day(s.as_of)})` : " (not read yet)"}`);
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `${list} couldn't be read at the last check, so its newest dates and figures may be missing here.`;
+}
 export interface EvPrefs {
   remind: boolean; kinds: EvKind[]; days: number; money_calendar: boolean; allowed: boolean; plan: string; channels: string[]; remind_days: number[];
 }

@@ -34,14 +34,26 @@ function DayGroups({ events, kinds, today, render, label }: { events: CalEvent[]
     for (const e of [...events].sort((a, b) => a.date.localeCompare(b.date))) by.set(e.date, [...(by.get(e.date) ?? []), e]);
     return [...by.entries()];
   }, [events]);
+  // the list opens at today, with a "today" line where today falls between the days listed (DC-016: a 166-event list
+  // began on 28 Apr with no today in it); the earlier days stay above it
+  const at = days.findIndex(([d]) => d >= today);
+  const mark = useRef<HTMLLIElement>(null);
+  useEffect(() => { mark.current?.scrollIntoView?.({ block: "start" }); }, []);
+  const nowLine = (key: string) => (
+    <li key={key} ref={mark} className="k-cal-daygroup k-cal-now" data-testid="cal-today">
+      <div className="k-cal-date today"><b>Today, {shortDay(today)}</b>{days[at]?.[0] !== today && <span className="k-note"> · nothing on the calendar today</span>}</div>
+    </li>
+  );
   return (
     <ol className="k-cal-days" aria-label={label}>
-      {days.map(([d, evs]) => (
-        <li key={d} className="k-cal-daygroup">
+      {days.map(([d, evs], i) => [
+        i === at && d !== today ? nowLine("now") : null,
+        <li key={d} ref={d === today ? mark : undefined} className="k-cal-daygroup">
           <div className={`k-cal-date${d === today ? " today" : ""}`}><b>{shortDay(d)}</b>{d === today && <span className="k-note"> · today</span>}</div>
           <ul className="k-cal-evs">{evs.map((e) => <EventItem key={e.id} e={e} kinds={kinds} past={d < today} render={render} />)}</ul>
-        </li>
-      ))}
+        </li>,
+      ])}
+      {at === -1 && days.length > 0 && nowLine("now-end")}
     </ol>
   );
 }
@@ -155,6 +167,8 @@ export function Calendar({ label, events, kinds, today, initialMonth, onMonth, v
                         onClick={() => { setPicked(d === picked ? null : d); setFocus(d); }} onKeyDown={(e) => key(e, d)}>
                         <span className="k-cal-n">{parse(d).getDate()}</span>
                         <span className="k-cal-dots" aria-hidden="true">{kindsHere.slice(0, 5).map((k) => <i key={k} className={`k-cal-dot c${kindIndex(kinds, k) % 6}`} />)}</span>
+                        {/* the first kind's name in words where the cell has room: the dots alone were colour only (DC-016) */}
+                        {kindsHere.length > 0 && <span className="k-cal-tag" aria-hidden="true">{kinds.find((k) => k.id === kindsHere[0])?.label ?? kindsHere[0]}{kindsHere.length > 1 ? ` +${kindsHere.length - 1}` : ""}</span>}
                         {evs.length > 1 && <span className="k-cal-count" aria-hidden="true">{evs.length}</span>}
                       </button>
                     </div>

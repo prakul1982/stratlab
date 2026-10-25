@@ -127,10 +127,10 @@ test("trade journal: import a tax P&L, the checks, a hand-added trade, a journal
   await us.getByLabel("Entry price").fill("200");
   await us.getByLabel("Exit price").fill("210");
   await us.getByRole("button", { name: "Add trade" }).click();
-  await expect(page.getByText("Trade added.").first()).toBeVisible();
+  // the tab follows the trade just added (DB-044)
+  await expect(page.getByText("Trade added to US stocks; showing US stocks.")).toBeVisible();
   const market = page.getByRole("radiogroup", { name: "Market" });
-  await expect(market.getByRole("radio", { name: /^India/ })).toBeChecked();
-  await market.getByRole("radio", { name: /^US stocks/ }).click();
+  await expect(market.getByRole("radio", { name: /^US stocks/ })).toBeChecked();
   await expect(page.getByRole("heading", { name: "1 closed trade" })).toBeVisible();
   await expect(page.getByRole("table", { name: "Trades" })).toContainText("$50");
   await expect(page.getByRole("table", { name: "Trades" })).not.toContainText("₹");
@@ -139,7 +139,7 @@ test("trade journal: import a tax P&L, the checks, a hand-added trade, a journal
 
   await page.getByLabel("Break the P&L down by").selectOption("tag");
   await expect(page.getByRole("table", { name: "P&L by setup" }).getByText("Breakout")).toBeVisible();
-  await expect(page.getByText(/1 of 16 trades have a planned stop/)).toBeVisible();
+  await expect(page.getByText(/1 of 16 trades has a planned stop/)).toBeVisible();
   await expect(page.getByRole("region", { name: "Paper vs real" })).toBeVisible();
   if (phone) await touchable(page);
   await sane(page, errors);

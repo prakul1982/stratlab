@@ -12,3 +12,12 @@
 .k-session-head { align-items: flex-end; }
 .k-session-name { font-family: var(--serif); font-size: clamp(24px, 3.4vw, 32px); font-weight: 600; letter-spacing: -.02em; }
 .k-rows > div > span .info { margin-left: 6px; }
+
+/* DB-024: on a phone the session's chart takes the card's full width (it was about 260px), and the legend sits on a
+   backing so the candles under it stay readable */
+@media (max-width: 640px) {
+  .k-card.sess-chart .pc:not(.pc-full) { margin-inline: calc(-1 * var(--s4) + 4px); }
+  .k-card.sess-chart .pc-legend .pc-chg { display: none; }
+  .k-card.sess-chart .pc-legend > div { background: color-mix(in srgb, var(--card) 85%, transparent); border-radius: 6px; padding: 0 4px; }
+}
+@media (max-width: 640px) { .rp-chart .pc-stage { height: calc(var(--pc-h, 420px) * 1.1); } }

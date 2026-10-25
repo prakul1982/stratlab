@@ -26,22 +26,18 @@ async function open(page: Page, path: string, ready: string) {
   return errors;
 }
 
-test("positioning: every change and net figure carries the up or down colour, and keeps its sign", async ({ page }) => {
+test("positioning: net figures carry the up or down colour; changes in long and short counts keep their sign, uncoloured", async ({ page }) => {
   const errors = await open(page, "/trade/positioning", "Participant-wise open interest");
   const main = page.locator("main");
   const table = main.getByTestId("part-table");
-  // the change line under each cell: a plus is green, a minus red, anything else plain
+  // the change line under each long or short count keeps its sign but takes no colour: more shorts isn't good news, nor
+  // fewer longs bad (DC-005)
   const changes = table.locator(".k-sub-line");
   expect(await changes.count(), "the table has change lines").toBeGreaterThan(5);
-  const lines = await changes.evaluateAll((els) => els.map((el) => ({ text: (el.textContent ?? "").trim(), coloured: el.querySelector(".k-up, .k-down")?.className ?? "" })));
-  let ups = 0, downs = 0;
-  for (const { text, coloured } of lines) {
-    if (/^\+/.test(text)) { expect(coloured, text).toContain("k-up"); ups++; }
-    else if (/^−/.test(text)) { expect(coloured, text).toContain("k-down"); downs++; }
-    else expect(coloured, text).toBe("");
-  }
-  expect(ups, "some changes are up").toBeGreaterThan(0);
-  expect(downs, "some changes are down").toBeGreaterThan(0);
+  const lines = await changes.evaluateAll((els) => els.map((el) => ({ text: (el.textContent ?? "").trim(), coloured: el.matches(".k-up, .k-down") || !!el.querySelector(".k-up, .k-down") })));
+  for (const { text, coloured } of lines) expect(coloured, text).toBe(false);
+  expect(lines.some((l) => /^\+/.test(l.text)), "some changes are up").toBe(true);
+  expect(lines.some((l) => /^−/.test(l.text)), "some changes are down").toBe(true);
   // the net futures column: the number itself is coloured with its sign
   const nets = await table.locator("tbody tr").evaluateAll((rows) => rows.map((r) => {
     const el = r.querySelectorAll("td")[2]?.querySelector(":scope > .k-up, :scope > .k-down");

@@ -51,7 +51,8 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
             <CardHead title={ci === 0 ? "All running sessions" : `All running sessions (${c.currency})`}
               info="Every running paper session added up, per currency (rupees and dollars are never mixed). Open value is what the open positions are worth now at the latest prices. The worst day and the deepest fall are for all of them together, which is what you'd feel if this were one account." infoLabel="About all running sessions" />
             <StatRow label={`Totals in ${c.currency}`}>
-              <Stat item label="Open value" value={c.open_value ? money(c.open_value, c.currency) : "No open positions"} note={c.open_value && c.capital ? `${Math.round((c.open_value / c.capital) * 100)}% of ${money(c.capital, c.currency)}` : undefined} />
+              {/* a figure in the figure's style, the words beside it (DB-023: "No open positions" in the big type) */}
+              <Stat item label="Open value" value={money(c.open_value, c.currency)} note={c.open_value && c.capital ? `${Math.round((c.open_value / c.capital) * 100)}% of ${money(c.capital, c.currency)}` : "No open positions"} />
               <Stat item label={dayLabel(c)} value={money(c.session_pnl ?? c.today, c.currency)} tone={tone(c.session_pnl ?? c.today)} />
               <Stat item label="Since the start" value={money(c.pnl, c.currency)} tone={tone(c.pnl)} note={`${c.sessions} session${c.sessions === 1 ? "" : "s"}`} />
               <Stat item label="Worst day" value={c.worst_day ? money(c.worst_day.pnl, c.currency) : "None yet"} tone={tone(c.worst_day?.pnl ?? null)} note={c.worst_day ? day(c.worst_day.date) : undefined} />

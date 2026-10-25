@@ -62,7 +62,7 @@ test("R20-012: the option chain says live only while the exchange trades, else w
   assert.equal(chainStamp({ market: IN, times, now: new Date("2026-10-15T05:00:00Z") }), "live");                    // 10:30 IST, open
   assert.equal(chainStamp({ market: IN, times: [], now: new Date("2026-10-14T21:55:00Z") }), "last prices (market closed)");
   assert.equal(chainStamp({ market: null, times, now: new Date("2026-10-14T21:55:00Z") }), "live");               // no market to judge by
-  assert.match(read("src/pages/OptionsPage.tsx"), /bid \/ ask, IV and Greeks, \{chain \? stamp : stamp === "live" \? "live" : "market closed"\}/);
+  assert.match(read("src/pages/OptionsPage.tsx"), /bid \/ ask, IV and Greeks, \{chain \? stamp : offline \? "from the last recorded close" : stamp === "live" \? "live" : "market closed"\}/);
 });
 
 test("R20-013: the journal's badge is the newest trade's date, not today's", () => {
