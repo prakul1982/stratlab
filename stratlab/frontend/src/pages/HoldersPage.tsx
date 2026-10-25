@@ -6,6 +6,8 @@ import { ChangeText, isQuarterEnd, quarterEnd, shares, type HolderChange } from 
 import { useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
 import { asOf, ET, fmtDate, safeHref } from "../lib/format";
+import { LockedPreview } from "../components/LockedPreview";
+import { useApp } from "../lib/app";
 import { Badge, Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Pager, PlanNote, Seg, Skeleton, StockPicker, Suggest, type SuggestItem } from "../components/kit";
 
 /* Named holders across companies: search a name in every company's latest shareholding pattern (holders above 1%),
@@ -55,8 +57,12 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
   const [hold, setHold] = useState<Holdings | null>(null);
   const [show, setShow] = useState("all");
   const [follows, setFollows] = useState<Follow[]>([]);
+  // the plan says it's locked: nothing is asked that the server would refuse (DP1-019)
+  const { me } = useApp();
+  const off = me?.plan_info.features?.holders === false;
 
   useEffect(() => {
+    if (off) { setLocked(true); return; }
     let live = true;
     setBusy(true); setError(null); setGroup(null); setHold(null);
     api<SearchAnswer>(`/invest/holders${q ? `?q=${encodeURIComponent(q)}` : ""}`)
@@ -70,7 +76,7 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
       .finally(() => live && setBusy(false));
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [q, off]);
 
   useEffect(() => {
     if (!picked.length) { setHold(null); return; }
@@ -112,7 +118,15 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
       {toolbar}
 
       {locked ? (
-        <PlanNote>Searching a holder across companies and following one is on the Basic plan. Each company page shows its own named holders for everyone.</PlanNote>
+        <>
+          <PlanNote>Searching a holder across companies and following one is on the Basic plan. Each company page shows its own named holders for everyone.</PlanNote>
+          <LockedPreview title="Named holders" actions={false} points={[
+            "Search a fund, a promoter group or a person and see every company that names them above 1%.",
+            "What changed since the quarter before in each of those companies: bought, sold, new or gone.",
+            "Follow a holder for a message when a new shareholding pattern changes their stake.",
+            "For US companies, the latest 13D and 13G filings across every company.",
+          ]} />
+        </>
       ) : (
         <>
           <Card>

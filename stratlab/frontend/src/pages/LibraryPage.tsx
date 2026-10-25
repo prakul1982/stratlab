@@ -4,6 +4,8 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
+import { copyNeeds } from "../lib/rules";
+import { LIMITS } from "../lib/plans";
 import { TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksOf, headTone, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, type LibEntry, checksBeyond, CHECKS_NOT_HOLD } from "../components/LibraryBits";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
@@ -29,7 +31,10 @@ function usePhone(): boolean {
 /* /library: rules people published with the verdict they earned, luck included. Copy any of them and re-test it
  * yourself. Built from the kit (components/kit). */
 export function LibraryPage() {
-  const { markets, fail, notify, refreshNotebooks } = useApp();
+  const { markets, fail, notify, refreshNotebooks, me, allIndicators } = useApp();
+  // what a copy would need that the plan lacks, said on the card before the copy (DP1-008)
+  const needs = (e: LibEntry) => me ? copyNeeds(e.strategy, e.group?.members?.length ?? 0,
+    { allIndicators, groupCap: me.plan_info.group_size, basicCap: LIMITS.basic.group_size, proCap: LIMITS.pro.group_size }) : null;
   const nav = useNavigate();
   const [rows, setRows] = useState<LibEntry[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -189,6 +194,7 @@ export function LibraryPage() {
                   ) : (
                     <div className="k-row k-push">
                       <button type="button" className="btn sm" disabled={busy === e.id} onClick={() => copy(e)}>{busy === e.id ? "Copying…" : "Copy and re-test"}</button>
+                      {needs(e) && <span className="k-note" data-testid="lib-needs">{needs(e)}</span>}
                       {e.mine && <button type="button" className="btn quiet sm danger" onClick={() => setTaking(e)}>Take down</button>}
                       {!e.mine && (e.reported
                         ? <span className="k-note k-end">Reported</span>

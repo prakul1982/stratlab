@@ -3,10 +3,10 @@ import { notebookTitle, useDocTitle } from "../lib/title";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { fillsLine } from "../lib/paperText";
+import { fillsLine, liveLimitLine, STOP_IS_FINAL, trialStartLine } from "../lib/paperText";
 import { currencySymbol, dateOnly, money, pct, periodName, TF_NAME } from "../lib/format";
 import { isAutoNotebookName, rebuiltRisk, riskForCurrency, statedIn, usesPro } from "../lib/rules";
-import { runCopy, runTime } from "../lib/notebookText";
+import { runCopy, runTime, tradesCount } from "../lib/notebookText";
 import type { Experiment, Instrument, LiveRow, Notebook, Strategy, Tf } from "../lib/types";
 import { getUpload } from "../lib/upload";
 import { fitGaps, makeSaver, type SaveState } from "../lib/notebookSave";
@@ -219,7 +219,8 @@ function NotebookView() {
   const inst = nb.instrument && "symbol" in nb.instrument ? nb.instrument : null;
   const group = nb.group && nb.group.members?.length ? nb.group : null;
   const market = markets.find((m) => m.id === (group?.market ?? inst?.market));
-  const currency = group ? (market?.currency ?? "") : inst?.currency || (inst?.market === "IN" || !inst ? "INR" : "");
+  // nothing chosen yet: no currency is shown, so the capital doesn't read as rupees for a test that may run in dollars (DP1-012)
+  const currency = group ? (market?.currency ?? "") : inst ? inst.currency || (inst.market === "IN" ? "INR" : "") : "";
   const maxDays = market?.max_days?.[s.tf] ?? 3650;
   const periods = PERIODS[s.tf].filter((d) => d <= maxDays);
   const picked = spanDays(days) ?? Number(days);
@@ -249,6 +250,16 @@ function NotebookView() {
     : group && groupCap != null && group.members.length > groupCap
       ? `Your ${me!.plan_info.name} plan tests up to ${groupCap} instruments in a group and this one has ${group.members.length}: pick fewer, or ${group.members.length <= LIMITS.basic.group_size ? `Basic tests up to ${LIMITS.basic.group_size}` : `Pro tests up to ${LIMITS.pro.group_size}`}.`
     : null;
+  // what starting one more paper session would meet, said before Paper trade is pressed (DP1-014)
+  const nextLive = me?.plan === "free" ? { name: "Basic", limit: LIMITS.basic.live_limit } : me?.plan === "basic" ? { name: "Pro", limit: LIMITS.pro.live_limit } : null;
+  const liveFull = me && !live ? liveLimitLine(me.live_running, me.live_limit, nextLive) : null;
+  // a group trades on intraday candles only: said on the button, before the click (DP1-016)
+  const groupDaily = !!group && groupOk && s.tf === "1d";
+  // when the month's backtests start again, and what the next plan gives (DP1-009)
+  // (the month is India's, as the server counts it)
+  const resetDay = (() => { const ist = new Date(Date.now() + 5.5 * 3600_000);
+    return new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth() + 1, 1)).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short" }); })();
+  const moreRuns = me?.plan === "free" ? ` Basic gives ${LIMITS.basic.backtests_per_month} a month.` : me?.plan === "basic" ? " Pro has no limit." : "";
   const run = async () => {
     if (running || starting.current) return;
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
@@ -282,8 +293,9 @@ function NotebookView() {
       if (mounted.current) nav(`/n/${nb.id}/e/${out.experiment.v}`);
       else notify(`Experiment v${out.experiment.v} of "${nb.name}" finished.`, { label: `Open v${out.experiment.v}`, run: () => nav(`/n/${nb.id}/e/${out.experiment.v}`) });
     } catch (e) {
-      const same = e instanceof ApiError && e.code === "unchanged" ? last : undefined;
-      if (same) notify(e instanceof Error ? e.message : "Nothing has changed since the last run.", { label: `Open v${same.v}`, run: () => nav(`/n/${nb.id}/e/${same.v}`) });
+      // the run it repeats can be an earlier one of today's, not only the last (DP1-009): the message names it
+      const sameV = e instanceof ApiError && e.code === "unchanged" ? Number(/\bv(\d+)\b/.exec(e.message)?.[1] ?? last?.v) : NaN;
+      if (sameV) notify(e instanceof Error ? e.message : "Nothing has changed since the last run.", { label: `Open v${sameV}`, run: () => nav(`/n/${nb.id}/e/${sameV}`) });
       else fail(e);
     } finally { starting.current = false; if (mounted.current) setRunning(false); }
   };
@@ -328,6 +340,7 @@ function NotebookView() {
   };
 
   const paperTrade = async () => {
+    if (liveFull) { plansToast(liveFull); return; }       // before the dialog, not as a toast after Start (DP1-014)
     if (group) {
       if (!groupOk) { plansToast("Paper trading a group is on the Basic plan."); return; }
       if (s.tf === "1d") { notify("Paper trading a group needs intraday candles. Switch the rules to 5-minute, 15-minute or 1-hour candles first."); return; }
@@ -381,7 +394,7 @@ function NotebookView() {
     { key: "v", header: "Run", rowHeader: true, cell: (e) => <Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>v{e.v}</b></Link> },
     // a run whose figures contradict each other says so in its row, never "Capital lost" (R38-001)
     { key: "ret", header: "Overall", numeric: true, cell: (e) => isLegacyEmptied(e) ? "Not shown" : <Signed value={e.stats.ret}>{lost(e.stats.ret)}</Signed> },
-    { key: "what", header: "What changed", wrap: true, cell: (e) => <><Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>{e.label}</b></Link><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)}{isLegacyEmptied(e) ? "" : ` · ${e.stats.n} trade${e.stats.n === 1 ? "" : "s"}`}</span>{isLegacyEmptied(e) && <span className="k-sub-line">{legacyNote(e)}</span>}</> },
+    { key: "what", header: "What changed", wrap: true, cell: (e) => <><Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>{e.label}</b></Link><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)}{isLegacyEmptied(e) ? "" : ` · ${tradesCount(e.stats.n, (e.trades ?? []).filter((t) => !t.exit_t).length)}`}</span>{isLegacyEmptied(e) && <span className="k-sub-line">{legacyNote(e)}</span>}</> },
     { key: "unseen", header: "Unseen part", numeric: true, cell: (e) => { if (isLegacyEmptied(e)) return "–"; const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? <Signed value={u.unseen_ret}>{lost(u.unseen_ret)}</Signed> : "–"; } },
     { key: "verdict", header: "Verdict", cell: (e) => isLegacyEmptied(e) ? "Not shown" : <VerdictBadge v={e.verdict.verdict} label={badgeLabel(e.verdict)} /> },
   ];
@@ -399,7 +412,9 @@ function NotebookView() {
           <CardHead title="About this notebook" info={HELP.notebook} infoLabel="About notebooks" actions={<>
             <button type="button" className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
             {live ? <Link className="btn quiet sm" to={`/paper/${live.id}`} title={`Running since ${dateOnly(live.started_at)}`}><Pulse size={17} />Paper trading · open</Link>
-              : <button type="button" className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}><Pulse size={17} />Paper trade{group && !groupOk ? " (Basic)" : ""}</button>}
+              : <button type="button" className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}
+                title={liveFull ?? (groupDaily ? "Paper trading a group needs 5-minute, 15-minute or 1-hour candles." : undefined)}>
+                <Pulse size={17} />Paper trade{group && !groupOk ? " (Basic)" : groupDaily ? " (needs intraday candles)" : liveFull ? " (limit reached)" : ""}</button>}
             <button type="button" className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
             <MoreMenu align="right" items={[
               { label: "Make a copy", icon: <Copy size={16} />, run: duplicate },
@@ -479,8 +494,10 @@ function NotebookView() {
           <FormGrid label="Run an experiment" onSubmit={(e) => { e.preventDefault(); void run(); }}>
             <Field label="What's different this time?" optional wide maxLength={120} value={label} placeholder={nextV === 1 ? "e.g. First try" : "e.g. Tighter stop loss"} onChange={(e) => setLabel(e.target.value)} />
             <FormActions>
-              <button type="submit" className="btn" disabled={running || outOfRuns} title={outOfRuns ? "This month's experiments are used up on your plan" : undefined}>{running ? `Running 4 honesty checks…${elapsed >= 3 ? ` ${runTime(elapsed)}` : ""}` : `Run experiment v${nextV}`}</button>
-              <span className="k-small k-muted kbd-hint">or press <kbd>{navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd></span>
+              {/* nothing chosen to test on: the button waits for a choice, as the note under it says (DP1-012) */}
+              <button type="submit" className="btn" disabled={running || outOfRuns || (!inst && !group)} title={outOfRuns ? "This month's experiments are used up on your plan" : !inst && !group ? "Choose what to test it on first" : undefined}>{running ? `Running 4 honesty checks…${elapsed >= 3 ? ` ${runTime(elapsed)}` : ""}` : `Run experiment v${nextV}`}</button>
+              {/* the shortcut is offered only while it can run something (DP1-009) */}
+              {!outOfRuns && (inst || group) && <span className="k-small k-muted kbd-hint">or press <kbd>{navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd></span>}
               <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
             </FormActions>
           </FormGrid>
@@ -491,8 +508,8 @@ function NotebookView() {
           )}
           {planBlock && <p className="k-note" data-testid="run-plan-block">🔒 {planBlock} <Link className="link" to="/plans">Plans</Link></p>}
           <p className="k-note">
-            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} backtests left this month${outOfRuns ? " (limit reached)" : ""}. ` : ""}
-            {runCopy(group?.members.length ?? 0, running, elapsed)}
+            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} backtests left this month${outOfRuns ? ` (limit reached). The count starts again on ${resetDay}.${moreRuns}` : "."} ` : ""}
+            {!outOfRuns && runCopy(group?.members.length ?? 0, running, elapsed)}
             {outOfRuns && <> <Link className="link" to="/plans">Plans</Link></>}
           </p>
           {experiments.length === 0
@@ -516,7 +533,10 @@ function NotebookView() {
             {/* how fills and fees really work, not "at live prices" (DB-021) */}
             <span>The rules of "{nb.name}" on {TF_NAME[s.tf]} candles, live, with {money(s.risk.capital, currency)} of fake money. Nothing real is ever placed.</span>
             <span className="k-note" data-testid="paper-fills">{fillsLine(s.risk, markets.find((m) => m.id === inst.market)?.costs, money(s.risk.brokerage, currency, 2))}</span>
-            <span className="k-note">It runs until you stop it and counts as one of your plan's paper sessions. A message for each paper trade is {me?.alerts.enabled ? "on" : "off"} in Settings (Notifications).</span>
+            {/* Free's session is a trial of 5 market days: said here, not "It runs until you stop it" (DP1-013) */}
+            {me?.plan === "free" && trialStartLine(me.trial) ? <span className="k-note" data-testid="paper-trial">{trialStartLine(me.trial)}</span>
+              : <span className="k-note">It runs until you stop it and counts as one of your plan's paper sessions.</span>}
+            <span className="k-note">{STOP_IS_FINAL} A message for each paper trade is {me?.alerts.enabled ? "on" : "off"} in Settings (Notifications).</span>
           </span>
         </ConfirmDialog>
       )}
@@ -524,6 +544,7 @@ function NotebookView() {
         <Modal title="Paper trade this group" onClose={() => setGroupStart(false)}>
           <div className="k-stack">
             <p className="k-small k-muted">{group.name}: {group.members.length} instruments, up to {group.maxOpen} open at once, on {TF_NAME[s.tf]} candles, with fake money.</p>
+            <p className="k-note">{STOP_IS_FINAL}</p>
             {group.market === "IN" && (
               <div className="k-stack k-tight">
                 <CheckField label={<><b>Faster entries</b>{!fastOk && " (Pro)"}</>} checked={fast.ticks} disabled={!fastOk && !fast.ticks} onChange={(on) => setFast({ ...fast, ticks: on })} />

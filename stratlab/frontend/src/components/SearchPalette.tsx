@@ -75,7 +75,7 @@ const looksLikeCode = (q: string) => /\n.*\n/.test(q) || /(\/\/@version|strategy
 
 /** One box for everything: a stock, an idea, a question, a feature's name or a pasted script. Opens with Ctrl+K. */
 export function SearchPalette({ onClose }: { onClose: () => void }) {
-  const { notebooks, markets, fail, refreshMe, refreshNotebooks, focus } = useApp();
+  const { notebooks, markets, fail, refreshMe, refreshNotebooks, focus, me, allIndicators } = useApp();
   const example = useRotating(askExamples(focus));
   const [steps, setSteps] = useState<string[] | null>(null);
   const [answer, setAnswer] = useState<{ q: string; text: string; title?: string; problem?: boolean } | null>(null);
@@ -137,8 +137,8 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const buildAndRun = async (a: Ask, paper: boolean) => {
     if (cancelled.current) return;
     step("Turning your words into exact rules…");
-    const r = await buildIdea(a.text || text, a.market ?? lastMarket());
-    if (r.usedAI) refreshMe();                       // the AI was used, closed or not
+    const r = await buildIdea(a.text || text, a.market ?? lastMarket(), { allIndicators: me ? allIndicators : undefined });
+    refreshMe();                                     // the builds left as the server counts them, closed or not (DP1-001)
     if (cancelled.current) return;
     if (!r.built) throw new Error(r.note);
     const b = r.built;
@@ -148,7 +148,9 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     const nb = await api<Notebook>("/notebooks", { method: "POST", body: { name: b.strategy.name, question: b.question, strategy: b.strategy, instrument: inst?.id ?? null } });
     await refreshNotebooks();                        // the notebook now exists, so the list is refreshed even if the palette was closed
     if (cancelled.current) return;
-    if (!inst) {           // nothing named to trade: the notebook asks what to test it on
+    // nothing named to trade: the notebook asks what to test it on. Rules the simple converter made are opened to be
+    // checked first, never tested or traded unseen: it can get an idea wrong (DP1-004)
+    if (!inst || r.confirm) {
       go(`/n/${nb.id}`, { gaps: b.gaps });
       return;
     }

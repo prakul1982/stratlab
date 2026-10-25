@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { riskForCurrency } from "../lib/rules";
-import type { GroupMember, Instrument, Market, Notebook } from "../lib/types";
+import type { GroupMember, Instrument, LiveRow, Market, Notebook } from "../lib/types";
 import { LIMITS } from "../lib/plans";
 import { parseCsv, saveUpload, type Candle } from "../lib/upload";
 import { InstrumentSearch } from "../components/InstrumentSearch";
@@ -135,6 +135,18 @@ export function MarketPage() {
   const [upCur, setUpCur] = useState("USD");
   const [upStep, setUpStep] = useState(1);
   const loc = useLocation();
+  // a paper session already running this notebook's rules: it keeps trading what it started on whatever is picked here,
+  // so that is said before a new pick (DP1-017: a running session stayed on the old instrument without a word)
+  const [live, setLive] = useState<LiveRow | null>(null);
+  useEffect(() => {
+    if (!nb?.id) return;
+    let on = true;
+    const instId = nb.instrument && "id" in nb.instrument ? nb.instrument.id : null;
+    api<LiveRow[]>("/live/sessions").then((rows) => {
+      if (on) setLive(rows.find((r) => r.status === "running" && r.name === nb.name && (!instId || r.instrument?.id === instId)) ?? null);
+    }).catch(() => undefined);
+    return () => { on = false; };
+  }, [nb?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!nb || sel) return;
@@ -173,6 +185,13 @@ export function MarketPage() {
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title="Where do you want to test it?" info={HELP.markets} infoLabel="About markets"
         lede={<><Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link> · The same rules run on any market. Prices, trading hours, currency and costs switch to match it.</>} />
+      {live && (
+        <div data-testid="market-live-note">
+          <Notice tone="warn" role="note" action={{ label: "Open the session", to: `/paper/${live.id}` }}>
+            A paper session is running these rules on {live.instrument?.symbol ?? "what this notebook tested on"}. A new pick here changes what the notebook tests, not the session: it keeps trading {live.instrument?.symbol ?? "the old one"} until you stop it. To paper trade the new pick, stop that session and start one from the notebook.
+          </Notice>
+        </div>
+      )}
 
       <Card label="Market">
         <CardHead title="Pick a market" />

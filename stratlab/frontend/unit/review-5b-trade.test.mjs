@@ -202,7 +202,7 @@ test("R5B-009: plan-locked choices say their plan before Start, with the server'
   const nb = read("src/pages/NotebookPage.tsx");
   assert.match(nb, /const groupOk = feats \? !!feats\.group_live : true, fastOk = feats \? !!feats\.fast_entries : true;/);
   assert.match(nb, /if \(!groupOk\) \{ plansToast\("Paper trading a group is on the Basic plan\."\); return; \}/);
-  assert.match(nb, /Paper trade\{group && !groupOk \? " \(Basic\)" : ""\}/);
+  assert.match(nb, /Paper trade\{group && !groupOk \? " \(Basic\)" : groupDaily \? " \(needs intraday candles\)" : liveFull \? " \(limit reached\)" : ""\}/);   // DP1-014, DP1-016
   assert.match(nb, /<CheckField label=\{<><b>Faster entries<\/b>\{!fastOk && " \(Pro\)"\}<\/>\} checked=\{fast\.ticks\} disabled=\{!fastOk && !fast\.ticks\}/);
   assert.match(nb, /label=\{`Skip if the spread is over\$\{fastOk \? "" : " \(Pro\)"\}`\}[^\n]*disabled=\{!fastOk && !fast\.maxSpreadPct\}/);
 });

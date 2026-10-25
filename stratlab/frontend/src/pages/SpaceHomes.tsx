@@ -25,6 +25,7 @@ import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
 import { investStrip, withRegion } from "../lib/investUi";
 import { notRunning } from "../lib/tradeUi";
+import { PLAN_NAME, planOf } from "../lib/plans";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
  * pages' own pieces; nothing here is new data, only what those pages already show, gathered.
@@ -51,11 +52,15 @@ function Head({ eyebrow, title, children }: { eyebrow: string; title: string; ch
 
 /** One tool on a space's strip. `status`: a live line (e.g. "2 running"); null while it loads (a placeholder of the
  * same height); left out, the card's foot says where it goes instead. */
-type Tool = { to: string; icon: ReactNode; title: string; line: string; status?: ReactNode; plain?: boolean; go?: string; lead?: boolean; testId?: string; data?: Record<string, string> };
+type Tool = { to: string; icon: ReactNode; title: string; line: string; status?: ReactNode; plain?: boolean; go?: string; lead?: boolean; testId?: string; data?: Record<string, string>;
+  /** the plan feature it needs: a plan without it sees which plan has it on the card (DP1-020) */
+  flag?: string };
 
 /** Four tools in one row of equal cards (two by two when the column is narrow). The lead tool is marked by its
  * border and tint, not its size. Every card has the same three lines, so the row never jumps when a status loads. */
 function ToolStrip({ label, tools }: { label: string; tools: Tool[] }) {
+  const { me } = useApp();
+  const lockedOn = (flag?: string) => (flag && me?.plan_info.features?.[flag] === false ? PLAN_NAME[planOf(flag)] : null);
   return (
     <nav className="space-strip" aria-label={label}>
       {tools.map((t) => (
@@ -63,7 +68,7 @@ function ToolStrip({ label, tools }: { label: string; tools: Tool[] }) {
           <span className="space-card-title">{t.icon}<b>{t.title}</b></span>
           <span className="small muted space-card-line">{t.line}</span>
           {t.status === null ? <span className="space-card-foot" aria-hidden="true"><span className="skel" /></span>
-            : <span className={`small space-card-foot${t.status && !t.plain ? " live" : ""}`} data-testid={t.testId}>{t.status || t.go || "Open →"}</span>}
+            : <span className={`small space-card-foot${t.status && !t.plain ? " live" : ""}`} data-testid={t.testId}>{lockedOn(t.flag) ? `On the ${lockedOn(t.flag)} plan →` : t.status || t.go || "Open →"}</span>}
         </Link>
       ))}
     </nav>
@@ -210,7 +215,7 @@ const INVEST_LINKED = ["breadth", "filings", "investor", "watchlist", "rotation"
 const INVEST_STRIP: Record<string, Omit<Tool, "to">> = {
   screens: { icon: <Search size={18} />, title: "Screener", lead: true, line: "Filter companies by plain facts: growth, debt, returns." },
   rotation: { icon: <Compass size={18} />, title: "Sector rotation", line: "Which sectors lead or lag the market, with their stocks." },
-  scan: { icon: <Pulse size={18} />, title: "Trend scan", line: "Stocks in a rising trend with the Supertrend up." },
+  scan: { icon: <Pulse size={18} />, title: "Trend scan", line: "Stocks in a rising trend with the Supertrend up.", flag: "scans" },
   dividends: { icon: <Calendar size={18} />, title: "Dividends", line: "Dividends, bonuses and splits ahead, for your stocks and all." },
 };
 

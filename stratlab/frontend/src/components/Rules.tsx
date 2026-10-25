@@ -206,8 +206,8 @@ export function RulesCard({ s, currency, onChange, onRebuilt, defaultStop }: {
     if (rewrite === null) return;
     setRebuilding(true); setRewriteNote(""); setRewriteWarnings([]); setRewriteOptions(false);
     try {
-      const out = await buildIdea(rewrite.trim());
-      if (out.usedAI) refreshMe();
+      const out = await buildIdea(rewrite.trim(), undefined, { allIndicators: me ? allIndicators : undefined });
+      refreshMe();            // the builds left, as the server now counts them: one that made no rules costs none (DP1-001)
       if (!out.built) { setRewriteNote(out.note); setRewriteOptions(!!out.options); return; }
       const n = out.built.strategy;
       // the stop, target, trail and time limit come from the words; risk per trade, sizing and the rest only when the words
@@ -427,7 +427,9 @@ export function RulesCard({ s, currency, onChange, onRebuilt, defaultStop }: {
             <NumTok title="Risk per trade (% of your capital)" value={r.riskPct} suffix="%" min={0.1} max={100}
               onChange={(v) => setRisk({ riskPct: v })} hint="The share of your starting capital you would lose if the stop loss is hit. After losses it is the share of what is left, so trades shrink; after a profit the size does not grow." />{" "}of your capital{" "}
             <span className="k-amount" data-testid="risk-amount">({money(riskAmount, currency)})</span>
-            <Info label="What does risk per trade mean?">{HELP.risk} With {r.riskPct}% of {money(r.capital, currency)}, that is {money(riskAmount, currency)} if the stop loss is hit.</Info>
+            {/* with only a trailing stop, the size is measured from it: said, so "1%" doesn't read as clashing with a 5% trail (DP1-011) */}
+            {!(r.sl > 0) && (r.trail ?? 0) > 0 && <span className="k-small k-muted" data-testid="risk-from-trail"> if the {r.trail}% trailing stop is hit, so each trade is sized to that</span>}
+            <Info label="What does risk per trade mean?">{HELP.risk} With {r.riskPct}% of {money(r.capital, currency)}, that is {money(riskAmount, currency)} if the {r.sl > 0 ? "stop loss" : "trailing stop"} is hit.</Info>
           </p>
         ) : (
           <p className="sentence">
