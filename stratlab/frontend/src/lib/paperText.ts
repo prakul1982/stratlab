@@ -27,3 +27,31 @@ export function rulesLines<C>(s: { entry: C[]; exit: C[]; entryJoin?: string; si
   if (s.exit.length) out.push(`Exits when ${s.exit.map(cond).join(" or ")}.`);
   return out;
 }
+
+/** The last day of Free's paper trading trial, in India's calendar: the trial ends at midnight India time after its fifth
+ * Indian market day, so "until the end of Thu 29 Oct", not "until 30 Oct, 18:30 UTC" (DP1-013). */
+export function trialLastDay(endsAt: string): string {
+  const d = new Date(new Date(endsAt).getTime() - 60_000);
+  return d.toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short" }).replace(",", "").replace(/\bSept\b/, "Sep");
+}
+
+/** What Free's trial is, said in the start dialog before a first session starts it, and how long is left once it runs
+ * (DP1-013: the dialog said "It runs until you stop it" while the trial ends after 5 market days). `days`: the trial's
+ * length in Indian market days. */
+export function trialStartLine(trial: { started: boolean; active: boolean; ends_at: string | null; days?: number } | null | undefined): string | null {
+  if (!trial) return null;
+  const days = trial.days ?? 5;
+  if (!trial.started) return `On Free, paper trading is a trial of ${days} Indian market days from this first start (weekends and market holidays don't count, even for crypto). It ends at midnight India time after the ${days === 5 ? "fifth" : `${days}th`}, and the session stops then unless you upgrade.`;
+  if (trial.active && trial.ends_at) return `Your Free trial runs until the end of ${trialLastDay(trial.ends_at)} (India time); the session stops then unless you upgrade.`;
+  return "Your Free paper trading trial has ended, so a new session needs Basic or Pro.";
+}
+
+/** Said in the start dialog, before the click (DP1-015): stopping ends a session for good. */
+export const STOP_IS_FINAL = "You can stop it any time from its page; a stopped session can't be restarted or paused, so a new one starts from fresh.";
+
+/** What starting one more session would meet, said before Start rather than after it (DP1-014): the plan's count of sessions
+ * running at once. Null while there is room. `next`: the next plan's count, when there is one. */
+export function liveLimitLine(running: number, limit: number, next: { name: string; limit: number } | null): string | null {
+  if (running < limit) return null;
+  return `Your plan runs ${limit} live ${limit === 1 ? "strategy" : "strategies"} at a time and ${running === 1 ? "one is" : `${running} are`} running. Stop one first${next ? `, or ${next.name} runs ${next.limit}` : ""}.`;
+}

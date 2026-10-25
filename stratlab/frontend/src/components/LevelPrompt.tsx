@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import type { Focus, Level } from "../lib/types";
-import { homeOf, SPACE_HOMES, viewForFocus } from "../lib/spaces";
+import { homeOf, SPACE_HOMES, SPACE_IDS, SPACES, viewForFocus } from "../lib/spaces";
 import { Modal } from "./ui";
 import { track } from "../lib/analytics";
 
@@ -31,6 +31,9 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>) => void
   const lvl: Level = chosen || "some";                                 // left alone, the standard layout applies
   const nav = useNavigate();
   const loc = useLocation();
+  // asked on a space's own home ("/trade"): the line says where they are, not "We'll open the one you pick" as if they
+  // were nowhere yet (DP1-028)
+  const here = SPACE_IDS.find((x) => SPACES[x].home === loc.pathname);
   const pick = (f: Focus) => {
     const view = viewForFocus(f)!;
     // on a home page (the only place this is asked), open the home of what they picked
@@ -42,7 +45,7 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>) => void
     // closing keeps the page as it is: the default answer is saved, so it isn't asked again
     <Modal title="What brings you here?" startOnClose onClose={() => onDone(savePrefs({ focus: focus ?? "both", level: lvl }))}>
       <div className="k-stack">
-        <p className="k-muted">StratLab has four spaces: Trade, Invest, Money and My space, your own summary of all three. We'll open the one you pick. The others stay one tap away, and you can change this any time in Settings.</p>
+        <p className="k-muted">StratLab has four spaces: Trade, Invest, Money and My space, your own summary of all three. {here ? `You're on ${SPACES[here].label} now: pick ${SPACES[here].label} to stay, or another to open its home.` : "We'll open the one you pick."} The others stay one tap away, and you can change this any time in Settings.</p>
         <div className="k-stack snug">
           <span className="k-small k-muted">How much have you done? · optional</span>
           <Seg label="Experience" value={chosen} onChange={(v) => setChosen(v as Level)} options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} />

@@ -1425,10 +1425,13 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
     try:
         with ai_slot(profile) as (used, limit):
             out = write_strategy(importer.ai_prompt(fmt, req.text), pro=all_indicators(profile))
+            out.pop("locked", None)             # an import keeps what it can read and says what it left out in the notes
             cached = last_from_cache()          # an answer served from the cache costs nothing
-            if not cached:
+            # an import that finds no entry rule makes no notebook, so it costs no build (DP1-001)
+            charged = not cached and bool(out["entry"] or out.get("shortEntry"))
+            if charged:
                 db.add_usage(profile["id"], "ai")
-        used_ai, usage = True, {"ai_used": used + (not cached), "ai_limit": limit}
+        used_ai, usage = True, {"ai_used": used + charged, "ai_limit": limit}
         if not out["entry"] and fmt == "pine":
             out, used_ai = importer.pine(req.text), False
     except AIError as e:
@@ -1453,18 +1456,27 @@ def ai_strategy(req: AIReq, profile=Depends(current_profile)):
         # a single option, a straddle or any multi-leg idea can't be tested as rules on a price series: said before any AI
         # build is used, and the same whether or not the month's builds are left (DA-001, DA-009)
         err(422, "options_idea", ai_writer.OPTIONS_IDEA_MESSAGE)
+    pro = all_indicators(profile)
+    if not pro and (named := ai_writer.locked_named(req.text)):
+        # an idea built on Basic's indicators is said to be so, by name, before any build is used (DP1-002, DP1-003)
+        upgrade(ai_writer.locked_message(named), "indicator_plan")
     with ai_slot(profile) as (used, limit):
         try:
-            out = write_strategy(req.text, pro=all_indicators(profile))
+            out = write_strategy(req.text, pro=pro)
         except AIBusy as e:
             err(503, "ai_busy", str(e))
         except AIError as e:
             err(422, "ai_failed", str(e))
+        if locked := out.pop("locked", []):
+            upgrade(ai_writer.locked_message(locked), "indicator_plan")     # the rules came back with them: refused, not charged
         out = ai_writer.check_against_text(out, req.text)     # the rules checked against the words they came from (R11C-004)
         cached = last_from_cache()              # an answer served from the cache costs nothing
-        if not cached:
+        # only a build that makes rules is counted: a sentence that isn't a strategy ("the weather in Paris") or one the AI
+        # gave back nothing for makes no notebook, so it costs nothing (DP1-001)
+        charged = not cached and bool(out.get("entry") or out.get("shortEntry"))
+        if charged:
             db.add_usage(profile["id"], "ai")
-    out["usage"] = {"ai_used": used + (not cached), "ai_limit": limit}
+    out["usage"] = {"ai_used": used + charged, "ai_limit": limit}
     return out
 
 
@@ -1767,8 +1779,9 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     same = research.unchanged(experiments, strategy, f"GROUP:{group.get('id') or 'custom'}" if group else (nb.get("instrument") or {}).get("id"),
                               req.days, db.now_iso()) if not req.bars and not req.instrument else None
     if same is not None:
-        err(409, "unchanged", f"Nothing has changed since v{same}: the same rules, market and period, already run "
-            f"today. Its result stands, and no experiment was used. Change something to run a new one.")
+        last_v = experiments[-1].get("v") if experiments else None
+        err(409, "unchanged", f"{'Nothing has changed since' if same == last_v else 'This is the same set-up as'} v{same}: the same rules, "
+            f"market and period, already run today. Its result stands, and no experiment was used. Change something to run a new one.")
     if group and not req.bars:
         rec, usage = run_group_test(profile, strategy, group, req, version)
         out = {"usage": usage}
@@ -2666,7 +2679,9 @@ def check_deep(profile, kind: str, sym: str, region: str) -> str | None:
         if kind == "deepdive":
             upgrade(f"You've opened {limit} compan{'y' if limit == 1 else 'ies'} in the deep dive this month. Companies "
                     f"you've already opened this month still open.{more}", "deepdive_limit")
-        upgrade(f"You've made {limit} company deck{'' if limit == 1 else 's'} this month.{more}", "deck_limit")
+        # a deck is a company's: its PDF and its PowerPoint count as one, so those still download (DP1-026)
+        upgrade(f"You've made {limit} company deck{'' if limit == 1 else 's'} this month. A company's PDF and PowerPoint count as "
+                f"one deck, so the deck of a company you've already made one for still downloads in either format.{more}", "deck_limit")
     return mark
 
 

@@ -1,6 +1,7 @@
 import { Card, CardHead } from "./kit/Card";
 import { DataTable, type Column } from "./kit/DataTable";
-import { EVERYONE, FLAGS, LIMITS, NUMBERS, unlimitedLabel, type Limits, type PlanId } from "../lib/plans";
+import { Disclosure } from "./kit/Disclosure";
+import { EVERYONE, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimitedLabel, type Limits, type PlanId } from "../lib/plans";
 
 /** Every limit and feature side by side, from the server's plans when signed in; signed out, the
  * same tables from the app's own copy of the limits (R60-012: a visitor comparing plans saw less than a signed-in user). */
@@ -14,11 +15,14 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   const ids: PlanId[] = ["free", "basic", "pro"];
   const names = { free: "Free", basic: "Basic", pro: "Pro" };
   type Row = { id: string; label: string; cell: (p: PlanId) => string };
-  const groups: { id: string; title: string; rows: Row[] }[] = [
+  // "What each plan adds" in three parts under subheadings (DI-032: 40-odd rows mixing trading, research and money)
+  const flagRows = (g: string) => FLAGS.filter(([f]) => (FLAG_GROUP[f] ?? "research") === g)
+    .map(([f, label]) => ({ id: String(f), label, cell: (p: PlanId) => (lim(p).features.includes(f) ? "✓" : "–") }));
+  const groups: { id: string; title: string; sub?: string; rows: Row[] }[] = [
     { id: "limits", title: "How much", rows: NUMBERS.map(([k, label]) => ({ id: String(k), label, cell: (p: PlanId) => num(p, k) })) },
-    { id: "paid", title: "What each plan adds", rows: FLAGS.map(([f, label]) => ({ id: String(f), label, cell: (p: PlanId) => (lim(p).features.includes(f) ? "✓" : "–") })) },
-    { id: "all", title: "On every plan", rows: EVERYONE.map((label) => ({ id: label, label, cell: () => "✓" })) },
+    ...FLAG_GROUPS.map((g) => ({ id: `paid-${g.id}`, title: g.title, sub: "What each plan adds", rows: flagRows(g.id) })),
   ];
+  const everyone: Row[] = EVERYONE.map((label) => ({ id: label, label, cell: () => "✓" }));
   const columns = (first: string): Column<Row>[] => [
     { key: "label", header: first, wrap: true, cell: (r) => r.label },
     ...ids.map((p) => ({ key: p, header: names[p], numeric: true, cell: (r: Row) => r.cell(p) })),
@@ -27,12 +31,19 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   return (
     <Card id="compare" className="k-compare">
       <CardHead title="Side by side" />
-      {groups.map((g) => (
+      {groups.map((g, i) => (
         <div key={g.id} className="k-stack" data-plans-group={g.id}>
-          <h3 className="k-sub">{g.title}</h3>
-          <DataTable label={`Plans side by side: ${g.title.toLowerCase()}`} columns={columns(g.title)} rows={g.rows} rowKey={(r) => r.id} pinHead />
+          {g.sub && groups[i - 1]?.sub !== g.sub && <h3 className="k-sub">{g.sub}</h3>}
+          {g.sub ? <h4 className="k-sub k-small">{g.title}</h4> : <h3 className="k-sub">{g.title}</h3>}
+          <DataTable label={`Plans side by side: ${g.sub ? `${g.sub.toLowerCase()}, ` : ""}${g.title.toLowerCase()}`} columns={columns(g.title)} rows={g.rows} rowKey={(r) => r.id} pinHead />
         </div>
       ))}
+      {/* the same on every plan: one line each, folded so the page stays short (DP1-022: three lists said the same facts) */}
+      <div className="k-stack" data-plans-group="all">
+        <Disclosure summary={`On every plan (${everyone.length} tools)`}>
+          <ul className="k-list">{everyone.map((r) => <li key={r.id}>{r.label}</li>)}</ul>
+        </Disclosure>
+      </div>
     </Card>
   );
 }

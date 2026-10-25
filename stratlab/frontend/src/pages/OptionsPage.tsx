@@ -539,9 +539,10 @@ export function OptionsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Practise" title="Options builder" info={HELP.options} infoLabel="About options"
+      {/* one "i" for the page, holding why there is no options backtest too: two icons around the chip read as stray (DP1-025) */}
+      <PageHeader eyebrow="Trade · Practise" title="Options builder" info={<>{HELP.options}<br /><br /><b>Why live paper trading only:</b> {HELP.optBacktest}</>} infoLabel="About options"
         lede="Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask; a contract with none is priced from its last trade, and the page says so."
-        actions={<><Badge tone="plain" dot={false}>Live paper trading only</Badge><Info label="About options backtesting">{HELP.optBacktest}</Info></>} />
+        actions={<span title={HELP.optBacktest}><Badge tone="plain" dot={false}>Live paper trading only</Badge></span>} />
 
       {offline && <Notice tone="warn">{offline}</Notice>}
       {restored && s.name !== blankOptions().name && (
@@ -706,7 +707,7 @@ export function OptionsPage() {
             <button type="submit" className="btn quiet" disabled={pricing || (!!offline && !recordedUnd)}>{pricing ? "Pricing…" : offline && recordedUnd ? (preview ? "Price again on the last close" : "Price it on the last close") : preview ? "Price again" : "Price it now"}</button>
             <button type="button" className="btn" disabled={starting || !!offline || !canStart || (ruleMode && (!s.signal || !signalOk)) || timeIssues.length > 0 || notes.length > 0} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : !canStart ? "🔒 Start paper trading (Basic)" : ruleMode && !signalOk ? "🔒 Start paper trading (Pro)" : "Start paper trading"}</button>
             {/* the Free plan's trial is for strategies: the lock says so, not just "Basic" (R59-005) */}
-            {!canStart && <span className="k-note">Paper trading options is on the Basic plan; the Free plan's 5-market-day trial is for a notebook's strategy, not options. Price it now works on every plan. <Link className="link" to="/plans">Plans</Link></span>}
+            {!canStart && <span className="k-note">Paper trading options is on the Basic plan; the Free plan's 5-market-day trial is for a notebook's strategy, not options. Pricing a structure works on every plan{offline && !recordedUnd ? ", once the live option quotes are back" : ""}. <Link className="link" to="/plans">Plans</Link></span>}
             {/* greyed out with no reason beside them read as broken (R48-004) */}
             {offline && <span className="k-note" data-testid="opt-offline-why">{recordedUnd
               ? <>Live option quotes are offline now (the note at the top says until when), so pricing uses {s.underlying}'s last recorded chain, as of {recordedAt(und?.as_of)}, and says so. Paper trading needs the live feed.</>

@@ -39,7 +39,8 @@ export const LIMITS: Record<PlanId, Limits> = {
       "mf_behaviour", "sip_luck", "rates_slab", "loan_check"] },
 };
 
-export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
+// Free has every market and the core tools, not every tool: Replay, Forward test, the scans and the full journal are paid (DP1-021)
+export const WHO: Record<PlanId, string> = { free: "Every market and the core tools, free", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
 
 const L = LIMITS;
 // six to eight short lines a card, each a topic with its items (DK-003: the old cards were run-on paragraphs); built from the
@@ -56,16 +57,17 @@ export const FEATURES: Record<PlanId, string[]> = {
     `Paper trading trial: ${L.free.live_limit} strategy on 1 stock for 5 market days from your first start, then Basic or Pro`,
     "Options builder with Greeks and breakevens after charges",
     `Today's derivatives positioning and F&O contract changes, and a journal of your last ${L.free.journal_trades} trades`,
-    `${L.free.deepdives_per_month} company deep dives and ${L.free.decks_per_month} slide deck a month`,
+    // a deep dive on Free has the report card and checklist too (DP1-021); a company's PDF and PowerPoint are one deck (DP1-026)
+    `${L.free.deepdives_per_month} company deep dives a month, each with the report card and checklist, and ${L.free.decks_per_month} company slide deck (its PDF and PowerPoint count as one)`,
     "Price charts, screens, sector rotation, today's market breadth, ETF prices against NAV and red flags on every company",
     `${L.free.stock_alerts} stock alerts and ${L.free.screens} saved screens; import up to ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds and ${L.free.networth_items} net worth entries`,
     "Tax report, money calendar, the Market Brief on News, a weekly My Stocks email, every market we cover and your own CSV"],
   basic: ["Everything in Free, plus:",
     `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month, with all 20+ indicators: MACD, Supertrend, VWAP and more`,
-    `Paper trade ${L.basic.live_limit} strategies at a time, whole groups and options at set times, with trade notifications and a daily report`,
+    `Paper trade ${L.basic.live_limit} strategies at a time, whole groups on intraday candles and options at set times, with trade notifications and a daily report`,
     "Trading tools: full trade journal, positioning history, stock futures history, closing auction history, chart replay practice, an India VIX entry filter, SIP dip rules",
     "Alerts: F&O change alerts, ETF gap alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email",
-    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} slide decks a month, business updates in numbers and named-holder search`,
+    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} company slide decks a month, business updates in numbers and named-holder search`,
     "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags, Watchlist at a glance, market breadth charts, margin funding history",
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, deposit rates after your own tax, a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings`],
@@ -81,10 +83,10 @@ export const FEATURES: Record<PlanId, string[]> = {
 
 export const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backtests a month, each with a verdict"], ["ai_builds_per_month", "AI strategy builds a month"],
   ["live_limit", "Paper trading sessions at a time"], ["group_size", "Instruments in a group test"], ["deepdives_per_month", "Company deep dives a month"],
-  ["decks_per_month", "Company slide decks a month"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"],
+  ["decks_per_month", "Company slide decks a month (a company's PDF and PowerPoint are one deck)"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"],
   ["mf_schemes", "Mutual fund schemes kept"], ["networth_items", "Net worth entries"], ["journal_trades", "Trades the journal keeps"],
   ["ai_reads_per_day", "Fresh AI reads a day (a company's read already written today, and the market mood, never count)"]];
-export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in strategy rules"], ["group_live", "Paper trade a whole group"], ["options", "Options paper trading at set times"],
+export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in strategy rules"], ["group_live", "Paper trade a whole group (on 5-minute, 15-minute or 1-hour candles)"], ["options", "Options paper trading at set times"],
   ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks by email"],
   ["scans", "Stage 2 + Supertrend scan, with a daily alert"], ["filings", "Red flags for the whole watchlist, with an evening alert"],
   ["investor_home", "Watchlist at a glance"], ["fno", "Indian F&O in notebooks and backtests"], ["options_signal", "Options entered on your own rules' signals"],
@@ -136,3 +138,16 @@ export const EVERYONE = ["Every market, and your own CSV",
 export function planOf(feature: string): PlanId {
   return LIMITS.basic.features.includes(feature) ? "basic" : LIMITS.pro.features.includes(feature) ? "pro" : "free";
 }
+
+/** The comparison table's "What each plan adds" in three parts with their own subheadings, so 40-odd rows read as trading,
+ * research and money (DI-032, DP1-022). A feature not named here goes under Research. */
+export const FLAG_GROUPS: { id: "trade" | "research" | "money"; title: string }[] = [
+  { id: "trade", title: "Trading" }, { id: "research", title: "Research and alerts" }, { id: "money", title: "Money and tax" }];
+export const FLAG_GROUP: Record<string, "trade" | "research" | "money"> = {
+  indicators: "trade", group_live: "trade", options: "trade", alerts: "trade", daily_report: "trade", fno: "trade", options_signal: "trade",
+  fast_entries: "trade", export: "trade", positioning: "trade", journal: "trade", fo_alerts: "trade", options_whatif: "trade", cas_history: "trade",
+  vix_filter: "trade", strike_rules: "trade", chart_replay: "trade", signal_webhooks: "trade", event_reminders: "trade", stock_futures: "trade",
+  mtf: "trade", assistant: "trade",
+  networth: "money", mf_gains: "money", dividends: "money", tax_tools: "money", money_reminders: "money", mf_costs: "money", itr_export: "money",
+  us_tax: "money", mf_behaviour: "money", sip_luck: "money", rates_slab: "money", loan_check: "money",
+};
