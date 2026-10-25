@@ -102,6 +102,16 @@ def _stored_market(region: str, weekly: bool) -> dict | None:
         return None
 
 
+def _week_to(issue: dict, text: str) -> str:
+    """A weekly issue stored before its subject said the last session: "week to 24 Oct" (its Saturday) as "week to 23 Oct",
+    the Friday its figures close on (DJ-039), as write.subject now says it."""
+    if not issue.get("weekly") or not issue.get("day"):
+        return text
+    from .newsletter import write
+    sat, end = kit.fmt_date(issue["day"], year=False), kit.fmt_date(write.close_day(issue) or issue["day"], year=False)
+    return text.replace(f"week to {sat}", f"week to {end}") if sat != end else text
+
+
 def _last_weekday(day: date) -> date:
     """The weekday before `day`: a daily sample is of a session that has closed, never of a day still to come."""
     d = day - timedelta(days=1)
@@ -114,7 +124,7 @@ def _market(region: str, weekly: bool = False) -> tuple[str, str, str]:
     real = _stored_market(region, weekly)
     if real:
         html, text = kit.preview_links(real["html"], real["text"])
-        return real["subject"], html, text
+        return _week_to(real, real["subject"]), _week_to(real, html), _week_to(real, text)
     day = _saturday(_today()) if weekly else _last_weekday(_today())
     if region == "IN":
         scan = ({"group": "NIFTY 50", "st_s2": [{"symbol": "HDFCBANK"}], "stage2": [{"symbol": "MARUTI"}, {"symbol": "TITAN"}]} if weekly
@@ -250,7 +260,10 @@ def _weekly_admin() -> tuple[str, str, str]:
              "audits": {"IN": {"enabled": True, "checked": 48, "issues": []}, "US": {"enabled": True, "checked": 19, "issues": []}},
              "errors": 1, "admin_url": kit.site("/admin")}
     subject, text = weekly.summary(now, facts)
-    return _alerts_email(subject, text, "/admin", "Weekly summary", alerts.ADMIN_WHY)
+    # dated the Monday it goes out, not today (DJ-038: "Weekly summary (admins, Monday)" headed "Sun 25 Oct")
+    monday = _today() + timedelta(days=(7 - _today().weekday()) % 7)
+    return _alerts_email(subject, text, "/admin", "Weekly summary", alerts.ADMIN_WHY,
+                         date=kit.fmt_date(monday, year=False, weekday=True))
 
 
 def _screens() -> tuple[str, str, str]:
@@ -314,10 +327,18 @@ def registry() -> dict:
     return out
 
 
+def is_sample(kind: str) -> bool:
+    """Whether a preview is made up (DJ-038: its real-looking dates read as real events): every one but a market brief
+    with a stored issue, which shows that real issue."""
+    regions = {"market_in": ("IN", False), "market_us": ("US", False), "market_weekly": ("IN", True), "market_weekly_us": ("US", True)}
+    return kind not in regions or _stored_market(*regions[kind]) is None
+
+
 def describe(kind: str, full: bool = False) -> dict:
     name, group, build, unsub, tx = registry()[kind]
     subject, html, text = build()
-    out = {"kind": kind, "name": name, "group": group, "subject": kit.subject_line(subject), "unsubscribe": unsub, "transactional": tx}
+    out = {"kind": kind, "name": name, "group": group, "subject": kit.subject_line(subject), "unsubscribe": unsub, "transactional": tx,
+           "sample": is_sample(kind)}
     if full:
         out.update(html=html, text=text)
     return out

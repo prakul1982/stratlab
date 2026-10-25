@@ -842,7 +842,7 @@ def prices_view() -> dict:
     # when every rate was read, so it stays still (or None on a first read with an error) while one currency keeps failing
     read = {c: pricing.rate_at(c) for c in (fx.get("rates") or {})}
     read = {c: t for c, t in read.items() if t}
-    return {"currencies": pricing.table(), "rates_at": min(read.values()) if read else None, "rates_read_at": read,
+    return {"currencies": pricing.table(), "fixed_on": pricing.FIXED_ON, "rates_at": min(read.values()) if read else None, "rates_read_at": read,
             "rate_errors": fx.get("errors") or []}
 
 
@@ -3842,7 +3842,9 @@ def tax_view(profile) -> dict:
             "business_lines": int(sum(b["trades"] for b in i["business"])),
             "prices": i["live"], "prices_at": _prices_at([q for q in i["quotes"].values() if q]) if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},
-            "max_trades": tax_lots.MAX_TRADES}
+            "max_trades": tax_lots.MAX_TRADES,
+            # DH-003: the year being filed as one "payable now" figure, with the interest (Pro: it needs Tax tools' payments)
+            "payable": money_routes.payable_for_report(profile, i) if rep["years"] else None}
 
 
 @app.get("/tax")
@@ -5749,19 +5751,28 @@ def rules_watch_summary() -> dict:
             "pending": [x["name"] for x in st["sources"] if x["pending"]]}
 
 
-def audit_mismatches() -> dict:
-    """{region: companies with a number that disagrees with its source} from the whole-market audit, for Overview
-    (R50-008: 48 mismatches, 44 of them prices, shown only on Quality)."""
-    out = {}
+def audit_summary() -> tuple[dict, dict]:
+    """({region: companies with a number that disagrees with its source}, {region: {"oldest", "newest"}}) from the
+    whole-market audit, for Overview (R50-008: 48 mismatches, 44 of them prices, shown only on Quality), with when those
+    rows were checked (DJ-026: "49 in India disagree" read as today's, from checks made 2.5 weeks before)."""
+    counts, checked = {}, {}
     for region in ("IN", "US"):
         try:
             rows = market_for(region).status().get("rows") or []
         except Exception:
             continue
-        n = sum(1 for r in rows if any(i.get("level") == "mismatch" for i in r.get("issues") or []))
-        if n:
-            out[region] = n
-    return out
+        bad = [r for r in rows if any(i.get("level") == "mismatch" for i in r.get("issues") or [])]
+        if bad:
+            counts[region] = len(bad)
+        at = sorted(str(r["at"]) for r in bad if r.get("at"))
+        if at:
+            checked[region] = {"oldest": at[0], "newest": at[-1]}
+    return counts, checked
+
+
+def audit_mismatches() -> dict:
+    """{region: companies with a number that disagrees with its source} from the whole-market audit."""
+    return audit_summary()[0]
 
 
 def server_status() -> dict:
@@ -5771,6 +5782,7 @@ def server_status() -> dict:
     except Exception:
         stopped = None
     live = running_now(current, stopped)
+    mismatches, checked = audit_summary()
     return {"kite_ready": kite.ready(), "kite_token_day": kite.token_day, "kite_invalid": kite.invalid_reason, "feed_started": hub.started,
             "feed_connected": hub.connected, "live_sessions": len(live),
             # the sessions that need the broker's live feed (India); other markets are polled and never use it
@@ -5785,7 +5797,9 @@ def server_status() -> dict:
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(RECENT_ERRORS)], "server_started_at": SERVER_STARTED_AT,
             "calendar": calendar_status(), "invoice_seller": invoices.readiness(), "build": build_info.info(),
-            "rules_watch": rules_watch_summary(), "audit_mismatches": audit_mismatches(),
+            "rules_watch": rules_watch_summary(), "audit_mismatches": mismatches, "audit_checked": checked,
+            # whether India is shut today anyway, so a weekend's logged-out broker is OK, not Check (DJ-003)
+            "data_note": data_note(),
             "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
 
 
@@ -5903,41 +5917,79 @@ def parse_holidays(text: str) -> list[str]:
 
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------
 OVERVIEW_FOR = 45                     # seconds Overview's counts are kept (the server's status is read each time)
-_overview = {"at": None, "client": None, "stats": None}
+_overview = {"at": None, "client": None, "stats": None, "test": None}
 _overview_lock = threading.Lock()
 
 
-def overview_stats(fresh: bool = False) -> dict:
+def revenue_since(days: int = 30) -> dict:
+    """The invoices of the last `days` days (DJ-004), by currency: {"INR": 6990.0, ...}, and how many there were. Read
+    from this financial year's invoices and, near its start, last year's."""
+    now = datetime.now(timezone.utc)
+    since = (now - timedelta(days=days)).astimezone(IST).date().isoformat()
+    years = {invoices.fy(now), invoices.fy(now - timedelta(days=days))}
+    rows = [i for y in sorted(years) for i in invoices.of_year(y) if str(i.get("date") or "") >= since]
+    by: dict[str, float] = {}
+    for i in rows:
+        by[i.get("currency") or "INR"] = round(by.get(i.get("currency") or "INR", 0) + float(i.get("total") or 0), 2)
+    return {"days": days, "count": len(rows), "by_currency": by}
+
+
+def overview_stats(fresh: bool = False, include_test: bool = False) -> dict:
     """Overview's counts, kept OVERVIEW_FOR seconds: every Admin section opens with them, and each is a handful of
-    database reads. `fresh` (Refresh, or a change made from Admin) reads them again."""
+    database reads. `fresh` (Refresh, or a change made from Admin) reads them again; `include_test` counts the test
+    accounts too (DJ-001: Admin's "Show test accounts")."""
     with _overview_lock:
         o = dict(_overview)
-    if not fresh and o["stats"] is not None and o["client"] == id(db.sb()) and time.monotonic() - o["at"] < OVERVIEW_FOR:
+    if (not fresh and o["stats"] is not None and o["client"] == id(db.sb()) and o["test"] == include_test
+            and time.monotonic() - o["at"] < OVERVIEW_FOR):
         return o["stats"]
-    st = admin.stats(month_start_iso(), extra={"plan_interest": plan_interest.count})
+    def safe(fn):
+        def run():
+            try:
+                return fn()
+            except Exception as e:          # an extra figure: Overview shows the rest without it
+                print("overview extra failed:", str(e)[:160])
+                return None
+        return run
+    st = admin.stats(month_start_iso(), include_test=include_test,
+                     extra={"plan_interest": plan_interest.count, "revenue_30d": safe(revenue_since),
+                            "active_7d": safe(lambda: admin.active_users(7, include_test))})
     with _overview_lock:
-        _overview.update(at=time.monotonic(), client=id(db.sb()), stats=st)
+        _overview.update(at=time.monotonic(), client=id(db.sb()), stats=st, test=include_test)
     return st
 
 
 def forget_overview() -> None:
     with _overview_lock:
-        _overview.update(at=None, client=None, stats=None)
+        _overview.update(at=None, client=None, stats=None, test=None)
 
 
 @app.get("/admin/overview")
-def admin_overview(fresh: bool = False, _=Depends(admin.admin_profile)):
-    counts = _usage_pool.submit(overview_stats, fresh)        # the counts' reads while the server's status is read here
+def admin_overview(fresh: bool = False, test: bool = False, _=Depends(admin.admin_profile)):
+    counts = _usage_pool.submit(overview_stats, fresh, test)  # the counts' reads while the server's status is read here
+    quota = _usage_pool.submit(alerts.brevo_quota, fresh)       # Brevo's sends today against its daily limit (DJ-034)
     server = server_status()
+    try:
+        server["admin_alerts"]["quota"] = quota.result(timeout=6)
+    except Exception:                                            # slow or down: the light says only what is known
+        server["admin_alerts"]["quota"] = None
     return {"server": server, "stats": counts.result()}
 
 
 @app.get("/admin/users")
-def admin_users(q: str = "", plan: str = "", _=Depends(admin.admin_profile)):
-    """The newest 200 users, or those whose email contains `q`, on `plan` (free, basic or pro) when given."""
+def admin_users(q: str = "", plan: str = "", test: bool = False, _=Depends(admin.admin_profile)):
+    """The newest 200 users, or those whose email contains `q`, on `plan` (free, basic or pro) when given; the test
+    accounts only with `test` (DJ-001)."""
     if plan and plan not in PLANS:
         err(400, "bad_plan", "Pick Free, Basic or Pro.")
-    return admin.users(q, month_start_iso(), plan=plan or None)
+    return admin.users(q, month_start_iso(), plan=plan or None, include_test=test)
+
+
+@app.get("/admin/accounts")
+def admin_accounts(test: bool = False, _=Depends(admin.admin_profile)):
+    """Accounts that signed in but have no profile (DJ-010), and plans given by hand that are ending or have just ended
+    (DJ-011). Read only."""
+    return admin.accounts_view(include_test=test)
 
 
 @app.get("/admin/invite-rewards")
@@ -6021,6 +6073,23 @@ def admin_stop_session(sid: str, _=Depends(admin.admin_profile)):
     elif not db.stop_running_session(check_id(sid), "Stopped by the site owner."):   # running on the leader: its row says stop
         err(404, "not_found", "That session isn't running.")
     return {"ok": True}
+
+
+@app.get("/admin/billing/activity")
+def admin_billing_activity(_=Depends(admin.admin_profile)):
+    """Subscriptions, refunds and failed payments straight from Razorpay, with the mode, the last webhook's time and the
+    currencies with plans of their own (DJ-016, DJ-017), and the invoices' revenue by month. Read only."""
+    out = billing.activity()
+    months: dict[str, dict[str, float]] = {}
+    now = datetime.now(timezone.utc)
+    for y in sorted({invoices.fy(now), invoices.fy(now - timedelta(days=365))}):
+        for i in invoices.of_year(y):
+            m = str(i.get("date") or "")[:7]
+            if m:
+                cur = i.get("currency") or "INR"
+                months.setdefault(m, {})[cur] = round(months.get(m, {}).get(cur, 0) + float(i.get("total") or 0), 2)
+    out["revenue_by_month"] = [{"month": m, "by_currency": v} for m, v in sorted(months.items())][-12:]
+    return out
 
 
 @app.post("/admin/billing/check")
@@ -6784,7 +6853,7 @@ def admin_review_link(profile=Depends(admin.admin_profile)):
 # Test accounts for the automated reviewers (owner, 24 Oct: "add more accounts"): sign-in is Google-only, which a script
 # can't drive, so an admin can make up to MAX_TEST_ACCOUNTS accounts on a "+" alias of their own address ("you+sl-free@…",
 # delivered to their own inbox), each on a plan, and email one a one-time sign-in link. They are never paying accounts.
-TEST_ACCOUNTS = "test-accounts"
+TEST_ACCOUNTS = admin.TEST_ACCOUNTS          # also read by admin.py, which leaves these accounts out of the counts (DJ-001)
 MAX_TEST_ACCOUNTS = 8
 
 

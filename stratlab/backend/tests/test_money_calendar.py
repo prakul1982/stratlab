@@ -41,13 +41,15 @@ def test_tax_dates_for_a_year_under_the_new_due_dates():
     assert days_of(evs, "advance_tax") == ["2025-06-15", "2025-09-15", "2025-12-15", "2026-03-15"]
     assert [e["title"] for e in evs if e["kind"] == "advance_tax"][1] == "Advance tax, second instalment (45%)"
     assert days_of(evs, "tax_saving") == ["2026-03-31"] and "old regime" in evs[4]["title"]
-    assert days_of(evs, "itr") == ["2026-07-31", "2026-08-31", "2026-10-31"]       # ITR-1/2, business without audit, audit
+    # ITR-1/2, business without audit, audit: the audit case as CBDT Circular 7/2026 extended it (DH-040), its report too
+    assert days_of(evs, "itr") == ["2026-07-31", "2026-08-31", "2026-11-21"]
+    assert days_of(evs, "audit_report") == ["2026-10-21"]
     assert days_of(evs, "itr_late") == ["2026-12-31"] and days_of(evs, "itr_revise") == ["2027-03-31"]
 
 
 def test_tax_dates_before_the_finance_act_2026_changes():
     evs = M.tax_dates(2024)
-    assert days_of(evs, "itr") == ["2025-07-31", "2025-10-31"]
+    assert days_of(evs, "itr") == ["2025-09-16", "2025-12-10"]                       # as the CBDT extended them for AY 2025-26
     assert days_of(evs, "itr_late") == ["2025-12-31"] and "revised" in next(e for e in evs if e["kind"] == "itr_late")["title"]
     assert days_of(evs, "itr_revise") == []
 
@@ -140,7 +142,8 @@ def test_other_money_pages_through_hooks(w, monkeypatch):
     tax.upcoming_dates = lambda uid, days, frm=None: [{"date": jun.isoformat(), "title": "Advance tax: ₹12,000 due", "amount": 12000, "kind": "advance_due"}]
     for name, mod in (("app.money_networth", fake), ("app.money_mf", broken), ("app.money_advance_tax", tax)):
         monkeypatch.setitem(sys.modules, name, mod)
-    assert M.HOOKS == [("money_networth", "upcoming_dates", "money")]          # only the pages that have the function are named
+    # only the pages that have the function are named; money_routes gives the user's own tax items (DH-040, DH-043)
+    assert M.HOOKS == [("money_networth", "upcoming_dates", "money"), ("money_routes", "calendar_dates", "tax")]
     monkeypatch.setattr(M, "HOOKS", M.HOOKS + [("money_mf", "upcoming_dates", "money"), ("money_advance_tax", "upcoming_dates", "tax")])
     got = M.events("u-pro", today, today + timedelta(days=400))
     money = [(e["title"], e["amount"]) for e in got if e["cat"] == "money"]

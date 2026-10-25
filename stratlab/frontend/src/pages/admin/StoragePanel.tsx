@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago } from "../../lib/format";
+import { ago, safeHref } from "../../lib/format";
 import { Card, CardHead, ConfirmDialog, Disclosure, ErrorState, Meter, Notice, Skeleton } from "../../components/kit";
 
 type Sized = { name: string; bytes: number };
 type Group = { prefix: string; bytes: number; rows: number };
+/** One real database against its own real limit (DJ-020): Railway's Postgres (its limit is the volume's, known only when
+ * set on the server; else a link to where Railway shows it) and Supabase (the plan's limit), with what Supabase still
+ * holds from before the move. */
+export type DbMeter = { name: string; used: number | null; limit: number | null; share: number | null; link: string; error?: string | null;
+  note?: string | null; reclaimable?: number | null; reclaimable_tables?: string[] };
 type Storage = {
-  limit: number; warn_at: number; total?: number; share?: number; tables?: Sized[]; settings?: Group[];
+  limit: number; warn_at: number; total?: number; share?: number | null; tables?: Sized[]; settings?: Group[]; databases?: DbMeter[]; main?: "railway" | "supabase";
   missing?: boolean; sql?: string; error?: string;
   market: { enabled: boolean; total?: number; tables?: Sized[]; error?: string };
   move: { running?: boolean; started_at?: string; finished_at?: string; moved?: { settings: number; snapshots: number }; error?: string | null };
@@ -15,10 +20,10 @@ type Storage = {
     failed_at?: string; copied?: Record<string, number>; error?: string | null };
 };
 
-const mb = (n: number) => `${(n / 1024 / 1024).toLocaleString("en-IN", { maximumFractionDigits: n < 10 * 1024 * 1024 ? 1 : 0 })} MB`;
+export const mb = (n: number) => `${(n / 1024 / 1024).toLocaleString("en-IN", { maximumFractionDigits: n < 10 * 1024 * 1024 ? 1 : 0 })} MB`;
 
-/** Admin: how full the main database is against the free plan's limit, what fills it, and the second database on
- * Railway that the bulky market data can move to. */
+/** Admin: how full each real database is against its own limit (DJ-020), what fills the main one, and the second
+ * database on Railway that the bulky market data can move to. */
 export function StoragePanel() {
   const { fail } = useApp();
   const [s, setS] = useState<Storage | null>(null);
@@ -50,8 +55,9 @@ export function StoragePanel() {
     try { await navigator.clipboard.writeText(s?.sql ?? ""); setCopied(true); } catch { /* the SQL stays shown to copy by hand */ }
   };
 
-  const share = s?.share ?? 0;
-  const high = !!s && share >= s.warn_at;
+  const meters = s?.databases ?? [];
+  const high = !!s && meters.some((d) => d.share != null && d.share >= s.warn_at);
+  const reclaim = meters.find((d) => d.reclaimable);
   return (
     <Card label="Storage">
       <CardHead title="Storage" />
@@ -68,9 +74,19 @@ export function StoragePanel() {
         </div>
       ) : (
         <div className="k-stack">
-          <div className="k-small"><b>{mb(s.total ?? 0)}</b> of {mb(s.limit)} used ({Math.round(share * 100)}%)</div>
-          <div role="meter" aria-label="Main database used" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(share * 100)}><Meter pct={share * 100} /></div>
-          {high && <Notice tone="warn">Getting full: move the market data to the second database below.</Notice>}
+          <div className="adm-meters" data-testid="storage-meters">
+            {meters.map((d) => <DbLine key={d.name} d={d} />)}
+          </div>
+          {high && <Notice tone="warn">{s.main === "supabase" ? "Getting full: move the market data to the second database below." : "A database is getting full: open its dashboard from the line above."}</Notice>}
+          {reclaim && (
+            // in plain words, with the exact step one click away (DJ-025: "run vacuum full …" as the instruction itself)
+            <div className="k-stack k-small" data-testid="storage-reclaim">
+              <span>Supabase still holds {mb(reclaim.reclaimable!)} of copies left from before users' data moved to Railway ({(reclaim.reclaimable_tables ?? []).map((t) => t.replace(/^public\./, "")).join(", ")}). StratLab no longer reads them; Supabase gives the space back only once they are emptied and compacted.</span>
+              <Disclosure summary="Show the step, for Supabase's SQL Editor" testId="storage-reclaim-sql">
+                <pre className="k-code adm-pre" tabIndex={0} aria-label="The step to run in Supabase">{`truncate ${(reclaim.reclaimable_tables ?? []).join(", ")};\nvacuum full ${(reclaim.reclaimable_tables ?? []).join(", ")};`}</pre>
+              </Disclosure>
+            </div>
+          )}
           <div className="adm-sizes">
             <Sizes title="Biggest tables" rows={(s.tables ?? []).slice(0, 6).map((t) => [t.name.replace(/^public\./, ""), t.bytes])} />
             <Sizes title="Biggest stored data" rows={(s.settings ?? []).slice(0, 6).map((g) => [`${g.prefix} (${g.rows.toLocaleString("en-IN")})`, g.bytes])} />
@@ -88,8 +104,7 @@ export function StoragePanel() {
               <p className={`k-small ${s.move.error ? "k-down" : "k-muted"}`}>
                 {s.move.running ? <>Moving… started {ago(s.move.started_at ?? "")}</>
                   : s.move.error ? <>The last move stopped: {s.move.error}. Running it again carries on.</>
-                  : s.move.finished_at && s.move.moved ? <>Last move {ago(s.move.finished_at)}: {s.move.moved.settings.toLocaleString("en-IN")} stored items and {s.move.moved.snapshots.toLocaleString("en-IN")} option chains.
-                    {" "}Supabase frees the space after it's reclaimed: run <code>vacuum full public.option_snapshots, public.app_settings;</code> in its SQL Editor.</>
+                  : s.move.finished_at && s.move.moved ? <>Last move {ago(s.move.finished_at)}: {s.move.moved.settings.toLocaleString("en-IN")} stored items and {s.move.moved.snapshots.toLocaleString("en-IN")} option chains.</>
                   : "Older market data is still in the main database until you move it."}
               </p>
               <div className="k-row"><button type="button" className="btn sm" disabled={!!s.move.running} onClick={() => setAsking(true)}>{s.move.running ? "Moving…" : "Move market data now"}</button></div>
@@ -136,6 +151,23 @@ export function StoragePanel() {
         </ConfirmDialog>
       )}
     </Card>
+  );
+}
+
+/** One database's line: what it uses against its limit, or what it uses and where its limit is shown. */
+function DbLine({ d }: { d: DbMeter }) {
+  const pct = d.share != null ? Math.round(d.share * 100) : null;
+  return (
+    <div className="k-stack" data-testid="storage-db">
+      <div className="k-small">
+        <b>{d.name}</b>{": "}
+        {d.used == null ? <span className="k-down">size not read{d.error ? ` (${d.error})` : ""}</span>
+          : d.limit ? <><b>{mb(d.used)}</b> of {mb(d.limit)} used ({pct}%)</> : <><b>{mb(d.used)}</b> used</>}
+        {" · "}<a className="link" href={safeHref(d.link)} target="_blank" rel="noopener noreferrer">{d.limit ? `Open ${d.name.split(" ")[0]}` : `Volume size on ${d.name.split(" ")[0]}`}</a>
+      </div>
+      {d.used != null && d.limit ? <div role="meter" aria-label={`${d.name} used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct ?? 0}><Meter pct={(d.share ?? 0) * 100} /></div> : null}
+      {d.note && <span className="k-note k-muted">{d.note}</span>}
+    </div>
   );
 }
 

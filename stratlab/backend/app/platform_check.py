@@ -227,11 +227,36 @@ def check_options(options, today: date) -> dict:
                    f"Expiry {_day(expiry)}, spot {_level(c.get('spot'))}, {len(rows)} strikes; {quoted} prices, {two_sided} with bid and ask.")
 
 
+# How old the newest item of a feed may be before a pass is a Check (DJ-033: "Insider trades … newest 13 Feb" passed
+# eight months on): Reliance files with the exchange every few days and discloses insider trades every few weeks.
+FRESH_DAYS = {"Exchange filings": 21, "Insider trades": 120}
+
+
+def _newest(items: list, key: str) -> date | None:
+    days = []
+    for i in items:
+        try:
+            days.append(date.fromisoformat(str(i.get(key) or "")[:10]))
+        except ValueError:
+            continue
+    return max(days) if days else None
+
+
+def _fresh(name: str, count_text: str, newest: date | None, today: date | None = None) -> dict:
+    """A feed's pass, or a Check when its newest item is older than FRESH_DAYS: old data isn't passed as OK."""
+    today = today or date.today()
+    when = _day(newest) if newest else "not dated"
+    if newest and (today - newest).days > FRESH_DAYS[name]:
+        return _result(name, "Filings", "warn", f"{count_text}; but the newest is {when}, {(today - newest).days} days old, which is "
+                       "unusual for Reliance: the feed may be serving old data.")
+    return _result(name, "Filings", "pass", f"{count_text}; newest {when}.")
+
+
 def check_filings(feed) -> dict:
     items = feed.announcements("RELIANCE")
     if not items:
         return _result("Exchange filings", "Filings", "warn", "Reliance has no filings in the window, which is unusual.")
-    return _result("Exchange filings", "Filings", "pass", f"{len(items)} Reliance filings; newest {_day(items[0]['at'])}.")
+    return _fresh("Exchange filings", f"{len(items)} Reliance filings", _newest(items, "at"))
 
 
 def check_insider_trades(feed) -> dict:
@@ -240,7 +265,7 @@ def check_insider_trades(feed) -> dict:
     items = feed.insider_trades("RELIANCE")
     if not items:
         return _result("Insider trades", "Filings", "warn", "Reliance has no insider-trading disclosures in the last year, which is unusual.")
-    return _result("Insider trades", "Filings", "pass", f"{len(items)} Reliance insider-trading disclosures; newest {_day(items[0]['date'])}.")
+    return _fresh("Insider trades", f"{len(items)} Reliance insider-trading disclosures", _newest(items, "date"))
 
 
 def check_surveillance(feed) -> dict:

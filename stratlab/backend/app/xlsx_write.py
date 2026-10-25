@@ -13,9 +13,11 @@ STYLES = (HEAD + f'<styleSheet {NS.split(" xmlns:r")[0]}><fonts count="2"><font>
           '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill>'
           '<fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders>'
           '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-          '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>'
-          '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" applyFont="1"/>'
-          '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/></cellXfs></styleSheet>')
+          '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+          '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+          '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>'
+          # the named "Normal" style: without it Excel readers warn "Workbook contains no default style" (DH-013)
+          '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>')
 _BAD = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 

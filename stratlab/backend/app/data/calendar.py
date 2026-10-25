@@ -305,7 +305,8 @@ def coverage(market: str, today: date) -> dict:
     row = {"market": market, "name": NAMES.get(market, market), "known_until": None, "days_left": None,
            "next": None, "next_name": None, "state": "none", "hint": None}
     if market not in CODES:
-        return {**row, "source": "No exchange holidays (24/7 / weekdays)"}
+        # each in its own words (DJ-024: both read "24/7 / weekdays")
+        return {**row, "source": "No exchange holidays: trades 24/7" if market == "CRYPTO" else "No exchange holidays: trades on weekdays"}
     row["source"] = "Exchange's own list, read daily" if market in LISTED else "Built-in calendar rules"
     until = covered_until(market)
     if until is None:

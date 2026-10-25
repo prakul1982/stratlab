@@ -43,9 +43,10 @@ def summary_lines(y: dict) -> list[tuple[str, str]]:
             ("Short-term loss to carry forward", money(y["carry_forward"]["st"])), ("Long-term loss to carry forward", money(y["carry_forward"]["lt"])),
             ("Intraday (speculative) profit or loss, not in the above", money(y["intraday"]["pnl"]))]
     for seg in (y.get("business") or {}).get("segments") or []:
-        out.append((f"{seg['label']}: profit or loss before charges ({seg['trades']} trades)", money(seg["pnl"])))
+        # DH-007: each line of the broker's tradewise file is a trade's exit, so they are "exit lines", and "1 exit line"
+        out.append((f"{seg['label']}: profit or loss before charges ({seg['trades']:,} exit line{'' if seg['trades'] == 1 else 's'})", money(seg["pnl"])))
         out.append((f"{seg['label']}: charges", money(seg["charges"])))
-        out.append((f"{seg['label']}: turnover, trade by trade (netted per contract)",
+        out.append((f"{seg['label']}: turnover, exit by exit (netted per contract)",
                     f"{money(seg['turnover'])} ({money(seg['turnover_contract'])})"))
     return out
 
@@ -167,10 +168,11 @@ def to_pdf(y: dict, names: dict, below: dict | None = None) -> bytes:
     top = sorted(y["rows"], key=lambda r: -abs(r["gain"] or 0))[:25]
     if top:
         story += [Paragraph("Largest realised lines", h2),
+                  # dates as the rest of the PDF writes them, and the header again on a new page (DH-007)
                   Table([["Stock", "Bought", "Sold", "Qty", "Gain or loss", "Term"]] +
-                        [[_name(names, r["key"])[:24], r["bought"], r["sold"], f"{r['qty']:g}", money(r["gain"]),
+                        [[_name(names, r["key"])[:24], _day(r["bought"]), _day(r["sold"]), f"{r['qty']:g}", money(r["gain"]),
                           "Long" if r["term"] == "LT" else "Short"] for r in top],
-                        colWidths=[46 * mm, 25 * mm, 25 * mm, 20 * mm, 32 * mm, 18 * mm],
+                        colWidths=[46 * mm, 25 * mm, 25 * mm, 20 * mm, 32 * mm, 18 * mm], repeatRows=1,
                         style=TableStyle(list(grid.getCommands()) + [("FONT", (0, 0), (-1, 0), "Body-Bold", 9)]))]
         if y["count"] > len(top):
             story.append(Paragraph(f"{y['count']} lines in all; the CSV has every one.", small))
@@ -180,5 +182,10 @@ def to_pdf(y: dict, names: dict, below: dict | None = None) -> bytes:
                             f"across {len(below['rows'])} lot(s), at today's prices.", body)]
     story += [Spacer(1, 10), Paragraph(f"Made by StratLab on {_day(datetime.now(timezone.utc))} from your uploaded files. "
                                         + escape(DISCLAIMER), small)]
-    doc.build(story)
+
+    def number(canvas, d):            # DH-007: page numbers
+        canvas.setFont("Body", 7)
+        canvas.setFillColor(HexColor("#5B6475"))
+        canvas.drawRightString(A4[0] - 16 * mm, 8 * mm, f"Page {d.page} · Tax estimate, {y['label']}")
+    doc.build(story, onFirstPage=number, onLaterPages=number)
     return buf.getvalue()

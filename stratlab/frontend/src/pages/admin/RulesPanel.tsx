@@ -7,7 +7,9 @@ import { Card, CardHead, DataTable, ErrorState, Light, Skeleton, type Column } f
 type Rule = { id: string; area: string; name: string; value: string; where: string; source: string; since: string | null };
 type Area = { area: string; label: string; reviewed: string; days: number; due: boolean; passed: { date: string; what: string }[]; next: { date: string; what: string } | null };
 type Pending = { at: string; why: string; was?: string | null; now?: string; uses?: string | null; items?: { date: string; subject: string; url: string }[] };
-type Source = { id: string; name: string; area: string; url: string; where: string; checked: string | null; shown: string | null;
+/** `used`: what reads the value, in plain words; `unit`: its unit ("dollars a million on sells"); `note`: a line of
+ * explanation (DJ-029: "SEC fee rate 20.6" with no unit, code paths in the owner's page) */
+type Source = { id: string; name: string; area: string; url: string; where: string; used?: string | null; unit?: string; note?: string | null; checked: string | null; shown: string | null;
   expected: string | null; error: string | null; fails: number; pending: Pending | null };
 type Rules = { rules: Rule[]; areas: Area[]; stale_days: number; watch: { sources: Source[]; last_run: string | null };
   check: { state: "pass" | "warn"; detail: string } };
@@ -42,7 +44,7 @@ export function RulesPanel() {
     { key: "n", header: "Rule", rowHeader: true, wrap: true, cell: (x) => <span className="k-stack"><b>{x.name}</b><span className="k-note k-muted">{label[x.area]}</span></span> },
     { key: "v", header: "Value", wrap: true, cell: (x) => x.value },
     { key: "s", header: "Since", cell: (x) => (x.since ? (x.since.length === 10 ? dateOnly(x.since) : x.since) : "–") },
-    { key: "w", header: "Where", wrap: true, cell: (x) => <span className="k-note k-muted">{x.where}</span> },
+    { key: "w", header: "In the code", info: "Where the value lives, for whoever changes it", wrap: true, cell: (x) => <span className="k-note k-muted">{x.where}</span> },
     { key: "so", header: "Source", wrap: true, cell: (x) => <span className="k-note k-muted adm-cell">{x.source}</span> },
   ];
   return (
@@ -60,13 +62,14 @@ export function RulesPanel() {
             <p className="k-row k-small">
               <Light state={s.pending ? "bad" : s.error ? "warn" : s.checked ? "ok" : "warn"} word={s.pending ? "Changed" : s.error ? "Unread" : s.checked ? "Same" : "Not read yet"} />
               <b>{s.name}</b>
-              <span className="k-muted">{s.error ? `${s.error}${s.fails > 1 ? ` (${s.fails} days running)` : ""}` : s.shown ?? ""}{s.expected && !s.pending ? ` · StratLab uses ${s.expected}` : ""}</span>
+              <span className="k-muted">{s.error ? `${s.error}${s.fails > 1 ? ` (${s.fails} days running)` : ""}` : s.shown ? `${s.shown}${s.unit ?? ""}` : ""}{s.expected && !s.pending ? ` · StratLab uses ${s.expected}${s.unit ?? ""}` : ""}</span>
               <a className="link" href={safeHref(s.url)} target="_blank" rel="noreferrer">Source</a>
             </p>
+            {(s.used || s.note) && <p className="k-note k-muted">{[s.used && `Used for: ${s.used}.`, s.note].filter(Boolean).join(" ")}</p>}
             {s.pending && (
               <div className="k-row k-small">
                 <span>{s.pending.items ? s.pending.items.map((c) => `${fmtDate(c.date)}: ${c.subject}`).join(" · ")
-                  : `${s.pending.why}: now ${s.pending.now}${s.pending.uses ? `, StratLab uses ${s.pending.uses}` : s.pending.was ? `, was ${s.pending.was}` : ""}`} <span className="k-muted">({s.where}, {ago(s.pending.at)})</span></span>
+                  : `${s.pending.why}: now ${s.pending.now}${s.pending.uses ? `, StratLab uses ${s.pending.uses}` : s.pending.was ? `, was ${s.pending.was}` : ""}`} <span className="k-muted">({s.used ?? "for the record"}, {ago(s.pending.at)})</span></span>
                 <button type="button" className="btn quiet sm" disabled={busy === s.id} onClick={() => go(s.id, `/admin/rules/watch/${s.id}/seen`, "Marked seen.")}>Mark seen</button>
               </div>
             )}

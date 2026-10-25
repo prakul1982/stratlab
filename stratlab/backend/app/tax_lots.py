@@ -797,6 +797,10 @@ STEP_NAMES = {"st_new": "short-term gains taxed at 20% (sold from 23 Jul 2024)",
 
 
 FOREIGN = {"st_us", "lt_us", "lt_usi"}
+# from FY 2025-26 every sale is after the 23 Jul 2024 change and the forms dropped the split, so the date says nothing
+# (DH-005: "Short-term, sold from 23 Jul 2024" for FY 2025-26)
+PLAIN_LABELS = {"st_new": "Short-term, section 111A (20%)", "lt_new": "Long-term, section 112A (12.5%)"}
+PLAIN_STEPS = {"st_new": "short-term gains taxed at 20%", "lt_new": "long-term gains taxed at 12.5%"}
 
 
 def _side(rows: list[dict]) -> dict:
@@ -846,6 +850,7 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
             lt_loss -= r["gain"]
     net = dict(gains)
     steps: list[str] = []
+    names = {**STEP_NAMES, **(PLAIN_STEPS if fy >= 2025 else {})}
 
     def use(order: list[str], loss: float, what: str) -> float:
         for b in order:
@@ -853,7 +858,7 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
             if take > EPS:
                 net[b] -= take
                 loss -= take
-                steps.append(f"{what} of {money(take)} set off against {STEP_NAMES[b]}.")
+                steps.append(f"{what} of {money(take)} set off against {names[b]}.")
         return loss
     st_left = use(ST_ORDER, st_loss, "Short-term losses")
     lt_left = use(LT_ORDER, lt_loss, "Long-term losses")
@@ -881,7 +886,7 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
         t = taxable * rate
         tax += t
         if gains[b] or net[b]:
-            buckets.append({"key": b, "label": label, "rate": rate, "gains": _r(gains[b]), "after_setoff": _r(net[b]),
+            buckets.append({"key": b, "label": PLAIN_LABELS.get(b, label) if fy >= 2025 else label, "rate": rate, "gains": _r(gains[b]), "after_setoff": _r(net[b]),
                             "exempt": _r(exempt[b]), "taxable": _r(taxable), "tax": _r(t), **({"slab": True} if b in SLAB else {})})
     if st_left > EPS or lt_left > EPS:
         steps.append(f"Left to carry forward: {money(st_left)} short-term and {money(lt_left)} long-term loss.")
@@ -902,6 +907,8 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
         "exemption": {"limit": cap, "used": _r(used), "left": _r(ex_left)},
         "buckets": buckets, "steps": steps, "tax": _r(tax), "tax_with_cess": _r(tax * (1 + CESS)),
         "carry_forward": {"st": _r(st_left), "lt": _r(lt_left)}, "brought_forward": bf,
+        # this year's own capital losses, so the gains table can show them and add up (DH-005)
+        "losses": {"st": _r(st_loss), "lt": _r(lt_loss)},
         "intraday": {"count": len(intra), "buy": _r(sum(i["buy"] for i in intra)), "sell": _r(sum(i["sell"] for i in intra)),
                      "pnl": _r(sum(i["pnl"] for i in intra)), "turnover": _r(sum(abs(i["pnl"]) for i in intra)),
                      "stt": _r(sum(i["stt"] for i in intra)), "stt_estimated": any(i["stt_est"] for i in intra)},

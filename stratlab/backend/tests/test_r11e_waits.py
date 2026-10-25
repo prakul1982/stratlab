@@ -384,8 +384,8 @@ def test_overview_counts_match_reading_every_profile(fake_db):
                                       for n, k in enumerate(["backtest", "backtest", "ai", "research_ai"])]
     admin.mark_granted("i", True)                       # a subscription id, and a plan given by hand after it
     month = (now - timedelta(days=1)).isoformat()
-    assert admin.stats(month) == _legacy_stats(month)
     got = admin.stats(month)
+    assert got.pop("test_accounts") == 0 and got == _legacy_stats(month)     # DJ-001 added only the test-account count
     assert got["users"] == 9 and got["plans"] == {"free": 5, "basic": 1, "pro": 3}
     assert got["paying"] == {"basic": 1, "pro": 1} and got["experiments_month"] == 2
 
@@ -421,17 +421,17 @@ def test_overview_counts_are_kept_and_refresh_reads_them_again(w, monkeypatch):
     monkeypatch.setattr(main.time, "monotonic", lambda: clock[0])
     first = c.get("/admin/overview", headers=A).json()
     reads = counting.calls.get("usage_events", 0)
-    assert reads == 3
+    assert reads == 4                          # the month's three counts, and who was active this week (DJ-004)
     db.update_profile("u-basic", razorpay_subscription_id="sub_1")
     again = c.get("/admin/overview", headers=A).json()
     assert counting.calls["usage_events"] == reads and again["stats"] == first["stats"]       # kept: no count read again
     assert "server" in again and again["server"]["kite_ready"] == first["server"]["kite_ready"]   # the status: read each time
     fresh = c.get("/admin/overview?fresh=1", headers=A).json()                               # Refresh
-    assert counting.calls["usage_events"] == reads + 3
+    assert counting.calls["usage_events"] == reads + 4
     assert fresh["stats"]["paying"]["basic"] == first["stats"]["paying"]["basic"] + 1
     clock[0] += main.OVERVIEW_FOR + 1
     c.get("/admin/overview", headers=A)
-    assert counting.calls["usage_events"] == reads + 6                                         # read again once old
+    assert counting.calls["usage_events"] == reads + 8                                         # read again once old
 
 
 def test_overview_reads_go_at_once(fake_db, monkeypatch):

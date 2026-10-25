@@ -106,6 +106,48 @@ def _send_brevo(to: str, subject: str, body: str, html: str | None = None, heade
         raise _refused("Brevo", r)
 
 
+# Brevo's own figures for today (DJ-034): what was sent, and what the account's plan has left of its daily send limit,
+# read from Brevo's API with the key the server sends with, and kept ten minutes. Only Brevo says these; for Resend or
+# SMTP nothing is read (Admin then links to the service's own dashboard).
+BREVO_QUOTA_FOR = 600.0
+_brevo_quota: dict = {"at": 0.0, "value": None}
+BREVO_DASHBOARD = "https://app.brevo.com/billing/account/plans"
+
+
+def brevo_quota(fresh: bool = False) -> dict | None:
+    """{"sent_today", "left_today", "plan", "limit_kind", "error"} from Brevo, or None when Brevo isn't the service.
+    `left_today` is Brevo's own count of the sends the plan has left (a "sendLimit" plan's daily limit); None when the
+    plan isn't one with a daily limit."""
+    import time as _time
+    if not settings.BREVO_API_KEY:
+        return None
+    if not fresh and _brevo_quota["value"] is not None and _time.monotonic() - _brevo_quota["at"] < BREVO_QUOTA_FOR:
+        return _brevo_quota["value"]
+    from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo
+    head = {"api-key": settings.BREVO_API_KEY, "accept": "application/json"}
+    out = {"sent_today": None, "left_today": None, "plan": None, "limit_kind": None, "error": None, "dashboard": BREVO_DASHBOARD}
+    try:
+        acct = httpx.get("https://api.brevo.com/v3/account", headers=head, timeout=8)
+        acct.raise_for_status()
+        plans = acct.json().get("plan") or []
+        email_plan = next((p for p in plans if p.get("creditsType") == "sendLimit"), None) or next(iter(plans), None) or {}
+        out["plan"] = email_plan.get("type")
+        out["limit_kind"] = email_plan.get("creditsType")
+        if email_plan.get("creditsType") == "sendLimit" and isinstance(email_plan.get("credits"), (int, float)):
+            out["left_today"] = int(email_plan["credits"])
+        day = _dt.now(ZoneInfo("Asia/Kolkata")).date().isoformat()     # the account's own zone is India's
+        rep = httpx.get("https://api.brevo.com/v3/smtp/statistics/aggregatedReport", headers=head, timeout=8,
+                        params={"startDate": day, "endDate": day})
+        rep.raise_for_status()
+        if isinstance(rep.json().get("requests"), (int, float)):
+            out["sent_today"] = int(rep.json()["requests"])
+    except Exception as e:
+        out["error"] = f"Brevo didn't say: {str(e)[:120]}"
+    _brevo_quota.update(at=_time.monotonic(), value=out)
+    return out
+
+
 def ready_channels() -> dict:
     from . import push
     return {"push": push.enabled(), "telegram": telegram_ready(), "email": email_ready()}

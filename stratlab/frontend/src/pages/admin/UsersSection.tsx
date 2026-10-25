@@ -3,15 +3,46 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
-import { Badge, Card, CardHead, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Pager, Seg, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Pager, Seg, Skeleton, type Column } from "../../components/kit";
 import { endsAt } from "../../lib/offer";
 import { useAdmin } from "./AdminContext";
 import { UserDialog } from "./UserDialog";
-import { PLAN_FILTERS, PLAN_NAME, planNote, usersPath, type PlanFilter, type UserRow } from "./users";
+import { PLAN_FILTERS, PLAN_NAME, monthShort, planNote, untilWords, usersPath, type PlanFilter, type UserRow } from "./users";
 
 interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null; currency?: string | null }
 
 const PAGE = 25;
+
+type AccountsView = { orphans: { id: string; email: string | null; created_at: string | null; last_sign_in: string | null }[];
+  ending: { id: string; email: string | null; plan: "basic" | "pro"; until: string; ended: boolean; plan_now: string }[];
+  sign_ins_error: string | null; accounts: number | null };
+
+/** Beside the users (DJ-010, DJ-011): accounts that signed in but have no profile here, so they appear nowhere else, and
+ * plans given by hand that end within a week or ended in the last one. Read only. */
+function AccountsCard({ test }: { test: boolean }) {
+  const { fail } = useApp();
+  const [v, setV] = useState<AccountsView | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); api<AccountsView>(`/admin/accounts${test ? "?test=1" : ""}`).then(setV).catch((e) => { setFailed(true); fail(e); }); }, [fail, test]);
+  if (!v) return <Card label="Plans ending and sign-ins without a profile">{failed ? <ErrorState title="These couldn't be read" /> : <Skeleton label="Loading" lines={2} />}</Card>;
+  return (
+    <Card testId="admin-accounts" label="Plans ending and sign-ins without a profile">
+      <CardHead title="Plans ending and sign-ins without a profile" info="Plans you gave by hand that end within 7 days or ended in the last 7, and accounts the sign-in service has that never got a profile here (they appear nowhere else in Admin). Nothing here changes anything." />
+      <h3 className="adm-sub">Given plans ending ({v.ending.length})</h3>
+      {!v.ending.length ? <p className="k-small k-muted">None in the 7 days either side of today.</p> : (
+        <ul className="k-small adm-list">{v.ending.map((e) => (
+          <li key={e.id}><b>{e.email ?? e.id}</b> · {PLAN_NAME[e.plan]} · <span className={e.ended ? "k-down" : ""}>{untilWords(e.until)}</span>
+            {e.ended && e.plan_now !== "free" ? <span className="k-muted"> (on the plan one more day, the grace period)</span> : ""}</li>))}</ul>
+      )}
+      <h3 className="adm-sub">Signed in, no profile ({v.sign_ins_error ? "–" : v.orphans.length})</h3>
+      {v.sign_ins_error ? <p className="k-small k-down">{v.sign_ins_error}</p> : !v.orphans.length
+        ? <p className="k-small k-muted">None: every account the sign-in service has{v.accounts != null ? ` (${v.accounts})` : ""} has a profile.</p> : (
+          <ul className="k-small adm-list">{v.orphans.map((o) => (
+            <li key={o.id}><b>{o.email ?? o.id}</b> · made {dateOnly(o.created_at)}{o.last_sign_in ? ` · last signed in ${ago(o.last_sign_in)}` : " · never signed in"}</li>))}</ul>
+        )}
+    </Card>
+  );
+}
 
 type RewardRow = { newcomer: string; newcomer_email: string | null; referrer: string; referrer_email: string | null; at: string | null;
   status: string; given_at: string | null; signups_that_day: number; months: number; capped: boolean;
@@ -74,7 +105,7 @@ function InviteRewards({ onChanged }: { onChanged: () => void }) {
  * trading sessions running now. */
 export function UsersSection() {
   const { me, notify, fail } = useApp();
-  const { ov, reload } = useAdmin();
+  const { ov, reload, showTest, setShowTest } = useAdmin();
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [q, setQ] = useState("");
   const [plan, setPlan] = useState<PlanFilter>("all");
@@ -88,12 +119,13 @@ export function UsersSection() {
   const [promoDays, setPromoDays] = useState("10");
   const [busy, setBusy] = useState(false);
   const more = useMoreColumns("admin-users", 2);      // invite counts: one click away, so the users table fits a laptop
+  const [sort, setSort] = useState<{ key: string; desc: boolean }>({ key: "joined", desc: true });
 
   const seq = useRef(0);       // the answer to the last search or filter is the one shown, whatever order they come in
   const loadUsers = useCallback(async (query: string, on: PlanFilter) => {
     const n = ++seq.current;
-    try { const r = await api<UserRow[]>(usersPath(query, on)); if (n === seq.current) { setUsers(r); setUsersFailed(false); } } catch (e) { if (n === seq.current) { setUsersFailed(true); fail(e); } }
-  }, [fail]);
+    try { const r = await api<UserRow[]>(usersPath(query, on, showTest)); if (n === seq.current) { setUsers(r); setUsersFailed(false); } } catch (e) { if (n === seq.current) { setUsersFailed(true); fail(e); } }
+  }, [fail, showTest]);
   const loadSessions = useCallback(async () => { try { setSessions(await api<SessionRow[]>("/admin/sessions")); setSessionsFailed(false); } catch (e) { setSessionsFailed(true); fail(e); } }, [fail]);
   useEffect(() => {
     if (!me?.is_admin) return;
@@ -117,14 +149,19 @@ export function UsersSection() {
     try { await api(`/admin/sessions/${stopping.id}/stop`, { method: "POST" }); notify("Session stopped."); setStopping(null); await loadSessions(); } catch (e) { fail(e); } finally { setBusy(false); }
   };
 
+  const mon = monthShort();
   const cols: Column<UserRow>[] = [
-    { key: "email", header: "Email", rowHeader: true, wrap: true, cell: (u) => u.email ?? "–" },
+    { key: "email", header: "Email", rowHeader: true, wrap: true, cell: (u) => <>{u.email ?? "–"}{u.test && <> <Badge dot={false}>Test</Badge></>}</> },
+    // the badge with its note under it, always: a note that sometimes wrapped made uneven rows (DJ-014)
     { key: "plan", header: "Plan", cell: (u) => (
-      <span className="k-row"><Badge tone={u.plan === "free" ? "plain" : "ok"} dot={false}>{PLAN_NAME[u.plan]}</Badge>
+      <span className="k-stack adm-plan"><Badge tone={u.plan === "free" ? "plain" : "ok"} dot={false}>{PLAN_NAME[u.plan]}</Badge>
         {u.plan !== "free" && <span className="k-small k-muted">{planNote(u)}</span>}</span>) },
-    { key: "joined", header: "Joined", cell: (u) => dateOnly(u.created_at) },
-    { key: "exp", header: "Experiments", numeric: true, cell: (u) => u.experiments },
-    { key: "ai", header: "AI builds", numeric: true, cell: (u) => u.ai_builds },
+    { key: "joined", header: "Joined", sortable: true, cell: (u) => dateOnly(u.created_at) },
+    { key: "active", header: "Last active", sortable: true, info: "The later of the last sign-in and the last experiment or AI build this month",
+      cell: (u) => (u.last_active ? <span title={u.last_sign_in ? `Last signed in ${dateOnly(u.last_sign_in)}` : undefined}>{ago(u.last_active)}</span>
+        : <span className="k-muted">{u.sign_ins_unread ? "Not read" : "Not yet"}</span>) },
+    { key: "exp", header: `Experiments (${mon})`, cardLabel: `Experiments (${mon})`, numeric: true, cell: (u) => u.experiments },
+    { key: "ai", header: `AI builds (${mon})`, cardLabel: `AI builds (${mon})`, numeric: true, cell: (u) => u.ai_builds },
     ...(more.on ? [
       { key: "inv", header: "Invited", info: "Accounts that signed up through this user's invite link", numeric: true, cell: (u: UserRow) => u.referrals ?? 0 },
       { key: "free", header: "Free months", info: "Free months of Basic this user earned from invites", numeric: true, cell: (u: UserRow) => u.free_months ?? 0 },
@@ -134,23 +171,29 @@ export function UsersSection() {
         onClick={() => setOpen(u)}>⋯</button>) },
   ];
   const sess: Column<SessionRow>[] = [
-    { key: "name", header: "Session", rowHeader: true, wrap: true, cell: (s) => s.name },
-    { key: "user", header: "User", wrap: true, cell: (s) => s.email },
-    { key: "sym", header: "Instrument", cell: (s) => s.symbol },
+    // long names and addresses break inside the card, so the Stop buttons stay in view (DJ-013)
+    { key: "name", header: "Session", rowHeader: true, wrap: true, cell: (s) => <span className="adm-break">{s.name}</span> },
+    { key: "user", header: "User", wrap: true, cell: (s) => <span className="adm-break">{s.email}</span> },
+    { key: "sym", header: "Instrument", wrap: true, cell: (s) => s.symbol },
     { key: "at", header: "Started", cell: (s) => ago(s.started_at) },
     { key: "eq", header: "Equity", numeric: true, cell: (s) => (s.equity != null ? money(s.equity, s.currency ?? "INR") : "–") },
     { key: "tr", header: "Trades", numeric: true, cell: (s) => s.trades ?? 0 },
     { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (s) => <button type="button" className="btn quiet sm" aria-label={`Stop ${s.name} (${s.email ?? "no email"})`} onClick={() => setStopping(s)}>Stop</button> },
   ];
   const until = ov?.server.promo_until;
+  const by = (u: UserRow) => (sort.key === "active" ? u.last_active : u.created_at) ?? "";
+  const sorted = users ? [...users].sort((a, b) => (by(a) < by(b) ? -1 : by(a) > by(b) ? 1 : 0) * (sort.desc ? -1 : 1)) : null;
   const pages = Math.max(1, Math.ceil((users?.length ?? 0) / PAGE));
   const at = Math.min(page, pages);
 
   return (
     <>
       <Card label="Users">
-        <CardHead title="Users" info="Experiments and AI builds are for this month; Invited is everyone who signed up through the user's invite link, ever; Free months are the months of Basic they earned from invites. The newest 200 users are loaded; search by email to find others. The … button on a row changes the plan or deletes the user's data."
-          actions={more.toggle} />
+        <CardHead title="Users" info="Experiments and AI builds are for this month; Invited is everyone who signed up through the user's invite link, ever; Free months are the months of Basic they earned from invites. The newest 200 users are loaded; search by email to find others. The … button on a row changes the plan or deletes the user's data. Test accounts (the +sl- addresses made for reviewers) are left out of the list and of every count on Overview unless shown."
+          actions={<>
+            <CheckField label={`Show test accounts${ov?.stats.test_accounts ? ` (${ov.stats.test_accounts})` : ""}`} checked={showTest} onChange={setShowTest} />
+            {more.toggle}
+          </>} />
         <div className="k-row adm-filters">
           <input className="k-input adm-search" type="search" placeholder="Search by email" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} aria-label="Search users by email" />
           <Seg label="Plan" options={PLAN_FILTERS} value={plan} onChange={(v) => { setPlan(v as PlanFilter); setPage(1); }} />
@@ -159,12 +202,15 @@ export function UsersSection() {
           <EmptyState title="No users match">{plan === "all" ? "Try part of an email address." : `No ${PLAN_NAME[plan]} users${q ? " with that in their email" : ""}.`}</EmptyState>
         ) : (
           <>
-            <DataTable label="Users" rows={users.slice((at - 1) * PAGE, at * PAGE)} rowKey={(u) => u.id} columns={cols} stack />
+            <DataTable label="Users" rows={(sorted ?? users).slice((at - 1) * PAGE, at * PAGE)} rowKey={(u) => u.id} columns={cols} stack
+              sort={{ ...sort, onSort: (key) => { setSort((x) => ({ key, desc: x.key === key ? !x.desc : true })); setPage(1); } }} />
             <Pager page={at} pages={pages} total={users.length} noun={users.length === 1 ? "user" : "users"} onPage={setPage} />
             {users.length >= 200 && <p className="k-small k-muted">The newest 200 are listed. Search by email to find others.</p>}
           </>
         )}
       </Card>
+
+      <AccountsCard test={showTest} />
 
       <InviteRewards onChanged={() => loadUsers(q, plan)} />
 
@@ -187,7 +233,7 @@ export function UsersSection() {
 
       <Card label="Paper trading now">
         <CardHead title={`Paper trading now (${sessions?.length ?? 0})`} />
-        {!sessions ? (sessionsFailed ? <ErrorState title="The sessions couldn't be read" action={{ label: "Try again", onClick: () => void loadSessions() }} /> : <Skeleton label="Loading sessions" lines={2} />) : <DataTable label="Paper trading sessions" rows={sessions} rowKey={(s) => s.id} columns={sess} empty="No sessions running." />}
+        {!sessions ? (sessionsFailed ? <ErrorState title="The sessions couldn't be read" action={{ label: "Try again", onClick: () => void loadSessions() }} /> : <Skeleton label="Loading sessions" lines={2} />) : <DataTable label="Paper trading sessions" rows={sessions} rowKey={(s) => s.id} columns={sess} empty="No sessions running." stack />}
       </Card>
 
       {open && <UserDialog user={open} onClose={() => setOpen(null)} onChanged={() => { void loadUsers(q, plan); void reload(); }} />}

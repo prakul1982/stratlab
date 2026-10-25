@@ -241,7 +241,11 @@ test("invoices: in Account for the customer, with the GST setup in Admin", async
   let errors = await open(page, "/account", "Invoices");
   await expect(page.getByText("Details on your invoices")).toBeVisible();
   await sane(page, errors);
-  errors = await open(page, "/admin/money", "LUT ARN");
+  // the seller form is one click away, its values summed up above it (DJ-018)
+  errors = await open(page, "/admin/money", "Edit the invoice details");
+  await expect(page.getByTestId("invoice-summary")).toContainText("GSTIN");
+  await page.getByTestId("invoice-edit").locator("summary").click();
+  await expect(page.getByText("LUT ARN")).toBeVisible();
   await expect(page.getByText(/financial year \d{4}-\d{2}/i).first()).toBeVisible();
   await sane(page, errors);
 });
@@ -1349,7 +1353,8 @@ test("admin: exchange holidays show every market's source, coverage and next hol
   const table = panel.getByRole("table", { name: "Holidays by market" });
   for (const name of ["India (NSE/BSE)", "MCX", "Currency F&O", "US", "UK", "Europe", "Japan", "Commodities", "Crypto", "Forex"])
     await expect(table.getByRole("rowheader", { name, exact: true })).toBeVisible();
-  await expect(table.getByText("No exchange holidays (24/7 / weekdays)")).toHaveCount(2);
+  await expect(table.getByText("No exchange holidays: trades 24/7")).toHaveCount(1);
+  await expect(table.getByText("No exchange holidays: trades on weekdays")).toHaveCount(1);
   await expect(table.getByText("Built-in calendar rules")).toHaveCount(5);
   await expect(table.getByText("Exchange's own list, read daily")).toHaveCount(3);
   await expect(panel.getByRole("button", { name: "Read the exchange's list now" })).toBeVisible();

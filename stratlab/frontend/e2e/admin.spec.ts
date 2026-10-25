@@ -80,7 +80,14 @@ test("admin overview: what needs you, a light with a word on every service and f
   await expect(page.getByRole("region", { name: "Today's numbers" })).toContainText(/\d+ on a plan you gave, not paying/);
   const services = page.getByRole("list", { name: "Services" });
   await expect(services.getByRole("listitem").first()).toBeVisible({ timeout: 30_000 });
-  const feeds = page.getByRole("list", { name: "Data feeds" });
+  // the feeds that need a look are in view; the OK ones are one line until opened (DJ-008)
+  const feeds = page.getByRole("region", { name: "Data feeds" });
+  await expect(feeds.getByTestId("feeds-summary")).toContainText(/\d+ (OK|Check|Problem)/, { timeout: 30_000 });
+  const fold = feeds.getByTestId("feeds-ok");
+  if (await fold.count()) {
+    await expect(fold).not.toHaveAttribute("open", /.*/);
+    await fold.locator("summary").click();
+  }
   await expect(feeds.getByRole("listitem").first()).toBeVisible({ timeout: 30_000 });
   for (const list of [services, feeds]) {
     const items = await list.getByRole("listitem").all();
@@ -287,7 +294,8 @@ test("admin quality and system open with their cards", async ({ page }, info) =>
   await sane(page, errors);
   await shot(page, "admin-system", info);
   errors = await open(page, "/admin/money", "Prices outside India");
-  await expect(page.getByRole("region", { name: "Payments" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Payments", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Subscriptions and payments" })).toBeVisible();     // read from Razorpay (DJ-016)
   await sane(page, errors);
   await shot(page, "admin-money", info);
 });

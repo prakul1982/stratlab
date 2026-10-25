@@ -58,9 +58,20 @@ def redact(text: str) -> str:
     return _TOKENS.sub(lambda m: m.group(1) + m.group(2) + "[key]", text)
 
 
+def clip(text: str, n: int = 160) -> str:
+    """Text cut to about `n` characters at a word, with "…" when cut: a provider's error never ends mid-word on Admin
+    (DJ-036: "…and impro)", "…(OTPM): Lim)")."""
+    text = str(text or "")
+    if len(text) <= n:
+        return text
+    cut = text[:n - 1]
+    space = cut.rfind(" ")
+    return (cut[:space] if space > n // 2 else cut).rstrip(" ,;:(") + "…"
+
+
 def _short(r: httpx.Response) -> str:
     """The provider's own error message, short and without any key, for the Admin page."""
-    return redact(_short_raw(r))[:160]
+    return clip(redact(_short_raw(r)), 160)
 
 
 def not_a_reply(r: httpx.Response) -> str:

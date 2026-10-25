@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { dateOnly, money } from "../../lib/format";
 import { openInvoice } from "../../components/InvoicesCard";
-import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Select, Skeleton, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, Disclosure, ErrorState, Field, FormActions, FormGrid, Select, Skeleton, type Column } from "../../components/kit";
 import { useAdmin } from "./AdminContext";
 
 type Seller = { legal_name: string; address: string; state: string; gstin: string; pan: string; lut_arn: string; email: string; prefix: string };
@@ -49,6 +49,11 @@ export function InvoiceAdminPanel() {
       <Card id="invoice-details" label="Invoice details">
         <CardHead title="Invoice details" info="Every payment gets an invoice, numbered per financial year. Prices include GST: 18% split CGST + SGST within your state, IGST across states. Customers outside India are an export of services: zero-rated with your LUT number, otherwise IGST is shown as included. Without a GSTIN the invoice says you aren't registered for GST. Have your accountant confirm the setup." />
         {!s ? (failed ? <ErrorState title="The invoice details couldn't be read" action={{ label: "Try again", onClick: () => void load(asked.trim()) }} /> : <Skeleton label="Loading invoice details" lines={3} />) : (
+          <>
+          {/* what is set, in one line; the form one click away, not a full-size form with a 36-state list (DJ-018) */}
+          <p className="k-small" data-testid="invoice-summary">{s.legal_name ? <b>{s.legal_name}</b> : "No legal name yet"}{" · "}
+            {s.gstin ? `GSTIN ${s.gstin}` : "No GSTIN: invoices say you aren't registered for GST"}{s.state && states[s.state] ? ` · ${states[s.state]}` : ""}</p>
+          <Disclosure summary="Edit the invoice details" testId="invoice-edit">
           <FormGrid label="Who the invoices are from" onSubmit={(e) => { e.preventDefault(); save(); }}>
             {text("legal_name", "Legal name")}
             {text("address", "Address")}
@@ -60,6 +65,8 @@ export function InvoiceAdminPanel() {
             {text("prefix", "Invoice number prefix", "e.g. SL gives SL/2026-27/0001")}
             <FormActions><button type="submit" className="btn sm">Save details</button></FormActions>
           </FormGrid>
+          </Disclosure>
+          </>
         )}
       </Card>
       <Card label="Invoices">

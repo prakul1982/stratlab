@@ -77,15 +77,16 @@ def test_options_rate_sits_near_the_91_day_t_bill_yield():
 
 def test_return_due_dates_follow_the_finance_act_2026():
     facts = " ".join(T.filing_facts(2025, 1e6, True))
-    assert "31 August" in facts and "31 October" in facts and "31 March" in facts
-    assert "31 July after the year ends without an audit" in " ".join(T.filing_facts(2024, 1e6, True))
+    assert "31 August" in facts and "31 October" in facts and "31 March" in facts and "21 November 2026" in facts
+    # FY 2024-25: the dates as the CBDT extended them (tax_due.py, DH-001)
+    assert "16 September 2025" in " ".join(T.filing_facts(2024, 1e6, True))
     assert T.NEW_ACT_NOTE in T.filing_facts(2026, 1e6, True) and T.NEW_ACT_NOTE not in T.filing_facts(2025, 1e6, True)
     assert "111A is now 196" in T.NEW_ACT_NOTE and "112A is now 198" in T.NEW_ACT_NOTE and "87A is now 156" in T.NEW_ACT_NOTE
 
 
 def test_234b_counts_to_31_august_with_business_income():
     assert A.return_due(2025, True) == date(2026, 8, 31) and A.return_due(2025, False) == date(2026, 7, 31)
-    assert A.return_due(2024, True) == date(2025, 7, 31)                  # before the Finance Act 2026
+    assert A.return_due(2024, True) == date(2025, 9, 16)                  # before the Finance Act 2026, as extended by CBDT
     plain = A.schedule(2026, 100000, [100000] * 4, 0, [], date(2027, 4, 2))["b234"]
     biz = A.schedule(2026, 100000, [100000] * 4, 0, [], date(2027, 4, 2), business=True)["b234"]
     assert plain["until"] == "2027-07-31" and plain["months"] == 4

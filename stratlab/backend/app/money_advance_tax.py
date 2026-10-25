@@ -24,10 +24,11 @@ import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import alerts, db, leader, run_marks
+from . import alerts, db, leader, run_marks, tax_due
 from .config import settings
 from .plans import allows, plan_of
 from .tax_lots import fy_label, money
+from .tax_total import round10
 
 KEY = "advtax:"                   # advtax:<uid> = {"remind": bool, "years": {"2026": {"tds", "paid": [{d, amount}]}}}
 RUN_KEY = "moneyjob:advtax:"      # moneyjob:advtax:<due date>:<days before> = when it ran
@@ -36,9 +37,9 @@ INSTALMENTS = ((6, 15, 0.15), (9, 15, 0.45), (12, 15, 0.75), (3, 15, 1.0))
 TOLERANCE = {0: 0.12, 1: 0.36}    # paid at least this share by June and September: no 234C interest for that one
 RATE = 0.01                       # a month, for 234B and 234C
 MONTHS_234C = (3, 3, 3, 1)
-RETURN_BY = (7, 31)               # 234B is shown as if the rest is paid with the return, by 31 July
-RETURN_BY_AUDIT = (10, 31)        # with a tax audit (section 44AB): 31 October, as the tax report says (R29B-015)
-RETURN_BY_BUSINESS = (8, 31)      # with business income and no audit, by 31 August from FY 2025-26 (Finance Act 2026)
+# 234B is shown as if the rest is paid with the return, by its due date: the one table of the Act's dates and the CBDT's
+# extensions (tax_due.py), so an audit case's FY 2025-26 date is 21 November 2026, not 31 October (DH-001, R29B-015)
+FEE_234F, FEE_234F_SMALL = 5000.0, 1000.0      # a return after its due date; ₹1,000 when total income is ₹5 lakh or less
 MAX_AMOUNT = 1e11
 MAX_PAYMENTS = 24
 REMIND_DAYS = (7, 1)
@@ -50,12 +51,15 @@ ASSUMPTIONS = [
     "tax (section 207).",
     "Each instalment is worked out on the share gains and dividends that had arisen by its due date; everything else "
     "(salary, interest, intraday and F&O results) is counted for the whole year at every date.",
-    "Interest is shown on whole ₹100 of shortfall, the way rule 119A rounds it. Interest under section 234A (a late "
-    "return) isn't included.",
+    "Interest is shown on whole ₹100 of shortfall, the way rule 119A rounds it.",
     "Payments dated after 31 March are self-assessment tax. Section 234B interest runs to each one on the shortfall then "
     "outstanding, and after it only on what is left (section 234B(2)). On an amount still unpaid it is counted to the "
-    "return's due date (31 July, 31 August with intraday or F&O income from FY 2025-26 under Finance Act 2026, or 31 October when a tax audit applies), or to "
-    "today once that date has passed.",
+    "return's due date, or to today once that date has passed. The due date is 31 July, 31 August with intraday or F&O "
+    "income from FY 2025-26 (Finance Act 2026), or 31 October when a tax audit applies, as extended by the CBDT: for FY "
+    "2025-26 audit cases, 21 November 2026 (Circular 7/2026).",
+    "Section 234A (a return filed after its due date): 1% a month or part of a month, from the day after the due date, "
+    "on the tax still unpaid then. It is counted only once the due date has passed, as if the return is filed today, and "
+    "with it the section 234F fee (₹5,000, or ₹1,000 when total income is ₹5 lakh or less).",
     "Section 234C: tax on gains and dividends that arose after 15 March carries no interest for March when paid by "
     "31 March (first proviso to section 234C).",
 ]
@@ -85,10 +89,8 @@ def months_234b(fy: int, pay_day: date) -> int:
 
 def return_due(fy: int, business: bool = False, audit: bool = False) -> date:
     """The return's due date: 31 October when a tax audit applies, else 31 July, or 31 August with business income
-    (intraday, F&O) from FY 2025-26."""
-    if audit:
-        return date(fy + 1, *RETURN_BY_AUDIT)
-    return date(fy + 1, *(RETURN_BY_BUSINESS if business and fy >= 2025 else RETURN_BY))
+    (intraday, F&O) from FY 2025-26, each as the CBDT extended it (tax_due.py)."""
+    return tax_due.return_due(fy, business, audit)
 
 
 def split_paid(fy: int, payments: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -195,6 +197,62 @@ def schedule(fy: int, tax: float, tax_upto: list[float], tds: float, payments: l
             "threshold": THRESHOLD, "instalments": rows, "next": nxt, "paid": paid_year,
             "self_assessment": b234["self_assessment"],
             "interest_234c": round(sum(r["interest_234c"] for r in rows), 2), "b234": b234, "steps": steps(fy, net, due, rows, b234)}
+
+
+def interest_234a(fy: int, owed: float, later: list[dict], due_day: date, on: date) -> dict:
+    """Section 234A month by month, as if the return is filed on `on`: 1% a month or part of a month from the day
+    after the due date, on the tax unpaid then (in whole ₹100, rule 119A); a self-assessment payment after the due date
+    stops it on the amount paid from the month after its own."""
+    n = tax_due.months_late(due_day, on)
+    out, cur, months = owed, 0.0, 0
+    paid = {}
+    for p in later:
+        d = date.fromisoformat(p["d"])
+        if d > due_day:
+            m = max(1, tax_due.months_late(due_day, d))
+            paid[m] = paid.get(m, 0.0) + p["amount"]
+    for m in range(1, n + 1):
+        base = floor100(out)
+        if base <= 0:
+            break
+        cur += base * RATE
+        months += 1
+        out = round(out - paid.get(m, 0.0), 2)
+    return {"interest": round(cur, 2), "months": months, "late": n > 0}
+
+
+def payable(fy: int, s: dict, tax: float, income: float, payments: list[dict], today: date,
+            business: bool = False, audit: bool = False) -> dict | None:
+    """DH-003: what a past year still needs, as one figure: the tax as the return rounds it (section 288B), less TDS,
+    advance tax and self-assessment tax paid, plus the interest under sections 234A, 234B and 234C and, once the due
+    date has passed, the section 234F fee; the whole rounded to ₹10 again. Worked out as if paid, and the return filed,
+    by the due date (or today, once that has passed). None for the year still running."""
+    if today <= date(fy + 1, 3, 31):
+        return None
+    rb = return_due(fy, business, audit)
+    on = max(today, rb)
+    advance, later = split_paid(fy, payments)
+    adv_t, sa_t = sum(p["amount"] for p in advance), sum(p["amount"] for p in later)
+    left = tax - s["tds"] - adv_t - sa_t
+    sa_by_due = sum(p["amount"] for p in later if p["d"] <= rb.isoformat())
+    a = interest_234a(fy, max(0.0, tax - s["tds"] - adv_t - sa_by_due), later, rb, on)
+    i234b = s["b234"]["interest"] if s["b234"]["applies"] else 0.0
+    fee = (FEE_234F if income > 500000 else FEE_234F_SMALL) if a["late"] else 0.0
+    total = max(0.0, left) + a["interest"] + i234b + s["interest_234c"] + fee
+    lines = [("Tax on total income, rounded to ₹10 (section 288B)", tax), ("Less TDS", -s["tds"]), ("Less advance tax paid", -adv_t)]
+    if sa_t:
+        lines.append(("Less self-assessment tax paid", -sa_t))
+    lines += [("Interest under section 234A (late return)", a["interest"]), ("Interest under section 234B", i234b),
+              ("Interest under section 234C", s["interest_234c"])]
+    if fee:
+        lines.append(("Late fee under section 234F", fee))
+    lines.append(("Payable now, rounded to ₹10 (section 288B)", round10(total)))
+    return {"fy": fy, "label": fy_label(fy), "tax": round(tax, 2), "tds": s["tds"], "advance": round(adv_t, 2),
+            "self_assessment": round(sa_t, 2), "balance": round(max(0.0, left), 2), "refund": round(max(0.0, -left), 2),
+            "interest_234a": a["interest"], "months_234a": a["months"], "interest_234b": round(i234b, 2),
+            "months_234b": s["b234"]["months"] if s["b234"]["applies"] else 0, "interest_234c": s["interest_234c"],
+            "fee_234f": fee, "total": round10(total), "due": rb.isoformat(), "on": on.isoformat(), "past_due": today > rb,
+            "lines": [{"label": k, "amount": round(v, 2)} for k, v in lines]}
 
 
 def _month(iso: str) -> str:

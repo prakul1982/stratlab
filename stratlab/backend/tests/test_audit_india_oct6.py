@@ -180,6 +180,8 @@ def test_half_yearly_columns_are_not_four_quarters():
 def test_a_pe_under_a_turn_apart_is_rounding():
     p = {"name": "Acme", "pl": {"cols": ["Mar 2026", "TTM"], "rows": {"Sales": [100, 100], "Net Profit": [20, 20]}}}
     nums = {"years": [], "quarters": []}
-    assert not [i for i in audit.check_numbers(p, nums, {"pe": 0.1, "market_cap_cr": 4.0}) if i["area"] == "Valuation"]   # ours 0.2
+    small = [i for i in audit.check_numbers(p, nums, {"pe": 0.1, "market_cap_cr": 4.0}) if i["area"] == "Valuation"]   # ours 0.2
+    # no mismatch; but a P/E under 1 is flagged as suspect data on its own (DJ-027)
+    assert [i["level"] for i in small] == ["gap"] and "under 1" in small[0]["detail"]
     got = audit.check_numbers(p, nums, {"pe": 10.0, "market_cap_cr": 400.0})        # ours 20: a real difference
     assert [i["level"] for i in got if i["area"] == "Valuation"] == ["mismatch"]
