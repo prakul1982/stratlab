@@ -2648,7 +2648,7 @@ def deep_base_us(sym: str, years: int = 2) -> dict:
     docs = [d for d in p.get("documents") or [] if d["at"][:10] >= cut]
     trend, why = price_status(sym, "US")
     return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": trend, "trend_why": why,
-            "quote": {k: m.get(k) for k in ("price", "prev_close", "high", "low")} if m.get("price") else None}
+            "quote": {k: m.get(k) for k in ("price", "prev_close", "high", "low", "at")} if m.get("price") else None}
 
 
 def usd_per(cur: str) -> float | None:
@@ -6161,10 +6161,11 @@ def live_price(sym: str):
     return filings_feed.last_price(sym)
 
 
-def audit_one(sym: str, docs: bool, exchange=None, region: str = "IN") -> dict:
+def audit_one(sym: str, docs: bool, exchange=None, region: str = "IN", new: bool = False) -> dict:
     us = region == "US"
     read = (lambda cands, probs, p: deepdive.readable(deep_docs, cands, 1, probs, company_hosts(p))) if docs and not us else None
-    row = audit.audit_company(sym, lambda s: deep_base(s, region, trades=False), deep_view, None if us else exchange, read)
+    row = audit.audit_company(sym, lambda s: deep_base(s, region, trades=False), deep_view, None if us else exchange, read,
+                              lambda s: research_hub.company(region, s), new)
     for i in row["issues"]:
         i["detail"] = public_text(i["detail"])
     return row
@@ -6178,7 +6179,12 @@ def _nse_check(sym: str) -> dict:
     in the morning doesn't leave the rest of the day unchecked."""
     if time.time() - _market_breaker[1] > 6 * 3600:
         _market_breaker[:] = [audit.Breaker(live_price), time.time()]
-    return audit_one(research_routes.symbol_of(sym), False, _market_breaker[0])
+    if kite.ready():
+        try:           # the day's full BSE list (read once a day), so a company NSE's feed has nothing for finds its BSE listing's filings
+            kite.instruments_of("BSE")
+        except Exception:
+            pass
+    return audit_one(research_routes.symbol_of(sym), False, _market_breaker[0], "IN", market_audit.is_new(sym))
 
 
 BSE_ONLY = "audit:bse-only"                # the last good list of BSE-only companies: {code: {ts, token, name}}
@@ -6285,7 +6291,7 @@ def _market_check(sym: str) -> dict:
         _load_bse_map()
         ts = (_bse_map.get(code) or {}).get("ts")
         price = live_price if ts and kite.ready() else None          # BSE's own quote, by the scrip code
-        row = audit.audit_company(code, deep_base, deep_view, price, None)
+        row = audit.audit_company(code, deep_base, deep_view, price, None, lambda s: research_hub.company("IN", s), market_audit.is_new(sym))
         for i in row["issues"]:
             i["detail"] = public_text(i["detail"])
         name = row.get("name") if row.get("name") not in (None, "", code) else None   # the check stopped before the name
@@ -6318,8 +6324,15 @@ def _sec_companies() -> list[dict]:
     return [{"symbol": t, "name": names[t]["name"], "listed": None} for t in out]
 
 
-market_audit_us = audit.MarketAudit(lambda: _sec_companies(), lambda s: audit_one(s, False, None, "US"),
-                                    busy_fn=lambda: bool(audit_runner.state.get("running")), key="audit:market-us")
+def first_trade_day(sym: str) -> str | None:
+    """A US ticker's first day of trading, for telling a company new to the SEC's list from a new listing: the SEC's list has
+    no listing dates, and a company that has traded for years turns up in it for other reasons (MS1-005)."""
+    return research_hub.yahoo.meta(sec.price_symbol(sym)).get("first_trade")
+
+
+market_audit_us = audit.MarketAudit(lambda: _sec_companies(), lambda s: audit_one(s, False, None, "US", market_audit_us.is_new(s)),
+                                    busy_fn=lambda: bool(audit_runner.state.get("running")), key="audit:market-us",
+                                    date_fn=first_trade_day)
 
 
 def market_for(region: str):
@@ -6353,12 +6366,12 @@ def market_status(region: str) -> dict:
 @app.post("/admin/audit/market")
 def admin_market_audit_set(req: MarketAuditReq, _=Depends(admin.admin_profile)):
     """Start or pause the whole-market audit, reset it and check every company again from nothing, re-read the
-    exchange's list now, re-check the companies not checked yet or one company, or switch the monthly check."""
+    exchange's list now, re-check the companies not checked yet or one company, or switch the daily pass."""
     m = market_for(req.region)
     if req.on is not None:
         m.set_enabled(req.on)
-    if req.monthly is not None:
-        m.set_monthly(req.monthly)
+    if req.daily is not None:
+        m.set_daily(req.daily)
     if req.reset:                     # every result cleared; the list read again so it starts from today's market
         m.reset()
         threading.Thread(target=m.refresh_list, kwargs={"force": True}, daemon=True).start()

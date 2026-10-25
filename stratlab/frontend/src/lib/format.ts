@@ -288,6 +288,13 @@ export function ago(iso: string | null | undefined): string {
   return dateOnly(iso);
 }
 
+/** Whole days since a finding was first found (null without a usable time), and how that reads: "found today", "open 3 days" (MS1-004). */
+export function openDays(since: string | null | undefined, now = Date.now()): number | null {
+  const t = since ? Date.parse(since) : NaN;
+  return Number.isFinite(t) ? Math.max(0, Math.floor((now - t) / 86400000)) : null;
+}
+export const openFor = (days: number) => (days < 1 ? "found today" : `open ${days} ${days === 1 ? "day" : "days"}`);
+
 export const TF_NAME: Record<string, string> = { "1d": "Daily", "1h": "1-hour", "15m": "15-minute", "5m": "5-minute" };
 export function periodName(days: number): string {
   if (days >= 365 && days % 365 < 5) return `${Math.round(days / 365)} year${days >= 730 ? "s" : ""}`;

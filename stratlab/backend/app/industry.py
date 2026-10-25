@@ -135,11 +135,12 @@ def _last(table: dict | None, prefix: str):
     return None
 
 
-def _none_because(short: str, snap: dict, p: dict, own: str | None) -> str:
+def _none_because(short: str, snap: dict, p: dict, own: str | None, absent: str | None = None) -> str:
     """Why a multiple is blank, when it is a fact about the company: `own` is the multiple's own reason (a loss,
-    negative net worth or EBITDA); otherwise no market value (shares not trading) or no reported results."""
+    negative net worth or EBITDA); otherwise no market value (shares not trading) or no reported results; last, `absent`,
+    the figure it is worked out from not being in the filings' data at all (MS1-007)."""
     why = own or ("the company page shows no market value for its shares" if not snap.get("market_cap_cr")
-                  else "there are no reported results to divide by" if not (p.get("pl") or {}).get("rows") else None)
+                  else "there are no reported results to divide by" if not (p.get("pl") or {}).get("rows") else absent)
     return f" There's no {short} here: {why}." if why else ""
 
 
@@ -167,6 +168,7 @@ def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
         if v is None and mcap and worth and worth > 0:   # no book value on the page: from the balance sheet
             v = mcap / worth
         own = ("the company's net worth is negative" if worth is not None and worth < 0
+               else "the company's net worth is nil" if worth == 0
                else "the company has no balance sheet on its page" if worth is None and snap.get("market_cap_cr") else None)
         return {"name": "Price to book", "short": "P/B", "value": round(v, 2) if v is not None else None, "pe": pe,
                 "why": ("REITs and business development companies are usually valued on their book (net asset value)."
@@ -183,9 +185,11 @@ def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
                        "enterprise value to EBITDA, because depreciation and debt differ so much between them. Here EV is market "
                        + ("value plus borrowings less cash" if cash is not None else "value plus borrowings (cash isn't subtracted)")
                        + " and EBITDA is the last twelve months' operating profit."
-                       + (_none_because("EV/EBITDA", snap, p, own) if v is None else "")}
+                       + (_none_because("EV/EBITDA", snap, p, own, "the filings give no operating profit to work EBITDA out from"
+                                       if ebitda is None else None) if v is None else "")}
     return {"name": "Price to earnings", "short": "P/E", "value": round(pe, 1) if pe is not None else None, "pe": pe,
             "why": "Most businesses are compared on price to earnings."
                    + (" Here it is market value divided by the last 12 months' net profit." if computed else "")
-                   + (_none_because("P/E", snap, p, "the company made a loss over the last 12 months" if loss else None)
+                   + (_none_because("P/E", snap, p, "the company made a loss over the last 12 months" if loss else None,
+                                    "the filings give no net profit for the last 12 months to divide by" if ttm is None else None)
                       if pe is None else "")}

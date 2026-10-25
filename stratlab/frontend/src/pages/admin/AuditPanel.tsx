@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago, fmtDate } from "../../lib/format";
+import { ago, fmtDate, openDays, openFor } from "../../lib/format";
 import { Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, Field, FieldGroup, FormActions, Meter, Notice, Select, Skeleton, type Column } from "../../components/kit";
 
 /** fact: true of the company (a recent listing, no calls held), not a gap of ours; pending: a source turned the check away, so it runs again. */
 type Level = "mismatch" | "gap" | "error" | "fact" | "pending";
 export type Region = "IN" | "US";
-type Issue = { level: Level; area: string; detail: string };
+/** `since`: when a finding that isn't a fact was first found, kept while it comes out the same, so its age shows (MS1-004) */
+type Issue = { level: Level; area: string; detail: string; since?: string };
 /** A company's page: BSE-only companies (BSE:543210) open by their BSE code. */
 const pageSymbol = (s: string) => (s.startsWith("BSE:") ? s.slice(4) : s);   // a BSE code opens the same page as its symbol
 
@@ -101,7 +102,9 @@ interface MarketState {
   paused?: "off" | "busy" | "offline" | "cooling" | "loading" | null; cool_minutes?: number; rate_per_hour?: number;
   list_at: string | null; list_error: string | null; reset_at?: string | null;
   full?: { running: boolean; since: string | null; done_at: string | null; left: number; checked: number | null; everything?: boolean; pending_only?: boolean };
-  monthly?: { on: boolean; last: string | null; next: string | null };
+  daily?: { on: boolean; last: string | null; next: string | null };
+  /** how long the findings that aren't facts have stood: counts by age, and the oldest in days (MS1-004) */
+  ages?: { open: number; today: number; days_1_2: number; days_3_7: number; over_a_week: number; oldest_days: number };
   retry?: { waiting: number; due: number; next: string | null; gap_hours: number; batch: number };
   bse?: { refusing?: boolean; refused_at?: string | null; waiting: number };
   pending?: number;
@@ -126,8 +129,8 @@ const PAUSED: Record<"off" | "busy" | "offline" | "cooling" | "loading", string>
 };
 
 /** Every company listed in India (NSE, plus those only on BSE) or filing with the SEC, checked in the background
- * while started: new listings first, a full check of every company on the 1st of each month, and a reset to check
- * everything again from nothing. */
+ * while started: new listings first (the day they list, and every day of their first weeks), a pass over every company
+ * each day (the problems still standing first), and a reset to check everything again from nothing. */
 export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
   const { fail } = useApp();
   const us = region === "US";
@@ -154,9 +157,9 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
     <Card label={`Whole market: ${name}`}>
       <CardHead title={`Whole market: ${name}`}
         info={<>{us
-          ? "Every company that files with the SEC (common stock only: preferred shares, warrants, units and rights are left out). The SEC's list is read once a day; new companies are checked as they appear."
-          : "Every company listed in India: all of NSE, plus those listed only on BSE (shown as BSE: and their code). The lists are read once a day; new listings are checked as they appear and delisted companies drop off."}
-          {" "}A full check of every company runs on the 1st of each month; between those, only new listings. A check a source turned away is tried again in small batches every hour.</>}
+          ? "Every company that files with the SEC (common stock only: preferred shares, warrants, units and rights are left out). The SEC's list is read every six hours; a new company is checked the day it appears."
+          : "Every company listed in India: all of NSE, plus those listed only on BSE (shown as BSE: and their code). The lists are read every six hours; a new listing is checked the day it appears and delisted companies drop off."}
+          {" "}Every company is checked again every day, the problems still standing first, and a new listing each day of its first weeks. A check a source turned away is tried again in small batches every hour.</>}
         actions={m && !m.loading ? (
           <>
             <Badge tone={m.enabled && !m.paused ? "live" : "warn"}>{m.enabled ? (m.paused ? "Waiting" : "Running") : "Paused"}</Badge>
@@ -204,9 +207,16 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
             <button type="button" className="btn quiet sm" disabled={busy} onClick={() => send({ read_list: true })}>Read the list now</button>
           </div>
           <div className="k-row">
-            <CheckField label="Full re-check on the 1st of each month" checked={!!m.monthly?.on} disabled={busy} onChange={(on) => send({ monthly: on })} />
-            <span className="k-small k-muted">{m.monthly?.on && m.monthly.next ? `Next full check: ${dayMonth(m.monthly.next)}` : "Only new listings, until you reset"}</span>
+            <CheckField label="Check every company every day" checked={!!m.daily?.on} disabled={busy} onChange={(on) => send({ daily: on })} />
+            <span className="k-small k-muted">{m.daily?.on && m.daily.next ? `Next pass starts ${dayMonth(m.daily.next)}` : "Only new listings, until you reset"}</span>
           </div>
+          {!!m.ages?.open && (
+            <p className="k-small" data-testid="audit-ages">
+              Problems standing: {m.ages.open.toLocaleString("en-IN")} ({m.ages.today.toLocaleString("en-IN")} found today
+              {m.ages.days_1_2 + m.ages.days_3_7 ? `, ${(m.ages.days_1_2 + m.ages.days_3_7).toLocaleString("en-IN")} up to a week old` : ""}
+              {m.ages.over_a_week ? `, ${m.ages.over_a_week.toLocaleString("en-IN")} over a week old` : ""}){m.ages.oldest_days >= 1 ? ` · the oldest for ${m.ages.oldest_days} days` : ""}.
+            </p>
+          )}
           <p className="k-small k-muted">
             {m.list_error ? <span className="k-down">Couldn't read the exchange's list: {m.list_error}{m.list_at ? ` (using the one from ${ago(m.list_at)})` : ""}.</span>
               : m.list_at ? `List read ${ago(m.list_at)}.` : ""}
@@ -246,11 +256,11 @@ function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: 
   const rows = useMemo(() => all.map((r) => ({ ...r, shown: r.issues.filter((i) => show === "all" || i.level === show) }))
     .filter((r) => r.shown.length), [all, show]);
   const csv = () => {
-    const lines = [["symbol", "name", "checked", "level", "area", "detail"].join(",")];
+    const lines = [["symbol", "name", "checked", "level", "area", "detail", "first_found"].join(",")];
     // names and details come from the exchanges' feeds: a leading = + - @ (or tab/CR) would run as a spreadsheet
     // formula when the file is opened, so such a cell is written as text
     const cell = (x: unknown) => { const s = String(x ?? ""); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; };
-    for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, r.at ?? "", i.level, i.area, i.detail].map(cell).join(","));
+    for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, r.at ?? "", i.level, i.area, i.detail, i.level === "fact" ? "" : i.since ?? ""].map(cell).join(","));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })); a.download = file; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
@@ -283,7 +293,8 @@ function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: 
                 {onRecheck && <button type="button" className="btn quiet sm" disabled={!!again} aria-label={`Re-check ${r.name}`}
                   onClick={async () => { setAgain(r.symbol); try { await onRecheck(r.symbol); } finally { setAgain(null); } }}>{again === r.symbol ? "Checking…" : "Re-check"}</button>}
               </span>
-              {r.shown.map((i, n) => <span key={n}><Badge tone={LEVEL[i.level][1]} dot={false}>{show === "all" && i.level !== "pending" ? `${LEVEL[i.level][0]}: ` : ""}{i.area}</Badge> {i.detail}</span>)}
+              {r.shown.map((i, n) => <span key={n}><Badge tone={LEVEL[i.level][1]} dot={false}>{show === "all" && i.level !== "pending" ? `${LEVEL[i.level][0]}: ` : ""}{i.area}</Badge> {i.detail}
+                {i.level !== "fact" && openDays(i.since ?? r.at) != null && <span className="k-muted" data-testid="audit-age"> · {openFor(openDays(i.since ?? r.at)!)}</span>}</span>)}
             </div>
           ))}
           {rows.length > upTo && upTo < SHOWN && (

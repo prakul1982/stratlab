@@ -115,7 +115,7 @@ test("DJ-026: the audit's mismatch count on Overview says when those rows were c
   assert.ok(items.includes("The whole-market audit has companies whose numbers disagree with their source: 49 in India (checked 5 Oct to 9 Oct), 19 in the US (checked 7 Oct)."), items.join("\n"));
   const panel = read("src/pages/admin/AuditPanel.tsx");
   assert.match(panel, /checked \{fmtDate\(r\.at, \{ year: false \}\)\}/);
-  assert.match(panel, /\["symbol", "name", "checked", "level", "area", "detail"\]/);
+  assert.match(panel, /\["symbol", "name", "checked", "level", "area", "detail", "first_found"\]/);
 });
 
 test("DJ-028, DJ-030: an old audit says how old, and the findings come 30 companies at a time", () => {

@@ -48,7 +48,8 @@ def test_mismatches_against_the_source_are_caught(monkeypatch):
     assert "Numbers: The company page shows an operating margin above 100% in" in " ".join(issues(run(p, monkeypatch), "gap"))
     assert audit.check_numbers({"pl": {"cols": ["Mar 2025", "TTM"], "rows": {"Sales": [1, 2]}}},
                                {"years": [], "quarters": [{"sales": 1}] * 4}, {}) == [
-        audit._issue("gap", "Numbers", "Only 0 years of annual results")]   # 2 cr vs 4 cr: whole-crore rounding
+        audit._later("Numbers", "the company page came back without its annual results",
+                     audit._issue("fact", "Numbers", audit.NO_RESULTS_YET))]   # 2 cr vs 4 cr: whole-crore rounding
     assert "Industry: No industry classification" in " ".join(issues(row, "gap"))
 
 
@@ -113,7 +114,7 @@ def test_admin_audit_endpoint_runs_and_reports(monkeypatch):
     from app import admin
     monkeypatch.setattr(main, "audit_runner", audit.Runner())
     monkeypatch.setattr(audit.db, "set_setting", lambda k, v: None)
-    monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN": {"symbol": s, "name": s, "seconds": 0, "issues": []})
+    monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN", new=False: {"symbol": s, "name": s, "seconds": 0, "issues": []})
     main.app.dependency_overrides[admin.admin_profile] = lambda: {"id": "a", "role": "admin"}
     try:
         c = TestClient(main.app)
@@ -179,7 +180,7 @@ def test_a_whole_index_comes_from_the_exchanges_list(monkeypatch):
     from tests import world as W
     w = W.build(monkeypatch)
     try:
-        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN": {"symbol": s, "name": s, "seconds": 0, "issues": []})
+        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN", new=False: {"symbol": s, "name": s, "seconds": 0, "issues": []})
         sets = {s["id"]: s for s in w["client"].get("/admin/audit", headers=W.headers("admin-token")).json()["sets"]}
         assert {"nifty500", "niftynext50", "midcap150", "smallcap250"} <= sets.keys()
         r = w["client"].post("/admin/audit", headers=W.headers("admin-token"), json={"set": "nifty500"}).json()
@@ -211,7 +212,7 @@ def test_whole_market_audit_reads_the_exchange_list_and_checks_only_new_listings
     from tests import world as W
     w = W.build(monkeypatch)
     try:
-        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN": {**_clean(s), "issues": [{"level": "gap", "area": "Numbers", "detail": "x"}] if s == "NEWCO" else []})
+        monkeypatch.setattr(main, "audit_one", lambda s, docs, exchange=None, region="IN", new=False: {**_clean(s), "issues": [{"level": "gap", "area": "Numbers", "detail": "x"}] if s == "NEWCO" else []})
         h = W.headers("admin-token")
         assert w["client"].get("/admin/audit/market", headers=h).json()["enabled"] is False
         assert main.market_audit.step() is None                                          # off: does nothing
