@@ -31,6 +31,8 @@ const FORMATS: [Format, string, string][] = [
   ["xlsx", "Excel workbook", "Every schedule on its own sheet"], ["zip", "CSV files (ZIP)", "One file per schedule, with the 112A upload layout"],
   ["pdf", "PDF pack for your CA", "Summary, schedules, workings, assumptions and sources"],
 ];
+/** A summary line that is a figure (₹1,000, −₹1,000, 12): the others are words (the year, the return that fits, the audit). */
+const isFigure = (value: string) => /^[−+-]?[₹$\d]/.test(value) && value.length < 18;
 const fyLabel = (y: number) => `FY ${y}-${String(y + 1).slice(2)}`;
 const cell = (v: Cell) => (v == null ? "" : typeof v === "number" ? minus(v.toLocaleString("en-IN", { maximumFractionDigits: 2 })) : v);
 
@@ -135,7 +137,14 @@ export function ItrExportPage() {
               ))}
             </div>
             {v.locked && <p id="itr-why-off" className="k-small k-muted">The downloads are on the {v.plan} plan.</p>}
-            <StatRow>{v.summary.map((s) => <Stat key={s.label} label={s.label} value={/^[−+-]?[₹$\d]/.test(s.value) && s.value.length < 18 ? s.value : <span className="k-stat-text">{s.value}</span>} />)}</StatRow>
+            {/* MO-3c: what is said in words (the year, the return that fits, the audit) is a short list of its own; only figures
+                are in the grid of big numbers, so every value in a row sits on one line */}
+            {v.summary.some((s) => !isFigure(s.value)) && (
+              <dl className="k-dl facts" aria-label="This year's return">
+                {v.summary.filter((s) => !isFigure(s.value)).map((s) => <div key={s.label}><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
+              </dl>
+            )}
+            <StatRow>{v.summary.filter((s) => isFigure(s.value)).map((s) => <Stat key={s.label} label={s.label} value={s.value} />)}</StatRow>
           </Card>
 
           <section className="k-page" aria-label="Schedules">

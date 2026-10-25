@@ -1400,6 +1400,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-card-actions .btn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-card.compact { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s4); padding-block: var(--s3); }
 .k-card.compact .k-card-head { min-height: 0; }
+/* MO-3b: figures in a compact card spread over its width (they sat in its left two thirds, sized to their text), each in an equal column */
+.k-card.compact > .k-stats { flex: 1 1 100%; }
+.k-stat-link { display: block; margin-top: 2px; }
 .k-card.compact .k-card-title { font-size: 17px; }
 
 /* stats */
@@ -1467,6 +1470,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* form grid: every label one line, every box the same height, all boxes on one baseline (rows start together, so a hint under one box never lifts its neighbours' labels) */
 .k-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s4); align-items: start; min-width: 0; }
 .k-form.k-form-pair { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
+/* MO-3a: three columns at most, whatever the card's width (a column is never narrower than a three-choice switch) */
+.k-form.k-form-trio { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); max-width: 1000px; }
 .k-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .k-field.wide { grid-column: 1 / -1; }
 .k-card > .k-field { max-width: 420px; }   /* a lone field in a card (a stock lookup) is not stretched across it */
@@ -1714,15 +1719,17 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-dl dt { font-size: var(--t-note); color: var(--muted); }
 .k-dl dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 /* facts that are sentences: the term as the heading, the sentence in plain weight, two to a row at most (DF-022) */
+/* MO-3c: a few facts that are words, not figures (the year, the return, the audit): up to three across, each in an equal column */
+.k-dl.facts { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
 .k-dl.prose { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s4) var(--s5); }
 .k-dl.prose dt { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
 .k-dl.prose dd { font-weight: 400; color: var(--muted); line-height: 1.5; }
-.k-downloads { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.k-downloads .btn { height: auto; min-height: 52px; padding-block: var(--s2); text-align: left; }
+/* MO-3c: the downloads are equal columns across the card (three buttons of three widths left a gap at the right), one a row on a phone */
+.k-downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: var(--s2); }
+.k-downloads .btn { height: auto; min-height: 52px; padding-block: var(--s2); text-align: left; justify-content: flex-start; white-space: normal; min-width: 0; }
 .k-downloads .btn small { display: block; font-weight: 400; opacity: .75; font-size: var(--t-note); }
 .k-fold { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; display: flex; justify-content: space-between; align-items: center; gap: var(--s3); text-align: left; flex-wrap: wrap; }
 .k-fold .k-card-title { font-size: var(--t-card); }
-@media (max-width: 600px) { .k-downloads .btn { flex: 1 1 100%; justify-content: flex-start; } }
 
 /* account, settings, assistant, app, invite */
 .k-linkcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s3); }
@@ -1978,11 +1985,15 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .adm-main .k-table th, .adm-main .k-table td { padding-inline: 10px; }
 @media (max-width: 480px) { .k-line-row.stack-narrow { flex-direction: column; align-items: flex-start; } }
 
-.k-stat-text { display: block; font-size: var(--t-body); font-weight: 600; letter-spacing: 0; line-height: 1.35; }
-/* a switch inside a form fills its column, so it lines up with the boxes beside it; one with three or more choices takes two columns */
-.k-form > .k-field > .k-seg { width: 100%; max-width: 100%; min-height: var(--ctl); align-items: center; box-sizing: border-box; }
-.k-form > .k-field > .k-seg button { flex: 1 1 auto; padding: 0 10px; }
+/* MO-3a: a switch inside a form is as wide as its choices, not stretched to its column (a three-choice switch was 750px wide beside
+   a 230px box), and as tall as the boxes beside it: the track is the box's height and its buttons fill it. One with three or more
+   choices takes two columns of an ordinary form, so it isn't squeezed. */
+.k-form > .k-field > .k-seg { width: max-content; max-width: 100%; min-height: var(--ctl); align-items: stretch; box-sizing: border-box; }
+.k-form > .k-field > .k-seg button { flex: 1 1 auto; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; }
 @media (min-width: 640px) { .k-form > .k-field:has(> .k-seg button:nth-child(3)) { grid-column: span 2; } }
+.k-form.k-form-trio > .k-field:has(> .k-seg button:nth-child(3)) { grid-column: auto; }
+/* where the buttons are 44px to tap (a phone), the track has no padding: a padded one was 50px beside 44px boxes */
+@media (max-width: 640px), (pointer: coarse) { .k-form > .k-field > .k-seg { padding: 0; gap: 0; overflow: hidden; } }
 /* R17-003: the Plans page's "Billed" switch (Monthly / "Yearly · about 2 months free") takes two columns, so the long label is not squeezed to a few words a line */
 @media (min-width: 640px) { .k-form > .k-field:has(> .k-seg[aria-label="Billing period"]) { grid-column: span 2; } }
 .k-card-title a { color: inherit; text-decoration: none; }
@@ -2185,7 +2196,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .k-form > .k-field > .k-seg button { min-width: 0; height: auto; min-height: 32px; padding-block: 5px; white-space: normal; line-height: 1.25; }
 /* the switch's buttons share its width evenly and none gets narrower than its longest word: the long one wrapping took
    the room, and "Monthly" ran under it */
-.k-form > .k-field > .k-seg button { flex: 1 1 0; min-width: min-content; }
+.k-form > .k-field > .k-seg button { flex: 1 1 auto; min-width: min-content; }
 /* R13S-011: on a touch screen the controls the review measured under 44px are 44px: the switch, the screener's sort
    headers, the links in a table, a tick in a row, the admin sections */
 @media (pointer: coarse) {
