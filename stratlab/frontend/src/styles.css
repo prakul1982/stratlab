@@ -2165,6 +2165,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .nw-snaps summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 .nw-snaps ul { list-style: none; margin: 0; padding: 0; }
 .nw-snaps li { justify-content: space-between; flex-wrap: wrap; gap: var(--s2); }
+/* MO-2: the quick-add chips: every one shown (no scroll box), an icon beside each name */
+.nw-quick { max-height: none; overflow: visible; gap: var(--s2); }
+.nw-quick .chip { gap: 6px; }
 
 /* ---------- round 13, Safari (R13S) ---------- */
 /* R13S-005: iOS Safari zooms the page when a field under 16px takes focus and doesn't zoom back, so on a phone or a touch
@@ -2267,3 +2270,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* Get the app: one step per browser (DI-029) */
 .install-list { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+/* MO-2: My Holdings' recent filings: date, tag and title in fixed columns (the tag's fits the longest, "Promoter pledge or
+   encumbrance"), centred on one line, so every title starts at the same place; on a phone the title goes under the date and tag */
+.h-filing { display: grid; grid-template-columns: 7.5em 17em minmax(0, 1fr); align-items: center; column-gap: var(--s3); row-gap: 4px; }
+.h-filing > :first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h-filing > :nth-child(2) { justify-self: start; }
+@media (max-width: 640px) { .h-filing { grid-template-columns: 7.5em minmax(0, 1fr); } .h-filing > :nth-child(3) { grid-column: 1 / -1; } }

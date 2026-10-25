@@ -19,8 +19,6 @@ export interface NavPage {
   icon: string;
   /** Other addresses that are part of this page (a company's page is part of "Look up a company"). */
   also?: RegExp;
-  /** Shipped on the date below: marked "New" on the "All features" page. */
-  isNew?: boolean;
   /** Plan feature flag (plans.ts) when the page is on a paid plan. */
   flag?: string;
   /** Only part of the page is on `flag`'s plan, and the page has no gate of its own (lib/gates.ts): its card says
@@ -33,13 +31,12 @@ const fromData = (to: string): NavEntry | undefined =>
   [...NAV_GROUPS.Trade, ...NAV_GROUPS.Invest, ...NAV_GROUPS.Money].find((e) => e.to === to);
 
 /** A page whose texts are already written for its card on a space's home (NAV_GROUPS) reuses them. */
-function page(to: string, label: string, icon: string, words: string, o: { line?: string; blurb?: string; also?: RegExp; isNew?: boolean; flag?: string; part?: boolean } = {}): NavPage {
+function page(to: string, label: string, icon: string, words: string, o: { line?: string; blurb?: string; also?: RegExp; flag?: string; part?: boolean } = {}): NavPage {
   const d = fromData(to);
   const line = o.line ?? d?.title ?? o.blurb ?? d?.blurb ?? label;
-  return { to, label, icon, words, line, blurb: o.blurb ?? d?.blurb ?? line, also: o.also, isNew: o.isNew, flag: o.flag, part: o.part };
+  return { to, label, icon, words, line, blurb: o.blurb ?? d?.blurb ?? line, also: o.also, flag: o.flag, part: o.part };
 }
 
-export const NEW_SINCE = "5 Oct 2026";
 
 export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGroup[] }> = {
   trade: {
@@ -53,21 +50,21 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/import", "Import a strategy", "upload", "import pine script tradingview python metatrader amibroker config json bot code upload convert",
           { line: "Bring a strategy from Pine Script, Python, MetaTrader or AmiBroker, or a config file.", blurb: "Pine Script, Python, MetaTrader, AmiBroker, a config file or plain words: StratLab turns it into rules you can read, edit and test." }),
         page("/trade/signals", "Forward test", "pulse", "forward test signal signals webhook tradingview chartink alert alerts paper live out of sample go forward",
-          { line: "Run your strategy forward on paper: each TradingView or Chartink alert is filled at StratLab's own price.", also: /^\/trade\/signals\/.*$/, flag: "signal_webhooks", isNew: true }),
+          { line: "Run your strategy forward on paper: each TradingView or Chartink alert is filled at StratLab's own price.", also: /^\/trade\/signals\/.*$/, flag: "signal_webhooks" }),
       ] },
       { id: "practise", label: "Practise", blurb: "Trade with fake money on live prices or on past candles. Nothing here sends a real order.", pages: [
         page("/paper", "Paper trading", "pulse", "paper trading live forward test sessions running fake money simulate practice demo risk exposure all sessions",
           { line: "Run a notebook's rules live on real prices with fake money, until you stop them.", blurb: "Run rules live on real prices with fake money. Every session keeps its orders, its open position and its running result.", also: /^\/(paper|options\/s)\/.*$/ }),
         page("/options", "Options builder", "layers", "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o greeks delta gamma theta vega iv payoff what if expiry expiries",
           { line: "Build straddles, strangles, condors or any legs and paper trade them at the live bid and ask.", blurb: "Straddles, strangles, iron flies, condors or any structure, filled at the live bid and ask, with Greeks and a what-if payoff." }),
-        page("/trade/replay", "Chart replay", "lens", "chart replay practise past candles bar replay manual trading practice journal", { isNew: true, flag: "chart_replay" }),
+        page("/trade/replay", "Chart replay", "lens", "chart replay practise past candles bar replay manual trading practice journal", { flag: "chart_replay" }),
       ] },
       { id: "fo-desk", label: "F&O desk", blurb: "What the futures and options market is doing: who holds what, what is changing, what is coming.", pages: [
         page("/trade/positioning", "Positioning", "layers", "positioning fii dii pro client participant open interest oi pcr put call ratio max pain iv implied volatility flows cash fno f&o derivatives vix stock futures buildup rollover basis mwpl",
           { also: /^\/trade\/positioning\/stocks$/ }),
         page("/trade/fo-changes", "F&O changes", "calendar", "f&o changes lot size lot revisions entering leaving fno list ban expiry day contract exchange circular"),
-        page("/trade/closing-auction", "Closing auction", "pulse", "closing auction 15:15 15:35 reference price indicative price settlement expiry day", { isNew: true }),
-        page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates", { isNew: true }),
+        page("/trade/closing-auction", "Closing auction", "pulse", "closing auction 15:15 15:35 reference price indicative price settlement expiry day"),
+        page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates"),
       ] },
       { id: "my-trades", label: "My trades", blurb: "Your real trades, looked at honestly.", pages: [
         page("/trade/journal", "Trade journal", "book", "trade journal round trips tradebook import pnl charges notes real trades review mistakes win rate"),
@@ -91,20 +88,20 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/research/pulse", "Market pulse", "pulse", "market pulse today news mood indices nifty sensex headlines index levels", { line: "Index levels, headlines and today's mood." }),
         page("/invest/breadth", "Market breadth", "pulse", "market breadth advance decline advances declines a/d line ad ratio mcclellan oscillator summation index new highs lows 52 week dma moving average trin arms thrust sector breadth nifty 500 midcap smallcap"),
         page("/research/rotation", "Sector rotation", "compass", "sector rotation relative strength momentum quadrant leading lagging improving weakening rrg sectors", { line: "Which sectors lead, weaken, lag or improve against the market." }),
-        page("/invest/etf-gaps", "ETF vs NAV", "lens", "etf nav premium discount gap price iopv nifty bees goldbees fund unit value", { isNew: true }),
-        page("/invest/margin-funding", "Margin funding", "wallet", "margin funding mtf margin trading facility borrowed money broker funding leverage loan to buy shares interest pledge exposure", { isNew: true, flag: "mtf" }),
-        page("/invest/stock-lending", "Stock lending fees", "receipt", "stock lending fees slb securities lending borrowing borrowed shares lend my shares earn on holdings", { isNew: true }),
+        page("/invest/etf-gaps", "ETF vs NAV", "lens", "etf nav premium discount gap price iopv nifty bees goldbees fund unit value"),
+        page("/invest/margin-funding", "Margin funding", "wallet", "margin funding mtf margin trading facility borrowed money broker funding leverage loan to buy shares interest pledge exposure", { flag: "mtf" }),
+        page("/invest/stock-lending", "Stock lending fees", "receipt", "stock lending fees slb securities lending borrowing borrowed shares lend my shares earn on holdings"),
       ] },
       { id: "company-news", label: "Company news", blurb: "What companies report and announce: news, results, dividends, updates, IPOs and who holds them.", pages: [
         page("/news", "Briefs", "news", "news briefs newsletter brief digest email daily weekly market close my stocks watchlist headlines subscribe", { line: "A short brief after each market close, for India, the US and the companies you follow." }),
         page("/research/results", "Results", "calendar", "results quarterly earnings calendar results dates q1 q2 q3 q4 profit revenue announcement", { line: "Results days for your stocks, or every company, week by week." }),
         page("/research/corporate-actions", "Corporate actions", "calendar", "corporate actions dividend ex date record date bonus issue stock split rights buyback demerger", { line: "Dividends, bonus issues and splits by ex-date, for your stocks or every company." }),
         page("/invest/ipos", "IPOs", "calendar", "ipo ipos initial public offering new issue public issue drhp rhp red herring prospectus price band lot size subscription subscribed times allotment listing listing gain sme mainboard s-1 f-1 prospectus nasdaq nyse upcoming open closed recently listed",
-          { isNew: true, flag: "ipo_alerts", also: /^\/invest\/ipos\/[^/]+$/,
+          { flag: "ipo_alerts", also: /^\/invest\/ipos\/[^/]+$/,
             line: "India's and the US's IPOs: dates, price band, lot, bids and how a listing has traded against its issue price.",
             blurb: "Upcoming, open, closed and recently listed IPOs for India and the US, each with its price band, lot, size, bids by category and the facts in its offer document." }),
-        page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { isNew: true, flag: "biz_updates" }),
-        page("/invest/holders", "Named holders", "layers", "named holders shareholders promoter fund fii dii mutual fund shareholding pattern above 1% who owns", { isNew: true, flag: "holders" }),
+        page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { flag: "biz_updates" }),
+        page("/invest/holders", "Named holders", "layers", "named holders shareholders promoter fund fii dii mutual fund shareholding pattern above 1% who owns", { flag: "holders" }),
       ] },
       { id: "watch", label: "Watch", blurb: "The companies you follow, and a message when something happens to them.", pages: [
         page("/research/watchlist", "Watchlist", "pin", "watchlist saved favourites companies i follow at a glance investor home dashboard checklist report card track record",
@@ -127,12 +124,12 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/tax-report", "Tax report", "receipt", "tax report capital gains stcg ltcg tradebook fifo financial year grandfathering harvest p&l loss set off"),
         page("/money/tax-tools", "Tax tools", "receipt", "tax tools dividends tds advance tax due dates ltcg exemption 1.25 lakh section 87a"),
         page("/money/us-tax", "US stocks tax", "compass", "us stocks tax foreign tax credit schedule fa form 67 tt buying rate sbi 24 month rule indian investors us shares"),
-        page("/money/itr", "ITR-ready export", "receipt", "itr export schedule 112a cg ca pdf pack income tax return filing f&o turnover audit", { isNew: true }),
+        page("/money/itr", "ITR-ready export", "receipt", "itr export schedule 112a cg ca pdf pack income tax return filing f&o turnover audit"),
       ] },
       { id: "plan", label: "Plan", blurb: "Look ahead: what a SIP would have done, what your savings earn, and the dates that matter.", pages: [
-        page("/money/sip-test", "Test a SIP", "pulse", "sip stock sip etf sip systematic investment plan monthly weekly daily step up dip rule lump sum xirr niftybees goldbees test", { isNew: true, flag: "sip_luck" }),
-        page("/money/rates", "Rates", "receipt", "rates fixed income fd fixed deposit t-bill treasury bill g-sec government bond repo ppf scss ssy nsc kvp post office small savings after tax yield slab tds interest", { isNew: true, flag: "rates_slab" }),
-        page("/money/calendar", "Money calendar", "calendar", "money calendar tax due dates advance tax itr results dividends maturities premiums emi expiries own dates feed reminders", { isNew: true }),
+        page("/money/sip-test", "Test a SIP", "pulse", "sip stock sip etf sip systematic investment plan monthly weekly daily step up dip rule lump sum xirr niftybees goldbees test", { flag: "sip_luck" }),
+        page("/money/rates", "Rates", "receipt", "rates fixed income fd fixed deposit t-bill treasury bill g-sec government bond repo ppf scss ssy nsc kvp post office small savings after tax yield slab tds interest", { flag: "rates_slab" }),
+        page("/money/calendar", "Money calendar", "calendar", "money calendar tax due dates advance tax itr results dividends maturities premiums emi expiries own dates feed reminders"),
       ] },
     ],
   },
