@@ -5,22 +5,29 @@ import { api } from "./api";
  * NAV (iNAV) only when a source gives one (the exchange's list doesn't). One answer for the list page and every badge in the app, read once and kept for five
  * minutes. Facts only: a gap as a percent, with the time of each number. */
 export type Fund = "equity" | "gold" | "silver" | "debt" | "intl";
-export interface GapSummary { days: number; avg: number; low: number; high: number; from: string; to: string }
+/** `days`: the days with a gap; `stored`: the days kept at all (DF-003: the page said 30 when it had 14) */
+export interface GapSummary { days: number; stored?: number; avg: number; low: number; high: number; from: string; to: string }
 export interface EtfGap {
   symbol: string; name: string; underlying: string | null; fund: Fund; fund_label: string;
   price: number; price_at: string | null; inav: number | null; inav_gap: number | null;
+  /** the day of the last trade: an ETF with no units traded on the read's day last traded earlier (DF-005); null when unknown */
+  price_day?: string | null;
   nav: number | null; nav_date: string | null; nav_gap: number | null;
   /** the price set against the NAV and its day: that day's close (a gap is always of one day), or none yet */
   nav_price?: number | null; nav_price_day?: string | null; nav_waiting?: boolean;
   /** the close and the latest price are too far apart to both be right: the gap is left out (R7O-007) */
   nav_doubtful?: boolean;
+  /** beyond 50%: shown, and said to be that wide (DF-001); `nav_mismatch`: a NAV of another unit, left out and said so */
+  nav_wide?: boolean; nav_mismatch?: boolean;
+  /** the NAV is dated a day with no trading (a liquid fund's Sunday NAV) and no trading day's NAV was found (DF-006) */
+  nav_closed_day?: boolean;
   gap: number | null; basis: "iNAV" | "NAV" | null; text: string | null; days?: GapSummary | null;
 }
 export interface EtfGaps {
   rows: EtfGap[]; as_of: string | null; read: string | null; nav_as_of: string | null; count: number; with_gap: number;
   note: string; alerts: boolean;
 }
-export interface GapDay { day: string; close: number | null; nav: number | null; gap: number | null }
+export interface GapDay { day: string; close: number | null; nav: number | null; gap: number | null; doubtful?: boolean; mismatch?: boolean }
 export interface EtfGapDetail { row: EtfGap; history: GapDay[]; days: GapSummary | null; note: string; alerts: boolean }
 
 export const FUND_NAME: Record<Fund, string> = { equity: "Equity", gold: "Gold", silver: "Silver", debt: "Debt", intl: "International" };
@@ -51,4 +58,4 @@ export const etfGapApi = {
   detail: (symbol: string) => api<EtfGapDetail>(`/invest/etf-gaps/${encodeURIComponent(symbol)}`),
 };
 
-export { gapAtPrice, gapPct, gapShort, gapWords } from "./etfGapMath";
+export { dayCount, gapAtPrice, gapPct, gapShort, gapWords } from "./etfGapMath";

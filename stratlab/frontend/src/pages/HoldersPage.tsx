@@ -5,8 +5,8 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { ChangeText, isQuarterEnd, quarterEnd, shares, type HolderChange } from "../components/NamedHolders";
 import { useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
-import { asOf, ET, safeHref } from "../lib/format";
-import { Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Pager, PlanNote, Seg, Skeleton, StockPicker, Suggest, type SuggestItem } from "../components/kit";
+import { asOf, ET, fmtDate, safeHref } from "../lib/format";
+import { Badge, Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Pager, PlanNote, Seg, Skeleton, StockPicker, Suggest, type SuggestItem } from "../components/kit";
 
 /* Named holders across companies: search a name in every company's latest shareholding pattern (holders above 1%),
  * pick the spellings that are the same holder, see each company alphabetically with the change since the quarter
@@ -16,13 +16,15 @@ import { Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, F
 interface NameGroup { label: string; companies: number; names: { key: string; name: string; companies: number }[] }
 interface Follow { id: string; label: string; names: string[]; created_at: string }
 interface Coverage { companies: number; latest_quarter: string | null; queued: number }
-interface SearchAnswer { q: string; groups: NameGroup[]; coverage: Coverage; follows: Follow[]; note: string }
+interface SearchAnswer { q: string; groups: NameGroup[]; coverage: Coverage; follows: Follow[]; note: string; popular?: { label: string; companies: number }[] }
 interface HoldingRow {
   symbol: string; company: string; quarter: string; prev_quarter: string | null; filed: string | null; url: string | null; names: string[];
   kind: string; group: string; shares: number | null; pct: number | null; prev_shares: number | null; prev_pct: number | null;
   change: HolderChange; pct_change: number | null;
+  /** filed under another name than the quarter before (LIC as "LICI ULIP-GROWTH FUND"): the same holder, not gone (DF-016) */
+  renamed?: boolean; prev_names?: string[];
 }
-interface Holdings { rows: HoldingRow[]; count: number; dropped: number; new: number; keys: string[]; coverage: Coverage; note: string }
+interface Holdings { rows: HoldingRow[]; count: number; dropped: number; new: number; renamed?: number; keys: string[]; coverage: Coverage; note: string }
 
 const SHOW = [{ value: "held", label: "Held now" }, { value: "all", label: "With dropped" }];
 const companies = (n: number) => `${n} compan${n === 1 ? "y" : "ies"}`;
@@ -115,16 +117,21 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
         <>
           <Card>
             <CardHead title="Search a holder" />
-            <FormGrid label="Search a holder" onSubmit={search}>
-              <Field label="Holder's name" wide>
+            {/* the button beside the box, so the open list of names never covers it (DF-019) */}
+            <form className="holder-search" aria-label="Search a holder" onSubmit={search}>
+              <Field label="Holder's name">
                 {(id) => <Suggest id={id} value={q} placeholder="A fund or a person" load={holderNames}
                   onText={setText} onPick={(s) => { setText(s.label); go(s.label); }} />}
               </Field>
-              <FormActions>
-                <button className="btn" type="submit" disabled={busy}>Search</button>
-                <span className="k-small k-muted">Names appear as you type, three letters in.</span>
-              </FormActions>
-            </FormGrid>
+              <button className="btn" type="submit" disabled={busy}>Search</button>
+            </form>
+            <span className="k-small k-muted">Names appear as you type, three letters in: pick one, or press Search.</span>
+            {!q && !!ans?.popular?.length && (
+              <div className="k-row holder-popular">
+                <span className="k-small k-muted">Named in the most companies:</span>
+                {ans.popular.map((p) => <button key={p.label} type="button" className="chip" onClick={() => { setText(p.label); go(p.label); }}>{p.label}<span className="k-muted"> · {p.companies}</span></button>)}
+              </div>
+            )}
           </Card>
           {error && <ErrorState title="That didn't work" action={{ label: "Dismiss", onClick: () => setError(null) }}>{error}</ErrorState>}
 
@@ -160,7 +167,8 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
           {group && (
             <Card id="holder" label={`${group.label}'s holdings`}>
               <CardHead title={group.label}
-                actions={following ? <button className="btn quiet sm" onClick={() => unfollow(following.id)}>Following · stop</button>
+                // following says so, and the way to stop is its own plain button (DF-019: "Following · stop")
+                actions={following ? <span className="k-row tight"><Badge tone="plain">Following</Badge><button className="btn quiet sm" onClick={() => unfollow(following.id)}>Stop following</button></span>
                   : <button className="btn quiet sm" onClick={follow} disabled={!picked.length}>Follow this holder</button>} />
               {group.names.length > 1 && (
                 <FieldGroup label="Spellings counted as this holder (untick any that's someone else)">
@@ -175,7 +183,8 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
                 <>
                   <div className="k-row">
                     <span className="k-small">Listed in <b>{hold.count}</b> compan{hold.count === 1 ? "y" : "ies"}
-                      {hold.new > 0 && <> · new in {hold.new}</>}{hold.dropped > 0 && <> · no longer listed in {hold.dropped}</>}</span>
+                      {hold.new > 0 && <> · new in {hold.new}</>}{hold.dropped > 0 && <> · no longer listed in {hold.dropped}</>}
+                      {!!hold.renamed && <> · filed under another name in {hold.renamed}</>}</span>
                     {hold.dropped > 0 && <Seg label="Which companies" value={show} onChange={setShow} options={SHOW} />}
                   </div>
                   <DataTable stack label="Companies where the holder is named" rows={rows} rowKey={(r) => r.symbol} sticky={rows.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
@@ -183,7 +192,8 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
                       { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => (
                         <><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>
                           <span className="k-sub-line holder-name">{r.company}</span>
-                          <span className="k-sub-line">{r.group === "promoter" ? "Promoter group · " : ""}{r.kind}</span></>) },
+                          <span className="k-sub-line">{r.group === "promoter" ? "Promoter group · " : ""}{r.kind}</span>
+                          {r.renamed && <span className="k-sub-line">filed as {r.names.join(", ")}; last quarter as {(r.prev_names ?? []).join(", ")}</span>}</>) },
                       { key: "s", header: "Shares", numeric: true, cell: (r) => (r.shares == null ? "–" : shares(r.shares)) },
                       { key: "p", header: "Stake", numeric: true, cell: (r) => (r.pct == null ? "–" : `${r.pct.toFixed(2)}%`) },
                       { key: "ch", header: "Since last quarter", numeric: true, cell: (r) => <><ChangeText c={r.change} d={r.pct_change} />{r.prev_pct != null && r.change !== "same" && <span className="k-sub-line">was {r.prev_pct.toFixed(2)}%</span>}</> },
@@ -204,7 +214,7 @@ interface UsItem {
   id: string; symbol: string; company: string | null; at: string; form: string; kind: "13D" | "13G"; amendment: boolean; label: string; url: string;
   holder: string | null; pct: number | null; shares: number | null; read: boolean; others?: number;
 }
-interface UsOut { region: Region; symbol: string; items: UsItem[]; total: number; page: number; pages: number; form: string; as_of: string | null; updated_at: string | null; unread: number; note: string }
+interface UsOut { region: Region; symbol: string; items: UsItem[]; total: number; page: number; pages: number; form: string; as_of: string | null; updated_at: string | null; unread: number; note: string; holder?: string; newest?: string | null }
 const FORMS = [{ value: "", label: "All" }, { value: "13D", label: "13D · active" }, { value: "13G", label: "13G · passive" }];
 
 /** US holders above 5%: the Schedule 13D and 13G filings of one company (any plan) or of every S&P 500 company (Basic and
@@ -214,6 +224,9 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
   const symbol = (params.get("symbol") ?? "").toUpperCase();
   const form = params.get("form") ?? "";
   const page = Math.max(1, Number(params.get("page")) || 1);
+  const holder = params.get("holder") ?? "";
+  const [holderText, setHolderText] = useState(holder);
+  const [holderErr, setHolderErr] = useState<string | null>(null);
   const [data, setData] = useState<UsOut | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
@@ -228,17 +241,24 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
   useEffect(() => {
     let live = true;
     setError(null); setLocked(false);
-    const qs = new URLSearchParams({ symbol, form, page: String(page), size: "25" });
+    const qs = new URLSearchParams({ symbol, form, page: String(page), size: "25", ...(holder ? { holder } : {}) });
     api<UsOut>(`/research/holders-us?${qs}`).then((x) => live && setData(x))
       .catch((e) => { if (!live) return; if ((e as ApiError).status === 402) { setLocked(true); setData(null); } else setError((e as Error).message); });
     return () => { live = false; };
-  }, [symbol, form, page, tries]);
+  }, [symbol, form, page, holder, tries]);
+  const findHolder = (e: React.FormEvent) => {
+    e.preventDefault();
+    const v = holderText.trim();
+    if (v && v.length < 3) { setHolderErr("Type at least three letters of the holder's name."); return; }
+    setHolderErr(null); setParam({ holder: v || null });
+  };
 
   return (
     <div className="k-page holders-page">
-      <PageHeader eyebrow={eyebrowOf("/invest/holders")} title="Holders above 5%"
-        lede="Who holds more than 5% of a US company, as they filed with the SEC. Facts as filed, not advice."
-        asOf={data?.as_of} asOfLabel="Filings read through" asOfTz={ET} info={data ? <>Anyone who holds more than 5% of a US company's shares files a Schedule 13D (an active stake) or 13G (a passive one), and an amendment when it changes. Find one company's filings, or see the latest from every S&P 500 company. {data.note} Names and percentages are read from each filing's cover page{data.unread > 0 ? `; ${data.unread} of these filings are still waiting to be read` : ""}.</> : undefined}
+      {/* what this tab really is: the 13D and 13G filings about S&P 500 companies, not India's 1% lists (DF-018) */}
+      <PageHeader eyebrow={eyebrowOf("/invest/holders")} title="US holders above 5%: S&P 500 companies"
+        lede="Who reported holding more than 5% of an S&P 500 company, from their Schedule 13D and 13G filings with the SEC. Look up a company, or a holder across companies. Facts as filed, not advice."
+        asOf={data?.as_of} asOfLabel="Filings read through" asOfTz={ET} info={data ? <>Anyone who holds more than 5% of a US company's shares files a Schedule 13D (an active stake) or 13G (a passive one), and an amendment when it changes. US holders below 5% aren't named in any filing, so there is no 1% list as for India. {data.note} Names and percentages are read from each filing's cover page{data.unread > 0 ? `; ${data.unread} of these filings are still waiting to be read` : ""}.</> : undefined}
         infoLabel="Where the names come from" />
       {toolbar}
       <Card>
@@ -254,14 +274,21 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
             {symbol && <button className="btn quiet" type="button" onClick={() => setParam({ symbol: null })}>Show every company</button>}
           </FormActions>
         </FormGrid>
+        <form className="holder-search" aria-label="Find a holder" onSubmit={findHolder}>
+          <Field label="Holder" optional placeholder="A fund or a person, like Vanguard" value={holderText} error={holderErr}
+            onChange={(e) => { setHolderText(e.target.value); setHolderErr(null); }} />
+          <button className="btn" type="submit">Find</button>
+          {holder && <button className="btn quiet" type="button" onClick={() => { setHolderText(""); setParam({ holder: null }); }}>Every holder</button>}
+        </form>
       </Card>
       {locked && <PlanNote>The latest 13D and 13G filings across every company are on the Basic plan. Pick a company above to see its own, on every plan.</PlanNote>}
       {error && <ErrorState title="The filings couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
       {!data && !error && !locked && <Card><Skeleton label="Opening the stored filings" lines={4} /></Card>}
       {data && (
         <Card>
-          <CardHead title={`${data.total.toLocaleString("en-IN")} filing${data.total === 1 ? "" : "s"}${symbol ? ` for ${symbol}` : " across companies"}`}
-            actions={data.updated_at ? <span className="k-small k-muted">Read {asOf(data.updated_at, { tz: ET })}</span> : undefined} />
+          <CardHead title={`${data.total.toLocaleString("en-IN")} filing${data.total === 1 ? "" : "s"}${symbol ? ` for ${symbol}` : " across companies"}${holder ? ` by holders named like “${holder}”` : ""}`}
+            actions={data.updated_at ? <span className="k-small k-muted">Read {asOf(data.updated_at, { tz: ET })}{data.newest ? ` · newest filed ${fmtDate(data.newest)}` : ""}</span> : undefined} />
+          {holder && data.unread > 0 && <p className="k-small k-muted">Only filings whose cover page has been read can be found by holder: {data.unread.toLocaleString("en-IN")} {data.unread === 1 ? "is" : "are"} still waiting to be read.</p>}
           <DataTable stack label="13D and 13G filings, newest first" rows={data.items} rowKey={(r) => r.id} empty={symbol ? `No 13D or 13G filing found for ${symbol} in the last 13 months.` : "No filings stored yet."}
             columns={[
               { key: "d", header: "Filed", cell: (r) => asOf(r.at, { tz: ET }) ?? "–" },

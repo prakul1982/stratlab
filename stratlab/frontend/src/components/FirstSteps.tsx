@@ -9,8 +9,10 @@ type Step = { id: string; title: string; to: string; done: boolean };
 type View = { show: boolean; dismissed: boolean; done: number; steps: Step[] };
 
 /** Home's first-steps checklist for a new account. Each step ticks itself from what the user has really done; the
- *  list hides for good when dismissed, and by itself once every step is done. */
-export function FirstSteps({ onShown }: { onShown?: (shown: boolean) => void }) {
+ *  list hides for good when dismissed, and by itself once every step is done. `compact`: one line with the next step,
+ *  for a page whose own content comes first (DF-023: on Invest home the whole checklist, the same as on Trade home,
+ *  took the top of the page). */
+export function FirstSteps({ onShown, compact }: { onShown?: (shown: boolean) => void; compact?: boolean }) {
   const { fail, me } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,6 +34,17 @@ export function FirstSteps({ onShown }: { onShown?: (shown: boolean) => void }) 
     catch (e) { fail(e); } finally { setBusy(false); }
   };
   const total = view.steps.length;
+  if (compact) {
+    const next = view.steps.find((s) => !s.done);
+    return (
+      <Card compact className="first-steps fs-compact" label="Your first steps">
+        <div className="k-row">
+          <span className="k-small"><b>Your first steps</b> · {view.done} of {total} done{next && <> · next: <Link className="link" to={next.to}>{next.title}</Link></>}</span>
+          <button className="btn quiet sm" disabled={busy} onClick={dismiss}>Hide this</button>
+        </div>
+      </Card>
+    );
+  }
   return (
     <Card className="first-steps" label="Your first steps">
       <CardHead title="Your first steps" actions={<button className="btn quiet sm" disabled={busy} onClick={dismiss}>Hide this</button>} />

@@ -27,8 +27,10 @@ export type LendSummary = { days: number; traded_days: number; shares: number; l
 export type LendTrade = { day: string; price: number | null; series: string; expiry: string; fee: number | null; ann: number | null; shares: number; trades: number };
 export type LendRow = { symbol: string; eligible: boolean | null; eligible_as_of: string | null; as_of: string | null; summaries: LendSummary[];
   trades?: LendTrade[]; held?: boolean; watched?: boolean };
+/** The whole segment on its newest day: each stock with lending trades (DF-022). */
+export type LendMarketRow = { symbol: string; shares: number; fee_paid: number; trades: number; series: number; price: number | null; ann: number | null };
 export type LendTable = { rows: LendRow[]; status: DeskStatus; note: string; source: string; facts: { title: string; text: string }[];
-  windows: number[]; coverage: { days: number; first: string | null } };
+  windows: number[]; coverage: { days: number; first: string | null }; market?: { day: string; rows: LendMarketRow[]; stocks: number } | null };
 
 export type MtfChange = { from: string; shares: number; crore: number; pct: number | null } | null;
 export type MtfRow = { symbol: string; as_of: string | null; funded: boolean; shares?: number; crore?: number; close?: number | null;

@@ -71,30 +71,36 @@ export function BizUpdatesPage() {
   return (
     <div className="k-page biz-page">
       <PageHeader eyebrow={eyebrowOf("/invest/business-updates")} title="Business updates"
-        lede="Monthly and quarterly figures companies file with the exchanges (NSE and BSE): automakers' sales, banks' deposits and advances, cement, airlines and airports, power, telecom, metals and retail. Read into numbers, each linked to its filing. Facts, not advice." />
+        // only what is filed and read: no cement, telecom or airline list, which file no such update (DF-013)
+        lede="Monthly and quarterly figures companies file with the exchanges (NSE and BSE): automakers' sales, banks' and lenders' deposits and advances, port and airport traffic, power capacity, metals and mining output, and retailers' quarterly updates. Read into numbers, each linked to its filing. Facts, not advice." />
       {locked ? (
         <PlanNote>The sector view of business updates is on the Basic plan. Each company page lists its own update filings for everyone.</PlanNote>
       ) : error ? <ErrorState title="The business updates couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>
         : !d ? <Card><Skeleton label="Reading the business updates" lines={4} /></Card> : (
         <>
-          {mine && (
+          {mine && (mine.rows.length === 0 ? (
+            // nothing of yours read yet: one line with the two places to add stocks, not a 340px empty card (DF-015)
+            <Card compact label="My stocks" testId="biz-mine">
+              <p className="k-small k-muted"><b>My stocks:</b> {mine.without.length ? `${waitingLine(mine.without.length)} ` : "none of your stocks has a business update read yet. "}
+                Add Indian stocks to <Link className="link" to="/holdings">My Holdings</Link> or your <Link className="link" to="/research/watchlist">watchlist</Link>, and their updates show here.</p>
+            </Card>
+          ) : (
             <Card label="My stocks" testId="biz-mine">
               <CardHead title="My stocks" info="Your holdings first, then your watchlist: the Indian stocks that have business updates read into numbers. A stock with none read yet is named below the table." infoLabel="About my stocks" />
-              {mine.rows.length === 0
-                ? <EmptyState title="None of your stocks has a business update read yet">{mine.without.length ? waitingLine(mine.without.length) : "Add holdings or star companies in Research and their updates appear here."}</EmptyState>
-                : <DataTable label="My stocks' latest business updates" rows={mine.rows} rowKey={(r) => r.symbol} rowAttrs={(r) => ({ "data-company": r.symbol })}
-                    columns={figureColumns({ key: "k", header: "From", cell: (r) => <Badge tone="plain" dot={false}>{kindName((r as MineRow).kind)}</Badge> })} />}
-              {mine.rows.length > 0 && mine.without.length > 0 && <p className="k-note">Not read yet: {mine.without.map((x) => x.name).join(", ")}.</p>}
+              {/* stack: on a phone each company is a card with every figure labelled, not a table cut to its first column (DF-014) */}
+              <DataTable stack label="My stocks' latest business updates" rows={mine.rows} rowKey={(r) => r.symbol} rowAttrs={(r) => ({ "data-company": r.symbol })}
+                columns={figureColumns({ key: "k", header: "From", cell: (r) => <Badge tone="plain" dot={false}>{kindName((r as MineRow).kind)}</Badge> })} />
+              {mine.without.length > 0 && <p className="k-note">Not read yet: {mine.without.map((x) => x.name).join(", ")}.</p>}
               <p className="k-note">{mine.note}</p>
             </Card>
-          )}
+          ))}
           <div className="k-toolbar">
             {choices.length <= 4 ? <Seg label="Sector" value={sector} onChange={pick} options={choices} /> : <ChipBar label="Sector" value={sector} onChange={pick} options={choices} />}
           </div>
           <Card>
             <CardHead title={d.label} info="Each filing is read once: the figures are copied from the company's own document and kept only when the line they come from is found in it. Each company's page shows the line, the page and its 24-month chart." infoLabel="How the figures are read" />
             {filed.length === 0 ? <EmptyState title="Nothing read into numbers yet">No update in this list has been read into numbers yet. They are read each evening after they're filed.</EmptyState> : (
-              <DataTable label={d.label} rows={filed} rowKey={(r) => r.symbol} sticky={filed.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
+              <DataTable stack label={d.label} rows={filed} rowKey={(r) => r.symbol} sticky={filed.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
                 columns={[...figureColumns(), { key: "r", header: "Filings read", numeric: true, info: "How many of this company's update filings were read into figures that could be checked against the document.", cell: (r) => `${r.read_ok} of ${r.reads}` }]} />
             )}
             {waiting.length > 0 && <p className="k-note">Not read yet: {waiting.map((r) => r.name).join(", ")}.</p>}
@@ -133,7 +139,11 @@ function Compare({ c, label }: { c: Compare; label: string }) {
       <CardHead title={`${label}: month by month`} info="Each company's own headline figure for each month, in its own unit, with the change on the same month a year earlier. Each figure links to the filing it was read from. Quarterly filers have a figure in the last month of each quarter." />
       {c.companies.length === 0
         ? <EmptyState title="No month to compare yet">Once companies in this list have updates read into numbers, they appear here side by side, month by month.</EmptyState>
-        : <DataTable label={`${label}, month by month`} rows={rows} rowKey={(p) => p} columns={cols} sticky={rows.length > 14} />}
+        : <>
+          {/* a month-by-company grid stays a grid; on a phone it says it scrolls sideways (DF-014) */}
+          {c.companies.length > 1 && <p className="k-small k-muted k-swipe-hint">Swipe the table sideways for all {c.companies.length} companies.</p>}
+          <DataTable label={`${label}, month by month`} rows={rows} rowKey={(p) => p} columns={cols} sticky={rows.length > 14} />
+        </>}
       {c.without.length > 0 && c.companies.length > 0 && <p className="k-note">No figures yet: {c.without.join(", ")}.</p>}
       <p className="k-note">{c.note}</p>
     </Card>

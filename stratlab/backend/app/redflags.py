@@ -13,6 +13,7 @@ Stored by month (redflags:<region>:<YYYY-MM>) with a state row per region (redfl
 only the months it asks for. Facts as filed: the label is the rule that matched, the subject is the filing's own
 wording, and the link opens the filing. Nothing here says what a company or its shares will do."""
 import json
+import re
 import threading
 import time
 from datetime import date, datetime, timedelta
@@ -35,7 +36,9 @@ REBUILD_DAYS = 90                     # read again when the rules change: the pa
 PAGE = 25
 MAX_PAGE = 100
 GIVE_UP = 8                           # this many failed calls in a row: the source is down, the run stops and keeps the old
-COVER_READS = 40                      # holder covers read per run (newest first)
+# holder covers read per run, newest first (the rest wait for the next run): 40 left 2,451 of 2,793 filings unread, so
+# hardly any could be found by holder (DF-018); at the SEC's pace (PAUSE) 400 take under two minutes
+COVER_READS = 400
 PAUSE = 0.25                          # seconds between the SEC's documents
 
 # the 8-K items worth a flag: item -> (id, label, severity)
@@ -443,13 +446,27 @@ def listing(region: str, flag: str = "", frm: str | None = None, to: str | None 
             "covers": universes.sp500_doc()["name"] if region == "US" else "NSE-listed companies"}
 
 
-def holders_listing(symbol: str = "", form: str = "", page: int = 1, size: int = PAGE, today: date | None = None) -> dict:
-    """13D and 13G filings: one company's (by ticker), or every S&P 500 company's, newest first. `form` is 13D or 13G."""
+def holder_matches(query: str, name: str | None) -> bool:
+    """Every word typed starts a word of the holder's name ("vang" finds The Vanguard Group; "black rock" doesn't)."""
+    words = re.findall(r"[a-z0-9]+", (name or "").lower())
+    want = re.findall(r"[a-z0-9]+", (query or "").lower())
+    return bool(want and words) and all(any(w.startswith(t) for w in words) for t in want)
+
+
+def holders_listing(symbol: str = "", form: str = "", page: int = 1, size: int = PAGE, today: date | None = None, holder: str = "") -> dict:
+    """13D and 13G filings: one company's (by ticker), or every S&P 500 company's, newest first by the day filed
+    (whether its cover is read or not). `form` is 13D or 13G; `holder` part of the holder's name, matched on the filings
+    whose cover has been read (DF-018: "Vanguard" could only be looked up as a company, and found American Vanguard)."""
     today = today or datetime.now(ZoneInfo("America/New_York")).date()
     sym = "".join(ch for ch in (symbol or "").upper() if ch.isalnum() or ch in "-.")[:12].replace(".", "-")
+    holder = " ".join(str(holder or "").split())[:60]
     rows = holds.between("US", today - timedelta(days=us_holders.LOOKBACK_DAYS), today)
     rows = [i for i in rows if (not sym or i["symbol"] == sym) and (form not in ("13D", "13G") or i["kind"] == form)
             and not us_holders.about_itself(i)]
+    unread = sum(1 for i in rows if not i.get("read"))
+    newest = max((i["at"] for i in rows), default=None)
+    if holder:
+        rows = [i for i in rows if holder_matches(holder, i.get("holder"))]
     rows.sort(key=lambda i: (i["at"], i["symbol"], i["id"]), reverse=True)
     size = max(1, min(int(size or PAGE), MAX_PAGE))
     pages = max(1, -(-len(rows) // size))
@@ -457,4 +474,8 @@ def holders_listing(symbol: str = "", form: str = "", page: int = 1, size: int =
     st = state("US")
     return {"region": "US", "symbol": sym, "items": rows[(page - 1) * size:page * size], "total": len(rows), "page": page, "pages": pages,
             "size": size, "as_of": st.get("through"), "updated_at": st.get("at"), "form": form if form in ("13D", "13G") else "",
-            "unread": sum(1 for i in rows if not i.get("read"))}
+            # with a holder searched, the filings still unread in the same companies and forms (they can't be matched yet)
+            "holder": holder, "unread": unread,
+            # the newest filing stored, beside the day the lists were read through: a day with no filing about an S&P 500
+            # company leaves it older than that (DF-018: "21 Oct" against "read through 23 Oct")
+            "newest": newest, "covers": universes.sp500_doc()["name"]}

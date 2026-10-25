@@ -42,8 +42,8 @@ export function SpaceHome() {
 }
 
 /** The launch offer and the new-account checklist, right under every space home's heading. */
-function Top({ onSteps }: { onSteps?: (shown: boolean) => void }) {
-  return <><PromoCountdown /><FirstSteps onShown={onSteps} /></>;
+function Top({ onSteps, compact }: { onSteps?: (shown: boolean) => void; compact?: boolean }) {
+  return <><PromoCountdown /><FirstSteps onShown={onSteps} compact={compact} /></>;
 }
 
 /** A space home's heading: the space's name, one question or title, one line under it. */
@@ -227,7 +227,7 @@ export function InvestHome() {
       <Head eyebrow="Invest · your research desk" title="Your research desk">
         What your watchlist, results days and red flags say today, and the market around them. Facts, not tips.
       </Head>
-      <Top />
+      <Top compact />
       <Card className="space-next" label="Jump to a company">
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />
         {/* not on a touch screen: focusing it there raises the keyboard over the page (R58-014) */}
@@ -243,7 +243,8 @@ export function InvestHome() {
         <WatchPanel region={region} />
         <ResultsToday region={region} />
       </div>
-      <div className="grid2 space-panels">
+      {/* the same height side by side, so a short breadth card leaves no hole beside the red flags (DF-023) */}
+      <div className="grid2 space-panels even">
         <BreadthCard region={region} />
         <RedFlags region={region} />
       </div>
@@ -257,7 +258,10 @@ function NextEvents({ limit = 3, testId = "invest-events", region }: { limit?: n
   const v = useEvents();
   // the US tab lists the US's own (the Fed, US data), not India's RBI and IIP (R71-004); India's holidays count (R72-005: the
   // evening before Tuesday's holiday, "Coming up" started at Wednesday's RBI minutes)
-  const next = v ? v.events.filter((e) => e.date >= v.today && e.kind !== "expiry" && (region !== "US" || e.kind === "us")).slice(0, limit) : null;
+  const rest = v ? v.events.filter((e) => e.date >= v.today && e.kind !== "expiry" && (region !== "US" || e.kind === "us")).slice(0, limit) : null;
+  // India's next F&O expiry too, one line among the rest (DF-023: "Coming up" left out the 27 Oct expiry); never every expiry
+  const expiry = v && region !== "US" ? v.events.find((e) => e.date >= v.today && e.kind === "expiry") : undefined;
+  const next = rest ? [...rest, ...(expiry ? [expiry] : [])].sort((a, b) => a.date.localeCompare(b.date)) : null;
   if (next && !next.length) return null;
   return (
     <Card testId={testId} label="Coming up">

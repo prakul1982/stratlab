@@ -42,6 +42,10 @@ BACKFILL_MONTHS = 13            # a company with fewer months stored has its old
 USER_STOCKS = 150               # stocks from people's holdings and watchlists the daily job reads, beyond the sector lists
 JOB_DAYS = 45                   # the daily job reads updates filed this recently
 RUN_AT = "19:30"                # India time: after the day's monthly updates (the 1st of the month, mostly by noon)
+# how filings are read now: a read made by an older reader is read again, newest first, as the day's budget allows. 2: the
+# period's own column (DF-009), sales over production and the company's own business (DF-010, DF-011), the quarterly
+# updates and the press releases that weren't recognised (DF-012)
+READER = 2
 SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9&\-_.]{0,19}$")
 NOTE = ("Figures as the company filed them with the exchange, copied from its own document; each one links to the filing "
         "with the page and the line it's on. Changes are arithmetic on those filed figures. Facts, not advice.")
@@ -54,19 +58,14 @@ SECTORS: dict[str, dict] = {
         ("ESCORTS", "Escorts Kubota"), ("FORCEMOT", "Force Motors"), ("HEROMOTOCO", "Hero MotoCorp"), ("HYUNDAI", "Hyundai Motor India"),
         ("M&M", "Mahindra & Mahindra"), ("MARUTI", "Maruti Suzuki India"), ("OLECTRA", "Olectra Greentech"),
         ("TMCV", "Tata Motors (commercial vehicles)"), ("TMPV", "Tata Motors Passenger Vehicles"), ("TVSMOTOR", "TVS Motor Company")]},
-    "cement": {"label": "Cement: volumes", "span": "quarter", "symbols": [
-        ("ACC", "ACC"), ("AMBUJACEM", "Ambuja Cements"), ("DALBHARAT", "Dalmia Bharat"), ("JKCEMENT", "JK Cement"),
-        ("JKLAKSHMI", "JK Lakshmi Cement"), ("RAMCOCEM", "The Ramco Cements"), ("SHREECEM", "Shree Cement"),
-        ("ULTRACEMCO", "UltraTech Cement")]},
-    "airlines": {"label": "Airlines and airports: traffic", "span": "month", "symbols": [
-        ("ADANIPORTS", "Adani Ports and SEZ"), ("GMRAIRPORT", "GMR Airports"), ("INDIGO", "InterGlobe Aviation"),
-        ("SPICEJET", "SpiceJet")]},
-    "power": {"label": "Power: generation and sales", "span": "month", "symbols": [
+    # DF-013: the cement makers and the telecom companies file no monthly or quarterly volume update (nothing was ever read
+    # for them), nor do the airlines (their traffic is the regulator's, not a filing): only the lists that file one are shown
+    "airlines": {"label": "Ports and airports: traffic", "span": "month", "symbols": [
+        ("ADANIPORTS", "Adani Ports and SEZ"), ("GMRAIRPORT", "GMR Airports")]},
+    # what the power companies file between results is mostly capacity added; the label says that, not "sales"
+    "power": {"label": "Power: capacity and generation", "span": "month", "symbols": [
         ("ADANIPOWER", "Adani Power"), ("CESC", "CESC"), ("JSWENERGY", "JSW Energy"), ("NHPC", "NHPC"), ("NTPC", "NTPC"),
         ("POWERGRID", "Power Grid Corporation of India"), ("TATAPOWER", "Tata Power Company"), ("TORNTPOWER", "Torrent Power")]},
-    "telecom": {"label": "Telecom: quarterly operating numbers", "span": "quarter", "symbols": [
-        ("BHARTIARTL", "Bharti Airtel"), ("INDUSTOWER", "Indus Towers"), ("TATACOMM", "Tata Communications"),
-        ("IDEA", "Vodafone Idea")]},
     "metals": {"label": "Metals and mining: production and sales", "span": "month", "symbols": [
         ("COALINDIA", "Coal India"), ("HINDALCO", "Hindalco Industries"), ("HINDZINC", "Hindustan Zinc"),
         ("JINDALSTEL", "Jindal Steel"), ("JSWSTEEL", "JSW Steel"), ("NMDC", "NMDC"), ("SAIL", "Steel Authority of India"),
@@ -106,6 +105,9 @@ UPDATE = re.compile(
     rf"\bsales (?:in|for) (?:the month of )?{MONTHS}\b|\bauto sales\b|"
     r"provisional (?:business|figures|numbers|data|update)|operational (?:update|performance)|traffic (?:figures|update|data)|"
     r"(?:quarterly|q[1-4]) business update|pre-?quarter(?:ly)? update|monthly sales|\bsales (?:in|for) (?:q[1-4]|the quarter)|"
+    # DF-012: Titan's "Quarterly Update Q2 FY 2026-27", Avenue Supermarts' "Company Update at the end of Quarter 2 (Q2)"
+    r"\bquarterly update\b|\bq[1-4] (?:fy\s?\d{2,4}(?:-\d{2,4})? )?update\b|\bcompany update at the end of (?:the )?(?:quarter|q[1-4])\b|"
+    r"\bproduction and delivery volumes\b|"
     r"wholesales? and retail sales|\b(?:production|sales|exports?)\b[^.]{0,30}\bfigures\b|"
     r"(?:power|electricity) (?:generation|sales)(?: (?:figures|data|update|numbers))?\b|\bgeneration (?:figures|data|update)|"
     r"\b(?:cargo|container|passenger|aircraft) (?:volumes?|traffic|movements?|throughput)\b|\bcement (?:sales|volumes?|despatch\w*)|"
@@ -144,7 +146,11 @@ def maybe_update(item: dict) -> bool:
 
 # what a sales update says on its first pages, to confirm a "maybe"
 SALES_TEXT = re.compile(r"\b(?:sales|sold|despatch\w*|dispatch\w*|production)\b[^\n]{0,200}\bunits\b|"
-                        r"\bunits\b[^\n]{0,200}\b(?:sales|sold)\b", re.I)
+                        r"\bunits\b[^\n]{0,200}\b(?:sales|sold)\b|"
+                        # a quarter's update in money or stores, as retailers and lenders file it (DF-012: Avenue Supermarts'
+                        # "revenue from operations ... crore" and "total number of stores" was taken for something else)
+                        r"\b(?:revenue|deposits?|advances|disbursements?|gross loans?|assets under management)\b[^\n]{0,200}\b(?:crores?|cr\b|billion|lakhs?)|"
+                        r"\b(?:number of stores|store count|stores? (?:added|opened))\b", re.I)
 
 
 def _row(i: dict, maybe: bool = False) -> dict:
@@ -193,10 +199,17 @@ Return {"period": "YYYY-MM: the month the figures are for (for a quarter, its la
    "unit": "units, Rs crore, Rs billion, %, tonnes, MW, stores, passengers...", "basis": "month", "quarter" or "period end",
    "prior": the same figure for the same period a year earlier, as filed, or null,
    "headline": true for the one company-wide total, else false,
+   "own": false when the figure is of a joint venture, an associate or a separately named subsidiary the document reports
+          (e.g. VE Commercial Vehicles for Eicher Motors), true for the listed company's own business and brands,
    "quote": "the exact line or sentence holding the number, copied word for word", "page": page number}]}
 Rules:
 - Only figures the document states for that one period. Leave out year-to-date and cumulative totals, targets,
   guidance and anything that isn't the company's own reported figure.
+- A table often has a column for this period and one for the same period a year earlier, in either order ("Sep-25
+  Sep-26", or "Sep-26 Sep-25"): read the column headings. "value" is always this period's column, "prior" the year-ago one.
+- When the document gives both sales (or despatches) and production, the headline is total sales, never production.
+  Name a production figure as production ("Total production"), so it never shares a name with a sales figure.
+- The headline is the listed company's own total, never a joint venture's or a subsidiary's reported on its own.
 - Use the names under KNOWN MEASURES when the same figure appears, so months line up.
 - Every "quote" is copied word for word from the document; a figure whose quote or number isn't there is thrown away.
 - At most 12 figures, the company-wide totals first. No opinion, no comparison with estimates.
@@ -222,6 +235,59 @@ def number_in(value: float, quote: str) -> bool:
         if mult and abs(x * mult - value) <= step * mult + 1e-9:
             return True
     return False
+
+
+# a column heading for a month: "Sep-26", "Sept'26", "Sep -25", "September 2026"
+_LABEL = re.compile(rf"\b({MONTHS})\s*['’\-]?\s*(\d{{4}}|\d{{2}})\b(?!\s*[-–]\s*\d)", re.I)
+_MON = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), 1)}
+
+
+def header_periods(page: str, period: str) -> list[str]:
+    """The month columns of the first line on the page that heads columns for `period` and the same month a year
+    earlier, in their order ("Sep-25 Sep-26 Sep-25 Sep-26" → ["2025-09", "2026-09", "2025-09", "2026-09"]); [] when no
+    line does."""
+    want = {period, shift(period, -12)}
+    for line in (page or "").splitlines():
+        got = []
+        for m in _LABEL.finditer(line):
+            y = int(m.group(2))
+            y = y + 2000 if y < 100 else y
+            got.append(f"{y:04d}-{_MON[m.group(1)[:3].lower()]:02d}")
+        if len(got) >= 2 and set(got) <= want and len(set(got)) == 2:
+            return got
+    return []
+
+
+def own_column(value: float, prior: float | None, quote: str, page: str, period: str) -> tuple[float, float | None]:
+    """The value of the period's own column, when the AI copied the year-ago column instead (DF-009: Mahindra's
+    "102092 121722 ..." under "Sep-25 Sep-26 ...", read as Sep 2026's 1,02,092 when Sep 2026 was 1,21,722). The row's
+    numbers are matched to the page's column headings one to one; when they don't line up, the figure stays as read."""
+    seq = header_periods(page, period)
+    nums = []
+    for m in _NUM.finditer(quote or ""):
+        if m.group(2):
+            continue
+        try:
+            nums.append(float(m.group(1).replace(",", "")))
+        except ValueError:
+            continue
+    if not seq or len(nums) != len(seq):
+        return value, prior
+    at = next((i for i, x in enumerate(nums) if abs(x - value) < 1e-9), None)
+    if at is None or seq[at] == period:
+        return value, prior
+    for j in (at + 1, at - 1):
+        if 0 <= j < len(seq) and seq[j] == period:
+            return nums[j], nums[at]
+    return value, prior
+
+
+# a filing about a subsidiary's or joint venture's own volumes, as its cover letter says (DF-011: "sales volume of VE
+# Commercial Vehicles Limited, an unlisted subsidiary of Eicher Motors")
+NOT_OWN = re.compile(r"\b(?:sales|production|despatch\w*|dispatch\w*|volumes?)\s+(?:volumes?\s+)?of\s+[^.]{2,90}?,?\s+an?\s+"
+                     r"(?:unlisted\s+|material\s+|wholly[- ]owned\s+|step[- ]down\s+)*(?:subsidiary|joint venture|associate)\b", re.I)
+PRODUCTION = re.compile(r"\bproduc", re.I)
+SALES = re.compile(r"\b(?:sales?|sold|despatch\w*|dispatch\w*|wholesales?|deliver\w*|off-?take)\b", re.I)
 
 
 def _num(v) -> float | None:
@@ -285,9 +351,12 @@ def pages_of(docs_api, url: str) -> list[str]:
     return pages
 
 
-def clean_figures(d: dict, pages: list[str], filed: str) -> tuple[str | None, str, list[dict]]:
+def clean_figures(d: dict, pages: list[str], filed: str, own: bool = True, production: bool = False) -> tuple[str | None, str, list[dict]]:
     """(period, span, figures) kept from the AI's reply: each figure's quote must be on one of the pages and its number
-    in the quote; the year-ago figure is kept only when it's in the quote too. Year-to-date figures are dropped."""
+    in the quote; the year-ago figure is kept only when it's in the quote too. Year-to-date figures are dropped. A value
+    copied from the year-ago column is put right from the page's column headings (own_column). `own` false: the filing
+    is a subsidiary's or a joint venture's, so none of its figures is the company's own; `production`: a production
+    filing, whose figures are named as production so they never stand for sales (DF-010)."""
     period = _period(d.get("period"), filed)
     span = "quarter" if str(d.get("span") or "").lower().startswith("q") else "month"
     out, seen, headline = [], set(), False
@@ -307,6 +376,10 @@ def clean_figures(d: dict, pages: list[str], filed: str) -> tuple[str | None, st
         prior = _num(f.get("prior"))
         if prior is not None and not number_in(prior, quote):
             prior = None
+        if period:
+            value, prior = own_column(value, prior, quote, pages[page - 1], period)
+        if production and not PRODUCTION.search(name):
+            name = f"Production: {name}"[:80]
         unit = " ".join(str(f.get("unit") or "").split())[:30] or "units"
         unit = re.sub(r"^(?:rs\.?|inr|₹)\s*", "₹ ", unit, flags=re.I)
         segment = " ".join(str(f.get("segment") or "").split())[:60] or None
@@ -317,7 +390,7 @@ def clean_figures(d: dict, pages: list[str], filed: str) -> tuple[str | None, st
         head = bool(f.get("headline")) and not headline
         headline = headline or head
         out.append({"metric": name, "segment": segment, "value": value, "unit": unit, "basis": basis, "prior": prior,
-                    "headline": head, "quote": quote, "page": page})
+                    "headline": head, "quote": quote, "page": page, "own": bool(own and f.get("own") is not False)})
         if len(out) >= MAX_FIGURES:
             break
     return period, span, out
@@ -336,7 +409,8 @@ def known_measures(reads: dict) -> list[str]:
 def read_one(symbol: str, item: dict, docs_api, ai, known: list[str]) -> dict:
     """One filing read into figures: {"at", "title", "url", "read_at", "period", "span", "figures", "problem"}."""
     out = {"at": item["at"], "title": item["title"], "url": item["url"], "exchange": item.get("exchange") or "NSE",
-           "read_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "period": None, "span": None, "figures": [], "problem": None}
+           "read_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "period": None, "span": None, "figures": [], "problem": None,
+           "reader": READER}
     try:
         pages = pages_of(docs_api, item["url"])
     except SourceError as e:
@@ -357,7 +431,10 @@ def read_one(symbol: str, item: dict, docs_api, ai, known: list[str]) -> dict:
     except AIError:
         out["problem"] = "The AI's reply couldn't be read."
         return out
-    period, span, figures = clean_figures(parsed if isinstance(parsed, dict) else {}, pages, item["at"])
+    cover = " ".join(" ".join(pages[:2]).split())
+    own = not NOT_OWN.search(cover)
+    production = bool(PRODUCTION.search(item["title"]) and not SALES.search(item["title"]))
+    period, span, figures = clean_figures(parsed if isinstance(parsed, dict) else {}, pages, item["at"], own, production)
     out.update(period=period, span=span, figures=figures if period else [])
     if not period or not figures:
         out["problem"] = "No figure could be checked against the document."
@@ -406,7 +483,11 @@ def _ai_budget() -> bool:
 def read_new(symbol: str, items: list[dict], docs_api, ai, limit: int = READ_AT_ONCE, since: str | None = None) -> dict:
     """Read the newest unread updates (up to `limit`; filed on or after `since` when given). Returns {"read", "problems"}."""
     reads = stored(symbol)
-    todo = [i for i in candidates(items) if i["id"] not in reads and (not since or i["at"] >= since)][:limit]
+    every = candidates(items)
+    # the unread filed since `since` first, then any an older reader read, however old: their figures may be the year-ago
+    # column or production (DF-009), and the year-ago months are what each change is worked out on
+    todo = ([i for i in every if i["id"] not in reads and (not since or i["at"] >= since)]
+            + [i for i in every if i["id"] in reads and int(reads[i["id"]].get("reader") or 1) < READER])[:limit]
     done, problems = 0, []
     for item in todo:
         if not _ai_budget():
@@ -460,8 +541,9 @@ def series(reads: dict) -> list[dict]:
         for f in r.get("figures") or []:
             k = metric_key(f["metric"], f.get("segment"), f["unit"], f["basis"])
             m = metrics.setdefault(k, {"key": k, "metric": f["metric"], "segment": f.get("segment"), "unit": f["unit"],
-                                       "basis": f["basis"], "span": r.get("span") or "month", "headline": False, "points": {}})
+                                       "basis": f["basis"], "span": r.get("span") or "month", "headline": False, "own": True, "points": {}})
             m["metric"], m["headline"] = f["metric"], m["headline"] or bool(f.get("headline"))
+            m["own"] = f.get("own") is not False
             src = {"at": r["at"], "url": r["url"], "page": f.get("page"), "quote": f.get("quote"), "exchange": r.get("exchange") or "NSE"}
             m["points"][p] = {"period": p, "value": f["value"], "filed_later": False, "source": src}
             if f.get("prior") is not None:
@@ -485,7 +567,7 @@ def series(reads: dict) -> list[dict]:
         if prev and shift(prev["period"], 1) != latest["period"] and not (step == "quarter" and shift(prev["period"], 3) == latest["period"]):
             prev = None
         lo = shift(latest["period"], -(CHART_MONTHS - 1))
-        out.append({**{x: m[x] for x in ("key", "metric", "segment", "unit", "basis", "span", "headline")},
+        out.append({**{x: m[x] for x in ("key", "metric", "segment", "unit", "basis", "span", "headline", "own")},
                     "latest": latest, "prev": prev, "year_ago": year, "step": step,
                     "change_prev": change(latest["value"], prev["value"], m["unit"]) if prev else None,
                     "change_year": change(latest["value"], year["value"], m["unit"]) if year else None,
@@ -497,8 +579,20 @@ def series(reads: dict) -> list[dict]:
 
 
 def headline(metrics: list[dict]) -> dict | None:
-    """The company-wide total: the one the filing marked, else the first measure."""
-    return next((m for m in metrics if m["headline"]), metrics[0] if metrics else None)
+    """The company-wide total. Among the measures of the newest period (DF-012: Atul Auto's headline stayed at May 2026
+    once its June to September filings named the total another way, JSW Steel's at March), the company's own business
+    first (DF-011: Eicher's VECV trucks, an unlisted subsidiary, stood for Eicher over Royal Enfield's 1,33,958), sales
+    before production (DF-009, DF-010: Maruti's production filing, read last, put 2,42,011 produced in a table of
+    sales), then the one a filing marked, then a total; else the first measure."""
+    if not metrics:
+        return None
+    newest = max(m["latest"]["period"] for m in metrics)
+
+    def rank(m: dict) -> tuple:
+        name = f"{m['metric']} {m.get('segment') or ''}"
+        made = bool(PRODUCTION.search(name)) and not SALES.search(name)
+        return (m["latest"]["period"] != newest, m.get("own") is False, made, not m["headline"], "total" not in name.lower())
+    return min(metrics, key=rank)
 
 
 def words(m: dict | None) -> str | None:

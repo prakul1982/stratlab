@@ -6,6 +6,8 @@ export type Limits = {
   /** The lowest value allowed; `above: true` makes it "more than". */
   min?: number; above?: boolean;
   max?: number;
+  /** `max` itself isn't allowed: "less than" (a margin under 100%). */
+  below?: boolean;
   whole?: boolean;
   optional?: boolean;
   /** Written in front of the limit in a message: "₹", "$"; or after it: "%". */
@@ -28,7 +30,7 @@ export function numberProblem(text: string, lim: Limits = {}): string | null {
   if (lim.min != null && (lim.above ? n <= lim.min : n < lim.min)) {
     return lim.above ? `Enter more than ${limitText(lim.min, lim.unit)}.` : `Enter ${limitText(lim.min, lim.unit)} or more.`;
   }
-  if (lim.max != null && n > lim.max) return `Enter at most ${limitText(lim.max, lim.unit)}.`;
+  if (lim.max != null && (lim.below ? n >= lim.max : n > lim.max)) return lim.below ? `Enter less than ${limitText(lim.max, lim.unit)}.` : `Enter at most ${limitText(lim.max, lim.unit)}.`;
   return null;
 }
 

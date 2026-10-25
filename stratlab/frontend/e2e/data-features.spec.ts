@@ -201,6 +201,13 @@ test("US holders above 5%: the latest 13D and 13G filings, by company and by kin
   await expect(page.getByRole("heading", { name: new RegExp(`for ${first}$`) })).toBeVisible();
   for (const c of await table.locator("tbody tr th").allInnerTexts()) expect(c).toContain(first);
   await sane(page, errors);
+  // a holder across companies, not a company of that name (DF-018)
+  await page.goto("/invest/holders?region=US");
+  await expect(page.getByRole("heading", { name: "US holders above 5%: S&P 500 companies" })).toBeVisible();
+  await page.getByRole("textbox", { name: /^Holder/ }).fill("zzzz nobody");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect(page).toHaveURL(/holder=zzzz/);
+  await expect(page.getByRole("heading", { name: /^0 filings across companies by holders named like/ })).toBeVisible();
   // India is still the shareholding-pattern search
   await page.getByRole("radio", { name: "₹ India" }).click();
   await expect(page.getByText("Named holders across companies")).toBeVisible();
