@@ -103,7 +103,7 @@ def _tax(uid: str) -> None:
 
 
 ALERT_KEYS = ("stock_alerts.KEY", "scan.ALERT_KEY", "results.ALERT_KEY", "corp_actions.ALERT_KEY", "intel.filings.ALERT_KEY",
-              "breadth.ALERT_KEY", "fo_changes.ALERT_KEY", "shareholders.FOLLOW_KEY", "screens.KEY", "market_events.USER_KEY")
+              "breadth.ALERT_KEY", "fo_changes.ALERT_KEY", "shareholders.FOLLOW_KEY", "screens.KEY", "market_events.USER_KEY", "ipo.USER_KEY")
 PREF_KEYS = ("daily_report.PREFS", "lifecycle.PREFS", "lifecycle.SEEN", "alerts.CONFIRMED", "alerts.ALERT_OFF", "push.PREFIX",
              "first_steps.KEY", "plan_interest.KEY", "newsletter_prefs.PREFIX", "alerts.TG_VERIFY")
 WATCHLIST = "watchlist:"

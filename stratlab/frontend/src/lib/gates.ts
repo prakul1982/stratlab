@@ -22,6 +22,7 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/trade/events": { feature: "event_reminders", whole: false },
   "/invest/etf-gaps": { feature: "etf_gaps", whole: false },
   "/invest/margin-funding": { feature: "mtf", whole: false },
+  "/invest/ipos": { feature: "ipo_alerts", whole: false },
   // on Free these pages hold nothing else (each company's own updates and holders are on its company page), so the menu
   // marks them locked like the scan (DP1-019: no badge, then a page blank under its banner)
   "/invest/business-updates": { feature: "biz_updates", whole: true },
@@ -37,13 +38,16 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/options": { feature: "options", whole: false },
 };
 
+/** An IPO's own page holds the summary of its offer document (Basic); the rest of the page is for everyone. */
+export const IPO_PAGE_GATE: Gate = { feature: "ipo_summary", whole: false };
+
 /** Paid features that live inside other pages, not a page of their own (where to find them, for the test's sake). */
 export const ELSEWHERE: Record<string, string> = {
   indicators: "the rules editor", fno: "Indian F&O instruments", group_live: "paper trading a group", options_signal: "the options builder",
   fast_entries: "group paper trading", alerts: "Settings", daily_report: "Settings", export: "a notebook's More menu",
   newsletter: "Settings", dividends: "Tax tools (by company)", mf_costs: "Mutual funds", mf_behaviour: "Mutual funds", options_whatif: "the options builder",
   vix_filter: "the options builder", strike_rules: "the options builder", loan_check: "Net worth",
-  assistant: "Connect an AI assistant (its own plan note)",
+  assistant: "Connect an AI assistant (its own plan note)", ipo_summary: "an IPO's own page (its gate is below)",
 };
 
 export const featureName = (feature: string) => FLAGS.find(([f]) => f === feature)?.[1] ?? feature;
@@ -51,6 +55,7 @@ export const featureName = (feature: string) => FLAGS.find(([f]) => f === featur
 /** The gate for a page address, or null. */
 export function gateFor(path: string): Gate | null {
   const p = path.split(/[?#]/)[0].replace(/(.)\/$/, "$1");
+  if (p.startsWith("/invest/ipos/")) return IPO_PAGE_GATE;
   return PAGE_GATES[p] ?? (p.startsWith("/trade/signals/") ? PAGE_GATES["/trade/signals"] : null);
 }
 

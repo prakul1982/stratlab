@@ -95,10 +95,14 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/invest/margin-funding", "Margin funding", "wallet", "margin funding mtf margin trading facility borrowed money broker funding leverage loan to buy shares interest pledge exposure", { isNew: true, flag: "mtf" }),
         page("/invest/stock-lending", "Stock lending fees", "receipt", "stock lending fees slb securities lending borrowing borrowed shares lend my shares earn on holdings", { isNew: true }),
       ] },
-      { id: "company-news", label: "Company news", blurb: "What companies report and announce: news, results, dividends, updates and who holds them.", pages: [
+      { id: "company-news", label: "Company news", blurb: "What companies report and announce: news, results, dividends, updates, IPOs and who holds them.", pages: [
         page("/news", "Briefs", "news", "news briefs newsletter brief digest email daily weekly market close my stocks watchlist headlines subscribe", { line: "A short brief after each market close, for India, the US and the companies you follow." }),
         page("/research/results", "Results", "calendar", "results quarterly earnings calendar results dates q1 q2 q3 q4 profit revenue announcement", { line: "Results days for your stocks, or every company, week by week." }),
         page("/research/corporate-actions", "Corporate actions", "calendar", "corporate actions dividend ex date record date bonus issue stock split rights buyback demerger", { line: "Dividends, bonus issues and splits by ex-date, for your stocks or every company." }),
+        page("/invest/ipos", "IPOs", "calendar", "ipo ipos initial public offering new issue public issue drhp rhp red herring prospectus price band lot size subscription subscribed times allotment listing listing gain sme mainboard s-1 f-1 prospectus nasdaq nyse upcoming open closed recently listed",
+          { isNew: true, flag: "ipo_alerts", also: /^\/invest\/ipos\/[^/]+$/,
+            line: "India's and the US's IPOs: dates, price band, lot, bids and how a listing has traded against its issue price.",
+            blurb: "Upcoming, open, closed and recently listed IPOs for India and the US, each with its price band, lot, size, bids by category and the facts in its offer document." }),
         page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { isNew: true, flag: "biz_updates" }),
         page("/invest/holders", "Named holders", "layers", "named holders shareholders promoter fund fii dii mutual fund shareholding pattern above 1% who owns", { isNew: true, flag: "holders" }),
       ] },

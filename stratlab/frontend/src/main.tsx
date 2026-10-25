@@ -113,6 +113,8 @@ const EventsPage = page(() => import("./pages/trade/EventsPage"), "EventsPage");
 const StockFuturesPage = page(() => import("./pages/trade/StockFuturesPage"), "StockFuturesPage");
 const StockLendingPage = page(() => import("./pages/StockLendingPage"), "StockLendingPage");
 const MarginFundingPage = page(() => import("./pages/MarginFundingPage"), "MarginFundingPage");
+const IposPage = page(() => import("./pages/IposPage"), "IposPage");
+const IpoPage = page(() => import("./pages/IpoPage"), "IpoPage");
 const DevKit = page(() => import("./pages/DevKit"), "DevKit");   // /dev/kit: the design kit on one page (dev builds and admins only)
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
@@ -306,6 +308,8 @@ function Routed() {
         <Route path="/invest/business-updates" element={<BizUpdatesPage />} />
         <Route path="/invest/stock-lending" element={<StockLendingPage />} />
         <Route path="/invest/margin-funding" element={<MarginFundingPage />} />
+        <Route path="/invest/ipos" element={<IposPage />} />
+        <Route path="/invest/ipos/:id" element={<IpoPage />} />
         <Route path="/dev/kit" element={import.meta.env.DEV ? <DevKit /> : <AdminOnly what="The design kit"><DevKit /></AdminOnly>} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />

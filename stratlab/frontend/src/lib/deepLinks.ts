@@ -15,7 +15,7 @@ export const APP_ROUTES = [
   "/money/us-tax", "/money/itr", "/money/sip-test", "/money/rates", "/alerts", "/research", "/research/themes",
   "/research/pulse", "/research/compare", "/research/watchlist", "/research/scan", "/research/scans", "/scans",
   "/watchlist", "/research/screens", "/research/rotation", "/invest/breadth", "/invest/etf-gaps", "/invest/holders",
-  "/invest/business-updates", "/invest/stock-lending", "/invest/margin-funding", "/dev/kit", "/research/filings",
+  "/invest/business-updates", "/invest/stock-lending", "/invest/margin-funding", "/invest/ipos", "/invest/ipos/:id", "/dev/kit", "/research/filings",
   "/research/results", "/research/corporate-actions", "/research/IN/:symbol/deep", "/research/US/:symbol/deep",
   "/research/investor", "/research/:region/:symbol", "/login", "/signup", "/about",
 ];

@@ -108,6 +108,7 @@ from . import fo_changes_routes
 from . import closing_auction
 from . import replay_routes, signals_routes
 from . import market_events_routes
+from . import ipo
 from . import mcp_server
 from . import mtf, slb, stock_desks, stock_futures     # the per-stock market desks: futures, lending, margin funding
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
@@ -283,6 +284,8 @@ rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: te
 biz_updates.setup(lambda: filings_feed, lambda: deep_docs, lambda: (_gemini, _anthropic))
 biz_job = biz_updates.Job(lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit, kind_ok=_alert_kind_ok),
                           biz_updates.alert_symbols)
+# IPOs: India's from the exchanges' public-issue pages and SEBI's lists, the US's from the public IPO calendar and the SEC's filings
+ipo.setup(lambda: filings_feed, lambda: us_market_calendar, lambda: (_gemini, _anthropic), lambda: markets.providers["US"].yahoo)
 shareholders.setup(lambda: filings_feed)
 holders_job = shareholders.Job(lambda: filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                can_alert=lambda p: allows(access_plan(p), "holders") and bool(alerts.jobs_for(p, "", "")))
@@ -409,6 +412,7 @@ def start_jobs():
     _start("vix_job", vix_job.start)
     _start("biz_job", biz_job.start)
     _start("holders_job", holders_job.start)
+    _start("ipo.job", ipo.job.start)                    # IPOs: the exchanges' and regulators' pages, the bids through the day, the alerts
     _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
 
 
@@ -455,6 +459,7 @@ app.include_router(closing_auction.router)     # /trade/closing-auction
 app.include_router(vix.router)                 # /trade/vix
 app.include_router(biz_updates.router)         # /research/business-updates, /invest/business-updates
 app.include_router(shareholders.router)        # /research/holders, /invest/holders
+app.include_router(ipo.router)                 # /invest/ipos
 app.include_router(redflags_routes.router)     # /research/redflags, /research/holders-us
 app.include_router(stock_futures.router)       # /trade/stock-futures
 app.include_router(slb.router)                 # /invest/stock-lending

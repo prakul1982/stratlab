@@ -1,6 +1,7 @@
 """The US market calendar a US exchange publishes for every listed company: one call a day for the companies reporting
 results that day (with the session, before the open or after the close, they announced), and one for the dividends
-going ex that day (with the amount, record and pay dates and the day the company declared it).
+going ex that day (with the amount, record and pay dates and the day the company declared it), and one for a month's
+IPOs (the offerings expected to price, priced, filed and withdrawn), which the IPO section reads (ipo.py).
 
 The results calendar and the corporate actions calendar read it for the whole market (DE-025, DE-028): the earnings
 feed it complemented came back empty in the middle of the reporting season, and a price history only holds ex-dates
@@ -66,6 +67,50 @@ def dividend_rows(raw: dict) -> list[dict]:
     return out
 
 
+def _shares(v) -> int | None:
+    try:
+        n = int(float(str(v).replace(",", "")))
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def _price_range(v) -> tuple[float | None, float | None]:
+    """"14.00-16.00" or "$16.00" or "18.00" as (low, high)."""
+    nums = [_amount(x) for x in re.findall(r"\d[\d,]*(?:\.\d+)?", str(v or ""))]
+    nums = [n for n in nums if n]
+    return (nums[0], nums[-1]) if nums else (None, None)
+
+
+def ipo_rows(raw: dict) -> list[dict]:
+    """A month of the IPO calendar as one row per offering: [{id, stage, symbol, name, exchange, low, high, shares, amount,
+    expected, priced, filed, withdrawn}]. stage: "upcoming" (expected to price), "priced" (priced; trading from the next
+    session), "filed" (filed with the SEC, no date) or "withdrawn". `id` is the calendar's own deal number."""
+    data = ((raw or {}).get("data")) or {}
+    out = []
+
+    def rows(block):
+        got = ((block or {}).get("upcomingTable") if isinstance(block, dict) and "upcomingTable" in block else block) or {}
+        r = got.get("rows") if isinstance(got, dict) else None
+        return r if isinstance(r, list) else []
+
+    for stage, block in (("upcoming", data.get("upcoming")), ("priced", data.get("priced")), ("filed", data.get("filed")),
+                         ("withdrawn", data.get("withdrawn"))):
+        for r in rows(block):
+            if not isinstance(r, dict) or not r.get("companyName"):
+                continue
+            low, high = _price_range(r.get("proposedSharePrice"))
+            out.append({"id": str(r.get("dealID") or ""), "stage": stage, "symbol": _symbol(r.get("proposedTickerSymbol")),
+                        "name": str(r["companyName"]).strip(), "exchange": str(r.get("proposedExchange") or "").strip() or None,
+                        "low": low, "high": high, "shares": _shares(r.get("sharesOffered")),
+                        "amount": _amount(r.get("dollarValueOfSharesOffered")),
+                        "expected": (d.isoformat() if (d := _day(r.get("expectedPriceDate"))) else None),
+                        "priced": (d.isoformat() if (d := _day(r.get("pricedDate"))) else None),
+                        "filed": (d.isoformat() if (d := _day(r.get("filedDate"))) else None),
+                        "withdrawn": (d.isoformat() if (d := _day(r.get("withdrawDate"))) else None)})
+    return out
+
+
 class USCalendar(Source):
     name = "The US market calendar"
     STALE_FOR = 0                 # a day's list changes as companies announce: an old copy is never passed off as today's
@@ -86,3 +131,10 @@ class USCalendar(Source):
 
     def dividends(self, day: date, ttl: float = 6 * 3600) -> list[dict]:
         return dividend_rows(self._day_list("/dividends", day, ttl))
+
+    def ipos(self, month: date, ttl: float = 3 * 3600) -> list[dict]:
+        """The IPO calendar for the month `month` falls in (expected, priced, filed and withdrawn offerings)."""
+        got = self.fetch("https://api.nasdaq.com/api/ipo/calendar", {"date": month.strftime("%Y-%m")}, ttl=ttl)
+        if not isinstance(got, dict) or "data" not in got:
+            raise SourceError(self.name, f"{self.name} sent something that isn't its calendar.", busy=True)
+        return ipo_rows(got)

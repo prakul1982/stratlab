@@ -82,6 +82,8 @@ CARD_WORDS = {
     "sip_luck": "SIP dip rules",
     "rates_slab": "after your own tax",
     "loan_check": "floating-rate loan check",
+    "ipo_summary": "IPO offer document summaries",
+    "ipo_alerts": "IPO alerts",
 }
 
 

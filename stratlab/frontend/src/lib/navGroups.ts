@@ -16,6 +16,8 @@ export const NAV_GROUPS: Record<string, NavEntry[]> = {
       blurb: "How far each ETF's price is from what a unit holds, the widest gap first, with 30 days of history and alerts." },
     { to: "/invest/business-updates", label: "Business updates", icon: "calendar", title: "Automakers' monthly sales and lenders' quarterly figures, read into numbers",
       blurb: "Monthly and quarterly updates as each company filed them, with the change on the month and the year, side by side." },
+    { to: "/invest/ipos", label: "IPOs", icon: "calendar", title: "India's and the US's public offerings: dates, price band, lot, bids and listing against the issue price",
+      blurb: "Upcoming, open, closed and recently listed IPOs, each with its price band, lot, size, bids by category and the facts in its offer document." },
     { to: "/invest/holders", label: "Named holders", icon: "layers", title: "Search a holder named above 1% across every company's shareholding pattern",
       blurb: "Which companies a fund or person is named in, above 1%, and what changed since the quarter before. Follow one for a message." },
     { to: "/invest/stock-lending", label: "Stock lending fees", icon: "receipt", title: "Lending fees that traded on the exchange for the stocks you hold and watch",
