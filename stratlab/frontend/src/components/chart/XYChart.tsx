@@ -248,10 +248,12 @@ export function XYChart(p: XYChartProps) {
     };
     if (!n) return [];
     if (T) {
-      const ta = T[Math.max(0, Math.min(n - 1, Math.ceil(a)))], tb = T[Math.max(0, Math.min(n - 1, Math.floor(b)))];
+      // the first and last points in the window, by position: with a numeric x (times placed by date, DA-031) the window's
+      // ends are x values, not point numbers
+      const ta = T[Math.max(0, Math.min(n - 1, in0))], tb = T[Math.max(0, Math.min(n - 1, in1))];
       if (intraday && spansDays(ta, tb, p.tz)) {
         // points across days on an axis that skips the hours between sessions: each day's first point named by its day
-        for (const d of dayTicks(T, Math.max(in0, Math.ceil(a)), Math.min(in1, Math.floor(b)), p.tz)) push(sx(X[d.i]), d.label);
+        for (const d of dayTicks(T, in0, in1, p.tz)) push(sx(X[d.i]), d.label);
         return out.map((t) => ({ ...t, anchor: (t.px - textWidth(t.label) / 2 < padL ? "start" : t.px + textWidth(t.label) / 2 > padL + plotW ? "end" : "middle") as "start" | "middle" | "end" }));
       }
       const ticks = timeTicks(ta, tb, max, p.tz, !intraday);

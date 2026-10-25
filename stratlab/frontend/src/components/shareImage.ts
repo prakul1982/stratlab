@@ -1,5 +1,5 @@
 import { checksRun } from "../lib/shareText";
-import { LOST_CHECKS, lostMoney, unseenWord } from "../lib/tradeUi";
+import { LOST_CHECKS, lostMoney, summaryLines, unseenWord } from "../lib/tradeUi";
 import { asDate, monthShort, pct } from "../lib/format";
 import { MARK_RATIO, markSvg } from "../lib/brand";
 import type { CheckStatus, Experiment, Notebook } from "../lib/types";
@@ -90,6 +90,29 @@ function wrap(g: CanvasRenderingContext2D, text: string, max: number, lines: num
   return out;
 }
 
+/** The reason under the headline, in the room left above the checks' caption (at 418): whole sentences only, as many as
+ * fit, at 22px or else 19px (DA-036: "…buying and holding ov…" was cut mid-sentence). A first sentence too long for the
+ * room at 19px is the only one ever cut, with "…". */
+export function reasonLines(g: CanvasRenderingContext2D, reason: string, max: number, top: number): { text: string; y: number; font: string }[] {
+  const sentences = summaryLines(reason);
+  for (const [px, step, most] of [[22, 30, 3], [19, 26, 4]] as const) {
+    const font = `400 ${px}px Fraunces, Georgia, serif`;
+    g.font = font;
+    const room = Math.max(0, Math.min(most, Math.floor((418 - px - top) / step) + 1));
+    let fits: string[] = [];
+    for (let k = 1; k <= sentences.length; k++) {
+      const lines = wrap(g, sentences.slice(0, k).join(" "), max, 99);
+      if (lines.length > room) break;
+      fits = lines;
+    }
+    if (fits.length) return fits.map((text, i) => ({ text, y: top + i * step, font }));
+  }
+  const font = "400 19px Fraunces, Georgia, serif";
+  g.font = font;
+  const room = Math.max(0, Math.min(4, Math.floor((418 - 19 - top) / 26) + 1));
+  return wrap(g, sentences[0] ?? "", max, room).slice(0, room).map((text, i) => ({ text, y: top + i * 26, font }));
+}
+
 export function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
   g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
@@ -132,9 +155,8 @@ export async function renderCard(d: CardData, theme: "light" | "dark" = "light")
   cv.width = W * 2; cv.height = H * 2;
   const g = cv.getContext("2d")!;
   g.scale(2, 2);
+  // a plain paper ground: the ruled lines ran through the words (DA-036)
   g.fillStyle = c.paper; g.fillRect(0, 0, W, H);
-  g.fillStyle = c.rule;
-  for (let y = 34; y < H; y += 34) g.fillRect(0, y, W, 1);
 
   // logo and what was tested
   let lx = PAD;
@@ -167,11 +189,9 @@ export async function renderCard(d: CardData, theme: "light" | "dark" = "light")
   const lineH = Math.round(size * 1.08);
   g.fillStyle = tone;
   heads.forEach((ln, i) => g.fillText(ln, PAD - 3, 142 + 16 + size + i * lineH));
-  g.fillStyle = c.ink2; g.font = "400 22px Fraunces, Georgia, serif";
+  g.fillStyle = c.ink2;
   const ry = 142 + 16 + size + (heads.length - 1) * lineH + 44;
-  // the reason fills what is left above the checks' caption (at 418), at most three lines
-  const room = Math.max(0, Math.min(3, Math.floor((418 - 22 - ry) / 30) + 1));
-  wrap(g, d.reason, left, room).slice(0, room).forEach((ln, i) => g.fillText(ln, PAD, ry + i * 30));
+  reasonLines(g, d.reason, left, ry).forEach((r) => { g.font = r.font; g.fillText(r.text, PAD, r.y); });
 
   // the equity chart, right column
   chart(g, c, d, PAD + left + 36, 104, W - PAD - (PAD + left + 36), 270);

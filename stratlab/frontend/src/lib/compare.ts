@@ -85,3 +85,24 @@ export function changes(a: CompareRun, b: CompareRun): string[] {
   }
   return out;
 }
+
+/** One run's values on the dates of both runs' charts: its own points as they are, a date between two of them read off
+ * the straight line joining them, and nothing before its first point or after its last. Each run keeps a thinned set of
+ * points (240 over its own window), so the two runs' dates rarely match: a value only on its own dates broke both lines
+ * into pieces, and one stopped part way (DA-031). `dates` are sorted "YYYY-MM-DD" days. */
+export function onDates(points: Map<string, number>, dates: string[]): (number | null)[] {
+  const own = [...points.keys()].sort();
+  if (!own.length) return dates.map(() => null);
+  const ms = (d: string) => Date.parse(`${d.slice(0, 10)}T00:00:00Z`);
+  let k = 0;
+  return dates.map((d) => {
+    if (d < own[0] || d > own[own.length - 1]) return null;
+    const exact = points.get(d);
+    if (exact != null) return exact;
+    while (k < own.length - 1 && own[k + 1] < d) k++;
+    const a = own[k], b = own[Math.min(own.length - 1, k + 1)];
+    const va = points.get(a)!, vb = points.get(b)!;
+    const span = ms(b) - ms(a);
+    return span > 0 ? va + ((vb - va) * (ms(d) - ms(a))) / span : va;
+  });
+}

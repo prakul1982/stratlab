@@ -27,6 +27,13 @@ export function checksLine(passed: number, run: number, notRun?: string[]): stri
   return `${run} of ${CHECKS} checks run · ${passed >= run ? `all ${run} passed` : `${passed} passed`}${which}`;
 }
 
+/** The checks as a count for a table cell, out of the same four: "2 of 4", "3 of 4 (1 not run)" (DA-031: the compare table's
+ * cell read the verdict's sentence "4 of 4 checks run · 2 passed"). */
+export function checksCell(passed: number, run: number): string {
+  const skipped = Math.max(0, CHECKS - Math.max(0, run));
+  return `${Math.min(passed, CHECKS)} of ${CHECKS}${skipped ? ` (${skipped} not run)` : ""}`;
+}
+
 /** The checks line under a headline, or "" when the headline already says it (R61-007: "…; 3 of 4 checks run · all 3 passed."
  * over "3 of 4 checks run · all 3 passed" on the landing page's cards). */
 export function underHeadline(line: string, headline: string | null | undefined): string {
@@ -51,9 +58,10 @@ export function summaryLines(summary: string | null | undefined): string[] {
 }
 
 /** A run's badge words where the plain "Passed the checks" would overstate it: the count when some checks didn't pass
- * (R62-003: "Passed the checks" over a verdict of "4 of 4 checks run · 2 passed"). Undefined keeps the badge's own words. */
+ * (R62-003: "Passed the checks" over a verdict of "4 of 4 checks run · 2 passed"), as short as the other badges beside it in
+ * the runs table ("Too few trades" beside "4 of 4 checks run · 2 passed", DA-031). Undefined keeps the badge's own words. */
 export function badgeLabel(v: { verdict: string; passed: number; total: number }): string | undefined {
-  return v.verdict === "edge" && v.passed < v.total ? checksLine(v.passed, v.total) : undefined;
+  return v.verdict === "edge" && v.passed < v.total ? `Passed ${v.passed} of ${CHECKS} checks` : undefined;
 }
 
 /** A strategy that lost money after costs: no pass count is headlined for it (R16-006); its checks are shown for reference. */

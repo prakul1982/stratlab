@@ -104,10 +104,11 @@ export interface WalkForward {
   efficiency?: number | null; settings_used?: number; tuned?: string[]; grid_size?: number; from?: string; to?: string;
   series?: { t: string[]; wf: number[]; fixed: number[] };
 }
-export interface BasketRow { id: string; symbol: string; name?: string | null; ret?: number; buy_hold?: number; n?: number; win?: number; mdd?: number; error?: string }
+/** `from`: the first day its prices cover; `short`: well after the period's own first day, so it isn't counted (DA-030). */
+export interface BasketRow { id: string; symbol: string; name?: string | null; ret?: number; buy_hold?: number; n?: number; win?: number; mdd?: number; error?: string; from?: string; short?: boolean }
 export interface Basket {
   status: "pass" | "warn" | "fail"; headline: string; market: string; days: number; tested: number; profitable: number;
-  beat_buy_hold: number; median_ret: number | null; rows: BasketRow[];
+  beat_buy_hold: number; median_ret: number | null; rows: BasketRow[]; shorter?: { symbol: string; from: string }[];
 }
 export interface NotebookSummary { experiments: number; last_verdict: VerdictKind | null; last_label: string | null; /** the last run's return in %, to say "Capital lost" at the −100% floor */ last_return?: number | null;
   /** the last run was saved by an older version and its figures contradict each other, so none are shown (R38-001) */ last_legacy?: boolean }

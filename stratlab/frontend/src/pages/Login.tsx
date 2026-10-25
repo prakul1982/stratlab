@@ -108,7 +108,7 @@ const TOOLS: [string, string][] = [
   ["Real trading costs", "STT, stamp duty, GST, exchange fees and slippage, per market."],
   ["Long, short and intraday", "Stops in %, points or ATR, trailing stops, square-off, a daily loss cap."],
   ["Walk-forward test", "Re-tune on the past, trade the stretch the tuning never saw, repeat."],
-  ["Whole groups", "One set of rules on NIFTY 50, the F&O stocks, US mega caps or your list."],
+  ["Whole groups", "One set of rules on NIFTY 50, the F&O stocks, the largest US companies or your list."],
   ["Options, live", "Any structure up to eight legs at the real bid and ask."],
   ["Greeks and what-if", "Delta, gamma, theta and vega, the payoff today and at expiry, and sliders."],
   ["After charges", "Breakevens, most it can make and most it can lose, after every charge."],

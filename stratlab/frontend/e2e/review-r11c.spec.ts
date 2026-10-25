@@ -150,7 +150,13 @@ test("options: USDINR priced from last trades says so, flags an impossible fly, 
 
 // ---------- R11C-015: a dead share link says so ----------
 test("share: a link turned off says so, in the API's words (R11C-015)", async ({ page }) => {
+  // the page goes to the shared address, which answers with a real 404 (DA-035)
+  const shared = page.waitForResponse((r) => new URL(r.url()).pathname === "/v/NlpCFMRAhSA", { timeout: 30_000 });
   const errors = await open(page, "/verdict/NlpCFMRAhSA");
+  expect((await shared).status()).toBe(404);
+  await expect(page.getByRole("heading", { name: "This shared link isn't available" })).toBeVisible({ timeout: 30_000 });
+  // once per link in a tab: opened again, the page itself says so, in the API's words
+  await page.goto("/verdict/NlpCFMRAhSA");
   await expect(page.getByText("This verdict isn't available")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("This link was turned off or never existed.")).toBeVisible();
   expect(errors).toEqual([]);

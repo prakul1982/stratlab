@@ -418,7 +418,8 @@ function NotebookView() {
             <button type="button" className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
             <MoreMenu align="right" items={[
               { label: "Make a copy", icon: <Copy size={16} />, run: duplicate },
-              { label: `Export${canExport ? "" : " (Pro)"}`, icon: <Download size={16} />, run: exportStrategy },
+              // says what it gives: the rules as a file to import again; a run's trades download from its verdict page (DA-041)
+              { label: `Export the rules${canExport ? "" : " (Pro)"}`, icon: <Download size={16} />, run: exportStrategy },
               { label: "Delete notebook", icon: <Trash size={16} />, run: () => setRemoving(true), danger: true },
             ]} />
           </>} />

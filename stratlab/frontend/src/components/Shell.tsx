@@ -4,6 +4,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { Bell, Book, Calendar, Chevron, Close, Compass, Gear, Layers, Library, Lens, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
 import { Logo } from "./Logo";
+import { VERDICT_FACT } from "./ui";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { useScrollMemory } from "../lib/scrollMemory";
 import { NAV, groupPath, locate, locateGroup, type NavPage } from "../lib/nav";
@@ -125,16 +126,19 @@ export function Shell({ children }: { children: ReactNode }) {
       {sideNotebooks?.map((n) => {
         const inst = n.instrument && "symbol" in n.instrument ? n.instrument.symbol : null;
         const count = n.summary?.experiments ?? 0;
-        const verdict = n.summary?.last_verdict ? `last verdict: ${n.summary.last_verdict.replace("_", " ")}` : "no experiments yet";
+        // the dot's colour in the verdict's own words ("Too few trades"), not its code ("not enough", DA-032)
+        const verdict = n.summary?.last_verdict ? `last run: ${VERDICT_FACT[n.summary.last_verdict] ?? n.summary.last_verdict}` : "no experiments yet";
         return (
           <NavLink key={n.id} to={`/n/${n.id}`} title={[n.name, inst, `${count} experiment${count === 1 ? "" : "s"}`, verdict].filter(Boolean).join(" · ")}
             className={({ isActive }) => `nb-link${isActive || path.startsWith(`/n/${n.id}/`) ? " active" : ""}`}>
-            <span className="nb-dot"><span className={`vdot ${n.summary?.last_verdict ?? "none"}`} /></span>
+            <span className="nb-dot" title={`The dot is the ${verdict}`}><span className={`vdot ${n.summary?.last_verdict ?? "none"}`} /></span>
             <span className="nb-text">{n.name}</span>
             {n.pinned && <span className="nb-pin" title="Pinned"><Pin size={13} filled /></span>}
           </NavLink>
         );
       })}
+      {/* what the coloured dots are, said once under the list (DA-032: they were unexplained) */}
+      {!!sideNotebooks?.length && <span className="small muted side-note-wrap nb-key" data-testid="nb-dot-key">Dots: each notebook's last verdict.</span>}
       {!!notebooks?.length && <Link to={allNotebooks} className="nb-more">{notebooks.length > SIDE_NOTEBOOKS ? `All ${notebooks.length} notebooks` : "All notebooks"}</Link>}
     </div>
   );

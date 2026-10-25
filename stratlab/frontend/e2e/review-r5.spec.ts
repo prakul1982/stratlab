@@ -275,9 +275,10 @@ test.describe("StratLab's own library, readable signed out (R5V-011)", () => {
     await open(page, "/library/nothing-here-1");
     await expect(page.getByText("This strategy isn't available")).toBeVisible({ timeout: 30_000 });
     await expect(page).toHaveTitle("Strategy not found · StratLab");
+    // a shared verdict that isn't there goes to the shared address's real 404, with a title of its own (DA-035)
     await open(page, "/verdict/not-a-real-token");
-    await expect(page.getByText("This verdict isn't available")).toBeVisible({ timeout: 30_000 });
-    await expect(page).toHaveTitle("Verdict not available · StratLab");
+    await expect(page.getByRole("heading", { name: "This shared link isn't available" })).toBeVisible({ timeout: 30_000 });
+    await expect(page).toHaveTitle("Link not available · StratLab");
   });
 });
 

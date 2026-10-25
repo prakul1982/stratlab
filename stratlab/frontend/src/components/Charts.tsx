@@ -55,14 +55,17 @@ export function Heatmap({ grid, yours, label }: { grid: number[][]; yours: [numb
       <div role="grid" aria-label={label} style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 2 }}>
         {/* each row is a row for screen readers (a grid's cells must sit in rows) without changing the layout (R5O-030) */}
         {grid.map((row, r) => <div key={r} role="row" aria-label={`Row ${r + 1}`} style={{ display: "contents" }}>{row.map((val, c) => {
-          const a = Math.min(1, 0.25 + Math.abs(val) / 20).toFixed(2);
+          // the colour's share runs from the theme's floor (--heat-floor) up to full at a 15% move: on the dark card a
+          // quarter of the colour read as the card itself, so the weakest "made money" cells looked empty (DA-026)
+          const k = Math.min(1, Math.abs(val) / 15).toFixed(3);
+          const share = `calc(var(--heat-floor, 25%) + (100% - var(--heat-floor, 25%)) * ${k})`;
           const mine = r === yours[0] && c === yours[1];
           return (
             <span key={`${r}-${c}`} role="gridcell" tabIndex={0} aria-label={`${fmt(val)}${mine ? ", your settings" : ""}`}
               title={`${fmt(val)}${val > 0 ? ", made money" : val < 0 ? ", lost money" : ""}${mine ? " · your settings" : ""}`}
               onPointerEnter={() => setOn([r, c])} onFocus={() => setOn([r, c])} onBlur={() => setOn(null)} style={{
                 height: 28, borderRadius: 4, cursor: "default",
-                background: val > 0 ? `color-mix(in srgb, var(--series-1) ${+a * 100}%, transparent)` : `color-mix(in srgb, var(--series-2) ${+a * 100}%, transparent)`,
+                background: `color-mix(in srgb, var(${val > 0 ? "--series-1" : "--series-2"}) ${share}, transparent)`,
                 outline: mine ? "2.5px solid var(--ink)" : on && on[0] === r && on[1] === c ? "1.5px solid var(--ink-2)" : undefined, outlineOffset: 1,
               }} />
           );

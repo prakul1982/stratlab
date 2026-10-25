@@ -1,11 +1,11 @@
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { money, monthYear, num, pct } from "../lib/format";
-import { changes } from "../lib/compare";
+import { fmtDate, money, monthYear, num, pct } from "../lib/format";
+import { changes, onDates } from "../lib/compare";
 import type { Experiment } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
 import { VerdictBadge } from "../components/ui";
-import { badgeLabel, checksLine } from "../lib/tradeUi";
+import { badgeLabel, checksCell } from "../lib/tradeUi";
 import { compareGap, legacyNote, splitLegacy } from "../lib/legacyRun";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, Select, Signed, Skeleton, type Column } from "../components/kit";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
@@ -70,19 +70,30 @@ export function CompareExperiments() {
   const ra = ret(a), rb = ret(b);
   const dates = Array.from(new Set([...ra.keys(), ...rb.keys()])).sort();
   const lbl = dates.map((d) => monthYear(d));
+  // on a time axis by date (each day its own distance, not each point: 2025→2026 was three times as wide as 2022→2023),
+  // each run's line drawn across its own window (DA-031)
+  const xs = dates.map((d) => Date.parse(`${d}T00:00:00Z`));
+  const lineA = onDates(ra, dates), lineB = onDates(rb, dates);
+  const span = (m: Map<string, number>) => { const k = [...m.keys()].sort(); return k.length ? `${fmtDate(k[0])} to ${fmtDate(k[k.length - 1])}` : ""; };
+  const spanA = span(ra), spanB = span(rb);
+  // said when the windows differ by month, not for runs a day or two apart
+  const months = (m: Map<string, number>) => { const k = [...m.keys()].sort(); return k.length ? `${monthYear(k[0])}|${monthYear(k[k.length - 1])}` : ""; };
+  const apart = months(ra) !== months(rb);
   const diff = changes(a, b);
   // the last flag is true for a gain or loss, which is green or red like everywhere else
   const defs: [string, (e: Experiment) => string, (e: Experiment) => number | null, boolean, boolean?][] = [
     ["Return after costs", (e) => pct(e.stats.ret), (e) => e.stats.ret, true, true],
     ["Yearly return", (e) => pct(e.stats.cagr), (e) => e.stats.cagr, true, true],
-    ["Worst drop", (e) => pct(-Math.abs(e.stats.mdd)), (e) => -Math.abs(e.stats.mdd), true, true],
+    // the verdict's own name for it (DA-031: "Worst drop" here, "Worst fall" there)
+    ["Worst fall", (e) => pct(-Math.abs(e.stats.mdd)), (e) => -Math.abs(e.stats.mdd), true, true],
     ["Trades", (e) => String(e.stats.n), () => null, false],
     ["Win rate", (e) => e.stats.n ? `${e.stats.win.toFixed(0)}%` : "–", (e) => e.stats.win, true],
     ["Sharpe", (e) => num(e.stats.sharpe, 2), (e) => e.stats.sharpe, true],
     // each run's costs in its own currency (v1 on NIFTY in rupees beside v2 on AAPL in dollars)
     // ...and never marked the smaller of two currencies
     ["Costs paid", (e) => money(e.costs.total, e.instrument?.currency), (e) => -e.costs.total, (a.instrument?.currency || "") === (b.instrument?.currency || "")],
-    ["Checks passed", (e) => checksLine(e.verdict.passed, e.verdict.total), (e) => e.verdict.passed, true],
+    // a count in a cell, "2 of 4", not the verdict's sentence "4 of 4 checks run · 2 passed" (DA-031)
+    ["Checks passed", (e) => checksCell(e.verdict.passed, e.verdict.total), (e) => e.verdict.passed, true],
     ["Buy and hold", (e) => pct(e.stats.buy_hold_ret), () => null, false],
   ];
   const lines: Line[] = defs.map(([label, show, score, better, gain]) => {
@@ -117,10 +128,11 @@ export function CompareExperiments() {
       </Card>
       <Card label="Return over the test">
         <CardHead level={3} title="Return over the test" />
-        <XYChart ariaLabel="Both experiments' return over time" height={260} times={dates} labels={lbl}
-          series={[{ id: "a", values: dates.map((d) => ra.get(d) ?? null), color: "var(--muted)", width: 1.5, dash: "5 4", label: `v${a.v} · ${a.label}` },
-            { id: "b", values: dates.map((d) => rb.get(d) ?? null), color: "var(--series-1)", label: `v${b.v} · ${b.label}` }]}
+        <XYChart ariaLabel="Both experiments' return over time" height={260} times={dates} x={xs} labels={lbl}
+          series={[{ id: "a", values: lineA, color: "var(--muted)", width: 1.5, dash: "5 4", label: `v${a.v} · ${a.label}` },
+            { id: "b", values: lineB, color: "var(--series-1)", label: `v${b.v} · ${b.label}` }]}
           format={(v) => pct(v)} signedTip axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
+        {apart && <p className="k-note" data-testid="compare-windows">The two runs cover different dates: v{a.v} {spanA}, v{b.v} {spanB}. Each line is drawn over its own run's dates.</p>}
       </Card>
       <Card label="The numbers">
         <CardHead level={3} title="The numbers" info="Bold marks the larger of the two on each line. A higher backtest figure is not proof: the verdict's honesty checks are what test for luck." infoLabel="About the numbers" />

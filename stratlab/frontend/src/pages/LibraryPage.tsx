@@ -11,6 +11,7 @@ import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
 import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat, type Column } from "../components/kit";
 import { usePersisted } from "../lib/persist";
+import { LIBRARY_DATES } from "../lib/libraryText";
 import "./trade/trade.css";
 
 
@@ -42,7 +43,8 @@ export function LibraryPage() {
   const [q, setQ] = useState(() => new URLSearchParams(location.search).get("q") ?? "");
   const [market, setMarket] = useState("");
   const [verdict, setVerdict] = useState("");
-  const [sort, setSort] = useState("best");
+  // furthest ahead of buy and hold first by default: by checks alone, a strategy 108.5 points behind it led the list (DA-037)
+  const [sort, setSort] = useState("hold");
   const [official, setOfficial] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -120,7 +122,8 @@ export function LibraryPage() {
           <Select label="Market" value={market} onChange={setMarket} options={[{ value: "", label: "Every market" }, ...live.map((m) => ({ value: m.id, label: m.name }))]} />
           <Select label="Verdict" value={verdict} onChange={setVerdict} options={VERDICTS.map(([value, label]) => ({ value, label }))} />
           <Seg label="Whose" options={[{ value: "all", label: "Everyone's" }, { value: "official", label: "StratLab's own" }]} value={official ? "official" : "all"} onChange={(v) => setOfficial(v === "official")} />
-          <Seg label="Sort" options={[{ value: "best", label: "Best verdict" }, { value: "new", label: "Newest" }, { value: "copied", label: "Most copied" }]} value={sort} onChange={setSort} />
+          <Seg label="Sort" options={[{ value: "hold", label: "Ahead of buy and hold", short: "Vs hold" }, { value: "best", label: "Most checks passed", short: "Checks" },
+            { value: "new", label: "Newest" }, { value: "copied", label: "Most copied", short: "Copied" }]} value={sort} onChange={setSort} />
           {!phone && <Seg label="View" options={[{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }]} value={layout} onChange={(v) => setLayout(v as "cards" | "table")} />}
         </div>
       </Card>
@@ -133,6 +136,10 @@ export function LibraryPage() {
         ) : (
           <>
             <span className="k-small k-muted">{total} strateg{total === 1 ? "y" : "ies"}</span>
+            {/* said once for the list, not on every card (DA-037), and why a copy's figures can differ from its card (DA-038) */}
+            <p className="k-note" data-testid="lib-list-notes">
+              {rows.some(trails) && <>{CHECKS_NOT_HOLD} </>}{LIBRARY_DATES}
+            </p>
             {layout === "table" && !phone ? (
               <Card label="Strategies">
                 <DataTable label="Strategies" rows={rows} rowKey={(e) => e.id} columns={tableCols} />
@@ -159,7 +166,6 @@ export function LibraryPage() {
                         </div>
                         <div className="k-row"><BehindHold e={e} /><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />{checksBeyond(checksOf(e), e.verdict.label) && <span className="k-note">{checksBeyond(checksOf(e), e.verdict.label)}</span>}{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                         <HoldLine e={e} />
-                        {trails(e) && <p className="k-note" data-testid="lib-checks-not-hold">{CHECKS_NOT_HOLD}</p>}
                         {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
                         {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                         {/* two lines of the description; the rest is a tap away in its title, so a card isn't a wall of text */}

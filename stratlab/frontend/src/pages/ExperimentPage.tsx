@@ -10,7 +10,8 @@ import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts"
 import { pctTick, moneyCompact } from "../lib/chartFormat";
 import { instrumentLoader, PriceChart, strategyStudies, type Tf } from "../charts/price/lazy";
 import { Info, Modal, STATUS_NAME } from "../components/ui";
-import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, Seg, Signed, Skeleton, Stat, StatRow, usePhone, type Column } from "../components/kit";
+import { usePersisted } from "../lib/persist";
 import { HELP } from "../lib/help";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
@@ -18,7 +19,8 @@ import { libraryDraft } from "../lib/shareText";
 import { MoreMenu } from "../components/MoreMenu";
 import { track } from "../lib/analytics";
 import { siteUrl } from "../lib/share";
-import { Book, Globe, Layers, Pencil, Pulse, Share, Trash } from "../components/Icons";
+import { Book, Download, Globe, Layers, Pencil, Pulse, Share, Trash } from "../components/Icons";
+import { usePlansToast } from "../components/PlanInterest";
 import "./trade/trade.css";
 
 /* /n/:id/e/:v: one experiment's verdict, its four checks, the money, every trade and the extra tests. Built from the
@@ -109,7 +111,8 @@ function BasketInner({ nb, e }: { nb: Notebook; e: Experiment }) {
     finally { setBusy(false); }
   };
   const cols: Column<BasketRow>[] = [
-    { key: "sym", header: "Instrument", rowHeader: true, cell: (r) => <b title={r.name || undefined}>{r.symbol}</b> },
+    { key: "sym", header: "Instrument", rowHeader: true, cell: (r) => <><b title={r.name || undefined}>{r.symbol}</b>
+      {r.short && r.from ? <span className="k-sub-line">Prices from {fmtDate(r.from)}: not counted</span> : null}</> },
     { key: "ret", header: "Return", numeric: true, cell: (r) => (r.error ? "" : r.n ? <span className={upDown(r.ret)}>{pct(r.ret!)}</span> : "No trades") },
     { key: "bh", header: "Buy and hold", numeric: true, cell: (r) => (r.error ? "" : pct(r.buy_hold!)) },
     { key: "n", header: "Trades", numeric: true, cell: (r) => (r.error ? "" : r.n) },
@@ -125,6 +128,12 @@ function BasketInner({ nb, e }: { nb: Notebook; e: Experiment }) {
         <div className="k-row"><Badge tone={checkTone(b.status)}>{STATUS_NAME[b.status]}</Badge><span className="k-sub">{b.headline}</span></div>
         {b.tested > 0 && <p className="k-small k-muted">Median return <Signed value={b.median_ret ?? 0}>{pct(b.median_ret ?? 0)}</Signed> · beat buy and hold on {b.beat_buy_hold} of {b.tested}.</p>}
         <DataTable label="Similar instruments" columns={cols} rows={b.rows} rowKey={(r) => r.id} rowNote={(r) => r.error || undefined} />
+        {/* a row over a shorter window isn't like for like, so the count above leaves it out and says so (DA-030) */}
+        {(b.shorter?.length ?? 0) > 0 && (
+          <p className="k-note" data-testid="basket-shorter">
+            Not counted: {b.shorter!.map((x) => `${x.symbol} (prices from ${fmtDate(x.from)})`).join(", ")}. {b.shorter!.length === 1 ? "Its prices start" : "Their prices start"} well after this test's first day, so {b.shorter!.length === 1 ? "its figures cover" : "their figures cover"} a shorter period than the others.
+          </p>
+        )}
       </>}
     </Card>
   );
@@ -309,6 +318,22 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       nav(`/n/${nb.id}`);
     } catch (err) { fail(err); }
   };
+  const pub = usePublicLink(nb, e);
+  const { me } = useApp();
+  const plansToast = usePlansToast();
+  const canExport = !!me?.plan_info.features?.export;
+  // the trades as a CSV file: the "rules and trades" export Plans promises Pro, beside the rules' own export (DA-041)
+  const downloadTrades = async () => {
+    if (!canExport) { plansToast("Trade export is on the Pro plan."); return; }
+    try {
+      const r = await api<Response>(`/notebooks/${nb.id}/experiments/${e.v}/trades.csv`, { raw: true });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await r.blob());
+      a.download = `${nb.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "trades"}-v${e.v}-trades.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (x) { fail(x); }
+  };
   const cur = e.instrument.currency || "";
   const tz = tzOf(e.instrument);
   const intraday = e.tf !== "1d";
@@ -343,6 +368,17 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     { key: "ret", header: "Return", numeric: true, cell: (t) => { const r = tradeRet(t); return <span className={upDown(r)}>{pct(r, 2)}</span>; } },
     { key: "why", header: "Why it closed", wrap: true, cell: (t) => (t.exit_t ? t.why : "Valued at the last close") },
   ];
+  // on a phone each trade was a card of nine figures, about 240px, so 15 trades were a long scroll (DA-027): the short card
+  // is one line of when, then P&L and Return; every detail is one tap away, and the choice is kept on this device
+  const phone = usePhone();
+  const [tradeCards, setTradeCards] = usePersisted<"short" | "full">("stratlab.tradeCards", "short");
+  const shortCards = phone && tradeCards === "short";
+  const shortCols: Column<Trade>[] = [
+    { key: "trade", header: "Trade", rowHeader: true, cell: (t) => <>{e.group && t.symbol ? <b>{t.symbol} · </b> : null}{twoWay ? `${t.side === "short" ? "Short" : "Long"} · ` : ""}{at(t.entry_t)} → {t.exit_t ? at(t.exit_t) : "still open"}</> },
+    tradeCols.find((c) => c.key === "pnl")!,
+    tradeCols.find((c) => c.key === "ret")!,
+  ];
+  const shownCols = shortCards ? shortCols : tradeCols;
   const stats: [string, string, number | null, string][] = [
     ["Total return", pct(st.ret), st.ret, HELP.totalReturn],
     ["Buy and hold", pct(st.buy_hold_ret), st.buy_hold_ret, HELP.buyHold],
@@ -358,7 +394,8 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title={nb.name}
         lede={<><Link to={`/n/${nb.id}`} className="link">← Back to the notebook</Link> · {/^Experiment v\d+$/.test(e.label) ? e.label : `v${e.v}: ${e.label}`} · {e.instrument.symbol} · {TF_NAME[e.tf]} · {yearSpan(e.range.from.slice(0, 4), e.range.to.slice(0, 4))} · {withOpen(st.n, open)}</>}
-        actions={<ShareMenu nb={nb} e={e} />} />
+        actions={<ShareMenu nb={nb} e={e} pub={pub} />} />
+      <PublicLinkNote pub={pub} />
       {legacy && (
         <Notice tone="warn">
           {legacyNote(e)}
@@ -451,9 +488,13 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
       <Card label="Every trade">
         <CardHead title="Every trade" info={HELP.trades} infoLabel="About the trades"
-          actions={<span className="k-note" data-testid="trades-caption">{list.caption} · P&L and Return after costs</span>} />
-        <DataTable stack label="Every trade" columns={tradeCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period."
-          foot={list.hidden ? { [tradeCols[0].key]: `${list.hidden.toLocaleString("en-IN")} earlier closed trade${list.hidden === 1 ? "" : "s"}, not listed`, pnl: <span className={upDown(list.hiddenPnl)}>{money(list.hiddenPnl, cur)}</span> } : undefined} />
+          actions={<><span className="k-note" data-testid="trades-caption">{list.caption} · P&L and Return after costs</span>
+            {allTrades.length > 0 && <button type="button" className="btn quiet sm" onClick={downloadTrades}><Download size={16} />Download as CSV{canExport ? "" : " (Pro)"}</button>}</>} />
+        {phone && allTrades.length > 1 && (
+          <Seg label="Trade cards" options={[{ value: "short", label: "Short cards" }, { value: "full", label: "Every detail" }]} value={tradeCards} onChange={(x) => setTradeCards(x as "short" | "full")} />
+        )}
+        <DataTable stack label="Every trade" columns={shownCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period." phonePage={30}
+          foot={list.hidden ? { [shownCols[0].key]: `${list.hidden.toLocaleString("en-IN")} earlier closed trade${list.hidden === 1 ? "" : "s"}, not listed`, pnl: <span className={upDown(list.hiddenPnl)}>{money(list.hiddenPnl, cur)}</span> } : undefined} />
         {list.hidden > 0 && <p className="k-note" data-testid="trades-reconcile">Only the newest {closed.toLocaleString("en-IN")} closed trades are kept as rows{e.trades_trimmed ? " (an older experiment keeps fewer, to save space)" : ""}. The rows and the line for the {list.hidden.toLocaleString("en-IN")} not listed add up to the total P&L, {money(list.total, cur)}.</p>}
         {/* a few shares and a flat charge per order: the return can go the other way from the price (R50-015: 2 ITC shares
             up 4.5% shown at −4.97%) */}
@@ -487,22 +528,17 @@ export function ExperimentPage() {
 }
 
 
-/** Share a verdict: an image for chats and posts, or a public link that previews as the same card. */
-function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
-  const { notify, fail, theme } = useApp();
+/** A verdict's public link: whether it is on, making it (after saying what becomes public), copying it and turning it off.
+ *  Shared by the Share menu and the page's own line about it, so the page says the verdict is public for as long as it
+ *  is (DA-033: the link was only in a toast for two seconds, and nothing on the page said the verdict was public). */
+function usePublicLink(nb: Notebook, e: Experiment) {
+  const { notify, fail } = useApp();
   const [token, setToken] = useState<string | null>(e.public ?? null);
-  const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
   const link = token ? `${siteUrl()}/v/${token}` : null;
-  const [ask, setAsk] = useState<"link" | "library" | null>(null);
-  const image = async () => {
-    try {
-      const r = await shareVerdict(nb, e, dark ? "dark" : "light", link);
-      if (r !== "cancelled") track("card shared", { kind: "verdict", channel: r });
-      if (r === "saved") notify("Share card saved (and copied, where your browser allows). Post it anywhere.");
-    } catch (x) { fail(x); }
-  };
+  const [ask, setAsk] = useState<"make" | "off" | null>(null);
   const linking = useRef(false);
-  const makeLink = async () => {
+  const make = async () => {
+    setAsk(null);
     if (linking.current) return;
     linking.current = true;
     try {
@@ -512,13 +548,57 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
       setToken(out.token);
       track("card shared", { kind: "verdict", channel: "link" });
       const url = `${siteUrl()}/v/${out.token}`;
-      try { await navigator.clipboard.writeText(url); notify(`Public link copied: ${url}`); } catch { notify(`Public link: ${url}`); }
+      // the link itself stays on the page (the line under the title); the toast only says it was copied
+      try { await navigator.clipboard.writeText(url); notify("Public link made and copied."); } catch { notify("Public link made."); }
     } catch (x) { fail(x); } finally { linking.current = false; }
   };
   const copy = async () => { if (!link) return; try { await navigator.clipboard.writeText(link); notify("Link copied."); } catch { notify(link); } };
   const off = async () => {
     setAsk(null);
     try { await api(`/notebooks/${nb.id}/experiments/${e.v}/share`, { method: "DELETE" }); setToken(null); notify("Public link turned off."); } catch (x) { fail(x); }
+  };
+  const where = e.group ? e.group.name : e.instrument.symbol;
+  const dialogs = (
+    <>
+      {ask === "make" && (
+        <ConfirmDialog title="Make a public link?" confirmLabel="Make the link" danger={false} onConfirm={make} onClose={() => setAsk(null)}>
+          Anyone with the link can open this verdict without an account: the notebook's name "{nb.name}", {where}, the dates and candle size, the
+          headline and the four checks, the return beside buy and hold, the worst fall, the number of trades, and the chart of the return (from
+          100, no amounts). Your rules, capital, trades and notes stay private. You can turn it off at any time.
+        </ConfirmDialog>
+      )}
+      {ask === "off" && <ConfirmDialog title="Turn off the public link?" confirmLabel="Turn it off" onConfirm={off} onClose={() => setAsk(null)}>Anyone who has it will see that it's gone.</ConfirmDialog>}
+    </>
+  );
+  return { token, link, copy, askMake: () => setAsk("make"), askOff: () => setAsk("off"), dialogs };
+}
+type PublicLink = ReturnType<typeof usePublicLink>;
+
+/** The page's own line while the verdict is public: the link in full, with Copy and Turn off beside it (DA-033). */
+function PublicLinkNote({ pub }: { pub: PublicLink }) {
+  if (!pub.link) return null;
+  return (
+    <Notice label="Public link" actions={<>
+      <button type="button" className="btn sm" onClick={pub.copy}>Copy link</button>
+      <button type="button" className="btn quiet sm danger" onClick={pub.askOff}>Turn off</button>
+    </>}>
+      <span data-testid="public-link-note"><b>This verdict is public.</b> Anyone with this link can open it: <a className="link k-any" href={pub.link} target="_blank" rel="noopener noreferrer">{pub.link}</a></span>
+    </Notice>
+  );
+}
+
+/** Share a verdict: an image for chats and posts, or a public link that previews as the same card. */
+function ShareMenu({ nb, e, pub }: { nb: Notebook; e: Experiment; pub: PublicLink }) {
+  const { notify, fail, theme } = useApp();
+  const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  const link = pub.link;
+  const [ask, setAsk] = useState<"library" | null>(null);
+  const image = async () => {
+    try {
+      const r = await shareVerdict(nb, e, dark ? "dark" : "light", link);
+      if (r !== "cancelled") track("card shared", { kind: "verdict", channel: r });
+      if (r === "saved") notify("Share card saved (and copied, where your browser allows). Post it anywhere.");
+    } catch (x) { fail(x); }
   };
   const nav = useNavigate();
   const [lib, setLib] = useState<string | null>(e.library ?? null);
@@ -555,10 +635,10 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
     <>
       <MoreMenu label="Share verdict" icon={<Share size={17} />} buttonClass="btn outline" align="right" items={[
         { label: "Share the card as an image", icon: <Share size={16} />, run: image },
-        ...(token ? [
-          { label: "Copy the public link", run: copy },
-          { label: "Turn off the public link", run: () => setAsk("link"), danger: true },
-        ] : [{ label: "Make a public link", run: makeLink }]),
+        ...(pub.token ? [
+          { label: "Copy the public link", run: pub.copy },
+          { label: "Turn off the public link", run: pub.askOff, danger: true },
+        ] : [{ label: "Make a public link", run: pub.askMake }]),
         ...(upload ? [] : lib ? [
           { label: "Update it in the strategy library", run: openPublish },
           { label: "Take it out of the library", run: () => setAsk("library"), danger: true },
@@ -581,7 +661,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
           </div>
         </Modal>
       )}
-      {ask === "link" && <ConfirmDialog title="Turn off the public link?" confirmLabel="Turn it off" onConfirm={off} onClose={() => setAsk(null)}>Anyone who has it will see that it's gone.</ConfirmDialog>}
+      {pub.dialogs}
       {ask === "library" && <ConfirmDialog title="Take this strategy out of the library?" confirmLabel="Take it out" onConfirm={unpublish} onClose={() => setAsk(null)}>Copies people already made stay theirs.</ConfirmDialog>}
     </>
   );
