@@ -527,7 +527,7 @@ def test_the_pulse_after_the_close_says_closed(monkeypatch):
     monkeypatch.setattr(A, "complete", fake)
     idx = [{"name": "NIFTY 50", "price": 22231.8, "change_pct": -1.64, "high52": 26277.35, "low52": 22182.55}]
     out = A.pulse("IN", "", idx, [], (None, None), closed=True)
-    assert out["tone"] == "Indian markets closed sharply lower on Thursday, with the NIFTY 50 at 22,231.8."
+    assert out["tone"] == "Indian markets closed sharply lower on Thursday, with the NIFTY 50 at 22,232."      # the card's whole points (DE-017)
     assert "The market has closed for the day" in seen["facts"]
     # during the session the words stay as written
     assert "opened" in A.pulse("IN", "", idx, [], (None, None), closed=False)["tone"]

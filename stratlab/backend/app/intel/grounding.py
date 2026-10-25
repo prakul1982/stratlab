@@ -318,10 +318,37 @@ _HIGHS = re.compile(r"\b(above|fresh|new|record|all[- ]time)\b[^.]{0,30}\bhighs?
 _NEAR_HIGH = re.compile(r"\b(near|close to|at|around|just below|approach\w*)\b[^.]{0,30}\b(52[- ]week|record) highs?\b", re.I)
 
 
+# "well below their 52-week highs", "far above its lows": a distance claim, held to every index the sentence speaks of
+_FAR_BELOW_HIGH = re.compile(r"\b(well|far|deep(?:ly)?|sharply|significantly|substantially|much|way)\s+(below|under|off|short of)\b"
+                             r"[^.]{0,30}\bhighs?\b", re.I)
+_FAR_ABOVE_LOW = re.compile(r"\b(well|far|comfortably|significantly|substantially|much|way)\s+(above|over|off)\b[^.]{0,30}\blows?\b", re.I)
+FAR_PCT = 5.0       # how far from a high or low "well below" or "far above" needs: a few percent is close, not far
+
+
+def _spoken_of(s: str, indices: list[dict]) -> list[dict]:
+    """The indices a sentence names (by full name, else by first word: "the Nifty"), else every one given ("all three
+    indices")."""
+    full = [i for i in indices if i.get("name") and re.search(r"(?<!\w)" + re.escape(str(i["name"])) + r"(?!\w)", s, re.I)]
+    if full:
+        return full
+    first = [i for i in indices if i.get("name") and re.search(r"(?<!\w)" + re.escape(str(i["name"]).split()[0]) + r"(?!\w)", s, re.I)]
+    return first or indices
+
+
 def range_claims_ok(s: str, indices: list[dict]) -> bool:
     """A claim about 52-week lows or highs holds for at least one index given (R5O-018: "well below their 52-week
-    lows" while NIFTY was above its low)."""
+    lows" while NIFTY was above its low). "Well below" a high, or "far above" a low, holds only when every index the
+    sentence speaks of is at least FAR_PCT away (DE-016: "All three indices closed well below their 52-week highs" with
+    the S&P 500 2.8% below its high)."""
     lv = [(i.get("price"), i.get("low52"), i.get("high52")) for i in indices if i.get("price")]
+    if _FAR_BELOW_HIGH.search(s) or _FAR_ABOVE_LOW.search(s):
+        high = bool(_FAR_BELOW_HIGH.search(s))
+        for i in _spoken_of(s, indices):
+            p, lo, hi = i.get("price"), i.get("low52"), i.get("high52")
+            ref = hi if high else lo
+            if not (p and ref) or (high and p > ref * (1 - FAR_PCT / 100)) or (not high and p < ref * (1 + FAR_PCT / 100)):
+                return False
+        return half_claim_ok(s, indices)
     if _BELOW_LOW.search(s):
         return any(lo and p <= lo * 1.001 for p, lo, _ in lv)
     if _NEAR_LOW.search(s):
@@ -426,6 +453,132 @@ def market_facts(indices: list[dict]) -> list[dict]:
         out.append({**i, "from_low_pct": round((p / lo - 1) * 100, 2) if p and lo else None,
                     "from_high_pct": round((p / hi - 1) * 100, 2) if p and hi else i.get("from_high_pct")})
     return out
+
+
+def _card_inr(name: str) -> bool:
+    """Whether an index card groups its level the Indian way (the NIFTYs and the SENSEX), as Research.tsx IndexStrip does."""
+    return "NIFTY" in name.upper() or name.upper() == "SENSEX"
+
+
+_INDEX_LEVEL = re.compile(r"(?<![\w.,₹$−+-])(\d{1,3}(?:,\d{2,3})+|\d{3,})(\.\d+)?(?!\d|,\d|\.\d|\s?%)")
+
+
+def card_levels(text, indices: list[dict]):
+    """The index levels in a read written as the index cards show them: whole points, grouped the card's way (DE-017:
+    "22,600.0" and "73,123.83" in the text beside cards of 22,600 and 73,124). Only a number that is an index's level
+    (to half a point) is touched; points moves, percentages and money stay as written."""
+    if not isinstance(text, str) or not text:
+        return text
+    levels = [(float(i["price"]), _card_inr(str(i.get("name") or ""))) for i in indices
+              if isinstance(i.get("price"), (int, float)) and i["price"] >= 100]
+
+    def one(m):
+        try:
+            v = float((m.group(1) + (m.group(2) or "")).replace(",", ""))
+        except ValueError:
+            return m.group(0)
+        for p, inr in levels:
+            if abs(v - p) <= 0.51:
+                return _grouped(float(int(p + 0.5)), 0, inr)        # Math.round's half-up, as the card rounds
+        return m.group(0)
+    return _INDEX_LEVEL.sub(one, text)
+
+
+_COUNT_NAMES = {2: "both", 3: "all three", 4: "all four"}
+
+
+def mood_line(indices: list[dict], sectors: dict | None = None) -> str:
+    """The mood in plain words, worked out from the day's index moves (and StratLab's sector count when there is one), so
+    it is a fact of the numbers and never the AI's impression (DD-001: a read that recited the levels and gave no mood).
+    Mixed when the indices moved different ways; else flat under 0.25% on average, mildly positive or negative under 1%,
+    positive or negative under 2%, sharply so beyond."""
+    moves = [(str(i["name"]), float(i["change_pct"])) for i in indices
+             if i.get("name") and isinstance(i.get("change_pct"), (int, float))][:4]
+    if not moves:
+        return ""
+    ups, downs = [n for n, c in moves if c > 0], [n for n, c in moves if c < 0]
+    avg = sum(c for _, c in moves) / len(moves)
+    sec = sectors if sectors and isinstance(sectors.get("of"), int) and sectors["of"] > 0 else None
+
+    def names(xs):
+        return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1]
+    if ups and downs:
+        out = f"Mixed: the {names(ups)} up and the {names(downs)} down on the day"
+        if sec:
+            out += f", with {sec.get('up', 0)} of {sec['of']} sector indices up and {sec.get('down', 0)} down"
+        return out + "."
+    a = abs(avg)
+    up = avg > 0 or (avg == 0 and not downs)
+    word = ("flat" if a < 0.25 else "mildly positive" if a < 1 and up else "mildly negative" if a < 1
+            else "positive" if a < 2 and up else "negative" if a < 2 else "sharply positive" if up else "sharply negative")
+    way = "up" if up else "down"
+    if a == 0:
+        return f"Flat: {_COUNT_NAMES.get(len(moves), 'the')} indices unchanged on the day." if len(moves) > 1 else "Flat on the day."
+    lo, hi = sorted(abs(c) for _, c in moves)[0], sorted(abs(c) for _, c in moves)[-1]
+    who = f"{_COUNT_NAMES[len(moves)]} indices" if len(moves) in _COUNT_NAMES else f"the {moves[0][0]}"
+    size = f"{lo:.2f}%" if f"{lo:.2f}" == f"{hi:.2f}" else f"{lo:.2f}% to {hi:.2f}%"
+    out = f"{word[:1].upper() + word[1:]}: {who} {way} on the day, by {size}"
+    if sec:
+        n = sec.get("up" if up else "down", 0)
+        out += f", with {n} of {sec['of']} sector indices {way}"
+    return out + "."
+
+
+# the subjects a day's headlines are often about, for naming the main story when the AI gives none that holds (DD-001)
+_STORIES = (("crude oil prices", r"\b(crude|brent|oil prices?)\b"), ("the rupee", r"\brupee\b"),
+            ("interest rates", r"\b(rbi|repo|rate cuts?|rate hikes?|fed|federal reserve|fomc|interest rates?|monetary policy)\b"),
+            ("inflation", r"\b(inflation|cpi|wpi)\b"), ("quarterly results", r"\b(q[1-4]|quarterly|results|earnings)\b"),
+            ("foreign investors' flows", r"\b(fiis?|fpis?|foreign (?:investors|funds|portfolio))\b"),
+            ("tariffs and trade", r"\b(tariffs?|trade (?:deal|war|talks|pact))\b"),
+            ("geopolitics", r"\b(war|geopolitic\w*|ceasefire|sanctions?|missile|strikes? on)\b"),
+            ("gold and silver", r"\b(gold|silver)\b"), ("bond yields", r"\b(bond|treasury) yields?\b"),
+            ("technology shares", r"\b(it stocks|it shares|tech stocks|tech shares|technology stocks|chip\w*|semiconductor\w*|ai stocks)\b"),
+            ("bank shares", r"\b(bank stocks|bank shares|banking stocks|psu banks|lenders)\b"))
+
+
+def _phrase_stems(phrase: str) -> list[str]:
+    return [w[:max(4, len(w) - 2)] for w in _cause_words(phrase)]
+
+
+def headline_count(phrase: str, titles: list[str]) -> int:
+    """How many headlines carry every word of a phrase (by stem, as cause_backed reads them)."""
+    stems = _phrase_stems(phrase)
+    if not stems:
+        return 0
+    return sum(1 for t in titles if all(re.search(r"\b" + re.escape(w), str(t or "").lower()) for w in stems))
+
+
+def main_story(driver: str, titles: list[str]) -> str:
+    """The day's main story as the headlines tell it, with how many of them carry it: the AI's `driver` (every word of it
+    in a headline) or the subject of _STORIES, whichever more headlines carry, at least two; "" when no subject is in two (DD-001: the read gave no cause while every headline on the page was about crude oil)."""
+    titles = [str(t or "") for t in titles if t]
+    best, n = "", 0
+    d = " ".join(str(driver or "").split()).strip(" .")
+    if d and len(d) <= 60 and not ADVICE.search(d) and not _PREVIEW.search(d) and not re.search(r"\d", d):
+        best = d if d[:2].isupper() else d[:1].lower() + d[1:]           # "crude oil", but "RBI policy" as written
+        n = headline_count(d, titles)
+    if n < 2:
+        best, n = "", 0
+    for name, rx in _STORIES:            # a subject more headlines carry is the main story, the AI's naming ties
+        k = sum(1 for t in titles if re.search(rx, t, re.I))
+        if k > n:
+            best, n = name, k
+    if n < 2:
+        return ""
+    return f"The main story in today's headlines: {best} ({n} of {len(titles)})."
+
+
+def flows_source(cash: dict | None) -> str:
+    """Where the FII and DII figures a read quotes come from, said without naming any data vendor (DD-001)."""
+    if not cash or not cash.get("as_of"):
+        return ""
+    try:
+        from datetime import date as _date
+        d = _date.fromisoformat(str(cash["as_of"])[:10])
+        day = f"{d.day} {d.strftime('%b')}"
+    except ValueError:
+        return ""
+    return f"FII and DII figures are the exchange's provisional cash-market numbers for {day}, in ₹ crore; the final ones can differ a little."
 
 
 def template_tone(indices: list[dict]) -> str:
@@ -753,6 +906,47 @@ JUDGE = re.compile(r"\b(strong|weak|healthy|poor|excellent|robust|solid|impressi
                    r"|\b(low|high|rich|stretched|modest|lofty|full|undemanding|demanding|reasonable) valuation\b"
                    r"|\b(indicating|suggesting|signalling|signaling)\b", re.I)
 _WATCH_PAST = re.compile(r"\b(actual|reported|beat|beats|missed|came in)\b", re.I)
+
+# how big a gap the words make it: "slightly ahead" needs a small one, "far ahead" a large one (DD-061: profit growth of
+# 14.9% against 6.3%, more than double, called "slightly ahead")
+_SMALL_GAP = re.compile(r"\b(slightly|marginally|a little|a bit|modestly|somewhat|narrowly|fractionally|just)\b\s+"
+                        r"(ahead|higher|faster|lower|slower|behind|better|more|less|above|below|greater|bigger|smaller)\b", re.I)
+_BIG_GAP = re.compile(r"\b(far|much|well|significantly|substantially|considerably|sharply|vastly|markedly)\s+"
+                      r"(ahead|higher|faster|lower|slower|behind|above|below|greater|bigger|smaller|more|less)\b", re.I)
+_VS = re.compile(r"\s(?:vs\.?|versus|against|compared (?:with|to)|over)\s", re.I)
+_PCT_NUM = re.compile(r"[-−+]?\d[\d,]*(?:\.\d+)?(?=\s?%)")
+
+
+def _gap_pairs(s: str) -> list[tuple[float, float]]:
+    """The figures a comparison sets against each other: "11.2% and 14.9% vs 10.7% and 6.3%" pairs 11.2 with 10.7 and
+    14.9 with 6.3. Only when each side of the "vs" has as many percentages as the other."""
+    parts = _VS.split(s, maxsplit=1)
+    if len(parts) != 2:
+        return []
+    num = lambda t: [float(x.replace(",", "").replace("−", "-")) for x in _PCT_NUM.findall(t)]       # noqa: E731
+    left, right = num(parts[0]), num(parts[1])
+    return list(zip(left, right)) if left and len(left) == len(right) else []
+
+
+def degree_ok(s: str) -> bool:
+    """A sentence that sizes a gap agrees with its own figures: "slightly" only when every pair is close (within 25%
+    of the larger and 3 points), "far" or "much" only when one pair is wide apart (DD-061). A sentence without pairs
+    of figures to check is kept."""
+    small, big = _SMALL_GAP.search(s), _BIG_GAP.search(s)
+    if not small and not big:
+        return True
+    pairs = _gap_pairs(s)
+    if not pairs:
+        return True
+
+    def wide(x, y):
+        hi, lo = max(abs(x), abs(y)), min(abs(x), abs(y))
+        return abs(x - y) > 3 or (hi > 0 and (hi - lo) / hi > 0.25) or (x < 0) != (y < 0)
+    if small and any(wide(x, y) for x, y in pairs):
+        return False
+    if big and not any(wide(x, y) for x, y in pairs):
+        return False
+    return True
 
 
 def _fy_num(t: str) -> int:

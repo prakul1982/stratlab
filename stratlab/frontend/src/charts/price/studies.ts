@@ -11,28 +11,34 @@ export interface StudyParam { label: string; min: number; max: number; step: num
 
 export interface StudyDef {
   type: StudyType; name: string; pane: "price" | "own"; params: StudyParam[];
+  /** One short line under the name in the Indicators menu (DD-046: the menu read as a wall of definitions). */
   about: string;
+  /** The exact definition, in the item's tooltip, where the short line leaves something out. */
+  detail?: string;
 }
 
 export const STUDIES: StudyDef[] = [
-  { type: "sma", name: "Moving average (SMA)", pane: "price", about: "The average close of the last N candles.",
+  { type: "sma", name: "Moving average (SMA)", pane: "price", about: "Average close of the last N candles.",
     params: [{ label: "Length", min: 1, max: 400, step: 1, def: 20 }] },
   { type: "ema", name: "Exponential average (EMA)", pane: "price", about: "An average that weighs recent closes more.",
     params: [{ label: "Length", min: 1, max: 400, step: 1, def: 50 }] },
-  { type: "bb", name: "Bollinger bands", pane: "price", about: "The N-candle average with bands K standard deviations either side.",
+  { type: "bb", name: "Bollinger bands", pane: "price", about: "An average with bands a set number of standard deviations away.",
     params: [{ label: "Length", min: 2, max: 200, step: 1, def: 20 }, { label: "Deviations", min: 0.5, max: 5, step: 0.1, def: 2 }] },
-  { type: "vwap", name: "VWAP", pane: "price", about: "Volume-weighted average price: from each day's open on intraday candles, over the last N candles on daily ones.",
+  { type: "vwap", name: "VWAP", pane: "price", about: "Volume-weighted average price.",
+    detail: "From each day's open on intraday candles, over the last N candles on daily ones.",
     params: [{ label: "Length (daily candles)", min: 1, max: 200, step: 1, def: 20 }] },
-  { type: "supertrend", name: "Supertrend", pane: "price", about: "A trailing band, ATR times the multiplier from the candle's middle.",
+  { type: "supertrend", name: "Supertrend", pane: "price", about: "A trailing band set by the average true range.",
     params: [{ label: "ATR length", min: 1, max: 100, step: 1, def: 10 }, { label: "Multiplier", min: 0.5, max: 10, step: 0.1, def: 3 }] },
-  { type: "stage", name: "Stage (30-week average)", pane: "price", about: "Weinstein's stage 1 to 4 from the 150-day average and its slope; the legend shows the stage.",
+  { type: "stage", name: "Stage (150-day average)", pane: "price", about: "Stage 1 to 4 from the 150-day average and its slope.",
+    detail: "Weinstein's stages from the 150-day (30-week) average and its slope; the legend shows the stage.",
     params: [{ label: "Average length", min: 10, max: 400, step: 1, def: 150 }, { label: "Slope look-back", min: 1, max: 100, step: 1, def: 20 }] },
   { type: "hl52", name: "52-week high and low", pane: "price",
-    about: "On daily candles, the highest high and lowest low of the 252 candles before each one, the candle itself left out, as in the rules. On other candles, of the year up to and including each one.",
+    about: "The highest high and lowest low of the past year.",
+    detail: "On daily candles, the highest high and lowest low of the 252 candles before each one, the candle itself left out, as in the rules. On other candles, of the year up to and including each one.",
     params: [] },
-  { type: "rsi", name: "RSI", pane: "own", about: "Relative strength index, 0 to 100, with 30 and 70 lines.",
+  { type: "rsi", name: "RSI", pane: "own", about: "Relative strength index, 0 to 100.",
     params: [{ label: "Length", min: 2, max: 100, step: 1, def: 14 }] },
-  { type: "macd", name: "MACD", pane: "own", about: "Fast minus slow exponential average, its signal line and the gap between them.",
+  { type: "macd", name: "MACD", pane: "own", about: "Fast minus slow average, with its signal line.",
     params: [{ label: "Fast", min: 1, max: 100, step: 1, def: 12 }, { label: "Slow", min: 2, max: 200, step: 1, def: 26 }, { label: "Signal", min: 1, max: 50, step: 1, def: 9 }] },
 ];
 

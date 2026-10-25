@@ -48,7 +48,7 @@ test("one name for the person's own space, and the company lookup and the Invest
   }
   const research = src("pages/Research.tsx"), invest = src("pages/SpaceHomes.tsx");
   assert.match(research, /title="Look up a company"/);
-  assert.match(invest, /title="Your research desk"/);
+  assert.match(invest, /title="Invest home"/);
   // the watchlist lives on the desk (and its own page), not on both
   const lookup = research.slice(research.indexOf("export function ResearchHome"), research.indexOf("/* ================= One company"));
   assert.doesNotMatch(lookup, /title="Your watchlist"/);

@@ -87,7 +87,8 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
       {v.allowed && v.headline && <p className="k-small"><b>{v.headline}</b>.</p>}
       {v.allowed && v.metrics.length > 0 && (
         <>
-          <DataTable label={`${symbol} business update figures`} rows={v.metrics.slice(0, 10)} rowKey={(m) => m.key} rowAttrs={(m) => ({ className: chosen?.key === m.key ? "on" : "" })}
+          {/* a card per figure on a phone, its changes side by side, not five columns cut at "vs Q…" (DD-051) */}
+          <DataTable label={`${symbol} business update figures`} stack rows={v.metrics.slice(0, 10)} rowKey={(m) => m.key} rowAttrs={(m) => ({ className: chosen?.key === m.key ? "on" : "" })}
             columns={[
               { key: "f", header: "Figure", rowHeader: true, wrap: true, cell: (m) => (
                 <><button className="link-btn" onClick={() => setPick(m.key)} aria-pressed={chosen?.key === m.key}>{m.metric}</button>

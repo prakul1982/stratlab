@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { FEATURES, GOAL_ORDER, GOALS, resolve, type Goal } from "../lib/features";
-import { Search } from "./Icons";
 import "../pages/trade/trade.css";
 
 const OPEN_KEY = "stratlab.explore.open";
@@ -29,10 +28,8 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
   };
   return (
     <section className="k-stack k-explore" aria-labelledby="explore-h">
-      <div className="k-spread">
-        <h2 id="explore-h" className="h2">{title}</h2>
-        <button className="btn quiet sm" onClick={() => window.dispatchEvent(new Event("stratlab:search"))}><Search size={16} />Search everything</button>
-      </div>
+      {/* no "Search everything" here: the menu's search box is on every page, and a second one read as another search (DD-002) */}
+      <h2 id="explore-h" className="h2">{title}</h2>
       {goals.slice(0, all ? goals.length : 1).map((g) => {
         const items = shown.filter((f) => f.goal === g);
         return (

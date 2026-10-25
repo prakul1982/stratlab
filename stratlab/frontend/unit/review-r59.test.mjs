@@ -28,7 +28,8 @@ test("R59-001: the company search takes the cursor on a desktop with a mouse, ne
   }
   // the Invest home's search (both of its boxes) and the Trade home's go through it
   assert.equal((read("src/pages/Research.tsx").match(/autoFocus=\{typingFirst\(\)\}/g) ?? []).length, 2);
-  assert.match(read("src/pages/SpaceHomes.tsx"), /<CompanySearch region=\{region\} autoFocus=\{typingFirst\(\)\} \/>/);
+  // the Invest home has no search box of its own: Look up a company is the one (DD-002)
+  assert.doesNotMatch(read("src/pages/SpaceHomes.tsx"), /<CompanySearch/);
 });
 
 test("R59-007: a chip row that wraps keeps + Custom level with its first line", () => {

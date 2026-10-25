@@ -115,6 +115,29 @@ def describe(a: dict) -> str:
     return "Makes a new 52-week high" if k == "high52" else "Makes a new 52-week low"
 
 
+def fits(region: str, symbol: str) -> dict:
+    """Which instrument-bound alerts fit a symbol, for the form's list (DD-024: a plain stock offered an ETF's NAV gap and
+    MWPL use): `etf` whether it is on the exchange's ETF list (an ETF has no insider trades or business updates), `fo`
+    whether it has stock futures (MWPL). None where that list hasn't been read yet: the form then leaves the choice in."""
+    if str(region).upper() != "IN":
+        return {"etf": False, "fo": False}
+    sym = str(symbol or "").strip().upper()
+    etf = fo = None
+    try:
+        from . import etf_nav
+        rows = etf_nav.load_live()["rows"]
+        etf = (sym in rows) if rows else None
+    except Exception:
+        pass
+    try:
+        from . import stock_futures
+        got = stock_futures.DESK.store.latest()
+        fo = (sym in (got[1].get("rows") or {})) if got and (got[1].get("rows") or {}) else None
+    except Exception:
+        pass
+    return {"etf": etf, "fo": fo}
+
+
 # ---------- checking and cleaning what people send ----------
 def _finite(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
