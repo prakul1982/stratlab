@@ -68,18 +68,20 @@ test("Ctrl K: a question shows the explanation already written for it", async ({
   expect(errors).toEqual([]);
 });
 
-test("the Invest home's company box finds a company by its name, as its placeholder suggests", async ({ page }) => {
-  const errors = await open(page, "/invest");
-  const input = page.getByRole("textbox", { name: "Search any company listed in India (NSE or BSE)" });
+// the company box lives on Look up a company; the Invest home has none of its own since DD-002
+test("Look up a company's box finds a company by its name, as its placeholder suggests", async ({ page }) => {
+  const errors = await open(page, "/research");
+  const input = page.getByPlaceholder(/Search by name or symbol, like HDFC Bank/);
   await expect(input).toBeVisible({ timeout: 30_000 });
   for (const [q, sym] of [["Apollo Hospitals", "APOLLOHOSP"], ["HDFC Bank", "HDFCBANK"], ["Infosys", "INFY"], ["Tata Motors", "TMPV"]] as const) {
     await input.fill(q);
-    const first = page.locator(".search-box .results button").first();
+    const first = page.getByRole("listbox", { name: "Suggestions" }).getByRole("option").first();
     await expect(first, q).toContainText(sym);
     await expect(page.getByText("No matches")).toHaveCount(0);
   }
   await input.fill("Apollo Hospitals");
-  await expect(page.locator(".search-box .results button").first()).toContainText("Apollo Hospitals Enterprise");
+  await expect(page.getByRole("listbox", { name: "Suggestions" }).getByRole("option").first()).toContainText("Apollo Hospitals Enterprise");
+  await input.press("ArrowDown");          // nothing is marked until ↓, so Enter on a name never opens a guess
   await input.press("Enter");
   await expect(page).toHaveURL(/\/research\/IN\/APOLLOHOSP$/);
   expect(errors).toEqual([]);
@@ -92,7 +94,7 @@ test("the notebook's market picker finds a company by its name", async ({ page }
   await market.getByRole("button", { name: /India/ }).first().click();
   const input = page.getByPlaceholder(/Search a stock, index or F&O/);
   await input.fill("HDFC Bank");
-  const first = page.locator(".results button").first();
+  const first = page.getByRole("listbox", { name: "Suggestions" }).getByRole("option").first();
   await expect(first).toContainText("HDFCBANK");
   await expect(first).toContainText("HDFC Bank");
   await input.fill("Infosis");                       // a typo

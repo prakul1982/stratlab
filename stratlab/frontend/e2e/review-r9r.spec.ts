@@ -72,7 +72,8 @@ test("R9R-008: the Invest home's United States tab shows the S&P 500 and US card
   await expect(page.getByTestId("invest-us-redflags").getByRole("link")).toHaveAttribute("href", "/research/filings?region=US");
   await expect(page.getByText("Red flags in your holdings and watchlist")).toHaveCount(0);
   // the breadth card asked for a US group, and the results for the US only
-  expect(asked.some((p) => /\/invest\/breadth\?group=sp500/.test(p))).toBe(true);
+  // polled: the page's request events reach the test a moment after the card shows (failed once on a busy runner)
+  await expect.poll(() => asked.some((p) => /\/invest\/breadth\?group=sp500/.test(p))).toBe(true);
   expect(asked.filter((p) => /\/research\/results\?region=US/.test(p)).length).toBeGreaterThan(0);
   // and back: India's cards come back
   await page.getByRole("radio", { name: "₹ India" }).click();

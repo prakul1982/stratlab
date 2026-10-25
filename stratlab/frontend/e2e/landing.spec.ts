@@ -233,9 +233,10 @@ test("/plans: one heading and one line, the cards in view, the public header, in
   // Free, Basic and Pro stand at the same x in each table (wide screens: a phone's tables scroll or wrap)
   if (info.project.name !== "phone") {
     const xs = await page.locator("#compare table").evaluateAll((ts) => ts.map((t) => [...t.querySelectorAll("thead th")].slice(1).map((th) => Math.round(th.getBoundingClientRect().x))));
-    expect(xs.length).toBe(3);
-    expect(xs[1]).toEqual(xs[0]);
-    expect(xs[2]).toEqual(xs[0]);
+    // one table per group of features since DP1-022 (Trading, Research and alerts, Money and tax) and the limits: every one
+    // with its plan columns at the same place
+    expect(xs.length).toBeGreaterThanOrEqual(3);
+    for (const x of xs.slice(1)) expect(x).toEqual(xs[0]);
   }
   await expect(page.getByRole("row", { name: /Paper trading sessions at a time/ })).toContainText("1 (5-market-day trial)");
   expect(errors).toEqual([]);
