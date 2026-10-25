@@ -36,7 +36,7 @@ type View = {
   years: Year[]; fa: Fa | null; facts: string[]; assumptions: string[]; missing_history: string[];
   rates: { available: boolean; sbi_from: string | null; sbi_to: string | null; source: string; fallback: string }; names: Record<string, string>;
 };
-type ImportReply = { read: number; added: number; duplicates: number; problems: { line: number; text: string; reason: string }[]; month_first: boolean; date_note?: string | null; us: View };
+type ImportReply = { read: number; added: number; duplicates: number; problems: { line: number; text: string; reason: string }[]; month_first: boolean; date_note?: string | null; note?: string | null; us: View };
 
 const usd = (v: number | null | undefined, dp = 2) => money(v, "USD", dp);
 const rateText = (r: Rate) => (r ? `₹${r.rate.toFixed(2)} (${dateOnly(r.on)}${r.fallback ? ", RBI" : ""})` : "not known");
@@ -111,7 +111,7 @@ export function UsTaxPage() {
     try {
       const r = await api<ImportReply>(`/money/us-tax/import?${new URLSearchParams({ filename: f.name.slice(0, 200) })}`, { method: "POST", file: f });
       setV(r.us);
-      setNote(`${r.added} trade${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.${r.date_note ? ` ${r.date_note}` : r.month_first ? " Dates like 03/04/2025 were read month first, the US way." : ""}`);
+      setNote(`${r.added} trade${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.${r.date_note ? ` ${r.date_note}` : r.month_first ? " Dates like 03/04/2025 were read month first, the US way." : ""}${r.note ? ` ${r.note}` : ""}`);
       track("us trades imported", { rows: r.added });
     } catch (e) { fail(e); } finally { setBusy(false); reset(); }
   };
@@ -193,11 +193,12 @@ export function UsTaxPage() {
       <Notice label="Estimate only"><b>Estimate only.</b> Arithmetic on your own trades, not tax advice, for a resident individual. Check it with a chartered accountant (CA) before you file.</Notice>
 
       <Card>
-        <CardHead title="Your US trades" info="Upload your US broker's trade history as CSV or Excel (columns for the date, purchase or sale, the ticker, shares and the price in dollars; fees optional), or add each purchase and sale below. Dates are best as YYYY-MM-DD."
+        <CardHead title="Your US trades" info="A trade list needs columns for the date, purchase or sale, the ticker, shares and the price in dollars (fees optional); dates are best as YYYY-MM-DD. Or add each purchase and sale below."
           actions={<>
             <UploadButton quiet label="Upload US trades" busy={busy} accept=".csv,.xlsx,.txt,text/csv" ariaLabel="US trades file" onFiles={pick} />
             {!!v?.trades.length && <button type="button" className="btn quiet sm" onClick={() => setAsking(true)}><Trash size={16} />Delete all US trades</button>}
           </>} />
+        <p className="k-small k-muted" data-testid="us-upload-help">A trade list (CSV or Excel) from your broker, or a realised-gains tax report such as Vested's yearly tax report (the .xlsx).</p>
         {note && <p className="k-small" role="status">{note}</p>}
         <div role="group" aria-label="Add a trade">
           <FormGrid onSubmit={(e) => { e.preventDefault(); void add(); }}>
