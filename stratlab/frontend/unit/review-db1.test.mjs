@@ -31,7 +31,7 @@ test("DB-002: an import with notes can't start until they're read", () => {
 test("DB-004: times out of order or out of hours are said", async () => {
   const { timingIssues } = await import("../src/lib/options.ts");
   const bad = timingIssues({ entry: "16:00", lastEntry: "08:00", squareoff: "09:00" }, "09:15", "15:40");
-  assert.ok(bad.some((x) => x === "The entry time, 16:00, is outside the market's hours (09:15 to 15:40)."));
+  assert.ok(bad.some((x) => x === "The entry time, 16:00, is after the market closes at 15:40, so it could never happen (the market's hours are 09:15 to 15:40)."));
   assert.ok(bad.some((x) => /last entry \(08:00\) is before the first \(16:00\)/.test(x)));
   assert.ok(bad.some((x) => /square-off \(09:00\) has to come after the entries/.test(x)));
   assert.deepEqual(timingIssues({ entry: "09:30", lastEntry: "14:45", squareoff: "15:15" }, "09:15", "15:40"), []);

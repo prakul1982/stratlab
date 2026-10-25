@@ -287,6 +287,9 @@ def own_column(value: float, prior: float | None, quote: str, page: str, period:
 NOT_OWN = re.compile(r"\b(?:sales|production|despatch\w*|dispatch\w*|volumes?)\s+(?:volumes?\s+)?of\s+[^.]{2,90}?,?\s+an?\s+"
                      r"(?:unlisted\s+|material\s+|wholly[- ]owned\s+|step[- ]down\s+)*(?:subsidiary|joint venture|associate)\b", re.I)
 PRODUCTION = re.compile(r"\bproduc", re.I)
+# an arm that isn't the listed company (Eicher's trucks joint venture), named in a figure's own words: for a filing an older
+# reader kept without its cover-letter check (DF-011)
+UNLISTED_ARM = re.compile(r"\bVECV\b|\bVE Commercial", re.I)
 SALES = re.compile(r"\b(?:sales?|sold|despatch\w*|dispatch\w*|wholesales?|deliver\w*|off-?take)\b", re.I)
 
 
@@ -486,8 +489,12 @@ def read_new(symbol: str, items: list[dict], docs_api, ai, limit: int = READ_AT_
     every = candidates(items)
     # the unread filed since `since` first, then any an older reader read, however old: their figures may be the year-ago
     # column or production (DF-009), and the year-ago months are what each change is worked out on
-    todo = ([i for i in every if i["id"] not in reads and (not since or i["at"] >= since)]
-            + [i for i in every if i["id"] in reads and int(reads[i["id"]].get("reader") or 1) < READER])[:limit]
+    # (RC1 DF-010/011: a company still short of its year of months read its older unread filings first, two a day, so the
+    # newest figures an older reader got wrong waited weeks for a new read: they come before the older backfill)
+    unread = [i for i in every if i["id"] not in reads]
+    recent = [i for i in unread if since and i["at"] >= since]
+    again = [i for i in every if i["id"] in reads and int(reads[i["id"]].get("reader") or 1) < READER]
+    todo = (recent + again + ([] if since else unread))[:limit]
     done, problems = 0, []
     for item in todo:
         if not _ai_budget():
@@ -528,6 +535,24 @@ def change(now: float | None, before: float | None, unit: str) -> float | None:
     return round((now / before - 1) * 100, 1)
 
 
+def as_read_now(r: dict, f: dict) -> dict:
+    """A stored figure as today's reader would have kept it, for a filing an older reader read and the daily job hasn't
+    read again yet: a production filing's figures named as production, never standing for sales (DF-010: Maruti's
+    "Grand Total (PV+LCV) 2,42,011" was production), and a subsidiary's or joint venture's volumes not the company's
+    own (DF-011: Eicher's VECV trucks). Decided from the filing's title and file name and the figure's own words."""
+    if int(r.get("reader") or 1) >= READER:
+        return f
+    title = str(r.get("title") or "")
+    name = str(r.get("url") or "").rsplit("/", 1)[-1]
+    hay = f"{title} {name}"
+    if PRODUCTION.search(hay) and not SALES.search(hay) and not PRODUCTION.search(f["metric"]):
+        f = {**f, "metric": f"Production: {f['metric']}"[:80]}
+    own = f"{title} {f['metric']} {f.get('segment') or ''} {f.get('quote') or ''}"
+    if f.get("own") is not False and (NOT_OWN.search(own) or UNLISTED_ARM.search(own)):
+        f = {**f, "own": False}
+    return f
+
+
 def series(reads: dict) -> list[dict]:
     """Every measure across the stored reads: its points by period (a later filing's figure wins; a year-ago figure a
     filing states fills that month when nothing else does), the latest value, the change on the previous point and on
@@ -539,6 +564,7 @@ def series(reads: dict) -> list[dict]:
         if not p:
             continue
         for f in r.get("figures") or []:
+            f = as_read_now(r, f)
             k = metric_key(f["metric"], f.get("segment"), f["unit"], f["basis"])
             m = metrics.setdefault(k, {"key": k, "metric": f["metric"], "segment": f.get("segment"), "unit": f["unit"],
                                        "basis": f["basis"], "span": r.get("span") or "month", "headline": False, "own": True, "points": {}})
@@ -552,7 +578,7 @@ def series(reads: dict) -> list[dict]:
                     m["points"][py] = {"period": py, "value": f["prior"], "filed_later": True, "source": src}
     newest = max((r for r in reads.values() if r.get("period") and r.get("figures")), key=lambda r: r.get("at") or "", default=None)
     if newest:
-        order = [metric_key(f["metric"], f.get("segment"), f["unit"], f["basis"]) for f in newest.get("figures") or []]
+        order = [metric_key(g["metric"], g.get("segment"), g["unit"], g["basis"]) for g in (as_read_now(newest, f) for f in newest.get("figures") or [])]
     out = []
     for k, m in metrics.items():
         pts = sorted(m["points"].values(), key=lambda x: x["period"])

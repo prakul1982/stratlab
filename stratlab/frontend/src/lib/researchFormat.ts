@@ -183,6 +183,13 @@ export function monthsOld(n: number): string {
   return `${n} month${n === 1 ? "" : "s"} old`;
 }
 
+/** Whole calendar days from `t`'s date to `now`'s (the viewer's own days): two headlines of one date have one age, whatever time
+ * of day each came (RC1-012: "1 day old" and "2 days old" on 23 Oct headlines, by hours elapsed). */
+function calendarDays(t: Date, now: Date): number {
+  const day = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000;
+  return Math.round(day(now) - day(t));
+}
+
 /** A headline's age beside its date once it is over a week old ("24 Sep 2026 · 2 weeks old"), so an old item never
  * reads as today's news; null for a fresh one (its "3 h ago" says enough). */
 export function newsAge(iso: string | null | undefined, now: Date = new Date()): string | null {
@@ -204,7 +211,7 @@ export function newsWhen(iso: string | null | undefined, now: Date = new Date())
   if (s < 60) return "just now";
   if (s < 3600) return `${Math.floor(s / 60)} min ago`;
   if (s < 86400) { const h = Math.floor(s / 3600); return `${h} hour${h === 1 ? "" : "s"} ago`; }
-  const days = Math.floor(s / 86400);
+  const days = Math.max(1, calendarDays(t, now));
   const date = t.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(t.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }) });
   const age = days < 7 ? `${days} day${days === 1 ? "" : "s"} old` : newsAge(iso, now);
   return `${date} · ${age}`;

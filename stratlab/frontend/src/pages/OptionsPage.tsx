@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { axisInrFor, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp, exchangeTime, optionsMarket } from "../lib/marketHours";
 import { HELP } from "../lib/help";
-import { blankOptions, clampTyped, convertOptLimit, expiryChoiceLabel, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
+import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoiceLabel, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -32,6 +32,15 @@ import { usePlansToast } from "../components/PlanInterest";
  * summary of the most it can make and lose, and the advanced settings folded away. */
 
 const DRAFT = "stratlab.options.draft.v1";
+/** The import's notes, kept beside the draft until "Got it": leaving the page and coming back doesn't drop them, so a
+ * structure whose legs were changed on the way in is confirmed before it can start (DB-002 remainder, RC1-010). */
+const NOTES = "stratlab.options.importnotes.v1";
+const loadNotes = (): string[] => {
+  try {
+    const got = JSON.parse(localStorage.getItem(NOTES) || "[]");
+    return Array.isArray(got) && localStorage.getItem(DRAFT) ? got.filter((x): x is string => typeof x === "string").slice(0, 30) : [];
+  } catch { return []; }
+};
 
 const loadDraft = (): OptionStrategy => {
   try {
@@ -374,7 +383,7 @@ export function OptionsPage() {
   const [confirmStart, setConfirmStart] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [rows, setRows] = useState<LiveRow[] | null>(null);
-  const [notes, setNotes] = useState<string[]>([]);
+  const [notes, setNotes] = useState<string[]>(loadNotes);
   const live = (rows ?? []).filter((x) => x.status === "running" || x.status === "paused");     // the stopped ones fold away
 
   useEffect(() => {
@@ -394,6 +403,7 @@ export function OptionsPage() {
     } catch { /* nothing imported */ }
   }, []);
   useEffect(() => { try { localStorage.setItem(DRAFT, JSON.stringify(s)); } catch { /* storage off */ } }, [s]);
+  useEffect(() => { try { if (notes.length) localStorage.setItem(NOTES, JSON.stringify(notes)); else localStorage.removeItem(NOTES); } catch { /* storage off */ } }, [notes]);
 
   const patch = useCallback((p: Partial<OptionStrategy>) => { setS((x) => ({ ...x, ...p })); setPreview(null); }, []);
   const und = unds?.find((u) => u.exchange === s.exchange && u.name === s.underlying);
@@ -528,7 +538,7 @@ export function OptionsPage() {
   // one expiry a month (BANKNIFTY, FINNIFTY): Nearest and Monthly are the same day, and the page says so
   const sameExpiry = (und?.expiries?.length ?? 0) > 1 && new Set(und!.expiries.map((e) => e.slice(0, 7))).size === und!.expiries.length;
   // the times checked against each other and the exchange's hours (DB-004)
-  const hours = optionsMarket(markets, s.exchange)?.hours;
+  const hours = optionsMarket(markets, s.exchange)?.hours ?? FALLBACK_HOURS[s.exchange];
   const timeIssues = timingIssues(s.timing, hours?.open, hours?.close);
   const stopWord = r.stopType === "none" ? "" : `, stopping out if the loss reaches ${r.stopType === "amount" ? inr(r.stop) : `${r.stop}% of the premium`}`;
   const tgtWord = r.tgtType === "none" ? "" : ` and taking profit at ${r.tgtType === "amount" ? inr(r.tgt) : `${r.tgt}% of the premium`}`;

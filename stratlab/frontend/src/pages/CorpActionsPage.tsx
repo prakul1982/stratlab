@@ -13,7 +13,7 @@ import { Card, CardHead, CheckField, EmptyState, ErrorState, Field, FormGrid, Pa
 
 interface CalendarView {
   region: Region; scope: "mine" | "all"; kind: string; today: string; updated_at: string | null; ahead: CorpAction[]; recent: CorpAction[];
-  more: number; mine_count: number; alerts: boolean; kinds: ActionKind[]; ahead_known: boolean; note: string;
+  more: number; mine_count: number; alerts: boolean; kinds: ActionKind[]; ahead_known: boolean; ahead_note?: string | null; note: string;
   recent_days?: number; universe?: { companies: number | null; updated_at: string | null } | null;
 }
 
@@ -106,18 +106,17 @@ export function CorpActionsPage() {
             action={scope === "mine" ? { label: "See all companies", onClick: () => setParam("scope", "all") } : undefined}>
             {scope === "mine"
               ? (data.mine_count ? `None of your ${REGION_NAME[region]} stocks has an ex-date in this window.` : `You have no ${REGION_NAME[region]} stocks yet: they come from your watchlist, holdings, notebooks and paper sessions.`)
-              : q ? "No company by that name has an action in this window." : "Nothing announced for this window yet."}
+              : q ? "No company by that name has an action in this window." : (data.ahead_note ?? "Nothing announced for this window yet.")}
           </EmptyState>
         </Card>
       )}
       {data && !empty && (
         <>
-          {(data.ahead_known || data.ahead.length > 0) && (
-            <Card>
-              <CardHead title="Coming up" />
-              {data.ahead.length === 0 ? <span className="k-small k-muted">Nothing announced with an ex-date ahead.</span> : <DayGroups rows={data.ahead} today={data.today} />}
-            </Card>
-          )}
+          {/* always there, and when it has nothing it says why (RC1-006: the US list was empty with no word) */}
+          <Card>
+            <CardHead title="Coming up" />
+            {data.ahead.length === 0 ? <span className="k-small k-muted" data-testid="ahead-note">{data.ahead_note ?? "Nothing announced with an ex-date ahead."}</span> : <DayGroups rows={data.ahead} today={data.today} />}
+          </Card>
           {/* ex-dates gone by fold under one line, open only when there is nothing ahead to show */}
           {data.recent.length > 0 && (
             <Card label={lookBack}>

@@ -35,8 +35,18 @@ ST_S2 = {
 }
 
 
+def _price(v) -> bool:
+    try:
+        return float(v) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 def analyse(bars: list[dict]) -> dict | None:
     """Stage, Supertrend state and the ST S2 signal on the latest candle."""
+    # a candle with no price (a missing close) is left out: one in the last 150 would blank the average and with it the
+    # Stage (DE-009: TCS and INFY were listed with none)
+    bars = [b for b in bars if all(_price(b.get(k)) for k in "ohlc")]
     if len(bars) < 30:
         return None
     df = pd.DataFrame(bars)

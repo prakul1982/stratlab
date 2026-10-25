@@ -237,6 +237,43 @@ def test_the_page_after_two_runs_names_entries_exits_lots_and_the_rename(w, monk
     assert muhurat and muhurat[0]["session"] == F.muhurat_session(text("circular_FAOP76940.txt"))
 
 
+def test_circulars_kept_by_an_older_reader_are_sorted_and_read_again_once(w, monkeypatch):
+    """RC1 DC-017/018/020: the live list kept the rename circular as "other" and the files as read with nothing taken
+    from them, so the exit/entry the contract file shows stood after any number of runs. A run now sorts the kept
+    circulars again and opens the files an older reader marked read."""
+    by_url = {}
+    for c in circs().values():
+        name = f"circular_FAOP{c['no'].split('/')[-1]}.txt"
+        if (FO / name).exists():
+            by_url[c["url"]] = (text(name), annexure() if c["no"].endswith("76657") else {})
+    new_lots = text("fo_mktlots_live_2026-10-23.csv")
+    old_lots = new_lots.replace("ICICILIFE ", "ICICIPRULI").replace("ICICI LIFE INSURANCE LTD", "ICICI PRU LIFE INS CO LTD")
+    data = json.loads(text("circulars_live_2026-10-23.json"))
+    with monkeypatch.context() as old_build:      # the old build: no rename kind, and a reader that found nothing in any file but marked each one read
+        old_build.setattr(F, "CIRCULAR_KINDS", tuple(k for k in F.CIRCULAR_KINDS if k[0] != "rename"))
+        old_build.setattr(F, "circular_file", lambda data: ("", {}))
+        F.refresh(Feed(Nse(old_lots, {"data": []})), TODAY - timedelta(days=3), sleep=lambda s: None)
+        for _ in range(6):
+            F.refresh(Feed(Nse(new_lots, data)), TODAY, sleep=lambda s: None)
+    st = json.loads(db.get_setting(F.KEY))
+    st["circulars"].pop("parser", None)
+    db.set_setting(F.KEY, json.dumps(st))
+    F._cache.clear()
+    stale = F.view(TODAY)["events"]
+    assert any(r["kind"] == "exit" and r["symbol"] == "ICICIPRULI" for r in stale)       # the page as the live one was
+    assert not any(r["kind"] == "entry" and r["symbol"] == "COROMANDEL" for r in stale)
+    # the new build
+    monkeypatch.setattr(F, "circular_file", lambda data: by_url[data.decode()])
+    for _ in range(8):
+        F.refresh(Feed(Nse(new_lots, data)), TODAY, sleep=lambda s: None)
+    rows = F.view(TODAY)["events"]
+    assert not any(r["kind"] == "exit" and r["symbol"] == "ICICIPRULI" for r in rows)
+    assert [r["was_symbol"] for r in rows if r["kind"] == "rename"] == ["ICICIPRULI"]
+    assert {"COROMANDEL", "CUB", "SYRMA"} <= {r["symbol"] for r in rows if r["kind"] == "entry"}
+    assert len([r for r in rows if r["kind"] == "lot" and r.get("was") and r.get("now")]) > 30
+    assert json.loads(db.get_setting(F.KEY))["circulars"]["parser"] == F.DETAILS_PARSER
+
+
 def test_a_circular_kept_without_its_date_is_read_again_and_dated(w):
     c = circs()["NSE/FAOP/76657"]
     kept = {**c, "date": None, "seen": "2026-10-05"}

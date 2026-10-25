@@ -5,7 +5,7 @@ import { numberProblem, type Limits } from "../../lib/validate";
 import { useApp } from "../../lib/app";
 import { LoanCheck } from "./LoanCheck";
 import { asOf, axisInr, dateOnly, inr, inrCompact, istToday, pctPlain, signedInrCompact } from "../../lib/format";
-import { netWorthDelta, sinceNote } from "../../lib/networth";
+import { netWorthDelta, restatedNote, sinceNote } from "../../lib/networth";
 import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
 import { Download, Trash } from "../../components/Icons";
@@ -25,13 +25,13 @@ type Policy = {
   id: string; label: string; name: string; insurer: string; sum_assured: number | null; premium: number; frequency: string; yearly_premium: number | null;
   next_due: string | null; due_in: number | null; nominee: string | null; entry: Entry;
 };
-type Snapshot = { d: string; net: number; assets: number; liabilities: number; why: string; partial?: string[]; added?: number };
+type Snapshot = { d: string; net: number; assets: number; liabilities: number; why: string; partial?: string[]; added?: number; m?: number };
 type View = {
   as_of: string; computed_at: string; totals: { assets: number; liabilities: number; net: number; oldest_as_of: string | null; partial?: string[] | null; partial_lasting?: boolean; notes?: string[] | null };
   allocation: { class: string; label: string; value: number; pct: number | null }[]; assets: Row[]; liabilities: Row[];
   insurance: { policies: Policy[]; yearly_premium: number; cover: Record<string, number>; next: string | null };
   gold_price: { per_g: number; as_of: string } | null; rates: { epf: number; epf_note: string; ppf: number; ppf_note: string; sgb: number };
-  history: Snapshot[] | null; history_allowed: boolean; history_count: number;
+  history: Snapshot[] | null; history_allowed: boolean; history_count: number; valuation?: number;
   limit: number | null; count: number; deposit_tax?: DepositTax | null;
 };
 type DepositTax = { tax_rate: number; basis: "estimate" | "slab"; items: Record<string, { interest: number; interest_after_tax: number }> };
@@ -384,7 +384,7 @@ export function NetWorthPage() {
   const whole = hist;
   const shown = whole.filter((h) => keepDays == null || (Date.parse(whole[whole.length - 1].d) - Date.parse(h.d)) / 86_400_000 <= keepDays);
   const marked = shown.flatMap((h, i) => (h.partial?.length ? [{ i, kind: "dot" as const, color: "var(--orange)" }] : []));
-  const last = hist[hist.length - 1], move = t ? netWorthDelta(t.net, t.partial, hist) : null;
+  const last = hist[hist.length - 1], move = t ? netWorthDelta(t.net, t.partial, hist, undefined, view?.valuation) : null;
 
   const assetCols: Column<Row>[] = [
     { key: "asset", header: "Asset, and how it's worked out", rowHeader: true, wrap: true, cell: (r) => (
@@ -462,7 +462,7 @@ export function NetWorthPage() {
             <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined}
               actions={<button type="button" className="btn sm" onClick={() => setAdding(true)}>Add an entry</button>} />
             <StatRow>
-              <Stat label="Net worth" value={inr(t.net)} delta={move ? <Delta value={move.change}>{signedInrCompact(move.change)}</Delta> : undefined} note={move ? sinceNote(move, day, inrCompact) : undefined} />
+              <Stat label="Net worth" value={inr(t.net)} delta={move ? <Delta value={move.change}>{signedInrCompact(move.change)}</Delta> : undefined} note={move ? sinceNote(move, day, inrCompact) : restatedNote(hist, view?.valuation, day) ?? undefined} />
               <Stat label="Assets" value={inr(t.assets)} />
               <Stat label="Loans" value={inr(t.liabilities)} />
             </StatRow>

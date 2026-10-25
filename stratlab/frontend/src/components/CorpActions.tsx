@@ -87,7 +87,7 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
       <div className="k-stack">
         <span className="k-eyebrow">Coming up: dividends and splits</span>
         {data.ahead.length ? <div className="inv-rows">{data.ahead.map((a) => <ActionLine key={a.id} a={a} showSymbol={false} />)}</div>
-          : <span className="k-small k-muted">{data.ahead_known ? (region === "US" ? "No dividend declared with an ex-date in the next four weeks." : "Nothing announced with an ex-date ahead.") : "Dividend and split dates ahead aren't available for US companies yet (the results date is at the top of the page); past ones are below."}</span>}
+          : <span className="k-small k-muted">{data.ahead_known ? (region === "US" ? "No dividend declared with an ex-date in the next four weeks." : "Nothing announced with an ex-date ahead.") : "Dividends declared for the next four weeks couldn't be read yet, so none is listed. A split ahead isn't listed until its ex-date; past ones are below."}</span>}
       </div>
       <div className="k-stack">
         <span className="k-eyebrow">Past three years</span>

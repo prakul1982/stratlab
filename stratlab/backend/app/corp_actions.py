@@ -237,17 +237,40 @@ def us_rows(symbol: str, events: dict) -> list[dict]:
             continue
         f = num / den
         if not split_ratio(num, den):
-            # DE-030: CTVA "Split 6665-for-1000" on 1 Oct was the price history's adjustment for its separation, not a
-            # split: no share count changes, so it is never applied to a holding (adjusts() reads only bonus and split)
-            text = (f"The price history was adjusted {f:.4g} for 1 on this day. That isn't a split ratio (a split is a ratio of "
-                    "small whole numbers); a spin-off or a large special payment is recorded this way. The company's filing says which.")
-            out.append(row("US", symbol, {"kind": "demerger", "sub": f"adj{_n(num)}:{_n(den)}", "label": "Price adjustment", "text": text,
-                                          "short": "price adjustment"}, ex, src="price history"))
+            out.append(price_adjustment(symbol, ex, num, den))
             continue
         label = "Split" if f > 1 else "Reverse split"
         text = f"{label} {_n(num)}-for-{_n(den)}"
         out.append(row("US", symbol, {"kind": "split", "sub": f"{_n(num)}:{_n(den)}", "label": label, "text": text, "short": text.lower(),
                                       "factor": f}, ex, src="price history"))
+    return out
+
+
+def price_adjustment(symbol: str, ex: date, num: float, den: float) -> dict:
+    """The row for a "split" of the price history that no company splits by (DE-030: CTVA "Split 6665-for-1000" on 1 Oct was
+    the history's adjustment for its separation): no share count changes, so it is never applied to a holding (adjusts()
+    reads only bonus and split)."""
+    f = num / den
+    text = (f"The price history was adjusted {f:.4g} for 1 on this day. That isn't a split ratio (a split is a ratio of "
+            "small whole numbers); a spin-off or a large special payment is recorded this way. The company's filing says which.")
+    return row("US", symbol, {"kind": "demerger", "sub": f"adj{_n(num)}:{_n(den)}", "label": "Price adjustment", "text": text,
+                              "short": "price adjustment"}, ex, src="price history")
+
+
+def restated(rows: list[dict]) -> list[dict]:
+    """Stored rows as today's reader would keep them: a US "split" whose ratio is no split's is a price adjustment (RC1
+    DE-030: the stored CTVA row, kept by the first reader, stayed "Split 6665-for-1000" until its company's history was
+    next read, and the old id was still in the calendar)."""
+    out = []
+    for r in rows:
+        m = re.fullmatch(r"(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)", str(r.get("sub") or "")) if r.get("kind") == "split" and r.get("region") == "US" else None
+        if m and float(m.group(2)) > 0 and not split_ratio(float(m.group(1)), float(m.group(2))):
+            try:
+                out.append(price_adjustment(r["symbol"], date.fromisoformat(r["ex_date"]), float(m.group(1)), float(m.group(2))))
+                continue
+            except ValueError:
+                pass
+        out.append(r)
     return out
 
 
@@ -356,19 +379,25 @@ def load(region: str) -> dict:
     cal = db.json_value(db.get_setting(KEY + region), {})
     cal = cal if isinstance(cal, dict) else {}
     return {"at": cal.get("at"), "universe_at": cal.get("universe_at"), "universe": cal.get("universe"),
-            "rows": [r for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("ex_date") and r.get("id")]}
+            "declared_at": cal.get("declared_at"),
+            "rows": restated([r for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("ex_date") and r.get("id")])}
 
 
-def save(region: str, rows: list[dict], universe: int | None = None):
-    """Store the calendar. `universe`: how many companies a whole-universe read covered (kept as it was when None)."""
+def save(region: str, rows: list[dict], universe: int | None = None, declared_at: str | None = None):
+    """Store the calendar. `universe`: how many companies a whole-universe read covered (kept as it was when None).
+    `declared_at`: when the market calendar last answered for the dividends declared ahead (kept as it was when None)."""
     rows = sorted(rows, key=lambda r: (r["ex_date"], r["symbol"]))[:MAX_ROWS]
     now = datetime.now(ZoneInfo(TZ[region])).isoformat(timespec="minutes")
     doc = {"at": now, "rows": rows}
+    old = db.json_value(db.get_setting(KEY + region), {})
+    old = old if isinstance(old, dict) else {}
     if universe is not None:
         doc.update(universe_at=now, universe=universe)
     else:
-        old = db.json_value(db.get_setting(KEY + region), {})
         doc.update({k: old.get(k) for k in ("universe_at", "universe") if old.get(k) is not None})
+    stamp = now if declared_at else old.get("declared_at")
+    if stamp:
+        doc["declared_at"] = stamp
     try:
         db.set_setting(KEY + region, json.dumps(doc))
     finally:
@@ -400,7 +429,7 @@ def prefetch(region: str, symbols) -> None:
 def hist_load(region: str, symbol: str) -> dict:
     got = db.json_value(db.get_setting(f"{HIST}{region}:{symbol.upper()}"), {})
     got = got if isinstance(got, dict) else {}
-    return {"at": got.get("at"), "rows": [r for r in got.get("rows") or [] if isinstance(r, dict) and r.get("ex_date") and r.get("id")]}
+    return {"at": got.get("at"), "rows": restated([r for r in got.get("rows") or [] if isinstance(r, dict) and r.get("ex_date") and r.get("id")])}
 
 
 def hist_save(region: str, symbol: str, rows: list[dict]):
@@ -472,6 +501,7 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
     today = today or local_today(region)
     frm, to = today - timedelta(days=BEHIND_DAYS), today + timedelta(days=AHEAD_DAYS)
     tracked, rows, problems, whole = {s.upper() for s in tracked or ()}, [], [], False
+    answered = False
     in_window = lambda r: frm.isoformat() <= r["ex_date"] <= to.isoformat()
     if region == "IN":
         feed = sources.get("in")
@@ -503,6 +533,10 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
             except (SourceError, AttributeError, KeyError, TypeError) as e:
                 problems.append(f"{sym}: {str(e)[:120]}")
         declared, unread = us_declared(sources, set(us_universe(tracked)), today, problems)
+        # the calendar answered for at least one day: what it listed (even nothing) is the list ahead, so the page can say
+        # "none declared" rather than "not known" (RC1-006)
+        asked = len(results.weekdays(today, today + timedelta(days=US_AHEAD_DAYS)))
+        answered = sources.get("cal") is not None and len(unread) < asked
         have = {r["id"] for r in rows}
         rows += [r for r in declared if r["id"] not in have]
         if declared or unread:
@@ -515,7 +549,7 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
             rows += [r for r in old if r["id"] not in stale and r["id"] not in {x["id"] for x in rows}
                      and r["symbol"] not in tracked and r["ex_date"] >= frm.isoformat()]
             whole = bool(declared)
-    if not whole and not rows and (problems or region == "IN"):
+    if not whole and not rows and not answered and (problems or region == "IN"):
         return {"rows": None, "fresh": 0, "problems": problems}
     with _lock:
         cal = load(region)
@@ -524,7 +558,7 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
             asked = {r["symbol"] for r in rows} | tracked
             rows += [r for r in old if r["symbol"] not in asked and r["ex_date"] >= frm.isoformat()]
         merged = merge(old, rows, frm, today, first)
-        save(region, merged)
+        save(region, merged, declared_at=datetime.now(ZoneInfo(TZ[region])).isoformat(timespec="minutes") if region == "US" and answered else None)
     return {"rows": len(merged), "fresh": sum(1 for r in merged if r.get("fresh")), "problems": problems}
 
 
@@ -820,7 +854,7 @@ class Job:
         self.sources, self.send, self.can_alert = sources, send, can_alert
         self.last: dict[str, str] = {}
         self.status = {"last_run": None, "sent": 0, "last_error": None, "problems": []}
-        self.universe_running, self.universe_retry = False, 0.0
+        self.universe_running, self.universe_retry, self.declared_retry = False, 0.0, 0.0
         self.down: dict[str, str] = {}               # region -> why its last refresh read nothing (shown until one does)
 
     def start(self):
@@ -875,6 +909,12 @@ class Job:
                         continue
                     sent += self.announce(region, day, who, run)
                     run.done()
+            if region == "US" and self._declared_due():
+                # the list of declared dividends was never read (a deploy between two scheduled runs left the page without
+                # it for a day, RC1-006): read it now, again in half an hour when it can't be
+                self.declared_retry = time.time() + 1800
+                self.refresh(region, who(), now.astimezone(ZoneInfo(TZ[region])).date())
+                ran = True
             if region == "US" and self._universe_due(now):
                 self.start_universe(who())
                 ran = True
@@ -891,6 +931,9 @@ class Job:
             from . import job_status
             job_status.keep("corp", self)          # Admin shows this run after a restart too
         return sent
+
+    def _declared_due(self) -> bool:
+        return time.time() >= self.declared_retry and self.sources().get("cal") is not None and load("US").get("declared_at") is None
 
     def _universe_due(self, now: datetime) -> bool:
         """The whole US universe is read once a day from UNIVERSE_AT, and at the first chance when it never has been
@@ -1000,10 +1043,23 @@ def _clean_q(q: str) -> str:
     return re.sub(r"[^A-Z0-9&.\- ]", "", (q or "").upper()).strip()[:30]
 
 
-def ahead_known(region: str, rows: list[dict]) -> bool:
+def ahead_known(region: str, rows: list[dict], declared_at: str | None = None) -> bool:
     """Whether the calendar knows the dates ahead: India's exchange list does; the US list does once the market
-    calendar's declared dividends are in it (DE-028)."""
-    return region == "IN" or any(r.get("src") == "market calendar" for r in rows)
+    calendar has been read for the dividends declared (DE-028), whether or not it listed one of the companies covered."""
+    return region == "IN" or bool(declared_at) or any(r.get("src") == "market calendar" for r in rows)
+
+
+def ahead_note(region: str, known: bool, has_ahead: bool, cal: dict) -> str | None:
+    """Why a page has no dividends ahead to show, in words, or None when it has some (RC1-006: the US list was empty with
+    nothing said). A calendar that was never read is said to be unread, not to be empty."""
+    if has_ahead:
+        return None
+    if region == "US" and not known:
+        return ("Dividends companies have declared for the next four weeks couldn't be read yet, so none is listed here. "
+                "They are read from the US market calendar every morning; the ex-dates that have passed are below.")
+    if region == "US":
+        return "No dividend is declared with an ex-date in the next four weeks, for the companies shown here. A split ahead isn't listed until its ex-date."
+    return "Nothing announced with an ex-date ahead."
 
 
 def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = "", today: date | None = None, limit: int = 400) -> dict:
@@ -1021,7 +1077,8 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = ""
     show = lambda rs: [{k: v for k, v in {**r, "mine": r["symbol"] in mine}.items() if k != "fresh"} for r in rs[:limit]]
     return {"region": region, "scope": scope, "kind": kind, "today": t, "updated_at": cal["at"], "ahead": show(ahead), "recent": show(recent),
             "more": max(0, len(ahead) - limit) + max(0, len(recent) - limit), "mine_count": len(mine), "alerts": alerts_on(uid),
-            "kinds": list(KINDS), "ahead_known": ahead_known(region, cal["rows"]), "note": NOTE, "recent_days": recent_days,
+            "kinds": list(KINDS), "ahead_known": ahead_known(region, cal["rows"], cal.get("declared_at")), "note": NOTE, "recent_days": recent_days,
+            "ahead_note": ahead_note(region, ahead_known(region, cal["rows"], cal.get("declared_at")), bool(ahead), cal),
             "universe": {"companies": cal.get("universe"), "updated_at": cal.get("universe_at")} if region == "US" else None}
 
 
@@ -1156,7 +1213,7 @@ def company(region: str, symbol: str, sources: dict | None, today: date | None =
             "past": [strip(r) for r in sorted((r for r in rows if r["ex_date"] <= t), key=lambda r: r["ex_date"], reverse=True)[:30]],
             "dividends_12m": {"amount": round(total, 4), "count": len(divs), "currency": CUR[region],
                               **({"adjusted": True} if any(r.get("now_amount") for r in divs) else {})} if divs else None,
-            "ahead_known": ahead_known(region, load_cached(region)["rows"]) if region == "US" else True, "note": NOTE}
+            "ahead_known": ahead_known(region, load_cached(region)["rows"], load_cached(region).get("declared_at")) if region == "US" else True, "note": NOTE}
 
 
 def in_todays_shares(region: str, rows: list[dict], today: str | None = None) -> list[dict]:

@@ -78,10 +78,30 @@ def test_yahoos_first_session_reference_is_its_issue_price():
     from datetime import datetime, timezone
     at = lambda h: datetime(2026, 10, 23, h, 0, tzinfo=timezone.utc).timestamp()      # noqa: E731
     meta = {"regularMarketTime": at(10), "exchangeTimezoneName": "Asia/Kolkata", "firstTradeDate": at(3),
-            "previousClose": 159.25, "chartPreviousClose": 151.0}
-    assert _previous_close(meta, [{"t": "2026-10-23", "c": 138.25}]) == 151.0
+            "regularMarketPrice": 138.25, "fulldayChange": -12.75, "chartPreviousClose": 159.25}
+    assert _previous_close(meta, [{"t": "2026-10-23", "o": 159.25, "c": 138.25}]) == 151.0
     older = {**meta, "firstTradeDate": 1500000000}
     assert _previous_close(older, [{"t": "2026-10-23", "c": 138.25}]) == 159.25
+
+
+def test_a_listings_issue_price_from_the_saved_answers_never_the_open():
+    """RC1-001: saved real answers for ZETWERK and TONBO (23 Oct 2026). For the explicit period the page asks, the chart's
+    chartPreviousClose is the day's open (159.25, 1,160): the issue price (151, 700) is price less the day's change."""
+    import json
+    from pathlib import Path
+    from app.intel.yahoo import _previous_close
+    d = Path(__file__).parent / "fixtures" / "yahoo_ipo"
+    for sym, issue, opened in (("ZETWERK", 151.0, 159.25), ("TONBO", 700.0, 1160.0)):
+        for form in ("period", "range"):
+            r = json.loads((d / f"{sym}_{form}.json").read_text())["chart"]["result"][0]
+            q = r["indicators"]["quote"][0]
+            bars = [{"t": "2026-10-23", "o": q["open"][0], "c": q["close"][0]}]
+            assert q["open"][0] == opened
+            assert _previous_close(r["meta"], bars) == issue
+        # only the open to go on (no change fields): no issue price, so no change, rather than one against the open
+        bare = {k: v for k, v in r["meta"].items() if k not in ("fulldayChange", "regularMarketChangePercent", "fulldayChangePercent")}
+        assert _previous_close({**bare, "chartPreviousClose": opened}, bars) is None
+        assert company.against_issue({"price": 100.0}, _previous_close({**bare, "chartPreviousClose": opened}, bars))["change"] is None
 
 
 def test_a_new_listings_range_is_since_listing_and_its_value_on_the_shares_now_in_issue():
@@ -256,6 +276,62 @@ def test_the_us_page_takes_the_filings_results_and_says_interest_cover_is_not_me
     assert cover["value"] is None and cover["text"] == "n/m" and "No interest expense" in cover["note"]
     assert out["earnings_basis"] == "gaap" and out["earnings"][-1]["actual"] == 2.02
     assert routes.with_filed_results("IN", c) is c
+
+
+def test_a_us_page_stored_before_the_filed_eps_was_kept_is_checked_by_the_filings_read_now(monkeypatch):
+    """RC1 DD-030/031: the live AAPL page was served with its stored public page from before `eps_q` was kept, so the
+    quarter stayed 1.91 against the filed 2.02. The saved SEC answers for AAPL and NVDA give the filed quarters."""
+    import json
+    from pathlib import Path
+    from app.intel import sec
+    d = Path(__file__).parent / "fixtures" / "sec_eps"
+    for sym, fye, rows, want in (
+            ("AAPL", "0926", [("2025-12-31", 2.84, 2.67), ("2026-03-31", 2.01, 1.95), ("2026-06-30", 1.91, 1.93)], [2.84, 2.01, 2.02]),
+            ("NVDA", "0125", [("2026-03-31", 1.62, 1.5), ("2026-06-30", 1.87, 1.8), ("2026-09-30", 2.22, 2.1)], [1.76, 2.39, 2.46])):
+        facts = json.loads((d / f"{sym}_eps.json").read_text())
+        eps_q = {e: round(v, 4) for e, v in sorted(sec.quarterly(facts, sec.EPS, "USD/shares").items())[-8:]}
+        monkeypatch.setattr(routes, "public_facts", lambda r, s: {"v": 7, "years": []})           # stored by an older build
+        monkeypatch.setattr(routes, "filed_numbers", lambda s, eps_q=eps_q, fye=fye: {"eps_q": eps_q, "fiscal_year_end": fye, "interest_shown": True})
+        c = {"symbol": sym, "earnings": [{"period": p, "actual": a, "estimate": e, "surprise_pct": 0} for p, a, e in rows]}
+        out = routes.with_filed_results("US", c)
+        assert out["earnings_basis"] in ("gaap", "adjusted")
+        assert [r["gaap"] for r in out["earnings"]] == want
+        assert all(r["fiscal"].startswith("Q") for r in out["earnings"])
+        if sym == "AAPL":
+            assert out["earnings"][-1]["actual"] == 2.02 and out["earnings"][-1]["period"] == "2026-06-27"
+        else:
+            assert [r["period"] for r in out["earnings"]] == ["2026-01-25", "2026-04-26", "2026-07-26"]
+            assert [r["fiscal"] for r in out["earnings"]] == ["Q4 FY26", "Q1 FY27", "Q2 FY27"]
+
+
+def test_a_symbol_the_price_source_never_heard_of_is_a_wrong_symbol_not_a_fault():
+    """RC1-004: Yahoo answers 404 for ZZZZ; the chart route answered it 502 and Compare said prices couldn't be read."""
+    import httpx
+    from app.intel.net import NotFound
+    from app.intel.yahoo import Yahoo
+    y = Yahoo(transport=httpx.MockTransport(lambda req: httpx.Response(404, json={"chart": {"result": None, "error": {"code": "Not Found"}}})))
+    with pytest.raises(NotFound) as e:
+        y.chart("ZZZZ", "1d", 30)
+    assert "No prices found" in str(e.value)
+    r = routes.source_call
+    with pytest.raises(Exception) as http:
+        r(lambda: y.chart("ZZZZ", "1d", 30))
+    assert getattr(http.value, "status_code", None) == 404
+
+
+def test_a_share_listed_within_the_year_says_its_range_is_since_listing_on_the_public_page():
+    from app import stock_pages
+    """RC1-007: ZETWERK, listed two days before, was shown a "1-year range"."""
+    bars = [{"t": "2026-10-23T00:00:00+05:30", "o": 159.25, "h": 161.0, "l": 127.4, "c": 138.25, "v": 1},
+            {"t": "2026-10-24T00:00:00+05:30", "o": 139.0, "h": 150.0, "l": 130.0, "c": 140.0, "v": 1}]
+    got = stock_pages.price_facts(bars)
+    assert got["range_since"] == "2026-10-23" and (got["low52"], got["high52"]) == (127.4, 161.0)
+    older = [{"t": f"2025-{m:02d}-15T00:00:00+05:30", "o": 1, "h": 2, "l": 1, "c": 1, "v": 1} for m in range(10, 13)] + bars
+    assert "range_since" not in stock_pages.price_facts(older)
+    f = {"region": "IN", "symbol": "ZETWERK", "name": "Zetwerk", "currency": "INR", "price": 140.0, "price_at": "2026-10-24", "low52": 127.4,
+         "high52": 161.0, "range_since": "2026-10-23", "unit": "₹ crore", "years": []}
+    assert ("Range since listing on 23 Oct 2026 (intraday)", "₹127.40 to ₹161.00") in stock_pages._stats(f)
+    assert "range since listing" in stock_pages.description(f) and "1-year range" not in stock_pages.description(f)
 
 
 # ---------- DD-033: one rounding for the page and the AI read ----------

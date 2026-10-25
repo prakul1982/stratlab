@@ -261,6 +261,43 @@ def test_a_subsidiarys_filing_is_not_the_companys_own():
     assert B.headline(B.series(eicher))["latest"]["value"] == 133958
 
 
+def test_stored_figures_of_an_older_reader_are_shown_as_the_new_reader_keeps_them():
+    """RC1 DF-010/011: the live rows were read by the first reader (Maruti's production as plain "Grand Total", Eicher's
+    VECV as the company's own) and the daily job had not read them again. Their filings' real titles say what they are."""
+    mar = {i["title"]: i for i in B.updates(biz_items("ann_MARUTI.json"))}
+    eic = {i["title"]: i for i in B.updates(biz_items("ann_EICHERMOT.json"))}
+    prod = next(i for t, i in mar.items() if "Production Volume" in t)
+    sales = next(i for t, i in mar.items() if "sales in September" in t)
+    vecv = next(i for t, i in eic.items() if "VE Commercial" in t)
+    own = next(i for t, i in eic.items() if "VE Commercial" not in t)
+
+    def old(i, period, figures):
+        return {**read(i["at"], period, figures, title=i["title"]), "url": i["url"], "reader": 1}
+    maruti = {"p": old(prod, "2026-09", [{"metric": "Grand Total (PV+LCV)", "value": 242011, "prior": 201915, "headline": True}]),
+              "s": old(sales, "2026-09", [{"metric": "Total Sales (Total Domestic + Export)", "value": 236013, "prior": 189665}])}
+    h = B.headline(B.series(maruti))
+    assert h["latest"]["value"] == 236013 and "Production" not in h["metric"]
+    assert any(m["metric"] == "Production: Grand Total (PV+LCV)" for m in B.series(maruti))
+    eicher = {"v": old(vecv, "2026-09", [{"metric": "Total VECV (Inclusive of EVs)", "value": 11396, "headline": True}]),
+              "r": old(own, "2026-09", [{"metric": "Total motorcycles", "value": 133958, "prior": 124328}])}
+    assert B.headline(B.series(eicher))["latest"]["value"] == 133958
+    # the current reader's own rows are not touched
+    assert B.as_read_now({"reader": B.READER, "title": prod["title"]}, {"metric": "Grand Total", "unit": "units"})["metric"] == "Grand Total"
+
+
+def test_filings_an_older_reader_read_come_before_the_older_unread_backfill(w, monkeypatch):
+    items = B.candidates(biz_items("ann_ATULAUTO.json"))
+    assert len(items) >= 4
+    newest = items[0]
+    db.set_setting(B.KEY + "ATULAUTO", json.dumps({"reads": {newest["id"]: {**read(newest["at"], "2026-09", [{"metric": "Total", "value": 1}]), "reader": 1}}}))
+    B.forget()
+    seen = []
+    monkeypatch.setattr(B, "read_one", lambda sym, item, d, ai, known: seen.append(item["id"]) or read(item["at"], "2026-09", [{"metric": "Total", "value": 2}]))
+    monkeypatch.setattr(B, "_ai_budget", lambda: True)
+    B.read_new("ATULAUTO", biz_items("ann_ATULAUTO.json"), None, None, limit=1)       # a company still short of its months: no `since`
+    assert seen == [newest["id"]]
+
+
 def test_the_newest_period_heads_even_when_named_another_way():
     # Atul Auto: May's total was marked the headline; June to September's totals came under another name (DF-012)
     reads = {"may": read("2026-06-01T13:23", "2026-05", [{"metric": "Total 3W", "value": 3236, "headline": True}]),
