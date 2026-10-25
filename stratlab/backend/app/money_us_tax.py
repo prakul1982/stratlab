@@ -51,6 +51,30 @@ COLUMNS = {
              "feescomm", "feesandcomm", "feescommissions", "feesandcommissions", "commissionsfees", "commissionandfees"},    # Schwab: "Fees & Comm"
     "value": hf.TRADE_COLUMNS["value"] | {"amountusd", "proceeds", "netamount"},
 }
+# MO-1: a realised-gains tax report (Vested's yearly one, other Indian US-stock apps' similar ones): one line per lot sold,
+# with the day it was acquired and the day it was sold, instead of a list of trades
+GAINS = {
+    "symbol": COLUMNS["symbol"],
+    "qty": {"quantitysold", "quantity", "qty", "sharessold", "unitssold", "soldquantity", "qtysold", "noofshares", "numberofshares",
+            "shares", "units"},
+    "bought": {"dateacquired", "acquired", "acquireddate", "dateofacquisition", "acquisitiondate", "purchasedate", "dateofpurchase",
+               "purchaseddate", "datepurchased", "buydate", "buyingdate", "datebought", "bought"},
+    "bprice": {"buyingpriceusd", "buyingprice", "buypriceusd", "buyprice", "purchasepriceusd", "purchaseprice", "acquisitionpriceusd",
+               "acquisitionprice", "costpershare", "costpersharesusd", "purchasepricepershare"},
+    "sold": {"datesold", "sold", "solddate", "saledate", "dateofsale", "selldate", "sellingdate", "dateofsell"},
+    "sprice": {"sellingpriceusd", "sellingprice", "sellpriceusd", "sellprice", "salepriceusd", "saleprice", "salespriceusd",
+               "salepricepershare"},
+}
+# a lot's whole sale proceeds and cost, when the report has them: its prices are rounded to the cent, these aren't, so the
+# gains come out as the report's own summary has them (Vested's 2025 report: $4.43 apart over 132 lots read from the prices)
+GAINS_TOTALS = {"proceeds": {"proceedsusd", "proceeds", "saleproceedsusd", "saleproceeds", "salevalueusd", "salevalue"},
+                "cost": {"costbasisusd", "costbasis", "totalcostusd", "totalcost", "purchasevalueusd", "purchasevalue"}}
+# the workbooks Vested (and others) give next to the tax report: schedules already worked out, not trades
+READY_MADE = [("Schedule FA", re.compile(r"(?i)schedule[\s_-]*fa(?![a-z])")), ("Schedule FSI", re.compile(r"(?i)schedule[\s_-]*fsi(?![a-z])")),
+              ("Schedule TR", re.compile(r"(?i)schedule[\s_-]*tr(?![a-z])")), ("Form 67", re.compile(r"(?i)form[\s_-]*67(?!\d)"))]
+GAINS_NOTE = ("This is a realised-gains report: it has the lots you sold, not the shares you still hold. Schedule FA needs "
+              "everything held in the calendar year, so the shares still held are missing from it until you add their purchases "
+              "(or upload your broker's full transaction or activity statement).")
 ASSUMPTIONS = [
     "You are a resident (and ordinarily resident) individual in the year; non-residents don't report foreign assets "
     "and are taxed differently.",
@@ -174,24 +198,113 @@ def _head(rows: list[list[str]]) -> tuple[int, dict[str, int]] | None:
     return None
 
 
+def _gains_cols(row: list[str]) -> dict[str, int]:
+    keys = [hf.key(c) for c in row]
+    found: dict[str, int] = {}
+    for field, names in (GAINS | GAINS_TOTALS).items():
+        for i, k in enumerate(keys):
+            if k in names and field not in found and i not in found.values():
+                found[field] = i
+    return found
+
+
+def _gains_heads(rows: list[list[str]]) -> list[int]:
+    """The rows that name a realised-gains table's columns (the ticker, the quantity sold, the day acquired and the day sold
+    and a price for each): a report has one under each of its sections, anywhere down the sheet."""
+    return [i for i, row in enumerate(rows) if GAINS.keys() <= _gains_cols(row).keys()]
+
+
+def _ready_made(data: bytes, filename: str) -> str | None:
+    """"Schedule FA", "Schedule FSI", "Schedule TR" or "Form 67" when the workbook is one of those ready-made tables (by the file
+    name, the sheet names, then the title rows at the top), else None."""
+    texts = [filename]
+    try:
+        for name, rows in hf.sheets(data, 30, whole=False):
+            texts.append(name)
+            texts += [c for r in rows[:12] for c in r if c.strip()]
+    except hf.FileError:
+        pass
+    for text in texts:
+        for label, rx in READY_MADE:
+            if rx.search(text or ""):
+                return label
+    return None
+
+
 def parse_upload(data: bytes, filename: str = "") -> dict:
     """US trades from a CSV or Excel file: the date, purchase or sale, the ticker, the quantity and the price in dollars
-    (and optionally fees). {"rows", "problems", "month_first", "date_note"}. Raises FileError when nothing can be read."""
+    (and optionally fees), or a realised-gains tax report (MO-1), whose lot lines are read as a purchase and a sale.
+    {"rows", "problems", "month_first", "date_note", "note"}. Raises FileError when nothing can be read."""
     if not data:
         raise hf.FileError("That file is empty.")
     if len(data) > MAX_BYTES:
         raise hf.FileError(f"That file is larger than {MAX_BYTES // (1024 * 1024)} MB.")
+    if data[:5] == b"%PDF-":
+        raise hf.FileError("PDFs can't be read: upload the Excel (.xlsx) or CSV version of the same report.")
     if data[:4] == b"PK\x03\x04":                      # a workbook: the sheet with the trades, read whole; the others only at the top
-        tables = [rows for _, rows in hf.sheets(data, hf.MAX_ROWS, wanted=lambda rows: _head(rows) is not None)][:1]
+        tables = [rows for _, rows in hf.sheets(data, hf.MAX_ROWS, wanted=lambda rows: bool(_gains_heads(rows)) or _head(rows) is not None)][:1]
     else:
         tables = [hf.table(data, MAX_BYTES)]
     for rows in tables:
+        heads = _gains_heads(rows)
+        if heads:
+            return _gains(rows, heads, indian_export(rows, heads[0], filename))
         got = _head(rows)
         if got:
             i, c = got
             return _rows(rows[i + 1:], c, i + 2, indian_export(rows, i, filename))
+    ready = _ready_made(data, filename) if data[:4] == b"PK\x03\x04" else None
+    if ready:
+        raise hf.FileError(f"This is a ready-made {ready} table, not a list of trades. Upload the tax report workbook (the yearly one, "
+                           "such as 2025.xlsx, with the Transaction History sheet) instead: StratLab works the schedules out from the trades.")
     raise hf.FileError("No US trades were found in that file. It needs columns for the date, the trade (purchase or sale), "
                        "the ticker, the quantity and the price in dollars.")
+
+
+def _gains(rows: list[list[str]], heads: list[int], broker: str | None = None) -> dict:
+    """A realised-gains report as trades: each lot line under a "… Gains (Losses)" heading becomes a purchase (the day it was
+    acquired, at the buying price) and a sale (the day it was sold, at the selling price) of the same shares. A section ends at
+    the first blank line or title line (so dividends, interest and the rest below are never read as trades); only the columns
+    for the lot are read, whatever else the sheet holds."""
+    lots: list[tuple[int, list[str], dict[str, int]]] = []
+    for h in heads:
+        c = _gains_cols(rows[h])
+        for n in range(h + 1, len(rows)):
+            r = rows[n]
+            if sum(1 for x in r if x.strip()) < 2 or GAINS.keys() <= _gains_cols(r).keys():
+                break
+            lots.append((n + 1, r, c))
+
+    def cell(r, c, f):
+        i = c.get(f)
+        return r[i].strip() if i is not None and i < len(r) else ""
+    order, note = date_order([cell(r, c, f) for _, r, c in lots for f in ("bought", "sold")], broker)
+    out, problems = [], []
+    for n, r, c in lots:
+        sym = re.sub(r"[^A-Z0-9.\-]", "", cell(r, c, "symbol").upper()).replace(".", "-")[:10]
+        qty, bp, sp = (_money(cell(r, c, f)) for f in ("qty", "bprice", "sprice"))
+        qty = abs(qty) if qty is not None else None
+        if qty:                     # each price from the lot's own proceeds and cost where the report has them (GAINS_TOTALS)
+            whole_s, whole_b = _money(cell(r, c, "proceeds")), _money(cell(r, c, "cost"))
+            sp = abs(whole_s) / qty if whole_s else sp
+            bp = abs(whole_b) / qty if whole_b else bp
+        bd, sd = _day(cell(r, c, "bought"), order), _day(cell(r, c, "sold"), order)
+        if re.match(r"(?i)total", cell(r, c, "symbol")) or (not sym and not bd and not sd):      # a totals line
+            continue
+        text = " · ".join(x for x in (cell(r, c, "symbol"), cell(r, c, "qty"), cell(r, c, "bought"), cell(r, c, "sold")) if x)[:80]
+        why = ("No ticker" if not sym else "No date" if not bd or not sd else "Sold before it was acquired" if sd < bd
+               else "No quantity" if not qty or qty > MAX_QTY
+               else "No price" if bp is None or sp is None or min(bp, sp) < 0 or max(bp, sp) > MAX_PRICE else None)
+        if why:
+            problems.append({"line": n, "text": text, "reason": why})
+            continue
+        if len(out) + 2 > MAX_TRADES:
+            raise hf.too_many(MAX_TRADES // 2)
+        for d, side, price in ((bd, "B", bp), (sd, "S", sp)):
+            out.append({"d": d, "side": side, "sym": sym, "qty": round(qty, 6), "price": round(price, 6), "fees": 0.0, "name": "", "src": "file"})
+    if not out:
+        raise hf.FileError("No US trades could be read from that file: " + (problems[0]["reason"].lower() if problems else "it has no lot lines") + ".")
+    return {"rows": out, "problems": problems[:100], "month_first": order == "mdy", "date_note": note, "note": GAINS_NOTE}
 
 
 def _rows(rows: list[list[str]], c: dict[str, int], first_line: int, broker: str | None = None) -> dict:
@@ -230,7 +343,7 @@ def _rows(rows: list[list[str]], c: dict[str, int], first_line: int, broker: str
                     "name": cell(r, "name")[:60], "src": "file"})
     if not out:
         raise hf.FileError("No US trades could be read from that file: " + (problems[0]["reason"].lower() if problems else "it has no lines") + ".")
-    return {"rows": out, "problems": problems[:100], "month_first": order == "mdy", "date_note": note}
+    return {"rows": out, "problems": problems[:100], "month_first": order == "mdy", "date_note": note, "note": None}
 
 
 # ---------- stored ----------

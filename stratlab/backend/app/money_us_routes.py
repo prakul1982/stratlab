@@ -363,7 +363,7 @@ def _import(profile, data: bytes, filename: str):
         r["id"] = uuid.uuid4().hex[:12]
     added, dup = us.add(profile["id"], got["rows"], filename)
     return M.ok({"read": len(got["rows"]), "added": added, "duplicates": dup, "problems": got["problems"][:50],
-                 "month_first": got["month_first"], "date_note": got["date_note"], "us": view(profile)})
+                 "month_first": got["month_first"], "date_note": got["date_note"], "note": got["note"], "us": view(profile)})
 
 
 @router.delete("")

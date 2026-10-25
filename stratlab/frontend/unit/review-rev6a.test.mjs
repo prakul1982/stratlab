@@ -19,3 +19,13 @@ test("rev6a: the US trades and dividends imports say how dates that read either 
     assert.match(page, /r\.date_note \? ` \$\{r\.date_note\}`/);
   }
 });
+
+test("mo1: the US trades card says in one line which files work, names the realised-gains report, and shows the upload's own note", async () => {
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("../src/pages/money/UsTaxPage.tsx", import.meta.url), "utf8");
+  assert.match(page, /data-testid="us-upload-help">A trade list \(CSV or Excel\) from your broker, or a realised-gains tax report such as Vested's yearly tax report \(the \.xlsx\)\.<\/p>/);
+  assert.equal((page.match(/realised-gains/g) ?? []).length, 1);                      // one explanation, not two
+  assert.match(page, /\$\{r\.note \? ` \$\{r\.note\}` : ""\}/);
+  assert.match(page, /accept="\.csv,\.xlsx,\.txt,text\/csv"/);                         // .xls is not read, so it is not offered
+  assert.doesNotMatch(page, /Drive ?Wealth/i);
+});

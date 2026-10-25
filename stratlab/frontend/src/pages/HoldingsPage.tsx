@@ -353,7 +353,9 @@ export function HoldingsPage() {
                     <div key={r.symbol} className="k-stack">
                       <div className="k-row"><b>{r.symbol}</b>{f.flags.length > 0 && <span className="k-note">Last 3 months: {f.flags.join(" · ")}</span>}</div>
                       {f.recent.map((x, i) => (
-                        <div key={i} className="k-row top k-small">
+                        // MO-2: one grid for every line, so the dates, tags and titles line up in columns (a flex row put each
+                        // tag wherever its date ended, and the title a few pixels lower than the tag)
+                        <div key={i} className="h-filing k-small">
                           <span className="k-note">{dateOnly(x.at)}</span>
                           <Badge dot={false}>{x.label}</Badge>
                           {x.url ? <a className="link k-any" href={safeHref(x.url)} target="_blank" rel="noreferrer">{x.subject || "Filing"}</a> : <span className="k-any">{x.subject}</span>}

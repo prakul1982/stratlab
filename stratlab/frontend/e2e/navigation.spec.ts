@@ -168,8 +168,8 @@ test("All features lists every page by space and group, is linked from the accou
     await expect(row.locator(".feat-line")).toHaveText(p.line);
   }
   await expect(features.getByRole("link", { name: "Market view", exact: true })).toHaveAttribute("href", groupPath("invest", "market-view"));
-  // "New" marks what shipped lately
-  await expect(features.getByRole("region", { name: "Invest: Market view" }).locator("li").filter({ hasText: "Margin funding" })).toContainText("New");
+  // no "New" tags: everything is new at launch (owner, 25 Oct)
+  await expect(features.getByRole("region", { name: "Invest: Market view" }).locator("li").filter({ hasText: "Margin funding" })).not.toContainText(/\bNew\b/);
   // narrowing, and a friendly message when nothing matches
   await features.getByLabel("Narrow the list of features").fill("tax");
   await expect(features.getByRole("link", { name: "Tax report", exact: true })).toBeVisible();
