@@ -16,10 +16,14 @@ export default defineConfig({
   reporter: process.env.GITHUB_ACTIONS ? [["list"], ["github"]] : [["list"]],     // on GitHub, failures also show as annotations
   use: { baseURL: `http://127.0.0.1:${webPort}`, launchOptions: chromium ? { executablePath: chromium } : {}, screenshot: "only-on-failure" },
   projects: [
-    { name: "desktop", testIgnore: /screens\.spec/, use: { viewport: { width: 1440, height: 1000 } } },
-    { name: "phone", testIgnore: /screens\.spec/, use: { ...devices["Pixel 7"], browserName: "chromium" } },
+    { name: "desktop", testIgnore: /screens\.spec|ui-lint\.spec/, use: { viewport: { width: 1440, height: 1000 } } },
+    { name: "phone", testIgnore: /screens\.spec|ui-lint\.spec/, use: { ...devices["Pixel 7"], browserName: "chromium" } },
     // every route at five screen sizes (each test makes its own browser windows at its size)
     { name: "screens", testMatch: /screens\.spec/ },
+    // the layout checker (e2e/ui-lint.spec.ts): measures every route for dead space, floating controls, uneven rows... and writes a report;
+    // its own project because it takes minutes and reports rather than fails (npm run ui-lint; UI_LINT_STRICT=1 makes it fail)
+    // (only when UI_LINT=1, which the npm script sets, so a plain `playwright test` in CI does not run it)
+    ...(process.env.UI_LINT ? [{ name: "ui-lint", testMatch: /ui-lint\.spec/, use: { viewport: { width: 1440, height: 900 } } }] : []),
   ],
   webServer: [
     { command: `${process.env.PYTHON ?? "python"} -m tests.visual_server`, cwd: "../backend", port: apiPort, timeout: 300_000, reuseExistingServer: !process.env.CI },   // the fake world can take minutes to build on a busy machine
