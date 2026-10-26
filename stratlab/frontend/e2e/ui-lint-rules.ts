@@ -9,7 +9,8 @@
 // Rule list and thresholds (also printed at the top of the report):
 //   R1  dead space beside a short card      cards/columns in one visual row (same top +-4px); one has > 60px AND > 25% of the row's
 //                                            height unused below its content (CK-2: was 120px / 30%, which let a 86px / 41% hole through)
-//   R2  sparse wide card                    a card wider than 900px and >= 140px tall whose content covers < 55% of its inner width
+//   R2  sparse wide card                    a card wider than 900px and >= 140px tall whose content covers < 55% of its inner width; (CK-2) a row of
+//                                            2+ tiles that fills < 60% of the row's width (two tiles in the left half of a four-column grid)
 //   R3  floating control                    a button/chip that is a flex sibling of a chip group wrapped over 2+ rows and not level
 //                                            with its first row; or the end control of a row of 3+ controls > 48px from the rest
 //   R4  text wrapping inside a button       a button/chip/segmented option/tab whose own text runs on 2+ lines
@@ -26,8 +27,9 @@
 //   R11 tiny tap target (phone)             a control < 32px tall on a phone-width screen
 //   R12 caption clutter                     a small "Dots: ..." / "Colours: ..." caption right under a list or menu
 // CK-2: what the visual review (VR-1) found by eye and the checker could not see, as rules (its "Checker gaps" G1-G14):
-//   R13 empty inside a box (G1)             any bordered/filled box >= 140px tall (cards inside cards too, not only side by side): content
-//                                            ends > 70px AND > 25% of its height above the bottom (a box whose content is centred is left out)
+//   R13 empty inside a box (G1)             any bordered/filled box >= 140px tall (cards inside cards too, not only side by side): the biggest
+//                                            empty band, at the bottom or between two blocks of content (a note pinned to the bottom edge), is
+//                                            > 70px AND > 25% of its height (a box whose content is centred is left out)
 //   R14 overlay on content (G2)             a fixed/sticky box that is not app chrome (menu, dialog, toast) covers text or a control in main by
 //                                            > 6px each way, with the page scrolled to the top, middle or bottom
 //   R15 icon glued to its label (G3)        an (i) or icon button < 3px from the text beside it while level with it (or overlapping it)
@@ -233,6 +235,21 @@ export function lintPage(opts: LintOpts): LintResult {
     // that fills less than 55% of the width with figures in it or with a long column of lines (a list squeezed into the left third).
     // A short card of words (one headline, three lines of a note) or an empty-state message reads fine at its natural width.
     if ((used / inner < 0.55 && (nums.length >= 2 || tops >= 6)) || (figReach < 0.75 && cols && !hasWide && nums.length >= 2)) add("R2", c, `content spans ${Math.round(used)}px of ${Math.round(inner)}px (${Math.round((100 * used) / inner)}%); its figures reach ${Math.round(100 * figReach)}% of the width, ${tops} lines, in a ${Math.round(r.width)}x${Math.round(r.height)} card`);
+  }
+
+  // ---- R2 (CK-2) a short list of tiles that leaves much of its row empty --------------------------------------------------------------------
+  // two tiles of an Invest page in the left half of a four-column grid: the right half of the row is empty (VR1-021 had kept four-to-a-row widths)
+  for (const p of all) {
+    const s = S(p);
+    if (!flexish(s) || !shown(p) || (s.display.includes("flex") && s.flexDirection.startsWith("column")) || !inFlow(p)) continue;
+    const ks = kids(p);
+    const tiles = ks.filter((c) => R(c).width >= 140 && R(c).height >= 60 && S(c).position !== "absolute" && (isCard(c) || c.matches(".k-linkcard, [class*=tile]")));
+    if (tiles.length < 2 || tiles.length !== ks.length || rowsOf(tiles, 4).length !== 1) continue;
+    const pr = R(p);
+    const inner = pr.width - px(s.paddingLeft) - px(s.paddingRight) - px(s.borderLeftWidth) - px(s.borderRightWidth);
+    if (inner < 600) continue;
+    const used = Math.max(...tiles.map((c) => R(c).right)) - Math.min(...tiles.map((c) => R(c).left));
+    if ((inner - used) / inner > 0.4) add("R2", p, `${tiles.length} tiles fill ${Math.round((100 * used) / inner)}% of their ${Math.round(inner)}px row, ${Math.round(inner - used)}px of it empty`);
   }
 
   // ---- R3 floating control -------------------------------------------------------------------------------------------
@@ -488,17 +505,34 @@ export function lintPage(opts: LintOpts): LintResult {
       if (r.height < 140 || r.width < 200) continue;
       const s = S(c);
       if (!(hasBorder(s) || alpha(s.backgroundColor) > 0.05)) continue;
-      if (c.matches("[role=dialog], [aria-modal=true], .modal, .k-state, [class*=skeleton]")) continue;       // a dialog or an empty-state message sizes itself
+      if (c.matches("[role=dialog], [aria-modal=true], .modal, .k-state, [class*=skeleton]") || c.querySelector("[aria-busy=true], .skel, [class*=skeleton]")) continue;       // a dialog or an empty-state message sizes itself; a card still loading is not measured
       const box = contentBox(c, false);
       if (!box) continue;
       // (a chart library draws its canvases in boxes of its own that the walk above does not enter: they are the content too)
-      let lowest = box.b;
-      for (const m of Array.from(c.querySelectorAll("canvas, svg, img, video, iframe"))) { const mr = R(m); if (mr.width >= 8 && mr.height >= 8 && !m.closest("[hidden]") && S(m).visibility !== "hidden" && !m.closest(".info-btn, button")) lowest = Math.max(lowest, mr.bottom); }
+      const blocks = box.parts.map((q) => ({ t: q.t, b: q.b }));
+      for (const m of Array.from(c.querySelectorAll("canvas, svg, img, video, iframe"))) { const mr = R(m); if (mr.width >= 8 && mr.height >= 8 && !m.closest("[hidden]") && S(m).visibility !== "hidden" && !m.closest(".info-btn, button")) blocks.push({ t: mr.top, b: mr.bottom }); }
+      // painted boxes inside it (a tile, an empty-state panel) are content as much as their text, and so is a decorative picture marked aria-hidden
+      const drawn = (d: Element) => { const dr = R(d); return dr.width >= 8 && dr.height >= 8 && S(d).display !== "none" && S(d).visibility !== "hidden" && Number(S(d).opacity) > 0 && !closedDetails(d) && dr.right > 0 && dr.left < vw; };
+      for (const d of Array.from(c.querySelectorAll("*"))) {
+        if (d.closest("svg, .sr-only, [hidden]") || !drawn(d)) continue;
+        const ds = S(d);
+        const art = d.matches("[aria-hidden=true]") && !d.parentElement?.closest("[aria-hidden=true]");
+        if (art || ((hasBorder(ds) || alpha(ds.backgroundColor) > 0.05) && !d.matches(".info-btn, .chip-x"))) blocks.push({ t: R(d).top, b: R(d).bottom });
+      }
       const innerTop = r.top + px(s.paddingTop) + px(s.borderTopWidth);
-      const empty = r.bottom - padBottom(c) - lowest;
-      if (empty > 70 && empty / r.height > 0.25 && box.t - innerTop <= 0.5 * empty) {        // (content centred in its box, as a message is, is not a hole at the bottom)
+      const innerBottom = r.bottom - padBottom(c);
+      // the biggest empty band: content blocks by top, the gap before each one past everything above it, then the gap under the last (a note pinned
+      // to the bottom edge leaves its band in the middle: stretching a short card and pinning its notes only moved the hole)
+      blocks.sort((x, y) => x.t - y.t);
+      let reach = -Infinity, band = 0, from = 0;
+      for (const q of blocks) { if (reach > -Infinity && q.t - reach > band) { band = q.t - reach; from = reach; } reach = Math.max(reach, q.b); }
+      const lowest = reach;
+      const empty = innerBottom - lowest;
+      const atBottom = empty > 70 && empty / r.height > 0.25 && box.t - innerTop <= 0.5 * empty;      // (content centred in its box, as a message is, is not a hole at the bottom)
+      const inMiddle = band > 70 && band / r.height > 0.25;
+      if (atBottom || inMiddle) {
         flagged.push(c);
-        found.push({ rule: "R13", el: c, detail: `${Math.round(empty)}px empty (${Math.round((100 * empty) / r.height)}%) at the bottom of a ${Math.round(r.width)}x${Math.round(r.height)} box; its content ends ${Math.round(lowest - r.top)}px down` });
+        found.push({ rule: "R13", el: c, detail: inMiddle && band >= empty ? `a ${Math.round(band)}px empty band (${Math.round((100 * band) / r.height)}%) in a ${Math.round(r.width)}x${Math.round(r.height)} box, ${Math.round(from - r.top)}px down` : `${Math.round(empty)}px empty (${Math.round((100 * empty) / r.height)}%) at the bottom of a ${Math.round(r.width)}x${Math.round(r.height)} box; its content ends ${Math.round(lowest - r.top)}px down` });
       }
     }
     // a box inside a flagged box shares its hole: report the innermost one

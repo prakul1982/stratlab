@@ -232,7 +232,11 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   await expect(holdings.locator(".as-of")).toContainText("as of");
   const tax = page.getByTestId("tax-summary");
   await expect(tax).toContainText(/Total tax estimate, FY ?\d{4}/, { timeout: 30_000 });         // the tax report's own total (R5O-022)
-  await expect(tax).toContainText(/As the tax report works it out|Assumes only the sales in the tradebooks you uploaded/);   // every estimate says what it assumes
+  await expect(tax).toContainText("An estimate to check with your CA.");
+  // every estimate says what it assumes: behind the card's (i), not a three-line paragraph that made it taller than My Holdings (CK-2)
+  await page.getByRole("button", { name: /^About Tax/ }).click();
+  await expect(page.getByRole("note")).toContainText(/As the tax report works it out|Assumes only the sales in the tradebooks you uploaded/);
+  await page.keyboard.press("Escape");
   // no "Prices as of" stamp: the tax total is worked out from the tradebooks' sales, not today's prices (R66)
   await expect(tax.locator(".as-of")).toHaveCount(0);
   // one card per Money feature that exists, and nothing for one that doesn't yet

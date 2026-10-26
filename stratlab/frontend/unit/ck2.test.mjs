@@ -30,7 +30,7 @@ test("CK-2: every new rule is listed, measured, coloured and checked on a bad ca
 
 test("CK-2: thresholds written in the rules", () => {
   assert.match(rules, /r\.height < 140 \|\| r\.width < 200/);                                   // R13: boxes 140px+ tall
-  assert.match(rules, /empty > 70 && empty \/ r\.height > 0\.25/);                              // R13: > 70px and > 25%
+  assert.match(rules, /const atBottom = empty > 70 && empty \/ r\.height > 0\.25/);                // R13: > 70px and > 25%
   assert.match(rules, /ow > 6 && oh > 6/);                                                       // R14: more than 6px each way
   assert.match(rules, /gap < 3 && gap > -80/);                                                   // R15: under 3px
   assert.match(rules, /x\.h > 1\.6 \* mh/);                                                      // R16: a wrapped value
@@ -56,13 +56,39 @@ test("CK-2 (R17): the page frame is compared across pages, by the pure function 
   assert.match(spec, /\$\{t\.r\.path\.startsWith\("\/admin"\) \? "admin" : "app"\}/);
 });
 
-test("CK-2 (R1, R13): cards of a row end level and their notes stand on the bottom edge", () => {
+test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its notes pinned to the bottom; the hole is not moved, it is closed", () => {
   const css = read("src/styles.css");
-  assert.match(css, /\.k-explore \.explore-grid \{ grid-template-columns: repeat\(auto-fill, minmax\(230px, 1fr\)\); \}/);
-  assert.match(css, /\.explore-card \.explore-go \{ margin-top: auto;/);
-  assert.match(css, /\.money-panels > \.k-card > \.k-stack \{ flex: 1; \}/);
-  assert.match(css, /\.money-panels > \.k-card > \.k-stack > :last-child \{ margin-top: auto; \}/);
-  assert.match(read("src/pages/trade/events.css"), /\.k-two\.ev-pair \{ align-items: stretch; \}\s*\/\*[^*]*\*\/\s*\.ev-week-more \{ margin-top: auto; \}/);
+  // the checker measures the biggest empty band inside a box (a pinned note leaves it in the middle), and a short list of tiles that leaves its row half empty
+  assert.match(rules, /let reach = -Infinity, band = 0, from = 0;/);
+  assert.match(rules, /const inMiddle = band > 70 && band \/ r\.height > 0\.25;/);
+  assert.match(rules, /\(inner - used\) \/ inner > 0\.4\) add\("R2", p,/);
+  assert.match(spec, /"R13 notes pinned to the bottom edge"\)\.toContain\("R13"\)/);
+  assert.match(spec, /"R2 two tiles in half the row"\)\.toContain\("R2"\)/);
+  // no stretch + bottom pin left behind
+  assert.doesNotMatch(css, /explore-go \{ margin-top: auto/);
+  assert.doesNotMatch(css, /\.money-panels > \.k-card > \.k-stack/);
+  assert.doesNotMatch(read("src/pages/trade/events.css"), /ev-week-more \{ margin-top: auto/);
+  // Invest's short tile list shares its row
+  assert.match(css, /\.k-explore \.explore-grid \{ grid-template-columns: repeat\(auto-fit, minmax\(230px, 1fr\)\); align-items: start; \}/);
+  // Money home: the tax card's explanation is behind its (i); each card its own height
+  const home = read("src/pages/SpaceHomes.tsx");
+  assert.match(home, /<Panel title=\{year \? `Tax, \$\{year\.label\}` : "Tax this year"\} info=\{how\}/);
+  assert.match(home, /<p className="tiny muted">\{year\?\.count \?/);
+  assert.match(home, /An estimate to check with your CA\.<\/p>/);
+  assert.match(home, /className="grid2 space-panels money-panels"/);
+  // /trade/events: the week card full width (events side by side, the count lines beside them), the reminders card in two columns under it
+  const ev = read("src/pages/trade/EventsPage.tsx");
+  assert.match(ev, /<div className="ev-weekgrid">/);
+  assert.match(ev, /<div className="ev-remind">/);
+  assert.ok(ev.indexOf('className="ev-weekgrid"') < ev.indexOf("<RemindCard v={v} onSave={save} />"));
+  const evc = read("src/pages/trade/events.css");
+  assert.match(evc, /\.ev-weekgrid > \.ev-week \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(190px, 1fr\)\);/);
+  assert.match(evc, /\.ev-remind \{ display: grid; grid-template-columns: minmax\(0, 1\.4fr\) minmax\(0, 1fr\);/);
+  // the plans: each card its own height, its button under its list
+  assert.match(css, /\.k-plans \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\); gap: var\(--s4\); align-items: start; \}/);
+  const allow = JSON.parse(read("e2e/ui-lint.allow.json")).allow;
+  assert.deepEqual(allow.map((x) => `${x.page} ${x.rule} ${x.element}`), ["/plans R1 k-plan"]);
+  // the company page: the peers' tiles in equal rows, the news under them
   assert.match(read("src/pages/Research.tsx"), /<div className="k-stack">\s*\{c\.peers\.length > 0 && <Card><CardHead title="Similar companies"/);
   assert.match(read("src/pages/Research.tsx"), /className=\{`co-peers co-peers-\$\{c\.peers\.length === 4 \? 2 : Math\.min\(3, c\.peers\.length\)\}`\}/);
   assert.match(read("src/styles-invest.css"), /\.co-peers-3 \.inv-tiles \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/);

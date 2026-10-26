@@ -1,4 +1,11 @@
 {
   "_about": "Layout violations accepted on purpose. Each entry: page (a route like /holdings, or * for every page), rule (R1..R25), element (a piece of the element label shown in the report) and a reason. Only used by UI_LINT_STRICT=1 runs (npm run ui-lint) to pass; the report still lists them.",
-  "allow": []
+  "allow": [
+    {
+      "page": "/plans",
+      "rule": "R1",
+      "element": "k-plan",
+      "reason": "The three plan cards are a comparison: Free lists fewer features than Basic, and at 1280 px that shows as a shorter card. They start level, each ends at its own list with its button directly under it; stretching Free would only move the blank space inside it (R13), and filling it would be filler."
+    }
+  ]
 }

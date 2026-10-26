@@ -34,7 +34,7 @@ const PASSES: { size: (typeof SIZES)[number]; theme: "dark" | "light" }[] = [
 
 export const RULES: Record<string, string> = {
   R1: "Dead space beside a short card: cards/columns in one row, one with > 60px and > 25% of the row height empty under its content",
-  R2: "Sparse wide card: a card wider than 900px (and 140px+ tall) whose content covers < 55% of its inner width",
+  R2: "Sparse wide card: a card wider than 900px (and 140px+ tall) whose content covers < 55% of its inner width; a row of 2+ tiles that fills < 60% of the row",
   R3: "Floating control: a button/chip not level with the first row of a chip group wrapped over 2+ rows beside it, or an end control > 48px from its row",
   R4: "Text wrapping inside a button, chip, segmented option or tab (2+ lines)",
   R5: "Uneven row: a control > 25% (and 16px) off the row's median height; fields/stats whose control/value sits > 3px off its neighbours'; a stretched segmented option",
@@ -45,7 +45,7 @@ export const RULES: Record<string, string> = {
   R10: "Overflow and clipping: the page scrolls sideways, text cut off by a clipping box, two text lines overlapping",
   R11: "Tiny tap target on a phone (< 32px tall)",
   R12: "Caption clutter: a small 'Dots: ...' / 'Colours: ...' caption under a list or menu",
-  R13: "Empty inside a box: any bordered/filled box 140px+ tall (a card inside a card too) whose content ends > 70px and > 25% of its height above its bottom",
+  R13: "Empty inside a box: any bordered/filled box 140px+ tall (a card inside a card too) with an empty band > 70px and > 25% of its height, at the bottom or between two blocks of content",
   R14: "Overlay on content: a fixed/sticky box (not the menu, a dialog or a toast) covering text or a control in the page, scrolled to the top, middle or bottom",
   R15: "Icon glued to its label: an (i) or icon button < 3px from the text beside it, or overlapping it",
   R16: "Uneven stat row: a word among numbers, a value wrapped over 2+ lines, or labels of different heights, in one row of figures",
@@ -219,6 +219,13 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
   expect(await fire(`<div class="row" style="align-items:stretch"><div><div class="k-card" style="height:287px"><h3 style="margin:0">Paper sessions</h3><b class="k-stat-v">1 running</b><p style="margin:0">One line</p></div></div><div class="k-card" style="height:287px">${lines(12)}</div></div>`), "R13 hole inside a nested card").toContain("R13");
   expect(await fire(`<div class="k-card" style="height:287px"><h3 style="margin:0">Equity</h3><svg width="400" height="210"><rect width="400" height="210" fill="#ccc"/></svg></div>`), "R13 card filled by a chart").not.toContain("R13");
   expect(await fire(`<div class="k-card" style="height:287px;justify-content:center;align-items:center"><span>Nothing here yet</span></div>`), "R13 a message centred in its box").not.toContain("R13");
+  // R13 a short card stretched beside a taller one with its notes pinned to the bottom edge: the hole is in the middle (Money's My Holdings, the events week card)
+  expect(await fire(`<div class="k-card" style="height:300px"><h3 style="margin:0">The next seven days</h3><p style="margin:0">Tue 27 Oct · Monthly F&amp;O expiry</p><p style="margin:0;margin-top:auto">Results this week: 1</p></div>`), "R13 notes pinned to the bottom edge").toContain("R13");
+  expect(await fire(`<div class="k-card" style="height:150px"><h3 style="margin:0">The next seven days</h3><p style="margin:0">Tue 27 Oct · Monthly F&amp;O expiry</p><p style="margin:0">Results this week: 1</p></div>`), "R13 notes directly under the list").not.toContain("R13");
+  // R2 (CK-2) two tiles in the left half of a four-column grid leave the right half of the row empty (Invest's "More you can do"); sharing the row they do not
+  const tile = (n: string) => `<div class="k-card" style="height:100px">${n}</div>`;
+  expect(await fire(`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;width:1000px">${tile("Compare two companies")}${tile("Company deep dive")}</div>`), "R2 two tiles in half the row").toContain("R2");
+  expect(await fire(`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;width:1000px">${tile("Compare two companies")}${tile("Company deep dive")}</div>`), "R2 two tiles sharing the row").not.toContain("R2");
   // R14 a fixed pill over a control (the notebook's "Lab notes" over a rule's delete button), checked at the scroll's top, middle and bottom
   const pill = `<div style="position:fixed;right:10px;bottom:10px;width:120px;height:40px;border:1px solid #888;border-radius:20px;background:#fff">Lab notes</div>`;
   expect(await fire(`<main style="position:relative;height:1600px;width:1240px"><button style="position:absolute;left:1330px;top:860px;width:40px;height:30px">x</button>${pill}</main>`), "R14 pill over a button").toContain("R14");

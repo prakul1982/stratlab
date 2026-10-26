@@ -112,7 +112,7 @@ test("VR1-130: the alerts summary is one sentence row with the settings link in 
 });
 
 test("VR1-140, VR1-149, VR1-150, VR1-151: Money home's figures and tiles, label baselines, a disabled main button, the rates table", () => {
-  assert.match(read("src/pages/SpaceHomes.tsx"), /grid2 space-panels even money-panels/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /grid2 space-panels money-panels/);
   assert.match(css, /\.money-panels \.k-stats \{ grid-template-columns: repeat\(auto-fit, minmax\(112px, 1fr\)\);/);
   assert.match(css, /\.explore-grid\.money-cards \{ grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 215px\), 1fr\)\); \}/);
   assert.match(css, /\.k-stat-k \.info \{ margin-block: -4px; \}/);

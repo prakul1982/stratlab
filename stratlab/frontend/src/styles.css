@@ -891,18 +891,13 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .palette-foot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--line); }
 @media (max-width: 640px) { .palette-back { padding: 8px; place-items: start stretch; } .palette { max-height: calc(100vh - 16px); } .palette-foot { display: none; } }
 .explore-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }   /* auto-fit: a short list fills the row */
-/* VR1-021: a short list (two tiles) keeps cards of four-to-a-row width, left to right, instead of two 534px cards for a sentence each */
-.k-explore .explore-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
-/* CK-2 (R1): cards of one row end level (a short one is not left with dead space beside a taller one) and every "Open →" sits on the bottom edge */
-.explore-card .explore-go { margin-top: auto; padding-top: var(--s1); }
+/* VR1-021 kept a short list at four-to-a-row widths, which left the right half of the row empty (CK-2, R2): the tiles share the row */
+.k-explore .explore-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); align-items: start; }   /* CK-2: a short list (two tiles) shares the whole row, so no half of it is empty (VR1-021 had kept four-to-a-row widths) */
 /* VR1-140: Money's eight cards are 4 + 4 on a laptop (230px made 3 + 3 + 2, a hole beside the last) */
 @media (min-width: 561px) { .explore-grid.money-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); } }
 /* VR1-140: the three figures of Money home's two summary cards in one row, not 2 + 1 with the lower left empty */
 .money-panels .k-stats { grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: var(--s3) var(--s4); }
 .money-panels .k-stat-v { font-size: clamp(22px, 1.9vw, 30px); }
-/* CK-2 (R1): the two summary cards end level, so each one's notes (prices as of, uploaded on) stand on the bottom edge and no card ends in a blank band */
-.money-panels > .k-card > .k-stack { flex: 1; }
-.money-panels > .k-card > .k-stack > :last-child { margin-top: auto; }
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
 @media (max-width: 560px) {
@@ -2053,7 +2048,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-progress::-moz-progress-bar { background: var(--blue); border-radius: 99px; }
 
 /* plans */
-.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: stretch; }
+.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a 260px band in the middle */
 .k-plan.pro { border: 2px solid var(--ink); }
 @media (min-width: 601px) and (max-width: 1000px) { /* a tablet: two columns, the last plan across both, never one narrow column */
   .k-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); }
