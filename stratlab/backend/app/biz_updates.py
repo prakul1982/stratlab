@@ -320,6 +320,27 @@ def shift(period: str, months: int) -> str:
     return f"{n // 12:04d}-{n % 12 + 1:02d}"
 
 
+def settled(period: str | None, filed: str, span: str | None = "month") -> str | None:
+    """The period as a figure filed on `filed` can be for: a month that was over by then, and for a quarter its last month
+    (RC2B-008: Tata Motors Passenger Vehicles' Q2 FY27 update, filed on 1 Oct 2026, was labelled "Oct 2026" with an empty
+    "Oct 2026" row in the month-by-month table: a month can't have a figure before it ends). A month that has not ended
+    by the filing day, or a quarter named by a month that is not a quarter's end, goes back to the last that had."""
+    if not period or not re.fullmatch(r"\d{4}-\d{2}", str(period)):
+        return period
+    try:
+        day = date.fromisoformat(str(filed)[:10])
+    except ValueError:
+        return period
+    nxt = date(day.year + (day.month == 12), day.month % 12 + 1, 1)
+    over = f"{day.year:04d}-{day.month:02d}" if (nxt - day).days == 1 else shift(f"{day.year:04d}-{day.month:02d}", -1)
+    if period > over:
+        period = over
+    if span == "quarter":
+        while int(period[5:7]) % 3:
+            period = shift(period, -1)
+    return period
+
+
 def pdf_pages(data: bytes, max_pages: int = 12) -> list[str]:
     """Each page's text (the rupee sign put back), for finding the page a quote is on."""
     from pypdf import PdfReader
@@ -360,8 +381,8 @@ def clean_figures(d: dict, pages: list[str], filed: str, own: bool = True, produ
     copied from the year-ago column is put right from the page's column headings (own_column). `own` false: the filing
     is a subsidiary's or a joint venture's, so none of its figures is the company's own; `production`: a production
     filing, whose figures are named as production so they never stand for sales (DF-010)."""
-    period = _period(d.get("period"), filed)
     span = "quarter" if str(d.get("span") or "").lower().startswith("q") else "month"
+    period = settled(_period(d.get("period"), filed), filed, span)
     out, seen, headline = [], set(), False
     for f in (d.get("figures") or [])[:MAX_FIGURES * 2] if isinstance(d.get("figures"), list) else []:
         if not isinstance(f, dict):
@@ -553,6 +574,24 @@ def as_read_now(r: dict, f: dict) -> dict:
     return f
 
 
+# a filing's own wording for a measure: "Total Sales (units, month)", "Total Vehicles", "Units" (RC2B-028)
+_NOTE_IN_NAME = re.compile(r"\s*\(\s*(?:(?:units?|nos\.?|numbers?|vehicles?|month(?:ly)?|quarter(?:ly)?|in|for|the)\b[\s,/&-]*)+\)", re.I)
+
+
+def tidy_figure(f: dict) -> dict:
+    """A figure as the pages show it: no "(units, month)" tail on the name (the unit and the period are shown beside it),
+    a name in Title Case read as a sentence ("Total sales"), and a unit written with a capital ("Units") in lower case like
+    every other. Names with an abbreviation or a bracket of their own are left as filed."""
+    name = _NOTE_IN_NAME.sub("", f["metric"]).strip() or f["metric"]
+    if re.fullmatch(r"[A-Z][a-z]+(?: [A-Z][a-z]+)+", name):
+        name = name[0] + name[1:].lower()
+    unit = f["unit"]
+    head, _, rest = unit.partition(" ") if unit.startswith("₹") else ("", "", unit)
+    if re.fullmatch(r"[A-Z][a-z]{2,}(?: [a-z]+)*", rest):
+        unit = (f"{head} " if head else "") + rest.lower()
+    return f if (name, unit) == (f["metric"], f["unit"]) else {**f, "metric": name, "unit": unit}
+
+
 def series(reads: dict) -> list[dict]:
     """Every measure across the stored reads: its points by period (a later filing's figure wins; a year-ago figure a
     filing states fills that month when nothing else does), the latest value, the change on the previous point and on
@@ -560,11 +599,11 @@ def series(reads: dict) -> list[dict]:
     metrics: dict[str, dict] = {}
     order: list[str] = []
     for fid, r in sorted(reads.items(), key=lambda kv: kv[1].get("at") or ""):
-        p = r.get("period")
+        p = settled(r.get("period"), r.get("at") or "", r.get("span"))     # also for reads stored with a month not yet over (RC2B-008)
         if not p:
             continue
         for f in r.get("figures") or []:
-            f = as_read_now(r, f)
+            f = tidy_figure(as_read_now(r, f))
             k = metric_key(f["metric"], f.get("segment"), f["unit"], f["basis"])
             m = metrics.setdefault(k, {"key": k, "metric": f["metric"], "segment": f.get("segment"), "unit": f["unit"],
                                        "basis": f["basis"], "span": r.get("span") or "month", "headline": False, "own": True, "points": {}})
@@ -578,7 +617,7 @@ def series(reads: dict) -> list[dict]:
                     m["points"][py] = {"period": py, "value": f["prior"], "filed_later": True, "source": src}
     newest = max((r for r in reads.values() if r.get("period") and r.get("figures")), key=lambda r: r.get("at") or "", default=None)
     if newest:
-        order = [metric_key(g["metric"], g.get("segment"), g["unit"], g["basis"]) for g in (as_read_now(newest, f) for f in newest.get("figures") or [])]
+        order = [metric_key(g["metric"], g.get("segment"), g["unit"], g["basis"]) for g in (tidy_figure(as_read_now(newest, f)) for f in newest.get("figures") or [])]
     out = []
     for k, m in metrics.items():
         pts = sorted(m["points"].values(), key=lambda x: x["period"])
@@ -599,7 +638,9 @@ def series(reads: dict) -> list[dict]:
                     "change_year": change(latest["value"], year["value"], m["unit"]) if year else None,
                     "points": [x for x in pts if x["period"] >= lo]})
     rank = {k: i for i, k in enumerate(order)}
-    out.sort(key=lambda m: (not m["headline"] or m["key"] not in rank, rank.get(m["key"], 999), m["latest"]["period"] < ((newest or {}).get("period") or ""),
+    n = newest or {}
+    newest_period = settled(n.get("period"), n.get("at") or "", n.get("span")) or ""
+    out.sort(key=lambda m: (not m["headline"] or m["key"] not in rank, rank.get(m["key"], 999), m["latest"]["period"] < newest_period,
                             m["metric"].lower()))
     return out[:MAX_FIGURES * 2]
 
@@ -686,7 +727,7 @@ def view(symbol: str, items: list[dict] | None, allowed: bool, problems: list[st
             found.append({"id": fid, "at": r["at"], "title": r["title"], "url": r["url"], "maybe": False,
                           "exchange": r.get("exchange") or "NSE"})
     found.sort(key=lambda f: f["at"], reverse=True)
-    filings = [{**f, "read": f["id"] in reads, "period": reads.get(f["id"], {}).get("period"),
+    filings = [{**f, "read": f["id"] in reads, "period": settled(reads.get(f["id"], {}).get("period"), f["at"], reads.get(f["id"], {}).get("span")),
                 "problem": reads.get(f["id"], {}).get("problem")} for f in found[:30]]
     to_check = sum(1 for c in candidates(items or []) if c["maybe"] and c["id"] not in reads)
     metrics = series(reads) if allowed else []

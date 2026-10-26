@@ -54,8 +54,8 @@ test("a cold /library keeps its own words until the page is ready, with no splas
   expect(errors).toEqual([]);
 });
 
-test("/pricing and /faq are drawn at their section from the first frame, not moved there (R10V-006)", async ({ context }) => {
-  for (const [path, section] of [["/pricing/", "#pricing"], ["/faq/", "#faq"]] as const) {
+test("a landing address with a section is drawn at it from the first frame, not moved there (R10V-006); /pricing and /faq draw their own part from the top (RC2B-032)", async ({ context }) => {
+  for (const [path, section] of [["/features/", "#trade"], ["/pricing/", "#pricing"], ["/faq/", "#faq"]] as const) {
     const page = await context.newPage();            // a page of its own: init scripts and routes stay with it
     const errors = await quiet(page);
     // the first frames the landing page is on screen: where is its section?
@@ -78,7 +78,8 @@ test("/pricing and /faq are drawn at their section from the first frame, not mov
     expect(frames[0].top, `${path}: ${JSON.stringify(frames.slice(0, 4))}`).not.toBeNull();
     expect(frames[0].top!, path).toBeGreaterThanOrEqual(-40);
     expect(frames[0].top!, path).toBeLessThan(vh);
-    expect(frames[0].y, path).toBeGreaterThan(200);
+    if (path === "/features/") expect(frames[0].y, path).toBeGreaterThan(200);
+    else expect(frames[0].y, path).toBeLessThan(5);           // its own part of the page: nothing to scroll to
     expect(errors).toEqual([]);
     await page.close();
   }

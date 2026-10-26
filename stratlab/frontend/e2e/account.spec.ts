@@ -179,6 +179,37 @@ test("account: Free's limits match the Plans page, and deleting all your data as
   await shot(page, "account-free", phone);
 });
 
+test("account: Delete my account asks for your email, says why a billed plan stops it, and ends on a page that says it is done (RC2B-031)", async ({ page, request }, info) => {
+  const phone = info.project.name === "phone";
+  const u = who(241, phone);                 // a Free account
+  const sent: unknown[] = [];
+  await page.route(`${API}/me/delete-account`, async (r) => {            // nothing is really deleted
+    sent.push(r.request().postDataJSON());
+    if (sent.length === 1) {
+      await r.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ detail: { code: "cancel_first", message: "Your plan is still billed. Cancel it first." } }) });
+    } else {
+      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, closed: true, done: [], failed: [] }) });
+    }
+  });
+  const errors = await signIn(page, request, u, "/account");
+  const main = page.locator("main");
+  await expect(main.locator("#data")).toBeVisible({ timeout: 30_000 });
+  await expect(main.locator("#data")).not.toContainText("done by us on request");
+  await main.getByRole("button", { name: "Delete my account…" }).click();
+  const ask = page.getByRole("dialog", { name: "Delete your account?" });
+  const go = ask.getByRole("button", { name: "Delete my account" });
+  await expect(go).toBeDisabled();
+  await ask.getByLabel("Type your email to confirm").fill("someone@else.com");
+  await expect(go).toBeDisabled();
+  await ask.getByLabel("Type your email to confirm").fill(u.email);
+  await go.click();
+  await expect(ask).toContainText("Your plan is still billed. Cancel it first.");        // refused: the dialog stays, the account is open
+  await go.click();
+  await expect(page.getByRole("dialog", { name: "Your account is deleted" })).toContainText("Invoices and the payment records behind them are kept");
+  expect(sent).toEqual([{ confirm: u.email }, { confirm: u.email }]);
+  expect(errors.filter((e) => !/401|403|409|sign/i.test(e))).toEqual([]);
+});
+
 test("settings: each section is a step in the history, so Back returns to the one before", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
   const errors = await signIn(page, request, who(275, phone), "/settings");

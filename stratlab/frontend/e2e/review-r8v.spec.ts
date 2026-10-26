@@ -29,13 +29,15 @@ test("each landing address draws the h1 its own HTML carries, with the tagline b
   await expect(h1(page)).toHaveCount(1);
   expect(rawH1("pricing/index.html")).toEqual(["Plans and prices"]);
   await expect(page.locator("#pricing")).toBeInViewport();
-  await expect(page.locator(".lp").getByText("it, research it, track it.").first()).toBeAttached();
+  // /pricing is the prices page, as /plans is (RC2B-032): no hero, so no tagline beside its heading; /faq and /about keep theirs
+  await expect(page.locator(".lp").getByText("it, research it, track it.")).toHaveCount(0);
   for (const [path, file, heading] of [["/faq", "faq/index.html", "Questions"], ["/about", "about/index.html", "About StratLab"],
     ["/", "index.html", "Test it, research it, track it."]] as const) {
     await page.goto(path);
     await expect(appH1(page)).toHaveText(heading, { timeout: 30_000 });
     expect(rawH1(file), path).toEqual([heading]);
     await expect(h1(page)).toHaveCount(1);
+    if (path !== "/") await expect(page.locator(".lp").getByText("it, research it, track it.").first()).toBeAttached();
   }
   // /plans opens on the prices themselves (R17-002), with the prices' heading
   await page.goto("/plans");

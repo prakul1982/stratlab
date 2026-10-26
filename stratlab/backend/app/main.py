@@ -1080,6 +1080,28 @@ def delete_my_data(req: DeleteMyDataReq, profile=Depends(current_profile)):
     return {"ok": not out["failed"], **out}
 
 
+@app.post("/me/delete-account")
+def delete_my_account(req: DeleteMyDataReq, profile=Depends(current_profile)):
+    """Close your own account (RC2B-031): the same erasing as "Delete all my data", then the sign-in account itself, once
+    the account's email is typed in to confirm. Invoices and the payment records behind them are kept, as tax law asks. A
+    plan that would still be billed is cancelled first, so a closed account is never charged; the owner's account is
+    closed from the sign-in service, not here."""
+    not_viewing(profile)
+    email = (profile.get("email") or "").strip().lower()
+    if not email or req.confirm.strip().lower() != email:
+        err(400, "confirm_mismatch", "Type your account's email exactly to confirm.")
+    if admin.is_admin(profile):
+        err(403, "owner_account", "This is the site owner's account, so it can't be closed from here.")
+    sub, status = profile.get("razorpay_subscription_id"), profile.get("plan_status")
+    if sub and status not in billing.FINAL and not profile.get("cancel_at_period_end"):
+        err(409, "cancel_first", "Your plan is still billed. Cancel it first (Account, Plan and usage, Cancel subscription), "
+                                 "then delete your account, so you aren't charged again.")
+    throttle(profile, "delete-my-account", 5, 3600, "Too many tries. Try again in an hour.")
+    out = user_data.close_account(profile["id"])
+    log.info("user %s closed their account: closed=%s, %d areas done, %d failed", profile["id"], out["closed"], len(out["done"]), len(out["failed"]))
+    return {"ok": out["closed"], **out}
+
+
 @app.put("/me/prefs")
 def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     """Experience level, what the user came for (trading, investing, their money or all of it) and the space last picked

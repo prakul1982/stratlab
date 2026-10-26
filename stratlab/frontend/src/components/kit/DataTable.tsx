@@ -17,6 +17,7 @@ export type Column<R> = {
   lead?: boolean;                            // on a phone card (`stack`), this cell comes right under the row's name, across the card: the answer first (DE-004, DE-035)
 };
 
+const info = (c: { header?: ReactNode; info?: ReactNode }) => <Info label={`About ${typeof c.header === "string" ? c.header.toLowerCase() : "this column"}`}>{c.info}</Info>;
 const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: boolean }) =>
   [c.numeric && "k-num", c.wrap && "k-wrap", c.action && "k-act", c.lead && "k-lead"].filter(Boolean).join(" ") || undefined;
 
@@ -75,9 +76,11 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
             const on = by?.key === c.key;
             return (
               <th key={c.key} scope="col" role={stack ? "columnheader" : undefined} className={cls(c)} aria-sort={by ? (on ? (by.desc ? "descending" : "ascending") : "none") : undefined}>
+                {/* a number column's (i) goes before its words, so the words end where the figures do (RC2B-027: "Of shares issued") */}
+                {c.numeric && c.info && info(c)}
                 {by ? <button type="button" className="k-th-sort" onClick={() => by.onSort(c.key)}>{c.header}<span aria-hidden="true">{on ? (by.desc ? " ↓" : " ↑") : ""}</span></button>
                   : c.header === "" || c.header == null ? <span className="sr-only">{c.action ? "Actions" : c.key}</span> : c.header}
-                {c.info && <Info label={`About ${typeof c.header === "string" ? c.header.toLowerCase() : "this column"}`}>{c.info}</Info>}
+                {!c.numeric && c.info && info(c)}
               </th>
             );
           })}</tr>

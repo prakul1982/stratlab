@@ -520,7 +520,8 @@ def _act(event: dict):
     profile = db.profile_by_subscription(sub["id"])
     if not profile:
         uid = (sub.get("notes") or {}).get("user_id")
-        profile = db.get_profile(uid) if uid else None
+        # find, never make: a late event for a closed account (RC2B-031) must not bring its profile back
+        profile = db.find_profile(uid) if uid else None
     if not profile:
         return
     if name in ("subscription.activated", "subscription.charged", "subscription.resumed"):

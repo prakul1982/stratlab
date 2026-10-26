@@ -57,10 +57,11 @@ test("R22-005: a visitor's /plans draws the prices alone, never the landing page
   assert.equal(isPlansPath("/plans"), true);
   assert.equal(isPlansPath("/plans/"), true);
   assert.equal(isPlansPath("/plans?x=1"), true);
-  assert.equal(isPlansPath("/pricing"), false);
+  assert.equal(isPlansPath("/pricing"), true);                      // RC2B-032: /pricing and /upgrade are the same prices page
+  assert.equal(isPlansPath("/upgrade"), true);
   assert.equal(isPlansPath("/"), false);
   assert.match(read("src/visitor/VisitorApp.tsx"), /plansOnly=\{isPlansPath\(pathname\)\}/);
-  assert.match(read("src/pages/Login.tsx"), /const section = plansOnly \? null : asked;/);
+  assert.match(read("src/pages/Login.tsx"), /const section = plansOnly \|\| slim \? null : asked;/);
 });
 
 test("R22: Data and jobs says a job's network error plainly and keeps the raw text in a tooltip", () => {

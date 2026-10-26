@@ -257,7 +257,8 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       out.push({ group: "Browse", items: [{ key: "features", icon: <Compass size={18} />, title: "All features", sub: "Every page by space and group, with what it is for in a line", run: () => go("/features") }] });
       return out;
     }
-    const feats = code ? [] : match(text, 5);
+    // the page an intent opens is not listed again as a feature of the same name ("tax report" showed two Tax report rows, RC2B-030)
+    const feats = code ? [] : match(text, 6).filter((f) => !(intent?.to && resolve(f.to, loc.pathname, null) === intent.to)).slice(0, 5);
     // companies by symbol or name ("hdfc bank", "infosys") from the live search and the company directory, each opening its page
     const companies: CompanyHit[] = code ? [] : companyHits(insts, suggested, 5);
     // a feature named by the words typed ("sip" → Test a SIP, "tax" → Tax report) beats a company that merely has those
@@ -312,7 +313,10 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     const first = (group: string) => { const n = out.findIndex((g) => g.group === group); if (n > 0) out.unshift(...out.splice(n, 1)); };
     if (words <= 2 && feats.length) first("Features");          // a short search that names a feature ("walk forward") opens it on Enter
     // a company named by its symbol or name comes first: "hdfc bank" is HDFC Bank, not the Holdings page
-    if (companies.length && (companies[0].match ?? 9) <= STRONG && !exactFeature && !intent) first("Companies");
+    // a single everyday word that several pages are about ("gold") puts those pages before a company that only has it in its name
+    // (RC2B-030: Gold.com and a Kotak ETF above Net worth and Test a SIP); a symbol or a name people use is still the company
+    const topicWord = words === 1 && feats.length >= 2 && (companies[0]?.match ?? 9) > 2;
+    if (companies.length && (companies[0].match ?? 9) <= STRONG && !exactFeature && !intent && !topicWord) first("Companies");
     // a term an explanation is written for, typed as its words ("pe ratio", "max drawdown"), opens that explanation, not a
     // feature that only shares letters with it (R52-004: "pe ratio" led with Paper trading)
     const term = text.toLowerCase().trim();

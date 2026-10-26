@@ -205,15 +205,21 @@ const moneyCard = ([t, b, tag]: [string, string, string]) => (
   <div key={t} className="lp-card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-tag">{tag}</span></div>
 );
 
+/** An address of its own that draws only its part of the landing page, not the whole of it scrolled to a section (RC2B-032:
+ * /help, /faq, /about, /login each were the 14,000 px page): the questions, the three spaces, or just the way in. */
+export type Slim = "faq" | "about" | "login";
+
 /** `section`: scroll there first (the page was opened as /pricing, /faq…). `panel`: the address was /login or /signup, so
  * the way in is open on top of the page. `heading`: the address's own heading (content/seo.ts: "Plans and prices" at
  * /pricing), the page's one h1, with the tagline beside it as words, so the heading a crawler reads in the address's
  * own HTML is the one the page shows (R8V-008). `plansOnly`: /plans, the prices on their own page under that heading, not the
  * whole landing page scrolled down to them: a phone drew the page's top and then jumped about 8,900 px (R22-005). */
-export function Login({ section: asked = null, panel, heading, intro, plansOnly = false }: { section?: string | null; panel?: "login" | "signup"; heading?: string; intro?: string; plansOnly?: boolean } = {}) {
+export function Login({ section: asked = null, panel, heading, intro, plansOnly = false, slim }: { section?: string | null; panel?: "login" | "signup"; heading?: string; intro?: string; plansOnly?: boolean; slim?: Slim } = {}) {
   // Google sends a refused or failed sign-in back with ?error= or #error= in the address: say so at the top, in words
   const [error, setError] = useState<string | null>(() => signInProblem(location.search, location.hash));
-  const section = plansOnly ? null : asked;          // the plans page is only the prices: it starts at the top, nothing to scroll to (R22-005)
+  const section = plansOnly || slim ? null : asked;          // the plans page is only the prices: it starts at the top, nothing to scroll to (R22-005)
+  const full = !plansOnly && !slim;                           // the whole landing page
+  const ownMenu = plansOnly || !!slim;                        // a page with no sections to scroll to carries the public pages' links (DK-004)
   const [way, setWay] = useState(panel ?? null);
   useEffect(() => setWay(panel ?? null), [panel]);
   useLayoutEffect(() => {
@@ -254,15 +260,15 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
     <div className="lp">
       <SkipLink />
       <header className="lp-nav">
-        <a href={plansOnly ? "/" : "#top"} className="brand" aria-label="StratLab home"><Logo size={46} /></a>
+        <a href={ownMenu ? "/" : "#top"} className="brand" aria-label="StratLab home"><Logo size={46} /></a>
         <nav aria-label="Sections">
-          {NAV_LINKS(plansOnly).map(([to, label]) => <a key={to} href={to}>{label}</a>)}
+          {NAV_LINKS(ownMenu).map(([to, label]) => <a key={to} href={to}>{label}</a>)}
         </nav>
         {/* on a phone the section links fold into a small menu (the row above hides there) */}
         <details className="lp-menu" ref={menu}>
           <summary>Menu</summary>
           <nav aria-label="Sections (menu)" onClick={(e) => { if ((e.target as HTMLElement).closest("a")) (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
-            {NAV_LINKS(plansOnly).map(([to, label]) => <a key={to} href={to}>{label}</a>)}
+            {NAV_LINKS(ownMenu).map(([to, label]) => <a key={to} href={to}>{label}</a>)}
           </nav>
         </details>
         <button type="button" className="btn outline sm" onClick={go}>Sign in</button>
@@ -271,7 +277,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
       <main id="main" tabIndex={-1}>
       {!plansOnly && <>
       <section id="top" className="lp-hero ruled">
-        <div className="lp-wrap lp-hero-grid">
+        <div className={`lp-wrap lp-hero-grid${full ? "" : " lp-hero-solo"}`}>
           <div className="stack g22 lp-hero-copy">
             {/* an address of its own (/help, /faq, /pricing, /about) leads with its own heading and line, not the home page's
                 hero under a renamed eyebrow (DI-033) */}
@@ -282,16 +288,16 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             <p className="serif lp-lede">{heading && intro ? intro : "One place for trading ideas, company research and your own money. Facts and tests, never tips."}</p>
             <div className="row wrap g12">
               {cta()}
-              <a className="btn quiet lp-cta-2" href="#trade">See how it works</a>
+              {full && <a className="btn quiet lp-cta-2" href="#trade">See how it works</a>}
             </div>
             {error && <p className="banner" role="alert">{error}</p>}
             <p className="small muted">Free to start · No card · No code · Paper trading only, no real orders</p>
           </div>
-          <HeroDemo />
+          {full && <HeroDemo />}
         </div>
       </section>
 
-      <section className="lp-sec lp-spaces-sec" aria-labelledby="spaces-h">
+      {(full || slim === "about") && <section className="lp-sec lp-spaces-sec" aria-labelledby="spaces-h">
         <div id="about" className="lp-wrap stack g24">
           <h2 id="spaces-h" className="serif lp-h3">Three spaces, one place.</h2>
           <div className="lp-spaces">
@@ -304,8 +310,9 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             ))}
           </div>
         </div>
-      </section>
+      </section>}
 
+      {full && <>
       <section id="trade" className="lp-sec lp-alt">
         <div className="lp-wrap stack g36">
           <Head eyebrow="Trade · the strategy lab" title="From a sentence to a verdict.">
@@ -400,15 +407,16 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
           <ToolList items={ALERTS} label="kinds of alert" shown={3} three />
         </div>
       </section>
+      </>}
 
       </>}
 
-      <Pricing top={plansOnly ? { heading: heading ?? "Plans and prices", error } : undefined} />
+      {!slim && <Pricing top={plansOnly ? { heading: heading ?? "Plans and prices", error } : undefined} />}
       {/* signed out, the plans page has the same side-by-side tables as signed in, loaded only here (R60-012) */}
       {plansOnly && <section className="lp-sec lp-compare"><div className="lp-wrap"><Suspense fallback={null}><PlanCompare /></Suspense></div></section>}
 
       {!plansOnly && <>
-      <section id="faq" className="lp-sec lp-alt">
+      {(full || slim === "faq") && <section id="faq" className="lp-sec lp-alt">
         <div className="lp-wrap lp-split lp-split-top">
           <div className="lp-faq-head stack g18">
             {/* /help: its own heading and the few places people ask for, above the same questions (DK-011: it was the FAQ under another name) */}
@@ -431,7 +439,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             {FAQ.map((f) => <details key={f.q}><summary>{f.q}</summary>{f.a.map((t) => <p key={t} className="muted">{t}</p>)}</details>)}
           </div>
         </div>
-      </section>
+      </section>}
 
       <section className="lp-final ruled">
         <div className="lp-wrap stack g20 lp-center">
@@ -472,7 +480,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
  * every case: while the prices are coming the cards are drawn with their amounts held back (so nothing flashes rupees and
  * then changes, and nothing moves), and if they can't be read the cards show the rupee prices with a line saying so. */
 function Pricing({ top }: { top?: { heading: string; error: string | null } } = {}) {
-  const { pricing, currency, pick, status } = usePricing();
+  const { pricing, currency, pick, status, offerRupees } = usePricing();
   const loading = status === "loading";
   // what's on sale today comes from the server (plans.offer_state), the same answer the Plans page reads
   const offer = pricing?.offer ?? null;
@@ -528,6 +536,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                 : <option value={currency}>{currency}</option>}
             </select>
           </label>
+          {offerRupees && !loading && <button type="button" className="link-btn small" onClick={() => pick("INR")}>In India? Show prices in ₹</button>}
         </div>
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {

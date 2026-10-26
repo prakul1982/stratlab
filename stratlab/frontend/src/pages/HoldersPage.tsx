@@ -275,8 +275,16 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
         asOf={data?.as_of} asOfLabel="Filings read through" asOfTz={ET} info={data ? <>Anyone who holds more than 5% of a US company's shares files a Schedule 13D (an active stake) or 13G (a passive one), and an amendment when it changes. US holders below 5% aren't named in any filing, so there is no 1% list as for India. {data.note} Names and percentages are read from each filing's cover page{data.unread > 0 ? `; ${data.unread} of these filings are still waiting to be read` : ""}.</> : undefined}
         infoLabel="Where the names come from" />
       {toolbar}
+      {/* the holder first, as on the India tab: the box at the top of a "holders" page searches a holder, not a company (RC2B, DF-018) */}
       <Card>
-        <CardHead title="Which filings" />
+        <CardHead title="Search a holder" />
+        <form className="holder-search" aria-label="Find a holder" onSubmit={findHolder}>
+          <Field label="Holder's name" placeholder="A fund or a person, like Vanguard" value={holderText} error={holderErr}
+            onChange={(e) => { setHolderText(e.target.value); setHolderErr(null); }} />
+          <button className="btn" type="submit">Find</button>
+          {holder && <button className="btn quiet" type="button" onClick={() => { setHolderText(""); setParam({ holder: null }); }}>Every holder</button>}
+        </form>
+        <h3 className="k-sub">Or one company's filings</h3>
         <FormGrid label="Which filings" onSubmit={(e) => e.preventDefault()}>
           <Field label="Company" optional>
             {(id) => <StockPicker id={id} market="US" value={symbol} placeholder="A US ticker or name, like AAPL" onPick={(s) => setParam({ symbol: s })} />}
@@ -288,12 +296,6 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
             {symbol && <button className="btn quiet" type="button" onClick={() => setParam({ symbol: null })}>Show every company</button>}
           </FormActions>
         </FormGrid>
-        <form className="holder-search" aria-label="Find a holder" onSubmit={findHolder}>
-          <Field label="Holder" optional placeholder="A fund or a person, like Vanguard" value={holderText} error={holderErr}
-            onChange={(e) => { setHolderText(e.target.value); setHolderErr(null); }} />
-          <button className="btn" type="submit">Find</button>
-          {holder && <button className="btn quiet" type="button" onClick={() => { setHolderText(""); setParam({ holder: null }); }}>Every holder</button>}
-        </form>
       </Card>
       {locked && <PlanNote>The latest 13D and 13G filings across every company are on the Basic plan. Pick a company above to see its own, on every plan.</PlanNote>}
       {error && <ErrorState title="The filings couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}

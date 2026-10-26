@@ -102,7 +102,10 @@ def _by_today(issue: dict) -> dict:
             at = next((n for n, s in enumerate(secs) if s.get("title") == "Headlines"), len(secs))
             secs = secs[:at] + extra + secs[at:]
     if out.get("ai_summary"):
-        out["ai_summary"] = write.day_first(out["ai_summary"])
+        # a stock the scan named has no price move in the words (RC2B-010); the symbols are in its sections
+        named = [m.group(1) for s in secs if str(s.get("title") or "").startswith("Newly") for i in s.get("items") or []
+                 if (m := re.match(r"([A-Z0-9][A-Z0-9&.\-]*) (?:matches|moved)\b", str(i.get("text") or "")))]
+        out["ai_summary"] = write.no_scan_moves(write.day_first(out["ai_summary"]), named)
     out["sections"] = secs
     return out
 
