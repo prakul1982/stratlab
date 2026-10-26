@@ -1307,7 +1307,7 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 /* a short symbol ("IEX") is still a 32 px target for a thumb (R95-003: 29 px wide) */
 .fo-row .link { display: inline-flex; justify-content: center; min-width: 32px; }
 
-.surv-badge.fo-badge { white-space: normal; max-width: 100%; }   /* wraps inside a narrow card */
+.surv-badge.fo-badge { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }   /* one line: in a narrow tile the badge moves to a line of its own as a whole (the row wraps) and only a badge wider than the whole tile is cut, with the full text in its tooltip; a pill on two lines was R19 */
 /* market events (/trade/events): neutral tags, figures in ink, the index table scrolling inside its card */
 
 .ev-figure { font-variant-numeric: tabular-nums; }
