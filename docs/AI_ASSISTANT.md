@@ -15,7 +15,7 @@ plan.
 
 ## 1. Make a key
 
-In StratLab, open **Account → AI assistant**, name the assistant (one key per assistant, so you can revoke one without
+In StratLab, open **Connect an AI assistant** (`/assistant`, in the My space menu), name the assistant (one key per assistant, so you can revoke one without
 the others) and choose whether it may place paper orders. Copy the key (`slm_…`) straight away: StratLab keeps only a
 fingerprint of it and can't show it again. **Revoke** stops a key at once.
 
