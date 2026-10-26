@@ -1333,7 +1333,8 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   const notice = page.getByText(/TCS had a 1:1 bonus on .*: your quantity is now 24, average price ₹1,760/);
   await expect(notice).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Dividends" })).toBeVisible();
-  await expect(page.getByRole("table", { name: "Dividends ahead" }).getByText("TCS")).toBeVisible();
+  // TCS can have two dividends ahead in the window (around midnight IST the seeded dates shift a day): one or more rows is the point
+  await expect(page.getByRole("table", { name: "Dividends ahead" })).toContainText("TCS");
   if (info.project.name === "phone") await touchable(page);
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page.getByText("TCS: quantity 24, average price ₹1,760.00.")).toBeVisible();

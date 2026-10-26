@@ -126,7 +126,8 @@ test("admin data and jobs: last run, next run, Run now and a log for each job; t
   await shot(page, "admin-data-log", info);
   await log.getByRole("button", { name: "Close" }).click();
   await expect(log).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Holidays by market, scrolls sideways" })).toBeVisible();
+  // five columns, a row per market: cards on a phone (CK-2, R18: no figure behind a sideways swipe), a table on a laptop
+  await expect(page.getByRole("region", { name: info.project.name === "phone" ? "Holidays by market, as cards" : "Holidays by market, scrolls sideways" })).toBeVisible();
   expect(boxes).toEqual([]);
   await sane(page, errors);
   await shot(page, "admin-data", info);
