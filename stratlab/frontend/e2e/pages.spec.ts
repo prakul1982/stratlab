@@ -417,8 +417,8 @@ test("my holdings: add by hand from suggestions, an Indian stock with the keyboa
   await expect(table.getByText("AAPL", { exact: true })).toBeVisible();
   await expect(table.getByRole("row", { name: /AAPL/ })).toContainText("$");
   const usLine = page.getByLabel("US stocks");
-  await expect(usLine).toContainText("$");
   await expect(usLine).toContainText("Sales of US stocks come from the trades");
+  await expect(usLine, "RC2B-045: one US stock's dollar value is its row's, not said again in the line above").not.toContainText("invested $");
   // an exact symbol typed without picking still works
   await page.getByRole("radio", { name: "India (NSE/BSE)" }).click();
   await box.fill("INFY");
@@ -1527,25 +1527,33 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await expect(page.getByText("Costs are being read; check back shortly.")).toBeVisible();
   await expect(page.getByLabel("PDF password")).toHaveCount(0);              // the password field goes with the file
 
-  const schemes = page.getByRole("table", { name: "Schemes" });
-  await expect(schemes.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible();
+  // MF-1 (RC2B-047): each scheme is one row of one list; its units, costs, return and sales are folded under it
+  const schemes = page.getByRole("list", { name: "Schemes" });
+  const flexi = schemes.getByRole("listitem").filter({ hasText: "Example Flexi Cap Fund - Direct Plan - Growth" });
+  await expect(flexi).toHaveCount(1);
   await expect(schemes.getByText("Sample Short Duration Fund - Direct Plan - Growth")).toBeVisible();
   await expect(page.getByText("₹42,500").first()).toBeVisible();             // 1,100 units at 25 and 500 at 30
-  await expect(page.getByRole("heading", { name: "By category" })).toBeVisible();
+  await expect(page.getByText("Share of the current value, by each scheme's official category.")).toBeVisible();
+  await expect(page.getByRole("table", { name: "Schemes" }), "no second table of the same schemes").toHaveCount(0);
 
   await page.getByRole("combobox", { name: "Financial year" }).selectOption("2025");
   await expect(page.getByRole("table", { name: "Gains by rate" }).getByText("Short-term at your slab rate (debt and other funds)")).toBeVisible();
   await page.getByRole("combobox", { name: "Financial year" }).selectOption("2024");
-  await expect(page.getByRole("table", { name: "Redemptions matched to purchases" }).getByText("grandfathered")).toBeVisible();
+  await expect(page.getByTestId("mf-sales-pointer")).toContainText("Each is listed under its scheme");
+  // the year's sales are under their scheme, with every year it sold in
+  await flexi.locator("summary").click();
+  await expect(flexi.getByRole("table", { name: "Redemptions matched to purchases" }).getByText("grandfathered")).toBeVisible();
 
-  // what the funds cost: each TER, rupees a year, both plans side by side, the TER since bought and a category change
-  const costs = page.getByRole("table", { name: "Fund costs" });
-  await expect(costs.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("region", { name: "Fund costs" }).getByText("₹185").first()).toBeVisible();   // 143 + 42 a year
+  // what the funds cost: the totals once, each fund's TER and rupees a year in its row, and both plans, the TER since bought and a category change in its fold
+  await expect(page.getByRole("region", { name: "Costs and how you invested" }).getByText("₹185").first()).toBeVisible({ timeout: 30_000 });   // 143 + 42 a year
+  await expect(flexi.getByText("₹143 a year")).toBeVisible();
+  const costs = flexi.getByRole("region", { name: "What it costs" });
   await expect(costs.getByText("₹352")).toBeVisible();                       // the 1.28-point plan gap on ₹27,500
-  await expect(costs.getByText(/Category changed on 16 Mar 2026 \(2026 recategorisation\)/)).toBeVisible();
   await costs.getByText("Parts of the TER").first().click();
   await expect(costs.getByText("Brokerage and transaction costs: 0.08%")).toBeVisible();
+  const short = schemes.getByRole("listitem").filter({ hasText: "Sample Short Duration Fund - Direct Plan - Growth" });
+  await short.locator("summary").click();
+  await expect(short.getByText(/Category changed on 16 Mar 2026 \(2026 recategorisation\)/)).toBeVisible();
 
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/you should|we suggest|recommend|better fund|switch to|rating/i);
