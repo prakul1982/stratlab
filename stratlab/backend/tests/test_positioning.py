@@ -398,7 +398,7 @@ def test_daily_summaries_from_recorded_chains(w):
 
 
 def test_chain_view_live_with_change_and_iv_stats(w):
-    today = date.today()
+    today = P.ist_now().date()                      # the IST day, as the views read it: date.today() (UTC) was a day behind after 18:30 UTC
     days = FP.weekdays_before(today, 25)
     FP.record_days(db.add_option_snapshot, "NIFTY", days)
     P.Runner(lambda: main.filings_feed, pace=0).chain_backfill(today, days=60)
@@ -409,7 +409,8 @@ def test_chain_view_live_with_change_and_iv_stats(w):
     v = P.chain_view(main.options_data, "NIFTY", pick, full=True, now=now)
     # on an expiry day the expiring chain has no IV percentile by design (its last day isn't comparable with the recorded
     # front expiry's), so the test reads the next expiry that day: it failed every expiry-day morning
-    if v["expiry"] == now.date().isoformat():
+    # (the chain's own day, not the clock's: before 09:15 IST the chain shown is the last session's, whose expiry day is not today)
+    if v["expiry"] == datetime.fromisoformat(v["as_of"]).date().isoformat():
         pick = "next"
         v = P.chain_view(main.options_data, "NIFTY", pick, full=True, now=now)
     assert v["source"] == "live" and v["spot"] and v["rows"] and v["max_pain"] and v["atm_iv"]
@@ -449,7 +450,7 @@ def test_api_today_is_for_everyone_history_is_basic(w, paid):
         assert d["participants"]["oi"] and d["cash"]["fii"] and [r["name"] for r in d["pcr"]] == list(P.NAMES)
         assert d["full"] == (token == "basic-token") and d["plan_needed"] == "Basic"
         ch = c.get("/trade/positioning/chain", params={"name": "NIFTY"}, headers=headers(token)).json()
-        if ch.get("expiry") == P.ist_now().date().isoformat():          # an expiry day: its chain has no IV percentile by design
+        if ch.get("expiry") and ch.get("as_of") and ch["expiry"] == datetime.fromisoformat(ch["as_of"]).date().isoformat():   # the chain's own day is an expiry day: no IV percentile by design
             ch = c.get("/trade/positioning/chain", params={"name": "NIFTY", "expiry": "next"}, headers=headers(token)).json()
         assert ch["rows"] and (ch["iv"] is None) == (token == "free-token")
     r = c.get("/trade/positioning/history", params={"kind": "participants"}, headers=headers("free-token"))
