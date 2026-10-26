@@ -98,8 +98,9 @@ export function EtfGapsPage() {
   return (
     <div className="k-page etf-gaps">
       <PageHeader eyebrow={eyebrowOf("/invest/etf-gaps")} title="ETF price against NAV" asOf={data?.as_of} asOfLabel="Prices as of"
-        info={data ? <>{data.nav_as_of ? `NAVs of ${asOf(data.nav_as_of)}. ` : ""}{data.count} ETFs. {data.note}</> : undefined} infoLabel="What the numbers are"
-        lede={<>How far each ETF's close is from what one unit holds: that day's published NAV, as a percent above or below. Through the day the gap is the last close's, as the new NAV comes out each evening. Each row shows two prices: the last trade, and the official close the gap uses, which the exchange works out from the session's final trades.{!hasInav && data ? " An indicative NAV (the fund house's estimate through the day) isn't shown: the exchange's list doesn't carry one." : ""} Facts with their dates, not a view on any fund.</>} />
+        info={<>Through the day the gap is the last close's, as the new NAV comes out each evening. Each row shows two prices: the last trade, and the official close the gap uses, which the exchange works out from the session's final trades.{!hasInav && data ? " An indicative NAV (the fund house's estimate through the day) isn't shown: the exchange's list doesn't carry one." : ""}{data ? <> {data.nav_as_of ? `NAVs of ${asOf(data.nav_as_of)}. ` : ""}{data.count} ETFs. {data.note}</> : null}</>} infoLabel="What the numbers are"
+        lede="How far each ETF's close is from what one unit holds: that day's published NAV, as a percent above or below. Facts with their dates, not a view on any fund."   // the rest is behind the (i) (VR1-116)
+      />
 
       {pick && <EtfGapDetailView key={pick} symbol={pick} />}
 

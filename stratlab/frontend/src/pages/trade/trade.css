@@ -87,6 +87,9 @@
 .k-card.lib-card.lib-lean { grid-row: span 6; }
 .lib-card > * { min-width: 0; margin: 0; }
 .lib-head .k-card-head { margin: 0; }
+/* VR1-171, VR1-180: the card's name and "By ..." sit at the bottom of the head cell, so in a row of cards the titles are level whether the market line above takes one line or two (the empty strip is above the title, not under "By") */
+.lib-card .lib-head { display: flex; flex-direction: column; }
+.lib-card .lib-head > .k-card-head { margin-top: auto; }
 .lib-by { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-meta { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .lib-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--s3); align-items: stretch; }

@@ -72,7 +72,9 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   const head = table.locator("thead tr").first();
   await expect(head).toContainText("Close vs NAV");                                       // one day's close against that day's NAV (R5O-005)
   await expect(head).not.toContainText("iNAV");                                          // none published: no empty columns
+  await page.getByRole("button", { name: "What the numbers are" }).click();                // the page's one-line intro keeps the rest behind its (i) (VR1-116)
   await expect(page.getByText(/An indicative NAV \(the fund house's estimate through the day\) isn't shown/)).toBeVisible();   // and said so (DF-007)
+  await page.keyboard.press("Escape");                                                    // the open note would cover the filters below it on a phone
   await expect(head).toContainText("Up to 30 trading days");                             // the days used, never a promised 30 (DF-003)
   await expect(rows.last()).toHaveAttribute("data-etf", "BANKBEES");                    // no published NAV: no gap, last
   // the page sits in Invest › Market view, in the breadcrumb at the top

@@ -211,7 +211,8 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
         <SpaceSwitch space={space} onPick={goSpace} />
         {/* the space's main button: never a link to the page you are on */}
-        {path !== main.to && <button className="side-new" onClick={() => nav(main.to)}>{main.icon}{main.label}</button>}
+        {/* (VR1-102: on that page the button's place is kept, so the menu doesn't jump 42px against the pages around it) */}
+        {path !== main.to ? <button className="side-new" onClick={() => nav(main.to)}>{main.icon}{main.label}</button> : <span className="side-new-gap" aria-hidden="true" />}
         <button className="search-btn" onClick={() => setSearch(true)} aria-keyshortcuts={/Mac/.test(navigator.platform) ? "Meta+K" : "Control+K"}>
           <Sparkle size={16} /><span>Ask or do anything</span>{/* no keyboard shortcut on a touch screen (R50-016) */}
           {!window.matchMedia?.("(pointer: coarse)").matches && <kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>}

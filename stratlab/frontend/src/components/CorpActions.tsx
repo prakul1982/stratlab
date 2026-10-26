@@ -79,13 +79,16 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
   if (!data) return <Skeleton label="Reading the corporate actions" lines={3} />;
   const past = all ? data.past : data.past.slice(0, 5);
   const ccy = region === "IN" ? "INR" : "USD";
+  const wide = past.length >= 3 && data.ahead.length <= 1;
   return (
     <div className="k-stack">
       {data.dividends_12m && (
         <span className="k-small">Dividends with an ex-date in the last 12 months: <b>{price(data.dividends_12m.amount, ccy)}</b> a share{data.dividends_12m.adjusted ? " in today's shares" : ""} ({data.dividends_12m.count} payment{data.dividends_12m.count === 1 ? "" : "s"})</span>
       )}
-      {/* what is ahead and what has been, side by side where there is room: one under the other left a wide card half empty (UI-FIX-1, R2) */}
-      <div className="inv-pair">
+      {/* what is ahead and what has been, side by side where there is room: one under the other left a wide card half empty (UI-FIX-1, R2).
+          When a short "Coming up" stands beside a long past list (VR1-105: one entry and ~300px of nothing beside four), "Coming up" goes on top
+          and the past rows run two across under it */}
+      <div className={wide ? "k-stack" : "inv-pair"}>
       <div className="k-stack">
         <span className="k-eyebrow">Coming up: dividends and splits</span>
         {data.ahead.length ? <div className="inv-rows">{data.ahead.map((a) => <ActionLine key={a.id} a={a} showSymbol={false} />)}</div>
@@ -93,7 +96,7 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
       </div>
       <div className="k-stack">
         <span className="k-eyebrow">Past three years</span>
-        {past.length ? <div className="inv-rows">{past.map((a) => <ActionLine key={a.id} a={a} showSymbol={false} year />)}</div> : <span className="k-small k-muted">None on record.</span>}
+        {past.length ? <div className={`inv-rows${wide ? " inv-rows-cols" : ""}`}>{past.map((a) => <ActionLine key={a.id} a={a} showSymbol={false} year />)}</div> : <span className="k-small k-muted">None on record.</span>}
         {data.past.length > 5 && <button className="btn quiet sm k-btn-end" onClick={() => setAll(!all)}>{all ? "Show fewer" : `Show all ${data.past.length}`}</button>}
       </div>
       </div>

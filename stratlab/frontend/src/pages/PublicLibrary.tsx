@@ -77,7 +77,7 @@ export function PublicLibrary() {
           <label className="k-search"><Search size={18} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: RSI, breakout, NIFTY" aria-label="Search the library" /></label>
           <Select label="Verdict" value={verdict} onChange={setVerdict} options={verdicts.map(([value, label]) => ({ value, label }))} />
         </div>
-        {markets.length > 2 && <ChipBar label="Market" options={markets} value={market} onChange={setMarket} />}
+        {markets.length > 2 && <ChipBar label="Market" options={markets} value={market} onChange={setMarket} wrap />}
       </Card>
       {rows === null ? <Card><Skeleton label="Opening the library" /></Card>
         : failed ? <ErrorState title="The library couldn't be opened" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Your connection or ours dropped for a moment.</ErrorState>
@@ -88,7 +88,8 @@ export function PublicLibrary() {
             <div className="k-stack k-tight">
               <p className="k-small" data-testid="lib-summary"><b>{tally.line}</b></p>
               <p className="k-note" data-testid="lib-checks-not-hold">{CHECKS_NOT_HOLD} Points are the gap in total return after costs, over the same dates.</p>
-              <span className="k-small k-muted">{shown.length} strateg{shown.length === 1 ? "y" : "ies"} shown</span>
+              {/* only when a search or a filter narrows the list: the summary above already counts them all (VR1-171) */}
+              {shown.length !== rows.length && <span className="k-small k-muted">{shown.length} of {rows.length} strategies shown</span>}
             </div>
             <div className="k-cards lib-cards">
               {shown.map((e) => (

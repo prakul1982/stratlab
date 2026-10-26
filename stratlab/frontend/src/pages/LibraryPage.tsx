@@ -126,8 +126,8 @@ export function LibraryPage() {
             { value: "new", label: "Newest" }, { value: "copied", label: "Most copied", short: "Copied" }]} value={sort} onChange={setSort} />
           {!phone && <Seg label="View" options={[{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }]} value={layout} onChange={(v) => setLayout(v as "cards" | "table")} />}
         </div>
-        {/* only the markets that have strategies, each with how many; one row that scrolls on a phone (MO-5b) */}
-        {choices.length > 2 && <ChipBar label="Market" options={choices} value={market} onChange={setMarket} />}
+        {/* only the markets that have strategies, each with how many; wrapped on a phone too, so none is cut off at the edge (MO-5b, VR1-181) */}
+        {choices.length > 2 && <ChipBar label="Market" options={choices} value={market} onChange={setMarket} wrap />}
       </Card>
       {rows === null ? <Card><Skeleton label="Opening the library" /></Card>
         : failed ? <ErrorState title="The library couldn't be opened" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Your connection or ours dropped for a moment. Nothing was lost.</ErrorState>

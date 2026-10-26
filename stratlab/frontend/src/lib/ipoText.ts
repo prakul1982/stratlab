@@ -82,7 +82,7 @@ export const croreText = (v: number | null | undefined) => (v == null ? "–" : 
 export const STAGE_BADGE: Record<Stage, { word: string; tone: "ok" | "warn" | "plain" | "live" }> = {
   filed: { word: "Filed, no dates yet", tone: "plain" }, upcoming: { word: "Upcoming", tone: "ok" }, open: { word: "Open for bidding", tone: "live" },
   closed: { word: "Closed, not listed yet", tone: "plain" }, listed: { word: "Listed", tone: "plain" },
-  withdrawn: { word: "Withdrawn", tone: "warn" }, social: { word: "Social Stock Exchange raise, not an IPO", tone: "plain" },
+  withdrawn: { word: "Withdrawn", tone: "warn" }, social: { word: "Fund raise", tone: "plain" },   // (VR1-121: the long wording wrapped to three lines in a pill; the section and the issue page say "not an IPO")
 };
 
 /** What the exchange says happened to an issue that did not go ahead: "Withdrawn", "Postponed" or "Cancelled". */

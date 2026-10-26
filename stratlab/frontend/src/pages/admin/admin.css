@@ -65,7 +65,7 @@
 
 /* Review DJ: small lists, the plan cell, sample previews, collapsed groups */
 .adm-list { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: var(--s1); overflow-wrap: anywhere; }
-.adm-plan { align-items: flex-start; gap: 2px; }   /* the plan's badge with its note under it on every row (DJ-014) */
+.adm-plan { align-items: flex-start; gap: 2px; min-height: 48px; }   /* VR1-173: a Free row (a badge, no note) is as tall as one with a note, so the table has one row height */   /* the plan's badge with its note under it on every row (DJ-014) */
 .adm-mail-stage.sample { position: relative; }
 .adm-mail-stage.sample::after { content: "SAMPLE · made-up details"; position: absolute; top: var(--s3); right: var(--s3); padding: 4px 10px; border-radius: 999px;
   background: var(--orange-soft); color: var(--orange-ink); font: 600 12px/1.4 var(--sans, inherit); letter-spacing: .04em; pointer-events: none; }

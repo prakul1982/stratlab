@@ -174,11 +174,12 @@ const SPACES: [string, string, string, string][] = [
 ];
 
 /** A section's eyebrow, heading and one line under it. */
-function Head({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) {
+function Head({ eyebrow, title, children, h1 }: { eyebrow: string; title: string; children?: ReactNode; h1?: boolean }) {
+  const H = h1 ? "h1" : "h2";       // /help has no hero above it, so its own heading is the page's (VR1-170)
   return (
     <div className="lp-head">
       <span className="eyebrow">{eyebrow}</span>
-      <h2 className="serif lp-h2">{title}</h2>
+      <H className="serif lp-h2">{title}</H>
       {children && <p className="lp-p">{children}</p>}
     </div>
   );
@@ -219,6 +220,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
   const [error, setError] = useState<string | null>(() => signInProblem(location.search, location.hash));
   const section = plansOnly || slim ? null : asked;          // the plans page is only the prices: it starts at the top, nothing to scroll to (R22-005)
   const full = !plansOnly && !slim;                           // the whole landing page
+  const helpOnly = !plansOnly && slim === "faq" && heading === "Help";       // /help: the questions, with no hero over them
   const ownMenu = plansOnly || !!slim;                        // a page with no sections to scroll to carries the public pages' links (DK-004)
   const [way, setWay] = useState(panel ?? null);
   useEffect(() => setWay(panel ?? null), [panel]);
@@ -276,7 +278,9 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
 
       <main id="main" tabIndex={-1}>
       {!plansOnly && <>
-      <section id="top" className="lp-hero ruled">
+      {/* VR1-170: /help starts at the questions: no hero with a second "Help" title, the home page's tagline and a sign-in button above them */}
+      {helpOnly && error && <p className="banner lp-wrap" role="alert">{error}</p>}
+      {!helpOnly && <section id="top" className="lp-hero ruled">
         <div className={`lp-wrap lp-hero-grid${full ? "" : " lp-hero-solo"}`}>
           <div className="stack g22 lp-hero-copy">
             {/* an address of its own (/help, /faq, /pricing, /about) leads with its own heading and line, not the home page's
@@ -295,7 +299,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
           </div>
           {full && <HeroDemo />}
         </div>
-      </section>
+      </section>}
 
       {(full || slim === "about") && <section className="lp-sec lp-spaces-sec" aria-labelledby="spaces-h">
         <div id="about" className="lp-wrap stack g24">
@@ -422,7 +426,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             {/* /help: its own heading and the few places people ask for, above the same questions (DK-011: it was the FAQ under another name) */}
             {heading === "Help" ? (
               <>
-                <Head eyebrow="Questions and contact" title="Help">
+                <Head eyebrow="Questions and contact" title="Help" h1>
                   The questions people ask first are beside this. The links below go to the rest, and the Contact page reaches a person.
                 </Head>
                 <ul className="lp-help-links" aria-label="Where to find help">

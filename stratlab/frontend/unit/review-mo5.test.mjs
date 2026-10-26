@@ -79,7 +79,7 @@ test("MO-5b: the market filter offers only markets that have samples, each with 
   assert.equal(marketName("CMDTY"), "Global commodities");
   for (const f of ["src/pages/LibraryPage.tsx", "src/pages/PublicLibrary.tsx"]) {
     const src = read(f);
-    assert.match(src, /<ChipBar label="Market" options=\{(choices|markets)\} value=\{market\} onChange=\{setMarket\} \/>/, f);
+    assert.match(src, /<ChipBar label="Market" options=\{(choices|markets)\} value=\{market\} onChange=\{setMarket\} wrap \/>/, f);   // (VR1-181: wrapped on a phone too)
     assert.doesNotMatch(src, /label="Market" value=\{market\}/, `${f}: the dropdown of every market is gone`);
   }
   assert.match(read("src/pages/LibraryPage.tsx"), /markets\?: Record<string, number>/);

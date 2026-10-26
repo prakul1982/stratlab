@@ -256,7 +256,7 @@ test("landing: Library and Companies are in the header, the menu and the footer;
   expect(pause.y).toBeLessThan(card.y);
   expect(Math.abs(pause.y - bar.y)).toBeLessThan(bar.height);
   await page.goto("/help");
-  await expect(page.locator("#faq").getByRole("heading", { level: 2 })).toHaveText("Help", { timeout: 30_000 });
+  await expect(page.locator("#faq").getByRole("heading", { level: 1 })).toHaveText("Help", { timeout: 30_000 });
   await expect(page.locator("#faq").getByRole("link", { name: "Contact us" })).toHaveAttribute("href", "/contact");
   await expect(page.locator("#faq details").first()).toBeVisible();
   expect(errors).toEqual([]);

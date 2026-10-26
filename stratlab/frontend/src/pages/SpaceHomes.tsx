@@ -417,7 +417,7 @@ export function MoneyHome() {
       {/* DG-051: the first-steps list is about trading (a backtest, paper trading, a deep dive), so Money home leaves it to Home */}
       <PromoCountdown />
       {/* RC2B-040: at one height, as on Invest home (DF-023): with no tax data the tax card was 140px shorter, a hole under it */}
-      <div className="grid2 space-panels even">
+      <div className="grid2 space-panels even money-panels">
         <HoldingsSummary />
         <TaxSummary />
       </div>

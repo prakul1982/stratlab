@@ -104,7 +104,7 @@ test("an issue that did not go ahead says which way, and has no stage of its own
   assert.equal(ipo.badgeOf({ stage: "withdrawn", issue_status: "postponed" }).word, "Postponed");
   assert.equal(ipo.badgeOf({ stage: "withdrawn", issue_status: "cancelled" }).word, "Cancelled");
   assert.equal(ipo.badgeOf({ stage: "withdrawn" }).word, "Withdrawn");
-  assert.match(ipo.badgeOf({ stage: "social" }).word, /not an IPO/);
+  assert.equal(ipo.badgeOf({ stage: "social" }).word, "Fund raise");   // VR1-121: a short badge; "not an IPO" is in the section title and the issue note
   assert.equal(ipo.badgeOf({ stage: "closed" }).word, "Closed, not listed yet");
   const page = read("src/pages/IposPage.tsx");
   assert.match(page, /d\.tabs\.withdrawn/);
