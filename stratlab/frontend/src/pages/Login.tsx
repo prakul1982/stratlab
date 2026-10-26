@@ -536,7 +536,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                 : <option value={currency}>{currency}</option>}
             </select>
           </label>
-          {offerRupees && !loading && <button type="button" className="link-btn small" onClick={() => pick("INR")}>In India? Show prices in ₹</button>}
+          {offerRupees && !loading && <button type="button" className="link-btn inr-pick small" onClick={() => pick("INR")}>In India? Show prices in ₹</button>}
         </div>
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {

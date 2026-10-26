@@ -129,7 +129,7 @@ export function PlansPage() {
               {(id) => <Select id={id} value={currency} onChange={pick} options={Object.entries(pricing.currencies).map(([c, r]) => ({ value: c, label: `${c} · ${r.name}` }))} />}
             </Field>
           )}
-          {pricing && offerRupees && <button type="button" className="link-btn k-small" onClick={() => pick("INR")}>In India? Show prices in ₹</button>}
+          {pricing && offerRupees && <button type="button" className="link-btn inr-pick k-small" onClick={() => pick("INR")}>In India? Show prices in ₹</button>}
           {billing && yearlyOk && (
             <FieldGroup label="Billed">
               <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}

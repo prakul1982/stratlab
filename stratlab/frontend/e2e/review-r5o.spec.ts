@@ -83,7 +83,7 @@ test("library cards say the return beside buy and hold, in facts (R5O-014)", asy
   await dismissWelcome(page);
   const cards = page.locator(".k-cards > section");
   await expect(cards.first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("lib-hold").first()).toContainText(/after costs against .* for buying and holding/);
+  await expect(page.getByTestId("lib-hold").first()).toContainText(/points (ahead of|behind) buy and hold/);          // said once on the card (MO-5a); the figures sit above it
   await expect(page.locator(".k-cards")).not.toContainText("Likely a real edge");
 });
 
