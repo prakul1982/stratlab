@@ -47,7 +47,10 @@ export function usePricing() {
   }, []);
   const chosen = pickCurrency(p, code);
   const pick = (c: string) => { setCode(c); try { localStorage.setItem(KEY, c); } catch { /* private window */ } };
-  return { pricing: p, currency: chosen, pick, status };
+  // the currency came from the browser (its time zone and language), not from the visitor: an Indian visitor whose browser
+  // says another country is offered rupees in one tap beside the list (RC2B-034)
+  const guessed = !!p && !(code && p.currencies[code]);
+  return { pricing: p, currency: chosen, pick, status, offerRupees: guessed && chosen !== "INR" && !!p?.currencies.INR };
 }
 
 /** The currency a visitor sees: their own choice, else their country's, else dollars (rupees in India). */

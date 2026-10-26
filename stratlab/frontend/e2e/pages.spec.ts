@@ -1064,10 +1064,10 @@ test("an invite link is remembered through sign-in, sent once, and taken out of 
 
 test("admin: invite counts in Users and growth", async ({ page }, info) => {
   const errors = await open(page, "/admin/users", "Paper trading now");
-  await expect(page.getByRole("table", { name: "Users" }).getByRole("columnheader", { name: /^Invited/ })).toHaveCount(0);           // a click away, so the table fits a laptop
+  await expect(page.getByRole("table", { name: "Users" }).getByRole("columnheader", { name: /Invited/ })).toHaveCount(0);           // a click away, so the table fits a laptop
   await page.getByTestId("cols-admin-users").click();
-  await expect(page.getByRole("table", { name: "Users" }).getByRole("columnheader", { name: /^Invited/ })).toBeVisible();
-  await expect(page.getByRole("table", { name: "Users" }).getByRole("columnheader", { name: /^Free months/ })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Users" }).getByRole("columnheader", { name: /Invited/ })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Users" }).getByRole("columnheader", { name: /Free months/ })).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 });

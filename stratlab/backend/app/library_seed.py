@@ -1,5 +1,6 @@
 """StratLab's own strategies in the public library: well-known rule sets, each built from the rules engine, run through
-the app's own backtest and verdict on the standard groups of stocks, and published as "StratLab" with a badge.
+the app's own backtest and verdict on the standard groups of each market the backtester reads (stocks in India, the US, the
+UK, Europe and Japan, coins, currency pairs, and commodity futures), and published as "StratLab" with a badge.
 
 Every verdict is published as the engine gave it, "No edge here" and "Probably luck" as plainly as "Likely a real
 edge": the library says what each rule set did on that group over that period, nothing more. Nothing here is advice or a
@@ -8,12 +9,14 @@ recommendation, and a verdict about the past says nothing about what a strategy 
 The entries have fixed ids (seed-<strategy>-<group>), so running the seed again updates them in place and never
 duplicates one: their copies count, moderation and first publication date stay. Run it from the admin page
 (POST /admin/library/seed), from a shell (`python -m app.library_seed`) or let the server do it once, a while after
-starting, when the library has no StratLab entries yet. Each group's candles are read once per strategy, paced by the
-data source's own limits."""
+starting, when the library has no StratLab entries yet, or lacks some of them (MO-5b: only the missing ones are run, so
+adding a market costs one background run and nothing on any other start). Each group's candles are read once per strategy,
+paced by the data source's own limits."""
 import time
 from datetime import datetime, timezone
 
 from . import library, memguard, research, universes
+from .data.markets import BY_ID
 from .models import Strategy
 
 OWNER = library.OFFICIAL_OWNER
@@ -24,6 +27,16 @@ DAYS = {"1d": 1825, "15m": 180}          # the period each timeframe is tested o
 STOP_SENTENCES = ("Worth paper trading before real money.",)
 
 RISK = {"capital": 500000, "riskPct": 1, "maxAlloc": 10, "sl": 8, "tgt": 0, "brokerage": 20, "slippage": 0.05}
+# (MO-5b) what a market's own money and contract sizes need on top of that: a Japanese stock is in yen, and one MCX or
+# currency-futures lot costs more than a tenth of Rs5,00,000 (a mini silver lot is about Rs9 lakh), so at the stock default
+# no lot could ever be bought and every verdict would read "no trades"
+MARKET_RISK = {"JP": {"capital": 50000000}, "MCX": {"capital": 5000000, "maxAlloc": 20}, "CDS": {"capital": 5000000, "maxAlloc": 20}}
+# how many positions a group holds at once where ten slots would be smaller than a lot of its contracts
+MARKET_OPEN = {"FX": 5, "CRYPTO": 5, "MCX": 4, "CDS": 4}
+# the markets whose candles come through the broker's daily login (the rest are read from open sources at any hour)
+BROKER_MARKETS = ("IN", "MCX", "CDS")
+# what one position is in, for the sentence about its size
+NOUN = {"CRYPTO": "coin", "FX": "pair", "CDS": "pair", "MCX": "commodity", "CMDTY": "commodity"}
 
 
 def _c(l, op, r):
@@ -48,21 +61,21 @@ STRATEGIES: dict[str, dict] = {
     "ema-20-50": {
         "name": "20/50 EMA cross",
         "text": "Enters when the 20-day exponential average crosses above the 50-day one; leaves when it crosses back below.",
-        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega")],
+        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega"), ("EU", "eu_large"), ("CRYPTO", "top_coins"), ("MCX", "mcx_minis")],
         "body": {"entry": [_c({"t": "ema", "p": 20}, "xa", {"t": "ema", "p": 50})],
                  "exit": [_c({"t": "ema", "p": 20}, "xb", {"t": "ema", "p": 50})]}},
     "rsi2-revert": {
         "name": "RSI(2) mean reversion",
         "text": "Enters after a sharp short-term drop (2-day RSI under 10) while the price is above its 200-day average; leaves when "
                 "the 2-day RSI is back above 70.",
-        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega")],
+        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega"), ("UK", "uk_large"), ("EU", "eu_large"), ("JP", "jp_large")],
         "body": {"entry": [_c({"t": "rsi", "p": 2}, "lt", _num(10)), _c(PRICE, "gt", {"t": "sma", "p": 200})],
                  "exit": [_c({"t": "rsi", "p": 2}, "gt", _num(70))], "risk": {"sl": 6}}},
     "breakout-52w": {
         "name": "52-week breakout with ATR stop",
         "text": "Enters when the price closes above the highest high of the previous 252 trading days (about 52 weeks); the stop is 3 "
                 "times the 14-day ATR below the entry; leaves when the price closes below its 50-day average.",
-        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega")],
+        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega"), ("EU", "eu_large")],
         "body": {"entry": [_c(PRICE, "xa", {"t": "dc_upper", "p": 252})],
                  "exit": [_c(PRICE, "xb", {"t": "sma", "p": 50})], "risk": {"stopType": "atr", "sl": 3}}},
     "boll-squeeze": {
@@ -84,30 +97,45 @@ STRATEGIES: dict[str, dict] = {
     "golden-cross": {
         "name": "Golden cross",
         "text": "Enters when the 50-day average crosses above the 200-day average; leaves when it crosses back below (the death cross).",
-        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega")],
+        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega"), ("UK", "uk_large"), ("CMDTY", "global_commodities")],
         "body": {"entry": [_c({"t": "sma", "p": 50}, "xa", {"t": "sma", "p": 200})],
                  "exit": [_c({"t": "sma", "p": 50}, "xb", {"t": "sma", "p": 200})], "risk": {"sl": 15}}},
     "donchian-20-10": {
         "name": "Donchian 20/10 (turtle-style)",
         "text": "Enters when the price closes above the highest high of the previous 20 days; leaves when it closes below the lowest low "
                 "of the previous 10 days; the stop is 2 times the 14-day ATR below the entry.",
-        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega")],
+        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega"), ("JP", "jp_large"), ("CRYPTO", "top_coins"), ("FX", "fx_majors"), ("MCX", "mcx_minis"), ("CDS", "cds_all"), ("CMDTY", "global_commodities")],
         "body": {"entry": [_c(PRICE, "xa", {"t": "dc_upper", "p": 20})],
                  "exit": [_c(PRICE, "xb", {"t": "dc_lower", "p": 10})], "risk": {"stopType": "atr", "sl": 2}}},
     "macd-cross": {
         "name": "MACD signal cross",
         "text": "Enters when the MACD line (12, 26) crosses above its 9-day signal line while the price is above its 200-day average; "
                 "leaves when the MACD line crosses back below the signal line.",
-        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega")],
+        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega"), ("UK", "uk_large")],
         "body": {"entry": [_c({"t": "macd", "p": 12, "m": 26}, "xa", {"t": "macd_signal", "p": 12, "m": 26}),
                            _c(PRICE, "gt", {"t": "sma", "p": 200})],
                  "exit": [_c({"t": "macd", "p": 12, "m": 26}, "xb", {"t": "macd_signal", "p": 12, "m": 26})]}},
     "supertrend": {
         "name": "Supertrend flip",
         "text": "Enters when the price crosses above the Supertrend (10, 3); leaves when it crosses back below.",
-        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega")],
+        "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega"), ("JP", "jp_large")],
         "body": {"entry": [_c(PRICE, "xa", {"t": "supertrend", "p": 10, "m": 3})],
                  "exit": [_c(PRICE, "xb", {"t": "supertrend", "p": 10, "m": 3})], "risk": {"sl": 12}}},
+    # (MO-5b) the mean-reversion and the long-and-short rule sets for the markets of coins, currencies and commodity futures
+    "bb-revert": {
+        "name": "Bollinger band reversion",
+        "text": "Enters when the price drops below the lower Bollinger band (20, 2); leaves when it closes back above the middle band.",
+        "tf": "1d", "groups": [("CRYPTO", "top_coins"), ("FX", "fx_majors"), ("MCX", "mcx_minis"), ("CDS", "cds_all"), ("CMDTY", "global_commodities")],
+        "body": {"entry": [_c(PRICE, "xb", {"t": "bb_lower", "p": 20, "m": 2})],
+                 "exit": [_c(PRICE, "xa", {"t": "bb_mid", "p": 20, "m": 2})], "risk": {"sl": 6}}},
+    "ema-20-50-ls": {
+        "name": "20/50 EMA cross, long and short",
+        "text": "Goes long when the 20-day exponential average crosses above the 50-day one and short when it crosses below; each "
+                "position is closed when the two averages cross back.",
+        "tf": "1d", "groups": [("FX", "fx_majors"), ("CDS", "cds_all")],
+        "body": {"side": "both",
+                 "entry": [_c({"t": "ema", "p": 20}, "xa", {"t": "ema", "p": 50})], "exit": [_c({"t": "ema", "p": 20}, "xb", {"t": "ema", "p": 50})],
+                 "shortEntry": [_c({"t": "ema", "p": 20}, "xb", {"t": "ema", "p": 50})], "shortExit": [_c({"t": "ema", "p": 20}, "xa", {"t": "ema", "p": 50})]}},
 }
 NOTE = library.SEED_NOTE        # said once on the library page, no longer at the end of every entry's description (DA-037)
 
@@ -116,7 +144,8 @@ class SeedError(Exception):
     pass
 
 
-SHORT = {"nifty50": "in", "us_mega": "us", "fno_liquid": "fo"}
+SHORT = {"nifty50": "in", "us_mega": "us", "fno_liquid": "fo", "uk_large": "uk", "eu_large": "eu", "jp_large": "jp",
+         "top_coins": "coin", "fx_majors": "fx", "mcx_minis": "mcx", "cds_all": "cds", "global_commodities": "cmd"}
 
 
 def entry_id(slug: str, preset: str) -> str:
@@ -124,14 +153,22 @@ def entry_id(slug: str, preset: str) -> str:
     return f"seed-{slug}-{SHORT.get(preset, preset[:6])}"
 
 
+def risk_of(spec: dict, market: str = "IN") -> dict:
+    """The risk settings one entry is run with: the stock defaults, then what the market's own money and contracts need
+    (MO-5b), then what the rule set itself says."""
+    own = spec["body"].get("risk", {})
+    risk = {**RISK, **MARKET_RISK.get(market, {}), **own}
+    # brokerage is a flat amount in the market's own money: ₹20 an order in India and on the Indian futures, none on the
+    # commission-free US broker or the others (R62-004: $20 an order on the US runs, $10,080 on one card), as a new
+    # notebook's defaults do
+    if "brokerage" not in own:
+        risk["brokerage"] = (BY_ID.get(market) or {}).get("brokerage", 0)
+    return risk
+
+
 def strategy_of(spec: dict, name: str, market: str = "IN") -> Strategy:
     body = {k: v for k, v in spec["body"].items() if k != "risk"}
-    risk = {**RISK, **spec["body"].get("risk", {})}
-    # brokerage is a flat amount in the market's own money: ₹20 an order in India, none on the US's commission-free
-    # brokers (R62-004: $20 an order on the US runs, $10,080 on one card), as a new notebook's defaults do
-    if market != "IN" and "brokerage" not in spec["body"].get("risk", {}):
-        risk["brokerage"] = 0
-    return Strategy(name=name, tf=spec["tf"], text=spec["text"], risk=risk, **body)
+    return Strategy(name=name, tf=spec["tf"], text=spec["text"], risk=risk_of(spec, market), **body)
 
 
 def preset_of(market: str, pid: str) -> dict:
@@ -168,7 +205,7 @@ def risk_text(spec: dict, group: dict) -> str:
     """The stop and the cap on one position, in the card's own words, right after the rules (R11C-017: both were seen only
     after opening "The rules"): "A 12% stop loss; at most 10% of the capital in one stock, up to 10 at once." A stop the
     rules' text already describes isn't said twice."""
-    risk = {**RISK, **spec["body"].get("risk", {})}
+    risk = risk_of(spec, group.get("market") or "IN")
     bits = []
     if "stop" not in spec["text"].lower():
         kind, sl = risk.get("stopType", "pct"), risk.get("sl") or 0
@@ -177,7 +214,7 @@ def risk_text(spec: dict, group: dict) -> str:
                         else f"a {sl:g}-point stop" if kind == "points" else f"a stop at the {sl:g}-candle swing")
         else:
             bits.append("no stop loss")
-    unit = "coin" if group.get("market") == "CRYPTO" else "stock"
+    unit = NOUN.get(group.get("market"), "stock")
     bits.append(f"at most {risk['maxAlloc']:g}% of the capital in one {unit}, up to {group.get('maxOpen')} at once")
     text = "; ".join(bits)
     return library.an_before_vowel_number(text[:1].upper() + text[1:] + ".")
@@ -202,22 +239,25 @@ def publish(slug: str, spec: dict, market: str, preset: dict, rec: dict, group: 
 
 
 def seed(registry, only: list[str] | None = None, now: str | None = None, sleep=time.sleep, gap: float = 1.0,
-         max_open: int = 10) -> dict:
-    """Run every StratLab strategy (or those in `only`) on its groups and publish the results. A strategy whose data
-    isn't available is reported and skipped; the others still publish. Returns {"published": [...], "failed": [...]}."""
+         max_open: int = 10, ids: set[str] | None = None) -> dict:
+    """Run every StratLab strategy (or those in `only`, or only the entries whose ids are in `ids`) on its groups and
+    publish the results. A strategy whose data isn't available is reported and skipped; the others still publish.
+    Returns {"published": [...], "failed": [...]}."""
     now = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
     out, failed = [], []
     for slug, spec in STRATEGIES.items():
         if only and slug not in only:
             continue
         for market, pid in spec["groups"]:
+            if ids is not None and entry_id(slug, pid) not in ids:
+                continue
             strat = strategy_of(spec, spec["name"], market)
             if out or failed:
                 sleep(gap)
             try:
                 preset = preset_of(market, pid)
                 with memguard.heavy("library-seed", force_release=True):      # a group's backtest in its turn, its candles dropped after (MEM-001)
-                    rec, group = run_group(registry, strat, market, preset, now, max_open if spec["tf"] == "1d" else 5)
+                    rec, group = run_group(registry, strat, market, preset, now, MARKET_OPEN.get(market, max_open) if spec["tf"] == "1d" else 5)
                 e = publish(slug, spec, market, preset, rec, group)
                 out.append({"id": e["id"], "name": e["name"], "verdict": e["verdict"]["verdict"], "trades": (e["stats"] or {}).get("trades")})
             except Exception as ex:                                  # one group's trouble never stops the rest
@@ -227,6 +267,18 @@ def seed(registry, only: list[str] | None = None, now: str | None = None, sleep=
 
 def seeded() -> list[dict]:
     return [e for e in library.all_entries(everything=True) if e.get("official")]
+
+
+def wanted() -> dict[str, str]:
+    """Every entry the seed publishes, {id: market}."""
+    return {entry_id(slug, pid): market for slug, spec in STRATEGIES.items() for market, pid in spec["groups"]}
+
+
+def lacking(have: list[dict]) -> dict[str, str]:
+    """The entries the seed publishes that the library doesn't hold yet, {id: market}: what a start-up run publishes
+    when the rest are fresh, so a market added later is seeded once and nothing already there is run again (MO-5b)."""
+    got = {e.get("id") for e in have}
+    return {i: m for i, m in wanted().items() if i not in got}
 
 
 STALE_DAYS = 7

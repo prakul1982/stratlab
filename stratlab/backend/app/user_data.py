@@ -1,6 +1,7 @@
 """Erase one user's app data: the one place that knows every store a person's data lives in.
 
-Used by Admin -> Users, "Delete this user's data". It removes what the app keeps for the person (drawings, Connect
+Used by Admin -> Users, "Delete this user's data", by Account -> "Delete all my data" and, with close_account below, by
+Account -> "Delete my account" (RC2B-031). It removes what the app keeps for the person (drawings, Connect
 records with their sealed tokens, inbox address and statement password, holdings, net worth, notebooks, alerts,
 preferences and the like). It does not delete the sign-in account or the billing record: those stay with the auth
 provider and the payment records the law asks us to keep. Usage counts (usage_events, the plan's monthly quotas) and
@@ -405,6 +406,74 @@ def export(profile: dict) -> dict:
             log.warning("user data export: %s for %s failed: %s", key, uid, str(e)[:160])
             out["not_included"].append({"key": key, "label": label})
     return out
+
+
+# ---------- closing the account (RC2B-031) ----------
+KEPT_CLOSED = "Kept: invoices and payment records, as tax law asks. Usage counts and the sign-in account are gone."
+
+
+def _my_stocks_briefs(uid: str) -> int:
+    """The user's own My Stocks briefs (news:my_stocks:<uid>:<day> and their index): built from their holdings."""
+    from .newsletter import job
+    n = 0
+    for iid in job.ids("my_stocks", uid):
+        parts = job.parse_id(iid)
+        if parts:
+            db.delete_setting(job._key(*parts))
+            db.delete_setting(job.SENT + iid)          # who it was sent to
+            n += 1
+    db.delete_setting(job._index_key("my_stocks", uid))
+    return n
+
+
+def _billing_details(uid: str) -> int:
+    """The name, address and GSTIN saved for invoices. Each invoice already issued carries its own copy and stays."""
+    return _setting_keys("billing:")(uid)
+
+
+def _email_records(uid: str) -> int:
+    """Which account emails were sent and which are waiting, the "no tips" choice and the paper-trade alert count."""
+    from . import lifecycle, live
+    return _setting_keys(lifecycle.SENT, lifecycle.PENDING, lifecycle.PREFS, lifecycle.SEEN, live.TRADE_ALERTS)(uid)
+
+
+CLOSE_STEPS: list[Step] = [
+    ("my_stocks_briefs", "My Stocks briefs", _my_stocks_briefs),
+    ("billing_details", "Billing details (name, address, GSTIN)", _billing_details),
+    ("email_records", "Account email records", _email_records),
+]
+
+
+def close_account(uid: str) -> dict:
+    """Delete the person's data in every store and then their sign-in account (the sign-in service's own record, which
+    also removes the profile, usage counts, notebooks and sessions that hang from it). Invoices and the payment records
+    behind them stay, as tax law asks. Nothing is closed unless every step before the sign-in account worked, so a failure
+    leaves a whole account the person can try again on (every step is safe to repeat). Only ever one user's rows.
+    Returns {"closed", "done", "failed", "kept"}."""
+    out = erase(uid)
+    for key, label, fn in CLOSE_STEPS:
+        try:
+            n = fn(uid)
+            out["done"].append({"key": key, "label": label, "count": n if isinstance(n, int) else None})
+        except Exception as e:
+            log.warning("account closing: %s for %s failed: %s", key, uid, str(e)[:160])
+            out["failed"].append({"key": key, "label": label, "error": type(e).__name__})
+    out["kept"] = KEPT_CLOSED
+    if out["failed"]:
+        return {**out, "closed": False}
+    try:
+        db.sb().auth.admin.delete_user(uid)
+    except Exception as e:
+        log.warning("account closing: sign-in account of %s not deleted: %s", uid, str(e)[:160])
+        return {**out, "closed": False, "failed": [{"key": "signin", "label": "The sign-in account", "error": type(e).__name__}]}
+    try:
+        db.sb().table("profiles").delete(returning="minimal").eq("id", uid).execute()      # already gone with the sign-in record
+    except Exception as e:
+        log.warning("account closing: profile row of %s: %s", uid, str(e)[:120])
+    db.forget_profile(uid)
+    from . import auth
+    auth.forget_user(uid)
+    return {**out, "closed": True}
 
 
 def erase(uid: str) -> dict:

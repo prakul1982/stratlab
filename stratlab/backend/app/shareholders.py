@@ -561,7 +561,9 @@ def _all_keys() -> dict[str, dict]:
     keys: dict[str, dict] = {}
     spelt: dict[str, dict[str, int]] = {}
     for sym, co in _index().items():
-        for q in sorted(co["q"]):
+        # the latest quarter and the one before, as holdings() reads a company: a count on the landing and the result's rows
+        # are the same companies (RC2B-026: LIC "named in 299 companies" beside a result of 288, the 11 being quarters back)
+        for q in sorted(co["q"])[-2:]:
             for r in _rows(co["q"][q]):
                 k = keys.setdefault(r["key"], {"key": r["key"], "name": r["name"], "companies": set(), "group": r["group"]})
                 k["companies"].add(sym)

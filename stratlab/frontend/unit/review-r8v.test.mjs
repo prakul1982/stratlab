@@ -100,7 +100,7 @@ test("every landing address's raw h1 is the h1 the page draws there (R8V-008)", 
   // the address's own heading is the hero's h1, the tagline above it (DI-033: it was drawn as the eyebrow)
   assert.match(login, /\? <h1 className="serif lp-h1 lp-own-h1">\{heading\}<\/h1>/);
   assert.match(login, /<span className="eyebrow">\{heading \? <><em>Test<\/em> it, research it, track it\.<\/> :/);
-  assert.match(read("src/visitor/VisitorApp.tsx"), /<Login section=\{view\.section\} panel=\{view\.panel\} heading=\{landingHeading\(pathname\)\} intro=\{landingIntro\(pathname\)\} plansOnly=\{isPlansPath\(pathname\)\} \/>/);
+  assert.match(read("src/visitor/VisitorApp.tsx"), /<Login section=\{view\.section\} panel=\{view\.panel\} heading=\{landingHeading\(pathname\)\} intro=\{landingIntro\(pathname\)\} plansOnly=\{isPlansPath\(pathname\)\} slim=\{slimOf\(pathname\) \?\? undefined\} \/>/);
   assert.match(read("src/styles.css"), /h1\.eyebrow \{ font-weight: 400; \}/);
 });
 
@@ -127,7 +127,7 @@ test("a visitor's first page asks its public questions alongside its code (R8V-0
   for (const p of ["/", "/pricing", "/faq", "/login"]) assert.deepEqual(publicReads(p), ["/pricing", "/public/library?sort=new&limit=60"], p);
   for (const p of ["/terms", "/research/IN/TCS", "/nope"]) assert.deepEqual(publicReads(p), [], p);
   // each is exactly the address its page asks for
-  assert.match(read("src/pages/PublicLibrary.tsx"), /publicGet<\{ entries: LibEntry\[\] \}>\("\/public\/library"\)/);
+  assert.match(read("src/pages/PublicLibrary.tsx"), /publicGet<\{ entries: LibEntry\[\]; markets\?: Record<string, number> \}>\("\/public\/library"\)/);
   assert.match(read("src/pages/PublicLibrary.tsx"), /publicGet<LibEntry>\(`\/public\/library\/\$\{encodeURIComponent\(id\)\}`\)/);
   assert.match(read("src/pages/PublicVerdict.tsx"), /publicGet<Snapshot>\(`\/public\/v\/\$\{encodeURIComponent\(token\)\}`\)/);
   assert.match(read("src/lib/currency.ts"), /publicGet<Pricing>\("\/pricing"\)/);
@@ -168,7 +168,7 @@ test("the public pages' code leaves out the sign-in library and the account code
     }
   }
   // none of those pieces reads the account
-  for (const name of ["Badge", "Card", "DataTable", "Stat", "States", "Form", "PageHeader", "LinkCard", "Signed"]) {
+  for (const name of ["Badge", "Card", "ChipBar", "DataTable", "Disclosure", "Stat", "States", "Form", "PageHeader", "LinkCard", "Signed"]) {
     assert.doesNotMatch(read(`src/components/kit/${name}.tsx`), /lib\/(api|app|account)"|PlanInterest/, name);
   }
   const pwa = read("src/lib/pwa.ts");

@@ -23,7 +23,7 @@ export function PlansPage() {
   // buttons from the public prices while /me is still on its way, and they must already be off (R7M-010, again in R8)
   const viewAs = me ? viewAsMe : readViewAs();
   const [busy, setBusy] = useState<string | null>(null);
-  const { pricing, currency, pick } = usePricing();
+  const { pricing, currency, pick, offerRupees } = usePricing();
   // one answer for what's on sale today (plans.offer_state): /me's, else the public one the landing page reads
   const offer = me?.offer ?? pricing?.offer ?? null;
   const billing = offer ? canBuy(offer) : me?.billing_enabled !== false;
@@ -129,6 +129,7 @@ export function PlansPage() {
               {(id) => <Select id={id} value={currency} onChange={pick} options={Object.entries(pricing.currencies).map(([c, r]) => ({ value: c, label: `${c} · ${r.name}` }))} />}
             </Field>
           )}
+          {pricing && offerRupees && <button type="button" className="link-btn inr-pick k-small" onClick={() => pick("INR")}>In India? Show prices in ₹</button>}
           {billing && yearlyOk && (
             <FieldGroup label="Billed">
               <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}

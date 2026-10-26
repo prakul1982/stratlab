@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { asOf, dayIn, fmtDate, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { FUND_NAME, dayCount, gapShort, loadEtfGaps, type EtfGap, type EtfGaps, type Fund } from "../lib/etfGaps";
+import { FUND_NAME, dayCount, gapAtLastTrade, gapShort, loadEtfGaps, type EtfGap, type EtfGaps, type Fund } from "../lib/etfGaps";
 import { EtfGapDetailView } from "../components/EtfGap";
 import { Badge, Card, CardHead, ChipBar, DataTable, ErrorState, Field, FieldGroup, FormGrid, PageHeader, Select, Skeleton, StockPicker, type Column } from "../components/kit";
 
@@ -13,6 +13,12 @@ type Sort = "wide" | "above" | "below";
 const SORTS: { value: Sort; label: string }[] = [{ value: "wide", label: "Widest gap" }, { value: "above", label: "Most above" }, { value: "below", label: "Most below" }];
 const FUNDS: (Fund | "all")[] = ["all", "equity", "gold", "silver", "debt", "intl"];
 const TOP = 50;
+
+/** The last trade's own day as a date (2026-10-26), when it is known. */
+function tradeDayOf(r: EtfGap): string | null {
+  if (!r.price_at) return null;
+  return r.price_day === undefined ? dayIn(r.price_at) ?? null : r.price_day;
+}
 
 /** The last trade's own day ("23 Oct"), or that it's older than the days kept. */
 function lastTradeDay(r: EtfGap): string {
@@ -63,7 +69,12 @@ export function EtfGapsPage() {
     // the price with its day, so it is never read against the close the gap uses (R6O-018)
     // the last trade, which can differ from the exchange's official close the gap uses (R57-005: 317.46 against a 316.61 close)
     // its own day: an ETF with no units traded on the day read last traded earlier (DF-005: GSEC10ABSL's 19 Oct trade read "23 Oct")
-    { key: "px", header: "Last trade", numeric: true, cell: (r) => <>{price(r.price, "INR")}{r.price_at && <span className="k-sub-line">{lastTradeDay(r)}</span>}</> },
+    // a trade of a later day than the close the gap uses also says what that price is against, so the live row is not read as the gap (RC2B-029)
+    { key: "px", header: "Last trade", numeric: true, cell: (r) => {
+      const live = gapAtLastTrade(r, tradeDayOf(r));
+      return <>{price(r.price, "INR")}{r.price_at && <span className="k-sub-line">{lastTradeDay(r)}</span>}
+        {live != null && r.nav_date && <span className="k-sub-line">{gapShort(live)} the {fmtDate(r.nav_date, { year: false })} NAV</span>}</>;
+    } },
     ...(hasInav ? [
       { key: "inav", header: "iNAV", numeric: true, cell: (r: EtfGap) => (r.inav == null ? "–" : price(r.inav, "INR")) },
       { key: "ig", header: "Gap to iNAV", numeric: true, cell: (r: EtfGap) => gapShort(r.inav_gap) }] : []),

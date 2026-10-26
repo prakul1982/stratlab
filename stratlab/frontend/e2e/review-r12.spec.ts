@@ -15,7 +15,7 @@ async function quiet(page: Page) {
   return errors;
 }
 
-for (const [path, section, heading] of [["/faq/", "#faq", "Good to know."], ["/pricing/", "#pricing", null]] as const) {
+for (const [path, section, heading] of [["/features/", "#trade", "From a sentence to a verdict."], ["/pricing/", "#pricing", null]] as const) {
   test(`${path} lands with its section's heading clear of the sticky header, after the prices arrive (R12-008)`, async ({ page }) => {
     const errors = await quiet(page);
     let release: () => void = () => {};
@@ -45,13 +45,32 @@ for (const [path, section, heading] of [["/faq/", "#faq", "Good to know."], ["/p
   });
 }
 
-test("a visitor who scrolls is not pulled back to the section (R12-008)", async ({ page }) => {
+test("/faq draws the questions with its heading, not the whole landing page (RC2B-032)", async ({ page }) => {
   const errors = await quiet(page);
   await page.goto("/faq/");
   await expect(page.locator(".lp")).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("#faq")).toBeInViewport();
+  await expect(page.getByRole("heading", { level: 1, name: "Questions" })).toBeInViewport();
+  await expect(page.locator("#faq details").first()).toBeVisible();
+  await expect(page.locator("#trade, #invest, #money, #pricing, .lp-demo")).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThan(4500);
+  for (const path of ["/help/", "/about/", "/login/"]) {
+    await page.goto(path);
+    await expect(page.locator(".lp")).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("#trade, #invest, #money, #pricing, .lp-demo")).toHaveCount(0);
+  }
+  await page.goto("/pricing/");
+  await expect(page.getByRole("heading", { level: 1, name: "Plans and prices" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("#trade, #invest, #money, #faq, .lp-demo")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("a visitor who scrolls is not pulled back to the section (R12-008)", async ({ page }) => {
+  const errors = await quiet(page);
+  await page.goto("/features/");           // the landing page at its Trade section (/faq and /pricing draw only their own part since RC2B-032)
+  await expect(page.locator(".lp")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("#trade")).toBeInViewport();
   await page.mouse.wheel(0, -2000);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(await page.evaluate(() => document.getElementById("faq")!.offsetTop - 500));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(await page.evaluate(() => document.getElementById("trade")!.offsetTop - 500));
   const y = await page.evaluate(() => window.scrollY);
   await page.evaluate(() => document.querySelector(".lp")!.appendChild(Object.assign(document.createElement("div"), { style: "height:300px" })));
   await page.waitForTimeout(300);

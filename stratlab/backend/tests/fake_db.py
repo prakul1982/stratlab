@@ -174,15 +174,35 @@ class Query:
         return r
 
 
+class FakeAuthAdmin:
+    """auth.admin: deleting a user removes the sign-in record and what hangs from it (on delete cascade in schema.sql)."""
+    def __init__(self, db):
+        self.db = db
+        self.deleted: list[str] = []
+        self.fail = None
+
+    def delete_user(self, uid, should_soft_delete=False):
+        if self.fail:
+            raise self.fail
+        with self.db.lock:
+            self.deleted.append(uid)
+            for name in ("profiles", "usage_events", "strategies", "live_sessions", "live_orders"):
+                key = "id" if name == "profiles" else "user_id"
+                self.db.tables[name] = [r for r in self.db.tables.get(name, []) if r.get(key) != uid]
+
+
 class FakeAuth:
     def __init__(self, db):
         self.db = db
+        self.admin = FakeAuthAdmin(db)
 
     def get_user(self, token):
         from supabase_auth.errors import AuthApiError, AuthRetryableError
         if self.db.fail:
             raise AuthRetryableError("Connection refused", 0)
         u = USERS.get(token)
+        if u and u[0] in self.admin.deleted:
+            u = None                          # the sign-in record is gone: the token no longer checks out
         if not u:
             raise AuthApiError("invalid JWT: unable to parse or verify signature", 401, "bad_jwt")
         provider = "email" if token == "email-signup-admin-token" else "google"

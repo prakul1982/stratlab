@@ -173,13 +173,14 @@ test("library cards: facts about the checks, buy and hold beside the return, whi
   // the facts wording, with the server's own label for the entry when it has one (R6V-005: the card and the page agree)
   assert.match(lib, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} tone=\{headTone\(e\)\} \/>/);
   assert.doesNotMatch(lib, /<VerdictBadge v=\{e\.verdict\.verdict\} \/>/);
-  assert.match(lib, /<HoldLine e=\{e\} \/>/);
   // the card pieces live in components/LibraryBits.tsx since the public library shares them; it says the same
   const bits = read("src/components/LibraryBits.tsx");
+  assert.match(bits, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} tone=\{headTone\(e\)\} \/>/);   // one face for both (MO-5a)
+  assert.match(lib, /<LibraryCard e=\{e\}/);
   assert.match(bits, /\{num\(gap, 1\)\} points \{h\.gap < 0 \? "behind" : "ahead"\}/);
   const pub = read("src/pages/PublicLibrary.tsx");
-  assert.match(pub, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} tone=\{headTone\(e\)\} \/>/);
-  assert.match(pub, /<HoldLine e=\{e\} \/>/);
+  assert.match(pub, /<LibraryCard e=\{e\} details=\{false\}/);
+  assert.match(pub, /<HoldLine e=\{e\} \/>/);          // the strategy's own page keeps the full sentence
   assert.match(lib, /lede=\{onlyOurs \?/);
   const ui = read("src/components/ui.tsx");
   assert.match(ui, /edge: "Passed the checks"/);
@@ -242,7 +243,7 @@ test("Ctrl K: a feature's name beats a company's letters, no futures for a plain
   assert.equal(offerIdeas("tcs", { features: 0, companies: 1, helps: 0, intent: false }), true);
   const p = read("src/components/SearchPalette.tsx");
   assert.match(p, /!isCompany\(i\) && \(!i\.fno \|\| asksContract\(text\) \|\| !companies\.length\)/);
-  assert.match(p, /if \(companies\.length && \(companies\[0\]\.match \?\? 9\) <= STRONG && !exactFeature && !intent\) first\("Companies"\);/);
+  assert.match(p, /if \(companies\.length && \(companies\[0\]\.match \?\? 9\) <= STRONG && !exactFeature && !intent && !topicWord\) first\("Companies"\);/);
 });
 
 test("My space greets in India's time for the Indian market, or the person's own zone (R5O-031)", async () => {
@@ -331,7 +332,7 @@ test("R39: library return figures say they are the total over the test, not per 
   assert.deepEqual([TOTAL_AFTER_COSTS, TOTAL_HOLD], ["Total after costs", "Total buy and hold"]);
   const bits = read("src/components/LibraryBits.tsx"), pub = read("src/pages/PublicLibrary.tsx"), lib = read("src/pages/LibraryPage.tsx");
   assert.match(bits, /\{TOTAL_NOTE\} against[^]*total for buying and holding over the same dates/);
-  assert.match(pub, /\[\[TOTAL_AFTER_COSTS, sh\.ret\], \[TOTAL_HOLD, sh\.buy_hold\]/);
+  assert.match(bits, /\[TOTAL_AFTER_COSTS, sh\.ret, [^\]]*\],\s*\[TOTAL_HOLD, sh\.buy_hold, /);       // the card both libraries draw (MO-5a)
   assert.match(pub, /label="Total buy and hold"/);
   assert.match(lib, /header: TOTAL_AFTER_COSTS/);
   assert.match(lib, /header: TOTAL_HOLD/);

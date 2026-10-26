@@ -135,10 +135,11 @@ def test_job_first_year_then_close_then_backfill(w, monkeypatch):
 
 
 def test_job_survives_the_exchange_being_down(w):
+    before = V.daily()        # (another test on this worker may have stored a history already: only nothing NEW counts)
     job = V.Job(lambda: Nse(fail=True), sleep=lambda s: None)
     with pytest.raises(Exception):
         job.tick(datetime(2026, 10, 5, 12, 0, tzinfo=IST).astimezone(timezone.utc))
-    assert not V.daily()      # nothing half-stored; the loop logs the error and tries again later
+    assert V.daily() == before    # nothing half-stored; the loop logs the error and tries again later
 
 
 # ---------- India VIX in rules ----------

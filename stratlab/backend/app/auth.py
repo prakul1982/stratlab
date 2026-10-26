@@ -64,6 +64,16 @@ def _verify(token: str, now: float) -> tuple[str, str | None, bool, str | None]:
     return uid, email, verified, method
 
 
+def forget_user(uid: str) -> None:
+    """A closed account's sign-in tokens are refused from now on, not after the TOKEN_TTL a checked token is trusted (so a
+    request already carrying one can't make the account's profile again)."""
+    until = time.time() + 600
+    with _lock:
+        for token in [t for t, v in _cache.items() if v[1] == uid]:
+            _cache.pop(token, None)
+            _rejected[token] = until
+
+
 def current_profile(authorization: str | None = Header(None), x_view_as: str | None = Header(None)) -> dict:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, {"code": "login_required", "message": "Sign in to continue."})

@@ -15,7 +15,7 @@ export const DEFAULT_BUSINESS: Business = { name: "StratLab", email: "support@st
   privacy: "privacy@stratlab.studio", address: "", gstin: "" };
 
 /** The day each page's words last changed (the sitemap's dates, backend/app/site_pages.py, say the same). */
-export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "18 October 2026", "/refunds": "25 October 2026", "/contact": "26 September 2026" };
+export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "26 October 2026", "/refunds": "25 October 2026", "/contact": "26 September 2026" };
 
 export type Tok = { t: "text" | "b" | "code"; s: string } | { t: "link"; s: string; to: string } | { t: "mail"; s: string; to: string };
 
@@ -105,7 +105,7 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
     ] },
     { p: "You can clear all of this from your browser's settings; you will be signed out and the choices above reset." },
     { h: "Keeping and deleting" },
-    { p: "We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. The Account page has \"Download all my data\" to get a copy of what we hold, and \"Delete all my data\" to erase it. Or email [{privacy}](mail:privacy) to see what we hold, correct it, or delete your account and its data; we'll act within 30 days. Billing records may be kept longer where tax law requires." },
+    { p: "We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. The Account page has \"Download all my data\" to get a copy of what we hold, \"Delete all my data\" to erase it, and \"Delete my account\" to erase it and delete your sign-in account too, at once and with no way back. Invoices and the payment records behind them are kept, as tax law requires; everything else goes. Or email [{privacy}](mail:privacy) to see what we hold or correct it; we'll act within 30 days." },
     { h: "Security" },
     { p: "Data is sent over HTTPS, access is limited to your own account, and secrets stay on the server. No system is perfectly secure; if a breach affects you, we'll tell you as the law requires." },
     { h: "Children" },
