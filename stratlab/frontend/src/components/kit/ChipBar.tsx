@@ -51,6 +51,9 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
   }, [value, mine.length]);
 
   const all = [...options, ...mine.filter((m) => !options.some((o) => o.value === m.value))];
+  // CK-2 (R18): a row of up to 12 chips wraps on a phone too, so none is cut at the edge behind a fade (ten markets, two of them in view); only a
+  // long strip (14 candle sizes) scrolls
+  const wrapRow = wrap || all.length <= 12;
   const count = Number(n);
   // up to four digits ("1000" days is a real period); a minus sign is kept in the box and refused in words, not dropped so that
   // "-3" quietly became 3 (DA-013)
@@ -81,8 +84,8 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
   return (
     <div className="k-chipwrap">
       {/* "+ Custom" sits beside the scrolling row, not at its faded end, so it is never cut off at the card's edge (R7O-010) */}
-      <div className={`k-chiprow${wrap ? " wrap" : ""}`} role="group" aria-label={label}>
-        <div ref={bar} className={`k-chipbar${wrap ? " wrap" : ""}${atEnd ? " end" : ""}`} onScroll={edge}>
+      <div className={`k-chiprow${wrapRow ? " wrap" : ""}`} role="group" aria-label={label}>
+        <div ref={bar} className={`k-chipbar${wrapRow ? " wrap" : ""}${atEnd ? " end" : ""}`} onScroll={edge}>
           {all.map((o) => <button key={o.value} type="button" className="k-chip" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>)}
         </div>
         {custom && <button ref={opener} type="button" className="k-chip add" aria-expanded={open} onClick={() => setOpen((x) => !x)}>+ Custom</button>}

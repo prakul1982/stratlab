@@ -144,7 +144,7 @@ test("VR1-080, VR1-081, VR1-082: the F&O desk", () => {
   const page = read("src/pages/trade/FoChangesPage.tsx");
   assert.match(page, /const circulars = \(e\.sources \?\? \[\]\)\.filter\(\(s\) => s\.no \|\| s\.url\);/);
   assert.match(page, /const sources = circulars\.length \? circulars : e\.sources \?\? \[\];/);
-  assert.match(read("src/pages/trade/events.css"), /\.k-two\.ev-pair \{ align-items: start; \}/);
+  assert.match(read("src/pages/trade/events.css"), /\.k-two\.ev-pair \{ align-items: stretch; \}/);
 });
 
 test("VR1-090, VR1-091, VR1-092, VR1-093, VR1-094, VR1-095: Paper, Options, Journal, Signals", () => {

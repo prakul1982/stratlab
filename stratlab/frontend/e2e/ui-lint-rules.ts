@@ -7,8 +7,8 @@
 // never on the source, so it finds the problem whichever component caused it.
 //
 // Rule list and thresholds (also printed at the top of the report):
-//   R1  dead space beside a short card      cards/columns in one visual row (same top +-4px); one has > 120px AND > 30% of the row's
-//                                            height unused below its content
+//   R1  dead space beside a short card      cards/columns in one visual row (same top +-4px); one has > 60px AND > 25% of the row's
+//                                            height unused below its content (CK-2: was 120px / 30%, which let a 86px / 41% hole through)
 //   R2  sparse wide card                    a card wider than 900px and >= 140px tall whose content covers < 55% of its inner width
 //   R3  floating control                    a button/chip that is a flex sibling of a chip group wrapped over 2+ rows and not level
 //                                            with its first row; or the end control of a row of 3+ controls > 48px from the rest
@@ -25,9 +25,29 @@
 //                                            boxes cross each other
 //   R11 tiny tap target (phone)             a control < 32px tall on a phone-width screen
 //   R12 caption clutter                     a small "Dots: ..." / "Colours: ..." caption right under a list or menu
+// CK-2: what the visual review (VR-1) found by eye and the checker could not see, as rules (its "Checker gaps" G1-G14):
+//   R13 empty inside a box (G1)             any bordered/filled box >= 140px tall (cards inside cards too, not only side by side): content
+//                                            ends > 70px AND > 25% of its height above the bottom (a box whose content is centred is left out)
+//   R14 overlay on content (G2)             a fixed/sticky box that is not app chrome (menu, dialog, toast) covers text or a control in main by
+//                                            > 6px each way, with the page scrolled to the top, middle or bottom
+//   R15 icon glued to its label (G3)        an (i) or icon button < 3px from the text beside it while level with it (or overlapping it)
+//   R16 uneven stat row (G4)                3+ stat values >= 20px in one group: a word among numbers, a value wrapped over 2+ lines, or
+//                                            labels of different heights in one row
+//   R17 page frame (G5)                     (across pages: ui-lint.spec.ts) a page whose title top, left or rightmost card edge differs from
+//                                            the one most pages share at that width, by > 2px
+//   R18 clipped scroller on a phone (G7)    a sideways-scrolling row whose first/last child is cut by the edge (a chip half shown), or a
+//                                            table that shows fewer than all its columns
+//   R19 wrapped badge (G8)                  a pill/badge/tag/chip (not a button: R4) whose text runs on 2+ lines
+//   R20 orphan end control (G11)            a lone control at the end of a row of text, > 250px from where that text ends
+//   R21 gap under the page header (G14)     > 56px of nothing between the page header and the first card
+//   R22 row tags out of column (G10)        rows of [tag][name]: the name starts at x's that differ by > 4px from row to row
+//   R23 header wrap parity (G13)            cards side by side whose headers differ in height by > 12px because one header's controls wrapped
+//   R24 faint checkbox (G12)                an unchecked checkbox/radio whose border and fill are both < 3:1 against what is behind it
+//   R25 same sentence twice (G9)            the same sentence (>= 30 characters) twice in one card, outside a table's repeating rows
 export interface Violation { rule: string; element: string; key: string; detail: string }
 export interface LintOpts { phone: boolean; mark: boolean }
-export interface LintResult { violations: Violation[]; counts: Record<string, number>; nodes: number }
+export interface PageFrame { h1Top: number; h1Left: number; right: number }
+export interface LintResult { violations: Violation[]; counts: Record<string, number>; nodes: number; frame: PageFrame | null }
 
 export function lintPage(opts: LintOpts): LintResult {
   const vw = document.documentElement.clientWidth;
@@ -124,7 +144,9 @@ export function lintPage(opts: LintOpts): LintResult {
     words(root);
     const walk = (e: Element) => {
       for (const c of Array.from(e.children)) {
-        if (c.matches(SKIP) || !shown(c)) continue;
+        if (c.matches(SKIP)) continue;
+        if (S(c).display === "contents") { walk(c); continue; }       // a wrapper with no box of its own (a phone's chip bar): its children are the content
+        if (!shown(c)) continue;
         const s = S(c);
         if (s.position === "fixed") continue;
         const tag = c.tagName.toUpperCase();
@@ -179,7 +201,7 @@ export function lintPage(opts: LintOpts): LintResult {
         const box = contentBox(it, true);
         if (!box) continue;
         const dead = bottom - usedBottom(it, box);
-        if (dead > 120 && dead / rowH > 0.3) add("R1", it, `${Math.round(dead)}px of ${Math.round(rowH)}px row height empty under it (content ends ${Math.round(usedBottom(it, box) - top)}px down; ${row.length} side by side)`);
+        if (dead > 60 && dead / rowH > 0.25) add("R1", it, `${Math.round(dead)}px of ${Math.round(rowH)}px row height empty under it (content ends ${Math.round(usedBottom(it, box) - top)}px down; ${row.length} side by side)`);
       }
     }
   }
@@ -440,11 +462,309 @@ export function lintPage(opts: LintOpts): LintResult {
     if (((prev && prev.matches(LIST)) || (prev && e.parentElement && e.parentElement.matches(LIST))) && px(S(e).fontSize) <= 13.5) add("R12", e, `a ${Math.round(px(S(e).fontSize))}px caption under a list explains a decoration`);
   }
 
+  // ======== CK-2: what the visual review found by eye (VR-1 "Checker gaps") ====================================================
+  const mainEl = document.querySelector("main") || document.body;
+  const inMain = (e: Element) => mainEl.contains(e);
+  const hasBorder = (s: CSSStyleDeclaration) => (["Top", "Right", "Bottom", "Left"] as const).some((d) => px(s[`border${d}Width` as "borderTopWidth"]) > 0 && s[`border${d}Style` as "borderTopStyle"] !== "none" && alpha(s[`border${d}Color` as "borderTopColor"]) > 0.02);
+  // the lines of text a person reads in a box: one rect per line (never the box of a wrapped paragraph)
+  const textLines = (root: Element, fn: (r: DOMRect, pe: Element) => void) => {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      const pe = n.parentElement;
+      if (!pe || !(n.textContent || "").trim() || pe.closest("svg, canvas, script, style, select, option, textarea, " + SKIP) || !shown(pe)) continue;
+      const rg = document.createRange(); rg.selectNodeContents(n);
+      for (const lr of Array.from(rg.getClientRects())) if (lr.width > 1 && lr.height > 1 && !clippedAway(pe, lr)) fn(lr, pe);
+    }
+  };
+
+  // ---- R13 empty inside a box (G1) ---------------------------------------------------------------------------------------
+  // R1 compares side-by-side siblings and counts a nested card as the content of its wrapper, so a short card stretched by its row
+  // (the home page's "Paper sessions": 110px empty of 287px, inside a .mine-slot) passed. This looks inside every bordered or filled box.
+  {
+    const flagged: Element[] = [];
+    for (const c of all) {
+      if (c.matches("main, body, html, aside, nav, header, footer, table, thead, tbody, tfoot, tr, td, th, select, input, textarea, button, svg, canvas, img, option, summary, details, li") || !shown(c) || !inFlow(c)) continue;
+      const r = R(c);
+      if (r.height < 140 || r.width < 200) continue;
+      const s = S(c);
+      if (!(hasBorder(s) || alpha(s.backgroundColor) > 0.05)) continue;
+      if (c.matches("[role=dialog], [aria-modal=true], .modal, .k-state, [class*=skeleton]")) continue;       // a dialog or an empty-state message sizes itself
+      const box = contentBox(c, false);
+      if (!box) continue;
+      // (a chart library draws its canvases in boxes of its own that the walk above does not enter: they are the content too)
+      let lowest = box.b;
+      for (const m of Array.from(c.querySelectorAll("canvas, svg, img, video, iframe"))) { const mr = R(m); if (mr.width >= 8 && mr.height >= 8 && !m.closest("[hidden]") && S(m).visibility !== "hidden" && !m.closest(".info-btn, button")) lowest = Math.max(lowest, mr.bottom); }
+      const innerTop = r.top + px(s.paddingTop) + px(s.borderTopWidth);
+      const empty = r.bottom - padBottom(c) - lowest;
+      if (empty > 70 && empty / r.height > 0.25 && box.t - innerTop <= 0.5 * empty) {        // (content centred in its box, as a message is, is not a hole at the bottom)
+        flagged.push(c);
+        found.push({ rule: "R13", el: c, detail: `${Math.round(empty)}px empty (${Math.round((100 * empty) / r.height)}%) at the bottom of a ${Math.round(r.width)}x${Math.round(r.height)} box; its content ends ${Math.round(lowest - r.top)}px down` });
+      }
+    }
+    // a box inside a flagged box shares its hole: report the innermost one
+    for (const f of flagged) if (flagged.some((o) => o !== f && f.contains(o))) { const i = found.findIndex((x) => x.rule === "R13" && x.el === f); if (i >= 0) found.splice(i, 1); }
+  }
+
+  // ---- R15 icon glued to its label (G3) ----------------------------------------------------------------------------------
+  for (const b of all) {
+    if (!shown(b) || !b.matches("button, [role=button]")) continue;
+    const br = R(b);
+    const icon = b.matches(".info-btn") || (br.width <= 40 && br.height <= 40 && textOf(b).length <= 2 && !b.matches(".chip-x"));
+    if (!icon) continue;
+    for (const dir of [-1, 1]) {
+      let n: Node | null = dir < 0 ? b.previousSibling : b.nextSibling;
+      while (n && n.nodeType === 3 && !(n.textContent || "").trim()) n = dir < 0 ? n.previousSibling : n.nextSibling;
+      if (!n) continue;
+      if (n.nodeType === 1 && (!shown(n as Element) || (n as Element).matches("svg, button, [role=button], .info-btn, input, select") || S(n as Element).position === "absolute")) continue;
+      if (n.nodeType !== 1 && n.nodeType !== 3) continue;
+      const rg = document.createRange(); rg.selectNodeContents(n);
+      for (const lr of Array.from(rg.getClientRects())) {
+        if (lr.width < 1) continue;
+        const vo = Math.min(br.bottom, lr.bottom) - Math.max(br.top, lr.top);
+        const gap = dir < 0 ? br.left - lr.right : lr.left - br.right;
+        const beside = dir < 0 ? lr.left < br.left : lr.right > br.right;
+        if (vo > 4 && beside && gap < 3 && gap > -80) { add("R15", b, `${gap < 0 ? "overlaps" : "is " + Math.round(gap) + "px from"} the text ${dir < 0 ? "before" : "after"} it ("${(n.textContent || "").trim().slice(dir < 0 ? -22 : 0, dir < 0 ? undefined : 22)}")`); break; }
+      }
+    }
+  }
+
+  // ---- R16 uneven stat row (G4) ----------------------------------------------------------------------------------------------
+  {
+    const groups = new Map<Element, Element[]>();
+    for (const st of all) if (st.matches(".k-stat") && shown(st) && st.parentElement) groups.set(st.parentElement, [...(groups.get(st.parentElement) || []), st]);
+    const UNIT = /\b(crores?|cr|lakhs?|thousands?|millions?|billions?|trillions?|k|mn|bn|months?|years?|yrs?|days?|weeks?|times|time|shares?|candles?|trades?|points?|pts|lots?|units?|stocks?|companies|sessions?|alerts?|of|a|an|per|and|to|in|on|at|vs|x|am|pm|min|mins|hours?|sec)\b/gi;
+    for (const [, items] of groups) {
+      if (items.length < 3) continue;
+      const vals = items.map((it) => { const v = it.querySelector(".k-stat-v"); return v && shown(v) && px(S(v).fontSize) >= 20 ? { it, v, t: textOf(v), h: R(v).height } : null; }).filter((x): x is { it: Element; v: Element; t: string; h: number } => !!x);
+      if (vals.length >= 3) {
+        const numeric = vals.filter((x) => /\d/.test(x.t));
+        const words = vals.filter((x) => /[A-Za-z]{4,}/.test(x.t.replace(UNIT, "")));
+        if (numeric.length >= 3) for (const x of words) add("R16", x.v, `the word value "${x.t.slice(0, 30)}" among ${numeric.length} numbers in one row of figures`);
+        const mh = median(vals.map((x) => x.h));
+        for (const x of vals) if (x.h > 1.6 * mh && x.h > 30) add("R16", x.v, `the value "${x.t.slice(0, 30)}" wraps to ${Math.round(x.h)}px while its neighbours' are ${Math.round(mh)}px`);
+      }
+      for (const row of rowsOf(items, 6)) {
+        if (row.length < 2) continue;
+        const labs = row.map((it) => it.querySelector(".k-stat-k")).filter((l): l is Element => !!l && shown(l));
+        if (labs.length < 2) continue;
+        // a label of two lines over a one-line one is fine while the figures under them stand level (R5 checks that); what shows is a label's last
+        // line sitting at another height (an (i) taller than the text, VR1-149) or a label of 3+ lines (VR1-111) beside one that is a line
+        const ends = labs.map((l) => { let b = -Infinity; textLines(l, (lr) => { b = Math.max(b, lr.bottom); }); return b; });
+        const lines = labs.map((l) => Math.round(R(l).height / lineH(l)));
+        if (Math.max(...ends) - Math.min(...ends) > 3 && ends.every((e) => e > -Infinity)) add("R16", labs[ends.indexOf(Math.min(...ends))], `its label's last line sits ${Math.round(Math.max(...ends) - Math.min(...ends))}px higher than its neighbour's in one row of ${row.length}`);
+        else if (Math.max(...lines) >= 3 && Math.min(...lines) <= 1) add("R16", labs[lines.indexOf(Math.max(...lines))], `its label runs on ${Math.max(...lines)} lines beside labels of ${Math.min(...lines)} in one row of ${row.length}`);
+      }
+    }
+  }
+
+  // ---- R18 clipped scroller on a phone (G7) ----------------------------------------------------------------------------------
+  if (opts.phone) {
+    for (const e of all) {
+      if (!/(auto|scroll)/.test(S(e).overflowX) || !shown(e) || e.scrollWidth <= e.clientWidth + 4 || e.matches("body, html, textarea, pre, code")) continue;
+      const er = R(e);
+      if (er.width < 120) continue;
+      const tbl = e.matches("table") ? e : e.querySelector("table");
+      if (tbl && shown(tbl)) {
+        if (e.closest("[data-grid]")) continue;                      // a grid read across its row on purpose (a period grid, an option chain): its first column stays put
+        const row1 = tbl.querySelector("thead tr") || tbl.querySelector("tr");
+        const head = row1 ? Array.from(row1.children).filter(shown) : [];
+        const cut = head.filter((h) => R(h).right > er.right + 1 || R(h).left < er.left - 1);
+        if (cut.length) add("R18", e, `a table of ${head.length} columns shows ${head.length - cut.length} on a phone (${cut.slice(0, 3).map((h) => `"${textOf(h).slice(0, 14)}"`).join(", ")} are off the edge)`);
+        continue;
+      }
+      const ks = Array.from(e.children).filter(shown);
+      if (e.children.length > 12) continue;                          // a long strip (14 candle sizes) scrolls on purpose; a row of up to 12 has room to wrap
+      const part = ks.filter((k) => { const kr = R(k); return (kr.right > er.right + 1 && kr.left < er.right - 1) || (kr.left < er.left - 1 && kr.right > er.left + 1); });
+      if (ks.length >= 2 && part.length) add("R18", e, `${part.length} of ${ks.length} items cut by the edge of a sideways-scrolling row (${part.slice(0, 2).map((k) => `"${textOf(k).slice(0, 18)}"`).join(", ")})`);
+    }
+  }
+
+  // ---- R19 wrapped badge (G8) ----------------------------------------------------------------------------------------------------
+  for (const b of all) {
+    if (b.matches("button, [role=button], a.btn, .k-chip, [role=radio], [role=tab], .info-btn, .chip-x, input, select, textarea, option, table, td, th, tr") || !shown(b)) continue;
+    const s = S(b);
+    const r = R(b);
+    const pillish = px(s.borderTopLeftRadius) >= Math.min(r.height, 60) / 2 - 1 && (alpha(s.backgroundColor) > 0.02 || hasBorder(s));
+    if (!(pillish || clsOf(b).some((c) => /(^|-)(pill|badge|tag|chip)s?($|-)/.test(c)))) continue;
+    if (!b.matches("span, small, a, i, b, em, strong, div, p, li, label") || textOf(b).length > 90) continue;
+    if (Array.from(b.querySelectorAll("*")).some((d) => /^(block|flex|grid|list-item|table)/.test(S(d).display) && textOf(d))) continue;   // a box that holds blocks is not a label
+    if (/^(block|flex|grid)$/.test(s.display) && r.width > 0.9 * (b.parentElement ? R(b.parentElement).width : 1e9) && r.height > 2.4 * lineH(b)) continue;       // a callout paragraph
+    const tops: number[] = [];
+    textLines(b, (lr) => { if (!tops.some((t) => Math.abs(t - lr.top) < lineH(b) * 0.5)) tops.push(lr.top); });
+    if (tops.length >= 2) add("R19", b, `its text runs on ${tops.length} lines in a ${Math.round(r.width)}x${Math.round(r.height)} badge`);
+  }
+
+  // ---- R20 orphan end control (G11) -----------------------------------------------------------------------------------------------
+  for (const p of all) {
+    const s = S(p);
+    if (!s.display.includes("flex") || s.flexDirection.startsWith("column") || !shown(p) || p.matches("thead, nav, header, footer, aside") || !inFlow(p)) continue;
+    const ks = kids(p);
+    if (ks.length < 2) continue;
+    const end = ks[ks.length - 1];
+    if (!(isControl(end) || end.matches(".info-btn, .chip-x, a.link-btn, .link-btn")) || end.matches("input, select") || R(end).width > 160) continue;
+    const others = ks.slice(0, -1);
+    if (others.some((o) => o.matches("h1, h2, h3, h4, h5, h6, .k-card-head, .k-card-title, .k-page-head, [class*=title], [class*=head]") || o.querySelector("h1, h2, h3, h4, h5, h6, .k-card-title") || isControl(o) || o.querySelector(CONTROL))) continue;     // a title with an action (the card's head), or a row with more controls
+    let textEnd = -Infinity;
+    for (const o of others) textLines(o, (lr) => { if (Math.abs(lr.top + lr.height / 2 - (R(end).top + R(end).height / 2)) < Math.max(R(end).height, lr.height)) textEnd = Math.max(textEnd, lr.right); });
+    if (textEnd === -Infinity) continue;
+    const gap = R(end).left - textEnd;
+    if (gap > 250) add("R20", end, `sits ${Math.round(gap)}px to the right of where its row's text ends (${Math.round(textEnd)}px)`);
+  }
+
+  // ---- R21 gap under the page header (G14) ------------------------------------------------------------------------------------------
+  {
+    const cardsIn = all.filter((c) => inMain(c) && isCard(c) && shown(c) && inFlow(c));
+    const first = [...cardsIn].sort((a, b) => R(a).top - R(b).top || R(a).left - R(b).left)[0];
+    const h1 = mainEl.querySelector("h1");
+    if (first && h1 && shown(h1) && R(first).top > R(h1).top) {
+      let above = -Infinity;
+      const fr = R(first);
+      // what starts above the card counts up to the card's own top: a headline that runs on beside the card (the verdict's hero) leaves no gap
+      const take = (r: { bottom: number; top: number }) => { if (r.top <= fr.top + 1) above = Math.max(above, Math.min(r.bottom, fr.top)); };
+      textLines(mainEl, (lr, pe) => { if (!first.contains(pe) && inFlow(pe)) take(lr); });
+      for (const e of Array.from(mainEl.querySelectorAll(CONTROL + ", svg, canvas, img"))) if (shown(e) && !first.contains(e) && !e.contains(first) && inFlow(e)) take(R(e));
+      const gap = fr.top - above;
+      if (above > -Infinity && gap > 56) add("R21", first, `${Math.round(gap)}px of nothing between the page header's last line and the first card`);
+    }
+  }
+
+  // ---- R22 row tags out of column (G10) -------------------------------------------------------------------------------------------------
+  for (const p of all) {
+    if (!shown(p) || !/(flex|grid|block)/.test(S(p).display)) continue;
+    const rows = Array.from(p.children).filter((c) => shown(c) && c.children.length >= 2);
+    if (rows.length < 3) continue;
+    const lead = rows.map((r) => { const t = Array.from(r.children).find((c) => shown(c)); return t && t.matches(".badge, .k-badge, .pill, [class*=tag], [class*=badge], [class*=pill]") && R(t).width <= 220 ? { r, t } : null; });
+    if (lead.some((x) => !x)) continue;
+    // the rows stand one under the other (a flex row of items is not a list of rows)
+    if (new Set(rows.map((r) => Math.round(R(r).top))).size < rows.length) continue;
+    const xs = (lead as { r: Element; t: Element }[]).map(({ t }) => { const nx = t.nextElementSibling && shown(t.nextElementSibling) ? R(t.nextElementSibling).left : null; return nx; });
+    if (xs.some((x) => x === null)) continue;
+    const v = xs as number[];
+    if (Math.max(...v) - Math.min(...v) > 4) add("R22", rows[0], `${rows.length} rows start their name at x = ${Math.round(Math.min(...v))}..${Math.round(Math.max(...v))}px (the tags before them differ in width)`);
+  }
+
+  // ---- R23 header wrap parity (G13) ---------------------------------------------------------------------------------------------------------
+  for (const p of all) {
+    const s = S(p);
+    if (!flexish(s) || !shown(p) || (s.display.includes("flex") && s.flexDirection.startsWith("column"))) continue;
+    const cs = kids(p).filter((c) => isCard(c) && R(c).width >= 200);
+    for (const row of rowsOf(cs, 4)) {
+      if (row.length < 2) continue;
+      const heads = row.map((c) => Array.from(c.children).find((h) => shown(h) && /head|title/.test(clsOf(h).join(" ")) && h.children.length >= 2) || null);
+      const hs = heads.filter((h): h is Element => !!h);
+      if (hs.length < 2) continue;
+      const min = Math.min(...hs.map((h) => R(h).height));
+      for (const h of hs) {
+        const tops = [...new Set(Array.from(h.children).filter(shown).map((c) => Math.round(R(c).top / 6)))].length;
+        if (R(h).height - min > 12 && tops >= 2) add("R23", h, `this card's header is ${Math.round(R(h).height)}px (its controls wrap under the title) beside headers of ${Math.round(min)}px in the same row`);
+      }
+    }
+  }
+
+  // ---- R24 faint checkbox (G12) --------------------------------------------------------------------------------------------------------------------
+  {
+    const rgba = (c: string): [number, number, number, number] | null => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(parseFloat); return p.length >= 3 ? [p[0], p[1], p[2], p.length > 3 ? p[3] : 1] : null; };
+    const lum = (c: number[]) => { const f = (v: number) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+    const over = (top: number[], below: number[]) => { const a = top[3] ?? 1; return [0, 1, 2].map((i) => top[i] * a + below[i] * (1 - a)); };
+    const behind = (e: Element): number[] => { let acc: number[] = [255, 255, 255]; const chain: number[][] = []; for (let p: Element | null = e.parentElement; p; p = p.parentElement) { const c = rgba(S(p).backgroundColor); if (c && c[3] > 0) { chain.push(c); if (c[3] >= 1) break; } } for (const c of chain.reverse()) acc = over(c, acc); return acc; };
+    const ratio = (a: number[], b: number[]) => { const la = lum(a), lb = lum(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); };
+    for (const c of all) {
+      if (!c.matches("input[type=checkbox], input[type=radio]") || !shown(c) || (c as HTMLInputElement).checked) continue;
+      const s = S(c);
+      if (!/none/.test(s.appearance || (s as unknown as { webkitAppearance: string }).webkitAppearance || "")) continue;        // a native box draws itself
+      const bg = behind(c);
+      const fill = rgba(s.backgroundColor), line = rgba(s.borderTopColor);
+      const seen = [fill && fill[3] > 0.05 ? ratio(over(fill, bg), bg) : 1, line && px(s.borderTopWidth) > 0 && s.borderTopStyle !== "none" && line[3] > 0.05 ? ratio(over(line, bg), bg) : 1];
+      if (Math.max(...seen) < 3) add("R24", c, `its border and fill are ${Math.max(...seen).toFixed(1)}:1 against what is behind it (3:1 needed to see the box)`);
+    }
+  }
+
+  // ---- R25 same sentence twice in one card (G9) ---------------------------------------------------------------------------------------------------
+  for (const c of all) {
+    if (!isCard(c) || !shown(c) || Array.from(c.querySelectorAll("[class*=card]")).some(isCard)) continue;
+    const seenT = new Map<string, Element[]>();
+    const w = document.createTreeWalker(c, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      const pe = n.parentElement;
+      if (!pe || pe.closest("table, [role=table], [role=grid], svg, .k-tbl-wrap, select, option, script, style, li, " + SKIP) || !shown(pe)) continue;
+      const t = (n.textContent || "").replace(/\s+/g, " ").trim().replace(/[.:;]+$/, "").toLowerCase();
+      if ((pe.textContent || "").replace(/\s+/g, " ").trim() !== (n.textContent || "").replace(/\s+/g, " ").trim()) continue;      // a whole sentence of its own, not the tail of "Last 3 months: X"
+      if (t.length >= 30) seenT.set(t, [...(seenT.get(t) || []), pe]);
+    }
+    // the same words in one entry (a title and then the line under it), not the same caption on each of a card's rows or stats:
+    // two different kinds of element, close together
+    const sig = (e: Element) => `${e.tagName}.${clsOf(e).join(".")}`;
+    for (const [t, els] of seenT) {
+      if (els.length < 2) continue;
+      for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) {
+        if (sig(els[i]) === sig(els[j])) continue;
+        let lca: Element | null = els[i];
+        while (lca && !lca.contains(els[j])) lca = lca.parentElement;
+        if (lca && lca !== document.body && R(lca).height <= 220) { add("R25", c, `"${t.slice(0, 50)}" is said twice in one entry of this card`); i = els.length; break; }
+      }
+    }
+  }
+
+  // ---- R14 overlay on content (G2) --------------------------------------------------------------------------------------------------------------------
+  // a fixed/sticky box that is not app chrome: the notebook's "Lab notes" pill sat over a row's delete button, the end of "Edit in words"
+  // and the "Testing on" box. Content is measured once on the page, the overlay's own box at the top, middle and bottom of the scroll.
+  {
+    const CHROME = "header, aside, nav, [role=dialog], [role=alertdialog], [aria-modal=true], [role=status], [role=alert], [role=tooltip], .toast, .modal-back, .scrim, .topbar, .sidebar, .side-show, .side-pop, .side-pop-back, .k-coach, .skip-link, .lp-nav, .info-pop, .popover, .palette, table";
+    const pos = (e: Element) => S(e).position;
+    const overlays = all.filter((e) => (pos(e) === "fixed" || pos(e) === "sticky") && shown(e) && !e.closest(CHROME) && (pos(e) === "fixed" || R(e).width < 0.7 * vw) && !e.matches("body, html"));
+    const top = overlays.filter((e) => !overlays.some((o) => o !== e && o.contains(e)));
+    if (top.length) {
+      const sy = window.scrollY;
+      const inOverlay = (e: Element) => { for (let p: Element | null = e; p && p !== document.body; p = p.parentElement) { const q = pos(p); if (q === "fixed" || q === "sticky") return true; } return false; };
+      interface Tgt { l: number; t: number; r: number; b: number; what: string; el: Element }
+      const tgts: Tgt[] = [];
+      textLines(mainEl, (lr, pe) => { if (!inOverlay(pe) && !pe.closest(CHROME) && lr.width < 900) tgts.push({ l: lr.left, t: lr.top + sy, r: lr.right, b: lr.bottom + sy, what: textOf(pe).slice(0, 24), el: pe }); });
+      for (const e of Array.from(mainEl.querySelectorAll(CONTROL + ", .info-btn"))) if (shown(e) && !inOverlay(e) && R(e).width < 900) tgts.push({ l: R(e).left, t: R(e).top + sy, r: R(e).right, b: R(e).bottom + sy, what: textOf(e).slice(0, 24) || keyOf(e), el: e });
+      const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      const stops = [...new Set([0, Math.round(maxY / 2), maxY])];
+      const names = ["the top", "the middle", "the bottom"];
+      for (const o of top) {
+        const hit = new Map<string, string>();
+        for (const y of stops) {
+          window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
+          const sy2 = window.scrollY;
+          const boxes = [o, ...Array.from(o.querySelectorAll("*"))].filter((d) => { const r = d.getBoundingClientRect(); return r.width >= 8 && r.height >= 8 && r.width <= 480 && r.height <= 240 && shown(d) && (d === o || d.matches(CONTROL) || alpha(getComputedStyle(d).backgroundColor) > 0.1 || hasBorder(getComputedStyle(d))); });
+          for (const d of boxes) {
+            const r = d.getBoundingClientRect();
+            if (r.bottom < 0 || r.top > window.innerHeight) continue;
+            for (const t of tgts) {
+              if (t.el.contains(o) || o.contains(t.el)) continue;
+              const ow = Math.min(r.right, t.r) - Math.max(r.left, t.l), oh = Math.min(r.bottom + sy2, t.b) - Math.max(r.top + sy2, t.t);
+              if (ow > 6 && oh > 6) hit.set(t.what || keyOf(t.el), names[stops.indexOf(y)] ?? "the scroll");
+            }
+          }
+        }
+        window.scrollTo({ top: sy, behavior: "instant" as ScrollBehavior });
+        if (hit.size) add("R14", o, `a ${pos(o)} box covers ${[...hit].slice(0, 3).map(([w, where]) => `"${w}" (at ${where})`).join(", ")}${hit.size > 3 ? ` and ${hit.size - 3} more` : ""}`);
+      }
+    }
+  }
+
+  // ---- the page's frame (R17 compares it across pages: ui-lint.spec.ts) ------------------------------------------------------------------
+  let frame: PageFrame | null = null;
+  {
+    const h1 = mainEl.querySelector("h1") || document.querySelector("h1");
+    if (h1 && shown(h1)) {
+      const cards = Array.from(mainEl.querySelectorAll("[class*=card]")).filter((e) => isCard(e) && shown(e) && inFlow(e));
+      // the page's column: the cards' rightmost edge or the page header's, whichever reaches further (a page of three tiles ends its cards early
+      // but its column does not; a column cut short, as /new's was at 920px, does)
+      const head = h1.closest("header") || h1.parentElement;
+      frame = { h1Top: Math.round(R(h1).top + window.scrollY), h1Left: Math.round(R(h1).left), right: Math.round(Math.max(head ? R(head).right : 0, ...cards.map((e) => R(e).right))) };
+    }
+  }
+
   // ---- results ------------------------------------------------------------------------------------------------------------------
   const counts: Record<string, number> = {};
   const seen = new Set<string>();
   const violations: Violation[] = [];
+  const r1els = new Set(found.filter((f) => f.rule === "R1").map((f) => f.el));
   for (const f of found) {
+    if (f.rule === "R13" && r1els.has(f.el)) continue;                // R1 already says this box has a hole
     const k = `${f.rule}|${f.el === document.body ? "body" : labelOf(f.el)}|${f.detail.slice(0, 40)}`;
     if (seen.has(k)) continue;
     seen.add(k);
@@ -452,11 +772,33 @@ export function lintPage(opts: LintOpts): LintResult {
     if (counts[f.rule] <= 25) violations.push({ rule: f.rule, element: f.el === document.body ? "body" : labelOf(f.el), key: f.el === document.body ? "body" : keyOf(f.el), detail: f.detail });
   }
   if (opts.mark) {
-    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e" };
+    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6" };
     const st = document.createElement("style");
     st.textContent = Object.entries(colour).map(([r, c]) => `[data-uilint~="${r}"]{outline:3px solid ${c} !important;outline-offset:-2px !important}`).join("\n");
     document.head.appendChild(st);
     for (const f of found) if (f.el !== document.body && f.el instanceof HTMLElement) { const cur = f.el.getAttribute("data-uilint") || ""; if (!cur.split(" ").includes(f.rule)) f.el.setAttribute("data-uilint", (cur + " " + f.rule).trim()); }
   }
-  return { violations, counts, nodes: all.length };
+  return { violations, counts, nodes: all.length, frame };
+}
+
+/** R17 (CK-2, VR-1 G5): the title's top, its left edge and the rightmost card edge are the same on every app page at one width, so the
+ *  page does not jump or look cut off on the right when you move between them. A page that differs from the value most pages share
+ *  (by more than 2px) is reported. Compared per width, theme and sign-in state; needs a handful of pages to know what "most" is. */
+export interface FrameRow { group: string; frame: PageFrame }
+export function frameOutliers(rows: FrameRow[], minPages = 8): { index: number; detail: string }[] {
+  const out: { index: number; detail: string }[] = [];
+  const modal = (vals: number[]): number => { const n = new Map<number, number>(); for (const v of vals) { const k = Math.round(v / 2) * 2; n.set(k, (n.get(k) || 0) + 1); } return [...n].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0; };
+  for (const g of new Set(rows.map((r) => r.group))) {
+    const mine = rows.map((r, index) => ({ r, index })).filter((x) => x.r.group === g);
+    if (mine.length < minPages) continue;
+    const m = { h1Top: modal(mine.map((x) => x.r.frame.h1Top)), h1Left: modal(mine.map((x) => x.r.frame.h1Left)), right: modal(mine.filter((x) => x.r.frame.right > 0).map((x) => x.r.frame.right)) };
+    for (const { r, index } of mine) {
+      const why: string[] = [];
+      if (Math.abs(r.frame.h1Top - m.h1Top) > 2) why.push(`its title starts ${r.frame.h1Top}px down, where most pages (${mine.filter((x) => Math.abs(x.r.frame.h1Top - m.h1Top) <= 2).length} of ${mine.length}) have it at ${m.h1Top}px`);
+      if (Math.abs(r.frame.h1Left - m.h1Left) > 2) why.push(`its title starts ${r.frame.h1Left}px from the left, where most pages have it at ${m.h1Left}px`);
+      if (r.frame.right > 0 && Math.abs(r.frame.right - m.right) > 2) why.push(`its cards end at ${r.frame.right}px, where most pages' end at ${m.right}px`);
+      if (why.length) out.push({ index, detail: why.join("; ") });
+    }
+  }
+  return out;
 }

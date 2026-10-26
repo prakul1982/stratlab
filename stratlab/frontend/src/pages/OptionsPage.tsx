@@ -349,7 +349,7 @@ function Chain({ s, offline }: { s: OptionStrategy; offline: boolean }) {
               </span>
             </div>
             <div data-testid={greeks ? "chain-greeks" : "chain-quotes"}>
-              <DataTable label={greeks ? "Option chain, IV and Greeks" : "Option chain, bid and ask"} columns={greeks ? greekCols : quoteCols} rows={chain.rows} rowKey={(r) => String(r.strike)} rowAttrs={atm} />
+              <DataTable grid label={greeks ? "Option chain, IV and Greeks" : "Option chain, bid and ask"} columns={greeks ? greekCols : quoteCols} rows={chain.rows} rowKey={(r) => String(r.strike)} rowAttrs={atm} />
             </div>
             {greeks && chain.model && <ModelInputs m={chain.model} extra="Per option; an asterisk marks an IV taken from the at-the-money strike." />}
           </div>

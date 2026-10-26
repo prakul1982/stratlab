@@ -697,6 +697,7 @@ td.num, .num { font-family: var(--sans); }
 /* "Illustration: made-up figures": the landing's pictures say what they are in type as readable as the figures beside them */
 .lp-illus { align-self: flex-start; padding: 2px 10px; border: 1px dashed var(--dash); border-radius: 999px; background: var(--card);
   color: var(--ink-2); font: 600 var(--t-label) / 1.5 var(--sans); }
+@media (max-width: 520px) { .lp-illus { border-radius: 14px; } }   /* CK-2 (R19): a sentence that runs to two lines on a phone is a label box, not a pill */
 .lp-illus-note { color: var(--ink-2); }
 .lp-tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); }
 .lp-tool { display: flex; flex-direction: column; gap: 6px; padding: 22px 22px 22px 0; border-bottom: 1px solid var(--line); }
@@ -777,6 +778,7 @@ td.num, .num { font-family: var(--sans); }
 .lp-money .lp-beyond-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
 .lp-money .lp-fix { margin-top: auto; font-size: 13px; }
 @media (max-width: 1000px) { .lp-money { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .lp-money { grid-template-columns: minmax(0, 1fr); } }   /* CK-2 (R19): in 139px columns each tag ("An estimate for your CA") wrapped to two lines inside its pill */
 @media (max-width: 600px) {
   .lp-tools, .lp-steps, .lp-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; }
   .lp-steps, .lp-checks { gap: 10px; }
@@ -890,12 +892,17 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 @media (max-width: 640px) { .palette-back { padding: 8px; place-items: start stretch; } .palette { max-height: calc(100vh - 16px); } .palette-foot { display: none; } }
 .explore-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }   /* auto-fit: a short list fills the row */
 /* VR1-021: a short list (two tiles) keeps cards of four-to-a-row width, left to right, instead of two 534px cards for a sentence each */
-.k-explore .explore-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); align-items: start; }
+.k-explore .explore-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+/* CK-2 (R1): cards of one row end level (a short one is not left with dead space beside a taller one) and every "Open →" sits on the bottom edge */
+.explore-card .explore-go { margin-top: auto; padding-top: var(--s1); }
 /* VR1-140: Money's eight cards are 4 + 4 on a laptop (230px made 3 + 3 + 2, a hole beside the last) */
 @media (min-width: 561px) { .explore-grid.money-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); } }
 /* VR1-140: the three figures of Money home's two summary cards in one row, not 2 + 1 with the lower left empty */
 .money-panels .k-stats { grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: var(--s3) var(--s4); }
 .money-panels .k-stat-v { font-size: clamp(22px, 1.9vw, 30px); }
+/* CK-2 (R1): the two summary cards end level, so each one's notes (prices as of, uploaded on) stand on the bottom edge and no card ends in a blank band */
+.money-panels > .k-card > .k-stack { flex: 1; }
+.money-panels > .k-card > .k-stack > :last-child { margin-top: auto; }
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
 @media (max-width: 560px) {
@@ -2295,7 +2302,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* net worth: the history's snapshots, each removable on its own */
 .nw-snaps summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 .nw-snaps ul { list-style: none; margin: 0; padding: 0; }
-.nw-snaps li { justify-content: space-between; flex-wrap: wrap; gap: var(--s2); }
+.nw-snaps li { justify-content: flex-start; flex-wrap: wrap; gap: var(--s2); }   /* CK-2 (R20): the remove icon follows the snapshot's text, not 550px away at the card's edge */
 /* MO-2: the quick-add chips: every one shown (no scroll box), an icon beside each name */
 .nw-quick { max-height: none; overflow: visible; gap: var(--s2); }
 .nw-quick .chip { gap: 6px; }

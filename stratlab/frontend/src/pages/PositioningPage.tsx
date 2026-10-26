@@ -314,7 +314,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
             {oiBasis(c) && <p className="k-note" data-testid="chain-basis">{oiBasis(c)}</p>}
             {c.change_from && <p className="k-note">Change since the recording of {istTime(c.change_from)}.</p>}
             <Disclosure summary="Show the strikes as a table">
-              <DataTable label={`${name} open interest, change and volume by strike, in ${unit}`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
+              <DataTable grid label={`${name} open interest, change and volume by strike, in ${unit}`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
                 rowAttrs={(r): Record<string, string> => (r.strike === c.atm ? { "data-atm": "1" } : {})} />
             </Disclosure>
             {/* the page's own note says the rest, once, at its foot (R66-006: the same sentence twice in a row) */}
