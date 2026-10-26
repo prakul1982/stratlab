@@ -106,6 +106,8 @@ const loading = (label: string) => <Card><Skeleton label={label} /></Card>;
 const failedLoad = (title: string, message: string, retry: () => void) => <ErrorState title={title} action={{ label: "Try again", onClick: retry }}>{message}</ErrorState>;
 
 // ---------- dividends ----------
+const DIVIDEND_INFO = "Upload your broker's dividend statement as CSV or Excel, with columns for the date, the company (symbol, name or ISIN) and the amount (or quantity and dividend a share); TDS and currency are optional (USD for US dividends). A tax P&L ZIP uploaded to the tax report brings its dividend sheet too. Without a file, the year is estimated from your holdings and the dividends the companies declared.";
+
 function DividendsTab() {
   const { fail, notify } = useApp();
   const [v, setV] = useState<Dividends | null>(null);
@@ -174,27 +176,32 @@ function DividendsTab() {
     { key: "ps", header: "A share", numeric: true, cell: (a) => money(a.per_share, a.currency === "USD" ? "USD" : "INR", 2) },
     { key: "amt", header: "Amount", numeric: true, cell: (a) => money(a.amount, a.currency === "USD" ? "USD" : "INR", 0) },
   ];
+  const uploadBtn = <UploadButton label="Upload dividends" busy={busy} accept=".csv,.xlsx,.txt,.zip,text/csv" ariaLabel="Dividend file" onFiles={pick} />;
+  const deleteBtn = v.files.length > 0 ? <button type="button" className="btn quiet sm" onClick={() => setAsking(true)}><Trash size={16} />Delete uploaded dividends</button> : null;
   return (
     <>
       {v.locked && <PlanNote>Dividends by company, with the TDS expected and the US tax withheld, are on the Basic plan.</PlanNote>}
-      <Card compact={!note && v.files.length === 0}>
-        <CardHead title="Your dividends" info="Upload your broker's dividend statement as CSV or Excel, with columns for the date, the company (symbol, name or ISIN) and the amount (or quantity and dividend a share); TDS and currency are optional (USD for US dividends). A tax P&L ZIP uploaded to the tax report brings its dividend sheet too. Without a file, the year is estimated from your holdings and the dividends the companies declared."
-          actions={<>
-            <UploadButton label="Upload dividends" busy={busy} accept=".csv,.xlsx,.txt,.zip,text/csv" ariaLabel="Dividend file" onFiles={pick} />
-            {v.files.length > 0 && <button type="button" className="btn quiet sm" onClick={() => setAsking(true)}><Trash size={16} />Delete uploaded dividends</button>}
-          </>} />
-        {note && <p className="k-small" role="status">{note}</p>}
-        {v.files.length > 0 && <p className="k-note">From {v.files.map((f) => f.name).join(", ")}.</p>}
-      </Card>
+      {/* VR1-146: with a year to show, the upload button sits in that year's card head (it was a card of its own, a title and one button, above a card
+          titled "Dividends, FY …"); with none, the card stays so the file can still be uploaded */}
+      {!y && (
+        <Card compact={!note && v.files.length === 0}>
+          <CardHead title="Your dividends" info={DIVIDEND_INFO} actions={uploadBtn} />
+          {note && <p className="k-small" role="status">{note}</p>}
+          {v.files.length > 0 && <p className="k-note">From {v.files.map((f) => f.name).join(", ")}. {deleteBtn}</p>}
+        </Card>
+      )}
 
       {y && (
         <>
           <Card label="Dividends for the year">
-            <CardHead title={`Dividends, ${y.label}`} actions={<>
+            <CardHead title={`Dividends, ${y.label}`} info={DIVIDEND_INFO} infoLabel="About your dividends" actions={<>
               {y.source === "files" && <Badge>From your files</Badge>}
               {y.source === "estimated" && <Badge>Estimated</Badge>}
               <Select small label="Financial year" value={y.fy} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); }} options={yearOptions(v.years, v.current_fy)} />
+              {uploadBtn}
             </>} />
+            {note && <p className="k-small" role="status">{note}</p>}
+            {v.files.length > 0 && <p className="k-note">From {v.files.map((f) => f.name).join(", ")}. {deleteBtn}</p>}
             {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="dividends-moved-year">{movedYearNote(movedFrom, y.fy, v.current_fy, "dividends")}</p>}
             {y.source !== "none" && y.taxed && (
               <FieldGroup label="In the total tax estimate" info="Whether this year's dividends are counted as income in the total tax estimate on the tax report.">

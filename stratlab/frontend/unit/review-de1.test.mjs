@@ -50,7 +50,7 @@ test("DE-010/DE-011/DE-012: an impossible range is said, the filtered column sho
   assert.match(s, /c\.key === sort \|\| filtered\.has\(c\.key\)/);
   assert.match(s, /placeholder="Like: Low debt"/);
   assert.match(s, /data-testid="screens-no-value"/);
-  assert.match(read("src/styles-invest.css"), /grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\) 2\.75rem/);
+  assert.match(read("src/styles-invest.css"), /grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\) auto/);   // (VR1-103: the unit column is as wide as its word)
 });
 
 test("DE-013: the theme page names no unlisted company and shows the exchange's list for the industries", () => {

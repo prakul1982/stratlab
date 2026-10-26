@@ -289,7 +289,7 @@ export function ScreensPage() {
           </Card>
         </div>
 
-        <div className="k-stack">
+        <div className="k-stack screens-main">
           <Card label="Companies that match">
             <CardHead title={out ? `${out.total.toLocaleString("en-IN")} of ${out.indexed.toLocaleString("en-IN")} companies match` : "Checking…"}
               actions={<>
@@ -310,7 +310,7 @@ export function ScreensPage() {
             {out && rows.length < out.total && <button className="btn quiet sm k-btn-end" disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString("en-IN")} left)</button>}
           </Card>
 
-          <Card>
+          <Card className="screens-save">
             <CardHead title={open ? `Screen: ${open.name}` : "Save this screen"} info="Saved screens keep your conditions. Turn on the weekly email to hear on Saturday mornings which companies newly meet them. Your plan sets how many you can keep." />
             <FormGrid label="Save this screen" onSubmit={(e) => e.preventDefault()}>
               <Field label="Name" maxLength={60} placeholder="Like: Low debt" value={name} onChange={(e) => setName(e.target.value)} />

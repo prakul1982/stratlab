@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
+import { bodyAfter } from "../lib/filingText";
 import { Badge, CheckField, EmptyState, ErrorState, Skeleton } from "./kit";
 
 export type Severity = "red" | "amber" | "info";
@@ -25,29 +26,32 @@ function SevBadge({ s, label }: { s: Severity; label: string }) {
 
 /** The last-3-months verdict in one line: what was found, stated as facts. A list that shows only the flagged filings passes
  * `to` (the company's own filings), so "N filings in all" is a link to the rest whenever there are more than the ones listed. */
-export function SummaryLine({ s, to }: { s: FilingSummary; to?: string }) {
+export function SummaryLine({ s, to, rowsHaveFundRaise }: { s: FilingSummary; to?: string; rowsHaveFundRaise?: boolean }) {
+  // the rows listed under it already show the fund raise and its date: not said twice (VR1-100)
+  const raise = s.fund_raise ? (rowsHaveFundRaise ? null : <b>Fund raise filed on {day(s.fund_raise_last!)}.</b>) : <span className="k-muted">No fund raise filed.</span>;
   if (s.total == null) return (
     <span className="k-small">
       Last {s.days} days: <b>{s.red} red flag{s.red === 1 ? "" : "s"}</b>, {s.amber} to look closer at, from the evening's read of every company's filings.{" "}
-      {s.fund_raise ? <b>Fund raise filed on {day(s.fund_raise_last!)}.</b> : <span className="k-muted">No fund raise filed.</span>}
+      {raise}
     </span>
   );
   if (!s.total) return <span className="k-small k-muted">No filings in the last {s.days} days.</span>;
   return (
     <span className="k-small">
       Last {s.days} days: <b>{s.red} red flag{s.red === 1 ? "" : "s"}</b>, {s.amber} to look closer at, {to && s.total > s.red + s.amber ? <Link className="link" to={to}>{s.total} filings in all</Link> : `${s.total} filing${s.total === 1 ? "" : "s"} in all`}.{" "}
-      {s.fund_raise ? <b>Fund raise filed on {day(s.fund_raise_last!)}.</b> : <span className="k-muted">No fund raise filed.</span>}
+      {raise}
     </span>
   );
 }
 
 export function FilingRow({ i }: { i: FilingItem }) {
+  const text = bodyAfter(i.subject, i.text);
   return (
     <div className="inv-filing">
       <span className="k-note">{day(i.at)}</span>
       <div className="k-stack">
         <div className="k-row"><SevBadge s={i.severity} label={i.label} /><span className="k-small">{i.subject}</span></div>
-        {i.text && <span className="k-note inv-clamp">{i.text}</span>}
+        {text && <span className="k-note inv-clamp" title={i.text}>{text}</span>}
       </div>
       {i.url ? <a className="link k-small" href={safeHref(i.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a> : <span />}
     </div>

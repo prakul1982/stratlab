@@ -116,7 +116,7 @@ test("RC2B-024: the floating rate bond is a row of the small savings table", () 
 });
 
 test("RC2B-040, RC2B-041, RC2B-043, RC2B-044: the cards of Money home and the calendar end together, and the add forms use the row", () => {
-  assert.match(read("src/pages/SpaceHomes.tsx"), /className="grid2 space-panels even">\s*<HoldingsSummary \/>/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /className="grid2 space-panels even money-panels">\s*<HoldingsSummary \/>/);
   const css = read("src/styles.css");
   assert.match(css, /\.mc-grid \{ align-items: stretch; \}/);
   assert.match(css, /\.us-add > \.k-form \{ grid-template-columns: repeat\(6, minmax\(0, 1fr\)\); \}/);

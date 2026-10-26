@@ -153,12 +153,12 @@ export function UsTaxPage() {
     { key: "sold", header: "Sold", numeric: true, cell: (r) => dateOnly(r.sold) },
     { key: "qty", header: "Shares", numeric: true, cell: (r) => qtyText(r.qty) },
     { key: "cost", header: "Cost", numeric: true, cell: (r) => usd(r.cost_usd) },
-    { key: "rb", header: "Rate used", cell: (r) => rateText(r.rate_buy) },
+    { key: "rb", header: "Rate used", cardLabel: "Rate used at purchase", cell: (r) => rateText(r.rate_buy) },
     { key: "costinr", header: "Cost (₹)", numeric: true, cell: (r) => <>{inr(r.indexed_cost ?? r.cost)}{r.indexed_cost != null && <span className="k-sub-line">indexed</span>}</> },
     { key: "sale", header: "Sale", numeric: true, cell: (r) => usd(r.sale_usd) },
-    { key: "rs", header: "Rate used", cell: (r) => rateText(r.rate_sell) },
+    { key: "rs", header: "Rate used", cardLabel: "Rate used at sale", cell: (r) => rateText(r.rate_sell) },
     { key: "saleinr", header: "Sale (₹)", numeric: true, cell: (r) => inr(r.sale) },
-    { key: "gain", header: "Gain (₹)", numeric: true, cell: (r) => <span className={tone(r.gain)}>{inr(r.gain)}</span> },
+    { key: "gain", header: "Gain (₹)", numeric: true, up: true, cell: (r) => <span className={tone(r.gain)}>{inr(r.gain)}</span> },
     { key: "term", header: "Term", cell: (r) => (r.term === "LT" ? `Long, ${r.rate === 0.2 ? "20%" : "12.5%"}` : "Short, slab") },
   ];
   const divCols: Column<DivStock>[] = [
@@ -198,7 +198,6 @@ export function UsTaxPage() {
         <CardHead title="Your US trades" info="A trade list needs columns for the date, purchase or sale, the ticker, shares and the price in dollars (fees optional); dates are best as YYYY-MM-DD. Or add each purchase and sale below."
           actions={<>
             <UploadButton quiet label="Upload US trades" busy={busy} accept=".csv,.xlsx,.txt,text/csv" ariaLabel="US trades file" onFiles={pick} />
-            {!!v?.trades.length && <button type="button" className="btn quiet sm" onClick={() => setAsking(true)}><Trash size={16} />Delete all US trades</button>}
           </>} />
         <p className="k-small k-muted" data-testid="us-upload-help">A trade list (CSV or Excel) from your broker, or a realised-gains tax report such as Vested's yearly tax report (the .xlsx).</p>
         {note && <p className="k-small" role="status">{note}</p>}
@@ -232,7 +231,9 @@ export function UsTaxPage() {
         )}
         {v && v.trades.length > 0 && (
           <Disclosure summary={<>{v.trades.length} trade{v.trades.length === 1 ? "" : "s"}{v.files.length ? ` · last file ${ago(v.files[v.files.length - 1].at)}` : ""}</>}>
-            <DataTable label="US trades" columns={tradeCols} rows={v.trades.slice(0, 200)} rowKey={(t) => t.id || `${t.d}${t.sym}${t.qty}${t.price}`} />
+            <DataTable stack phonePage={10} label="US trades" columns={tradeCols} rows={v.trades.slice(0, 200)} rowKey={(t) => t.id || `${t.d}${t.sym}${t.qty}${t.price}`} />
+            {/* VR1-148: "Delete all" was a head button of the same weight as Upload; it sits under the list it empties */}
+            <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete all US trades</button>
           </Disclosure>
         )}
       </Card>
@@ -252,9 +253,10 @@ export function UsTaxPage() {
       {v && v.trades.length > 0 && y && !reloadError && (
         <>
           {!v.rates.available && <Notice tone="warn">The rupee rates couldn't be loaded just now, so the rupee figures are missing. Try again in a while.</Notice>}
-          <FormGrid label="Choose the year">
-            <Field label="Financial year">{(id) => <Select id={id} value={y.fy} onChange={(x) => { setMovedFrom(null); load(Number(x), v.cy); }} options={v.years.map((x) => ({ value: x.fy, label: x.label }))} />}</Field>
-          </FormGrid>
+          {/* VR1-148: the year choice is a strip of its own, as on the tax report, not a loose label and box between two cards */}
+          <Card compact>
+            <CardHead title="Financial year" actions={<Select small label="Financial year" value={y.fy} onChange={(x) => { setMovedFrom(null); load(Number(x), v.cy); }} options={v.years.map((x) => ({ value: x.fy, label: x.label }))} />} />
+          </Card>
           {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="us-moved-year">{movedYearNote(movedFrom, y.fy, Math.max(...v.years.map((x) => x.fy)), "sales")}</p>}
           <Card>
             <CardHead title={`Sales in ${y.label}`} />
@@ -273,7 +275,7 @@ export function UsTaxPage() {
               <Card>
                 <CardHead title="Each sale in rupees" />
                 {!y.rows?.length ? <EmptyState title={`No US sales in ${y.label}`}>Sales you add or upload show here with the rate used for each.</EmptyState>
-                  : <DataTable label="US sales in rupees" columns={saleCols} rows={y.rows} rowKey={(r, i) => `${r.symbol}${r.bought}${r.sold}${r.qty}${r.cost_usd}-${i}`} />}
+                  : <DataTable stack phonePage={10} label="US sales in rupees" columns={saleCols} rows={y.rows} rowKey={(r, i) => `${r.symbol}${r.bought}${r.sold}${r.qty}${r.cost_usd}-${i}`} />}
                 <p className="k-note">Rule 115: the sale at SBI's TT buying rate on the last day of the month before the sale, the cost at the rate on the last day of the month before the purchase; the last rate SBI published when it has none that day. "RBI" marks the RBI reference rate, used where SBI's rate isn't known.</p>
               </Card>
 
@@ -281,7 +283,7 @@ export function UsTaxPage() {
                 <CardHead title="US dividends and the foreign tax credit" info="The US withholds 25% of dividends paid to an Indian resident who gave the broker a W-8BEN (India-US treaty, Article 10). India taxes the dividend at your slab rate and gives credit for the US tax, but never more than the Indian tax on that dividend. You claim it by filing Form 67 by the end of the assessment year." infoLabel="How the credit works" />
                 {!y.dividends || !y.dividends.stocks.length ? <EmptyState title={`No US dividends in ${y.label}`}>Dividends from your US holdings show here with the US tax withheld.</EmptyState> : (
                   <>
-                    <DataTable label="US dividends and credit" columns={divCols} rows={y.dividends.stocks} rowKey={(s) => s.symbol} />
+                    <DataTable stack label="US dividends and credit" columns={divCols} rows={y.dividends.stocks} rowKey={(s) => s.symbol} />
                     <p className="k-small">Credit for {y.label}: <b>{inr(y.dividends.ftc.credit)}</b> of the {inr(y.dividends.tax_inr)} US tax{y.dividends.ftc.not_credited > 0.5 ? `; ${inr(y.dividends.ftc.not_credited)} can't be credited (more than the Indian tax on the dividends)` : ""}. Indian tax on the dividends at your average rate of {(y.dividends.indian_rate * 100).toFixed(2)}% from the <Link className="link" to={fyLink("/tax-report", y.fy)}>total tax estimate</Link>.</p>
                     {y.dividends.estimated && <p className="k-note">Estimated: each dividend the company paid × the shares your trades held on its ex-date, dated by the ex-date. Upload your broker's dividend statement in <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>Tax tools</Link> for the actual figures.</p>}
                   </>
@@ -293,7 +295,7 @@ export function UsTaxPage() {
           <Card>
             <CardHead title="Shares you still hold" />
             {!v.open_lots.length ? <EmptyState title="No US shares open">Your trades leave no US shares open.</EmptyState>
-              : <DataTable label="Open US lots" columns={lotCols} rows={v.open_lots} rowKey={(l, i) => `${l.symbol}${l.bought}${l.qty}-${i}`} />}
+              : <DataTable stack label="Open US lots" columns={lotCols} rows={v.open_lots} rowKey={(l, i) => `${l.symbol}${l.bought}${l.qty}-${i}`} />}
             <p className="k-note">Facts only: when each lot turns long term under the 24-month rule.</p>
           </Card>
 
@@ -306,7 +308,7 @@ export function UsTaxPage() {
                 </>} />
               <p className="k-small k-muted">{v.fa.label}.</p>
               {!v.fa.rows.length ? <EmptyState title={`No US shares were held in ${v.fa.cy}`}>Pick another calendar year above.</EmptyState>
-                : <DataTable label="Schedule FA" columns={faCols} rows={v.fa.rows} rowKey={(r) => `${r.symbol}-${r.lot}`} />}
+                : <DataTable stack label="Schedule FA" columns={faCols} rows={v.fa.rows} rowKey={(r) => `${r.symbol}-${r.lot}`} />}
               {v.fa.missing_prices.length > 0 && <p className="k-small">No daily prices for {v.fa.missing_prices.join(", ")}, so their peak value, and the closing value of shares still held on 31 December, are blank. Use your broker's year statement for them.</p>}
               <p className="k-note">Country: 2-UNITED STATES OF AMERICA; nature of entity: company. Fill each company's address and ZIP code from its annual report. The broker account's cash goes in Table A2, from your broker's statement.</p>
             </Card>

@@ -9,6 +9,7 @@ import { ipoApi, type DocLink, type Facts, type IpoDetail, type Statement, type 
 import { badgeOf, bandText, clockText, croreText, expectedText, minText, partsText, sharesText, sizeText, spanText, timesText } from "../lib/ipoText";
 import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { LockedPreview } from "../components/LockedPreview";
+import { Info } from "../components/ui";
 import "./ipo.css";
 
 /* /invest/ipos/:id: one issue. Its dates, price band, lot and minimum, size (fresh issue and offer for sale), the bids by category
@@ -36,7 +37,7 @@ function Dates({ d }: { d: IpoDetail }) {
         <li><span className="k-note">Allotment</span><b>{expectedText(r.allotment, r.allotment_expected)}</b></li>
         <li><span className="k-note">Listing</span><b>{expectedText(r.listing, r.listing_expected)}</b></li>
       </ul>
-      {r.hours && <p className="k-note" data-testid="ipo-hours">Bidding hours as the exchange states them: {r.hours}.</p>}
+      {r.hours && <p className="k-note" data-testid="ipo-hours">Bidding hours as the exchange states them: {r.hours.replace(/\.+$/, "")}.</p>}
       {(r.allotment_expected || r.listing_expected) && (
         <p className="k-note">"Expected" is the day SEBI's timetable gives: allotment the working day after bidding closes, listing three working days after. The exchange publishes the actual day.</p>
       )}
@@ -48,7 +49,7 @@ function Terms({ d }: { d: IpoDetail }) {
   const r = d.ipo;
   const us = r.market === "US";
   return (
-    <Card label="The issue" testId="ipo-terms">
+    <Card label="The issue" testId="ipo-terms" className="ipo-terms">
       <CardHead level={2} title="The issue" />
       <StatRow label="Terms of the issue">
         <Stat label={us ? "Price" : "Price band"} value={bandText(r)} note={us && r.stage === "upcoming" ? "range not final" : undefined} />
@@ -58,7 +59,7 @@ function Terms({ d }: { d: IpoDetail }) {
       </StatRow>
       <dl className="ipo-facts">
         {!us && (r.fresh != null || r.fresh_cr != null) && <div><dt>Fresh issue</dt><dd>{r.fresh != null ? `${sharesText(r.fresh)} shares` : croreText(r.fresh_cr)}</dd></div>}
-        {!us && (r.ofs != null || r.ofs_cr != null) && <div><dt>Offer for sale (shares existing holders offer)</dt><dd>{r.ofs != null ? `${sharesText(r.ofs)} shares` : croreText(r.ofs_cr)}</dd></div>}
+        {!us && (r.ofs != null || r.ofs_cr != null) && <div><dt>Offer for sale<Info label="About the offer for sale">The shares existing holders offer, as against new shares the company issues.</Info></dt><dd>{r.ofs != null ? `${sharesText(r.ofs)} shares` : croreText(r.ofs_cr)}</dd></div>}
         {!us && r.face_value != null && <div><dt>Face value</dt><dd>{price(r.face_value, "INR", 2)}</dd></div>}
         {!us && r.retail_max != null && <div><dt>Most a retail bid can be</dt><dd>{price(r.retail_max, "INR", 0)}</dd></div>}
         {r.issue_type && <div><dt>Issue type</dt><dd>{r.issue_type}</dd></div>}

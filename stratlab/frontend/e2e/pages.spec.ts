@@ -536,7 +536,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await expect(total.getByText(/^Old regime/)).toBeVisible();
   await expect(total.getByText(/With the same figures, the new regime works out to/)).toBeVisible();
   await expect(total.getByText(/Deductions you entered \(80C and the like\): ₹1,50,000/)).toBeVisible();
-  const amount = await total.getByLabel("Estimated total tax").innerText();
+  const amount = await page.locator('span[aria-label="Total tax estimate"]').innerText();      // the summary at the top: the total is not printed twice (VR1-144)
   expect(Number(amount.replace(/[^\d]/g, ""))).toBeGreaterThan(100000);
   await expect(total.getByText(/Covers only the income you enter or import here/)).toBeVisible();
   await expect(total.getByText(/Rules for this year not yet confirmed/)).toHaveCount(0);
@@ -558,7 +558,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await total.getByRole("button", { name: "Save and update" }).click();
   await expect(total.getByText(/resident, aged 60 to 79/)).toBeVisible();
   await expect(total.getByText(/the old regime's basic exemption is ₹3,00,000/)).toBeVisible();
-  const senior = Number((await total.getByLabel("Estimated total tax").innerText()).replace(/[^\d]/g, ""));
+  const senior = Number((await page.locator('span[aria-label="Total tax estimate"]').innerText()).replace(/[^\d]/g, ""));
   expect(senior).toBeLessThan(Number(amount.replace(/[^\d]/g, "")));
   await total.getByRole("radio", { name: "No", exact: true }).click();
   await total.getByRole("button", { name: "Save and update" }).click();
@@ -1652,7 +1652,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   await expect(today.getByText(/vs \d+ \w+/).first()).toBeVisible();                     // the change against the day before
   const charts = page.getByTestId("breadth-charts");
   await expect(charts.getByRole("heading", { name: "Advance/decline line" })).toBeVisible();
-  for (const name of ["Share above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
+  for (const name of ["Above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
     "Sectors: share above the 50-day average", "Breadth thrust measure", "TRIN"]) await expect(charts.getByRole("heading", { name })).toBeVisible();
   // the index is its own small chart: no chart has a second scale
   await expect(charts.getByRole("heading", { name: /^NIFTY 500/ })).toBeVisible();

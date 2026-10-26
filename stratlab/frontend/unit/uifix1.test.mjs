@@ -42,7 +42,7 @@ test("UI-FIX-1 (R1): the Invest home pairs short cards with short cards, and the
 
 test("UI-FIX-1 (R2): lists spread over the card instead of one narrow column", () => {
   assert.match(read("src/pages/CorpActionsPage.tsx"), /className="inv-days"/);
-  assert.match(read("src/components/CorpActions.tsx"), /className="inv-pair"/);
+  assert.match(read("src/components/CorpActions.tsx"), /className=\{wide \? "k-stack" : "inv-pair"\}/);   // (VR1-105: with a short "Coming up" beside a long past list, the past rows run two across under it)
   assert.match(read("src/pages/HoldingsPage.tsx"), /className="h-filings"/);
   assert.match(read("src/pages/AccountPage.tsx"), /className="k-dl spread"/);
   assert.match(read("src/pages/SettingsPage.tsx"), /<div className="k-two">/);

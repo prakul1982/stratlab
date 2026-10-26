@@ -82,7 +82,7 @@ test("DK-008, DK-009, DK-011: real company pages linked from Invest, the pause b
   assert.ok(login.indexOf('className="lp-demo-pause"') < login.indexOf('className="lp-demo-stack"'), "the pause button is above the card, not under it");
   assert.match(login, /<Link className="link" to="\/contact">the Contact page<\/Link> reaches a person/);
   assert.match(login, /heading === "Help"/);
-  assert.match(login, /<Head eyebrow="Questions and contact" title="Help">/);
+  assert.match(login, /<Head eyebrow="Questions and contact" title="Help" h1>/);
   assert.match(read("src/styles.css"), /\.lp-faq-head \{ position: sticky;/);
 });
 

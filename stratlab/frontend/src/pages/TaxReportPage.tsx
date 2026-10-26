@@ -516,7 +516,7 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
       {t.available ? (
         <>
           <div className="k-stack">
-            <b className="k-big" aria-label="Estimated total tax">{inr(t.total)}</b>
+            {/* VR1-144: no second copy of the total's figure here: the summary at the top of the page and the table below carry it */}
             <span className="k-note">{REGIME[t.regime]} · {y.inputs.resident ? "resident" : "non-resident"}, aged {AGE_TEXT[y.inputs.age ?? "below60"]}{t.rebate > 0 ? ` · 87A rebate ${inr(t.rebate)}` : ""}{t.surcharge > 0 ? ` · surcharge ${inr(t.surcharge)}` : ""} · cess {inr(t.cess)}{!y.inputs.saved ? " · no other income entered yet" : ""}</span>
           </div>
           <StatRow label="Where the tax comes from">

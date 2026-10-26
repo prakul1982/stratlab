@@ -129,6 +129,9 @@ a.inv-theme:hover { border-color: var(--ink); }
 .inv-rows > .inv-row:first-child { border-top: 0; padding-top: 0; }
 .inv-day { display: flex; flex-direction: column; gap: var(--s2); }
 /* the days side by side where there is room, in the order they come (across, then down): one column of them left a wide card two-thirds empty (UI-FIX-1, R2) */
+/* VR1-105: rows two across where there is room (past corporate actions), each a block of its own, no rule between */
+.inv-rows.inv-rows-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s4) var(--s6, 32px); align-items: start; }
+.inv-rows.inv-rows-cols > .inv-row { border-top: 0; padding: 0; }
 .inv-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s4) var(--s6, 32px); align-items: start; }
 .inv-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); gap: var(--s4) var(--s5); align-items: start; }
 .inv-alert { display: flex; justify-content: space-between; align-items: center; gap: var(--s3) var(--s4); flex-wrap: wrap; padding: var(--s3) 0; border-top: 1px solid var(--line); }
@@ -157,7 +160,7 @@ a.inv-theme:hover { border-color: var(--ink); }
 .inv-toggle { display: none; }
 @media (max-width: 1360px) { .inv-toggle { display: inline-flex; } }
 /* the unit's column is one width for "%" and "times", so every row's boxes line up (DE-012) */
-.inv-bounds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2.75rem; gap: var(--s2); align-items: end; }
+.inv-bounds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--s2); align-items: end; }   /* (VR1-103: the unit is as wide as its word, not a 44px strip) */
 .inv-bounds .k-unit { padding-bottom: 12px; color: var(--muted); font-size: var(--t-note); }
 
 /* sector rotation chart bits */

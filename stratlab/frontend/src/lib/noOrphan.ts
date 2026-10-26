@@ -4,6 +4,8 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
  * the fullest even split when there is one (6 tiles in 5 columns become 3 + 3), else the widest count that leaves two or more on the
  * last line (5 in 4 become 3 + 2). `fit` itself when it already leaves none alone. (UI-FIX-1, R9) */
 export function fillCols(n: number, fit: number): number {
+  // a short last line (8 tiles in 5 columns: 5 + 3) is an even split when one is not much narrower than what fit: 4 + 4 (VR1-111)
+  if (n > fit && fit >= 4 && n % fit >= 2) { for (let c = fit - 1; c >= Math.ceil(fit * 0.75); c--) if (n % c === 0) return c; }
   if (n < 2 || fit < 2 || n <= fit || n % fit !== 1) return fit;
   const tries: number[] = [];
   for (let c = Math.min(fit, n) - 1; c >= 2; c--) if (n % c !== 1) tries.push(c);

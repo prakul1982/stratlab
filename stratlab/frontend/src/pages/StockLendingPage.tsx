@@ -123,7 +123,7 @@ export function StockLendingPage() {
                 { key: "d", header: "Days with trades", numeric: true, info: "How many of the last 30 days, and of the last 90 days, had at least one lending trade in this stock.",
                   cell: (r) => <>{r.summaries[0] ? `${r.summaries[0].traded_days} of 30 days` : "–"}<span className="k-sub-line">{r.summaries[1] ? `${r.summaries[1].traded_days} of 90 days` : ""}</span></> },
                 { key: "a", header: "A year, last 30 days", numeric: true, info: "The lowest and the highest fee traded in the last 30 days, each as a percent of the price over a year.",
-                  cell: (r) => (r.summaries[0] ? <>{range(r.summaries[0].ann_low, r.summaries[0].ann_high)}<span className="k-sub-line">lowest to highest, a year</span></> : "–") },
+                  cell: (r) => (r.summaries[0] && r.summaries[0].ann_low != null ? <>{range(r.summaries[0].ann_low, r.summaries[0].ann_high)}<span className="k-sub-line">lowest to highest, a year</span></> : "–") },   // no caption under a dash (VR1-115)
                 { key: "n", header: "Newest trade", numeric: true, cell: (r) => { const l = r.summaries[1]?.last; return l ? <>{plainPct(l.ann, 2)}<span className="k-sub-line">{dayText(l.day)}</span></> : <span className="k-muted">None in 90 days</span>; } },
                 { key: "sh", header: "Shares lent, 30 days", numeric: true, cell: (r) => (r.summaries[0] ? sharesShort(r.summaries[0].shares) : "–") },
               ]} />

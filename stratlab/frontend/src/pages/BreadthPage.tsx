@@ -267,7 +267,7 @@ function AlertBox({ group }: { group: Group }) {
     <Card label="Breadth alerts">
       <CardHead title="Alert on the share above the 50-day average"
         info="Checked once a day, after the counts for the close are in. You get one message each time the share moves from one side of your level to the other, by phone notification, Telegram or email, whichever you set up in Settings. Up to 5." infoLabel="About breadth alerts" />
-      <FormGrid label="New breadth alert" onSubmit={add}>
+      <FormGrid label="New breadth alert" onSubmit={add} inline>
         <Field label="Alert level" unit="%" inputMode="decimal" value={level} onChange={(e) => setLevel(e.target.value)} aria-invalid={!ok}
           aria-label={`Alert me when the share of ${group.name} stocks above their 50-day average crosses`} />
         {why && <p className="k-note k-down k-field wide" role="alert" data-testid="breadth-alert-why">{why}</p>}
@@ -325,7 +325,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           <LineChart lines={[{ values: h.ad_line, color: A, label: "A/D line", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             format={fmtInt} ariaLabel={`Advance/decline line, ${labels[0]} to ${last}`} />
         </Box>
-        <Box title="Share above the 50- and 200-day averages" info={help.ma} h={h} cols={[{ header: "Above 50-day", get: (i) => share(h.pct50[i]) }, { header: "Above 200-day", get: (i) => share(h.pct200[i]) }]} note={`Last ${last}`}>
+        <Box title="Above the 50- and 200-day averages" info={help.ma} h={h} cols={[{ header: "Above 50-day", get: (i) => share(h.pct50[i]) }, { header: "Above 200-day", get: (i) => share(h.pct200[i]) }]} note={`Last ${last}`}>
           <LineChart lines={[{ values: h.pct50, color: A, label: "Above 50-day", width: 2 }, { values: h.pct200, color: B, label: "Above 200-day", width: 2 }]} legend
             labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200} format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Share of stocks above their 50- and 200-day averages" />
         </Box>

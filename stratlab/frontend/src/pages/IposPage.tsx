@@ -166,8 +166,8 @@ export function IposPage() {
   return (
     <div className="k-page ipo-page">
       <PageHeader eyebrow={eyebrowOf("/invest/ipos")} title="IPOs"
-        lede="India's and the US's public offerings in their stages: when bidding opens and closes, the price band, the lot and the minimum, the bids received by category while an issue is open, and how a new listing has traded against its issue price. From the exchanges' and regulators' own pages. Facts, not advice."
-        asOf={d?.as_of} asOfTz={marketTz(market)} asOfLabel="Read" info={d ? d.note : undefined} infoLabel="Where this comes from" />
+        lede="India's and the US's public offerings in their stages, from the exchanges' and regulators' own pages. Facts, not advice."
+        asOf={d?.as_of} asOfTz={marketTz(market)} asOfLabel="Read" info={<>When bidding opens and closes, the price band, the lot and the minimum, the bids received by category while an issue is open, and how a new listing has traded against its issue price.{d ? <> {d.note}</> : null}</>} infoLabel="Where this comes from" />
       <div className="k-toolbar">
         <Seg label="Market" value={market} onChange={(v) => pick(v as Market)} options={[{ value: "IN", label: "India" }, { value: "US", label: "US" }]} />
       </div>
