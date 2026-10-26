@@ -388,7 +388,7 @@ function CompanyView() {
             {wiki?.description && <p className="k-sub">{wiki.description}</p>}
             <p className="k-small">{wiki?.extract || c.about.profile}</p>
             {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
-            {c.facts.some((f) => !/market cap/i.test(f.label)) && <dl className="k-dl">{c.facts.filter((f) => !/market cap/i.test(f.label)).map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
+            {c.facts.some((f) => !/market cap/i.test(f.label)) && <dl className="k-dl pairs">{c.facts.filter((f) => !/market cap/i.test(f.label)).map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
             {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
           </Card>
         )}

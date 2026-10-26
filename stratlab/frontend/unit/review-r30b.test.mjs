@@ -55,7 +55,11 @@ test("R30-009: on a phone the banner's dismiss is an icon on the text's row, 40 
 });
 
 test("R30-010: on a phone the paper session cards stack inside the page", () => {
-  assert.match(read("src/pages/trade/paper.css"), /max-width: 640px\) \{\s*\.k-sessions \{ flex-direction: column; overflow-x: visible; \}\s*\.k-sess \{ min-width: 0; width: 100%/);
+  // (UI-FIX-1: the sessions are rows across the card on every screen; on a phone a row's parts stack)
+  const css = read("src/pages/trade/paper.css");
+  assert.match(css, /\.k-sessions \{ display: flex; flex-direction: column;/);
+  assert.match(css, /\.k-sess \{ width: 100%; box-sizing: border-box;/);
+  assert.match(css, /max-width: 640px\) \{\s*\.k-sess \{ flex-direction: column;/);
 });
 
 test("R30-013: the scan line names the number of stocks from the first render", async () => {

@@ -4,6 +4,13 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 26 October 2026: layout problems found by a checker, not by eye (UI-FIX-1)
+
+- **UI checker in CI:** `e2e/ui-lint.spec.ts` measures every page at 1440, 1280 and 390 px for dead space beside a short card, sparse wide cards, floating controls, text wrapping inside buttons, uneven rows, a figure said three times, an orphan tile on the last line, sideways scroll, overlapping text and tiny taps. It runs as its own job in `tests.yml` with `UI_LINT_STRICT=1`: a new problem fails the build (a deliberate exception goes in `e2e/ui-lint.allow.json` with a reason), and its report and annotated screenshots are kept as the `ui-lint-report` artifact.
+- **Segmented switches:** no label wraps inside its button, on a phone or in a form; choices that do not fit one row stack, two by two or one under another, all the same width.
+- **Rows of tiles:** stat rows, form grids, health grids and card grids never leave one tile alone on the last line (4 + 1 becomes 3 + 2, 3 + 1 becomes 2 + 2).
+- **Pages:** the Invest home pairs short cards with short cards and spreads breadth across the page; the notebook's four checks are two columns of their own; the market events week lists its three links as lines; Corporate actions, My Holdings' recent filings and a company's actions use the card's width; paper sessions are rows; Account and Settings spread their facts and switches; Yours and Popular are two rows in the stock search; a figure is said once on the tax total, the Money calendar and the library card.
+
 ### 26 October 2026: the owner's re-score, the Invest data and public pages
 
 - **Account:** Account → Your data has **Delete my account**: the account's email typed in, then every store's data and the sign-in account go in one step (`POST /me/delete-account`, `user_data.close_account`). Invoices and the payment records behind them are kept, as tax law asks, and the page says so. A plan still being billed has to be cancelled first, the owner's account is refused, and a store that fails leaves the account open to try again. The privacy page names the button (updated 26 October).

@@ -74,6 +74,8 @@ function ExperienceCards() {
     <>
       <Card id="experience" label="What you see first">
         <CardHead title="What you see first" info="Changes only which space the menu and home page open in, and which settings start open. Every tool stays available." />
+        {/* the two choices side by side: one under the other left a wide card holding two small switches in its left third (UI-FIX-1, R2) */}
+        <div className="k-two">
         <FieldGroup label="What you're here for">
           <Seg label="What you're here for" options={FOCUSES.map(([f, title]) => ({ value: f, label: title }))} value={focus ?? ""}
             onChange={(f) => void savePrefs({ focus: f as Focus, space: viewForFocus(f as Focus)! })} />
@@ -83,6 +85,7 @@ function ExperienceCards() {
           <Seg label="Experience" options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} value={level ?? ""} onChange={(l) => void setLevel(l as Level)} />
           {level && <p className="k-small k-muted k-hint-line">{LEVELS.find(([l]) => l === level)?.[2]}</p>}
         </FieldGroup>
+        </div>
       </Card>
       <Card id="theme" label="Theme">
         <CardHead title="Theme" />

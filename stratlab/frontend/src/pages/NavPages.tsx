@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { Card, EmptyState, PageHeader } from "../components/kit";
 import { PageTags } from "../components/PageTags";
+import { TileGrid } from "../components/TileGrid";
 import { NAV, SPACE_LIST, groupPath, locateGroup, type NavPage } from "../lib/nav";
 import { MINE_NAME } from "../lib/spaces";
 
@@ -33,9 +34,9 @@ export function GroupPage() {
   return (
     <div className="stack nav-page" data-testid="group-page" data-group={g.group.id}>
       <PageHeader eyebrow={`${NAV[g.space].label} · ${g.group.label}`} title={g.group.label} lede={g.group.blurb} />
-      <div className="nav-cards">
+      <TileGrid className="nav-cards">
         {g.group.pages.map((p) => <FeatureCard key={p.to} page={p} />)}
-      </div>
+      </TileGrid>
     </div>
   );
 }

@@ -143,7 +143,7 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
             {!q && !!ans?.popular?.length && (
               <div className="k-row holder-popular">
                 <span className="k-small k-muted">Named in the most companies:</span>
-                {ans.popular.map((p) => <button key={p.label} type="button" className="chip" onClick={() => { setText(p.label); go(p.label); }}>{p.label}<span className="k-muted"> · {p.companies}</span></button>)}
+                {ans.popular.map((p) => <button key={p.label} type="button" className="chip" title={p.label} onClick={() => { setText(p.label); go(p.label); }}><span className="chip-name">{p.label}</span><span className="k-muted"> · {p.companies}</span></button>)}
               </div>
             )}
           </Card>

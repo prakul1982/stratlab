@@ -97,7 +97,7 @@ export function AccountPage() {
 
       <Card id="profile" label="Profile">
         <CardHead title="Profile" />
-        <dl className="k-dl">
+        <dl className="k-dl spread">
           {name && <div><dt>Name</dt><dd>{name}</dd></div>}
           <div><dt>Email</dt><dd>{me.email ?? session?.user.email ?? "–"}</dd></div>
           {method && <div><dt>Signed in with</dt><dd>{method}</dd></div>}

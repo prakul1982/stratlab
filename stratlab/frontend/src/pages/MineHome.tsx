@@ -272,7 +272,6 @@ function MarketsCard({ later }: { later: boolean }) {
                 : (
                   <>
                     <span className="mine-mkt-v">{t.fmt(s.last)}</span>
-                    {t.id === "gold" && (() => { const line = goldLine(gold, series.usdinr ? goldInr10g(s.last, series.usdinr.last) : null, inr); return line && <span className="k-note" data-testid="mine-gold-inr">{line}</span>; })()}
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct} tone={t.neutral ? "neutral" : "auto"}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
                       {/* a move that isn't today's says its day (R7T-003) */}
                       {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t)), !tileMarket(t)); return w && <span className={w.includes("settling") ? "k-note" : "k-note nowrap"} data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008); the long settling words wrap inside the tile (R89-003) */; })()}</span>
@@ -283,6 +282,9 @@ function MarketsCard({ later }: { later: boolean }) {
           );
         })}
       </div>
+      {/* gold's rupee price and the duty between it and the world price, as one line under the tiles: inside its tile it ran to ten lines and
+          made every tile as tall, with a hole between each tile's figures and its line (UI-FIX-1) */}
+      {(() => { const g = series.gold; const line = g ? goldLine(gold, series.usdinr ? goldInr10g(g.last, series.usdinr.last) : null, inr) : null; return line && <p className="k-note k-muted" data-testid="mine-gold-inr">Gold: {line}</p>; })()}
     </Card>
   );
 }
@@ -301,7 +303,7 @@ function ComingCard({ rows, more = 0 }: { rows: Up[] | null; more?: number }) {
               return (
                 <li key={u.key} className="mine-tl-i">
                   <span className="dt"><b>{d.d}</b>{d.m}</span>
-                  <span className="body">{u.to ? <Link to={u.to}><b>{u.title}</b></Link> : <b>{u.title}</b>}{u.detail && <span className="k-stat-d">{u.detail}</span>}</span>
+                  <span className="body">{u.to ? <Link to={u.to}><b>{u.title}</b></Link> : <b>{u.title}</b>}{u.detail && <span className="k-stat-d" title={u.detail}>{u.detail}</span>}</span>
                   {/* every row gives its weekday; a tax date keeps its colour (and says so to a screen reader) (R48-011) */}
                   <Badge tone={u.tone === "warn" ? "warn" : "plain"} dot={false}>{d.w}{u.tone === "warn" && <span className="sr-only"> · {u.tag} date</span>}</Badge>
                 </li>

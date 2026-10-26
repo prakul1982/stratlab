@@ -84,6 +84,8 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
       {data.dividends_12m && (
         <span className="k-small">Dividends with an ex-date in the last 12 months: <b>{price(data.dividends_12m.amount, ccy)}</b> a share{data.dividends_12m.adjusted ? " in today's shares" : ""} ({data.dividends_12m.count} payment{data.dividends_12m.count === 1 ? "" : "s"})</span>
       )}
+      {/* what is ahead and what has been, side by side where there is room: one under the other left a wide card half empty (UI-FIX-1, R2) */}
+      <div className="inv-pair">
       <div className="k-stack">
         <span className="k-eyebrow">Coming up: dividends and splits</span>
         {data.ahead.length ? <div className="inv-rows">{data.ahead.map((a) => <ActionLine key={a.id} a={a} showSymbol={false} />)}</div>
@@ -93,6 +95,7 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
         <span className="k-eyebrow">Past three years</span>
         {past.length ? <div className="inv-rows">{past.map((a) => <ActionLine key={a.id} a={a} showSymbol={false} year />)}</div> : <span className="k-small k-muted">None on record.</span>}
         {data.past.length > 5 && <button className="btn quiet sm k-btn-end" onClick={() => setAll(!all)}>{all ? "Show fewer" : `Show all ${data.past.length}`}</button>}
+      </div>
       </div>
       <Link className="link k-small" to={`/research/corporate-actions?region=${region}`}>Every company's corporate actions →</Link>
     </div>

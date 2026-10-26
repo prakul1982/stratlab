@@ -91,6 +91,9 @@
 @media (max-width: 560px) { .tbar-num { font-size: 11px; } .tbar-num:has(.tbar-short) .tbar-full { display: none; } .tbar-num:has(.tbar-short) .tbar-short { display: inline; }
   /* ten bars in 300px: the years go to two digits and the figures to the compact form, every other bar names itself (R25-001), and
      the label is never cut: it is centred on its bar and may run over the quiet neighbour; the full figure is in the bar's tooltip */
+  /* UI-FIX-1 (R10): seven bars in 300px: "Sep 2019" ran into "Sep 2020", so a year label longer than four characters is written "Sep 19" */
+  .tbar-year.long .tbar-full { display: none; }
+  .tbar-year.long .tbar-short { display: inline; }
   .tbars.dense { gap: 2px; }
   .tbars.dense .tbar-num { overflow: visible; text-overflow: clip; font-size: 10.5px; }
   .tbars.dense .tbar-year { font-size: 10.5px; overflow: visible; }
@@ -125,6 +128,9 @@ a.inv-theme:hover { border-color: var(--ink); }
 .inv-row { display: grid; gap: 4px; padding: var(--s3) 0; border-top: 1px solid var(--line); min-width: 0; overflow-wrap: anywhere; }
 .inv-rows > .inv-row:first-child { border-top: 0; padding-top: 0; }
 .inv-day { display: flex; flex-direction: column; gap: var(--s2); }
+/* the days side by side where there is room, in the order they come (across, then down): one column of them left a wide card two-thirds empty (UI-FIX-1, R2) */
+.inv-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s4) var(--s6, 32px); align-items: start; }
+.inv-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); gap: var(--s4) var(--s5); align-items: start; }
 .inv-alert { display: flex; justify-content: space-between; align-items: center; gap: var(--s3) var(--s4); flex-wrap: wrap; padding: var(--s3) 0; border-top: 1px solid var(--line); }
 .inv-alert > .k-stack { flex: 1 1 280px; gap: 4px; }
 .inv-rows > .inv-alert:first-child { border-top: 0; padding-top: 0; }

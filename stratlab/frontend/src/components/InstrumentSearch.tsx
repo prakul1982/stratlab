@@ -135,16 +135,21 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
         )}
       </div>
       {(held.length > 0 || defaults.length > 0) && (
-        <div className="k-row">
-          {held.length > 0 && <>
-            <span className="k-small k-muted">Yours:</span>
-            {held.map((s) => <button key={`h-${s}`} type="button" className="btn quiet sm" onClick={() => void pickHeld(s)}>{s}</button>)}
-          </>}
-          {defaults.length > 0 && <>
-            <span className="k-small k-muted">Popular:</span>
-            {defaults.map((d) => <button key={d.id} type="button" className="btn quiet sm" onClick={() => pick(d)}>{d.symbol}
-              {market.id === "IN" && <> <SurvBadges region="IN" symbol={d.symbol} plain /></>}</button>)}
-          </>}
+        /* Yours and Popular are two rows of their own: in one wrapping row the "Popular:" label began mid-line after the last of Yours (UI-FIX-1, R3) */
+        <div className="k-stack snug">
+          {held.length > 0 && (
+            <div className="k-row">
+              <span className="k-small k-muted">Yours:</span>
+              {held.map((s) => <button key={`h-${s}`} type="button" className="btn quiet sm" onClick={() => void pickHeld(s)}>{s}</button>)}
+            </div>
+          )}
+          {defaults.length > 0 && (
+            <div className="k-row">
+              <span className="k-small k-muted">Popular:</span>
+              {defaults.map((d) => <button key={d.id} type="button" className="btn quiet sm" onClick={() => pick(d)}>{d.symbol}
+                {market.id === "IN" && <> <SurvBadges region="IN" symbol={d.symbol} plain /></>}</button>)}
+            </div>
+          )}
         </div>
       )}
       {surv && [...(results ?? []), ...defaults].some((i) => surv.flags[i.symbol]) && <p className="k-note">Small tags such as LT-ASM 2, T2T or F&amp;O ban are the exchange's
