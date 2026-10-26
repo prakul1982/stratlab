@@ -53,8 +53,13 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 - Each backtest's trades and paper session's stops and targets on the price chart, with the indicators the rules use.
 - F&O changes (`/trade/fo-changes`): stocks entering and leaving F&O, lot-size revisions and expiry-day changes in one dated list, with badges and an alert when a change touches your watchlist or paper sessions (Basic).
 - Positioning: who holds index and stock futures and options (clients, DIIs, FIIs, proprietary traders; long and short shares), FII/DII cash flows, each index's put-call ratio, max pain, open interest by strike and ATM IV, with their history.
+- Forward test (`/trade/signals`): a secret webhook moves a paper session from your own TradingView or Chartink alerts, filled at StratLab's own price, with the signal log and the verdict's checks on the result (Pro).
+- Chart replay (`/trade/replay`): practise on past candles bar by bar; each practice trade goes to the trade journal (Basic).
+- Closing auction (`/trade/closing-auction`): the 15:15 to 15:35 auction's indicative and reference prices live, with 60 days of history on Basic.
+- Market events (`/trade/events`): RBI policy, data releases, the Fed, budget, index changes, holidays and every F&O expiry in one calendar, with reminders on Basic.
+- Stock futures and margin funding: each F&O stock's open interest, buildup, rollover, basis and MWPL use, and the market's and each stock's margin-funded positions, today for everyone, with history and alerts on Basic.
 - Trade journal: your real trades from a tradebook or tax P&L (equity and F&O), paired into round trips after charges, with your notes and the verdict's honesty checks run on them.
-- A strategy library, and share cards and public links for verdicts.
+- A strategy library of StratLab's own tested strategies (copy one and re-test it), and share cards and public links for verdicts.
 - Markets: India (stocks, indices, F&O), Indian currency futures, MCX, crypto, US, UK, Europe, Japan, forex, global commodities, and any CSV.
 
 <picture>
@@ -85,8 +90,11 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 **Invest: research**
 - Company pages for every Indian (NSE, and BSE-only) and US company, with a price chart (candles, Heikin-Ashi, bars, line; 5 minutes to daily; indicators; drawings kept on your account; compare on a % scale), plus public facts pages at `/stocks/in/SYMBOL` and `/stocks/us/SYMBOL` for search engines.
 - Deep dive: ten years of numbers, the business and its plans read from the company's own presentations, calls or 10-K, industry measures, valuation on the yardstick its industry uses, a management report card, an investor checklist, and the whole thing as PowerPoint or PDF slides.
+- IPOs (`/invest/ipos`): India's main-board and SME issues from NSE's and BSE's issue pages and SEBI's DRHP and RHP lists, and US IPOs from the IPO calendar and SEC filings, in tabs (upcoming, open, closed, listed, filed), with withdrawn issues kept apart. Each issue's page has its dates, price band, lot, size, bids by category while it is open, its documents and its trading since listing. A daily check compares the lists with the exchanges' and the regulator's own. The offer document's summary (each statement checked against a quote) and IPO alerts are on Basic.
+- Business updates and named holders: monthly sales of automakers and quarterly figures of lenders read into numbers, and every holder named above 1% in a company's shareholding, searchable across companies and followed on Basic.
 - Results calendar, corporate actions (dividends, bonuses, splits, buybacks, rights, demergers), deals and insider trades (including bulk and block deals), exchange surveillance lists (ASM, GSM, ESM, trade-to-trade, price bands, F&O ban), and filings with red flags.
 - ETF vs NAV (`/invest/etf-gaps`): each Indian ETF's price against its last published NAV, widest gap first, with 30 days of history and a gap alert (Basic).
+- Stock lending fees (`/invest/stock-lending`): what borrowing or lending shares costs in the exchange's lending market.
 - Screens on plain facts, the Stage 2 + Supertrend scan, sector rotation, market breadth (advances and declines, stocks above their 20/50/200-day averages, new highs and lows, by group and sector), a watchlist and Watchlist at a glance, themes, market pulse, compare, News, and Markets now.
 
 <picture>
@@ -113,10 +121,12 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 - My Holdings: import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (or any CSV or Excel file), add US stocks, and see value, P&L, sectors, dividends and one-click bonus and split adjustments. ETFs, REITs, InvITs and gold bonds keep their own label.
 - Tax report: capital gains on listed Indian shares and funds from tradebooks, tax P&L files or the broker's ZIP of them, matched FIFO with the July 2024 rates, the yearly exemption, 2018 grandfathering and intraday apart; the year's total tax estimate with F&O, commodity and currency results, other income, either regime, age band and residency; CSV and PDF downloads.
 - Mutual funds from the CAMS or KFintech CAS PDF: each scheme's value, XIRR, allocation by category and capital gains by year, and what each fund costs: its TER in rupees a year, its parts, the direct and regular plans side by side, and changes since you bought.
-- Net worth: holdings and funds plus PF, PPF, NPS, deposits, gold, property and cash, minus loans (EMIs and prepayment arithmetic), an insurance register and a monthly history.
+- Net worth: holdings and funds plus PF, PPF, NPS, deposits, gold, sovereign gold bonds, property, crypto and cash, minus loans (EMIs, prepayment arithmetic and a floating-rate loan check against its benchmark), an insurance register and a monthly history. A one-tap add for each kind.
 - Tax tools: dividends with TDS, advance tax due by each date (with 234B and 234C) and the long-term exemption, lot by lot.
-- US stocks in Indian tax: sales in rupees at the rate the Income-tax Rules use, the 24-month rule, US dividends and the foreign tax credit, and Schedule FA.
+- US stocks in Indian tax: sales in rupees at the rate the Income-tax Rules use, the 24-month rule, US dividends and the foreign tax credit, and Schedule FA. Takes a trade list from any broker or a realised-gains tax report such as Vested's yearly one.
 - ITR-ready export: the year laid out like the ITR-2 and ITR-3 schedules, as a spreadsheet, CSVs or one PDF for your CA. Not a filed return.
+- Test a SIP (`/money/sip-test`): an amount every day, week or month into stocks or ETFs, with a step-up or a dip rule: charges, XIRR, the deepest fall and a lump sum beside it.
+- Rates (`/money/rates`): this quarter's small savings rates, T-bill cut-offs, bond yields and the repo rate, each with its yield after tax at your rate.
 - Money calendar: tax due dates, results and dividends for your stocks, maturities, premiums, EMIs and your own dates, with a private calendar feed and reminders.
 - Every estimate states its assumptions and the date it's as of, and each page deletes its data in one step. An estimate to check with a CA, not tax advice.
 
@@ -128,6 +138,11 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 **Alerts**
 - Stock alerts (price, day move, moving average, RSI, Stage, 52-week high or low; for India, insider trades, deals and surveillance; an ETF's gap to its NAV), F&O contract changes touching your watchlist or paper sessions, results and corporate-action messages, the red-flag and Stage 2 alerts, market breadth crossing a level, every paper trade and a daily report, advance tax and money calendar reminders, the Market Brief and My Stocks newsletters, and a weekly email per saved screen.
 - By phone notification (install from the browser), Telegram or email to a confirmed address.
+
+**Everyday**
+- Connected accounts: the broker holdings file and tradebooks, the funds statement, a private statements inbox (forward the email), and connections that update by themselves (Zerodha, IBKR, EPF, NPS and the tax statement).
+- Briefs after each market close for India, the US and the companies you follow; Ask (Ctrl+K) to find a page or do something in words.
+- Connect an AI assistant (Pro): keys that let Claude or ChatGPT read your StratLab and place paper orders in your own paper sessions, each key revocable.
 
 **Getting started:** a first-steps checklist on each space's home (a backtest, a watchlist, a deep dive, paper trading, alerts), a short tour, share cards for a company's facts, and invite rewards (a free month of Basic for both once a friend is active).
 
@@ -158,9 +173,13 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | Trade journal in full (honesty checks, breakdowns, paper vs real); positioning and market breadth history | – | ✓ | ✓ |
 | Mutual fund capital gains, fund costs in rupees (parts, both plans, changes), Net worth history, dividends by company with TDS, money calendar reminders | – | ✓ | ✓ |
 | F&O change alerts, ETF gap alerts | – | ✓ | ✓ |
-| Indian F&O, options on your own signals, options what-if sliders and roll preview, faster group entries, export | – | – | ✓ |
+| IPO offer-document summaries and IPO alerts; business updates in numbers and named holders search; chart replay; market event reminders | – | ✓ | ✓ |
+| Stock futures and margin-funding history with their alerts; closing auction history; the India VIX filter on options sessions | – | ✓ | ✓ |
+| Fund behaviour, the SIP test's dip rules, rates after tax at your own rate, the floating-rate loan check | – | ✓ | ✓ |
+| Indian F&O, options on your own signals, options what-if sliders and roll preview, strikes picked by delta or premium, faster group entries, export | – | – | ✓ |
+| Forward test from TradingView or Chartink alerts; StratLab in your AI assistant | – | – | ✓ |
 | Advance tax amounts and the long-term exemption lot by lot, US stocks in Indian tax, the ITR-ready export | – | – | ✓ |
-| Every market, company pages and price charts, the options builder with Greeks, the payoff today and breakevens after charges, F&O changes, ETF vs NAV, each fund's TER in rupees, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, today's positioning and breadth, My Holdings, the tax report and total tax estimate, the money calendar and its feed, share cards, invites | ✓ | ✓ | ✓ |
+| Every market, company pages and price charts, the options builder with Greeks, the payoff today and breakevens after charges, F&O changes, ETF vs NAV, IPO lists, pages and bids, the events calendar, today's closing auction, stock futures and margin funding, each fund's TER in rupees, a plain SIP test, rates, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, today's positioning and breadth, My Holdings, the tax report and total tax estimate, the money calendar and its feed, share cards, invites | ✓ | ✓ | ✓ |
 
 Paid features switch on once Razorpay's keys and monthly plan IDs are set; until then every feature is open to
 everyone and only the monthly counts apply. The admin can also run a **launch offer** (Pro for everyone for N days), and
@@ -194,6 +213,10 @@ flowchart LR
 - **Backend** (`stratlab/backend`): **FastAPI** on **Railway**, run as one process, because live paper sessions, the
   tick feed and the scheduled jobs (newsletters, alerts, audits, the daily checks) live in memory. Backtests run in
   worker processes. The backend owns every secret; the browser only talks to it and to Supabase sign-in.
+- **Memory** is the hosting cost, so the process keeps it low (`backend/app/memguard.py`): the heavy background jobs
+  take turns on one lock and hand their memory back after each run, the caches share one budget (`CACHE_BUDGET_MB`,
+  256 by default), and malloc returns freed memory. The whole-market data audit runs monthly; new listings are checked
+  daily for their first 10 days. `/admin/memory` shows the process's memory and, with `?detail=true`, what the heap holds.
 - **Database and sign-in**: **Supabase** for Google sign-in. Users' data starts in Supabase's Postgres
   (`stratlab/supabase/schema.sql`) and moves with one Admin button to a Postgres on **Railway** next to the server
   (`backend/app/pgdb.py`, `backend/app/maindb.py`), which also holds the bulky market-wide data
@@ -282,6 +305,14 @@ Set on the backend (Railway, or `stratlab/backend/.env`). Names and purposes onl
 | `POSTHOG_KEY`, `POSTHOG_HOST` | Optional server-side usage events (a completed payment) |
 | `BACKTEST_PROCESSES` | Backtest worker processes (default 2; 0 runs them in the server process) |
 | `HEAVY_SLOTS` | Heavy requests (backtests, scans, document reads) run at once (default 2) |
+| `CACHE_BUDGET_MB`, `HEAVY_JOB_WAIT`, `MALLOC_TUNE` | Memory: all caches together (default 256 MB), how long a heavy background job waits for its turn before running anyway (default 45 minutes), and `0` to leave malloc's settings alone |
+| `CONNECT_SECRET_KEY` | Encrypts users' stored broker tokens and passwords for Connected accounts (Fernet; see [docs/ADMIN.md](docs/ADMIN.md)) |
+| `INBOUND_DOMAIN`, `INBOUND_PROVIDER`, `INBOUND_WEBHOOK_SECRET` | The statements inbox: mail to a user's private address at this domain, parsed by Brevo (default) or sent as signed JSON |
+| `KITE_MULTIUSER_APPROVED`, `KITE_CONNECT_API_KEY`, `KITE_CONNECT_API_SECRET` | Zerodha connections for every user, once Zerodha approves the multi-user app (until then only admins can connect) |
+| `REPLY_TO_EMAIL` | The reply-to address on emails (default support@stratlab.studio) |
+| `RAILWAY_VOLUME_MB` | The Railway Postgres volume's size, for the storage figure in Admin (Railway sets `RAILWAY_PROJECT_ID` itself) |
+| `MAIN_DATABASE`, `LEADER_LEASE` | `supabase` keeps users' data on Supabase; `off` turns off the lease that lets only one server run the scheduled jobs |
+| `TRUSTED_PROXY_HOPS`, `TRUST_X_REAL_IP` | How the caller's address is read behind proxies (default: one hop of X-Forwarded-For; X-Real-IP only when set to `1`) |
 
 The frontend's `public/config.js` sets `API_BASE`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` (public), and optionally
 `SENTRY_DSN`, `POSTHOG_KEY`, `POSTHOG_HOST`, `BUSINESS_NAME`, `CONTACT_EMAIL`, `BILLING_EMAIL`, `PRIVACY_EMAIL`, `BUSINESS_ADDRESS` and `BUSINESS_GSTIN` (the last two are listed on the Contact page when set). The file is served to every visitor as it is, so keep comments and notes out of it (`unit/seo.test.mjs` checks).
@@ -289,7 +320,7 @@ The frontend's `public/config.js` sets `API_BASE`, `SUPABASE_URL`, `SUPABASE_ANO
 ## Tests
 
 ```bash
-# backend: the whole suite (~8 minutes; add -n auto with pytest-xdist)
+# backend: the whole suite, about 5,000 tests (~8 minutes in parallel: add -n auto with pytest-xdist)
 cd stratlab/backend && python -m pytest -q
 
 # frontend: typecheck and production build
