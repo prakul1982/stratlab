@@ -9,12 +9,19 @@ The server's cost is its memory. Three habits keep the peaks down without cuttin
   peaks never stack, and each hands its memory back when it is through (`release_memory`);
 - the caches stay under one budget (`app.intel.net.shrink_caches`), with expired entries swept out, not kept until asked for.
 
+- the small Python objects live in malloc's heap, not in Python's own 1 MB arenas (PYTHONMALLOC=malloc, set in the start
+  command; MEM-3): an arena goes back to the system only when every object in it is gone, and a heap kept alive by a few
+  long-lived entries between the temporary ones is what held ~300 MB after the day's peaks (measured on the replay of the
+  day's jobs: freeing 250 MB of cache gave back 75 MB with Python's arenas, 220 MB with malloc; `python_heap` below tells which is in use).
+
 Nothing here changes a result: a job that waits too long for its turn runs anyway, and a cache entry dropped is read again."""
 import contextlib
 import ctypes
 import gc
 import os
+import re
 import sys
+import tempfile
 import threading
 import time
 from collections import deque
@@ -64,6 +71,72 @@ def malloc_trim() -> bool:
         return True
     except Exception:
         return False
+
+
+def python_heap() -> dict | None:
+    """What Python's own small-object allocator holds (MEM-3): `arenas_mb` taken from the system, `used_mb` of it in live
+    objects, `wasted_mb` the rest (free, but kept: an arena goes back only when every block in it is free). None when it is
+    not in use (PYTHONMALLOC=malloc: those objects are malloc's, and what malloc keeps shows in `rss_split`). The numbers
+    are CPython's own report, written to stderr; it is caught for the moment through a temporary file."""
+    if os.environ.get("PYTHONMALLOC", "").lower() in ("malloc", "malloc_debug") or not hasattr(sys, "_debugmallocstats"):
+        return None
+    try:
+        fd = os.dup(2)
+    except OSError:
+        return None
+    try:
+        with tempfile.TemporaryFile() as t:
+            sys.stderr.flush()
+            os.dup2(t.fileno(), 2)
+            try:
+                sys._debugmallocstats()
+            finally:
+                os.dup2(fd, 2)
+            t.seek(0)
+            text = t.read().decode("ascii", "replace")
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    try:
+        def n(pattern: str) -> int:
+            return int(re.search(pattern + r"\s*=\s*([\d,]+)", text).group(1).replace(",", ""))
+        arenas, used = n(r"\d+ arenas \* \d+ bytes/arena"), n("# bytes in allocated blocks")
+    except (AttributeError, ValueError):
+        return None
+    return {"arenas_mb": round(arenas / 1048576, 1), "used_mb": round(used / 1048576, 1), "wasted_mb": round((arenas - used) / 1048576, 1)}
+
+
+def rss_split() -> dict:
+    """The resident memory as the kernel counts it: anonymous (the heap, Python's arenas, mappings made by malloc) and
+    file-backed (the program, libraries, mapped files), in MB (Linux; {} elsewhere)."""
+    out = {}
+    try:
+        with open("/proc/self/smaps_rollup") as f:
+            for line in f:
+                key, _, rest = line.partition(":")
+                if key in ("Rss", "Anonymous"):
+                    out["rss_mb" if key == "Rss" else "anon_mb"] = round(int(rest.split()[0]) / 1024, 1)
+    except (OSError, ValueError, IndexError):
+        return {}
+    if len(out) == 2:
+        out["file_mb"] = round(out["rss_mb"] - out["anon_mb"], 1)
+    return out
+
+
+def allocators() -> dict:
+    """Which allocators this process runs on, to be read from Admin (MEM-3): the C library's malloc (glibc, or jemalloc when
+    preloaded) and whether Python's own small-object allocator is in use (`pymalloc`), with the settings that apply."""
+    malloc = "glibc"
+    try:
+        with open("/proc/self/maps") as f:
+            if "jemalloc" in f.read():
+                malloc = "jemalloc"
+    except OSError:
+        malloc = "unknown"
+    return {"malloc": malloc, "pymalloc": os.environ.get("PYTHONMALLOC", "").lower() not in ("malloc", "malloc_debug"),
+            "arena_max": os.environ.get("MALLOC_ARENA_MAX") or ("2 (mallopt)" if os.environ.get("MALLOC_TUNE") != "0" else "default"),
+            "malloc_conf": os.environ.get("MALLOC_CONF") or None}
 
 
 def rss_mb() -> float | None:
@@ -198,7 +271,44 @@ def status() -> dict:
     """Which heavy job has the turn, how many wait, the process's memory and the caches' size (Admin)."""
     from .intel import net
     return {"running": TURNS.name, "since": TURNS.since, "waiting": TURNS.waiting(), "rss_mb": rss_mb(),
-            "cache_mb": round(net.cache_bytes() / 1048576, 1), "cache_budget_mb": round(CACHE_BUDGET / 1048576)}
+            "cache_mb": round(net.cache_bytes() / 1048576, 1), "cache_budget_mb": round(CACHE_BUDGET / 1048576),
+            "allocators": allocators()}
+
+
+def named_caches(top: int = 15) -> list[dict]:
+    """The caches by name, largest first: where each is held (a module's variable, or a field of an object it holds, such
+    as a data source's), its items and its bytes as the budget counts them (MEM-3: the cache total is most of what grows
+    through a day, and a total with no names says nothing about which cache it is). Walks the app's modules once."""
+    from .intel import net
+    kinds = (net.TTLCache, net.SizedDict)
+    found: dict[int, tuple] = {}
+    seen: set[int] = set()
+
+    def look(path: str, obj, depth: int):
+        if id(obj) in seen or depth > 5:
+            return
+        seen.add(id(obj))
+        if isinstance(obj, kinds):
+            found.setdefault(id(obj), (path, obj))
+        elif depth < 5 and isinstance(obj, dict) and len(obj) <= 200:       # a registry of sources, by market or name
+            for k, v in list(obj.items()):
+                if isinstance(v, kinds) or hasattr(v, "__dict__"):
+                    look(f"{path}[{str(k)[:20]}]", v, depth + 1)
+        elif depth < 5 and not isinstance(obj, (type, str, bytes, int, float, list, tuple, set)) and hasattr(obj, "__dict__"):
+            for k, v in list(vars(obj).items()):
+                if isinstance(v, kinds) or (not k.startswith("__") and (hasattr(v, "__dict__") or isinstance(v, dict))):
+                    look(f"{path}.{k}", v, depth + 1)
+    for name, mod in list(sys.modules.items()):
+        if name.startswith("app") and mod is not None:
+            for attr, v in list(vars(mod).items()):
+                if isinstance(v, kinds) or (not attr.startswith("__") and hasattr(v, "__dict__") and not isinstance(v, type)
+                                            and type(v).__name__ != "module"):
+                    look(f"{name}.{attr}", v, 1)
+    for c in net.caches():       # any not reached above (held in a list or a dict), listed by type
+        found.setdefault(id(c), (f"({type(c).__name__})", c))
+    rows = [{"name": path, "items": len(c._d), "mb": round(c.bytes / 1048576, 1)} for path, c in found.values() if c._d or c.bytes]
+    rows.sort(key=lambda r: -r["mb"])
+    return rows[:top]
 
 
 def census(top: int = 25) -> dict:
@@ -225,8 +335,14 @@ def census(top: int = 25) -> dict:
             if isinstance(v, (dict, list, set, deque)) and len(v) >= 100:
                 held.append((f"{name}.{attr}", type(v).__name__, len(v)))
     held.sort(key=lambda x: -x[2])
+    tracked = sum(b for _, b in counts.values())
+    # `types` and `held` see only what the garbage collector tracks: containers, with their own slots. The strings, numbers
+    # and bytes inside them are not counted (a page's JSON, parsed, measured 10 MB here for 66 MB held: MEM-3), so the true
+    # size of the Python heap is `python_heap` (or, with PYTHONMALLOC=malloc, `rss_split` less the libraries) and the
+    # caches' own size is `caches`.
     return {"objects": sum(n for n, _ in counts.values()), "types": [{"type": t, "count": n, "mb": round(b / 1048576, 1)} for t, n, b in types],
-            "held": [{"name": n, "kind": k, "len": ln} for n, k, ln in held[:top]], "rss_mb": rss_mb()}
+            "held": [{"name": n, "kind": k, "len": ln} for n, k, ln in held[:top]], "rss_mb": rss_mb(),
+            "tracked_mb": round(tracked / 1048576, 1), "python_heap": python_heap(), "rss_split": rss_split(), "caches": named_caches(top)}
 
 
 def janitor(every: float = 300.0, sleep=time.sleep):
