@@ -61,7 +61,7 @@ test("VR1-010, VR1-011, VR1-012, VR1-013, VR1-014: Invest home's panels, tiles, 
 });
 
 test("VR1-021, VR1-022, VR1-031: the 'more you can do' tiles keep a card's width, one name, whole lines on a phone", () => {
-  assert.match(css, /\.k-explore \.explore-grid \{ grid-template-columns: repeat\(auto-fill, minmax\(230px, 1fr\)\);/);
+  assert.match(css, /\.k-explore \.explore-grid \{ grid-template-columns: repeat\(auto-fit, minmax\(230px, 1fr\)\);/);
   assert.match(css, /\.k-explore \.explore-card \.small \{ display: block; -webkit-line-clamp: unset;/);
   assert.match(read("src/components/Explore.tsx"), /title = "More you can do"/);
 });
@@ -144,7 +144,7 @@ test("VR1-080, VR1-081, VR1-082: the F&O desk", () => {
   const page = read("src/pages/trade/FoChangesPage.tsx");
   assert.match(page, /const circulars = \(e\.sources \?\? \[\]\)\.filter\(\(s\) => s\.no \|\| s\.url\);/);
   assert.match(page, /const sources = circulars\.length \? circulars : e\.sources \?\? \[\];/);
-  assert.match(read("src/pages/trade/events.css"), /\.k-two\.ev-pair \{ align-items: start; \}/);
+  assert.match(read("src/pages/trade/events.css"), /\.ev-weekgrid \{ display: grid;/);
 });
 
 test("VR1-090, VR1-091, VR1-092, VR1-093, VR1-094, VR1-095: Paper, Options, Journal, Signals", () => {

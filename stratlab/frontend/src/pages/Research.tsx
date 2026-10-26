@@ -453,8 +453,9 @@ function CompanyView() {
 
       <AIRead region={region} symbol={c.symbol} onTest={(i) => test(c, i)} />
 
-      <div className="k-cols">
-        {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><QuoteGrid region={region} symbols={c.peers} /></Card>}
+      {/* CK-2 (R1): one card under the other: the news list is shorter than the peers' tiles, so side by side it left 120px of blank beside it */}
+      <div className="k-stack">
+        {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><div className={`co-peers co-peers-${c.peers.length === 4 ? 2 : Math.min(3, c.peers.length)}`}><QuoteGrid region={region} symbols={c.peers} /></div></Card>}
         <Card id="co-news"><CardHead title="Latest news" />{c.lazy?.length ? <Skeleton label="Loading the latest news" lines={2} />
           : c.news_failed && !c.news.length ? <p className="k-small k-muted" data-testid="news-failed">The news couldn't be loaded just now. It is read again when you open the page.</p>
           : <NewsList items={c.news} />}</Card>

@@ -3,6 +3,11 @@
 .ev-row p { margin: 0; }
 .ev-figure { font-variant-numeric: tabular-nums; }
 .ev-week li { display: flex; flex-direction: column; gap: 0; }
-/* the week and the reminders side by side each keep their own height: stretched to the reminders (RC2A-040) the week card ended 130px of nothing short of its
-   content (VR1-082); the shorter card is a tight box, not a padded one */
-.k-two.ev-pair { align-items: start; }
+/* CK-2 (R1, R13): the week card is the page's width: its events side by side, the three count lines in a column beside them; the reminders card under
+   it keeps its controls in two columns. Nothing is stretched beside a card of another height, so neither has a blank band. */
+.ev-weekgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); gap: var(--s5); align-items: start; }
+.ev-weekgrid > .ev-week { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--s3) var(--s5); }
+.ev-weekgrid > p { margin: 0; }
+.ev-week-more { display: flex; flex-direction: column; gap: var(--s2); }
+.ev-remind { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--s4) var(--s5); align-items: start; }
+@media (max-width: 900px) { .ev-weekgrid, .ev-remind { grid-template-columns: minmax(0, 1fr); } }

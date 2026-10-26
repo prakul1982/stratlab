@@ -416,8 +416,9 @@ export function MoneyHome() {
       </Head>
       {/* DG-051: the first-steps list is about trading (a backtest, paper trading, a deep dive), so Money home leaves it to Home */}
       <PromoCountdown />
-      {/* RC2B-040: at one height, as on Invest home (DF-023): with no tax data the tax card was 140px shorter, a hole under it */}
-      <div className="grid2 space-panels even money-panels">
+      {/* CK-2: each card its own height, notes directly under its figures: the tax card's explanation is behind its (i), so the two end near each other
+          without one being stretched into a blank band (RC2B-040 had stretched them) */}
+      <div className="grid2 space-panels money-panels">
         <HoldingsSummary />
         <TaxSummary />
       </div>
@@ -492,8 +493,10 @@ function TaxSummary() {
   const ok = t && t !== "error" ? t : null;
   const open = ok ? openFy(ok.years.map((x) => x.fy), ok.current_fy, (fy) => ok.years.some((x) => x.fy === fy && yearHasTrades(x))) : null;
   const year = ok && open ? ok.years.find((y) => y.fy === open.fy) ?? null : null;
+  // CK-2 (R1/R13): what the estimate assumes is behind the card's (i), not a three-line paragraph that made this card taller than My Holdings beside it
+  const how = year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge.";
   return (
-    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} right={<Link to={year ? fyLink("/tax-report", year.fy) : "/tax-report"} className="link" data-money="/tax-report">Open Tax report →</Link>}>
+    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} info={how} right={<Link to={year ? fyLink("/tax-report", year.fy) : "/tax-report"} className="link" data-money="/tax-report">Open Tax report →</Link>}>
       {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !taxHasData(t) ? (
@@ -506,7 +509,7 @@ function TaxSummary() {
             <div className="k-stats">
               {/* the tax report's own total (capital gains, F&O and intraday business income, slab, surcharge and cess), so the
                   two pages agree; the capital gains part alone said ₹0 beside a report of ₹77,61,298 */}
-              <Fig label={`Total tax estimate, ${year?.label ?? "this year"}`} value={money(year?.total?.available ? year.total.total ?? 0 : year?.tax_with_cess ?? 0, "INR")} />
+              <Fig label="Total tax estimate" value={money(year?.total?.available ? year.total.total ?? 0 : year?.tax_with_cess ?? 0, "INR")} />
               {/* where the tax comes from: the F&O and intraday income beside the gains (R6O-014: ₹77,61,298 beside −₹59 and ₹0) */}
               {!!year?.total?.income?.business && <Fig label="F&O and other business income" tone={signCls(year.total.income.business)} value={money(year.total.income.business, "INR")} />}
               {!!year?.total?.income?.intraday && <Fig label="Intraday income" tone={signCls(year.total.income.intraday)} value={money(year.total.income.intraday, "INR")} />}
@@ -514,7 +517,7 @@ function TaxSummary() {
               <Fig label="Long-term gains" tone={signCls(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>
             {year?.audit && <p className="small">{year.audit}</p>}
-            <p className="tiny muted">{year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge."} {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
+            <p className="tiny muted">{year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
             {(t.updated_at || t.last_trade) && <p className="tiny muted" data-testid="tax-uploaded">{uploadedLine(t.updated_at, t.last_trade, (iso) => fmtDate(iso, { tz: "Asia/Kolkata" }))}</p>}
             {/* no "Prices as of": nothing on this card is at today's price, only sales already made (R66-008) */}
           </div>

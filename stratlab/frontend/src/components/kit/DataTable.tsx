@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Info } from "../ui";
+import { textOf } from "./Card";
 import { minusNode } from "../../lib/format";
 import { scrollToEnd } from "../../lib/phoneFit";
 
@@ -40,13 +41,17 @@ export function usePhone(): boolean {
   return on;
 }
 
-export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack, pinHead, sort, phonePage, scrollEnd }: {
+export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, scrollEnd }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** No longer used: a long table scrolls with the page, never in a box of its own. Kept so callers need not change. */
   sticky?: boolean;
   /** On a phone, each row becomes a card (the first column as its title, every other cell under its own column name),
    * so nothing is cut off at the edge and the figures that matter are all in view. Desktop is unchanged. */
   stack?: boolean;
+  /** CK-2 (R18): a table of 5+ columns is a list of cards on a phone unless it says otherwise, so no figure sits off the edge behind a
+   * sideways swipe (a person who does not swipe never saw the gain, VR1-147). A `grid` is read across its row on purpose (an option chain by
+   * its strike, a table of periods) and scrolls with its first column in place. */
+  grid?: boolean;
   /** A table that fits its card (a few narrow columns) keeps its header row in view while the page scrolls past it. */
   pinHead?: boolean;
   /** A wide table of periods opens scrolled to its right end, where the latest column is (R25-003). The order stays. */
@@ -60,16 +65,25 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   phonePage?: number;
 }) {
   const phone = usePhone();
+  // a table that does not fit the phone is read as cards, however few its columns (a watchlist's Actions column sat off the edge); `spill` is set after
+  // a first look at the drawn table
+  const [spill, setSpill] = useState(false);
+  const stack = stackProp ?? (!grid && !scrollEnd && (columns.length >= 5 || spill));
   const [pages, setPages] = useState(1);
   useEffect(() => { setPages(1); }, [allRows.length]);
   const box = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!phone) { setSpill(false); return; }
+    const b = box.current;
+    if (stackProp === undefined && !grid && !scrollEnd && !pinHead && !spill && b && b.scrollWidth > b.clientWidth + 2) setSpill(true);
+  }, [phone, spill, stackProp, grid, scrollEnd, pinHead, allRows.length, columns.length]);
   useLayoutEffect(() => { if (scrollEnd) scrollToEnd(box.current); }, [scrollEnd, columns.length, allRows.length]);
   const cap = stack && phonePage && phone ? phonePage * pages : Infinity;
   const rows = allRows.length > cap ? allRows.slice(0, cap) : allRows;
   const left = allRows.length - rows.length;
   return (
     <>
-    <div ref={box} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
+    <div ref={box} data-grid={grid || scrollEnd ? "" : undefined} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
           <tr role={stack ? "row" : undefined}>{columns.map((c) => {
@@ -94,7 +108,7 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
               <tr key={rowKey(r, ri)} role={stack ? "row" : undefined} {...rowAttrs?.(r)}>
                 {columns.map((c, i) => {
                   if (note !== undefined && i > 0) return i === 1 ? <td key={c.key} colSpan={columns.length - 1} className="k-row-note">{note}</td> : null;
-                  const label = c.cardLabel ?? (typeof c.header === "string" ? c.header : undefined);
+                  const label = c.cardLabel ?? (typeof c.header === "string" ? c.header : textOf(c.header).trim() || undefined);
                   return c.rowHeader ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined} className={cls(c)}>{minusNode(c.cell(r))}</th>
                     : <td key={c.key} role={stack ? "cell" : undefined} data-label={label} className={cls(c)}>{minusNode(c.cell(r))}</td>;
                 })}
@@ -105,7 +119,7 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
         {foot && rows.length > 0 && (
           <tfoot>
             <tr role={stack ? "row" : undefined}>{columns.map((c, i) => (i === 0 ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined}>{foot[c.key]}</th>
-              : <td key={c.key} role={stack ? "cell" : undefined} data-label={typeof c.header === "string" ? c.header : undefined} className={c.numeric ? "k-num" : undefined}>{foot[c.key]}</td>))}</tr>
+              : <td key={c.key} role={stack ? "cell" : undefined} data-label={typeof c.header === "string" ? c.header : textOf(c.header).trim() || undefined} className={c.numeric ? "k-num" : undefined}>{foot[c.key]}</td>))}</tr>
           </tfoot>
         )}
       </table>

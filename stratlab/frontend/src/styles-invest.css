@@ -32,12 +32,15 @@
 .inv-rail52 .k-spread { gap: var(--s3); }
 @media (max-width: 640px) { .inv-head-price { width: 100%; } }
 /* the AI read when there is none: one calm line and one button */
-.ai-read-off { justify-content: space-between; }
+.ai-read-off { justify-content: flex-start; }   /* CK-2 (R20): "Ask again" follows the line it answers */
 
 /* the day's market: a few index levels */
 
 /* company tiles */
 .inv-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s2); }
+/* CK-2 (R9): the peers fill the card in equal rows (6 = 3 + 3, 4 = 2 + 2), never five across and one left over */
+.co-peers-1 .inv-tiles { grid-template-columns: minmax(0, 1fr); } .co-peers-2 .inv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .co-peers-3 .inv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 640px) { .co-peers .inv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .inv-tile { display: flex; flex-direction: column; gap: 4px; padding: var(--s3); min-width: 0; border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--card); color: var(--ink); text-decoration: none; }
 .inv-tile:hover { border-color: var(--ink); color: var(--ink); }
 .inv-tile-top { display: flex; justify-content: space-between; gap: var(--s2); align-items: baseline; min-width: 0; }

@@ -127,7 +127,7 @@ test("RC2A-029 (UI-FIX-1): a phone's segmented control shares its row, no label 
 
 test("RC2A-040, 041, 038, 039: events, the account chip, Trade home and the watchlist", () => {
   assert.match(read("src/pages/trade/EventsPage.tsx"), /kinds\.filter\(\(k\) => !none\(k\)\)\.map\(\(k\) => \(\{ value: k, label: v\.kinds\[k\] \}\)\)/);
-  assert.match(read("src/pages/trade/EventsPage.tsx"), /className="k-two ev-pair"/);
+  assert.match(read("src/pages/trade/EventsPage.tsx"), /className="ev-weekgrid"/);
   assert.match(read("src/components/SideMenus.tsx"), /<span className="acct-name">Account<\/span>/);
   const home = read("src/pages/SpaceHomes.tsx");
   assert.ok(home.indexOf("<MarketStrip />") < home.indexOf("<Top onSteps"), "today's market comes before the first-steps card");

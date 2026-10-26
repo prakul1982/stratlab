@@ -2,11 +2,13 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { lintPage, type LintResult, type Violation } from "./ui-lint-rules";
+import { frameOutliers, lintPage, type FrameRow, type LintResult, type PageFrame, type Violation } from "./ui-lint-rules";
 import { seedWorld, session, WEB, type Route } from "./ui-lint-world";
 
 // UI-LINT: finds the owner's kind of layout problems (dead space beside a short card, a floating "+ Custom", a squeezed hint, two
-// highlighted menu items, a figure said three times on a card, uneven rows...) on every page, automatically.
+// highlighted menu items, a figure said three times on a card, uneven rows, and (CK-2) what a visual review found by eye: a hole inside any
+// box, a fixed pill over content, an (i) glued to its label, a stat row mixing words and numbers, a page whose frame differs, a clipped
+// sideways row on a phone, a wrapped badge, a far-away end control...) on every page, automatically.
 //
 // It fills the pages with a Pro user's data (ui-lint-world.ts), visits every route at 1440x900, 1280x800 and 390x844 in the dark
 // theme, measures the drawn page against the rules in ui-lint-rules.ts, and writes report.md, report.json and a screenshot per
@@ -31,8 +33,8 @@ const PASSES: { size: (typeof SIZES)[number]; theme: "dark" | "light" }[] = [
 ];
 
 export const RULES: Record<string, string> = {
-  R1: "Dead space beside a short card: cards/columns in one row, one with > 120px and > 30% of the row height empty under its content",
-  R2: "Sparse wide card: a card wider than 900px (and 140px+ tall) whose content covers < 55% of its inner width",
+  R1: "Dead space beside a short card: cards/columns in one row, one with > 60px and > 25% of the row height empty under its content",
+  R2: "Sparse wide card: a card wider than 900px (and 140px+ tall) whose content covers < 55% of its inner width; a row of 2+ tiles that fills < 60% of the row",
   R3: "Floating control: a button/chip not level with the first row of a chip group wrapped over 2+ rows beside it, or an end control > 48px from its row",
   R4: "Text wrapping inside a button, chip, segmented option or tab (2+ lines)",
   R5: "Uneven row: a control > 25% (and 16px) off the row's median height; fields/stats whose control/value sits > 3px off its neighbours'; a stretched segmented option",
@@ -43,6 +45,19 @@ export const RULES: Record<string, string> = {
   R10: "Overflow and clipping: the page scrolls sideways, text cut off by a clipping box, two text lines overlapping",
   R11: "Tiny tap target on a phone (< 32px tall)",
   R12: "Caption clutter: a small 'Dots: ...' / 'Colours: ...' caption under a list or menu",
+  R13: "Empty inside a box: any bordered/filled box 140px+ tall (a card inside a card too) with an empty band > 70px and > 25% of its height, at the bottom or between two blocks of content",
+  R14: "Overlay on content: a fixed/sticky box (not the menu, a dialog or a toast) covering text or a control in the page, scrolled to the top, middle or bottom",
+  R15: "Icon glued to its label: an (i) or icon button < 3px from the text beside it, or overlapping it",
+  R16: "Uneven stat row: a word among numbers, a value wrapped over 2+ lines, or labels of different heights, in one row of figures",
+  R17: "Page frame: a page whose title top/left or rightmost card edge differs (> 2px) from the one most pages share at that width",
+  R18: "Clipped scroller on a phone: a sideways row with an item cut by the edge, or a table showing fewer than all its columns",
+  R19: "Wrapped badge: a pill/badge/tag/chip whose text runs on 2+ lines",
+  R20: "Orphan end control: a lone control at the end of a row of text, > 250px from where the text ends",
+  R21: "Gap under the page header: > 56px of nothing between the page header and the first card",
+  R22: "Row tags out of column: rows of [tag][name] whose name starts at x's that differ by > 4px",
+  R23: "Header wrap parity: cards side by side whose headers differ by > 12px because one header's controls wrapped",
+  R24: "Faint checkbox: an unchecked checkbox/radio whose border and fill are both < 3:1 against what is behind it",
+  R25: "Same sentence twice: one sentence (30+ characters) said twice in one card (table rows left out)",
 };
 
 interface Row extends Violation { page: string; label: string; width: number; theme: string; shot?: string; allowed?: string }
@@ -77,7 +92,7 @@ async function newContext(browser: Browser, size: (typeof SIZES)[number], theme:
 }
 
 /** Opens a route, waits for it to be drawn, measures it, and (when it has violations) saves a shot with the offenders outlined. */
-async function measure(page: Page, r: Route, size: (typeof SIZES)[number], theme: string, shots: string): Promise<{ rows: Row[]; note?: string }> {
+async function measure(page: Page, r: Route, size: (typeof SIZES)[number], theme: string, shots: string): Promise<{ rows: Row[]; note?: string; frame?: PageFrame | null }> {
   await page.goto(WEB + r.path);
   await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
   let note: string | undefined;
@@ -101,7 +116,7 @@ async function measure(page: Page, r: Route, size: (typeof SIZES)[number], theme
     await page.screenshot({ path: resolve(shots, file), type: "jpeg", quality: 60, fullPage: true, clip: { x: 0, y: 0, width: size.width, height: Math.min(h, 6000) } }).catch(() => undefined);
     for (const x of rows) x.shot = `shots/${file}`;
   }
-  return { rows, note };
+  return { rows, note, frame: res.frame };
 }
 
 function report(rows: Row[], routes: Route[], notes: string[], seconds: number, allow: Allow[], total: number): string {
@@ -151,8 +166,11 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
     .k-chip{height:32px;padding:0 12px;border:1px solid #888;border-radius:99px;background:#fff}.chips{display:flex;flex-wrap:wrap;gap:8px;width:300px}
     .k-field{display:flex;flex-direction:column;gap:6px}.k-form{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
     .k-field-msg{font-size:12px;line-height:16px}.k-stat-v{font-size:24px}.k-seg{display:inline-flex}.k-seg button{height:32px;padding:0 14px}
-    nav a{display:block;padding:6px 10px}nav a.active{background:#ccd}.tall{height:300px}</style>`;
-  const fire = async (html: string) => { await page.setContent(css + html); return (await page.evaluate(lintPage, { phone: false, mark: false })).violations.map((v) => v.rule); };
+    nav a{display:block;padding:6px 10px}nav a.active{background:#ccd}.tall{height:300px}
+    .info-btn{display:inline-grid;place-items:center;width:18px;height:18px;border:1px solid #888;border-radius:50%;padding:0;font-size:11px;background:#fff}
+    .k-stats{display:flex;gap:16px}.k-stat{display:flex;flex-direction:column;gap:2px;width:150px}.k-stat-k{font-size:12px;line-height:16px}.k-stat-v{font-size:24px;line-height:28px}
+    .badge{display:inline-block;border-radius:99px;background:#dde;padding:3px 10px;font-size:12px;line-height:16px}</style>`;
+  const fire = async (html: string, phone = false) => { await page.setContent(css + html); return (await page.evaluate(lintPage, { phone, mark: false })).violations.map((v) => v.rule); };
   const chips = (n: number) => Array.from({ length: n }, (_, i) => `<button class="k-chip">Chip number ${i}</button>`).join("");
   // R1 dead space: two cards of very different heights side by side (the Positioning FII/DII gap)
   expect(await fire(`<div class="row"><div class="k-card tall">Long card<p>x</p></div><div class="k-card">Short</div></div>`), "R1 short card beside a tall one").toContain("R1");
@@ -193,6 +211,74 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
   expect(await fire(`<div class="grid">${cells(8)}</div>`), "R9 4+4").not.toContain("R9");
   // R10 clipped text
   expect(await fire(`<div style="width:100px;overflow:hidden;white-space:nowrap">A sentence much longer than its box allows</div>`), "R10 clipped text").toContain("R10");
+  // R1 lowered (CK-2): the Invest home's "Results today" held one line in a card stretched to 207px by "Coming up" beside it: 86px (41%) empty
+  const lines = (n: number) => Array.from({ length: n }, (_, i) => `<p style="margin:0">Line ${i + 1} of the card</p>`).join("");
+  expect(await fire(`<div class="row" style="align-items:stretch"><div class="k-card" style="min-height:207px"><h3 style="margin:0">Coming up</h3>${lines(7)}</div><div class="k-card"><h3 style="margin:0">Results today</h3>${lines(2)}</div></div>`), "R1 86px / 41% hole").toContain("R1");
+  expect(await fire(`<div class="row" style="align-items:stretch"><div class="k-card" style="min-height:207px"><h3 style="margin:0">Coming up</h3>${lines(7)}</div><div class="k-card"><h3 style="margin:0">Results today</h3>${lines(6)}</div></div>`), "R1 nearly full").not.toContain("R1");
+  // R13 empty inside a box: the home page's "Paper sessions", a short card stretched by its row inside a wrapper (R1 sees the wrapper's card as content)
+  expect(await fire(`<div class="row" style="align-items:stretch"><div><div class="k-card" style="height:287px"><h3 style="margin:0">Paper sessions</h3><b class="k-stat-v">1 running</b><p style="margin:0">One line</p></div></div><div class="k-card" style="height:287px">${lines(12)}</div></div>`), "R13 hole inside a nested card").toContain("R13");
+  expect(await fire(`<div class="k-card" style="height:287px"><h3 style="margin:0">Equity</h3><svg width="400" height="210"><rect width="400" height="210" fill="#ccc"/></svg></div>`), "R13 card filled by a chart").not.toContain("R13");
+  expect(await fire(`<div class="k-card" style="height:287px;justify-content:center;align-items:center"><span>Nothing here yet</span></div>`), "R13 a message centred in its box").not.toContain("R13");
+  // R13 a short card stretched beside a taller one with its notes pinned to the bottom edge: the hole is in the middle (Money's My Holdings, the events week card)
+  expect(await fire(`<div class="k-card" style="height:300px"><h3 style="margin:0">The next seven days</h3><p style="margin:0">Tue 27 Oct · Monthly F&amp;O expiry</p><p style="margin:0;margin-top:auto">Results this week: 1</p></div>`), "R13 notes pinned to the bottom edge").toContain("R13");
+  expect(await fire(`<div class="k-card" style="height:150px"><h3 style="margin:0">The next seven days</h3><p style="margin:0">Tue 27 Oct · Monthly F&amp;O expiry</p><p style="margin:0">Results this week: 1</p></div>`), "R13 notes directly under the list").not.toContain("R13");
+  // R2 (CK-2) two tiles in the left half of a four-column grid leave the right half of the row empty (Invest's "More you can do"); sharing the row they do not
+  const tile = (n: string) => `<div class="k-card" style="height:100px">${n}</div>`;
+  expect(await fire(`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;width:1000px">${tile("Compare two companies")}${tile("Company deep dive")}</div>`), "R2 two tiles in half the row").toContain("R2");
+  expect(await fire(`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;width:1000px">${tile("Compare two companies")}${tile("Company deep dive")}</div>`), "R2 two tiles sharing the row").not.toContain("R2");
+  // R14 a fixed pill over a control (the notebook's "Lab notes" over a rule's delete button), checked at the scroll's top, middle and bottom
+  const pill = `<div style="position:fixed;right:10px;bottom:10px;width:120px;height:40px;border:1px solid #888;border-radius:20px;background:#fff">Lab notes</div>`;
+  expect(await fire(`<main style="position:relative;height:1600px;width:1240px"><button style="position:absolute;left:1330px;top:860px;width:40px;height:30px">x</button>${pill}</main>`), "R14 pill over a button").toContain("R14");
+  expect(await fire(`<main style="position:relative;height:1600px;width:1240px"><button style="position:absolute;left:100px;top:860px;width:40px;height:30px">x</button><p style="margin:0;width:600px">Some text in the column</p>${pill}</main>`), "R14 pill in the margin").not.toContain("R14");
+  // R15 an (i) glued to the header text beside it ("ⓘOf shares issued" in a right-aligned column head)
+  expect(await fire(`<table><tr><th style="text-align:right"><button class="info-btn">i</button>Of shares issued</th></tr></table>`), "R15 (i) touching its text").toContain("R15");
+  expect(await fire(`<table><tr><th style="text-align:right"><button class="info-btn" style="margin-right:6px">i</button>Of shares issued</th></tr></table>`), "R15 (i) with a gap").not.toContain("R15");
+  // R16 a stat row: a word among numbers ("None yet"), a value wrapped over two lines, a three-line label beside a one-line one
+  const stat = (k: string, v: string) => `<div class="k-stat"><span class="k-stat-k">${k}</span><b class="k-stat-v">${v}</b></div>`;
+  expect(await fire(`<div class="k-stats">${stat("Open value", "$10,120")}${stat("Today", "$120")}${stat("Since the start", "$320")}${stat("Worst day", "None yet")}</div>`), "R16 word among numbers").toContain("R16");
+  expect(await fire(`<div class="k-stats">${stat("Open value", "$10,120")}${stat("Today", "$120")}${stat("Since the start", "$320")}${stat("Period", "49 months, 1,499 candles")}</div>`), "R16 wrapped value").toContain("R16");
+  expect(await fire(`<div class="k-stats">${stat("Ratio", "0.94")}${stat("Stocks up 4% or more, down 4% or more on the day, and the rest", "12")}${stat("Up", "196")}</div>`), "R16 three-line label").toContain("R16");
+  expect(await fire(`<div class="k-stats">${stat("Open value", "$10,120")}${stat("Today", "$120")}${stat("Since the start", "$320")}${stat("Period", "49 months")}${stat("Worst day", "−$40")}</div>`), "R16 a row of figures").not.toContain("R16");
+  // R17 page frame: every page but one shows its title at y 112 and its cards to x 1384; the odd one (the notebook's /new, 1224) is reported
+  const frameOf = async (h1Top: number, right: number) => { await page.setContent(css + `<main style="padding:0;margin:0"><div style="height:${h1Top - 6}px"></div><h1 style="margin:0;line-height:20px">T</h1><div class="k-card" style="margin:20px 0 0 300px;width:${right - 300}px;height:100px">c</div></main>`); return (await page.evaluate(lintPage, { phone: false, mark: false })).frame!; };
+  const frames = [await frameOf(112, 1384), await frameOf(112, 1384), await frameOf(112, 1384), await frameOf(112, 1224), await frameOf(86, 1384)];
+  const odd = frameOutliers(frames.map((frame) => ({ group: "app", frame })), 3).map((o) => o.index);
+  expect(odd, "R17 the narrow page and the high title are the odd ones").toEqual([3, 4]);
+  expect(frameOutliers(frames.slice(0, 3).map((frame) => ({ group: "app", frame })), 3), "R17 pages that agree").toEqual([]);
+  // R18 on a phone: a row of chips cut at the edge; a table showing 2 of 4 columns (and a grid that scrolls on purpose)
+  const bar = (wrapIt: boolean) => `<div class="k-chipbar" style="display:flex;gap:6px;width:300px;${wrapIt ? "flex-wrap:wrap" : "overflow-x:auto"}">${["3M", "6M", "1Y", "2Y", "All"].map((c) => `<button class="k-chip" style="flex:none;width:80px">${c}</button>`).join("")}</div>`;
+  expect(await fire(bar(false), true), "R18 chips cut by the edge").toContain("R18");
+  expect(await fire(bar(true), true), "R18 chips wrapped").not.toContain("R18");
+  const tbl = (attr: string) => `<div ${attr} style="overflow-x:auto;width:300px"><table style="width:700px"><thead><tr><th>Stock</th><th>Price</th><th>Shares</th><th>Gain</th></tr></thead><tbody><tr><td>TCS</td><td>3,000</td><td>10</td><td>+400</td></tr></tbody></table></div>`;
+  expect(await fire(tbl(""), true), "R18 table shows fewer columns").toContain("R18");
+  expect(await fire(tbl("data-grid"), true), "R18 a grid read across").not.toContain("R18");
+  // R19 a status badge that wraps to three lines (the IPO list's "Social Stock Exchange raise, not an IPO")
+  expect(await fire(`<span class="badge" style="width:110px">Social Stock Exchange raise, not an IPO</span>`), "R19 wrapped badge").toContain("R19");
+  expect(await fire(`<span class="badge">Fund raise</span>`), "R19 one-line badge").not.toContain("R19");
+  // R20 a delete "×" far from the end of its rule's text
+  const rule = (far: boolean) => `<div style="display:flex;align-items:center;width:1000px"><span>Buys when EMA 10 crosses above EMA 30</span><button class="k-chip" style="width:32px;padding:0;${far ? "margin-left:auto" : "margin-left:8px"}">×</button></div>`;
+  expect(await fire(rule(true)), "R20 far × ").toContain("R20");
+  expect(await fire(rule(false)), "R20 × beside the text").not.toContain("R20");
+  expect(await fire(`<div style="display:flex;align-items:center;width:1000px"><h3 style="margin:0">Coming up</h3><button class="k-chip" style="margin-left:auto">Market events</button></div>`), "R20 a card head's action").not.toContain("R20");
+  // R21 a blank band between the page title and the first card (the notebook page's 65px)
+  const head = (gap: number) => `<main><h1 style="margin:0;font-size:28px;line-height:34px">Notebook</h1><p style="margin:0">What it tests</p><div class="k-card" style="margin-top:${gap}px;height:100px">About</div></main>`;
+  expect(await fire(head(80)), "R21 blank band").toContain("R21");
+  expect(await fire(head(24)), "R21 normal gap").not.toContain("R21");
+  // R22 change rows whose tags differ in width push the name to a different x ("Leaving F&O", "Lot size", "Expiry or session")
+  const tagRow = (tag: string, fixed: boolean) => `<div style="display:flex;gap:8px;align-items:center"><span class="badge" style="${fixed ? "width:140px" : ""}">${tag}</span><a href="#">RELIANCE</a></div>`;
+  expect(await fire(`<div>${["Leaving F&O", "Lot size", "Expiry or session"].map((t) => tagRow(t, false)).join("")}</div>`), "R22 names out of column").toContain("R22");
+  expect(await fire(`<div>${["Leaving F&O", "Lot size", "Expiry or session"].map((t) => tagRow(t, true)).join("")}</div>`), "R22 names in a column").not.toContain("R22");
+  // R23 two cards side by side, the header of one wraps its button under the title (the breadth page's two chart cards)
+  const cardHead = (title: string) => `<div class="k-card" style="width:300px"><div class="k-card-head" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between"><h3 style="margin:0">${title}</h3><button class="k-chip">Table</button></div><p>Chart</p></div>`;
+  expect(await fire(`<div style="display:flex;gap:16px;align-items:flex-start">${cardHead("Share above the 50- and 200-day averages")}${cardHead("Advance/decline line")}</div>`), "R23 one header wraps").toContain("R23");
+  expect(await fire(`<div style="display:flex;gap:16px;align-items:flex-start">${cardHead("Advances")}${cardHead("Advance/decline line")}</div>`), "R23 both headers one line").not.toContain("R23");
+  // R24 an unchecked box that is a dark grey square on a dark card (about 1.6:1)
+  const box = (border: string, fill: string) => `<div style="background:#2a2a28;padding:20px"><input type="checkbox" style="appearance:none;-webkit-appearance:none;width:18px;height:18px;margin:0;border:1.5px solid ${border};background:${fill};border-radius:4px"></div>`;
+  expect(await fire(box("#3c3c39", "#3c3c39")), "R24 faint box").toContain("R24");
+  expect(await fire(box("#a8a8a2", "transparent")), "R24 visible box").not.toContain("R24");
+  // R25 one sentence twice in one entry (a filing's title printed again as its body)
+  expect(await fire(`<div class="k-card"><div><b>Disclosure of creation of pledge by promoter</b><p style="margin:0">Disclosure of creation of pledge by promoter.</p></div></div>`), "R25 title said again").toContain("R25");
+  expect(await fire(`<div class="k-card"><div style="display:flex;gap:20px"><small class="k-stat-d">last 12 months vs the 12 before</small><small class="k-stat-d">last 12 months vs the 12 before</small></div></div>`), "R25 same caption on two stats").not.toContain("R25");
   // R12 caption under a list
   expect(await fire(`<ul><li>One</li><li>Two</li></ul><p style="font-size:12px">Dots: each notebook's last verdict.</p>`), "R12 caption").toContain("R12");
 });
@@ -213,6 +299,7 @@ test("every route, three widths: UI layout problems, reported (UI_LINT_STRICT=1 
   const tasks = routes.flatMap((r) => PASSES.map((p) => ({ r, ...p })));
   let next = 0;
   const rows: Row[] = [];
+  const frames: (FrameRow & { r: Route; width: number; theme: string })[] = [];
   const notes = [...world.notes];
   await Promise.all(Array.from({ length: LANES }, async () => {
     const pages = new Map<string, Page>();
@@ -226,12 +313,15 @@ test("every route, three widths: UI layout problems, reported (UI_LINT_STRICT=1 
       try {
         const m = await measure(page, t.r, t.size, t.theme, shots);
         rows.push(...m.rows);
+        if (m.frame) frames.push({ group: `${t.size.width}|${t.theme}|${t.r.signedIn}|${t.r.path.startsWith("/admin") ? "admin" : "app"}`, frame: m.frame, r: t.r, width: t.size.width, theme: t.theme });
         if (m.note) notes.push(`${t.r.label} @ ${t.size.width}: ${m.note}`);
       } catch (e) { notes.push(`${t.r.label} @ ${t.size.width}: ${String(e).slice(0, 160)}`); }
     }
     for (const c of ctxs) await c.close();
   }));
 
+  // R17 compares pages with each other, so it is decided once every page has been measured
+  for (const o of frameOutliers(frames)) { const f = frames[o.index]; rows.push({ rule: "R17", element: "page frame", key: "page-frame", detail: o.detail, page: f.r.path, label: f.r.label, width: f.width, theme: f.theme }); }
   const allow = allowlist();
   for (const r of rows) r.allowed = allowedBy(allow, r);
   rows.sort((a, b) => routes.findIndex((x) => x.label === a.label) - routes.findIndex((x) => x.label === b.label) || a.rule.localeCompare(b.rule, "en", { numeric: true }) || b.width - a.width);
