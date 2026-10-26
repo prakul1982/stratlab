@@ -363,12 +363,16 @@ export function SignalsPage() {
           )}
           {sid ? <SessionView key={sid} sid={sid} onGone={onGone} /> : (
             <>
+              {/* the short webhook card and the how-to share the left column beside the tall new-session form, so neither
+                  column leaves a gap under it (MO-4b) */}
               <div className="k-two">
-                <UrlCard ov={ov} reload={load} />
+                <div className="k-page">
+                  <UrlCard ov={ov} reload={load} />
+                  <HowTo />
+                </div>
                 <NewSession onStarted={(id) => { refreshMe(); load(); nav(`/trade/signals/${id}`); }} />
               </div>
               {!ov.sessions.length && <EmptyState title="No signal sessions yet">Start one above, then put its session id and your URL into an alert.</EmptyState>}
-              <HowTo />
               <Format format={ov.format} ov={ov} />
               <Earlier label="Signals that reached no session" count={ov.misses.length}>
                 <ul className="k-list">

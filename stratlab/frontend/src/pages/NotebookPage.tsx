@@ -22,13 +22,14 @@ import { HELP } from "../lib/help";
 import { sipTestLink } from "../lib/sip";
 import { isLegacyEmptied, legacyNote } from "../lib/legacyRun";
 import { IdeaComposer } from "../components/IdeaComposer";
+import { LabNotes, type LabNotesHandle } from "../components/LabNotes";
 import "./trade/trade.css";
 import { usePlansAction, usePlansToast } from "../components/PlanInterest";
 import { badgeLabel } from "../lib/tradeUi";
 import { LIMITS } from "../lib/plans";
 
 /* /n/:id: one notebook: its question, what it tests on, the rules, and every experiment run on them. Built from the kit
- * (components/kit); the two-column layout with the lab notes beside it stays. */
+ * (components/kit); the lab notes float at the bottom-right (components/LabNotes). */
 
 const DEFAULT_DAILY_DAYS = 1825;
 const PERIODS: Record<Tf, number[]> = {
@@ -178,7 +179,7 @@ function NotebookView() {
   }, [nb?.id, nb?.name]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [removing, setRemoving] = useState(false);
   const [fast, setFast] = useState({ ticks: false, maxSpreadPct: 0, minPrice: 0 });
-  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const notesRef = useRef<LabNotesHandle>(null);
 
   // the questions about the idea are kept with the notebook: the ones a new notebook arrives with are saved, and a
   // notebook opened again shows the ones still open (R5O-010)
@@ -400,135 +401,127 @@ function NotebookView() {
   ];
 
   return (
-    <div className="nb-grid">
-      <div className="k-page">
-        <PageHeader eyebrow="Trade · Build and test" title={nb.name}
-          lede={nb.question ? <span title={s.text && s.text.trim() !== nb.question ? s.text.trim() : undefined} data-testid="nb-question">{nb.question}</span> : "Write the question this notebook should answer."}
-          actions={<span className="k-note" aria-live="polite">{saving === "failed"
-            ? <button type="button" className="link k-down" data-testid="save-retry" onClick={() => void flush()}>Not saved · Retry</button>
-            : saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>} />
+    <div className="k-page">
+      <PageHeader eyebrow="Trade · Build and test" title={nb.name}
+        lede={nb.question ? <span title={s.text && s.text.trim() !== nb.question ? s.text.trim() : undefined} data-testid="nb-question">{nb.question}</span> : "Write the question this notebook should answer."}
+        actions={<span className="k-note" aria-live="polite">{saving === "failed"
+          ? <button type="button" className="link k-down" data-testid="save-retry" onClick={() => void flush()}>Not saved · Retry</button>
+          : saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>} />
 
-        <Card label="About this notebook">
-          <CardHead title="About this notebook" info={HELP.notebook} infoLabel="About notebooks" actions={<>
-            <button type="button" className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
-            {live ? <Link className="btn quiet sm" to={`/paper/${live.id}`} title={`Running since ${dateOnly(live.started_at)}`}><Pulse size={17} />Paper trading · open</Link>
-              : <button type="button" className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}
-                title={liveFull ?? (groupDaily ? "Paper trading a group needs 5-minute, 15-minute or 1-hour candles." : undefined)}>
-                <Pulse size={17} />Paper trade{group && !groupOk ? " (Basic)" : groupDaily ? " (needs intraday candles)" : liveFull ? " (limit reached)" : ""}</button>}
-            <button type="button" className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
-            <MoreMenu align="right" items={[
-              { label: "Make a copy", icon: <Copy size={16} />, run: duplicate },
-              // says what it gives: the rules as a file to import again; a run's trades download from its verdict page (DA-041)
-              { label: `Export the rules${canExport ? "" : " (Pro)"}`, icon: <Download size={16} />, run: exportStrategy },
-              { label: "Delete notebook", icon: <Trash size={16} />, run: () => setRemoving(true), danger: true },
-            ]} />
-          </>} />
-          <FormGrid label="Notebook name and question">
-            <Field label="Notebook name" wide maxLength={80} value={nb.name} onChange={(e) => patch({ name: e.target.value })}
-              onBlur={(e) => { if (!e.target.value.trim()) patch({ name: "Untitled notebook" }, true); }} />
-            <Field label="The question this notebook tests" wide>{(fid) => (
-              <AutoGrow id={fid} className="k-textarea" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
-                placeholder="The question you want answered, e.g. Does buying NIFTY on RSI dips beat just holding it?" onChange={(e) => patch({ question: e.target.value })} />
-            )}</Field>
-          </FormGrid>
-          <div className="k-row">
-            <Link to={`/n/${nb.id}/market`} className={`market-btn${inst || group ? "" : " empty"}`}>
-              <span className="k-eyebrow">{inst || group ? "Testing on" : "Not chosen yet"}</span>
-              <span className="market-btn-main">
-                {group ? <>{group.name}<span className="muted"> · {group.members.length} {group.market === "CRYPTO" ? "coins" : "stocks"}, up to {group.maxOpen} at once · {market?.name ?? group.market} · {TF_NAME[s.tf]} candles</span>{group.maxOpen < group.members.length && <span className="muted k-small"> · when more signal at once than there are free slots, the members listed first take them</span>}
-                  {/* the plan's cap on a group, said before a run is refused for it (R44-003) */}
-                  {me?.plan_info.group_size != null && group.members.length > me.plan_info.group_size && <span className="k-small" data-testid="group-over-cap"> · Your {me.plan_info.name} plan tests up to {me.plan_info.group_size} instruments in a group: pick fewer, or {group.members.length <= LIMITS.basic.group_size ? `Basic tests up to ${LIMITS.basic.group_size}` : `Pro tests up to ${LIMITS.pro.group_size}`}</span>}</>
-                  : inst ? <>{inst.symbol}<span className="muted">{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}{currency ? ` · ${currency}` : ""} · {TF_NAME[s.tf]} candles</span></>
-                  : "Pick a market and instrument"}
-              </span>
-              <span className="market-btn-cta">{inst || group ? "Change" : "Choose"}<span aria-hidden="true"> →</span></span>
-            </Link>
-            {sipTestLink(inst, group) && <Link className="btn quiet sm" to={sipTestLink(inst, group)!}>Test as a SIP</Link>}
+      <Card label="About this notebook">
+        <CardHead title="About this notebook" info={HELP.notebook} infoLabel="About notebooks" actions={<>
+          <button type="button" className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
+          {live ? <Link className="btn quiet sm" to={`/paper/${live.id}`} title={`Running since ${dateOnly(live.started_at)}`}><Pulse size={17} />Paper trading · open</Link>
+            : <button type="button" className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}
+              title={liveFull ?? (groupDaily ? "Paper trading a group needs 5-minute, 15-minute or 1-hour candles." : undefined)}>
+              <Pulse size={17} />Paper trade{group && !groupOk ? " (Basic)" : groupDaily ? " (needs intraday candles)" : liveFull ? " (limit reached)" : ""}</button>}
+          <button type="button" className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
+          <MoreMenu align="right" items={[
+            { label: "Make a copy", icon: <Copy size={16} />, run: duplicate },
+            // says what it gives: the rules as a file to import again; a run's trades download from its verdict page (DA-041)
+            { label: `Export the rules${canExport ? "" : " (Pro)"}`, icon: <Download size={16} />, run: exportStrategy },
+            { label: "Delete notebook", icon: <Trash size={16} />, run: () => setRemoving(true), danger: true },
+          ]} />
+        </>} />
+        <FormGrid label="Notebook name and question">
+          <Field label="Notebook name" wide maxLength={80} value={nb.name} onChange={(e) => patch({ name: e.target.value })}
+            onBlur={(e) => { if (!e.target.value.trim()) patch({ name: "Untitled notebook" }, true); }} />
+          <Field label="The question this notebook tests" wide>{(fid) => (
+            <AutoGrow id={fid} className="k-textarea" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
+              placeholder="The question you want answered, e.g. Does buying NIFTY on RSI dips beat just holding it?" onChange={(e) => patch({ question: e.target.value })} />
+          )}</Field>
+        </FormGrid>
+        <div className="k-row">
+          <Link to={`/n/${nb.id}/market`} className={`market-btn${inst || group ? "" : " empty"}`}>
+            <span className="k-eyebrow">{inst || group ? "Testing on" : "Not chosen yet"}</span>
+            <span className="market-btn-main">
+              {group ? <>{group.name}<span className="muted"> · {group.members.length} {group.market === "CRYPTO" ? "coins" : "stocks"}, up to {group.maxOpen} at once · {market?.name ?? group.market} · {TF_NAME[s.tf]} candles</span>{group.maxOpen < group.members.length && <span className="muted k-small"> · when more signal at once than there are free slots, the members listed first take them</span>}
+                {/* the plan's cap on a group, said before a run is refused for it (R44-003) */}
+                {me?.plan_info.group_size != null && group.members.length > me.plan_info.group_size && <span className="k-small" data-testid="group-over-cap"> · Your {me.plan_info.name} plan tests up to {me.plan_info.group_size} instruments in a group: pick fewer, or {group.members.length <= LIMITS.basic.group_size ? `Basic tests up to ${LIMITS.basic.group_size}` : `Pro tests up to ${LIMITS.pro.group_size}`}</span>}</>
+                : inst ? <>{inst.symbol}<span className="muted">{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}{currency ? ` · ${currency}` : ""} · {TF_NAME[s.tf]} candles</span></>
+                : "Pick a market and instrument"}
+            </span>
+            <span className="market-btn-cta">{inst || group ? "Change" : "Choose"}<span aria-hidden="true"> →</span></span>
+          </Link>
+          {sipTestLink(inst, group) && <Link className="btn quiet sm" to={sipTestLink(inst, group)!}>Test as a SIP</Link>}
+        </div>
+      </Card>
+
+      {nextStep !== -1 && (
+        <ol className="steps" aria-label="Getting started">
+          {steps.map((st, i) => (
+            <li key={st.text} className={st.done ? "done" : i === nextStep ? "next" : ""}>
+              <button type="button" onClick={st.act}>
+                <span className="num" aria-hidden="true">{st.done ? "✓" : i + 1}</span>
+                <span>{st.text}{i === nextStep && <span className="sr-only"> (next step)</span>}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {/* the questions are for before the first run: once the idea has been tested they are answered or no longer matter, and
+          "Question 1 of 3" beside a finished experiment reads as unfinished (DA-011) */}
+      {gaps && experiments.length === 0 && (
+        <GapsCard s={s} gaps={gaps} hasInstrument={!!inst || !!group} currency={currency}
+          onStrategy={setStrategy}
+          onInstrument={(i) => patch({ instrument: i, instrumentId: i.id, strategy: { ...s, risk: riskForCurrency(s.risk, i.currency) } }, true)}
+          onPickMarket={() => nav(`/n/${nb.id}/market`)} onDone={() => { setGaps(null); patch({ gaps: null }, true); }}
+          onAnswered={(answered) => saveGaps({ ...gaps, answered })} />
+      )}
+      {(!gaps || experiments.length > 0) && s.entry.length > 0 && !s.exit.length && !(s.shortExit ?? []).length && (
+        <Notice tone="warn" role="status">No sell rule is set: {(() => {
+          // what closes a trade without a sell rule: the stop, the target, the trailing stop, a time limit, the day's square-off
+          const ways = [s.risk.sl > 0 && "stop loss", s.risk.tgt > 0 && "target", (s.risk.trail ?? 0) > 0 && "trailing stop", (s.risk.maxBars ?? 0) > 0 && "time limit",
+            s.tf !== "1d" && s.session?.squareoff && `${s.session.squareoff} square-off`].filter(Boolean);
+          return ways.length ? `a trade closes only at the ${ways.join(" or the ")}, or at the end of the test.` : "a trade stays open until the end of the test.";
+        })()} Add one under The rules.</Notice>
+      )}
+
+      <RulesCard s={s} currency={currency} onChange={setStrategy} defaultStop={!!gaps && experiments.length === 0 && !gaps.mentioned.includes("sl") && !gaps.answered?.sl && !statedIn(s.text).includes("sl")}
+        onRebuilt={(g) => { if (gaps) saveGaps({ ...gaps, mentioned: [...new Set([...gaps.mentioned, ...g.mentioned])], notes: g.notes, warnings: g.warnings }); }} />
+
+      <Card id="exp-h" label="Experiments">
+        <CardHead title="Experiments" info={HELP.experiments} infoLabel="About experiments"
+          actions={nb.experiments.length >= 2 ? <Link className="link" to={`/n/${nb.id}/compare`}>Compare experiments →</Link> : undefined} />
+        {!isUpload && (
+          <div className="k-field">
+            <div className="k-label-row"><span className="k-lbl">Test period</span><Info label="About the test period">{HELP.period} Add your own with + Custom: any whole number of days, weeks, months or years up to the {maxDays.toLocaleString("en-IN")} days stored for {TF_NAME[s.tf].toLowerCase()} candles here.</Info></div>
+            <ChipBar label="Test period" value={periodValue} onChange={setDays}
+              options={periods.map((d) => ({ value: String(d), label: periodName(d) }))}
+              custom={{ storageKey: `stratlab.chips.period.${me?.id ?? "anon"}`, units: SPAN_UNITS, defaultUnit: "months", validate: spanCheck(maxDays, 5) }} />
           </div>
-        </Card>
-
-        {nextStep !== -1 && (
-          <ol className="steps" aria-label="Getting started">
-            {steps.map((st, i) => (
-              <li key={st.text} className={st.done ? "done" : i === nextStep ? "next" : ""}>
-                <button type="button" onClick={st.act}>
-                  <span className="num" aria-hidden="true">{st.done ? "✓" : i + 1}</span>
-                  <span>{st.text}{i === nextStep && <span className="sr-only"> (next step)</span>}</span>
-                </button>
-              </li>
-            ))}
-          </ol>
         )}
-
-        {/* the questions are for before the first run: once the idea has been tested they are answered or no longer matter, and
-            "Question 1 of 3" beside a finished experiment reads as unfinished (DA-011) */}
-        {gaps && experiments.length === 0 && (
-          <GapsCard s={s} gaps={gaps} hasInstrument={!!inst || !!group} currency={currency}
-            onStrategy={setStrategy}
-            onInstrument={(i) => patch({ instrument: i, instrumentId: i.id, strategy: { ...s, risk: riskForCurrency(s.risk, i.currency) } }, true)}
-            onPickMarket={() => nav(`/n/${nb.id}/market`)} onDone={() => { setGaps(null); patch({ gaps: null }, true); }}
-            onAnswered={(answered) => saveGaps({ ...gaps, answered })} />
+        <FormGrid label="Run an experiment" onSubmit={(e) => { e.preventDefault(); void run(); }}>
+          <Field label="What's different this time?" optional wide maxLength={120} value={label} placeholder={nextV === 1 ? "e.g. First try" : "e.g. Tighter stop loss"} onChange={(e) => setLabel(e.target.value)} />
+          <FormActions>
+            {/* nothing chosen to test on: the button waits for a choice, as the note under it says (DP1-012) */}
+            <button type="submit" className="btn" disabled={running || outOfRuns || (!inst && !group)} title={outOfRuns ? "This month's experiments are used up on your plan" : !inst && !group ? "Choose what to test it on first" : undefined}>{running ? `Running 4 honesty checks…${elapsed >= 3 ? ` ${runTime(elapsed)}` : ""}` : `Run experiment v${nextV}`}</button>
+            {/* the shortcut is offered only while it can run something (DP1-009) */}
+            {!outOfRuns && (inst || group) && <span className="k-small k-muted kbd-hint">or press <kbd>{navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd></span>}
+            <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
+          </FormActions>
+        </FormGrid>
+        {!inst && !group && (
+          <div data-testid="run-needs-market">
+            <Notice tone="warn" role="status" action={{ label: "Choose market", to: `/n/${nb.id}/market` }}>Choose what to test it on before you run it: the rules need a market and an instrument, or a group.</Notice>
+          </div>
         )}
-        {(!gaps || experiments.length > 0) && s.entry.length > 0 && !s.exit.length && !(s.shortExit ?? []).length && (
-          <Notice tone="warn" role="status">No sell rule is set: {(() => {
-            // what closes a trade without a sell rule: the stop, the target, the trailing stop, a time limit, the day's square-off
-            const ways = [s.risk.sl > 0 && "stop loss", s.risk.tgt > 0 && "target", (s.risk.trail ?? 0) > 0 && "trailing stop", (s.risk.maxBars ?? 0) > 0 && "time limit",
-              s.tf !== "1d" && s.session?.squareoff && `${s.session.squareoff} square-off`].filter(Boolean);
-            return ways.length ? `a trade closes only at the ${ways.join(" or the ")}, or at the end of the test.` : "a trade stays open until the end of the test.";
-          })()} Add one under The rules.</Notice>
-        )}
+        {/* the one lock wording (DP2-022, DP1-018): the plan note, with the price and its button, not an emoji and a bare link */}
+        {planBlock && <div data-testid="run-plan-block"><PlanNote>{planBlock}</PlanNote></div>}
+        {outOfRuns && me?.usage.backtests_limit != null
+          ? <PlanNote>You've used all {me.usage.backtests_limit} backtests this month (limit reached). The count starts again on {resetDay}.{moreRuns}</PlanNote>
+          : <p className="k-note">
+            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} backtests left this month. ` : ""}
+            {runCopy(group?.members.length ?? 0, running, elapsed)}
+          </p>}
+        {experiments.length === 0
+          ? <EmptyState title="No experiments yet">Your first run shows whether the idea holds up.</EmptyState>
+          : <DataTable stack label="Experiments" columns={cols} rows={experiments} rowKey={(e) => String(e.v)} />}
+      </Card>
 
-        <RulesCard s={s} currency={currency} onChange={setStrategy} defaultStop={!!gaps && experiments.length === 0 && !gaps.mentioned.includes("sl") && !gaps.answered?.sl && !statedIn(s.text).includes("sl")}
-          onRebuilt={(g) => { if (gaps) saveGaps({ ...gaps, mentioned: [...new Set([...gaps.mentioned, ...g.mentioned])], notes: g.notes, warnings: g.warnings }); }} />
-
-        <Card id="exp-h" label="Experiments">
-          <CardHead title="Experiments" info={HELP.experiments} infoLabel="About experiments"
-            actions={nb.experiments.length >= 2 ? <Link className="link" to={`/n/${nb.id}/compare`}>Compare experiments →</Link> : undefined} />
-          {!isUpload && (
-            <div className="k-field">
-              <div className="k-label-row"><span className="k-lbl">Test period</span><Info label="About the test period">{HELP.period} Add your own with + Custom: any whole number of days, weeks, months or years up to the {maxDays.toLocaleString("en-IN")} days stored for {TF_NAME[s.tf].toLowerCase()} candles here.</Info></div>
-              <ChipBar label="Test period" value={periodValue} onChange={setDays}
-                options={periods.map((d) => ({ value: String(d), label: periodName(d) }))}
-                custom={{ storageKey: `stratlab.chips.period.${me?.id ?? "anon"}`, units: SPAN_UNITS, defaultUnit: "months", validate: spanCheck(maxDays, 5) }} />
-            </div>
-          )}
-          <FormGrid label="Run an experiment" onSubmit={(e) => { e.preventDefault(); void run(); }}>
-            <Field label="What's different this time?" optional wide maxLength={120} value={label} placeholder={nextV === 1 ? "e.g. First try" : "e.g. Tighter stop loss"} onChange={(e) => setLabel(e.target.value)} />
-            <FormActions>
-              {/* nothing chosen to test on: the button waits for a choice, as the note under it says (DP1-012) */}
-              <button type="submit" className="btn" disabled={running || outOfRuns || (!inst && !group)} title={outOfRuns ? "This month's experiments are used up on your plan" : !inst && !group ? "Choose what to test it on first" : undefined}>{running ? `Running 4 honesty checks…${elapsed >= 3 ? ` ${runTime(elapsed)}` : ""}` : `Run experiment v${nextV}`}</button>
-              {/* the shortcut is offered only while it can run something (DP1-009) */}
-              {!outOfRuns && (inst || group) && <span className="k-small k-muted kbd-hint">or press <kbd>{navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd></span>}
-              <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
-            </FormActions>
-          </FormGrid>
-          {!inst && !group && (
-            <div data-testid="run-needs-market">
-              <Notice tone="warn" role="status" action={{ label: "Choose market", to: `/n/${nb.id}/market` }}>Choose what to test it on before you run it: the rules need a market and an instrument, or a group.</Notice>
-            </div>
-          )}
-          {/* the one lock wording (DP2-022, DP1-018): the plan note, with the price and its button, not an emoji and a bare link */}
-          {planBlock && <div data-testid="run-plan-block"><PlanNote>{planBlock}</PlanNote></div>}
-          {outOfRuns && me?.usage.backtests_limit != null
-            ? <PlanNote>You've used all {me.usage.backtests_limit} backtests this month (limit reached). The count starts again on {resetDay}.{moreRuns}</PlanNote>
-            : <p className="k-note">
-              {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} backtests left this month. ` : ""}
-              {runCopy(group?.members.length ?? 0, running, elapsed)}
-            </p>}
-          {experiments.length === 0
-            ? <EmptyState title="No experiments yet">Your first run shows whether the idea holds up.</EmptyState>
-            : <DataTable stack label="Experiments" columns={cols} rows={experiments} rowKey={(e) => String(e.v)} />}
-        </Card>
-      </div>
-
-      <aside className="k-page">
-        <Card label="Lab notes">
-          <CardHead title="Lab notes" level={3} info={HELP.labNotes} infoLabel="About lab notes" />
-          <label className="sr-only" htmlFor="notes">Lab notes</label>
-          <textarea id="notes" ref={notesRef} className="lab-note" value={nb.notes ?? ""} maxLength={4000}
-            placeholder="What did you notice? What do you want to try next?" onChange={(e) => patch({ notes: e.target.value })} />
-        </Card>
-      </aside>
+      {/* the notes float at the bottom-right so the notebook keeps the one centred column of every other page (MO-4a) */}
+      <LabNotes ref={notesRef} value={nb.notes ?? ""} onChange={(v) => patch({ notes: v })} />
 
       {paperAsk && inst && (
         <ConfirmDialog title={`Paper trade on ${inst.symbol}?`} confirmLabel="Start paper trading" danger={false} onConfirm={() => void startSingle()} onClose={() => setPaperAsk(false)}>

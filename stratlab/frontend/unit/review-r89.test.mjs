@@ -194,3 +194,50 @@ test("MS1-004: a finding's age reads in whole days, and the panel shows it besid
   assert.match(panel, /i\.level !== "fact" && openDays\(i\.since \?\? r\.at\) != null/);        // a fact has no age: nothing is wrong
   assert.match(panel, /Problems standing:/);
 });
+
+test("MO-4a: the notebook is one centred column and the Lab notes float, with the notes card's behaviour kept", () => {
+  const page = read("src/pages/NotebookPage.tsx");
+  assert.doesNotMatch(page, /className="nb-grid"/);                                   // no second column beside the notebook
+  assert.doesNotMatch(page, /<aside/);
+  assert.match(page, /<LabNotes ref=\{notesRef\} value=\{nb\.notes \?\? ""\} onChange=\{\(v\) => patch\(\{ notes: v \}\)\} \/>/);   // the same autosave patch, same field
+  assert.match(page, /action === "note"\) notesRef\.current\?\.focus\(\)/);           // a suggestion to write a note opens the panel
+  const notes = read("src/components/LabNotes.tsx");
+  assert.match(notes, /placeholder="What did you notice\? What do you want to try next\?"/);
+  assert.match(notes, /maxLength=\{4000\}/);
+  assert.match(notes, /info=\{HELP\.labNotes\}/);
+  assert.match(notes, /aria-expanded=\{open\} aria-controls=\{PANEL\}/);
+  assert.match(notes, /<Card label="Lab notes">/);                                    // a labelled region
+  assert.match(notes, /e\.key === "Escape" && !e\.defaultPrevented/);
+  assert.match(notes, /button\.current\?\.focus\(\)/);                                // focus back to the button on close
+  assert.match(notes, /area\.current\?\.focus\(\)/);                                  // and into the notes on open
+  assert.match(notes, /try \{ localStorage\.setItem\(KEY/);                           // remembered per device, never throws
+  assert.match(notes, /try \{ return localStorage\.getItem\(KEY\) === "1"; \} catch/);
+  assert.match(notes, /ln-dot/);                                                      // a dot when there are notes
+});
+
+test("MO-4a: the floating notes clear the safe areas, sit under dialogs and toasts, and are a bottom sheet on a phone", () => {
+  const css = read("src/styles.css");
+  const dock = css.match(/\.ln-dock \{[^}]*\}/)[0];
+  assert.match(dock, /position: fixed/);
+  assert.match(dock, /env\(safe-area-inset-bottom\)/);
+  assert.match(dock, /env\(safe-area-inset-right\)/);
+  const z = Number(dock.match(/z-index: (\d+)/)[1]);
+  assert.ok(z < 40 && z > 30, "above the sticky top bar (30), below the menu drawer (40), dialogs (60) and toasts (70)");
+  assert.match(css, /\.ln-panel \{ width: 380px;/);
+  assert.match(css, /\.ln-panel\[hidden\] \{ display: none; \}/);
+  assert.match(css, /\.ln-panel \.lab-note \{[^}]*max-height:/);                      // its own scroll, never taller than the screen
+  const phone = css.slice(css.indexOf("@media (max-width: 640px) {\n  .ln-dock"));
+  assert.match(phone, /\.ln-dock \{ right: 0; left: 0; bottom: 0;/);
+  assert.match(phone, /border-radius: 14px 14px 0 0/);
+});
+
+test("MO-4b: Positioning's cash and put-call cards stack, and a pair of cards in .k-two ends level", () => {
+  const page = read("src/pages/PositioningPage.tsx");
+  assert.doesNotMatch(page, /<div className="k-two">\s*<Cash/);
+  assert.match(page, /<Cash s=\{s\} \/>\s*<PcrTable coverage=\{s\.coverage\} \/>/);
+  const css = read("src/styles.css");
+  assert.match(css, /\.k-two \{[^}]*align-items: stretch;/);
+  assert.match(css, /\.mc-grid \{ align-items: start; \}/);                           // the Money calendar keeps its own
+  const sig = read("src/pages/trade/SignalsPage.tsx");
+  assert.match(sig, /<div className="k-page">\s*<UrlCard ov=\{ov\} reload=\{load\} \/>\s*<HowTo \/>\s*<\/div>/);   // the short card shares its column
+});

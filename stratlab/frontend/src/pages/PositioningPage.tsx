@@ -166,9 +166,15 @@ function Cash({ s }: { s: Summary }) {
       </Source>
       <p className="k-small k-muted" data-testid="cash-status">{statusLine(c, "cash numbers")}</p>
       {c.fii && c.dii ? (
-        <StatRow label="Cash market, net">
-          <Stat label="FII/FPI net" value={crore(c.fii.net, true)} tone={signTone(c.fii.net)} note={`Bought ${crore(c.fii.buy)} · sold ${crore(c.fii.sell)}`} />
-          <Stat label="DII net" value={crore(c.dii.net, true)} tone={signTone(c.dii.net)} note={`Bought ${crore(c.dii.buy)} · sold ${crore(c.dii.sell)}`} />
+        // full width now (MO-4b), so the bought and sold figures sit in the row beside each net, not in a note under it:
+        // two figures in the left third of a wide card was the gap the owner asked to remove
+        <StatRow label="Cash market">
+          <Stat label="FII/FPI net" value={crore(c.fii.net, true)} tone={signTone(c.fii.net)} />
+          <Stat label="FII/FPI bought" value={crore(c.fii.buy)} />
+          <Stat label="FII/FPI sold" value={crore(c.fii.sell)} />
+          <Stat label="DII net" value={crore(c.dii.net, true)} tone={signTone(c.dii.net)} />
+          <Stat label="DII bought" value={crore(c.dii.buy)} />
+          <Stat label="DII sold" value={crore(c.dii.sell)} />
         </StatRow>
       ) : null}
     </Card>
@@ -493,10 +499,10 @@ export function PositioningPage() {
           <>
             <Participants s={s} />
             <VixPanel />
-            <div className="k-two">
-              <Cash s={s} />
-              <PcrTable coverage={s.coverage} />
-            </div>
+            {/* one under the other, not side by side: the cash card is short and the PCR table about twice as tall, which left
+                half the row empty (MO-4b) */}
+            <Cash s={s} />
+            <PcrTable coverage={s.coverage} />
             {s.full ? <History names={s.names} coverage={s.coverage} /> : <Locked plan={s.plan_needed} coverage={s.coverage} />}
             <Chain names={s.names} full={s.full} plan={s.plan_needed} />
             <p className="k-note">{s.note}</p>
