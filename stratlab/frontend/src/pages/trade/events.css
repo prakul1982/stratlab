@@ -3,3 +3,5 @@
 .ev-row p { margin: 0; }
 .ev-figure { font-variant-numeric: tabular-nums; }
 .ev-week li { display: flex; flex-direction: column; gap: 0; }
+/* the week and the reminders side by side are one height (RC2A-040) */
+.k-two.ev-pair { align-items: stretch; }

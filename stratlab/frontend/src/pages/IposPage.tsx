@@ -3,10 +3,10 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { eyebrowOf } from "../lib/eyebrow";
-import { fmtDate, marketTz, pct, price } from "../lib/format";
+import { asOf, fmtDate, marketTz, pct, price } from "../lib/format";
 import { useLiveRefresh } from "../lib/liveRefresh";
 import { ipoApi, type AlertPrefs, type EventKind, type IpoList, type IpoRow, type Market, type Stage } from "../lib/ipo";
-import { TAB_LINE, badgeOf, bandText, expectedText, minText, segmentWord, sharesText, sizeText, spanText, tabsFor, timesText } from "../lib/ipoText";
+import { TAB_LINE, badgeOf, bandText, clockText, expectedText, minText, segmentWord, sharesText, sizeText, spanText, tabsFor, timesText } from "../lib/ipoText";
 import { Badge, Card, CardHead, CheckField, ChipSet, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Signed, Skeleton, type Column } from "../components/kit";
 import "./ipo.css";
 
@@ -51,7 +51,9 @@ function perfCell(r: IpoRow, which: "listing" | "now") {
   const v = which === "listing" ? p?.listing_change_pct : p?.change_pct;
   const px = which === "listing" ? p?.listing_price : p?.latest;
   if (px == null || v == null) return <span className="k-muted">–</span>;
-  return <>{price(px, r.currency, 2)}<span className="k-sub-line"><Signed value={v} fmt={(x) => pct(x, 1)} /> on the issue price</span></>;
+  // the latest close is dated: it is the last session's close, not a live price (RC2A-002)
+  const day = which === "now" && p?.latest_date ? `Close ${fmtDate(p.latest_date, { year: false })} · ` : "";
+  return <>{price(px, r.currency, 2)}<span className="k-sub-line">{day}<Signed value={v} fmt={(x) => pct(x, 1)} /> on the issue price</span></>;
 }
 
 function columns(m: Market, tab: Stage): Column<IpoRow>[] {
@@ -76,7 +78,7 @@ function columns(m: Market, tab: Stage): Column<IpoRow>[] {
       { key: "l", header: "Listing", cell: (r) => expectedText(r.listing, r.listing_expected) }];
   }
   if (tab === "open") {
-    return [name, { key: "d", header: "Closes", cell: (r) => <>{fmtDate(r.close)}<span className="k-sub-line">5 PM IST</span></> }, band, lot, size, times];
+    return [name, { key: "d", header: "Closes", cell: (r) => <>{fmtDate(r.close)}{r.close_time && <span className="k-sub-line">{clockText(r.close_time)} IST</span>}</> }, band, lot, size, times];
   }
   if (tab === "closed") {
     return [name, { key: "d", header: "Closed", cell: (r) => fmtDate(r.close) }, { key: "a", header: "Allotment", cell: (r) => expectedText(r.allotment, r.allotment_expected) },
@@ -104,7 +106,7 @@ function Filed({ rows, m }: { rows: IpoRow[]; m: Market }) {
   );
 }
 
-function AlertsCard({ p, onSave }: { p: AlertPrefs; onSave: (n: Partial<AlertPrefs>) => void }) {
+function AlertsCard({ p, onSave, sme }: { p: AlertPrefs; onSave: (n: Partial<AlertPrefs>) => void; sme: number }) {
   const names = p.event_names;
   return (
     <Card label="IPO alerts" testId="ipo-alerts">
@@ -114,12 +116,13 @@ function AlertsCard({ p, onSave }: { p: AlertPrefs; onSave: (n: Partial<AlertPre
       ) : (
         <PlanNote plan="basic">IPO alerts are on the {p.plan} plan: a message when an issue opens, closes, is allotted or lists. The lists and every issue's page stay free.</PlanNote>
       )}
-      {p.allowed && p.on && !p.channels.length && <p className="k-note">Nowhere to send them yet: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>}
+      {p.allowed && p.on && !p.channels.length && <p className="k-callout k-small" role="status" data-testid="ipo-no-channel">Alerts are on, but there is nowhere to send them yet: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>}
       <ChipSet label="Which events" options={EVENT_ORDER.map((e) => ({ value: e, label: names[e] ?? e }))} on={p.events}
         onToggle={(e) => p.allowed && onSave({ events: p.events.includes(e as EventKind) ? p.events.filter((x) => x !== e) : [...p.events, e as EventKind] })} />
       <ChipSet label="Which markets" options={[{ value: "IN", label: "India" }, { value: "US", label: "US" }]} on={p.markets}
         onToggle={(m) => p.allowed && onSave({ markets: p.markets.includes(m as Market) ? p.markets.filter((x) => x !== m) : [...p.markets, m as Market] })} />
       <CheckField checked={p.sme} disabled={!p.allowed} onChange={(sme) => onSave({ sme })} label="Include SME issues (India)" />
+      {p.allowed && !p.sme && sme > 0 && <p className="k-note" data-testid="ipo-sme-note">{sme} SME issue{sme === 1 ? " is" : "s are"} open or coming up. SME issues are left out of the alerts unless you tick the box above.</p>}
       {p.markets.includes("US") && <p className="k-note">For the US, an alert comes on the day an offering is expected to price and on the day it starts trading ({US_EVENT.listing}).</p>}
     </Card>
   );
@@ -171,12 +174,13 @@ export function IposPage() {
       {error ? <ErrorState title="The IPO lists couldn't be read" action={{ label: "Try again", onClick: () => load() }}>{error}</ErrorState>
         : !d ? <Card><Skeleton label="Reading the IPO lists" lines={5} /></Card> : (
         <>
-          {d.problems.length > 0 && <p className="k-callout k-small" role="status" data-testid="ipo-problems">Some of the sources couldn't be read at the last read, so this list may be missing a few issues: {d.problems[0]}</p>}
+          {d.problems.length > 0 && <p className="k-callout k-small" role="status" data-testid="ipo-problems">At the list's read{d.problems_at ? ` of ${asOf(d.problems_at, { tz: marketTz(market), year: false })}` : ""} a source couldn't be read, so this list may be missing a few issues. It is read again within the hour. {d.problems[0]}</p>}
           <Card label="IPOs" testId="ipo-list">
             <div className="k-row">
               <Seg label="Stage" value={now} onChange={(v) => { setTab(v as Stage); const p = new URLSearchParams(params); p.set("t", v); setParams(p, { replace: true }); }}
                 options={tabs.map((t) => ({ value: t.value, label: `${t.label} ${d.counts[t.value] ?? 0}`, short: t.label === "Recently listed" ? `Listed ${d.counts[t.value] ?? 0}` : undefined }))} />
               {now === "open" && d.counts.open > 0 && <Badge tone="live">Live</Badge>}
+              {now === "open" && d.counts.open > 0 && d.bids_read && <span className="k-small k-muted" data-testid="ipo-bids-read">Bids read {asOf(d.bids_read, { tz: marketTz(market), year: false })}</span>}
             </div>
             <p className="k-small k-muted" data-testid="ipo-tab-line">{TAB_LINE[market][now]}</p>
             {rows.length === 0 ? (
@@ -189,12 +193,12 @@ export function IposPage() {
             )}
             {market === "US" && <p className="k-note" data-testid="ipo-us-note">A US offering has no public bidding window, so there is no Open tab: the price is set the evening before trading starts.</p>}
           </Card>
+          <AlertsCard p={d.prefs} onSave={save} sme={[...d.tabs.open, ...d.tabs.upcoming].filter((r) => r.segment === "sme").length} />
           {now === "upcoming" && <Filed rows={d.tabs.filed} m={market} />}
           <Aside rows={d.tabs.withdrawn ?? []} label="Withdrawn, postponed or cancelled" testId="ipo-withdrawn"
             note="The exchange names these issues withdrawn, postponed or cancelled in its list. They are not open, closed or listed, and no allotment or listing date applies." />
           <Aside rows={d.tabs.social ?? []} label="Social Stock Exchange fund raises, not IPOs" testId="ipo-social"
             note="The Social Stock Exchange lists fund raises by social enterprises beside the IPOs. They are not offers of shares to the public in the sense the stages above describe." />
-          <AlertsCard p={d.prefs} onSave={save} />
           <p className="k-note">{d.note}</p>
         </>
       )}

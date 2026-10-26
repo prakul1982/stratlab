@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { axisInrFor, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp, exchangeTime, optionsMarket } from "../lib/marketHours";
 import { HELP } from "../lib/help";
-import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoiceLabel, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
+import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoiceLabel, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -450,7 +450,7 @@ export function OptionsPage() {
     try { setPreview(await api<OptPreview>("/options/preview", { method: "POST", body: { strategy: s } })); }
     catch (e) { fail(e); } finally { setPricing(false); }
   };
-  const startWhen = s.signal ? `whenever "${s.signal.name}" signals a trade (from ${s.timing.entry})` : `at ${s.timing.entry}`;
+  const startWhen = startWhenText(s.timing, s.signal);
   const start = async () => {
     setConfirmStart(false);
     setStarting(true);
@@ -756,7 +756,7 @@ export function OptionsPage() {
 
       {confirmStart && (
         <ConfirmDialog title={`Start paper trading "${s.name}"?`} confirmLabel="Start paper trading" danger={false} onConfirm={start} onClose={() => setConfirmStart(false)}>
-          It enters {startWhen} on market days with fake money, on live {s.underlying} option prices: each leg fills at the bid when sold and the ask when bought{c.slippageTicks ? `, ${c.slippageTicks} tick${c.slippageTicks === 1 ? "" : "s"} worse` : ""}, or at its last trade when there's none, with brokerage of {inr(c.brokerage)} an order and the exchange's charges.{s.vix ? " Entries wait while India VIX is outside your band." : ""}
+          It enters {startWhen}, with fake money, on live {s.underlying} option prices: each leg fills at the bid when sold and the ask when bought{c.slippageTicks ? `, ${c.slippageTicks} tick${c.slippageTicks === 1 ? "" : "s"} worse` : ""}, or at its last trade when there's none, with brokerage of {inr(c.brokerage)} an order and the exchange's charges.{s.vix ? " Entries wait while India VIX is outside your band." : ""}
         </ConfirmDialog>
       )}
       {confirmReset && (

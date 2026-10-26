@@ -107,6 +107,7 @@ def company_facts(c: dict) -> dict:
                                       **({"other_income": qt["other_income"]} if any(v is not None for v in qt.get("other_income") or []) else {}),
                                       **({"tax_rate_pct": qt["tax_pct"]} if any(v is not None for v in qt.get("tax_pct") or []) else {})}
     if c.get("base_effects"):
+        facts["base_effect_items"] = [{"quarter": e["quarter"], "text": e["text"]} for e in c["base_effects"]]     # (for the check, grounding.base_noted)
         facts["base_effects"] = ("Quarters moved by one-off items. Any year-on-year change measured against one of these "
                                  "quarters must say so in the same sentence: " + " ".join(e["text"] for e in c["base_effects"]))
     if c.get("merger"):

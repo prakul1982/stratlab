@@ -493,6 +493,8 @@ class Runner:
         through = last_complete(region, now)
         recent_from = (date.fromisoformat(through) - timedelta(days=RECENT_DAYS - LOOKBACK_DAYS)).isoformat()
         who = {g: members(g, self.index_members, self.all_equities) for g in groups}
+        if region == "IN" and self.index_members:
+            universes.refresh_followed(self.index_members)      # the ready-made groups that follow an index take its list from the exchange (RC2A-020)
         empty = [g for g in groups if not who[g]]
         if full is None:                # short of a year and a half of history, or a gap since the last run: the whole span
             # (a group with no list of stocks can't be counted, so it doesn't make every run read two years again)

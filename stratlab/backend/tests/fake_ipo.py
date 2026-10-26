@@ -159,6 +159,7 @@ def seed(today: date | None = None):
     open_row = {**base, "id": "in-bonfig", "name": "Bonfiglioli Transmissions Limited", "symbol": "BONFIG", "nkey": "bonfiglioli", "open": d(-1), "close": d(2),
                 "low": 558.0, "high": 586.0, "lot": 25, "face_value": 10.0, "retail_max": 200000, "ofs": 43239042, "size_shares": 30282330, "isin": "INE28SO01013",
                 "industry": "Industrial Products", "issue_type": "Book Building", "lead_managers": bon["lead_managers"], "registrar": bon["registrar"],
+                "close_time": bon["close_time"], "open_time": bon["open_time"], "hours": bon["hours"],
                 "docs": rhp("BONFIG"), "sub": bon["subscription"], "sub_read": f"{today}T05:00:00+00:00", "detail_at": f"{today}T05:00:00+00:00"}
     rows_in = [
         open_row,

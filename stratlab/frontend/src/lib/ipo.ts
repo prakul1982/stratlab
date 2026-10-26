@@ -12,17 +12,17 @@ export type EventKind = "open" | "close" | "allotment" | "listing";
 export interface Perf { listing_price?: number; listing_change_pct?: number; latest?: number; change_pct?: number; latest_date?: string; at?: string }
 export interface IpoRow {
   id: string; market: Market; segment?: "mainboard" | "sme"; name: string; symbol?: string; stage: Stage;
-  open?: string; close?: string; allotment?: string; allotment_expected?: boolean; listing?: string; listing_expected?: boolean;
+  open?: string; close?: string; close_time?: string; allotment?: string; allotment_expected?: boolean; listing?: string; listing_expected?: boolean;
   low?: number; high?: number; price?: number; lot?: number; min_amount?: number; min_basis?: string; size?: number; size_basis?: string;
   exchanges?: string[]; exchange?: string; expected?: string; priced?: string; filed?: string; shares?: number; currency: string;
-  docs?: string[]; sub_times?: number; sub_as_of?: string; perf?: Perf;
+  docs?: string[]; sub_times?: number; sub_as_of?: string; sub_read?: string; perf?: Perf;
   issue_status?: IssueStatus;
   /** A book-built issue with one part in rupees and one in shares: the parts, shown instead of a size until the price band gives a total. */
   size_parts?: { fresh_cr?: number; ofs_cr?: number; fresh?: number; ofs?: number };
 }
 export interface AlertPrefs { on: boolean; events: EventKind[]; markets: Market[]; sme: boolean; allowed: boolean; plan: string; channels: string[]; event_names: Record<EventKind, string> }
 export interface IpoList {
-  market: Market; as_of: string | null; tabs: Record<Stage, IpoRow[]>; counts: Record<Stage, number>; note: string; problems: string[]; prefs: AlertPrefs; today: string;
+  market: Market; as_of: string | null; bids_read?: string | null; problems_at?: string | null; tabs: Record<Stage, IpoRow[]>; counts: Record<Stage, number>; note: string; problems: string[]; prefs: AlertPrefs; today: string;
 }
 export interface SubRow { label: string; sr: string; offered: number | null; bid: number | null; times: number | null }
 export interface Subscription { rows: SubRow[]; times: number | null; as_of: string | null; live?: boolean; read?: string }
@@ -30,7 +30,8 @@ export interface DocLink { kind: string; label: string; source: string; url: str
 export interface Financials { page: number; unit: string; years: string[]; rows: { key: string; label: string; values: (number | null)[] }[] }
 export interface Facts {
   state: "none" | "pending" | "ready"; kind?: string; read_at?: string; pages_read?: number;
-  promoters?: string[]; selling?: { name: string; kind: string }[]; objects?: { page: number; text: string }; financials?: Financials;
+  promoters?: string[]; selling?: { name: string; kind: string }[];
+  objects?: { page: number; text: string; table?: { unit: string | null; rows: { label: string; figures: string | null }[] } }; financials?: Financials;
   us?: { company_shares?: number; selling_shares?: number; price?: number; range?: number[]; listing?: string; symbol?: string; proceeds?: string };
 }
 export interface Statement { text: string; quote: string }
@@ -41,7 +42,7 @@ export interface Summary {
 export interface IpoDetail {
   ipo: IpoRow & {
     isin?: string; industry?: string; retail_max?: number; face_value?: number; fresh?: number; ofs?: number; fresh_cr?: number; ofs_cr?: number; size_shares?: number;
-    issue_type?: string; issue_text?: string; lead_managers?: string[]; registrar?: string; amount?: number; company_link?: string;
+    issue_type?: string; hours?: string; issue_text?: string; lead_managers?: string[]; registrar?: string; amount?: number; company_link?: string;
   };
   documents: DocLink[]; facts: Facts; summary: Summary; subscription: Subscription | null; perf: (Perf & { issue_price?: number; day_close?: number; day_change_pct?: number; listed?: string; basis?: string }) | null;
   note: string; prefs: AlertPrefs;

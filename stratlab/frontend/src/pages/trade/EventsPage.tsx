@@ -49,8 +49,11 @@ function RemindCard({ v, onSave }: { v: EventsView; onSave: (p: Partial<EvPrefs>
         <p className="k-small">Reminders of these events are on the {p.plan} plan. <Link className="link" to="/plans">See the {p.plan} plan</Link></p>
       )}
       {p.allowed && p.remind && !p.channels.length && <p className="k-note">Nowhere to send them yet: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>}
-      <ChipSet label="Kinds of event" options={kinds.map((k) => ({ value: k, label: none(k) ? `${v.kinds[k]} (none yet)` : v.kinds[k] }))} on={p.kinds}
+      {/* a kind with no event on the calendar is not offered as a chip that can never fire (RC2A-040); it is named below, and a pick already
+          saved for it stays saved */}
+      <ChipSet label="Kinds of event" options={kinds.filter((k) => !none(k)).map((k) => ({ value: k, label: v.kinds[k] }))} on={p.kinds}
         onToggle={(k) => onSave({ kinds: p.kinds.includes(k as EvKind) ? p.kinds.filter((x) => x !== k) : [...p.kinds, k as EvKind] })} />
+      {kinds.some(none) && <p className="k-note" data-testid="ev-empty-kinds">Nothing is on the calendar yet for {kinds.filter(none).map((k) => v.kinds[k]).join(", ")}; it can be picked once there is.</p>}
       {p.allowed && (
         <Field label="When" wide>{(id) => <Select id={id} label="When to remind" value={p.days} onChange={(d) => onSave({ days: Number(d) })} options={DAY_OPTS} />}</Field>
       )}
@@ -200,7 +203,7 @@ export function EventsPage() {
         : (
           <>
             {failedLine(v.sources, (d) => asOf(d) ?? d) && <p className="k-callout k-small" role="status" data-testid="ev-failed">{failedLine(v.sources, (d) => asOf(d) ?? d)}</p>}
-            <div className="k-two">
+            <div className="k-two ev-pair">
               <Card label="The next seven days">
                 <CardHead level={2} title="The next seven days" />
                 {week.length ? (

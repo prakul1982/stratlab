@@ -31,6 +31,7 @@ SQUEEZE_DAYS, SQUEEZE_PCT = 120, 0.2
 # groups whose results the daily run stores (the group ids of breadth.GROUPS)
 STALE_DAYS = 10                    # a stock whose last candle is this much older than the group's newest is suspended or delisted: left out
 STORED = {"IN": "nifty500", "US": "sp500"}
+WHOLE_DAY = ("volume_surge",)      # rules that hold a whole day's volume against an average: not judged on a session still going on (RC2A-022)
 
 
 def _c(l: dict, op: str, r: dict) -> dict:
