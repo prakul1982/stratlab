@@ -931,13 +931,16 @@ def upcoming_dates(uid: str, days: int = 60, at: date | None = None, frm: date |
                     d = add_months(d, step) if step else None
             elif k == "loan" and i.get("tenure_months") and _date(i.get("start")):
                 s = date.fromisoformat(i["start"])
-                pay = emi(i["principal"], i["rate"], i["tenure_months"])
                 label = name if i.get("name") else LOAN_TYPES.get(i.get("loan_type", "other"), "Loan")
-                for j in range(emis_paid(s, i["tenure_months"], start - timedelta(days=1)) + 1, i["tenure_months"] + 1):
+                # RC2B-019: the count is on the rate charged (a floating loan's resets, as Net worth shows its EMIs left), not the
+                # nominal tenure: "EMI 42 of 240" stood beside a loan that ends after 171 more
+                st = loan_state(i["principal"], i["rate"], i["tenure_months"], s, start - timedelta(days=1), rate_changes(i, start - timedelta(days=1)))
+                total = st["paid"] + st["left"]
+                for j in range(st["paid"] + 1, total + 1):
                     d = add_months(s, j)
                     if d > end:
                         break
-                    add(d, "emi", f"{label}: EMI", f"EMI {j} of {i['tenure_months']}", pay)
+                    add(d, "emi", f"{label}: EMI", f"EMI {j} of {total}", st["emi"])
                 if i.get("benchmark") not in (None, "fixed") and i.get("reset_months"):
                     anchor = _date(i.get("last_reset")) or s
                     step, n = int(i["reset_months"]), 1

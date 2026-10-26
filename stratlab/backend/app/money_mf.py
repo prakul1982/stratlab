@@ -872,6 +872,8 @@ def view(uid: str, plan: str) -> dict:
     return {**h, "gains": gains(data, w, today) if can else None, "gains_allowed": can,
             "gains_plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"], "limit": limit,
             "files": data["files"], "updated_at": data["updated_at"], "txns": len(data["txns"]),
+            # RC2B-022: the stamp duty, STT and TDS lines apart, so the page counts what the import toast counted
+            "charge_lines": sum(1 for t in data["txns"] if t.get("t") in ("stamp", "stt", "tds")),
             "kinds": KINDS, "names": names(data), "nav_date": max((r.get("date") or "" for r in w["daily"].get("schemes", {}).values()), default="") or None,
             "assumptions": ASSUMPTIONS, "disclaimer": DISCLAIMER, "as_of": today}
 
@@ -993,6 +995,14 @@ async def mf_import(req: ImportReq, profile=Depends(current_profile)):
     return await run_in_threadpool(_import, profile, data, req.filename, req.password, req.mode)
 
 
+def _units(v: float) -> str:
+    """Units to three places with the Indian grouping, as the rest of the page writes them: 2,00,000.000 (RC2B-022)."""
+    whole, frac = f"{abs(v):.3f}".split(".")
+    if len(whole) > 3:
+        whole = re.sub(r"(\d)(?=(\d{2})+$)", r"\1,", whole[:-3]) + "," + whole[-3:]
+    return f"{'-' if v < 0 else ''}{whole}.{frac}"
+
+
 def _import(profile, data: bytes, filename: str, password: str, mode: str):
     try:
         got = read_file(data, filename, password)
@@ -1003,10 +1013,10 @@ def _import(profile, data: bytes, filename: str, password: str, mode: str):
     v = view(uid, profile["_plan"])
     # DG-021, DG-024: a redemption of more units than the files hold, and ELSS units redeemed inside the lock-in, are said
     # with the import as well as on the scheme (6,000 units redeemed of 2,551.943 held was accepted without a word)
-    warn = [{"line": None, "text": r["name"][:80], "reason": f"{r['short_units']:,.3f} units were redeemed with no purchase before them in your files"
-             + (f", so ₹{r['short_sale']:,.0f} of sale value is left out of the capital gains." if r.get("short_sale") else ".")}
+    warn = [{"line": None, "text": r["name"][:80], "reason": f"{_units(r['short_units'])} units were redeemed with no purchase before them in your files"
+             + (f", so {tax_lots.money(r['short_sale'])} of sale value is left out of the capital gains." if r.get("short_sale") else ".")}
             for r in v.get("schemes") or [] if (r.get("short_units") or 0) > EPS]
-    warn += [{"line": None, "text": r["name"][:80], "reason": f"{r['elss_early_units']:,.3f} ELSS units were redeemed within 3 years of "
+    warn += [{"line": None, "text": r["name"][:80], "reason": f"{_units(r['elss_early_units'])} ELSS units were redeemed within 3 years of "
               "buying them, inside the lock-in. Check the dates in your statement."} for r in v.get("schemes") or [] if (r.get("elss_early_units") or 0) > EPS]
     return ok({"kind": got["kind"], **counts, "problems": got["problems"] + warn, "limit": limit,
                "upgrade": f"{PLANS['basic']['name']} keeps every scheme." if counts["over_limit"] else None,

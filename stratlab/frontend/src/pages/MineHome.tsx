@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { asOf, dayIn, firstName, inr, inrCompact, pct, price, signedInrCompact } from "../lib/format";
 import { evWhen } from "../lib/marketEvents";
-import { netWorthDelta, sinceNote } from "../lib/networth";
+import { netWorthDelta, restatedNote, sinceNote } from "../lib/networth";
 import { inWords, marketState, usSettling, usTodayNote } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
 import { MARKET_TILES, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUpAll, useMarketStrip, type Up } from "../lib/mine";
@@ -142,7 +142,7 @@ function CustomisePanel({ layout, onChange, onDone }: { layout: Layout; onChange
 /* ---------- net worth ---------- */
 type NwView = {
   as_of: string; totals: { assets: number; liabilities: number; net: number; partial?: string[] | null }; assets: unknown[]; liabilities: unknown[];
-  history: { d: string; net: number; partial?: string[]; added?: number }[] | null; history_allowed: boolean;
+  history: { d: string; net: number; partial?: string[]; added?: number; m?: number }[] | null; history_allowed: boolean; valuation?: number;
 };
 
 function NetWorthCard() {
@@ -160,23 +160,25 @@ function NetWorthCard() {
   // as on the Net worth page: the change is against the latest complete snapshot from before today, none while the live
   // total is partial; the chart leaves out partial snapshots, which read as falls
   const whole = hist.filter((h) => !h.partial?.length);
-  const move = netWorthDelta(v.totals.net, v.totals.partial, hist);
+  // RC2B-001: the page's rule exactly: a snapshot valued another way is no start for the change, and the note says why
+  const move = netWorthDelta(v.totals.net, v.totals.partial, hist, undefined, v.valuation);
   const diff = move ? move.change : null;
+  const restated = move ? null : restatedNote(hist, v.valuation, (d) => asOf(d) ?? d);
   return (
     <Card testId="mine-networth">
       <CardHead title="Net worth" actions={<Link className="btn quiet sm" to="/money/net-worth" aria-label="Open net worth">Open</Link>} />
       <Stat label="What you own minus what you owe" value={inrCompact(v.totals.net)}
         delta={diff !== null ? <Delta value={diff}>{signedInrCompact(diff)}</Delta> : undefined}
-        note={move ? sinceNote(move, (d) => asOf(d) ?? d, inrCompact) : `As of ${asOf(v.as_of) ?? "today"}`} />
+        note={move ? sinceNote(move, (d) => asOf(d) ?? d, inrCompact) : restated ?? `As of ${asOf(v.as_of) ?? "today"}`} />
       {/* two snapshots joined by a line read as a trend: the chart waits for a third (DI-012) */}
       {whole.length >= 3 ? <Spark values={whole.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />
-        : <HistoryPlaceholder allowed={v.history_allowed} />}
+        : <HistoryPlaceholder allowed={v.history_allowed} count={whole.length} />}
     </Card>
   );
 }
 
 /** The space under the net worth figure while there is no history to draw: a dashed baseline with today's dot, and why. */
-function HistoryPlaceholder({ allowed }: { allowed: boolean }) {
+function HistoryPlaceholder({ allowed, count }: { allowed: boolean; count: number }) {
   return (
     <div className="mine-nw-ph" data-testid="mine-nw-placeholder">
       <svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
@@ -184,7 +186,7 @@ function HistoryPlaceholder({ allowed }: { allowed: boolean }) {
         <path className="base" d="M2 12H96" />
         <circle cx="97" cy="12" r="2.2" />
       </svg>
-      <span className="k-note k-muted">{allowed ? "History starts after your first month" : <>The history chart is on the Basic plan. <PlanInline /></>}</span>
+      <span className="k-note k-muted">{allowed ? (count > 0 ? `${count} snapshot${count === 1 ? "" : "s"} so far; the chart starts at the third` : "History starts after your first month") : <>The history chart is on the Basic plan. <PlanInline /></>}</span>
     </div>
   );
 }

@@ -1112,7 +1112,8 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-own > li.mc-own-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .mc-own-row > .k-row { flex-wrap: nowrap; }
 .mc-url { width: 100%; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
-.mc-grid { align-items: start; }
+/* RC2B-041: the two columns end together; "start" left the add-a-date card 190px short of the reminders beside it */
+.mc-grid { align-items: stretch; }
 @media (max-width: 760px) {
   .mc-grid { grid-template-columns: minmax(0, 1fr); }
   .mc-cell { min-height: 48px; padding: 4px; align-items: center; }
@@ -1402,7 +1403,6 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-card.compact .k-card-head { min-height: 0; }
 /* MO-3b: figures in a compact card spread over its width (they sat in its left two thirds, sized to their text), each in an equal column */
 .k-card.compact > .k-stats { flex: 1 1 100%; }
-.k-stat-link { display: block; margin-top: 2px; }
 .k-card.compact .k-card-title { font-size: 17px; }
 
 /* stats */
@@ -1587,6 +1587,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-tbl-wrap.stack .k-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) var(--s3); padding: var(--s3); margin-bottom: var(--s2);
     border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
   .k-tbl-wrap.stack .k-table tbody tr:hover { background: var(--card); }
+  /* RC2B-049: each dividend on Holdings was a bordered card inside the Dividends card (a double border, 190px each): a line between them */
+  #holdings-dividends .k-tbl-wrap.stack .k-table tr { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; padding: var(--s3) 0; margin-bottom: 0; }
+  #holdings-dividends .k-tbl-wrap.stack .k-table tbody tr:last-child { border-bottom: 0; }
   .k-tbl-wrap.stack .k-table td, .k-tbl-wrap.stack .k-table th[scope="row"] { display: block; padding: 0; border: 0; white-space: normal; text-align: left; min-width: 0; background: none; }
   .k-tbl-wrap.stack .k-table th[scope="row"] { grid-column: 1 / -1; color: var(--ink); font-size: var(--t-body); }
   .k-tbl-wrap.stack .k-table td[data-label]::before { content: attr(data-label) / ""; display: block; color: var(--muted); font-size: var(--t-note); font-weight: 400; }
@@ -2287,3 +2290,14 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .h-filing > :first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h-filing > :nth-child(2) { justify-self: start; }
 @media (max-width: 640px) { .h-filing { grid-template-columns: 7.5em minmax(0, 1fr); } .h-filing > :nth-child(3) { grid-column: 1 / -1; } }
+
+/* RC2B-043: the add-a-trade form's six boxes in one row where the page is wide (they wrapped 4 + 2, or 5 + 1 with "Fees" alone),
+   three and three on a tablet, two on a phone */
+.us-add > .k-form { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+@media (max-width: 1000px) { .us-add > .k-form { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .us-add > .k-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* RC2B-044: the add-a-stock form across the card: the symbol box twice as wide as the quantity and the price beside it, not two short
+   boxes in the left 40% under a full-width one */
+.hold-add > .k-form { grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); }
+@media (max-width: 700px) { .hold-add > .k-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .hold-add > .k-form > .k-field:first-child { grid-column: 1 / -1; } }

@@ -11,7 +11,7 @@ import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, E
 import { FundCosts } from "./FundCosts";
 import { FundBehaviour } from "./FundBehaviour";
 import { Earlier } from "../../components/Earlier";
-import { movedYearNote, openFy, rememberFy } from "../../lib/fy";
+import { movedYearNote, openFy } from "../../lib/fy";
 import { importLine } from "../../lib/mfImport";
 import { useAskedFy } from "../../lib/useFy";
 import { PlanInline } from "../../components/PlanInterest";
@@ -40,7 +40,7 @@ type View = {
   schemes: Scheme[]; allocation: { broad: string; value: number; pct: number | null; schemes: number; subs: { sub: string; value: number; pct: number | null }[] }[];
   total: { value: number; invested: number; gain: number; xirr: number | null; held: number; schemes: number; unknown_cost: number; no_nav?: number; nav_dates: [string, string] | null };
   gains: Gains | null; gains_allowed: boolean; gains_plan: string; limit: number | null; files: { name: string; kind: string; txns: number; at: string }[];
-  updated_at: string | null; txns: number; kinds: Record<Kind, string>; nav_date: string | null; assumptions: string[]; disclaimer: string; as_of: string;
+  updated_at: string | null; txns: number; charge_lines?: number; kinds: Record<Kind, string>; nav_date: string | null; assumptions: string[]; disclaimer: string; as_of: string;
 };
 type Problem = { line?: number; text: string; reason: string };
 type ImportReply = { kind: "cas" | "csv"; added: number; duplicates: number; over_limit: string[]; schemes: number; kept?: number; charges?: number; problems: Problem[]; limit: number | null; upgrade: string | null; view: View };
@@ -219,7 +219,7 @@ export function MutualFundsPage() {
           </div>
         )}
         {view && view.files.length > 0 && (
-          <p className="k-note">{view.txns.toLocaleString("en-IN")} transactions from {view.files.length} file{view.files.length === 1 ? "" : "s"}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}</p>
+          <p className="k-note">{(view.txns - (view.charge_lines ?? 0)).toLocaleString("en-IN")} transactions{view.charge_lines ? ` and ${view.charge_lines.toLocaleString("en-IN")} stamp duty or tax lines` : ""} from {view.files.length} file{view.files.length === 1 ? "" : "s"}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}</p>
         )}
       </Card>
 
@@ -270,7 +270,7 @@ export function MutualFundsPage() {
           {view.gains && (
             <Card label="Capital gains">
               <CardHead title="Capital gains by financial year" actions={view.gains.years.length > 0 ? (
-                <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
+                <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
                   options={view.gains.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === view.gains!.current_fy ? " (this year)" : ""}` }))} />
               ) : undefined} />
               {movedFrom != null && y && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="mf-moved-year">{movedYearNote(movedFrom, y.fy, view.gains.current_fy, "redemptions")}</p>}

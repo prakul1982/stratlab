@@ -222,11 +222,13 @@ def interest_234a(fy: int, owed: float, later: list[dict], due_day: date, on: da
 
 
 def payable(fy: int, s: dict, tax: float, income: float, payments: list[dict], today: date,
-            business: bool = False, audit: bool = False) -> dict | None:
+            business: bool = False, audit: bool = False, exempt: float | None = None) -> dict | None:
     """DH-003: what a past year still needs, as one figure: the tax as the return rounds it (section 288B), less TDS,
     advance tax and self-assessment tax paid, plus the interest under sections 234A, 234B and 234C and, once the due
     date has passed, the section 234F fee; the whole rounded to ₹10 again. Worked out as if paid, and the return filed,
-    by the due date (or today, once that has passed). None for the year still running."""
+    by the due date (or today, once that has passed). None for the year still running. `exempt` is the regime's basic
+    exemption limit: a year whose total income is within it needs no return (section 139(1)), so it has no section 234F
+    fee however late the date is (RC2B-003: ₹1,000 "payable now" on an income of ₹1,20,780)."""
     if today <= date(fy + 1, 3, 31):
         return None
     rb = return_due(fy, business, audit)
@@ -237,7 +239,8 @@ def payable(fy: int, s: dict, tax: float, income: float, payments: list[dict], t
     sa_by_due = sum(p["amount"] for p in later if p["d"] <= rb.isoformat())
     a = interest_234a(fy, max(0.0, tax - s["tds"] - adv_t - sa_by_due), later, rb, on)
     i234b = s["b234"]["interest"] if s["b234"]["applies"] else 0.0
-    fee = (FEE_234F if income > 500000 else FEE_234F_SMALL) if a["late"] else 0.0
+    needed = exempt is None or income > exempt
+    fee = (FEE_234F if income > 500000 else FEE_234F_SMALL) if a["late"] and needed else 0.0
     total = max(0.0, left) + a["interest"] + i234b + s["interest_234c"] + fee
     lines = [("Tax on total income, rounded to ₹10 (section 288B)", tax), ("Less TDS", -s["tds"]), ("Less advance tax paid", -adv_t)]
     if sa_t:
@@ -251,7 +254,7 @@ def payable(fy: int, s: dict, tax: float, income: float, payments: list[dict], t
             "self_assessment": round(sa_t, 2), "balance": round(max(0.0, left), 2), "refund": round(max(0.0, -left), 2),
             "interest_234a": a["interest"], "months_234a": a["months"], "interest_234b": round(i234b, 2),
             "months_234b": s["b234"]["months"] if s["b234"]["applies"] else 0, "interest_234c": s["interest_234c"],
-            "fee_234f": fee, "total": round10(total), "due": rb.isoformat(), "on": on.isoformat(), "past_due": today > rb,
+            "fee_234f": fee, "return_needed": needed, "income": round(income, 2), "exempt": exempt, "total": round10(total), "due": rb.isoformat(), "on": on.isoformat(), "past_due": today > rb,
             "lines": [{"label": k, "amount": round(v, 2)} for k, v in lines]}
 
 

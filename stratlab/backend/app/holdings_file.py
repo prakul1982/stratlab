@@ -519,7 +519,8 @@ def parse(data: bytes, filename: str = "") -> dict:
 # ---------- tradebooks and tax P&L exports, for the tax report ----------
 TRADE_COLUMNS = {
     "date": {"tradedate", "date", "transactiondate", "executiondate", "executiondateandtime", "tradedatetime", "orderdate",
-             "datetime", "tradedon", "dateoftransaction"},
+             "datetime", "tradedon", "dateoftransaction", "executedat", "executedon", "executiontimestamp", "orderexecutiontimestamp",
+             "orderexecutedtime"},         # Groww's order history: "Executed at"
     "time": {"tradetime", "orderexecutiontime", "executiontime", "time", "ordertime", "tradetimestamp"},
     "side": {"tradetype", "type", "side", "buysell", "bs", "action", "transactiontype", "buyorsell", "trantype",
              "buysellindicator", "transaction"},
@@ -552,6 +553,7 @@ TRADE_BROKERS = [
     ("Zerodha Console", {"tradedate", "tradetype", "tradeid"}),
     ("Zerodha", {"entrydate", "exitdate", "taxableprofit"}),          # the tax P&L's tradewise exits
     ("Groww", {"executiondateandtime", "exchangeorderid"}),
+    ("Groww", {"executedat", "exchangeorderid"}),
     ("Upstox", {"tradenum", "side"}),
     ("ICICI Direct", {"action", "orderref"}),
     ("HDFC Securities", {"securityname", "rate", "tradeno"}),
@@ -608,6 +610,10 @@ def day(v) -> str | None:
         if m:
             y, mo, d = map(int, m.groups())
             return _date(y, mo, d).isoformat()
+        m = re.match(r"(\d{4})(\d{2})(\d{2})(?!\d)", s)          # IBKR Flex Query's 20250305 and "20250305;093015" (RC2B-011)
+        if m and 1990 <= int(m.group(1)) <= 2100:
+            y, mo, d = map(int, m.groups())
+            return _date(y, mo, d).isoformat()
         m = re.match(r"(\d{1,2})[-/. ](\d{1,2})[-/. ](\d{2,4})(?!\d)", s)
         if m:
             d, mo, y = map(int, m.groups())
@@ -655,6 +661,22 @@ def _trade_header(rows: list[list[str]]) -> tuple[int, dict[str, int], str] | No
             return i, cols, "pnl"
         if "date" in cols and "side" in cols and cols.keys() & {"price", "value"}:
             return i, cols, "trades"
+    return None
+
+
+def _partly_trades(rows: list[list[str]]) -> str | None:
+    """RC2B-012: a file with some of a tradebook's columns (a date, or a buy/sell column) but not all of what it needs: the
+    message says which are missing, not "that looks like a holdings file" (a Groww order history was refused that way, with its
+    dates and BUY/SELL column in plain view under names the reader didn't know)."""
+    for row in rows[:HEADER_SCAN]:
+        cols = _trade_columns(row)
+        if not cols.keys() & {"isin", "symbol", "name"} or "qty" not in cols or not cols.keys() & {"date", "side"}:
+            continue
+        missing = [what for ok, what in (("date" in cols, "the trade date"), ("side" in cols, "buy or sell"),
+                                          (bool(cols.keys() & {"price", "value"}), "the price or value")) if not ok]
+        if missing:
+            return ("That file has some of a tradebook's columns, but we couldn't find a column for " + " or ".join(missing)
+                    + " by a name we know. Rename it Date, Type (buy or sell) or Price, or upload your broker's own tradebook.")
     return None
 
 
@@ -709,6 +731,9 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
         if summary(rows):
             raise FileError("That is the summary page of a tax P&L: totals by company, without the buy and sale dates. "
                             "Upload the whole ZIP file your broker gives you, or the \"Tradewise Exits\" CSV files in it.")
+        part = _partly_trades(rows)
+        if part:
+            raise FileError(part)
         if _header(rows):
             raise FileError("That looks like a holdings file, which has no trade dates. For the tax report, upload your "
                             "tradebook (every buy and sale) or your broker's tax P&L instead.")

@@ -71,11 +71,15 @@ test("R4-007: the owner's year being filed has no sales, so the tax card and the
   expect(errors).toEqual([]);
 });
 
-test("R4-007: a year asked for carries to the other Money pages", async ({ page }) => {
+test("R4-007, RC2B-002: a year asked for is that page's own; the other Money pages open on their own year", async ({ page }) => {
   const errors = await open(page, "/tax-report?fy=2024");
   await expect(page.getByRole("heading", { name: /Total tax estimate, FY 2024-25/ })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("tax-moved-year")).toHaveCount(0);                 // asked for, not moved
-  await page.goto("/money/itr");
+  // Tax tools has dividends in the year being filed, so it opens there, not on the year the tax report was asked for
+  await page.goto("/money/tax-tools");
+  await expect(page.getByRole("heading", { name: "Dividends, FY 2025-26" })).toBeVisible({ timeout: 30_000 });
+  // a link that names the year still lands on it
+  await page.goto("/money/itr?fy=2024");
   await expect(page.getByRole("heading", { name: /Download for FY 2024-25/ })).toBeVisible({ timeout: 30_000 });
   expect(errors).toEqual([]);
 });
@@ -178,7 +182,7 @@ test("R4-021: the symbol box is full width, and a rule shows once the person has
   await expect(card).toBeVisible({ timeout: 30_000 });
   const symbol = await card.getByRole("combobox").first().boundingBox();
   const qty = await card.getByLabel("Quantity").boundingBox();
-  expect(symbol!.width, "the symbol box spans the form").toBeGreaterThan(qty!.width * 2);
+  expect(symbol!.width, "the symbol box is twice the quantity's (RC2B-044)").toBeGreaterThanOrEqual(qty!.width * 2 - 1);
   await expect(card.getByPlaceholder("Name or symbol, e.g. Reliance")).toBeVisible();
   await expect(card.getByText("More than 0"), "a rule on a clean form").toHaveCount(0);
   await card.getByLabel("Quantity").fill("3");
