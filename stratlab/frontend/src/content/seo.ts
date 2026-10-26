@@ -97,21 +97,45 @@ export const LIBRARY_SEEDS: [string, string][] = [
   ["seed-st-s2-us", "ST S2: Stage 2 + Supertrend · 20 of the largest US companies"],
   ["seed-ema-20-50-in", "20/50 EMA cross · NIFTY 50 stocks"],
   ["seed-ema-20-50-us", "20/50 EMA cross · 20 of the largest US companies"],
+  ["seed-ema-20-50-eu", "20/50 EMA cross · 12 large European companies"],
+  ["seed-ema-20-50-coin", "20/50 EMA cross · 10 large coins"],
+  ["seed-ema-20-50-mcx", "20/50 EMA cross · 7 MCX mini contracts (metals and energy)"],
   ["seed-rsi2-revert-in", "RSI(2) mean reversion · NIFTY 50 stocks"],
   ["seed-rsi2-revert-us", "RSI(2) mean reversion · 20 of the largest US companies"],
+  ["seed-rsi2-revert-uk", "RSI(2) mean reversion · 12 large UK companies"],
+  ["seed-rsi2-revert-eu", "RSI(2) mean reversion · 12 large European companies"],
+  ["seed-rsi2-revert-jp", "RSI(2) mean reversion · 12 large Japanese companies"],
   ["seed-breakout-52w-in", "52-week breakout with ATR stop · NIFTY 50 stocks"],
   ["seed-breakout-52w-us", "52-week breakout with ATR stop · 20 of the largest US companies"],
+  ["seed-breakout-52w-eu", "52-week breakout with ATR stop · 12 large European companies"],
   ["seed-boll-squeeze-in", "Bollinger squeeze breakout · NIFTY 50 stocks"],
   ["seed-boll-squeeze-us", "Bollinger squeeze breakout · 20 of the largest US companies"],
   ["seed-orb-15m-fo", "Opening-range breakout (intraday) · 25 most liquid F&O stocks"],
   ["seed-golden-cross-in", "Golden cross · NIFTY 50 stocks"],
   ["seed-golden-cross-us", "Golden cross · 20 of the largest US companies"],
+  ["seed-golden-cross-uk", "Golden cross · 12 large UK companies"],
+  ["seed-golden-cross-cmd", "Golden cross · 14 global commodity futures"],
   ["seed-donchian-20-10-in", "Donchian 20/10 (turtle-style) · NIFTY 50 stocks"],
   ["seed-donchian-20-10-us", "Donchian 20/10 (turtle-style) · 20 of the largest US companies"],
+  ["seed-donchian-20-10-jp", "Donchian 20/10 (turtle-style) · 12 large Japanese companies"],
+  ["seed-donchian-20-10-coin", "Donchian 20/10 (turtle-style) · 10 large coins"],
+  ["seed-donchian-20-10-fx", "Donchian 20/10 (turtle-style) · 7 major currency pairs"],
+  ["seed-donchian-20-10-mcx", "Donchian 20/10 (turtle-style) · 7 MCX mini contracts (metals and energy)"],
+  ["seed-donchian-20-10-cds", "Donchian 20/10 (turtle-style) · 4 rupee currency pairs"],
+  ["seed-donchian-20-10-cmd", "Donchian 20/10 (turtle-style) · 14 global commodity futures"],
   ["seed-macd-cross-in", "MACD signal cross · NIFTY 50 stocks"],
   ["seed-macd-cross-us", "MACD signal cross · 20 of the largest US companies"],
+  ["seed-macd-cross-uk", "MACD signal cross · 12 large UK companies"],
   ["seed-supertrend-in", "Supertrend flip · NIFTY 50 stocks"],
   ["seed-supertrend-us", "Supertrend flip · 20 of the largest US companies"],
+  ["seed-supertrend-jp", "Supertrend flip · 12 large Japanese companies"],
+  ["seed-bb-revert-coin", "Bollinger band reversion · 10 large coins"],
+  ["seed-bb-revert-fx", "Bollinger band reversion · 7 major currency pairs"],
+  ["seed-bb-revert-mcx", "Bollinger band reversion · 7 MCX mini contracts (metals and energy)"],
+  ["seed-bb-revert-cds", "Bollinger band reversion · 4 rupee currency pairs"],
+  ["seed-bb-revert-cmd", "Bollinger band reversion · 14 global commodity futures"],
+  ["seed-ema-20-50-ls-fx", "20/50 EMA cross, long and short · 7 major currency pairs"],
+  ["seed-ema-20-50-ls-cds", "20/50 EMA cross, long and short · 4 rupee currency pairs"],
 ];
 
 /** Each library strategy's rules in words, by its slug (seed-<slug>-<group>), as backend/app/library_seed.py states them
@@ -127,10 +151,12 @@ export const LIBRARY_RULES: Record<string, string> = {
   "donchian-20-10": "Enters when the price closes above the highest high of the previous 20 days; leaves when it closes below the lowest low of the previous 10 days; the stop is 2 times the 14-day ATR below the entry.",
   "macd-cross": "Enters when the MACD line (12, 26) crosses above its 9-day signal line while the price is above its 200-day average; leaves when the MACD line crosses back below the signal line.",
   "supertrend": "Enters when the price crosses above the Supertrend (10, 3); leaves when it crosses back below.",
+  "bb-revert": "Enters when the price drops below the lower Bollinger band (20, 2); leaves when it closes back above the middle band.",
+  "ema-20-50-ls": "Goes long when the 20-day exponential average crosses above the 50-day one and short when it crosses below; each position is closed when the two averages cross back.",
 };
 
 /** A library entry's strategy slug: "seed-golden-cross-in" → "golden-cross". */
-export const librarySlug = (id: string) => id.replace(/^seed-/, "").replace(/-(in|us|fo)$/, "");
+export const librarySlug = (id: string) => id.replace(/^seed-/, "").replace(/-(in|us|fo|uk|eu|jp|coin|fx|mcx|cds|cmd)$/, "");
 
 /** Where it was tested, unless the strategy's own name already says so ("Supertrend flip · 20 of the largest US companies"): by the
  * words shown, or by the group's own name (`group`, when `where` adds a count to it). */

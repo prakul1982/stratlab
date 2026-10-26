@@ -104,7 +104,7 @@ test("DK-014, DK-015: the library says its result once per card, sums the list f
   assert.match(lib, /data-testid="lib-summary"/);
   const list = lib.slice(0, lib.indexOf("export function PublicLibraryEntry"));
   assert.doesNotMatch(list, /<BehindHold|<HoldLine|lib-reason|lib-window/, "the card no longer repeats the result four ways");
-  assert.match(list, /data-testid="lib-hold"/);
+  assert.match(read("src/components/LibraryBits.tsx"), /data-testid="lib-hold"/);       // the one result line, in the card both libraries draw (MO-5a)
 });
 
 test("DK-001: a card charged in rupees leads with the rupee price on the landing page and on Plans", () => {

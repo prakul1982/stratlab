@@ -32,18 +32,36 @@ PRESETS = {
             "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AVGO", "TSLA", "BRK-B", "JPM", "LLY", "V", "UNH", "XOM",
             "MA", "JNJ", "PG", "HD", "COST", "WMT"]},
     ],
+    # (MO-5b) ready-made groups for the markets whose data the backtester reads but that had none: the library's StratLab
+    # samples run on them (app/library_seed.py), and the group picker lists them like the others
+    "UK": [
+        {"id": "uk_large", "name": "12 large UK companies", "symbols": [
+            "SHEL.L", "AZN.L", "HSBA.L", "ULVR.L", "BP.L", "GSK.L", "RIO.L", "DGE.L", "BATS.L", "LSEG.L", "BARC.L", "VOD.L"]},
+    ],
+    "EU": [
+        {"id": "eu_large", "name": "12 large European companies", "symbols": [
+            "SAP.DE", "SIE.DE", "ALV.DE", "DTE.DE", "MC.PA", "OR.PA", "AIR.PA", "SAN.PA", "TTE.PA", "ASML.AS", "INGA.AS", "IBE.MC"]},
+    ],
+    "JP": [
+        {"id": "jp_large", "name": "12 large Japanese companies", "symbols": [
+            "7203.T", "6758.T", "9984.T", "6861.T", "8306.T", "9432.T", "8035.T", "7974.T", "9983.T", "4063.T", "8316.T", "6098.T"]},
+    ],
+    "FX": [
+        {"id": "fx_majors", "name": "7 major currency pairs", "symbols": [
+            "EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X", "USDCAD=X", "USDCHF=X", "NZDUSD=X"]},
+    ],
     "CRYPTO": [
         {"id": "top_coins", "name": "10 large coins", "symbols": [
             "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "ADA-USD", "DOGE-USD", "LINK-USD", "LTC-USD", "AVAX-USD", "DOT-USD"]},
     ],
     "MCX": [
-        {"id": "mcx_minis", "name": "MCX mini contracts (metals and energy)", "symbols": [
+        {"id": "mcx_minis", "name": "7 MCX mini contracts (metals and energy)", "symbols": [
             "GOLDM", "SILVERM", "CRUDEOILM", "NATGASMINI", "ZINCMINI", "ALUMINI", "LEADMINI"]},
         {"id": "mcx_main", "name": "MCX main contracts", "symbols": [
             "GOLD", "SILVER", "CRUDEOIL", "NATURALGAS", "COPPER", "ZINC", "ALUMINIUM", "LEAD"]},
     ],
     "CDS": [
-        {"id": "cds_all", "name": "The four rupee pairs", "symbols": ["USDINR", "EURINR", "GBPINR", "JPYINR"]},
+        {"id": "cds_all", "name": "4 rupee currency pairs", "symbols": ["USDINR", "EURINR", "GBPINR", "JPYINR"]},
     ],
     "CMDTY": [
         {"id": "global_commodities", "name": "14 global commodity futures", "symbols": [

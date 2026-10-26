@@ -2,20 +2,19 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { groupLabel, plainTerms } from "../lib/plainTerms";
-import { pct, TF_NAME } from "../lib/format";
+import { pct } from "../lib/format";
 import { copyNeeds } from "../lib/rules";
 import { LIMITS } from "../lib/plans";
-import { TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksOf, headTone, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, type LibEntry, checksBeyond, CHECKS_NOT_HOLD } from "../components/LibraryBits";
+import { TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksOf, headTone, LibraryCard, libMeta, marketChoices, shownStats, strategyName, trails, VERDICTS, type LibEntry, checksBeyond, CHECKS_NOT_HOLD } from "../components/LibraryBits";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
-import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat, type Column } from "../components/kit";
+import { Card, ChipBar, ConfirmDialog, DataTable, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, type Column } from "../components/kit";
 import { usePersisted } from "../lib/persist";
 import { LIBRARY_DATES } from "../lib/libraryText";
 import "./trade/trade.css";
 
 
-/** True on a phone-width screen: the library cards then show the headline and keep the rest behind "Rules and all figures". */
+/** True on a phone-width screen: the Cards/Table switch goes (a table is no use there). */
 function usePhone(): boolean {
   const q = "(max-width: 640px)";
   const [phone, setPhone] = useState(() => typeof matchMedia === "function" && matchMedia(q).matches);
@@ -32,7 +31,7 @@ function usePhone(): boolean {
 /* /library: rules people published with the verdict they earned, luck included. Copy any of them and re-test it
  * yourself. Built from the kit (components/kit). */
 export function LibraryPage() {
-  const { markets, fail, notify, refreshNotebooks, me, allIndicators } = useApp();
+  const { fail, notify, refreshNotebooks, me, allIndicators } = useApp();
   // what a copy would need that the plan lacks, said on the card before the copy (DP1-008)
   const needs = (e: LibEntry) => me ? copyNeeds(e.strategy, e.group?.members?.length ?? 0,
     { allIndicators, groupCap: me.plan_info.group_size, basicCap: LIMITS.basic.group_size, proCap: LIMITS.pro.group_size }) : null;
@@ -40,6 +39,8 @@ export function LibraryPage() {
   const [rows, setRows] = useState<LibEntry[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [total, setTotal] = useState(0);
+  // how many strategies each market has, so the market filter offers only those that have some (MO-5b)
+  const [counts, setCounts] = useState<Record<string, number> | undefined>(undefined);
   const [q, setQ] = useState(() => new URLSearchParams(location.search).get("q") ?? "");
   const [market, setMarket] = useState("");
   const [verdict, setVerdict] = useState("");
@@ -60,8 +61,8 @@ export function LibraryPage() {
     const t = window.setTimeout(() => {
       const p = new URLSearchParams({ q, market, verdict, sort, ...(official ? { official: "true" } : {}) });
       setFailed(false);
-      api<{ entries: LibEntry[]; total: number; reasons?: Record<string, string> }>(`/library?${p}`)
-        .then((r) => { if (!live) return; setRows(r.entries); setTotal(r.total); if (r.reasons) setReasons(r.reasons); }).catch((e) => { if (!live) return; setRows([]); setFailed(true); fail(e); });
+      api<{ entries: LibEntry[]; total: number; reasons?: Record<string, string>; markets?: Record<string, number> }>(`/library?${p}`)
+        .then((r) => { if (!live) return; setRows(r.entries); setTotal(r.total); setCounts(r.markets); if (r.reasons) setReasons(r.reasons); }).catch((e) => { if (!live) return; setRows([]); setFailed(true); fail(e); });
     }, 200);
     return () => { live = false; window.clearTimeout(t); };
   }, [q, market, verdict, sort, official, fail, again]);
@@ -92,16 +93,16 @@ export function LibraryPage() {
       notify(r.hidden ? "Thanks. It's hidden while the site owner takes a look." : "Thanks. The site owner will take a look.");
     } catch (x) { fail(x); } finally { setBusy(null); }
   };
-  const live = markets.filter((m) => m.status !== "soon" && m.id !== "CSV");
+  const choices = marketChoices(counts, rows ?? [], market);
   const signedPct = (n: number | null) => (n == null ? "–" : <span className={n > 0 ? "k-up" : n < 0 ? "k-down" : undefined}>{pct(n)}</span>);
   const tableCols: Column<LibEntry>[] = [
-    { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => <><b>{plainTerms(e.name)}</b><span className="k-sub-line">{e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} · by {e.author}</span></> },
+    { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => <><b>{strategyName(e)}</b><span className="k-sub-line">{libMeta(e)} · by {e.author}</span></> },
     { key: "verdict", header: "Checks", wrap: true, cell: (e) => <><BehindHold e={e} /><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />{checksBeyond(checksOf(e), e.verdict.label) && <span className="k-sub-line">{checksBeyond(checksOf(e), e.verdict.label)}</span>}{e.reason && <span className="k-sub-line">{e.reason}</span>}</> },
     { key: "ret", header: TOTAL_AFTER_COSTS, numeric: true, cell: (e) => trails(e) && shownStats(e).ret != null ? pct(shownStats(e).ret as number) : signedPct(shownStats(e).ret) },
     { key: "bh", header: TOTAL_HOLD, numeric: true, cell: (e) => signedPct(e.stats.buy_hold) },
     { key: "unseen", header: "Unseen part", numeric: true, cell: (e) => signedPct(shownStats(e).unseen) },
     { key: "mdd", header: "Worst fall", numeric: true, cell: (e) => signedPct(shownStats(e).mdd) },
-    { key: "copy", header: "", action: true, cell: (e) => <button type="button" className="btn quiet sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${plainTerms(e.name)}`}>{busy === e.id ? "Copying…" : "Copy"}</button> },
+    { key: "copy", header: "", action: true, cell: (e) => <button type="button" className="btn quiet sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${strategyName(e)}, ${libMeta(e)}`}>{busy === e.id ? "Copying…" : "Copy"}</button> },
   ];
   const filtered = !!(q || market || verdict || official);
   // the intro doesn't promise other people's rules while every entry is StratLab's own (R5O-014); read from the
@@ -119,13 +120,14 @@ export function LibraryPage() {
       <Card label="Find a strategy">
         <div className="k-toolbar">
           <label className="k-search"><Search size={18} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: RSI, BANKNIFTY, breakout" aria-label="Search the library" /></label>
-          <Select label="Market" value={market} onChange={setMarket} options={[{ value: "", label: "Every market" }, ...live.map((m) => ({ value: m.id, label: m.name }))]} />
           <Select label="Verdict" value={verdict} onChange={setVerdict} options={VERDICTS.map(([value, label]) => ({ value, label }))} />
           <Seg label="Whose" options={[{ value: "all", label: "Everyone's" }, { value: "official", label: "StratLab's own" }]} value={official ? "official" : "all"} onChange={(v) => setOfficial(v === "official")} />
           <Seg label="Sort" options={[{ value: "hold", label: "Ahead of buy and hold", short: "Vs hold" }, { value: "best", label: "Most checks passed", short: "Checks" },
             { value: "new", label: "Newest" }, { value: "copied", label: "Most copied", short: "Copied" }]} value={sort} onChange={setSort} />
           {!phone && <Seg label="View" options={[{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }]} value={layout} onChange={(v) => setLayout(v as "cards" | "table")} />}
         </div>
+        {/* only the markets that have strategies, each with how many; one row that scrolls on a phone (MO-5b) */}
+        {choices.length > 2 && <ChipBar label="Market" options={choices} value={market} onChange={setMarket} />}
       </Card>
       {rows === null ? <Card><Skeleton label="Opening the library" /></Card>
         : failed ? <ErrorState title="The library couldn't be opened" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Your connection or ours dropped for a moment. Nothing was lost.</ErrorState>
@@ -145,68 +147,28 @@ export function LibraryPage() {
                 <DataTable label="Strategies" rows={rows} rowKey={(e) => e.id} columns={tableCols} />
               </Card>
             ) : (
-            <div className="k-cards">
+            <div className="k-cards lib-cards">
               {rows.map((e) => (
-                <Card key={e.id} label={plainTerms(e.name)} className={shownStats(e).ran ? undefined : "lib-unrun"}>
-                  {(() => {
-                    const eyebrow = <span className="k-eyebrow">{e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} candles{e.side !== "long" ? ` · ${e.side === "both" ? "long and short" : "short"}` : ""}</span>;
-                    const sh = shownStats(e);
-                    const stats = ([[TOTAL_AFTER_COSTS, sh.ret], [TOTAL_HOLD, sh.buy_hold], [unseenLabel(e), sh.unseen], ["Worst fall", sh.mdd]] as [string, number | null][])
-                      .filter(([k]) => !phone || k !== TOTAL_HOLD);
-                    const miniStats = (list: [string, number | null][]) => (
-                      <div className="k-mini-stats">
-                        {list.map(([k, n]) => <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={n == null || n === 0 || (k === TOTAL_AFTER_COSTS && trails(e)) ? undefined : n > 0 ? "up" : "down"} />)}
-                      </div>);
-                    return (
-                      <>
-                        <div className="k-stack k-tight">
-                          {!phone && eyebrow}
-                          <CardHead title={plainTerms(e.name)} />
-                          <span className="k-note k-row">{e.official && <Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge>}<span>by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span></span>
-                        </div>
-                        <div className="k-row"><BehindHold e={e} /><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />{checksBeyond(checksOf(e), e.verdict.label) && <span className="k-note">{checksBeyond(checksOf(e), e.verdict.label)}</span>}{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
-                        <HoldLine e={e} />
-                        {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
-                        {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
-                        {/* two lines of the description; the rest is a tap away in its title, so a card isn't a wall of text */}
-                        {e.description && <p className={`k-small ${phone ? "lib-oneline" : "lib-clamp"}`} title={plainTerms(e.description)}>{plainTerms(e.description)}</p>}
-                        {phone ? (
-                          <>
-                            {miniStats(stats.filter(([k]) => k !== "Worst fall"))}
-                            <Disclosure summary="Rules and all figures">
-                              <div className="k-stack">
-                                {eyebrow}
-                                <Rules s={e.strategy} />
-                                {miniStats([["Buy and hold", sh.buy_hold], ["Worst fall", sh.mdd]])}
-                              </div>
-                            </Disclosure>
-                          </>
-                        ) : (
-                          <>
-                            {miniStats(stats)}
-                            <Disclosure summary="The rules"><Rules s={e.strategy} /></Disclosure>
-                          </>
-                        )}
-                      </>
-                    );
-                  })()}
-                  {e.mine && e.hidden && <p className="k-small k-down">Hidden from others after reports. The site owner will review it; editing and publishing again won't bring it back sooner.</p>}
-                  {reporting?.id === e.id ? (
-                    <div className="k-row k-push">
-                      <Select label="Why are you reporting this?" small value={reporting.reason} onChange={(v) => setReporting({ id: e.id, reason: v })} options={Object.entries(reasons).map(([k, n]) => ({ value: k, label: n }))} />
-                      <button type="button" className="btn sm" disabled={busy === e.id} onClick={sendReport}>{busy === e.id ? "Sending…" : "Send report"}</button>
-                      <button type="button" className="btn quiet sm" onClick={() => setReporting(null)}>Cancel</button>
-                    </div>
-                  ) : (
-                    <div className="k-row k-push">
-                      <button type="button" className="btn sm" disabled={busy === e.id} onClick={() => copy(e)}>{busy === e.id ? "Copying…" : "Copy and re-test"}</button>
-                      {needs(e) && <span className="k-note" data-testid="lib-needs">{needs(e)}</span>}
-                      {e.mine && <button type="button" className="btn quiet sm danger" onClick={() => setTaking(e)}>Take down</button>}
-                      {!e.mine && (e.reported
-                        ? <span className="k-note k-end">Reported</span>
-                        : <button type="button" className="btn quiet sm k-end" onClick={() => setReporting({ id: e.id, reason: "spam" })}>Report</button>)}
-                    </div>
-                  )}
+                <Card key={e.id} label={`${strategyName(e)}, ${libMeta(e)}`} className={`lib-card${shownStats(e).ran ? "" : " lib-unrun"}`}>
+                  <LibraryCard e={e} actions={<>
+                    {e.mine && e.hidden && <p className="k-small k-down">Hidden from others after reports. The site owner will review it; editing and publishing again won't bring it back sooner.</p>}
+                    {reporting?.id === e.id ? (
+                      <div className="k-row">
+                        <Select label="Why are you reporting this?" small value={reporting.reason} onChange={(v) => setReporting({ id: e.id, reason: v })} options={Object.entries(reasons).map(([k, n]) => ({ value: k, label: n }))} />
+                        <button type="button" className="btn sm" disabled={busy === e.id} onClick={sendReport}>{busy === e.id ? "Sending…" : "Send report"}</button>
+                        <button type="button" className="btn quiet sm" onClick={() => setReporting(null)}>Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="k-row lib-buttons">
+                        <button type="button" className="btn sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${strategyName(e)}, ${libMeta(e)}`}>{busy === e.id ? "Copying…" : "Copy and re-test"}</button>
+                        {e.mine && <button type="button" className="btn quiet sm danger" onClick={() => setTaking(e)}>Take down</button>}
+                        {!e.mine && (e.reported
+                          ? <span className="k-note k-end">Reported</span>
+                          : <button type="button" className="btn quiet sm k-end" onClick={() => setReporting({ id: e.id, reason: "spam" })}>Report</button>)}
+                      </div>
+                    )}
+                    {needs(e) && <span className="k-note" data-testid="lib-needs">{needs(e)}</span>}
+                  </>} />
                 </Card>
               ))}
             </div>

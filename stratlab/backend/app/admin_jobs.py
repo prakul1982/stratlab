@@ -487,7 +487,7 @@ def rows() -> list[dict]:
             log.append(f"Last run: {len(out.get('published') or [])} published or refreshed, {len(out.get('failed') or [])} failed")
         log.append(f"{len(entries)} StratLab strategies in the library")
         last = res.get("finished") or max((str(e.get("published_at") or "") for e in entries), default="") or None
-        return _row("library-seed", "Library seed", "Once, a while after start-up when the library has none; the button refreshes them",
+        return _row("library-seed", "Library seed", "Once, a while after start-up when the library has none, is a week old or lacks some; the button refreshes them",
                     last, res.get("error"), log, [{"label": "Run now", "path": "/admin/library/seed"}],
                     running=m._seeding.locked(), note="Runs StratLab's own strategies through the backtest and verdict, which takes a few minutes.")
     add("Library seed", library_seed)
