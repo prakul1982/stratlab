@@ -132,7 +132,7 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/money-home-dark.png">
-  <img alt="The Money home: four tool cards, holdings value and gain, and this year's capital gains tax estimate" src="docs/screenshots/money-home-light.png">
+  <img alt="The Money home: holdings value and gain beside this year's capital gains tax estimate, then a card for each other Money tool" src="docs/screenshots/money-home-light.png">
 </picture>
 
 **Alerts**
@@ -181,9 +181,9 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | Advance tax amounts and the long-term exemption lot by lot, US stocks in Indian tax, the ITR-ready export | – | – | ✓ |
 | Every market, company pages and price charts, the options builder with Greeks, the payoff today and breakevens after charges, F&O changes, ETF vs NAV, IPO lists, pages and bids, the events calendar, today's closing auction, stock futures and margin funding, each fund's TER in rupees, a plain SIP test, rates, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, today's positioning and breadth, My Holdings, the tax report and total tax estimate, the money calendar and its feed, share cards, invites | ✓ | ✓ | ✓ |
 
-Paid features switch on once Razorpay's keys and monthly plan IDs are set; until then every feature is open to
-everyone and only the monthly counts apply. The admin can also run a **launch offer** (Pro for everyone for N days), and
-invite rewards give free months of Basic. Visitors outside India see prices in their own currency; every payment gets a
+Each plan gets what its card lists whether or not payments are set up; until Razorpay's keys and monthly plan IDs are
+set nobody can buy Basic or Pro (the Plans page says so and how to ask for early access). The admin can also run a
+**launch offer** (Pro for everyone for N days), and invite rewards give free months of Basic. Visitors outside India see prices in their own currency; every payment gets a
 GST invoice.
 
 <picture>
@@ -349,7 +349,7 @@ cd stratlab/frontend && npx playwright test
 - **Frontend → Vercel**, root `stratlab/frontend`; `vercel.json` sets the build (`npm run build`, output `dist`),
   security headers, the CSP and the rewrites to the backend.
 - Pull requests merge once the backend, frontend and browser tests pass and the preview builds; Railway and Vercel then
-  deploy. Run **Admin → Data checks → Check every feature** after a deploy.
+  deploy. Run **Admin → System → Check every feature** after a deploy.
 - **Backups:** a GitHub Action copies the main database every night at 02:10 IST, encrypted
   ([docs/ADMIN.md](docs/ADMIN.md#backups)).
 

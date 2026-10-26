@@ -10,7 +10,7 @@ test("R34-003: recent notebook cards wrap with a minimum width", () => {
   assert.match(css, /\.space-recent \{[^}]*repeat\(auto-fit, minmax\(240px, 1fr\)\)/);
 });
 
-test("R34-004: the notebook page stacks Lab notes under the table below 1500px", () => {
+test("R34-004: the paper page stacks its side card under the chart below 1500px (the notebook no longer has a side column: MO-4a)", () => {
   assert.match(css, /@media \(max-width: 1500px\) \{ \.nb-grid \{ grid-template-columns: minmax\(0, 1fr\)/);
 });
 

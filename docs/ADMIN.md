@@ -3,30 +3,50 @@
 [← Back to the project overview](../README.md) · [Setup guide](../stratlab/README.md)
 
 Everything the site owner does after deploy: the Admin page, the checks and jobs that run by themselves, email,
-analytics, error alerts, storage and backups. Setting up the services the first time (Supabase, the broker data API,
+analytics, error alerts, memory, storage and backups. Setting up the services the first time (Supabase, the broker data API,
 Razorpay, AI keys) is in the [setup guide](../stratlab/README.md).
 
 ## Who is an admin
 
 Set `ADMIN_EMAILS` on the backend to one or more Google addresses, comma-separated, and redeploy. Signed in with one
-of them (Google-verified, and the current sign-in address), you get **Admin** in the sidebar. Everyone else gets a 403
-from every `/admin` route and never sees the link.
+of them (Google-verified, and the current sign-in address), you get **Admin** in the account menu (your initials at the
+foot of the menu). Everyone else gets a 403 from every `/admin` route and never sees the link.
 
 ## The Admin page
 
-Admin is split into five tabs.
+Admin is its own area with a left menu of seven sections. **Refresh** at the top re-reads the page. Old links such as
+`/admin?tab=services` open the section that took over.
 
-| Tab | What's on it |
+| Section | What's on it |
 | --- | --- |
-| **Overview** | **Needs your attention**, worst first (the broker not logged in or its automatic login failing, AI providers down, email not set up, server errors, reported library entries, the option-chain recorder, holidays running out, payments not connected), usage at a glance, a link to the PostHog dashboard once a key is set, and **Recent server errors**: the last 25 unexpected errors with the request, the error, the line of code and the ref code the user saw, kept across restarts |
-| **Services** | Market data: the broker login state, **Log in**, **Run the automatic login now**. Other services: Telegram, email (**Send a test email**), phone notifications, Sentry, the option-chain recorder, the newsletters, and **Send this week's summary now** (the owner's Monday 9:00 IST email). **AI**: each provider's state, quota and models in use (success rate, median time, last problem), the order each kind of job asks them in, **Test every provider**, **Re-rank models**, **Pin** and **Block**, and the free providers not set up yet with where to get a key (see [AI providers](#ai-providers)) |
-| **Data checks** | **Check every feature**, **Rates and rules**, **Market breadth** (**Run now** per market), **Fund costs (TER)** (**Read now**), **Storage**, the **Data audit**, the **Whole market** audits for India and the US, **Exchange holidays** for every market, and **Save real prices** (the price snapshot the tests run on) |
-| **Users** | Every user with plan, join date, experiments, AI builds, invites and free months earned; **Change plan** grants Basic or Pro for 30 days, 90 days, a year or with no end. **Invite rewards** shows rewards given and sign-ups waiting for review. **Paper trading now** lists every running session with **Stop**. **Reported in the library** holds strategy-library entries people reported |
-| **Billing** | The **Launch offer**, payments status and **Check payments**, **Prices** per currency, and **Invoices** (the seller's GST details and every invoice) |
+| **Overview** | **Needs your attention**, worst first (the broker not logged in or its automatic login failing, the live price feed, AI providers down, email not set up, server errors, library entries users reported, a data job that failed or needs a look, holidays running out, rate or rule sources that changed, whole-market audit mismatches, invoice details missing, payments not connected). **Today's numbers** (sign-ups, revenue, server errors since the last restart), **Money, use and limits** (30-day revenue, active users, emails sent today against the email service's daily limit, links to the bills StratLab can't read), **Services** (one light each for the live price feed, AI providers, the broker login, the automatic login, alert emails, US company data, payments and exchange holidays), **Data feeds** (a light per background job), **This month** with a link to the PostHog dashboard once a key is set, and **View as a plan** (see [View as](#view-as-a-plan)) |
+| **Users and growth** | **Plans ending and sign-ins without a profile**; **Invite rewards** (given, and waiting for review); **Users** (search by email, filter by plan, experiments and AI builds this month, invites and free months earned; **Change plan** grants Basic or Pro for 30 days, 90 days, a year or with no end, and **Delete data** removes one person's app data behind a confirmation); the **Launch offer**; **Paper trading now** lists every running session with **Stop** |
+| **Money** | **Payments** (Razorpay connected, the webhook secret, international cards; **Check payments setup**), **Subscriptions and payments** (the newest 50 of each, refunds and failed payments, revenue by month), **Prices outside India** and **Invoice details** with every invoice |
+| **Data and jobs** | **Background jobs**: every job with its status, last run, schedule and a **Run now** where it has one, and a **Log** of what it reported; **India broker data** (the broker login state, **Log in to the broker**, **Run the automatic login now**); **Exchange holidays** for every market; **Storage** (see [Storage](#storage)) |
+| **Quality** | The **Data audit** and the **Whole market** audit for India or the US, **Reported strategies** (strategy-library entries people reported: **Restore**, **Hide** or **Delete**), and **Rates and rules** |
+| **System** | **Server errors** (the last 25 unexpected errors with the request, the error, the line of code and the ref code the user saw, kept across restarts), **Other services** (alert channels, US company data, alert email with **Send a test email**, **Email a reviewer sign-in link** and **Send this week's summary now**, the exchange filings feed with **Check filings feed**), **Build** (which commit each host runs), the **AI providers** (see [AI providers](#ai-providers)), **Check every feature** and **Real prices for testing** |
+| **Email previews** | Every email StratLab sends, as a reader gets it, at desktop or phone width or as text. The market briefs are the newest real issues; the rest use made-up details and say so. Nothing here is sent except **Send me a test** to your own address |
+
+### Background jobs (Data and jobs)
+
+One row per job (`backend/app/admin_jobs.py`): market breadth, the quarter-hour breadth rounds, red flags across
+companies, newsletters, positioning, ETF price against NAV, fund costs (TER), exchange holidays, the results calendar,
+corporate actions, market events, IPOs, F&O contract changes, surveillance lists, the closing auction, India VIX
+history, option chain recording, company pages' prices, the daily Interactive Brokers read, the statement inbox
+reminder and the library seed. Each row says when the job runs next (its own clock, in IST or New York time), when it
+last ran and how that went:
+
+- **OK**, **Check** or **Problem**. **Problem** is a failed run. **Check** is something to look at that isn't a failure:
+  a job that reads several sources and got some of them (the row says which source was missed, what that leaves out,
+  and whether the fault looks like the source's site), a feed waiting for a file the exchange hasn't published, or an IPO
+  filing no exchange lists yet.
+- **Run now** starts the job at once where it has a manual trigger (a job without a button runs on its clock only); a
+  second press while it runs is refused. **Log** shows what the last run reported and what you ran from the page.
+- A job's last status is kept in the database, so a row doesn't read "Not run yet" only because the server restarted.
 
 ### Check every feature (platform check)
 
-`backend/app/platform_check.py`, shown on **Data checks**. Runs each part of StratLab once on the live server with live
+`backend/app/platform_check.py`, shown on **System**. Runs each part of StratLab once on the live server with live
 data and compares what came back with what it should be: prices in every market and how fresh they are, a two-year
 backtest per market, the NIFTY 50 and US scans, sector rotation, the NIFTY option chain, exchange filings, insider
 trades, surveillance lists, BSE filings, company pages, news, the database and how full it is (**Database space**), the
@@ -35,30 +55,33 @@ holiday calendar of every market (a warning under 60 days known), **Rates and ru
 so it costs no allowance.
 
 - **By itself:** every day at 4:50 pm IST. Anything that fails is tried again two minutes later; whatever still fails is
-  emailed to the admins (and sent by phone notification or Telegram when set up in Account).
+  emailed to the admins (and sent by phone notification or Telegram when set up in Settings).
 - **By hand:** **Run checks** (about a minute). Run it after every deploy.
 - The last runs show as a row of ticks and crosses, with the time of the last failure.
 
 ### Data audit (companies)
 
-`backend/app/audit.py`, the **Data audit** panel. Runs every company in a set through the deep dive on the live server:
+`backend/app/audit.py`, the **Data audit** panel on **Quality**. Runs every company in a set through the deep dive on the live server:
 the numbers, prices, industry, valuation, checklist and documents, each compared with its source. **Mismatches** are
 numbers that disagree with the source; **gaps** are things a user would still have to look up elsewhere. No AI is used;
 about 3 to 10 seconds a company.
 
 - Pick India or the US and a set: a ready-made group, every sector's main stocks, or (India) a whole NSE index such as
   the NIFTY 500. **Run audit**, **Stop**, and **Download CSV** of the findings.
-- **Whole market (India / US):** reads the list of every listed company daily (NSE and BSE-only; US common stock
-  only, no preferred shares, warrants, units or rights) and puts each new listing through the same checks as it
-  appears. **Start** / **Pause** (with why it's paused), a progress bar with the rate and the time left, **Reset and
-  check everything again**, **Re-check the N not checked yet**, **Re-check** on each company, and **Full re-check on the
-  1st of each month** (on by default; off means only new listings until you reset). When BSE refuses the server, the
-  panel says so and how many companies wait for their documents.
+- **Whole market (India / US):** reads the list of every listed company every six hours (NSE and BSE-only; US common
+  stock only, no preferred shares, warrants, units or rights) and puts each new listing through the same checks the day
+  it appears and again on each day of its first 10 days. Every company gets a **full check on the 1st of each month**
+  (India time), the ones never checked first, then the problems still standing, then whoever was checked longest ago; the
+  month's run is marked in the database so a restart doesn't repeat it. **Start** / **Pause** (with why it's paused), a
+  progress bar with the rate and the time left, **Reset and check everything again**, **Re-check the N not checked
+  yet**, **Read the list now**, **Re-check** on each company, and a **Full re-check on the 1st of each month**
+  switch (on by default; off means only new listings until you reset). When BSE refuses the server, the panel says so
+  and how many companies wait for their documents.
 - **Why it's paused:** **off** (switched off; press **Start**), **busy** (a Data audit above is running; it carries on
   when that ends), **offline** (India only: the broker's market data login isn't done today, so prices can't be read;
   it carries on by itself once you log in), **cooling** (a source is turning every company away, so it waits between
   companies, up to half an hour, until it answers again).
-- **Log in before the India audit.** The broker's login lasts one day. Each day, **Log in** on Services (or let the
+- **Log in before the India audit.** The broker's login lasts one day. Each day, **Log in to the broker** on Data and jobs (or let the
   automatic login run) before the India whole-market audit is due; until then it waits as **offline** rather than
   marking every company "not checked yet".
 - **Clearing "not checked yet" rows:** a check a source turned away is tried again by itself, 20 an hour, backing off
@@ -77,9 +100,9 @@ about 3 to 10 seconds a company.
 
 ### Other admin jobs
 
-- **Launch offer** (Billing): every user gets every Pro feature free for N days, starting now. Users see a banner and a
+- **Launch offer** (Users and growth): every user gets every Pro feature free for N days, starting now. Users see a banner and a
   countdown; Plans and Account still show what they actually pay for. It ends by itself, or press **End now**.
-- **Invite rewards** (Users): more than 5 sign-ups through one link in a day wait here for review; the sign-ups
+- **Invite rewards** (Users and growth): more than 5 sign-ups through one link in a day wait here for review; the sign-ups
   themselves go through. Approve or reject each reward. A daily check from 6 am IST gives rewards and closes invites
   whose 14 days ran out. The Given table's **Reward** column says how the inviter earned: **Use** (the friend used
   StratLab on 3 days in their first 2 weeks; 2 a rolling year), **Payment** (the friend's first real Razorpay charge
@@ -87,24 +110,27 @@ about 3 to 10 seconds a company.
   the percentage is `INVITE_EXTRA_PCT` in `invite_rewards.py`), **Waiting to subscribe**, or **Taken back (refund)**.
   For refunds and disputes to take a payment-based reward back, tick `refund.created`, `refund.processed` and
   `payment.dispute.created` in Razorpay's webhook settings, next to the subscription events.
-- **Prices** (Billing): rupee prices are set in `plans.py` only. US dollars, euros and pounds have their own prices
-  (`pricing.py`); every other currency follows the rupee price at the day's exchange rate. Any price can be overridden
-  here, and cleared to go back to the default.
-- **Invoices** (Billing): the seller's legal name, address, state, GSTIN and LUT ARN. Every payment gets a GST invoice
+- **Prices** (Money): rupee prices are set in `plans.py` only. Every other currency (18 of them, in `pricing.py`) has
+  its own fixed price, set from the rupee price at 24 October's rates and rounded; it doesn't move with the exchange rate
+  and changing the rupee price doesn't change it. Any price can be overridden here, and cleared to go back to the set
+  price. **Read today's rates** only refreshes the "about ₹…" notes. No Razorpay plan is needed to show a price: without
+  one in that currency, visitors pay the rupee price and their card converts it.
+- **Invoices** (Money): the seller's legal name, address, state, GSTIN and LUT ARN. Every payment gets a GST invoice
   (CGST and SGST within the state, IGST across states, exports zero-rated under the LUT).
-- **Exchange holidays** (Data checks): a row per market with where its holidays come from (the calendar package or
+- **Exchange holidays** (Data and jobs): a row per market with where its holidays come from (the calendar package or
   the exchange's own list), how far ahead they're known, the next holiday and a status with a hint. For India, add a
   holiday by hand or refresh from the exchange here.
-- **Refreshes:** the results calendar, corporate actions, surveillance lists and F&O contract changes run on their own
-  schedules; each has an admin refresh route (`/admin/results/refresh`, `/admin/corp-actions/refresh`,
-  `/admin/surveillance/refresh`, `/admin/fo-changes/refresh`) for after an outage. There are no buttons for these:
-  call them signed in as an admin (see [F&O contract changes](#fo-contract-changes)).
+- **Refreshes:** the results calendar, corporate actions, surveillance lists, market events, IPOs and F&O contract
+  changes run on their own schedules, and each has a **Run now** in **Data and jobs** (the routes behind them are
+  `/admin/results/refresh`, `/admin/corp-actions/refresh`, `/admin/surveillance/refresh`, `/admin/events/refresh`,
+  `/admin/ipos/refresh` and `/admin/fo-changes/refresh`) for after an outage. Corporate actions also has **Read the whole
+  US universe**.
 
 ### Rates and rules
 
 `backend/app/rules.py` lists every hard-coded rate and rule (tax slabs, STT, exchange and SEC fees, freeze limits,
 interest rates, due dates) with its official source and the day each area was last checked; the **Rates and rules**
-panel shows them. An area asks for a review after 90 days, or when a day it is known to change has passed (1 April, each
+panel on **Quality** shows them. An area asks for a review after 90 days, or when a day it is known to change has passed (1 April, each
 quarter's small-savings rates, the SEC's fiscal year). Every morning at 07:40 IST `rules_watch.py` reads the official
 sources a program can read (NSE's freeze limits, lot sizes and circulars, the SEC's fee rate, the PPF rate), emails the
 admins about a change and shows it here until you press **Mark seen**; **Read the sources now** runs it at once.
@@ -114,11 +140,17 @@ Nothing is applied by itself: a changed rate is changed in the code, with a test
 
 `backend/app/breadth.py` counts, for each group (all NSE stocks, NIFTY 50, NIFTY 500, Midcap 150, Smallcap 250, US large
 caps), how many stocks rose or fell, sit above their averages and made new highs or lows. It runs by itself after each
-close (18:30 IST for India, 17:45 New York for the US), and the first run on a new server reads about two years. The
-**Market breadth** panel shows each market's last run (when, prices up to which day, stocks read and any that failed,
-and the last error), and **Run now** works the whole two years out at once: a few minutes for the US, 20 to 25 for India,
-which needs the day's broker login (**Log in** on Services). The same is `POST /admin/breadth/run?region=IN&full=true`;
-`GET /admin/breadth` is the status.
+close (18:30 IST for India, 16:55 New York for the US, in by about 5:05 PM there), and the first run on a new server
+reads about two years. The **Market breadth** row in **Data and jobs** shows each market's last run (when, prices up to
+which day, stocks read and any that failed, and the last error), and **Run India** and **Run US** work the whole two
+years out at once: a few minutes for the US, 20 to 25 for India, which needs the day's broker login (**Log in to the
+broker** on Data and jobs). The same is `POST /admin/breadth/run?region=IN&full=true`; `GET /admin/breadth` is the
+status.
+
+While India's market is open, `backend/app/breadth_live.py` also works the same measures out from the live prices every
+quarter hour (09:15 to 15:30 IST) for the Indian groups, a few requests a round whatever the number of stocks. The
+**Intraday breadth rounds** row shows the last round (its time and how many stocks it read) and says **Late** when the
+newest round is more than 20 minutes old.
 
 ### Positioning
 
@@ -128,9 +160,10 @@ catch-up every 20 minutes reads whatever an evening run missed (a restart, a ser
 numbers and the last 10 days' participant files. On a new server it walks the archives back a year, 25 days a run, a
 second and a half between files; five days missing in a row count as the archive refusing and are tried again later.
 The option-chain facts and their history come from the recorded chains (NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and
-SENSEX; `OPTION_SNAPSHOTS`). There's no panel: `GET /admin/positioning` shows the job, the archive walk and each part's
-state, `POST /admin/positioning/run` reads the newest trading day now, and `POST /admin/positioning/run?backfill=true`
-takes the next step back through the archives. When a number is missing, the page says why in words.
+SENSEX; `OPTION_SNAPSHOTS`). The **Positioning** row in **Data and jobs** has **Run now**, which reads the newest
+trading day (the row is a **Check** while a file isn't out yet); `GET /admin/positioning` shows the archive walk and each
+part's state, and `POST /admin/positioning/run?backfill=true` takes the next step back through the archives. When a
+number is missing, the page says why in words.
 
 ### Fund costs (TER)
 
@@ -139,9 +172,10 @@ costs**: the current and previous month at most every 12 hours (started when som
 due), then one older month a run until two years are stored, with a pause between requests. It's kept market-wide in
 `app_settings`; nothing in it is per user.
 
-- **The panel** (Data checks → **Fund costs (TER)**): the last good read (when, how many schemes, which month), how many
-  schemes and months are stored, the last error, and the check's verdict. The check passes when the last good read had
-  500 or more schemes and is at most 45 days old, warns when it's older or smaller, and fails when nothing was ever read.
+- **The row** (**Data and jobs** → **Fund costs (TER)**): the last good read (when, how many schemes, which month), how
+  many schemes and months are stored and the last error. **Check every feature** has a **Fund costs (TER)** check that
+  passes when the last good read had 500 or more schemes and is at most 45 days old, warns when it's older or smaller,
+  and fails when nothing was ever read.
 - **Read now** reads the disclosure at once in the background, whatever the age of the stored copy (a second press while
   it runs is refused). Press it on a new server, or when the check warns.
 - While the very first read runs, users see "Costs are being read; check back shortly." The same is
@@ -154,21 +188,41 @@ its F&O circulars (exits, entries, lot sizes, expiry days and sessions), read tw
 IST, and at once on a new server. A new change that touches a user's watchlist or running paper sessions is sent to
 those who turned the alert on (Basic and up), once each.
 
-- **No panel.** After an outage, or to see what the sources answer, call `POST /admin/fo-changes/refresh` signed in as
-  an admin: it reads both sources now and returns what was added, any problems and each source's state. It sends no
-  alerts; the next scheduled run sends any due.
+- **The row** (**Data and jobs** → **F&O contract changes**) shows the last run and each source's state, and **Run now**
+  reads both sources at once and sends no alerts; the next scheduled run sends any due. After an outage, or to see what
+  the sources answer, `POST /admin/fo-changes/refresh` returns what was added, any problems and each source's state.
 - Expiry dates come from the listed contracts once the day's broker login is done, else from the exchange's rule.
 
 ### ETF price against NAV
 
 `backend/app/etf_nav.py` reads the exchange's ETF list (price and the last published NAV; it gives no indicative NAV)
-every few minutes while India's market is open, takes each ETF's ISIN from the exchange's ETF securities file (once a
-day) to match it in the NAV file, records each ETF's close after the close with that day's NAV once the NAV file has it, and keeps 30 trading days.
-It runs by itself and has no admin panel; a new server reads the list at once.
+every 4 minutes while India's market is open, takes each ETF's ISIN from the exchange's ETF securities file (once a
+day) to match it in the NAV file, records each ETF's close after 3:45 PM IST with that day's NAV once the NAV file has
+it, and keeps 30 trading days. It runs by itself; a new server reads the list at once. The **ETF price against NAV**
+row in **Data and jobs** has **Read now**.
+
+### IPOs
+
+`backend/app/ipo.py` keeps the lists behind **Invest → IPOs**, one stored row per issue. India is read at 7:40 AM and
+8:10 PM IST (NSE's and BSE's public-issue pages, and every page of SEBI's draft and red herring prospectus lists) and the US at 8:30 AM and 9:30 PM IST (the public IPO calendar and the SEC's S-1,
+F-1 and prospectus filings). While an Indian issue is open its bids are read every 15 minutes from 9:55 AM to 5:30 PM
+IST, and the final bids after 7:20 PM. Between the reads the offer documents are fetched and the summaries written a few
+at a time; the alerts go at 8:00 AM IST (India) and 7:00 PM IST (the US dates). **Data and jobs → IPOs** has **Run now**
+and the log.
+
+- **The completeness check.** After each read the lists are compared with the exchanges' and regulators' own: an issue
+  on NSE's or BSE's list that ours lacks, or has without dates, or one BSE says is listed that ours doesn't, is a
+  **Problem**. A red herring prospectus filed with SEBI that no exchange lists yet, or a US final prospectus not yet
+  confirmed as a company's first offering, is a **Check** ("To check"), looked for again every day: it is usually an
+  issue that hasn't been announced yet, not a gap in StratLab.
+- Issues the exchange names withdrawn, postponed or cancelled are kept in their own list with that word, with no alerts,
+  and Social Stock Exchange fund raises are labelled as not IPOs.
+- The offer-document summaries use the AI layer: each document is summarised once, for everyone, up to 120 a day; a
+  statement is kept only when its quote is found in the document.
 
 ### Option-chain recorder (`OPTION_SNAPSHOTS`)
 
-The recorder (Services → the option-chain recorder; Overview flags a problem) saves the chains named in
+The recorder (**Data and jobs → Option chain recording**: when it last saved, how many chains today, any problem) saves the chains named in
 `OPTION_SNAPSHOTS` every `OPTION_SNAPSHOT_MINUTES` (5) in market hours and keeps `OPTION_SNAPSHOT_KEEP_DAYS` (120). The
 default is all five: `NFO:NIFTY,NFO:BANKNIFTY,NFO:FINNIFTY,NFO:MIDCPNIFTY,BFO:SENSEX`.
 
@@ -184,7 +238,7 @@ default is all five: `NFO:NIFTY,NFO:BANKNIFTY,NFO:FINNIFTY,NFO:MIDCPNIFTY,BFO:SE
 The idea builder, the ask bar, the research reads and the long-document reads (deep dive, report card) all go through
 one AI layer (`backend/app/ai_providers.py`). It needs at least one key; two or three free ones from different
 companies make it hard to take down. Each provider below is optional and skipped while its variables are empty. After
-adding a key in **Railway → Variables**, redeploy, then press **Re-rank models** in **Admin → Services → AI**.
+adding a key in **Railway → Variables**, redeploy, then press **Re-rank models** in **Admin → System → AI providers**.
 
 | Provider | Free allowance (checked October 2026) | Production use on the free tier | Get a key | Railway variables |
 | --- | --- | --- | --- | --- |
@@ -243,7 +297,7 @@ The flagged ones add resilience but are asked last.
   hours (long), so a repeat doesn't spend free quota.
 - **Errors users see never name a provider**; the details (each model's error) are on the Admin page.
 
-### The AI panel (Admin → Services)
+### The AI panel (Admin → System)
 
 Per provider: its state (OK, Check, Problem, Not tested), the free limit and terms, the quota left and when it resets,
 when it was last measured and what was left out, and each model in use with its success rate, median time and last
@@ -264,19 +318,49 @@ The server tries, in order:
 3. SMTP: `SMTP_HOST`, `SMTP_PORT` (465 SSL, 587 STARTTLS), `SMTP_USER`, `SMTP_PASSWORD`. Railway blocks outgoing mail
    ports, so on Railway use Brevo or Resend.
 
-`ALERT_FROM_EMAIL` sets the sender. Until one channel is set, the Account page doesn't offer email, and alerts go by
+`ALERT_FROM_EMAIL` sets the sender. Until one channel is set, Settings doesn't offer email, and alerts go by
 phone notification or Telegram instead.
 
-- **Admin → Services → Send a test email** sends one to you and shows the exact reason when it can't.
+- **Admin → System → Other services → Send a test email** sends one to you and shows the exact reason when it can't.
 - Alert, scan and newsletter email goes only to an address the user confirmed from a link. Every email carries a signed
   one-click unsubscribe link (and the `List-Unsubscribe` headers); the unsubscribe page asks first, so mail scanners
   opening links don't unsubscribe anyone.
 - Links in emails point at the backend itself: set `PUBLIC_API_URL` (on Railway it defaults to the service's public
   domain). `MAIL_TOKEN_SECRET` signs those links; without it one is derived from the Supabase service key.
-- What goes out: trade alerts and the daily report, stock, results, corporate-action, red-flag, scan and market breadth
-  alerts, advance tax and money calendar reminders, the newsletters (`backend/app/newsletter/`), the weekly screen
-  email, lifecycle emails (welcome, first test, trial and offer reminders, what's new, receipts, invite rewards), and
-  the owner's Monday summary.
+- What goes out: trade alerts and the daily report, stock, results, corporate-action, red-flag, scan, market breadth,
+  F&O change, ETF gap, IPO, business update and named holder alerts, market event, advance tax and money calendar
+  reminders, the newsletters (`backend/app/newsletter/`), the weekly screen email, lifecycle emails (welcome, first test,
+  trial and offer reminders, what's new, receipts, invite rewards), and the owner's Monday summary. **Admin → Email
+  previews** shows each one as a reader gets it.
+
+## India broker login
+
+Indian prices, F&O, MCX, live ticks, India paper trading, India market breadth and the India audit need the broker's
+market data login every day: its tokens end each morning at about 6 am.
+
+- **By hand:** **Admin → Data and jobs → India broker data → Log in to the broker** opens the broker's login in a new tab.
+  After it, the server restarts itself (live sessions are saved first and resume), because the live feed can't switch to
+  a new token inside a running process.
+- **Automatically:** with `KITE_USER_ID`, `KITE_PASSWORD` and `KITE_TOTP_SECRET` set, the server logs in by itself every
+  day from `KITE_AUTO_LOGIN_AT` (IST, 08:00 unless set). **Run the automatic login now** tests it and shows the result. A
+  rejected password is not retried that day; a rejected 2FA code gets one more try with the next code; a network error is
+  retried every 5 minutes, up to 6 attempts a day. When it gives up it tells the admin (Overview, and Telegram when
+  `ADMIN_TELEGRAM_CHAT_ID` is set).
+- **A CAPTCHA on Zerodha's login page.** Repeated failed logins can make Zerodha ask for a CAPTCHA, which the automatic
+  login can't answer. Log in once by hand on kite.zerodha.com in a browser to clear it, then press **Run the automatic
+  login now**. Keep the password and the 2FA secret right (and `KITE_AUTO_LOGIN_AT` away from any other program's
+  login on the same account) so the failures don't repeat.
+- Give StratLab its own API app. A new login to the same app cancels the previous token, so a bot sharing the key would
+  knock StratLab out; StratLab notices, goes offline with a message and does not log in again by itself.
+
+## View as a plan
+
+**Overview → View as a plan** (or **View as:** in the account menu) with Free, Basic, Pro or Off: the app reads as that
+plan's user would see it, on the live site, with its locks, upgrade prompts and monthly limits; the launch offer and free
+Basic time are left out. A banner on every page says "Viewing as Free. Your real plan is unchanged." with a **Turn off**
+button, and the choice stays on that device across reloads. The page sends it as an `X-View-As` header, which the server
+honours for a Google-verified admin only; your stored plan, billing and Admin access are never touched, and
+subscribing, verifying and cancelling are refused while it is on.
 
 ## Connect once (Settings → Connected accounts)
 
@@ -339,12 +423,12 @@ adapter class in `backend/app/connect/inbound.py`.
 Behaviour worth knowing: unknown addresses get the same 200 as real ones (so addresses can't be guessed); at most 30 mails
 a day per address and 120 posts a minute overall; Gmail's forwarding-confirmation mail is recognised and its code is
 shown on the user's card; a user with no statement for 40 days gets a reminder through their usual notifications. The
-background job `connect-once` does the reminders and the daily Interactive Brokers read.
+background job `connect-once` does the reminders, the daily Interactive Brokers read and the owner's own Zerodha read.
 
 ### 3. Zerodha login for every user
 
 Built and switched off. Until Zerodha approves a multi-user Kite Connect app, only admins (`ADMIN_EMAILS`) can connect their
-own Zerodha; for everyone else the card says "Not open yet". Zerodha's terms for apps serving many users need their
+own Zerodha; for everyone else the card says "Not open yet" (`KITE_MULTIUSER_APPROVED` is `false`). Zerodha's terms for apps serving many users need their
 approval: ask through the Kite Connect forum (https://kite.trade) or Zerodha support. Once approved:
 
 1. In the Kite developer console (https://developers.kite.trade/apps) set the app's **redirect URL** to
@@ -391,7 +475,7 @@ personal is sent.
 
 ## Storage
 
-Admin → Data checks → **Storage** shows how full the main database is against Supabase's free 500 MB (`DB_LIMIT_MB`
+**Admin → Data and jobs → Storage** shows how full the main database is against Supabase's free 500 MB (`DB_LIMIT_MB`
 sets another limit), its biggest tables and the biggest kinds of stored data. **Check every feature**'s **Database
 space** row warns at 80% and fails at 95%, and says what to do.
 
@@ -420,7 +504,7 @@ than twice. Moving users' data to the Railway Postgres (the same one as `MARKET_
 schema) puts it next to the server on Railway's private network, so none of it counts. Supabase then only checks
 sign-ins.
 
-- **Admin → Data checks → Storage → Move users' data to Railway.** The server saves the running paper sessions,
+- **Admin → Data and jobs → Storage → Move users' data to Railway.** The server saves the running paper sessions,
   restarts, and before it answers anyone copies every table (profiles, notebooks, paper sessions and orders, usage,
   settings) in one transaction, checks each table's row count, and marks the move done. The site is away for about a
   minute. If anything fails, nothing is kept on Railway, the panel shows the error and the server carries on with
@@ -429,6 +513,29 @@ sign-ins.
   connection URL) so the nightly backup copies Railway instead of Supabase (below).
 - The way back, in an emergency: set `MAIN_DATABASE=supabase` on the backend. Supabase then serves its copy from the
   moment of the move; anything written on Railway since isn't in it.
+
+## Memory
+
+The server's cost is its memory (one process holds the live paper sessions, the tick feed and the jobs), so
+`backend/app/memguard.py` keeps it low without cutting a feature:
+
+- **Heavy jobs take turns.** The whole-market audits, the screens index, the company pages' price refresh, market
+  breadth (daily and quarter-hour), the evening exchange files, positioning, the library seed, IPO offer documents,
+  business updates, named holders and the corporate-action reads each build their big structures inside one fair lock, so
+  two jobs' peaks never stack, and each hands its memory back when it is through. A job that waits longer than
+  `HEAVY_JOB_WAIT` (45 minutes by default) runs anyway.
+- **The caches share one budget,** `CACHE_BUDGET_MB` (256 by default): the least recently used entries of the fattest
+  cache go first, expired entries are swept out, a source's last good copy is capped at 16 MB, and the mutual fund
+  histories kept in memory are the latest 80 schemes.
+- **malloc gives memory back:** it is told to keep two arenas and to serve blocks of 1 MB and more from their own
+  mappings. `MALLOC_TUNE=0` leaves malloc's settings alone.
+- **Looking at it:** there is no panel. `GET /admin/memory` (signed in as an admin) returns the process's resident memory
+  (`rss_mb`), which heavy job has the turn (`running`, `since`) and how many wait, and the caches' size against the budget.
+  `GET /admin/memory?detail=true` adds a census of the heap by type (object counts and bytes of the 25 biggest types) and
+  the largest module-level collections: take it twice an hour apart and the type or collection that grew is what is
+  growing between them. It takes about a second and keeps nothing.
+- Backtests run in worker processes (`BACKTEST_PROCESSES`, 2 by default; 0 runs them in the server process) and
+  `HEAVY_SLOTS` (2) caps heavy requests running at once.
 
 ## Backups
 
