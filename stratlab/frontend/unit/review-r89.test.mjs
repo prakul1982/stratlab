@@ -241,3 +241,17 @@ test("MO-4b: Positioning's cash and put-call cards stack, and a pair of cards in
   const sig = read("src/pages/trade/SignalsPage.tsx");
   assert.match(sig, /<div className="k-page">\s*<UrlCard ov=\{ov\} reload=\{load\} \/>\s*<HowTo \/>\s*<\/div>/);   // the short card shares its column
 });
+
+test("Owner 26 Oct: + Custom flows as the last chip where the row wraps; the cost choice's note sits under the row", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /@media \(min-width: 641px\) \{\s*\.k-chiprow \{ flex-wrap: wrap; align-items: flex-start; padding: 2px; \}\s*\.k-chiprow > \.k-chipbar \{ display: contents; \}/);
+  const rules = read("src/components/Rules.tsx");
+  assert.match(rules, /<Field label="Indian stock costs">/);
+  assert.match(rules, /\{currency === "INR" && " Indian stock costs: Automatic uses intraday \(MIS\) costs/);
+});
+
+test("Owner 26 Oct: inside a notebook only the notebook is the selected menu entry; no dots caption", () => {
+  const shell = read("src/components/Shell.tsx");
+  assert.match(shell, /const here = at\?\.page\.to === p\.to && !\(p\.to === "\/notebooks" && path\.startsWith\("\/n\/"\)\);/);
+  assert.doesNotMatch(shell, /Dots: each notebook's last verdict/);
+});

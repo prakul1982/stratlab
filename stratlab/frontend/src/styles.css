@@ -2197,6 +2197,14 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* a row that wraps keeps "+ Custom" level with its first line, not floating between two (R59-007) */
 .k-chiprow.wrap { align-items: flex-start; }
 .k-chiprow.wrap > .k-chip.add { margin-top: 2px; }
+/* above a phone's width a chip row wraps rather than scrolls, so "+ Custom" is the row's last chip, in line with the others: beside
+   a row that had wrapped onto two lines it floated half-way between them (owner, 26 Oct, the notebook's test period). The bar's
+   chips and "+ Custom" become one wrapping row; on a phone the bar scrolls and "+ Custom" stays beside it (R7O-010) */
+@media (min-width: 641px) {
+  .k-chiprow { flex-wrap: wrap; align-items: flex-start; padding: 2px; }
+  .k-chiprow > .k-chipbar { display: contents; }
+  .k-chiprow > .k-chip.add, .k-chiprow.wrap > .k-chip.add { margin-top: 0; }
+}
 /* every tap target on a phone is at least 32px: the ticks, the features list, short links in text */
 @media (max-width: 640px) {
   input[type=checkbox], input[type=radio],

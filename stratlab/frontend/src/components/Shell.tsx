@@ -111,7 +111,10 @@ export function Shell({ children }: { children: ReactNode }) {
     const locked = off && gate!.whole;
     // drawn by CSS from data-plan, so the link's name stays the page's own; the plan is in its title
     const label = locked ? <>{p.label}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(gate!)]} aria-hidden="true" /></> : p.label;
-    return item(p.to, <Icon />, label, at?.page.to === p.to, off ? `${p.line} (${gate!.whole ? "" : "part of it "}on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
+    // inside a notebook the notebook under Notebooks is the one selected entry: Notebooks itself isn't highlighted too
+    // (owner, 26 Oct: both had the selected background)
+    const here = at?.page.to === p.to && !(p.to === "/notebooks" && path.startsWith("/n/"));
+    return item(p.to, <Icon />, label, here, off ? `${p.line} (${gate!.whole ? "" : "part of it "}on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
   };
   // the group holding the page showing is open (and stays as the person leaves it, so the menu only ever grows toward what they use); the others are as they left them
   const activeGroup = space !== "mine" ? (onGroup?.space === space ? onGroup.group.id : at?.space === space ? at.group.id : null) : null;
@@ -132,13 +135,13 @@ export function Shell({ children }: { children: ReactNode }) {
           <NavLink key={n.id} to={`/n/${n.id}`} title={[n.name, inst, `${count} experiment${count === 1 ? "" : "s"}`, verdict].filter(Boolean).join(" · ")}
             className={({ isActive }) => `nb-link${isActive || path.startsWith(`/n/${n.id}/`) ? " active" : ""}`}>
             <span className="nb-dot" title={`The dot is the ${verdict}`}><span className={`vdot ${n.summary?.last_verdict ?? "none"}`} /></span>
-            <span className="nb-text">{n.name}</span>
+            {/* the dot says what it is on hover (its title) and to a screen reader here; the caption under the list that said it
+                for every dot was clutter in the menu (owner, 26 Oct) */}
+            <span className="nb-text">{n.name}<span className="sr-only">, {verdict}</span></span>
             {n.pinned && <span className="nb-pin" title="Pinned"><Pin size={13} filled /></span>}
           </NavLink>
         );
       })}
-      {/* what the coloured dots are, said once under the list (DA-032: they were unexplained) */}
-      {!!sideNotebooks?.length && <span className="small muted side-note-wrap nb-key" data-testid="nb-dot-key">Dots: each notebook's last verdict.</span>}
       {!!notebooks?.length && <Link to={allNotebooks} className="nb-more">{notebooks.length > SIDE_NOTEBOOKS ? `All ${notebooks.length} notebooks` : "All notebooks"}</Link>}
     </div>
   );
