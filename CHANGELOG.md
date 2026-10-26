@@ -4,6 +4,19 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 26 October 2026: IPO checks, memory
+
+- **IPOs in Admin:** a red herring prospectus filed with SEBI that no exchange lists yet, or a US final prospectus not yet confirmed as a first offering, is a Check ("To check"), looked for again each day; an issue an exchange lists that ours doesn't is still a Problem.
+- **Memory:** `/admin/memory?detail=true` adds a census of the heap by type and the largest module-level collections, to find what grows between two readings.
+
+### 25 October 2026: the owner's check of the Money pages
+
+- **US stocks tax:** the upload takes a realised-gains tax report such as Vested's yearly `2025.xlsx` (each lot sold becomes a purchase and a sale, priced from the lot's own proceeds and cost basis so the gains match the report's summary to the cent); the ready-made Schedule FA, FSI, TR and Form 67 workbooks and PDFs get a message saying which file to upload instead.
+- **Net worth:** Add an entry is a full-size button at the top, with one-tap chips for savings, deposits, EPF, PPF, gold, property and loans.
+- **Layouts:** the tax report's inputs in a tidy grid with switches sized to their choices, the year's figures spread across their card, the ITR-ready export's downloads equal width with the written facts out of the figure grid, and My Holdings' recent filings in lined-up columns. The "New" tags on page cards are gone.
+- **IPOs:** Jio Platforms and every issue between the exchanges' lists (closed, not yet listed) are kept; every SEBI draft page is read; a daily completeness check compares the lists with NSE's, BSE's and SEBI's.
+- **Markets data:** the whole-market audit runs monthly; new listings are checked daily for their first 10 days.
+
 ### 25 October 2026: memory peaks, and the IPO lists
 
 - **Memory (`memguard.py`):** the heavy background jobs (the whole-market audits, the screens index, the page price refresh, breadth, positioning, the library seed, offer-document and filing reads, corporate-action reads) take turns on one fair lock, each hands its memory back when it is through, and malloc is told to keep two arenas and to give back blocks of 1 MB and more (a test with eight threads building and dropping 100 MB each kept 385 MB before and 44 MB after). The price refresh no longer holds every due page parsed (144 MB for 15,000 pages, now 3 MB), the caches stay under one 256 MB budget with expired entries swept, a source's last-good copy is capped at 16 MB, and the mutual fund history kept in memory is the latest 80 schemes. Admin: `/admin/memory`.
