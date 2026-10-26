@@ -10,7 +10,9 @@ from app.intel import net
 from tests import world
 
 
-def test_heavy_jobs_run_one_at_a_time_in_the_order_they_asked():
+def test_heavy_jobs_run_one_at_a_time_in_the_order_they_asked(monkeypatch):
+    # a queue of its own: another test's background job asking for a turn meanwhile was counted as waiting (5, not 3, in CI)
+    monkeypatch.setattr(memguard, "TURNS", memguard._Turns())
     order, inside, worst = [], [0], [0]
 
     def job(name):
