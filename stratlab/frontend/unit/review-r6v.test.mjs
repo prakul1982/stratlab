@@ -45,7 +45,7 @@ test("the page and the card use the server's words for the verdict, and show all
   const pub = read("src/pages/PublicLibrary.tsx");
   assert.match(pub, /e\.verdict\.fact_headline \?\? e\.verdict\.headline/);
   assert.match(pub, /e\.verdict\.fact_summary \?\? e\.verdict\.summary/);
-  assert.match(pub, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} tone=\{headTone\(e\)\} \/>/);
+  assert.match(read("src/components/LibraryBits.tsx"), /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} tone=\{headTone\(e\)\} \/>/);   // the card both libraries draw
   assert.match(read("src/pages/Login.tsx"), /e\.verdict\.fact_headline \?\? e\.verdict\.headline/);
   assert.deepEqual(Object.keys(CHECK_RESULT).sort(), ["fail", "not_passed", "pass", "skip", "warn"]);
   assert.equal(CHECK_RESULT.skip, "Not run");

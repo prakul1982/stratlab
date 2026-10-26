@@ -1,9 +1,17 @@
+import type { ReactNode } from "react";
 import { num, pct } from "../lib/format";
 import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
-import { VERDICT_FACT } from "./ui";
+import { plainTerms } from "../lib/plainTerms";
+import { holdResult, libMeta, strategyName } from "../lib/libraryList";
+import { TOTAL_AFTER_COSTS, TOTAL_HOLD, testedRange } from "../lib/libraryText";
+import { headTone, trails, unseenLabel } from "../lib/tradeUi";
+import { VERDICT_FACT, VerdictBadge } from "./ui";
 import { Signed } from "./kit/Signed";
 import { Badge } from "./kit/Badge";
+import { CardHead } from "./kit/Card";
+import { Disclosure } from "./kit/Disclosure";
+import { Stat } from "./kit/Stat";
 
 /* The pieces of a library strategy that its page behind sign-in and its read-only public page both draw: what an entry
  * looks like, which of its figures exist, and its rules in words. Kept apart from pages/LibraryPage.tsx so the public
@@ -61,7 +69,7 @@ export function checksBeyond(line: string, label: string | null | undefined): st
 }
 
 export { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";
-export { holdResult, libraryTally, liveOptions } from "../lib/libraryList";
+export { holdResult, libMeta, libraryTally, liveOptions, marketChoices, marketName, strategyName } from "../lib/libraryList";
 
 /** The return beside buy and hold, as the notebook's verdict says it (R5O-014). */
 /** A plain badge beside the checks badge when the strategy trails buy and hold, so "Passed" never reads as "beat the market". */
@@ -95,5 +103,52 @@ export function Rules({ s }: { s: Strategy }) {
       ))}
       {s.risk?.sl ? <span className="k-muted">Stop {s.risk.sl}{s.risk.stopType === "points" ? " points" : s.risk.stopType === "atr" ? "× ATR" : s.risk.stopType === "swing" ? " candles (swing)" : "%"}{s.risk.tgt ? ` · target ${s.risk.tgt}${s.risk.tgtType === "r" ? "R" : s.risk.tgtType === "points" ? " points" : "%"}` : ""}</span> : null}
     </div>
+  );
+}
+
+/** The one library card's face, drawn by the signed-in library and the public one (MO-5a): where it was tested (small, once),
+ * the strategy's own name, who made it, two lines of what it does, then ONE row of figures that lines up from card to card,
+ * the gap to buy and hold said once, and the checks with the unseen part on one line. Everything else (the dates, which
+ * check did what, the rules, the full description) is behind "Rules and details". The pieces are the card's grid rows: the
+ * cards of a row share each row's height (`.lib-card` takes its rows from the list), so the figures and the buttons sit
+ * at one height whatever the title or the description. `actions` is the last row; without `details` the card has one row less. */
+export function LibraryCard({ e, details = true, actions }: { e: LibEntry; details?: boolean; actions: ReactNode }) {
+  const sh = shownStats(e);
+  const title = strategyName(e);
+  const hold = holdResult(e);
+  const figs: [string, number | null, "up" | "down" | undefined][] = [
+    [TOTAL_AFTER_COSTS, sh.ret, sh.ret == null || sh.ret === 0 || trails(e) ? undefined : sh.ret > 0 ? "up" : "down"],
+    [TOTAL_HOLD, sh.buy_hold, sh.buy_hold == null || sh.buy_hold === 0 ? undefined : sh.buy_hold > 0 ? "up" : "down"],
+    ["Worst fall", sh.mdd, sh.mdd == null || sh.mdd === 0 ? undefined : sh.mdd > 0 ? "up" : "down"],
+  ];
+  return (
+    <>
+      <div className="k-stack k-tight lib-head">
+        <span className="k-note lib-meta" title={libMeta(e)}>{libMeta(e)}</span>
+        <CardHead title={title} />
+        <span className="k-note lib-by">By {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span>
+      </div>
+      <p className={`k-small lib-clamp lib-about${e.description ? "" : " lib-none"}`} title={plainTerms(e.description)}>{plainTerms(e.description)}</p>
+      <div className="lib-figs" role="list" aria-label="Totals over the whole test">
+        {figs.map(([k, n, tone]) => <Stat key={k} item label={k} value={n == null ? "–" : pct(n)} tone={tone} />)}
+      </div>
+      <p className="k-small lib-vs" data-testid="lib-hold">{hold ? <b>{hold}</b> : null}</p>
+      <div className="k-row lib-status">
+        <VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />
+        {sh.ran ? (sh.unseen != null && <span className="k-note">{unseenLabel(e)} <Signed value={sh.unseen} fmt={(v) => pct(v)} /></span>)
+          : <Badge tone="plain" dot={false}>Not run</Badge>}
+      </div>
+      {details && (
+        <Disclosure summary="Rules and details" className="lib-details">
+          <div className="k-stack k-tight">
+            {e.range && <p className="k-note lib-line" data-testid="lib-window">Tested {testedRange(e.range)}{e.stats.trades != null ? ` · ${e.stats.trades} trades` : ""}</p>}
+            {e.reason && <p className="k-note lib-line lib-reason">{e.reason}</p>}
+            {e.description && <p className="k-small lib-line">{plainTerms(e.description)}</p>}
+            <Rules s={e.strategy} />
+          </div>
+        </Disclosure>
+      )}
+      <div className="k-stack k-tight lib-actions">{actions}</div>
+    </>
   );
 }

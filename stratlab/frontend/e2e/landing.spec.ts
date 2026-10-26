@@ -274,9 +274,15 @@ test("/library: a result line, the checks and the figures on each card; one summ
   const cards = page.locator(".lib-card");
   await expect(cards).toHaveCount(list.length);
   await expect(page.locator("main")).not.toContainText(/Passed: .*Not run:|Behind buy and hold by/);
+  // a market filter that offers only markets that have a strategy, each with how many (MO-5b)
+  const byMarket = new Map<string, number>();
+  for (const e of list) byMarket.set(e.market, (byMarket.get(e.market) ?? 0) + 1);
+  const chips = (await page.getByRole("group", { name: "Market" }).getByRole("button").allInnerTexts()).filter((t) => t !== "All markets");
+  expect(chips.length, chips.join(" | ")).toBe(byMarket.size);
+  for (const n of byMarket.values()) expect(chips.some((t) => t.endsWith(` · ${n}`)), chips.join(" | ")).toBe(true);
   await expect(cards.first().getByTestId("lib-hold")).toContainText(/points (behind|ahead of) buy and hold|About the same as buy and hold/);
   await expect(cards.first().locator(".badge").first()).toContainText(/checks run|Lost money|Too few|Mixed|Failed/);
-  await expect(cards.first().locator(".k-mini-stats .k-stat-v")).toHaveCount(3);
+  await expect(cards.first().locator(".lib-figs .k-stat-v")).toHaveCount(3);
   // each verdict option is one some strategy has
   const have = new Set(list.map((e) => e.verdict.verdict));
   const options = await page.getByLabel("Verdict").locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value));

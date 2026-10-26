@@ -27,14 +27,15 @@ def small(monkeypatch):
 
 
 def test_every_strategy_is_a_valid_rule_set():
-    assert 8 <= len(S.STRATEGIES) <= 12
+    assert 8 <= len(S.STRATEGIES) <= 14
     for slug, spec in S.STRATEGIES.items():
         s = S.strategy_of(spec, spec["name"])
         assert isinstance(s, Strategy) and s.entry, slug
         assert not ADVICE.search(spec["name"] + spec["text"]), slug
         for market, pid in spec["groups"]:
             assert S.preset_of(market, pid)["symbols"]
-        assert len(S.entry_id(slug, "fno_liquid")) <= 24 and library.ID.match(S.entry_id(slug, "fno_liquid"))
+            assert library.ID.match(S.entry_id(slug, pid)), S.entry_id(slug, pid)       # every id fits the library's 24 characters (MO-5b)
+            assert S.strategy_of(spec, spec["name"], market).entry
     assert len({S.entry_id(s, p) for s, v in S.STRATEGIES.items() for _, p in v["groups"]}) == sum(len(v["groups"]) for v in S.STRATEGIES.values())
     names = " ".join(s["name"] for s in S.STRATEGIES.values())
     for need in ("ST S2", "20/50 EMA", "RSI(2)", "52-week", "Bollinger", "Opening-range", "Golden cross", "Donchian"):
@@ -66,7 +67,7 @@ def test_the_page_lists_them_with_the_badge(w, small):
     S.seed(main_markets(), only=["golden-cross"], gap=0)
     r = w["client"].get("/library", headers=headers("free-token")).json()
     rows = [e for e in r["entries"] if e.get("official")]
-    assert sorted(e["id"] for e in rows) == ["seed-golden-cross-in", "seed-golden-cross-us"]
+    assert sorted(e["id"] for e in rows) == sorted(S.entry_id("golden-cross", p) for _, p in S.STRATEGIES["golden-cross"]["groups"])
     assert all(e["badge"] == "StratLab" and e["mine"] is False and "owner" not in e for e in rows)
     one = w["client"].get(f"/library/{rows[0]['id']}", headers=headers("free-token")).json()
     assert one["author"] == "StratLab" and one["verdict"]["headline"]
@@ -84,7 +85,7 @@ def test_seeding_again_changes_nothing_but_keeps_counts_and_moderation(w, small)
     again = library.load(eid)
     assert again["copies"] == 4 and again["hidden"] is True and again["published_at"] == e["published_at"]
     assert len([x for x in library.all_entries() if x["id"] == eid]) == 1
-    assert len(S.seeded()) == 2
+    assert len(S.seeded()) == len(S.STRATEGIES["ema-20-50"]["groups"])
 
 
 def test_a_group_without_data_is_reported_and_the_rest_publish(w, small, monkeypatch):
@@ -96,7 +97,7 @@ def test_a_group_without_data_is_reported_and_the_rest_publish(w, small, monkeyp
         return real(registry, strat, market, preset, now, max_open)
     monkeypatch.setattr(S, "run_group", flaky)
     out = S.seed(main_markets(), only=["golden-cross"], gap=0)
-    assert [p["id"] for p in out["published"]] == ["seed-golden-cross-in"]
+    assert "seed-golden-cross-in" in [p["id"] for p in out["published"]] and "seed-golden-cross-us" not in [p["id"] for p in out["published"]]
     assert out["failed"][0]["id"] == "seed-golden-cross-us" and "Fewer than two" in out["failed"][0]["error"]
 
 
@@ -121,7 +122,7 @@ def test_start_up_seed_does_nothing_when_the_library_has_them_and_stops_after_a_
     from app import main
     seeds, waits = [], []
     monkeypatch.setattr(S, "seed", lambda registry, **kw: seeds.append(1) or {})
-    monkeypatch.setattr(S, "seeded", lambda: [{"id": "seed-x"}])
+    monkeypatch.setattr(S, "seeded", lambda: [{"id": i} for i in S.wanted()])
     main.library_seed_once(sleep=waits.append)
     assert seeds == [] and waits == [main.SEED_FIRST_WAIT]                  # a deploy costs one cheap check
     monkeypatch.setattr(S, "seeded", lambda: [])

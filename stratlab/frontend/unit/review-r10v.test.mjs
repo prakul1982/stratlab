@@ -37,7 +37,7 @@ const entryFor = ([id, name], i) => ({
 test("every verdict page's title is about 60 characters and leads with the shortfall; its description is at most 160 (R10V-005)", () => {
   const entries = Object.fromEntries(seo.LIBRARY_SEEDS.map((s, i) => [s[0], entryFor(s, i)]));
   const files = Object.fromEntries(libraryFiles(template, entries));
-  assert.equal(Object.keys(files).length, 19);
+  assert.equal(Object.keys(files).length, seo.LIBRARY_SEEDS.length);       // one page for each (43 since the other markets' samples, MO-5b)
   const titles = new Set();
   seo.LIBRARY_SEEDS.forEach(([id, name], i) => {
     const page = files[`library/${id}/index.html`];

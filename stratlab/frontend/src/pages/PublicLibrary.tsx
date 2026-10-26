@@ -8,11 +8,11 @@ import { pct, TF_NAME } from "../lib/format";
 import { signedInHere, signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
-import { CHECK_RESULT, CHECKS_NOT_HOLD, TOTAL_AFTER_COSTS, TOTAL_HOLD, checksBeyond, checksOf, headTone, HoldLine, holdResult, libraryTally, liveOptions, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
+import { CHECK_RESULT, CHECKS_NOT_HOLD, checksOf, headTone, HoldLine, LibraryCard, libraryTally, liveOptions, marketChoices, Rules, shownStats, strategyName, libMeta, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
 import { libraryDescription, libraryTitle } from "../lib/libraryText";
-import { VerdictBadge } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
 import { Card, CardHead } from "../components/kit/Card";
+import { ChipBar } from "../components/kit/ChipBar";
 import { Select } from "../components/kit/Form";
 import { PageHeader } from "../components/kit/PageHeader";
 import { Stat, StatRow } from "../components/kit/Stat";
@@ -31,7 +31,6 @@ const CHECK_SAYS: Record<string, string> = {
   shuffle: "With the same trades in a worse order, how much deeper could the worst fall have been?",
   sample: "Were there enough trades to tell skill from luck (30 or more)?",
 };
-const MARKETS: [string, string][] = [["", "Every market"], ["IN", "India"], ["US", "United States"]];
 const NOTE = "Tested by StratLab on past prices, for research and paper trading. Each entry's dates are the prices its latest test covered. A verdict describes the past, not what comes next, and nothing here is investment advice.";
 
 /** How a group was tested, so the totals can be read (R43B-004): one pot of capital, buy and hold in equal parts, and
@@ -50,6 +49,7 @@ const GoogleCopy = ({ label = "Continue with Google to copy and re-test" }: { la
 /** /library, signed out: StratLab's own strategies with their verdicts. */
 export function PublicLibrary() {
   const [rows, setRows] = useState<LibEntry[] | null>(null);
+  const [counts, setCounts] = useState<Record<string, number> | undefined>(undefined);
   const [failed, setFailed] = useState(false);
   const [again, setAgain] = useState(0);
   const [q, setQ] = useState("");
@@ -58,14 +58,15 @@ export function PublicLibrary() {
   useEffect(() => {
     let live = true;
     setFailed(false);
-    publicGet<{ entries: LibEntry[] }>("/public/library").then((r) => { if (live) setRows(r.entries); }).catch(() => { if (live) { setRows([]); setFailed(true); } });
+    publicGet<{ entries: LibEntry[]; markets?: Record<string, number> }>("/public/library").then((r) => { if (live) { setRows(r.entries); setCounts(r.markets); } }).catch(() => { if (live) { setRows([]); setFailed(true); } });
     return () => { live = false; };
   }, [again]);
   const shown = useMemo(() => (rows ?? []).filter((e) => (!verdict || e.verdict.verdict === verdict) && (!market || e.market === market)
     && (!q.trim() || `${e.name} ${e.description} ${where(e)}`.toLowerCase().includes(q.trim().toLowerCase()))), [rows, q, verdict, market]);
   // only the choices some strategy matches; the one picked stays so it can be undone (DK-015)
   const verdicts = useMemo(() => liveOptions(VERDICTS, rows ?? [], (e) => e.verdict.verdict, verdict), [rows, verdict]);
-  const markets = useMemo(() => liveOptions(MARKETS, rows ?? [], (e) => e.market, market), [rows, market]);
+  // the markets that have a strategy, each with how many (MO-5b)
+  const markets = useMemo(() => marketChoices(counts, rows ?? [], market), [counts, rows, market]);
   const tally = useMemo(() => libraryTally(rows ?? []), [rows]);
   return (
     <PublicFrame action={<GoogleCopy label="Continue with Google" />}>
@@ -74,9 +75,9 @@ export function PublicLibrary() {
       <Card label="Find a strategy">
         <div className="k-toolbar">
           <label className="k-search"><Search size={18} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: RSI, breakout, NIFTY" aria-label="Search the library" /></label>
-          <Select label="Market" value={market} onChange={setMarket} options={markets.map(([value, label]) => ({ value, label }))} />
           <Select label="Verdict" value={verdict} onChange={setVerdict} options={verdicts.map(([value, label]) => ({ value, label }))} />
         </div>
+        {markets.length > 2 && <ChipBar label="Market" options={markets} value={market} onChange={setMarket} />}
       </Card>
       {rows === null ? <Card><Skeleton label="Opening the library" /></Card>
         : failed ? <ErrorState title="The library couldn't be opened" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Your connection or ours dropped for a moment.</ErrorState>
@@ -90,27 +91,13 @@ export function PublicLibrary() {
               <span className="k-small k-muted">{shown.length} strateg{shown.length === 1 ? "y" : "ies"} shown</span>
             </div>
             <div className="k-cards lib-cards">
-              {shown.map((e) => {
-                const sh = shownStats(e);
-                const hold = holdResult(e);
-                const beyond = checksBeyond(checksOf(e), e.verdict.label);
-                return (
-                  <Card key={e.id} label={plainTerms(e.name)} className="lib-card">
-                    <div className="k-stack k-tight">
-                      <span className="k-eyebrow">{where(e)} · {TF_NAME[e.tf] ?? e.tf} candles{e.side !== "long" ? ` · ${e.side === "both" ? "long and short" : "short"}` : ""}</span>
-                      <div className="lib-title"><CardHead title={plainTerms(e.name)} level={2} /></div>
-                    </div>
-                    {/* the result against buy and hold, then the checks: one line each (the figures are in the row below) */}
-                    {hold && <p className="lib-result" data-testid="lib-hold"><b>{hold}</b></p>}
-                    <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />{beyond && <span className="k-note">{beyond}</span>}{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
-                    <div className="k-mini-stats">
-                      {([[TOTAL_AFTER_COSTS, sh.ret], [TOTAL_HOLD, sh.buy_hold], [unseenLabel(e), sh.unseen]] as [string, number | null][])
-                        .map(([k, n]) => <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={k === TOTAL_AFTER_COSTS && trails(e) ? undefined : tone(n)} />)}
-                    </div>
-                    <div className="k-row k-push"><Link className="btn sm" to={`/library/${encodeURIComponent(e.id)}`} aria-label={`Open the verdict and rules of ${plainTerms(e.name)}`}>Open the verdict and rules</Link></div>
-                  </Card>
-                );
-              })}
+              {shown.map((e) => (
+                <Card key={e.id} label={`${strategyName(e)}, ${libMeta(e)}`} className="lib-card lib-lean">
+                  {/* the same face as the signed-in library's; the rules and the checks one by one are on the strategy's own page */}
+                  <LibraryCard e={e} details={false} actions={
+                    <Link className="btn sm" to={`/library/${encodeURIComponent(e.id)}`} aria-label={`Open the verdict and rules of ${strategyName(e)}, ${libMeta(e)}`}>Open the verdict and rules</Link>} />
+                </Card>
+              ))}
             </div>
           </>
         )}

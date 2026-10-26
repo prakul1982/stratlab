@@ -4097,7 +4097,7 @@ def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str =
     shown = library.same_hold([e for e in library.all_entries() if library.visible(e, profile["id"]) and (e.get("official") or not official)])
     rows = library.search(shown, market.upper()[:10], verdict[:12], q[:80], sort)
     return {"entries": [library.public(e, profile["id"]) for e in rows[:200]], "total": len(rows),
-            "reasons": library.REASONS}
+            "reasons": library.REASONS, "markets": library.market_counts(shown)}
 
 
 def visible_entry(eid: str, profile) -> dict:
@@ -4178,7 +4178,8 @@ def public_library(market: str = "", verdict: str = "", q: str = "", sort: str =
     published strategy is never listed here (signed-in people see those in /library)."""
     rows = library.search(library.public_entries(), market.upper()[:10], verdict[:12], q[:80], sort)
     cap = max(1, min(limit, 200))
-    return JSONResponse({"entries": [library.public_view(e) for e in rows[:cap]], "total": len(rows), "reasons": library.REASONS},
+    return JSONResponse({"entries": [library.public_view(e) for e in rows[:cap]], "total": len(rows), "reasons": library.REASONS,
+                         "markets": library.market_counts(library.public_entries())},
                         headers=PUBLIC_LIBRARY_HEADERS)
 
 
@@ -6774,18 +6775,23 @@ def library_seed_once(sleep=time.sleep):
     data is up. Market data comes up with the day's broker login, which a night-time deploy starts before, so a start
     that finds it down checks again every half hour for a day instead of giving up until the next deploy. A library
     that has fresh ones is not touched (a deploy costs one cheap check); one last tested over a week ago is run again, so
-    its dates stay near today's (DA-038). A seed is only ever run once a start; the admin button refreshes them any time."""
+    its dates stay near today's (DA-038). A library that is fresh but lacks some entries (a market added since) gets only
+    those, and waits for the broker's login only when one of them needs it (MO-5b). A seed is only ever run once a start;
+    the admin button refreshes them any time."""
     sleep(SEED_FIRST_WAIT)
     for _ in range(SEED_TRIES):
         try:
             if not leader.leading():      # another container leads: its own start seeds
                 return
             have = library_seed.seeded()
-            if have and not library_seed.stale(have):
+            fresh = bool(have) and not library_seed.stale(have)
+            todo = library_seed.lacking(have) if fresh else {}
+            if fresh and not todo:
                 return
-            if kite.ready() and _seeding.acquire(blocking=False):
+            needs_broker = not fresh or any(m in library_seed.BROKER_MARKETS for m in todo.values())
+            if (kite.ready() or not needs_broker) and _seeding.acquire(blocking=False):
                 try:
-                    _seed_result.update(started=db.now_iso(), result=library_seed.seed(markets), error=None)
+                    _seed_result.update(started=db.now_iso(), result=library_seed.seed(markets, ids=set(todo)) if fresh else library_seed.seed(markets), error=None)
                 finally:
                     _seed_result["finished"] = db.now_iso()
                     _seeding.release()

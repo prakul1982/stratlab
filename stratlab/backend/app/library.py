@@ -494,6 +494,17 @@ def all_entries(everything: bool = False) -> list[dict]:
     return out
 
 
+def market_counts(entries: list[dict]) -> dict[str, int]:
+    """How many entries each market has, {"IN": 12, "US": 12, ...}: what the page's market filter offers, so it lists only the
+    markets that have samples (MO-5b)."""
+    out: dict[str, int] = {}
+    for e in entries:
+        m = e.get("market")
+        if m:
+            out[m] = out.get(m, 0) + 1
+    return out
+
+
 def search(entries: list[dict], market: str = "", verdict: str = "", q: str = "", sort: str = "best") -> list[dict]:
     words = [w for w in q.lower().split() if w]
     rows = [e for e in entries
