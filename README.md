@@ -305,7 +305,7 @@ Set on the backend (Railway, or `stratlab/backend/.env`). Names and purposes onl
 | `POSTHOG_KEY`, `POSTHOG_HOST` | Optional server-side usage events (a completed payment) |
 | `BACKTEST_PROCESSES` | Backtest worker processes (default 2; 0 runs them in the server process) |
 | `HEAVY_SLOTS` | Heavy requests (backtests, scans, document reads) run at once (default 2) |
-| `CACHE_BUDGET_MB`, `HEAVY_JOB_WAIT`, `MALLOC_TUNE` | Memory: all caches together (default 256 MB), how long a heavy background job waits for its turn before running anyway (default 45 minutes), and `0` to leave malloc's settings alone |
+| `CACHE_BUDGET_MB`, `HEAVY_JOB_WAIT`, `MALLOC_TUNE`, `PYTHONMALLOC` | Memory: all caches together (default 256 MB), how long a heavy background job waits for its turn before running anyway (default 45 minutes), `0` to leave malloc's settings alone, and `pymalloc` to keep Python's small objects in its own arenas (the start command sets `malloc`: they live in malloc's heap) |
 | `CONNECT_SECRET_KEY` | Encrypts users' stored broker tokens and passwords for Connected accounts (Fernet; see [docs/ADMIN.md](docs/ADMIN.md)) |
 | `INBOUND_DOMAIN`, `INBOUND_PROVIDER`, `INBOUND_WEBHOOK_SECRET` | The statements inbox: mail to a user's private address at this domain, parsed by Brevo (default) or sent as signed JSON |
 | `KITE_MULTIUSER_APPROVED`, `KITE_CONNECT_API_KEY`, `KITE_CONNECT_API_SECRET` | Zerodha connections for every user, once Zerodha approves the multi-user app (until then only admins can connect) |

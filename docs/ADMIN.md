@@ -529,11 +529,22 @@ The server's cost is its memory (one process holds the live paper sessions, the 
   histories kept in memory are the latest 80 schemes.
 - **malloc gives memory back:** it is told to keep two arenas and to serve blocks of 1 MB and more from their own
   mappings. `MALLOC_TUNE=0` leaves malloc's settings alone.
+- **Python's small objects live in malloc's heap,** not in its own 1 MB arenas: the start command sets
+  `PYTHONMALLOC=malloc` (a Railway variable of the same name overrides it; `pymalloc` goes back). An arena returns to the
+  system only when every object in it is gone, and a few long-lived cache entries between the temporary ones kept ~300 MB
+  after each day's peaks; malloc returns what is free in pages. On a replay of the day's jobs, freeing the caches gave
+  back 75 MB with Python's arenas and 220 MB with malloc (with every cache full it is about 4% higher, 709 against 681 MB,
+  and parsing takes about 5% more CPU), so the gain is memory handed back when entries expire and jobs finish, which is what
+  the bill follows. jemalloc was measured too and did not beat it.
 - **Looking at it:** there is no panel. `GET /admin/memory` (signed in as an admin) returns the process's resident memory
   (`rss_mb`), which heavy job has the turn (`running`, `since`) and how many wait, and the caches' size against the budget.
   `GET /admin/memory?detail=true` adds a census of the heap by type (object counts and bytes of the 25 biggest types) and
   the largest module-level collections: take it twice an hour apart and the type or collection that grew is what is
-  growing between them. It takes about a second and keeps nothing.
+  growing between them. It takes about a second and keeps nothing. The census counts only what the garbage collector
+  tracks (containers; not the strings, numbers and bytes inside them, which are most of the data: 10 MB counted for 66 MB
+  held on a test page set), so read it with the rest of that answer: `allocators` (which malloc, whether Python's
+  arenas are in use), `python_heap` (arenas taken, in live objects, wasted: only with Python's arenas), `rss_split`
+  (anonymous against file-backed memory) and `caches` (each cache by name, its items and its size against the budget).
 - Backtests run in worker processes (`BACKTEST_PROCESSES`, 2 by default; 0 runs them in the server process) and
   `HEAVY_SLOTS` (2) caps heavy requests running at once.
 
