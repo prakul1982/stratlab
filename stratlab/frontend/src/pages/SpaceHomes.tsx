@@ -121,11 +121,12 @@ export function TradeHome() {
       <Head eyebrow="Trade · your strategy lab" title="Test an idea, then trade it on paper">
         Years of real prices, real costs and four checks for luck. Fake money, never real orders.
       </Head>
+      {/* today's market first, above the first-steps and "pick up" cards (RC2A-038: the data began at y=830 of a 900 px screen) */}
+      <MarketStrip />
       <Top onSteps={setSteps} />
       {/* the checklist's first step is a first test: one guide at a time, so "Start here" waits until it's gone */}
       <NextIdea hideStart={steps} />
       <ToolStrip label="Trade tools" tools={tools} />
-      <MarketStrip />
       <p className="k-small k-muted" data-testid="positioning-link">FII and DII flows, futures positions, PCR and India VIX are on <Link className="link tap-link" to="/trade/positioning">Positioning</Link>.</p>
       <Explore title="More you can do" hide={TRADE_LINKED} order="trade" />
     </div>

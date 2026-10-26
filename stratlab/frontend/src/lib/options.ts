@@ -158,6 +158,17 @@ export function flatLine(snap: OptionSnapshot, closedToday: number, market: Mark
   return hm < s.timing.entry ? `${none} Next entry ${s.timing.entry}.` : `${none} Entries open until ${s.timing.lastEntry}.`;
 }
 
+/** When a session about to start will enter, said as it will happen (RC2A-031: the dialog said "at 09:30" at 09:55 while the session entered at
+ * once). During the entry window of a weekday it enters now ("now, because today's window is open (09:30 to 14:45)"); otherwise at the
+ * entry time on market days ("at 09:30 on market days"). A session that waits for a notebook's rules says that. */
+export function startWhenText(t: { entry: string; lastEntry: string }, signal: { name: string } | null | undefined, now = new Date()): string {
+  if (signal) return `whenever "${signal.name}" signals a trade (from ${t.entry}) on market days`;
+  const hm = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: IST });
+  const wd = now.toLocaleDateString("en-GB", { weekday: "short", timeZone: IST });
+  if (wd !== "Sat" && wd !== "Sun" && hm >= t.entry && hm <= t.lastEntry) return `now if prices are live, because today's window is open (${t.entry} to ${t.lastEntry}), and again on later market days`;
+  return `at ${t.entry} on market days`;
+}
+
 /** MCX trades into the evening and currency options until 17:00; everything else follows equity hours. */
 export const sessionFor = (exchange: string) =>
   exchange === "MCX" ? { entry: "09:15", lastEntry: "22:30", squareoff: "23:15" }

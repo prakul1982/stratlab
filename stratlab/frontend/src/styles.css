@@ -1172,8 +1172,9 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .rules-strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; padding: 14px 18px; }
 .rules-strip ul { display: flex; flex-wrap: wrap; gap: 4px 0; list-style: none; margin: 0; padding: 0; font-size: 14px; color: var(--ink-2); }
 .rules-strip > p { flex-basis: 100%; margin: 0; }
-.rules-strip li:not(:last-child)::after { content: "·"; margin: 0 10px; color: var(--muted); }
-@media (max-width: 640px) { .rules-strip ul { flex-direction: column; } .rules-strip li::after { display: none; } }
+/* the dot goes before each rule but the first, so a rule that wraps never ends a line with one (RC2A-037: "Sell ATM CE, Sell ATM PE ·") */
+.rules-strip li:not(:first-child)::before { content: "·"; margin: 0 10px; color: var(--muted); }
+@media (max-width: 640px) { .rules-strip ul { flex-direction: column; } .rules-strip li::before { display: none; } }
 /* closed trades, one line each: when, why and the amounts, the P&L at the end; tapping one opens its orders under it */
 ul.trade-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 ul.trade-lines > li { border-top: 1px solid var(--line); }
@@ -1438,8 +1439,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-seg button:hover { color: var(--ink); }
 .k-seg button[aria-checked="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); font-weight: 600; }
 /* in dark mode the card and the track are close in tone: a ring shows which choice is on (R49-017) */
-:root[data-theme="dark"] .k-seg button[aria-checked="true"] { box-shadow: inset 0 0 0 1px var(--ink-2); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme]) .k-seg button[aria-checked="true"] { box-shadow: inset 0 0 0 1px var(--ink-2); } }
+/* in dark the chosen segment is filled like the chosen pills elsewhere, not an outlined box (RC2A-042) */
+:root[data-theme="dark"] .k-seg button[aria-checked="true"] { background: var(--ink); color: var(--on-ink); box-shadow: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) .k-seg button[aria-checked="true"] { background: var(--ink); color: var(--on-ink); box-shadow: none; } }
 .k-seg button:disabled { opacity: .55; cursor: not-allowed; }
 
 /* chips wrap onto a second line where there is room, so none hides behind a fade (R1-024); a phone keeps one
@@ -1633,7 +1635,14 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-clip { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .k-btn-end { align-self: flex-start; }
 .k-any { min-width: 0; overflow-wrap: anywhere; }
-@media (max-width: 480px) { .k-seg { flex-wrap: wrap; } .k-seg button { flex: 1 1 auto; } }
+/* On a phone the choices of a segmented control share the row in equal parts and wrap their words inside their own button, so none sits alone on
+ * a second row or is wider than its neighbours (RC2A-029: the IPO stage tabs; RC2A-037: the options expiry choices). More than four keep wrapping. */
+@media (max-width: 480px) {
+  .k-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
+  .k-seg button { min-width: 0; padding: 6px 3px; height: auto; min-height: 36px; white-space: normal; line-height: 1.2; text-align: center; font-size: 13px; }
+  .k-seg:has(> button:nth-child(5)) { display: flex; flex-wrap: wrap; }
+  .k-seg:has(> button:nth-child(5)) button { flex: 1 1 auto; }
+}
 .k-upload { cursor: pointer; }
 .k-upload.disabled { cursor: wait; opacity: .6; }
 .k-notice { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s3) var(--s4); border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--paper-2); font-size: var(--t-label); }
@@ -2287,3 +2296,5 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .h-filing > :first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h-filing > :nth-child(2) { justify-self: start; }
 @media (max-width: 640px) { .h-filing { grid-template-columns: 7.5em minmax(0, 1fr); } .h-filing > :nth-child(3) { grid-column: 1 / -1; } }
+
+.watch-add .k-field, .watch-add .k-field > * { max-width: none; width: 100%; }

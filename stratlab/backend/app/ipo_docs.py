@@ -205,8 +205,59 @@ def objects(pages: list[str]) -> dict | None:
         m = re.search(pat, flat, re.I)
         if m:
             body = re.split(r"\s+(?:In addition to (?:the|these)|Further,|For further details|The objects as set out)", m.group(0), maxsplit=1)[0]
-            return {"page": page, "text": body[:650].rstrip(" ,;")}
+            return {"page": page, "text": clip_words(body, 650)}
     return None
+
+
+def clip_words(text: str, size: int = 650) -> str:
+    """`text` cut at a word (never inside one, RC2A-007: "...creating a public market fo"), with an ellipsis when it was cut."""
+    t = _flat(text).rstrip(" ,;")
+    if len(t) <= size:
+        return t
+    cut = t[:size].rsplit(" ", 1)[0].rstrip(" ,;:-")
+    return cut + "…"
+
+
+def tidy_summary(items: dict | None) -> dict | None:
+    """A stored summary's quotes with one an older read cut inside a word (300 characters, no ending) cut at the word before it."""
+    if not items:
+        return items
+
+    def tidy(st):
+        q = st.get("quote") if isinstance(st, dict) else None
+        if q and len(q) >= 299 and not q.endswith((".", ")", "”", '"', "…", ";")):
+            return {**st, "quote": clip_words(q, len(q) - 1)}
+        return st
+
+    return {k: (tidy(v) if isinstance(v, dict) else [tidy(x) for x in v] if isinstance(v, list) else v) for k, v in items.items()}
+
+
+MONEY_TABLE = re.compile(r"\bS\.?\s*No\b.{0,30}\bParticulars\b", re.I)
+
+
+def objects_view(obj: dict | None) -> dict | None:
+    """The "objects of the offer" fact for the page. A text that is a table of the document (S. No., Particulars, amounts) is given as its
+    lines too, [{"label", "figures"}], with the header's unit, so the page shows a list, not a run of numbers squeezed into a column
+    (RC2A-007: Jio Platforms'); a text cut mid-word by an older read is cut at a word."""
+    if not obj or not obj.get("text"):
+        return obj
+    text = _flat(obj["text"])
+    out = {**obj, "text": text if len(text) < 640 or text.endswith((".", ")", "”", "…", ";")) else clip_words(text, len(text) - 1)}
+    if MONEY_TABLE.search(text):
+        head = re.search(r"\(\s*(?:in\s*)?(?:₹|Rs\.?|INR)\s*(?:in\s*)?(million|mn|lakhs?|crores?)\s*\)|\bin\s+(?:₹|Rs\.?\s*)?(million|mn|lakhs?|crores?)\b", text, re.I)
+        body = text[head.end():] if head else MONEY_TABLE.sub("", text, count=1)
+        items = []
+        for m in re.finditer(r"(?:^|\s)(\d{1,2})\.\s+(.+?)(?=\s\d{1,2}\.\s+[A-Z(]|$)", body.strip()):
+            label, figs = m.group(2), []
+            while (t := re.search(r"\s((?:\[●\]|[\d,]+(?:\.\d+)?)[*#^]*)$", label)):
+                figs.insert(0, t.group(1))
+                label = label[:t.start()]
+            if label.strip():
+                items.append({"label": label.strip(" ,;"), "figures": " ".join(figs) or None})
+        if len(items) >= 2:
+            out["table"] = {"unit": (head.group(1) or head.group(2)).lower() if head else None, "rows": items[:12]}
+            out["text"] = text[:MONEY_TABLE.search(text).start()].strip()         # (the lead-in; the lines are the table)
+    return out
 
 
 MONTH_END = re.compile(r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s*(\d{4})")
@@ -406,7 +457,7 @@ def clean_summary(parsed: dict, excerpt: str) -> dict:
             return None
         if not _numbers(text) <= _numbers(quote):         # every figure the statement gives is in the words it quotes
             return None
-        return {"text": text, "quote": quote[:300]}
+        return {"text": text, "quote": clip_words(quote, 300)}      # (cut at a word, RC2A-007: "...shall not e")
 
     out: dict = {}
     b = keep(parsed.get("business"))

@@ -4,6 +4,14 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 26 October 2026: the live-hours check of Trade and Research (FX-1)
+
+- **IPOs:** one row per issue (an issue named by both exchanges' lists, or stored from one before the other listed it, is one row with the NSE page's size); the latest close is the exchange's official close, dated, and a session still going is not a close; bidding times are the ones the exchange's issue page gives (Jio Platforms bid to 7 PM; no time is written when the page gives none); the first bids are read every five minutes, the list says when they were read, and a read that met a busy source is read again within the hour; the issue grid pairs each label with its own value; the offer document's text is cut at a word, a money table is a list, and what the summary says is not said twice; an issue only BSE lists says its bids are on BSE's page; IPO alerts are above the folds and say when there is nowhere to send them.
+- **Plan prices on locks:** a plan charged in rupees is named by its rupee price with the local amount as "about ... at today's rate", as Plans says it.
+- **Scans:** NIFTY 50 and NIFTY Bank are the exchange's own lists (read daily by the breadth run, dated); while the market trades a row's price and its numbers are one price and say so, and Volume surge is judged on the last whole session.
+- **Events and trade:** the index notice of 23 Oct reads into stocks (a lettered part names its own index) and an unread notice is tried again the next day; a revision circular's lot badge names its series; the options start dialog says when the session enters; Trade home opens with today's market; the journal's verdict names the trades it is about.
+- **Research:** a US company's page has holders above 5% and flagged Form 8-K items; the comparison keeps a qualifier such as a special dividend; an AI read drops a cause no headline reports and names a quarter moved by a one-off.
+
 ### 26 October 2026: IPO checks, memory
 
 - **IPOs in Admin:** a red herring prospectus filed with SEBI that no exchange lists yet, or a US final prospectus not yet confirmed as a first offering, is a Check ("To check"), looked for again each day; an issue an exchange lists that ours doesn't is still a Problem.

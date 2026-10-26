@@ -37,6 +37,10 @@ interface PresetRow { symbol: string; name: string | null; currency: string | nu
 interface PresetOut {
   kind: "preset"; scan: string; scan_name: string; name: string; market: Region; rows: PresetRow[]; matches: number; checked: number; asked?: number; as_of: string | null;
   updated_at?: string | null; stored: boolean; missing: string[]; problems: string[];
+  /** read while the market trades: the prices are the last price of the session so far, not a close (RC2A-021) */
+  live?: boolean;
+  /** a volume rule judged on the last whole session, not the one still going (RC2A-022) */
+  basis?: "whole_session";
 }
 interface ScanInfo { id: string; name: string; text: string; rules: string[]; within: number }
 interface SetInfo { id: string; name: string; count: number; stored?: boolean; as_of?: string | null }
@@ -48,7 +52,8 @@ const SIGNAL: Record<string, ["ok" | "plain", string]> = {
 };
 const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
 const FIRST_SCAN: ScanInfo = { id: "st_s2", name: "Stage 2 + Supertrend", text: "", rules: [], within: 1 };
-const sessions = (n: number) => (n === 0 ? "On the latest close" : `${n} session${n === 1 ? "" : "s"} before the latest close`);
+const sessions = (n: number, mode?: "live" | "whole") => (n === 0 ? (mode === "live" ? "On today's last price, session still going" : mode === "whole" ? "On the last whole session" : "On the latest close")
+  : `${n} session${n === 1 ? "" : "s"} before the ${mode === "live" ? "latest" : mode === "whole" ? "last whole session" : "latest close"}`);
 
 /** "Scanning 50 stocks… 12 s": the scan reports no progress, so the count and the time spent so far. */
 function ScanElapsed({ count }: { count?: number }) {
@@ -175,7 +180,7 @@ export function ScanPage() {
           )}
           <Field label="Group to scan" wide>
             {(id) => <Select id={id} value={setId} onChange={chooseSet}
-              options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count})`, disabled: (s.id === "watchlist" || !!s.stored) && !s.count }))} />}
+              options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count}${!s.stored && s.as_of ? `, list of ${s.as_of}` : ""})`, disabled: (s.id === "watchlist" || !!s.stored) && !s.count }))} />}
           </Field>
           <FormActions>
             <button className="btn" disabled={busy || !pro || !cur?.count}>{busy ? scanningText(cur?.count) : "Scan"}</button>
@@ -203,6 +208,8 @@ export function ScanPage() {
             <Stat label="Stocks checked" value={preset.asked && preset.asked > preset.checked ? `${preset.checked} of ${preset.asked}` : String(preset.checked)}
               note={`${preset.stored ? "read after the close" : "read just now"}${preset.asked && preset.asked > preset.checked ? ` · ${preset.asked - preset.checked} skipped, named below` : ""}`} />
           </StatRow>
+          {preset.basis === "whole_session" && <p className="k-note" data-testid="scan-whole-session">The session is still going. A volume rule holds a whole day's volume against an average, so it is judged on the last whole session; today's volume so far is not compared.</p>}
+          {preset.live && !preset.basis && <p className="k-note" data-testid="scan-live-note">The session is still going: each price is the last price so far, not a close.</p>}
           <DataTable stack phonePage={25} label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
@@ -211,7 +218,7 @@ export function ScanPage() {
                   <Link className="link k-small" to={`${link(r.symbol)}/deep`}>Deep dive →</Link></>) },
               { key: "p", header: "Price", numeric: true, cell: (r) => (
                 <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
-              { key: "m", header: `Matches ${scan.name.toLowerCase()}`, wrap: true, lead: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago)}</span></> },
+              { key: "m", header: `Matches ${scan.name.toLowerCase()}`, wrap: true, lead: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago, preset.basis ? "whole" : preset.live ? "live" : undefined)}</span></> },
               { key: "d", header: "The numbers", wrap: true, cell: (r) => r.detail || "–" },
             ]} />
           {preset.matches > preset.rows.length && <p className="k-note">Showing the first {preset.rows.length} of {preset.matches.toLocaleString("en-IN")} matches, the most recent first.</p>}

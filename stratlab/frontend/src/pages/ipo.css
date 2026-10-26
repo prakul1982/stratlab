@@ -1,8 +1,14 @@
 /* IPOs: the list and an issue's page. */
 .ipo-page .k-sub-line { white-space: normal; }
+/* Each label and its value are one grid item (a div around the dt and dd), so a grid that wraps never pairs a label with the next
+ * value (RC2A-003: at 1280 px "Fresh issue" sat over "Face value"'s value). A long value (the money's use, the promoters) takes the row. */
+.ipo-facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); column-gap: var(--s5); row-gap: var(--s2); }
+.ipo-facts > div { min-width: 0; }
+.ipo-facts > div.wide { grid-column: 1 / -1; }
 .ipo-facts dt { color: var(--muted); font-size: var(--t-label); }
-.ipo-facts dd { margin: 0 0 var(--s2); }
-.ipo-facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); column-gap: var(--s5); }
+.ipo-facts dd { margin: 0; overflow-wrap: anywhere; }
+.ipo-money { margin: var(--s1) 0 0; padding-left: var(--s4); }
+.ipo-money li { margin: 0 0 var(--s1); }
 .ipo-dates { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--s3); margin: 0; padding: 0; list-style: none; }
 .ipo-dates li { display: flex; flex-direction: column; gap: 2px; }
 .ipo-statement { margin: 0 0 var(--s3); }

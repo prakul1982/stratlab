@@ -257,7 +257,7 @@ export function JournalPage() {
                 Your plan keeps the last {j.limit} trades, so {j.beyond_limit.toLocaleString("en-IN")} older one{j.beyond_limit === 1 ? " isn't" : "s aren't"} counted. {j.plan_name} counts every trade.
               </Notice>
             )}
-            {j.verdict ? <VerdictView v={j.verdict} n={s.n} totals={j.tax_totals.length > 0} /> : <Locked plan={j.plan_name} what="The honesty checks on your real trades (enough trades, luck or edge, bad-luck drawdown, charges)" />}
+            {j.verdict ? <VerdictView v={j.verdict} n={s.n} totals={j.tax_totals.length > 0} whose={whoseTrades(j.show, j.practice_count)} /> : <Locked plan={j.plan_name} what={`The honesty checks on ${whoseTrades(j.show, j.practice_count)} (enough trades, luck or edge, bad-luck drawdown, charges)`} />}
             <Stats s={s} />
             <Card label="Running P&L after charges">
               <CardHead title="Running P&L after charges" />
@@ -372,12 +372,16 @@ const CHECK_HELP: Record<string, string> = {
   costs: "Would the result survive charges twice as high: a costlier broker, more slippage, or a busier market?",
 };
 
-function VerdictView({ v, n, totals }: { v: NonNullable<Journal["verdict"]>; n: number; totals: boolean }) {
+/** Whose trades the verdict is about, as the tab says: the real ones, the practice ones, or both (RC2A-034: "Verdict on your real trades" over the
+ * Both tab, whose one trade was a practice trade). */
+const whoseTrades = (show: Show, practice: number) => (show === "practice" ? "your practice trades" : show === "all" && practice > 0 ? "your trades" : "your real trades");
+
+function VerdictView({ v, n, totals, whose }: { v: NonNullable<Journal["verdict"]>; n: number; totals: boolean; whose: string }) {
   return (
     <>
-      <section className="j-verdict" aria-label="Verdict on your real trades">
+      <section className="j-verdict" aria-label={`Verdict on ${whose}`}>
         <div className="k-stack j-verdict-main">
-          <span className="k-eyebrow">Verdict on your real trades</span>
+          <span className="k-eyebrow">Verdict on {whose}</span>
           {/* "too few to judge" isn't a verdict: it's said in smaller type (DB-044: about 100px) */}
           <h2 className={`verdict-head j-verdict-head ${v.verdict}`}>{v.headline}</h2>
           <p className="j-verdict-sum">{v.summary}</p>

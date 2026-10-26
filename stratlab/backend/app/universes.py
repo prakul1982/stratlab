@@ -4,9 +4,12 @@ Preset lists are well-known indices' current members (a list with a known date c
 the market no longer lists is skipped and reported, and you can always build your own group."""
 import json
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from functools import lru_cache
 from pathlib import Path
 
+from . import db
 from .kite_service import NSE_SERIES
 from .research import ResearchError, load
 
@@ -14,14 +17,14 @@ MAX_MEMBERS = 100
 PRESETS = {
     "IN": [
         {"id": "nifty50", "name": "NIFTY 50 stocks", "symbols": [
-            "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK", "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BEL",
+            "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK", "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BEL", "BSE",
             "BHARTIARTL", "CIPLA", "COALINDIA", "DRREDDY", "EICHERMOT", "ETERNAL", "GRASIM", "HCLTECH", "HDFCBANK", "HDFCLIFE",
-            "HEROMOTOCO", "HINDALCO", "HINDUNILVR", "ICICIBANK", "INDUSINDBK", "INFY", "ITC", "JIOFIN", "JSWSTEEL", "KOTAKBANK",
-            "LT", "M&M", "MARUTI", "NESTLEIND", "NTPC", "ONGC", "POWERGRID", "RELIANCE", "SBILIFE", "SBIN", "SHRIRAMFIN",
-            "SUNPHARMA", "TATACONSUM", "TMPV", "TATASTEEL", "TCS", "TECHM", "TITAN", "TRENT", "ULTRACEMCO", "WIPRO"]},
+            "HINDALCO", "HINDUNILVR", "ICICIBANK", "INDIGO", "INFY", "ITC", "JIOFIN", "JSWSTEEL", "KOTAKBANK",
+            "LT", "M&M", "MARUTI", "MAXHEALTH", "NESTLEIND", "NTPC", "ONGC", "POWERGRID", "RELIANCE", "SBILIFE", "SBIN", "SHRIRAMFIN",
+            "SUNPHARMA", "TATACONSUM", "TMPV", "TATASTEEL", "TCS", "TECHM", "TITAN", "TRENT", "ULTRACEMCO"]},
         {"id": "banknifty", "name": "NIFTY Bank stocks", "symbols": [
             "HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK", "INDUSINDBK", "BANKBARODA", "PNB", "CANBK",
-            "FEDERALBNK", "IDFCFIRSTB", "AUBANK"]},
+            "FEDERALBNK", "IDFCFIRSTB", "AUBANK", "UNIONBANK", "YESBANK"]},
         {"id": "fno_liquid", "name": "25 most liquid F&O stocks", "symbols": [
             "RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS", "SBIN", "AXISBANK", "KOTAKBANK", "LT", "BHARTIARTL",
             "ITC", "BAJFINANCE", "TMPV", "TATASTEEL", "MARUTI", "M&M", "SUNPHARMA", "HINDALCO", "ADANIENT",
@@ -100,19 +103,63 @@ def members_note(group: dict) -> str | None:
             "and leave out those that left it.")
 
 
-# a ready-made group that follows an index: the index provider's announced changes are applied once they take effect,
-# so the group is the index's members today (R50-004: BSE in and WIPRO out of the NIFTY 50 from 30 Sep, still WIPRO here)
+# a ready-made group that follows an index: its members are the exchange's own current list (its constituent file, read once a day
+# by the breadth run and kept, with the day it was read), and until one has been read, the list written above with the index
+# provider's announced changes applied once they take effect (R50-004: BSE in and WIPRO out of the NIFTY 50 from 30 Sep). RC2A-020: the
+# written list was months behind (WIPRO, HEROMOTOCO and INDUSINDBK where the exchange had BSE, INDIGO and MAXHEALTH, so MAXHEALTH, 2.3%
+# above its 52-week low, was missing from "Near 52-week low"), and the announced changes did not cover all of it.
 FOLLOWS = {"nifty50": "Nifty 50", "banknifty": "Nifty Bank"}
+EXCHANGE_NAME = {"nifty50": "NIFTY 50", "banknifty": "NIFTY BANK"}       # how the exchange's constituent files name the index (intel/filings.py INDEX_FILES)
+FOLLOWED_KEY = "universe:members:"           # universe:members:<id> = {"symbols": [...], "as_of": "YYYY-MM-DD"}: the exchange's list as last read
+MIN_FOLLOWED = {"nifty50": 45, "banknifty": 10}      # a shorter list is taken as a broken answer, not an index's members
+
+
+def keep_followed(pid: str, symbols: list[str], today: date | None = None) -> bool:
+    """Store the exchange's current list of a followed index (`symbols`, as its file gives them) with the day it was read (India's). False
+    when the list is too short to be the index's."""
+    syms = [s for s in dict.fromkeys(str(x).strip().upper() for x in symbols or []) if s]
+    if len(syms) < MIN_FOLLOWED.get(pid, 20):
+        return False
+    day = (today or datetime.now(ZoneInfo("Asia/Kolkata")).date()).isoformat()
+    db.set_setting(FOLLOWED_KEY + pid, json.dumps({"symbols": syms, "as_of": day}, separators=(",", ":")))
+    return True
+
+
+def refresh_followed(index_members, today: date | None = None) -> list[str]:
+    """Read each followed index's current members through `index_members(name)` (the breadth run's, cached for the day) and keep them.
+    Returns the ids refreshed; an index the exchange does not answer for keeps its last list."""
+    done = []
+    for pid, name in EXCHANGE_NAME.items():
+        try:
+            if keep_followed(pid, index_members(name), today):
+                done.append(pid)
+        except Exception as e:
+            print("universes: members of", name, str(e)[:100])
+    return done
+
+
+def followed(pid: str) -> dict | None:
+    """The stored list of a followed index: {"symbols", "as_of"}, or None before one has been read."""
+    try:
+        got = db.json_value(db.get_setting(FOLLOWED_KEY + pid), {})
+    except Exception:
+        return None
+    syms = [s for s in got.get("symbols") or [] if isinstance(s, str)] if isinstance(got, dict) else []
+    return {"symbols": syms, "as_of": got.get("as_of")} if len(syms) >= MIN_FOLLOWED.get(pid, 20) else None
 
 
 def current(p: dict, today=None) -> dict:
-    """A preset with the announced index changes that have taken effect applied, and as_of the latest one's date."""
+    """A preset's members today. A group that follows an index: the exchange's own list as last read (dated), else the written list with the
+    announced index changes that have taken effect applied, and as_of the latest one's date."""
     index = FOLLOWS.get(p.get("id"))
     if not index:
         return p
+    got = followed(p["id"])
+    if got:
+        when = date.fromisoformat(got["as_of"]) if got.get("as_of") else None
+        return {**p, "symbols": got["symbols"], **({"as_of": f"{when.day} {when:%b %Y}"} if when else {})}
     try:
         from . import market_events
-        from datetime import date
         day = (today or market_events.ist_now().date()).isoformat()
         changes = sorted((c for c in market_events.index_changes() if c.get("effective") and str(c["effective"])[:10] <= day),
                          key=lambda c: str(c["effective"])[:10])

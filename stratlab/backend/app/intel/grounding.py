@@ -784,7 +784,7 @@ def flow_facts(cash: dict | None) -> dict | None:
 # or what comes before "helped", "lifted", "drove"… (R13-011: "strong earnings helped lift most sectors")
 _CAUSE_AFTER = re.compile(r"\b(?:because of|because|due to|driven by|thanks to|on the back of|fuel(?:l)?ed by|boosted by|lifted by|"
                           r"helped by|supported by|weighed (?:down )?by|dragged (?:down )?by|pressured by|spurred by|amid)\b(.+)$", re.I)
-_CAUSE_BEFORE = re.compile(r"^(.+?)\b(?:helped|helps|lifted|lifts|boosted|boosts|drove|drives|fuel(?:l)?ed|spurred|propelled|pushed|"
+_CAUSE_BEFORE = re.compile(r"^(.+?)\b(?:helped|helps|lifted|lifts|boosted|boosts|drove|drives|driven|fuel(?:l)?ed|spurred|propelled|pushed|"
                            r"weighed on|dragged|pressured|sent)\b(?!\s+by\b)", re.I)
 _PREVIEW = re.compile(r"\b(on tap|ahead|set for|await\w*|expected|could|may|might|preview|what to (watch|expect)|week ahead|look(s|ing)? ahead|due)\b", re.I)
 _PLAIN = {"strong", "weak", "solid", "robust", "the", "a", "an", "and", "of", "in", "on", "for", "with", "its", "their", "most",
@@ -926,11 +926,15 @@ def ground_company(read: dict, facts: dict, region: str, today) -> dict:
     sym = str(facts.get("symbol") or "")
     res = dict(read)
     fy = lambda t: fix_fiscal_labels(t, today, region)        # noqa: E731
+    # a sentence that gives a cause ("...which has driven a recent 2% stock surge") stands only on a headline on the page that reports it
+    # (RC2A-026: a RELIANCE read called the Jio IPO's subscription the cause of a 2% surge no headline or price on the page showed)
+    titles = [str(h) for h in facts.get("recent_headlines") or []]
+    backed = lambda check: (lambda s: check(s) and cause_backed(s, titles))        # noqa: E731
     for k in ("summary", "valuation_note", "position"):
-        res[k] = keep_sentences(read.get(k) or "", pool, page.check)
+        res[k] = base_noted(keep_sentences(read.get(k) or "", pool, backed(page.check)), facts)
     for k in ("bull", "bear", "watch"):
-        check = page.check_watch if k == "watch" else page.check
-        res[k] = [x for x in (keep_sentences(fy(str(i)) if k == "watch" else str(i), pool, check) for i in read.get(k) or []) if x]
+        check = backed(page.check_watch if k == "watch" else page.check)
+        res[k] = [x for x in (base_noted(keep_sentences(fy(str(i)) if k == "watch" else str(i), pool, check), facts) for i in read.get(k) or []) if x]
     ideas = []
     for i in read.get("ideas") or []:
         text = rule_words(str(i.get("text") or ""), sym)
@@ -939,10 +943,28 @@ def ground_company(read: dict, facts: dict, region: str, today) -> dict:
         # a rule made of a typed-in price, or titled for an indicator it doesn't use, tests nothing (R10O-005)
         if hardcodes_price(text, facts.get("price")) or not idea_uses_what_it_names(i.get("title"), text):
             continue
-        ideas.append({**i, "text": text, "why": keep_sentences(str(i.get("why") or ""), pool, page.check)})
+        ideas.append({**i, "text": text, "why": keep_sentences(str(i.get("why") or ""), pool, backed(page.check))})
     res["ideas"] = ideas
     res["checked"] = True
     return res
+
+
+_BASE_WORDS = re.compile(r"one-off|base effect|moved by|other income|tax rate|exceptional|unusual", re.I)
+
+
+def base_noted(text: str, facts: dict) -> str:
+    """A line that measures a change against a quarter the quarterly table shows was moved by a one-off (other income several times the
+    usual, a tax rate far off it) says so in the same line, as the Key numbers card does (RC2A-026: "Profit growth YoY June 2026 vs
+    June 2025 is −24.6%" in Notable figures, with no word of June 2025's ₹15,119 crore of other income)."""
+    if not text or not re.search(r"\d", text) or _BASE_WORDS.search(text):
+        return text
+    for e in facts.get("base_effect_items") or []:
+        q = str(e.get("quarter") or "").split()
+        if len(q) != 2 or not q[1].isdigit():
+            continue
+        if re.search(rf"\b{re.escape(q[0])}[a-z]*\.?\s+{q[1]}\b", text, re.I):
+            return f"{text.rstrip('. ')} ({str(e.get('text') or '').split(':')[0]})."
+    return text
 
 
 _LEAD = re.compile(r"^\s*(?:(buy|go long(?: on)?|purchase)|(sell(?:\s+\S+)?\s+short|short[- ]sell|short|go short(?: on)?))\s+(?:(?:the\s+)?(?:stock|shares)\s+(?:of\s+)?)?", re.I)

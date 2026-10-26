@@ -883,7 +883,7 @@ test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All
   const errors = await open(page, "/research", "Companies");
   let side = await menu(page, phone);
   const btn = side.getByRole("button", { name: /Pro plan, account menu$/ });
-  await expect(btn).toContainText("owner");
+  await expect(btn).toContainText("Account");
   await expect(btn).toContainText("Pro");
   await btn.click();
   const acct = page.getByRole("menu", { name: "Account" });

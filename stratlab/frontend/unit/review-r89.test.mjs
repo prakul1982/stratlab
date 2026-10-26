@@ -163,7 +163,7 @@ test("R92-001: a lock says what the plan costs, in the visitor's currency, while
     INR: { symbol: "₹", name: "Rupee", basic: 699, pro: 1999, basic_year: 6999, pro_year: 19999, charged_in: "INR", yearly_charged_in: "INR" },
     SAR: { symbol: "SAR ", name: "Riyal", basic: 27, pro: 78, basic_year: 274, pro_year: 783, charged_in: "INR", yearly_charged_in: "INR", converted: true } } };
   assert.equal(planPriceLine("basic", p, "INR"), "Basic is ₹699 a month or ₹6,999 a year.");
-  assert.equal(planPriceLine("pro", p, "SAR"), "Pro is about SAR 78 a month or about SAR 783 a year.");
+  assert.equal(planPriceLine("pro", p, "SAR"), "Pro is ₹1,999 a month or ₹19,999 a year, paid in rupees (about SAR 78 or SAR 783 at today's rate)."); // the rupee price is the charge (DK-001, RC2A-010)
   assert.equal(planPriceLine("pro", { ...p, offer: { ...paid, yearly: false } }, "INR"), "Pro is ₹1,999 a month.");
   assert.equal(planPriceLine("pro", p, "XYZ"), null);
   // the price, and the lock's own button says "See plans" (DP2-022: never said twice)
