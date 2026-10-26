@@ -418,7 +418,7 @@ test("my holdings: add by hand from suggestions, an Indian stock with the keyboa
   await expect(table.getByRole("row", { name: /AAPL/ })).toContainText("$");
   const usLine = page.getByLabel("US stocks");
   await expect(usLine).toContainText("$");
-  await expect(usLine).toContainText("aren't part of the tax report");
+  await expect(usLine).toContainText("Sales of US stocks come from the trades");
   // an exact symbol typed without picking still works
   await page.getByRole("radio", { name: "India (NSE/BSE)" }).click();
   await box.fill("INFY");
@@ -568,7 +568,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   if (info.project.name === "phone") await touchable(page);
   await page.reload();
   await settle(page);
-  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("textbox", { name: "Other income", exact: true })).toHaveValue("1500000");
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("textbox", { name: "Other income", exact: true })).toHaveValue("15,00,000");          // a saved amount is written the Indian way (RC2B-018)
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("radio", { name: "60–79", exact: true })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("radio", { name: "No", exact: true })).toHaveAttribute("aria-checked", "true");
 

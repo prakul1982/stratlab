@@ -21,7 +21,7 @@ test("rev10b: US share sales are labelled apart from the Indian totals", async (
   assert.equal(gainLabel("st", false), "Short-term gains (net)");
   assert.equal(gainLabel("lt", true), "Long-term gains, Indian shares and funds (net)");
   const fmt = (v) => `₹${v}`;
-  assert.equal(usSharesNote(500, -20, fmt), "US shares, not in these totals: short-term ₹500, long-term ₹-20 (net).");
+  assert.equal(usSharesNote(500, -20, fmt), "US shares, kept apart from these totals: short-term ₹500, long-term ₹-20 (net).");
   assert.equal(usSharesNote(null, undefined, fmt), null);
   const report = read("src/pages/TaxReportPage.tsx");
   assert.match(report, /label=\{gainLabel\("st", !!y\.foreign\)\}/);

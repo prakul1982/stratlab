@@ -94,7 +94,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
             {(data.by_fy ?? []).filter((y) => y.count > 0).map((y) => <Stat key={y.fy} label={`${y.label} (estimated)`} value={inr(y.total)} note={<>{y.count} payment{y.count === 1 ? "" : "s"} · <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>as in tax tools</Link></>} />)}
           </StatRow>
           {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} stack /></>}
-          {received.length > 0 && <><h3 className="k-sub">Last 12 months (estimated)</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack /></>}
+          {received.length > 0 && <><h3 className="k-sub">Paid in the last 12 months, by company</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack /></>}
           {data.received.length > 6 && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setShowAll(!showAll)}>{showAll ? "Show fewer" : `Show all ${data.received.length}`}</button>}
           {data.checking > 0 && <p className="k-note">Still reading the history of {data.checking} stock{data.checking === 1 ? "" : "s"}; reload in a minute.</p>}
         </Card>

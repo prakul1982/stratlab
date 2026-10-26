@@ -3448,7 +3448,9 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         if not rows:                      # nothing matched: the saved holdings stay as they were
             return None
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
-        return with_sectors(rows, known), parsed["broker"]
+        # RC2B-009: Kite's holdings export is a file; "Zerodha Kite" as a stored source means the Kite login's read, and the
+        # page said "from your Zerodha login" after an upload
+        return with_sectors(rows, known), "Zerodha Kite file" if parsed["broker"] == "Zerodha Kite" else parsed["broker"]
     holdings.update(profile["id"], merged)
     if out["saved"]:
         invite_rewards.safe_touch(profile, "holdings")
@@ -3867,6 +3869,9 @@ def tax_view(profile) -> dict:
                           extra=mf["rows"] + usr["rows"], dividends=money_routes.dividends_for_tax(profile), more_years=set(usr["years"]))
     rep["names"].update(mf["names"])
     rep["names"].update(usr["names"])
+    # RC2B-005: the 31 Jan 2018 price is asked for shares only. A fund's sale carries its own grandfathered NAV (the Money
+    # page for funds asks for a missing one), so it isn't listed here as "price not known" beside its grandfathered line
+    rep["pre_2018"] = [k for k in rep["pre_2018"] if k in set(i["pre"])]
     for y in rep["years"]:
         y["mutual_funds"] = mf["years"].get(y["fy"])
         y["us"] = {**usr["years"][y["fy"]], "allowed": usr["allowed"], "plan": usr.get("plan")} if y["fy"] in usr["years"] else None

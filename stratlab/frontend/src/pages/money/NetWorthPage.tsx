@@ -484,7 +484,7 @@ export function NetWorthPage() {
             {/* the history has a card once there is a chart to draw; until then, one line here says when it starts */}
             {!view.history_allowed
               ? <PlanNote>The net worth history is on the Basic plan{view.history_count ? ` (${view.history_count} snapshot${view.history_count === 1 ? "" : "s"} recorded so far)` : ""}.</PlanNote>
-              : hist.length < 2 && !empty && <p className="k-note">History: a snapshot is taken on the 1st of each month and whenever you change an entry; the chart starts at the second{hist.length === 1 ? ` (the first is from ${day(hist[0].d)})` : ""}.</p>}
+              : hist.length < 3 && !empty && <p className="k-note">History: a snapshot is taken on the 1st of each month and whenever you change an entry; the chart starts at the third{hist.length > 0 ? ` (${hist.length === 1 ? `the first is from ${day(hist[0].d)}` : `${hist.length} so far, the latest from ${day(hist[hist.length - 1].d)}`})` : ""}.</p>}
           </Card>
 
           {/* MO-2 (owner, 25 Oct): one tap to the usual kinds, so adding a deposit, EPF, gold or a loan is never hunted for */}
@@ -520,7 +520,7 @@ export function NetWorthPage() {
             </Card>
           )}
 
-          {view.history_allowed && whole.length >= 2 && (
+          {view.history_allowed && whole.length >= 3 && (
             <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rangeChoices} range={range} onRange={setPick}
               footer={<><p className="k-note">Last snapshot {day(last.d)}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>{snapsList("nw-snaps")}</>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
@@ -532,7 +532,7 @@ export function NetWorthPage() {
           )}
 
           {/* with a chart, the snapshots list sits under it; alone it was an empty-looking card of its own (DP2-006) */}
-          {view.history_allowed && hist.length > 0 && whole.length < 2 && snapsList("k-card nw-snaps")}
+          {view.history_allowed && hist.length > 0 && whole.length < 3 && snapsList("k-card nw-snaps")}
 
           {view.assets.length > 0 && (
             <Card>
@@ -583,7 +583,7 @@ export function NetWorthPage() {
             {full ? <PlanNote plan="basic">Your {me?.plan_info.name ?? "Free"} plan keeps {view.limit} entries. Delete one to add another. Basic has no limit on entries, and adds the monthly history chart.</PlanNote>
               : step === "pick" ? <TilePicker label="What is it?" groups={TILES} value={kind} onChange={(k) => { setKind(k as Kind); setAddStart(fresh(k as Kind)); setStep("form"); setFieldErrs(null); }} />
               : <>
-                <button type="button" className="btn quiet sm k-btn-end" onClick={() => setStep("pick")}>← Something else</button>
+                <button type="button" className="btn quiet sm k-btn-end" onClick={() => setStep("pick")}>← Back</button>
                 <EntryForm key={kind} kind={kind} start={addStart} busy={busy} saveLabel="Add" onSave={addOne} serverErrors={fieldErrs} onCancel={() => { setAdding(false); setStep("pick"); }} />
               </>}
           </div>

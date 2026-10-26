@@ -25,7 +25,7 @@ import { PromoCountdown } from "../components/PromoCountdown";
 import { Explore } from "../components/Explore";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
-import { fyLabel, fyLink, movedYearNote, openFy, savedFy, taxHasData, yearHasTrades } from "../lib/fy";
+import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
 import { investStrip, withRegion } from "../lib/investUi";
 import { notRunning } from "../lib/tradeUi";
 import { PLAN_NAME, planOf } from "../lib/plans";
@@ -413,7 +413,8 @@ export function MoneyHome() {
       </Head>
       {/* DG-051: the first-steps list is about trading (a backtest, paper trading, a deep dive), so Money home leaves it to Home */}
       <PromoCountdown />
-      <div className="grid2 space-panels">
+      {/* RC2B-040: at one height, as on Invest home (DF-023): with no tax data the tax card was 140px shorter, a hole under it */}
+      <div className="grid2 space-panels even">
         <HoldingsSummary />
         <TaxSummary />
       </div>
@@ -483,7 +484,7 @@ function HoldingsSummary() {
 function TaxSummary() {
   const [t, setT] = useState<Tax | null | "error">(null);
   useEffect(() => { api<Tax>("/tax").then(setT).catch(() => setT("error")); }, []);
-  // the Money pages' one rule for the year (lib/fy openFy): the year last picked, else the one being filed now, or the latest
+  // the Money pages' one rule for the year (lib/fy openFy): the one being filed now, or the latest
   // year with sales when that has none (said in one line); the link to the tax report carries the year shown
   const ok = t && t !== "error" ? t : null;
   const open = ok ? openFy(ok.years.map((x) => x.fy), ok.current_fy, (fy) => ok.years.some((x) => x.fy === fy && yearHasTrades(x))) : null;
@@ -510,7 +511,7 @@ function TaxSummary() {
               <Fig label="Long-term gains" tone={signCls(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>
             {year?.audit && <p className="small">{year.audit}</p>}
-            <p className="tiny muted">{year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge."} {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""}{year && open?.from == null && savedFy() === year.fy && year.fy !== ok!.current_fy - 1 ? ` ${fyLabel(year.fy)} is the year last picked on a Money page.` : ""} An estimate to check with your CA.</p>
+            <p className="tiny muted">{year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge."} {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
             {(t.updated_at || t.last_trade) && <p className="tiny muted" data-testid="tax-uploaded">{uploadedLine(t.updated_at, t.last_trade, (iso) => fmtDate(iso, { tz: "Asia/Kolkata" }))}</p>}
             {/* no "Prices as of": nothing on this card is at today's price, only sales already made (R66-008) */}
           </div>

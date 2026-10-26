@@ -120,7 +120,7 @@ def fy_label(y: int) -> str:
     return f"FY {y}-{str(y + 1)[2:]}"
 
 
-def tax_dates(fy: int) -> list[dict]:
+def tax_dates(fy: int, business: bool = True) -> list[dict]:
     """One financial year's dates (fy is its first year: 2025 for FY 2025-26).
 
     Advance tax: section 211 of the 1961 Act (section 404 of the Income-tax Act, 2025 from tax year 2026-27): 15%,
@@ -130,7 +130,9 @@ def tax_dates(fy: int) -> list[dict]:
     31 Jul without an audit; from FY 2025-26 the Finance Act 2026 moved non-audit business and profession returns
     (ITR-3, ITR-4) to 31 Aug; 31 Oct with an audit, its report a month before. Belated return by 31 Dec (139(4)); revised
     by 31 Dec, or by 31 Mar from FY 2025-26 (Finance Act 2026, a fee after 31 Dec). Sources, checked 25 Oct 2026: the
-    CBDT circulars named in tax_due.py, https://cleartax.in/s/due-date-tax-filing and the Budget 2026 summaries."""
+    CBDT circulars named in tax_due.py, https://cleartax.in/s/due-date-tax-filing and the Budget 2026 summaries.
+    `business` False leaves out the dates only business or professional income brings (the audit report and the audit-case
+    return, and the no-audit business return): a user with none of it saw "ITR due date (audit cases)" (RC2B-019)."""
     lab, ay = fy_label(fy), fy + 1
     sec = "263" if fy >= 2026 else "139"     # the Income-tax Act, 2025 renumbers section 139 from tax year 2026-27
     out = []
@@ -151,17 +153,19 @@ def tax_dates(fy: int) -> list[dict]:
     if fy >= 2025:
         out.append(_ev(tax_due.return_due(fy), f"ITR due date for {lab} (no business income)", "tax", "itr",
                        "Return due date for individuals without business or professional income (ITR-1, ITR-2)." + moved("no_business"), ref=lab))
-        out.append(_ev(tax_due.return_due(fy, True), f"ITR due date for {lab} (business, no audit)", "tax", "itr",
-                       "Return due date for business or professional income without a tax audit (ITR-3, ITR-4), from "
-                       "FY 2025-26. Intraday and F&O trading count as business income." + moved("business"), ref=lab))
+        if business:
+            out.append(_ev(tax_due.return_due(fy, True), f"ITR due date for {lab} (business, no audit)", "tax", "itr",
+                           "Return due date for business or professional income without a tax audit (ITR-3, ITR-4), from "
+                           "FY 2025-26. Intraday and F&O trading count as business income." + moved("business"), ref=lab))
     else:
         out.append(_ev(tax_due.return_due(fy), f"ITR due date for {lab} (no audit)", "tax", "itr",
                        "Return due date when the accounts don't need a tax audit." + moved("no_business"), ref=lab))
-    out.append(_ev(tax_due.due(fy, "audit_report")["date"], f"Tax audit report due for {lab}", "tax", "audit_report",
-                   "The tax audit report (Form 3CA or 3CB, with Form 3CD) for accounts audited under section 44AB, such as "
-                   "trading turnover above ₹10 crore." + moved("audit_report") + " " + tax_due.PENALTY_271B, ref=lab + " audit report"))
-    out.append(_ev(tax_due.return_due(fy, True, True), f"ITR due date for {lab} (audit cases)", "tax", "itr",
-                   "Return due date when the accounts need a tax audit (section 44AB)." + moved("audit"), ref=lab + " audit"))
+    if business:
+        out.append(_ev(tax_due.due(fy, "audit_report")["date"], f"Tax audit report due for {lab}", "tax", "audit_report",
+                       "The tax audit report (Form 3CA or 3CB, with Form 3CD) for accounts audited under section 44AB, such as "
+                       "trading turnover above ₹10 crore." + moved("audit_report") + " " + tax_due.PENALTY_271B, ref=lab + " audit report"))
+        out.append(_ev(tax_due.return_due(fy, True, True), f"ITR due date for {lab} (audit cases)", "tax", "itr",
+                       "Return due date when the accounts need a tax audit (section 44AB)." + moved("audit"), ref=lab + " audit"))
     if fy >= 2025:
         out.append(_ev(tax_due.belated(fy), f"Last day for a belated {lab} return", "tax", "itr_late",
                        f"A return filed after its due date (section {sec}(4)), with the late fee. Losses can't be carried forward "
@@ -176,12 +180,29 @@ def tax_dates(fy: int) -> list[dict]:
     return out
 
 
-def tax_between(frm: date, to: date) -> list[dict]:
+def has_business(uid: str) -> bool:
+    """Whether the user's tax files hold business income: F&O, commodity or currency lines, or intraday trades (a stock bought and
+    sold on one day). Without it, the calendar leaves out the audit and business-return dates (RC2B-019)."""
+    from . import tax_lots
+    try:
+        data = tax_lots.load(uid)
+        if data["business"]:
+            return True
+        seen: dict[tuple, set] = {}
+        for t in data["trades"]:
+            seen.setdefault((t.get("d"), t.get("sym")), set()).add(t.get("side"))
+        return any({"B", "S"} <= sides for sides in seen.values())
+    except Exception as e:                           # a part of the calendar, never its failure: show everything then
+        print("calendar business check:", type(e).__name__)
+        return True
+
+
+def tax_between(frm: date, to: date, business: bool = True) -> list[dict]:
     first = (frm.year if frm.month >= 4 else frm.year - 1) - 2          # a revised return reaches two years on
     last = to.year if to.month >= 4 else to.year - 1
     out = []
     for fy in range(first, last + 1):
-        out += [e for e in tax_dates(fy) if frm.isoformat() <= e["date"] <= to.isoformat()]
+        out += [e for e in tax_dates(fy, business) if frm.isoformat() <= e["date"] <= to.isoformat()]
     return out
 
 
@@ -400,7 +421,7 @@ def events(uid: str, frm: date, to: date, cats: set[str] | None = None, data: di
     out: list[dict] = []
     parts = []
     if "tax" in cats:
-        parts.append(lambda: tax_between(frm, to))
+        parts.append(lambda: tax_between(frm, to, has_business(uid)))
     if "holdings" in cats:
         parts.append(lambda: holdings_events(uid, frm, to))
     if cats & {"money", "tax"}:

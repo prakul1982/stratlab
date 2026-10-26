@@ -206,6 +206,14 @@ def advance_view(profile, fy: int | None = None, i: dict | None = None) -> dict:
     return out
 
 
+def _exemption(fy: int, whole: dict) -> float | None:
+    """The basic exemption limit of the regime, age band and residency the year's total was worked out for: income within it
+    needs no return (RC2B-003). None when the total isn't available."""
+    v = whole.get("inputs") or {}
+    r = tax_total.rules(fy, v.get("regime", "new"), v.get("age", "below60"), v.get("resident", True)) if whole.get("available") else None
+    return tax_total.basic_exemption(r["slabs"]) if r else None
+
+
 def _advance_year(profile, fy: int, i: dict | None, plain: dict | None = None) -> dict:
     """One year's advance tax view (advance_view); `i` None on a plan without the amounts, which gets `plain` (the
     tax report's inputs) for the shares of the year's tax by each date: the tax report shows that total on every plan,
@@ -264,7 +272,7 @@ def _advance_year(profile, fy: int, i: dict | None, plain: dict | None = None) -
     out.update({"schedule": s, "inputs": mine,
                 # DH-003: the year's tax with the interest on it and what's paid taken off, as one figure
                 "payable": adv.payable(fy, s, full_tax if rounded is None else rounded, (whole.get("income") or {}).get("total") or 0.0,
-                                       mine["paid"], t, business, audit),
+                                       mine["paid"], t, business, audit, exempt=_exemption(fy, whole)),
                 "return_due": tax_due.due(fy, tax_due.return_kind(business, audit))["date"].isoformat(), "audit": audit,
                 "dividends_in_estimate": round(sum(a for _, a in div_events), 2),
                 "dividend_tds": next((y["tds"]["expected"] for y in dv["years"] if y["fy"] == fy), 0.0),
@@ -273,6 +281,48 @@ def _advance_year(profile, fy: int, i: dict | None, plain: dict | None = None) -
 
 
 WHEN = ("first", "second", "third", "last")
+
+
+def _instalment_dates(profile, cur: int, i: dict) -> list[dict]:
+    """This year's instalments for the calendar: the amount still due by each, or that none is due."""
+    out = []
+    now = _advance_year(profile, cur, i)
+    s = now.get("schedule")
+    for r in (s or {}).get("instalments") or []:
+        if r["status"] == "passed":
+            continue
+        n = WHEN[r["n"]]
+        if not s["due"]:
+            out.append({"date": r["date"], "kind": "advance_none", "id": f"adv{r['n']}{cur}",
+                        "title": f"Advance tax, {n} instalment: none due for {now['label']}",
+                        "detail": f"Your {now['label']} estimate, less TDS, is {money(s['net'])}: below {money(s['threshold'])}, so no "
+                                  "advance tax is due (section 208). It changes when your files or income for the year do.",
+                        "url": "/money/tax-tools?tab=advance"})
+        else:
+            out.append({"date": r["date"], "kind": "advance_due", "id": f"adv{r['n']}{cur}", "amount": r["to_pay"],
+                        "title": f"Advance tax, {n} instalment ({r['pct'] * 100:g}%): {money(r['to_pay'])} still due",
+                        "detail": f"{r['pct'] * 100:g}% of {now['label']}'s estimated tax less TDS is {money(r['required'])} by "
+                                  f"{r['label']}; paid by then so far {money(r['paid'])}. From your figures in Tax tools.",
+                        "url": "/money/tax-tools?tab=advance"})
+    return out
+
+
+def _unpaid_date(profile, cur: int, i: dict, t: date) -> list[dict]:
+    """The year before's tax still unpaid, as one item: on the return's due date while it is ahead, today once it has passed
+    (the interest is running and a belated return can be filed until its last day, named in the item)."""
+    last = _advance_year(profile, cur - 1, i)
+    p = last.get("payable")
+    if not (p and p["total"] > 0.5 and t <= tax_due.belated(cur - 1)):
+        return []
+    late = tax_due.belated(cur - 1)
+    on = t if p["past_due"] else date.fromisoformat(p["due"])
+    return [{"date": on.isoformat(), "kind": "self_assessment", "id": f"sa{cur - 1}", "amount": p["total"],
+             "title": f"{p['label']} tax still unpaid: {money(p['total'])}",
+             "detail": (f"Self-assessment tax is paid before the return is filed (section 140A). The figure is the tax "
+                        f"less TDS and payments entered, with interest under sections 234A, 234B and 234C, as if paid by "
+                        f"{tax_due.day(late if p['past_due'] else on)}. The return's due date is {tax_due.day(date.fromisoformat(p['due']))}"
+                        + (f"; a belated return can be filed until {tax_due.day(late)}." if p["past_due"] else ".")),
+             "url": "/money/tax-tools?tab=advance"}]
 
 
 def calendar_dates(uid: str, days: int = 90, frm: date | None = None) -> list[dict]:
@@ -294,35 +344,16 @@ def calendar_dates(uid: str, days: int = 90, frm: date | None = None) -> list[di
     cur = tax_lots.fy_of(t.isoformat())
     i = _m().tax_inputs(profile)
     out = []
-    now = _advance_year(profile, cur, i)
-    s = now.get("schedule")
-    for r in (s or {}).get("instalments") or []:
-        if r["status"] == "passed":
-            continue
-        n = WHEN[r["n"]]
-        if not s["due"]:
-            out.append({"date": r["date"], "kind": "advance_none", "id": f"adv{r['n']}{cur}",
-                        "title": f"Advance tax, {n} instalment: none due for {now['label']}",
-                        "detail": f"Your {now['label']} estimate, less TDS, is {money(s['net'])}: below {money(s['threshold'])}, so no "
-                                  "advance tax is due (section 208). It changes when your files or income for the year do.",
-                        "url": "/money/tax-tools?tab=advance"})
-        else:
-            out.append({"date": r["date"], "kind": "advance_due", "id": f"adv{r['n']}{cur}", "amount": r["to_pay"],
-                        "title": f"Advance tax, {n} instalment ({r['pct'] * 100:g}%): {money(r['to_pay'])} still due",
-                        "detail": f"{r['pct'] * 100:g}% of {now['label']}'s estimated tax less TDS is {money(r['required'])} by "
-                                  f"{r['label']}; paid by then so far {money(r['paid'])}. From your figures in Tax tools.",
-                        "url": "/money/tax-tools?tab=advance"})
-    last = _advance_year(profile, cur - 1, i)
-    p = last.get("payable")
-    if p and p["total"] > 0.5 and t <= tax_due.belated(cur - 1):
-        on = date.fromisoformat(p["due"]) if not p["past_due"] else tax_due.belated(cur - 1)
-        out.append({"date": on.isoformat(), "kind": "self_assessment", "id": f"sa{cur - 1}", "amount": p["total"],
-                    "title": f"{p['label']} tax still unpaid: {money(p['total'])}",
-                    "detail": (f"Self-assessment tax is paid before the return is filed (section 140A). The figure is the tax "
-                               f"less TDS and payments entered, with interest under sections 234A, 234B and 234C, as if paid by "
-                               f"{tax_due.day(on)}. The return's due date is {tax_due.day(date.fromisoformat(p['due']))}"
-                               + (f"; a belated return can be filed until {tax_due.day(on)}." if p["past_due"] else ".")),
-                    "url": "/money/tax-tools?tab=advance"})
+    # RC2B-019, DH-043: the two parts stand apart, so one that fails (this year's schedule) doesn't take the year before's
+    # unpaid tax out of the calendar with it
+    try:
+        out += _instalment_dates(profile, cur, i)
+    except Exception as e:
+        print("calendar instalments:", type(e).__name__)
+    try:
+        out += _unpaid_date(profile, cur, i, t)
+    except Exception as e:
+        print("calendar unpaid tax:", type(e).__name__)
     return out
 
 

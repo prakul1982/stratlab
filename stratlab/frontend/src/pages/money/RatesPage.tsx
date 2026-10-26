@@ -96,13 +96,9 @@ export function RatesPage() {
         </Card>
 
         <Card label="Small savings">
-          <CardHead title={`Small savings, ${d.small_savings.quarter}`} info={`Rates for ${dateOnly(d.small_savings.from)} to ${dateOnly(d.small_savings.to)}, notified on ${dateOnly(d.small_savings.notified)}. Source: ${d.small_savings.source}. Reset every quarter.`} />
-          {table(d.small_savings.rows, "Small savings rates", (r) => (r.c80 ? sub("80C on the deposit (old regime)") : null))}
-        </Card>
-
-        <Card label="Bonds">
-          <CardHead title="RBI floating rate bond" />
-          {table(d.bonds, "Floating rate bond", (r) => (r.from ? sub(`${dateOnly(r.from)} to ${dateOnly(r.to)}`) : null))}
+          {/* RC2B-024: the floating rate bond is a row of this table, under a heading that names it, not a second table with its own header */}
+          <CardHead title={`Small savings, ${d.small_savings.quarter}, and the RBI floating rate bond`} info={`Small savings rates for ${dateOnly(d.small_savings.from)} to ${dateOnly(d.small_savings.to)}, notified on ${dateOnly(d.small_savings.notified)}. Source: ${d.small_savings.source}. Reset every quarter. The floating rate bond's rate is reset every six months.`} />
+          {table([...d.small_savings.rows, ...d.bonds], "Small savings rates", (r) => (r.from ? sub(`${dateOnly(r.from)} to ${dateOnly(r.to)}`) : r.c80 ? sub("80C on the deposit (old regime)") : null))}
         </Card>
 
         <Card label="Your deposits">
