@@ -192,7 +192,7 @@ function PnlCard() {
   if (h === "none" || !h.rows.length) {
     return (
       <Card testId="mine-pnl">
-        <EmptyState title="Today's P&L" action={{ label: "Add your holdings", to: "/holdings" }}>How your stocks moved today shows here once you bring in your holdings file.</EmptyState>
+        <EmptyState title="Your P&L" action={{ label: "Add your holdings", to: "/holdings" }}>How your stocks moved today shows here once you bring in your holdings file.</EmptyState>
       </Card>
     );
   }
@@ -201,8 +201,10 @@ function PnlCard() {
   const fresh = !h.prices_at || dayIn(h.prices_at) === dayIn(new Date());
   return (
     <Card testId="mine-pnl">
-      <CardHead title={fresh ? "Today's P&L" : "Last session's P&L"} actions={<Link className="btn quiet sm" to="/holdings" aria-label="Open holdings">Open</Link>} />
-      <Stat label={`${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={day == null ? "–" : signedInrCompact(day)} tone={day == null || day === 0 ? undefined : day > 0 ? "up" : "down"}
+      {/* one short title, the day in the figure's label, as Net worth ("What you own…") and Paper sessions ("Running now") beside it: "Last
+          session's P&L" wrapped at 1280 and pushed Open onto a line of its own, so this card stood 77px taller than both (CI UI checker R13) */}
+      <CardHead title="Your P&L" actions={<Link className="btn quiet sm" to="/holdings" aria-label="Open holdings">Open</Link>} />
+      <Stat label={`${fresh ? "Today" : "Last session"} · ${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={day == null ? "–" : signedInrCompact(day)} tone={day == null || day === 0 ? undefined : day > 0 ? "up" : "down"}
         note={day == null ? "The day's change needs prices, which are not in yet." : h.totals.day_pct != null ? <>Holdings <Signed value={day}>{pct(h.totals.day_pct, 2)}</Signed></> : undefined} />
       {/* the US part of the day named, live or at its close, as Holdings and Money say it (R7O-012) */}
       {(() => { const note = usTodayNote(markets, h.us, h.usd_inr); return note && <p className="k-note" data-testid="mine-us-today">{note}</p>; })()}

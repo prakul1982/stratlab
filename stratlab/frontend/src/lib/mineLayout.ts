@@ -2,7 +2,7 @@
 
 export const CARDS = [
   { id: "networth", label: "Net worth" },
-  { id: "pnl", label: "Today's P&L" },
+  { id: "pnl", label: "Your P&L" },
   { id: "paper", label: "Paper sessions" },
   { id: "markets", label: "Markets" },
   { id: "coming", label: "Coming up" },
