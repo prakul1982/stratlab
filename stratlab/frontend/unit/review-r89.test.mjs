@@ -237,7 +237,7 @@ test("MO-4b: Positioning's cash and put-call cards stack, and a pair of cards in
   assert.match(page, /<Cash s=\{s\} \/>\s*<PcrTable coverage=\{s\.coverage\} \/>/);
   const css = read("src/styles.css");
   assert.match(css, /\.k-two \{[^}]*align-items: stretch;/);
-  assert.match(css, /\.mc-grid \{ align-items: start; \}/);                           // the Money calendar keeps its own
+  assert.match(css, /\.mc-grid \{ align-items: stretch; \}/);                         // the Money calendar's columns end level too (RC2B-041)
   const sig = read("src/pages/trade/SignalsPage.tsx");
   assert.match(sig, /<div className="k-page">\s*<UrlCard ov=\{ov\} reload=\{load\} \/>\s*<HowTo \/>\s*<\/div>/);   // the short card shares its column
 });
