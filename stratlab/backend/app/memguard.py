@@ -201,6 +201,34 @@ def status() -> dict:
             "cache_mb": round(net.cache_bytes() / 1048576, 1), "cache_budget_mb": round(CACHE_BUDGET / 1048576)}
 
 
+def census(top: int = 25) -> dict:
+    """What the Python heap holds, by type: the object count and the shallow bytes of the `top` types by bytes, and the
+    largest module-level dicts, lists and sets by length (MEM-002: after a restart the process grew ~20 MB an hour with the
+    caches at a steady size; two of these an hour apart show which kind of object it is). Admin only, on demand: one pass
+    over the tracked objects (about a second), nothing kept."""
+    counts: dict[str, list[int]] = {}
+    for o in gc.get_objects():
+        t = type(o).__name__
+        c = counts.get(t)
+        size = sys.getsizeof(o, 0)
+        if c is None:
+            counts[t] = [1, size]
+        else:
+            c[0] += 1
+            c[1] += size
+    types = sorted(((t, n, b) for t, (n, b) in counts.items()), key=lambda x: -x[2])[:top]
+    held = []
+    for name, mod in list(sys.modules.items()):
+        if not name.startswith("app"):
+            continue
+        for attr, v in list(vars(mod).items()):
+            if isinstance(v, (dict, list, set, deque)) and len(v) >= 100:
+                held.append((f"{name}.{attr}", type(v).__name__, len(v)))
+    held.sort(key=lambda x: -x[2])
+    return {"objects": sum(n for n, _ in counts.values()), "types": [{"type": t, "count": n, "mb": round(b / 1048576, 1)} for t, n, b in types],
+            "held": [{"name": n, "kind": k, "len": ln} for n, k, ln in held[:top]], "rss_mb": rss_mb()}
+
+
 def janitor(every: float = 300.0, sleep=time.sleep):
     """Every few minutes: expired cache entries out, the caches under budget, and the heap trimmed (the jobs do it after
     their own work; this catches what pages and imports left)."""
