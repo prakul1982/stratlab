@@ -1382,11 +1382,16 @@ test("admin: fund costs (TER) shows its last read in Data and jobs and reads aga
   const errors = await open(page, "/admin/data", "Fund costs (TER)");
   const row = page.getByRole("row", { name: /Fund costs \(TER\)/ });
   await expect(row.getByRole("button", { name: "Read now: Fund costs (TER)" })).toBeVisible({ timeout: 30_000 });
+  // a read of its own first: the world reads TER only when a page asks for fund costs, so run alone (or before the mutual
+  // funds specs) nothing had been read yet and the log said "Not yet"
+  await row.getByRole("button", { name: "Read now: Fund costs (TER)" }).click();
+  await expect.poll(() => reads).toBe(1);
+  await expect(row.getByRole("button", { name: "Read now: Fund costs (TER)" })).toBeEnabled({ timeout: 30_000 });
   await row.getByRole("button", { name: "Log of Fund costs (TER)" }).click();
   await expect(page.getByRole("dialog", { name: "Fund costs (TER): log" })).toContainText(/3 schemes for/, { timeout: 30_000 });
   await page.keyboard.press("Escape");
   await row.getByRole("button", { name: "Read now: Fund costs (TER)" }).click();
-  await expect.poll(() => reads).toBe(1);
+  await expect.poll(() => reads).toBe(2);
   await expect(row.getByRole("button", { name: "Read now: Fund costs (TER)" })).toBeEnabled({ timeout: 30_000 });
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
