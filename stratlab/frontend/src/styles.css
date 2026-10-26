@@ -382,6 +382,28 @@ a.link { margin-inline: -2px; }
 .lab-note:hover { border-color: var(--dash); }
 .lab-note:focus { outline: none; border-color: var(--ink); }
 
+/* MO-4a: the Lab notes float at the bottom-right (a button, and a card above it that scrolls inside itself; a bottom sheet on a phone),
+ * so the notebook is the same centred column as every other page. Below the sidebar drawer (40), dialogs (60) and toasts (70). */
+.ln-dock { position: fixed; z-index: 35; right: max(16px, calc(env(safe-area-inset-right) + 16px)); bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
+.ln-dock > * { pointer-events: auto; }
+.ln-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); font: 600 15px var(--sans); cursor: pointer; box-shadow: var(--shadow); }
+.ln-btn:hover { border-color: var(--ink); }
+.ln-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.ln-btn[aria-expanded="true"] { border-color: var(--ink); }
+.ln-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); flex: none; }
+.ln-panel { width: 380px; max-width: calc(100vw - 32px); }
+.ln-panel[hidden] { display: none; }
+.ln-panel .k-card { box-shadow: var(--shadow); gap: var(--s3); }
+.ln-panel .lab-note { min-height: 172px; max-height: max(172px, calc(100vh - 300px)); }
+@media (max-width: 640px) {
+  .ln-dock { right: 0; left: 0; bottom: 0; padding: 0 max(16px, env(safe-area-inset-right)) max(16px, calc(env(safe-area-inset-bottom) + 16px)) max(16px, env(safe-area-inset-left)); }
+  .ln-dock:has(.ln-panel:not([hidden])) { padding: 0; }
+  .ln-dock:has(.ln-panel:not([hidden])) .ln-btn { display: none; }     /* the sheet has its own Close; the button is back when it shuts */
+  .ln-panel { width: 100%; max-width: none; }
+  .ln-panel .k-card { border-radius: 14px 14px 0 0; border-bottom-width: 0; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .ln-panel .lab-note { max-height: max(172px, calc(60vh - 140px)); }
+}
+
 /* ---------- verdict ---------- */
 .verdict-head { font-family: var(--serif); font-size: clamp(44px, 6vw, 76px); line-height: .95; font-weight: 400; letter-spacing: -.035em; }
 .verdict-head.edge { color: var(--blue); }
@@ -1705,7 +1727,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-table td.k-act .k-row.k-col { flex-direction: column; align-items: flex-end; gap: var(--s1); }   /* two actions stacked, so the column stays narrow */
 .k-inline-badge { margin-left: 6px; }
 .k-big { font-size: clamp(30px, 4vw, 40px); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
-.k-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: start; }
+.k-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: stretch; }   /* two cards side by side end level, not one short with dead space under it (MO-4b); a pair that differs a lot belongs in one column instead */
 @media (max-width: 900px) { .k-two { grid-template-columns: minmax(0, 1fr); } }
 .k-label-row .k-lbl { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }

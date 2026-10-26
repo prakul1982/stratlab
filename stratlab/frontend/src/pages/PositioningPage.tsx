@@ -493,10 +493,10 @@ export function PositioningPage() {
           <>
             <Participants s={s} />
             <VixPanel />
-            <div className="k-two">
-              <Cash s={s} />
-              <PcrTable coverage={s.coverage} />
-            </div>
+            {/* one under the other, not side by side: the cash card is short and the PCR table about twice as tall, which left
+                half the row empty (MO-4b) */}
+            <Cash s={s} />
+            <PcrTable coverage={s.coverage} />
             {s.full ? <History names={s.names} coverage={s.coverage} /> : <Locked plan={s.plan_needed} coverage={s.coverage} />}
             <Chain names={s.names} full={s.full} plan={s.plan_needed} />
             <p className="k-note">{s.note}</p>
