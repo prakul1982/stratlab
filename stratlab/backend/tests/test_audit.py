@@ -120,13 +120,13 @@ def test_admin_audit_endpoint_runs_and_reports(monkeypatch):
         c = TestClient(main.app)
         assert c.post("/admin/audit", json={"set": "nope"}).status_code == 400
         r = c.post("/admin/audit", json={"set": "banknifty"}).json()
-        assert r["label"] == "NIFTY Bank stocks" and r["total"] == 12
+        assert r["label"] == "NIFTY Bank stocks" and r["total"] == 14
         for _ in range(100):                      # wait on the runner itself: polling the API would spend the rate limit
             if not main.audit_runner.status()["running"]:
                 break
             time.sleep(0.02)
         s = c.get("/admin/audit").json()
-        assert s["done"] == 12 and s["summary"]["clean"] == 12 and any(x["id"] == "sectors" for x in s["sets"])
+        assert s["done"] == 14 and s["summary"]["clean"] == 14 and any(x["id"] == "sectors" for x in s["sets"])
     finally:
         main.app.dependency_overrides.pop(admin.admin_profile, None)
 

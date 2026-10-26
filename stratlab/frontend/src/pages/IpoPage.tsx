@@ -6,7 +6,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { asOf, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
 import { useLiveRefresh } from "../lib/liveRefresh";
 import { ipoApi, type DocLink, type Facts, type IpoDetail, type Statement, type Summary } from "../lib/ipo";
-import { badgeOf, bandText, croreText, expectedText, minText, partsText, sharesText, sizeText, spanText, timesText } from "../lib/ipoText";
+import { badgeOf, bandText, clockText, croreText, expectedText, minText, partsText, sharesText, sizeText, spanText, timesText } from "../lib/ipoText";
 import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { LockedPreview } from "../components/LockedPreview";
 import "./ipo.css";
@@ -32,10 +32,11 @@ function Dates({ d }: { d: IpoDetail }) {
     <>
       <ul className="ipo-dates" data-testid="ipo-dates">
         <li><span className="k-note">Bidding opens</span><b>{fmtDate(r.open)}</b></li>
-        <li><span className="k-note">Bidding closes</span><b>{fmtDate(r.close)}</b><span className="k-note">5 PM IST</span></li>
+        <li><span className="k-note">Bidding closes</span><b>{fmtDate(r.close)}</b>{r.close_time && <span className="k-note" data-testid="ipo-close-time">{clockText(r.close_time)} IST</span>}</li>
         <li><span className="k-note">Allotment</span><b>{expectedText(r.allotment, r.allotment_expected)}</b></li>
         <li><span className="k-note">Listing</span><b>{expectedText(r.listing, r.listing_expected)}</b></li>
       </ul>
+      {r.hours && <p className="k-note" data-testid="ipo-hours">Bidding hours as the exchange states them: {r.hours}.</p>}
       {(r.allotment_expected || r.listing_expected) && (
         <p className="k-note">"Expected" is the day SEBI's timetable gives: allotment the working day after bidding closes, listing three working days after. The exchange publishes the actual day.</p>
       )}
@@ -56,17 +57,17 @@ function Terms({ d }: { d: IpoDetail }) {
         {us && r.shares != null && <Stat label="Shares offered" value={sharesText(r.shares, "US")} />}
       </StatRow>
       <dl className="ipo-facts">
-        {!us && (r.fresh != null || r.fresh_cr != null) && <><dt>Fresh issue</dt><dd>{r.fresh != null ? `${sharesText(r.fresh)} shares` : croreText(r.fresh_cr)}</dd></>}
-        {!us && (r.ofs != null || r.ofs_cr != null) && <><dt>Offer for sale (shares existing holders offer)</dt><dd>{r.ofs != null ? `${sharesText(r.ofs)} shares` : croreText(r.ofs_cr)}</dd></>}
-        {!us && r.face_value != null && <><dt>Face value</dt><dd>{price(r.face_value, "INR", 2)}</dd></>}
-        {!us && r.retail_max != null && <><dt>Most a retail bid can be</dt><dd>{price(r.retail_max, "INR", 0)}</dd></>}
-        {r.issue_type && <><dt>Issue type</dt><dd>{r.issue_type}</dd></>}
-        {r.exchanges && r.exchanges.length > 0 && <><dt>Lists on</dt><dd>{r.exchanges.join(" and ")}{r.segment === "sme" ? " (SME platform)" : ""}</dd></>}
-        {us && r.exchange && <><dt>Lists on</dt><dd>{r.exchange}</dd></>}
-        {r.industry && <><dt>Industry</dt><dd>{r.industry}</dd></>}
-        {r.isin && <><dt>ISIN</dt><dd>{r.isin}</dd></>}
-        {r.lead_managers && r.lead_managers.length > 0 && <><dt>Lead managers</dt><dd>{r.lead_managers.join(", ")}</dd></>}
-        {r.registrar && <><dt>Registrar</dt><dd>{r.registrar}</dd></>}
+        {!us && (r.fresh != null || r.fresh_cr != null) && <div><dt>Fresh issue</dt><dd>{r.fresh != null ? `${sharesText(r.fresh)} shares` : croreText(r.fresh_cr)}</dd></div>}
+        {!us && (r.ofs != null || r.ofs_cr != null) && <div><dt>Offer for sale (shares existing holders offer)</dt><dd>{r.ofs != null ? `${sharesText(r.ofs)} shares` : croreText(r.ofs_cr)}</dd></div>}
+        {!us && r.face_value != null && <div><dt>Face value</dt><dd>{price(r.face_value, "INR", 2)}</dd></div>}
+        {!us && r.retail_max != null && <div><dt>Most a retail bid can be</dt><dd>{price(r.retail_max, "INR", 0)}</dd></div>}
+        {r.issue_type && <div><dt>Issue type</dt><dd>{r.issue_type}</dd></div>}
+        {r.exchanges && r.exchanges.length > 0 && <div><dt>Lists on</dt><dd>{r.exchanges.join(" and ")}{r.segment === "sme" ? " (SME platform)" : ""}</dd></div>}
+        {us && r.exchange && <div><dt>Lists on</dt><dd>{r.exchange}</dd></div>}
+        {r.industry && <div><dt>Industry</dt><dd>{r.industry}</dd></div>}
+        {r.isin && <div><dt>ISIN</dt><dd>{r.isin}</dd></div>}
+        {r.lead_managers && r.lead_managers.length > 0 && <div className="wide"><dt>Lead managers</dt><dd>{r.lead_managers.join(", ")}</dd></div>}
+        {r.registrar && <div><dt>Registrar</dt><dd>{r.registrar}</dd></div>}
       </dl>
       <h3 className="k-sub">Dates</h3>
       <Dates d={d} />
@@ -79,7 +80,10 @@ function Bids({ d }: { d: IpoDetail }) {
   if (!s) {
     return d.ipo.market === "IN" && d.ipo.stage !== "listed" && d.ipo.stage !== "withdrawn" && d.ipo.stage !== "social" ? (
       <Card compact label="Bids received" testId="ipo-bids">
-        <p className="k-small k-muted">{d.ipo.stage === "upcoming" ? "Bidding has not opened. The bids received by category show here, refreshed through the day, once it does." : "The exchange has no bids to show for this issue."}</p>
+        {/* an issue only BSE lists has no NSE page here: said as that, not as "no bids" (RC2A-005: the one open SME issue read as having none) */}
+        <p className="k-small k-muted" data-testid="ipo-no-bids">{d.ipo.stage === "upcoming" ? "Bidding has not opened. The bids received by category show here, refreshed through the day, once it does."
+          : !d.ipo.symbol && d.ipo.exchanges?.length === 1 && d.ipo.exchanges[0] === "BSE" ? "This issue is listed on BSE only. Its bids are on BSE's own page for the issue; they are not read here yet, so none are shown."
+          : "The exchange has no bids to show for this issue."}</p>
       </Card>
     ) : null;
   }
@@ -133,23 +137,36 @@ function FromTheDocument({ f, d }: { f: Facts; d: IpoDetail }) {
     return <Card compact label="From the offer document" testId="ipo-facts"><p className="k-small k-muted">The {kind} is read automatically a few at a time. What it says about the promoters, the objects and the figures shows here once it has been. Open it under Documents meanwhile.</p></Card>;
   }
   const fin = f.financials;
+  // what the summary below already says, with the words it rests on, is not said twice (RC2A-007)
+  const said = d.summary.state === "ready" ? d.summary.items : undefined;
+  const hide = { promoters: !!said?.promoters?.length, objects: !!said?.objects?.length };
   return (
     <Card label="From the offer document" testId="ipo-facts">
       <CardHead level={2} title="From the offer document" info={`Read by fixed rules from the places the ${kind} always puts these, each with the page it is on. A fact the rules can't find is left out, not guessed. Open the document for everything else.`} infoLabel="About these facts" />
       {r.market === "IN" ? (
         <dl className="ipo-facts">
-          {f.promoters && f.promoters.length > 0 && <><dt>Promoters</dt><dd data-testid="ipo-promoters">{f.promoters.join(", ")}</dd></>}
-          {f.selling && f.selling.length > 0 && <><dt>Selling shareholders (offer for sale)</dt><dd data-testid="ipo-selling">{f.selling.map((s) => `${s.name} (${s.kind.toLowerCase()})`).join(", ")}</dd></>}
-          {f.objects && <><dt>What the money is for</dt><dd data-testid="ipo-objects">{f.objects.text}<span className="k-note"> The document's words.{there(f.objects.page)}</span></dd></>}
+          {f.promoters && f.promoters.length > 0 && !hide.promoters && <div className="wide"><dt>Promoters</dt><dd data-testid="ipo-promoters">{f.promoters.join(", ")}</dd></div>}
+          {f.selling && f.selling.length > 0 && <div className="wide"><dt>Selling shareholders (offer for sale)</dt><dd data-testid="ipo-selling">{f.selling.map((s) => `${s.name} (${s.kind.toLowerCase()})`).join(", ")}</dd></div>}
+          {f.objects && !hide.objects && (
+            <div className="wide"><dt>What the money is for</dt>
+              <dd data-testid="ipo-objects">{f.objects.text}
+                {f.objects.table && (
+                  <ol className="ipo-money" data-testid="ipo-money-table">
+                    {f.objects.table.rows.map((x, i) => <li key={i}>{x.label}{x.figures ? <span className="k-note"> {x.figures}{f.objects?.table?.unit ? ` (${f.objects.table.unit})` : ""}</span> : null}</li>)}
+                  </ol>
+                )}
+                <span className="k-note"> The document's words.{there(f.objects.page)}</span></dd>
+            </div>
+          )}
         </dl>
       ) : (
         <dl className="ipo-facts">
-          {f.us?.company_shares != null && <><dt>Shares offered by the company</dt><dd>{sharesText(f.us.company_shares, "US")}</dd></>}
-          {f.us?.selling_shares != null && <><dt>Shares offered by selling stockholders</dt><dd>{sharesText(f.us.selling_shares, "US")}</dd></>}
-          {f.us?.price != null && <><dt>Offer price</dt><dd>{price(f.us.price, "USD", 2)}</dd></>}
-          {f.us?.range && <><dt>Price range on the cover</dt><dd>{price(f.us.range[0], "USD", 2)} to {price(f.us.range[1], "USD", 2)}</dd></>}
-          {f.us?.listing && <><dt>Listing</dt><dd>{f.us.listing}{f.us.symbol ? `, symbol ${f.us.symbol}` : ""}</dd></>}
-          {f.us?.proceeds && <><dt>Use of proceeds</dt><dd data-testid="ipo-proceeds">{f.us.proceeds}<span className="k-note"> The document's words.</span></dd></>}
+          {f.us?.company_shares != null && <div><dt>Shares offered by the company</dt><dd>{sharesText(f.us.company_shares, "US")}</dd></div>}
+          {f.us?.selling_shares != null && <div><dt>Shares offered by selling stockholders</dt><dd>{sharesText(f.us.selling_shares, "US")}</dd></div>}
+          {f.us?.price != null && <div><dt>Offer price</dt><dd>{price(f.us.price, "USD", 2)}</dd></div>}
+          {f.us?.range && <div><dt>Price range on the cover</dt><dd>{price(f.us.range[0], "USD", 2)} to {price(f.us.range[1], "USD", 2)}</dd></div>}
+          {f.us?.listing && <div><dt>Listing</dt><dd>{f.us.listing}{f.us.symbol ? `, symbol ${f.us.symbol}` : ""}</dd></div>}
+          {f.us?.proceeds && <div className="wide"><dt>Use of proceeds</dt><dd data-testid="ipo-proceeds">{f.us.proceeds}<span className="k-note"> The document's words.</span></dd></div>}
         </dl>
       )}
       {r.market === "IN" && !f.promoters?.length && !f.objects && !fin && <p className="k-small k-muted">The rules couldn't read the cover or the summary tables of this document. Open it under Documents.</p>}

@@ -11,5 +11,5 @@ export function gainLabel(term: "st" | "lt", hasUs: boolean, net = true): string
 /** The line under them with the US shares' own figures, or null without US sales. */
 export function usSharesNote(st: number | null | undefined, lt: number | null | undefined, fmt: (v: number) => string): string | null {
   if (st == null && lt == null) return null;
-  return `US shares, not in these totals: short-term ${fmt(st ?? 0)}, long-term ${fmt(lt ?? 0)} (net).`;
+  return `US shares, kept apart from these totals: short-term ${fmt(st ?? 0)}, long-term ${fmt(lt ?? 0)} (net).`;
 }

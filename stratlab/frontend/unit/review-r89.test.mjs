@@ -163,7 +163,7 @@ test("R92-001: a lock says what the plan costs, in the visitor's currency, while
     INR: { symbol: "₹", name: "Rupee", basic: 699, pro: 1999, basic_year: 6999, pro_year: 19999, charged_in: "INR", yearly_charged_in: "INR" },
     SAR: { symbol: "SAR ", name: "Riyal", basic: 27, pro: 78, basic_year: 274, pro_year: 783, charged_in: "INR", yearly_charged_in: "INR", converted: true } } };
   assert.equal(planPriceLine("basic", p, "INR"), "Basic is ₹699 a month or ₹6,999 a year.");
-  assert.equal(planPriceLine("pro", p, "SAR"), "Pro is about SAR 78 a month or about SAR 783 a year.");
+  assert.equal(planPriceLine("pro", p, "SAR"), "Pro is ₹1,999 a month or ₹19,999 a year, paid in rupees (about SAR 78 or SAR 783 at today's rate)."); // the rupee price is the charge (DK-001, RC2A-010)
   assert.equal(planPriceLine("pro", { ...p, offer: { ...paid, yearly: false } }, "INR"), "Pro is ₹1,999 a month.");
   assert.equal(planPriceLine("pro", p, "XYZ"), null);
   // the price, and the lock's own button says "See plans" (DP2-022: never said twice)
@@ -237,7 +237,21 @@ test("MO-4b: Positioning's cash and put-call cards stack, and a pair of cards in
   assert.match(page, /<Cash s=\{s\} \/>\s*<PcrTable coverage=\{s\.coverage\} \/>/);
   const css = read("src/styles.css");
   assert.match(css, /\.k-two \{[^}]*align-items: stretch;/);
-  assert.match(css, /\.mc-grid \{ align-items: start; \}/);                           // the Money calendar keeps its own
+  assert.match(css, /\.mc-grid \{ align-items: stretch; \}/);                         // the Money calendar's columns end level too (RC2B-041)
   const sig = read("src/pages/trade/SignalsPage.tsx");
   assert.match(sig, /<div className="k-page">\s*<UrlCard ov=\{ov\} reload=\{load\} \/>\s*<HowTo \/>\s*<\/div>/);   // the short card shares its column
+});
+
+test("Owner 26 Oct: + Custom flows as the last chip where the row wraps; the cost choice's note sits under the row", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /@media \(min-width: 641px\) \{\s*\.k-chiprow \{ flex-wrap: wrap; align-items: flex-start; padding: 2px; \}\s*\.k-chiprow > \.k-chipbar \{ display: contents; \}/);
+  const rules = read("src/components/Rules.tsx");
+  assert.match(rules, /<Field label="Indian stock costs">/);
+  assert.match(rules, /\{currency === "INR" && " Indian stock costs: Automatic uses intraday \(MIS\) costs/);
+});
+
+test("Owner 26 Oct: inside a notebook only the notebook is the selected menu entry; no dots caption", () => {
+  const shell = read("src/components/Shell.tsx");
+  assert.match(shell, /const here = at\?\.page\.to === p\.to && !\(p\.to === "\/notebooks" && path\.startsWith\("\/n\/"\)\);/);
+  assert.doesNotMatch(shell, /Dots: each notebook's last verdict/);
 });

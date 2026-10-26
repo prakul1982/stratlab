@@ -502,6 +502,7 @@ export function sourceWords(source: string): string {
   if (source === "CSV") return "a CSV file";
   if (source === "Statement") return "your statements";
   if (source === "Zerodha Kite") return "your Zerodha login";
+  if (source === "Zerodha Kite file") return "your Zerodha Kite file";      // the Kite web export uploaded by hand (RC2B-009)
   if (source === "Interactive Brokers") return "your Interactive Brokers account";
   return `your ${source} file`;
 }

@@ -10,7 +10,7 @@ import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
 import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../components/kit";
-import { fyLink, movedYearNote, openFy, rememberFy, yearHasTrades } from "../lib/fy";
+import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
 import { useAskedFy } from "../lib/useFy";
 import { gainLabel, usSharesNote } from "../lib/usGains";
 
@@ -41,7 +41,7 @@ type Total = {
 };
 /** The year being filed as one figure with the interest (Pro: it needs Tax tools' payments), DH-003. */
 type Payable = { fy: number; locked: boolean; plan?: string; total?: number; due?: string; past_due?: boolean; balance?: number;
-  interest_234a?: number; interest_234b?: number; interest_234c?: number; fee_234f?: number };
+  interest_234a?: number; interest_234b?: number; interest_234c?: number; fee_234f?: number; return_needed?: boolean; income?: number; exempt?: number };
 type Year = {
   fy: number; label: string; stcg: Side; ltcg: Side; foreign?: { st: Side; lt: Side; count: number } | null; exempt_old: number | null; exemption: { limit: number; used: number; left: number };
   buckets: Bucket[]; steps: string[]; tax: number; tax_with_cess: number; carry_forward: { st: number; lt: number };
@@ -319,7 +319,7 @@ export function TaxReportPage() {
         <>
           <Card compact>
             <CardHead title="Financial year" actions={<>
-              <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
+              <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
                 options={rep.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === rep.current_fy ? " (this year)" : ""}` }))} />
               <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("csv")}><Download size={16} />{getting === "csv" ? "Making the CSV…" : "Download CSV"}</button>
               <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("pdf")}><Download size={16} />{getting === "pdf" ? "Making the PDF…" : "Download PDF summary"}</button>
@@ -330,7 +330,7 @@ export function TaxReportPage() {
           {!hasTrades(y) && (() => {
             const other = rep.years.filter((x) => x.fy !== y.fy && hasTrades(x)).sort((a, b) => b.fy - a.fy)[0];
             return other ? (
-              <Notice label="A year with trades" action={{ label: `Show ${other.label}`, onClick: () => { setFy(other.fy); rememberFy(other.fy); setMovedFrom(null); setAllSales(false); } }}>
+              <Notice label="A year with trades" action={{ label: `Show ${other.label}`, onClick: () => { setFy(other.fy); setMovedFrom(null); setAllSales(false); } }}>
                 No trades in {y.label}. {other.label} has trades in your files.
               </Notice>
             ) : null;
@@ -357,7 +357,7 @@ export function TaxReportPage() {
                 value={inr(y.tax)} note={`${inr(y.tax_with_cess)} with 4% cess`} />
             </StatRow>
             {y.exemption.limit > 0 && y.exemption.used > 0 && <Meter pct={Math.max(0, Math.min(100, (y.exemption.used / y.exemption.limit) * 100))} />}
-            {y.foreign && <p className="k-small k-muted" data-testid="tax-us-apart">{usSharesNote(y.foreign.st.net, y.foreign.lt.net, inr)} Their tax is in the estimate; the US card below has each sale.</p>}
+            {y.foreign && <p className="k-small k-muted" data-testid="tax-us-apart">{usSharesNote(y.foreign.st.net, y.foreign.lt.net, inr)} Their tax is added in the year's total tax estimate; the US card below has each sale.</p>}
           </Card>
 
           <Card>
@@ -472,15 +472,21 @@ const FIRST_UNDERLYINGS = 5;
 function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
   const t = y.total;
   if (!t.available) return null;
+  // RC2B-004: the figure once, in the same plain style as the payable one; the rounded line only when the return rounds it to
+  // something else, and the links sit inside the notes, not on lines of their own
+  const rounds = t.rounded != null && t.rounded.tax !== Math.round(t.total);
+  const toolsLink = <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link>;
   return (
     <Card compact label="The year's tax">
       <StatRow>
-        <Stat label={`Total tax estimate, ${y.label}`} value={<a className="link" href="#tax-total">{inr(t.total)}</a>}
-          note={t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B)` : undefined} />
+        <Stat label={`Total tax estimate, ${y.label}`} value={<span aria-label="Total tax estimate">{inr(t.total)}</span>}
+          note={<>{rounds && t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B). ` : ""}<a className="link" href="#tax-total">How it is worked out</a></>} />
         {payable && !payable.locked && payable.total != null && (
           <Stat label="Payable now, with interest" value={<span aria-label="Payable now">{inr(payable.total)}</span>}
-            note={<>less TDS and tax paid, plus 234A, 234B and 234C{payable.due ? `, as if paid by ${payable.past_due ? "today" : dateOnly(payable.due)}` : ""}
-              <span className="k-stat-link"><Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link></span></>} />
+            note={payable.return_needed === false
+              ? <>No return is needed for {y.label}: total income {inr(payable.income ?? 0)} is within the {inr(payable.exempt ?? 0)} basic exemption limit, so there is no late fee. {toolsLink}</>
+              // RC2B-003: the late fee is named beside the interest when the figure holds one
+              : <>less TDS and tax paid, plus 234A, 234B and 234C{payable.fee_234f ? " and the 234F late fee" : ""}{payable.due ? `, as if paid by ${payable.past_due ? "today" : dateOnly(payable.due)}` : ""}. {toolsLink}</>} />
         )}
       </StatRow>
       {payable?.locked && <p className="k-small k-muted" data-testid="tax-payable-locked">What is still payable, with your TDS and payments taken off and the interest under sections 234A, 234B and 234C added, is in <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link> on the {payable.plan ?? "Pro"} plan.</p>}
@@ -536,14 +542,18 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
 }
 
 const amount = (s: string) => { const n = Number(s.replace(/[,\s₹]/g, "")); return s.trim() === "" ? null : Number.isFinite(n) && n >= 0 ? n : NaN; };
+/** A saved amount as the page writes rupees everywhere, 20,00,000, not 2000000 (RC2B-018). */
+const grouped = (n: number | null | undefined) => (n ? n.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "");
+/** The box's text in that grouping once it is left, when it is a number; anything else is left to be fixed. */
+const regroup = (s: string) => { const n = amount(s); return n == null || Number.isNaN(n) ? s : grouped(n) || s; };
 
 /** Regime, other income (and how much of it is salary), the old regime's deductions, age band and residency, saved per year. */
 function InputsPanel({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void> }) {
   const v = y.inputs;
   const [regime, setRegime] = useState<"new" | "old">(v.regime);
-  const [other, setOther] = useState(v.saved && v.other ? String(v.other) : "");
-  const [salary, setSalary] = useState(v.salary != null ? String(v.salary) : "");
-  const [ded, setDed] = useState(v.deductions ? String(v.deductions) : "");
+  const [other, setOther] = useState(v.saved && v.other ? grouped(v.other) : "");
+  const [salary, setSalary] = useState(v.salary != null ? grouped(v.salary) || "0" : "");
+  const [ded, setDed] = useState(v.deductions ? grouped(v.deductions) : "");
   const [age, setAge] = useState<Age>(v.age ?? "below60");
   const [resident, setResident] = useState(v.resident ?? true);
   const [saving, setSaving] = useState(false);
@@ -568,12 +578,12 @@ function InputsPanel({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inpu
         <FieldGroup label="Resident in India?" infoLabel="About residency" info="Residency for tax depends mainly on the days spent in India in the year. A non-resident gets no section 87A rebate, can't set the unused basic exemption against share gains (sections 111A and 112A), and has the ₹2.5 lakh old-regime limit at any age. Surcharge and cess apply as usual. TDS on NRI sales is deducted by the broker; this estimate does not reconcile TDS.">
           <Seg label="Resident in India" options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} value={resident ? "yes" : "no"} onChange={(r) => setResident(r === "yes")} />
         </FieldGroup>
-        <Field label="Other income" unit="₹" inputMode="decimal" placeholder="e.g. 1200000" value={other} onChange={(e) => setOther(e.target.value)} aria-label="Other income"
+        <Field label="Other income" unit="₹" inputMode="decimal" placeholder="e.g. 1200000" value={other} onChange={(e) => setOther(e.target.value)} onBlur={() => setOther(regroup)} aria-label="Other income"
           info="Salary, pension, interest, rent and the like for the year, before deductions, as one number. Not the trades in your files: those are added from the files." />
-        <Field label="Of which salary" optional unit="₹" inputMode="decimal" placeholder="all of it" value={salary} onChange={(e) => setSalary(e.target.value)} aria-label="Of which salary"
+        <Field label="Of which salary" optional unit="₹" inputMode="decimal" placeholder="all of it" value={salary} onChange={(e) => setSalary(e.target.value)} onBlur={() => setSalary(regroup)} aria-label="Of which salary"
           info="Used for the standard deduction, which is only for salary and pension, and because business losses can't be set off against salary. Leave it blank if all of it is salary." />
         {regime === "old" && (
-          <Field label="Deductions" unit="₹" inputMode="decimal" placeholder="e.g. 150000" value={ded} onChange={(e) => setDed(e.target.value)} aria-label="Deductions"
+          <Field label="Deductions" unit="₹" inputMode="decimal" placeholder="e.g. 150000" value={ded} onChange={(e) => setDed(e.target.value)} onBlur={() => setDed(regroup)} aria-label="Deductions"
             info="80C, 80D, home-loan interest and the like, as one total. They reduce income taxed at slab rates, not share gains taxed at special rates." />
         )}
         <FormActions>

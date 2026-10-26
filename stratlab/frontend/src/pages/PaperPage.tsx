@@ -211,13 +211,6 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
             ) : <ChartEmpty height={160}>Your equity curve starts after the first closed candle.</ChartEmpty>}
             {curve.length > 1 && <p className="k-note">From the starting {money(a.capital, cur, 0)} (the grey line), after each closed candle.</p>}
           </ChartFrame>
-          <Card label="Rules">
-            <CardHead level={3} title="Rules" />
-            <ul className="k-list" data-testid="sess-rules">
-              {rulesLines(s, cond).map((x) => <li key={x}>{x}</li>)}
-              <li>{s.risk.sl ? `A ${stopWords(s.risk.sl, s.risk.stopType)}` : "No stop"}{s.risk.tgt ? `, a ${s.risk.tgt}${s.risk.tgtType === "points" ? "-point" : s.risk.tgtType === "r" ? "R" : "%"} target` : ", no target"}; {money(s.risk.capital, cur, 0)} of fake money.</li>
-            </ul>
-          </Card>
         </div>
         <div className="k-page">
           <Card label="Account">
@@ -228,11 +221,11 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
               ))}
             </div>
           </Card>
-          <Card label="Closed trades">
+          {/* nothing to list until a trade has closed: the Account card above already says "Closed trades 0" (RC2A-033: a full-width card of "None yet") */}
+          {closedTrades.length > 0 && <Card label="Closed trades">
             <CardHead level={3} title={`Closed trades (${a.trades})`} />
-            {closedTrades.length ? <OrderList events={closedTrades} cur={cur} tz={tz} newest tf={snap.strategy.tf} close={marketClose} />
-              : <p className="k-small k-muted">None yet. A trade shows here once its exit order fills.</p>}
-          </Card>
+            <OrderList events={closedTrades} cur={cur} tz={tz} newest tf={snap.strategy.tf} close={marketClose} />
+          </Card>}
           <Card label="Orders">
             <CardHead level={3} title="Orders" />
             {today.length ? <OrderList events={today} cur={cur} tz={tz} newest tf={snap.strategy.tf} close={marketClose} />
@@ -241,6 +234,14 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
               note={<><span className={upDown(closedPnl)}>{money(closedPnl, cur)}</span> on closed trades</>}>
               <OrderList events={earlier} cur={cur} tz={tz} newest tf={snap.strategy.tf} close={marketClose} />
             </Earlier>
+          </Card>
+          {/* the rules last in the column: on a phone the account and the orders come before three lines of rules (RC2A-033) */}
+          <Card label="Rules">
+            <CardHead level={3} title="Rules" />
+            <ul className="k-list" data-testid="sess-rules">
+              {rulesLines(s, cond).map((x) => <li key={x}>{x}</li>)}
+              <li>{s.risk.sl ? `A ${stopWords(s.risk.sl, s.risk.stopType)}` : "No stop"}{s.risk.tgt ? `, a ${s.risk.tgt}${s.risk.tgtType === "points" ? "-point" : s.risk.tgtType === "r" ? "R" : "%"} target` : ", no target"}; {money(s.risk.capital, cur, 0)} of fake money.</li>
+            </ul>
           </Card>
         </div>
       </div>

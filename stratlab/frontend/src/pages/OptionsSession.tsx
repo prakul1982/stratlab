@@ -76,8 +76,12 @@ export function OptionsSession() {
   // the strategy's own exchange's hours first (lib/marketHours): after the close it says so and when it opens, not "Reconnecting"
   const closed = sessionFeed({ feedConnected: snap.feed_connected, lastTickAt: null, market: optionsMarket(markets, s.exchange) });
   const feed = closed.text.startsWith("Market closed") ? closed
-    : !snap.feed_connected ? { text: "Reconnecting to prices", tone: "plain" as const } : snap.fresh ? { text: "Live option prices", tone: "live" as const } : { text: "Waiting for the first prices", tone: "plain" as const };
+    : !snap.feed_connected ? { text: "Reconnecting to prices", tone: "plain" as const } : snap.fresh ? { text: "Live option prices", tone: "live" as const }
+      // fills are in, so prices have been read: not "waiting for the first" (RC2A-032, the page opened before the first tick settled)
+      : orders.length > 0 || p ? { text: "Reading the latest prices", tone: "plain" as const } : { text: "Waiting for the first prices", tone: "plain" as const };
 
+  // a few thousand rupees of movement on lakhs reads as one "₹5L" label on every tick: whole rupees then (RC2A-037, as Paper trading's chart does)
+  const eqSpan = snap.equity_curve.length ? Math.max(...snap.equity_curve.map((x) => x.eq), a.capital) - Math.min(...snap.equity_curve.map((x) => x.eq), a.capital) : 0;
   const stop = async () => {
     setAsk(null);
     try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); await load(); refreshMe(); } catch (e) { fail(e); }
@@ -130,7 +134,9 @@ export function OptionsSession() {
       <Card label="The account">
         <StatRow label="Session results">
           <Stat item label="Open trade, after costs" value={p ? inr(p.net) : "No open trade"} tone={tone(p ? p.net : null)} />
+          {/* today's result is the open trade alone before any trade has closed: one figure, not the same one twice (RC2A-037) */}
           {(() => { const d = dayStat(running, snap.status, a.today, p ? p.net : 0);
+            if (running && p && !(a.today ?? 0) && !today.length) return null;
             return <Stat item label={d.label} value={d.text ?? inr(d.value)} tone={tone(d.value)} />; })()}
           <Stat item label="All closed trades" value={inr(a.realised)} tone={tone(a.realised)} />
           <Stat item label="Paper account" value={inr(a.equity)} tone={tone(a.equity - a.capital)} />
@@ -197,7 +203,7 @@ export function OptionsSession() {
         <CardHead level={3} title="Paper equity" />
         {snap.equity_curve.length > 1 ? (
           <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((x) => t(x.t))} height={170} times={snap.equity_curve.map((x) => x.t)} tz={TZ}
-            format={(v) => inr(v)} axisFormat={(v) => moneyCompact(v, "INR")} baseline={a.capital}
+            format={(v) => inr(v)} axisFormat={(v) => (eqSpan < a.capital * 0.05 ? inr(v) : moneyCompact(v, "INR"))} baseline={a.capital}
             lines={[{ label: "Account", values: snap.equity_curve.map((x) => x.eq), color: "var(--series-1)", width: 2 }]} />
         ) : <ChartEmpty height={170}>Fills in minute by minute while the market is open.</ChartEmpty>}
       </Card>

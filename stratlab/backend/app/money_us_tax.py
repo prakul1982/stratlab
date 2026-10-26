@@ -42,7 +42,8 @@ EPS = 1e-9
 COLUMNS = {
     "date": hf.TRADE_COLUMNS["date"] | {"settlementdate", "tradedateutc", "activitydate", "runtime"},
     "side": hf.TRADE_COLUMNS["side"] | {"activity", "activitytype", "buysellflag", "transcode", "transactioncode", "trancode",
-                                        "orderside", "tradeside", "tradeaction", "buysellcode"},     # Robinhood: "Trans Code"
+                                        "orderside", "tradeside", "tradeaction", "buysellcode",
+                                        "ordertype", "orderaction", "direction", "tradedirection"},     # Robinhood: "Trans Code"; INDmoney's "Order Type"
     "symbol": {"symbol", "ticker", "stocksymbol", "stock", "instrument", "security", "securitysymbol", "scrip"},
     "name": {"name", "companyname", "securityname", "description", "stockname"},
     "qty": hf.TRADE_COLUMNS["qty"] | {"shares", "units", "noofshares", "numberofshares"},
@@ -50,7 +51,9 @@ COLUMNS = {
     "fees": {"fees", "fee", "commission", "commissions", "charges", "brokerage", "commfee", "ibcommission", "totalfees", "feesusd",
              "feescomm", "feesandcomm", "feescommissions", "feesandcommissions", "commissionsfees", "commissionandfees"},    # Schwab: "Fees & Comm"
     "value": hf.TRADE_COLUMNS["value"] | {"amountusd", "proceeds", "netamount"},
+    "asset": {"assetclass", "assetcategory", "securitytype"},      # IBKR's STK / OPT / CASH: only stocks are read (RC2B-011)
 }
+STOCK_KINDS = {"STK", "STOCK", "STOCKS", "EQUITY", "EQUITIES", "ETF", "ETFS", "ADR", "COMMONSTOCK", "COMMON STOCK"}
 # MO-1: a realised-gains tax report (Vested's yearly one, other Indian US-stock apps' similar ones): one line per lot sold,
 # with the day it was acquired and the day it was sold, instead of a list of trades
 GAINS = {
@@ -75,6 +78,9 @@ READY_MADE = [("Schedule FA", re.compile(r"(?i)schedule[\s_-]*fa(?![a-z])")), ("
 GAINS_NOTE = ("This is a realised-gains report: it has the lots you sold, not the shares you still hold. Schedule FA needs "
               "everything held in the calendar year, so the shares still held are missing from it until you add their purchases "
               "(or upload your broker's full transaction or activity statement).")
+DIVIDENDS_NOTE = (" The report's own dividends section isn't read: the dividends on this page are worked out from the companies' "
+                  "declared amounts and the shares your trades held, so they can differ from the report's. Upload your broker's "
+                  "dividend statement in Tax tools for the actual figures.")
 ASSUMPTIONS = [
     "You are a resident (and ordinarily resident) individual in the year; non-residents don't report foreign assets "
     "and are taxed differently.",
@@ -304,7 +310,10 @@ def _gains(rows: list[list[str]], heads: list[int], broker: str | None = None) -
             out.append({"d": d, "side": side, "sym": sym, "qty": round(qty, 6), "price": round(price, 6), "fees": 0.0, "name": "", "src": "file"})
     if not out:
         raise hf.FileError("No US trades could be read from that file: " + (problems[0]["reason"].lower() if problems else "it has no lot lines") + ".")
-    return {"rows": out, "problems": problems[:100], "month_first": order == "mdy", "date_note": note, "note": GAINS_NOTE}
+    # RC2B-014: the report's own dividends section is not read (the page's dividends are estimates from the trades): said
+    seen = any(re.match(r"(?i)^\s*dividends?\b", next((x for x in r if x.strip()), "")) and sum(1 for x in r if x.strip()) <= 2 for r in rows)
+    return {"rows": out, "problems": problems[:100], "month_first": order == "mdy", "date_note": note,
+            "note": GAINS_NOTE + (DIVIDENDS_NOTE if seen else "")}
 
 
 def _rows(rows: list[list[str]], c: dict[str, int], first_line: int, broker: str | None = None) -> dict:
@@ -332,7 +341,9 @@ def _rows(rows: list[list[str]], c: dict[str, int], first_line: int, broker: str
         text = " · ".join(x for x in (cell(r, "date"), cell(r, "side"), sym, cell(r, "qty")) if x)[:80]
         if not sym or re.match(r"(?i)total", cell(r, "symbol")):
             continue
-        why = ("No date" if not d else "Not a purchase or sale (dividends, deposits and the like are left out)" if not side
+        asset = cell(r, "asset").upper()
+        why = ("Not a stock (options, futures, bonds and currencies are left out)" if asset and asset not in STOCK_KINDS
+               else "No date" if not d else "Not a purchase or sale (dividends, deposits and the like are left out)" if not side
                else "No quantity" if not qty or qty > MAX_QTY else "No price" if price is None or price < 0 or price > MAX_PRICE else None)
         if why:
             problems.append({"line": n, "text": text, "reason": why})

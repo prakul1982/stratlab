@@ -365,12 +365,12 @@ def t_os(g: dict) -> dict:
             totals = [a + b for a, b in zip(totals, p)]
     if rows:
         rows.append(["Total", "", ""] + [r2(x) for x in totals] + [r2(sum(totals)), None, ""])
-    src = {"files": "your dividend files", "estimated": "an estimate from your holdings and the dividends declared (upload your "
-           "broker's dividend statement for the actual figures)", "none": "none found"}[g["div_source"] if g["div_source"] in ("files", "estimated") else "none"]
-    # DH-013: a year with none said as a sentence, not "Indian dividends from none found."
-    notes = [(f"Indian dividends from {src}." if g["div_source"] in ("files", "estimated") else
-              "No Indian dividends in your dividend files or holdings for the year.") + " Gross amounts, before TDS; dividends "
-             "are taxed at your slab rate.",
+    # DH-013: a year with none said as a sentence; RC2B-016: the estimate's sentence reads whole ("Indian dividends from an
+    # estimate from your holdings" did not)
+    lead = {"files": "Indian dividends are from your dividend files.",
+            "estimated": "Indian dividends are an estimate from your holdings and the dividends declared (upload your broker's "
+                         "dividend statement for the actual figures)."}.get(g["div_source"], "No Indian dividends in your dividend files or holdings for the year.")
+    notes = [lead + " Gross amounts, before TDS; dividends are taxed at your slab rate.",
              "TDS shown is what the 10% rule gives (once a company's dividends to you pass ₹10,000 in FY 2025-26; ₹5,000 "
              "before) unless your file gave it; Form 26AS and the AIS have what was actually cut.",
              "The five periods are the return's quarterly breakup of dividends for section 234C."]
@@ -639,6 +639,8 @@ def summary(g: dict) -> list[tuple[str, str]]:
     if p:                             # DH-003: the year's tax, what's paid and the interest, as one figure
         out.append(("Interest under sections 234A, 234B and 234C", money(p["interest_234a"] + p["interest_234b"] + p["interest_234c"])))
         out.append(("Payable now, with the interest" + (" and late fee" if p["fee_234f"] else ""), money(p["total"])))
+        if not p.get("return_needed", True):       # RC2B-003: a year within the basic exemption needs no return, so no late fee
+            out.append(("Return needed", f"No: total income {money(p['income'])} is within the {money(p['exempt'])} basic exemption limit (section 139(1))"))
     if g.get("audit"):
         out.append(("Tax audit (section 44AB)", "Applies: report by " + tax_due.day(tax_due.due(g["fy"], "audit_report")["date"])
                     + ", return by " + tax_due.day(tax_due.due(g["fy"], "audit")["date"])))
@@ -757,10 +759,9 @@ def to_pdf(g: dict) -> bytes:
     from .deck import _fonts
     _fonts()
     y = g["y"]
+    from reportlab.pdfbase.pdfmetrics import stringWidth
     body = ParagraphStyle("b", fontName="Body", fontSize=9, leading=12)
     small = ParagraphStyle("s", parent=body, fontSize=7.5, leading=10, textColor=HexColor("#5B6475"))
-    cell = ParagraphStyle("c", fontName="Body", fontSize=6.5, leading=8)
-    head_cell = ParagraphStyle("hc", fontName="Body-Bold", fontSize=6.5, leading=8)
     head = ParagraphStyle("h", fontName="Head", fontSize=18, leading=22, spaceAfter=4)
     h2 = ParagraphStyle("h2", fontName="Body-Bold", fontSize=11.5, leading=15, spaceBefore=10, spaceAfter=4)
     label = ParagraphStyle("l", parent=body, fontName="Body-Bold", textColor=HexColor("#8A4B00"))
@@ -770,24 +771,46 @@ def to_pdf(g: dict) -> bytes:
                             title=f"Pack for your CA, {y['label']}", author="StratLab")
     width = page[0] - 24 * mm
     grid = TableStyle([("FONT", (0, 0), (-1, -1), "Body", 7), ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                       ("LINEBELOW", (0, 0), (-1, -1), 0.3, HexColor("#DDE3EA")), ("BACKGROUND", (0, 0), (-1, 0), HexColor("#F2F4F7"))])
+                       ("LINEBELOW", (0, 0), (-1, -1), 0.3, HexColor("#DDE3EA")), ("BACKGROUND", (0, 0), (-1, 0), HexColor("#F2F4F7")),
+                       ("LEFTPADDING", (0, 0), (-1, -1), 2), ("RIGHTPADDING", (0, 0), (-1, -1), 2)])
 
-    def fmt(v):
+    def fmt(v, places=None):
         if v is None:
             return ""
         if isinstance(v, (int, float)) and not isinstance(v, bool):
-            return indian(v)          # DH-007: Indian grouping, as everywhere else (it printed 395,574,093.50)
+            # DH-007: Indian grouping, as everywhere else (it printed 395,574,093.50); RC2B-016: the app's own minus sign, and two
+            # places down a whole column when any of it has paise ("302.50" and "1,762.50" stood beside whole numbers)
+            return indian(v, places).replace("-", "\u2212")
         return str(v)
 
     def tbl(t: dict) -> list:
         out = [Paragraph(escape(t["title"]), h2)]
         if t["rows"]:
             n = len(t["columns"])
-            # each column as wide as its longest cell needs (within limits), shared out across the page
-            need = [min(22, max(9, max((len(fmt(r[i])) for r in t["rows"][:400] if i < len(r)), default=0),
-                                max(len(w) for w in t["columns"][i].split()), len(t["columns"][i]) // 5)) for i in range(n)]
-            data = [[Paragraph(escape(c), head_cell) for c in t["columns"]]] + [[Paragraph(escape(fmt(v)), cell) for v in r] for r in t["rows"][:400]]
-            out.append(Table(data, colWidths=[width * x / sum(need) for x in need], repeatRows=1, style=grid))
+            rows = t["rows"][:400]
+            places = [2 if any(isinstance(r[i], float) and not float(r[i]).is_integer() for r in rows if i < len(r)
+                               and isinstance(r[i], (int, float)) and not isinstance(r[i], bool)) else None for i in range(n)]
+            texts = [[fmt(r[i], places[i]) if i < len(r) else "" for i in range(n)] for r in rows]
+            # RC2B-016: every column at least as wide as its longest unbreakable piece (a date, an ISIN, a figure, a header word), so
+            # no word breaks mid-word; the room left goes to the columns with text that can wrap. The type steps down when even
+            # that does not fit the page.
+            pad, size = 5, 6.5            # the cell's 2 + 2 points of padding, and a point to spare
+            while True:
+                hard = [max([stringWidth(w, "Body-Bold", size) for w in t["columns"][i].split()] +
+                            [stringWidth(w, "Body", size) for tx in texts for w in tx[i].split()] + [0]) + pad for i in range(n)]
+                if sum(hard) <= width or size <= 4.5:
+                    break
+                size -= 0.5
+            soft = [min(max([stringWidth(tx[i], "Body", size) for tx in texts] + [0]) + pad, 70 * mm) for i in range(n)]
+            grow = [max(0.0, s - h) for s, h in zip(soft, hard)]
+            spare = max(0.0, width - sum(hard))
+            widths = [h + (spare * g / sum(grow) if sum(grow) else spare / n) for h, g in zip(hard, grow)]
+            if sum(widths) > width:
+                widths = [w * width / sum(widths) for w in widths]
+            cell = ParagraphStyle("c", fontName="Body", fontSize=size, leading=size + 1.5)
+            head_cell = ParagraphStyle("hc", fontName="Body-Bold", fontSize=size, leading=size + 1.5)
+            data = [[Paragraph(escape(c), head_cell) for c in t["columns"]]] + [[Paragraph(escape(x), cell) for x in tx] for tx in texts]
+            out.append(Table(data, colWidths=widths, repeatRows=1, style=grid))
             if len(t["rows"]) > 400:
                 out.append(Paragraph(f"{len(t['rows'])} lines in all; the spreadsheet has every one.", small))
         else:
@@ -833,10 +856,10 @@ def to_pdf(g: dict) -> bytes:
     return buf.getvalue()
 
 
-def indian(v: float) -> str:
-    """A number with Indian digit grouping (1,23,45,678.50), whole numbers without decimals."""
+def indian(v: float, places: int | None = None) -> str:
+    """A number with Indian digit grouping (1,23,45,678.50), whole numbers without decimals unless `places` asks for them."""
     neg, v = v < 0, abs(float(v))
-    whole, frac = (f"{v:.2f}".split(".") if not float(v).is_integer() else (f"{int(v)}", ""))
+    whole, frac = (f"{v:.2f}".split(".") if places or not float(v).is_integer() else (f"{int(v)}", ""))
     if len(whole) > 3:
         whole = re.sub(r"(\d)(?=(\d{2})+$)", r"\1,", whole[:-3]) + "," + whole[-3:]
     return ("-" if neg else "") + whole + (f".{frac}" if frac else "")

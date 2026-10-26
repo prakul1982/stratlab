@@ -66,9 +66,10 @@ test("IPO lists: every stage in India, the US without an Open tab, the open issu
   const stage = page.getByRole("radiogroup", { name: "Stage" });
   await expect(stage.getByRole("radio")).toHaveCount(4);
   await expect(stage.getByRole("radio", { name: /^Open 1$/ })).toBeChecked();             // the open tab first when an issue is open
-  await expect(page.getByTestId("ipo-tab-line")).toContainText("Bidding on the last day ends at 5 PM IST");
+  await expect(page.getByTestId("ipo-tab-line")).toContainText("closing time on its last day is the one its exchange page gives");
   const open1 = page.locator("tr[data-ipo=in-bonfig], [data-ipo=in-bonfig]").filter({ visible: true }).first();
   await expect(open1).toContainText("Bonfiglioli Transmissions Limited");
+  await expect(open1).toContainText("5 PM IST");          // the time the issue's own page gives (RC2A-004)
   await expect(open1).toContainText("₹558 to ₹586");
   await expect(open1).toContainText("25 shares");
   await expect(open1).toContainText("₹14,650");                                             // the lot at the top of the band
@@ -154,6 +155,7 @@ test("An IPO's page: terms, bids, the offer document's facts and its summary (Ba
   await expect(terms).toContainText("4,32,39,042 shares");                                        // the offer for sale, in Indian grouping
   await expect(terms).toContainText("Industrial Products");
   await expect(page.getByTestId("ipo-dates")).toContainText("5 PM IST");
+  await expect(page.getByTestId("ipo-hours")).toContainText("10.00 a.m. to 5.00 p.m.");
   const bids = page.getByTestId("ipo-bids");
   await expect(bids).toContainText("Qualified institutional buyers");
   await expect(bids).toContainText("Non-institutional, bids over ₹10 lakh");
@@ -162,10 +164,10 @@ test("An IPO's page: terms, bids, the offer document's facts and its summary (Ba
   await expect(bids.locator(".k-badge.live")).toBeVisible();
 
   const facts = page.getByTestId("ipo-facts");
-  await expect(facts.getByTestId("ipo-promoters")).toContainText("Sonia Bonfiglioli, Luciano Bonfiglioli");
+  // what the summary below says (promoters, what the money is for), with the words under it, is not said twice (RC2A-007): a Basic page has it once
+  await expect(facts.getByTestId("ipo-promoters")).toHaveCount(0);
+  await expect(facts.getByTestId("ipo-objects")).toHaveCount(0);
   await expect(facts.getByTestId("ipo-selling")).toContainText("Bonfiglioli S.p.A. (promoter)");
-  await expect(facts.getByTestId("ipo-objects")).toContainText("The objects of the Offer are to");
-  await expect(facts.getByTestId("ipo-objects")).toContainText("Page 111 of the PDF");
   await expect(facts).toContainText("Dec 2025");
   await expect(facts).toContainText("Revenue from operations");
   await expect(facts).toContainText("₹2,014 cr");                                                // 2,013.53 crore
@@ -218,6 +220,8 @@ test("A Free account sees the lists and the facts, and the summary and the alert
 
   await page.goto("/invest/ipos/in-bonfig");
   await expect(page.getByTestId("ipo-facts").getByTestId("ipo-promoters")).toContainText("Sonia Bonfiglioli");               // facts and bids stay free
+  await expect(page.getByTestId("ipo-facts").getByTestId("ipo-objects")).toContainText("The objects of the Offer are to");
+  await expect(page.getByTestId("ipo-facts").getByTestId("ipo-objects")).toContainText("Page 111 of the PDF");
   await expect(page.getByTestId("ipo-bids")).toContainText("46.06 times");
   const sum = page.getByTestId("ipo-summary");
   await expect(sum).toContainText("The summary of the offer document is on the Basic plan");

@@ -495,13 +495,15 @@ export function RulesCard({ s, currency, onChange, onRebuilt, defaultStop }: {
           <NumField label={`Brokerage per order (${currency || "flat"})`} min={0} step={1} value={r.brokerage} onValid={(v) => { if (v >= 0) setRisk({ brokerage: v }); }} />
           <NumField label="Slippage (%)" min={0} max={5} step={0.01} value={r.slippage} onValid={(v) => { if (v >= 0 && v <= 5) setRisk({ slippage: v }); }} />
           {currency === "INR" && (
-            <Field label="Indian stock costs" hint="Automatic uses intraday (MIS) costs when the strategy squares off the same day, and delivery (CNC) costs otherwise.">{(id) => (
+            <Field label="Indian stock costs">{(id) => (
               <Select id={id} value={s.product ?? "auto"} onChange={(v) => set({ product: v as Strategy["product"] })}
                 options={[{ value: "auto", label: "Automatic" }, { value: "delivery", label: "Delivery (CNC)" }, { value: "intraday", label: "Intraday (MIS)" }]} />
             )}</Field>
           )}
         </FormGrid>
-        <p className="k-note">By risk: quantity = risk amount ÷ distance to the stop, capped by max capital per trade. Fixed capital: quantity = capital per trade × leverage ÷ price. Taxes and exchange fees are added for you per market.</p>
+        {/* the cost choice's explanation joins the note under the row (owner, 26 Oct: as a hint it was a narrow four-line column
+            under one box, the only one in the row) */}
+        <p className="k-note">By risk: quantity = risk amount ÷ distance to the stop, capped by max capital per trade. Fixed capital: quantity = capital per trade × leverage ÷ price. Taxes and exchange fees are added for you per market.{currency === "INR" && " Indian stock costs: Automatic uses intraday (MIS) costs when the strategy squares off the same day, and delivery (CNC) costs otherwise."}</p>
       </More>
     </Card>
   );

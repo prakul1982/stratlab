@@ -1,4 +1,7 @@
 """The pages' side of redflags.py: red-flag filings across every company, and US holders above 5% (13D and 13G)."""
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Depends
 
 from . import redflags, results, scan
@@ -46,3 +49,20 @@ def us_holders_list(symbol: str = "", form: str = "", page: int = 1, size: int =
     out = redflags.holders_listing(symbol, form, page, size, holder=holder)
     return ok({**out, "note": "Filed by anyone holding more than 5% of a company's shares: a 13D when the stake is active, a 13G when it is passive, "
                               "and an amendment when it changes. Names and percentages are as the filer's cover page states them. Not advice."})
+
+
+@router.get("/research/us-company/{symbol}")
+def us_company_filings(symbol: str, profile=Depends(current_profile)):
+    """What a US company's page shows of its SEC filings, from the stored reads (nothing is fetched here), free on every plan as India's company
+    filings are: the Form 8-K items flagged over the last year, and the holders above 5% from the Schedule 13D and 13G filings (RC2A-027: a US
+    company's page had no owners, filings or red flags section)."""
+    sym = "".join(ch for ch in (symbol or "").upper() if ch.isalnum() or ch in "-.")[:12].replace(".", "-")
+    if not sym:
+        err(404, "not_found", "That company isn't on the list.")
+    today = datetime.now(ZoneInfo("America/New_York")).date()
+    flags = redflags.listing("US", "", (today - timedelta(days=365)).isoformat(), today.isoformat(), 1, 25, "", {sym})
+    holders = redflags.holders_listing(sym, "", 1, 12)
+    return ok({"symbol": sym,
+               "flags": {k: flags[k] for k in ("items", "total", "from", "to", "as_of", "updated_at", "covers")},
+               "holders": {k: holders[k] for k in ("items", "total", "as_of", "updated_at", "newest", "unread", "covers")},
+               "note": NOTE["US"]})

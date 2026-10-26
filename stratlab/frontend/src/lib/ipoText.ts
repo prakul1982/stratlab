@@ -12,11 +12,17 @@ export function tabsFor(m: Market): { value: Stage; label: string }[] {
 
 /** What a tab holds, in a line under it (the Closed tab is the issues whose bidding has ended and whose shares aren't trading yet). */
 export const TAB_LINE: Record<Market, Partial<Record<Stage, string>>> = {
-  IN: { upcoming: "Dates announced, bidding not open yet.", open: "Open for bidding now. Bidding on the last day ends at 5 PM IST.",
+  IN: { upcoming: "Dates announced, bidding not open yet.", open: "Open for bidding now. Each issue's closing time on its last day is the one its exchange page gives.",
     closed: "Bidding has ended; the shares are not trading yet.", listed: "Listed in the last few months." },
   US: { upcoming: "Expected to price. A US offering has no public bidding window: the price is set the evening before trading starts.",
     closed: "Priced; trading starts at the next session.", listed: "Priced and trading in the last few months." },
 };
+
+/** "17:00" is "5 PM", "19:30" is "7:30 PM" (a time the exchange's issue page gives; none is written when it does not). */
+export function clockText(hm: string): string {
+  const [h, m] = hm.split(":").map(Number);
+  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h >= 12 ? "PM" : "AM"}`;
+}
 
 /** "₹153 to ₹162", a single price when the band has none, or "–". */
 export function bandText(r: Pick<IpoRow, "low" | "high" | "price" | "currency">): string {

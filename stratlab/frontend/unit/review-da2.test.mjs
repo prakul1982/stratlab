@@ -68,7 +68,9 @@ test("DA-032: a notebook card is titled by its name, with its question under it 
   assert.match(read("src/pages/trade/trade.css"), /\.k-cards\.nb-cards \{ align-items: stretch; \}/);
   const shell = read("src/components/Shell.tsx");
   assert.match(shell, /VERDICT_FACT\[n\.summary\.last_verdict\]/);
-  assert.match(shell, /Dots: each notebook's last verdict\./);
+  assert.doesNotMatch(shell, /Dots: each notebook's last verdict/);                  // owner, 26 Oct: no caption in the menu
+  assert.match(shell, /<span className="nb-dot" title=\{`The dot is the \$\{verdict\}`\}>/);   // each dot says it on hover
+  assert.match(shell, /<span className="sr-only">, \{verdict\}<\/span>/);
 });
 
 test("DA-033: making a public link asks first and says what becomes public; the page then says the verdict is public", () => {
