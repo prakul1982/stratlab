@@ -2228,7 +2228,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .lp-currency { display: inline-flex; align-items: center; gap: 8px; }
 .lp-currency select { width: auto; min-height: 44px; }
 .lp-skel-seg { height: 44px; width: 280px; max-width: 100%; }
-.lp-skel-amount { height: 46px; width: 60%; }
+.lp-skel-amount { height: calc(46px + 2px + 1.5em); width: 60%; }   /* the price line and the "about $8 at today's rate" line under it (VR1-162 put it on its own line): the page below holds still when prices arrive (R5V-006) */
 .lp-skel-note { height: 1.2em; width: 80%; }
 .lp-skel-fine { height: calc(13.5px * 1.5 * 3); width: min(80ch, 100%); }
 /* a phone wraps the lede to four lines and the fine print to six, and its switch is a touch-sized 50px: the placeholders keep
