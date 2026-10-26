@@ -33,6 +33,8 @@ test("DI-032 / DP1-028: Esc closes the welcome question, and it isn't asked agai
   const errors = await signIn(page, u, "/", false);
   const welcome = page.getByRole("dialog", { name: "What brings you here?" });
   await expect(welcome).toBeVisible({ timeout: 30_000 });
+  // the dialog moves focus into itself once it is ready for keys; pressing Esc the instant it is painted raced that in CI
+  await expect.poll(() => welcome.evaluate((d) => d.contains(document.activeElement))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(welcome).toHaveCount(0);
   // closing it is "not now": no tour starts in its place
