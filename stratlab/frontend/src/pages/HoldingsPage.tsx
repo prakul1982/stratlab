@@ -283,9 +283,10 @@ export function HoldingsPage() {
             )}
             {view.us && view.us.count > 0 && (
               <p className="k-small" aria-label="US stocks">
-                <b>US stocks</b> ({view.us.count}): {usd(view.us.value)} · invested {usd(view.us.invested)}
-                {view.us.pnl != null && <> · <span className={tone(view.us.pnl)}>{usd(view.us.pnl)} ({pct(view.us.pnl_pct)})</span></>}
-                <span className="k-note"> · {view.us.in_total && view.usd_inr ? `in the rupee totals above at ${dollarRate(view.usd_inr, view.usd_inr_at)}` : "not in the rupee totals above: the exchange rate isn't available right now"}
+                {/* RC2B-045: one US stock's value, cost and gain are its row in the table below; the sentence adds the dollar totals only for two or more */}
+                <b>US {view.us.count === 1 ? "stock" : `stocks (${view.us.count})`}</b>{view.us.count > 1 && <>: {usd(view.us.value)} · invested {usd(view.us.invested)}
+                {view.us.pnl != null && <> · <span className={tone(view.us.pnl)}>{usd(view.us.pnl)} ({pct(view.us.pnl_pct)})</span></>}</>}
+                <span className="k-note">{view.us.count > 1 ? " · " : ": "}{view.us.in_total && view.usd_inr ? `in the rupee totals above at ${dollarRate(view.usd_inr, view.usd_inr_at)}` : "not in the rupee totals above: the exchange rate isn't available right now"}
                   {view.us_prices === false && " · US prices are offline right now, so these are at cost"}. Sales of US stocks come from the trades on the <Link className="link" to="/money/us-tax">US stocks tax page</Link>, not from this list.</span>
               </p>
             )}

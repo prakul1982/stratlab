@@ -65,23 +65,25 @@ test("fund behaviour: your return against the fund's, the SIP record and a redem
   expect((await request.post(`${API}/money/mutual-funds/import`, { headers: auth, data: { filename: "cas.pdf", data: raw, password: "ABCDE1234F", mode: "replace" } })).ok()).toBeTruthy();
 
   const errors = await open(page, "/money/mutual-funds", "Your mutual funds, in one place", n);
-  const card = page.getByRole("region", { name: "Fund behaviour" });
-  await expect(card.getByRole("heading", { name: "Your return against each fund's" })).toBeVisible({ timeout: 30_000 });
-  const table = card.getByRole("table", { name: "Your return against each fund's" });
-  await expect(table.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible();
-  await expect(table.getByText(/10 Jan 2018 to today · NAV 10 to 25/)).toBeVisible();
-  await expect(card.getByText("Gap in rupees, all funds")).toBeVisible();
+  // MF-1: the totals in one card, each fund's own return, SIP record and falls folded under its row
+  const card = page.getByRole("region", { name: "Costs and how you invested" });
+  await expect(card.getByText("Gap in rupees, all funds")).toBeVisible({ timeout: 30_000 });
+  const flexi = page.getByRole("list", { name: "Schemes" }).getByRole("listitem").filter({ hasText: "Example Flexi Cap Fund - Direct Plan - Growth" });
+  await expect(flexi).toHaveCount(1);
+  await flexi.locator("summary").click();
+  const how = flexi.getByRole("region", { name: "How you invested" });
+  await expect(how.getByText(/Compared over 10 Jan 2018 to today · NAV 10 to 25/)).toBeVisible();
 
   // the SIP record: one instalment in Feb 2019, long since stopped
-  const sips = card.getByRole("list", { name: "SIP record" });
-  await expect(sips.getByText(/Feb 2019 to Feb 2019: 1 month paid, 0 missed/)).toBeVisible();
-  await expect(sips.getByText(/no instalment after Feb 2019/)).toBeVisible();
+  await expect(how.getByText(/Feb 2019 to Feb 2019: 1 month paid, 0 missed/)).toBeVisible();
+  await expect(how.getByText(/no instalment after Feb 2019/)).toBeVisible();
 
   // sold at 20 with the high at 24: a 16.7% fall; the 300 units are ₹7,500 today against ₹6,000 received
-  const falls = card.getByRole("table", { name: "Redemptions after a fall" });
-  await expect(falls.getByText(/16.7% below 24 \(3 Jun 2024\)/)).toBeVisible();
-  await expect(falls.getByText("₹6,000")).toBeVisible();
-  await expect(falls.getByText("₹7,500")).toBeVisible();
+  const falls = how.getByRole("list", { name: "Redemptions after a fall" });
+  await expect(falls.getByText(/16.7% below the high of 24 \(3 Jun 2024\)/)).toBeVisible();
+  await expect(falls.getByText(/Received ₹6,000/)).toBeVisible();
+  await expect(falls.getByText(/those units today ₹7,500/)).toBeVisible();
+  await card.getByText("How this is worked out").click();
   await expect(card.getByText(/hindsight arithmetic/).first()).toBeVisible();
 
   if (process.env.E2E_SHOTS) {
@@ -90,7 +92,6 @@ test("fund behaviour: your return against the fund's, the SIP record and a redem
     await page.screenshot({ path: `${process.env.E2E_SHOTS}/fund-behaviour-${info.project.name}-dark.png`, fullPage: true });
     await page.emulateMedia({ colorScheme: "light" });
   }
-  await card.getByText("How this is worked out").click();
   await expect(card.getByText(/not a suggestion to start, stop or change a SIP/)).toBeVisible();
   await sane(page, errors, await card.innerText());
   if (phone) await touchable(page);

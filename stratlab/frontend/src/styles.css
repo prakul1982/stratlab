@@ -2337,6 +2337,39 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* R13S-013: the scrolling list of a group's members can be reached with the keyboard, and shows where it is */
 .chip-row:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 8px; }
 
+/* MF-1 (RC2B-047): the fold list, one row for each thing with its main figures, the rest folded under it. A header row over the
+   columns on a wide screen; on a phone each row is a card, its figures two across, each under its own name (never a sideways table) */
+.k-fold-head, .k-fold-sum { display: grid; grid-template-columns: var(--fold-cols); column-gap: var(--s4); align-items: start; padding-inline: var(--s3) var(--s6); }
+.k-fold-head { font-size: var(--t-note); color: var(--muted); padding-block: var(--s1) var(--s2); border-bottom: 1px solid var(--line); }
+.k-fold-head .k-num, .k-fold-cell.k-num { text-align: right; }
+.k-fold-rows { list-style: none; margin: 0; padding: 0; }
+.k-fold-rows > li + li { border-top: 1px solid var(--line); }
+.k-fold-sum { position: relative; min-height: 44px; padding-block: var(--s3); cursor: pointer; list-style: none; }
+.k-fold-sum::-webkit-details-marker { display: none; }
+.k-fold-sum::after { content: ""; position: absolute; right: var(--s4); top: 22px; width: 7px; height: 7px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; }
+.k-fold[open] > .k-fold-sum::after { transform: rotate(45deg); }
+.k-fold-sum:hover { background: var(--paper-2); }
+.k-fold-name, .k-fold-cell { min-width: 0; overflow-wrap: anywhere; }
+.k-fold-name b { display: block; font-weight: 600; }
+.k-fold-k { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }   /* the column's name: the header row's on a wide screen, spoken here */
+.k-fold-v { display: block; font-variant-numeric: tabular-nums; }
+.k-fold-body { padding: var(--s2) var(--s3) var(--s5); display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+.k-fold-body > section { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.k-fold-body h3 { margin: 0; font-size: var(--t-body); font-weight: 600; }
+.k-fold-body .k-dl { grid-template-columns: repeat(5, minmax(0, 1fr)); }   /* a scheme's facts are five at most: one row, never 4 + 1 */
+@media (max-width: 720px) {
+  .k-fold-head { display: none; }
+  .k-fold-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--s2); padding-inline: var(--s2) var(--s6); }
+  .k-fold-sum::after { top: 24px; }
+  .k-fold-name, .k-fold-wide { grid-column: 1 / -1; }
+  .k-fold-cell.k-num { text-align: left; }
+  .k-fold-k { position: static; display: block; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; font-size: var(--t-note); color: var(--muted); }
+  .k-fold-cell:has(.k-none) { display: none; }   /* a figure it has none of takes no line on a phone */
+  .k-fold-body .k-dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mf-stats .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); }   /* seven figures one under another were 600 px: two across */
+  .k-fold-body { padding-inline: var(--s2); }
+}
+
 /* R39: on a phone (touch or not) the plan switch's buttons and the footer's policy links are at least 44px to tap, made with
    padding and height, not a larger font; placed last so the 32px and 40px rules above can't win */
 @media (max-width: 640px) {

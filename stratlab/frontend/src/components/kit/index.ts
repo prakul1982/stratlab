@@ -19,6 +19,7 @@ export { ConfirmDialog } from "./ConfirmDialog";
 export { Dialog, useDialogFocus, usePopover, tabbables } from "./Dialog";
 export { BarList, Meter } from "./BarList";
 export { Disclosure } from "./Disclosure";
+export { FoldTable } from "./FoldTable";
 export { Pager } from "./Pager";
 export { UploadButton } from "./UploadButton";
 export { ChipSet, CheckField } from "./Choices";

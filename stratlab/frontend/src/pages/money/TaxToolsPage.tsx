@@ -211,8 +211,9 @@ function DividendsTab() {
             {y.source === "none" ? <EmptyState title={`No dividends in ${y.label}`}>No dividends in your files or holdings for the year. Upload a dividend statement above to add them.</EmptyState> : (
               <>
                 <StatRow>
-                  <Stat label="Dividend income" value={<span aria-label="Dividend income">{inr(y.total)}</span>} note={`${y.count} payment${y.count === 1 ? "" : "s"} from ${y.companies_count} compan${y.companies_count === 1 ? "y" : "ies"}`} />
-                  <Stat label="Indian companies" value={inr(y.india_total)} note={y.tds.threshold != null ? `TDS above ${inr(y.tds.threshold)} a company` : "Exempt that year"} />
+                  <Stat label="Dividend income" value={<span aria-label="Dividend income">{inr(y.total)}</span>} note={`${y.count} payment${y.count === 1 ? "" : "s"} from ${y.companies_count} compan${y.companies_count === 1 ? "y" : "ies"}${!y.us ? (y.tds.threshold != null ? ` · TDS above ${inr(y.tds.threshold)} a company` : " · exempt that year") : ""}`} />
+                  {/* RC2B-046: with no US dividends the Indian total is the income above, the same figure twice; its note goes under the income */}
+                  {y.us && <Stat label="Indian companies" value={inr(y.india_total)} note={y.tds.threshold != null ? `TDS above ${inr(y.tds.threshold)} a company` : "Exempt that year"} />}
                   {!y.locked && y.tds.threshold != null && (
                     <Stat label={<>TDS expected <Info label="About TDS on dividends">A company cuts 10% TDS (20% without a PAN) from a resident once its dividends to you in the year are over the threshold, on the whole amount: {inr(y.tds.threshold)} for {y.label} under {y.tds.section}. Form 26AS or the AIS shows what was actually cut.</Info></>}
                       value={inr(y.tds.expected)} note={`${y.tds.companies_over} compan${y.tds.companies_over === 1 ? "y" : "ies"} over the threshold${y.tds.in_file != null ? ` · ${inr(y.tds.in_file)} in your file` : ""}`} />
