@@ -116,11 +116,12 @@ test("DF-022: lending across the market for anyone, and the lending facts as hea
   assert.match(read("src/styles.css"), /\.k-dl\.prose dd \{ font-weight: 400;/);
 });
 
-test("DF-023: Invest home's first steps in one line, the next expiry in Coming up, the two cards one height", () => {
+test("DF-023: Invest home's first steps in one line, the next expiry in Coming up, no short card beside a tall one", () => {
   const home = read("src/pages/SpaceHomes.tsx");
   assert.match(home, /<Top compact \/>/);
   assert.match(home, /e\.kind === "expiry"/);
-  assert.match(home, /className="grid2 space-panels even"/);
+  // VR1-010/011 replaced the two equal-height pairs: the watchlist beside Coming up and Results today stacked
+  assert.match(home, /<WatchPanel region=\{region\} \/>\s*<div className="space-col">\s*<NextEvents region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>/);
   assert.match(read("src/components/FirstSteps.tsx"), /if \(compact\) \{/);
   assert.match(read("src/styles.css"), /\.space-panels\.even \{ align-items: stretch; \}/);
 });
