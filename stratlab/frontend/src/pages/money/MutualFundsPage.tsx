@@ -9,7 +9,7 @@ import { track } from "../../lib/analytics";
 import { LIMITS } from "../../lib/plans";
 import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
 import { CostCell, CostDetail, CostHow, CostNotes, CostStats, costsShown, useFundCosts } from "./FundCosts";
-import { BehaviourDetail, BehaviourHow, BehaviourNotes, BehaviourStats, GapCell, behaviourShown, useFundBehaviour } from "./FundBehaviour";
+import { BehaviourDetail, BehaviourHow, BehaviourNotes, BehaviourStats, GapCell, behaviourShown, hasGap, useFundBehaviour } from "./FundBehaviour";
 import { Earlier } from "../../components/Earlier";
 import { movedYearNote, openFy } from "../../lib/fy";
 import { importLine } from "../../lib/mfImport";
@@ -142,7 +142,7 @@ export function MutualFundsPage() {
   const gfFor = view?.gains ? gfYears(view.gains.years) : "";
 
   // one row for a scheme: what it is worth and returns, its cost and how it did against the fund; the rest is folded under it
-  const schemeCols: Column<Scheme>[] = [
+  const allSchemeCols: Column<Scheme>[] = [
     { key: "scheme", header: "Scheme", rowHeader: true, cell: (s) => {
       const flags = flagsOf(s, missing.has(s.key));
       return (
@@ -161,6 +161,8 @@ export function MutualFundsPage() {
     { key: "ter", header: "TER", numeric: true, info: "The fund's total expense ratio as published, and what it comes to in rupees a year on your current value.", cell: (s) => <CostCell q={costs} id={s.key} /> },
     { key: "gap", header: "Against the fund", numeric: true, wrap: true, info: "Your XIRR less the fund's own NAV return over the same dates: what timing did, not what to do next.", cell: (s) => <GapCell q={habits} id={s.key} /> },
   ];
+  // a column of dashes says nothing: "Against the fund" is shown once any scheme has a gap to show
+  const schemeCols = allSchemeCols.filter((c) => c.key !== "gap" || schemes.some((s) => hasGap(habits, s.key)));
   const bucketCols: Column<Bucket>[] = [
     { key: "kind", header: "Kind", rowHeader: true, cell: (b) => b.label },
     { key: "rate", header: "Rate", numeric: true, cell: (b) => rate(b.rate, b.slab) },

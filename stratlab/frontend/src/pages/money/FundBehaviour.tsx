@@ -105,6 +105,11 @@ export function BehaviourHow({ q }: { q: BehaviourQuery }) {
 }
 
 /** The gap to the fund's own NAV return in points, with that return under it: the one comparison a row shows. */
+/** Whether a scheme has a gap to show (the scheme list leaves out the "Against the fund" column when none has). */
+export function hasGap(q: BehaviourQuery, id: string): boolean {
+  return behaviourOf(q, id)?.gap_pp != null;
+}
+
 export function GapCell({ q, id }: { q: BehaviourQuery; id: string }) {
   const s = behaviourOf(q, id);
   if (!s || s.gap_pp == null) return <span className="k-none">–</span>;
