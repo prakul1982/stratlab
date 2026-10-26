@@ -383,7 +383,7 @@ def ai_summary(f: dict) -> str | None:
         text = str(extract_json(raw).get("summary") or "").strip()
     except (AIError, ValueError, AttributeError, TypeError):
         return None
-    text = day_first(not_the_indices(two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f)), f))
+    text = day_first(no_scan_moves(not_the_indices(two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f)), f), scan_names(f)))
     return text if text and grounded(text, f) and not robotic(text) else None
 
 
@@ -393,6 +393,30 @@ def not_the_indices(text: str, f: dict) -> str:
     moves = [(i["name"].lower(), f"{abs(i['change_pct']):.2f}") for i in f.get("indices") or [] if i.get("name") and i.get("change_pct") is not None]
     keep = [x for x in re.split(r"(?<=[.!?])\s+", text or "") if x and not any(n in x.lower() and m in x for n, m in moves)]
     return " ".join(keep).strip()
+
+
+_SCAN_WORDS = re.compile(r"\bscan\b|\bstage 2\b|\bsupertrend\b", re.I)
+
+
+def scan_names(f: dict) -> list[str]:
+    """The symbols and names of the stocks the brief's scan named."""
+    scan = f.get("scan") or {}
+    return [x for r in (scan.get("st_s2") or []) + (scan.get("stage2") or []) for x in (r.get("symbol"), r.get("name")) if x]
+
+
+def no_scan_moves(text: str | None, names=()) -> str:
+    """The AI's words without a sentence that gives a price move for a stock the scan named: a scan names a stock for
+    meeting its rule, and the move it carries is the last session's alone (RC2B-010: the weekly brief of 24 Oct said "In the
+    scan of NIFTY 50 stocks, Tech Mahindra Limited dropped 2.14%", Thursday's fall in a week the stock ended where it began).
+    A sentence is dropped when it has a percentage and speaks of the scan, Stage 2 or the Supertrend, or names a stock the
+    scan named."""
+    named = re.compile(r"\b(?:" + "|".join(re.escape(str(n)) for n in names if n) + r")\b", re.I) if any(names) else None
+    keep = []
+    for x in re.split(r"(?<=[.!?])\s+", text or ""):
+        if x and re.search(r"%|\bper ?cent\b", x, re.I) and (_SCAN_WORDS.search(x) or (named and named.search(x))):
+            continue
+        keep.append(x)
+    return " ".join(k for k in keep if k).strip()
 
 
 _ONE_DP = re.compile(r"(?<![\d.,])(\d{1,3}(?:,\d{2,3})+)\.(\d)(?![\d%])")

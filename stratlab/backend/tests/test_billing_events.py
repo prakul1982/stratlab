@@ -35,6 +35,7 @@ def _events(monkeypatch, profile: dict):
     monkeypatch.setattr(billing.db, "profile_by_subscription",
                         lambda sid: dict(profile) if profile.get("razorpay_subscription_id") == sid else None)
     monkeypatch.setattr(billing.db, "get_profile", lambda uid, *a: dict(profile))
+    monkeypatch.setattr(billing.db, "find_profile", lambda uid: dict(profile))     # a user's profile by the event's notes: found, never made (RC2B-031)
     monkeypatch.setattr(billing.db, "update_profile", lambda uid, **kw: profile.update(kw) or dict(profile))
     monkeypatch.setattr(billing.lifecycle, "later", lambda *a, **k: None)
     monkeypatch.setattr("app.admin.mark_granted", lambda *a: None)

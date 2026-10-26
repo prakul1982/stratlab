@@ -25,8 +25,8 @@ test("R29A-005: Privacy quotes the Account buttons as they read, with one update
     assert.ok(account.includes(label), label);
   }
   assert.doesNotMatch(legal, /"Download everything"/);
-  assert.match(legal, /"\/privacy": "18 October 2026"/);
-  assert.match(read("../backend/app/site_pages.py"), /\("\/privacy", "2026-10-18"\)/);
+  assert.match(legal, /"\/privacy": "26 October 2026"/);
+  assert.match(read("../backend/app/site_pages.py"), /\("\/privacy", "2026-10-26"\)/);
 });
 
 test("R29A-008: the description's options are paper trading's", () => {

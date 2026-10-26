@@ -32,7 +32,7 @@ const DATA: { to: string; title: string; what: string }[] = [
 
 export function AccountPage() {
   const { me, session, fail, notify, refreshMe } = useApp();
-  const [ask, setAsk] = useState<"cancel" | "everywhere" | "erase" | null>(null);
+  const [ask, setAsk] = useState<"cancel" | "everywhere" | "erase" | "close" | null>(null);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   // every kept-count limit Plans lists, with what the account holds (DP2-031); its own call, so /me reads no more
@@ -151,10 +151,16 @@ export function AccountPage() {
         <h3 className="k-sub">Delete everything</h3>
         <p className="k-small k-muted k-hint-line">
           Removes everything above, plus your chart drawings, connected accounts, alerts and preferences, with no way back. Your sign-in account,
-          plan, payment records and usage counts for your plan's limits stay: payment records are kept as the law asks, and closing the sign-in account itself is done by us on request,
-          through Contact us at the bottom of this page.
+          plan, payment records and usage counts for your plan's limits stay: payment records are kept as the law asks.
         </p>
         <div className="k-row"><button type="button" className="btn quiet danger" onClick={() => setAsk("erase")}>Delete all my data…</button></div>
+        {/* closing the account in the page, not by asking us (RC2B-031) */}
+        <h3 className="k-sub">Delete my account</h3>
+        <p className="k-small k-muted k-hint-line">
+          Deletes all of the above and then your sign-in account, with no way back. Invoices and the payment records behind them are kept, as tax law asks.
+          Your usage counts go with the account. If you pay for a plan, cancel it first (Plan and usage, above) so you aren't charged again.
+        </p>
+        <div className="k-row"><button type="button" className="btn quiet danger" onClick={() => setAsk("close")}>Delete my account…</button></div>
       </Card>
 
       <LegalLinks />
@@ -164,6 +170,7 @@ export function AccountPage() {
       {ask === "everywhere" && <ConfirmDialog title="Sign out on every device?" confirmLabel="Sign out everywhere" busy={busy} onConfirm={() => void everywhere()} onClose={() => setAsk(null)}>
         You'll be signed out here and on every other phone or computer where you're signed in. Sign in again to carry on.</ConfirmDialog>}
       {ask === "erase" && <DeleteMyData email={me.email ?? session?.user.email ?? ""} onClose={() => setAsk(null)} />}
+      {ask === "close" && <DeleteMyAccount email={me.email ?? session?.user.email ?? ""} onClose={() => setAsk(null)} />}
     </div>
   );
 }
@@ -193,6 +200,53 @@ function DeleteMyData({ email, onClose }: { email: string; onClose: () => void }
           <Field label="Type your email to confirm" wide value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={email} autoComplete="off" spellCheck={false} />
           <FormActions>
             <button type="submit" className="btn danger" disabled={!ok || busy}>{busy ? "Deleting…" : "Delete all my data"}</button>
+            <button type="button" className="btn quiet" onClick={onClose}>Cancel</button>
+          </FormActions>
+        </FormGrid>
+      </div>
+    </Modal>
+  );
+}
+
+/** Deleting the account itself (RC2B-031): the account's email typed in first, then the data and the sign-in account go in one
+ * step. A plan still being billed, or a store that could not be cleared, says so here and leaves the account as it was. Once it
+ * is gone the saved sign-in is dropped and the page goes to the home page. */
+function DeleteMyAccount({ email, onClose }: { email: string; onClose: () => void }) {
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [gone, setGone] = useState(false);
+  const ok = confirmMatches(typed, email);
+  const leave = async () => { await signOutHere(supabase.auth, () => location.assign("/")); location.assign("/"); };
+  const close = async () => {
+    if (!ok) return;
+    setBusy(true); setProblem(null);
+    try {
+      const r = await api<{ ok: boolean; closed: boolean; failed: { label: string }[] }>("/me/delete-account", { method: "POST", body: { confirm: typed } });
+      if (r.closed) setGone(true);
+      else setProblem(`Your account is still open. Not finished: ${r.failed.map((f) => f.label).join(", ")}. Try again to finish.`);
+    } catch (e) { setProblem((e as Error).message); } finally { setBusy(false); }
+  };
+  if (gone) {
+    return (
+      <Modal title="Your account is deleted" onClose={() => void leave()}>
+        <div className="k-stack">
+          <p className="k-small">Your data and your sign-in account are gone. Invoices and the payment records behind them are kept, as tax law asks.</p>
+          <div className="k-row"><button type="button" className="btn" onClick={() => void leave()}>Done</button></div>
+        </div>
+      </Modal>
+    );
+  }
+  return (
+    <Modal title="Delete your account?" onClose={onClose}>
+      <div className="k-stack">
+        <p className="k-small k-muted">Everything you saved is deleted: holdings, tradebooks, funds, net worth, notebooks and experiments, chart drawings, connected
+          accounts, alerts and preferences. Then your sign-in account is deleted, with no way back. Invoices and the payment records behind them are kept, as tax law
+          asks. A plan that is still billed has to be cancelled first, under Plan and usage.</p>
+        <FormGrid label="Delete my account" onSubmit={(e) => { e.preventDefault(); void close(); }}>
+          <Field label="Type your email to confirm" wide value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={email} autoComplete="off" spellCheck={false} error={problem} />
+          <FormActions>
+            <button type="submit" className="btn danger" disabled={!ok || busy}>{busy ? "Deleting…" : "Delete my account"}</button>
             <button type="button" className="btn quiet" onClick={onClose}>Cancel</button>
           </FormActions>
         </FormGrid>

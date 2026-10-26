@@ -174,19 +174,26 @@ export function match(q: string, limit = 6): Feature[] {
   const text = q.toLowerCase().trim();
   const words = searchWords(q);         // "what is walk-forward?" looks for walk and forward, not "is" inside "list"
   if (!words.length) return [];
+  const typoOnly = new Set<Feature>();       // found only by a word one typo away
   const scored = SEARCHABLE.map((f) => {
     const title = f.title.toLowerCase();
     const hay = `${title} ${f.words}`.toLowerCase();
     const tt = tokensOf(title), ht = tokensOf(hay);
+    let solid = false;
     let s = words.reduce((n, w) => {
       const inTitle = wordHit(w, tt, title);
-      return n + (inTitle === 2 ? 3 : inTitle === 1 ? 2 : wordHit(w, ht, hay) ? 1 : 0);
+      const inWords = inTitle ? 0 : wordHit(w, ht, hay);
+      if (inTitle === 2 || inWords === 2) solid = true;
+      return n + (inTitle === 2 ? 3 : inTitle === 1 ? 2 : inWords ? 1 : 0);
     }, 0);
     if (words.length > 1 && (hay.includes(text) || hay.includes(words.join(" ")))) s += 4;       // the whole phrase ("borrowed money") counts for more than its words
     if (title === text) s += 6;
+    if (s > 0 && !solid) typoOnly.add(f);
     return [s, f] as const;
   }).filter(([s]) => s > 0);
   scored.sort((a, b) => b[0] - a[0]);
+  // a typo's guess is for when nothing is found as typed: "contact" is Contact us, not also "F&O changes" (contracts), RC2B-030
+  if (typoOnly.size < scored.length) for (let n = scored.length - 1; n >= 0; n--) if (typoOnly.has(scored[n][1])) scored.splice(n, 1);
   // a page named outright ("sign out", "dark mode") leaves out pages that share only one of its words (DI-003)
   const best = scored[0]?.[0] ?? 0;
   return scored.filter(([s]) => best < 8 || s * 3 >= best).slice(0, limit).map(([, f]) => f);

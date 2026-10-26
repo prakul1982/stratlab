@@ -4,6 +4,15 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 26 October 2026: the owner's re-score, the Invest data and public pages
+
+- **Account:** Account → Your data has **Delete my account**: the account's email typed in, then every store's data and the sign-in account go in one step (`POST /me/delete-account`, `user_data.close_account`). Invoices and the payment records behind them are kept, as tax law asks, and the page says so. A plan still being billed has to be cancelled first, the owner's account is refused, and a store that fails leaves the account open to try again. The privacy page names the button (updated 26 October).
+- **Business updates:** a month that had not ended on the filing day is the month before, and a quarter is named by its last month (Tata Motors' Q2 update filed 1 Oct was "Oct 2026"); names and units are written like the rest ("Total sales", "units").
+- **Briefs:** the weekly brief's written summary no longer carries a price move beside a stock its scan named (Tech Mahindra's one-day fall in a week it was flat); stored briefs are read the same way.
+- **Named holders:** the landing's count and the result's rows are the same companies (the latest quarter and the one before); the US tab opens with the holder's name. **ETF vs NAV:** a last trade of a later day than the close says what it is against ("80.5% above the 23 Oct NAV").
+- **Search:** "contact" is Contact us alone (a typo's guess is only for when nothing is found as typed), a page an intent opens is not listed twice, and "gold" lists the pages about it before a company named like it.
+- **Public pages:** /help, /faq, /about and /login draw their own part of the landing page, /pricing and /upgrade are the prices page, the example tabs stay on one line on a phone, and a visitor whose browser says another country is offered rupees in one tap.
+
 ### 26 October 2026: IPO checks, memory
 
 - **IPOs in Admin:** a red herring prospectus filed with SEBI that no exchange lists yet, or a US final prospectus not yet confirmed as a first offering, is a Check ("To check"), looked for again each day; an issue an exchange lists that ours doesn't is still a Problem.

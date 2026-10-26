@@ -613,6 +613,7 @@ td.num, .num { font-family: var(--sans); }
 .lp-nav nav a:hover { color: var(--ink); }
 .lp-hero { padding: clamp(40px, 7vw, 96px) 0 clamp(32px, 4vw, 56px); border-bottom: 1px solid var(--line); }
 .lp-hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
+.lp-hero-solo { grid-template-columns: minmax(0, 1fr); }   /* an address of its own with no demo beside the heading (RC2B-032) */
 .lp-h1 { font-size: clamp(44px, 6.2vw, 80px); line-height: 1; font-weight: 400; letter-spacing: -.035em; max-width: 12ch; }
 .lp-h1 em { color: var(--orange); }
 .lp-lede { font-size: clamp(18px, 1.8vw, 22px); line-height: 1.45; color: var(--ink-2); max-width: 38ch; }
@@ -2150,7 +2151,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .lp-hero { padding-top: 28px; }
   .lp-demo-rule, .lp-cta-2 { display: none; }
   .lp-demo-tabs { align-self: stretch; }
-  .lp-demo-tabs button { flex: 1; }
+  /* one line each, sized to its words and sharing what is left (RC2B-033: "NIFTY 50" wrapped to two lines on an iPhone) */
+  .lp-demo-tabs button { flex: 1 1 auto; white-space: nowrap; padding: 0 10px; }
 }
 
 /* ---------- round 7 (R7O-010, R7O-013) ---------- */

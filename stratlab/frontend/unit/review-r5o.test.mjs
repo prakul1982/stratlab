@@ -242,7 +242,7 @@ test("Ctrl K: a feature's name beats a company's letters, no futures for a plain
   assert.equal(offerIdeas("tcs", { features: 0, companies: 1, helps: 0, intent: false }), true);
   const p = read("src/components/SearchPalette.tsx");
   assert.match(p, /!isCompany\(i\) && \(!i\.fno \|\| asksContract\(text\) \|\| !companies\.length\)/);
-  assert.match(p, /if \(companies\.length && \(companies\[0\]\.match \?\? 9\) <= STRONG && !exactFeature && !intent\) first\("Companies"\);/);
+  assert.match(p, /if \(companies\.length && \(companies\[0\]\.match \?\? 9\) <= STRONG && !exactFeature && !intent && !topicWord\) first\("Companies"\);/);
 });
 
 test("My space greets in India's time for the Indian market, or the person's own zone (R5O-031)", async () => {

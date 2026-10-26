@@ -47,6 +47,18 @@ export function gapAtPrice(r: EtfGap, p: number | null | undefined, day?: string
     text: basis ? `${r.symbol} ${gapWords(gap, basis === "iNAV" ? "indicative NAV" : "last NAV")}` : null };
 }
 
+/** The gap at the last trade, when that trade is of a later day than the close the list's gap uses: the trade's price against
+ * the NAV, both dated by the page beside it ("80.5% above the 23 Oct NAV"). With the market open the first figure a reader
+ * sees in a row is the live price, so the row says what it is against too (RC2B-029: ₹213.66 beside an 86.0% that is the
+ * 23 Oct close's). It is never the row's gap, which stays one day's close against that day's NAV (R5O-005). Null when the
+ * trade is of the close's own day, or the NAV is missing, of a day with no trading, or of another unit. */
+export function gapAtLastTrade(r: EtfGap, tradeDay: string | null | undefined): number | null {
+  if (!tradeDay || !r.nav_price_day || tradeDay <= r.nav_price_day) return null;
+  if (r.nav == null || !(r.nav > 0) || !(r.price > 0) || r.nav_doubtful || r.nav_mismatch || r.nav_closed_day) return null;
+  const ratio = r.price / r.nav;
+  return ratio > 1 / 3 && ratio < 3 ? Math.round((ratio - 1) * 100 * 100) / 100 : null;
+}
+
 /** "14 days", or "13 of 14 days" when a kept day had no gap to count (DF-003: the column said 30 days and never how many). */
 export function dayCount(d: { days: number; stored?: number }): string {
   return d.stored && d.stored > d.days ? `${d.days} of ${d.stored} days` : `${d.days} day${d.days === 1 ? "" : "s"}`;
