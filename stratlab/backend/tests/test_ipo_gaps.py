@@ -159,7 +159,8 @@ def test_a_red_herring_prospectus_no_page_can_be_found_for_is_a_gap_in_admin(w):
     job = job_read(w)
     missing = I.state()["IN"]["missing"]
     assert any("Jio Platforms Limited filed a red herring prospectus with SEBI on 2026-10-15" in m for m in missing)
-    assert job.status["last_error"] and job.status["problems"][0].startswith("Missing (India): ")
+    # it waits on the issuer, not on us: a Check line, not the job's error (owner, 26 Oct: Paras Healthcare)
+    assert not job.status["last_error"] and job.status["problems"][0].startswith("To check (India): ") and "no exchange listing yet" in job.status["check"]
     row = next(r for r in I.load("IN")["rows"] if r.get("nkey") == "jioplatforms")
     assert row["id"].startswith("in-f-") and I.stage_of(row, NOW) == "filed" and row["probe_at"] == "2026-10-25"       # kept, and looked for again tomorrow
     guesses = {f"detail:{g}" for g in S.symbol_guesses("Jio Platforms Limited")}
@@ -197,8 +198,29 @@ def test_the_admin_jobs_page_shows_the_gap(w):
     I.job.sleep = lambda s: None
     I.job.read("IN", NOW)                                                    # (the page reads the module's job)
     row = next(j for j in w["client"].get("/admin/jobs", headers=headers("admin-token")).json()["jobs"] if j["id"] == "ipo")
-    assert row["state"] == "bad" and "missing from ours" in row["error"]
+    assert row["state"] == "warn" and "no exchange listing yet" in row["error"]
     assert any("Jio Platforms Limited filed a red herring prospectus" in x for x in row["log"])
+
+
+def test_an_exchange_issue_missing_from_ours_is_still_a_problem(w, monkeypatch):
+    """Only a filing that waits on the issuer is a Check: an issue an exchange lists and ours doesn't is the job's error, beside the
+    Check lines."""
+    real = I.refresh_india
+
+    def with_gap(*a, check=None, **kw):
+        got = real(*a, check=check, **kw)
+        check += ["Gamma Labs Limited is on NSE's upcoming issues, not in our list."]
+        return got
+    monkeypatch.setattr(I, "refresh_india", with_gap)
+    w["feed"].nse.hidden = {"JPL"}
+    I.job.sleep = lambda s: None
+    I.job.read("IN", NOW)
+    assert I.job.status["last_error"] == "1 issue on the exchanges' lists is missing from ours."
+    assert I.job.status["problems"][0] == "Missing (India): Gamma Labs Limited is on NSE's upcoming issues, not in our list."
+    assert any(x.startswith("To check (India): Jio Platforms Limited") for x in I.job.status["problems"])
+    row = next(j for j in w["client"].get("/admin/jobs", headers=headers("admin-token")).json()["jobs"] if j["id"] == "ipo")
+    assert row["state"] == "bad" and "missing from ours" in row["error"]
+    assert I.awaits("X filed a red herring prospectus with SEBI on 2026-10-15; …") and not I.awaits("X is listed on BSE (2026-10-20), not in our list.")
 
 
 # ---------- the sources ----------

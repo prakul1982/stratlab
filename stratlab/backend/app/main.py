@@ -6342,9 +6342,10 @@ def market_for(region: str):
 
 
 @app.get("/admin/memory")
-def admin_memory(_=Depends(admin.admin_profile)):
-    """The server's memory: what it holds now, which heavy background job has its turn and how many wait, and the caches' size."""
-    return memguard.status()
+def admin_memory(detail: bool = False, _=Depends(admin.admin_profile)):
+    """The server's memory: what it holds now, which heavy background job has its turn and how many wait, and the caches' size;
+    with `detail`, what the heap holds by type and the largest module-level collections (MEM-002)."""
+    return {**memguard.status(), **({"census": memguard.census()} if detail else {})}
 
 
 @app.get("/admin/audit/market")

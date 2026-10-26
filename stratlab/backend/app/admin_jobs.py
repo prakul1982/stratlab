@@ -58,10 +58,11 @@ def missing_words(problem: str, effects: dict[str, str] | None, next_run: str | 
 
 def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | None = None, log: list[str] | None = None,
          run: list[dict] | None = None, running: bool = False, note: str | None = None, parts: int | None = None,
-         effects: dict[str, str] | None = None, next_run: str | None = None) -> dict:
+         effects: dict[str, str] | None = None, next_run: str | None = None, check: str | None = None) -> dict:
     """One job. `parts`: how many sources the last run tried, for a job that reads several (each failed one is a line
     of `log`); when some were read and some weren't, the run is partial: Check, not Problem. `effects` says, per source,
-    what is missing while it is unread (DJ-021), `next_run` when it is tried again."""
+    what is missing while it is unread (DJ-021), `next_run` when it is tried again. `check`: something to look at that is not a
+    failure (an IPO filing no exchange lists yet): Check, with that line, when nothing failed."""
     state = "bad" if error else "ok" if last_run else "warn"
     problems = [str(x) for x in (log or []) if x] if error else []
     failed = len(problems)
@@ -71,6 +72,8 @@ def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | N
                  + missing_words(problems[0], effects, next_run) + (f" And {failed - 1} more (see the log)." if failed > 1 else ""))
     else:
         error = plain_error(error)
+    if not error and check and last_run:
+        state, error = "warn", check
     # a provider's own error text can carry an account identifier: Admin shows it hidden (R29B-022)
     return {"id": id, "name": name, "schedule": schedule, "last_run": last_run, "error": redact_ids(error), "state": state,
             "running": bool(running), "log": [redact_ids(str(x)[:240]) for x in (log or []) if x][:8], "run": run or [], "note": note}
@@ -369,7 +372,9 @@ def rows() -> list[dict]:
         at, why = _ran(st, "last_run", data=lambda: max(filter(None, ((ipo.state().get(r) or {}).get("read") for r in ("IN", "US"))), default=None))
         return _row("ipo", "IPOs", "India 7:40 AM and 8:10 PM IST, US 8:30 AM and 9:30 PM IST; bids every 15 minutes from 9:55 AM to 5:30 PM IST while an issue is open; "
                     "alerts 8:00 AM (India) and 7:00 PM (US dates) IST", at, st.get("last_error"), _problems(st) + why,
-                    [{"label": "Run now", "path": "/admin/ipos/refresh"}], note="Offer documents are read and summarised a few at a time between the reads. After each read the lists are checked against the exchanges' and the regulators' own: an issue they have that ours does not is a Problem line here.")
+                    [{"label": "Run now", "path": "/admin/ipos/refresh"}], check=st.get("check"),
+                    note="Offer documents are read and summarised a few at a time between the reads. After each read the lists are checked against the exchanges' and the regulators' own: "
+                         "an issue an exchange lists that ours does not is a Problem; a prospectus filed with the regulator that no exchange lists yet is a Check.")
     add("IPOs", ipos)
 
     def fo():

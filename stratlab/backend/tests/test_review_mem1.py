@@ -7,9 +7,12 @@ import pytest
 
 from app import audit, memguard, screens
 from app.intel import net
+from tests import world
 
 
-def test_heavy_jobs_run_one_at_a_time_in_the_order_they_asked():
+def test_heavy_jobs_run_one_at_a_time_in_the_order_they_asked(monkeypatch):
+    # a queue of its own: another test's background job asking for a turn meanwhile was counted as waiting (5, not 3, in CI)
+    monkeypatch.setattr(memguard, "TURNS", memguard._Turns())
     order, inside, worst = [], [0], [0]
 
     def job(name):
@@ -149,3 +152,20 @@ def test_the_mutual_fund_history_kept_in_memory_is_bounded():
         mb._mem[str(i)] = {"from": "2020-01-01", "to": "2020-01-02", "p": [["2020-01-01", 1.0]]}
     assert len(mb._mem) <= mb._mem.max
     mb.forget()
+
+
+def test_the_heap_census_names_what_grows(w):
+    """MEM-002: what the heap holds by type and the largest module-level collections, on demand, for Admin only."""
+    from app import screens as held_here
+    held_here._mem002_probe = [object() for _ in range(5000)]           # a module-level list that grew
+    try:
+        got = memguard.census()
+        assert got["objects"] > 5000 and got["types"][0]["mb"] >= got["types"][-1]["mb"]
+        assert {"name": "app.screens._mem002_probe", "kind": "list", "len": 5000} in got["held"]
+        c = w["client"]
+        assert "census" not in c.get("/admin/memory", headers=world.headers("admin-token")).json()
+        full = c.get("/admin/memory?detail=true", headers=world.headers("admin-token")).json()
+        assert full["census"]["types"] and full["rss_mb"]
+        assert c.get("/admin/memory?detail=true", headers=world.headers("pro-token")).status_code in (401, 403)
+    finally:
+        del held_here._mem002_probe
