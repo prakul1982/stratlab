@@ -30,7 +30,7 @@ function JobLog({ job, mine, onClose }: { job: JobRow; mine: Outcome[]; onClose:
           <div><span>Next run</span><b>{job.schedule || "–"}</b></div>
           <div><span>Status</span><b><Light state={job.state} /></b></div>
         </div>
-        {job.error && <p className={`k-small ${job.state === "bad" ? "k-down" : ""}`} role="alert" title={plainError(job.error).full}>Last problem: {plainError(job.error).text}</p>}
+        {job.error && <p className={`k-small ${job.state === "bad" ? "k-down" : ""}`} role="alert" title={plainError(job.error).full}>{job.state === "bad" ? "Last problem" : "To check"}: {plainError(job.error).text}</p>}
         {job.note && <p className="k-small k-muted">{job.note}</p>}
         <h3 className="adm-sub">What it reported</h3>
         {job.log.length ? <ul className="adm-log">{job.log.map((l, i) => <li key={i}>{plainDates(l)}</li>)}</ul> : <p className="k-small k-muted">Nothing besides the times above.</p>}

@@ -52,6 +52,13 @@ SEBI_BACKFILL = 4                     # older pages of it read per run until it 
 RHP_ROW_DAYS = 45                     # a red herring prospectus no exchange list names yet stays a row this long after it was filed
 PROBE_DAYS, PROBE_ROWS = 21, 2        # such a row's issue page is looked for for this many days, for this many rows a run
 CHECK_DAYS = 60                       # the completeness check compares the exchanges' lists over this many days
+# lines of the check that wait on the issuer, not on us: a prospectus filed with the regulator that no exchange lists yet, a US final
+# prospectus not yet looked at. Admin shows these as a Check, an exchange's issue missing from ours as a Problem (owner, 26 Oct)
+AWAITS = ("filed a red herring prospectus with SEBI", "not yet checked whether it is a first offering")
+
+
+def awaits(line: str) -> bool:
+    return any(a in line for a in AWAITS)
 CATCH_LISTED_DAYS = 60                # an issue BSE's table says listed, that no issue list gave, becomes a row for this many days
 EVENTS = {"open": "Opens for bidding", "close": "Closes for bidding", "allotment": "Allotment", "listing": "Listing"}
 SMALL = 3                             # offer documents the job reads per pass (each is a download and a long read)
@@ -1044,11 +1051,16 @@ class Job:
         st = state()
         st[market] = {**(st.get(market) or {}), "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "missing": missing[:12], "rows": len(rows)}
         save_state(st)
-        # Admin shows a gap the same day: what a list has that ours doesn't, from both markets' last reads, as the job's problems (IPO-002)
-        gaps = [f"Missing ({'India' if m == 'IN' else 'US'}): {x}" for m in ("IN", "US") for x in (st.get(m) or {}).get("missing", [])[:6]]
-        self.status.update(last_run=now.isoformat(timespec="seconds"), read=market, problems=(gaps + problems[:5])[:10],
-                           last_error=(f"{len(gaps)} issue{'s' if len(gaps) != 1 else ''} on the exchanges' or regulators' lists {'is' if len(gaps) == 1 else 'are'} missing from ours."
-                                       if gaps else problems[0][:200] if problems else None))
+        # Admin shows a gap the same day: what a list has that ours doesn't, from both markets' last reads, as the job's problems (IPO-002);
+        # a line that waits on the issuer (AWAITS) is a Check, not a Problem
+        lines = [(f"{'India' if m == 'IN' else 'US'}", x) for m in ("IN", "US") for x in (st.get(m) or {}).get("missing", [])[:6]]
+        gaps = [f"Missing ({where}): {x}" for where, x in lines if not awaits(x)]
+        waits = [f"To check ({where}): {x}" for where, x in lines if awaits(x)]
+        self.status.update(last_run=now.isoformat(timespec="seconds"), read=market, problems=(gaps + waits + problems[:5])[:10],
+                           last_error=(f"{len(gaps)} issue{'s' if len(gaps) != 1 else ''} on the exchanges' lists {'is' if len(gaps) == 1 else 'are'} missing from ours."
+                                       if gaps else problems[0][:200] if problems else None),
+                           check=(f"{len(waits)} filing{'s' if len(waits) != 1 else ''} with the regulators {'has' if len(waits) == 1 else 'have'} no exchange "
+                                  "listing yet; looked for again each day." if waits else None))
         return {"rows": len(rows), "problems": problems, "missing": missing}
 
     def read_open(self, now: datetime, final: bool = False) -> int:
