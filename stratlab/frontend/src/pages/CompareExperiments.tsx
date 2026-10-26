@@ -109,7 +109,16 @@ export function CompareExperiments() {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title={`v${a.v} against v${b.v}`} lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
-      {pickers}
+      {/* the pickers and what changed in one row: What changed was a full-width card for one bullet (VR1-065) */}
+      <div className="k-two k-two-start">
+        {pickers}
+        <Card label="What changed">
+          <CardHead level={3} title="What changed" info="Every difference in the setup between the two experiments. If more than one thing changed, you can't tell which one made the difference: change one thing at a time." infoLabel="About what changed" />
+          {diff.length === 0 ? <p className="k-small k-muted">Same setup. The results differ only if the prices did (a later run includes newer candles).</p>
+            : <ul className="k-list">{diff.map((d) => <li key={d}>{d}</li>)}</ul>}
+          {diff.length > 2 && <p className="k-note">Several things changed at once, so it's hard to say which one mattered.</p>}
+        </Card>
+      </div>
       <div className="k-two">
         {[a, b].map((e) => (
           <Card key={e.v} label={`v${e.v}`}>
@@ -120,12 +129,6 @@ export function CompareExperiments() {
           </Card>
         ))}
       </div>
-      <Card label="What changed">
-        <CardHead level={3} title="What changed" info="Every difference in the setup between the two experiments. If more than one thing changed, you can't tell which one made the difference: change one thing at a time." infoLabel="About what changed" />
-        {diff.length === 0 ? <p className="k-small k-muted">Same setup. The results differ only if the prices did (a later run includes newer candles).</p>
-          : <ul className="k-list">{diff.map((d) => <li key={d}>{d}</li>)}</ul>}
-        {diff.length > 2 && <p className="k-note">Several things changed at once, so it's hard to say which one mattered.</p>}
-      </Card>
       <Card label="Return over the test">
         <CardHead level={3} title="Return over the test" />
         <XYChart ariaLabel="Both experiments' return over time" height={260} times={dates} x={xs} labels={lbl}

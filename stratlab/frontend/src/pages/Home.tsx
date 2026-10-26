@@ -1,4 +1,5 @@
 import { Explore } from "../components/Explore";
+import { TileGrid } from "../components/TileGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
@@ -65,7 +66,7 @@ function WhereToTest({ where, setWhere }: { where: Where; setWhere: (w: Where) =
   const market = markets.find((m) => m.id === where.market);
   return (
     <Card label="Where to test">
-      <CardHead title="1. Where do you want to test it?" info={HELP.markets} infoLabel="About markets" />
+      <CardHead title="1. Where do you want to test it?" info={`${HELP.markets} Picking a stock or coin is optional: if your idea names one, we'll find it for you.`} infoLabel="About markets" />
       <ChipBar label="Market" value={where.market} onChange={(id) => setWhere({ market: id, instrument: null })}
         options={usable.map((m) => ({ value: m.id, label: `${[...m.symbol].length === 1 && m.symbol !== "+" ? m.symbol + " " : ""}${m.name}${m.status === "offline" ? " (offline)" : ""}` }))} />
       {soon.length > 0 && <p className="k-note">Coming soon: {soon.map((m) => m.name).join(", ")}. Until then, use "Your own data" with a CSV.</p>}
@@ -83,7 +84,7 @@ function WhereToTest({ where, setWhere }: { where: Where; setWhere: (w: Where) =
       ) : market ? (
         <Notice tone="warn">{market.name} data is offline right now. Pick another market, or write your idea now and choose later.</Notice>
       ) : null}
-      {!where.instrument && where.market !== "CSV" && <p className="k-note">Optional: if your idea names a stock or coin, we'll find it for you.</p>}
+      {/* the "optional" hint is behind the (i) in the heading, not a line far from the search box (VR1-042) */}
     </Card>
   );
 }
@@ -162,7 +163,7 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
   useEffect(() => { if (where.market) try { localStorage.setItem(LAST_MARKET, where.market); } catch { /* private mode */ } }, [where.market]);
   const create = useCreateNotebook(where);
   return (
-    <div className="k-page k-narrow">
+    <div className="k-page">{/* the same 1080px column as every app page (VR1-040: a 920px column ended 160px short of the rest) */}
       <PageHeader eyebrow="Trade · Build and test" title="What trading idea do you want to test?"
         lede="Write it the way you'd explain it to a friend. We'll turn it into exact rules and ask about anything that's missing."
         actions={!hide.includes("import") ? <button type="button" className="btn quiet sm" onClick={() => { setImporting(true); window.setTimeout(() => importRef.current?.scrollIntoView({ behavior: "smooth" }), 50); }}>
@@ -177,11 +178,7 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
       ) : (
         <p className="k-small k-muted">Not sure what to test? <Link to="/research" className="link">Research a company first</Link>: its AI read suggests ideas you can test in one click.</p>
       )}
-      <ol className="k-routes" aria-label="How StratLab works">
-        <li><b>1. Describe it</b><span className="k-small k-muted">In plain words. We turn it into rules you can read and edit.</span></li>
-        <li><b>2. Test it honestly</b><span className="k-small k-muted">On years of real prices, after real costs, with four checks for luck.</span></li>
-        <li><b>3. Trade it on paper</b><span className="k-small k-muted">If the verdict says the edge is real, watch it live with fake money.</span></li>
-      </ol>
+      {/* no "1, 2, 3" strip here: the two numbered sections below are the steps (VR1-041: "1. Describe it" over "1. Where do you want to test it?") */}
       <WhereToTest where={where} setWhere={setWhere} />
       <Card label="Describe your idea">
         <CardHead title="2. Describe your idea" />
@@ -259,7 +256,7 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
       {/* each card: the notebook's name as its title, its question in two lines under it (whole in its tooltip), what it was
           last tested on, a pin that says what it does, and one height per row (DA-032: the long question in large serif was cut
           mid-quote, the name was tiny caps below, the pin had no words and the cards' heights differed) */}
-      <div className="k-cards nb-cards">
+      <TileGrid className="k-cards nb-cards">
         {shown.map((n) => {
           const inst = n.instrument && "symbol" in n.instrument ? n.instrument.symbol : null;
           const count = n.summary?.experiments ?? 0;
@@ -268,7 +265,7 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
             <Card key={n.id} label={n.name}>
               <CardHead title={<Link to={`/n/${n.id}`} className="k-title-link">{n.name}</Link>}
                 actions={<button type="button" className={`k-pin${n.pinned ? " on" : ""}`} aria-pressed={!!n.pinned} aria-label={n.pinned ? `Unpin ${n.name}` : `Pin ${n.name} to the top`}
-                  title={n.pinned ? "Unpin it" : "Keep it at the top of the list"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /><span aria-hidden="true">{n.pinned ? "Pinned" : "Pin"}</span></button>} />
+                  title={n.pinned ? "Unpin it" : "Keep it at the top of the list"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /></button>} />
               {question && <p className="k-small k-muted nb-question" title={question}>{question}</p>}
               <span className="k-note">{inst ? `Tested on ${inst}` : "No instrument picked yet"}</span>
               <div className="k-spread k-push">
@@ -278,7 +275,7 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
             </Card>
           );
         })}
-      </div>
+      </TileGrid>
       <Explore hide={hide} />
     </div>
   );

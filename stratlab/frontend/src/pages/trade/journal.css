@@ -28,3 +28,5 @@
 /* a form inside a dialog never makes the dialog wider than the screen */
 .modal-back { grid-template-columns: minmax(0, 1fr); }
 .modal .k-form { grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); }
+/* VR1-094: the "How this works" text in a column of about 70 characters, on the cards' left edge, not three paragraphs of 170 characters starting 16px in */
+.j-page [data-testid="j-how"] .k-disclosure-body { padding-left: 0; max-width: 72ch; }

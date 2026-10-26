@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { candleSpan, charge, fall, fmtDate, money, monthYear, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
-import { CHECKS, checkTone, checksLine, qtyNote, splitHeadline, summaryLines, tradeListFacts, upDown } from "../lib/tradeUi";
+import { CHECKS, checkTone, checksLine, heroSummary, qtyNote, splitHeadline, tradeListFacts, upDown } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
 import { pctTick, moneyCompact } from "../lib/chartFormat";
@@ -358,7 +358,8 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
   const tradeCols: Column<Trade>[] = [
     ...(e.group ? [{ key: "sym", header: "Symbol", rowHeader: true, cell: (t: Trade) => <b>{t.symbol}</b> }] : []),
-    { key: "open", header: intraday ? "Opened (candle)" : "Opened", cell: (t) => <>{at(t.entry_t)}{t.spans_split ? <span className="k-sub-line">Closed in the unseen period: counts as built</span> : t.part === "unseen" ? <span className="k-sub-line">Unseen part</span> : null}</> },
+    { key: "open", header: intraday ? "Opened (candle)" : "Opened", cell: (t) => <>{t.spans_split ? <span className="unseen-mark split" role="img" aria-label="Closed in the unseen period: counts as built" title="Closed in the unseen period: counts as built" />
+      : t.part === "unseen" ? <span className="unseen-mark" role="img" aria-label="Unseen part" title="Unseen part" /> : null}{at(t.entry_t)}</> },     // a marker, one legend line under the table: a note under the date made 8 rows taller than the rest (VR1-064)
     { key: "close", header: intraday ? "Closed (candle)" : "Closed", cell: (t) => (t.exit_t ? at(t.exit_t) : "Still open") },
     ...(twoWay ? [{ key: "side", header: "Side", cell: (t: Trade) => (t.side === "short" ? "Short" : "Long") }] : []),
     { key: "qty", header: "Qty", numeric: true, cell: (t) => <>{qty(t.qty, step, e.instrument.market)}{qtyNote(t) && <span className="k-sub-line">{qtyNote(t)}</span>}</> },
@@ -379,7 +380,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     tradeCols.find((c) => c.key === "ret")!,
   ];
   const shownCols = shortCards ? shortCols : tradeCols;
-  const stats: [string, string, number | null, string][] = [
+  const stats: [string, string, number | null, string, string?][] = [
     ["Total return", pct(st.ret), st.ret, HELP.totalReturn],
     ["Buy and hold", pct(st.buy_hold_ret), st.buy_hold_ret, HELP.buyHold],
     ["Worst fall", fall(st.mdd), st.mdd, HELP.worstFall],
@@ -387,7 +388,8 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     ["Profit factor", st.pf == null ? "∞" : !st.n ? "–" : st.pf > 100 ? "> 100" : st.pf.toFixed(2), null, HELP.profitFactor],
     ["Sharpe ratio", num(st.sharpe, 2), null, HELP.sharpe],
     ["Average trade", money(st.avg, cur), st.avg, HELP.avgTrade],
-    ["Period", `${periodName(e.days)}, ${e.candles.toLocaleString("en-IN")} candles`, null, HELP.period],
+    // the period as the value, the candles as its note: a two-line text value among numbers made its row taller (VR1-061)
+    ["Period", periodName(e.days), null, HELP.period, `${e.candles.toLocaleString("en-IN")} candles`],
   ];
 
   return (
@@ -422,7 +424,8 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
           <div className="k-card-titlerow"><h2 className={`verdict-head ${v.verdict}`}>{head.main}</h2><Info label="About the verdict: how it is decided">{HELP.verdict}</Info></div>
           {head.checks && <p className="k-small k-muted" data-testid="verdict-checks">{head.checks}</p>}
           <div className="k-stack k-tight" data-testid="verdict-summary">
-            {summaryLines(v.summary).map((line) => <p key={line} className="k-lede">{line}</p>)}
+            {/* the comparison with buy and hold is the headline and its two figures are in The numbers: not said a third time (VR1-062) */}
+            {heroSummary(v.summary, head.checks).map((line) => <p key={line} className="k-lede">{line}</p>)}
           </div>
           {open > 0 && (
             <p className="k-note" data-testid="open-trade-note">
@@ -452,16 +455,29 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         ))}
       </section>
 
-      <section className="k-money">
-        <ChartFrame title="Where the money came from, and went" info={HELP.equity} label="Account value" actions={<span className="k-note">{money(cap, cur)} start</span>}>
-          <XYChart ariaLabel="Account value over the test, with the unseen part shaded" times={e.series.t} tz={tz} height={260} compare
-            format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "INR")} refs={[{ v: cap }]} split={e.series.split}
-            splitNotes={unseen ? [`built part: ${pct(unseen.built_ret)}`, `unseen part: ${pct(unseen.unseen_ret)}`] : undefined}
-            series={[
-              { id: "strategy", label: "Strategy", values: e.series.equity, color: "var(--ink)", width: 2 },
-              { id: "hold", label: "Buy and hold", values: e.series.buy_hold, color: "var(--muted)", width: 1.5, dash: "5 4" },
-            ]} />
-        </ChartFrame>
+      {/* the chart across the page, and under it the numbers beside what you'd keep: the chart beside the short costs card left 125px empty under it (VR1-060) */}
+      <ChartFrame title="Where the money came from, and went" info={HELP.equity} label="Account value" actions={<span className="k-note">{money(cap, cur)} start</span>}>
+        <XYChart ariaLabel="Account value over the test, with the unseen part shaded" times={e.series.t} tz={tz} height={260} compare
+          format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "INR")} refs={[{ v: cap }]} split={e.series.split}
+          splitNotes={unseen ? [`built part: ${pct(unseen.built_ret)}`, `unseen part: ${pct(unseen.unseen_ret)}`] : undefined}
+          series={[
+            { id: "strategy", label: "Strategy", values: e.series.equity, color: "var(--ink)", width: 2 },
+            { id: "hold", label: "Buy and hold", values: e.series.buy_hold, color: "var(--muted)", width: 1.5, dash: "5 4" },
+          ]} />
+      </ChartFrame>
+
+      <section className="k-money k-money-even">
+      <Card label="The numbers" className="k-numbers">
+        <CardHead title="The numbers" />
+        <StatRow label="Experiment results">
+          {stats.map(([k, val, sign, help, note]) => (
+            <Stat key={k} item label={<>{k}<Info label={`What is ${k}?`}>{help}</Info></>} value={val} note={note} tone={sign == null || sign === 0 ? undefined : sign > 0 ? "up" : "down"} />
+          ))}
+        </StatRow>
+        {/* R11C-017: said where the number is, not only behind the info button */}
+        <p className="k-note" data-testid="buy-hold-note">Buy and hold is worked out from prices alone: dividends are not added{e.instrument.market === "US" ? ", so a US stock's dividends are left out" : ""}.</p>
+      </Card>
+
         <Card label="What you'd keep">
           <CardHead title="What you'd keep" info={HELP.keep} infoLabel="About costs" actions={<span className="k-note">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span>} />
           <div className="k-rows" role="list" aria-label="Profit and costs">
@@ -483,17 +499,6 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         </Card>
       )}
 
-      <Card label="The numbers">
-        <CardHead title="The numbers" />
-        <StatRow label="Experiment results">
-          {stats.map(([k, val, sign, help]) => (
-            <Stat key={k} item label={<>{k}<Info label={`What is ${k}?`}>{help}</Info></>} value={val} tone={sign == null || sign === 0 ? undefined : sign > 0 ? "up" : "down"} />
-          ))}
-        </StatRow>
-        {/* R11C-017: said where the number is, not only behind the info button */}
-        <p className="k-note" data-testid="buy-hold-note">Buy and hold is worked out from prices alone: dividends are not added{e.instrument.market === "US" ? ", so a US stock's dividends are left out" : ""}.</p>
-      </Card>
-
       <Card label="Every trade">
         <CardHead title="Every trade" info={HELP.trades} infoLabel="About the trades"
           actions={<><span className="k-note" data-testid="trades-caption">{list.caption} · P&L and Return after costs</span>
@@ -503,6 +508,12 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         )}
         <DataTable stack label="Every trade" columns={shownCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period." phonePage={30}
           foot={list.hidden ? { [shownCols[0].key]: `${list.hidden.toLocaleString("en-IN")} earlier closed trade${list.hidden === 1 ? "" : "s"}, not listed`, pnl: <span className={upDown(list.hiddenPnl)}>{money(list.hiddenPnl, cur)}</span> } : undefined} />
+        {allTrades.some((t) => t.spans_split || t.part === "unseen") && (
+          <p className="k-note" data-testid="unseen-legend">
+            <span className="unseen-mark" aria-hidden="true" /> Opened in the unseen part of the period.
+            {allTrades.some((t) => t.spans_split) && <> <span className="unseen-mark split" aria-hidden="true" /> Closed in the unseen period: counts as built.</>}
+          </p>
+        )}
         {list.hidden > 0 && <p className="k-note" data-testid="trades-reconcile">Only the newest {closed.toLocaleString("en-IN")} closed trades are kept as rows{e.trades_trimmed ? " (an older experiment keeps fewer, to save space)" : ""}. The rows and the line for the {list.hidden.toLocaleString("en-IN")} not listed add up to the total P&L, {money(list.total, cur)}.</p>}
         {/* a few shares and a flat charge per order: the return can go the other way from the price (R50-015: 2 ITC shares
             up 4.5% shown at −4.97%) */}

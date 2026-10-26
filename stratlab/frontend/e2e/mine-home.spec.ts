@@ -97,8 +97,8 @@ test("my space: the owner's net worth, holdings and sessions fill the tiles", as
   await expect(pnl).toContainText(/₹|needs live prices/);
   await expect(pnl.getByRole("link", { name: "Holdings" })).toHaveAttribute("href", "/holdings");
   // a link on every card leads to the page the figure comes from
-  await expect(page.getByTestId("mine-coming").getByRole("link", { name: "Calendar", exact: true })).toHaveAttribute("href", "/money/calendar");
-  await expect(page.getByTestId("mine-watch").getByRole("link", { name: "All" })).toHaveAttribute("href", "/research/watchlist");
+  await expect(page.getByTestId("mine-coming").getByRole("link", { name: "Open the money calendar", exact: true })).toHaveAttribute("href", "/money/calendar");
+  await expect(page.getByTestId("mine-watch").getByRole("link", { name: "Open the watchlist" })).toHaveAttribute("href", "/research/watchlist");
   await sane(page, errors, phone);
   if (SHOTS) {
     await page.screenshot({ path: `${SHOTS}/mine-owner-${phone ? "400" : "1300"}-light.png`, fullPage: true });
@@ -221,7 +221,8 @@ test("my space: greets by first name, writes the dollar rate without a rupee sig
   if (await v.count()) await expect(v).toHaveText(/^\d[\d,]*\.\d{2}$/);
   await expect(page.locator('.mine-mkt[data-market="gold"] .k-stat-k')).toContainText("$/oz");
   const nw = page.getByTestId("mine-networth");
-  await expect(nw.getByTestId("mine-nw-placeholder")).toContainText("History starts after your first month");
+  // VR1-005: no boxed placeholder chart until there is a history to draw: the figure stands alone
+  await expect(nw.getByTestId("mine-nw-placeholder")).toHaveCount(0);
   await expect(nw.locator("svg.k-spark")).toHaveCount(0);
   await sane(page, errors, phone);
   if (SHOTS) {

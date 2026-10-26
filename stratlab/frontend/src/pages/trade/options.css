@@ -15,6 +15,8 @@
 .k-expiry { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
 .legs-box { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--s2) var(--s3); background: var(--paper-2); min-width: 0; }
 .legs-box > summary { justify-content: space-between; }
+.legs-box > summary > span:first-of-type { flex: 1; min-width: 0; }   /* VR1-093: the legs' sentence follows the chevron instead of floating in the middle of the row with the chevron far left */
+.k-struct .k-row > select.k-input { width: auto; min-width: 260px; max-width: 100%; flex: 0 0 auto; }   /* VR1-093: two extra underlyings in a 1030px box */
 .legs-box, .legs-box .k-disclosure-body, .k-struct > *, .k-disclosure-body { min-width: 0; max-width: 100%; }
 .legs-box .k-tbl-wrap { max-width: 100%; }
 .legs-box[open] .link-ish { visibility: hidden; }

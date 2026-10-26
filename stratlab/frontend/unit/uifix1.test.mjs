@@ -35,7 +35,7 @@ test("UI-FIX-1 (R1): the Invest home pairs short cards with short cards, and the
   const home = read("src/pages/SpaceHomes.tsx");
   assert.ok(home.indexOf("<NextEvents region={region} />") < home.indexOf("<ResultsToday region={region} />"));
   assert.ok(home.indexOf("<WatchPanel region={region} />") < home.indexOf("<RedFlags region={region} />"));
-  assert.match(home, /<\/div>\s*<BreadthCard region=\{region\} \/>/);
+  assert.match(home, /<RedFlags region=\{region\} \/>\s*<BreadthCard region=\{region\} \/>/);      // VR1-010/011: the red flags across the page, the two short cards stacked
   assert.match(read("src/pages/ExperimentPage.tsx"), /className="k-checks-col"/);
   assert.match(read("src/pages/trade/trade.css"), /\.k-checks-col \{ display: flex; flex-direction: column;/);
 });

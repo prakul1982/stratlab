@@ -45,6 +45,7 @@ export const LabNotes = forwardRef<LabNotesHandle, { value: string; onChange: (v
     <div className="ln-dock"
       // Escape closes it, unless it was meant for the (i) tip inside, which has already taken it
       onKeyDown={(e) => { if (open && e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); set(false); } }}>
+      <div className="ln-dock-in">
       <div id={PANEL} className="ln-panel" hidden={!open}>
         <Card label="Lab notes">
           <CardHead title="Lab notes" level={3} info={HELP.labNotes} infoLabel="About lab notes"
@@ -58,6 +59,7 @@ export const LabNotes = forwardRef<LabNotesHandle, { value: string; onChange: (v
         onClick={() => set(!open, true)}>
         Lab notes{has && <><span className="ln-dot" aria-hidden="true" /><span className="sr-only"> (this notebook has notes)</span></>}
       </button>
+      </div>
     </div>
   );
 });

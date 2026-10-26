@@ -116,7 +116,7 @@ test("DI-009: a results day reads the same whichever calendar it came from, and 
 
 test("DI-010, DI-011, DI-012: the markets' period and colours in words, India's date says so, and the polish", () => {
   const mine = read("src/pages/MineHome.tsx");
-  assert.match(mine, /Lines: the last month of daily closes\./);
+  assert.match(mine, /Each line is the last month of daily closes/);                   // VR1-002: in the (i), with the colours, not a paragraph under the title
   assert.match(mine, /" in India" : ""/);
   assert.match(mine, /whole\.length >= 3 \? <Spark/);
   assert.match(mine, /<label className="k-check"><input type="checkbox"/);

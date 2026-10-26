@@ -12,7 +12,7 @@ const OPEN_KEY = "stratlab.explore.open";
  * tools aren't hidden and nobody faces a wall of equal choices. Only the first group shows until "Show everything"
  * is pressed (remembered), so the page under it stays short. `hide` leaves out tools the page above already links to,
  * so a space's home offers each one once. `order`: a space home lists its own space's goals first. */
-export function Explore({ title = "What you can do here", skip = [], hide = [], order }: { title?: string; skip?: Goal[]; hide?: string[]; order?: "trade" | "invest" }) {
+export function Explore({ title = "More you can do", skip = [], hide = [], order }: { title?: string; skip?: Goal[]; hide?: string[]; order?: "trade" | "invest" }) {
   const { notebooks, level, focus, me } = useApp();
   // a tool the plan doesn't include says which plan has it, on the tile, before the click (DP1-020)
   const lockedOn = (flag?: string) => (flag && me?.plan_info.features?.[flag] === false ? PLAN_NAME[planOf(flag)] : null);

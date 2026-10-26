@@ -243,6 +243,12 @@ export function atmIvLabel(atm: number | null | undefined, fmt: (v: number) => s
   return atm ? `ATM IV at the ${fmt(atm)} strike` : "ATM implied volatility";
 }
 export const VIX_IV_LABEL = "NIFTY ATM IV, StratLab model";
+/** vixIvNote's first sentence (the strike, and where the chain came from and when); on an expiry day also the one saying it is the next expiry's. The
+ * sentence on how India VIX differs is in the card's (i): the note ran to five lines of 12px text beside three one-line captions (VR1-071). */
+export function vixIvLine(strikeAt: number | null | undefined, chain: string, fmt: (v: number) => string, rolled = false): string {
+  const parts = vixIvNote(strikeAt, chain, fmt, rolled).split(/(?<=\.)\s+/);
+  return rolled ? parts.slice(0, 2).join(" ") : parts[0];
+}
 /** The VIX card's note under its ATM IV: the strike, then where the chain came from and when. */
 export function vixIvNote(strikeAt: number | null | undefined, chain: string, fmt: (v: number) => string, rolled = false): string {
   // the nearest expiry's IV, beside India VIX's 30-day measure: they differ by design, most when the expiry is days away (R52-014)

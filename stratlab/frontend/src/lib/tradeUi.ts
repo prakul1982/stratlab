@@ -57,6 +57,16 @@ export function summaryLines(summary: string | null | undefined): string[] {
   return (summary ?? "").split(/(?<=[.!?])\s+(?=[A-Z0-9+−-])/).map((x) => x.trim()).filter(Boolean);
 }
 
+/** The summary lines the Experiment page's verdict block keeps (VR1-062: the verdict was said four times: headline, caption, a paragraph and
+ * the figures again). The sentence that restates both returns ("The strategy returned -4.8% after costs, less than buying and holding over the
+ * same period (+50.2%).") goes, as the headline gives the gap and The numbers the two figures; the plain "lost money" sentence goes when the line
+ * under the headline already says it. Everything else (too few trades, the yearly rate, notes) stays. */
+export function heroSummary(summary: string | null | undefined, caption = ""): string[] {
+  const saysLost = /lost money after costs/i.test(caption);
+  return summaryLines(summary).filter((l) => !/^The strategy returned .+ (more than|less than|about the same as) buying and holding over the same period \(.+\)\.$/.test(l)
+    && !(saysLost && l === "After costs, the strategy lost money over the period."));
+}
+
 /** A run's badge words where the plain "Passed the checks" would overstate it: the count when some checks didn't pass
  * (R62-003: "Passed the checks" over a verdict of "4 of 4 checks run · 2 passed"), as short as the other badges beside it in
  * the runs table ("Too few trades" beside "4 of 4 checks run · 2 passed", DA-031). Undefined keeps the badge's own words. */

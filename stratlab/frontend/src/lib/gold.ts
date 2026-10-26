@@ -14,3 +14,13 @@ export function goldLine(india: IndiaGold | null | undefined, world10g: number |
   }
   return world10g ? `${inr(world10g)} per 10 g at the world price and dollar rate, before India's import duty and GST` : null;
 }
+
+/** goldLine in two parts: India's price (one short line) and the world price with the duty (for behind an (i)), so a home card can
+ * show the first and keep the rest one tap away (VR1-002). `short + " " + more` is goldLine. */
+export function goldLineParts(india: IndiaGold | null | undefined, world10g: number | null, inr: (v: number) => string): { short: string; more: string | null } | null {
+  const line = goldLine(india, world10g, inr);
+  if (!line) return null;
+  if (!india?.per_10g || !world10g) return { short: line, more: null };
+  const i = line.indexOf(". ");
+  return i < 0 ? { short: line, more: null } : { short: line.slice(0, i + 1), more: line.slice(i + 2) };
+}

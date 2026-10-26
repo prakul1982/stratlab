@@ -218,16 +218,17 @@ test("MO-4a: the notebook is one centred column and the Lab notes float, with th
 test("MO-4a: the floating notes clear the safe areas, sit under dialogs and toasts, and are a bottom sheet on a phone", () => {
   const css = read("src/styles.css");
   const dock = css.match(/\.ln-dock \{[^}]*\}/)[0];
-  assert.match(dock, /position: fixed/);
-  assert.match(dock, /env\(safe-area-inset-bottom\)/);
-  assert.match(dock, /env\(safe-area-inset-right\)/);
+  assert.match(dock, /position: sticky/);                                              // VR1-050: a zero-height sticky box at the page's end, its tab drawn up from it
+
   const z = Number(dock.match(/z-index: (\d+)/)[1]);
   assert.ok(z < 40 && z > 30, "above the sticky top bar (30), below the menu drawer (40), dialogs (60) and toasts (70)");
   assert.match(css, /\.ln-panel \{ width: 380px;/);
   assert.match(css, /\.ln-panel\[hidden\] \{ display: none; \}/);
   assert.match(css, /\.ln-panel \.lab-note \{[^}]*max-height:/);                      // its own scroll, never taller than the screen
   const phone = css.slice(css.indexOf("@media (max-width: 640px) {\n  .ln-dock"));
-  assert.match(phone, /\.ln-dock \{ right: 0; left: 0; bottom: 0;/);
+  assert.match(phone, /\.ln-dock-in \{ right: -16px; left: -16px;/);
+  assert.match(phone, /env\(safe-area-inset-bottom\)/);
+  assert.match(phone, /env\(safe-area-inset-right\)/);
   assert.match(phone, /border-radius: 14px 14px 0 0/);
 });
 

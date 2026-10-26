@@ -208,7 +208,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
             {curve.length > 1 ? (
               <LineChart ariaLabel="Paper account value" labels={curve.map((p) => when(p.t, tz, intraday))} times={curve.map((p) => p.t)} tz={tz} height={160}
                 format={(x) => money(x, cur, 2)} axisFormat={axis} baseline={a.capital} lines={[{ label: "Equity", values: curve.map((p) => p.eq), color: "var(--series-1)", width: 2 }]} />
-            ) : <ChartEmpty height={160}>Your equity curve starts after the first closed candle.</ChartEmpty>}
+            ) : <ChartEmpty height={72}>Your equity curve starts after the first closed candle.</ChartEmpty>}{/* VR1-092: a 160px box for one line */}
             {curve.length > 1 && <p className="k-note">From the starting {money(a.capital, cur, 0)} (the grey line), after each closed candle.</p>}
           </ChartFrame>
         </div>
@@ -316,9 +316,10 @@ export function PaperPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Practise" title="Paper trading" info={HELP.paper} infoLabel="About paper trading"
+      <PageHeader eyebrow="Trade · Practise" title="Paper trading"
         lede="Your rules on live prices, with fake money. Each market runs in its own hours; crypto never closes."
-        actions={sub ? <Badge tone="plain" dot={false}>{sub}</Badge> : undefined} />
+        // the (i) follows the plan pill, as "Data up to" badges are followed by theirs, not dangling in front of it (VR1-091)
+        actions={<>{sub && <Badge tone="plain" dot={false}>{sub}</Badge>}<Info label="About paper trading">{HELP.paper}</Info></>} />
       {rows === null ? <Card><Skeleton label="Opening your sessions" /></Card>
         : failed ? <ErrorState title="Your sessions couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
         : rows.length === 0 ? (

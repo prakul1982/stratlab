@@ -4,6 +4,14 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 26 October 2026: the visual review's findings for My space, the homes, notebooks, Positioning, the F&O desk and Paper (VFA)
+
+- **Notebook page:** the Lab notes button is a tab on the bottom edge of the screen (level with the page's right edge, below the last card at the end of the page) and no longer sits over a button, a rule's delete cross or the "Testing on" box; the saving text no longer leaves a blank band under the question; a rule's delete cross follows its text; the test-period chips wrap on a phone.
+- **Experiment page:** the verdict is said once (headline and one line, not a paragraph repeating both returns); the chart runs across the page with The numbers (four across, the period as "49 months" with its candles beneath) beside What you'd keep; trades in the unseen part carry a marker and one legend line instead of a note on each row; Compare puts the pickers beside what changed.
+- **My space, Invest and Trade homes:** the heading says only the market state; one "Open" link on every card; no boxed placeholder chart; the Markets card's colour key and gold duty note are behind its (i); Invest home stacks the two short dated cards beside the watchlist and gives the red flags the page's width.
+- **Notebooks and New notebook:** two notebooks fill the row, the pin is an icon; /new has the same column as every page, one numbered list and its hint behind the (i).
+- **Positioning, F&O desk, Paper, Options, Journal, Forward test:** the long share is a figure like its neighbours, the VIX card's IV note is one line, F&O change tags share one column and show the contract-file source once, Paper's totals are not repeated by a one-row table, the journal offers its tax-report trades once.
+
 ### 26 October 2026: layout problems found by a checker, not by eye (UI-FIX-1)
 
 - **UI checker in CI:** `e2e/ui-lint.spec.ts` measures every page at 1440, 1280 and 390 px for dead space beside a short card, sparse wide cards, floating controls, text wrapping inside buttons, uneven rows, a figure said three times, an orphan tile on the last line, sideways scroll, overlapping text and tiny taps. It runs as its own job in `tests.yml` with `UI_LINT_STRICT=1`: a new problem fails the build (a deliberate exception goes in `e2e/ui-lint.allow.json` with a reason), and its report and annotated screenshots are kept as the `ui-lint-report` artifact.

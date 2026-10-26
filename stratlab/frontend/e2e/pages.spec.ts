@@ -1725,14 +1725,14 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   for (const who of ["client", "dii", "fii", "pro", "total"]) await expect(main.locator(`tr[data-participant="${who}"]`)).toBeVisible();
   await expect(main.getByText("FII index futures, net")).toBeVisible();
   // both sides of the futures: the long and the short share, adding up to 100
-  await expect(main.getByText("FII index futures, long · short")).toBeVisible();
+  await expect(main.getByText("FII index futures, long share")).toBeVisible();
   await expect(main.getByTestId("split-fii")).toHaveCount(0);                                     // the split is a click away in the table
   await main.getByTestId("cols-pos-part").click();
   const split = await main.getByTestId("split-fii").innerText();
   const [lo, sh] = (split.match(/[\d.]+(?=%)/g) ?? []).map(Number);
   expect(lo + sh).toBeCloseTo(100, 1);
-  await expect(main.getByTestId("sides-fig")).toContainText(/[\d.]+% long\s*[\d.]+% short/);
-  await expect(main.getByTestId("sides-fig")).toContainText(/Long share [+−][\d.]+ pts from the previous trading day/);
+  await expect(main.getByTestId("sides-fig")).toContainText(/long share\s*[\d.]+%\s*[\d.]+% short/);        // VR1-070: the long share as the figure, the short side in its note
+  await expect(main.getByTestId("sides-fig")).toContainText(/[+−][\d.]+ pts from the previous trading day/);
   // a figure is three rows shared with its neighbours (label, number, note): nothing in one draws over the next
   const overlaps = await main.locator(".k-stat").evaluateAll((figs) => figs.flatMap((f) => {
     const rows = Array.from(f.children).map((c) => c.getBoundingClientRect()).filter((b) => b.height > 0);

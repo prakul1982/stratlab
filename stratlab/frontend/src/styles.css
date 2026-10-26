@@ -384,9 +384,15 @@ a.link { margin-inline: -2px; }
 
 /* MO-4a: the Lab notes float at the bottom-right (a button, and a card above it that scrolls inside itself; a bottom sheet on a phone),
  * so the notebook is the same centred column as every other page. Below the sidebar drawer (40), dialogs (60) and toasts (70). */
-.ln-dock { position: fixed; z-index: 35; right: max(16px, calc(env(safe-area-inset-right) + 16px)); bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
-.ln-dock > * { pointer-events: auto; }
-.ln-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); font: 600 15px var(--sans); cursor: pointer; box-shadow: var(--shadow); }
+/* VR1-050: the button was a pill 16px off the corner and sat over page content (the "Edit in words" button at 1280, a rule's delete cross at 1440, the "Testing on"
+ * box on a phone). It is now a tab flush with the bottom edge of the screen: the dock is a zero-height sticky box at the end of the page (so a full-page
+ * capture or the end of the page has it below the last card, not over it), and its tab and panel are drawn up from it. */
+.ln-dock { position: sticky; z-index: 35; bottom: 0; height: 0; pointer-events: none; }
+.ln-dock-in { position: absolute; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
+.ln-dock-in > * { pointer-events: auto; }
+.k-page:has(> .ln-dock) { padding-bottom: 44px; }
+/* the dock is as wide as the page column: its right edge is the cards' right edge, not the window's (VR1-050: it hung half outside the card) */
+.ln-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 12px 12px 0 0; border: 1px solid var(--line-2); border-bottom: 0; background: var(--card); color: var(--ink); font: 600 15px var(--sans); cursor: pointer; box-shadow: 0 -4px 14px rgba(0, 0, 0, .14); }
 .ln-btn:hover { border-color: var(--ink); }
 .ln-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .ln-btn[aria-expanded="true"] { border-color: var(--ink); }
@@ -396,8 +402,8 @@ a.link { margin-inline: -2px; }
 .ln-panel .k-card { box-shadow: var(--shadow); gap: var(--s3); }
 .ln-panel .lab-note { min-height: 172px; max-height: max(172px, calc(100vh - 300px)); }
 @media (max-width: 640px) {
-  .ln-dock { right: 0; left: 0; bottom: 0; padding: 0 max(16px, env(safe-area-inset-right)) max(16px, calc(env(safe-area-inset-bottom) + 16px)) max(16px, env(safe-area-inset-left)); }
-  .ln-dock:has(.ln-panel:not([hidden])) { padding: 0; }
+  .ln-dock-in { right: -16px; left: -16px; padding:   /* the sheet runs edge to edge: out over the page's 16px gutters */  0 max(16px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px, env(safe-area-inset-left)); }
+  .ln-dock:has(.ln-panel:not([hidden])) .ln-dock-in { padding: 0; }
   .ln-dock:has(.ln-panel:not([hidden])) .ln-btn { display: none; }     /* the sheet has its own Close; the button is back when it shuts */
   .ln-panel { width: 100%; max-width: none; }
   .ln-panel .k-card { border-radius: 14px 14px 0 0; border-bottom-width: 0; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
@@ -471,7 +477,7 @@ td.num, .num { font-family: var(--sans); }
 .block:first-of-type { border-top: 0; padding-top: 0; }
 .block-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .cond-row { display: flex; align-items: flex-start; gap: 8px; }
-.cond-row .sentence { flex: 1; min-width: 0; }
+.cond-row .sentence { flex: 0 1 auto; min-width: 0; }   /* VR1-052: the cross follows the rule's text, not 550px away at the card's far edge */
 .cond-x { flex: none; width: 36px; height: 36px; margin-top: 4px; border-radius: 8px; border: 1px solid transparent; background: none;
   color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; opacity: .55; }
 .cond-row:hover .cond-x, .cond-x:focus-visible { opacity: 1; border-color: var(--line); }
@@ -550,10 +556,10 @@ td.num, .num { font-family: var(--sans); }
 /* ---------- notebook header: market button and toolbar ---------- */
 .market-btn {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label cta" "main cta"; column-gap: 18px; row-gap: 2px;
-  align-items: center; min-height: 64px; padding: 10px 18px; border-radius: 14px; background: var(--card); border: 1.5px solid var(--ink);
+  align-items: center; min-height: 64px; padding: 10px 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--line-2);   /* VR1-054: a white 2px outline read as selected */
   color: var(--ink); text-decoration: none; max-width: 100%; min-width: 0; flex: 0 1 auto;
 }
-.market-btn:hover { color: var(--ink); background: var(--paper-2); }
+.market-btn:hover { color: var(--ink); background: var(--paper-2); border-color: var(--ink); }
 .market-btn .eyebrow { grid-area: label; }
 .market-btn-main { grid-area: main; font-weight: 600; font-size: 17px; overflow: hidden; text-overflow: ellipsis; }
 .market-btn-main .muted { font-weight: 400; }
@@ -879,6 +885,8 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .palette-foot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--line); }
 @media (max-width: 640px) { .palette-back { padding: 8px; place-items: start stretch; } .palette { max-height: calc(100vh - 16px); } .palette-foot { display: none; } }
 .explore-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }   /* auto-fit: a short list fills the row */
+/* VR1-021: a short list (two tiles) keeps cards of four-to-a-row width, left to right, instead of two 534px cards for a sentence each */
+.k-explore .explore-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); align-items: start; }
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
 @media (max-width: 560px) {
@@ -886,6 +894,7 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
   .explore-card { padding: 12px; gap: 4px; }
   .explore-card b { font-size: 14px; line-height: 1.25; }
   .explore-card .small { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .k-explore .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* VR1-031: half of each description was hidden behind "..." on a phone */
   .modal .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* choices must be read in full */
   .money-cards .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* Money's card lines are read in full, not cut mid-phrase (DP2-014) */
 }
@@ -1040,6 +1049,15 @@ label.btn.disabled { opacity: .5; }
 
 /* side-by-side panels keep their own height: a short card is not stretched to the taller one beside it, leaving an empty block */
 .space-panels { align-items: start; }
+/* VR1-012: the watchlist's tiles keep their own height (a stretched TCS tile was half empty beside RELIANCE's two rows of badges) */
+.space-panels .inv-tiles { align-items: start; }
+/* VR1-013: a card head whose only control is a "Market events ->" style link keeps it at the top right and lets the title wrap beside it, on a phone too,
+   instead of dropping the link to a line of its own under a long title */
+.space-home .k-card-head:has(> .k-card-actions > a.link:only-child) { flex-wrap: nowrap; align-items: flex-start; }
+.space-home .k-card-head:has(> .k-card-actions > a.link:only-child) > .k-card-actions { flex: none; white-space: nowrap; }
+.space-home .k-card-head:has(> .k-card-actions > a.link:only-child) .k-card-title { min-width: 0; }
+.space-flag > :first-child { min-width: 110px; }   /* red flags across the page: the symbols make a column and the sentences line up after them */
+.space-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }   /* two short cards stacked in one column of a panel row (VR1-010) */
 .space-next { display: flex; flex-direction: column; gap: 14px; }
 .space-next .how li { background: var(--paper); }
 .space-recent { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }   /* wraps to two, then one, on a tablet instead of squeezing each card (R34-003) */
@@ -1050,6 +1068,7 @@ label.btn.disabled { opacity: .5; }
 /* Trade home's market figures (DC-001): laid out as the tool strip, but its own class (the strip is the tools' row) */
 .trade-market { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .trade-market b.num { font-size: 1.15rem; line-height: 1.3; }
+.trade-market .space-card-line { min-height: 0; }   /* VR1-020: the two-line room left the tile with no caption half blank */
 .space-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 16px; color: var(--ink); text-decoration: none; }
 .space-card:hover { border-color: var(--ink-2); color: var(--ink); }
 .space-card-lead { border-color: var(--blue); background: var(--blue-soft); }
@@ -1060,10 +1079,10 @@ label.btn.disabled { opacity: .5; }
 .space-card-line { line-height: 1.4; min-height: 2.8em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 560px) { .space-card-line { display: block; -webkit-line-clamp: unset; overflow: visible; min-height: 0; } }   /* a card's caveat is read in full on a phone (R76-006) */
 .space-card-foot { display: flex; align-items: center; min-height: 20px; margin-top: auto; padding-top: 4px; color: var(--muted); font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }   /* a long status wraps onto a second line: a flex box clips text with no ellipsis (R13S-008) */
-.space-card-foot.live, .space-card-lead .space-card-foot { font-weight: 600; }
+.space-card-foot.live { font-weight: 600; }
 .space-card-foot.live { color: var(--up); }     /* 5:1 on the paper; the lighter series green was 3.8:1 */
 .space-card-foot.live::before { content: ""; flex: none; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; }
-.space-card-lead .space-card-foot:not(.live) { color: var(--blue-ink); }
+/* VR1-014: the lead card's "Open ->" was blue beside grey ones, like a hover left on; the lead is marked by its border and tint alone */
 .space-card-foot .skel { width: 72px; height: 12px; }
 @container (max-width: 720px) {
   .space-strip, .trade-market { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -1170,7 +1189,6 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .pos-source { margin-top: -6px; max-width: 80ch; }
 /* long against short: the long side dark, the short side the line colour; the shares are written out beside it */
 .pos-split { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-.k-stat .pos-sides { display: flex; flex-direction: column; font-size: 18px; line-height: 1.25; }
 
 /* ---------- trade journal ---------- */
 .j-bar { position: relative; height: 12px; min-width: 80px; }
@@ -1415,6 +1433,10 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-h1 { font-family: var(--serif); font-size: var(--t-h1); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; text-wrap: balance; }
 .k-lede { font-size: var(--t-lede); color: var(--ink-2); max-width: 64ch; }
 .k-meta { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; min-height: 25px; }   /* a badge's height: the "Data up to" badge that lands later doesn't move the page */
+/* VR1-051: the notebook's "Saving / Saved" text is the only thing in its header's last row, which held a 25px band of nothing under the question line:
+   it sits at the header's top right instead, so the row is not there. */
+.k-page-head:has(> .k-meta > .nb-save:only-child) { position: relative; }
+.k-page-head:has(> .k-meta > .nb-save:only-child) > .k-meta { position: absolute; top: 0; right: 0; min-height: 0; }
 
 /* card and its header row */
 .k-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--s5); display: flex; flex-direction: column; gap: var(--s4); min-width: 0; scroll-margin-top: 80px; }
@@ -1750,6 +1772,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-big { font-size: clamp(30px, 4vw, 40px); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
 .k-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: stretch; }   /* two cards side by side end level, not one short with dead space under it (MO-4b); a pair that differs a lot belongs in one column instead */
 @media (max-width: 900px) { .k-two { grid-template-columns: minmax(0, 1fr); } }
+.k-two.k-two-start { align-items: start; }   /* the pickers beside a short list of changes: each its own height (VR1-065) */
 .k-label-row .k-lbl { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-picks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
@@ -1874,7 +1897,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 
 .mine { gap: var(--s5); }
 /* the lede gains its second line when the calendars answer: keep room for it */
-.space-home.mine .k-lede { min-height: 3em; }
+.space-home.mine .k-lede { min-height: 1.5em; }   /* one line now: the dates moved to "Coming up" only (VR1-003) */
 /* the cards in the person's order: each one's width comes from its place in that order (lib/mineLayout slotSpans), so the grid
    never moves one into an earlier gap (DI-005: dense packing drew Markets, put second, below the two cards after it) */
 .mine-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--s4); }

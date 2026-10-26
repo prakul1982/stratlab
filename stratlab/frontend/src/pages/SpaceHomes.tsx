@@ -241,16 +241,17 @@ export function InvestHome() {
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />
       </div>
       <ToolStrip label="Invest tools" tools={tools} />
-      {/* the two short dated cards side by side, then the two lists of companies, then breadth across the page: a short card beside a
-          tall one left a hole under it (DF-023; UI-FIX-1, R1/R2) */}
-      <div className="grid2 space-panels even">
-        <NextEvents region={region} />
-        <ResultsToday region={region} />
-      </div>
-      <div className="grid2 space-panels even">
+      {/* the watchlist beside the two short dated cards stacked (their heights add up to about its), then the red flags across the page,
+          each flag on one line, then breadth: two short cards side by side left one with 40% of it empty, and the red flags beside the
+          watchlist ended 100px short of it (VR1-010, VR1-011; before: DF-023, UI-FIX-1 R1/R2) */}
+      <div className="grid2 space-panels">
         <WatchPanel region={region} />
-        <RedFlags region={region} />
+        <div className="space-col">
+          <NextEvents region={region} />
+          <ResultsToday region={region} />
+        </div>
       </div>
+      <RedFlags region={region} />
       <BreadthCard region={region} />
       <Explore title="More you can do" hide={INVEST_LINKED} order="invest" />
     </div>
@@ -382,7 +383,7 @@ function RedFlags({ region }: { region: Region }) {
         ) : (
           <div className="k-stack snug">
             {flagged.slice(0, 5).map((r) => (
-              <div key={r.symbol} className="space-line">
+              <div key={r.symbol} className="space-line space-flag">
                 <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}><b>{r.symbol}</b></Link>
                 <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
               </div>

@@ -3,5 +3,6 @@
 .ev-row p { margin: 0; }
 .ev-figure { font-variant-numeric: tabular-nums; }
 .ev-week li { display: flex; flex-direction: column; gap: 0; }
-/* the week and the reminders side by side are one height (RC2A-040) */
-.k-two.ev-pair { align-items: stretch; }
+/* the week and the reminders side by side each keep their own height: stretched to the reminders (RC2A-040) the week card ended 130px of nothing short of its
+   content (VR1-082); the shorter card is a tight box, not a padded one */
+.k-two.ev-pair { align-items: start; }
