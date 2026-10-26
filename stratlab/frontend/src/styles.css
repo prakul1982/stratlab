@@ -816,6 +816,9 @@ table.legs th, table.legs td { padding-left: 6px; padding-right: 6px; }
 table.legs input[type=number] { width: 72px !important; }
 .chip { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line-2);
   background: var(--card); color: var(--ink); font: 500 14px var(--sans); white-space: nowrap; cursor: pointer; }
+/* UI-FIX-1 (R10): a chip never wider than its row: a long name (a fund's full name) is cut with an ellipsis, its count stays */
+.chip { max-width: 100%; }
+.chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .chip:hover { border-color: var(--ink); color: var(--ink); }
 .chip.on, .chip.on:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .legs-box { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--paper-2, transparent); }
@@ -1275,7 +1278,7 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 
 .ev-figure { font-variant-numeric: tabular-nums; }
 
-.space-events { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
+.space-events { display: flex; flex-direction: column; gap: 8px; }      /* one event a line, in the half-width card beside Results today (UI-FIX-1) */
 /* Admin: the AI panel */
 .ai-provider { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); }
 .ai-model, .ai-missing { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 8px 0; border-top: 1px dashed var(--line); }
@@ -1618,6 +1621,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-tbl-wrap.stack .k-table td, .k-tbl-wrap.stack .k-table th[scope="row"] { display: block; padding: 0; border: 0; white-space: normal; text-align: left; min-width: 0; background: none; }
   .k-tbl-wrap.stack .k-table th[scope="row"] { grid-column: 1 / -1; color: var(--ink); font-size: var(--t-body); }
   .k-tbl-wrap.stack .k-table td[data-label]::before { content: attr(data-label) / ""; display: block; color: var(--muted); font-size: var(--t-note); font-weight: 400; }
+  /* UI-FIX-1 (R10): a long status badge ("Social Stock Exchange raise, not an IPO") wraps inside its cell instead of running under the next */
+  .k-tbl-wrap.stack .k-table td .k-badge { white-space: normal; max-width: 100%; border-radius: 14px; }
   .k-tbl-wrap.stack .k-table td.k-act, .k-tbl-wrap.stack .k-table td.k-row-note, .k-tbl-wrap.stack .k-table td.k-empty-row { grid-column: 1 / -1; }
   .k-tbl-wrap.stack .k-table td.k-act { text-align: right; width: auto; }   /* the whole card's width: 1% of a grid cell put the Edit and remove buttons off the card (DP2-007) */
   /* a business update's card: the filing's own words stay in the link's tooltip, not three lines of every card (DD-051) */
@@ -1661,14 +1666,17 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-clip { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .k-btn-end { align-self: flex-start; }
 .k-any { min-width: 0; overflow-wrap: anywhere; }
-/* On a phone the choices of a segmented control share the row in equal parts and wrap their words inside their own button, so none sits alone on
- * a second row or is wider than its neighbours (RC2A-029: the IPO stage tabs; RC2A-037: the options expiry choices). More than four keep wrapping. */
+/* On a phone the choices of a segmented control share the row, and none wraps its words inside its button (UI-FIX-1, R4/R5): a button is as
+ * wide as its label at least, and when the choices don't fit one row Seg.tsx stacks them (data-stack: two by two, or one under another,
+ * all the same width), so none sits alone on a row stretched to the track, or runs onto two lines (RC2A-029, RC2A-037). */
 @media (max-width: 480px) {
-  .k-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
-  .k-seg button { min-width: 0; padding: 6px 3px; height: auto; min-height: 36px; white-space: normal; line-height: 1.2; text-align: center; font-size: 13px; }
-  .k-seg:has(> button:nth-child(5)) { display: flex; flex-wrap: wrap; }
-  .k-seg:has(> button:nth-child(5)) button { flex: 1 1 auto; }
+  .k-seg { display: flex; width: 100%; }
+  .k-seg button { flex: 1 1 auto; padding: 6px 10px; height: auto; min-height: 36px; white-space: nowrap; line-height: 1.2; text-align: center; font-size: 13px; }
 }
+.k-seg button { min-width: max-content; }
+.k-seg[data-stack] { width: 100%; }
+.k-seg[data-stack="1"] { display: flex; flex-direction: column; }
+.k-seg[data-stack="2"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .k-upload { cursor: pointer; }
 .k-upload.disabled { cursor: wait; opacity: .6; }
 .k-notice { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s3) var(--s4); border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--paper-2); font-size: var(--t-label); }
@@ -1755,6 +1763,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-dl dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 /* facts that are sentences: the term as the heading, the sentence in plain weight, two to a row at most (DF-022) */
 /* MO-3c: a few facts that are words, not figures (the year, the return, the audit): up to three across, each in an equal column */
+/* the facts of a half-width card two across, not one under another: "What they do" was 150px taller than "Where a sale goes" beside it (UI-FIX-1, R1) */
+.k-dl.pairs { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+/* a few facts spread over the card's width (the account's profile), not packed in its left half (UI-FIX-1, R2) */
+.k-dl.spread { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .k-dl.facts { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
 .k-dl.prose { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s4) var(--s5); }
 .k-dl.prose dt { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
@@ -1784,7 +1796,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-check-note { display: block; font-weight: 400; color: var(--muted); font-size: var(--t-note); }
 .k-check.top { align-items: flex-start; }
 .k-section-nav { display: flex; min-width: 0; }
-@media (max-width: 640px) { .k-section-nav .k-seg { flex-wrap: wrap; width: 100%; } .k-section-nav .k-seg button { flex: 1 1 auto; } }
+@media (max-width: 640px) { .k-section-nav .k-seg { width: 100%; } }
 .k-hint-line { margin: 0; }
 
 /* chart frame */
@@ -1906,6 +1918,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-tl-i .dt { display: flex; flex-direction: column; align-items: center; font-size: 12px; color: var(--muted); line-height: 1.2; }
 .mine-tl-i .dt b { font-size: 20px; color: var(--ink); font-weight: 600; }
 .mine-tl-i .body { display: flex; flex-direction: column; min-width: 0; }
+/* a long line (the tax date's whole explanation) is two lines at most, the rest is in the tooltip and the calendar: the two cards side by side end near each other (UI-FIX-1, R1) */
+.mine-tl-i .body .k-stat-d { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .mine-tl-i .body a { color: inherit; text-decoration: none; }
 .mine-tl-i .body a:hover { text-decoration: underline; }
 .mine-movers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -2236,14 +2250,17 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   /* R26-002: the search box (/library, a list's filter) and the notes box set their own size after the rule above (loaded later, same weight) */
   body .k-search input, body .k-textarea { font-size: 16px; }
 }
-/* R13S-006: a switch's long label ("Yearly · about 2 months free") wraps inside its button instead of spilling out of the pill */
-.k-form > .k-field > .k-seg button { min-width: 0; height: auto; min-height: 32px; padding-block: 5px; white-space: normal; line-height: 1.25; }
-/* the switch's buttons share its width evenly and none gets narrower than its longest word: the long one wrapping took
-   the room, and "Monthly" ran under it */
-.k-form > .k-field > .k-seg button { flex: 1 1 auto; min-width: min-content; }
+/* R13S-006 / UI-FIX-1 (R4): a switch's label never wraps inside its button ("Fixed units" ran onto two lines in a 190px column). Where the choices
+   don't fit one column, the field takes two (below, and the three-choice rule above); a switch is as wide as its labels, and its buttons
+   share any extra width evenly */
+.k-form > .k-field > .k-seg button { flex: 1 1 auto; min-width: max-content; height: auto; min-height: 32px; padding-block: 5px; white-space: nowrap; line-height: 1.25; }
+@media (min-width: 640px) { .k-form > .k-field:has(> .k-seg) { grid-column: span 2; } }
+.k-form.k-form-trio > .k-field:has(> .k-seg) { grid-column: auto; }
 /* R13S-011: on a touch screen the controls the review measured under 44px are 44px: the switch, the screener's sort
    headers, the links in a table, a tick in a row, the admin sections */
 @media (pointer: coarse) {
+  /* UI-FIX-1 (R11): the "In India? Show prices in ₹" link, alone beside a price box, was 20px to tap */
+  .link-btn.small, .link-btn.k-small { min-height: 44px; display: inline-flex; align-items: center; }
   .k-seg button { min-height: 44px; }
   .k-chip { height: 44px; }
   .k-th-sort { min-height: 44px; display: inline-flex; align-items: center; }
@@ -2292,6 +2309,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-disclosure > summary, details > summary.k-small { min-height: 44px; }
   .search-box input { min-height: 44px; }
   .k-table th .link-btn, .k-table td .link-btn { padding-block: 11px; margin-block: -11px; }
+  .link-btn.small, .link-btn.k-small { min-height: 44px; display: inline-flex; align-items: center; }      /* (UI-FIX-1, R11: also on a narrow window without touch) */
   .ch-bar .ch-btn, .ch-bar .ch-seg button { min-height: 40px; }
 }
 
@@ -2307,6 +2325,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* Invest home: the breadth and red-flag cards side by side at one height (DF-023) */
 .space-panels.even { align-items: stretch; }
+.space-panels > :only-child { grid-column: 1 / -1; }      /* the other card is not there (no market events): this one takes the row */
 .fs-compact .k-row { justify-content: space-between; flex-wrap: wrap; }
 
 /* the Help page's explanations, one line each until opened (DI-014) */
@@ -2325,6 +2344,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* Get the app: one step per browser (DI-029) */
 .install-list { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+/* the stocks' filings two across where there is room: one column of six left a wide card a third empty (UI-FIX-1, R2) */
+.h-filings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: var(--s4) var(--s5); align-items: start; }
 /* MO-2: My Holdings' recent filings: date, tag and title in fixed columns (the tag's fits the longest, "Promoter pledge or
    encumbrance"), centred on one line, so every title starts at the same place; on a phone the title goes under the date and tag */
 .h-filing { display: grid; grid-template-columns: 7.5em 17em minmax(0, 1fr); align-items: center; column-gap: var(--s3); row-gap: 4px; }

@@ -1,5 +1,6 @@
 import { Children, createContext, useContext, type ReactNode } from "react";
 import { changeDir, minusNode } from "../../lib/format";
+import { useNoOrphan } from "../../lib/noOrphan";
 
 /** Inside a labelled StatRow (a list for screen readers), each Stat is one of its items. */
 const InList = createContext(false);
@@ -42,5 +43,6 @@ export function Stat({ label, value, note, delta, tone, item, testId }: { label:
 
 /** Stats side by side; they wrap to the width (about three across on a desktop card, one on a phone). */
 export function StatRow({ children, label }: { children: ReactNode; label?: string }) {
-  return <div className="k-stats" role={label ? "list" : undefined} aria-label={label}><InList.Provider value={!!label}>{children}</InList.Provider></div>;
+  const ref = useNoOrphan<HTMLDivElement>();      // 4 + 1 and 5 + 1 become 3 + 2 and 3 + 3 (UI-FIX-1, R9)
+  return <div className="k-stats" ref={ref} role={label ? "list" : undefined} aria-label={label}><InList.Provider value={!!label}>{children}</InList.Provider></div>;
 }

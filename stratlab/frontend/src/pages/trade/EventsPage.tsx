@@ -216,11 +216,12 @@ export function EventsPage() {
                     ))}
                   </ul>
                 ) : <p className="k-small k-muted">No scheduled events in the next seven days.</p>}
-                <p className="k-note">
-                  Results this week: <Link className="link tap" to="/research/results">{v.week.results ?? "the results calendar"}</Link> ·
-                  Dividends and other corporate actions: <Link className="link tap" to="/research/corporate-actions">{v.week.actions ?? "the calendar"}</Link> ·
-                  Lot and expiry-day changes: <Link className="link" to="/trade/fo-changes">F&amp;O changes</Link>
-                </p>
+                {/* three lines of their own, not one run-on note: the card beside this one is taller (UI-FIX-1, R1) */}
+                <ul className="k-list plain ev-week-more">
+                  <li className="k-note">Results this week: <Link className="link tap" to="/research/results">{v.week.results ?? "the results calendar"}</Link></li>
+                  <li className="k-note">Dividends and other corporate actions: <Link className="link tap" to="/research/corporate-actions">{v.week.actions ?? "the calendar"}</Link></li>
+                  <li className="k-note">Lot and expiry-day changes: <Link className="link" to="/trade/fo-changes">F&amp;O changes</Link></li>
+                </ul>
               </Card>
               <RemindCard v={v} onSave={save} />
             </div>

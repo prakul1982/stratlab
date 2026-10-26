@@ -442,7 +442,15 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
       <NextSteps nb={nb} e={e} onDelete={() => setRemoving(true)} />
 
-      <section className="k-checks" aria-label="The four checks">{v.checks.map((c) => <CheckCard key={c.id} c={c} cur={cur} />)}</section>
+      {/* two columns of their own, not rows of two: the unseen-data card is short and the nearby-settings map tall, so in rows the short one stood
+          over an empty block (UI-FIX-1, R1). On a phone the columns dissolve and `order` puts the four back in their own order. */}
+      <section className="k-checks" aria-label="The four checks">
+        {[0, 1].map((col) => (
+          <div key={col} className="k-checks-col">
+            {v.checks.map((c, i) => i % 2 === col ? <div key={c.id} className="k-checks-slot" data-i={i}><CheckCard c={c} cur={cur} /></div> : null)}
+          </div>
+        ))}
+      </section>
 
       <section className="k-money">
         <ChartFrame title="Where the money came from, and went" info={HELP.equity} label="Account value" actions={<span className="k-note">{money(cap, cur)} start</span>}>

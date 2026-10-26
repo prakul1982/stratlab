@@ -19,7 +19,7 @@
 //   R6  squeezed hint                       a field hint narrower than 40% of its row, 3+ lines, in a row of 2+ fields
 //   R7  double highlight                    2+ highlighted items (background) with an active state in one nav/menu; 2+ pressed/checked
 //                                            in one segmented group
-//   R8  repeated figure                     the same money/percent string 3+ times in one card (tables and charts left out)
+//   R8  repeated figure                     the same money/percent string 3+ times in one card (tables, charts and list entries left out)
 //   R9  orphan row                          a grid/wrap row of 4+ equal cards/stats whose last line holds one item (3+1, 4+1, ...)
 //   R10 overflow / clipping / overlap       the page scrolls sideways; text cut off by an overflow:hidden box; two text lines whose
 //                                            boxes cross each other
@@ -189,7 +189,7 @@ export function lintPage(opts: LintOpts): LintResult {
     if (!isCard(c) || !shown(c)) continue;
     const r = R(c);
     if (r.width <= 900 || r.height < 140) continue;
-    if (c.querySelector("input, select, textarea")) continue;            // a form: its boxes have their own widths (R5/R6 look at those)
+    if (c.querySelector("input, select, textarea, .k-state")) continue;            // a form (its boxes have their own widths: R5/R6 look at those) or an empty-state message (centred on purpose)
     const box = contentBox(c, false);
     if (!box || !box.text) continue;
     const s = S(c);
@@ -199,10 +199,18 @@ export function lintPage(opts: LintOpts): LintResult {
     // in the left 72%): so the figures and fields alone (no paragraph, heading or summary) must also reach 75% of the inner width
     const inL = r.left + px(s.paddingLeft) + px(s.borderLeftWidth);
     const figs = box.parts.filter((q) => !q.el.closest("p, h1, h2, h3, h4, h5, h6, summary, .k-card-head"));
-    const figReach = figs.length >= 2 ? (Math.max(...figs.map((q) => q.r)) - inL) / inner : 1;
+    // a figure: a big, short text with a digit in it (a stat's value); names, words, dates in a list and sentences are not
+    const nums = figs.filter((q) => { const t = textOf(q.el); return t.length <= 24 && /\d/.test(t) && q.el.children.length === 0 && px(S(q.el).fontSize) >= 17; });
+    // (a figure column that starts in the right half of the card is spread across it, however short its last figure is)
+    const figReach = nums.length >= 2 ? Math.max((Math.max(...nums.map((q) => q.r)) - inL) / inner, (Math.max(...nums.map((q) => q.l)) - inL) / inner + 0.25) : 1;
     const hasWide = figs.some((q) => REPLACED.has(q.el.tagName.toUpperCase()));
-    const cols = [...new Set(figs.map((q) => Math.round(q.l / 40)))].length >= 2 && Math.max(...figs.map((q) => q.l)) - Math.min(...figs.map((q) => q.l)) > 150;     // figures side by side, not a left-aligned list
-    if (used / inner < 0.55 || (figReach < 0.75 && cols && !hasWide && figs.length >= 3)) add("R2", c, `content spans ${Math.round(used)}px of ${Math.round(inner)}px (${Math.round((100 * used) / inner)}%); its figures reach ${Math.round(100 * figReach)}% of the width, in a ${Math.round(r.width)}x${Math.round(r.height)} card`);
+    const cols = [...new Set(nums.map((q) => Math.round(q.l / 40)))].length >= 2 && Math.max(...nums.map((q) => q.l)) - Math.min(...nums.map((q) => q.l)) > 150;     // figures side by side, not a left-aligned list
+    // how many lines of text the card holds under its heading (parts whose tops are within 6px share a line)
+    const tops = [...new Set(box.parts.filter((q) => !q.el.closest("h1, h2, h3, h4, h5, h6, summary, .k-card-head")).map((q) => Math.round(q.t / 6)))].length;
+    // two ways to be sparse: figures that stay in the left of a wide card (the old FII/DII card: two stats in the left 72%), or content
+    // that fills less than 55% of the width with figures in it or with a long column of lines (a list squeezed into the left third).
+    // A short card of words (one headline, three lines of a note) or an empty-state message reads fine at its natural width.
+    if ((used / inner < 0.55 && (nums.length >= 2 || tops >= 6)) || (figReach < 0.75 && cols && !hasWide && nums.length >= 2)) add("R2", c, `content spans ${Math.round(used)}px of ${Math.round(inner)}px (${Math.round((100 * used) / inner)}%); its figures reach ${Math.round(100 * figReach)}% of the width, ${tops} lines, in a ${Math.round(r.width)}x${Math.round(r.height)} card`);
   }
 
   // ---- R3 floating control -------------------------------------------------------------------------------------------
@@ -218,6 +226,7 @@ export function lintPage(opts: LintOpts): LintResult {
         const gr = R(g);
         const inner = Array.from(g.querySelectorAll(CONTROL)).filter(shown);
         if (inner.length < 2 || gr.height < 1.8 * cr.height) continue;           // a group of controls wrapped over 2+ rows
+        if (cr.top >= gr.bottom - 2) continue;                                      // on a line of its own below the group (a full-width select on a phone): not beside it
         if (cr.top - gr.top > 6) add("R3", c, `sits ${Math.round(cr.top - gr.top)}px below the first row of the ${inner.length} controls beside it (${Math.round(gr.height)}px tall); centre y ${Math.round(cr.top + cr.height / 2)} vs first row ${Math.round(gr.top + cr.height / 2)}`);
       }
     }
@@ -230,7 +239,10 @@ export function lintPage(opts: LintOpts): LintResult {
           const gaps = sameRow.slice(1).map((e, i) => R(e).left - R(sameRow[i]).right);
           for (const [idx, end] of [[0, sameRow[0]], [gaps.length - 1, sameRow[sameRow.length - 1]]] as [number, Element][]) {
             const others = gaps.filter((_, i) => i !== idx);
-            if (gaps[idx] > 48 && median(others) <= 20) add("R3", end, `${Math.round(gaps[idx])}px from the rest of its row of ${sameRow.length} controls (the others are ${Math.round(median(others))}px apart)`);
+            // a gap with a label or a title in it ("Or try", "October 2026") is a gap on purpose: the end control belongs to the text beside it
+            const a = idx === 0 ? sameRow[0] : sameRow[idx], b = idx === 0 ? sameRow[1] : sameRow[idx + 1];
+            const labelled = ks.some((k) => !isControl(k) && textOf(k) && R(k).left >= R(a).right - 2 && R(k).right <= R(b).left + 2 && Math.abs(R(k).top + R(k).height / 2 - midY(a)) < 16);
+            if (!labelled && gaps[idx] > 48 && median(others) <= 20) add("R3", end, `${Math.round(gaps[idx])}px from the rest of its row of ${sameRow.length} controls (the others are ${Math.round(median(others))}px apart)`);
           }
         }
       }
@@ -274,7 +286,7 @@ export function lintPage(opts: LintOpts): LintResult {
       }
     }
     // fields and stats side by side: labels of different line counts push the controls/values to different y
-    for (const [sel, inner] of [[".k-field", "input, select, textarea, button:not(.info-btn), .k-input-unit, [role=radiogroup], .k-seg"], [".k-stat", ".k-stat-v"]] as const) {
+    for (const [sel, inner] of [[".k-field", "input:not([type=checkbox]):not([type=radio]), select, textarea, button:not(.info-btn), .k-input-unit, [role=radiogroup], .k-seg"], [".k-stat", ".k-stat-v"]] as const) {
       const items = ks.filter((c) => c.matches(sel));
       for (const row of rowsOf(items, 6)) {
         if (row.length < 2) continue;
@@ -329,7 +341,8 @@ export function lintPage(opts: LintOpts): LintResult {
     const w = document.createTreeWalker(c, NodeFilter.SHOW_TEXT);
     for (let n = w.nextNode(); n; n = w.nextNode()) {
       const pe = n.parentElement;
-      if (!pe || pe.closest("table, [role=table], [role=grid], svg, .k-tbl-wrap, select, option, script, style, " + SKIP)) continue;
+      // (a list's entries repeat on purpose: a loan's EMI on each month's date, the same fee on each line of a statement)
+      if (!pe || pe.closest("table, [role=table], [role=grid], svg, .k-tbl-wrap, select, option, script, style, li, " + SKIP)) continue;
       if (!shown(pe)) continue;
       for (const m of (n.textContent || "").match(FIG) || []) {
         const norm = m.replace(/^[+\-−–]/, "").replace(/\s+/g, "");
@@ -388,7 +401,7 @@ export function lintPage(opts: LintOpts): LintResult {
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let n = w.nextNode(); n; n = w.nextNode()) {
       const pe = n.parentElement;
-      if (!pe || !(n.textContent || "").trim() || pe.closest("svg, canvas, script, style, select, option, textarea, [role=tooltip], .info-pop, .popover, .palette, " + SKIP) || closedDetails(pe)) continue;
+      if (!pe || !(n.textContent || "").trim() || pe.closest("svg, canvas, script, style, select, option, textarea, [role=tooltip], .info-pop, .popover, .palette, " + SKIP) || closedDetails(pe) || S(pe).textOverflow === "ellipsis") continue;      // (an ellipsis cuts the line where its box ends: its text range runs on past that, unseen)
       const pr = R(pe);
       if (pr.width < 1 || pr.height < 1 || S(pe).visibility === "hidden" || pr.right <= 0 || pr.left >= vw || !inFlow(pe) || scrollsOnPurpose(pe)) continue;
       const rg = document.createRange(); rg.selectNodeContents(n);

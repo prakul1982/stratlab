@@ -15,7 +15,9 @@ test("MO-3a: the tax inputs are a three-column form, its switches sized to their
   // not stretched to the column, and "New (default)" is not squeezed into two lines by equal shares
   assert.match(css, /\.k-form > \.k-field > \.k-seg \{ width: max-content; max-width: 100%; min-height: var\(--ctl\); align-items: stretch;/);
   assert.doesNotMatch(css, /\.k-form > \.k-field > \.k-seg button \{ flex: 1 1 0;/);
-  assert.match(css, /\.k-form > \.k-field > \.k-seg button \{ flex: 1 1 auto; min-width: min-content; \}/);
+  // (UI-FIX-1) a label never wraps in its button; the field takes two columns instead
+  assert.match(css, /\.k-form > \.k-field > \.k-seg button \{ flex: 1 1 auto; min-width: max-content;[^}]*white-space: nowrap/);
+  assert.match(css, /\.k-form > \.k-field:has\(> \.k-seg\) \{ grid-column: span 2; \}/);
   assert.match(css, /@media \(max-width: 640px\), \(pointer: coarse\) \{ \.k-form > \.k-field > \.k-seg \{ padding: 0;/);   // 44px buttons in a 44px track
   const src = read("src/pages/TaxReportPage.tsx");
   assert.match(src, /label: "New \(default\)"/);                         // the words are kept

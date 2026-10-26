@@ -23,6 +23,7 @@ import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { Explore } from "../components/Explore";
+import { TileGrid } from "../components/TileGrid";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
@@ -240,16 +241,17 @@ export function InvestHome() {
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />
       </div>
       <ToolStrip label="Invest tools" tools={tools} />
-      <NextEvents region={region} />
-      <div className="grid2 space-panels">
-        <WatchPanel region={region} />
+      {/* the two short dated cards side by side, then the two lists of companies, then breadth across the page: a short card beside a
+          tall one left a hole under it (DF-023; UI-FIX-1, R1/R2) */}
+      <div className="grid2 space-panels even">
+        <NextEvents region={region} />
         <ResultsToday region={region} />
       </div>
-      {/* the same height side by side, so a short breadth card leaves no hole beside the red flags (DF-023) */}
       <div className="grid2 space-panels even">
-        <BreadthCard region={region} />
+        <WatchPanel region={region} />
         <RedFlags region={region} />
       </div>
+      <BreadthCard region={region} />
       <Explore title="More you can do" hide={INVEST_LINKED} order="invest" />
     </div>
   );
@@ -422,12 +424,12 @@ export function MoneyHome() {
         <section className="k-stack" aria-labelledby="money-tools">
           <h2 id="money-tools" className="k-card-title">More in Money</h2>
           {/* each card with its plan tag, as on the group pages ("Basic for part"), and its line in full on a phone (DP2-014) */}
-          <div className="explore-grid money-cards">
+          <TileGrid className="explore-grid money-cards">
             {rest.map((e) => {
               const at = pageAt(e.to);
               return <Link key={e.to} to={e.to} className="k-linkcard explore-card" data-money={e.to}><b>{e.label}</b><span className="small muted">{e.blurb ?? e.title}</span>{at && <PageTags page={at.page} />}</Link>;
             })}
-          </div>
+          </TileGrid>
         </section>
       )}
     </div>

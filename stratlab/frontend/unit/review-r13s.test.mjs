@@ -69,7 +69,8 @@ test("R13S-005: on a phone or a touch screen every field is 16px or more, so Saf
 
 test("R13S-006 and R13S-008: the billing switch's label and a Trade tile's status wrap instead of spilling out or being cut", () => {
   const css = read("src/styles.css");
-  assert.match(css, /\.k-form > \.k-field > \.k-seg button \{[^}]*white-space: normal/);
+  // (UI-FIX-1: the billing switch's label now keeps to one line; its field takes two columns, and a phone's column is wide enough)
+  assert.match(css, /\.k-form > \.k-field > \.k-seg button \{[^}]*white-space: nowrap/);
   const foot = css.split("\n").find((l) => l.startsWith(".space-card-foot {"));
   assert.ok(foot && !/white-space: nowrap/.test(foot) && !/overflow: hidden/.test(foot), foot);
 });

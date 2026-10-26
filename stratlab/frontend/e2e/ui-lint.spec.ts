@@ -82,6 +82,8 @@ async function measure(page: Page, r: Route, size: (typeof SIZES)[number], theme
   await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
   let note: string | undefined;
   await expect(page.locator(".spinner")).toHaveCount(0, { timeout: 15_000 }).catch(() => { note = "still loading after 15s"; });
+  // a card still reading its data shows a skeleton (role=status, aria-busy): measuring that would report the loading state, not the page
+  await expect(page.locator("[aria-busy=true]")).toHaveCount(0, { timeout: 10_000 }).catch(() => { note = note ?? "a skeleton was still showing after 10s"; });
   await page.evaluate(() => document.fonts.ready).catch(() => undefined);
   await page.waitForTimeout(350);
   // a person opens the folded parts (rules, glossaries, "more" sections) to use them: measure them open, so a problem inside one counts
@@ -158,11 +160,20 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
   // R1 with the short card stretched by the row: its border is as tall, but it is empty inside
   expect(await fire(`<div class="row" style="align-items:stretch"><div class="k-card" style="min-height:400px"><p>${"line ".repeat(500)}</p></div><div class="k-card">Short</div></div>`), "R1 stretched short card").toContain("R1");
   // R2 sparse wide card
-  expect(await fire(`<div class="k-card" style="width:1100px;height:200px"><h3>Two figures</h3><div style="display:flex;gap:30px"><b>12</b><b>34</b></div></div>`), "R2 wide card with two figures").toContain("R2");
+  expect(await fire(`<div class="k-card" style="width:1100px;height:200px"><h3>Two figures</h3><div style="display:flex;gap:30px"><b class="k-stat-v">12</b><b class="k-stat-v">34</b></div></div>`), "R2 wide card with two figures").toContain("R2");
+  // the old Positioning FII/DII card: two stats side by side in the left of a wide card, under a long caption that stretches the union
+  expect(await fire(`<div class="k-card" style="width:1100px;height:200px"><h3>Flows</h3><div style="display:flex;gap:200px;width:700px"><div><small>FII</small><br><b class="k-stat-v">₹4,120 cr</b></div><div><small>DII</small><br><b class="k-stat-v">₹3,310 cr</b></div></div><p style="width:1000px">${"A long caption that runs most of the way across the card. ".repeat(3)}</p></div>`), "R2 two stats in the left 72%").toContain("R2");
+  // a long column of lines squeezed into the left third (the corporate actions list) is sparse; one headline or a short note is not
+  expect(await fire(`<div class="k-card" style="width:1100px;height:400px"><h3>Coming up</h3>${Array.from({ length: 8 }, (_, i) => `<div>Ex-date ${i + 1} Nov: TCS ₹11 a share</div>`).join("")}</div>`), "R2 long list in the left third").toContain("R2");
+  expect(await fire(`<div class="k-card" style="width:1100px;height:160px"><h3>Market headlines</h3><div>Nifty trades higher at 25,337</div><small>Economic Times · 2 hours ago</small></div>`), "R2 one headline").not.toContain("R2");
+  expect(await fire(`<div class="k-card" style="width:1100px;height:160px"><h3>Profile</h3><div style="display:grid;grid-template-columns:repeat(3,1fr)"><div><small>Email</small><br><b>owner@example.com</b></div><div><small>Signed in with</small><br><b>Google</b></div><div><small>Plan</small><br><b>Pro</b></div></div></div>`), "R2 three facts spread across").not.toContain("R2");
   expect(await fire(`<div class="k-card" style="width:1100px;height:200px"><h3>Table</h3><table style="width:100%"><tr><td>a</td><td>b</td></tr></table></div>`), "R2 full-width table").not.toContain("R2");
   // R3 "+ Custom" centred beside two wrapped rows of chips, and as the last chip
   expect(await fire(`<div style="display:flex;align-items:center;gap:8px"><div class="chips">${chips(6)}</div><button class="k-chip">+ Custom</button></div>`), "R3 floating + Custom").toContain("R3");
   expect(await fire(`<div class="chips">${chips(6)}<button class="k-chip">+ Custom</button></div>`), "R3 + Custom as a chip").not.toContain("R3");
+  // R3 the end control far from the rest of its row is floating; with a title between ("‹ Prev   October 2026   Next ›") it is not
+  expect(await fire(`<div style="display:flex;gap:8px;align-items:center;width:600px"><button class="k-chip">A</button><button class="k-chip">B</button><button class="k-chip">C</button><span style="flex:1"></span><button class="k-chip">Far</button></div>`), "R3 end control floating").toContain("R3");
+  expect(await fire(`<div style="display:flex;gap:8px;align-items:center;width:600px"><button class="k-chip">‹ Prev</button><b style="width:200px;text-align:center">October 2026</b><button class="k-chip">Next ›</button><button class="k-chip">Today</button></div>`), "R3 title between").not.toContain("R3");
   // R4 a label wrapping inside a segmented button
   expect(await fire(`<div class="k-seg"><button style="width:60px">New (default)</button><button>Old</button></div>`), "R4 wrapped label").toContain("R4");
   expect(await fire(`<div class="k-seg"><button>New (default)</button><button>Old</button></div>`), "R4 one-line label").not.toContain("R4");

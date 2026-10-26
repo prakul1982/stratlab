@@ -48,8 +48,10 @@
 .k-verdict-hero > .k-stack { flex: 1 1 520px; }
 .k-verdict-hero > .k-card { flex: none; width: 250px; }
 @media (max-width: 640px) { .k-verdict-hero > .k-card { width: 100%; } }
-.k-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); align-items: stretch; }
-@media (max-width: 700px) { .k-checks { grid-template-columns: minmax(0, 1fr); } }
+.k-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); align-items: start; }
+.k-checks-col { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+@media (max-width: 700px) { .k-checks { display: flex; flex-direction: column; } .k-checks-col { display: contents; } }
+@media (max-width: 700px) { .k-checks-slot[data-i="1"] { order: 1; } .k-checks-slot[data-i="2"] { order: 2; } .k-checks-slot[data-i="3"] { order: 3; } }
 .k-money { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--s4); align-items: start; }
 @media (max-width: 960px) { .k-money { grid-template-columns: minmax(0, 1fr); } }
 .search-box.compact { min-height: 50px; }

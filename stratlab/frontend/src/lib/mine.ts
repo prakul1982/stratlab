@@ -154,7 +154,7 @@ export function useComingUpAll(enabled = true): Up[] | null {
         // a holding's results day reads as the results feed's does: "AAVAS results · Among your stocks" (DI-009)
         const res = e.symbol && /result/i.test(e.title) ? resultsLine(e.symbol, e.detail) : null;
         out.push({ key: `${e.date}|${e.symbol ?? ""}|${/result/i.test(e.title) ? "results" : e.title.toLowerCase()}`, date: e.date, title: res?.title ?? e.title, tag: CAT_TAG[e.cat] ?? "Money",
-          detail: res?.detail ?? [e.detail, e.amount != null ? `₹${Math.round(e.amount).toLocaleString("en-IN")}` : ""].filter(Boolean).join(" · "), to: e.url ?? "/money/calendar", tone: e.cat === "tax" ? "warn" : "plain" });
+          detail: res?.detail ?? [e.detail, e.amount != null && !e.title.includes(`₹${Math.round(e.amount).toLocaleString("en-IN")}`) ? `₹${Math.round(e.amount).toLocaleString("en-IN")}` : ""].filter(Boolean).join(" · "), to: e.url ?? "/money/calendar", tone: e.cat === "tax" ? "warn" : "plain" });
       }
       // when the money calendar already carries the market events (its own switch), they are not listed twice
       // the nearest weekly expiry within a week too (R52-013: Monday's NIFTY expiry missing from "Next up"); later weeklies

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { FEATURES, GOAL_ORDER, GOALS, resolve, type Goal } from "../lib/features";
 import { PLAN_NAME, planOf } from "../lib/plans";
+import { TileGrid } from "./TileGrid";
 import "../pages/trade/trade.css";
 
 const OPEN_KEY = "stratlab.explore.open";
@@ -41,7 +42,7 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
               <b>{GOALS[g].title}</b>
               <span className="small muted">{GOALS[g].sub}</span>
             </div>
-            <div className="explore-grid">
+            <TileGrid className="explore-grid">
               {items.map((f) => (
                 <button key={f.id} className="k-linkcard explore-card" onClick={() => open(f.to)}>
                   <b>{f.title}</b>
@@ -49,7 +50,7 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
                   <span className="small explore-go">{lockedOn(f.flag) ? `On the ${lockedOn(f.flag)} plan →` : f.to.startsWith("@") && !latest ? "Starts with a notebook →" : "Open →"}</span>
                 </button>
               ))}
-            </div>
+            </TileGrid>
           </div>
         );
       })}

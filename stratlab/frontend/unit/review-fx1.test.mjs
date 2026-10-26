@@ -115,8 +115,14 @@ test("RC2A-033: a paper session's page has no empty card and its rules come last
   assert.ok(p.indexOf('<Card label="Rules">') > p.indexOf('<Card label="Orders">'));
 });
 
-test("RC2A-029: a phone's segmented control shares its row in equal parts", () => {
-  assert.match(read("src/styles.css"), /\.k-seg \{ display: grid; grid-auto-flow: column; grid-auto-columns: minmax\(0, 1fr\); width: 100%; \}/);
+test("RC2A-029 (UI-FIX-1): a phone's segmented control shares its row, no label wraps, and one that does not fit stacks in equal widths", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /@media \(max-width: 480px\) \{\s*\.k-seg \{ display: flex; width: 100%; \}\s*\.k-seg button \{[^}]*white-space: nowrap/);
+  assert.match(css, /\.k-seg\[data-stack="1"\] \{ display: flex; flex-direction: column; \}/);
+  assert.match(css, /\.k-seg\[data-stack="2"\] \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  const seg = read("src/components/kit/Seg.tsx");
+  assert.match(seg, /setAttribute\("data-stack", "2"\)/);
+  assert.match(seg, /setAttribute\("data-stack", "1"\)/);
 });
 
 test("RC2A-040, 041, 038, 039: events, the account chip, Trade home and the watchlist", () => {

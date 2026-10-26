@@ -346,7 +346,7 @@ export function HoldingsPage() {
             <Card id="h-filings">
               <CardHead title="Recent filings" info={<>From the companies' own exchange filings, sorted by fixed rules you can read on the <Link className="link" to="/research/filings">Red flags</Link> page.</>} />
               <Disclosure summary={`Show the filings of ${withFilings.length} stock${withFilings.length === 1 ? "" : "s"}`}>
-              <div className="k-stack">
+              <div className="h-filings">
                 {withFilings.map((r) => {
                   const f = facts!.rows[r.symbol];
                   return (

@@ -263,7 +263,7 @@ export function TrendBars({ points, label, unit, tone = "ink", baseSales }: { po
                 {down > 0 && <line className="tbar-zero" x1="0" x2="10" y1={zero} y2={zero} vectorEffect="non-scaling-stroke" />}
                 <rect className={cls} data-v={p.v} x="1.5" width="7" y={neg ? zero : zero - h} height={h} />
               </svg>
-              <span className="tbar-year"><span className="tbar-full">{p.y}</span><span className="tbar-short">{shortYear(p.y)}</span></span>
+              <span className={`tbar-year${p.y.length > 4 && points.length >= 6 ? " long" : ""}`}><span className="tbar-full">{p.y}</span><span className="tbar-short">{shortYear(p.y)}</span></span>
             </div>
           );
         })}

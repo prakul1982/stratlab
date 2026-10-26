@@ -143,7 +143,7 @@ export function LibraryCard({ e, details = true, actions }: { e: LibEntry; detai
           <div className="k-stack k-tight">
             {e.range && <p className="k-note lib-line" data-testid="lib-window">Tested {testedRange(e.range)}{e.stats.trades != null ? ` · ${e.stats.trades} trades` : ""}</p>}
             {e.reason && <p className="k-note lib-line lib-reason">{e.reason}</p>}
-            {e.description && <p className="k-small lib-line">{plainTerms(e.description)}</p>}
+            {/* no second copy of the description here: it is the paragraph above (whole in its tooltip), and the rules below say it again in steps (UI-FIX-1, R8) */}
             <Rules s={e.strategy} />
           </div>
         </Disclosure>
