@@ -231,7 +231,9 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   await expect(holdings).toContainText("₹");
   await expect(holdings.locator(".as-of")).toContainText("as of");
   const tax = page.getByTestId("tax-summary");
-  await expect(tax).toContainText(/Total tax estimate, FY ?\d{4}/, { timeout: 30_000 });         // the tax report's own total (R5O-022)
+  // the tax report's own total (R5O-022); the year is in the card's heading, so the figure's label doesn't repeat it
+  await expect(page.getByRole("heading", { name: /^Tax, FY ?\d{4}/ })).toBeVisible({ timeout: 30_000 });
+  await expect(tax).toContainText("Total tax estimate");
   await expect(tax).toContainText("An estimate to check with your CA.");
   // every estimate says what it assumes: behind the card's (i), not a three-line paragraph that made it taller than My Holdings (CK-2)
   await page.getByRole("button", { name: /^About Tax/ }).click();

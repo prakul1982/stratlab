@@ -896,8 +896,10 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 /* VR1-140: Money's eight cards are 4 + 4 on a laptop (230px made 3 + 3 + 2, a hole beside the last) */
 @media (min-width: 561px) { .explore-grid.money-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); } }
 /* VR1-140: the three figures of Money home's two summary cards in one row, not 2 + 1 with the lower left empty */
-.money-panels .k-stats { grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: var(--s3) var(--s4); }
-.money-panels .k-stat-v { font-size: clamp(22px, 1.9vw, 30px); }
+/* up to four figures in one row (the tax card with intraday income had "Long-term gains" alone on a second row and stood 120px
+   taller than My Holdings beside it); the year is in the card's heading, so the total's label doesn't repeat it */
+.money-panels .k-stats { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: var(--s3) var(--s4); }
+.money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); }
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
 @media (max-width: 560px) {

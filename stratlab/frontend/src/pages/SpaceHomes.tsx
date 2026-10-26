@@ -509,7 +509,7 @@ function TaxSummary() {
             <div className="k-stats">
               {/* the tax report's own total (capital gains, F&O and intraday business income, slab, surcharge and cess), so the
                   two pages agree; the capital gains part alone said ₹0 beside a report of ₹77,61,298 */}
-              <Fig label={`Total tax estimate, ${year?.label ?? "this year"}`} value={money(year?.total?.available ? year.total.total ?? 0 : year?.tax_with_cess ?? 0, "INR")} />
+              <Fig label="Total tax estimate" value={money(year?.total?.available ? year.total.total ?? 0 : year?.tax_with_cess ?? 0, "INR")} />
               {/* where the tax comes from: the F&O and intraday income beside the gains (R6O-014: ₹77,61,298 beside −₹59 and ₹0) */}
               {!!year?.total?.income?.business && <Fig label="F&O and other business income" tone={signCls(year.total.income.business)} value={money(year.total.income.business, "INR")} />}
               {!!year?.total?.income?.intraday && <Fig label="Intraday income" tone={signCls(year.total.income.intraday)} value={money(year.total.income.intraday, "INR")} />}
