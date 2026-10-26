@@ -2068,7 +2068,7 @@ def scan_sets(region: str = "IN", profile=Depends(current_profile)):
         doc = scan_presets.load(b["id"])
         big.append({"id": b["id"], "name": b["name"], "count": (doc or {}).get("checked", 0), "stored": True, "as_of": (doc or {}).get("as_of")})
     return {"sets": [{"id": "watchlist", "name": "Your watchlist", "count": len(scan.watchlist_members(profile["id"], region))}]
-            + [{"id": p["id"], "name": p["name"], "count": p["count"]} for p in universes.presets(region)] + big,
+            + [{"id": p["id"], "name": p["name"], "count": p["count"], "as_of": p.get("as_of")} for p in universes.presets(region)] + big,
             "alerts": scan.alert_on(profile["id"]), "channels": stock_alerts.channels(profile), "template": scan.ST_S2, "fresh_days": scan.FRESH,
             "scans": scan_presets.listing(),
             "rotation_sets": [{"id": k, "name": v["name"]} for k, v in rotation.index_sets(region).items()]}
@@ -2188,20 +2188,26 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
         # last close from the public price history instead, and says so over the prices
         registry, offline = scan.LastCloseIndia(research_hub.yahoo), True
     # an answer from before the close settled isn't kept past it (R13-005)
-    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members), scan.settled_at(req.region), offline)
+    live = not offline and research_routes.market_open(req.region)          # trading now: the newest candle is today's, still forming
+    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members), scan.settled_at(req.region), offline, live)
     out = _results.get(key)
     if out is None:                       # the same group gives everyone the same answer until prices move
         if req.scan == "st_s2":
             out = {"kind": "st_s2", **scan.run(registry, req.region, members, session=scan.session_day(req.region))}
         else:
-            got = scan.run_preset(registry, req.region, members, req.scan, session=scan.session_day(req.region))
+            got = scan.run_preset(registry, req.region, members, req.scan, session=scan.session_day(req.region), live=live)
             out = {"kind": "preset", "scan": req.scan, "scan_name": scan_presets.BY_ID[req.scan]["name"], "matches": len(got["rows"]),
                    "stored": False, **got}
         if offline and not out.get("rows") and (out.get("problems") or out.get("missing")) and not out.get("checked", len(out.get("rows") or [])):
             raise KiteNotReady("Market data for this market is offline right now.")      # the price history didn't answer either
         _results.set(key, out, 300)
     out = dict(out)
-    out["rows"] = with_nse_close(req.region, out.get("rows") or [], "t" if out.get("kind") == "st_s2" else "as_of", "chg")
+    # a row's price and its "numbers" come from one candle: while the market trades, the quote is not laid over a scan's rows (RC2A-021: the
+    # row said 1,645.20 and its numbers "Last price 1,642.90"); the exchange's close is, once the session is over (R6O-009)
+    keep_read = out.get("kind") == "preset" and live
+    if not keep_read:
+        out["rows"] = with_nse_close(req.region, out.get("rows") or [], "t" if out.get("kind") == "st_s2" else "as_of", "chg")
+    out["live"] = keep_read
     out["problems"] = [public_text(x) for x in out["problems"]]          # data-source errors can name the source
     # the session the prices are of, and whether its closing prints are still settling: the page says "Last close, 9 Oct"
     # or "Latest, closing prints still settling" over the prices, as the company page does (R13-005, R13-007)
@@ -3442,7 +3448,9 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         if not rows:                      # nothing matched: the saved holdings stay as they were
             return None
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
-        return with_sectors(rows, known), parsed["broker"]
+        # RC2B-009: Kite's holdings export is a file; "Zerodha Kite" as a stored source means the Kite login's read, and the
+        # page said "from your Zerodha login" after an upload
+        return with_sectors(rows, known), "Zerodha Kite file" if parsed["broker"] == "Zerodha Kite" else parsed["broker"]
     holdings.update(profile["id"], merged)
     if out["saved"]:
         invite_rewards.safe_touch(profile, "holdings")
@@ -3861,6 +3869,9 @@ def tax_view(profile) -> dict:
                           extra=mf["rows"] + usr["rows"], dividends=money_routes.dividends_for_tax(profile), more_years=set(usr["years"]))
     rep["names"].update(mf["names"])
     rep["names"].update(usr["names"])
+    # RC2B-005: the 31 Jan 2018 price is asked for shares only. A fund's sale carries its own grandfathered NAV (the Money
+    # page for funds asks for a missing one), so it isn't listed here as "price not known" beside its grandfathered line
+    rep["pre_2018"] = [k for k in rep["pre_2018"] if k in set(i["pre"])]
     for y in rep["years"]:
         y["mutual_funds"] = mf["years"].get(y["fy"])
         y["us"] = {**usr["years"][y["fy"]], "allowed": usr["allowed"], "plan": usr.get("plan")} if y["fy"] in usr["years"] else None

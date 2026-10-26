@@ -109,7 +109,7 @@ test("DP2-011: the ITR downloads look alike and say why they're off", () => {
   const p = read("src/pages/money/ItrExportPage.tsx");
   assert.match(p, /<button key=\{f\} type="button" className="btn outline" disabled=\{v\.locked/);
   assert.doesNotMatch(p, /f === "pdf" \? "" : " quiet"/);
-  assert.match(p, /\{v\.locked && <p id="itr-why-off" className="k-small k-muted">The downloads are on the \{v\.plan\} plan\.<\/p>\}/);
+  assert.match(p, /\{v\.locked && <div id="itr-why-off"><PlanNote>Part of this page is on the \{v\.plan\} plan\./);       // the lock is said once (RC2B-017)
 });
 
 test("DP2-014: Money's home cards carry their plan tags and read in full on a phone", () => {

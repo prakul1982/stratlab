@@ -26,9 +26,10 @@ test("MO-3a: the tax inputs are a three-column form, its switches sized to their
 test("MO-3b: the year's two figures fill the card, and the Tax tools link is not left after a dot", () => {
   assert.match(css, /\.k-card\.compact > \.k-stats \{ flex: 1 1 100%; \}/);
   const src = read("src/pages/TaxReportPage.tsx");
-  assert.match(src, /<span className="k-stat-link"><Link className="link" to=\{fyLink\("\/money\/tax-tools", y\.fy\) \+ "&tab=advance"\}>Tax tools<\/Link><\/span>/);
+  // RC2B-004: the link sits inside the note's sentence (it was a block of its own under the figure)
+  assert.match(src, /const toolsLink = <Link className="link" to=\{fyLink\("\/money\/tax-tools", y\.fy\) \+ "&tab=advance"\}>Tax tools<\/Link>;/);
+  assert.doesNotMatch(src, /<span className="k-stat-link">/);
   assert.doesNotMatch(src, /"" \} · <Link className="link" to=\{fyLink\("\/money\/tax-tools"/);
-  assert.match(css, /\.k-stat-link \{ display: block;/);
 });
 
 test("MO-3c: the downloads share the width equally and the facts in words leave the grid of figures", () => {
@@ -38,7 +39,7 @@ test("MO-3c: the downloads share the width equally and the facts in words leave 
   const src = read("src/pages/money/ItrExportPage.tsx");
   assert.match(src, /const isFigure = /);
   assert.match(src, /<dl className="k-dl facts" aria-label="This year's return">/);
-  assert.match(src, /v\.summary\.filter\(\(s\) => !isFigure\(s\.value\)\)/);
+  assert.match(src, /\(v\?\.summary \?\? \[\]\)\.filter\(\(s\) => !isFigure\(s\.value\) && s\.label !== "Financial year"\)/);
   assert.match(src, /<StatRow>\{v\.summary\.filter\(\(s\) => isFigure\(s\.value\)\)/);
   assert.doesNotMatch(src, /k-stat-text/);
   // the same test as the page: money is a figure, the year, the return and the audit are words

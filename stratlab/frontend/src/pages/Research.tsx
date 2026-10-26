@@ -37,6 +37,7 @@ import { typingFirst } from "../lib/typingFirst";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
 import { FilingsPanel } from "../components/Filings";
+import { UsFilingsCards } from "../components/UsFilings";
 import { CompanyActions } from "../components/CorpActions";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import {
@@ -125,10 +126,9 @@ function usePulse(region: Region) {
     return () => { live = false; clearTimeout(late); if (next) clearTimeout(next); };
   }, [region, again]);
   // the levels again each minute while they're live, in place: a failed read keeps the ones shown
-  useLiveRefresh(!!data?.indices.some((i) => i.live), () => {
-    researchApi.pulse(region).then((d) => { if (!d.pending && d.indices.length) setData((cur) => (cur ? d : cur)); }).catch(() => undefined);
-  });
-  return { data, error, slow, state: pulseLoad({ data, error, slow }), retry: () => setAgain((n) => n + 1) };
+  const reload = () => { researchApi.pulse(region).then((d) => { if (!d.pending && d.indices.length) setData((cur) => (cur ? d : cur)); }).catch(() => undefined); };
+  useLiveRefresh(!!data?.indices.some((i) => i.live), reload);
+  return { data, error, slow, state: pulseLoad({ data, error, slow }), retry: () => setAgain((n) => n + 1), reload };
 }
 
 /** The index levels card's body for each loading state. */
@@ -375,7 +375,8 @@ function CompanyView() {
       <SourcesNote sources={c.sources} />
       <PageNav items={[...(c.delisted ? [] : [{ id: "co-chart", label: "Price chart" }]), { id: "co-numbers", label: "Key numbers" },
         ...(c.shareholding && c.shareholding.rows.length > 0 ? [{ id: "co-owners", label: "Who owns it" }] : []),
-        ...(region === "IN" ? [{ id: "filings", label: "Filings" }, { id: "deals", label: "Deals" }] : []),
+        ...(region === "US" && !c.delisted ? [{ id: "us-owners", label: "Holders above 5%" }] : []),
+        ...(region === "IN" ? [{ id: "filings", label: "Filings" }, { id: "deals", label: "Deals" }] : c.delisted ? [] : [{ id: "filings", label: "Filings" }]),
         { id: "corporate-actions", label: "Corporate actions" }, { id: "co-news", label: "News" }]} />
       {!c.delisted && <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>}
       {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} quiet />}
@@ -430,6 +431,8 @@ function CompanyView() {
           </Card>
         )}
       </div>
+
+      {region === "US" && !c.delisted && <UsFilingsCards symbol={c.symbol} />}
 
       {region === "IN" && <Card id="filings"><CardHead title="Filings and red flags"
         info="What the company told the exchange: fund raises (QIP, preferential, rights), pledges, resignations, defaults, regulator action, rating changes, results and calls." /><FilingsPanel symbol={c.symbol} /></Card>}
@@ -601,6 +604,12 @@ export function PulsePage() {
     loadAI();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region]);
+  // the mood is written from a fresh read of the levels, which the cards above may not have had yet: they are read again at once, so the
+  // sentence and the cards quote one set of figures (RC2A-024: cards 22,664 at +0.28%, the mood a minute later 22,684 at +0.37%)
+  const cardsAt = data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? null;
+  const reloadCards = levels.reload;
+  useEffect(() => { if (ai?.levels_at && cardsAt && ai.levels_at > cardsAt) reloadCards(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [ai?.levels_at]);
+  const moodOlder = !!(ai?.levels_at && cardsAt && Date.parse(cardsAt) - Date.parse(ai.levels_at) > 120_000);
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={pulseClosedDay(data?.indices) ? "How the market felt at the last close" : "How the market feels today"}
@@ -622,6 +631,7 @@ export function PulsePage() {
             {/* the mood and the main story first, worked out from the moves and headlines; then the read (DD-001) */}
             {ai.mood && <p className="inv-summary" data-testid="pulse-mood"><b>{ai.mood}</b></p>}
             <p className="inv-summary">{ai.tone}</p>
+            {moodOlder && ai.levels_at && <p className="k-note" data-testid="pulse-mood-older">The sentences above quote the levels of {asOf(ai.levels_at, { tz: marketTz(region) })}; the cards are newer.</p>}
             {ai.flows_source && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
           </>
         )}
@@ -735,9 +745,15 @@ export function ComparePage() {
   // each figure as its company page writes it (₹3.7 lakh cr, 0.44, 9.7%), never a bare number without its unit
   // a figure that compares two periods names them under it ("Jun 2026 vs Jun 2025"): the two companies' latest quarters
   // can differ, and a bare "Latest YoY" read as one period for both (R50-003)
-  const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => (m
-    ? <>{metricText(m, c.currency)}{(m as { period?: string }).period && <span className="k-sub-line">{(m as { period?: string }).period}</span>}</>
-    : "–");
+  // and a qualifier the company's page gives a figure stays with it: TCS's 4.4% yield says it counts a ₹46 special dividend and is 2.6% without
+  // it (RC2A-028)
+  const QUALIFIES = /special|like-for-like|against a quarter|n\/m|not meaningful/i;
+  const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => {
+    if (!m) return "–";
+    const note = (m as { note?: string }).note;
+    return <>{metricText(m, c.currency)}{(m as { period?: string }).period && <span className="k-sub-line">{(m as { period?: string }).period}</span>}
+      {note && QUALIFIES.test(note) && <span className="k-sub-line" data-testid="cmp-note">{note}</span>}</>;
+  };
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/compare")} title="Two companies, side by side" lede="Pick two companies to line up their numbers, with an AI summary of where they differ." />
@@ -894,9 +910,9 @@ export function WatchlistPage() {
       <PageHeader eyebrow={eyebrowOf("/research/watchlist")} title="Companies you're watching"
         lede="Press Watch on any company page to add it, or add one here. Saved to your account, so it's here on every device." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /><RouteSeg label="Watchlist view" views={WATCH_VIEWS} /></div>
-      <Card>
-        <CardHead title="Add a company" />
-        <Field label="Company">{(id) => <StockPicker id={id} market={region} clearOnPick listedOnly onPick={add} placeholder="Search by name or symbol, like RELIANCE" />}</Field>
+      {/* one field across the card, its title as its label: a card with a heading above a 40%-wide box was mostly empty (RC2A-039) */}
+      <Card compact className="watch-add">
+        <Field label="Add a company" wide>{(id) => <StockPicker id={id} market={region} clearOnPick listedOnly onPick={add} placeholder="Search by name or symbol, like RELIANCE" />}</Field>
       </Card>
       {items === null ? (failed
         ? <Card><ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed. Adding or removing a company waits until it opens.</ErrorState></Card>

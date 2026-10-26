@@ -6,7 +6,7 @@ import { Download, Lock } from "../../components/Icons";
 import { lockWords } from "../../lib/lockText";
 import { track } from "../../lib/analytics";
 import { Card, CardHead, DataTable, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
-import { movedYearNote, rememberFy, savedFy } from "../../lib/fy";
+import { movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { minus } from "../../lib/format";
 import { featureName } from "../../lib/gates";
@@ -68,13 +68,13 @@ export function ItrExportPage() {
     one(fy).then((x) => { if (n === seq.current) { setV(x); setLoadingFy(null); } })
       .catch((e) => { if (n !== seq.current) return; setLoadingFy(null); setError((e as Error).message); fail(e); });
   }, [one, fail]);
-  /** The Money pages' one rule (lib/fy openFy): the year a link asked for, else the year last picked, else the year being
+  /** The Money pages' one rule (lib/fy openFy): the year a link asked for, else the year being
    * filed; when that year has no schedule lines and another has, the latest year that has some, said in one line. */
   useEffect(() => {
     let live = true;
     setError(null);
     (async () => {
-      const first = await one(asked ?? savedFy() ?? undefined);
+      const first = await one(asked ?? undefined);
       if (!live) return;
       if (asked != null || hasLines(first)) { setV(first); return; }
       for (const y of [...first.years].sort((a, b) => b - a)) {
@@ -102,6 +102,7 @@ export function ItrExportPage() {
     } catch (e) { fail(e); } finally { setGetting(null); }
   };
 
+  const words = (v?.summary ?? []).filter((s) => !isFigure(s.value) && s.label !== "Financial year");
   return (
     <div className="k-page">
       <PageHeader eyebrow="Money · Tax" title="Your year, laid out for the return"
@@ -111,7 +112,7 @@ export function ItrExportPage() {
 
       <FormGrid label="Choose the year" pair>
         <Field label="Financial year">{(id) => (
-          <Select id={id} value={loadingFy ?? v?.fy ?? ""} disabled={!v} onChange={(x) => { rememberFy(Number(x)); load(Number(x)); }}
+          <Select id={id} value={loadingFy ?? v?.fy ?? ""} disabled={!v} onChange={(x) => { load(Number(x)); }}
             options={(v?.years ?? []).map((y) => ({ value: y, label: `${fyLabel(y)} (AY ${y + 1}-${String(y + 2).slice(2)})` }))} />
         )}</Field>
       </FormGrid>
@@ -125,7 +126,8 @@ export function ItrExportPage() {
             <CardHead title={`Download for ${v.label} (AY ${v.ay})`} />
             {/* the same words as the lock shown while the page loads, on every plan (R6O-013) */}
             {/* the page lock's words (PageLock.lockWords), so the two never read differently (R6O-013, DP2-012) */}
-            {v.locked && <PlanNote>Part of this page is on the {v.plan} plan. {lockWords(featureName("itr_export"), v.plan, yours, false)} Below is what each schedule would hold.</PlanNote>}
+            {/* RC2B-017: the lock is said once (a second "The downloads are on the Pro plan" line stood under the buttons) */}
+            {v.locked && <div id="itr-why-off"><PlanNote>Part of this page is on the {v.plan} plan. {lockWords(featureName("itr_export"), v.plan, yours, false)} Below is what each schedule would hold.</PlanNote></div>}
             {/* the three downloads look alike, and when they're off the reason is under them (DP2-011: a dark PDF button beside two
                 faint ones, all three off with no word) */}
             <div className="k-downloads">
@@ -136,12 +138,12 @@ export function ItrExportPage() {
                 </button>
               ))}
             </div>
-            {v.locked && <p id="itr-why-off" className="k-small k-muted">The downloads are on the {v.plan} plan.</p>}
             {/* MO-3c: what is said in words (the year, the return that fits, the audit) is a short list of its own; only figures
                 are in the grid of big numbers, so every value in a row sits on one line */}
-            {v.summary.some((s) => !isFigure(s.value)) && (
+            {/* RC2B-017: the year is the select above and the title of this card, so it isn't a third "Financial year" here */}
+            {words.length > 0 && (
               <dl className="k-dl facts" aria-label="This year's return">
-                {v.summary.filter((s) => !isFigure(s.value)).map((s) => <div key={s.label}><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
+                {words.map((s) => <div key={s.label}><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
               </dl>
             )}
             <StatRow>{v.summary.filter((s) => isFigure(s.value)).map((s) => <Stat key={s.label} label={s.label} value={s.value} />)}</StatRow>

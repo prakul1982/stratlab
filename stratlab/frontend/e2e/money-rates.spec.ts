@@ -79,7 +79,7 @@ test("rates: the Reserve Bank's rates, small savings and a deposit after tax, at
   await expect(ppf).toContainText("7.10%");
   await expect(ppf).toContainText("Tax-free");
   await expect(small.getByRole("row").filter({ hasText: "National Savings Certificate" })).toContainText("6.10%");     // 7.7 × 0.792
-  await expect(page.getByRole("table", { name: "Floating rate bond" })).toContainText("8.05%");
+  await expect(page.getByRole("table", { name: "Small savings rates" })).toContainText("8.05%");
   await expect(page.getByRole("table", { name: "Your deposits" }).getByText("Bank FD")).toBeVisible();
 
   // a slab picked instead

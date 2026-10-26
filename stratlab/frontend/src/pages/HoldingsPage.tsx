@@ -286,7 +286,7 @@ export function HoldingsPage() {
                 <b>US stocks</b> ({view.us.count}): {usd(view.us.value)} · invested {usd(view.us.invested)}
                 {view.us.pnl != null && <> · <span className={tone(view.us.pnl)}>{usd(view.us.pnl)} ({pct(view.us.pnl_pct)})</span></>}
                 <span className="k-note"> · {view.us.in_total && view.usd_inr ? `in the rupee totals above at ${dollarRate(view.usd_inr, view.usd_inr_at)}` : "not in the rupee totals above: the exchange rate isn't available right now"}
-                  {view.us_prices === false && " · US prices are offline right now, so these are at cost"}. US stocks aren't part of the tax report, which works out Indian capital gains.</span>
+                  {view.us_prices === false && " · US prices are offline right now, so these are at cost"}. Sales of US stocks come from the trades on the <Link className="link" to="/money/us-tax">US stocks tax page</Link>, not from this list.</span>
               </p>
             )}
           </Card>
@@ -323,8 +323,8 @@ export function HoldingsPage() {
           <CardHead title="Add a stock by hand" actions={
             <Seg label="Where it's listed" options={[{ value: "IN", label: "India (NSE/BSE)" }, { value: "US", label: "United States" }]} value={add.market}
               onChange={(m) => { setAdd({ ...add, market: m as Mkt, symbol: add.market === m ? add.symbol : "" }); if (add.market !== m) { setPicked(""); setBoxes((n) => n + 1); } }} />} />
-          <FormGrid onSubmit={(e) => { e.preventDefault(); void addOne(); }}>
-            <Field wide label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol." error={addErr.symbol}>
+          <div className="hold-add"><FormGrid onSubmit={(e) => { e.preventDefault(); void addOne(); }}>
+            <Field label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol." error={addErr.symbol}>
               {(id) => <StockPicker key={`${add.market}-${boxes}`} id={id} market={add.market} value={picked} placeholder={add.market === "IN" ? "Name or symbol, e.g. Reliance" : "Name or ticker, e.g. Apple"}
                 onText={(text) => { setAdd((x) => ({ ...x, symbol: text })); setAddErr((x) => ({ ...x, symbol: undefined })); }}
                 onPick={(s, region) => { setPicked(s); setAdd((x) => ({ ...x, symbol: s, market: region })); setAddErr((x) => ({ ...x, symbol: undefined })); }} />}
@@ -335,8 +335,8 @@ export function HoldingsPage() {
             <Field label="Average price" optional unit={add.market === "US" ? "$" : "₹"} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} value={add.avg} error={addErr.avg}
               onChange={(e) => { const v = e.target.value.replace(/,/g, ""); setAdd({ ...add, avg: v }); setAddErr((x) => ({ ...x, avg: numberProblem(v, { ...AVG, unit: add.market === "US" ? "$" : "₹" }) ?? undefined })); }} />
             <FormActions><button type="submit" className="btn" disabled={busy}>Add</button></FormActions>
-          </FormGrid>
-          {add.market === "US" && <p className="k-note">US stocks are valued in dollars, and added to your totals in rupees at the day's exchange rate. They aren't part of the tax report.</p>}
+          </FormGrid></div>
+          {add.market === "US" && <p className="k-note">US stocks are valued in dollars, and added to your totals in rupees at the day's exchange rate. Sales of them are worked out from the trades on the <Link className="link" to="/money/us-tax">US stocks tax page</Link>, not from this list.</p>}
         </Card>
       )}
 

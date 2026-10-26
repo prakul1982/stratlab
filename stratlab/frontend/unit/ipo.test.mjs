@@ -53,7 +53,7 @@ test("the US has no Open tab: it has no public bidding window", () => {
   assert.deepEqual(ipo.tabsFor("IN").map((t) => t.value), ["upcoming", "open", "closed", "listed"]);
   assert.deepEqual(ipo.tabsFor("US").map((t) => t.value), ["upcoming", "closed", "listed"]);
   assert.match(ipo.TAB_LINE.US.upcoming, /no public bidding window/);
-  assert.match(ipo.TAB_LINE.IN.open, /5 PM IST/);
+  assert.doesNotMatch(ipo.TAB_LINE.IN.open, /5 PM/);          // no time is written that the exchange's page did not give (RC2A-004)
 });
 
 test("the section is in the menu, ⌘K and All features, and its pages are app addresses", async () => {

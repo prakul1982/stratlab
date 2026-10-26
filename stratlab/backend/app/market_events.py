@@ -639,8 +639,13 @@ def read_index_changes(text: str, title: str = "") -> dict:
             cur = section(full)
             continue
         naming = False
-        if re.match(r"^[A-Z]\.\s", s):
+        if re.match(r"^[A-Z][.)]\s", s):
+            # a lettered part of the notice ("A." or "B)"): a new part, and when it names one index ("B) Exclusion from Nifty SME Emerge
+            # index on account of ...") that index is the part's (RC2A-025: its company was put under the part before)
             cur, mode = None, None
+            one = re.search(r"\b(?:from|to|in|of|for)\s+(Nifty[\w &\-]*?)\s+index\b", s, re.I)
+            if one and _index_name(one.group(1)):
+                cur = section(_index_name(one.group(1)))
             continue
         low = s.lower()
         if low.startswith("note"):
@@ -671,17 +676,22 @@ def refresh_index(web, st: dict, today: date) -> dict:
     part = dict(st or {})
     changes = {c["url"]: c for c in part.get("changes") or [] if isinstance(c, dict) and c.get("url")}
     tried = {k: v for k, v in (part.get("tried") or {}).items() if isinstance(v, int)}
+    # a notice that failed three times is left for the day, not for good (RC2A-025: one bad afternoon left a notice unread for ever, and
+    # the page said "the press release has the list" for weeks)
+    tried_on = {k: v for k, v in (part.get("tried_on") or {}).items() if isinstance(v, str)}
     items = [i for i in read_index_list(web.text(INDEX_LIST)) if (today - date.fromisoformat(i["date"])).days <= 120]
     budget = INDEX_PDFS_PER_RUN
     for it in sorted(items, key=lambda i: i["date"], reverse=True):        # the newest notices first
         kept = changes.get(it["url"])
-        if (kept and (kept.get("sections") or kept.get("reader", 1) >= INDEX_READER)) or tried.get(it["url"], 0) >= 3 or not budget:
+        if (kept and (kept.get("sections") or kept.get("reader", 1) >= INDEX_READER)) or not budget \
+                or (tried.get(it["url"], 0) >= 3 and tried_on.get(it["url"]) == today.isoformat()):
             continue
         budget -= 1
         try:
             got = read_index_changes(web.pdf_text(it["url"]), it["title"])
         except (SourceError, ValueError) as e:
             tried[it["url"]] = tried.get(it["url"], 0) + 1
+            tried_on[it["url"]] = today.isoformat()
             print("market events: index release unread:", str(e)[:120])
             continue
         changes[it["url"]] = {"id": hashlib.sha1(it["url"].encode()).hexdigest()[:12], "url": it["url"], "title": it["title"],
@@ -691,6 +701,7 @@ def refresh_index(web, st: dict, today: date) -> dict:
     part["changes"] = sorted((c for c in changes.values() if (c.get("effective") or c["announced"]) >= cut),
                              key=lambda c: (c.get("effective") or c["announced"], c["announced"]))
     part["tried"] = {k: v for k, v in tried.items() if k in {i["url"] for i in items}}
+    part["tried_on"] = {k: v for k, v in tried_on.items() if k in part["tried"]}
     return part
 
 

@@ -5,7 +5,7 @@ import { useApp } from "../../lib/app";
 import { ET, ago, dateOnly, dayIn, inr, money, qty as qtyText, signTone } from "../../lib/format";
 import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { fyLink, movedYearNote, rememberFy, savedFy } from "../../lib/fy";
+import { fyLink, movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 
@@ -56,6 +56,7 @@ export function UsTaxPage() {
   const [form, setForm] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);      // a refused file stays on the page, not only in a toast (RC2B-015)
   const [getting, setGetting] = useState(false);
   const [asking, setAsking] = useState(false);
 
@@ -71,14 +72,14 @@ export function UsTaxPage() {
   }, []);
   const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
   const asked = useAskedFy();             // a link's year ("?fy=2025") is the year it opens on
-  // The Money pages' one rule (lib/fy openFy): the year a link asked for, else the year last picked, else the year being
+  // The Money pages' one rule (lib/fy openFy): the year a link asked for, else the year being
   // filed; when that year has no sales and another has, the latest year with sales, said in one line.
   useEffect(() => {
     let live = true;
     const n = ++seq.current;
     setError(null);
     (async () => {
-      const want = asked ?? savedFy();
+      const want = asked;
       const first = await api<View>(`/money/us-tax${want ? `?fy=${want}` : ""}`);
       if (!live || n !== seq.current) return;
       const here = first.years.find((x) => x.fy === first.fy);
@@ -108,12 +109,13 @@ export function UsTaxPage() {
     if (!f) return;
     if (f.size > 5 * 1024 * 1024) { notify("That file is larger than 5 MB."); reset(); return; }
     setBusy(true);
+    setUploadError(null);
     try {
       const r = await api<ImportReply>(`/money/us-tax/import?${new URLSearchParams({ filename: f.name.slice(0, 200) })}`, { method: "POST", file: f });
       setV(r.us);
-      setNote(`${r.added} trade${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.${r.date_note ? ` ${r.date_note}` : r.month_first ? " Dates like 03/04/2025 were read month first, the US way." : ""}${r.note ? ` ${r.note}` : ""}`);
+      setNote(`${r.added} trade${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.${r.date_note ? ` ${r.date_note}` : ""}${r.note ? ` ${r.note}` : ""}`);
       track("us trades imported", { rows: r.added });
-    } catch (e) { fail(e); } finally { setBusy(false); reset(); }
+    } catch (e) { setUploadError((e as { message?: string })?.message || "That file couldn't be read."); setNote(null); fail(e); } finally { setBusy(false); reset(); }
   };
   const removeOne = async (id: string) => {
     try { setV(await api<View>(`/money/us-tax/trades/${encodeURIComponent(id)}`, { method: "DELETE" })); } catch (e) { fail(e); }
@@ -200,7 +202,8 @@ export function UsTaxPage() {
           </>} />
         <p className="k-small k-muted" data-testid="us-upload-help">A trade list (CSV or Excel) from your broker, or a realised-gains tax report such as Vested's yearly tax report (the .xlsx).</p>
         {note && <p className="k-small" role="status">{note}</p>}
-        <div role="group" aria-label="Add a trade">
+        {uploadError && <p className="k-small k-down" role="alert" data-testid="us-upload-error">{uploadError}</p>}
+        <div role="group" aria-label="Add a trade" className="us-add">
           <FormGrid onSubmit={(e) => { e.preventDefault(); void add(); }}>
             <DateField label="Date" value={form.d} max={today()} onChange={(d) => set("d")({ target: { value: d } })} ariaLabel="Trade date" />
             <Field label="Trade">{(id) => <Select id={id} value={form.side} label="Purchase or sale" onChange={(x) => setForm((f) => ({ ...f, side: x as "B" | "S" }))} options={[{ value: "B", label: "Purchase" }, { value: "S", label: "Sale" }]} />}</Field>
@@ -250,7 +253,7 @@ export function UsTaxPage() {
         <>
           {!v.rates.available && <Notice tone="warn">The rupee rates couldn't be loaded just now, so the rupee figures are missing. Try again in a while.</Notice>}
           <FormGrid label="Choose the year">
-            <Field label="Financial year">{(id) => <Select id={id} value={y.fy} onChange={(x) => { rememberFy(Number(x)); setMovedFrom(null); load(Number(x), v.cy); }} options={v.years.map((x) => ({ value: x.fy, label: x.label }))} />}</Field>
+            <Field label="Financial year">{(id) => <Select id={id} value={y.fy} onChange={(x) => { setMovedFrom(null); load(Number(x), v.cy); }} options={v.years.map((x) => ({ value: x.fy, label: x.label }))} />}</Field>
           </FormGrid>
           {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="us-moved-year">{movedYearNote(movedFrom, y.fy, Math.max(...v.years.map((x) => x.fy)), "sales")}</p>}
           <Card>

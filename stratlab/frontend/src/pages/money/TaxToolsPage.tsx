@@ -7,7 +7,7 @@ import { Info } from "../../components/ui";
 import { Lock, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
-import { fyLink, movedYearNote, openFy, rememberFy, savedFy } from "../../lib/fy";
+import { fyLink, movedYearNote, openFy } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { usSharesNote } from "../../lib/usGains";
 import { b234Note } from "../../lib/advanceTax";
@@ -47,6 +47,7 @@ type Payment = { d: string; amount: number };
 type Payable = {
   fy: number; label: string; tax: number; tds: number; advance: number; self_assessment: number; balance: number; refund: number;
   interest_234a: number; interest_234b: number; interest_234c: number; fee_234f: number; total: number; due: string; on: string; past_due: boolean;
+  return_needed?: boolean; income?: number; exempt?: number;
   lines: { label: string; amount: number }[];
 };
 type Advance = {
@@ -192,7 +193,7 @@ function DividendsTab() {
             <CardHead title={`Dividends, ${y.label}`} actions={<>
               {y.source === "files" && <Badge>From your files</Badge>}
               {y.source === "estimated" && <Badge>Estimated</Badge>}
-              <Select small label="Financial year" value={y.fy} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setMovedFrom(null); }} options={yearOptions(v.years, v.current_fy)} />
+              <Select small label="Financial year" value={y.fy} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); }} options={yearOptions(v.years, v.current_fy)} />
             </>} />
             {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="dividends-moved-year">{movedYearNote(movedFrom, y.fy, v.current_fy, "dividends")}</p>}
             {y.source !== "none" && y.taxed && (
@@ -214,9 +215,10 @@ function DividendsTab() {
                       value={inr(y.us.gross)} note={`${usd(y.us.gross_usd)} · US tax withheld ${usd(y.us.withheld_usd)} (${inr(y.us.withheld)}), the foreign tax credit figure`} />
                   )}
                 </StatRow>
+                {/* RC2B-046: the choice is the switch above; this line says only what it does, once */}
                 <p className="k-small">{y.taxed ? (y.include
-                  ? <>Included in the <Link className="link" to={fyLink("/tax-report", y.fy)}>total tax estimate</Link> as income from other sources, taxed at your slab rate.</>
-                  : <>Not in the <Link className="link" to={fyLink("/tax-report", y.fy)}>total tax estimate</Link>{y.source === "estimated" ? " (an estimate is left out until you include it)" : ""}.</>)
+                  ? <>Counted in the <Link className="link" to={fyLink("/tax-report", y.fy)}>total tax estimate</Link> as income from other sources, at your slab rate.</>
+                  : <>Not counted in the <Link className="link" to={fyLink("/tax-report", y.fy)}>total tax estimate</Link>{y.source === "estimated" ? " until you include it" : ""}.</>)
                   : "Dividends were exempt in your hands before FY 2020-21 (the company paid dividend distribution tax)."}</p>
                 <p className="k-note">Added up by financial year, each payment in the year of its record date. <Link className="link" to="/holdings">My Holdings</Link> shows the last 12 months instead, a different slice of the same dividends.</p>
                 {y.source === "files" && y.estimate_total != null && <p className="k-note">From your holdings, the estimate for {y.label} is {inr(y.estimate_total)}.</p>}
@@ -257,14 +259,14 @@ function AdvanceTab() {
   const [tries, setTries] = useState(0);
   const [fy, setFy] = useState<number | null>(null);
   const asked = useAskedFy();
-  // Advance tax is paid during the year, so it opens on the year running now; a year picked or asked for on the other Money
-  // pages carries here when this page has it (this year and the one before)
+  // Advance tax is paid during the year, so it opens on the year running now; a year asked for by a link carries here when
+  // this page has it (this year and the one before); a year picked on another page does not (RC2B-002)
   useEffect(() => {
     let live = true;
     setError(null);
     api<Advance>(`/money/advance-tax${fy ? `?fy=${fy}` : ""}`).then((a) => {
       if (!live) return;
-      const want = fy == null ? asked ?? savedFy() : null;
+      const want = fy == null ? asked : null;
       if (want != null && want !== a.fy && (want === a.current_fy || want === a.current_fy - 1)) setFy(want);
       else setV(a);
     }).catch((e) => { if (!live) return; setV(null); setError((e as Error).message); fail(e); });     // not the last year's schedule under this year's chip
@@ -365,6 +367,7 @@ function PayableCard({ p }: { p: Payable }) {
     <Card label="Payable now">
       <CardHead title={`Payable now, ${p.label}`} info="The tax as the return rounds it, less the TDS and the advance and self-assessment tax you entered, plus interest under sections 234A (a late return), 234B and 234C, and the section 234F fee once the due date has passed. The whole is rounded to ₹10 as the return rounds it (section 288B)." />
       <b className="k-big" aria-label="Payable now">{inr(p.total)}</b>
+      {p.return_needed === false && <p className="k-note" data-testid="payable-no-return">No return is needed for {p.label}: total income {inr(p.income ?? 0)} is within the {inr(p.exempt ?? 0)} basic exemption limit (section 139(1)), so there is no section 234F late fee.</p>}
       <p className="k-note">{p.past_due ? `The return's due date, ${dateOnly(p.due)}, has passed: worked out as if paid and filed today. Interest under sections 234A and 234B grows by 1% a month of the tax unpaid.`
         : `Worked out as if paid, and the return filed, by its due date, ${dateOnly(p.due)}. Each month after it adds interest under sections 234A and 234B.`}
         {p.refund > 0.5 ? ` TDS and tax paid are more than the tax by ${inr(p.refund)}.` : ""}</p>

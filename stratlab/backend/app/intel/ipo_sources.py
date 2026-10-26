@@ -233,6 +233,48 @@ def _as_of(text) -> str | None:
     return f"{d.isoformat()} {m.group(2)}" if d else None
 
 
+CLOCK = re.compile(r"(\d{1,2})(?:\s*[:.]\s*(\d{2}))?\s*([ap])\s*\.?\s*m\b", re.I)
+
+
+def clocks(text) -> list[str]:
+    """The times of day in a line, as 24-hour "HH:MM": "9:00 am - 7:00 pm" is ["09:00", "19:00"], "10.00 a.m. to 5.00 p.m." is
+    ["10:00", "17:00"]. A time that cannot be a clock reading (hour 0 or past 12) is skipped."""
+    out = []
+    for m in CLOCK.finditer(str(text or "")):
+        h, mi = int(m.group(1)), int(m.group(2) or 0)
+        if not 1 <= h <= 12 or mi > 59:
+            continue
+        h = h % 12 + (12 if m.group(3).lower() == "p" else 0)
+        out.append(f"{h:02d}:{mi:02d}")
+    return out
+
+
+def bid_times(info: dict, hours: list[str], close: str | None) -> dict:
+    """When bidding runs, as the exchange's own issue page states it (RC2A-004: Jio Platforms' bidding ran to 7 PM; it was shown as 5 PM):
+    `close_time`, the last day's time ("23-Oct-2026 (upto 7:00 PM)" in the UPI mandate cut-off, else the end of that day's line of the
+    bidding hours); `open_time`, the start of the bidding hours; `hours`, the exchange's bidding-hours text word for word (with its note
+    on the closing day, "Bidding Timings on Issue Closure upto 4:00 P.M."). Each is None when the page does not give it: no time is guessed."""
+    out = {"close_time": None, "open_time": None, "hours": None}
+    lines = [clean(h).strip('"').strip() for h in hours if clean(h).strip('"').strip()]
+    if lines:
+        out["hours"] = "; ".join(lines)[:300]
+        first = clocks(re.sub(r"\(.*?\)", " ", lines[0]))
+        out["open_time"] = first[0] if first else None
+    cut = re.search(r"(\d{1,2}-[A-Za-z]{3}-\d{4})\s*\(\s*up\s*to\s*([^)]*)\)", info.get("cut-off time for upi mandate confirmation", ""), re.I)
+    if cut and clocks(cut.group(2)) and (not close or iso(day_of(cut.group(1))) == close):
+        out["close_time"] = clocks(cut.group(2))[0]
+    elif lines:
+        # the closing day's own line ("October 23, 2026  9:00 am - 7:00 pm"), else a single line that gives the hours of every day
+        def line_day(l: str):
+            m = re.search(r"[A-Za-z]+ \d{1,2}, \d{4}", l)
+            return iso(day_of(m.group(0))) if m else None
+        dated = [l for l in lines if close and line_day(l) == close]
+        line = dated[0] if dated else lines[0] if len(lines) == 1 else None
+        got = clocks(re.sub(r"\(.*?\)", " ", line or ""))
+        out["close_time"] = got[1] if len(got) > 1 else None
+    return out
+
+
 ISSUE_SHARES = re.compile(r"([\d,]{4,})\s*(?:fully paid[- ]up\s*)?equity shares", re.I)
 AMOUNT = r"(?:Rs\.?|₹|INR)\s*([\d,]+(?:\.\d+)?)\s*(million|mn|lakhs?|lacs?|crores?|cr)\b"
 TO_CRORE = {"million": 0.1, "mn": 0.1, "lakh": 0.01, "lakhs": 0.01, "lac": 0.01, "lacs": 0.01, "crore": 1.0, "crores": 1.0, "cr": 1.0}
@@ -279,7 +321,7 @@ def issue_split(text) -> dict:
 
 def nse_detail(raw) -> dict:
     """One issue's own page on NSE, read into facts. {} when it is not an issue page.
-    Keys: company, symbol, isin, industry, listing (ISO day), open, close, low, high, face_value, lot, retail_max, issue_text, fresh, ofs,
+    Keys: company, symbol, isin, industry, listing (ISO day), open, close, close_time, open_time, hours, low, high, face_value, lot, retail_max, issue_text, fresh, ofs,
     issue_type, lead_managers, registrar, docs [{kind, label, url}], subscription (None until bids are in)."""
     if not isinstance(raw, dict) or not ((raw.get("issueInfo") or {}).get("dataList")):
         return {}
@@ -288,6 +330,15 @@ def nse_detail(raw) -> dict:
     for r in ((raw.get("issueInfo") or {}).get("dataList") or []):
         if isinstance(r, dict) and r.get("title"):
             info[clean(r["title"]).lower()] = clean(r.get("value")).strip('"').strip()
+    # the bidding hours: a line under "IPO Market Timings", and for an issue open several days one line per day (their titles are empty)
+    hours, in_hours = [], False
+    for r in ((raw.get("issueInfo") or {}).get("dataList") or []):
+        if not isinstance(r, dict):
+            continue
+        if r.get("title"):
+            in_hours = clean(r["title"]).lower() == "ipo market timings"
+        if in_hours:
+            hours.append(r.get("value") or "")
     first = next((r for r in ((raw.get("issueInfo") or {}).get("dataList") or []) if isinstance(r, dict)), {})
     # the company's name: the page's first line (a main-board page names the company there, empty value), else the exchange's meta
     company = clean(first.get("title")) if first.get("title") and not clean(first.get("value")) and clean(first.get("title")).lower() != "symbol" else clean(meta.get("companyName"))
@@ -296,6 +347,7 @@ def nse_detail(raw) -> dict:
     period = re.findall(r"\d{1,2}-[A-Za-z]{3}-\d{4}", info.get("issue period", ""))
     out["open"] = iso(day_of(period[0])) if period else None
     out["close"] = iso(day_of(period[1])) if len(period) > 1 else None
+    out.update(bid_times(info, hours, out["close"]))
     out["low"], out["high"] = band(info.get("price range"))
     fv = re.search(r"([\d.]+)", info.get("face value", ""))
     out["face_value"] = num(fv.group(1)) if fv else None

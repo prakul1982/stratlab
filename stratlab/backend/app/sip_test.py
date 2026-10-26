@@ -8,7 +8,8 @@ put in, charges, and the same money as one lump sum on day one. The verdict's tw
 SIP from every start month in the price history, as the spread of XIRRs, and for a dip rule how often it beat the plain
 SIP. History of the user's own rule, labelled as such: no "best day" or "best dip level" anywhere."""
 import math
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 from fastapi.concurrency import run_in_threadpool
@@ -21,6 +22,7 @@ from .money_mf import xirr
 from .plans import FEATURE_PLAN, PLANS, allows
 from .responses import err, ok
 
+IST = ZoneInfo("Asia/Kolkata")
 MAX_LEGS = 10
 MAX_YEARS = 10
 HISTORY_DAYS = 3650             # the daily closes read: ten years, the most the market data keeps
@@ -37,8 +39,9 @@ ASSUMPTIONS = [
     "what can't pay for a whole share waits and joins the next instalment.",
     "Charges are today's for delivery purchases: STT (none on ETF units), exchange and SEBI fees, stamp duty and GST, plus "
     "your brokerage per order. No sale is made, so no selling charges or tax are counted.",
-    "Value is the shares at the last close plus any cash waiting. XIRR treats each instalment as money in and the value as "
-    "money out on the last day.",
+    "Value is the shares at the last close plus any cash waiting (on a trading day, before the market closes, the latest "
+    "traded price: the table then says \"Last price\"). XIRR treats each instalment as money in and the value as money out on "
+    "the last day.",
     "Deepest fall: the largest drop of the pot from a high, leaving out the instalments themselves (a time-weighted index). "
     "Longest underwater: the longest stretch the pot was worth less than the money put in so far.",
     "A step-up raises the instalment by the same share on each anniversary of the first instalment.",
@@ -47,8 +50,8 @@ ASSUMPTIONS = [
     "set share.",
     "The lump sum puts all the money the SIP put in, on the SIP's first day, into the same split.",
     "Closes are the daily closes as the market data keeps them: adjusted for splits and bonuses, and for some stocks also for a "
-    "demerger or a dividend (ITC's are), for others not. Dividends aren't added, so two stocks' results aren't quite on the "
-    "same footing.",
+    "demerger or a dividend, for others not. A demerger inside the window is named under the result. Dividends aren't added, "
+    "so two stocks' results aren't quite on the same footing.",
 ]
 
 
@@ -157,6 +160,10 @@ def simulate(legs: list[dict], plan: dict, start: str, end: str, keep: bool = Tr
     n = len(legs)
     units, pots, spent_leg, buys = [0] * n, [0.0] * n, [0.0] * n, [0] * n
     last = [None] * n
+    # RC2B-006: an instalment buys on its own day (or the leg's next day with a close). Cash left over because it could not
+    # pay for a whole share waits for the next instalment, as the assumptions say; it was buying a share on any later day
+    # the price dipped, which counted 63 purchases for 60 instalments
+    owed = [False] * n
     flows, invested, charges, stamp = [], 0.0, 0.0, 0.0
     index, idx_v, values, put_in, days = [], 1.0, [], [], []
     prev_value = 0.0
@@ -170,6 +177,7 @@ def simulate(legs: list[dict], plan: dict, start: str, end: str, keep: bool = Tr
         if d in sched:
             years = anniversaries(first, d)
             grow = (1 + plan["step_up"]) ** years
+            owed = [True] * n
             for j, leg in enumerate(legs):
                 if plan["mode"] == "qty":
                     if d in leg["closes"]:
@@ -196,8 +204,12 @@ def simulate(legs: list[dict], plan: dict, start: str, end: str, keep: bool = Tr
             for j, leg in enumerate(legs):
                 if d not in leg["closes"] or pots[j] <= 0:
                     continue
-                if rule == "only_dips" and not is_dip(leg, d):
+                if rule == "only_dips":
+                    if not is_dip(leg, d):
+                        continue
+                elif not owed[j]:
                     continue
+                owed[j] = False
                 q, cost, st = buy(pots[j], leg["closes"][d], plan["brokerage"], leg.get("kind", "in_eq"))
                 if q:
                     units[j] += q
@@ -244,6 +256,7 @@ def _once(legs, plan, first, end):
     cal = sorted({d for leg in legs for d in leg["days"] if first <= d <= end})
     n = len(legs)
     units, pots, last = [0] * n, [0.0] * n, [None] * n
+    bought = [False] * n
     charges = stamp = 0.0
     index, idx_v, prev, values, days = [], 1.0, 0.0, [], []
     for d in cal:
@@ -253,7 +266,9 @@ def _once(legs, plan, first, end):
                 pots[j] += plan["amount"] * leg["weight"]
             add = plan["amount"]
         for j, leg in enumerate(legs):
-            if d in leg["closes"] and pots[j] > 0:
+            # the lump sum buys on its first day (the leg's first with a close); what a whole share can't use stays as cash
+            if d in leg["closes"] and pots[j] > 0 and not bought[j]:
+                bought[j] = True
                 q, cost, st = buy(pots[j], leg["closes"][d], plan["brokerage"], leg.get("kind", "in_eq"))
                 if q:
                     units[j] += q
@@ -415,6 +430,32 @@ def recent_highs(closes: dict[str, float], days: list[str], n: int) -> dict[str,
     return out
 
 
+def last_is_live(last_day: str, now: datetime | None = None) -> bool:
+    """Whether the last bar is today's, with the market still open: its "close" is then the latest traded price (RC2B-035:
+    "Last close ₹256.34" at 09:50 IST was the live price, while the close of the day before was ₹256.1x)."""
+    now = now or datetime.now(IST)
+    return last_day == now.date().isoformat() and now.weekday() < 5 and now.time() < time(15, 40)
+
+
+def demerger_notes(legs: list[dict], start: str, end: str) -> list[str]:
+    """RC2B-007: a demerger inside the window changes what a rupee buys, and the price data may already be stepped for it (ITC's
+    was, with no word on the page). Said as a fact for each stock that had one, from the exchange's own list."""
+    m = _m()
+    out = []
+    for leg in legs:
+        try:
+            rows = m.corp_actions.unadjusted("IN", leg["symbol"], start, end, m.corp_job.sources())
+        except Exception as e:                       # a note, never a failure of the test
+            print("sip demerger note:", leg["symbol"], type(e).__name__)
+            rows = []
+        for r in rows:
+            d = date.fromisoformat(r["ex_date"])
+            out.append(f"{leg['symbol']} had a {str(r.get('label') or 'demerger').lower()} with an ex-date of {d.day} {d.strftime('%b %Y')}, "
+                       "inside this window. The closes used are the price data's own, which can already be adjusted for it, so "
+                       f"{leg['symbol']}'s result isn't on the same footing as a stock with none.")
+    return out
+
+
 def run(req: SipReq, profile: dict) -> dict:
     full = allows(profile["_plan"], "sip_luck")
     if req.rule != "plain" and not full:
@@ -462,7 +503,8 @@ def run(req: SipReq, profile: dict) -> dict:
     out = {"result": res, "lump_sum": lump, "plain": plain, "full": full, "plan": PLANS[FEATURE_PLAN["sip_luck"]]["name"],
            "legs": [{"symbol": leg["symbol"], "name": leg["name"], "inst_id": leg["inst_id"], "weight": round(leg["weight"] * 100, 2)} for leg in legs],
            "history": {"from": first_day, "to": last_day}, "window": {"from": start, "to": end, "years": years},
-           "words": words(plan, legs), "assumptions": ASSUMPTIONS, "disclaimer": DISCLAIMER, "spread": None}
+           "words": words(plan, legs), "assumptions": ASSUMPTIONS, "disclaimer": DISCLAIMER, "spread": None,
+           "last_live": last_is_live(last_day), "notes": demerger_notes(legs, start, end)}
     if full and req.spread and req.mode == "amount":
         out["spread"] = spread(legs, plan, years, first_day, last_day, also=(start,))
     return out

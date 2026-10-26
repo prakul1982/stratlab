@@ -99,7 +99,7 @@ test("DC-016: the list opens at today, a day's kind is in words, and a kind with
   assert.match(cal, /data-testid="cal-today"/);
   assert.match(cal, /mark\.current\?\.scrollIntoView\?\.\(\{ block: "start" \}\)/);
   assert.match(cal, /className="k-cal-tag"/);
-  assert.match(read("src/pages/trade/EventsPage.tsx"), /none\(k\) \? `\$\{v\.kinds\[k\]\} \(none yet\)`/);
+  assert.match(read("src/pages/trade/EventsPage.tsx"), /data-testid="ev-empty-kinds">Nothing is on the calendar yet for /);   // a kind with no event is named, not a dead chip (RC2A-040)
 });
 
 test("DC-017 to DC-021: F&O changes have a name-change kind, the old symbol and a warning when a source failed", async () => {

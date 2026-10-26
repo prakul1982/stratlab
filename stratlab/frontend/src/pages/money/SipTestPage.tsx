@@ -30,6 +30,8 @@ type Reply = {
   result: Run; lump_sum: Lump | null; plain: Run | null; full: boolean; plan: string; legs: { symbol: string; name: string; inst_id: string; weight: number }[];
   history: { from: string; to: string }; window: { from: string; to: string; years: number }; words: string; spread: Spread | null;
   assumptions: string[]; disclaimer: string;
+  /** the last bar is today's, before the close (RC2B-035); a demerger in the window, said (RC2B-007) */
+  last_live?: boolean; notes?: string[];
 };
 type Pick = { id: string; symbol: string; name: string; weight: number };
 type Rule = "plain" | "only_dips" | "extra_on_dips";
@@ -146,7 +148,7 @@ export function SipTestPage() {
     { key: "units", header: "Shares", numeric: true, cell: (l) => l.units.toLocaleString("en-IN") },
     { key: "buys", header: "Purchases", numeric: true, cell: (l) => l.buys },
     { key: "avg", header: "Average cost", numeric: true, cell: (l) => money(l.avg_price, "INR", 2) },
-    { key: "last", header: "Last close", numeric: true, cell: (l) => money(l.last, "INR", 2) },
+    { key: "last", header: res?.last_live ? "Last price" : "Last close", numeric: true, cell: (l) => money(l.last, "INR", 2) },
     { key: "val", header: "Value", numeric: true, cell: (l) => inr(l.value) },
   ];
 
@@ -228,6 +230,7 @@ export function SipTestPage() {
               <Stat label="Longest below the money put in" value={r.underwater_days ? span(r.underwater_days) : "Never"} note={r.underwater_from ? `${dateOnly(r.underwater_from)} to ${dateOnly(r.underwater_to)}` : undefined} />
               <Stat label="Charges" value={inr(r.charges)} note={`${inr(r.stamp)} of it stamp duty`} />
             </StatRow>
+            {(res.notes ?? []).map((n) => <p key={n} className="k-small k-muted" data-testid="sip-note">{n}</p>)}
             {r.cash_waiting > 1 && <p className="k-small">{inr(r.cash_waiting)} was still waiting as cash at the end{res.plain ? ", for a dip that hadn't come" : ", short of a whole share"}; it is counted in the value.</p>}
           </Card>
 

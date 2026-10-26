@@ -121,7 +121,8 @@ export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () =>
       {/* named by what it shows, then what it opens: "owner Pro plan, account menu" */}
       <button ref={btn} className="acct-btn" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
         <span className="avatar" aria-hidden="true">{initial}</span>
-        <span className="acct-name">{email.split("@")[0] || "Account"}</span>
+        {/* "Account", not the start of the sign-in email: the chip is on every screen, and a screen share showed the owner's address (RC2A-041); the full address is in the menu */}
+        <span className="acct-name">Account</span>
         {plan && <span className="plan-tag">{plan}</span>}
         <span className="sr-only">{plan ? " plan" : ""}, account menu</span>
         <Updown size={14} />

@@ -7,7 +7,7 @@ import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -252,18 +252,26 @@ def run(registry, market: str, members: list[dict], budget: float | None = None,
             "counts": {k: sum(1 for r in rows if r["signal"] == k) for k in ("fresh", "st_s2", "stage2")}}
 
 
-def run_preset(registry, market: str, members: list[dict], preset: str, session: str | None = None) -> dict:
+def run_preset(registry, market: str, members: list[dict], preset: str, session: str | None = None, live: bool = False) -> dict:
     """One scan preset (scan_presets) over a small group, read live from the daily candles: {"rows" (the stocks that
-    match, most recent match first), "checked", "as_of", "missing", "problems"}. Facts only."""
+    match, most recent match first), "checked", "as_of", "missing", "problems"}. Facts only. `live`: the market is trading now, so the
+    newest candle is today's, still forming. A volume rule compares a whole day's volume with an average, so it is judged on the last
+    whole session then, and says so ("basis"); the others read the forming candle's last price (RC2A-022: "Volume surge" showed 0 matches
+    at 09:43 because 20 minutes of volume was held to twice a whole day's average)."""
     if preset not in scan_presets.BY_ID:
         raise KeyError(preset)
+    whole_day = live and preset in scan_presets.WHOLE_DAY
+    through = None
+    if whole_day:
+        from .intel.company import market_today
+        through = (date.fromisoformat(market_today(market)) - timedelta(days=1)).isoformat()
     ids, missing = universes.resolve(registry, market, members[:MAX])
     over = [str(m.get("symbol") or m.get("id") or "") for m in members[MAX:]]
     prov = registry.provider(market)
 
     def one(iid):
         try:
-            res = scan_presets.evaluate(_bars(registry, iid), only=[preset], live=True)
+            res = scan_presets.evaluate(_bars(registry, iid), through=through, only=[preset], live=not whole_day)
             inst = (prov.instrument(iid.split(":", 1)[1]) if prov else None) or {}
             return iid, res, inst, None
         except Exception as e:     # one member's data problem mustn't sink the rest
@@ -289,7 +297,7 @@ def run_preset(registry, market: str, members: list[dict], preset: str, session:
     problems += [f"{x}: past the {MAX} stocks a scan reads" for x in over if x]
     rows.sort(key=lambda r: (r["days_ago"], r["symbol"]))
     return {"rows": rows, "checked": checked, "asked": len(ids) + len(missing) + len(over), "as_of": max(days, default=None), "missing": missing,
-            "problems": problems}
+            "problems": problems, **({"basis": "whole_session"} if whole_day else {})}
 
 
 # ---------- the daily watchlist alert ----------

@@ -898,7 +898,8 @@ class NSEFilings:
     # 250 never had a list of stocks and their breadth was never counted (R5O-013); the file is read first.
     INDEX_FILES = {"NIFTY 50": "ind_nifty50list.csv", "NIFTY 500": "ind_nifty500list.csv",
                    "NIFTY MIDCAP 150": "ind_niftymidcap150list.csv", "NIFTY SMALLCAP 250": "ind_niftysmallcap250list.csv",
-                   "NIFTY NEXT 50": "ind_niftynext50list.csv", "NIFTY 100": "ind_nifty100list.csv", "NIFTY 200": "ind_nifty200list.csv"}
+                   "NIFTY NEXT 50": "ind_niftynext50list.csv", "NIFTY 100": "ind_nifty100list.csv", "NIFTY 200": "ind_nifty200list.csv",
+                   "NIFTY BANK": "ind_niftybanklist.csv"}
     INDEX_URL = "https://nsearchives.nseindia.com/content/indices/"
 
     def index_file(self, index: str) -> list[str]:

@@ -119,7 +119,7 @@ test("a rule under a box shows after interaction; titles don't repeat their fiel
   assert.match(form, /rule\?: string/);
   assert.match(form, /const shown = hint \?\? \(rule && touched \? rule : undefined\)/);
   assert.match(read("pages/HoldingsPage.tsx"), /rule="More than 0"/);
-  assert.match(read("pages/HoldingsPage.tsx"), /<Field wide label=\{add\.market === "IN" \? "NSE symbol or BSE code"/);
+  assert.match(read("pages/HoldingsPage.tsx"), /<Field label=\{add\.market === "IN" \? "NSE symbol or BSE code"/);
   const lending = read("pages/StockLendingPage.tsx");
   assert.doesNotMatch(lending, /CardHead title="Look up a stock"/);
   assert.match(lending, /Field label="Look up a stock"/);

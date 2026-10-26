@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from . import admin, alerts as alerts_mod, db, docs, ipo_docs as D, job_status, leader, memguard
+from . import admin, alerts as alerts_mod, db, docs, ipo_docs as D, job_status, leader, memguard, official_close
 from .ai_providers import AIError, complete, extract_json
 from .auth import current_profile
 from .data.calendar import is_trading_day
@@ -41,9 +41,13 @@ KEEP_LISTED_DAYS = 120                # a listed issue stays on the list this lo
 KEEP_FILED_DAYS = 150                 # a filing with no dates yet stays this long after it was filed
 PAST_DAYS = 130                       # how far back NSE's past issues are read
 DETAIL_FOR_DAYS = 45                  # issues listed within this many days have their own page read for the final figures
-BID_CLOSE = "17:00"                   # India: bidding on the last day ends at five (UPI mandates likewise)
-LIVE_FROM, LIVE_TO = "09:55", "17:30"      # the subscription is read this often through the bidding hours
+BID_CLOSE = "17:00"                   # India: the last day's bidding time when the issue's page gives none (it is shown only when the page gives it, RC2A-004)
+LIVE_FROM = "09:55"                   # the bids are read from here, or from the issue's own bidding hours (five minutes before them) to half an hour after its last bidding time
 LIVE_EVERY = 900                      # seconds between two reads of the bids of an open issue
+LIVE_FIRST = 300                      # ...and between two while an open issue has no bids stored yet: its first bids show within five minutes (RC2A-006)
+LIVE_AFTER = 30                       # minutes after an issue's last bidding time that its bids are still read
+RETRY_AFTER = 20 * 60                 # a read that met a busy source is read again after this long (twice a day at most), so a rate-limit note doesn't stand all day (RC2A-006)
+RETRIES = 2
 FINAL_AT = "19:20"                    # the exchange completes a day's bid figures about 19:00: read the final ones after it
 MAX_SENT = 600
 SEBI_KEY = "ipo:sebi:"                # ipo:sebi:<draft|red_herring> = {"entries": [...], "next": page, "done": bool, "at"}: SEBI's list as read so far
@@ -59,6 +63,8 @@ AWAITS = ("filed a red herring prospectus with SEBI", "not yet checked whether i
 
 def awaits(line: str) -> bool:
     return any(a in line for a in AWAITS)
+
+
 CATCH_LISTED_DAYS = 60                # an issue BSE's table says listed, that no issue list gave, becomes a row for this many days
 EVENTS = {"open": "Opens for bidding", "close": "Closes for bidding", "allotment": "Allotment", "listing": "Listing"}
 SMALL = 3                             # offer documents the job reads per pass (each is a download and a long read)
@@ -75,6 +81,29 @@ router = APIRouter(tags=["ipo"])
 _cache = TTLCache(max_items=300)
 _lock = threading.RLock()
 _wire = {"feed": None, "calendar": None, "ai": None, "yahoo": None, "sebi": None, "edgar": None, "http": None}
+
+
+def busy(problem: str) -> bool:
+    """Whether a problem line of a read is a source that was busy or rate limited (worth reading again soon), not one that is down."""
+    return bool(re.search(r"busy|rate limit", problem or "", re.I))
+
+
+def hm_add(hm: str, minutes: int) -> str:
+    """"17:00" plus 30 minutes is "17:30" (the day's end caps at 23:59)."""
+    t = min(int(hm[:2]) * 60 + int(hm[3:5]) + minutes, 23 * 60 + 59)
+    return f"{t // 60:02d}:{t % 60:02d}"
+
+
+def close_at(row: dict) -> str:
+    """The last day's bidding time of an Indian issue: the one its exchange page gives, else five o'clock (the usual one) for working out
+    the stage; the pages show the time only when it is the page's own (`close_time`)."""
+    return row.get("close_time") or BID_CLOSE
+
+
+def live_window(row: dict) -> tuple[str, str]:
+    """When an open Indian issue's bids are read through a day: from its bidding hours' start (or LIVE_FROM) to its last bidding time plus half an hour."""
+    start = hm_add(row["open_time"], -5) if row.get("open_time") else LIVE_FROM
+    return start, hm_add(close_at(row), LIVE_AFTER)
 
 
 def setup(feed_fn, calendar_fn, ai_fn, yahoo_fn, sebi_fn=None, edgar_fn=None):
@@ -94,6 +123,8 @@ def _now() -> datetime:
 def load(market: str) -> dict:
     got = db.json_value(db.get_setting(ROWS_KEY + market), {})
     rows = [r for r in got.get("rows") or [] if isinstance(r, dict) and r.get("id")]
+    if market == "IN":
+        rows = dedupe_india(rows)             # the rows stored before the merge joined them (RC2A-001) show as one at once
     return {"as_of": got.get("as_of"), "rows": rows, "checked": got.get("checked") if isinstance(got.get("checked"), dict) else {}}
 
 
@@ -142,7 +173,7 @@ def stage_of(row: dict, now: datetime | None = None) -> str:
         return "filed"
     if today < row["open"]:
         return "upcoming"
-    if today < row["close"] or (today == row["close"] and hm < BID_CLOSE):
+    if today < row["close"] or (today == row["close"] and hm < close_at(row)):
         return "open"
     if row.get("listing") and today >= row["listing"]:
         return "listed"
@@ -270,6 +301,54 @@ def _keep_old(old: dict | None, new: dict) -> dict:
     return out
 
 
+def _same_issue(a: dict, b: dict) -> bool:
+    """Whether two Indian rows are one issue read from two lists: the same company name (case, "Limited" and punctuation aside), or the same
+    dates and one name the beginning of the other; but two offers of one name more than 45 days apart are two issues."""
+    ka, kb = a.get("nkey"), b.get("nkey")
+    if not ka or not kb:
+        return False
+    if ka != kb:
+        short, long_ = sorted((ka, kb), key=len)
+        return bool(a.get("open") and a.get("open") == b.get("open") and a.get("close") == b.get("close") and len(short) >= 6 and long_.startswith(short))
+    oa, ob = a.get("open"), b.get("open")
+    try:
+        return not (oa and ob and abs((date.fromisoformat(oa) - date.fromisoformat(ob)).days) > 45)
+    except ValueError:
+        return True
+
+
+def _authority(r: dict) -> tuple:
+    """Which of two rows of one issue is the more authoritative: the one read from the issue's own NSE page, then NSE's list, then BSE's."""
+    return (1 if r.get("detail_at") else 0, 1 if r.get("symbol") else 0, 1 if "NSE" in (r.get("exchanges") or []) else 0, 1 if r.get("size_shares") else 0)
+
+
+def dedupe_india(rows: list[dict]) -> list[dict]:
+    """One row per issue (RC2A-001: SFC Environmental Technologies, BLS Polymers and M. K. Sons Fine Jewels were each listed twice, once from
+    NSE's list and once from the row stored when only BSE's list had named them, with two different sizes). The most authoritative row
+    stays (its id, symbol, size and dates win); the others lend what it lacks (exchanges, BSE code, documents) and are dropped. Only rows
+    with dates or a listing are joined: a filing with no dates is attached to its issue by merge_india."""
+    keep: list[dict] = []
+    for r in sorted(rows, key=lambda r: (_authority(r), r["id"]), reverse=True):
+        mate = next((k for k in keep if r.get("market") == "IN" and k.get("market") == "IN" and (r.get("open") or r.get("listing"))
+                     and (k.get("open") or k.get("listing")) and _same_issue(k, r)), None)
+        if mate is None:
+            keep.append(r)
+            continue
+        mate["exchanges"] = sorted(set((mate.get("exchanges") or []) + (r.get("exchanges") or [])))
+        for k, v in r.items():
+            if k in ("id", "nkey", "seen", "exchanges", "docs", "issue_status", "social") or v in (None, [], {}, ""):
+                continue
+            if mate.get(k) in (None, [], {}, ""):
+                mate[k] = v
+        have = {d["url"] for d in mate.get("docs") or []}
+        mate["docs"] = (mate.get("docs") or []) + [d for d in r.get("docs") or [] if d["url"] not in have]
+        mate["issue_status"] = mate.get("issue_status") or r.get("issue_status")
+        mate["social"] = mate.get("social") or r.get("social") or None
+        if not mate["docs"]:
+            mate.pop("docs")
+    return keep
+
+
 def india_id(symbol: str | None, code: str | None, filed_id: str | None = None) -> str:
     if symbol:
         return "in-" + re.sub(r"[^a-z0-9]+", "-", symbol.lower()).strip("-")
@@ -350,6 +429,8 @@ def merge_india(old_rows: list[dict], nse: dict, bse: list[dict], bse_perf: list
         if r.get("listing") and r["listing"] < cutoff_listed:
             continue
         out[rid] = r
+    # an issue read from two lists is one row: the row stored when only BSE's list named it, kept above, is NSE's row once NSE lists it (RC2A-001)
+    out = {r["id"]: r for r in dedupe_india(list(out.values()))}
     # SEBI's offer documents by company name; a filing with no dates stays a "filed" row. A draft is linked to the issue row of the same
     # company whenever it is found (the draft list is kept over many days, and an older draft is attached when the issue comes) (IPO-001)
     nkeys = {r["nkey"]: r["id"] for r in out.values() if r.get("nkey") and (r.get("open") or r.get("listing") or not r["id"].startswith("in-f-"))}
@@ -440,7 +521,7 @@ def merge_us(old_rows: list[dict], cal: list[dict], today: date) -> list[dict]:
 
 def apply_detail(row: dict, d: dict) -> dict:
     """An issue's own page read into its row (terms, offer document, bids)."""
-    for k in ("isin", "industry", "face_value", "lot", "retail_max", "issue_type", "registrar", "issue_text"):
+    for k in ("isin", "industry", "face_value", "lot", "retail_max", "issue_type", "registrar", "issue_text", "close_time", "open_time", "hours"):
         if d.get(k) not in (None, ""):
             row[k] = d[k]
     for k in ("open", "close", "low", "high", "fresh", "ofs", "fresh_cr", "ofs_cr", "total_cr"):
@@ -696,9 +777,57 @@ def yahoo_symbol(row: dict) -> str | None:
     return f"{row['symbol']}.NS" if row.get("symbol") else (f"{row['bse_code']}.BO" if row.get("bse_code") else None)
 
 
-def performance(row: dict, yahoo, today: date | None = None) -> dict | None:
+def _official(symbol: str, day: str, now: datetime, fetch: bool) -> float | None:
+    """The exchange's official close of an NSE stock on a day: the cash bhavcopy's (stored), and with `fetch` the file is read when it is out
+    and a same-day quote after the auction. A day before a split or bonus is left to the candle (official_close.before_ex_date)."""
+    sym = str(symbol or "").upper()
+    if not sym or not day:
+        return None
+    try:
+        if official_close.before_ex_date(sym, day, now):
+            return None
+        if fetch:
+            return official_close.official(sym, day, True, now)
+        return (official_close.stored(day) or {}).get(sym)
+    except Exception:
+        return None
+
+
+def _settle(row: dict, bars: list[dict], first: dict | None, now: datetime) -> tuple[list[dict], dict | None]:
+    """The daily candles of an Indian issue with the closes the exchange calls official (RC2A-002: the list's "latest close" for ZETWERK was
+    the 15:25 five-minute price, ₹140.70, the day's official close being ₹138.25). The latest day's close and the listing day's are the
+    exchange's own when it is out and on the candle's basis; a session still going on is not a close at all and is left out."""
+    if row["market"] != "IN" or not bars:
+        return bars, first
+    today = now.astimezone(IST).date().isoformat()
+    if bars[-1]["t"][:10] == today:
+        try:
+            ended = now >= official_close.out_at(today, "cash")
+        except ValueError:
+            ended = True
+        if not ended:
+            bars = bars[:-1]
+            if first and first["t"][:10] == today:
+                first = None
+    if not bars:
+        return bars, first
+
+    def fix(b: dict, fetch: bool) -> dict:
+        c = _official(row.get("symbol") or "", b["t"][:10], now, fetch)
+        if c is None or not official_close.same_basis(c, b.get("c")):
+            return b
+        return {**b, "c": c, "h": max(c, b.get("h") or c), "l": min(c, b.get("l") or c), "official": True}
+
+    last = fix(bars[-1], True)
+    if first is not None:
+        first = last if first["t"] == bars[-1]["t"] else fix(first, False)
+    return bars[:-1] + [last], first
+
+
+def performance(row: dict, yahoo, today: date | None = None, now: datetime | None = None) -> dict | None:
     """A listed issue against its issue price, from the daily prices: the listing price (the first session's opening price), that
-    session's close, and the latest close, each against the issue price. None until it has traded."""
+    session's close, and the latest close, each against the issue price. None until it has traded. An Indian issue's closes are the
+    exchange's official ones (see _settle)."""
     sym, issue = yahoo_symbol(row), row.get("price")
     listed = row.get("listing") if row["market"] == "IN" else row.get("priced")
     if not sym or not listed:
@@ -709,6 +838,7 @@ def performance(row: dict, yahoo, today: date | None = None) -> dict | None:
     except Exception:
         bars = []
     first = next((b for b in bars if b["t"][:10] >= listed), None)
+    bars, first = _settle(row, bars, first, now or _now())
     bse = row.get("bse_perf") or {}
     issue = issue or bse.get("issue_price")
     if not issue:
@@ -737,11 +867,24 @@ def attach_perf(rows: list[dict], now: datetime) -> int:
         listed = r.get("listing") if r["market"] == "IN" else r.get("priced")
         if stage_of(r, now) != "listed" or not listed or (today - date.fromisoformat(listed)).days > PERF_DAYS:
             continue
-        got = performance(r, _wire["yahoo"](), today) if _wire["yahoo"] else None
+        got = performance(r, _wire["yahoo"](), today, now) if _wire["yahoo"] else None
         if got:
             r["perf"] = {**got, "at": now.isoformat(timespec="seconds")}
             n += 1
     return n
+
+
+def official_perf(row: dict, perf: dict | None, now: datetime | None = None) -> dict | None:
+    """A stored performance with the exchange's official closes put in where its bhavcopy is stored now (the figures kept at 20:10 may have
+    been worked out before the file was out): the latest close and the listing day's, each against the issue price. Nothing is read."""
+    if not perf or row.get("market") != "IN" or not row.get("symbol") or perf.get("basis") != "prices" or not perf.get("issue_price"):
+        return perf
+    now, out = now or _now(), dict(perf)
+    for day_key, px_key, pct_key in (("latest_date", "latest", "change_pct"), ("listed", "day_close", "day_change_pct")):
+        c = _official(row["symbol"], out.get(day_key) or "", now, False)
+        if c is not None and out.get(px_key) and official_close.same_basis(c, out[px_key]):
+            out[px_key], out[pct_key] = c, round((c / out["issue_price"] - 1) * 100, 2)
+    return out
 
 
 def perf_for(row: dict, ttl: float = 600) -> dict | None:
@@ -843,6 +986,12 @@ def money(row: dict, v) -> str:
     return f"${v:,.2f}" if row["market"] == "US" else f"₹{v:,.2f}".rstrip("0").rstrip(".") if isinstance(v, float) and v != int(v) else f"₹{int(v):,}"
 
 
+def clock_text(hm: str) -> str:
+    """"17:00" is "5 PM", "19:30" is "7:30 PM"."""
+    h, m = int(hm[:2]), int(hm[3:5])
+    return f"{h % 12 or 12}{f':{m:02d}' if m else ''} {'PM' if h >= 12 else 'AM'}"
+
+
 def events_on(rows: list[dict], market: str, day: date, now: datetime) -> list[dict]:
     """The dated events of `market`'s issues falling on `day`: [{id, kind, row, text}], the dates as the rows give them (an
     expected allotment or listing counts, and says so)."""
@@ -861,7 +1010,7 @@ def events_on(rows: list[dict], market: str, day: date, now: datetime) -> list[d
             if r.get("open") == d:
                 out.append({"id": f"{r['id']}:open:{d}", "kind": "open", "row": r, "text": f"{name} opens for bidding today" + (f" ({band})." if band else ".")})
             if r.get("close") == d:
-                out.append({"id": f"{r['id']}:close:{d}", "kind": "close", "row": r, "text": f"{name} closes for bidding today at 5 PM IST."})
+                out.append({"id": f"{r['id']}:close:{d}", "kind": "close", "row": r, "text": f"{name} closes for bidding today" + (f" at {clock_text(r['close_time'])} IST." if r.get("close_time") else ".")})
             if pub.get("allotment") == d and r.get("open"):
                 out.append({"id": f"{r['id']}:allotment:{d}", "kind": "allotment", "row": r,
                             "text": f"{name}: the basis of allotment is expected today" + (" (SEBI's timetable)." if pub.get("allotment_expected") else ".")})
@@ -1005,6 +1154,9 @@ class Job:
             if self.live_due(now):
                 self.read_open(now)
                 ran.append("live")
+            elif not ran and (m := self.retry_due(now)):
+                self.read(m, now)
+                ran.append(f"retry-{m.lower()}")
             if not ran and time.time() - self._docs_at > 120 and not self.first_read(now):
                 self._docs_at = time.time()
                 if self.read_docs(now):
@@ -1026,11 +1178,37 @@ class Job:
         return did
 
     def live_due(self, now: datetime) -> bool:
+        """An open issue's bids are read every quarter hour through its bidding hours, and every five minutes while it has none stored yet,
+        so the first bids show at once (RC2A-006: EAAA's came up on NSE at 10:03 and on ours at 10:06, on someone's request)."""
         local = now.astimezone(IST)
         hm = local.strftime("%H:%M")
-        if not (LIVE_FROM <= hm <= LIVE_TO) or not is_trading_day("IN", local.date()) or time.time() - self._live_at < LIVE_EVERY:
+        if not is_trading_day("IN", local.date()):
             return False
-        return any(stage_of(r, now) == "open" for r in load("IN")["rows"])
+        live = [r for r in load("IN")["rows"] if stage_of(r, now) == "open" and (lambda w: w[0] <= hm <= w[1])(live_window(r))]
+        if not live:
+            return False
+        every = LIVE_FIRST if any(not r.get("sub") for r in live) else LIVE_EVERY
+        return time.time() - self._live_at >= every
+
+    def retry_due(self, now: datetime) -> str | None:
+        """The market whose last read met a busy source (a rate limit) and is read again, twice a day at most, after RETRY_AFTER: the note
+        that "some sources couldn't be read" would otherwise stand until the evening's read (RC2A-006). Inside the job's own loop."""
+        local = now.astimezone(IST)
+        if not ("08:15" <= local.strftime("%H:%M") <= "22:00"):
+            return None
+        day = local.date().isoformat()
+        for m in ("IN", "US"):
+            st = (state().get(m) or {})
+            if not any(busy(x) for x in st.get("problems") or []) or not st.get("read"):
+                continue
+            if datetime.fromisoformat(st["read"]) > now - timedelta(seconds=RETRY_AFTER):
+                continue
+            tried = db.json_value(db.get_setting(f"ipo:retry:{m}"), {})
+            if tried.get("day") == day and tried.get("n", 0) >= RETRIES:
+                continue
+            db.set_setting(f"ipo:retry:{m}", json.dumps({"day": day, "n": tried.get("n", 0) + 1 if tried.get("day") == day else 1}))
+            return m
+        return None
 
     def read(self, market: str, now: datetime, perf: bool = False) -> dict:
         """Read one market's sources and keep the rows; with `perf`, also how each recently listed issue has traded since."""
@@ -1173,14 +1351,16 @@ def doc_links(row: dict) -> list[dict]:
 def list_row(row: dict, now: datetime) -> dict:
     pub = public(row, now)
     sub = row.get("sub") or {}
-    perf = row.get("perf")
-    keys = ("id", "market", "segment", "name", "symbol", "stage", "open", "close", "allotment", "allotment_expected", "listing", "listing_expected",
+    perf = official_perf(row, row.get("perf"), now)
+    keys = ("id", "market", "segment", "name", "symbol", "stage", "open", "close", "close_time", "allotment", "allotment_expected", "listing", "listing_expected",
             "low", "high", "price", "lot", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status", "exchanges", "exchange",
             "expected", "priced", "filed", "shares", "currency")
     out = {k: pub.get(k) for k in keys if pub.get(k) is not None}
     out["docs"] = sorted({d["kind"] for d in doc_links(row) if d["kind"]})
     if sub.get("times") is not None:
         out["sub_times"], out["sub_as_of"] = sub["times"], sub.get("as_of")
+        if pub["stage"] == "open" and row.get("sub_read"):
+            out["sub_read"] = row["sub_read"]
     if perf:
         out["perf"] = {k: perf.get(k) for k in ("listing_price", "listing_change_pct", "latest", "change_pct", "latest_date", "at") if perf.get(k) is not None}
     return out
@@ -1221,8 +1401,10 @@ def ipos_list(market: str = "IN", profile=Depends(current_profile)):
     for k, rows in tabs.items():
         key, rev = ORDER[k]
         out[k] = [list_row(r, now) for r in sorted(rows, key=key, reverse=rev)][:120]
-    return ok({"market": market, "as_of": got["as_of"], "tabs": out, "counts": {k: len(v) for k, v in tabs.items()}, "note": NOTE[market],
-               "problems": (got["checked"].get("problems") or [])[:3], "prefs": prefs_view(profile), "today": now.astimezone(IST if market == "IN" else NY).date().isoformat()})
+    # the bids of the open issues are read through the day, the lists twice: when the newest bids were read, and when the lists' problems were noted
+    reads = [r.get("sub_read") for r in tabs.get("open", []) if r.get("sub_read")]
+    return ok({"market": market, "as_of": got["as_of"], "bids_read": max(reads) if reads else None, "tabs": out, "counts": {k: len(v) for k, v in tabs.items()}, "note": NOTE[market],
+               "problems": (got["checked"].get("problems") or [])[:3], "problems_at": got["checked"].get("read") if got["checked"].get("problems") else None, "prefs": prefs_view(profile), "today": now.astimezone(IST if market == "IN" else NY).date().isoformat()})
 
 
 _live: dict[str, float] = {}
@@ -1234,7 +1416,8 @@ def live_refresh(row: dict, now: datetime) -> bool:
     if row["market"] != "IN" or stage_of(row, now) != "open" or not row.get("symbol") or not _wire["feed"]:
         return False
     local = now.astimezone(IST)
-    if not (LIVE_FROM <= local.strftime("%H:%M") <= BID_CLOSE):
+    lo, hi = live_window(row)
+    if not (lo <= local.strftime("%H:%M") <= hm_add(hi, -LIVE_AFTER)):
         return False
     if time.time() - _live.get(row["id"], 0) < 300:
         return False
@@ -1263,6 +1446,8 @@ def facts_view(row: dict) -> dict:
     if not f:
         return {"state": "pending", "kind": d.get("kind")}
     out = {k: f[k] for k in ("promoters", "selling", "objects", "financials", "us", "pages_read") if k in f}
+    if out.get("objects"):
+        out["objects"] = D.objects_view(out["objects"])
     return {"state": "ready", "kind": f.get("kind"), "read_at": f.get("read_at"), **out}
 
 
@@ -1276,7 +1461,7 @@ def summary_view(row: dict, profile: dict) -> dict:
         return {"allowed": True, "plan": plan, "state": "none"}
     s = summary_of(d)
     if s and s.get("items"):
-        return {"allowed": True, "plan": plan, "state": "ready", "kind": d.get("kind"), "at": s.get("at"), "items": s["items"]}
+        return {"allowed": True, "plan": plan, "state": "ready", "kind": d.get("kind"), "at": s.get("at"), "items": D.tidy_summary(s["items"])}
     if s and s.get("problem"):
         return {"allowed": True, "plan": plan, "state": "problem", "kind": d.get("kind"), "message": s["problem"]}
     return {"allowed": True, "plan": plan, "state": "pending", "kind": d.get("kind")}
@@ -1322,7 +1507,8 @@ def ipo_detail(rid: str, profile=Depends(current_profile)):
     perf = row.get("perf") if (row.get("perf") or {}).get("at", "") > (now - timedelta(hours=1)).isoformat() else None
     if pub["stage"] == "listed" and not perf:
         perf = perf_for(row) or row.get("perf")
-    keys = ("id", "market", "segment", "name", "symbol", "stage", "isin", "industry", "exchanges", "exchange", "open", "close", "allotment", "allotment_expected",
+    perf = official_perf(row, perf, now)
+    keys = ("id", "market", "segment", "name", "symbol", "stage", "isin", "industry", "exchanges", "exchange", "open", "close", "close_time", "hours", "allotment", "allotment_expected",
             "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status",
             "fresh", "ofs", "fresh_cr", "ofs_cr", "size_shares", "issue_type", "issue_text", "lead_managers", "registrar", "expected", "priced", "filed",
             "shares", "amount", "currency", "industry")
