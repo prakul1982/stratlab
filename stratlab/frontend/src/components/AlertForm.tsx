@@ -149,7 +149,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
             </Field>
           ) : (
             <Field label="Stock" wide error={errs.symbol} hint={now != null ? alertPriceHint(sym, price(now, ccy), shut) : undefined}>
-              {(id) => <StockPicker id={id} market={region} value={picked} placeholder={region === "IN" ? "Name or symbol, like RELIANCE" : "Name or ticker, like AAPL"}
+              {(id, tie) => <StockPicker id={id} tie={tie} market={region} value={picked} placeholder={region === "IN" ? "Name or symbol, like RELIANCE" : "Name or ticker, like AAPL"}
                 onText={(t) => { setSymbol(t); setErrs((x) => ({ ...x, symbol: undefined })); }} onPick={(s, r) => { setRegion(r); setSymbol(s); setPicked(s); setErrs((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>
           )}

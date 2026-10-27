@@ -8,7 +8,7 @@ const initials = (s: Suggestion) => s.symbol.replace(/[^A-Za-z0-9]/g, "").slice(
  * pressing Enter on an exact symbol you typed, calls `onPick(symbol, region, name)` (the name only when picked from the list).
  * `value` is the symbol the page is showing now; the box shows it until you type. Give it an `id` (a Field does) so
  * its label points at it. */
-export function StockPicker({ value = "", onPick, onText, market = "IN", id, placeholder = "Search by name or symbol, like RELIANCE", clearOnPick, autoFocus, search, listedOnly }: {
+export function StockPicker({ value = "", onPick, onText, market = "IN", id, placeholder = "Search by name or symbol, like RELIANCE", clearOnPick, autoFocus, search, listedOnly, tie }: {
   value?: string; onPick: (symbol: string, region: "IN" | "US", name?: string) => void; market?: Market; id?: string; placeholder?: string; clearOnPick?: boolean; autoFocus?: boolean;
   /** Text to open with as if typed: its matches are looked up and listed (a search handed over in the address). */
   search?: string;
@@ -17,6 +17,8 @@ export function StockPicker({ value = "", onPick, onText, market = "IN", id, pla
   /** Only a listed company can be picked (a list that refuses any other symbol, like the watchlist): no "an exact symbol still
    * works" and Enter takes a suggestion only (RC1-003). */
   listedOnly?: boolean;
+  /** The Field's `aria-invalid` and `aria-describedby`, so what is wrong with the symbol is tied to this box (A11Y-005). */
+  tie?: { "aria-invalid"?: true; "aria-describedby"?: string };
 }) {
   const auto = useId();
   const fid = id ?? auto;
@@ -74,7 +76,7 @@ export function StockPicker({ value = "", onPick, onText, market = "IN", id, pla
   return (
     <div className="k-picker">
       <svg className="lens" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-      <input ref={box} id={fid} className="k-input" value={text} placeholder={placeholder} autoFocus={autoFocus} autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={40}
+      <input ref={box} id={fid} className={`k-input${tie?.["aria-invalid"] ? " bad" : ""}`} {...tie} value={text} placeholder={placeholder} autoFocus={autoFocus} autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={40}
         role="combobox" aria-expanded={shown} aria-controls={listId} aria-autocomplete="list" aria-activedescendant={shown && rows[on] ? `${fid}-o${on}` : undefined}
         onChange={(e) => { setTyped(true); setText(e.target.value); onText?.(e.target.value); }} onKeyDown={key}
         onFocus={() => { if (typed && rows.length) setOpen(true); }} onBlur={() => window.setTimeout(() => setOpen(false), 120)} />
