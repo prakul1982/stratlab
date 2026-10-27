@@ -204,3 +204,24 @@ def test_closing_auction_history_says_how_many_stocks_have_a_gap(monkeypatch):
     monkeypatch.setattr(CA, "_days", lambda: {"2026-10-26": day})
     row = CA.history()["days"][0]
     assert (row["stocks"], row["compared"], row["up"], row["down"]) == (4, 3, 1, 1)      # CCC has no reference price: no gap, not "unchanged"
+
+
+# ---------- RC3T-001 in the journal: a tradebook's ETF lines are charged as units ----------
+def test_the_journal_charges_an_etf_as_units_when_the_file_lists_no_charges():
+    from app import journal as J
+    s = J.clean_settings({})
+    assert J.classify("NIFTYBEES")["kind"] == "in_etf" and J.classify("GOLDBEES")["kind"] == "in_etf"
+    assert J.classify("RELIANCE")["kind"] == "in_eq" and J.classify("NIFTY25OCT25000CE")["kind"] == "in_opt"
+
+    def trade(sym, ed, xd):
+        got = J.manual_trades([{"id": "m1", "sym": sym, "segment": "eq", "side": "long", "ed": ed, "xd": xd, "qty": 100, "entry": 1000.0, "exit": 1010.0}], s)
+        return got[0]["charges"]
+    brk = s["brokerage_delivery"]
+    etf = trade("NIFTYBEES", "2026-09-01", "2026-10-01")
+    want = C.total(C.order_costs("in_etf", "buy", 100, 1000.0, brk)) + C.total(C.order_costs("in_etf", "sell", 100, 1010.0, brk)) + C.dp_charge()
+    assert etf == pytest.approx(want)
+    assert trade("RELIANCE", "2026-09-01", "2026-10-01") - etf == pytest.approx(100 * 1000.0 * 0.001 + 100 * 1010.0 * (0.001 - 0.00001), rel=1e-6)
+    # bought and sold on one day: no depository charge for the units, as for shares
+    same = trade("NIFTYBEES", "2026-10-01", "2026-10-01")
+    assert same == pytest.approx(C.total(C.order_costs("in_etf", "buy", 100, 1000.0, s["brokerage_other"]))
+                                 + C.total(C.order_costs("in_etf", "sell", 100, 1010.0, s["brokerage_other"])))
