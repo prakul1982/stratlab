@@ -120,6 +120,16 @@ about 3 to 10 seconds a company.
 - **Exchange holidays** (Data and jobs): a row per market with where its holidays come from (the calendar package or
   the exchange's own list), how far ahead they're known, the next holiday and a status with a hint. For India, add a
   holiday by hand or refresh from the exchange here.
+- **Library seed** (Data and jobs): StratLab's own library strategies are run through the app's own backtest and verdict on the
+  standard groups of every market the backtester reads (India, the US, UK, Europe, Japan, crypto, forex, Indian commodities,
+  Indian currency futures and global commodities). A start-up run publishes only the entries the library lacks, so a market
+  added later is seeded once and nothing already there is run again; **Run now** refreshes them all (`/admin/library/seed`).
+  Markets on the broker's feed wait for the daily login.
+- **Closed accounts:** a user can delete their own account (Account → Your data → Delete my account). It erases every store's
+  data and the sign-in account at once, and keeps invoices and the payment records behind them. It refuses while a plan would
+  still be billed (the user cancels first) and for the owner's account, which is closed from the sign-in service, not from here.
+- **Layout checker:** every change is measured page by page in CI ([UI_CHECKER.md](UI_CHECKER.md)); a failing run keeps its report
+  and screenshots on the run's page.
 - **Refreshes:** the results calendar, corporate actions, surveillance lists, market events, IPOs and F&O contract
   changes run on their own schedules, and each has a **Run now** in **Data and jobs** (the routes behind them are
   `/admin/results/refresh`, `/admin/corp-actions/refresh`, `/admin/surveillance/refresh`, `/admin/events/refresh`,

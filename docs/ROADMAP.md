@@ -53,8 +53,8 @@ Found while checking live companies. Each shows a note on the page today instead
 - **US companies:** no call transcripts are filed with the SEC, so the report card reads targets from earnings
   releases only. Red flags cover the S&P 500's 8-K items (bankruptcy, delisting or a listing notice, a change of auditor,
   earlier statements not to be relied on, director or officer changes), not every US filer or every kind of filing.
-- **The strategy library's own strategies** are tested on India's NIFTY 50 and liquid F&O stocks and on the US mega
-  caps; other markets have none of StratLab's own entries yet.
+- **The strategy library's own strategies** are a handful per market (three groups each outside India and the US), so a
+  market's page is a sample of how the checks come out there, not a survey.
 - **Briefs** are written once, after each market's close (India 4:15 PM IST, US 4:50 PM New York time); there is no
   morning or intraday brief, and the My stocks brief is written only on a day something changed for your stocks.
 - **Zerodha for every user** is built and switched off until Zerodha approves a multi-user app; until then only the
@@ -63,6 +63,18 @@ Found while checking live companies. Each shows a note on the page today instead
 ## Done recently
 Moved here from the plan above; details in the [changelog](../CHANGELOG.md).
 
+- **Strategy library for every market:** StratLab's own entries now cover all ten markets the backtester reads, with one
+  calm card face, a market filter that lists only markets that have samples, and a start-up run that seeds only what is
+  missing.
+- **Delete my account:** Account, Your data erases every store and the sign-in account; invoices are kept as tax law asks.
+- **Mutual funds page:** one list of schemes with each scheme's details folded under its row, in place of four tables.
+- **The UI checker:** 25 layout rules measured on every page at three widths, run in CI in strict mode
+  ([UI_CHECKER.md](UI_CHECKER.md)), and the layout problems the visual review and the checker found fixed across My space,
+  the homes, notebooks, Positioning, the F&O desk, Paper, Find stocks, Market view, Money and Plans.
+- **Notebook and Positioning layout:** Lab notes as a tab on the bottom edge, one column like every page, and Positioning's
+  cards spread across the page.
+- **IPO tracking:** one row per issue across both exchanges' lists, withdrawn issues apart, drafts not yet listed
+  flagged for a check in Admin, and a daily completeness check against the exchanges' and SEBI's lists.
 - **IPOs** for India and the US: lists in stages, each issue's page with bids by category, its offer document's facts
   and its trading since listing, a quote-checked summary and alerts on Basic, and a daily check of the lists against the
   exchanges' and regulators' own.

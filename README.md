@@ -7,8 +7,8 @@
 
 **Test it, research it, track it.**
 
-Honest strategy backtests with paper trading, company research, and your holdings, funds, net worth and tax, for Indian
-(NSE and BSE) and US stocks. Facts, never tips.
+Honest strategy backtests and paper trading in ten markets, company research for Indian (NSE and BSE) and US companies,
+and your holdings, funds, net worth and tax. Facts, never tips.
 
 ### [stratlab.studio](https://stratlab.studio)
 
@@ -59,7 +59,8 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 - Market events (`/trade/events`): RBI policy, data releases, the Fed, budget, index changes, holidays and every F&O expiry in one calendar, with reminders on Basic.
 - Stock futures and margin funding: each F&O stock's open interest, buildup, rollover, basis and MWPL use, and the market's and each stock's margin-funded positions, today for everyone, with history and alerts on Basic.
 - Trade journal: your real trades from a tradebook or tax P&L (equity and F&O), paired into round trips after charges, with your notes and the verdict's honesty checks run on them.
-- A strategy library of StratLab's own tested strategies (copy one and re-test it), and share cards and public links for verdicts.
+- A strategy library of StratLab's own tested strategies, with samples for every market the backtester reads, each shown with the verdict it earned, good or bad (copy one and re-test it), and share cards and public links for verdicts.
+- Lab notes: a tab on the bottom edge of a notebook for what you noticed and what to try next, seen only by you.
 - Markets: India (stocks, indices, F&O), Indian currency futures, MCX, crypto, US, UK, Europe, Japan, forex, global commodities, and any CSV.
 
 <picture>
@@ -120,15 +121,15 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 **Money: what you own**
 - My Holdings: import the holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities (or any CSV or Excel file), add US stocks, and see value, P&L, sectors, dividends and one-click bonus and split adjustments. ETFs, REITs, InvITs and gold bonds keep their own label.
 - Tax report: capital gains on listed Indian shares and funds from tradebooks, tax P&L files or the broker's ZIP of them, matched FIFO with the July 2024 rates, the yearly exemption, 2018 grandfathering and intraday apart; the year's total tax estimate with F&O, commodity and currency results, other income, either regime, age band and residency; CSV and PDF downloads.
-- Mutual funds from the CAMS or KFintech CAS PDF: each scheme's value, XIRR, allocation by category and capital gains by year, and what each fund costs: its TER in rupees a year, its parts, the direct and regular plans side by side, and changes since you bought.
+- Mutual funds from the CAMS or KFintech CAS PDF, as one list of schemes: each row has the value, gain, XIRR and the TER in rupees a year, and a scheme's plans side by side, changes since you bought, SIP record and sales by year fold under it. Allocation by category and capital gains by year are cards above and below.
 - Net worth: holdings and funds plus PF, PPF, NPS, deposits, gold, sovereign gold bonds, property, crypto and cash, minus loans (EMIs, prepayment arithmetic and a floating-rate loan check against its benchmark), an insurance register and a monthly history. A one-tap add for each kind.
 - Tax tools: dividends with TDS, advance tax due by each date (with 234B and 234C) and the long-term exemption, lot by lot.
-- US stocks in Indian tax: sales in rupees at the rate the Income-tax Rules use, the 24-month rule, US dividends and the foreign tax credit, and Schedule FA. Takes a trade list from any broker or a realised-gains tax report such as Vested's yearly one.
+- US stocks in Indian tax: sales in rupees at the rate the Income-tax Rules use, the 24-month rule, US dividends and the foreign tax credit, and Schedule FA. Takes a trade list from any broker (an Interactive Brokers Flex Query export too) or a realised-gains tax report such as Vested's yearly one.
 - ITR-ready export: the year laid out like the ITR-2 and ITR-3 schedules, as a spreadsheet, CSVs or one PDF for your CA. Not a filed return.
 - Test a SIP (`/money/sip-test`): an amount every day, week or month into stocks or ETFs, with a step-up or a dip rule: charges, XIRR, the deepest fall and a lump sum beside it.
 - Rates (`/money/rates`): this quarter's small savings rates, T-bill cut-offs, bond yields and the repo rate, each with its yield after tax at your rate.
 - Money calendar: tax due dates, results and dividends for your stocks, maturities, premiums, EMIs and your own dates, with a private calendar feed and reminders.
-- Every estimate states its assumptions and the date it's as of, and each page deletes its data in one step. An estimate to check with a CA, not tax advice.
+- Every estimate states its assumptions and the date it's as of, and each page deletes its data in one step; **Delete my account** (Account, Your data) erases everything and the sign-in too, keeping only invoices as tax law asks. An estimate to check with a CA, not tax advice.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/money-home-dark.png">
@@ -241,10 +242,11 @@ stratlab/
 ├── backend/tests/    pytest: units, every route with hostile input, failing sources, tricky dates, security, load
 ├── frontend/src/     pages/ (trade/, money/ and the rest), components/ (chart/: the shared chart system), charts/price/
 │                     (the price chart), lib/ (API client, plans, spaces, Greeks, formatting, analytics)
-├── frontend/e2e/     Playwright: every page on desktop and phone, every route at several sizes, the landing page
+├── frontend/e2e/     Playwright: every page on desktop and phone, every route at several sizes, the landing page, and the
+│                     UI checker (ui-lint.spec.ts: layout rules R1 to R25 on every page)
 ├── frontend/scripts/ docs-shots: retakes the README's screenshots from the fake world
 └── supabase/         schema.sql
-docs/                 FEATURES.md, ADMIN.md, ROADMAP.md, images/, screenshots/
+docs/                 FEATURES.md, ADMIN.md, ROADMAP.md, AI_ASSISTANT.md, UI_CHECKER.md, images/, screenshots/
 ```
 
 ## Local setup
@@ -328,6 +330,9 @@ cd stratlab/frontend && npx tsc --noEmit && npx vite build
 
 # browser tests (Playwright) against the backend's fake world; E2E_API_PORT / E2E_WEB_PORT move the servers
 cd stratlab/frontend && npx playwright test
+
+# the layout checker (needs the built site): report only, or UI_LINT_STRICT=1 to fail on any problem
+cd stratlab/frontend && npm run build && npm run ui-lint
 ```
 
 - **Backend:** units for every module, every route called with hostile input (`test_stress_fuzz.py`: no route may
@@ -336,10 +341,14 @@ cd stratlab/frontend && npx playwright test
 - **Browser:** every main page on desktop and phone (no errors, no broken numbers, nothing wider than the screen,
   every control at least 32px tall on a phone), every route at five screen sizes in light and dark
   (`E2E_ALL_SIZES=1` sweeps ten, 320 to 1920 px), a new user's first session, and the landing page's sections and plans.
+- **Layout:** the UI checker measures every page at 1440, 1280 and 390 px for 25 kinds of layout problem (dead space beside
+  a short card, floating controls, wrapped buttons, a figure said three times, sideways scroll and more) and fails the
+  build on any that the allowlist doesn't accept with a written reason. See **[docs/UI_CHECKER.md](docs/UI_CHECKER.md)**.
 - **On live data:** **Check every feature** runs daily at 4:50 pm IST, and the whole-market audit checks every new
   listing. See [docs/ADMIN.md](docs/ADMIN.md).
 - **On GitHub** (`.github/workflows/tests.yml`, Node 22 and Python 3.11 on Ubuntu 24.04): the backend suite in parallel
-  and the frontend build side by side, then the browser tests on the built site; a newer push cancels the run before it.
+  and the frontend build side by side, then the browser tests on the built site and the UI checker (its own job, in strict mode);
+  a newer push cancels the run before it.
 - **Screenshots:** `npx playwright test -c scripts/docs-shots.config.ts` (from `stratlab/frontend`, after a build)
   retakes the README's pictures in `docs/screenshots` from the same fake world.
 
@@ -358,7 +367,8 @@ Running it day to day (the Admin page, the audits, email, PostHog, Sentry): **[d
 ## What's new
 
 The [changelog](CHANGELOG.md) lists what shipped, by month; the [roadmap](docs/ROADMAP.md) lists what's next and the
-known gaps.
+known gaps. The other guides: [what StratLab does and where to find it](docs/FEATURES.md), [running it](docs/ADMIN.md),
+[the AI assistant connection](docs/AI_ASSISTANT.md) and [the UI checker](docs/UI_CHECKER.md).
 
 ## Disclaimer
 
