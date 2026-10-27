@@ -554,7 +554,7 @@ td.num, .num { font-family: var(--sans); }
 
 .search-box { position: relative; display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 18px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 14px; }
 .search-box input { flex: 1; border: 0; background: transparent; font-size: 17px; outline: none; min-width: 0; }
-.search-box:focus-within { box-shadow: 0 0 0 3px var(--blue-soft); }
+.search-box:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }   /* (A11Y-002) the soft glow it had is 1.1:1 against the card, and the input inside draws no ring of its own */
 
 /* ---------- notebook header: market button and toolbar ---------- */
 .market-btn {
