@@ -18,7 +18,9 @@
 
 /* a company's price block */
 .inv-quote .k-stat-v { font-size: clamp(30px, 4vw, 40px); }
-.inv-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s4); align-items: start; }
+/* VR2-018: the price column spans both rows and is taller than the left: the second row takes the extra, so the buttons stay under the badges
+   and the slack is below them, not a 50px hole between the two */
+.inv-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto 1fr; gap: var(--s4); align-items: start; }
 @media (max-width: 640px) { .inv-head { grid-template-columns: minmax(0, 1fr); } }
 .inv-badges { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .inv-badges:empty { display: none; }

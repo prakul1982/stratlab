@@ -12,6 +12,7 @@ export type Column<R> = {
   rowHeader?: boolean;                       // the cell that names the row (a stock): read as the row's header
   wrap?: boolean;                            // lets long text in this column wrap (a name with notes under it)
   action?: boolean;                          // the last column's buttons (Edit, Remove): as narrow as they are, right-aligned
+  corner?: boolean;                          // with `action`, on a phone card the one button sits at the card's top right beside the name, not alone on a last row (VR2-017)
   sortable?: boolean;                        // the header is a button that sorts by this column (needs the table's `sort`)
   cell: (row: R) => ReactNode;
   cardLabel?: string;                        // the figure's name on a phone card when the header isn't plain text (R88-003)
@@ -20,8 +21,8 @@ export type Column<R> = {
 };
 
 const info = (c: { header?: ReactNode; info?: ReactNode }) => <Info label={`About ${typeof c.header === "string" ? c.header.toLowerCase() : "this column"}`}>{c.info}</Info>;
-const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: boolean; up?: boolean }) =>
-  [c.numeric && "k-num", c.wrap && "k-wrap", c.action && "k-act", c.lead && "k-lead", c.up && "k-first"].filter(Boolean).join(" ") || undefined;
+const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: boolean; up?: boolean; corner?: boolean }) =>
+  [c.numeric && "k-num", c.wrap && "k-wrap", c.action && "k-act", c.action && c.corner && "k-corner", c.lead && "k-lead", c.up && "k-first"].filter(Boolean).join(" ") || undefined;
 
 /** The one table: a header row, right-aligned numbers, a hover row, and its own horizontal scroll box so a wide table
  * never makes the page scroll sideways. `label` names the table for screen readers. `rowNote` turns a row into its

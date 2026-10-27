@@ -117,10 +117,13 @@ function AlertsCard({ p, onSave, sme }: { p: AlertPrefs; onSave: (n: Partial<Ale
         <PlanNote plan="basic">IPO alerts are on the {p.plan} plan: a message when an issue opens, closes, is allotted or lists. The lists and every issue's page stay free.</PlanNote>
       )}
       {p.allowed && p.on && !p.channels.length && <p className="k-callout k-small" role="status" data-testid="ipo-no-channel">Alerts are on, but there is nowhere to send them yet: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>}
-      <ChipSet label="Which events" options={EVENT_ORDER.map((e) => ({ value: e, label: names[e] ?? e }))} on={p.events}
-        onToggle={(e) => p.allowed && onSave({ events: p.events.includes(e as EventKind) ? p.events.filter((x) => x !== e) : [...p.events, e as EventKind] })} />
-      <ChipSet label="Which markets" options={[{ value: "IN", label: "India" }, { value: "US", label: "US" }]} on={p.markets}
-        onToggle={(m) => p.allowed && onSave({ markets: p.markets.includes(m as Market) ? p.markets.filter((x) => x !== m) : [...p.markets, m as Market] })} />
+      {/* the events and the markets are one row of chips (VR2-019: two rows made this card as tall as the list above it) */}
+      <div className="ipo-alert-sets">
+        <ChipSet label="Which events" options={EVENT_ORDER.map((e) => ({ value: e, label: names[e] ?? e }))} on={p.events}
+          onToggle={(e) => p.allowed && onSave({ events: p.events.includes(e as EventKind) ? p.events.filter((x) => x !== e) : [...p.events, e as EventKind] })} />
+        <ChipSet label="Which markets" options={[{ value: "IN", label: "India" }, { value: "US", label: "US" }]} on={p.markets}
+          onToggle={(m) => p.allowed && onSave({ markets: p.markets.includes(m as Market) ? p.markets.filter((x) => x !== m) : [...p.markets, m as Market] })} />
+      </div>
       <CheckField checked={p.sme} disabled={!p.allowed} onChange={(sme) => onSave({ sme })} label="Include SME issues (India)" />
       {p.allowed && !p.sme && sme > 0 && <p className="k-note" data-testid="ipo-sme-note">{sme} SME issue{sme === 1 ? " is" : "s are"} open or coming up. SME issues are left out of the alerts unless you tick the box above.</p>}
       {p.markets.includes("US") && <p className="k-note">For the US, an alert comes on the day an offering is expected to price and on the day it starts trading ({US_EVENT.listing}).</p>}

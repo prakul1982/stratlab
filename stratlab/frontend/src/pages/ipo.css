@@ -17,3 +17,6 @@
 /* VR1-123: "The issue" is one set of columns: the terms, the facts and the dates line up row to row (they were 3, then 4, then 4 tracks of different widths) */
 .ipo-terms .k-stats, .ipo-terms .ipo-facts, .ipo-terms .ipo-dates { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); column-gap: var(--s5); }
 .ipo-terms .ipo-facts dt { display: flex; align-items: center; min-height: 22px; }   /* a label with an (i) is no taller than one without */
+
+/* VR2-019: the alert events and markets share a row, wrapping on a narrow screen */
+.ipo-alert-sets { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s6); }

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { vixChange, type VixQuote } from "../lib/vix";
 import { useApp } from "../lib/app";
 import { ago, fmtDate, istToday, money, pct, signCls } from "../lib/format";
 import { uploadedLine } from "../lib/journalTax";
@@ -135,7 +136,7 @@ export function TradeHome() {
 }
 
 type Brief = { cash?: { as_of: string | null; fii?: { net: number | null } }; fo_ban?: string[] };
-type VixBrief = { value: number | null; value_day?: string | null };
+type VixBrief = { value: number | null; value_day?: string | null; quote?: VixQuote | null };
 
 /** Trade home's market strip (DC-001: the page had no market data, only a sentence pointing to Positioning): India VIX, the
  * FIIs' cash market net, the next F&O expiry and the stocks in the F&O ban period, each linking to its page. Each figure
@@ -153,7 +154,8 @@ function MarketStrip() {
   const crore = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} cr`;
   const tiles: { to: string; k: string; v: ReactNode; note: string; id: string }[] = [
     { id: "vix", to: "/trade/positioning#india-vix", k: "India VIX", v: vix === null ? null : vix === "none" || vix.value == null ? "–" : vix.value.toFixed(2),
-      note: vix && vix !== "none" && vix.value_day ? fmtDate(vix.value_day, { year: false }) : vix === "none" ? "couldn't be read" : "" },
+      // a live quote comes with no day (the value is now's): its change stands in the line, so the tile is as tall as its three neighbours (VR2-013)
+      note: vix && vix !== "none" && vix.value_day ? fmtDate(vix.value_day, { year: false }) : vix === "none" ? "couldn't be read" : vixChange(vix?.quote ?? null) ?? "" },
     { id: "fii", to: "/trade/positioning#pos-cash", k: "FII/FPI cash, net", v: b === null ? null : fii == null ? "–" : <span className={signCls(fii)}>{crore(fii)}</span>,
       note: b && b !== "none" && b.cash?.as_of ? fmtDate(b.cash.as_of, { year: false }) : b === "none" ? "couldn't be read" : "" },
     { id: "expiry", to: "/trade/events", k: "Next F&O expiry", v: ev === null ? null : expiry ? fmtDate(expiry.date, { weekday: true, year: false }) : "–",
@@ -382,10 +384,12 @@ function RedFlags({ region }: { region: Region }) {
           </>
         ) : (
           <div className="k-stack snug">
+            {/* the window said once, not at the start of every line (VR2-021) */}
+            <p className="small muted" data-testid="invest-redflags-window">Last {flagged[0].summary.days} days</p>
             {flagged.slice(0, 5).map((r) => (
               <div key={r.symbol} className="space-line space-flag">
                 <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}><b>{r.symbol}</b></Link>
-                <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
+                <SummaryLine bare s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
               </div>
             ))}
             {unread.length > 0 && <p className="small muted" data-testid="invest-redflags-failed">{unreadLine(unread)} {retry}</p>}

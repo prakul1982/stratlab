@@ -388,8 +388,9 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     ["Profit factor", st.pf == null ? "∞" : !st.n ? "–" : st.pf > 100 ? "> 100" : st.pf.toFixed(2), null, HELP.profitFactor],
     ["Sharpe ratio", num(st.sharpe, 2), null, HELP.sharpe],
     ["Average trade", money(st.avg, cur), st.avg, HELP.avgTrade],
-    // the period as the value, the candles as its note: a two-line text value among numbers made its row taller (VR1-061)
-    ["Period", periodName(e.days), null, HELP.period, `${e.candles.toLocaleString("en-IN")} candles`],
+    // the period as the value, the candles in its (i): a note under one stat made its row taller than the first and lifted this card
+    // above "What you'd keep" beside it (VR1-061, VR2-014)
+    ["Period", periodName(e.days), null, `${HELP.period} This run used ${e.candles.toLocaleString("en-IN")} candles.`],
   ];
 
   return (

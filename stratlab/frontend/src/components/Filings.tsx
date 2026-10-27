@@ -26,19 +26,21 @@ function SevBadge({ s, label }: { s: Severity; label: string }) {
 
 /** The last-3-months verdict in one line: what was found, stated as facts. A list that shows only the flagged filings passes
  * `to` (the company's own filings), so "N filings in all" is a link to the rest whenever there are more than the ones listed. */
-export function SummaryLine({ s, to, rowsHaveFundRaise }: { s: FilingSummary; to?: string; rowsHaveFundRaise?: boolean }) {
+export function SummaryLine({ s, to, rowsHaveFundRaise, bare }: { s: FilingSummary; to?: string; rowsHaveFundRaise?: boolean; bare?: boolean }) {
+  // a list of lines says the window once above them and leaves "Last 90 days:" off each (VR2-021)
+  const since = bare ? null : <>Last {s.days} days: </>;
   // the rows listed under it already show the fund raise and its date: not said twice (VR1-100)
   const raise = s.fund_raise ? (rowsHaveFundRaise ? null : <b>Fund raise filed on {day(s.fund_raise_last!)}.</b>) : <span className="k-muted">No fund raise filed.</span>;
   if (s.total == null) return (
     <span className="k-small">
-      Last {s.days} days: <b>{s.red} red flag{s.red === 1 ? "" : "s"}</b>, {s.amber} to look closer at, from the evening's read of every company's filings.{" "}
+      {since}<b>{s.red} red flag{s.red === 1 ? "" : "s"}</b>, {s.amber} to look closer at, from the evening's read of every company's filings.{" "}
       {raise}
     </span>
   );
   if (!s.total) return <span className="k-small k-muted">No filings in the last {s.days} days.</span>;
   return (
     <span className="k-small">
-      Last {s.days} days: <b>{s.red} red flag{s.red === 1 ? "" : "s"}</b>, {s.amber} to look closer at, {to && s.total > s.red + s.amber ? <Link className="link" to={to}>{s.total} filings in all</Link> : `${s.total} filing${s.total === 1 ? "" : "s"} in all`}.{" "}
+      {since}<b>{s.red} red flag{s.red === 1 ? "" : "s"}</b>, {s.amber} to look closer at, {to && s.total > s.red + s.amber ? <Link className="link" to={to}>{s.total} filings in all</Link> : `${s.total} filing${s.total === 1 ? "" : "s"} in all`}.{" "}
       {raise}
     </span>
   );

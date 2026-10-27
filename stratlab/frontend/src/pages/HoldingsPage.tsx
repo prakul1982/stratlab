@@ -201,7 +201,7 @@ export function HoldingsPage() {
       { key: "filings", header: "Filings, 3 months", cell: (r: Row) => <FilingsCell f={facts?.rows[r.symbol]} allowed={facts?.filings !== false} plan={facts?.filings_plan} /> },
       { key: "results", header: "Results meeting", cell: (r: Row) => { const f = facts?.rows[r.symbol]; return f?.results ? <a className="link" href={safeHref(f.results.url)} target="_blank" rel="noreferrer">{dateOnly(f.results.date)}</a> : <span className="k-muted">–</span>; } },
     ] : []),
-    { key: "edit", header: "", action: true, cell: (r) => <button type="button" className="btn quiet sm" data-row-edit onClick={() => { editAt.current = rows.indexOf(r); setEdit(r); }} aria-label={`Edit ${r.symbol}`}>Edit</button> },
+    { key: "edit", header: "", action: true, corner: true, cell: (r) => <button type="button" className="btn quiet sm" data-row-edit onClick={() => { editAt.current = rows.indexOf(r); setEdit(r); }} aria-label={`Edit ${r.symbol}`}>Edit</button> },
   ];
   const unmatchedCols: Column<Unmatched & { i: number }>[] = [
     { key: "line", header: "Line", rowHeader: true, cell: (u) => u.line ?? "–" },

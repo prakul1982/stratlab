@@ -112,7 +112,7 @@ test("VR1-060, VR1-061, VR1-063, VR1-064, VR1-065: the experiment page's layout"
   assert.ok(page.indexOf('title="Where the money came from, and went"') < page.indexOf('<Card label="The numbers" className="k-numbers">'));
   assert.ok(page.indexOf('<Card label="The numbers" className="k-numbers">') < page.indexOf('<Card label="What you\'d keep">'));
   assert.ok(page.indexOf('<Card label="What you\'d keep">') < page.indexOf('<Card label="Price and trades">'));
-  assert.match(page, /\["Period", periodName\(e\.days\), null, HELP\.period, `\$\{e\.candles\.toLocaleString\("en-IN"\)\} candles`\]/);
+  assert.match(page, /\["Period", periodName\(e\.days\), null, `\$\{HELP\.period\} This run used \$\{e\.candles\.toLocaleString\("en-IN"\)\} candles\.`\]/);   // VR2-014: no note under one stat
   assert.match(page, /className="unseen-mark split"/);
   assert.match(page, /data-testid="unseen-legend"/);
   assert.doesNotMatch(page, /<span className="k-sub-line">Unseen part<\/span>/);
