@@ -5,14 +5,16 @@ import { Card, CardHead, DataTable, type Column } from "./kit";
 /** Gold, silver, international and debt ETFs and gold bonds in one year: each sale under the head the law puts it,
  * from the server's instrument_kinds.other_year. Equity ETFs, REITs and InvITs are taxed like shares and sit with them. */
 export type UnitSale = { key: string; kind: string; label: string; bought: string; sold: string; qty: number; cost: number; sale: number; gain: number;
-  head: "slab" | "lt" | "exempt" | "old"; why: string };
+  head: "slab" | "lt" | "lt_idx" | "lt_10" | "exempt" | "old"; why: string; indexed_cost?: number; taxed_gain?: number };
+type Group = { gains: number; losses: number; taxable: number; rate: number; tax: number };
 export type Units = {
   rows: UnitSale[]; count: number; slab: { gains: number; losses: number; taxable: number };
-  lt: { gains: number; losses: number; taxable: number; rate: number; tax: number }; exempt: number; old: number | null;
+  lt: Group; lt_idx?: Group | null; lt_10?: Group | null; exempt: number; old: number | null;
   carry_forward: { st: number; lt: number };
 };
 
-const HEADS: Record<UnitSale["head"], string> = { slab: "Short term, slab rate", lt: "Long term, 12.5%", exempt: "Exempt", old: "Old rules" };
+const HEADS: Record<UnitSale["head"], string> = { slab: "Short term, slab rate", lt: "Long term, 12.5%", lt_idx: "Long term, 20% with indexation",
+  lt_10: "Long term, 10% without indexation", exempt: "Exempt", old: "Old rules, not worked out" };
 const tone = (v: number) => { const t = signTone(v); return t ? `k-${t}` : undefined; };
 
 export function UnitsCard({ units, notes, name, label }: { units: Units | null | undefined; notes: string[]; name: (k: string) => string; label: string }) {
@@ -38,7 +40,9 @@ export function UnitsCard({ units, notes, name, label }: { units: Units | null |
         112, no exemption): <b>{inr(units.lt.gains)}</b> of gains{units.lt.losses > 0 && <>, {inr(units.lt.losses)} of losses</>}. They are set off with your
         share gains and losses in the year's set-off, which gives the taxable amounts, the total tax estimate and what's carried forward.
         {units.exempt ? <> Exempt (gold bonds redeemed at maturity): {inr(units.exempt)}.</> : null}
-        {units.old != null && <> Sold before 23 Jul 2024 under the old long-term rules (indexation), not worked out here: {inr(units.old)}.</>}
+        {units.lt_idx && <> Sold before 23 Jul 2024 after the old long-term holding period, 20% with indexation: <b>{inr(units.lt_idx.gains)}</b> of gains{units.lt_idx.losses > 0 && <>, {inr(units.lt_idx.losses)} of losses</>} as taxed.</>}
+        {units.lt_10 && <> Gold bonds where 10% without indexation is the lower tax: <b>{inr(units.lt_10.gains)}</b> of gains{units.lt_10.losses > 0 && <>, {inr(units.lt_10.losses)} of losses</>}.</>}
+        {units.old != null && <> Sold before 23 Jul 2024 under the old long-term rules, but the cost can't be indexed (bought before the index starts), so not worked out: {inr(units.old)}.</>}
       </p>
       <DataTable label="ETF and gold bond sales" columns={cols} rows={rows} rowKey={(r) => String(r.i)} />
       {units.rows.length > 20 && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {units.rows.length}</button>}

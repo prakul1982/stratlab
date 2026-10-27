@@ -777,12 +777,16 @@ BUCKETS = [("st_new", "Short-term, sold from 23 Jul 2024", IN_STCG), ("st_old", 
            ("lt_usi", "Long-term, foreign shares sold before 23 Jul 2024, 20% with indexation", 0.20),
            # gold, silver, international and debt ETFs and gold bonds (instrument_kinds.bucket_rows)
            ("st_unit", "Short-term at your slab rate (ETFs and gold bonds)", 0.0),
-           ("lt_unit", "Long-term, ETFs and gold bonds, 12.5% (section 112)", 0.125)]
+           ("lt_unit", "Long-term, ETFs and gold bonds, 12.5% (section 112)", 0.125),
+           # sold before 23 Jul 2024, after 36 months (gold bonds: 12): 20% with indexation, or for a gold bond the lower
+           # of that and 10% without it (RC3M-007)
+           ("lt_uniti", "Long-term, ETFs and gold bonds sold before 23 Jul 2024, 20% with indexation", 0.20),
+           ("lt_unit10", "Long-term, gold bonds sold before 23 Jul 2024, 10% without indexation", 0.10)]
 SLAB = {"st_slab", "st_us", "st_unit"}
 # slab-rate buckets last: whether they pay more than 20% depends on the user's slab (and 87A), not known here
 ST_ORDER = ["st_new", "st_old", "st_slab", "st_us", "st_unit"]
 # 12.5% buckets with no exemption before lt_new and lt_old, whose first ₹1.25 lakh is exempt anyway
-LT_ORDER = ["lt_112i", "lt_usi", "lt_112", "lt_us", "lt_unit", "lt_new", "lt_old"]
+LT_ORDER = ["lt_112i", "lt_usi", "lt_uniti", "lt_112", "lt_us", "lt_unit", "lt_unit10", "lt_new", "lt_old"]
 
 
 STEP_NAMES = {"st_new": "short-term gains taxed at 20% (sold from 23 Jul 2024)", "st_old": "short-term gains taxed at 15% (sold before 23 Jul 2024)",
@@ -793,7 +797,9 @@ STEP_NAMES = {"st_new": "short-term gains taxed at 20% (sold from 23 Jul 2024)",
               "lt_us": "long-term gains on foreign shares taxed at 12.5%",
               "lt_usi": "long-term gains on foreign shares taxed at 20% with indexation",
               "st_unit": "short-term gains on ETFs and gold bonds taxed at your slab rate",
-              "lt_unit": "long-term gains on ETFs and gold bonds taxed at 12.5%"}
+              "lt_unit": "long-term gains on ETFs and gold bonds taxed at 12.5%",
+              "lt_uniti": "long-term gains on ETFs and gold bonds taxed at 20% with indexation",
+              "lt_unit10": "long-term gains on gold bonds taxed at 10% without indexation"}
 
 
 FOREIGN = {"st_us", "lt_us", "lt_usi"}

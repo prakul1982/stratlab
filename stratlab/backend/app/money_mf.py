@@ -45,6 +45,7 @@ from pydantic import BaseModel, Field
 
 from . import db, money_mf_nav as navs, tax_lots
 from .auth import current_profile
+from .cii import CII          # the Cost Inflation Index, for long-term gains on non-equity funds sold before 23 July 2024
 from .responses import err, ok
 from .kite_service import IST
 from .plans import FEATURE_PLAN, PLANS, allows, mf_limit
@@ -61,12 +62,6 @@ SPECIFIED_FROM = "2023-04-01"           # section 50AA: units bought from this d
 SPECIFIED_REDEFINED = "2025-04-01"      # the new definition applies to sales from this day (AY 2026-27)
 RATE_CHANGE = tax_lots.RATE_CHANGE      # 23 July 2024: new rates and the 24-month holding period
 ELSS_LOCK_YEARS = 3                     # ELSS units are locked in for three years from each purchase
-
-# Cost Inflation Index, base year 2001-02 (CBDT Notification No. 44/2017 and the yearly notifications after it).
-# Only needed for long-term gains on non-equity funds sold before 23 July 2024.
-CII = {2001: 100, 2002: 105, 2003: 109, 2004: 113, 2005: 117, 2006: 122, 2007: 129, 2008: 137, 2009: 148, 2010: 167,
-       2011: 184, 2012: 200, 2013: 220, 2014: 240, 2015: 254, 2016: 264, 2017: 272, 2018: 280, 2019: 289, 2020: 301,
-       2021: 317, 2022: 331, 2023: 348, 2024: 363, 2025: 376}
 
 KINDS = {
     "equity": "Equity-oriented: 65% or more in shares of Indian companies",

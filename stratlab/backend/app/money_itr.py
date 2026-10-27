@@ -68,10 +68,12 @@ SECTIONS = {
     "lt_usi": ("Long-term, section 112, foreign shares, with indexation, sold before 23 Jul 2024", "20%"),
     "st_unit": ("Short-term, ETFs and gold bonds (section 50AA where it applies)", "slab rate"),
     "lt_unit": ("Long-term, section 112, ETFs and gold bonds, without indexation", "12.5%"),
+    "lt_uniti": ("Long-term, section 112, ETFs and gold bonds sold before 23 Jul 2024, with indexation", "20%"),
+    "lt_unit10": ("Long-term, section 112 proviso, gold bonds sold before 23 Jul 2024, without indexation", "10%"),
 }
 F_GROUPS = [("111A at 20%", {"st_new"}), ("111A at 15%", {"st_old"}), ("112A at 12.5%", {"lt_new"}), ("112A at 10%", {"lt_old"}),
-            ("112 at 12.5%", {"lt_112", "lt_us", "lt_unit"}), ("112 at 20%", {"lt_112i", "lt_usi"}),
-            ("At slab rates", {"st_slab", "st_us", "st_unit"})]
+            ("112 at 12.5%", {"lt_112", "lt_us", "lt_unit"}), ("112 at 20%", {"lt_112i", "lt_usi", "lt_uniti"}),
+            ("112 at 10%", {"lt_unit10"}), ("At slab rates", {"st_slab", "st_us", "st_unit"})]
 
 
 def _m():
