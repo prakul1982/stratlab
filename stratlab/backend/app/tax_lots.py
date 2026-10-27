@@ -68,7 +68,9 @@ NOTES = [
     "losses for 8 years, intraday for 4), as if each return was filed by its due date. Losses from years not in your "
     "files aren't included.",
     "Turnover is the total of profits and losses, trade by trade. Brokers' summaries often net them per contract "
-    "first, which gives a smaller figure; both are shown.",
+    "first, which gives a smaller figure; both are shown. Intraday turnover counts each round trip's difference "
+    "between sale and purchase before any charge, as the ICAI Guidance Note on Tax Audit counts it; the intraday "
+    "profit that is taxed is after the charges and STT.",
     "The estimate is for an individual of the age band and residency you choose (resident and below 60 until you say "
     "otherwise). The 87A rebate, surcharge (with its marginal relief) and cess follow each year's rules; the slab tax "
     "on the rest of your income is only as good as the figure you enter.",
@@ -542,6 +544,17 @@ def _intraday_stt(sells: list[dict], frac: float) -> tuple[float, bool]:
     return stt * frac, est
 
 
+def _round_trip(key: str, d: str, qty: float, buy_gross: float, sell_gross: float, buy: float, sell: float, stt: float, est: bool) -> dict:
+    """One intraday round trip (RC3M-011). `buy` and `sell` are with the charges (and the STT on the sale), so `pnl` is the
+    profit the return taxes: speculative business income is worked out after the expenses (brokerage, STT, section
+    36(1)(xv)). `diff` and `turnover` are the difference between the sale and the purchase before any expense and its
+    absolute value: the ICAI Guidance Note on Tax Audit counts a speculative transaction's turnover as the aggregate of
+    these differences."""
+    diff = sell_gross - buy_gross
+    return {"key": key, "d": d, "fy": fy_of(d), "qty": qty, "buy": buy, "sell": sell, "pnl": sell - buy, "diff": diff,
+            "turnover": abs(diff), "stt": stt, "stt_est": est}
+
+
 def _pair(key: str, buy: dict, sale: dict, fmv: float | None, out: dict):
     """One tax P&L line: intraday when bought and sold the same day, else a realised gain as the broker matched it,
     grandfathered like any other lot."""
@@ -553,8 +566,7 @@ def _pair(key: str, buy: dict, sale: dict, fmv: float | None, out: dict):
     if d == bd:
         stt, est = _intraday_stt([sale], q / sale["qty"])
         net -= stt
-        out["intraday"].append({"key": key, "d": d, "fy": fy_of(d), "qty": q, "buy": cost, "sell": net, "pnl": net - cost,
-                                "stt": stt, "stt_est": est})
+        out["intraday"].append(_round_trip(key, d, q, q * buy["price"], gross, cost, net, stt, est))
         return
     lt = long_term(bd, d)
     gf, actual, fmv_total = None, cost, None
@@ -621,8 +633,7 @@ def _day(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
         buy = intra * bval / bq + bchg * intra / bq
         stt, est = _intraday_stt(sells, intra / sq)
         sell = intra * sval / sq - schg * intra / sq - stt
-        out["intraday"].append({"key": key, "d": d, "fy": fy_of(d), "qty": intra, "buy": buy, "sell": sell, "pnl": sell - buy,
-                                "stt": stt, "stt_est": est})
+        out["intraday"].append(_round_trip(key, d, intra, intra * bval / bq, intra * sval / sq, buy, sell, stt, est))
     if bq - intra > EPS:
         q = bq - intra
         fmvs = [t["fmv"] * t["qty"] for t in buys if t.get("fmv")]
@@ -672,8 +683,7 @@ def _timed(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
             buy = n * b["price"] + (b.get("charges") or 0) * n / b["qty"]
             stt, est = _intraday_stt([s], n / s["qty"])
             sell = n * s["price"] - (s.get("charges") or 0) * n / s["qty"] - stt
-            out["intraday"].append({"key": key, "d": d, "fy": fy_of(d), "qty": n, "buy": buy, "sell": sell, "pnl": sell - buy,
-                                    "stt": stt, "stt_est": est})
+            out["intraday"].append(_round_trip(key, d, n, n * b["price"], n * s["price"], buy, sell, stt, est))
             q -= n
             opp[0][0] -= n
             if opp[0][0] <= EPS:
@@ -916,7 +926,8 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
         # this year's own capital losses, so the gains table can show them and add up (DH-005)
         "losses": {"st": _r(st_loss), "lt": _r(lt_loss)},
         "intraday": {"count": len(intra), "buy": _r(sum(i["buy"] for i in intra)), "sell": _r(sum(i["sell"] for i in intra)),
-                     "pnl": _r(sum(i["pnl"] for i in intra)), "turnover": _r(sum(abs(i["pnl"]) for i in intra)),
+                     "pnl": _r(sum(i["pnl"] for i in intra)), "turnover": _r(sum(i["turnover"] for i in intra)),
+                     "gross": _r(sum(i["diff"] for i in intra)), "charges": _r(sum(i["diff"] - i["pnl"] for i in intra)),
                      "stt": _r(sum(i["stt"] for i in intra)), "stt_estimated": any(i["stt_est"] for i in intra)},
         "gf_missing": sum(1 for r in rows if r["gf"] == "missing"), "gf_applied": sum(1 for r in rows if r["gf"] == "applied"),
         "count": len(rows), "rows": [_row(r) for r in rows_out[:limit]],

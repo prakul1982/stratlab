@@ -395,7 +395,7 @@ def t_business(g: dict) -> dict:
     # turnover in whole rupees, as the form takes it (DH-007: "39,55,74,093.5")
     if intra["count"]:
         rows.append(["Intraday trading (speculative business, section 43(5))", intra["count"], round(intra["turnover"]), None,
-                     r2(intra["sell"] - intra["buy"]), 0.0, r2(intra["pnl"])])
+                     r2(intra["gross"]), r2(intra["charges"]), r2(intra["pnl"])])
     for s in biz["segments"]:
         rows.append([f"{s['label']} (non-speculative business)", s["trades"], round(s["turnover"]), round(s["turnover_contract"]), r2(s["pnl"]),
                      r2(s["charges"]), r2(s["net"])])
@@ -405,8 +405,12 @@ def t_business(g: dict) -> dict:
     notes = ["ITR-3 for AY 2026-27 asks, in Part A Trading Account, for the turnover and the income of intraday trading and of "
              "futures and options separately.",
              "Turnover method: the sum of the absolute profit or loss of each trade (ICAI Guidance Note on Tax Audit under section "
-             "44AB, 2022 edition); for intraday, of each day's round trip per company. Option premium isn't added. The figure "
-             "netted per contract (as some broker summaries show) is given beside it.",
+             "44AB, 2022 edition); for intraday, of each round trip (a company's shares bought and sold the same day), taken as "
+             "the sale less the purchase before any charge, as the Guidance Note counts the difference. Option premium isn't added. "
+             "The figure netted per contract (as some broker summaries show) is given beside it.",
+             "Intraday profit is worked out after the expenses, as business income is: brokerage and the other charges in your "
+             "file and the STT on the sales (section 36(1)(xv)) are taken off the difference, so the profit is below the "
+             "difference by the charges shown.",
              "Income before charges is the profit or loss on the trades; the charges in your broker's file (including STT and "
              "CTT, which business income can deduct) are taken off to get the net."] + list(y.get("filing") or [])
     return table("business", "Business income for ITR-3 (intraday and F&O)",

@@ -33,3 +33,8 @@ test("RC3M-010: a mutual fund's kind says when it was only guessed from the fund
   assert.match(src, /data-testid="mf-kind-basis">\{kindBasis\(s\)\}/);
   assert.doesNotMatch(src, /\{s\.kind_set \? "Set by you" : "From the category"\}/);
 });
+
+test("RC3M-011: the tax report says what intraday turnover and the intraday result are worked on", () => {
+  const src = read("src/pages/TaxReportPage.tsx");
+  assert.match(src, /The result is after charges\. Intraday turnover is \{inr\(y\.intraday\.turnover\)\}: each round trip's sale less purchase before charges, every one counted as a positive amount\./);
+});

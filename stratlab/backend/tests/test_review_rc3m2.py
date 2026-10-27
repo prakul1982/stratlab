@@ -294,3 +294,50 @@ def test_a_schemes_row_says_the_kind_was_guessed_from_the_name():
     got = MF._resolve(data, {})
     assert (got["a"]["kind"], got["a"]["kind_basis"]) == ("equity", "name")     # not "other": "emerging" is not a foreign word
     assert (got["b"]["kind_auto"], got["b"]["kind"], got["b"]["kind_basis"]) == ("debt", "equity", "hint")     # yours wins; the page says "Set by you"
+
+
+# ---------- RC3M-011: intraday turnover is the difference before charges; the taxed profit is after them ----------
+def trade(d, side, qty, price, **kw):
+    return {"d": d, "side": side, "qty": qty, "price": price, "sym": "A", "isin": "", "name": "A", "tid": f"{d}{side}{qty}{price}", **kw}
+
+
+def test_intraday_turnover_is_the_difference_before_charges_and_the_profit_is_after_them():
+    # a winning trip: bought 100 at 100, sold at 103 (3 a share = 300), with ₹10 of charges on each side and ₹10 of STT
+    # a losing trip on another day: bought 50 at 200, sold at 196 (-200), with ₹5 of charges on each side and ₹5 STT
+    trades = [trade("2025-05-05", "B", 100, 100.0, charges=10.0), trade("2025-05-05", "S", 100, 103.0, charges=10.0, stt=10.0),
+              trade("2025-06-05", "B", 50, 200.0, charges=5.0), trade("2025-06-05", "S", 50, 196.0, charges=5.0, stt=5.0)]
+    c = T.compute(trades, {}, {}, TODAY)
+    assert [(i["diff"], i["turnover"], round(i["pnl"], 2)) for i in sorted(c["intraday"], key=lambda i: i["d"])] == [(300.0, 300.0, 270.0), (-200.0, 200.0, -215.0)]
+    y = T.year(2025, [], c["intraday"])["intraday"]
+    assert (y["count"], y["turnover"], y["gross"], y["charges"], y["pnl"]) == (2, 500.0, 100.0, 45.0, 55.0)       # not 485, the sum of |profit after charges|
+    assert y["gross"] - y["charges"] == y["pnl"]
+
+
+def test_a_tax_pl_line_is_counted_the_same_way():
+    c = T.compute([trade("2025-05-05", "B", 10, 100.0), trade("2025-05-05", "S", 10, 90.0)], {}, {}, TODAY)
+    [i] = c["intraday"]
+    assert (i["diff"], i["turnover"]) == (-100.0, 100.0) and i["pnl"] < -100.0
+
+
+def test_a_timed_round_trip_counts_its_difference_too():
+    c = T.compute([trade("2025-05-05", "B", 10, 100.0, t="09:20:00"), trade("2025-05-05", "S", 10, 101.0, t="10:05:00")], {}, {}, TODAY)
+    [i] = c["intraday"]
+    assert (i["diff"], i["turnover"]) == (10.0, 10.0)
+
+
+def test_the_advance_tax_audit_test_sees_the_intraday_turnover_too():
+    # money_routes sums each row's "turnover" for the audit limit; before, the rows had none and intraday counted as nil
+    c = T.compute([trade("2025-05-05", "B", 1000, 100.0), trade("2025-05-05", "S", 1000, 101.0)], {}, {}, TODAY)
+    assert sum(x.get("turnover") or 0 for x in c["intraday"] if x["fy"] == 2025) == 1000.0
+
+
+def test_the_return_table_gives_turnover_gross_charges_and_net_and_says_which_is_which():
+    trades = [trade("2025-05-05", "B", 100, 100.0, charges=10.0), trade("2025-05-05", "S", 100, 103.0, charges=10.0, stt=10.0)]
+    c = T.compute(trades, {}, {}, TODAY)
+    y = T.with_total(T.year(2025, [], c["intraday"]), [], None)
+    t = money_itr.t_business({"y": y})
+    row = t["rows"][0]
+    assert row[0].startswith("Intraday") and row[2:] == [300, None, 300.0, 30.0, 270.0]       # turnover, -, before charges, charges, net
+    notes = " ".join(t["notes"])
+    assert "sale less the purchase before any charge" in notes and "Intraday profit is worked out after the expenses" in notes
+    assert any("before any charge" in n and "profit that is taxed is after the charges" in n for n in T.NOTES)
