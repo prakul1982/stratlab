@@ -45,6 +45,7 @@ from pydantic import BaseModel, Field
 
 from . import db, money_mf_nav as navs, tax_lots
 from .auth import current_profile
+from .cii import CII          # the Cost Inflation Index, for long-term gains on non-equity funds sold before 23 July 2024
 from .responses import err, ok
 from .kite_service import IST
 from .plans import FEATURE_PLAN, PLANS, allows, mf_limit
@@ -61,12 +62,6 @@ SPECIFIED_FROM = "2023-04-01"           # section 50AA: units bought from this d
 SPECIFIED_REDEFINED = "2025-04-01"      # the new definition applies to sales from this day (AY 2026-27)
 RATE_CHANGE = tax_lots.RATE_CHANGE      # 23 July 2024: new rates and the 24-month holding period
 ELSS_LOCK_YEARS = 3                     # ELSS units are locked in for three years from each purchase
-
-# Cost Inflation Index, base year 2001-02 (CBDT Notification No. 44/2017 and the yearly notifications after it).
-# Only needed for long-term gains on non-equity funds sold before 23 July 2024.
-CII = {2001: 100, 2002: 105, 2003: 109, 2004: 113, 2005: 117, 2006: 122, 2007: 129, 2008: 137, 2009: 148, 2010: 167,
-       2011: 184, 2012: 200, 2013: 220, 2014: 240, 2015: 254, 2016: 264, 2017: 272, 2018: 280, 2019: 289, 2020: 301,
-       2021: 317, 2022: 331, 2023: 348, 2024: 363, 2025: 376}
 
 KINDS = {
     "equity": "Equity-oriented: 65% or more in shares of Indian companies",
@@ -121,8 +116,11 @@ def today_ist() -> str:
 
 
 # ---------- the scheme's kind and category ----------
-_INTL = re.compile(r"\b(us|u\.s\.|usa|nasdaq|s&p|s ?& ?p 500|global|international|overseas|world|emerging|greater china|china|"
-                   r"hang seng|japan|europe|asia|fang|taiwan|developed)\b", re.I)
+# Only words that plainly say the fund holds foreign shares (RC3M-010: "emerging" read as foreign for an Indian "Emerging
+# Equity" fund, "world", "asia" and the rest for Indian funds with those words in their names). The official category
+# ("FoF Overseas") is what names the rest.
+_INTL = re.compile(r"(?<![\w.])(?:us|u\.s\.|usa|nasdaq|s&p ?500|global|international|overseas|offshore|foreign|feeder|"
+                   r"emerging markets?|developed markets?)(?!\w)", re.I)
 _GOLD = re.compile(r"\b(gold|silver|precious)\b", re.I)
 _DEBT = re.compile(r"\b(gilt|g-?sec|sdl|bond|debt|crisil|liquid|overnight|money market|psu (?:bond|debt)|bharat bond|target maturity|treasury|t-?bill|"
                    r"income|corporate|credit|duration|floater|floating|fmp|fixed maturity|banking)\b", re.I)
@@ -133,32 +131,44 @@ _EQ_NAME = re.compile(r"\b(psu bank|nifty bank|bank ?bees|bank (?:etf|index)|cps
 def kind_of(category: str, name: str, hint: str = "") -> str:
     """The scheme's tax kind from its official category (and its name where the category alone can't tell, as with index
     funds, ETFs and funds of funds). `hint`: EQUITY or DEBT where nothing else is known."""
+    return kind_how(category, name, hint)[0]
+
+
+def kind_how(category: str, name: str, hint: str = "") -> tuple[str, str]:
+    """(kind, basis): the kind of `kind_of` and what it rests on, "category" (the official category, the name only telling
+    apart what it holds), "hint" (the statement's own equity or debt mark) or "name" (no category and no mark: words in the
+    scheme's name, or nothing to go on, so a guess; RC3M-010)."""
     c, n = (category or "").lower(), name or ""
     hint = hint.upper() if (hint or "").upper() in ("EQUITY", "DEBT") else ""
     if "equity scheme" in c or c in ("growth", "elss"):
-        return "other" if "thematic" in c and _INTL.search(n) else "equity"
+        return ("other" if "thematic" in c and _INTL.search(n) else "equity"), "category"
     if "debt scheme" in c or c in ("income", "gilt", "money market", "liquid"):
-        return "debt"
+        return "debt", "category"
     if "hybrid scheme" in c:
         if "conservative" in c:
-            return "debt"
+            return "debt", "category"
         if any(w in c for w in ("aggressive", "arbitrage", "equity savings", "balanced advantage", "dynamic asset")):
-            return "equity"
-        return "hybrid"
+            return "equity", "category"
+        return "hybrid", "category"
     if "solution oriented" in c:
-        return "debt" if _DEBT.search(n) and "equity" not in n.lower() else "equity" if "equity" in n.lower() else "hybrid"
+        return ("debt" if _DEBT.search(n) and "equity" not in n.lower() else "equity" if "equity" in n.lower() else "hybrid"), "category"
+    if "overseas" in c or "international" in c:        # "Other Scheme - FoF Overseas": the category says the holdings are foreign
+        return "other", "category"
+    how = "category" if c else "name"
     if c or not hint:
         if _GOLD.search(n) or _INTL.search(n):
-            return "other"
+            return "other", how
         if _DEBT.search(n) and not _EQ_NAME.search(n):
-            return "debt"
+            return "debt", how
         if re.search(r"hybrid|balanced|asset allocation|multi asset", n, re.I):
-            return "hybrid"
+            return "hybrid", how
         if "fof" in c or "fund of fund" in n.lower():
-            return "hybrid"
+            return "hybrid", how
         if c or re.search(r"equity|index|nifty|sensex|cap|elss|tax saver|flexi|focused|value|contra", n, re.I):
-            return "equity"
-    return "debt" if hint.upper() == "DEBT" else "equity" if hint.upper() == "EQUITY" else "hybrid"
+            return "equity", how
+    if hint:
+        return ("debt" if hint == "DEBT" else "equity"), "hint"
+    return "hybrid", "name"
 
 
 def broad_of(category: str, kind: str) -> tuple[str, str]:
@@ -694,10 +704,10 @@ def _resolve(data: dict, daily: dict) -> dict[str, dict]:
     for s in data["schemes"]:
         rec = navs.find(daily, s.get("isin") or "", s.get("amfi") or "", s.get("name") or "")
         category = rec["category"] if rec else ""
-        auto = kind_of(category, s.get("name") or (rec or {}).get("name", ""), s.get("hint") or "")
+        auto, basis = kind_how(category, s.get("name") or (rec or {}).get("name", ""), s.get("hint") or "")
         kind = data["kinds"].get(s["k"]) or auto
         nav, nav_date, src = (rec["nav"], rec["date"], "daily") if rec else (s.get("stmt_nav"), s.get("stmt_date"), "statement")
-        out[s["k"]] = {"rec": rec, "category": category, "kind_auto": auto, "kind": kind, "nav": nav or None,
+        out[s["k"]] = {"rec": rec, "category": category, "kind_auto": auto, "kind_basis": basis, "kind": kind, "nav": nav or None,
                        "nav_date": nav_date, "nav_source": src if nav else None}
     return out
 
@@ -792,7 +802,7 @@ def holdings(data: dict, w: dict, today: str) -> dict:
         rows.append({"key": k, "name": s["name"], "amc": s.get("amc") or rec.get("amc") or "", "folio": s.get("folio") or "",
                      "isin": s.get("isin") or rec.get("isin") or "", "amfi": s.get("amfi") or rec.get("code") or "",
                      "category": inf["category"], "broad": broad, "sub": sub, "kind": inf["kind"], "kind_auto": inf["kind_auto"],
-                     "kind_set": k in data["kinds"], "units": _r(units, 4), "nav": inf["nav"], "nav_date": inf["nav_date"],
+                     "kind_basis": inf.get("kind_basis", "category"), "kind_set": k in data["kinds"], "units": _r(units, 4), "nav": inf["nav"], "nav_date": inf["nav_date"],
                      "nav_source": inf["nav_source"], "invested": None if unknown else _r(invested),
                      "value": _r(value), "gain": None if unknown or value is None else _r(value - invested),
                      "gain_pct": None if unknown or not invested or value is None else _r((value - invested) / invested * 100, 2),

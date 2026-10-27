@@ -193,7 +193,7 @@ def test_fifo_across_lots_and_charges():
 def test_intraday_is_apart_and_only_the_overlap():
     c = T.compute([b("2024-09-02", 30, 100), s("2024-09-02", 20, 105), s("2024-12-02", 10, 90)], today=TODAY)
     assert c["intraday"] == [{"key": "A", "d": "2024-09-02", "fy": 2024, "qty": 20, "buy": 2000, "sell": 2099.475, "pnl": pytest.approx(99.475),
-                               "stt": 0.525, "stt_est": True}]            # no STT in the trades: 0.025% of 2100, estimated
+                               "diff": 100, "turnover": 100, "stt": 0.525, "stt_est": True}]            # no STT in the trades: 0.025% of 2100, estimated; the difference before it is 100
     assert [(x["qty"], x["gain"]) for x in c["realised"]] == [(10, -100)]                # the rest was delivery
     y = T.year(2024, c["realised"], c["intraday"])
     assert y["intraday"]["pnl"] == 99.47 and y["stcg"]["losses"] == 100                   # not mixed into capital gains
@@ -557,7 +557,7 @@ def test_every_broker_combined_into_one_report(w):
     rep = c.get("/tax", headers=PRO).json()
     assert rep["trades"] == 27 and len(rep["files"]) == 8 and rep["disclaimer"].startswith("An estimate")
     y = next(y for y in rep["years"] if y["fy"] == 2024)
-    assert y["intraday"] == {"count": 1, "buy": 36000.0, "sell": 36290.93, "pnl": 290.93, "turnover": 290.93, "stt": 9.08, "stt_estimated": True}       # INFY bought and sold the same day
+    assert y["intraday"] == {"count": 1, "buy": 36000.0, "sell": 36290.93, "pnl": 290.93, "turnover": 300.0, "gross": 300.0, "charges": 9.07, "stt": 9.08, "stt_estimated": True}       # INFY bought and sold the same day; turnover is the 300 difference before STT (RC3M-011)
     rel = [r for r in y["rows"] if r["key"] == "RELIANCE"]
     assert [(r["qty"], r["term"], r["rate"]) for r in rel] == [(8, "LT", 0.10), (2, "LT", 0.125), (5, "LT", 0.125)]
     wipro = next(r for r in y["rows"] if r["key"] == "WIPRO")

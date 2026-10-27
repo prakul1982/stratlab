@@ -45,6 +45,8 @@ export interface ScreenResult {
   pending?: { day: string; due: string | null } | null;
   /** companies that meet every other condition but have no value for this one, so it leaves them out (DE-009) */
   no_value?: Record<string, number>;
+  /** Said when the stored promoter and insider purchases don't reach back over the window picked (RC3M-009). */
+  insider_note?: string | null;
 }
 
 export interface SavedScreen {
