@@ -31,6 +31,8 @@ type Dividends = {
   years: DivYear[]; current_fy: number; files: { name: string; source: string; rows: number; at: string }[]; updated_at: string | null;
   ahead: Ahead[];
   ahead_total: number; usd_inr: number | null; as_of: string; assumptions: string[]; locked: boolean;
+  /** Held stocks whose declared dividends are still being read (the estimate leaves them out until then). */
+  checking?: number;
 };
 type DueDate = { n: number; date: string; pct: number; label: string };
 type Instalment = DueDate & {
@@ -193,6 +195,7 @@ function DividendsTab() {
 
       {y && (
         <>
+          {(v.checking ?? 0) > 0 && <p className="k-note" data-testid="dividends-checking">Still reading the dividends of {v.checking} stock{v.checking === 1 ? "" : "s"}; the estimate leaves {v.checking === 1 ? "it" : "them"} out until then. Reload in a minute.</p>}
           <Card label="Dividends for the year">
             <CardHead title={`Dividends, ${y.label}`} info={DIVIDEND_INFO} infoLabel="About your dividends" actions={<>
               {y.source === "files" && <Badge>From your files</Badge>}

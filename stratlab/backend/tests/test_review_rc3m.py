@@ -174,3 +174,18 @@ def test_the_first_tax_report_waits_for_every_companys_bonuses_and_splits(w, mon
     T.save(uid, [{"d": "2025-01-03", "side": "B", "qty": 100, "price": 100.0, "sym": "NEWCO", "isin": "", "name": "N"}], [{"name": "x"}])
     i = main.tax_inputs({**prof, "_plan": plan_of(prof)})
     assert i["corp_left"] == 1 and i["acts"]["NEWCO"] == []
+
+
+def test_the_dividends_page_says_how_many_stocks_it_is_still_reading(w, monkeypatch):
+    from app import holdings
+    syms = [f"D{i}" for i in range(12)]
+    holdings.save("u-pro", [{"symbol": s, "qty": 10, "avg": 100, "exchange": "NSE"} for s in syms], "Manual")
+    feed = FakeIndia(history={s: [] for s in syms})
+    monkeypatch.setattr(main.corp_job, "sources", lambda: {"in": feed, "us": None, "cal": None})
+    real = C.refresh_histories
+    monkeypatch.setattr(C, "refresh_histories", lambda *a, **k: 0)          # the background read has not come yet
+    v = w["client"].get("/money/dividends", headers=world.headers("pro-token")).json()
+    assert v["checking"] == 4                                              # eight were read while the page waited
+    monkeypatch.setattr(C, "refresh_histories", real)
+    real("IN", {"in": feed}, set(syms), TODAY)
+    assert w["client"].get("/money/dividends", headers=world.headers("pro-token")).json()["checking"] == 0

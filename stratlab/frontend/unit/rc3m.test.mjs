@@ -26,3 +26,10 @@ test("RC3M-006: the tax report says when some company's bonuses and splits could
   assert.match(src, /data-testid="tax-corp-left"/);
   assert.match(src, /bonuses and splits of \{rep\.corp_left\} \{rep\.corp_left === 1 \? "company" : "companies"\} couldn't be read yet/);
 });
+
+test("RC3M-006: Tax tools says how many held stocks' dividends are still being read", () => {
+  const src = read("src/pages/money/TaxToolsPage.tsx");
+  assert.match(src, /checking\?: number/);
+  assert.match(src, /data-testid="dividends-checking"/);
+  assert.match(src, /Still reading the dividends of \{v\.checking\} stock/);
+});
