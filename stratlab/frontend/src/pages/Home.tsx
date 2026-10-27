@@ -17,6 +17,7 @@ import { Pin, Search, Upload } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
 import { Badge, Card, CardHead, ChipBar, EmptyState, ErrorState, Notice, PageHeader, Seg, Skeleton } from "../components/kit";
 import "./trade/trade.css";
+import { scrollBehavior } from "../lib/motion";
 
 export type Where = { market: string; instrument: Instrument | null };
 
@@ -151,7 +152,7 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
   const loc = useLocation();
   const [importing, setImporting] = useState(new URLSearchParams(loc.search).has("import"));
   const importRef = useRef<HTMLElement>(null);
-  useEffect(() => { if (importing && new URLSearchParams(loc.search).has("import")) importRef.current?.scrollIntoView({ behavior: "smooth" }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (importing && new URLSearchParams(loc.search).has("import")) importRef.current?.scrollIntoView({ behavior: scrollBehavior() }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (where.market || !markets.length) return;
     // start where you left off last time, if that market is usable
@@ -166,7 +167,7 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
     <div className="k-page">{/* the same 1080px column as every app page (VR1-040: a 920px column ended 160px short of the rest) */}
       <PageHeader eyebrow="Trade · Build and test" title="What trading idea do you want to test?"
         lede="Write it the way you'd explain it to a friend. We'll turn it into exact rules and ask about anything that's missing."
-        actions={!hide.includes("import") ? <button type="button" className="btn quiet sm" onClick={() => { setImporting(true); window.setTimeout(() => importRef.current?.scrollIntoView({ behavior: "smooth" }), 50); }}>
+        actions={!hide.includes("import") ? <button type="button" className="btn quiet sm" onClick={() => { setImporting(true); window.setTimeout(() => importRef.current?.scrollIntoView({ behavior: scrollBehavior() }), 50); }}>
           <Upload size={16} />Import a strategy
         </button> : undefined} />
       {new URLSearchParams(loc.search).get("then") === "group" && !prefill?.symbol && (

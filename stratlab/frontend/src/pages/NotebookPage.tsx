@@ -27,6 +27,7 @@ import "./trade/trade.css";
 import { usePlansAction, usePlansToast } from "../components/PlanInterest";
 import { badgeLabel } from "../lib/tradeUi";
 import { LIMITS } from "../lib/plans";
+import { scrollBehavior } from "../lib/motion";
 
 /* /n/:id: one notebook: its question, what it tests on, the rules, and every experiment run on them. Built from the kit
  * (components/kit); the lab notes float at the bottom-right (components/LabNotes). */
@@ -376,7 +377,7 @@ function NotebookView() {
     else if (action === "other_instrument") nav(`/n/${nb.id}/market`);
     else if (action === "paper_trade") paperTrade();
     else if (action === "note") notesRef.current?.focus();
-    else if (action === "edit_rules") document.getElementById("rules-h")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    else if (action === "edit_rules") document.getElementById("rules-h")?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
     else if (action === "loosen_entry") setStrategy({ ...s, entry: s.entry.map((c) => ({ ...c, op: c.op === "xa" ? "gt" : c.op === "xb" ? "lt" : c.op })) });
     else if (action === "trend_filter") setStrategy({ ...s, entryJoin: "all", entry: [...s.entry, { l: { t: "price" }, op: s.side === "short" ? "lt" : "gt", r: { t: "sma", p: 200 } }] });
     if (["loosen_entry", "trend_filter", "longer_period"].includes(action)) notify("Rules updated. Run the next experiment to compare.");
@@ -386,8 +387,8 @@ function NotebookView() {
   const steps = [
     // a group is something to test on too (R11C-017: a library copy set to a group showed step 1 as next)
     { done: !!inst || !!group, text: "Pick what to test it on", act: () => nav(`/n/${nb.id}/market`) },
-    { done: s.entry.length > 0, text: "Check the rules", act: () => document.getElementById("rules-h")?.scrollIntoView({ behavior: "smooth" }) },
-    { done: experiments.length > 0, text: "Run an experiment", act: () => document.getElementById("exp-h")?.scrollIntoView({ behavior: "smooth" }) },
+    { done: s.entry.length > 0, text: "Check the rules", act: () => document.getElementById("rules-h")?.scrollIntoView({ behavior: scrollBehavior() }) },
+    { done: experiments.length > 0, text: "Run an experiment", act: () => document.getElementById("exp-h")?.scrollIntoView({ behavior: scrollBehavior() }) },
   ];
   const nextStep = steps.findIndex((x) => !x.done);
 
