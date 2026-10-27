@@ -364,7 +364,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
             <span className="eyebrow">{answer.problem ? "Not done" : "Answer"}</span>{answer.title && <b>{answer.title}</b>}<p>{answer.text}</p>
             {!answer.problem && <span className="small muted">An explanation, not advice. Test any idea before trusting it.</span>}</div>
         )}
-        <div className="palette-list" ref={list} role="listbox" hidden={!!steps}>
+        <div className="palette-list" ref={list} role="listbox" aria-label="Results" hidden={!!steps}>
           {rows.map((g) => (
             <div key={g.group} className="palette-grp">
               <div className="eyebrow palette-group">{g.group}</div>
