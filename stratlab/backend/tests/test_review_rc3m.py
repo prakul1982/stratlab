@@ -98,3 +98,22 @@ def test_schedule_os_expects_the_reduced_tds_for_that_year(w):
          "us_div": None, "div_source": "files"}
     row = I.t_os(g)["rows"][0]
     assert row[-2] == 600.0 and row[-1] == "expected"
+
+
+# ---------- RC3M-004: the day a PDF is made is India's ----------
+def test_the_tax_pdf_is_dated_by_the_india_day():
+    import io
+    import time_machine
+    from datetime import timezone
+    from pypdf import PdfReader
+    from app import tax_export
+    y = T.year(2025, [], [])
+    with time_machine.travel(datetime(2026, 10, 26, 22, 30, tzinfo=timezone.utc)):         # 4 AM on 27 Oct in India
+        text = " ".join(p.extract_text() for p in PdfReader(io.BytesIO(tax_export.to_pdf(y, {}))).pages)
+    assert "Made by StratLab on 27 Oct 2026" in text
+
+
+def test_the_itr_pack_is_dated_by_the_india_day():
+    from app import money_itr
+    src = open(money_itr.__file__).read()
+    assert '"made": datetime.now(IST)' in src and "datetime.now(timezone.utc)" not in src

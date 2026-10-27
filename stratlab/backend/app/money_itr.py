@@ -35,7 +35,8 @@ import csv
 import io
 import re
 import zipfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
@@ -48,6 +49,7 @@ from .tax_lots import GF_DATE, RATE_CHANGE, fy_label, money
 from .email_kit import fmt_date as _day
 
 router = APIRouter(prefix="/money/itr", tags=["money"])
+IST = ZoneInfo("Asia/Kolkata")      # the day a pack is made is India's (RC3M-004)
 LABEL = ("Prepared by StratLab from your files to help you or your CA fill the return. This is not a filed return, "
          "and StratLab files nothing for you.")
 CHECK = ("Check every figure against your broker's statements, Form 26AS and the AIS before you use it, and use the "
@@ -118,7 +120,7 @@ def gather(profile, fy: int) -> dict:
             "us_div": money_us_routes.us_dividends(profile, fy, y), "fa": money_us_routes.fa_for(profile, fy),
             "us_count": usr["count"], "us_allowed": usr["allowed"], "us_warning": ((usr.get("years") or {}).get(fy) or {}).get("warning"),
             "tds": saved["tds"], "paid": saved["paid"],
-            "mf_count": len(mf["rows"]), "made": datetime.now(timezone.utc)}
+            "mf_count": len(mf["rows"]), "made": datetime.now(IST)}
 
 
 # ---------- the schedules, as tables ----------
