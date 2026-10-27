@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { fmtDate, money, monthYear, num, pct } from "../lib/format";
-import { changes, onDates } from "../lib/compare";
+import { changes, BOLD_NOTE, onDates } from "../lib/compare";
 import type { Experiment } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
@@ -138,7 +138,7 @@ export function CompareExperiments() {
         {apart && <p className="k-note" data-testid="compare-windows">The two runs cover different dates: v{a.v} {spanA}, v{b.v} {spanB}. Each line is drawn over its own run's dates.</p>}
       </Card>
       <Card label="The numbers">
-        <CardHead level={3} title="The numbers" info="Bold marks the larger of the two on each line. A higher backtest figure is not proof: the verdict's honesty checks are what test for luck." infoLabel="About the numbers" />
+        <CardHead level={3} title="The numbers" info={BOLD_NOTE} infoLabel="About the numbers" />
         <DataTable label="Compared numbers" columns={cols} rows={lines} rowKey={(l) => l.label} />
       </Card>
       {notShown}

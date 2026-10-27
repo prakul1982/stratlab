@@ -146,7 +146,7 @@ def run_notes(strategy, data: dict) -> list[str]:
             notes.append(f"A rule on daily candles needs {need_days} days of history before the test starts; the "
                          f"{TF_MINUTES_NAME.get(strategy.tf, strategy.tf)} candles available reached back {max(got, 0)} days, so that rule "
                          f"had no value on the test's first {need_days - max(got, 0)} trading days.")
-    if data.get("kind") == "in_eq" and strategy.tf == "1d" and strategy.side in ("short", "both"):
+    if data.get("kind") in ("in_eq", "in_etf") and strategy.tf == "1d" and strategy.side in ("short", "both"):
         notes.append("Indian shares can be sold short only within the day (intraday); this test held its shorts on daily "
                      "candles, overnight, which the cash market does not allow.")
     return notes

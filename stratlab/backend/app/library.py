@@ -246,7 +246,12 @@ def restated(e: dict) -> dict:
                 out.append({"pass": f"It kept making money on the {w} it wasn't tuned on"
                                     + (f" ({_pc(unseen)})." if isinstance(unseen, (int, float)) else "."),
                             "fail": f"It lost money on the {w} it wasn't tuned on.",
-                            "warn": f"No trades happened in the {w} it wasn't tuned on, so it couldn't be tested there."}
+                            # a warning is either no trade at all there or too few closed to tell (verdict.unseen_check): the entry keeps
+                            # the part's return only when something traded, so a figure beside "no trades happened" was a contradiction
+                            # (RC3T-011)
+                            "warn": (f"Only a few trades closed in the {w} it wasn't tuned on ({_pc(unseen)} in all): too few to tell, as one "
+                                     "or two trades decide the result." if isinstance(unseen, (int, float))
+                                     else f"No trades happened in the {w} it wasn't tuned on, so it couldn't be tested there.")}
                            .get(s, f"The unseen-{w} check didn't pass."))
             elif c["id"] == "nearby":
                 out.append({"pass": "Settings near the chosen ones made money too.",

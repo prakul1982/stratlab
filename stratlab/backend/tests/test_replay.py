@@ -127,7 +127,8 @@ def test_lots_round_down_to_the_step():
 def test_charges_at_the_published_rates_intraday_or_delivery():
     b = day_bars()
     t, = sim(b, [{"i": 1, "action": "long", "qty": 100}, {"i": 4, "action": "flat"}], kind="in_eq", brokerage=0)["trades"]
-    want = C.total(C.order_costs("in_eq", "buy", 100, 102, 0)) + C.total(C.order_costs("in_eq", "sell", 100, 105, 0))
+    # a delivery sale also pays the depository charge, once for the day (RC3T-002; the journal has always counted it)
+    want = C.total(C.order_costs("in_eq", "buy", 100, 102, 0)) + C.total(C.order_costs("in_eq", "sell", 100, 105, 0)) + C.dp_charge()
     assert t["charges"] == pytest.approx(want) and t["net"] == pytest.approx(300 - want)
     intra = [bar(f"2026-03-02T09:{15 + 5 * i:02d}:00+05:30", 100 + i, 102 + i, 99 + i, 101 + i) for i in range(8)]
     t, = sim(intra, [{"i": 1, "action": "long", "qty": 100}, {"i": 4, "action": "flat"}], kind="in_eq", brokerage=20)["trades"]

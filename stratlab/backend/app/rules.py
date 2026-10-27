@@ -99,7 +99,7 @@ def registry() -> list[dict]:
         f"options {_pct(C.IN_OPTIONS['stamp_buy'])}, currency {_pct(C.IN_CDS_FUTURES['stamp_buy'])}",
         "engine/costs.py", "Indian Stamp Act 1899 as amended by the Finance Act 2019", "2020-07-01")
     add("dp_charge", "trading_costs", "Depository (DP) charge on delivery sales", f"₹{C.IN_DP_SELL:.2f} + GST (₹{C.dp_charge():.2f}) per stock a day",
-        "engine/costs.py IN_DP_SELL (the trade journal)", "CDSL tariff (₹3.50 a debit) plus a discount broker's published DP fee", "2026-10-24")
+        "engine/costs.py IN_DP_SELL (the trade journal, backtests, paper trading and chart replay)", "CDSL tariff (₹3.50 a debit) plus a discount broker's published DP fee", "2026-10-24")
     add("gst", "trading_costs", "GST on brokerage and exchange charges", _pct(C.GST), "engine/costs.py GST", "CBIC GST rates (financial services, 18%)")
     add("sec_fee", "trading_costs", "US SEC fee (Section 31)", f"${C.US_SEC_FEE * 1e6:.2f} a million on sells", "engine/costs.py US_SEC_FEE",
         "https://www.sec.gov/rules-regulations/fee-rate-advisories/2026-2", "2026-04-04")

@@ -55,7 +55,7 @@ def _brokerage(uid: str, inst: dict, tf: str) -> float:
         return 0.0
     if inst.get("market", "IN") not in ("IN", "MCX", "CDS"):
         return 0.0
-    return s["brokerage_delivery"] if R.cost_kind(inst) == "in_eq" and tf == "1d" else s["brokerage_other"]
+    return s["brokerage_delivery"] if R.cost_kind(inst) in ("in_eq", "in_etf") and tf == "1d" else s["brokerage_other"]
 
 
 @router.get("")
