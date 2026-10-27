@@ -501,13 +501,13 @@ td.num, .num { font-family: var(--sans); }
 /* the button is a 40px box (the tap target); the circle is drawn inside it at --i, so the visual stays compact and a
  * negative margin gives the space back to the layout */
 .info-btn {
-  --i: 22px; --ringw: 1.5px; --ring: var(--dash);
-  width: 40px; height: 40px; margin: calc((var(--i) - 40px) / 2); border: 0; border-radius: 50%; padding: 0; flex: none;
+  --i: 22px; --ringw: 1.5px; --ring: var(--dash); --hit: 40px;
+  width: var(--hit); height: var(--hit); margin: calc((var(--i) - var(--hit)) / 2); border: 0; border-radius: 50%; padding: 0; flex: none;
   background: radial-gradient(circle at 50% 50%, var(--card) 0, var(--card) calc(var(--i) / 2 - var(--ringw)), var(--ring) calc(var(--i) / 2 - var(--ringw) + .5px), var(--ring) calc(var(--i) / 2 - .5px), transparent calc(var(--i) / 2));
   color: var(--muted); font: italic 600 13px/1 var(--serif); display: grid; place-items: center; cursor: pointer;
 }
 .info-btn:hover, .info-btn[aria-expanded="true"] { --ring: var(--ink); color: var(--ink); }
-.info-btn:focus-visible { outline-offset: calc((var(--i) - 40px) / 2 + 2px); }
+.info-btn:focus-visible { outline-offset: calc((var(--i) - var(--hit)) / 2 + 2px); }
 .info-pop {
   position: absolute; top: calc(100% + 8px); z-index: 55; width: min(300px, calc(100vw - 32px)); padding: 12px 14px;
   background: var(--ink); color: var(--on-ink); border-radius: 10px; box-shadow: var(--shadow);
@@ -2505,4 +2505,14 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* VR2-010: on a phone the buttons of one segmented control are the same width (they were sized by their words: "Off | ₹ | % of premium" were a sliver, a sliver and a wide block); a longer label still makes room for itself (min-width above) */
 @media (max-width: 640px) {
   .k-seg:not([data-stack]) button { flex: 1 1 0; }   /* a form's own segmented controls keep their sizes (MO-3a) */
+}
+
+/* A11Y-004: on a phone or a touch screen the shared controls that were 32 to 40px are 44px to hit. The (i) keeps its small circle: only
+   the box around it grows, and its negative margin gives the space back, so nothing around it moves. */
+@media (max-width: 640px), (pointer: coarse) {
+  .info-btn { --hit: 44px; }
+  .brand { min-height: 44px; }
+  select { min-height: 44px; }
+  .k-input.sm, .k-input.k-in { height: 44px; }
+  .toast button { min-height: 44px; }
 }
