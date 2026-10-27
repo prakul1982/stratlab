@@ -113,3 +113,47 @@ def test_the_unit_rules_note_says_what_is_worked_out_and_what_is_not():
     note = next(n for n in I.NOTES if "Cost Inflation Index" in n)
     assert "20% on the gain after indexing" in note and "lower of 20% with indexation and 10% without it" in note
     assert "units have no 10% option" in note and "stays marked as not worked out" in note
+
+
+# ---------- RC3M-008: the 15% surcharge cap on section 112 gains starts in FY 2022-23 ----------
+def surcharge_case(fy, bucket, gain=2_000_000):
+    """2.5 crore of other income and a gain of 20 lakh in one 20% bucket (old regime): the slab part pays 25% surcharge in
+    every year, the gains' tax 15% where capped."""
+    b = [{"key": bucket, "rate": 0.20, "after_setoff": gain, "exempt": 0.0, "taxable": gain, "tax": gain * 0.2}]
+    return tax_total.estimate(fy, {"regime": "old", "other": 25_000_000, "salary": 0}, b, 0, 0)
+
+
+def test_section_112_gains_pay_the_full_surcharge_before_fy_2022_23_and_the_capped_one_after():
+    for fy, capped in ((2020, False), (2021, False), (2022, True), (2023, True)):
+        t = surcharge_case(fy, "lt_112i")
+        assert t["surcharge_rate"] == 0.25
+        gains_tax = 2_000_000 * 0.20
+        slab_tax = t["slab_tax"]
+        # slab tax + gains tax; surcharge at 25% on the slab tax, and on the gains' tax 15% when capped, else 25%
+        expect = slab_tax * 0.25 + gains_tax * (0.15 if capped else 0.25)
+        assert t["surcharge"] == pytest.approx(expect, abs=1.0), fy
+        assert ("the 15% cap on those starts in FY 2022-23" in " ".join(t["steps"])) is (not capped), fy
+
+
+def test_111a_and_112a_gains_and_dividends_stay_capped_in_every_year():
+    for fy in (2020, 2021, 2022):
+        for key in ("lt_new", "lt_old", "st_new"):
+            t = surcharge_case(fy, key)
+            assert t["surcharge"] == pytest.approx(t["slab_tax"] * 0.25 + 2_000_000 * 0.20 * 0.15, abs=1.0), (fy, key)
+            assert "section 112 gains" not in " ".join(t["steps"])
+
+
+def test_a_112_gain_does_not_count_as_special_income_for_the_25_percent_threshold_before_fy_2022_23():
+    # 1.9 crore of other income and 30 lakh of 112 gains: total 2.2 crore. Section 112 gains count with the rest then, so the
+    # income "other than special gains" is 2.2 crore, over the 2 crore threshold: 25%. A 112A gain is excluded: 1.9 crore, 15%.
+    big = {"regime": "old", "other": 19_000_000, "salary": 0}
+    g = lambda k: [{"key": k, "rate": 0.10, "after_setoff": 3_000_000, "exempt": 0.0, "taxable": 3_000_000, "tax": 300_000}]
+    assert tax_total.estimate(2021, big, g("lt_usi"), 0, 0)["surcharge_rate"] == 0.25
+    assert tax_total.estimate(2021, big, g("lt_old"), 0, 0)["surcharge_rate"] == 0.15
+    assert tax_total.estimate(2023, big, g("lt_usi"), 0, 0)["surcharge_rate"] == 0.15      # capped from FY 2022-23
+
+
+def test_the_surcharge_parts_add_up_with_uncapped_gains():
+    t = surcharge_case(2021, "lt_usi")
+    assert sum(t["parts"].values()) == pytest.approx(t["total"], abs=0.05)
+    assert t["total"] == pytest.approx((t["slab_tax"] + t["special_tax"] + t["surcharge"]) * 1.04, abs=1.0)

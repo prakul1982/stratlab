@@ -29,6 +29,11 @@ from . import db, tax_due
 KEY = "taxinputs:"                # taxinputs:<uid> = {"2025": {"regime", "other", "salary", "deductions", "age", "resident"}}
 CESS = 0.04
 SPECIAL_SC_CAP = 0.15             # surcharge on the tax on 111A and 112A gains, and on dividends (Finance Act 2020), is capped at 15%
+# the 15% cap reaches gains under section 112 (debt fund units with indexation, foreign and unlisted shares, gold bonds) only
+# from FY 2022-23 (Finance Act 2022, "long-term capital gains" in the proviso to the surcharge schedule): before that they
+# carry the surcharge of their income level like slab income (RC3M-008)
+SEC112_CAP_FY = 2022
+SEC112 = frozenset({"lt_112", "lt_112i", "lt_us", "lt_usi", "lt_unit", "lt_uniti", "lt_unit10"})
 MAX_AMOUNT = 1e11                 # ₹10,000 crore: anything typed above this is a mistake
 FIRST_FY, LAST_FY = 2020, 2026
 
@@ -212,13 +217,19 @@ def _base(normal: float, gains: dict[str, float], g_rates: dict[str, float], tot
             "rebate_slab": rebate_slab, "used_bel": used_bel, "gains": gains, "div_tax": div_tax}
 
 
-def _with_surcharge(b: dict, total: float, special_income: float, cap: float) -> tuple[float, float, float]:
-    """(tax before surcharge, surcharge, rate on the slab part). `special_income` includes dividends."""
+def uncapped_keys(fy: int) -> frozenset:
+    """The gain buckets whose tax pays the full surcharge rate in `fy`: section 112 gains before FY 2022-23 (RC3M-008)."""
+    return SEC112 if fy < SEC112_CAP_FY else frozenset()
+
+
+def _with_surcharge(b: dict, total: float, special_income: float, cap: float, uncapped: float = 0.0) -> tuple[float, float, float]:
+    """(tax before surcharge, surcharge, rate on the slab part). `special_income` includes dividends and leaves out
+    gains whose tax isn't capped; `uncapped` is that tax (it pays the slab part's rate in full)."""
     rate = surcharge_rate(total, special_income, cap)
     tax_slab = b["slab"] - b["rebate_slab"]
     tax_div = min(b.get("div_tax", 0.0), tax_slab)
     tax_special = b["special_total"] - (b["rebate"] - b["rebate_slab"])
-    sc = (tax_slab - tax_div) * rate + (tax_div + tax_special) * min(rate, SPECIAL_SC_CAP)
+    sc = (tax_slab - tax_div) * rate + (tax_div + tax_special - uncapped) * min(rate, SPECIAL_SC_CAP) + uncapped * rate
     return tax_slab + tax_special, sc, rate
 
 
@@ -389,6 +400,11 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     normal = max(0.0, normal_gross - ded) + _bump
     div_left = min(div, normal)           # dividends in slab income (surcharge on their tax capped at 15%)
     special_income = sum(taxable.values())
+    unc = uncapped_keys(fy)             # section 112 gains before FY 2022-23: no 15% cap on their surcharge (RC3M-008)
+    capped_income = sum(v for k, v in taxable.items() if k not in unc)
+
+    def unc_tax(bb: dict) -> float:
+        return sum(t for k, t in bb["special"].items() if k in unc)
     total = normal + special_income + sum(lt_exempt.values())
     steps.append(f"Income taxed at slab rates: {money(normal)}. Share gains taxed at special rates: {money(special_income)}"
                  + (f" (plus {money(sum(lt_exempt.values()))} of long-term gains within the exemption)" if sum(lt_exempt.values()) > 0.5 else "")
@@ -415,10 +431,10 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     elif b["special"] and any(k.startswith("lt") and t > 0 for k, t in b["special"].items()) and r["rebate_limit"] and total <= r["rebate_limit"]:
         steps.append("The 87A rebate can't be used against tax on long-term gains (section 112A).")
 
-    tax, sc, rate = _with_surcharge(b, total, special_income + div_left, r["sc_cap"])
+    tax, sc, rate = _with_surcharge(b, total, capped_income + div_left, r["sc_cap"], unc_tax(b))
     relief = 0.0
     for above, _ in SURCHARGE:           # marginal relief: just over a threshold, the extra tax is at most the extra income
-        above_rate = surcharge_rate(above, min(special_income + div_left, above), r["sc_cap"])
+        above_rate = surcharge_rate(above, min(capped_income + div_left, above), r["sc_cap"])
         if total > above and rate > above_rate:
             cut = total - above
             n2 = max(0.0, normal - cut)
@@ -430,13 +446,19 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
                 left -= take
             d2 = min(div_left, n2)
             b2 = _base(n2, g2, g_rates, above, r, d2)
-            t2, sc2, _ = _with_surcharge(b2, above, sum(g2.values()) + d2, r["sc_cap"])
+            t2, sc2, _ = _with_surcharge(b2, above, sum(v for k, v in g2.items() if k not in unc) + d2, r["sc_cap"], unc_tax(b2))
             relief = max(0.0, (tax + sc) - (t2 + sc2 + cut))
             relief = min(relief, sc)
             break
     if sc > 0:
-        capped = [w for w, on in (("the tax on dividends", rate > SPECIAL_SC_CAP and b["div_tax"] > 0), ("the special-rate tax", b["special_total"])) if on]
-        steps.append(f"Surcharge: {_pct(rate)} on the {'other ' if capped and capped[0] == 'the tax on dividends' else ''}slab tax" + (f" and {_pct(min(rate, SPECIAL_SC_CAP))} on {' and '.join(capped)}" if capped else "")
+        ut = unc_tax(b)
+        capped = [w for w, on in (("the tax on dividends", rate > SPECIAL_SC_CAP and b["div_tax"] > 0), ("the special-rate tax", b["special_total"] - ut > 0.005)) if on]
+        pieces = [f"{_pct(rate)} on the {'other ' if capped and capped[0] == 'the tax on dividends' else ''}slab tax"]
+        if capped:
+            pieces.append(f"{_pct(min(rate, SPECIAL_SC_CAP))} on {' and '.join(capped)}")
+        if ut > 0.005 and rate > SPECIAL_SC_CAP:
+            pieces.append(f"{_pct(rate)} on the tax on section 112 gains (the 15% cap on those starts in FY 2022-23)")
+        steps.append("Surcharge: " + ", ".join(pieces[:-1]) + (" and " if len(pieces) > 1 else "") + pieces[-1]
                      + f" as total income is over {money(next(a for a, _ in SURCHARGE if total > a))}: {money(sc)}"
                      + (f", less marginal relief of {money(relief)}" if relief > 0.5 else "") + ".")
     before_cess = tax + sc - relief
@@ -457,7 +479,8 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
 
     # each source's share: the special-rate tax is the gains'; the slab tax is split by each source's slab income
     special_after = b["special_total"] - (b["rebate"] - b["rebate_slab"])
-    sc_special = special_after * min(rate, SPECIAL_SC_CAP)
+    ut = unc_tax(b)
+    sc_special = (special_after - ut) * min(rate, SPECIAL_SC_CAP) + ut * rate
     rel_special = relief * (sc_special / sc) if sc else 0.0
     cg_tax = (special_after + sc_special - rel_special) * (1 + CESS)
     slab_total = max(0.0, final - cg_tax)

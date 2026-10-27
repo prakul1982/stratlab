@@ -119,7 +119,7 @@ def registry() -> list[dict]:
     add("rebate", "tax", "Rebate (87A; 156 of the 2025 Act), new regime", f"up to ₹{new['rebate_max']:,} for income to ₹{new['rebate_limit']:,}, not on special-rate gains",
         "tax_total.py _rules", "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2098406", "2025-04-01")
     add("surcharge", "tax", "Surcharge", ", ".join(f"{_pct(r)} above ₹{a:,}" for a, r in reversed(T.SURCHARGE))
-        + f"; new regime capped at {_pct(new['sc_cap'])}, gains at {_pct(T.SPECIAL_SC_CAP)}", "tax_total.py SURCHARGE", T.YEAR_SOURCES.get(2026, ""))
+        + f"; new regime capped at {_pct(new['sc_cap'])}, gains at {_pct(T.SPECIAL_SC_CAP)} (section 112 gains from FY {T.SEC112_CAP_FY}-{str(T.SEC112_CAP_FY + 1)[2:]})", "tax_total.py SURCHARGE", T.YEAR_SOURCES.get(2026, ""))
     add("cess", "tax", "Health and education cess", _pct(T.CESS), "tax_total.py CESS", "Finance Act 2018")
     add("last_fy", "tax", "Last year the tax rules cover", f"FY {T.LAST_FY}-{str(T.LAST_FY + 1)[2:]}", "tax_total.py LAST_FY",
         "add the next year once its Finance Act is out (February)")
