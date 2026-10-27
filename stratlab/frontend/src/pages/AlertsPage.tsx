@@ -8,7 +8,7 @@ import { AlertForm } from "../components/AlertForm";
 import { Bell, Pencil, Trash } from "../components/Icons";
 import { Modal } from "../components/ui";
 import { Earlier, LOCAL_TZ, splitToday } from "../components/Earlier";
-import { Badge, Card, CardHead, ConfirmDialog, EmptyState, ErrorState, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow } from "../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, EmptyState, ErrorState, Notice, PageHeader, PlanNote, Select, Skeleton } from "../components/kit";
 import { limitLine, planIdOf } from "../lib/lockText";
 
 /** Above this many alerts on, the list gets a search box and a sort (DP2-023: 25 alerts in one unsorted list). */
@@ -60,15 +60,13 @@ export function AlertsPage() {
           {/* the button stays on at the limit and opens the limit's note, as Net worth's does (DP2-022: one pattern) */}
           <CardHead title="Your alerts" info="Your plan's limit counts the alerts that are on. Ones that already fired don't count, and repeating ones count once."
             actions={<button className="btn sm" onClick={() => setAdding(true)}><Bell size={17} />New alert</button>} />
-          <StatRow>
-            <Stat label="Alerts on" value={`${page.count} of ${page.limit}`} />
-            {/* where a fired alert goes, in plain words (DP2-023, DP1-023: "Sent by: Nowhere yet") */}
-            <Stat label="Sent by" value={page.channels.length ? page.channels.map((c) => CHANNEL_NAME[c] ?? c).join(", ") : "This page only"}
-              note={page.channels.length ? "At most a few messages an hour: alerts that fire faster wait and go out together."
-                : "No phone, Telegram or confirmed email is set up, so a fired alert is listed here and nowhere else."} />
-          </StatRow>
+          {/* one sentence row, not two stats beside a three-line note with the settings link alone under them (VR1-130); where a
+              fired alert goes, in plain words (DP2-023, DP1-023: "Sent by: Nowhere yet") */}
+          <p className="k-small" data-testid="alerts-summary"><b>{page.count} of {page.limit}</b> alerts on · Sent by <b>{page.channels.length ? page.channels.map((c) => CHANNEL_NAME[c] ?? c).join(", ") : "This page only"}</b>
+            {" · "}<Link className="link" to="/settings#notifications">Where alerts go and what to send</Link></p>
+          <p className="k-note">{page.channels.length ? "At most a few messages an hour: alerts that fire faster wait and go out together."
+            : "No phone, Telegram or confirmed email is set up, so a fired alert is listed here and nowhere else."}</p>
           {full && limit && (limit.next ? <PlanNote plan={limit.next}>{limit.text}</PlanNote> : <Notice>{limit.text}</Notice>)}
-          <p className="k-small"><Link className="link" to="/settings#notifications">Where alerts go and what to send</Link></p>
           {/* the address itself stays in Settings, not printed on this page (DP1-023) */}
           {page.email && !page.email_confirmed && <p className="k-note">Alerts go to your email once you've confirmed the address in Settings (Notifications).</p>}
         </Card>

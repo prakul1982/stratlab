@@ -198,7 +198,8 @@ export function JournalPage() {
               <Select label="Add to or replace the imported trades" value={mode} onChange={(v) => setMode(v as "add" | "replace")}
                 options={[{ value: "add", label: "Add to my trades" }, { value: "replace", label: "Replace imported trades" }]} />
             )}
-            <button type="button" className="btn outline" disabled={busy} onClick={fromTax}>Use my tax report's trades</button>
+            {/* with trades waiting in the tax report and none here, the card below offers them as its one button: a second one here said the same (VR1-094) */}
+            {!(!has && taxTrades > 0 && j.show !== "practice") && <button type="button" className="btn outline" disabled={busy} onClick={fromTax}>Use my tax report's trades</button>}
           </div>
           {result && (
             <div className="k-stack k-tight" role="status">

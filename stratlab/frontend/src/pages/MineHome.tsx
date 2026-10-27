@@ -3,12 +3,11 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { asOf, dayIn, firstName, inr, inrCompact, pct, price, signedInrCompact } from "../lib/format";
-import { evWhen } from "../lib/marketEvents";
 import { netWorthDelta, restatedNote, sinceNote } from "../lib/networth";
 import { inWords, marketState, usSettling, usTodayNote } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
 import { MARKET_TILES, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUpAll, useMarketStrip, type Up } from "../lib/mine";
-import { goldLine, type IndiaGold } from "../lib/gold";
+import { goldLineParts, type IndiaGold } from "../lib/gold";
 import { fmtDate, monthShort } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, slotSpans, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
@@ -38,6 +37,8 @@ const ownZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().tim
 // "your time" (DI-011: "Sunday, 25 October" over "Sat 21:00 your time")
 const dateLine = () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: zone() }).replace(/^(\w+) /, "$1, ")
   + (zone() === "Asia/Kolkata" && ownZone() && ownZone() !== "Asia/Kolkata" && ownZone() !== "Asia/Calcutta" ? " in India" : "");
+/** A long explanation shows its first sentence whole (the rest is in the tooltip and the calendar), not cut mid-sentence with "…" (VR1-003). */
+const firstSentence = (t: string) => { const m = t.length > 110 ? t.match(/^.{20,}?[.!?](?=\s)/) : null; return m ? m[0] : t; };
 const dayNum = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); const t = new Date(y, m - 1, d); return { d: t.getDate(), m: monthShort(t), w: t.toLocaleDateString("en-GB", { weekday: "short" }) }; };
 
 export function MineHome() {
@@ -57,23 +58,19 @@ export function MineHome() {
   const shown = layout.order.filter((id) => !layout.hidden.includes(id));
 
   const now = useMinute();
-  // one line: when the market opens or closes, then the next two dates from the calendars
+  // one line: when the market opens or closes. The next dates are the first rows of "Coming up" right below, so they are not said twice
+  // (VR1-003: the heading line repeated the first two rows)
   const lede = useMemo(() => {
-    const parts: string[] = [];
     const m = markets.find((x) => x.id === "IN");
     const st = m && m.status !== "soon" ? marketState(m, new Date(now)) : null;     // the same minute the line counts from
     if (st && !st.offline) {
       const mins = st.change ? (st.change.getTime() - now) / 60000 : null;
-      if (st.open && mins !== null) parts.push(`Indian markets close in ${inWords(mins)}.`);
-      else if (st.closedFor) parts.push(`Indian markets are closed ${st.closedFor === "weekend" ? "for the weekend" : "today for a holiday"}${mins !== null ? `, and open in ${inWords(mins)}` : ""}.`);
-      else if (mins !== null) parts.push(`Indian markets open in ${inWords(mins)}.`);
+      if (st.open && mins !== null) return `Indian markets close in ${inWords(mins)}.`;
+      if (st.closedFor) return `Indian markets are closed ${st.closedFor === "weekend" ? "for the weekend" : "today for a holiday"}${mins !== null ? `, and open in ${inWords(mins)}` : ""}.`;
+      if (mins !== null) return `Indian markets open in ${inWords(mins)}.`;
     }
-    if (coming && coming.length) {
-      const [a, b] = coming;
-      parts.push(`Next up: ${a.title} on ${evWhen(a)}${b ? `, then ${b.title} on ${evWhen(b)}` : ""}.`);
-    } else if (coming) parts.push("Nothing dated is coming up yet.");
-    return parts.join(" ") || "Your money, the markets and what is coming up, in one place.";
-  }, [markets, coming, now]);
+    return "Your money, the markets and what is coming up, in one place.";
+  }, [markets, now]);
 
   const change = (next: Layout) => { setRaw(next); void savePrefs({ mine: next }, true); };
   const cardFor = (id: CardId) => ({
@@ -170,25 +167,17 @@ function NetWorthCard() {
       <Stat label="What you own minus what you owe" value={inrCompact(v.totals.net)}
         delta={diff !== null ? <Delta value={diff}>{signedInrCompact(diff)}</Delta> : undefined}
         note={move ? sinceNote(move, (d) => asOf(d) ?? d, inrCompact) : restated ?? `As of ${asOf(v.as_of) ?? "today"}`} />
-      {/* two snapshots joined by a line read as a trend: the chart waits for a third (DI-012) */}
+      {/* two snapshots joined by a line read as a trend: the chart waits for a third (DI-012); until then the card shows the number alone, not a
+          boxed dashed line that reads as a broken chart (VR1-005) */}
       {whole.length >= 3 ? <Spark values={whole.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />
-        : <HistoryPlaceholder allowed={v.history_allowed} count={whole.length} />}
+        : !v.history_allowed && <HistoryPlaceholder />}
     </Card>
   );
 }
 
-/** The space under the net worth figure while there is no history to draw: a dashed baseline with today's dot, and why. */
-function HistoryPlaceholder({ allowed, count }: { allowed: boolean; count: number }) {
-  return (
-    <div className="mine-nw-ph" data-testid="mine-nw-placeholder">
-      <svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
-        <path className="grid" d="M0 5H100" />
-        <path className="base" d="M2 12H96" />
-        <circle cx="97" cy="12" r="2.2" />
-      </svg>
-      <span className="k-note k-muted">{allowed ? (count > 0 ? `${count} snapshot${count === 1 ? "" : "s"} so far; the chart starts at the third` : "History starts after your first month") : <>The history chart is on the Basic plan. <PlanInline /></>}</span>
-    </div>
-  );
+/** What stands in for the chart on a plan without the history: one line, no boxed baseline (VR1-005). */
+function HistoryPlaceholder() {
+  return <p className="k-note k-muted" data-testid="mine-nw-placeholder">The history chart is on the Basic plan. <PlanInline /></p>;
 }
 
 /* ---------- today's P&L ---------- */
@@ -203,7 +192,7 @@ function PnlCard() {
   if (h === "none" || !h.rows.length) {
     return (
       <Card testId="mine-pnl">
-        <EmptyState title="Today's P&L" action={{ label: "Add your holdings", to: "/holdings" }}>How your stocks moved today shows here once you bring in your holdings file.</EmptyState>
+        <EmptyState title="Your P&L" action={{ label: "Add your holdings", to: "/holdings" }}>How your stocks moved today shows here once you bring in your holdings file.</EmptyState>
       </Card>
     );
   }
@@ -212,14 +201,17 @@ function PnlCard() {
   const fresh = !h.prices_at || dayIn(h.prices_at) === dayIn(new Date());
   return (
     <Card testId="mine-pnl">
-      <CardHead title={fresh ? "Today's P&L" : "Last session's P&L"} actions={<Link className="btn quiet sm" to="/holdings" aria-label="Open holdings">Open</Link>} />
-      <Stat label={`${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={day == null ? "–" : signedInrCompact(day)} tone={day == null || day === 0 ? undefined : day > 0 ? "up" : "down"}
+      {/* one short title, the day in the figure's label, as Net worth ("What you own…") and Paper sessions ("Running now") beside it: "Last
+          session's P&L" wrapped at 1280 and pushed Open onto a line of its own, so this card stood 77px taller than both (CI UI checker R13) */}
+      <CardHead title="Your P&L" actions={<Link className="btn quiet sm" to="/holdings" aria-label="Open holdings">Open</Link>} />
+      <Stat label={`${fresh ? "Today" : "Last session"} · ${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={day == null ? "–" : signedInrCompact(day)} tone={day == null || day === 0 ? undefined : day > 0 ? "up" : "down"}
         note={day == null ? "The day's change needs prices, which are not in yet." : h.totals.day_pct != null ? <>Holdings <Signed value={day}>{pct(h.totals.day_pct, 2)}</Signed></> : undefined} />
       {/* the US part of the day named, live or at its close, as Holdings and Money say it (R7O-012) */}
       {(() => { const note = usTodayNote(markets, h.us, h.usd_inr); return note && <p className="k-note" data-testid="mine-us-today">{note}</p>; })()}
       {/* a stock with a price but no buy price is in the day's change, not in the value and gain or loss (R3D) */}
       {h.totals.no_cost && <p className="k-note" data-testid="mine-no-cost">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}), except Today, which includes {h.totals.no_cost.count === 1 ? "its" : "their"} change.</p>}
-      {h.prices_at && <div><Badge>Prices as of {asOf(h.prices_at)}</Badge></div>}
+      {/* a note line like the other two cards' "As of": the pill under it made this card 40px taller than its neighbours (VR1-001) */}
+      {h.prices_at && <p className="k-note">Prices as of {asOf(h.prices_at)}</p>}
     </Card>
   );
 }
@@ -256,11 +248,11 @@ function MarketsCard({ later }: { later: boolean }) {
   const closed = (id: string | null) => { const m = id ? markets.find((x) => x.id === id) : null; return !!m && !marketState(m).open; };
   // the US closing prints settle about 50 minutes after the bell (the server's SETTLE_MIN): until then a tile's last value is the last trade
   const settling = (id: string | null) => usSettling(id === "US" ? markets.find((x) => x.id === id) : null);
+  const gline = series.gold ? goldLineParts(gold, series.usdinr ? goldInr10g(series.gold.last, series.usdinr.last) : null, inr) : null;
+  const goldShort = gline?.short ?? null, goldMore = gline?.more ?? null;
   return (
     <Card testId="mine-markets" label="Markets">
-      <CardHead title="Markets" info="Each line is the last month of daily closes; the change is the latest session against the one before, with its day when that session is not today." actions={<Link className="btn quiet sm" to="/research/pulse">Market pulse</Link>} />
-      {/* the period and the colours in words, not only behind the (i) (DI-010) */}
-      <p className="k-note k-muted" data-testid="mine-mkt-key">Lines: the last month of daily closes. Indices are green or red by the day's move; the dollar and gold stay blue, as a rise in either is neither good nor bad.</p>
+      <CardHead title="Markets" info={<>Each line is the last month of daily closes; the change is the latest session against the one before, with its day when that session is not today. Indices are green or red by the day's move; the dollar and gold stay blue, as a rise in either is neither good nor bad.{goldMore && ` Gold: ${goldMore}`}</>} actions={<Link className="btn quiet sm" to="/research/pulse" aria-label="Open market pulse">Open</Link>} />
       <div className="mine-markets">
         {MARKET_TILES.map((t) => {
           const s = series[t.id];
@@ -272,7 +264,6 @@ function MarketsCard({ later }: { later: boolean }) {
                 : (
                   <>
                     <span className="mine-mkt-v">{t.fmt(s.last)}</span>
-                    {t.id === "gold" && (() => { const line = goldLine(gold, series.usdinr ? goldInr10g(s.last, series.usdinr.last) : null, inr); return line && <span className="k-note" data-testid="mine-gold-inr">{line}</span>; })()}
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct} tone={t.neutral ? "neutral" : "auto"}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
                       {/* a move that isn't today's says its day (R7T-003) */}
                       {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t)), !tileMarket(t)); return w && <span className={w.includes("settling") ? "k-note" : "k-note nowrap"} data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008); the long settling words wrap inside the tile (R89-003) */; })()}</span>
@@ -283,6 +274,9 @@ function MarketsCard({ later }: { later: boolean }) {
           );
         })}
       </div>
+      {/* gold's rupee price as one short line under the tiles (inside its tile it ran to ten lines and made every tile as tall, UI-FIX-1); the world
+          price and the duty between them, and what the line colours mean, are behind the (i) (VR1-002: two paragraphs of small print on a home card) */}
+      {goldShort && <p className="k-note k-muted" data-testid="mine-gold-inr">Gold: {goldShort}</p>}
     </Card>
   );
 }
@@ -291,7 +285,7 @@ function MarketsCard({ later }: { later: boolean }) {
 function ComingCard({ rows, more = 0 }: { rows: Up[] | null; more?: number }) {
   return (
     <Card testId="mine-coming">
-      <CardHead title="Coming up" actions={<Link className="btn quiet sm" to="/money/calendar">Calendar</Link>} />
+      <CardHead title="Coming up" actions={<Link className="btn quiet sm" to="/money/calendar" aria-label="Open the money calendar">Open</Link>} />
       {rows === null ? <Skeleton label="Reading your calendars" lines={3} />
         : !rows.length ? <EmptyState title="Nothing dated yet" action={{ label: "Open the money calendar", to: "/money/calendar" }}>Tax dates, results and dividends for your stocks and market events show here.</EmptyState>
         : (
@@ -301,7 +295,7 @@ function ComingCard({ rows, more = 0 }: { rows: Up[] | null; more?: number }) {
               return (
                 <li key={u.key} className="mine-tl-i">
                   <span className="dt"><b>{d.d}</b>{d.m}</span>
-                  <span className="body">{u.to ? <Link to={u.to}><b>{u.title}</b></Link> : <b>{u.title}</b>}{u.detail && <span className="k-stat-d">{u.detail}</span>}</span>
+                  <span className="body">{u.to ? <Link to={u.to}><b>{u.title}</b></Link> : <b>{u.title}</b>}{u.detail && <span className="k-stat-d" title={u.detail}>{firstSentence(u.detail)}</span>}</span>
                   {/* every row gives its weekday; a tax date keeps its colour (and says so to a screen reader) (R48-011) */}
                   <Badge tone={u.tone === "warn" ? "warn" : "plain"} dot={false}>{d.w}{u.tone === "warn" && <span className="sr-only"> · {u.tag} date</span>}</Badge>
                 </li>
@@ -337,9 +331,12 @@ function WatchCard() {
     });
     return () => { live = false; };
   }, [items]);
+  // VR2-004: six rows each said "Mon 26 Oct" under the name: when every row is from the same earlier day it is said once, under the list
+  const days = (movers ?? []).map((m) => day(m));
+  const sameDay = days.length > 1 && days[0] && days.every((d) => d === days[0]) ? days[0] : null;
   return (
     <Card testId="mine-watch">
-      <CardHead title={movers?.length && movers.every((m) => day(m)) ? "Your watchlist, last session" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist">All</Link>} />
+      <CardHead title={movers?.length && movers.every((m) => day(m)) ? "Your watchlist, last session" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist" aria-label="Open the watchlist">Open</Link>} />
       {failed ? <ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed.</ErrorState>
         : movers === null ? <Skeleton label="Reading your watchlist prices" lines={3} />
         : !movers.length ? (
@@ -347,16 +344,20 @@ function WatchCard() {
             ? <EmptyState title="No prices yet" action={{ label: "Open the watchlist", to: "/research/watchlist" }}>Today's prices for your watchlist are not available right now.</EmptyState>
             : <EmptyState title="Your watchlist is empty" action={{ label: "Find a company", to: "/research" }}>Press Watch on any company to follow it here, with the biggest movers first.</EmptyState>
         ) : (
+          <>
           <ul className="mine-movers">
             {movers.map((m) => (
               <li key={`${m.region}-${m.symbol}`}>
                 <Link to={`/research/${m.region}/${encodeURIComponent(m.symbol)}`}><b>{m.symbol}</b>{m.name && <span className="k-stat-d">{m.name}</span>}</Link>
                 <span className="px">{price(m.q.price, m.region === "US" ? "USD" : "INR")}</span>
                 <Delta value={m.q.change_pct}>{pct(m.q.change_pct, 2)}</Delta>
-                {(() => { const d = day(m); return d && <span className="k-note" data-testid="mine-mover-day"> {fmtDate(d, { weekday: true, year: false })}</span>; })()}
+                {/* VR2-004: a row names its day only when the rows' days differ (India and the US can be on different sessions) */}
+                {!sameDay && (() => { const d = day(m); return d && <span className="k-note" data-testid="mine-mover-day"> {fmtDate(d, { weekday: true, year: false })}</span>; })()}
               </li>
             ))}
           </ul>
+          {sameDay && <p className="k-note" data-testid="mine-mover-day">Prices from {fmtDate(sameDay, { weekday: true, year: false })}</p>}
+          </>
         )}
     </Card>
   );

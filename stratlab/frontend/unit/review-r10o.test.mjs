@@ -24,7 +24,7 @@ test("R10O-001: a provider's long error is one line on Overview, with the whole 
   assert.ok(url.text.length <= 120 && url.text.endsWith("…") && url.full.length > 300);
   assert.deepEqual(oneLine("not answering"), { text: "not answering" });
   const css = read("src/pages/admin/admin.css");
-  assert.match(css, /\.adm-todo-t > span:last-child \{[^}]*overflow-wrap: anywhere/);
+  assert.match(css, /\.adm-todo-t > span:last-of-type \{[^}]*overflow-wrap: anywhere/);
   assert.match(read("src/pages/admin/OverviewSection.tsx"), /<span title=\{x\.full\}>\{x\.text\}<\/span>/);
 });
 

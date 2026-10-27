@@ -1,13 +1,17 @@
 /* Paper trading pages: the row of session cards and a session's title row. */
-.k-sessions { display: flex; gap: var(--s3); overflow-x: auto; padding-bottom: var(--s1); }
-.k-sess { flex: none; min-width: 210px; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); padding: var(--s3) var(--s4); text-align: left; font: inherit; color: var(--ink);
+/* a session is a row across the card (name, what it trades and since when, its state), one under another: tiles in a row left a wide card
+   holding one small box (UI-FIX-1, R2) */
+.k-sessions { display: flex; flex-direction: column; gap: var(--s2); }
+.k-sess { width: 100%; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s4); padding: var(--s3) var(--s4); text-align: left; font: inherit; color: var(--ink);
   cursor: pointer; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); }
+.k-sess > b { flex: 0 1 240px; min-width: 0; }
+.k-sess > .k-note { flex: 1 1 260px; min-width: 0; }
 .k-sess:hover { border-color: var(--ink-2); }
 .k-sess[aria-current="true"] { border: 2px solid var(--ink); padding: calc(var(--s3) - 1px) calc(var(--s4) - 1px); }
-/* a phone: the cards stack at the page's width, so a card's border is never cut off by the row's edge (R30-010) */
+/* a phone: each row's parts stack at the page's width, so a row's border is never cut off by the edge (R30-010) */
 @media (max-width: 640px) {
-  .k-sessions { flex-direction: column; overflow-x: visible; }
-  .k-sess { min-width: 0; width: 100%; box-sizing: border-box; }
+  .k-sess { flex-direction: column; align-items: flex-start; }
+  .k-sess > b, .k-sess > .k-note { flex: none; }
 }
 .k-session-head { align-items: flex-end; }
 .k-session-name { font-family: var(--serif); font-size: clamp(24px, 3.4vw, 32px); font-weight: 600; letter-spacing: -.02em; }

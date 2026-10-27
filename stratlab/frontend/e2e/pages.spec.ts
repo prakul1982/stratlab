@@ -417,8 +417,8 @@ test("my holdings: add by hand from suggestions, an Indian stock with the keyboa
   await expect(table.getByText("AAPL", { exact: true })).toBeVisible();
   await expect(table.getByRole("row", { name: /AAPL/ })).toContainText("$");
   const usLine = page.getByLabel("US stocks");
-  await expect(usLine).toContainText("$");
   await expect(usLine).toContainText("Sales of US stocks come from the trades");
+  await expect(usLine, "RC2B-045: one US stock's dollar value is its row's, not said again in the line above").not.toContainText("invested $");
   // an exact symbol typed without picking still works
   await page.getByRole("radio", { name: "India (NSE/BSE)" }).click();
   await box.fill("INFY");
@@ -536,7 +536,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await expect(total.getByText(/^Old regime/)).toBeVisible();
   await expect(total.getByText(/With the same figures, the new regime works out to/)).toBeVisible();
   await expect(total.getByText(/Deductions you entered \(80C and the like\): ₹1,50,000/)).toBeVisible();
-  const amount = await total.getByLabel("Estimated total tax").innerText();
+  const amount = await page.locator('span[aria-label="Total tax estimate"]').innerText();      // the summary at the top: the total is not printed twice (VR1-144)
   expect(Number(amount.replace(/[^\d]/g, ""))).toBeGreaterThan(100000);
   await expect(total.getByText(/Covers only the income you enter or import here/)).toBeVisible();
   await expect(total.getByText(/Rules for this year not yet confirmed/)).toHaveCount(0);
@@ -558,7 +558,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await total.getByRole("button", { name: "Save and update" }).click();
   await expect(total.getByText(/resident, aged 60 to 79/)).toBeVisible();
   await expect(total.getByText(/the old regime's basic exemption is ₹3,00,000/)).toBeVisible();
-  const senior = Number((await total.getByLabel("Estimated total tax").innerText()).replace(/[^\d]/g, ""));
+  const senior = Number((await page.locator('span[aria-label="Total tax estimate"]').innerText()).replace(/[^\d]/g, ""));
   expect(senior).toBeLessThan(Number(amount.replace(/[^\d]/g, "")));
   await total.getByRole("radio", { name: "No", exact: true }).click();
   await total.getByRole("button", { name: "Save and update" }).click();
@@ -1333,7 +1333,8 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   const notice = page.getByText(/TCS had a 1:1 bonus on .*: your quantity is now 24, average price ₹1,760/);
   await expect(notice).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Dividends" })).toBeVisible();
-  await expect(page.getByRole("table", { name: "Dividends ahead" }).getByText("TCS")).toBeVisible();
+  // TCS can have two dividends ahead in the window (around midnight IST the seeded dates shift a day): one or more rows is the point
+  await expect(page.getByRole("table", { name: "Dividends ahead" })).toContainText("TCS");
   if (info.project.name === "phone") await touchable(page);
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page.getByText("TCS: quantity 24, average price ₹1,760.00.")).toBeVisible();
@@ -1382,11 +1383,16 @@ test("admin: fund costs (TER) shows its last read in Data and jobs and reads aga
   const errors = await open(page, "/admin/data", "Fund costs (TER)");
   const row = page.getByRole("row", { name: /Fund costs \(TER\)/ });
   await expect(row.getByRole("button", { name: "Read now: Fund costs (TER)" })).toBeVisible({ timeout: 30_000 });
+  // a read of its own first: the world reads TER only when a page asks for fund costs, so run alone (or before the mutual
+  // funds specs) nothing had been read yet and the log said "Not yet"
+  await row.getByRole("button", { name: "Read now: Fund costs (TER)" }).click();
+  await expect.poll(() => reads).toBe(1);
+  await expect(row.getByRole("button", { name: "Read now: Fund costs (TER)" })).toBeEnabled({ timeout: 30_000 });
   await row.getByRole("button", { name: "Log of Fund costs (TER)" }).click();
   await expect(page.getByRole("dialog", { name: "Fund costs (TER): log" })).toContainText(/3 schemes for/, { timeout: 30_000 });
   await page.keyboard.press("Escape");
   await row.getByRole("button", { name: "Read now: Fund costs (TER)" }).click();
-  await expect.poll(() => reads).toBe(1);
+  await expect.poll(() => reads).toBe(2);
   await expect(row.getByRole("button", { name: "Read now: Fund costs (TER)" })).toBeEnabled({ timeout: 30_000 });
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
@@ -1522,25 +1528,33 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await expect(page.getByText("Costs are being read; check back shortly.")).toBeVisible();
   await expect(page.getByLabel("PDF password")).toHaveCount(0);              // the password field goes with the file
 
-  const schemes = page.getByRole("table", { name: "Schemes" });
-  await expect(schemes.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible();
+  // MF-1 (RC2B-047): each scheme is one row of one list; its units, costs, return and sales are folded under it
+  const schemes = page.getByRole("list", { name: "Schemes" });
+  const flexi = schemes.getByRole("listitem").filter({ hasText: "Example Flexi Cap Fund - Direct Plan - Growth" });
+  await expect(flexi).toHaveCount(1);
   await expect(schemes.getByText("Sample Short Duration Fund - Direct Plan - Growth")).toBeVisible();
   await expect(page.getByText("₹42,500").first()).toBeVisible();             // 1,100 units at 25 and 500 at 30
-  await expect(page.getByRole("heading", { name: "By category" })).toBeVisible();
+  await expect(page.getByText("Share of the current value, by each scheme's official category.")).toBeVisible();
+  await expect(page.getByRole("table", { name: "Schemes" }), "no second table of the same schemes").toHaveCount(0);
 
   await page.getByRole("combobox", { name: "Financial year" }).selectOption("2025");
   await expect(page.getByRole("table", { name: "Gains by rate" }).getByText("Short-term at your slab rate (debt and other funds)")).toBeVisible();
   await page.getByRole("combobox", { name: "Financial year" }).selectOption("2024");
-  await expect(page.getByRole("table", { name: "Redemptions matched to purchases" }).getByText("grandfathered")).toBeVisible();
+  await expect(page.getByTestId("mf-sales-pointer")).toContainText("Each is listed under its scheme");
+  // the year's sales are under their scheme, with every year it sold in
+  await flexi.locator("summary").click();
+  await expect(flexi.getByRole("table", { name: "Redemptions matched to purchases" }).getByText("grandfathered")).toBeVisible();
 
-  // what the funds cost: each TER, rupees a year, both plans side by side, the TER since bought and a category change
-  const costs = page.getByRole("table", { name: "Fund costs" });
-  await expect(costs.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("region", { name: "Fund costs" }).getByText("₹185").first()).toBeVisible();   // 143 + 42 a year
+  // what the funds cost: the totals once, each fund's TER and rupees a year in its row, and both plans, the TER since bought and a category change in its fold
+  await expect(page.getByRole("region", { name: "Costs and how you invested" }).getByText("₹185").first()).toBeVisible({ timeout: 30_000 });   // 143 + 42 a year
+  await expect(flexi.getByText("₹143 a year")).toBeVisible();
+  const costs = flexi.getByRole("region", { name: "What it costs" });
   await expect(costs.getByText("₹352")).toBeVisible();                       // the 1.28-point plan gap on ₹27,500
-  await expect(costs.getByText(/Category changed on 16 Mar 2026 \(2026 recategorisation\)/)).toBeVisible();
   await costs.getByText("Parts of the TER").first().click();
   await expect(costs.getByText("Brokerage and transaction costs: 0.08%")).toBeVisible();
+  const short = schemes.getByRole("listitem").filter({ hasText: "Sample Short Duration Fund - Direct Plan - Growth" });
+  await short.locator("summary").click();
+  await expect(short.getByText(/Category changed on 16 Mar 2026 \(2026 recategorisation\)/)).toBeVisible();
 
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/you should|we suggest|recommend|better fund|switch to|rating/i);
@@ -1647,7 +1661,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   await expect(today.getByText(/vs \d+ \w+/).first()).toBeVisible();                     // the change against the day before
   const charts = page.getByTestId("breadth-charts");
   await expect(charts.getByRole("heading", { name: "Advance/decline line" })).toBeVisible();
-  for (const name of ["Share above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
+  for (const name of ["Above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
     "Sectors: share above the 50-day average", "Breadth thrust measure", "TRIN"]) await expect(charts.getByRole("heading", { name })).toBeVisible();
   // the index is its own small chart: no chart has a second scale
   await expect(charts.getByRole("heading", { name: /^NIFTY 500/ })).toBeVisible();
@@ -1720,14 +1734,14 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   for (const who of ["client", "dii", "fii", "pro", "total"]) await expect(main.locator(`tr[data-participant="${who}"]`)).toBeVisible();
   await expect(main.getByText("FII index futures, net")).toBeVisible();
   // both sides of the futures: the long and the short share, adding up to 100
-  await expect(main.getByText("FII index futures, long · short")).toBeVisible();
+  await expect(main.getByText("FII index futures, long share")).toBeVisible();
   await expect(main.getByTestId("split-fii")).toHaveCount(0);                                     // the split is a click away in the table
   await main.getByTestId("cols-pos-part").click();
   const split = await main.getByTestId("split-fii").innerText();
   const [lo, sh] = (split.match(/[\d.]+(?=%)/g) ?? []).map(Number);
   expect(lo + sh).toBeCloseTo(100, 1);
-  await expect(main.getByTestId("sides-fig")).toContainText(/[\d.]+% long\s*[\d.]+% short/);
-  await expect(main.getByTestId("sides-fig")).toContainText(/Long share [+−][\d.]+ pts from the previous trading day/);
+  await expect(main.getByTestId("sides-fig")).toContainText(/long share\s*[\d.]+%\s*[\d.]+% short/);        // VR1-070: the long share as the figure, the short side in its note
+  await expect(main.getByTestId("sides-fig")).toContainText(/[+−][\d.]+ pts from the previous trading day/);
   // a figure is three rows shared with its neighbours (label, number, note): nothing in one draws over the next
   const overlaps = await main.locator(".k-stat").evaluateAll((figs) => figs.flatMap((f) => {
     const rows = Array.from(f.children).map((c) => c.getBoundingClientRect()).filter((b) => b.height > 0);

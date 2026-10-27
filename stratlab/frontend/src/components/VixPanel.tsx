@@ -6,7 +6,7 @@ import { Badge, Card, CardHead, ErrorState, Skeleton, Stat, StatRow } from "./ki
 import "../pages/trade/trade.css";
 import "../pages/trade/positioning.css";
 import { asOf, fmtDate, IST } from "../lib/format";
-import { chainWithTime, strike, VIX_IV_LABEL, vixIvNote } from "../lib/positioning";
+import { chainWithTime, strike, VIX_IV_LABEL, vixIvLine } from "../lib/positioning";
 const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /* India VIX on the Positioning page: the value now and its change, the day's range, where it sits among the past year's
@@ -36,7 +36,7 @@ export function VixPanel() {
   return (
     <Card id="india-vix" testId="vix-panel" label="India VIX">
       <CardHead title="India VIX" infoLabel="About India VIX"
-        info="The exchange's volatility index, worked out from NIFTY option prices. NIFTY ATM IV is StratLab's own model estimate from the nearest expiry (the next one on an expiry day), so the two are close but not the same number."
+        info="The exchange's volatility index, worked out from NIFTY option prices. NIFTY ATM IV is StratLab's own model estimate from the nearest expiry (the next one on an expiry day), so the two are close but not the same number. India VIX measures the next 30 days while the IV is of one expiry, so they differ, most of all near expiry."
         actions={fresh?.stamp ? <>
           {fresh.stale && <span data-testid="vix-stale"><Badge tone="warn">Not updated today</Badge></span>}
           {fresh.lastSession && <span data-testid="vix-last-session"><Badge>{fresh.lastSession}</Badge></span>}
@@ -57,7 +57,7 @@ export function VixPanel() {
                 <Stat label="Percentile, past year" value={val(v.percentile.percentile != null ? String(Math.round(v.percentile.percentile)) : null, "Not enough days yet")}
                   note={<span data-testid="vix-pct">{vixPercentileLine(v.percentile)}{v.percentile.low != null && v.percentile.high != null ? `; range ${vixNum(v.percentile.low)} – ${vixNum(v.percentile.high)}` : ""}</span>} />
                 <Stat label={VIX_IV_LABEL} value={val(ivNow ? `${ivNow.iv.toFixed(2)}%` : null, "Not recorded yet")}
-                  note={ivNow ? vixIvNote(ivNow.strike, upperFirst(chainWithTime(ivNow, vixTime(ivNow.as_of))), strike, !!ivNow.rolled) : undefined} />
+                  note={ivNow ? vixIvLine(ivNow.strike, upperFirst(chainWithTime(ivNow, vixTime(ivNow.as_of))), strike, !!ivNow.rolled) : undefined} />
               </StatRow>
             </div>
             <div className="k-two">

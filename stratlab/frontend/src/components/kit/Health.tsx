@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useNoOrphan } from "../../lib/noOrphan";
 
 export type HealthState = "ok" | "warn" | "bad";
 const WORD: Record<HealthState, string> = { ok: "OK", warn: "Check", bad: "Problem" };
@@ -11,7 +12,8 @@ export function Light({ state, word }: { state: HealthState; word?: string }) {
 
 /** Tiles in a grid, one per service or data feed: the name, its light with a word, and a line of detail. */
 export function HealthGrid({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="k-health" role="list" aria-label={label}>{children}</div>;
+  const ref = useNoOrphan<HTMLDivElement>();      // never one tile alone on the last line (UI-FIX-1, R9)
+  return <div className="k-health" ref={ref} role="list" aria-label={label}>{children}</div>;
 }
 
 /** One tile of a HealthGrid. With `to`, the whole tile opens where the thing is fixed. */

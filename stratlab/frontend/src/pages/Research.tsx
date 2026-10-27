@@ -388,7 +388,7 @@ function CompanyView() {
             {wiki?.description && <p className="k-sub">{wiki.description}</p>}
             <p className="k-small">{wiki?.extract || c.about.profile}</p>
             {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
-            {c.facts.some((f) => !/market cap/i.test(f.label)) && <dl className="k-dl">{c.facts.filter((f) => !/market cap/i.test(f.label)).map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
+            {c.facts.some((f) => !/market cap/i.test(f.label)) && <dl className="k-dl pairs">{c.facts.filter((f) => !/market cap/i.test(f.label)).map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
             {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
           </Card>
         )}
@@ -453,8 +453,9 @@ function CompanyView() {
 
       <AIRead region={region} symbol={c.symbol} onTest={(i) => test(c, i)} />
 
-      <div className="k-cols">
-        {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><QuoteGrid region={region} symbols={c.peers} /></Card>}
+      {/* CK-2 (R1): one card under the other: the news list is shorter than the peers' tiles, so side by side it left 120px of blank beside it */}
+      <div className="k-stack">
+        {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><div className={`co-peers co-peers-${c.peers.length === 4 ? 2 : Math.min(3, c.peers.length)}`}><QuoteGrid region={region} symbols={c.peers} /></div></Card>}
         <Card id="co-news"><CardHead title="Latest news" />{c.lazy?.length ? <Skeleton label="Loading the latest news" lines={2} />
           : c.news_failed && !c.news.length ? <p className="k-small k-muted" data-testid="news-failed">The news couldn't be loaded just now. It is read again when you open the page.</p>
           : <NewsList items={c.news} />}</Card>
@@ -921,7 +922,9 @@ export function WatchlistPage() {
       ) : (
         <Card>
           <CardHead title={`Your ${REGION_NAME[region]} watchlist`} actions={<AlertButton region={region} choices={mine.map((w) => ({ region: w.region, symbol: w.symbol }))} />} />
-          <DataTable label="Your watchlist" rows={mine} rowKey={(w) => `${w.region}:${w.symbol}`}
+          {/* cards on a phone from the start: the badges under a name arrive after the first draw, so the overflow check alone
+              could still leave Actions past the edge (UI checker R18) */}
+          <DataTable label="Your watchlist" stack rows={mine} rowKey={(w) => `${w.region}:${w.symbol}`}
             columns={[
               { key: "s", header: "Company", rowHeader: true, wrap: true, cell: (w) => (
                 // the flags sit under the name, not in a column of their own, so a phone fits the row and its Remove (R63-003)

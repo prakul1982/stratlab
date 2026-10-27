@@ -7,9 +7,9 @@ import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { LIMITS } from "../../lib/plans";
-import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
-import { FundCosts } from "./FundCosts";
-import { FundBehaviour } from "./FundBehaviour";
+import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { CostCell, CostDetail, CostHow, CostNotes, CostStats, costsShown, useFundCosts } from "./FundCosts";
+import { BehaviourDetail, BehaviourHow, BehaviourNotes, BehaviourStats, GapCell, behaviourShown, hasGap, useFundBehaviour } from "./FundBehaviour";
 import { Earlier } from "../../components/Earlier";
 import { movedYearNote, openFy } from "../../lib/fy";
 import { importLine } from "../../lib/mfImport";
@@ -17,7 +17,8 @@ import { useAskedFy } from "../../lib/useFy";
 import { PlanInline } from "../../components/PlanInterest";
 
 /* /money/mutual-funds: the Consolidated Account Statement read into every scheme's value at the latest NAV, what went in,
- * the gain and XIRR, the mix by category, and capital gains for each financial year. Built from the kit (components/kit). */
+ * the gain and XIRR, the mix by category, and capital gains for each financial year. Built from the kit (components/kit).
+ * Each scheme is said once (MF-1, RC2B-047): one list with its main figures in a row, its units, costs, return, SIPs and sales folded under it. */
 
 type Kind = "equity" | "debt" | "hybrid" | "other";
 type Scheme = {
@@ -64,7 +65,6 @@ export function MutualFundsPage() {
   const [fy, setFy] = useState<number | null>(null);
   const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
   const asked = useAskedFy();             // a link's year ("?fy=2025") is the year it opens on
-  const [allSales, setAllSales] = useState(false);
   const [asking, setAsking] = useState(false);
   const resetFile = useRef<() => void>(() => undefined);
 
@@ -125,37 +125,44 @@ export function MutualFundsPage() {
 
   const schemes = view?.schemes ?? [];
   const held = schemes.filter((s) => s.units > 0);
-  const name = useCallback((k: string) => schemes.find((s) => s.key === k)?.name ?? k, [schemes]);
   const y = useMemo(() => view?.gains?.years.find((x) => x.fy === fy) ?? null, [view, fy]);
   const t = view?.total;
   const navWhen = t?.nav_dates ? (t.nav_dates[0] === t.nav_dates[1] ? dateOnly(t.nav_dates[0]) : `${dateOnly(t.nav_dates[0])} to ${dateOnly(t.nav_dates[1])}`) : null;
+  // the costs and the habits are read once for the whole page; each scheme's row and the totals both take from them (MF-1)
+  const version = view ? `${view.updated_at}|${view.txns}` : "";
+  const costs = useFundCosts(version, !!view && held.length > 0);
+  const habits = useFundBehaviour(version, !!view);
+  // each scheme's sales across the years, for its own fold (the year card keeps only the year's totals)
+  const salesOf = useMemo(() => {
+    const m = new Map<string, SaleIn[]>();
+    for (const yr of view?.gains?.years ?? []) for (const r of yr.rows) (m.get(r.key) ?? m.set(r.key, []).get(r.key)!).push({ ...r, fy: yr.label });
+    return m;
+  }, [view]);
+  const missing = useMemo(() => new Set(view?.gains?.gf_missing ?? []), [view]);
+  const gfFor = view?.gains ? gfYears(view.gains.years) : "";
 
-  const schemeCols: Column<Scheme>[] = [
-    { key: "scheme", header: "Scheme", rowHeader: true, wrap: true, cell: (s) => (
-      <>
-        <b>{s.name}</b>
-        <span className="k-sub-line">Folio {s.folio}{s.category ? ` · ${s.category}` : ""}</span>
-        {s.elss && <span className="k-sub-line">ELSS lock-in: {qtyText(s.elss.locked_units)} units locked; the next free on {dateOnly(s.elss.next_free)}, all by {dateOnly(s.elss.all_free)}.</span>}
-        {s.cost_unknown && <span className="k-sub-line k-down">Some units have no purchase in the statement, so their cost isn't known. A statement from your first investment fixes this.</span>}
-        {/* DG-021: units redeemed with no purchase before them, and the sale value that isn't in the capital gains */}
-        {(s.short_units ?? 0) > 0 && <span className="k-sub-line k-down" data-testid="mf-short">{qtyText(s.short_units!)} units were redeemed with no purchase before them in your files{s.short_sale ? `, so ${inr(s.short_sale)} of sale value is left out of the capital gains` : ""}. A statement from your first investment fixes this.</span>}
-        {/* DG-024: ELSS units redeemed inside their three-year lock-in */}
-        {(s.elss_early_units ?? 0) > 0 && <span className="k-sub-line k-down" data-testid="mf-elss-early">{qtyText(s.elss_early_units!)} ELSS units were redeemed within 3 years of buying them, inside the lock-in. Check the dates in your statement.</span>}
-      </>) },
-    { key: "units", header: "Units", numeric: true, cell: (s) => qtyText(s.units) },
-    { key: "nav", header: "NAV", numeric: true, cell: (s) => <>{price(s.nav, "INR")}<span className="k-sub-line">{s.nav_date ? dateOnly(s.nav_date) : "–"}{s.nav_source === "statement" ? " · statement" : ""}</span></> },
-    { key: "inv", header: "Invested", numeric: true, cell: (s) => inr(s.invested) },
+  // one row for a scheme: what it is worth and returns, its cost and how it did against the fund; the rest is folded under it
+  const allSchemeCols: Column<Scheme>[] = [
+    { key: "scheme", header: "Scheme", rowHeader: true, cell: (s) => {
+      const flags = flagsOf(s, missing.has(s.key));
+      return (
+        <>
+          <b>{s.name}</b>
+          <span className="k-sub-line">{s.category || "No category in the statement"}</span>
+          {flags.map((f) => <span key={f} className="k-sub-line k-down">{f}</span>)}
+        </>);
+    } },
     { key: "val", header: "Value", numeric: true, cell: (s) => inr(s.value) },
     { key: "gain", header: "Gain", numeric: true, cell: (s) => (s.gain == null ? "–" : <><span className={tone(s.gain)}>{inr(s.gain)}</span><span className="k-sub-line"><Signed value={s.gain}>{pct(s.gain_pct)}</Signed></span></>) },
     // DG-026: a yearly rate of a few months' holding (137 days to −25.8%) isn't shown as one
-    { key: "xirr", header: "XIRR", numeric: true, cell: (s) => (s.held_days != null && s.held_days < 365 && s.units > 0
-      ? <>–<span className="k-sub-line">under a year</span></> : <span className={tone(s.xirr)}>{xirrText(s.xirr)}</span>) },
-    { key: "kind", header: "Taxed as", cell: (s) => (
-      <>
-        <Select small label={`How ${s.name} is taxed`} value={s.kind} onChange={(k) => setKind(s.key, k === s.kind_auto ? null : k as Kind)} options={(Object.keys(KIND_SHORT) as Kind[]).map((k) => ({ value: k, label: KIND_SHORT[k] }))} />
-        <span className="k-sub-line">{s.kind_set ? "Set by you" : "From the category"}</span>
-      </>) },
+    { key: "xirr", header: "XIRR", numeric: true, info: "The yearly rate of return that counts every purchase, redemption and dividend paid out in the scheme, with today's value as the last amount. It isn't shown for less than a year of holding, or when the cost of some units isn't known.",
+      cell: (s) => (s.held_days != null && s.held_days < 365 && s.units > 0
+        ? <>–<span className="k-sub-line">under a year</span></> : <span className={tone(s.xirr)}>{xirrText(s.xirr)}</span>) },
+    { key: "ter", header: "TER", numeric: true, info: "The fund's total expense ratio as published, and what it comes to in rupees a year on your current value.", cell: (s) => <CostCell q={costs} id={s.key} /> },
+    { key: "gap", header: "Against the fund", numeric: true, wrap: true, info: "Your XIRR less the fund's own NAV return over the same dates: what timing did, not what to do next.", cell: (s) => <GapCell q={habits} id={s.key} /> },
   ];
+  // a column of dashes says nothing: "Against the fund" is shown once any scheme has a gap to show
+  const schemeCols = allSchemeCols.filter((c) => c.key !== "gap" || schemes.some((s) => hasGap(habits, s.key)));
   const bucketCols: Column<Bucket>[] = [
     { key: "kind", header: "Kind", rowHeader: true, cell: (b) => b.label },
     { key: "rate", header: "Rate", numeric: true, cell: (b) => rate(b.rate, b.slab) },
@@ -165,17 +172,23 @@ export function MutualFundsPage() {
     { key: "taxable", header: "Taxable", numeric: true, cell: (b) => inr(b.taxable) },
     { key: "tax", header: "Tax", numeric: true, cell: (b) => (b.slab ? <span className="k-small k-muted">At your slab rate</span> : inr(b.tax)) },
   ];
-  const saleCols: Column<Sale & { i: number }>[] = [
-    { key: "scheme", header: "Scheme", rowHeader: true, wrap: true, cell: (r) => <>{name(r.key)}{r.gf === "applied" && <span className="k-note"> grandfathered</span>}{r.gf === "missing" && <span className="k-note k-down"> 31 Jan 2018 NAV missing</span>}</> },
-    { key: "bought", header: "Bought", numeric: true, cell: (r) => dateOnly(r.bought) },
-    { key: "sold", header: "Sold", numeric: true, cell: (r) => dateOnly(r.sold) },
-    { key: "units", header: "Units", numeric: true, cell: (r) => qtyText(r.qty) },
-    { key: "cost", header: "Cost", numeric: true, cell: (r) => inr(r.cost) },
-    { key: "sale", header: "Sale", numeric: true, cell: (r) => inr(r.sale) },
-    { key: "gain", header: "Gain or loss", numeric: true, cell: (r) => <span className={tone(r.gain)}>{inr(r.gain)}</span> },
-    { key: "term", header: "Term", cell: (r) => (r.term === "LT" ? "Long" : "Short") },
-    { key: "rate", header: "Rate", numeric: true, cell: (r) => rate(r.rate) },
-  ];
+  const detail = (s: Scheme) => (
+    <>
+      <SchemeHolding s={s} setKind={setKind} />
+      <CostDetail q={costs} id={s.key} />
+      <BehaviourDetail q={habits} id={s.key} />
+      <SchemeSales sales={salesOf.get(s.key) ?? []} />
+      {missing.has(s.key) && (
+        <section aria-label="31 Jan 2018 NAV">
+          {/* DG-020: the year the sales are in is named, so the ask isn't under another year's tab */}
+          <p className="k-small">Units held on 31 Jan 2018 cost at least that day's NAV{gfFor ? `, for sales in ${gfFor}` : ""}. It couldn't be found for this scheme; enter it to use it:</p>
+          <FmvRow onSave={(v) => setFmv(s.key, v)} />
+        </section>
+      )}
+      {s.fmv_yours && <p className="k-note">Your 31 Jan 2018 NAV of {price(s.fmv_2018, "INR")} is used. <button type="button" className="btn quiet sm" onClick={() => setFmv(s.key, null)}>Clear it</button></p>}
+    </>
+  );
+  const open = (s: Scheme) => flagsOf(s, missing.has(s.key)).length > 0;      // a scheme that needs something looked at opens on its own
 
   return (
     <div className="k-page">
@@ -232,7 +245,7 @@ export function MutualFundsPage() {
 
       {view && t && schemes.length > 0 && (
         <>
-          <Card>
+          <Card className="mf-stats">
             <CardHead title="Where your funds stand" info={navWhen ? `Valued at the NAV of ${navWhen}.` : "No NAV is available yet."} />
             <StatRow>
               <Stat label="Current value" value={inr(t.value)} note={`${t.held} scheme${t.held === 1 ? "" : "s"} held`} />
@@ -242,35 +255,41 @@ export function MutualFundsPage() {
               <Stat label={<>XIRR, all schemes <Info label="What XIRR is">The yearly rate of return that accounts for when each rupee went in and came out: every purchase, redemption and dividend paid out, with today's value as the last amount.</Info></>}
                 value={xirrText(t.xirr)} tone={signTone(t.xirr)} />
             </StatRow>
+            {/* the mix said once, in the card of the totals (it was a card of its own) */}
+            <BarList label="Funds by category" footnote="Share of the current value, by each scheme's official category."
+              rows={view.allocation.map((a) => ({ key: a.broad, name: a.broad, note: `${a.schemes} scheme${a.schemes === 1 ? "" : "s"}${a.subs.length > 0 ? ` · ${a.subs.map((s) => s.sub).join(", ")}` : ""}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
             {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
             {view.limit != null && <p className="k-note">{schemes.length} of {view.limit} free schemes used. Basic keeps every scheme, with capital gains by year.</p>}
           </Card>
 
-          <Card>
-            <CardHead title="By category" />
-            <BarList label="Funds by category" footnote="Share of the current value, by each scheme's official category."
-              rows={view.allocation.map((a) => ({ key: a.broad, name: a.broad, note: `${a.schemes} scheme${a.schemes === 1 ? "" : "s"}${a.subs.length > 0 ? ` · ${a.subs.map((s) => s.sub).join(", ")}` : ""}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
-          </Card>
+          {held.length > 0 && (costsShown(costs) || behaviourShown(habits)) && (
+            <Card label="Costs and how you invested" className="mf-stats">
+              <CardHead title="What your funds cost, and how you invested" info="Each fund's total expense ratio (TER) as published and what it comes to in rupees a year, then your return against each fund's own, your SIPs and your redemptions. Each scheme's own figures are under it in the list below." />
+              {(costs.c?.state === "ok" && costs.c.total || habits.b?.full && habits.b.total) && <StatRow><CostStats q={costs} /><BehaviourStats q={habits} /></StatRow>}
+              <CostNotes q={costs} />
+              <BehaviourNotes q={habits} />
+              <Disclosure summary="How this is worked out"><CostHow q={costs} /><BehaviourHow q={habits} /></Disclosure>
+            </Card>
+          )}
 
-          <Card>
-            <CardHead title="Schemes" info={'Gain is the current value less the cost of the units held. XIRR counts every purchase, redemption and dividend paid out in the scheme; it isn\'t shown for less than 30 days, or when the cost of some units isn\'t known. "Taxed as" is read from the category; change it where your fund\'s documents say otherwise.'} />
-            {/* fully redeemed schemes apart, so the table is what you hold (DG-026); a list of cards on a phone */}
-            <DataTable label="Schemes" columns={schemeCols} rows={held} rowKey={(s) => s.key} stack />
-            <Earlier label="Schemes you no longer hold" count={schemes.length - held.length} className="in-card"><DataTable label="Schemes you no longer hold" columns={schemeCols} rows={schemes.filter((s) => s.units <= 0)} rowKey={(s) => s.key} stack /></Earlier>
+          <Card label="Your schemes">
+            <CardHead title="Your schemes" info={'Gain is the current value less the cost of the units held. "Taxed as" is read from the category; change it, under the scheme, where your fund\'s documents say otherwise. Open a scheme for its units, NAV, cost, taxes, SIP record and sales.'} />
+            {/* each scheme is one row, said once; fully redeemed schemes apart, so the list is what you hold (DG-026) */}
+            <FoldTable label="Schemes" columns={schemeCols} rows={held} rowKey={(s) => s.key} detail={detail} openWhen={open} />
+            <Earlier label="Schemes you no longer hold" count={schemes.length - held.length} className="in-card">
+              <FoldTable label="Schemes you no longer hold" columns={schemeCols} rows={schemes.filter((s) => s.units <= 0)} rowKey={(s) => s.key} detail={detail} openWhen={open} />
+            </Earlier>
             <Disclosure summary="What each tax kind means">
               <ul className="k-list muted">{(Object.keys(view.kinds) as Kind[]).map((k) => <li key={k}>{view.kinds[k]}</li>)}</ul>
             </Disclosure>
           </Card>
-
-          {held.length > 0 && <FundCosts version={`${view.updated_at}|${view.txns}`} />}
-          <FundBehaviour version={`${view.updated_at}|${view.txns}`} />
 
           {/* the limit it lifts is named, as on Plans (DP2-012: the lock didn't say Free keeps 5 funds) */}
           {!view.gains_allowed && <PlanNote>Capital gains for each financial year, and every scheme you hold (Free keeps {LIMITS.free.mf_schemes}), are on the {view.gains_plan} plan.</PlanNote>}
           {view.gains && (
             <Card label="Capital gains">
               <CardHead title="Capital gains by financial year" actions={view.gains.years.length > 0 ? (
-                <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
+                <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); }}
                   options={view.gains.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === view.gains!.current_fy ? " (this year)" : ""}` }))} />
               ) : undefined} />
               {movedFrom != null && y && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="mf-moved-year">{movedYearNote(movedFrom, y.fy, view.gains.current_fy, "redemptions")}</p>}
@@ -286,20 +305,13 @@ export function MutualFundsPage() {
                   {y.buckets.length > 0 && <DataTable label="Gains by rate" columns={bucketCols} rows={y.buckets} rowKey={(b) => b.key} />}
                   {y.steps.length > 0 && <ul className="k-list">{y.steps.map((s, i) => <li key={i}>{s}</li>)}</ul>}
                   <p className="k-note">The long-term exemption here counts your funds alone. The <Link className="link" to="/tax-report">tax report</Link> adds these gains to your shares', shares the exemption and set-off between them, and includes them in the year's total tax estimate.</p>
-                  {y.count > 0 && <DataTable label="Redemptions matched to purchases" columns={saleCols} rows={(allSales ? y.rows : y.rows.slice(0, 30)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />}
-                  {y.rows.length > 30 && !allSales && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAllSales(true)}>Show all {y.rows.length}</button>}
+                  {/* the split by scheme is under each scheme in the list, with all its years (it was a table of every scheme again) */}
+                  {y.count > 0 && <p className="k-note" data-testid="mf-sales-pointer">{y.count} redemption{y.count === 1 ? "" : "s"} matched to purchases in {y.label}. Each is listed under its scheme in Your schemes.</p>}
                 </>
               )}
               {view.gains.gf_missing.length > 0 && (
-                <div className="k-stack">
-                  {/* DG-020: the year the sales are in is named, so the ask isn't under another year's tab */}
-                  <p className="k-small">Units held on 31 Jan 2018 cost at least that day's NAV{gfYears(view.gains.years) ? `, for sales in ${gfYears(view.gains.years)}` : ""}. It couldn't be found for these schemes; enter it to use it:</p>
-                  {view.gains.gf_missing.map((k) => <FmvRow key={k} label={name(k)} onSave={(v) => setFmv(k, v)} />)}
-                </div>
+                <p className="k-small k-down">{view.gains.gf_missing.length} scheme{view.gains.gf_missing.length === 1 ? " needs" : "s need"} the NAV of 31 Jan 2018{gfFor ? ` for sales in ${gfFor}` : ""}; enter it under {view.gains.gf_missing.length === 1 ? "the scheme" : "each scheme"} in Your schemes.</p>
               )}
-              {schemes.filter((s) => s.fmv_yours).map((s) => (
-                <p key={s.key} className="k-note">{s.name}: your 31 Jan 2018 NAV of {price(s.fmv_2018, "INR")} is used. <button type="button" className="btn quiet sm" onClick={() => setFmv(s.key, null)}>Clear it</button></p>
-              ))}
               <Disclosure summary="How gains are worked out">
                 <ul className="k-list muted">{view.gains.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
               </Disclosure>
@@ -324,15 +336,73 @@ function gfYears(years: { label: string; rows: { gf?: string | null }[] }[]): st
   return years.filter((y) => y.rows.some((r) => r.gf === "missing")).map((y) => y.label).join(", ");
 }
 
-function FmvRow({ label, onSave }: { label: string; onSave: (v: number | null) => void }) {
+function FmvRow({ onSave }: { onSave: (v: number | null) => void }) {
   const [v, setV] = useState("");
   return (
-    <div className="k-inset">
-      <b>{label}</b>
-      <FormGrid onSubmit={(e) => { e.preventDefault(); if (Number(v) > 0) onSave(Number(v)); }}>
-        <Field label="NAV on 31 Jan 2018" unit="₹" inputMode="decimal" placeholder="e.g. 42.15" value={v} onChange={(e) => setV(e.target.value)} />
-        <FormActions><button type="submit" className="btn" disabled={!(Number(v) > 0)}>Save</button></FormActions>
-      </FormGrid>
-    </div>
+    <FormGrid onSubmit={(e) => { e.preventDefault(); if (Number(v) > 0) onSave(Number(v)); }}>
+      <Field label="NAV on 31 Jan 2018" unit="₹" inputMode="decimal" placeholder="e.g. 42.15" value={v} onChange={(e) => setV(e.target.value)} />
+      <FormActions><button type="submit" className="btn" disabled={!(Number(v) > 0)}>Save</button></FormActions>
+    </FormGrid>
+  );
+}
+
+/** What a scheme row says in red without being opened: the facts that make its figures not what they seem. */
+function flagsOf(s: Scheme, needsFmv: boolean): string[] {
+  return [
+    s.cost_unknown && "Some units have no known cost",
+    (s.short_units ?? 0) > 0 && "Redeemed more than the statement shows bought",
+    (s.elss_early_units ?? 0) > 0 && "ELSS units redeemed inside the lock-in",
+    needsFmv && "Needs its 31 Jan 2018 NAV",
+  ].filter((f): f is string => !!f);
+}
+
+type SaleIn = Sale & { fy: string };
+
+/** A scheme's own facts, in its fold: folio, units, NAV, what went in and how it is taxed, and what is wrong with them if something is. */
+function SchemeHolding({ s, setKind }: { s: Scheme; setKind: (key: string, kind: Kind | null) => void }) {
+  return (
+    <section aria-label="Holding">
+      <h3>What you hold</h3>
+      <dl className="k-dl">
+        <div><dt>Folio</dt><dd>{s.folio}</dd></div>
+        <div><dt>Units</dt><dd>{qtyText(s.units)}</dd></div>
+        <div><dt>NAV</dt><dd>{price(s.nav, "INR")}<span className="k-sub-line">{s.nav_date ? dateOnly(s.nav_date) : "–"}{s.nav_source === "statement" ? " · statement" : ""}</span></dd></div>
+        <div><dt>Invested</dt><dd>{inr(s.invested)}</dd></div>
+        <div><dt>Taxed as</dt><dd>
+          <Select label={`How ${s.name} is taxed`} value={s.kind} onChange={(k) => setKind(s.key, k === s.kind_auto ? null : k as Kind)} options={(Object.keys(KIND_SHORT) as Kind[]).map((k) => ({ value: k, label: KIND_SHORT[k] }))} />
+          <span className="k-sub-line">{s.kind_set ? "Set by you" : "From the category"}</span>
+        </dd></div>
+      </dl>
+      {s.elss && <p className="k-note">ELSS lock-in: {qtyText(s.elss.locked_units)} units locked; the next free on {dateOnly(s.elss.next_free)}, all by {dateOnly(s.elss.all_free)}.</p>}
+      {s.cost_unknown && <p className="k-note k-down">Some units have no purchase in the statement, so their cost isn't known. A statement from your first investment fixes this.</p>}
+      {/* DG-021: units redeemed with no purchase before them, and the sale value that isn't in the capital gains */}
+      {(s.short_units ?? 0) > 0 && <p className="k-note k-down" data-testid="mf-short">{qtyText(s.short_units!)} units were redeemed with no purchase before them in your files{s.short_sale ? `, so ${inr(s.short_sale)} of sale value is left out of the capital gains` : ""}. A statement from your first investment fixes this.</p>}
+      {/* DG-024: ELSS units redeemed inside their three-year lock-in */}
+      {(s.elss_early_units ?? 0) > 0 && <p className="k-note k-down" data-testid="mf-elss-early">{qtyText(s.elss_early_units!)} ELSS units were redeemed within 3 years of buying them, inside the lock-in. Check the dates in your statement.</p>}
+    </section>
+  );
+}
+
+/** The redemptions of one scheme matched to its purchases, every year in one list (30 first). */
+function SchemeSales({ sales }: { sales: SaleIn[] }) {
+  const [all, setAll] = useState(false);
+  if (!sales.length) return null;
+  const cols: Column<SaleIn & { i: number }>[] = [
+    { key: "fy", header: "Year", rowHeader: true, cell: (r) => <>{r.fy}{r.gf === "applied" && <span className="k-note"> grandfathered</span>}{r.gf === "missing" && <span className="k-note k-down"> 31 Jan 2018 NAV missing</span>}</> },
+    { key: "bought", header: "Bought", numeric: true, cell: (r) => dateOnly(r.bought) },
+    { key: "sold", header: "Sold", numeric: true, cell: (r) => dateOnly(r.sold) },
+    { key: "units", header: "Units", numeric: true, cell: (r) => qtyText(r.qty) },
+    { key: "cost", header: "Cost", numeric: true, cell: (r) => inr(r.cost) },
+    { key: "sale", header: "Sale", numeric: true, cell: (r) => inr(r.sale) },
+    { key: "gain", header: "Gain or loss", numeric: true, cell: (r) => <span className={tone(r.gain)}>{inr(r.gain)}</span> },
+    { key: "term", header: "Term", cell: (r) => (r.term === "LT" ? "Long" : "Short") },
+    { key: "rate", header: "Rate", numeric: true, cell: (r) => rate(r.rate) },
+  ];
+  return (
+    <section aria-label="Sales">
+      <h3>Redemptions matched to purchases</h3>
+      <DataTable label="Redemptions matched to purchases" stack columns={cols} rows={(all ? sales : sales.slice(0, 30)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
+      {sales.length > 30 && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {sales.length}</button>}
+    </section>
   );
 }

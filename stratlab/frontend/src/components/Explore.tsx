@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { FEATURES, GOAL_ORDER, GOALS, resolve, type Goal } from "../lib/features";
 import { PLAN_NAME, planOf } from "../lib/plans";
+import { TileGrid } from "./TileGrid";
 import "../pages/trade/trade.css";
 
 const OPEN_KEY = "stratlab.explore.open";
@@ -11,7 +12,7 @@ const OPEN_KEY = "stratlab.explore.open";
  * tools aren't hidden and nobody faces a wall of equal choices. Only the first group shows until "Show everything"
  * is pressed (remembered), so the page under it stays short. `hide` leaves out tools the page above already links to,
  * so a space's home offers each one once. `order`: a space home lists its own space's goals first. */
-export function Explore({ title = "What you can do here", skip = [], hide = [], order }: { title?: string; skip?: Goal[]; hide?: string[]; order?: "trade" | "invest" }) {
+export function Explore({ title = "More you can do", skip = [], hide = [], order }: { title?: string; skip?: Goal[]; hide?: string[]; order?: "trade" | "invest" }) {
   const { notebooks, level, focus, me } = useApp();
   // a tool the plan doesn't include says which plan has it, on the tile, before the click (DP1-020)
   const lockedOn = (flag?: string) => (flag && me?.plan_info.features?.[flag] === false ? PLAN_NAME[planOf(flag)] : null);
@@ -41,7 +42,7 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
               <b>{GOALS[g].title}</b>
               <span className="small muted">{GOALS[g].sub}</span>
             </div>
-            <div className="explore-grid">
+            <TileGrid className="explore-grid">
               {items.map((f) => (
                 <button key={f.id} className="k-linkcard explore-card" onClick={() => open(f.to)}>
                   <b>{f.title}</b>
@@ -49,7 +50,7 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
                   <span className="small explore-go">{lockedOn(f.flag) ? `On the ${lockedOn(f.flag)} plan →` : f.to.startsWith("@") && !latest ? "Starts with a notebook →" : "Open →"}</span>
                 </button>
               ))}
-            </div>
+            </TileGrid>
           </div>
         );
       })}

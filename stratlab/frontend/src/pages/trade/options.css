@@ -15,6 +15,8 @@
 .k-expiry { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
 .legs-box { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--s2) var(--s3); background: var(--paper-2); min-width: 0; }
 .legs-box > summary { justify-content: space-between; }
+.legs-box > summary > span:first-of-type { flex: 1; min-width: 0; }   /* VR1-093: the legs' sentence follows the chevron instead of floating in the middle of the row with the chevron far left */
+.k-struct .k-row > select.k-input { width: auto; min-width: 260px; max-width: 100%; flex: 0 0 auto; }   /* VR1-093: two extra underlyings in a 1030px box */
 .legs-box, .legs-box .k-disclosure-body, .k-struct > *, .k-disclosure-body { min-width: 0; max-width: 100%; }
 .legs-box .k-tbl-wrap { max-width: 100%; }
 .legs-box[open] .link-ish { visibility: hidden; }
@@ -43,6 +45,11 @@
 @media (max-width: 640px) {
   .opt-legs .k-tbl-wrap.stack .k-table td[data-label="Strike by"] { grid-column: 1 / -1; }
   .opt-legs .k-tbl-wrap.stack .k-leg-pick { flex-wrap: wrap; }
+  /* VR2-011: a leg card's remove control is one labelled button at the card's foot, not a "Remove" caption over a lone x */
+  .opt-legs .k-tbl-wrap.stack .k-table td[data-label="Remove"] { grid-column: 1 / -1; justify-self: end; }
+  .opt-legs .k-tbl-wrap.stack .k-table td[data-label="Remove"]::before { display: none; }
+  .opt-legs .k-tbl-wrap.stack .k-table td[data-label="Remove"] .chip-x { margin: 0; min-width: 0; min-height: 36px; padding: 0 12px; gap: 6px; grid-auto-flow: column; border: 1px solid var(--line); border-radius: var(--r-ctl); font-size: 13px; color: var(--ink-2); }
+  .opt-legs .k-tbl-wrap.stack .k-table td[data-label="Remove"] .chip-x::after { content: "Remove leg"; }
   .opt-legs .k-tbl-wrap.stack .k-table td .k-select, .opt-legs .k-tbl-wrap.stack .k-table td select { width: 100%; min-width: 0; }
 }
 .k-in.num.bad { border-color: var(--down); }

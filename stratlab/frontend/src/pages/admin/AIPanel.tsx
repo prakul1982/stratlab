@@ -211,9 +211,12 @@ function MissingProvider({ p }: { p: Provider }) {
         <span className="k-small"><b>{p.label}</b>{p.terms === "prototype" && <> <Badge tone="warn" dot={false}>Prototyping tier</Badge></>}
           {p.terms === "paid" && <> <Badge tone="warn" dot={false}>Paid</Badge></>}</span>
         <span className="k-small k-muted">{p.free}{p.note ? ` ${p.note}` : ""}</span>
-        <span className="k-small k-muted">Set <span className="adm-mono">{p.missing.join(" and ")}</span>.</span>
+        {/* CK-2 (R20): the link to get a key ends the line that says which variable to set, not 500px away at the card's edge */}
+        <span className="k-row">
+          <span className="k-small k-muted">Set <span className="adm-mono">{p.missing.join(" and ")}</span>.</span>
+          <a className="btn quiet sm" href={safeHref(p.key_url)} target="_blank" rel="noopener noreferrer" aria-label={`Get a key: ${p.label}`}>Get a key</a>
+        </span>
       </div>
-      <a className="btn quiet sm" href={safeHref(p.key_url)} target="_blank" rel="noopener noreferrer" aria-label={`Get a key: ${p.label}`}>Get a key</a>
     </div>
   );
 }

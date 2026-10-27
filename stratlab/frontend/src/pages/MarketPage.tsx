@@ -198,7 +198,7 @@ export function MarketPage() {
         <TilePicker label="Market" value={sel} onChange={setSel}
           groups={[{ title: "Markets", tiles: markets.map((m) => ({ value: m.id, title: `${[...m.symbol].length === 1 && m.symbol !== "+" ? m.symbol + " " : ""}${m.name}`, sub: `${m.venues}${m.status !== "live" ? ` · ${STATUS[m.status]}` : ""}` })) }]} />
         {market && market.status !== "soon" && (
-          <p className="k-note">{market.name}: {market.what} · {localHours(market)} · costs: {market.costs}</p>
+          <p className="k-note">{market.name}: {market.what} · {localHours(market)} · Costs: {market.costs}</p>
         )}
       </Card>
 

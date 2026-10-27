@@ -63,9 +63,10 @@ test("DA-032: a notebook card is titled by its name, with its question under it 
   const home = read("src/pages/Home.tsx");
   assert.match(home, /title=\{<Link to=\{`\/n\/\$\{n\.id\}`\} className="k-title-link">\{n\.name\}<\/Link>\}/);
   assert.match(home, /className="k-small k-muted nb-question" title=\{question\}/);
-  assert.match(home, /\{n\.pinned \? "Pinned" : "Pin"\}/);
+  assert.match(home, /aria-label=\{n\.pinned \? `Unpin \$\{n\.name\}` : `Pin \$\{n\.name\} to the top`\}/);     // VR1-030: an icon at the card's top right; the words are its name and hover text
+  assert.match(home, /title=\{n\.pinned \? "Unpin it" : "Keep it at the top of the list"\}/);
   assert.match(home, /Tested on \$\{inst\}/);
-  assert.match(read("src/pages/trade/trade.css"), /\.k-cards\.nb-cards \{ align-items: stretch; \}/);
+  assert.match(read("src/pages/trade/trade.css"), /\.k-cards\.nb-cards \{ align-items: stretch;/);
   const shell = read("src/components/Shell.tsx");
   assert.match(shell, /VERDICT_FACT\[n\.summary\.last_verdict\]/);
   assert.doesNotMatch(shell, /Dots: each notebook's last verdict/);                  // owner, 26 Oct: no caption in the menu

@@ -100,6 +100,7 @@ test("notebooks: the name is the title, the question under it, and what it was t
   await expect(card.getByRole("link", { name: nb.name, exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(card.locator(".nb-question")).toHaveAttribute("title", /five years of daily candles/);
   await expect(card).toContainText("Tested on AAPL");
-  await expect(card.getByRole("button", { name: `Pin ${nb.name} to the top` })).toContainText("Pin");
+  // an icon at the card's top right (VR1-030): its words are its name and its hover text
+  await expect(card.getByRole("button", { name: `Pin ${nb.name} to the top` })).toHaveAttribute("title", "Keep it at the top of the list");
   expect(errors).toEqual([]);
 });

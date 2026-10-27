@@ -40,8 +40,10 @@ test("experiment page: one next-step block, counts that add up, forex decimals a
   await expect(page.getByText("What to try next")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Next experiment →" })).toHaveCount(0);
 
-  // the verdict states the comparison with buying and holding
-  await expect(page.locator(".k-verdict-hero")).toContainText("buying and holding over the same period");
+  // the verdict states the comparison with buying and holding once, in its headline (VR1-062: the sentence under it said it again), and The numbers give both figures
+  await expect(page.locator(".k-verdict-hero")).toContainText(/buy and hold/i);
+  await expect(page.locator(".k-verdict-hero")).not.toContainText("buying and holding over the same period");
+  await expect(page.getByRole("region", { name: "The numbers", exact: true })).toContainText("Buy and hold");
 
   // the open trade is counted the same way in the header and the trade list
   const open_ = exp.trades.filter((t: { exit_t: string | null }) => !t.exit_t).length;

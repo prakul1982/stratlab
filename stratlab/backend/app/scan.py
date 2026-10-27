@@ -20,7 +20,10 @@ DAYS = 420                 # enough daily candles for the 150-day average plus i
 FRESH = 5                  # a Supertrend flip up within this many candles counts as a fresh signal
 MAX = 100                  # a watchlist holds up to 100 stocks: all of them are scanned
 _cache = TTLCache(max_items=4000)
-_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="scan")
+# Eight at a time (RC2A-023: four left a cold 50-stock list waiting on one price source's answer after another). The sources
+# pace themselves (the broker's request turns in kite_service._slot, the public history's bucket in intel/net.RateLimit), so
+# more readers never mean more requests a second, only that a slow answer doesn't hold up the next stock's.
+_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="scan")
 
 ST_S2 = {
     "name": "ST S2: Stage 2 + Supertrend", "tf": "1d", "side": "long", "entryJoin": "all",
@@ -221,6 +224,12 @@ def run(registry, market: str, members: list[dict], budget: float | None = None,
             res = analyse(_bars(registry, iid))
             inst = prov.instrument(iid.split(":", 1)[1]) if prov else None
             names[iid] = inst or {}
+            if res is not None and budget is None:
+                # the stored company name is a database read: here, in the stock's own turn, it waits behind the price source's
+                # pacing instead of one read after another once all the prices are in (RC2A-023: 50 reads in a row was the
+                # 4 s every scan took even with every price kept). With a budget the wait must end at it: the names are then
+                # read together after it, below
+                res["_name"] = company_name(market, inst, iid)
             return iid, res, None
         except Exception as e:     # one member's data problem mustn't sink the rest
             return iid, None, f"{_label(prov, iid)}: {_why(e)}"
@@ -236,6 +245,7 @@ def run(registry, market: str, members: list[dict], budget: float | None = None,
         for f in jobs.values():
             f.cancel()                # not started yet: leave the pool to others
     newest = max([str(res["t"])[:10] for _, res, _ in done if res and res.get("t")] + [session or ""], default=None) or None
+    pending = []
     for iid, res, problem in done:
         if res is None:
             problems.append(problem or f"{_label(prov, iid)}: not enough daily prices yet")
@@ -244,8 +254,13 @@ def run(registry, market: str, members: list[dict], budget: float | None = None,
             problems.append(f"{_label(prov, iid)}: no recent daily prices")
             continue
         inst = names.get(iid) or {}
-        rows.append({"id": iid, "symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": company_name(market, inst, iid),
+        name = res.pop("_name", None)
+        rows.append({"id": iid, "symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": name,
                      "currency": inst.get("currency"), **res})
+        pending.append((len(rows) - 1, iid, inst))
+    if budget is not None:            # read together, not one database round trip after another (RC2A-023)
+        for (i, iid, inst), name in zip(pending, _pool.map(lambda p: company_name(market, p[2], p[1]), pending)):
+            rows[i]["name"] = name
     problems += [f"{x}: past the {MAX} stocks a scan reads" for x in over if x]
     rows.sort(key=lambda r: (RANK.get(r["signal"], 3), -(r["chg"] or 0)))
     return {"rows": rows, "missing": missing, "problems": problems, "asked": len(ids) + len(missing) + len(over), **({"late": late} if budget is not None else {}),
@@ -277,7 +292,7 @@ def run_preset(registry, market: str, members: list[dict], preset: str, session:
         except Exception as e:     # one member's data problem mustn't sink the rest
             return iid, None, {}, f"{_label(prov, iid)}: {_why(e)}"
 
-    rows, problems, checked, days = [], [], 0, []
+    rows, problems, checked, days, hits = [], [], 0, [], []
     done = list(_pool.map(one, ids))
     newest = max([res["as_of"] for _, res, _, _ in done if res] + [session or ""], default=None) or None
     for iid, res, inst, problem in done:
@@ -291,9 +306,13 @@ def run_preset(registry, market: str, members: list[dict], preset: str, session:
         days.append(res["as_of"])
         m = scan_presets.lagged(res["matches"].get(preset), res["as_of"], newest, preset)
         if m:
-            rows.append({"symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": company_name(market, inst, iid), "currency": inst.get("currency"),
+            hits.append((iid, inst))
+            rows.append({"symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": None, "currency": inst.get("currency"),
                          "price": res["price"], "chg": res["chg"], "as_of": res["as_of"], "days_ago": m["days_ago"], "day": m["day"],
                          "detail": m["detail"]})
+    # the matches' names, read together rather than one database round trip after another (RC2A-023)
+    for row, name in zip(rows, _pool.map(lambda h: company_name(market, h[1], h[0]), hits)):
+        row["name"] = name
     problems += [f"{x}: past the {MAX} stocks a scan reads" for x in over if x]
     rows.sort(key=lambda r: (r["days_ago"], r["symbol"]))
     return {"rows": rows, "checked": checked, "asked": len(ids) + len(missing) + len(over), "as_of": max(days, default=None), "missing": missing,

@@ -404,7 +404,7 @@ function NotebookView() {
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title={nb.name}
         lede={nb.question ? <span title={s.text && s.text.trim() !== nb.question ? s.text.trim() : undefined} data-testid="nb-question">{nb.question}</span> : "Write the question this notebook should answer."}
-        actions={<span className="k-note" aria-live="polite">{saving === "failed"
+        actions={<span className="k-note nb-save" aria-live="polite">{saving === "failed"
           ? <button type="button" className="link k-down" data-testid="save-retry" onClick={() => void flush()}>Not saved · Retry</button>
           : saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>} />
 
@@ -427,7 +427,7 @@ function NotebookView() {
           <Field label="Notebook name" wide maxLength={80} value={nb.name} onChange={(e) => patch({ name: e.target.value })}
             onBlur={(e) => { if (!e.target.value.trim()) patch({ name: "Untitled notebook" }, true); }} />
           <Field label="The question this notebook tests" wide>{(fid) => (
-            <AutoGrow id={fid} className="k-textarea" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
+            <AutoGrow id={fid} className="k-textarea nb-q" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
               placeholder="The question you want answered, e.g. Does buying NIFTY on RSI dips beat just holding it?" onChange={(e) => patch({ question: e.target.value })} />
           )}</Field>
         </FormGrid>
@@ -487,7 +487,7 @@ function NotebookView() {
         {!isUpload && (
           <div className="k-field">
             <div className="k-label-row"><span className="k-lbl">Test period</span><Info label="About the test period">{HELP.period} Add your own with + Custom: any whole number of days, weeks, months or years up to the {maxDays.toLocaleString("en-IN")} days stored for {TF_NAME[s.tf].toLowerCase()} candles here.</Info></div>
-            <ChipBar label="Test period" value={periodValue} onChange={setDays}
+            <ChipBar label="Test period" wrap value={periodValue} onChange={setDays}
               options={periods.map((d) => ({ value: String(d), label: periodName(d) }))}
               custom={{ storageKey: `stratlab.chips.period.${me?.id ?? "anon"}`, units: SPAN_UNITS, defaultUnit: "months", validate: spanCheck(maxDays, 5) }} />
           </div>

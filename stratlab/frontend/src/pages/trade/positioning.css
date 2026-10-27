@@ -4,7 +4,7 @@
 .pos-bar .fg { fill: var(--ink-2); }
 .pos-split { display: inline-flex; align-items: center; gap: var(--s2); white-space: nowrap; }
 .pos-split .pos-bar { width: 56px; }
-.pos-sides { display: flex; flex-direction: column; gap: 2px; font-size: var(--t-body); letter-spacing: 0; line-height: 1.35; }
+.pos-sides { display: flex; flex-direction: column; gap: 4px; }   /* the long/short bar over the other side, in the note line (VR1-070) */
 .pos-chart { min-width: 0; }
 .k-table tr[data-atm] td, .k-table tr[data-atm] th { background: var(--chip); }
 .sf-mwpl { display: inline-flex; align-items: center; gap: var(--s2); white-space: nowrap; }
@@ -16,3 +16,6 @@
 .sf-buildup { display: inline-flex; flex-direction: column; gap: 2px; align-items: flex-start; }
 .sf-search { max-width: 220px; }
 
+/* VR1-072: on a phone each participant is a card of seven figures in two columns; the last (Puts short) took a row to itself beside nothing. It spans the
+   card instead, as the one that closes the list. */
+@media (max-width: 640px) { [data-testid="part-table"] .k-tbl-wrap.stack .k-table td:last-child:nth-child(even) { grid-column: 1 / -1; } }

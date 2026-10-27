@@ -41,7 +41,9 @@ test("MO-4a: the notebook is centred like every page, and the Lab notes float, o
   await expect(page.getByRole("region", { name: "Lab notes" })).toBeHidden();
   const vp = page.viewportSize()!;
   const b = await btn.boundingBox();
-  expect(b!.x + b!.width, "at the right").toBeGreaterThan(vp.width - 40);
+  // at the right: level with the page's right edge on a laptop (VR1-050), within a finger of the screen's on a phone
+  if (phone) expect(b!.x + b!.width, "at the right").toBeGreaterThan(vp.width - 40);
+  else expect(Math.abs((b!.x + b!.width) - (main!.x + main!.width)), "level with the page's right edge").toBeLessThan(2);
   expect(b!.y + b!.height, "at the bottom").toBeGreaterThan(vp.height - 40);
   expect(b!.height, "a finger-sized target").toBeGreaterThanOrEqual(44);
   await expect(btn.locator(".ln-dot")).toHaveCount(0);
@@ -114,6 +116,7 @@ test("MO-4b: two cards in a row end level (Market events: the week and the remin
   await expect(week).toBeVisible({ timeout: 30_000 });
   const rem = page.getByRole("region", { name: /Reminders/ });
   const a = (await week.boundingBox())!, c = (await rem.boundingBox())!;
-  if (Math.abs(a.y - c.y) < 4) expect(Math.abs((a.y + a.height) - (c.y + c.height)), "side by side: the same height").toBeLessThan(2);
+  // each keeps its own height (VR1-082: stretched, the week card ended 130px of nothing short of its list); side by side they start level
+  if (Math.abs(a.y - c.y) < 4) expect(Math.abs(a.y - c.y), "side by side: level at the top").toBeLessThan(2);
   else expect(c.y).toBeGreaterThan(a.y + a.height - 1);     // stacked on a phone
 });

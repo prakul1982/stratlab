@@ -201,7 +201,7 @@ export function HoldingsPage() {
       { key: "filings", header: "Filings, 3 months", cell: (r: Row) => <FilingsCell f={facts?.rows[r.symbol]} allowed={facts?.filings !== false} plan={facts?.filings_plan} /> },
       { key: "results", header: "Results meeting", cell: (r: Row) => { const f = facts?.rows[r.symbol]; return f?.results ? <a className="link" href={safeHref(f.results.url)} target="_blank" rel="noreferrer">{dateOnly(f.results.date)}</a> : <span className="k-muted">–</span>; } },
     ] : []),
-    { key: "edit", header: "", action: true, cell: (r) => <button type="button" className="btn quiet sm" data-row-edit onClick={() => { editAt.current = rows.indexOf(r); setEdit(r); }} aria-label={`Edit ${r.symbol}`}>Edit</button> },
+    { key: "edit", header: "", action: true, corner: true, cell: (r) => <button type="button" className="btn quiet sm" data-row-edit onClick={() => { editAt.current = rows.indexOf(r); setEdit(r); }} aria-label={`Edit ${r.symbol}`}>Edit</button> },
   ];
   const unmatchedCols: Column<Unmatched & { i: number }>[] = [
     { key: "line", header: "Line", rowHeader: true, cell: (u) => u.line ?? "–" },
@@ -283,9 +283,10 @@ export function HoldingsPage() {
             )}
             {view.us && view.us.count > 0 && (
               <p className="k-small" aria-label="US stocks">
-                <b>US stocks</b> ({view.us.count}): {usd(view.us.value)} · invested {usd(view.us.invested)}
-                {view.us.pnl != null && <> · <span className={tone(view.us.pnl)}>{usd(view.us.pnl)} ({pct(view.us.pnl_pct)})</span></>}
-                <span className="k-note"> · {view.us.in_total && view.usd_inr ? `in the rupee totals above at ${dollarRate(view.usd_inr, view.usd_inr_at)}` : "not in the rupee totals above: the exchange rate isn't available right now"}
+                {/* RC2B-045: one US stock's value, cost and gain are its row in the table below; the sentence adds the dollar totals only for two or more */}
+                <b>US {view.us.count === 1 ? "stock" : `stocks (${view.us.count})`}</b>{view.us.count > 1 && <>: {usd(view.us.value)} · invested {usd(view.us.invested)}
+                {view.us.pnl != null && <> · <span className={tone(view.us.pnl)}>{usd(view.us.pnl)} ({pct(view.us.pnl_pct)})</span></>}</>}
+                <span className="k-note">{view.us.count > 1 ? " · " : ": "}{view.us.in_total && view.usd_inr ? `in the rupee totals above at ${dollarRate(view.usd_inr, view.usd_inr_at)}` : "not in the rupee totals above: the exchange rate isn't available right now"}
                   {view.us_prices === false && " · US prices are offline right now, so these are at cost"}. Sales of US stocks come from the trades on the <Link className="link" to="/money/us-tax">US stocks tax page</Link>, not from this list.</span>
               </p>
             )}
@@ -346,7 +347,7 @@ export function HoldingsPage() {
             <Card id="h-filings">
               <CardHead title="Recent filings" info={<>From the companies' own exchange filings, sorted by fixed rules you can read on the <Link className="link" to="/research/filings">Red flags</Link> page.</>} />
               <Disclosure summary={`Show the filings of ${withFilings.length} stock${withFilings.length === 1 ? "" : "s"}`}>
-              <div className="k-stack">
+              <div className="h-filings">
                 {withFilings.map((r) => {
                   const f = facts!.rows[r.symbol];
                   return (

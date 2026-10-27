@@ -41,24 +41,30 @@ function RemindCard({ v, onSave }: { v: EventsView; onSave: (p: Partial<EvPrefs>
   return (
     <Card label="Reminders and your calendar">
       <CardHead level={2} title="Reminders and your calendar" />
-      {p.allowed ? (
-        <CheckField checked={p.remind} onChange={(on) => onSave({ remind: on })}
-          label={<>Remind me of the events I pick
-            <Info>{"Sent once each morning (about 07:30 IST) by phone notification, Telegram or email, whichever you set up in Settings."}</Info></>} />
-      ) : (
-        <p className="k-small">Reminders of these events are on the {p.plan} plan. <Link className="link" to="/plans">See the {p.plan} plan</Link></p>
-      )}
-      {p.allowed && p.remind && !p.channels.length && <p className="k-note">Nowhere to send them yet: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>}
-      {/* a kind with no event on the calendar is not offered as a chip that can never fire (RC2A-040); it is named below, and a pick already
-          saved for it stays saved */}
-      <ChipSet label="Kinds of event" options={kinds.filter((k) => !none(k)).map((k) => ({ value: k, label: v.kinds[k] }))} on={p.kinds}
-        onToggle={(k) => onSave({ kinds: p.kinds.includes(k as EvKind) ? p.kinds.filter((x) => x !== k) : [...p.kinds, k as EvKind] })} />
-      {kinds.some(none) && <p className="k-note" data-testid="ev-empty-kinds">Nothing is on the calendar yet for {kinds.filter(none).map((k) => v.kinds[k]).join(", ")}; it can be picked once there is.</p>}
-      {p.allowed && (
-        <Field label="When" wide>{(id) => <Select id={id} label="When to remind" value={p.days} onChange={(d) => onSave({ days: Number(d) })} options={DAY_OPTS} />}</Field>
-      )}
-      <CheckField checked={p.money_calendar} onChange={(on) => onSave({ money_calendar: on })}
-        label={<span>Also show the kinds I picked in my <Link className="link" to="/money/calendar">Money calendar</Link> and its calendar feed</span>} />
+      <div className="ev-remind">
+        <div className="k-stack">
+          {p.allowed ? (
+            <CheckField checked={p.remind} onChange={(on) => onSave({ remind: on })}
+              label={<>Remind me of the events I pick
+                <Info>{"Sent once each morning (about 07:30 IST) by phone notification, Telegram or email, whichever you set up in Settings."}</Info></>} />
+          ) : (
+            <p className="k-small">Reminders of these events are on the {p.plan} plan. <Link className="link" to="/plans">See the {p.plan} plan</Link></p>
+          )}
+          {p.allowed && p.remind && !p.channels.length && <p className="k-note">Nowhere to send them yet: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>}
+          {/* a kind with no event on the calendar is not offered as a chip that can never fire (RC2A-040); it is named below, and a pick already
+              saved for it stays saved */}
+          <ChipSet label="Kinds of event" options={kinds.filter((k) => !none(k)).map((k) => ({ value: k, label: v.kinds[k] }))} on={p.kinds}
+            onToggle={(k) => onSave({ kinds: p.kinds.includes(k as EvKind) ? p.kinds.filter((x) => x !== k) : [...p.kinds, k as EvKind] })} />
+          {kinds.some(none) && <p className="k-note" data-testid="ev-empty-kinds">Nothing is on the calendar yet for {kinds.filter(none).map((k) => v.kinds[k]).join(", ")}; it can be picked once there is.</p>}
+        </div>
+        <div className="k-stack">
+          {p.allowed && (
+            <Field label="When" wide>{(id) => <Select id={id} label="When to remind" value={p.days} onChange={(d) => onSave({ days: Number(d) })} options={DAY_OPTS} />}</Field>
+          )}
+          <CheckField checked={p.money_calendar} onChange={(on) => onSave({ money_calendar: on })}
+            label={<span>Also show the kinds I picked in my <Link className="link" to="/money/calendar">Money calendar</Link> and its calendar feed</span>} />
+        </div>
+      </div>
     </Card>
   );
 }
@@ -203,9 +209,11 @@ export function EventsPage() {
         : (
           <>
             {failedLine(v.sources, (d) => asOf(d) ?? d) && <p className="k-callout k-small" role="status" data-testid="ev-failed">{failedLine(v.sources, (d) => asOf(d) ?? d)}</p>}
-            <div className="k-two ev-pair">
-              <Card label="The next seven days">
-                <CardHead level={2} title="The next seven days" />
+            {/* CK-2 (R1, R13): the week card is the full width, its events side by side and its three count lines in a column beside them, and the
+                reminders card under it is full width with its controls in two columns: neither is stretched beside the other into a blank band */}
+            <Card label="The next seven days">
+              <CardHead level={2} title="The next seven days" />
+              <div className="ev-weekgrid">
                 {week.length ? (
                   <ul className="k-list plain ev-week" data-testid="ev-week">
                     {week.slice(0, 10).map((e) => (
@@ -216,14 +224,14 @@ export function EventsPage() {
                     ))}
                   </ul>
                 ) : <p className="k-small k-muted">No scheduled events in the next seven days.</p>}
-                <p className="k-note">
-                  Results this week: <Link className="link tap" to="/research/results">{v.week.results ?? "the results calendar"}</Link> ·
-                  Dividends and other corporate actions: <Link className="link tap" to="/research/corporate-actions">{v.week.actions ?? "the calendar"}</Link> ·
-                  Lot and expiry-day changes: <Link className="link" to="/trade/fo-changes">F&amp;O changes</Link>
-                </p>
-              </Card>
-              <RemindCard v={v} onSave={save} />
-            </div>
+                <ul className="k-list plain ev-week-more">
+                  <li className="k-note">Results this week: <Link className="link tap" to="/research/results">{v.week.results ?? "the results calendar"}</Link></li>
+                  <li className="k-note">Dividends and other corporate actions: <Link className="link tap" to="/research/corporate-actions">{v.week.actions ?? "the calendar"}</Link></li>
+                  <li className="k-note">Lot and expiry-day changes: <Link className="link" to="/trade/fo-changes">F&amp;O changes</Link></li>
+                </ul>
+              </div>
+            </Card>
+            <RemindCard v={v} onSave={save} />
 
             <Card label="Every event">
               <CardHead title="Every event" />

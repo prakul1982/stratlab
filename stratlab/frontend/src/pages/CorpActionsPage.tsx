@@ -20,12 +20,12 @@ interface CalendarView {
 /** Ex-dates in day groups. */
 function DayGroups({ rows, today }: { rows: CorpAction[]; today: string }) {
   const days = [...new Set(rows.map((r) => r.ex_date))];
-  return <>{days.map((d) => (
+  return <div className="inv-days">{days.map((d) => (
     <div key={d} className="inv-day">
       <span className="k-eyebrow">Ex-date {exDay(d)}{d === today ? " · today" : ""}</span>
       <div className="inv-rows">{rows.filter((r) => r.ex_date === d).map((r) => <ActionLine key={r.id} a={r} showEx={false} />)}</div>
     </div>
-  ))}</>;
+  ))}</div>;
 }
 
 export function CorpActionsPage() {

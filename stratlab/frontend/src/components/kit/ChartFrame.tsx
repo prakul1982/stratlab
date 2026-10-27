@@ -17,7 +17,7 @@ export function ChartFrame<R>({ title, info, infoLabel, id, label, ranges, range
   const rangeBar = ranges && ranges.length > 1 && range != null && onRange
     ? (ranges.length <= 4 ? <Seg label="Range" options={ranges} value={range} onChange={onRange} /> : <ChipBar label="Range" options={ranges} value={range} onChange={onRange} />) : null;
   return (
-    <Card id={id} label={label}>
+    <Card id={id} label={label} className={rangeBar || actions ? undefined : "k-chart-plain"}>
       <CardHead title={title} info={info} infoLabel={infoLabel} actions={<>
         {rangeBar}
         {table && <button type="button" className="btn quiet sm" aria-pressed={asTable} onClick={() => setAsTable((x) => !x)}>Table</button>}

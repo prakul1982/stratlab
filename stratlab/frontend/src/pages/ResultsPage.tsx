@@ -126,7 +126,8 @@ export function ResultsPage() {
           </EmptyState>
         </Card>
       )}
-      {data && !empty && data.weeks.map((w) => {
+      {/* the two weeks side by side: each was a full-width card around one company row (VR1-125) */}
+      {data && !empty && <div className="k-cols">{data.weeks.map((w) => {
         const days = [...new Set(w.rows.map((r) => r.date))];
         const ahead = days.filter((d) => d >= data.today), past = days.filter((d) => d < data.today);     // the days gone by fold away
         const about = (d: string) => w.days?.find((x) => x.date === d);
@@ -156,7 +157,7 @@ export function ResultsPage() {
             </Earlier>
           </Card>
         );
-      })}
+      })}</div>}
       {data && data.more > 0 && <p className="k-note">Each day shows its first {data.day_rows ?? 40} companies, yours first; {data.more.toLocaleString("en-IN")} more are a click away under their day, or find a company by name.</p>}
       {data && <p className="k-note inv-text">{data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
     </div>

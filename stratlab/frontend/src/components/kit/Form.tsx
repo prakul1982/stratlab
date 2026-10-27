@@ -1,15 +1,19 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
 import { Info } from "../ui";
+import { useNoOrphan } from "../../lib/noOrphan";
 
 /** A form as a grid: columns of at least 190px that wrap to the width, every box on one baseline. Fields go in, then
  * one FormActions row with the main button. */
-export function FormGrid({ onSubmit, children, label, pair, trio }: { onSubmit?: (e: FormEvent<HTMLFormElement>) => void; children: ReactNode; label?: string;
+export function FormGrid({ onSubmit, children, label, pair, trio, inline }: { onSubmit?: (e: FormEvent<HTMLFormElement>) => void; children: ReactNode; label?: string;
   /** Two boxes that belong side by side (two companies to compare): each takes half the row, not a narrow column. */
   pair?: boolean;
   /** A form of a few switches and boxes (the tax report's inputs): at most three equal columns, two on a tablet, one on a
    * phone, so switches and boxes line up in rows instead of spreading over five or six narrow columns (MO-3a). */
-  trio?: boolean }) {
-  return <form className={`k-form${pair ? " k-form-pair" : ""}${trio ? " k-form-trio" : ""}`} onSubmit={onSubmit} aria-label={label}>{children}</form>;
+  trio?: boolean;
+  /** One box and its button in one row (a level and "Add alert"), the button level with the box: not a box in a corner of a wide card (VR1-112). */
+  inline?: boolean }) {
+  const ref = useNoOrphan<HTMLFormElement>();      // five boxes in four columns would leave one alone on a second line (UI-FIX-1, R9)
+  return <form className={`k-form${pair ? " k-form-pair" : ""}${trio ? " k-form-trio" : ""}${inline ? " k-form-inline" : ""}`} ref={ref} onSubmit={onSubmit} aria-label={label}>{children}</form>;
 }
 
 type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "children"> & {

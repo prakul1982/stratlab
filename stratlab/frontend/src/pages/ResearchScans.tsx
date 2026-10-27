@@ -196,7 +196,7 @@ export function ScanPage() {
       {emptyWatch && <Card compact><EmptyState title={`Your ${REGION_NAME[region]} watchlist is empty`} action={{ label: "Find a company", to: `/research?region=${region}` }}>Press Watch on company pages to add stocks, or scan a ready-made group.</EmptyState></Card>}
       {notRead && <Card compact><EmptyState title={`${cur?.name} hasn't been read yet`}>This group is worked out once a day after the market closes. Scan a smaller group meanwhile.</EmptyState></Card>}
       {scanErr && !busy && <ErrorState title="The scan didn't run" action={scanOffline ? undefined : { label: "Try again", onClick: () => void runScan() }}>{scanErr}</ErrorState>}
-      {!out && !busy && !scanErr && pro && !!cur?.count && <p className="k-small k-muted">Pick a scan and a group, then press Scan to see which stocks match.</p>}
+      {/* (VR1-101: no "Pick a scan and a group, then press Scan" line: the card above says it) */}
       {busy && <Card><p className="k-small k-muted" role="status" data-testid="scan-progress"><ScanElapsed count={cur?.count} /></p><SlowFirstScan /><Skeleton label="Reading each stock's daily chart" lines={4} /></Card>}
       {preset && !busy && (
         <Card>
@@ -266,9 +266,8 @@ export function ScanPage() {
         </Card>
       )}
       <p className="k-note inv-text">
-        {scan.id === "st_s2"
-          ? "Stage uses the 150-day average and its 20-day slope; Supertrend uses 10 days and 3× the average daily range (ATR). "
-          : "A match says the rule held on the date shown, on daily candles. "}
+        {/* (VR1-101: "a match says the rule held" is the card's own Rules line, so the footnote doesn't say it twice) */}
+        {scan.id === "st_s2" ? "Stage uses the 150-day average and its 20-day slope; Supertrend uses 10 days and 3× the average daily range (ATR). " : ""}
         Past signals don't predict future returns, and nothing here is investment advice.
       </p>
     </div>
@@ -366,7 +365,7 @@ export function RotationPage() {
         lede="Where each sector (or stock) stands against the market, and which way it's moving. Right of centre = stronger than the benchmark; above centre = gaining pace. Most move clockwise through the four corners." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); setBackTo(null); }} /></div>
       <Card>
-        <FormGrid label="What to show">
+        <FormGrid label="What to show" inline>   {/* (VR1-113: "Animate" ends the controls row, not alone under it) */}
           <Field label="What to compare">
             {(id) => (
               <select id={id} className="k-input" value={setId} onChange={(e) => { setSetId(e.target.value); setBackTo(null); }}>
@@ -511,7 +510,7 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
               <Card key={r.symbol}>
                 <CardHead title={<Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}>{r.symbol}</Link>}
                   actions={<>{r.stale && <Badge tone="plain">Last read, not refreshed</Badge>}{r.stored && <Badge tone="plain">From the evening's read{r.as_of ? ` (${asOf(r.as_of)})` : ""}</Badge>}<Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link></>} />
-                <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
+                <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} rowsHaveFundRaise={!!r.summary.fund_raise_last && r.flags.some((i) => i.at.slice(0, 10) === r.summary.fund_raise_last!.slice(0, 10))} />
                 {r.flags.length > 0 ? <div className="inv-rows">{r.flags.map((i) => <FilingRow key={i.id} i={i} />)}</div>
                   : <span className="k-small k-muted">Nothing flagged in the last {data.days} days.</span>}
               </Card>

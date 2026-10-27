@@ -1,6 +1,8 @@
 import { Card, CardHead } from "./kit/Card";
 import { DataTable, type Column } from "./kit/DataTable";
 import { Disclosure } from "./kit/Disclosure";
+import type { ReactNode } from "react";
+import { Info } from "./ui";
 import { EVERYONE, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimitedLabel, type Limits, type PlanId } from "../lib/plans";
 
 /** Every limit and feature side by side, from the server's plans when signed in; signed out, the
@@ -15,6 +17,9 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   const ids: PlanId[] = ["free", "basic", "pro"];
   const names = { free: "Free", basic: "Basic", pro: "Pro" };
   type Row = { id: string; label: string; cell: (p: PlanId) => string };
+  // VR1-163: a value's own note ("Unlimited (up to 200 a day)", "1 (5-market-day trial)") is a line under it, not four lines in a 55px column; a long note on a row's name sits behind an (i)
+  const valueOf = (v: string): ReactNode => { const m = /^(.+?) (\(.+\))$/.exec(v); return m ? <>{m[1]} <span className="k-sub-line">{m[2]}</span></> : v; };
+  const nameOf = (v: string): ReactNode => { const m = /^(.+?) \((.{20,})\)$/.exec(v); return m ? <>{m[1]}<Info label={`About ${m[1].toLowerCase()}`}>{m[2].charAt(0).toUpperCase() + m[2].slice(1)}.</Info></> : v; };
   // "What each plan adds" in three parts under subheadings (DI-032: 40-odd rows mixing trading, research and money)
   const flagRows = (g: string) => FLAGS.filter(([f]) => (FLAG_GROUP[f] ?? "research") === g)
     .map(([f, label]) => ({ id: String(f), label, cell: (p: PlanId) => (lim(p).features.includes(f) ? "✓" : "–") }));
@@ -24,8 +29,8 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   ];
   const everyone: Row[] = EVERYONE.map((label) => ({ id: label, label, cell: () => "✓" }));
   const columns = (first: string): Column<Row>[] => [
-    { key: "label", header: first, wrap: true, cell: (r) => r.label },
-    ...ids.map((p) => ({ key: p, header: names[p], numeric: true, cell: (r: Row) => r.cell(p) })),
+    { key: "label", header: first, wrap: true, cell: (r) => nameOf(r.label) },
+    ...ids.map((p) => ({ key: p, header: names[p], numeric: true, cell: (r: Row) => valueOf(r.cell(p)) })),
   ];
   // one table per group, each with the plan names on top; the header stays in view as the page scrolls past it
   return (

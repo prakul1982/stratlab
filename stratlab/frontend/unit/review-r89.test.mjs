@@ -218,16 +218,17 @@ test("MO-4a: the notebook is one centred column and the Lab notes float, with th
 test("MO-4a: the floating notes clear the safe areas, sit under dialogs and toasts, and are a bottom sheet on a phone", () => {
   const css = read("src/styles.css");
   const dock = css.match(/\.ln-dock \{[^}]*\}/)[0];
-  assert.match(dock, /position: fixed/);
-  assert.match(dock, /env\(safe-area-inset-bottom\)/);
-  assert.match(dock, /env\(safe-area-inset-right\)/);
+  assert.match(dock, /position: sticky/);                                              // VR1-050: a zero-height sticky box at the page's end, its tab drawn up from it
+
   const z = Number(dock.match(/z-index: (\d+)/)[1]);
   assert.ok(z < 40 && z > 30, "above the sticky top bar (30), below the menu drawer (40), dialogs (60) and toasts (70)");
   assert.match(css, /\.ln-panel \{ width: 380px;/);
   assert.match(css, /\.ln-panel\[hidden\] \{ display: none; \}/);
   assert.match(css, /\.ln-panel \.lab-note \{[^}]*max-height:/);                      // its own scroll, never taller than the screen
   const phone = css.slice(css.indexOf("@media (max-width: 640px) {\n  .ln-dock"));
-  assert.match(phone, /\.ln-dock \{ right: 0; left: 0; bottom: 0;/);
+  assert.match(phone, /\.ln-dock-in \{ right: -16px; left: -16px;/);
+  assert.match(phone, /env\(safe-area-inset-bottom\)/);
+  assert.match(phone, /env\(safe-area-inset-right\)/);
   assert.match(phone, /border-radius: 14px 14px 0 0/);
 });
 
@@ -254,4 +255,26 @@ test("Owner 26 Oct: inside a notebook only the notebook is the selected menu ent
   const shell = read("src/components/Shell.tsx");
   assert.match(shell, /const here = at\?\.page\.to === p\.to && !\(p\.to === "\/notebooks" && path\.startsWith\("\/n\/"\)\);/);
   assert.doesNotMatch(shell, /Dots: each notebook's last verdict/);
+});
+
+test("DOC-2: the landing page names the newer tools, its lists keep full grid rows, and the UI checker guide lists every rule", () => {
+  const login = read("src/pages/Login.tsx");
+  const list = (name) => {
+    const m = login.match(new RegExp(`const ${name}: \\[[^\\]]*\\]\\[\\] = \\[\\n([\\s\\S]*?)\\n\\];`));
+    assert.ok(m, name);
+    return (m[1].match(/^  \["/gm) ?? []).length;
+  };
+  assert.equal(list("RESEARCH") % 4, 0);                 // four research tools a row (landing.spec.ts)
+  assert.equal(list("TOOLS") % 4, 0);
+  assert.equal(list("ALERTS") % 3, 0);                   // three alerts a row
+  assert.equal(list("PORTFOLIO") % 2, 0);                // Money's cards in pairs
+  for (const t of ["IPOs", "Business updates", "Named holders", "Closing auction", "Market events", "Chart replay", "Forward test", "Test a SIP", "Rates after tax"])
+    assert.match(login, new RegExp(`\\["${t}",`), t);
+  assert.match(login, /Trade · Invest · Money · Ten markets/);
+  assert.doesNotMatch(login, /Yahoo|Screener|Finnhub|Kite|Zerodha Kite/);        // no data vendor named on the page
+  // docs/UI_CHECKER.md names every rule the checker has, R1 to R25
+  const rules = read("e2e/ui-lint.spec.ts").match(/^  R\d+: /gm) ?? [];
+  const doc = readFileSync(new URL("../../../docs/UI_CHECKER.md", import.meta.url), "utf8");
+  assert.equal(rules.length, 25);
+  for (let i = 1; i <= rules.length; i++) assert.match(doc, new RegExp(`\\| R${i} \\|`), `R${i}`);
 });

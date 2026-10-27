@@ -120,6 +120,16 @@ about 3 to 10 seconds a company.
 - **Exchange holidays** (Data and jobs): a row per market with where its holidays come from (the calendar package or
   the exchange's own list), how far ahead they're known, the next holiday and a status with a hint. For India, add a
   holiday by hand or refresh from the exchange here.
+- **Library seed** (Data and jobs): StratLab's own library strategies are run through the app's own backtest and verdict on the
+  standard groups of every market the backtester reads (India, the US, UK, Europe, Japan, crypto, forex, Indian commodities,
+  Indian currency futures and global commodities). A start-up run publishes only the entries the library lacks, so a market
+  added later is seeded once and nothing already there is run again; **Run now** refreshes them all (`/admin/library/seed`).
+  Markets on the broker's feed wait for the daily login.
+- **Closed accounts:** a user can delete their own account (Account → Your data → Delete my account). It erases every store's
+  data and the sign-in account at once, and keeps invoices and the payment records behind them. It refuses while a plan would
+  still be billed (the user cancels first) and for the owner's account, which is closed from the sign-in service, not from here.
+- **Layout checker:** every change is measured page by page in CI ([UI_CHECKER.md](UI_CHECKER.md)); a failing run keeps its report
+  and screenshots on the run's page.
 - **Refreshes:** the results calendar, corporate actions, surveillance lists, market events, IPOs and F&O contract
   changes run on their own schedules, and each has a **Run now** in **Data and jobs** (the routes behind them are
   `/admin/results/refresh`, `/admin/corp-actions/refresh`, `/admin/surveillance/refresh`, `/admin/events/refresh`,
@@ -529,11 +539,22 @@ The server's cost is its memory (one process holds the live paper sessions, the 
   histories kept in memory are the latest 80 schemes.
 - **malloc gives memory back:** it is told to keep two arenas and to serve blocks of 1 MB and more from their own
   mappings. `MALLOC_TUNE=0` leaves malloc's settings alone.
+- **Python's small objects live in malloc's heap,** not in its own 1 MB arenas: the start command sets
+  `PYTHONMALLOC=malloc` (a Railway variable of the same name overrides it; `pymalloc` goes back). An arena returns to the
+  system only when every object in it is gone, and a few long-lived cache entries between the temporary ones kept ~300 MB
+  after each day's peaks; malloc returns what is free in pages. On a replay of the day's jobs, freeing the caches gave
+  back 75 MB with Python's arenas and 220 MB with malloc (with every cache full it is about 4% higher, 709 against 681 MB,
+  and parsing takes about 5% more CPU), so the gain is memory handed back when entries expire and jobs finish, which is what
+  the bill follows. jemalloc was measured too and did not beat it.
 - **Looking at it:** there is no panel. `GET /admin/memory` (signed in as an admin) returns the process's resident memory
   (`rss_mb`), which heavy job has the turn (`running`, `since`) and how many wait, and the caches' size against the budget.
   `GET /admin/memory?detail=true` adds a census of the heap by type (object counts and bytes of the 25 biggest types) and
   the largest module-level collections: take it twice an hour apart and the type or collection that grew is what is
-  growing between them. It takes about a second and keeps nothing.
+  growing between them. It takes about a second and keeps nothing. The census counts only what the garbage collector
+  tracks (containers; not the strings, numbers and bytes inside them, which are most of the data: 10 MB counted for 66 MB
+  held on a test page set), so read it with the rest of that answer: `allocators` (which malloc, whether Python's
+  arenas are in use), `python_heap` (arenas taken, in live objects, wasted: only with Python's arenas), `rss_split`
+  (anonymous against file-backed memory) and `caches` (each cache by name, its items and its size against the budget).
 - Backtests run in worker processes (`BACKTEST_PROCESSES`, 2 by default; 0 runs them in the server process) and
   `HEAVY_SLOTS` (2) caps heavy requests running at once.
 

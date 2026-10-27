@@ -46,7 +46,7 @@ function EventRow({ e, past }: { e: Ev; past: boolean }) {
       <span className={`badge mc-cat mc-${e.cat}`}>{CAT_LABEL[e.cat]}</span>
       <div className="mc-ev-body">
         <div className="mc-ev-title">{e.url ? <Link className="link" to={e.url}>{e.title}</Link> : e.title}
-          {e.amount != null && <span className="mc-amount"> {inr(e.amount)}</span>}</div>
+          {e.amount != null && !e.title.includes(inr(e.amount)) && <span className="mc-amount"> {inr(e.amount)}</span>}      {/* not again when the title names it ("tax still unpaid: ₹5,000": UI-FIX-1, R8) */}</div>
         {e.detail && <div className="k-note">{e.detail}</div>}
       </div>
     </li>

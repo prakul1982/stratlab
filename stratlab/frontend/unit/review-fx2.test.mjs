@@ -29,7 +29,7 @@ test("RC2B-020, RC2B-021: the net worth chart waits for a third snapshot, and th
   assert.match(page, />← Back<\/button>/);
   assert.doesNotMatch(page, /← Something else/);
   const home = read("src/pages/MineHome.tsx");
-  assert.match(home, /so far; the chart starts at the third/);
+  assert.doesNotMatch(home, /so far; the chart starts at the third/);                 // VR1-005: no boxed placeholder under the figure until there is a chart
 });
 
 test("RC2B-002: no Money page opens on a year another page remembered", async () => {
@@ -116,7 +116,7 @@ test("RC2B-024: the floating rate bond is a row of the small savings table", () 
 });
 
 test("RC2B-040, RC2B-041, RC2B-043, RC2B-044: the cards of Money home and the calendar end together, and the add forms use the row", () => {
-  assert.match(read("src/pages/SpaceHomes.tsx"), /className="grid2 space-panels even">\s*<HoldingsSummary \/>/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /className="grid2 space-panels money-panels">\s*<HoldingsSummary \/>/);
   const css = read("src/styles.css");
   assert.match(css, /\.mc-grid \{ align-items: stretch; \}/);
   assert.match(css, /\.us-add > \.k-form \{ grid-template-columns: repeat\(6, minmax\(0, 1fr\)\); \}/);

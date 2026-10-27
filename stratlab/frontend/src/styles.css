@@ -91,6 +91,8 @@ h1.eyebrow { font-weight: 400; }
 }
 .btn:hover { color: var(--on-ink); filter: brightness(1.12); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+/* VR1-150: a disabled main button was the main button at half strength, a muddy grey-beige that read as a grey secondary one: it is an empty outline with muted words instead */
+.btn:disabled:not(.quiet):not(.blue):not(.outline) { opacity: 1; background: transparent; border: 1px dashed var(--dash); color: var(--muted); }
 .btn.blue { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
 .btn.outline { background: transparent; color: var(--ink); }
 .btn.outline:hover { background: var(--card); color: var(--ink); filter: none; }
@@ -207,6 +209,7 @@ a.link { margin-inline: -2px; }
 .side-new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px;
   border: 1px solid var(--ink); background: var(--ink); color: var(--on-ink); font: 600 13.5px var(--sans); cursor: pointer; }
 .side-new:hover { filter: brightness(1.15); }
+.side-new-gap { display: block; height: 34px; }   /* VR1-102: the main button's place on the page it points to */
 .search-btn { display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 10px; border: 1px solid var(--line-2);
   border-radius: 8px; background: var(--card); color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
 .search-btn:hover { color: var(--ink); border-color: var(--dash); }
@@ -308,7 +311,7 @@ a.link { margin-inline: -2px; }
 .acct-email { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* touch: rows a finger can hit */
 @media (pointer: coarse) {
-  .side-new, .search-btn { height: 40px; }
+  .side-new, .side-new-gap, .search-btn { height: 40px; }
   .space-switch button { height: 36px; }
   .side-list a { height: 40px; }
   .side-toggle { height: 32px; width: 32px; }
@@ -384,9 +387,15 @@ a.link { margin-inline: -2px; }
 
 /* MO-4a: the Lab notes float at the bottom-right (a button, and a card above it that scrolls inside itself; a bottom sheet on a phone),
  * so the notebook is the same centred column as every other page. Below the sidebar drawer (40), dialogs (60) and toasts (70). */
-.ln-dock { position: fixed; z-index: 35; right: max(16px, calc(env(safe-area-inset-right) + 16px)); bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
-.ln-dock > * { pointer-events: auto; }
-.ln-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); font: 600 15px var(--sans); cursor: pointer; box-shadow: var(--shadow); }
+/* VR1-050: the button was a pill 16px off the corner and sat over page content (the "Edit in words" button at 1280, a rule's delete cross at 1440, the "Testing on"
+ * box on a phone). It is now a tab flush with the bottom edge of the screen: the dock is a zero-height sticky box at the end of the page (so a full-page
+ * capture or the end of the page has it below the last card, not over it), and its tab and panel are drawn up from it. */
+.ln-dock { position: sticky; z-index: 35; bottom: 0; height: 0; pointer-events: none; }
+.ln-dock-in { position: absolute; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
+.ln-dock-in > * { pointer-events: auto; }
+.k-page:has(> .ln-dock) { padding-bottom: 44px; }
+/* the dock is as wide as the page column: its right edge is the cards' right edge, not the window's (VR1-050: it hung half outside the card) */
+.ln-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 12px 12px 0 0; border: 1px solid var(--line-2); border-bottom: 0; background: var(--card); color: var(--ink); font: 600 15px var(--sans); cursor: pointer; box-shadow: 0 -4px 14px rgba(0, 0, 0, .14); }
 .ln-btn:hover { border-color: var(--ink); }
 .ln-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .ln-btn[aria-expanded="true"] { border-color: var(--ink); }
@@ -396,8 +405,8 @@ a.link { margin-inline: -2px; }
 .ln-panel .k-card { box-shadow: var(--shadow); gap: var(--s3); }
 .ln-panel .lab-note { min-height: 172px; max-height: max(172px, calc(100vh - 300px)); }
 @media (max-width: 640px) {
-  .ln-dock { right: 0; left: 0; bottom: 0; padding: 0 max(16px, env(safe-area-inset-right)) max(16px, calc(env(safe-area-inset-bottom) + 16px)) max(16px, env(safe-area-inset-left)); }
-  .ln-dock:has(.ln-panel:not([hidden])) { padding: 0; }
+  .ln-dock-in { right: -16px; left: -16px; padding:   /* the sheet runs edge to edge: out over the page's 16px gutters */  0 max(16px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px, env(safe-area-inset-left)); }
+  .ln-dock:has(.ln-panel:not([hidden])) .ln-dock-in { padding: 0; }
   .ln-dock:has(.ln-panel:not([hidden])) .ln-btn { display: none; }     /* the sheet has its own Close; the button is back when it shuts */
   .ln-panel { width: 100%; max-width: none; }
   .ln-panel .k-card { border-radius: 14px 14px 0 0; border-bottom-width: 0; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
@@ -471,7 +480,7 @@ td.num, .num { font-family: var(--sans); }
 .block:first-of-type { border-top: 0; padding-top: 0; }
 .block-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .cond-row { display: flex; align-items: flex-start; gap: 8px; }
-.cond-row .sentence { flex: 1; min-width: 0; }
+.cond-row .sentence { flex: 0 1 auto; min-width: 0; }   /* VR1-052: the cross follows the rule's text, not 550px away at the card's far edge */
 .cond-x { flex: none; width: 36px; height: 36px; margin-top: 4px; border-radius: 8px; border: 1px solid transparent; background: none;
   color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; opacity: .55; }
 .cond-row:hover .cond-x, .cond-x:focus-visible { opacity: 1; border-color: var(--line); }
@@ -550,10 +559,10 @@ td.num, .num { font-family: var(--sans); }
 /* ---------- notebook header: market button and toolbar ---------- */
 .market-btn {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label cta" "main cta"; column-gap: 18px; row-gap: 2px;
-  align-items: center; min-height: 64px; padding: 10px 18px; border-radius: 14px; background: var(--card); border: 1.5px solid var(--ink);
+  align-items: center; min-height: 64px; padding: 10px 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--line-2);   /* VR1-054: a white 2px outline read as selected */
   color: var(--ink); text-decoration: none; max-width: 100%; min-width: 0; flex: 0 1 auto;
 }
-.market-btn:hover { color: var(--ink); background: var(--paper-2); }
+.market-btn:hover { color: var(--ink); background: var(--paper-2); border-color: var(--ink); }
 .market-btn .eyebrow { grid-area: label; }
 .market-btn-main { grid-area: main; font-weight: 600; font-size: 17px; overflow: hidden; text-overflow: ellipsis; }
 .market-btn-main .muted { font-weight: 400; }
@@ -688,6 +697,7 @@ td.num, .num { font-family: var(--sans); }
 /* "Illustration: made-up figures": the landing's pictures say what they are in type as readable as the figures beside them */
 .lp-illus { align-self: flex-start; padding: 2px 10px; border: 1px dashed var(--dash); border-radius: 999px; background: var(--card);
   color: var(--ink-2); font: 600 var(--t-label) / 1.5 var(--sans); }
+@media (max-width: 520px) { .lp-illus { border-radius: 14px; } }   /* CK-2 (R19): a sentence that runs to two lines on a phone is a label box, not a pill */
 .lp-illus-note { color: var(--ink-2); }
 .lp-tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); }
 .lp-tool { display: flex; flex-direction: column; gap: 6px; padding: 22px 22px 22px 0; border-bottom: 1px solid var(--line); }
@@ -723,7 +733,7 @@ td.num, .num { font-family: var(--sans); }
 .lp-prices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
 .lp-price { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
 .lp-price-top { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
-.lp-amount-row { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; }
+.lp-amount-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }   /* VR1-162: "about $8 at today's rate" always on its own line, so Basic and Pro start their next line at the same height (it sat beside the price in one and under it in the other) */
 .lp-amount { font-size: 44px; letter-spacing: -.02em; line-height: 1.05; }
 .lp-amount .small { font-family: var(--sans); }
 .lp-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14.5px; }
@@ -768,6 +778,7 @@ td.num, .num { font-family: var(--sans); }
 .lp-money .lp-beyond-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
 .lp-money .lp-fix { margin-top: auto; font-size: 13px; }
 @media (max-width: 1000px) { .lp-money { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .lp-money { grid-template-columns: minmax(0, 1fr); } }   /* CK-2 (R19): in 139px columns each tag ("An estimate for your CA") wrapped to two lines inside its pill */
 @media (max-width: 600px) {
   .lp-tools, .lp-steps, .lp-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; }
   .lp-steps, .lp-checks { gap: 10px; }
@@ -816,6 +827,9 @@ table.legs th, table.legs td { padding-left: 6px; padding-right: 6px; }
 table.legs input[type=number] { width: 72px !important; }
 .chip { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line-2);
   background: var(--card); color: var(--ink); font: 500 14px var(--sans); white-space: nowrap; cursor: pointer; }
+/* UI-FIX-1 (R10): a chip never wider than its row: a long name (a fund's full name) is cut with an ellipsis, its count stays */
+.chip { max-width: 100%; }
+.chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .chip:hover { border-color: var(--ink); color: var(--ink); }
 .chip.on, .chip.on:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .legs-box { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--paper-2, transparent); }
@@ -850,6 +864,7 @@ table.legs input[type=number] { width: 72px !important; }
 .lp-beyond-card .lp-fix { margin-top: auto; }
 .pub { min-height: 100vh; background: var(--paper); }
 .pub-nav { display: flex; justify-content: space-between; align-items: center; padding: 18px clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--line); }
+.pub:has(.lib-cards) .pub-main { max-width: 1144px; }   /* VR1-171: the signed-out library is as wide as the app pages (1080 of content), not 896 */
 .pub-main { max-width: 960px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 32px) 64px; }
 /* while a public page is still a loading placeholder, its main fills the screen, so the footer waits below it instead of
    showing under the placeholder and jumping down when the page arrives (R75-002: /library's layout shift on a phone) */
@@ -876,6 +891,15 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .palette-foot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--line); }
 @media (max-width: 640px) { .palette-back { padding: 8px; place-items: start stretch; } .palette { max-height: calc(100vh - 16px); } .palette-foot { display: none; } }
 .explore-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }   /* auto-fit: a short list fills the row */
+/* VR1-021 kept a short list at four-to-a-row widths, which left the right half of the row empty (CK-2, R2): the tiles share the row */
+.k-explore .explore-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }   /* CK-2: a short list (two tiles) shares the whole row, so no half of it is empty (VR1-021 had kept four-to-a-row widths); VR2-001: the tiles of a row are the same height (align-items:start left ragged bottoms, two tiles side by side differing by 20-40px) */
+/* VR1-140: Money's eight cards are 4 + 4 on a laptop (230px made 3 + 3 + 2, a hole beside the last) */
+@media (min-width: 561px) { .explore-grid.money-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); } }
+/* VR1-140: the three figures of Money home's two summary cards in one row, not 2 + 1 with the lower left empty */
+/* up to four figures in one row (the tax card with intraday income had "Long-term gains" alone on a second row and stood 120px
+   taller than My Holdings beside it); the year is in the card's heading, so the total's label doesn't repeat it */
+.money-panels .k-stats { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: var(--s3) var(--s4); }
+.money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); }
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
 @media (max-width: 560px) {
@@ -883,6 +907,7 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
   .explore-card { padding: 12px; gap: 4px; }
   .explore-card b { font-size: 14px; line-height: 1.25; }
   .explore-card .small { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .k-explore .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* VR1-031: half of each description was hidden behind "..." on a phone */
   .modal .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* choices must be read in full */
   .money-cards .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* Money's card lines are read in full, not cut mid-phrase (DP2-014) */
 }
@@ -1015,6 +1040,9 @@ label.btn.disabled { opacity: .5; }
 .screens-table { margin: 0 -24px; }
 @media (max-width: 640px) { .screens-table { margin: 0 -16px; } }
 .screens-table td:first-child { white-space: normal; min-width: 180px; }
+.screens-table th[scope="row"] { min-width: 240px; }   /* VR1-103: a company's name was wrapping over three lines beside a sector column with room to spare */
+/* VR1-104: on a phone, "Save this screen" sits under the filters it saves, not 20 company cards further down */
+@media (max-width: 640px) { .screens-main > .screens-save { order: -1; } }
 
 /* corporate actions: a quiet tag for each kind, and the bonus/split notice on My Holdings */
 .badge[class*="ca-"] { background: var(--chip); color: var(--ink-2); font-size: 12px; padding: 2px 8px; }
@@ -1037,16 +1065,25 @@ label.btn.disabled { opacity: .5; }
 
 /* side-by-side panels keep their own height: a short card is not stretched to the taller one beside it, leaving an empty block */
 .space-panels { align-items: start; }
+/* VR2-002: the watchlist's tiles of one row are the same height (VR1-012's align-items:start left TCS's bottom edge 24px above RELIANCE's beside it) */
+/* VR1-013: a card head whose only control is a "Market events ->" style link keeps it at the top right and lets the title wrap beside it, on a phone too,
+   instead of dropping the link to a line of its own under a long title */
+.space-home .k-card-head:has(> .k-card-actions > a.link:only-child) { flex-wrap: nowrap; align-items: flex-start; }
+.space-home .k-card-head:has(> .k-card-actions > a.link:only-child) > .k-card-actions { flex: none; white-space: nowrap; }
+.space-home .k-card-head:has(> .k-card-actions > a.link:only-child) .k-card-title { min-width: 0; }
+.space-flag > :first-child { min-width: 110px; }   /* red flags across the page: the symbols make a column and the sentences line up after them */
+.space-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }   /* two short cards stacked in one column of a panel row (VR1-010) */
 .space-next { display: flex; flex-direction: column; gap: 14px; }
 .space-next .how li { background: var(--paper); }
 .space-recent { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }   /* wraps to two, then one, on a tablet instead of squeezing each card (R34-003) */
 .space-recent-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 56px; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); text-decoration: none; }
 .space-recent-row:hover { border-color: var(--ink-2); color: var(--ink); }
 .space-recent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.space-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.space-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 12px; }      /* two rows of two on a phone end level: a longer line in one card no longer makes its row taller */
 /* Trade home's market figures (DC-001): laid out as the tool strip, but its own class (the strip is the tools' row) */
 .trade-market { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .trade-market b.num { font-size: 1.15rem; line-height: 1.3; }
+.trade-market .space-card-line { min-height: 0; }   /* VR1-020: the two-line room left the tile with no caption half blank */
 .space-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 16px; color: var(--ink); text-decoration: none; }
 .space-card:hover { border-color: var(--ink-2); color: var(--ink); }
 .space-card-lead { border-color: var(--blue); background: var(--blue-soft); }
@@ -1057,10 +1094,10 @@ label.btn.disabled { opacity: .5; }
 .space-card-line { line-height: 1.4; min-height: 2.8em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 560px) { .space-card-line { display: block; -webkit-line-clamp: unset; overflow: visible; min-height: 0; } }   /* a card's caveat is read in full on a phone (R76-006) */
 .space-card-foot { display: flex; align-items: center; min-height: 20px; margin-top: auto; padding-top: 4px; color: var(--muted); font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }   /* a long status wraps onto a second line: a flex box clips text with no ellipsis (R13S-008) */
-.space-card-foot.live, .space-card-lead .space-card-foot { font-weight: 600; }
+.space-card-foot.live { font-weight: 600; }
 .space-card-foot.live { color: var(--up); }     /* 5:1 on the paper; the lighter series green was 3.8:1 */
 .space-card-foot.live::before { content: ""; flex: none; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; }
-.space-card-lead .space-card-foot:not(.live) { color: var(--blue-ink); }
+/* VR1-014: the lead card's "Open ->" was blue beside grey ones, like a hover left on; the lead is marked by its border and tint alone */
 .space-card-foot .skel { width: 72px; height: 12px; }
 @container (max-width: 720px) {
   .space-strip, .trade-market { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -1164,10 +1201,9 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
   padding: 6px 10px; font-size: 12.5px; pointer-events: none; white-space: nowrap; box-shadow: var(--shadow); z-index: 2; }
 .key-line { width: 12px; height: 2px; display: inline-block; border-radius: 1px; }
 .pos-chart { min-width: 0; }
-.pos-source { margin-top: -6px; max-width: 80ch; }
+.pos-source { margin-top: -6px; }   /* VR2-022: the intro runs the card's width (it was held to 80ch, 60% of a wide card, with the right 40% empty) */
 /* long against short: the long side dark, the short side the line colour; the shares are written out beside it */
 .pos-split { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-.k-stat .pos-sides { display: flex; flex-direction: column; font-size: 18px; line-height: 1.25; }
 
 /* ---------- trade journal ---------- */
 .j-bar { position: relative; height: 12px; min-width: 80px; }
@@ -1270,12 +1306,12 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 /* a short symbol ("IEX") is still a 32 px target for a thumb (R95-003: 29 px wide) */
 .fo-row .link { display: inline-flex; justify-content: center; min-width: 32px; }
 
-.surv-badge.fo-badge { white-space: normal; max-width: 100%; }   /* wraps inside a narrow card */
+.surv-badge.fo-badge { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }   /* one line: in a narrow tile the badge moves to a line of its own as a whole (the row wraps) and only a badge wider than the whole tile is cut, with the full text in its tooltip; a pill on two lines was R19 */
 /* market events (/trade/events): neutral tags, figures in ink, the index table scrolling inside its card */
 
 .ev-figure { font-variant-numeric: tabular-nums; }
 
-.space-events { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
+.space-events { display: flex; flex-direction: column; gap: 8px; }      /* one event a line, in the half-width card beside Results today (UI-FIX-1) */
 /* Admin: the AI panel */
 .ai-provider { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); }
 .ai-model, .ai-missing { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 8px 0; border-top: 1px dashed var(--line); }
@@ -1409,9 +1445,14 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 
 /* page header */
 .k-page-head { display: flex; flex-direction: column; gap: var(--s2); padding-bottom: var(--s1); min-width: 0; }
+.k-page-head:not(:has(> .k-eyebrow)) { padding-top: 26px; }   /* VR1-160: a page with no kicker line (Account, Settings, Plans) keeps its title where the others have it, one line down */
 .k-h1 { font-family: var(--serif); font-size: var(--t-h1); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; text-wrap: balance; }
 .k-lede { font-size: var(--t-lede); color: var(--ink-2); max-width: 64ch; }
 .k-meta { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; min-height: 25px; }   /* a badge's height: the "Data up to" badge that lands later doesn't move the page */
+/* VR1-051: the notebook's "Saving / Saved" text is the only thing in its header's last row, which held a 25px band of nothing under the question line:
+   it sits at the header's top right instead, so the row is not there. */
+.k-page-head:has(> .k-meta > .nb-save:only-child) { position: relative; }
+.k-page-head:has(> .k-meta > .nb-save:only-child) > .k-meta { position: absolute; top: 0; right: 0; min-height: 0; }
 
 /* card and its header row */
 .k-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--s5); display: flex; flex-direction: column; gap: var(--s4); min-width: 0; scroll-margin-top: 80px; }
@@ -1420,11 +1461,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-card-title { display: inline-flex; align-items: center; gap: var(--s2); font-family: var(--serif); font-size: var(--t-card); font-weight: 600; min-width: 0; }
 /* a title with its (i): the button sits after the heading element, on the same line */
 .k-card-titlerow { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
+/* VR1-110: a chart whose only control is "Table" keeps it top-right beside a long title (the title wraps, the button doesn't drop below it) */
+.k-chart-plain > .k-card-head { flex-wrap: nowrap; align-items: flex-start; }
+.k-chart-plain > .k-card-head > .k-card-actions { flex: none; }
 .k-card-actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; min-width: 0; max-width: 100%; }
 .k-card-actions > .k-chipwrap { max-width: 100%; }
 .k-card-actions .btn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-card.compact { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s4); padding-block: var(--s3); }
 .k-card.compact .k-card-head { min-height: 0; }
+.k-card.compact > .k-card-head:has(> .k-card-actions) { flex: 1 1 100%; }   /* VR1-145: a strip's title and its controls spread over its width (the tax report's "Financial year" strip kept them in the left 65%) */
 /* MO-3b: figures in a compact card spread over its width (they sat in its left two thirds, sized to their text), each in an equal column */
 .k-card.compact > .k-stats { flex: 1 1 100%; }
 .k-card.compact .k-card-title { font-size: 17px; }
@@ -1433,11 +1478,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* a row of figures: each is label, number, note on a shared subgrid, so a label that wraps to two lines never pushes its
    number below its neighbours' */
 .k-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s4) var(--s5); }
+/* VR2-020: the funds' cost and behaviour card holds seven figures: four across (4 + 3), not five (5 + 2, a second row of two) */
+.mf-stats .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* never 3 across: seven made 3 + 3 + 1 at 1280 (UI checker R9) */
+@media (min-width: 1000px) { .mf-stats .k-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .k-stats > .k-stat { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
 .k-stats > .k-stat > * + * { margin-top: 2px; }
 .k-stats > .k-stat > .k-stat-k { align-self: end; }
 .k-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .k-stat-k { font-size: var(--t-note); color: var(--muted); }
+.k-stat-k .info { margin-block: -4px; }   /* VR1-149: the (i) is not taller than a line of the label, so a label with one sits on the same baseline as its neighbours */
 .k-stat-v { font-size: var(--t-stat); font-weight: 600; letter-spacing: -.02em; line-height: 1.2; overflow-wrap: anywhere; }
 .k-stat-d { font-size: var(--t-note); color: var(--muted); }
 .k-delta { display: inline-flex; align-items: center; gap: var(--s1); font-weight: 600; font-size: var(--t-note); padding: 2px var(--s2); border-radius: 999px; white-space: nowrap; }
@@ -1495,6 +1544,11 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* form grid: every label one line, every box the same height, all boxes on one baseline (rows start together, so a hint under one box never lifts its neighbours' labels) */
 .k-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s4); align-items: start; min-width: 0; }
 .k-form.k-form-pair { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
+/* VR1-112: a level and its button in one row, the button level with the box; a hint under it takes the whole row */
+.k-form.k-form-inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); }
+.k-form.k-form-inline > .k-field { flex: 0 1 220px; }
+.k-form.k-form-inline > .k-field.wide { flex: 1 1 100%; }
+.k-form.k-form-inline > .k-form-actions { flex: none; }
 /* MO-3a: three columns at most, whatever the card's width (a column is never narrower than a three-choice switch) */
 .k-form.k-form-trio { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); max-width: 1000px; }
 .k-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -1583,6 +1637,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-compare .k-table { table-layout: fixed; }
   .k-compare .k-table th:not(:first-child), .k-compare .k-table td:not(:first-child) { width: 17%; white-space: normal; }
 }
+/* VR1-163: on a phone the three plan columns get a share of their own (the names in the first column wrap), so "Unlimited" and a value's note fit */
+@media (max-width: 640px) { .k-compare .k-table th:not(:first-child), .k-compare .k-table td:not(:first-child) { width: 20%; min-width: 64px; } .k-compare .k-table td:first-child, .k-compare .k-table th:first-child { width: 40%; } }
 /* a table that fits its card keeps its header in view as the page scrolls (below the phone's top bar) */
 .k-tbl-wrap.pinhead { overflow: visible; background: none; border-radius: 0; animation: none; -webkit-mask-image: none; mask-image: none; }
 .k-tbl-wrap.pinhead .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }
@@ -1592,6 +1648,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
    (R5O-017: hundreds of targets under 32px on ETF vs NAV, Market events and the screener) */
 @media (max-width: 640px) {
   .k-table td a, .k-table th a, .k-table td .btn.sm, .k-table td button, .k-cal-ev a, .k-cal-evs button { min-height: 32px; display: inline-flex; align-items: center; }
+  .k-table td .info-btn { display: grid; min-height: 40px; }   /* VR1-163: an (i) in a row's name keeps its own 40px box and circle, not the 32px inline-flex of other table buttons */
   .k-table td input[type="checkbox"], .k-table th input[type="checkbox"] { min-width: 24px; min-height: 24px; margin: 4px; }
   /* R6O-024: the screener's sort headers, the chart's icon buttons, a card's small header links and the reminder ticks
      on Market events were still under 32px */
@@ -1618,20 +1675,31 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-tbl-wrap.stack .k-table td, .k-tbl-wrap.stack .k-table th[scope="row"] { display: block; padding: 0; border: 0; white-space: normal; text-align: left; min-width: 0; background: none; }
   .k-tbl-wrap.stack .k-table th[scope="row"] { grid-column: 1 / -1; color: var(--ink); font-size: var(--t-body); }
   .k-tbl-wrap.stack .k-table td[data-label]::before { content: attr(data-label) / ""; display: block; color: var(--muted); font-size: var(--t-note); font-weight: 400; }
+  /* UI-FIX-1 (R10): a long status badge ("Social Stock Exchange raise, not an IPO") wraps inside its cell instead of running under the next */
+  .k-tbl-wrap.stack .k-table td .k-badge { white-space: normal; max-width: 100%; border-radius: 14px; }
   .k-tbl-wrap.stack .k-table td.k-act, .k-tbl-wrap.stack .k-table td.k-row-note, .k-tbl-wrap.stack .k-table td.k-empty-row { grid-column: 1 / -1; }
   .k-tbl-wrap.stack .k-table td.k-act { text-align: right; width: auto; }   /* the whole card's width: 1% of a grid cell put the Edit and remove buttons off the card (DP2-007) */
+  /* VR2-017: a card's one button (Edit) sits at its top right, beside the name, not alone in a blank bottom corner under the figures */
+  .k-tbl-wrap.stack .k-table tr:has(> td.k-corner) { position: relative; }
+  .k-tbl-wrap.stack .k-table tr:has(> td.k-corner) th[scope="row"] { padding-right: 72px; }
+  .k-tbl-wrap.stack .k-table td.k-act.k-corner { position: absolute; top: var(--s2); right: var(--s2); grid-column: auto; }
   /* a business update's card: the filing's own words stay in the link's tooltip, not three lines of every card (DD-051) */
   .biz-updates .k-tbl-wrap.stack .inv-clamp { display: none; }
   /* a column marked `lead` (the scan's signal, a red flag's label) sits under the name, across the card (DE-004, DE-035) */
   .k-tbl-wrap.stack.has-lead .k-table th[scope="row"] { order: -2; }
   .k-tbl-wrap.stack.has-lead .k-table td.k-lead { order: -1; grid-column: 1 / -1; }
   .k-tbl-wrap.stack.has-lead .k-table td.k-lead::before { display: none; }
+  /* VR1-147: a column marked `up` (a sale's gain) sits right under the name with its label kept, not after eleven other figures */
+  .k-tbl-wrap.stack.has-up .k-table th[scope="row"] { order: -2; }
+  .k-tbl-wrap.stack.has-up .k-table td.k-first { order: -1; }
   /* a heat cell fills a table cell edge to edge; on a card it is a chip that stays inside its figure (R88-003) */
   .k-tbl-wrap.stack .inv-heat-cell { display: inline-block; margin: 0; padding: 2px 8px; border-radius: 6px; }
 }
 .k-th-sort { background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; white-space: nowrap; }
 .k-th-sort:hover { color: var(--ink); }
 .k-th-sort:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }
+/* VR1-114: a right-aligned header has its (i) before the words (RC2B-027); the 6px gap goes between them, not on the far side */
+.k-table th.k-num > .info { margin-left: 0; margin-right: 6px; }
 .k-table th[aria-sort="ascending"], .k-table th[aria-sort="descending"] { color: var(--ink); }
 
 /* empty, error, loading */
@@ -1661,14 +1729,17 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-clip { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .k-btn-end { align-self: flex-start; }
 .k-any { min-width: 0; overflow-wrap: anywhere; }
-/* On a phone the choices of a segmented control share the row in equal parts and wrap their words inside their own button, so none sits alone on
- * a second row or is wider than its neighbours (RC2A-029: the IPO stage tabs; RC2A-037: the options expiry choices). More than four keep wrapping. */
+/* On a phone the choices of a segmented control share the row, and none wraps its words inside its button (UI-FIX-1, R4/R5): a button is as
+ * wide as its label at least, and when the choices don't fit one row Seg.tsx stacks them (data-stack: two by two, or one under another,
+ * all the same width), so none sits alone on a row stretched to the track, or runs onto two lines (RC2A-029, RC2A-037). */
 @media (max-width: 480px) {
-  .k-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
-  .k-seg button { min-width: 0; padding: 6px 3px; height: auto; min-height: 36px; white-space: normal; line-height: 1.2; text-align: center; font-size: 13px; }
-  .k-seg:has(> button:nth-child(5)) { display: flex; flex-wrap: wrap; }
-  .k-seg:has(> button:nth-child(5)) button { flex: 1 1 auto; }
+  .k-seg { display: flex; width: 100%; }
+  .k-seg button { flex: 1 1 auto; padding: 6px 10px; height: auto; min-height: 36px; white-space: nowrap; line-height: 1.2; text-align: center; font-size: 13px; }
 }
+.k-seg button { min-width: max-content; }
+.k-seg[data-stack] { width: 100%; }
+.k-seg[data-stack="1"] { display: flex; flex-direction: column; }
+.k-seg[data-stack="2"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .k-upload { cursor: pointer; }
 .k-upload.disabled { cursor: wait; opacity: .6; }
 .k-notice { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s3) var(--s4); border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--paper-2); font-size: var(--t-label); }
@@ -1713,9 +1784,13 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-disclosure > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; flex: none; }
 .k-disclosure[open] > summary::before { transform: rotate(45deg); }
 .k-disclosure-body { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s1) 0 0 var(--s4); }
+.k-disclosure-body:has(> .k-tbl-wrap) { padding-left: 0; }   /* VR1-122: a table in a fold lines up with the cards around it, not 16px in */
 .k-chipset { display: flex; flex-wrap: wrap; gap: 6px; }
 .k-check { display: inline-flex; align-items: center; gap: var(--s2); min-height: 32px; font-size: var(--t-label); cursor: pointer; }
 .k-check input { width: 18px; height: 18px; accent-color: var(--blue); }
+/* VR1-120: an unchecked box was a dark square with no edge on a dark card (1.6:1), so it looked disabled beside the blue checked ones: a 1.5px edge in the muted text colour */
+.k-check input[type="checkbox"]:not(:checked), .k-tap input[type="checkbox"]:not(:checked) { -webkit-appearance: none; appearance: none; border: 1.5px solid var(--muted); border-radius: 3px; background: transparent; }
+.k-check input[type="checkbox"]:disabled:not(:checked) { opacity: .55; }
 /* a checkbox alone in a table cell: its label is a 40px tap area, the box stays 18px */
 .k-tap { display: inline-grid; place-items: center; min-width: 40px; min-height: 40px; margin: -9px; cursor: pointer; }
 .k-tap input { width: 18px; height: 18px; accent-color: var(--blue); cursor: pointer; }
@@ -1735,6 +1810,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 }
 .k-table .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-table td.k-wrap, .k-table th.k-wrap { white-space: normal; min-width: 160px; }
+@media (min-width: 900px) { .rates-page .k-table th.k-wrap[scope="row"] { min-width: 260px; } }   /* VR1-151: "Government bond, 6.20% GS 2029" over three lines beside a Tax column with room to spare */
 .k-table td.k-act, .k-table th.k-act { text-align: right; width: 1%; padding-left: var(--s1); }
 .k-table td.k-act .k-row { justify-content: flex-end; flex-wrap: nowrap; }
 .k-table td.k-act .k-row.k-col { flex-direction: column; align-items: flex-end; gap: var(--s1); }   /* two actions stacked, so the column stays narrow */
@@ -1742,6 +1818,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-big { font-size: clamp(30px, 4vw, 40px); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
 .k-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: stretch; }   /* two cards side by side end level, not one short with dead space under it (MO-4b); a pair that differs a lot belongs in one column instead */
 @media (max-width: 900px) { .k-two { grid-template-columns: minmax(0, 1fr); } }
+.k-two.k-two-start { align-items: start; }   /* the pickers beside a short list of changes: each its own height (VR1-065) */
 .k-label-row .k-lbl { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-picks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
@@ -1755,6 +1832,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-dl dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 /* facts that are sentences: the term as the heading, the sentence in plain weight, two to a row at most (DF-022) */
 /* MO-3c: a few facts that are words, not figures (the year, the return, the audit): up to three across, each in an equal column */
+/* the facts of a half-width card two across, not one under another: "What they do" was 150px taller than "Where a sale goes" beside it (UI-FIX-1, R1) */
+.k-dl.pairs { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+/* a few facts spread over the card's width (the account's profile), not packed in its left half (UI-FIX-1, R2) */
+.k-dl.spread { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .k-dl.facts { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
 .k-dl.prose { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s4) var(--s5); }
 .k-dl.prose dt { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
@@ -1784,7 +1865,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-check-note { display: block; font-weight: 400; color: var(--muted); font-size: var(--t-note); }
 .k-check.top { align-items: flex-start; }
 .k-section-nav { display: flex; min-width: 0; }
-@media (max-width: 640px) { .k-section-nav .k-seg { flex-wrap: wrap; width: 100%; } .k-section-nav .k-seg button { flex: 1 1 auto; } }
+@media (max-width: 640px) { .k-section-nav .k-seg { width: 100%; } }
 .k-hint-line { margin: 0; }
 
 /* chart frame */
@@ -1805,6 +1886,11 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-rows { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .k-rows > div { display: flex; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .k-rows > div:last-child { border-bottom: 0; }
+/* VR1-161: a long list of label-and-value rows in two columns on a wide card, so the eye crosses 400px, not 800 */
+@media (min-width: 900px) { .k-rows.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s6, 32px); }
+  .k-rows.two { grid-auto-flow: row dense; }
+  .k-rows.two > div.wide { grid-column: 1 / -1; }
+  .k-rows.two > div:nth-last-child(-n+2):nth-child(odd), .k-rows.two > div:last-child { border-bottom: 0; } }
 .k-rows > div > span { color: var(--muted); }
 .k-rows > div > b { font-weight: 600; }
 .k-rows > div.hl > span { color: var(--ink-2); }
@@ -1862,7 +1948,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 
 .mine { gap: var(--s5); }
 /* the lede gains its second line when the calendars answer: keep room for it */
-.space-home.mine .k-lede { min-height: 3em; }
+.space-home.mine .k-lede { min-height: 1.5em; }   /* one line now: the dates moved to "Coming up" only (VR1-003) */
 /* the cards in the person's order: each one's width comes from its place in that order (lib/mineLayout slotSpans), so the grid
    never moves one into an earlier gap (DI-005: dense packing drew Markets, put second, below the two cards after it) */
 .mine-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--s4); }
@@ -1884,6 +1970,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 }
 /* an empty card's message sits in the card itself: a dashed box inside a card drew a double border (DI-012) */
 .mine-slot .k-state { border: 0; padding: var(--s3) 0; }
+/* VR2-005: the Open button stays at a card head's top right and the title wraps beside it (the watchlist's long title dropped Open to a line of its own on a phone, unlike its siblings) */
+.mine-slot .k-card-head:has(> .k-card-actions > a:only-child) { flex-wrap: nowrap; align-items: flex-start; }
+.mine-slot .k-card-head:has(> .k-card-actions > a:only-child) > .k-card-actions { flex: none; }
+.mine-slot .k-card-head:has(> .k-card-actions > a:only-child) .k-card-title { min-width: 0; }
 /* the lines sit on one level across a row, whatever text a tile has above its line (DI-010: Gold's note pushed its line down) */
 .mine-mkt .k-spark { margin-top: auto; }
 /* two lists side by side keep their own height: stretched to the longer one, the shorter left a big blank box (R5O-036) */
@@ -1906,6 +1996,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-tl-i .dt { display: flex; flex-direction: column; align-items: center; font-size: 12px; color: var(--muted); line-height: 1.2; }
 .mine-tl-i .dt b { font-size: 20px; color: var(--ink); font-weight: 600; }
 .mine-tl-i .body { display: flex; flex-direction: column; min-width: 0; }
+/* a long line (the tax date's whole explanation) is two lines at most, the rest is in the tooltip and the calendar: the two cards side by side end near each other (UI-FIX-1, R1) */
+/* VR2-004: one line of explanation on a wide screen (the whole sentence is the hover text and the calendar's): with two, six events stood 160px taller than the six one-line watchlist movers beside them */
+.mine-tl-i .body .k-stat-d { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 760px) { .mine-tl-i .body .k-stat-d { -webkit-line-clamp: 2; } }
 .mine-tl-i .body a { color: inherit; text-decoration: none; }
 .mine-tl-i .body a:hover { text-decoration: underline; }
 .mine-movers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -1970,7 +2064,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-progress::-moz-progress-bar { background: var(--blue); border-radius: 99px; }
 
 /* plans */
-.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: stretch; }
+.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a 260px band in the middle */
 .k-plan.pro { border: 2px solid var(--ink); }
 @media (min-width: 601px) and (max-width: 1000px) { /* a tablet: two columns, the last plan across both, never one narrow column */
   .k-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2152,7 +2246,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .lp-currency { display: inline-flex; align-items: center; gap: 8px; }
 .lp-currency select { width: auto; min-height: 44px; }
 .lp-skel-seg { height: 44px; width: 280px; max-width: 100%; }
-.lp-skel-amount { height: 46px; width: 60%; }
+.lp-skel-amount { height: calc(46px + 2px + 1.5em); width: 60%; }   /* the price line and the "about $8 at today's rate" line under it (VR1-162 put it on its own line): the page below holds still when prices arrive (R5V-006) */
 .lp-skel-note { height: 1.2em; width: 80%; }
 .lp-skel-fine { height: calc(13.5px * 1.5 * 3); width: min(80ch, 100%); }
 /* a phone wraps the lede to four lines and the fine print to six, and its switch is a touch-sized 50px: the placeholders keep
@@ -2205,6 +2299,10 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-chiprow > .k-chipbar { display: contents; }
   .k-chiprow > .k-chip.add, .k-chiprow.wrap > .k-chip.add { margin-top: 0; }
 }
+/* VR2-009: a row that wraps (the notebook's test period) is one wrapping row of chips on a phone too: "+ Custom" sat at the far right of the first line, apart from the chips */
+.k-chiprow.wrap { flex-wrap: wrap; align-items: flex-start; padding: 2px; }
+.k-chiprow.wrap > .k-chipbar { display: contents; }
+.k-chiprow.wrap > .k-chip.add { margin-top: 0; }
 /* every tap target on a phone is at least 32px: the ticks, the features list, short links in text */
 @media (max-width: 640px) {
   input[type=checkbox], input[type=radio],
@@ -2219,7 +2317,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* net worth: the history's snapshots, each removable on its own */
 .nw-snaps summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 .nw-snaps ul { list-style: none; margin: 0; padding: 0; }
-.nw-snaps li { justify-content: space-between; flex-wrap: wrap; gap: var(--s2); }
+.nw-snaps li { justify-content: flex-start; flex-wrap: wrap; gap: var(--s2); }   /* CK-2 (R20): the remove icon follows the snapshot's text, not 550px away at the card's edge */
 /* MO-2: the quick-add chips: every one shown (no scroll box), an icon beside each name */
 .nw-quick { max-height: none; overflow: visible; gap: var(--s2); }
 .nw-quick .chip { gap: 6px; }
@@ -2236,14 +2334,17 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   /* R26-002: the search box (/library, a list's filter) and the notes box set their own size after the rule above (loaded later, same weight) */
   body .k-search input, body .k-textarea { font-size: 16px; }
 }
-/* R13S-006: a switch's long label ("Yearly · about 2 months free") wraps inside its button instead of spilling out of the pill */
-.k-form > .k-field > .k-seg button { min-width: 0; height: auto; min-height: 32px; padding-block: 5px; white-space: normal; line-height: 1.25; }
-/* the switch's buttons share its width evenly and none gets narrower than its longest word: the long one wrapping took
-   the room, and "Monthly" ran under it */
-.k-form > .k-field > .k-seg button { flex: 1 1 auto; min-width: min-content; }
+/* R13S-006 / UI-FIX-1 (R4): a switch's label never wraps inside its button ("Fixed units" ran onto two lines in a 190px column). Where the choices
+   don't fit one column, the field takes two (below, and the three-choice rule above); a switch is as wide as its labels, and its buttons
+   share any extra width evenly */
+.k-form > .k-field > .k-seg button { flex: 1 1 auto; min-width: max-content; height: auto; min-height: 32px; padding-block: 5px; white-space: nowrap; line-height: 1.25; }
+@media (min-width: 640px) { .k-form > .k-field:has(> .k-seg) { grid-column: span 2; } }
+.k-form.k-form-trio > .k-field:has(> .k-seg) { grid-column: auto; }
 /* R13S-011: on a touch screen the controls the review measured under 44px are 44px: the switch, the screener's sort
    headers, the links in a table, a tick in a row, the admin sections */
 @media (pointer: coarse) {
+  /* UI-FIX-1 (R11): the "In India? Show prices in ₹" link, alone beside a price box, was 20px to tap */
+  .link-btn.small, .link-btn.k-small { min-height: 44px; display: inline-flex; align-items: center; }
   .k-seg button { min-height: 44px; }
   .k-chip { height: 44px; }
   .k-th-sort { min-height: 44px; display: inline-flex; align-items: center; }
@@ -2253,6 +2354,41 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 }
 /* R13S-013: the scrolling list of a group's members can be reached with the keyboard, and shows where it is */
 .chip-row:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 8px; }
+
+/* MF-1 (RC2B-047): the fold list, one row for each thing with its main figures, the rest folded under it. A header row over the
+   columns on a wide screen; on a phone each row is a card, its figures two across, each under its own name (never a sideways table) */
+.k-fold-head, .k-fold-sum { display: grid; grid-template-columns: var(--fold-cols); column-gap: var(--s4); align-items: start; padding-inline: var(--s3) var(--s6); }
+.k-fold-head { font-size: var(--t-note); color: var(--muted); padding-block: var(--s1) var(--s2); border-bottom: 1px solid var(--line); }
+.k-fold-head .k-num, .k-fold-cell.k-num { text-align: right; }
+/* VR2-016: a right-aligned head's (i) is before its words (as DataTable's, VR1-114): the gap goes between them, not on the far side, where the (i) touched "XIRR" */
+.k-fold-head .k-num > .info { margin-left: 0; margin-right: 6px; }
+.k-fold-rows { list-style: none; margin: 0; padding: 0; }
+.k-fold-rows > li + li { border-top: 1px solid var(--line); }
+.k-fold-sum { position: relative; min-height: 44px; padding-block: var(--s3); cursor: pointer; list-style: none; }
+.k-fold-sum::-webkit-details-marker { display: none; }
+.k-fold-sum::after { content: ""; position: absolute; right: var(--s4); top: 22px; width: 7px; height: 7px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; }
+.k-fold[open] > .k-fold-sum::after { transform: rotate(45deg); }
+.k-fold-sum:hover { background: var(--paper-2); }
+.k-fold-name, .k-fold-cell { min-width: 0; overflow-wrap: anywhere; }
+.k-fold-name b { display: block; font-weight: 600; }
+.k-fold-k { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }   /* the column's name: the header row's on a wide screen, spoken here */
+.k-fold-v { display: block; font-variant-numeric: tabular-nums; }
+.k-fold-body { padding: var(--s2) var(--s3) var(--s5); display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+.k-fold-body > section { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.k-fold-body h3 { margin: 0; font-size: var(--t-body); font-weight: 600; }
+.k-fold-body .k-dl { grid-template-columns: repeat(5, minmax(0, 1fr)); }   /* a scheme's facts are five at most: one row, never 4 + 1 */
+@media (max-width: 720px) {
+  .k-fold-head { display: none; }
+  .k-fold-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--s2); padding-inline: var(--s2) var(--s6); }
+  .k-fold-sum::after { top: 24px; }
+  .k-fold-name, .k-fold-wide { grid-column: 1 / -1; }
+  .k-fold-cell.k-num { text-align: left; }
+  .k-fold-k { position: static; display: block; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; font-size: var(--t-note); color: var(--muted); }
+  .k-fold-cell:has(.k-none) { display: none; }   /* a figure it has none of takes no line on a phone */
+  .k-fold-body .k-dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mf-stats .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); }   /* seven figures one under another were 600 px: two across */
+  .k-fold-body { padding-inline: var(--s2); }
+}
 
 /* R39: on a phone (touch or not) the plan switch's buttons and the footer's policy links are at least 44px to tap, made with
    padding and height, not a larger font; placed last so the 32px and 40px rules above can't win */
@@ -2292,6 +2428,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-disclosure > summary, details > summary.k-small { min-height: 44px; }
   .search-box input { min-height: 44px; }
   .k-table th .link-btn, .k-table td .link-btn { padding-block: 11px; margin-block: -11px; }
+  .link-btn.small, .link-btn.k-small { min-height: 44px; display: inline-flex; align-items: center; }      /* (UI-FIX-1, R11: also on a narrow window without touch) */
   .ch-bar .ch-btn, .ch-bar .ch-seg button { min-height: 40px; }
 }
 
@@ -2307,6 +2444,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* Invest home: the breadth and red-flag cards side by side at one height (DF-023) */
 .space-panels.even { align-items: stretch; }
+.space-panels > :only-child { grid-column: 1 / -1; }      /* the other card is not there (no market events): this one takes the row */
 .fs-compact .k-row { justify-content: space-between; flex-wrap: wrap; }
 
 /* the Help page's explanations, one line each until opened (DI-014) */
@@ -2325,6 +2463,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* Get the app: one step per browser (DI-029) */
 .install-list { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+/* the stocks' filings two across where there is room: one column of six left a wide card a third empty (UI-FIX-1, R2) */
+.h-filings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: var(--s4) var(--s5); align-items: start; }
 /* MO-2: My Holdings' recent filings: date, tag and title in fixed columns (the tag's fits the longest, "Promoter pledge or
    encumbrance"), centred on one line, so every title starts at the same place; on a phone the title goes under the date and tag */
 .h-filing { display: grid; grid-template-columns: 7.5em 17em minmax(0, 1fr); align-items: center; column-gap: var(--s3); row-gap: 4px; }
@@ -2347,3 +2487,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* RC2B-034: the "In India? Show prices in ₹" link is a tap target on a phone like every other control (it measured 20 px) */
 .link-btn.inr-pick { min-height: 40px; display: inline-flex; align-items: center; }
+
+/* VR2-010: on a phone the buttons of one segmented control are the same width (they were sized by their words: "Off | ₹ | % of premium" were a sliver, a sliver and a wide block); a longer label still makes room for itself (min-width above) */
+@media (max-width: 640px) {
+  .k-seg:not([data-stack]) button { flex: 1 1 0; }   /* a form's own segmented controls keep their sizes (MO-3a) */
+}

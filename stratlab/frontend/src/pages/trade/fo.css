@@ -2,3 +2,5 @@
 .fo-sources { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .fo-sources a { overflow-wrap: anywhere; }
 .fo-page .sf-search { max-width: 240px; }
+/* VR1-080: the kind tag has one width, so the symbols after it start at one x on every row (they began at 414, 442 and 468) */
+.fo-row > .k-row > .k-badge:first-child { min-width: 9.5em; }

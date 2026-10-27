@@ -3,6 +3,7 @@
 Every source is called from the server, so users never need their own keys and the
 browser never hits a third-party site directly."""
 import contextvars
+import sys
 import threading
 import time
 import weakref
@@ -43,7 +44,7 @@ def approx_size(value, _budget: list | None = None) -> int:
         budget[0] -= 1
         seen += 1
         if isinstance(v, (str, bytes, bytearray)):
-            size += 50 + len(v)
+            size += sys.getsizeof(v)         # exact, and O(1): a page with one ₹ in it is two bytes a character, one with an emoji four (MEM-3)
         elif isinstance(v, dict):
             size += 100 + 50 * len(v)
             stack.extend(v.keys())
@@ -382,8 +383,9 @@ class Source:
             self._failed(e.busy)
             raise
         self._failed(False, ok=True)
-        # parsed JSON takes several times its text size in memory
-        size = len(r.content) * (4 if kind == "json" else 1) + 200
+        # parsed JSON takes several times its text size in memory; a page is held as the string it is (MEM-3: the bytes on the wire
+        # understate a page with a ₹ or a curly quote in it by half, one with an emoji by three quarters)
+        size = len(r.content) * 4 + 200 if kind == "json" else sys.getsizeof(value) + 200
         self.cache.set(key, value, ttl, size=size)
         if self.STALE_FOR:
             self.stale.set(key, value, ttl * self.STALE_FOR, size=size)

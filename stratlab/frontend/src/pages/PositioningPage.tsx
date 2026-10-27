@@ -97,11 +97,11 @@ function SidesFig({ label, long, short, words, chg }: { label: string; long: num
   return (
     <div className="k-stat" data-testid="sides-fig">
       <span className="k-stat-k">{label}</span>
-      {long == null || short == null ? <span className="k-stat-v">–</span> : (
-        <span className="k-stat-v pos-sides"><span>{pct(long)} {words[0]}</span><span>{pct(short)} {words[1]}</span>
-          <PosBar long={long} /></span>
+      {/* one number like its neighbours, the other side and the bar in the note: two lines of 20px text among 32px figures put this one's caption lower (VR1-070) */}
+      <span className="k-stat-v">{long == null || short == null ? "–" : pct(long)}</span>
+      {long != null && short != null && (
+        <span className="k-stat-d pos-sides"><PosBar long={long} /><span>{pct(short)} {words[1]}{chg != null && <> · <Signed value={chg}>{pts(chg)}</Signed> from the previous trading day</>}</span></span>
       )}
-      {chg != null && <span className="k-stat-d">Long share <Signed value={chg}>{pts(chg)}</Signed> from the previous trading day</span>}
     </div>
   );
 }
@@ -125,18 +125,19 @@ function Participants({ s }: { s: Summary }) {
           <Seg label="Open interest or volume" value={kind} onChange={(v) => setKind(v as "oi" | "vol")} options={[{ value: "oi", label: "Open interest" }, { value: "vol", label: "Volume" }]} />
           {rows.length > 0 && more.toggle}
         </>} />
-      <Source testId="part-source">
-        From the exchange's end-of-day participant-wise file, published each trading evening.{" "}
-        {cov ? <>Covers {spanLine(cov)}{cov.backfill_done ? "." : `, still filling in the past ${Math.round(cov.backfill_target / 30.4)} months.`}</> : null}
-        {s.full && cov && cov.days > 1 ? <> <a className="link" href="#pos-history">See the history</a>.</> : null}
-      </Source>
-      <p className="k-small k-muted" data-testid="part-status">{statusLine(p, "participant files")}{p.prev ? ` Changes are from ${dayName(p.prev)}.` : ""}</p>
+      {/* the source and the "as of" line as one paragraph, not two (VR1-073) */}
+      <p className="k-note pos-source">
+        <span data-testid="part-source">From the exchange's end-of-day participant-wise file.{" "}
+          {cov ? <>Covers {spanLine(cov)}{cov.backfill_done ? "." : `, still filling in the past ${Math.round(cov.backfill_target / 30.4)} months.`}</> : null}
+          {s.full && cov && cov.days > 1 ? <> <a className="link" href="#pos-history">See the history</a>.</> : null}</span>{" "}
+        <span data-testid="part-status">{statusLine(p, "participant files")}{p.prev ? ` Changes are from ${dayName(p.prev)}.` : ""}</span>
+      </p>
       {fii && (
         <div data-testid="part-figs">
           <StatRow label="FII figures">
             <Stat label={`FII ${segWord} futures, net`} value={signed(n(fii, `fut_${seg}_net`))} tone={signTone(n(fii, `fut_${seg}_net`))}
               note={<><Sgn v={n(fii, `fut_${seg}_net_chg`)} /> from the previous trading day</>} />
-            <SidesFig label={`FII ${segWord} futures, ${words.join(" · ")}`} long={n(fii, `fut_${seg}_long_pct`)} short={n(fii, `fut_${seg}_short_pct`)} words={words}
+            <SidesFig label={`FII ${segWord} futures, ${words[0]} share`} long={n(fii, `fut_${seg}_long_pct`)} short={n(fii, `fut_${seg}_short_pct`)} words={words}
               chg={kind === "oi" ? n(fii, `fut_${seg}_long_pct_chg`) : null} />
             <Stat label={`FII ${segWord} calls, net`} value={signed(n(fii, `opt_${seg}_call_net`))} tone={signTone(n(fii, `opt_${seg}_call_net`))}
               note={`${sides(n(fii, `opt_${seg}_call_long_pct`), n(fii, `opt_${seg}_call_short_pct`), words)}`} />
@@ -313,7 +314,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
             {oiBasis(c) && <p className="k-note" data-testid="chain-basis">{oiBasis(c)}</p>}
             {c.change_from && <p className="k-note">Change since the recording of {istTime(c.change_from)}.</p>}
             <Disclosure summary="Show the strikes as a table">
-              <DataTable label={`${name} open interest, change and volume by strike, in ${unit}`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
+              <DataTable grid label={`${name} open interest, change and volume by strike, in ${unit}`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
                 rowAttrs={(r): Record<string, string> => (r.strike === c.atm ? { "data-atm": "1" } : {})} />
             </Disclosure>
             {/* the page's own note says the rest, once, at its foot (R66-006: the same sentence twice in a row) */}

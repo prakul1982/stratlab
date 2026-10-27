@@ -33,7 +33,7 @@ test("R59-001: the company search takes the cursor on a desktop with a mouse, ne
 });
 
 test("R59-007: a chip row that wraps keeps + Custom level with its first line", () => {
-  assert.match(read("src/components/kit/ChipBar.tsx"), /className=\{`k-chiprow\$\{wrap \? " wrap" : ""\}`\}/);
+  assert.match(read("src/components/kit/ChipBar.tsx"), /className=\{`k-chiprow\$\{wrapRow \? " wrap" : ""\}`\}/);
   assert.match(read("src/styles.css"), /\.k-chiprow\.wrap \{ align-items: flex-start; \}/);
 });
 

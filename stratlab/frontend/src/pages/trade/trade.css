@@ -46,10 +46,16 @@
 .k-ink { color: var(--ink); }
 .k-verdict-hero { display: flex; gap: var(--s6); align-items: flex-end; flex-wrap: wrap; padding-bottom: var(--s5); border-bottom: 1px solid var(--line-2); }
 .k-verdict-hero > .k-stack { flex: 1 1 520px; }
-.k-verdict-hero > .k-card { flex: none; width: 250px; }
+.k-verdict-hero > .k-card { flex: none; width: 290px; }   /* VR1-063: 250px wrapped "Strength of evidence" onto two lines with its (i) floating between them */
+/* VR1-063: the (i) follows the headline's last word, not a box edge 300px away, vertically between its two lines */
+.k-verdict-hero .k-card-titlerow { display: block; }
+.k-verdict-hero .k-card-titlerow > .verdict-head { display: inline; margin: 0; }
+.k-verdict-hero .k-card-titlerow > .info { display: inline-block; margin-left: 12px; vertical-align: .55em; }
 @media (max-width: 640px) { .k-verdict-hero > .k-card { width: 100%; } }
-.k-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); align-items: stretch; }
-@media (max-width: 700px) { .k-checks { grid-template-columns: minmax(0, 1fr); } }
+.k-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); align-items: start; }
+.k-checks-col { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+@media (max-width: 700px) { .k-checks { display: flex; flex-direction: column; } .k-checks-col { display: contents; } }
+@media (max-width: 700px) { .k-checks-slot[data-i="1"] { order: 1; } .k-checks-slot[data-i="2"] { order: 2; } .k-checks-slot[data-i="3"] { order: 3; } }
 .k-money { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--s4); align-items: start; }
 @media (max-width: 960px) { .k-money { grid-template-columns: minmax(0, 1fr); } }
 .search-box.compact { min-height: 50px; }
@@ -66,12 +72,24 @@
 .lib-reason { margin: 0; }
 .k-cards.lib-cards { align-items: stretch; }
 /* the notebook list: one height per row, the verdict line along the bottom, the question in two lines (DA-032) */
-.k-cards.nb-cards { align-items: stretch; }
+.k-cards.nb-cards { align-items: stretch; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+/* VR1-030: two notebooks fill the row (auto-fit) instead of two thirds of a three-column grid, one alone stays a card's width, and the pin is an icon at the
+   card's top right that never wraps under the name (its words are the hover text and the screen-reader name) */
+.nb-cards > .k-card:only-child { max-width: 520px; }
+.nb-cards .k-card-head { flex-wrap: nowrap; align-items: flex-start; }
+.nb-cards .k-card-head .k-card-title { min-width: 0; overflow-wrap: anywhere; }
+.nb-cards .k-card-actions { flex: none; }
+.nb-cards .k-pin { min-width: 34px; padding: 0; }
+/* the question box of a notebook: one or two lines of room, not 130px for a one-line question (VR1-054; it grows with what is typed) */
+.k-textarea.nb-q { min-height: 76px; }
 .nb-question { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .k-card.lib-card { display: grid; grid-row: span 7; grid-template-rows: subgrid; row-gap: var(--s3); align-content: start; }
 .k-card.lib-card.lib-lean { grid-row: span 6; }
 .lib-card > * { min-width: 0; margin: 0; }
 .lib-head .k-card-head { margin: 0; }
+/* VR1-171, VR1-180: the card's name and "By ..." sit at the bottom of the head cell, so in a row of cards the titles are level whether the market line above takes one line or two (the empty strip is above the title, not under "By") */
+.lib-card .lib-head { display: flex; flex-direction: column; }
+.lib-card .lib-head > .k-card-head { margin-top: auto; }
 .lib-by { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-meta { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .lib-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--s3); align-items: stretch; }
@@ -84,3 +102,11 @@
 .lib-actions { align-self: end; }
 .lib-buttons { align-items: center; }
 .explore-go { color: var(--blue-ink); font-weight: 500; }
+
+/* a trade's marker for the unseen part of the test (VR1-064): a filled dot, and a ring for one that spans the split; the words are its hover text and
+   its screen-reader name, and the one legend line under the table */
+.unseen-mark { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--orange); vertical-align: middle; }
+.unseen-mark.split { background: transparent; box-shadow: inset 0 0 0 1.5px var(--orange); }
+/* The numbers beside What you'd keep: four across, so eight figures are two even rows, not 5 + 3 (VR1-061) */
+.k-numbers .k-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 700px) { .k-numbers .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

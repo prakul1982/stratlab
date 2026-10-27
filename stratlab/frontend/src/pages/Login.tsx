@@ -73,9 +73,12 @@ const RESEARCH: [string, string][] = [
   ["Company pages", "Any NSE, BSE or US company: price, key numbers, results, owners and news."],
   ["Deep dive", "Ten years of numbers, then the business and its plans in its own words."],
   ["Report card and checklist", "What management promised on past calls, against what followed."],
+  ["IPOs", "India and the US: dates, price bands, bids by category while open, the offer document's facts, trading since listing."],
   ["Results calendar", "Results meetings and report dates, a week back to four weeks ahead."],
   ["Corporate actions", "Dividends, bonuses, splits and buybacks by ex-date and record date."],
   ["Deals and insider trades", "Promoters' and directors' own trades, pledges, bulk and block deals."],
+  ["Business updates", "Monthly sales and quarterly figures read into numbers, for companies that publish them."],
+  ["Named holders", "Every holder above 1% in a company, searchable across companies."],
   ["Surveillance lists", "ASM, GSM, ESM, trade-to-trade and the F&O ban, and what each means."],
   ["Filings and red flags", "Fund raises, pledges, resignations and defaults, linked to the filing."],
   ["Screens", "Filter by size, growth, debt, returns and more; new matches by email."],
@@ -84,6 +87,7 @@ const RESEARCH: [string, string][] = [
   ["Market breadth", "How many stocks rose, fell, or sit above their 20, 50 and 200-day averages."],
   ["Price charts", "Candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare."],
   ["ETF price vs NAV", "How far each ETF trades from what a unit holds, with 30 days of history."],
+  ["Stock lending fees", "What borrowing or lending shares cost in the exchange's lending market."],
   ["Watchlist at a glance", "Trend, sector rotation, red flags and checklist for each company you follow."],
   ["Compare", "Two companies side by side on the same numbers."],
 ];
@@ -91,14 +95,16 @@ const RESEARCH: [string, string][] = [
 const PORTFOLIO: [string, string, string][] = [
   ["My Holdings", "From your broker's file: Zerodha, Groww, Upstox, Angel One and more.", "Seen only by you"],
   ["Tax report", "Capital gains from your tradebooks or their ZIP, first in, first out.", "An estimate for your CA"],
-  ["Mutual funds", "Your CAMS or KFintech statement: value, XIRR and gains by year.", "Never fund ratings"],
+  ["Mutual funds", "Your CAMS or KFintech statement as one list: value, XIRR and gains by year.", "Never fund ratings"],
   ["Fund costs", "Each fund's expense ratio in rupees a year, direct and regular side by side.", "Rupees, not just %"],
-  ["Net worth", "Stocks, funds, PF, PPF, NPS, deposits, gold and property, minus loans.", "Each value explained"],
+  ["Net worth", "Stocks, funds, PF, PPF, NPS, deposits, gold and property, minus loans. One tap adds each kind.", "Each value explained"],
   ["Loans and insurance", "EMIs, interest this year, what a prepayment changes, and premiums due.", "Your own figures"],
   ["Dividends, bonuses and splits", "What's ahead on what you hold; a bonus or split applied in one click.", "Nothing changes without you"],
   ["Tax tools", "Dividends with TDS, advance tax by due date, the exemption left.", "Dates and totals"],
-  ["US stocks in Indian tax", "US sales in rupees, the 24-month rule, tax credit and Schedule FA.", "For a resident individual"],
+  ["US stocks in Indian tax", "From a trade list or a realised-gains report: sales in rupees, the 24-month rule, tax credit, Schedule FA.", "For a resident individual"],
   ["ITR-ready export", "Your year laid out like the ITR schedules, as a spreadsheet or PDF.", "Not a filed return"],
+  ["Test a SIP", "An amount every day, week or month into stocks or ETFs: charges, XIRR and the deepest fall.", "Past prices only"],
+  ["Rates after tax", "Small savings rates, T-bill cut-offs and bond yields, each after tax at your rate.", "Dated rates"],
   ["Money calendar", "Tax dates, results, dividends, maturities and EMIs in one feed.", "Dates only"],
   ["Share cards and invites", "Share a company's facts as a card; invite friends for a month of Basic.", "A month of Basic each"],
 ];
@@ -109,17 +115,21 @@ const TOOLS: [string, string][] = [
   ["Long, short and intraday", "Stops in %, points or ATR, trailing stops, square-off, a daily loss cap."],
   ["Walk-forward test", "Re-tune on the past, trade the stretch the tuning never saw, repeat."],
   ["Whole groups", "One set of rules on NIFTY 50, the F&O stocks, the largest US companies or your list."],
-  ["Options, live", "Any structure up to eight legs at the real bid and ask."],
+  ["Options, live", "Any structure up to eight legs at the real bid and ask, with breakevens and the most it can make or lose after every charge."],
   ["Greeks and what-if", "Delta, gamma, theta and vega, the payoff today and at expiry, and sliders."],
-  ["After charges", "Breakevens, most it can make and most it can lose, after every charge."],
   ["F&O changes", "Stocks entering or leaving F&O, lot sizes and expiry days, by date."],
   ["Trades on the chart", "Each backtest trade's entry and exit on the candles, with the rules' indicators."],
   ["Paper trading", "Run it live on real prices with fake money, with a report after each close."],
   ["Positioning", "Who holds index futures and options, FII and DII flows, PCR and max pain."],
+  ["Stock futures", "Open interest, buildup, rollover and basis for each F&O stock; margin-funded positions."],
+  ["Closing auction", "The 15:15 to 15:35 auction's reference and indicative prices, live."],
+  ["Market events", "RBI policy, data releases, the Fed, index changes, expiries and holidays in one calendar."],
+  ["Chart replay", "Practise on past candles one bar at a time; each trade goes to your journal."],
+  ["Forward test", "Your TradingView or Chartink alerts move a paper session, judged by the same checks."],
   ["Trade journal", "Your real trades as round trips after charges, with the same four checks."],
   ["Bring any strategy", "Pine Script, Python, MetaTrader, AmiBroker or plain words."],
-  ["Strategy library", "Published rules, each with the result of its checks. Copy and re-test."],
-  ["Compare experiments", "Every run saved; two side by side show what changed."],
+  ["Strategy library", "StratLab's own strategies for every market, each with its checks. Copy and re-test."],
+  ["Compare experiments", "Every run saved; two side by side show what changed. Lab notes keep your thoughts."],
   ["Share the verdict", "A card or a public link with all four checks. Your rules stay private."],
 ];
 
@@ -132,6 +142,9 @@ const ALERTS: [string, string][] = [
   ["Newsletters", "The Market Brief and My Stocks, daily or weekly, by email."],
   ["F&O changes", "When an exit, lot size or expiry change touches your watchlist or paper sessions."],
   ["ETF price vs NAV", "When an ETF you pick trades further above or below its NAV than your level."],
+  ["IPOs", "When an issue opens, closes, is allotted or lists."],
+  ["Market events", "RBI policy, data releases, the Fed, index changes and expiries, on the day or ahead of it."],
+  ["Stock futures and margin funding", "When a stock's MWPL use or margin-funded level crosses your line."],
   ["Paper trades", "Each trade as it happens, and a short report after the close."],
 ];
 
@@ -174,11 +187,12 @@ const SPACES: [string, string, string, string][] = [
 ];
 
 /** A section's eyebrow, heading and one line under it. */
-function Head({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) {
+function Head({ eyebrow, title, children, h1 }: { eyebrow: string; title: string; children?: ReactNode; h1?: boolean }) {
+  const H = h1 ? "h1" : "h2";       // /help has no hero above it, so its own heading is the page's (VR1-170)
   return (
     <div className="lp-head">
       <span className="eyebrow">{eyebrow}</span>
-      <h2 className="serif lp-h2">{title}</h2>
+      <H className="serif lp-h2">{title}</H>
       {children && <p className="lp-p">{children}</p>}
     </div>
   );
@@ -219,6 +233,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
   const [error, setError] = useState<string | null>(() => signInProblem(location.search, location.hash));
   const section = plansOnly || slim ? null : asked;          // the plans page is only the prices: it starts at the top, nothing to scroll to (R22-005)
   const full = !plansOnly && !slim;                           // the whole landing page
+  const helpOnly = !plansOnly && slim === "faq" && heading === "Help";       // /help: the questions, with no hero over them
   const ownMenu = plansOnly || !!slim;                        // a page with no sections to scroll to carries the public pages' links (DK-004)
   const [way, setWay] = useState(panel ?? null);
   useEffect(() => setWay(panel ?? null), [panel]);
@@ -276,12 +291,14 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
 
       <main id="main" tabIndex={-1}>
       {!plansOnly && <>
-      <section id="top" className="lp-hero ruled">
+      {/* VR1-170: /help starts at the questions: no hero with a second "Help" title, the home page's tagline and a sign-in button above them */}
+      {helpOnly && error && <p className="banner lp-wrap" role="alert">{error}</p>}
+      {!helpOnly && <section id="top" className="lp-hero ruled">
         <div className={`lp-wrap lp-hero-grid${full ? "" : " lp-hero-solo"}`}>
           <div className="stack g22 lp-hero-copy">
             {/* an address of its own (/help, /faq, /pricing, /about) leads with its own heading and line, not the home page's
                 hero under a renamed eyebrow (DI-033) */}
-            <span className="eyebrow">{heading ? <><em>Test</em> it, research it, track it.</> : "Trade · Invest · Money · Indian and US stocks"}</span>
+            <span className="eyebrow">{heading ? <><em>Test</em> it, research it, track it.</> : "Trade · Invest · Money · Ten markets"}</span>
             {heading
               ? <h1 className="serif lp-h1 lp-own-h1">{heading}</h1>
               : <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>}
@@ -295,7 +312,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
           </div>
           {full && <HeroDemo />}
         </div>
-      </section>
+      </section>}
 
       {(full || slim === "about") && <section className="lp-sec lp-spaces-sec" aria-labelledby="spaces-h">
         <div id="about" className="lp-wrap stack g24">
@@ -422,7 +439,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             {/* /help: its own heading and the few places people ask for, above the same questions (DK-011: it was the FAQ under another name) */}
             {heading === "Help" ? (
               <>
-                <Head eyebrow="Questions and contact" title="Help">
+                <Head eyebrow="Questions and contact" title="Help" h1>
                   The questions people ask first are beside this. The links below go to the rest, and the Contact page reaches a person.
                 </Head>
                 <ul className="lp-help-links" aria-label="Where to find help">
@@ -737,7 +754,7 @@ function LibraryExamples() {
   return (
     <div id="examples" className="stack lp-anchor g14">
       <h3 className="serif lp-h3">Real verdicts, open to read.</h3>
-      <p className="lp-p">StratLab's own strategies, run through the same test and four checks. Each shows its rules and the verdict it earned, the failures as plainly as the rest.</p>
+      <p className="lp-p">StratLab's own strategies for every market it tests, run through the same test and four checks. Each shows its rules and the verdict it earned, the failures as plainly as the rest.</p>
       {rows === null ? <div className="lp-examples lp-examples-skel" aria-busy="true"><span className="lp-skel lp-skel-card" /><span className="lp-skel lp-skel-card" /><span className="lp-skel lp-skel-card" /></div>
         : rows.length > 0 && (
           <div className="lp-examples">

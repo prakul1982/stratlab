@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from "react";
+import { useLayoutEffect, useRef, type KeyboardEvent } from "react";
 
 /** `short`: the label a phone shows, so the choices fit on one line; the full label stays its name (DI-028). */
 export type Choice = { value: string; label: string; disabled?: boolean; short?: string };
@@ -8,6 +8,25 @@ export type Choice = { value: string; label: string; disabled?: boolean; short?:
 export function Seg({ label, options, value, onChange }: { label: string; options: Choice[]; value: string; onChange: (v: string) => void }) {
   const box = useRef<HTMLDivElement>(null);
   if (import.meta.env.DEV && (options.length < 2 || options.length > 4)) console.warn(`Seg "${label}" has ${options.length} choices; use 2 to 4 (a ChipBar for more).`);
+  // Where the choices don't fit in a row, they stack: two by two when there are four, else one under another, every button the same
+  // width and none wrapping its words (UI-FIX-1, R4/R5). Measured, because only the browser knows how wide the words are.
+  const sig = options.map((o) => `${o.label}|${o.short ?? ""}`).join("/");
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const fit = () => {
+      const over = () => el.scrollWidth > el.clientWidth + 1;
+      el.removeAttribute("data-stack");
+      if (!over()) return;
+      if (el.children.length === 4) { el.setAttribute("data-stack", "2"); if (!over()) return; }
+      el.setAttribute("data-stack", "1");
+    };
+    fit();
+    let w = el.parentElement?.clientWidth ?? 0;
+    const ro = new ResizeObserver(() => { const now = el.parentElement?.clientWidth ?? 0; if (now !== w) { w = now; fit(); } });
+    if (el.parentElement) ro.observe(el.parentElement);
+    return () => ro.disconnect();
+  }, [sig]);
   const enabled = options.filter((o) => !o.disabled);
   const stop = enabled.some((o) => o.value === value) ? value : enabled[0]?.value;
   const key = (e: KeyboardEvent) => {

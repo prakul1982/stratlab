@@ -34,11 +34,11 @@ export const PAGES: PageMeta[] = [
   // track it" over a drawn "Test it, research it, track it.")
   // the home page's opening words for a crawler that doesn't run scripts, the landing page's three spaces in its own order
   // (R43B-006: the served page had about 89 words)
-  { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-24", heading: TAGLINE,
+  { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-27", heading: TAGLINE,
     summary: [HOME_DESCRIPTION,
       "Trade: write a trading idea as plain rules, backtest it on years of real prices for Indian and US stocks, index futures, currencies, commodities and crypto, and see the result after brokerage, taxes and slippage beside buy and hold. Four checks test whether the result holds up: the unseen years it wasn't tuned on, nearby settings, a bad-luck shuffle of its trades, and enough trades to tell skill from luck. Then paper trade it on live prices, with no real orders.",
-      "Invest: company pages for Indian and US listed companies with prices, results, filings and ownership, read from the companies' own reports, plus scans, market breadth and a results calendar.",
-      "Money: your holdings, mutual funds, net worth, capital gains tax and a trade journal in one place, with alerts by email or on your phone.",
+      "Invest: company pages for Indian and US listed companies with prices, results, filings and ownership, read from the companies' own reports, plus IPOs, scans, market breadth and a results calendar.",
+      "Money: your holdings, mutual funds, net worth, capital gains tax, US stocks in Indian tax and a trade journal in one place, with alerts by email or on your phone.",
       "Free to start with no card; Basic and Pro raise the limits. StratLab states facts and never says buy, sell or hold."] },
   { path: "/pricing", title: "Plans · StratLab",
     description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, canonical: "/plans", updated: "2026-10-08",     // the landing page scrolled to its prices: the plans page is the one address for them (R26-006, RC1-011)

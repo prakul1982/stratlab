@@ -33,6 +33,10 @@ function symbolsOf(e: FoEvent): string[] {
 function Row({ e, mine }: { e: FoEvent; mine: Set<string> }) {
   const syms = symbolsOf(e);
   const yours = syms.some((s) => mine.has(s));
+  // the exchange's contract file backs every row alike and is named once, under the page's (i); a row keeps its circulars, and keeps the file line
+  // only when that is all it rests on (VR1-081: two "Source:" lines on every row, one of them the same on all)
+  const circulars = (e.sources ?? []).filter((s) => s.no || s.url);
+  const sources = circulars.length ? circulars : e.sources ?? [];
   return (
     <li className="fo-row" data-kind={e.kind} data-symbol={e.symbol ?? ""}>
       <div className="k-row">
@@ -43,9 +47,9 @@ function Row({ e, mine }: { e: FoEvent; mine: Set<string> }) {
         {yours && <Badge tone="ok" dot={false}>Your watchlist or sessions</Badge>}
       </div>
       <p className="k-small">{e.text}</p>
-      {e.sources && e.sources.length > 0 && (
+      {sources.length > 0 && (
         <ul className="fo-sources" aria-label="Sources">
-          {e.sources.map((s, i) => (
+          {sources.map((s, i) => (
             <li key={`${s.no}${i}`} className="k-note">
               Source: {safeHref(s.url) ? <a className="link" href={safeHref(s.url)} target="_blank" rel="noopener noreferrer">{s.no ? `Circular ${s.no}: ` : ""}{s.subject}</a>
                 : <>{s.no ? `Circular ${s.no}: ` : ""}{s.subject}</>}{s.date ? ` · ${longDay(s.date)}` : ""}

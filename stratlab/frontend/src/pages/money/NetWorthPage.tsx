@@ -394,13 +394,15 @@ export function NetWorthPage() {
   const marked = shown.flatMap((h, i) => (h.partial?.length ? [{ i, kind: "dot" as const, color: "var(--orange)" }] : []));
   const last = hist[hist.length - 1], move = t ? netWorthDelta(t.net, t.partial, hist, undefined, view?.valuation) : null;
 
+  // VR1-143: when every asset is as of the same day it is said once, in the card's head, not under each of ten values
+  const oneDay = !!view && view.assets.length > 1 && new Set(view.assets.map((r) => r.as_of)).size === 1;
   const assetCols: Column<Row>[] = [
     { key: "asset", header: "Asset, and how it's worked out", rowHeader: true, wrap: true, cell: (r) => (
       <>
         <b>{r.name}</b>{r.name !== r.label && <span className="k-note"> · {r.label}</span>}{r.basis === "as entered" && <span className="k-note"> · as entered</span>}
         <span className="k-sub-line">{r.rule}</span><Facts r={r} tax={view?.deposit_tax} />
       </>) },
-    { key: "value", header: "Value", numeric: true, cell: (r) => <>{r.value == null ? "–" : inr(r.value)}<span className="k-sub-line">as of {day(r.as_of)}</span></> },
+    { key: "value", header: "Value", numeric: true, cell: (r) => <>{r.value == null ? "–" : inr(r.value)}{!oneDay && <span className="k-sub-line">as of {day(r.as_of)}</span>}</> },
     { key: "act", header: "", action: true, cell: (r) => (r.entry ? (
       <span className="k-row">
         <button type="button" className="btn quiet sm" onClick={() => startEdit(r.entry!)} aria-label={`Edit ${r.name}`}>Edit</button>
@@ -439,16 +441,20 @@ export function NetWorthPage() {
   // the history's snapshots, each removable: under the chart when there is one (DP2-006)
   const snapsList = (cls: string) => (
     <details className={cls} data-testid="nw-snapshots" open={empty || undefined}>
-      <summary className="k-small">The history's snapshots ({hist.length}): remove one</summary>
+      {/* VR1-142: a plain "History: 3 snapshots", not "The history's snapshots (3): remove one"; each row's date and figure, its notes smaller under it, an icon to remove */}
+      <summary className="k-small">History: {hist.length} snapshot{hist.length === 1 ? "" : "s"}</summary>
       <ul className="k-stack k-tight">
-        {[...hist].reverse().map((h) => (
-          <li key={h.d} className="k-row">
-            <span className="k-small"><b>{dateOnly(h.d)}</b> · {inr(h.net)}{h.why === "change" ? " · taken when an entry changed" : h.why === "month" ? " · monthly" : ""}{h.added ? ` · ${signedInrCompact(h.added)} from entries added or changed` : ""}{h.partial?.length ? ` · partial (not counted: ${h.partial.join("; ")})` : ""}</span>
-            <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`}>
-              <Trash size={14} /> Remove
-            </button>
-          </li>
-        ))}
+        {[...hist].reverse().map((h) => {
+          const why = [h.why === "change" ? "taken when an entry changed" : h.why === "month" ? "monthly" : "", h.added ? `${signedInrCompact(h.added)} from entries added or changed` : "", h.partial?.length ? `partial (not counted: ${h.partial.join("; ")})` : ""].filter(Boolean).join(" · ");
+          return (
+            <li key={h.d} className="k-row">
+              <span className="k-small"><b>{dateOnly(h.d)}</b> · {inr(h.net)}{why && <span className="k-note k-sub-line">{why}</span>}</span>
+              <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`} title="Remove this snapshot">
+                <Trash size={14} />
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </details>
   );
@@ -489,8 +495,9 @@ export function NetWorthPage() {
 
           {/* MO-2 (owner, 25 Oct): one tap to the usual kinds, so adding a deposit, EPF, gold or a loan is never hunted for */}
           {!empty && !full && (
-            <Card label="Add to your net worth">
-              <CardHead title="Add to your net worth" />
+            <Card compact label="Add to your net worth">
+              {/* VR1-141: the usual kinds as one strip beside the header's button, not a 140px card of its own with a repeated title */}
+              <span className="k-eyebrow">Quick add</span>
               <div className="chip-row nw-quick" role="group" aria-label="Add to your net worth">
                 {QUICK.map((k) => <button key={k} type="button" className="chip" onClick={() => openAdd(k)}><Plus size={14} />{FORM[k].title}</button>)}
                 <button type="button" className="chip" onClick={() => openAdd()}>Something else…</button>
@@ -536,7 +543,7 @@ export function NetWorthPage() {
 
           {view.assets.length > 0 && (
             <Card>
-              <CardHead title="Assets" />
+              <CardHead title="Assets" actions={oneDay ? <span className="k-note">All as of {day(view.assets[0].as_of)}</span> : undefined} />
               <DataTable label="Assets" columns={assetCols} rows={view.assets} rowKey={(r) => r.id} stack />
               {view.gold_price && <p className="k-note">Gold at {inr(view.gold_price.per_g)} a gram (24 carat), from the front-month gold future on the commodity exchange, as of {day(view.gold_price.as_of)}.</p>}
             </Card>

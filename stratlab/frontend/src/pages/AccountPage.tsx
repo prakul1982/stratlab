@@ -97,7 +97,7 @@ export function AccountPage() {
 
       <Card id="profile" label="Profile">
         <CardHead title="Profile" />
-        <dl className="k-dl">
+        <dl className="k-dl spread">
           {name && <div><dt>Name</dt><dd>{name}</dd></div>}
           <div><dt>Email</dt><dd>{me.email ?? session?.user.email ?? "–"}</dd></div>
           {method && <div><dt>Signed in with</dt><dd>{method}</dd></div>}
@@ -110,7 +110,8 @@ export function AccountPage() {
           actions={<Badge tone="plain" dot={false}>{planName}{me.promo ? " (launch offer)" : me.free_basic_until ? " (free from invites)" : ""}</Badge>} />
         {/* View as shows the viewed plan's limits beside the account's own use: said, so "5 of 2" never reads as a fault (R6O-013) */}
         {me.view_as && <p className="k-small k-muted k-hint-line" data-testid="viewas-usage">Your own use this month, against the {me.plan_info.name} plan's limits you're viewing as. Your real plan's limits are unchanged.</p>}
-        <div className="k-rows">{usage.map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}</div>
+        {/* VR2-008: a long value takes the whole row (it wrapped to a second line and made its neighbour in the other column as tall) */}
+        <div className={`k-rows${usage.length > 6 ? " two" : ""}`}>{usage.map(([k, v]) => <div key={k} className={v.length > 44 ? "wide" : undefined}><span>{k}</span><b>{v}</b></div>)}</div>
         <div className="k-row">
           {run === "free" ? <Link to="/plans" className="btn">See paid plans</Link>
             : run === "given" ? <Link to="/plans" className="btn outline">Compare plans</Link>
