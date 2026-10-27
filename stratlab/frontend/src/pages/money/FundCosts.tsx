@@ -103,7 +103,7 @@ export function CostCell({ q, id }: { q: CostsQuery; id: string }) {
 }
 
 /** The rest of one scheme's costs, in its folded detail: the plan, both plans side by side, the TER since it was bought, category changes. */
-export function CostDetail({ q, id }: { q: CostsQuery; id: string }) {
+export function CostDetail({ q, id, name }: { q: CostsQuery; id: string; name?: string }) {
   const { c } = q;
   const s = costOf(q, id);
   if (!c || c.state !== "ok") return null;
@@ -115,7 +115,7 @@ export function CostDetail({ q, id }: { q: CostsQuery; id: string }) {
     </>
   ) : <span className="k-muted">No history yet</span>;
   return (
-    <section aria-label="What it costs">
+    <section aria-label={name ? `What it costs, ${name}` : "What it costs"}>
       <h3>What it costs</h3>
       <dl className="k-dl">
         <div><dt>Plan</dt><dd>{s.plan ? PLAN[s.plan] : "Plan not in the name"}<span className="k-sub-line">Listed as {s.matched}</span></dd></div>
