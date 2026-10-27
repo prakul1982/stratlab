@@ -89,7 +89,12 @@ def dividend_parts(uid: str, fetch: bool = True) -> tuple[dict, list[dict], list
 
 def dividend_view(profile, fetch: bool = True) -> dict:
     stored, est, ahead, rate = dividend_parts(profile["id"], fetch)
-    return divs.view(stored, est, ahead, rate, today(), full=allows(profile["_plan"], "dividends"))
+    out = divs.view(stored, est, ahead, rate, today(), full=allows(profile["_plan"], "dividends"))
+    # the estimate counts only the companies whose declared dividends are stored: a page opened first fetches a few while it
+    # waits and the rest after, and says so (RC3M-006: the holdings page did, the dividends page didn't)
+    syms = [i["symbol"] for i in holdings.indian(holdings.load(profile["id"])["items"])]
+    out["checking"] = sum(1 for s in syms if not corp_actions.hist_kept("IN", s)) if fetch and syms else 0
+    return out
 
 
 def dividends_for_tax(profile) -> dict[int, float]:

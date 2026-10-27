@@ -3,11 +3,14 @@
 disclaimer as the page."""
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from .tax_lots import DISCLAIMER, SETOFF_RULES, money
 from .tax_total import AGE_NAMES
 from .email_kit import fmt_date as _day
+
+IST = ZoneInfo("Asia/Kolkata")      # the day a file is made is India's: the server's UTC date is the day before until 5:30 AM (RC3M-004)
 
 
 def _name(names: dict, key: str) -> str:
@@ -180,7 +183,7 @@ def to_pdf(y: dict, names: dict, below: dict | None = None) -> bytes:
         story += [Paragraph("Open lots below cost today", h2),
                   Paragraph(f"Short-term: {money(below['st'] or 0)} · Long-term: {money(below['lt'] or 0)} "
                             f"across {len(below['rows'])} lot(s), at today's prices.", body)]
-    story += [Spacer(1, 10), Paragraph(f"Made by StratLab on {_day(datetime.now(timezone.utc))} from your uploaded files. "
+    story += [Spacer(1, 10), Paragraph(f"Made by StratLab on {_day(datetime.now(IST))} from your uploaded files. "
                                         + escape(DISCLAIMER), small)]
 
     def number(canvas, d):            # DH-007: page numbers

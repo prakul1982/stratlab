@@ -29,6 +29,10 @@ MAX_FILES = 20
 MAX_BYTES = 5 * 1024 * 1024       # a dividend CSV is a few kilobytes
 MAX_AMOUNT = 1e10
 TDS_RATE = 0.10                   # with a PAN; 20% without one
+# COVID-19 relief (CBDT press release of 13 May 2020): TDS under section 194 and the other non-salary sections was cut by a
+# quarter for payments from 14 May 2020 to 31 March 2021, so a dividend then had 7.5% cut, not 10% (RC3M-003)
+REDUCED_TDS = ("2020-05-14", "2021-03-31")
+REDUCED_RATE = 0.075
 US_WITHHOLDING = 0.25             # India-US tax treaty, Article 10, for an individual who gave the broker a W-8BEN
 AIS = "AIS"                       # the source of a line the user confirmed from their AIS
 FIRST_TAXED_FY = 2020             # dividends became taxable in the shareholder's hands from FY 2020-21
@@ -67,10 +71,24 @@ def tds_section(fy: int) -> str:
             else "section 194 of the Income-tax Act")
 
 
-def expected_tds(fy: int, total: float) -> float:
-    """TDS one company cuts on a year's dividends: 10% of all of it once the total is over the threshold."""
+def tds_rate(day: str | None) -> float:
+    """The rate a company cuts from a resident's dividend (with a PAN) paid on `day`: 10%, but 7.5% from 14 May 2020 to
+    31 March 2021 (REDUCED_TDS)."""
+    return REDUCED_RATE if day and REDUCED_TDS[0] <= str(day)[:10] <= REDUCED_TDS[1] else TDS_RATE
+
+
+def year_rate(fy: int) -> float:
+    """The rate in force at the end of a financial year (FY 2020-21 closed in the reduced window)."""
+    return tds_rate(f"{fy + 1}-03-31")
+
+
+def expected_tds(fy: int, total: float, taxed: float | None = None) -> float:
+    """TDS one company cuts on a year's dividends: the rate on all of it once the total is over the threshold. `taxed`:
+    the payments each at the rate of its own day (tds_rate), when the days are known; without it, the year's rate."""
     t = tds_threshold(fy)
-    return round(total * TDS_RATE, 2) if t is not None and total > t else 0.0
+    if t is None or total <= t:
+        return 0.0
+    return round(total * year_rate(fy) if taxed is None else taxed, 2)
 
 
 # ---------- reading files ----------
@@ -413,9 +431,10 @@ def year(fy: int, rows: list[dict], usd_inr: float | None, full: bool = True, hi
         k = (r["cur"], r.get("isin") or r["sym"])
         cur = by.setdefault(k, {"symbol": r["sym"], "name": r.get("name") or "", "country": "US" if r["cur"] == "USD" else "IN",
                                 "count": 0, "amount": 0.0, "amount_usd": 0.0 if r["cur"] == "USD" else None, "tds_file": None,
-                                "first": r["d"], "last": r["d"]})
+                                "first": r["d"], "last": r["d"], "taxed": 0.0})
         cur["count"] += 1
         cur["amount"] += v
+        cur["taxed"] += v * tds_rate(r["d"])
         if r["cur"] == "USD":
             cur["amount_usd"] += r["amount"]
         if r.get("tds"):
@@ -425,8 +444,9 @@ def year(fy: int, rows: list[dict], usd_inr: float | None, full: bool = True, hi
     companies = []
     for c in by.values():
         c["amount"] = round(c["amount"], 2)
+        c["taxed"] = round(c["taxed"], 2)
         if c["country"] == "IN":
-            c["tds_expected"] = expected_tds(fy, c["amount"])
+            c["tds_expected"] = expected_tds(fy, c["amount"], c["taxed"])
             c["over_threshold"] = t is not None and c["amount"] > t
         else:
             c["amount_usd"] = round(c["amount_usd"], 2)
@@ -444,7 +464,9 @@ def year(fy: int, rows: list[dict], usd_inr: float | None, full: bool = True, hi
     out = {"fy": fy, "label": fy_label(fy), "total": round(india_total + us_total, 2), "india_total": india_total,
            "us_total": us_total, "count": sum(c["count"] for c in companies), "companies_count": len(companies),
            "unpriced": unpriced, "taxed": fy >= FIRST_TAXED_FY,
-           "tds": {"threshold": t, "rate": TDS_RATE, "section": tds_section(fy),
+           "tds": {"threshold": t, "rate": year_rate(fy), "section": tds_section(fy),
+                   "note": (f"From 14 May 2020 to 31 March 2021 the rate was {REDUCED_RATE * 100:g}%, the COVID-19 relief; "
+                            f"before 14 May 2020 it was {TDS_RATE * 100:g}%.") if fy == 2020 else None,
                    "expected": round(sum(c["tds_expected"] for c in india), 2),
                    "companies_over": sum(1 for c in india if c["over_threshold"]),
                    "in_file": round(sum(c["tds_file"] or 0 for c in india), 2) if any(c["tds_file"] is not None for c in india) else None},
@@ -460,9 +482,9 @@ ASSUMPTIONS = [
     "Amounts are the gross dividend, before TDS. If your file shows amounts after TDS, the TDS has to be added back.",
     "A dividend is placed in the financial year of its record date (or the date in your file). The law taxes a final "
     "dividend in the year it is declared and an interim one in the year it is paid, which can differ near 31 March.",
-    "TDS: a company cuts 10% from a resident with a PAN (20% without) once its dividends to you in the year are over "
-    "₹10,000 (₹5,000 before FY 2025-26), on the whole amount. The TDS shown is what that rule gives; Form 26AS or the "
-    "AIS has what was actually cut.",
+    "TDS: a company cuts 10% from a resident with a PAN (20% without; 7.5% for payments from 14 May 2020 to 31 March 2021) "
+    "once its dividends to you in the year are over ₹10,000 (₹5,000 before FY 2025-26), on the whole amount. The TDS shown is "
+    "what that rule gives; Form 26AS or the AIS has what was actually cut.",
     "US dividends: 25% US tax withheld, the India-US tax treaty rate for someone who gave their broker a W-8BEN. In "
     "India the dividend is taxed at your slab rate, and the US tax can be claimed as a foreign tax credit, up to the "
     "Indian tax on that income, by filing Form 67 before the return.",

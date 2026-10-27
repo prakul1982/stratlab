@@ -410,8 +410,14 @@ def merge(old: list[dict], new: list[dict]) -> tuple[list[dict], int, int]:
 
 
 def add(uid: str, rows: list[dict], filename: str) -> tuple[int, int]:
+    """Save a file's trades with the ones already saved: (added, already there). A file that would take the list past
+    MAX_TRADES is refused whole, never saved in part: save() keeps the first MAX_TRADES, so the newest trades went
+    without a word while the page said all were added (RC3M-002)."""
     data = load(uid)
     data["trades"], added, dup = merge(data["trades"], rows)
+    if len(data["trades"]) > MAX_TRADES:
+        raise hf.FileError(f"With this file you would have {len(data['trades']):,} US trades, and up to {MAX_TRADES:,} are kept. "
+                           "Upload a shorter period, or delete the trades you no longer need first.")
     if added:
         data["files"].append({"name": (filename or "file")[:80], "rows": added, "at": datetime.now(timezone.utc).isoformat(timespec="minutes")})
         save(uid, data)

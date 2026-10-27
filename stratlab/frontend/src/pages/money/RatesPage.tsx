@@ -16,7 +16,7 @@ type Deposit = { id: string; kind: "fd" | "rd"; name: string; rate: number; afte
   monthly?: number; interest: number; interest_after_tax: number; compounding?: string };
 type Rates = {
   full: boolean; plan: string; tax_rate: number; basis: "slab" | "estimate"; slab: number | null; slabs: number[]; fy: number; inputs_saved?: boolean;
-  mine: { rate: number; regime: string; income: number; age: string; fy: number } | null;
+  mine: { rate: number; regime: string; income: number; age: string; fy: number; rules_fy?: number } | null;
   market: Row[]; market_read_at: string | null; market_available: boolean; tbill_note?: string | null;
   small_savings: { quarter: string; from: string; to: string; notified: string; source: string; rows: Row[] };
   bonds: Row[]; deposits: Deposit[]; tax_text: Record<Tax, string>; notes: string[]; disclaimer: string; as_of: string; rbi_source: string;
@@ -79,7 +79,7 @@ export function RatesPage() {
           <ChipBar label="Tax rate" options={rateOptions} value={pickValue} onChange={(v) => setPick(v === "mine" ? "mine" : Number(v))} wrap />
           <p className="k-small" role="status">
             {d.basis === "estimate" && d.mine
-              ? <>After-tax figures use <b>{d.tax_rate}%</b>: the tax on the next ₹10,000 of interest at your {fyLabel(d.mine.fy)} tax inputs ({d.mine.regime} regime, other income {inr(d.mine.income)}), with any rebate, surcharge and cess. Profits from imported trade files are not counted in it.</>
+              ? <>After-tax figures use <b>{d.tax_rate}%</b>: the tax on the next ₹10,000 of interest at your {fyLabel(d.mine.fy)} tax inputs ({d.mine.regime} regime, other income {inr(d.mine.income)}){d.mine.rules_fy != null && d.mine.rules_fy !== d.mine.fy ? `, under the ${fyLabel(d.mine.rules_fy)} rules` : ""}, with any rebate, surcharge and cess. Profits from imported trade files are not counted in it.</>
               : d.full && pick === "mine"
                 ? <>After-tax figures use <b>{d.tax_rate}%</b>: the {d.slab ?? 30}% slab with 4% cess and no surcharge, because no income is saved in your <Link className="link" to="/tax-report">tax report</Link> yet (this rate counts only the income you enter there, not profits from imported trade files). Save your income there to use your own rate.</>
                 : <>After-tax figures use <b>{d.tax_rate}%</b>: the {d.slab ?? 30}% slab with 4% cess and no surcharge.{pick === "mine" ? " That is the highest slab, used until you pick yours above." : ""}</>}

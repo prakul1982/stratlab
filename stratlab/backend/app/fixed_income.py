@@ -155,7 +155,13 @@ def tax_basis(profile: dict, slab: float | None, own: bool) -> tuple[float, str,
     if allows(profile["_plan"], "rates_slab") and own:
         found = saved_inputs(profile["id"], fy)
         if found:
-            mine = marginal(*found)
+            use, inputs = found
+            # the interest is earned this year, so the tax on it is worked out under this year's slabs, rebate and surcharge; the
+            # saved year only says what income to work it on (RC3M-005: income saved for FY 2023-24 was taxed under that year's
+            # 7 lakh rebate, not the 12 lakh one). A year with no rules of its own yet falls back to the saved year's.
+            mine = marginal(fy, inputs) or marginal(use, inputs)
+            if mine:
+                mine = {**mine, "fy": use, "rules_fy": mine["fy"]}
     if mine:
         return mine["rate"], "estimate", mine, fy
     return slab_rate(slab if slab is not None else 30), "slab", None, fy

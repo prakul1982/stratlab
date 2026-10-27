@@ -35,7 +35,8 @@ import csv
 import io
 import re
 import zipfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
@@ -48,6 +49,7 @@ from .tax_lots import GF_DATE, RATE_CHANGE, fy_label, money
 from .email_kit import fmt_date as _day
 
 router = APIRouter(prefix="/money/itr", tags=["money"])
+IST = ZoneInfo("Asia/Kolkata")      # the day a pack is made is India's (RC3M-004)
 LABEL = ("Prepared by StratLab from your files to help you or your CA fill the return. This is not a filed return, "
          "and StratLab files nothing for you.")
 CHECK = ("Check every figure against your broker's statements, Form 26AS and the AIS before you use it, and use the "
@@ -118,7 +120,7 @@ def gather(profile, fy: int) -> dict:
             "us_div": money_us_routes.us_dividends(profile, fy, y), "fa": money_us_routes.fa_for(profile, fy),
             "us_count": usr["count"], "us_allowed": usr["allowed"], "us_warning": ((usr.get("years") or {}).get(fy) or {}).get("warning"),
             "tds": saved["tds"], "paid": saved["paid"],
-            "mf_count": len(mf["rows"]), "made": datetime.now(timezone.utc)}
+            "mf_count": len(mf["rows"]), "made": datetime.now(IST)}
 
 
 # ---------- the schedules, as tables ----------
@@ -344,15 +346,17 @@ def t_os(g: dict) -> dict:
     by: dict[str, dict] = {}
     for r in g["div_lines"]:
         k = r.get("isin") or r["sym"]
-        c = by.setdefault(k, {"name": r.get("name") or r["sym"], "isin": r.get("isin") or "", "p": [0.0] * 5, "tds": 0.0, "tds_file": False})
+        c = by.setdefault(k, {"name": r.get("name") or r["sym"], "isin": r.get("isin") or "", "p": [0.0] * 5, "tds": 0.0, "tds_file": False,
+                              "taxed": 0.0})
         c["p"][period(r["d"])] += r["amount"]
+        c["taxed"] += r["amount"] * divs.tds_rate(r["d"])
         if r.get("tds"):
             c["tds"] += r["tds"]
             c["tds_file"] = True
     fy = g["fy"]
     for c in sorted(by.values(), key=lambda c: -sum(c["p"])):
         total = sum(c["p"])
-        tds = c["tds"] if c["tds_file"] else divs.expected_tds(fy, total)
+        tds = c["tds"] if c["tds_file"] else divs.expected_tds(fy, total, c["taxed"])
         rows.append([c["name"], c["isin"], "India"] + [r2(x) for x in c["p"]] + [r2(total), r2(tds), "your file" if c["tds_file"] else "expected"])
         totals = [a + b for a, b in zip(totals, c["p"])]
     ud = g["us_div"]
@@ -371,8 +375,9 @@ def t_os(g: dict) -> dict:
             "estimated": "Indian dividends are an estimate from your holdings and the dividends declared (upload your broker's "
                          "dividend statement for the actual figures)."}.get(g["div_source"], "No Indian dividends in your dividend files or holdings for the year.")
     notes = [lead + " Gross amounts, before TDS; dividends are taxed at your slab rate.",
-             "TDS shown is what the 10% rule gives (once a company's dividends to you pass ₹10,000 in FY 2025-26; ₹5,000 "
-             "before) unless your file gave it; Form 26AS and the AIS have what was actually cut.",
+             "TDS shown is what the rule gives (10% once a company's dividends to you pass ₹10,000 in FY 2025-26; ₹5,000 "
+             "before; 7.5% for payments from 14 May 2020 to 31 March 2021) unless your file gave it; Form 26AS and the AIS "
+             "have what was actually cut.",
              "The five periods are the return's quarterly breakup of dividends for section 234C."]
     if ud:
         notes.append("US dividends are in rupees at SBI's TT buying rate on the last day of the month before each one (Rule 115)"
@@ -420,7 +425,7 @@ def t_tax_paid(g: dict) -> dict:
         rows.append(["TDS you entered (Schedule TDS)", "", r2(g["tds"]), "", ""])
     dt = (g["div_year"] or {}).get("tds") or {}
     if dt.get("expected"):
-        rows.append(["Dividend TDS the 10% rule gives (check Form 26AS)", "", r2(dt["expected"]), "", ""])
+        rows.append(["Dividend TDS the rule gives (check Form 26AS)", "", r2(dt["expected"]), "", ""])
     return table("tax_paid", "Tax paid (Schedule IT and TDS)", ["Kind", "Date of deposit", "Amount", "BSR code", "Challan serial number"], rows,
                  ["From the payments entered in Tax tools: those dated by 31 March are advance tax, those after it self-assessment "
                   "tax. Fill the BSR code and challan serial number from each challan (the AIS's 'Payment of taxes' section has "
@@ -649,6 +654,16 @@ def summary(g: dict) -> list[tuple[str, str]]:
     return out
 
 
+def _india_day(at) -> str:
+    """The India day of a stored upload time (UTC, "2026-10-26T22:30+00:00" is 27 Oct): the first ten characters were the UTC date,
+    a day behind from midnight to 5:30 AM (RC3M-004)."""
+    try:
+        t = datetime.fromisoformat(str(at))
+    except ValueError:
+        return str(at or "")[:10]
+    return (t.astimezone(IST) if t.tzinfo else t).date().isoformat()
+
+
 def sources(g: dict) -> list[str]:
     out = []
     for f in g["files"][-20:]:
@@ -656,7 +671,7 @@ def sources(g: dict) -> list[str]:
         n, fno = int(f.get("trades") or 0), int(f.get("fno_lines") or 0)
         what = ", ".join(x for x in (f"{n:,} trade{'' if n == 1 else 's'}" if n or not fno else "",
                                      f"{fno:,} F&O, commodity and currency line{'' if fno == 1 else 's'}" if fno else "") if x)
-        out.append(f"Your file {f.get('name')} ({f.get('broker') or 'broker'}, {what}, uploaded {_day(str(f.get('at') or '')[:10])}).")
+        out.append(f"Your file {f.get('name')} ({f.get('broker') or 'broker'}, {what}, uploaded {_day(_india_day(f.get('at')))}).")
     if g["mf_count"]:
         out.append(f"Your mutual fund statement (CAS): {g['mf_count']} realised sales in all years.")
     if g["us_count"]:
