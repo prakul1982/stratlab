@@ -256,3 +256,25 @@ test("Owner 26 Oct: inside a notebook only the notebook is the selected menu ent
   assert.match(shell, /const here = at\?\.page\.to === p\.to && !\(p\.to === "\/notebooks" && path\.startsWith\("\/n\/"\)\);/);
   assert.doesNotMatch(shell, /Dots: each notebook's last verdict/);
 });
+
+test("DOC-2: the landing page names the newer tools, its lists keep full grid rows, and the UI checker guide lists every rule", () => {
+  const login = read("src/pages/Login.tsx");
+  const list = (name) => {
+    const m = login.match(new RegExp(`const ${name}: \\[[^\\]]*\\]\\[\\] = \\[\\n([\\s\\S]*?)\\n\\];`));
+    assert.ok(m, name);
+    return (m[1].match(/^  \["/gm) ?? []).length;
+  };
+  assert.equal(list("RESEARCH") % 4, 0);                 // four research tools a row (landing.spec.ts)
+  assert.equal(list("TOOLS") % 4, 0);
+  assert.equal(list("ALERTS") % 3, 0);                   // three alerts a row
+  assert.equal(list("PORTFOLIO") % 2, 0);                // Money's cards in pairs
+  for (const t of ["IPOs", "Business updates", "Named holders", "Closing auction", "Market events", "Chart replay", "Forward test", "Test a SIP", "Rates after tax"])
+    assert.match(login, new RegExp(`\\["${t}",`), t);
+  assert.match(login, /Trade · Invest · Money · Ten markets/);
+  assert.doesNotMatch(login, /Yahoo|Screener|Finnhub|Kite|Zerodha Kite/);        // no data vendor named on the page
+  // docs/UI_CHECKER.md names every rule the checker has, R1 to R25
+  const rules = read("e2e/ui-lint.spec.ts").match(/^  R\d+: /gm) ?? [];
+  const doc = readFileSync(new URL("../../../docs/UI_CHECKER.md", import.meta.url), "utf8");
+  assert.equal(rules.length, 25);
+  for (let i = 1; i <= rules.length; i++) assert.match(doc, new RegExp(`\\| R${i} \\|`), `R${i}`);
+});

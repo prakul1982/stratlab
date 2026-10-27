@@ -16,7 +16,7 @@ measurement.
 
 1. It fills a throwaway copy of the app with a Pro user's data (`ui-lint-world.ts`: holdings, funds, net worth, a notebook
    with experiments, paper sessions, alerts, IPOs and so on), so no page is measured while empty. Nothing real is used.
-2. It opens every page a person can reach, signed in and signed out, at **1440 × 900**, **1280 × 800** and **390 × 844**
+2. It opens every page a person can reach (about 100 routes), signed in and signed out, at **1440 × 900**, **1280 × 800** and **390 × 844**
    (a phone, with touch), in the dark theme. `UI_LINT_LIGHT=1` adds the light theme at 1440.
 3. It waits until the page has drawn (no spinner, no loading skeleton, fonts loaded), opens every folded part of the page
    so a problem inside one counts, and measures the page against the rules in `ui-lint-rules.ts`.
