@@ -13,3 +13,9 @@ test("RC3M-003: Tax tools says the rate of the year it shows, with the note the 
   assert.match(src, /note\?: string \| null/);
   assert.doesNotMatch(src, /A company cuts 10% TDS/);
 });
+
+test("RC3M-005: the Rates page says when the tax rate is worked under another year's rules than the saved inputs' year", () => {
+  const src = read("src/pages/money/RatesPage.tsx");
+  assert.match(src, /rules_fy\?: number/);
+  assert.match(src, /d\.mine\.rules_fy != null && d\.mine\.rules_fy !== d\.mine\.fy \? `, under the \$\{fyLabel\(d\.mine\.rules_fy\)\} rules`/);
+});

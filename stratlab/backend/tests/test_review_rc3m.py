@@ -4,6 +4,7 @@ import json
 from datetime import date, datetime, timezone
 
 import pytest
+import time_machine
 
 from app import corp_actions as C, db, main, tax_lots as T
 from app.plans import plan_of
@@ -117,3 +118,19 @@ def test_the_itr_pack_is_dated_by_the_india_day():
     from app import money_itr
     src = open(money_itr.__file__).read()
     assert '"made": datetime.now(IST)' in src and "datetime.now(timezone.utc)" not in src
+
+
+# ---------- RC3M-005: the after-tax rate works the saved income under this year's rules ----------
+@time_machine.travel(datetime(2026, 10, 27, 8, 0, tzinfo=timezone.utc))
+def test_the_marginal_rate_uses_this_years_rules_on_income_saved_for_an_older_year(w):
+    from app import fixed_income as F, tax_total
+    uid = "u-basic"
+    cur = 2026
+    tax_total.save_inputs(uid, 2023, {"regime": "new", "other": 1000000, "salary": 1000000})
+    prof = {**db.get_profile(uid), "_plan": "pro"}
+    t, basis, mine, fy = F.tax_basis(prof, None, True)
+    assert fy == cur and basis == "estimate" and mine["fy"] == 2023 and mine["rules_fy"] == cur
+    # ₹10 lakh of salary is 9.5 lakh after the standard deduction: inside this year's 12 lakh rebate, so the next ₹10,000 of
+    # interest is taxed at nothing; under FY 2023-24's own rules (15% from 9 lakh, rebate only to 7 lakh) it was 15.6%
+    assert mine["rate"] == 0 and t == 0
+    assert F.marginal(2023, {"regime": "new", "other": 1000000, "salary": 1000000})["rate"] == pytest.approx(0.156, abs=1e-4)
