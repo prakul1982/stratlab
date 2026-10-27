@@ -267,6 +267,9 @@ def _trade(bars: list[dict], ep: dict, kind: str, brokerage: float) -> dict:
     intraday = first_t[:10] == last_t[:10]
     gross = sign * (exit_ - entry) * qty
     charges = _costs(kind, ins + outs, brokerage, intraday)
+    if kind in C.DP_KINDS and not intraday and sign > 0:
+        # shares sold out of a demat account pay the depository charge, once for each day they were sold (RC3T-002)
+        charges += C.dp_charge() * len({str(f["t"])[:10] for f in outs})
     return {"side": "long" if sign > 0 else "short", "qty": qty, "entry": entry, "exit": exit_, "entry_i": ins[0]["i"],
             "exit_i": outs[-1]["i"], "entry_t": first_t, "exit_t": last_t, "gross": gross, "charges": charges,
             "net": gross - charges, "why": outs[-1]["why"], "fills": len(ins) + len(outs)}
@@ -358,6 +361,8 @@ def rates(kind: str, brokerage: float) -> dict:
             per = (C.total(C.order_costs(k, side, 1000.0, 1000.0, brokerage)) - flat) / 1e6
             row[side] = per
             row["flat"] = flat
+        if k in C.DP_KINDS:
+            row["dp"] = C.dp_charge()      # per day of sales of a long position held overnight, on top of the straight lines
         out[k] = row
     return out
 

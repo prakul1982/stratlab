@@ -14,7 +14,7 @@
 export interface RBar { t: string; o: number; h: number; l: number; c: number; v?: number }
 export type Action = "long" | "short" | "flat" | "stop" | "target" | "cancel_stop" | "cancel_target";
 export interface ROrder { i: number; action: Action; qty?: number; price?: number }
-export type Rates = Record<string, { buy: number; sell: number; flat: number }>;
+export type Rates = Record<string, { buy: number; sell: number; flat: number; dp?: number }>;
 export interface Fill { i: number; t: string; side: "buy" | "sell"; qty: number; px: number; why: string }
 export interface RTrade {
   side: "long" | "short"; qty: number; entry: number; exit: number; entry_i: number; exit_i: number; entry_t: string; exit_t: string;
@@ -48,7 +48,10 @@ function trade(ep: Episode, kind: string, rates: Rates): RTrade {
   const exit = outs.reduce((n, f) => n + f.px * f.qty, 0) / Math.max(outQ, EPS);
   const first = String(ins[0].t), last = String(outs[outs.length - 1].t);
   const gross = ep.sign * (exit - entry) * qty;
-  const ch = charges(kind, rates, [...ins, ...outs], first.slice(0, 10) === last.slice(0, 10));
+  const intraday = first.slice(0, 10) === last.slice(0, 10);
+  let ch = charges(kind, rates, [...ins, ...outs], intraday);
+  // shares sold out of a demat account pay the depository charge, once for each day they were sold (RC3T-002)
+  if ((kind === "in_eq" || kind === "in_etf") && !intraday && ep.sign > 0) ch += (rates[kind]?.dp ?? 0) * new Set(outs.map((f) => String(f.t).slice(0, 10))).size;
   return { side: ep.sign > 0 ? "long" : "short", qty, entry, exit, entry_i: ins[0].i, exit_i: outs[outs.length - 1].i, entry_t: first, exit_t: last,
     gross, charges: ch, net: gross - ch, why: outs[outs.length - 1].why, fills: ins.length + outs.length };
 }

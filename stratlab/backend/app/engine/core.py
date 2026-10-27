@@ -85,7 +85,7 @@ def bar_clock(t: str, tf_min: int, close_min: int | None = None) -> tuple[str, i
 
 # the cash and F&O session's close in India (15:30), for the cost models of NSE and BSE stocks, futures and options
 INDIA_CLOSE = 15 * 60 + 30
-INDIA_SESSION = ("in_eq", "in_eq_mis", "in_fut", "in_opt", "in_bse_opt")
+INDIA_SESSION = ("in_eq", "in_etf", "in_eq_mis", "in_fut", "in_opt", "in_bse_opt")
 
 
 class Engine:
@@ -113,6 +113,7 @@ class Engine:
         self.close_min = INDIA_CLOSE if cost_kind in INDIA_SESSION and self.tf_min < 1440 else None
         self.cash = self.r.capital
         self.emptied_on: str | None = None     # the day the account hit zero: nothing opens after it (R13S-001)
+        self.dp_day: str | None = None         # the last day a delivery sale paid the depository charge (RC3T-002)
         self.qty, self.entry, self.sl, self.tg = 0, 0.0, 0.0, math.inf
         self.init_sl, self.best, self.held = 0.0, 0.0, 0
         self.entry_t = None
@@ -150,6 +151,7 @@ class Engine:
                 "init_sl": self.init_sl, "best": self.best, "held": self.held, "dir": self.dir,
                 "day": self.day, "day_trades": self.day_trades, "day_pnl": self.day_pnl, "cool": self.cool,
                 "halted": self.halted, "emptied_on": self.emptied_on, "trades": self.trades[-500:], "events": self.events[-1000:],
+                "dp_day": self.dp_day,
                 "totals": {"realised": self.realised_total, "count": self.trade_count, "wins": self.win_count},
                 **({"early_t": self.early_t} if self.early_t else {}), **({"day_mark": self.day_mark} if self.day_mark is not None else {})}
 
@@ -168,6 +170,7 @@ class Engine:
         self.trades, self.events = st.get("trades", []), st.get("events", [])
         self.realised_total, self.trade_count, self.win_count = saved_totals(st)
         self.emptied_on = st.get("emptied_on")
+        self.dp_day = st.get("dp_day")
         self.early_t = st.get("early_t")
         self.day_mark = st.get("day_mark")
 
@@ -176,6 +179,12 @@ class Engine:
         for k, v in items.items():
             self.cost_items[k] = self.cost_items.get(k, 0.0) + v
         return C.total(items)
+
+    def dp_for(self, day: str | None) -> float:
+        """The depository charge a sale of a long position on `day` pays: Indian shares sold from a demat account pay it
+        once for each stock a day, whatever the number of sales (journal.py already counts it); none on intraday, futures,
+        options or a short sale (RC3T-002: a delivery backtest's sales paid STT and fees but not this one)."""
+        return C.dp_charge() if self.kind in C.DP_KINDS and self.dir == 1 and not (day is not None and self.dp_day == day) else 0.0
 
     def _slip(self, q: float, fill: float, px: float):
         """Slippage is in the fill price, not a charge; it's counted here so the cost breakdown can show it."""
@@ -242,6 +251,11 @@ class Engine:
         self._slip(self.qty, fill, px)
         px = fill
         exit_cost = self._pay(close_side, self.qty, px)
+        dp = self.dp_for(self.day)
+        if dp:
+            self.dp_day = self.day
+            self.cost_items["dp"] = self.cost_items.get("dp", 0.0) + dp
+            exit_cost += dp
         trade_costs = self.entry_cost + exit_cost
         pnl = d * self.qty * (px - self.entry) - trade_costs
         # the day's part of it: from the previous close for a position carried in from an earlier day

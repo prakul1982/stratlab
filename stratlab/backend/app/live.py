@@ -419,12 +419,16 @@ class LiveSession:
         m = BY_ID.get(self.market) or {}
         hours = m.get("hours") or {}
         local = now.astimezone(ZoneInfo(m.get("tz") or "UTC"))
-        close = day_close(self.market, local.date()) or hours.get("close")      # the calendar knows early closes
+        open_, close = hours.get("open"), day_close(self.market, local.date()) or hours.get("close")      # the calendar knows early closes
         if self.market == "MCX":
             from .options.data import expiry_time
             close = expiry_time("MCX", local.date())       # 23:55 while US daylight saving is off
+        elif self.market == "IN":
+            # the timetable of this kind of instrument: futures and options trade to 15:40, a stock with derivatives to 15:15 (RC3T-006)
+            start, end = S.continuous(getattr(self, "session_kind", "cash"), local.date())
+            open_, close = start.strftime("%H:%M"), end.strftime("%H:%M")
         if not is_trading_day(self.market, local.date()) or (
-                hours.get("open") and not hours["open"] <= local.strftime("%H:%M") < close):
+                open_ and not open_ <= local.strftime("%H:%M") < close):
             return f"{m.get('name') or self.market} is closed now, so there's no live price to fill a paper order at."
         if not self.last_tick_at:
             return "No live price has arrived for this session yet. Try again in a minute."

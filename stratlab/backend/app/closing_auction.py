@@ -411,7 +411,8 @@ def history(symbol: str | None = None) -> dict:
         gs = [g for g in gaps.values() if g is not None]
         idx = [{"name": n, "start": pos(v[0]), "close": pos(v[1]), "gap": gap(v[1], v[0])}
                for n, v in (got.get("indices") or {}).items() if isinstance(v, list) and len(v) >= 2]
-        row = {"day": day, "stocks": len(st), "avg_abs_gap": round(sum(abs(g) for g in gs) / len(gs), 2) if gs else None,
+        # `compared`: the stocks that have a gap (a reference price and a final price): "unchanged" is among those, not a stock with none
+        row = {"day": day, "stocks": len(st), "compared": len(gs), "avg_abs_gap": round(sum(abs(g) for g in gs) / len(gs), 2) if gs else None,
                "up": sum(1 for g in gs if g > 0), "down": sum(1 for g in gs if g < 0), "indices": idx}
         if gs:
             wide = max(gaps.items(), key=lambda kv: abs(kv[1]) if kv[1] is not None else -1)

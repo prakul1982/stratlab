@@ -304,7 +304,7 @@ def test_indian_futures_count_lots_and_fill_in_market_hours(w, monkeypatch):
     c = w["client"]
     main.kite._load_instruments()
     fut = next(r for r in main.kite._inst if r["type"] == "FUT")
-    monkeypatch.setattr(SS, "market_open", lambda inst, now: True)
+    monkeypatch.setattr(SS, "market_open", lambda inst, now, kind=None: True)
     s = session(c, inst=fut["id"], capital=10_000_000)
     sess = main.manager.sessions[s["id"]]
     sess.on_tick({"last_price": 25000.0})
@@ -319,7 +319,7 @@ def test_indian_futures_count_lots_and_fill_in_market_hours(w, monkeypatch):
     t = sess.trades[0]
     cost = C.total(C.order_costs("in_fut", "buy", 150, 25000, 20)) + C.total(C.order_costs("in_fut", "sell", 225, 25100, 20)) * 150 / 225
     assert t["pnl"] == pytest.approx(150 * 100 - cost) and t["qty"] == 150
-    monkeypatch.setattr(SS, "market_open", lambda inst, now: False)
+    monkeypatch.setattr(SS, "market_open", lambda inst, now, kind=None: False)
     r = send(c, path, {"session": s["id"], "action": "exit"})
     assert r.status_code == 409 and r.json()["detail"]["message"] == "The market was closed."
 

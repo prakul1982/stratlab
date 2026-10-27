@@ -36,6 +36,9 @@ IN_DP_SELL = 13.0
 def dp_charge() -> float:
     """The DP charge on one stock's delivery sales of a day, GST included."""
     return round(IN_DP_SELL * (1 + GST), 2)
+
+
+DP_KINDS = ("in_eq", "in_etf")       # shares and fund units held in a demat account; intraday, futures and options pay none
 IN_STCG, IN_LTCG, IN_LTCG_EXEMPT = 0.20, 0.125, 125000
 
 US_SEC_FEE = 0.0000206           # on sells: $20.60 a million from 4 Apr 2026 (SEC fee rate advisory, fiscal 2026)
@@ -48,8 +51,21 @@ CMDTY_SPREAD = 0.0002            # global futures: about a tick of spread plus c
 LABELS = {
     "brokerage": "Brokerage", "stt": "STT / CTT", "exchange": "Exchange + SEBI fees", "stamp": "Stamp duty",
     "gst": "GST", "sec": "SEC fee", "finra": "FINRA fee", "fee": "Exchange fee", "spread": "Spread",
-    "slippage": "Slippage",
+    "slippage": "Slippage", "dp": "Depository (DP) charge",
 }
+
+
+def is_india_etf(inst: dict | None) -> bool:
+    """Whether an Indian cash instrument is an exchange-traded fund. The instrument list files ETFs as plain "EQ"
+    (NIFTYBEES comes back as a share), so the symbol, ISIN and name tell (instrument_kinds.py, as the SIP test reads them):
+    a backtest of one was charged a share's 0.1% STT on both sides (RC3T-001; DG-031 had fixed the SIP test only)."""
+    inst = inst or {}
+    if inst.get("type") == "ETF":
+        return True
+    if inst.get("type") not in ("EQ", None, "") or inst.get("exchange") not in ("NSE", "BSE"):
+        return False
+    from .. import instrument_kinds
+    return instrument_kinds.base(instrument_kinds.classify(inst.get("symbol"), inst.get("isin"), inst.get("name"))) == "etf"
 
 
 def kind_of(inst: dict | None) -> str:
@@ -67,7 +83,9 @@ def kind_of(inst: dict | None) -> str:
         t = inst.get("type")
         if t in ("CE", "PE"):
             return "in_bse_opt" if inst.get("exchange") == "BFO" else "in_opt"
-        return "in_fut" if t == "FUT" else "in_eq"
+        if t == "FUT":
+            return "in_fut"
+        return "in_etf" if is_india_etf(inst) else "in_eq"
     if market == "UK":
         return "uk_etf" if inst.get("type") == "ETF" else "uk"
     return {"US": "us", "CRYPTO": "crypto", "FX": "fx", "CMDTY": "cmdty"}.get(market, "flat")
@@ -149,27 +167,47 @@ def _long_term(a: str, b: str) -> bool:
         return e > d.replace(year=d.year + 1, day=28)
 
 
+def _fy(exit_t) -> int:
+    """The financial year (April to March) a sale falls in, by its starting year; 0 when the date can't be read."""
+    try:
+        d = datetime.fromisoformat(str(exit_t)).date()
+    except (TypeError, ValueError):
+        return 0
+    return d.year if d.month >= 4 else d.year - 1
+
+
 def tax_estimate(kind: str, trades: list[dict]) -> dict:
     """A rough capital-gains estimate on the net profit, STT added back (capital-gains rules don't allow it as a
-    deduction). Only India equity is estimated."""
+    deduction). Only India equity is estimated. The ₹1.25 lakh of long-term gains that is free of tax is for each
+    financial year, and a loss no gain of its year could absorb carries on to the next year (RC3T-003: a ten-year test
+    had the exemption once)."""
     if kind != "in_eq":
         note = ("F&O profit is taxed as business income at your slab rate, so it isn't estimated here."
                 if kind in ("in_fut", "in_opt", "in_bse_opt", "in_mcx_fut", "in_mcx_opt")
                 else "Currency F&O profit is taxed as business income at your slab rate, so it isn't estimated here."
                 if kind.startswith("in_cds_")
                 else "Intraday equity profit is taxed as speculative business income at your slab rate, so it isn't estimated here."
-                if kind == "in_eq_mis" else "Tax depends on where you live, so it isn't estimated for this market.")
+                if kind == "in_eq_mis"
+                else "Tax on fund units depends on what the fund holds, so it isn't estimated here." if kind == "in_etf"
+                else "Tax depends on where you live, so it isn't estimated for this market.")
         return {"amount": None, "note": note}
     # the gain before STT: the trade's P&L is after it, and capital-gains rules don't deduct it (rev10a)
     gain = lambda t: t["pnl"] + IN_EQUITY["stt"] * (t.get("qty") or 0) * ((t.get("entry") or 0) + (t.get("exit") or 0))  # noqa: E731
-    short = sum(gain(t) for t in trades if not _long_term(t.get("entry_t"), t.get("exit_t")))
-    long_ = sum(gain(t) for t in trades if _long_term(t.get("entry_t"), t.get("exit_t")))
-    if short < 0:   # a short-term loss also sets off long-term gains; a long-term loss only long-term ones
-        long_, short = long_ + short, 0.0
-    amount = max(0.0, short) * IN_STCG + max(0.0, long_ - IN_LTCG_EXEMPT) * IN_LTCG
+    years: dict[int, list[float]] = {}
+    for t in trades:
+        got = years.setdefault(_fy(t.get("exit_t")), [0.0, 0.0])
+        got[1 if _long_term(t.get("entry_t"), t.get("exit_t")) else 0] += gain(t)
+    amount, lost_short, lost_long = 0.0, 0.0, 0.0
+    for fy in sorted(years):
+        short, long_ = years[fy][0] - lost_short, years[fy][1] - lost_long
+        if short < 0 < long_:   # a short-term loss also sets off long-term gains; a long-term loss only long-term ones
+            absorbed = min(-short, long_)
+            short, long_ = short + absorbed, long_ - absorbed
+        amount += max(0.0, short) * IN_STCG + max(0.0, long_ - IN_LTCG_EXEMPT) * IN_LTCG
+        lost_short, lost_long = max(0.0, -short), max(0.0, -long_)
     return {"amount": round(amount, 2),
-            "note": ("Rough estimate: 20% on short-term gains, 12.5% on long-term gains above ₹1.25 lakh, on gains before STT "
-                     "(STT isn't deductible from capital gains). Losses and your other income can change it.")}
+            "note": ("Rough estimate: 20% on short-term gains, 12.5% on long-term gains above ₹1.25 lakh in each financial year, "
+                     "on gains before STT (STT isn't deductible from capital gains). Losses and your other income can change it.")}
 
 
 def floor_to(q: float, step: float) -> float:

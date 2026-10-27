@@ -237,7 +237,7 @@ def _leaving_cash(books: list[dict], state: dict, lev: float) -> float:
         e, o = b["eng"], b["bars"][b["idx"][state["k"]]]["o"]
         fill = o * (1 - e.r.slippage / 100 * e.dir)
         side = "sell" if e.dir == 1 else "buy"
-        cost = C.total(C.order_costs(e.kind, side, e.qty, fill, e.r.brokerage))
+        cost = C.total(C.order_costs(e.kind, side, e.qty, fill, e.r.brokerage)) + e.dp_for(state["k"].date().isoformat())
         out += e.qty * e.entry / lev + e.dir * e.qty * (fill - e.entry) - e.entry_cost - cost
     return out
 
