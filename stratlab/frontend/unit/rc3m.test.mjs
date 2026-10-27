@@ -19,3 +19,10 @@ test("RC3M-005: the Rates page says when the tax rate is worked under another ye
   assert.match(src, /rules_fy\?: number/);
   assert.match(src, /d\.mine\.rules_fy != null && d\.mine\.rules_fy !== d\.mine\.fy \? `, under the \$\{fyLabel\(d\.mine\.rules_fy\)\} rules`/);
 });
+
+test("RC3M-006: the tax report says when some company's bonuses and splits couldn't be read yet", () => {
+  const src = read("src/pages/TaxReportPage.tsx");
+  assert.match(src, /corp_left\?: number/);
+  assert.match(src, /data-testid="tax-corp-left"/);
+  assert.match(src, /bonuses and splits of \{rep\.corp_left\} \{rep\.corp_left === 1 \? "company" : "companies"\} couldn't be read yet/);
+});

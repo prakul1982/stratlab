@@ -3560,18 +3560,20 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
 
 
 HOLDINGS_CA_NOW = 8                # held stocks without a stored history fetched while the page waits; the rest after
+TAX_CA_WAIT = 25.0                 # seconds the tax report waits for the histories of the companies it counts (RC3M-006)
+TAX_CA_NOW = 60                    # ...at most this many at once (the pool is shared); the rest in the background
 _corp_fetching: set[str] = set()
 
 
-def _corp_histories(uid: str, symbols: list[str], today) -> int:
-    """Fetch the histories of held stocks that have none (a few now) or an old one (in the background). Returns
-    how many are still being fetched."""
+def _corp_histories(uid: str, symbols: list[str], today, sync: int = HOLDINGS_CA_NOW, wait: float = 12.0) -> int:
+    """Fetch the histories of held stocks that have none (`sync` of them now, for up to `wait` seconds) or an old one (in the
+    background). Returns how many are still being fetched."""
     # a history kept before every bonus and split was counts as none: the tax report needs the old ones (RC3M-001)
     missing = [s for s in symbols if not corp_actions.hist_kept("IN", s)]
     sources = corp_job.sources()
-    now = missing[:HOLDINGS_CA_NOW]
+    now = missing[:sync]
     if now:
-        wait_all([_holdings_pool.submit(corp_actions.history, "IN", s, sources, today) for s in now], timeout=12)
+        wait_all([_holdings_pool.submit(corp_actions.history, "IN", s, sources, today) for s in now], timeout=wait)
     rest = [s for s in symbols if s not in now]
     if rest and uid not in _corp_fetching:
         _corp_fetching.add(uid)
@@ -3816,9 +3818,13 @@ def tax_inputs(profile) -> dict:
     # bonuses and splits only change lots from tradebooks (a tax P&L line already shows them), and the 31 Jan 2018
     # price of shares held then: a tax P&L of recent years needs no company's history
     need = sorted({t["sym"] for t in trades if t.get("sym") and (t.get("src") != "pnl" or t["d"] <= tax_lots.GF_DATE)})
+    left = 0
     if need:
         corp_actions.prefetch("IN", need)
-        _corp_histories(uid, need, today)
+        # every company's bonuses and splits are in before the first report is drawn: with only the first eight, the lots of
+        # the rest were counted in the wrong shares, and the page said nothing until its next visit (RC3M-006)
+        _corp_histories(uid, need, today, sync=TAX_CA_NOW, wait=TAX_CA_WAIT)
+        left = sum(1 for s in need if not corp_actions.hist_kept("IN", s))      # asked and not stored: the wait ran out or a feed said no
         cal = corp_actions.load("IN")["rows"]
         acts = {s: [a for a in corp_actions.actions_for("IN", s, None, today, fetch=False, cal=cal) if corp_actions.adjusts(a)] for s in need}
     fmv, fmv_src = {}, {}
@@ -3850,7 +3856,7 @@ def tax_inputs(profile) -> dict:
             quotes = kite.quote(syms[:500])
         except Exception:
             live = False
-    return {"data": data, "trades": trades, "acts": acts, "fmv": fmv, "fmv_src": fmv_src, "pre": pre, "quotes": quotes,
+    return {"data": data, "trades": trades, "acts": acts, "corp_left": left, "fmv": fmv, "fmv_src": fmv_src, "pre": pre, "quotes": quotes,
             "live": live, "items": holdings.indian(holdings.load(uid)["items"]), "today": today.isoformat(), "business": data["business"],
             "income": tax_total.load_inputs(uid)}
 
@@ -3876,7 +3882,7 @@ def tax_view(profile) -> dict:
     for y in rep["years"]:
         y["mutual_funds"] = mf["years"].get(y["fy"])
         y["us"] = {**usr["years"][y["fy"]], "allowed": usr["allowed"], "plan": usr.get("plan")} if y["fy"] in usr["years"] else None
-    return {**rep, "us_trades": usr["count"], "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
+    return {**rep, "corp_left": i["corp_left"], "us_trades": usr["count"], "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
                           "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
             "last_trade": max([t["d"] for t in i["trades"] if isinstance(t.get("d"), str)] + [b["last"] for b in i["business"]], default=None),
             "business_lines": int(sum(b["trades"] for b in i["business"])),

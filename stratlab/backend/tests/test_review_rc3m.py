@@ -150,3 +150,27 @@ def test_the_company_card_stays_three_years_while_the_history_keeps_the_old_bonu
     got = C.company("IN", "Z", {"in": feed}, TODAY)
     assert [r["kind"] for r in got["past"]] == ["dividend"]                      # the card: the last three years
     assert [r["ex_date"] for r in C.actions_for("IN", "Z", None, TODAY, fetch=False) if r["kind"] == "bonus"] == ["2020-05-04"]   # the tax report's input
+
+
+# ---------- RC3M-006: the first tax report has every company's bonuses and splits ----------
+def test_the_first_tax_report_waits_for_every_companys_bonuses_and_splits(w, monkeypatch):
+    uid = "u-pro"
+    syms = [f"S{i}" for i in range(12)]                         # more than the eight a holdings page fetches while it waits
+    feed = FakeIndia(history={s: [nse(s, "Bonus 1:1", date(2025, 5, 10))] for s in syms})
+    monkeypatch.setattr(main.corp_job, "sources", lambda: {"in": feed, "us": None, "cal": None})
+    T.save(uid, [t for s in syms for t in ({"d": "2025-01-03", "side": "B", "qty": 100, "price": 100.0, "sym": s, "isin": "", "name": s},
+                                              {"d": "2026-06-03", "side": "S", "qty": 200, "price": 150.0, "sym": s, "isin": "", "name": s})],
+           [{"name": "x"}])
+    prof = db.get_profile(uid)
+    i = main.tax_inputs({**prof, "_plan": plan_of(prof)})
+    assert all(i["acts"][s] for s in syms) and i["corp_left"] == 0           # the first look, not the second
+    assert sorted(feed.asked) == sorted(syms)
+    # a company the feed won't answer for is named by count, and its lots are counted as bought
+    class Down(FakeIndia):
+        def actions_of(self, symbol):
+            from app.intel.net import SourceError
+            raise SourceError("the exchange", "busy", busy=True)
+    monkeypatch.setattr(main.corp_job, "sources", lambda: {"in": Down(), "us": None, "cal": None})
+    T.save(uid, [{"d": "2025-01-03", "side": "B", "qty": 100, "price": 100.0, "sym": "NEWCO", "isin": "", "name": "N"}], [{"name": "x"}])
+    i = main.tax_inputs({**prof, "_plan": plan_of(prof)})
+    assert i["corp_left"] == 1 and i["acts"]["NEWCO"] == []
