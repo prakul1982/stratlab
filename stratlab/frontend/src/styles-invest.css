@@ -56,6 +56,14 @@
 
 /* key numbers */
 .inv-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--s5) var(--s6); }
+/* VR2-007: five groups were 3 + 2 with a blank third slot (and a hole under the shortest first-row group): on a wide page the groups share the
+   rows, so a short last row's groups are wider and fill it (a lone last group takes the row) */
+@media (min-width: 1200px) {
+  .inv-metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .inv-metrics > * { grid-column: span 2; }
+  .inv-metrics > :last-child:nth-child(3n+1) { grid-column: span 6; }
+  .inv-metrics > :nth-last-child(2):nth-child(3n+1), .inv-metrics > :last-child:nth-child(3n+2) { grid-column: span 3; }
+}
 .inv-metric-rows { display: flex; flex-direction: column; }
 .inv-metric { display: grid; grid-template-columns: minmax(0, 1fr) auto 64px; gap: var(--s3); align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); }
 .inv-metric:last-child { border-bottom: 0; }

@@ -892,7 +892,7 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 @media (max-width: 640px) { .palette-back { padding: 8px; place-items: start stretch; } .palette { max-height: calc(100vh - 16px); } .palette-foot { display: none; } }
 .explore-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }   /* auto-fit: a short list fills the row */
 /* VR1-021 kept a short list at four-to-a-row widths, which left the right half of the row empty (CK-2, R2): the tiles share the row */
-.k-explore .explore-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); align-items: start; }   /* CK-2: a short list (two tiles) shares the whole row, so no half of it is empty (VR1-021 had kept four-to-a-row widths) */
+.k-explore .explore-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }   /* CK-2: a short list (two tiles) shares the whole row, so no half of it is empty (VR1-021 had kept four-to-a-row widths); VR2-001: the tiles of a row are the same height (align-items:start left ragged bottoms, two tiles side by side differing by 20-40px) */
 /* VR1-140: Money's eight cards are 4 + 4 on a laptop (230px made 3 + 3 + 2, a hole beside the last) */
 @media (min-width: 561px) { .explore-grid.money-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); } }
 /* VR1-140: the three figures of Money home's two summary cards in one row, not 2 + 1 with the lower left empty */
@@ -1065,8 +1065,7 @@ label.btn.disabled { opacity: .5; }
 
 /* side-by-side panels keep their own height: a short card is not stretched to the taller one beside it, leaving an empty block */
 .space-panels { align-items: start; }
-/* VR1-012: the watchlist's tiles keep their own height (a stretched TCS tile was half empty beside RELIANCE's two rows of badges) */
-.space-panels .inv-tiles { align-items: start; }
+/* VR2-002: the watchlist's tiles of one row are the same height (VR1-012's align-items:start left TCS's bottom edge 24px above RELIANCE's beside it) */
 /* VR1-013: a card head whose only control is a "Market events ->" style link keeps it at the top right and lets the title wrap beside it, on a phone too,
    instead of dropping the link to a line of its own under a long title */
 .space-home .k-card-head:has(> .k-card-actions > a.link:only-child) { flex-wrap: nowrap; align-items: flex-start; }
@@ -1882,6 +1881,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-rows > div:last-child { border-bottom: 0; }
 /* VR1-161: a long list of label-and-value rows in two columns on a wide card, so the eye crosses 400px, not 800 */
 @media (min-width: 900px) { .k-rows.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s6, 32px); }
+  .k-rows.two { grid-auto-flow: row dense; }
+  .k-rows.two > div.wide { grid-column: 1 / -1; }
   .k-rows.two > div:nth-last-child(-n+2):nth-child(odd), .k-rows.two > div:last-child { border-bottom: 0; } }
 .k-rows > div > span { color: var(--muted); }
 .k-rows > div > b { font-weight: 600; }
@@ -1962,6 +1963,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 }
 /* an empty card's message sits in the card itself: a dashed box inside a card drew a double border (DI-012) */
 .mine-slot .k-state { border: 0; padding: var(--s3) 0; }
+/* VR2-005: the Open button stays at a card head's top right and the title wraps beside it (the watchlist's long title dropped Open to a line of its own on a phone, unlike its siblings) */
+.mine-slot .k-card-head:has(> .k-card-actions > a:only-child) { flex-wrap: nowrap; align-items: flex-start; }
+.mine-slot .k-card-head:has(> .k-card-actions > a:only-child) > .k-card-actions { flex: none; }
+.mine-slot .k-card-head:has(> .k-card-actions > a:only-child) .k-card-title { min-width: 0; }
 /* the lines sit on one level across a row, whatever text a tile has above its line (DI-010: Gold's note pushed its line down) */
 .mine-mkt .k-spark { margin-top: auto; }
 /* two lists side by side keep their own height: stretched to the longer one, the shorter left a big blank box (R5O-036) */
@@ -1985,7 +1990,9 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-tl-i .dt b { font-size: 20px; color: var(--ink); font-weight: 600; }
 .mine-tl-i .body { display: flex; flex-direction: column; min-width: 0; }
 /* a long line (the tax date's whole explanation) is two lines at most, the rest is in the tooltip and the calendar: the two cards side by side end near each other (UI-FIX-1, R1) */
-.mine-tl-i .body .k-stat-d { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* VR2-004: one line of explanation on a wide screen (the whole sentence is the hover text and the calendar's): with two, six events stood 160px taller than the six one-line watchlist movers beside them */
+.mine-tl-i .body .k-stat-d { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 760px) { .mine-tl-i .body .k-stat-d { -webkit-line-clamp: 2; } }
 .mine-tl-i .body a { color: inherit; text-decoration: none; }
 .mine-tl-i .body a:hover { text-decoration: underline; }
 .mine-movers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -2285,6 +2292,10 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-chiprow > .k-chipbar { display: contents; }
   .k-chiprow > .k-chip.add, .k-chiprow.wrap > .k-chip.add { margin-top: 0; }
 }
+/* VR2-009: a row that wraps (the notebook's test period) is one wrapping row of chips on a phone too: "+ Custom" sat at the far right of the first line, apart from the chips */
+.k-chiprow.wrap { flex-wrap: wrap; align-items: flex-start; padding: 2px; }
+.k-chiprow.wrap > .k-chipbar { display: contents; }
+.k-chiprow.wrap > .k-chip.add { margin-top: 0; }
 /* every tap target on a phone is at least 32px: the ticks, the features list, short links in text */
 @media (max-width: 640px) {
   input[type=checkbox], input[type=radio],
@@ -2467,3 +2478,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* RC2B-034: the "In India? Show prices in ₹" link is a tap target on a phone like every other control (it measured 20 px) */
 .link-btn.inr-pick { min-height: 40px; display: inline-flex; align-items: center; }
+
+/* VR2-010: on a phone the buttons of one segmented control are the same width (they were sized by their words: "Off | ₹ | % of premium" were a sliver, a sliver and a wide block); a longer label still makes room for itself (min-width above) */
+@media (max-width: 640px) {
+  .k-seg:not([data-stack]) button { flex: 1 1 0; }   /* a form's own segmented controls keep their sizes (MO-3a) */
+}

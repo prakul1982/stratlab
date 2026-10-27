@@ -69,7 +69,8 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   assert.doesNotMatch(css, /\.money-panels > \.k-card > \.k-stack/);
   assert.doesNotMatch(read("src/pages/trade/events.css"), /ev-week-more \{ margin-top: auto/);
   // Invest's short tile list shares its row
-  assert.match(css, /\.k-explore \.explore-grid \{ grid-template-columns: repeat\(auto-fit, minmax\(230px, 1fr\)\); align-items: start; \}/);
+  assert.match(css, /\.k-explore \.explore-grid \{ grid-template-columns: repeat\(auto-fit, minmax\(230px, 1fr\)\); \}/);   // VR2-001: the tiles of a row are as tall as each other (no align-items:start)
+  assert.doesNotMatch(css, /\.k-explore \.explore-grid \{[^}]*align-items: start/);
   // Money home: the tax card's explanation is behind its (i); each card its own height
   const home = read("src/pages/SpaceHomes.tsx");
   assert.match(home, /<Panel title=\{year \? `Tax, \$\{year\.label\}` : "Tax this year"\} info=\{how\}/);
@@ -82,7 +83,7 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   assert.match(ev, /<div className="ev-remind">/);
   assert.ok(ev.indexOf('className="ev-weekgrid"') < ev.indexOf("<RemindCard v={v} onSave={save} />"));
   const evc = read("src/pages/trade/events.css");
-  assert.match(evc, /\.ev-weekgrid > \.ev-week \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(190px, 1fr\)\);/);
+  assert.match(evc, /\.ev-weekgrid > \.ev-week \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\);/);
   assert.match(evc, /\.ev-remind \{ display: grid; grid-template-columns: minmax\(0, 1\.4fr\) minmax\(0, 1fr\);/);
   // the plans: each card its own height, its button under its list
   assert.match(css, /\.k-plans \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\); gap: var\(--s4\); align-items: start; \}/);

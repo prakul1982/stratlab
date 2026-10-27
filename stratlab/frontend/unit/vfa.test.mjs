@@ -54,7 +54,7 @@ test("VR1-010, VR1-011, VR1-012, VR1-013, VR1-014: Invest home's panels, tiles, 
   assert.match(inv, /<WatchPanel region=\{region\} \/>\s*<div className="space-col">\s*<NextEvents region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>\s*<\/div>/);
   assert.match(inv, /<\/div>\s*<RedFlags region=\{region\} \/>/);
   assert.doesNotMatch(inv, /space-panels even/);
-  assert.match(css, /\.space-panels \.inv-tiles \{ align-items: start; \}/);
+  assert.doesNotMatch(css, /\.space-panels \.inv-tiles \{ align-items: start; \}/);   // VR2-002: the tiles of a row are as tall as each other
   assert.match(css, /\.space-home \.k-card-head:has\(> \.k-card-actions > a\.link:only-child\) \{ flex-wrap: nowrap;/);
   assert.doesNotMatch(css, /\.space-card-lead \.space-card-foot:not\(\.live\) \{/);       // the lead's link has the colour of the others
   assert.match(css, /\.trade-market \.space-card-line \{ min-height: 0; \}/);

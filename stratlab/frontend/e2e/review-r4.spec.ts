@@ -62,7 +62,7 @@ test("R4-007: the owner's year being filed has no sales, so the tax card and the
   const card = page.getByTestId("tax-summary");
   await expect(card).toContainText("No sales in FY 2025-26, the year being filed, so this is FY 2024-25, the latest year with sales.", { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Tax, FY 2024-25" })).toBeVisible();
-  await page.getByRole("link", { name: /Open Tax report/ }).click();
+  await page.locator("[data-money=\"/tax-report\"]").filter({ hasText: "Tax report" }).click();
   await expect(page).toHaveURL(/\/tax-report\?fy=2024/);
   await expect(page.getByRole("heading", { name: /Total tax estimate, FY 2024-25/ })).toBeVisible({ timeout: 30_000 });
   // tax tools has dividends in the year being filed, so it opens there, and ITR with it

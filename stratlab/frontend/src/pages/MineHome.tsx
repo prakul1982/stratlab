@@ -331,6 +331,9 @@ function WatchCard() {
     });
     return () => { live = false; };
   }, [items]);
+  // VR2-004: six rows each said "Mon 26 Oct" under the name: when every row is from the same earlier day it is said once, under the list
+  const days = (movers ?? []).map((m) => day(m));
+  const sameDay = days.length > 1 && days[0] && days.every((d) => d === days[0]) ? days[0] : null;
   return (
     <Card testId="mine-watch">
       <CardHead title={movers?.length && movers.every((m) => day(m)) ? "Your watchlist, last session" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist" aria-label="Open the watchlist">Open</Link>} />
@@ -341,16 +344,20 @@ function WatchCard() {
             ? <EmptyState title="No prices yet" action={{ label: "Open the watchlist", to: "/research/watchlist" }}>Today's prices for your watchlist are not available right now.</EmptyState>
             : <EmptyState title="Your watchlist is empty" action={{ label: "Find a company", to: "/research" }}>Press Watch on any company to follow it here, with the biggest movers first.</EmptyState>
         ) : (
+          <>
           <ul className="mine-movers">
             {movers.map((m) => (
               <li key={`${m.region}-${m.symbol}`}>
                 <Link to={`/research/${m.region}/${encodeURIComponent(m.symbol)}`}><b>{m.symbol}</b>{m.name && <span className="k-stat-d">{m.name}</span>}</Link>
                 <span className="px">{price(m.q.price, m.region === "US" ? "USD" : "INR")}</span>
                 <Delta value={m.q.change_pct}>{pct(m.q.change_pct, 2)}</Delta>
-                {(() => { const d = day(m); return d && <span className="k-note" data-testid="mine-mover-day"> {fmtDate(d, { weekday: true, year: false })}</span>; })()}
+                {/* VR2-004: a row names its day only when the rows' days differ (India and the US can be on different sessions) */}
+                {!sameDay && (() => { const d = day(m); return d && <span className="k-note" data-testid="mine-mover-day"> {fmtDate(d, { weekday: true, year: false })}</span>; })()}
               </li>
             ))}
           </ul>
+          {sameDay && <p className="k-note" data-testid="mine-mover-day">Prices from {fmtDate(sameDay, { weekday: true, year: false })}</p>}
+          </>
         )}
     </Card>
   );
