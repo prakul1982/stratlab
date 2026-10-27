@@ -654,6 +654,16 @@ def summary(g: dict) -> list[tuple[str, str]]:
     return out
 
 
+def _india_day(at) -> str:
+    """The India day of a stored upload time (UTC, "2026-10-26T22:30+00:00" is 27 Oct): the first ten characters were the UTC date,
+    a day behind from midnight to 5:30 AM (RC3M-004)."""
+    try:
+        t = datetime.fromisoformat(str(at))
+    except ValueError:
+        return str(at or "")[:10]
+    return (t.astimezone(IST) if t.tzinfo else t).date().isoformat()
+
+
 def sources(g: dict) -> list[str]:
     out = []
     for f in g["files"][-20:]:
@@ -661,7 +671,7 @@ def sources(g: dict) -> list[str]:
         n, fno = int(f.get("trades") or 0), int(f.get("fno_lines") or 0)
         what = ", ".join(x for x in (f"{n:,} trade{'' if n == 1 else 's'}" if n or not fno else "",
                                      f"{fno:,} F&O, commodity and currency line{'' if fno == 1 else 's'}" if fno else "") if x)
-        out.append(f"Your file {f.get('name')} ({f.get('broker') or 'broker'}, {what}, uploaded {_day(str(f.get('at') or '')[:10])}).")
+        out.append(f"Your file {f.get('name')} ({f.get('broker') or 'broker'}, {what}, uploaded {_day(_india_day(f.get('at')))}).")
     if g["mf_count"]:
         out.append(f"Your mutual fund statement (CAS): {g['mf_count']} realised sales in all years.")
     if g["us_count"]:

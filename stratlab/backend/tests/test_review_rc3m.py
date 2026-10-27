@@ -134,3 +134,12 @@ def test_the_marginal_rate_uses_this_years_rules_on_income_saved_for_an_older_ye
     # interest is taxed at nothing; under FY 2023-24's own rules (15% from 9 lakh, rebate only to 7 lakh) it was 15.6%
     assert mine["rate"] == 0 and t == 0
     assert F.marginal(2023, {"regime": "new", "other": 1000000, "salary": 1000000})["rate"] == pytest.approx(0.156, abs=1e-4)
+
+
+def test_the_itr_pack_names_a_file_by_the_india_day_it_was_uploaded():
+    from app import money_itr
+    assert money_itr._india_day("2026-10-26T22:30+00:00") == "2026-10-27" and money_itr._india_day("2026-10-26T10:00+00:00") == "2026-10-26"
+    assert money_itr._india_day("2026-10-26T10:00") == "2026-10-26" and money_itr._india_day(None) == "" and money_itr._india_day("junk") == "junk"
+    g = {"files": [{"name": "t.csv", "broker": "Zerodha", "trades": 3, "at": "2026-10-26T22:30+00:00"}], "mf_count": 0, "us_count": 0, "us_div": None,
+         "fmv_src": {}, "div_source": "none"}
+    assert "uploaded 27 Oct 2026" in money_itr.sources(g)[0]
