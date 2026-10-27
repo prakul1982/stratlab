@@ -15,6 +15,7 @@ import { TipsCard } from "../components/TipsCard";
 import { ConnectCards } from "../components/ConnectedAccounts";
 import { Badge, Card, CardHead, FieldGroup, LinkCard, Notice, PageHeader, Seg } from "../components/kit";
 import { AccountWait } from "../components/AccountWait";
+import { TileGrid } from "../components/TileGrid";
 
 /* /settings: the things you set once. Four sections behind one Seg: where alerts and emails go, what you see first and the
  * theme, the accounts and files StratLab reads, and the connection check. The section is in the address (#notifications). */
@@ -118,13 +119,14 @@ function ConnectedAccounts() {
   return (
     <Card id="accounts" label="Connected accounts">
       <CardHead title="Connected accounts" info="Your holdings, funds and trades come from files you upload, numbers you type, or the connections below that update them by themselves. Each one shows when it last changed." />
-      <div className="k-linkcards">
+      {/* the three files share the card's width: in four 240px columns they left the right quarter empty (VR3-009) */}
+      <TileGrid className="k-linkcards" fill>
         <LinkCard to="/holdings" title="My Holdings" note={note(h, noun(h?.count, "stock", "stocks"))}>
           {h?.source ? `From ${sourceWords(h.source)}. Import a broker file or type them in.` : "Import a broker file or type your shares in."}
         </LinkCard>
         <LinkCard to="/money/mutual-funds" title="Mutual funds statement" note={note(mf, noun(mf?.count, "scheme", "schemes"))}>Upload your Consolidated Account Statement (PDF or CSV).</LinkCard>
         <LinkCard to="/tax-report" title="Broker tradebooks" note={note(tax, noun(tax?.count, "file", "files"))}>Upload tradebooks and tax P&amp;L files from any broker for your capital gains.</LinkCard>
-      </div>
+      </TileGrid>
       <Notice label="Keeping up to date">A file stays as it was until you upload a newer one. Connect once below and statements, Zerodha and US stocks update by themselves.</Notice>
     </Card>
   );

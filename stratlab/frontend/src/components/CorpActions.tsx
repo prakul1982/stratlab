@@ -23,7 +23,8 @@ export const KIND_NAME: Record<ActionKind, string> = {
 /** The dates under an action. Under a day's "Ex-date …" heading the ex-date isn't said again (DE-031), only the record
  * date (and the pay date, where the company gave one). */
 export function actionDates(a: Pick<CorpAction, "ex_date" | "record_date" | "pay_date">, year = false, showEx = true): string {
-  const rec = a.record_date && a.record_date !== a.ex_date ? `record date ${exDay(a.record_date, year)}` : a.record_date ? (showEx ? "" : "record date the same day") : "";
+  // a record date on the ex-date itself is said once, by the page's note ("on each row when it's another day"), not under every row (VR3-002)
+  const rec = a.record_date && a.record_date !== a.ex_date ? `record date ${exDay(a.record_date, year)}` : "";
   const pay = a.pay_date ? `paid ${exDay(a.pay_date, year)}` : "";
   if (showEx) return [`Ex-date ${exDay(a.ex_date, year)}${a.record_date && a.record_date === a.ex_date ? " (also the record date)" : ""}`, rec, pay].filter(Boolean).join(" · ");
   const rest = [rec, pay].filter(Boolean).join(" · ");
@@ -35,8 +36,8 @@ export function exDay(iso: string, year = false) {
   return fmtDate(iso.slice(0, 10), { weekday: !year, year });
 }
 
-/** One action: what it is, its ex-date and record date. */
-export function ActionLine({ a, showSymbol = true, year = false, showEx = true }: { a: CorpAction; showSymbol?: boolean; year?: boolean; showEx?: boolean }) {
+/** One action: what it is, its ex-date and record date. `showMine` is off where every row is the person's own (the My stocks list), so "Yours" is not on each one (VR3-002). */
+export function ActionLine({ a, showSymbol = true, year = false, showEx = true, showMine = true }: { a: CorpAction; showSymbol?: boolean; year?: boolean; showEx?: boolean; showMine?: boolean }) {
   const dates = actionDates(a, year, showEx);
   return (
     <div className="inv-row">
@@ -44,7 +45,7 @@ export function ActionLine({ a, showSymbol = true, year = false, showEx = true }
         <span className="k-row">
           <Link className="btn quiet sm" to={`/research/${a.region}/${encodeURIComponent(a.symbol)}`}><b>{a.symbol}</b></Link>
           {a.name && <span className="k-small k-muted">{a.name}</span>}
-          {a.mine && <Badge tone="plain" dot={false}>Yours</Badge>}
+          {showMine && a.mine && <Badge tone="plain" dot={false}>Yours</Badge>}
         </span>
       )}
       <span className="k-small"><Badge tone="plain" dot={false}>{a.label}</Badge> {a.text.toLowerCase().startsWith(a.label.toLowerCase()) ? a.text.slice(a.label.length).replace(/^[\s:·-]+/, "") : a.text}

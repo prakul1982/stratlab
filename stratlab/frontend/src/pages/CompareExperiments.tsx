@@ -110,7 +110,8 @@ export function CompareExperiments() {
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title={`v${a.v} against v${b.v}`} lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
       {/* the pickers and what changed in one row: What changed was a full-width card for one bullet (VR1-065) */}
-      <div className="k-two k-two-start">
+      {/* the pickers take two thirds: "v2 · 49 months → 26 months" was cut to "26 mont" in half a row (VR3-017) */}
+      <div className="k-two k-two-start cmp-top">
         {pickers}
         <Card label="What changed">
           <CardHead level={3} title="What changed" info="Every difference in the setup between the two experiments. If more than one thing changed, you can't tell which one made the difference: change one thing at a time." infoLabel="About what changed" />

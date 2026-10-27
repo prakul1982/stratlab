@@ -16,8 +16,8 @@ export function fillCols(n: number, fit: number): number {
 
 /** A grid of equal tiles (stats, fields, cards) that fills its row count: when the browser's own auto-fit leaves the last tile alone on
  * its line, the grid takes the column count `fillCols` picks. Re-checked when the grid's width or its items change. Put the returned ref
- * on the grid. A grid with a tile two columns wide is left as the page drew it; whole-row items do not count. */
-export function useNoOrphan<T extends HTMLElement>(): RefObject<T | null> {
+ * on the grid. `fill` is for grids of cards: fewer cards than fit take the whole row between them. A grid with a tile two columns wide is left as the page drew it; whole-row items do not count. */
+export function useNoOrphan<T extends HTMLElement>(fill = false): RefObject<T | null> {
   const ref = useRef<T>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -32,7 +32,8 @@ export function useNoOrphan<T extends HTMLElement>(): RefObject<T | null> {
       const col = (c: Element) => { const s = getComputedStyle(c); return `${s.gridColumnStart}|${s.gridColumnEnd}`; };
       if (own.some((c) => /span/.test(col(c)))) return;                               // a tile two columns wide: leave the grid as drawn
       const kids = own.filter((c) => col(c) !== "1|-1");                              // a whole-row item (the buttons under a form) is no tile
-      const c = fillCols(kids.length, fit);
+      // `fill`: two or more cards in a row that has room for more share the row, so a two-card page does not leave its right third empty (VR3-001)
+      const c = fill && kids.length >= 2 && kids.length < fit ? kids.length : fillCols(kids.length, fit);
       if (c !== fit) el.style.gridTemplateColumns = `repeat(${c}, minmax(0, 1fr))`;
     };
     const ro = new ResizeObserver(() => { const w = el.clientWidth; if (w !== width) { width = w; fix(); } });
