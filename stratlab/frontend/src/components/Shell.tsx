@@ -18,6 +18,7 @@ import { gateFor, gatePlan } from "../lib/gates";
 import { PLAN_NAME } from "../lib/plans";
 import { watchSize } from "../lib/resize";
 import { importWithRetry } from "../lib/lazyRetry";
+import { scrollBehavior } from "../lib/motion";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => importWithRetry(() => import("./SearchPalette")).then((m) => ({ default: m.SearchPalette })));
@@ -228,7 +229,7 @@ export function Shell({ children }: { children: ReactNode }) {
           wheel and the keyboard reach the same items, so it is left out of the Tab order and of screen readers. */}
       {(fade === "bottom" || fade === "both") && (
         <button type="button" className="side-more" tabIndex={-1} aria-hidden="true"
-          onClick={() => sideScroll.current?.scrollBy({ top: Math.round((sideScroll.current?.clientHeight ?? 300) * 0.6), behavior: "smooth" })}>
+          onClick={() => sideScroll.current?.scrollBy({ top: Math.round((sideScroll.current?.clientHeight ?? 300) * 0.6), behavior: scrollBehavior() })}>
           More below <Chevron size={12} />
         </button>
       )}

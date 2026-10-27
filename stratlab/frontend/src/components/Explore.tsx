@@ -5,6 +5,7 @@ import { FEATURES, GOAL_ORDER, GOALS, resolve, type Goal } from "../lib/features
 import { PLAN_NAME, planOf } from "../lib/plans";
 import { TileGrid } from "./TileGrid";
 import "../pages/trade/trade.css";
+import { scrollBehavior } from "../lib/motion";
 
 const OPEN_KEY = "stratlab.explore.open";
 
@@ -27,7 +28,7 @@ export function Explore({ title = "More you can do", skip = [], hide = [], order
   const goals = (GOAL_ORDER[order ?? focus ?? "both"] as Goal[]).filter((g) => !skip.includes(g) && shown.some((f) => f.goal === g));
   const open = (to: string) => {
     const dest = resolve(to, loc.pathname, latest);
-    if (dest === loc.pathname + loc.search) { const box = document.getElementById("idea"); box?.scrollIntoView({ behavior: "smooth", block: "center" }); box?.focus(); }
+    if (dest === loc.pathname + loc.search) { const box = document.getElementById("idea"); box?.scrollIntoView({ behavior: scrollBehavior(), block: "center" }); box?.focus(); }
     else nav(dest);
   };
   return (

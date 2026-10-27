@@ -172,14 +172,15 @@ export function MutualFundsPage() {
     { key: "taxable", header: "Taxable", numeric: true, cell: (b) => inr(b.taxable) },
     { key: "tax", header: "Tax", numeric: true, cell: (b) => (b.slab ? <span className="k-small k-muted">At your slab rate</span> : inr(b.tax)) },
   ];
+  // each block is a region named after its scheme: several folds can be open at once, and two regions with one name can't be told apart (A11Y-006)
   const detail = (s: Scheme) => (
     <>
       <SchemeHolding s={s} setKind={setKind} />
-      <CostDetail q={costs} id={s.key} />
-      <BehaviourDetail q={habits} id={s.key} />
-      <SchemeSales sales={salesOf.get(s.key) ?? []} />
+      <CostDetail q={costs} id={s.key} name={s.name} />
+      <BehaviourDetail q={habits} id={s.key} name={s.name} />
+      <SchemeSales sales={salesOf.get(s.key) ?? []} name={s.name} />
       {missing.has(s.key) && (
-        <section aria-label="31 Jan 2018 NAV">
+        <section aria-label={`31 Jan 2018 NAV, ${s.name}`}>
           {/* DG-020: the year the sales are in is named, so the ask isn't under another year's tab */}
           <p className="k-small">Units held on 31 Jan 2018 cost at least that day's NAV{gfFor ? `, for sales in ${gfFor}` : ""}. It couldn't be found for this scheme; enter it to use it:</p>
           <FmvRow onSave={(v) => setFmv(s.key, v)} />
@@ -368,7 +369,7 @@ function kindBasis(s: Pick<Scheme, "kind_set" | "kind_basis">): string {
 /** A scheme's own facts, in its fold: folio, units, NAV, what went in and how it is taxed, and what is wrong with them if something is. */
 function SchemeHolding({ s, setKind }: { s: Scheme; setKind: (key: string, kind: Kind | null) => void }) {
   return (
-    <section aria-label="Holding">
+    <section aria-label={`Holding, ${s.name}`}>
       <h3>What you hold</h3>
       <dl className="k-dl">
         <div><dt>Folio</dt><dd>{s.folio}</dd></div>
@@ -391,7 +392,7 @@ function SchemeHolding({ s, setKind }: { s: Scheme; setKind: (key: string, kind:
 }
 
 /** The redemptions of one scheme matched to its purchases, every year in one list (30 first). */
-function SchemeSales({ sales }: { sales: SaleIn[] }) {
+function SchemeSales({ sales, name }: { sales: SaleIn[]; name: string }) {
   const [all, setAll] = useState(false);
   if (!sales.length) return null;
   const cols: Column<SaleIn & { i: number }>[] = [
@@ -406,7 +407,7 @@ function SchemeSales({ sales }: { sales: SaleIn[] }) {
     { key: "rate", header: "Rate", numeric: true, cell: (r) => rate(r.rate) },
   ];
   return (
-    <section aria-label="Sales">
+    <section aria-label={`Sales, ${name}`}>
       <h3>Redemptions matched to purchases</h3>
       <DataTable label="Redemptions matched to purchases" stack columns={cols} rows={(all ? sales : sales.slice(0, 30)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
       {sales.length > 30 && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {sales.length}</button>}

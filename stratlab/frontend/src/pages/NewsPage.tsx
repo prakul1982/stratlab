@@ -6,6 +6,7 @@ import { itemCurrency } from "../lib/newsPrice";
 import { dayName, issueStamp, issueTab, issueToShow, NEWS_FOOTER, type Issue, type IssueRow } from "../lib/news";
 import { Badge, Card, EmptyState, ErrorState, PageHeader, Seg, Skeleton } from "../components/kit";
 import { inAppPath } from "../lib/investUi";
+import { scrollBehavior } from "../lib/motion";
 
 type Tab = "IN" | "US" | "mine";
 const TABS: [Tab, string, string][] = [["IN", "Market brief: India", "India"], ["US", "Market brief: US", "US"], ["mine", "My stocks", "My stocks"]];
@@ -66,7 +67,7 @@ export function NewsPage() {
     if (!shown || !clicked.current) return;
     clicked.current = false;
     const top = pane.current?.getBoundingClientRect().top;
-    if (top != null && (top < 0 || top > window.innerHeight * 0.6)) pane.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (top != null && (top < 0 || top > window.innerHeight * 0.6)) pane.current?.scrollIntoView({ block: "start", behavior: scrollBehavior() });
   }, [shown]);
 
   return (

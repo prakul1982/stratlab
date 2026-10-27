@@ -117,14 +117,14 @@ export function GapCell({ q, id }: { q: BehaviourQuery; id: string }) {
 }
 
 /** The rest of one scheme's story, in its folded detail: the dates compared, the gap in rupees, its SIP record and its redemptions after a fall. */
-export function BehaviourDetail({ q, id }: { q: BehaviourQuery; id: string }) {
+export function BehaviourDetail({ q, id, name }: { q: BehaviourQuery; id: string; name?: string }) {
   const { b } = q;
   const s = behaviourOf(q, id);
   if (!b || !s) return null;
   const r = s.sip;
   const falls = s.falls ?? [];
   return (
-    <section aria-label="How you invested">
+    <section aria-label={name ? `How you invested, ${name}` : "How you invested"}>
       <h3>How you invested</h3>
       <p className="k-small">
         <b>Compared over</b> {s.from ? `${dateOnly(s.from)} to ${s.held ? "today" : dateOnly(s.to)}` : "No dated purchase in the statement"}

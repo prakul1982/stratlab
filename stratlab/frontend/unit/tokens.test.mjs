@@ -44,3 +44,22 @@ for (const [name, t] of Object.entries(themes)) {
     }
   });
 }
+
+// A text field's, drop-down's and note box's edge is what shows they are there: WCAG 1.4.11 asks 3:1 against both what is
+// around them (a card or the page) and the box's own fill (the page colour), in both themes (A11Y-001).
+for (const [name, t] of Object.entries(themes)) {
+  test(`--field-line (a field's edge) is 3:1 on the card, the page and the page's second tone in the ${name} theme`, () => {
+    assert.ok(t["--field-line"], "defined in this theme");
+    for (const bg of ["--paper", "--card", "--paper-2"]) assert.ok(ratio(t["--field-line"], t[bg]) >= 3, `--field-line on ${bg} (${name}) is ${ratio(t["--field-line"], t[bg]).toFixed(2)}:1, needs 3:1`);
+  });
+}
+test("every text field, drop-down and note box draws its edge in --field-line", () => {
+  const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+  assert.match(css, /\.field input, \.field select, \.field textarea, \.input \{[^}]*border: 1px solid var\(--field-line\)/);
+  assert.match(css, /\.k-input \{[^}]*border: 1px solid var\(--field-line\)/);
+  assert.match(read("src/pages/trade/trade.css"), /\.k-textarea \{[^}]*border: 1px solid var\(--field-line\)/);
+  assert.match(read("src/pages/trade/trade.css"), /\.k-search \{[^}]*border: 1px solid var\(--field-line\)/);       // the list filters and the library's search
+  const pc = read("src/charts/price/priceChart.css");
+  assert.match(pc, /\.pc-sel \{ border-color: var\(--field-line\)/);
+  assert.match(pc, /\.pc-pop input \{[^}]*border: 1px solid var\(--field-line\)/);
+});

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
+import { prefersReducedMotion } from "./motion";
 
 /** A placeholder that cycles through concrete examples. A real example teaches what to type better than "Search…",
- * and a changing one shows the range without a wall of text. Slow enough to read; stops when the page is hidden. */
+ * and a changing one shows the range without a wall of text. Slow enough to read; stops when the page is hidden, and stays
+ * on the first example when the reader asked for less motion (A11Y-003: text that changes by itself, with no way to stop it). */
 export function useRotating(items: string[], ms = 3800): string {
   const [i, setI] = useState(0);
   useEffect(() => {
-    if (items.length < 2) return;
+    if (items.length < 2 || prefersReducedMotion()) return;
     const t = window.setInterval(() => { if (!document.hidden) setI((x) => (x + 1) % items.length); }, ms);
     return () => window.clearInterval(t);
   }, [items.length, ms]);
