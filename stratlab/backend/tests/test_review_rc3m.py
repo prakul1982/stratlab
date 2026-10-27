@@ -143,3 +143,10 @@ def test_the_itr_pack_names_a_file_by_the_india_day_it_was_uploaded():
     g = {"files": [{"name": "t.csv", "broker": "Zerodha", "trades": 3, "at": "2026-10-26T22:30+00:00"}], "mf_count": 0, "us_count": 0, "us_div": None,
          "fmv_src": {}, "div_source": "none"}
     assert "uploaded 27 Oct 2026" in money_itr.sources(g)[0]
+
+
+def test_the_company_card_stays_three_years_while_the_history_keeps_the_old_bonus(w):
+    feed = FakeIndia(history={"Z": [nse("Z", "Bonus 1:1", date(2020, 5, 4)), nse("Z", "Dividend - Rs 3 Per Share", date(2026, 6, 1))]})
+    got = C.company("IN", "Z", {"in": feed}, TODAY)
+    assert [r["kind"] for r in got["past"]] == ["dividend"]                      # the card: the last three years
+    assert [r["ex_date"] for r in C.actions_for("IN", "Z", None, TODAY, fetch=False) if r["kind"] == "bonus"] == ["2020-05-04"]   # the tax report's input

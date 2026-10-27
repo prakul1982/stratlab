@@ -1221,6 +1221,9 @@ def company(region: str, symbol: str, sources: dict | None, today: date | None =
     False: the stored history as it is, however old (the rest as `fetch` says)."""
     today = today or local_today(region)
     rows = actions_for(region, symbol, sources, today, fetch if fetch_history is None else fetch_history, keep_empty=False)
+    # the card is of the last three years: the older bonuses and splits the history keeps are for the tax report (RC3M-001)
+    first = (today - timedelta(days=HIST_DAYS)).isoformat()
+    rows = [r for r in rows if r["ex_date"] >= first]
     if region == "US" and fetch and sources and sources.get("us") is not None:
         rows = sorted(rows + home_listing_dividends(symbol, rows, sources["us"], today), key=lambda r: r["ex_date"])
     t = today.isoformat()
