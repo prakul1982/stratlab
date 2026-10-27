@@ -124,6 +124,7 @@ h1.eyebrow { font-weight: 400; }
 }
 
 .btn.danger { background: transparent; border-color: var(--line-2); color: var(--orange-ink); }
+.btn:not(.quiet):not(.outline):not(.danger) :is(.k-note, .k-sub-line, .muted) { color: inherit; }   /* (A11Y-009) a muted note inside a filled button was 2:1 on it (the rule editor's choices) */
 .btn.sm { min-height: var(--ctl-sm); padding: 0 12px; font-size: 14px; }
 .btn.block { width: 100%; }
 .link { background: none; border: 0; padding: 6px 2px; color: var(--blue); font-weight: 600; cursor: pointer; text-decoration: none; }
@@ -516,6 +517,7 @@ td.num, .num { font-family: var(--sans); }
 .info-pop.left { left: -8px; }
 .info-pop.right { right: -8px; }
 .info-pop b { color: var(--on-ink); }
+.info-pop a, .info-pop a:hover { color: var(--on-ink); text-decoration: underline; }   /* (A11Y-008) the box is ink with light text: the page's blue link on it is 2:1 */
 
 /* ---------- exchange surveillance flags: small, factual, not alarming ---------- */
 .surv { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; vertical-align: middle; max-width: 100%; }
