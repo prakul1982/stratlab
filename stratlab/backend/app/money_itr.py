@@ -344,15 +344,17 @@ def t_os(g: dict) -> dict:
     by: dict[str, dict] = {}
     for r in g["div_lines"]:
         k = r.get("isin") or r["sym"]
-        c = by.setdefault(k, {"name": r.get("name") or r["sym"], "isin": r.get("isin") or "", "p": [0.0] * 5, "tds": 0.0, "tds_file": False})
+        c = by.setdefault(k, {"name": r.get("name") or r["sym"], "isin": r.get("isin") or "", "p": [0.0] * 5, "tds": 0.0, "tds_file": False,
+                              "taxed": 0.0})
         c["p"][period(r["d"])] += r["amount"]
+        c["taxed"] += r["amount"] * divs.tds_rate(r["d"])
         if r.get("tds"):
             c["tds"] += r["tds"]
             c["tds_file"] = True
     fy = g["fy"]
     for c in sorted(by.values(), key=lambda c: -sum(c["p"])):
         total = sum(c["p"])
-        tds = c["tds"] if c["tds_file"] else divs.expected_tds(fy, total)
+        tds = c["tds"] if c["tds_file"] else divs.expected_tds(fy, total, c["taxed"])
         rows.append([c["name"], c["isin"], "India"] + [r2(x) for x in c["p"]] + [r2(total), r2(tds), "your file" if c["tds_file"] else "expected"])
         totals = [a + b for a, b in zip(totals, c["p"])]
     ud = g["us_div"]
@@ -371,8 +373,9 @@ def t_os(g: dict) -> dict:
             "estimated": "Indian dividends are an estimate from your holdings and the dividends declared (upload your broker's "
                          "dividend statement for the actual figures)."}.get(g["div_source"], "No Indian dividends in your dividend files or holdings for the year.")
     notes = [lead + " Gross amounts, before TDS; dividends are taxed at your slab rate.",
-             "TDS shown is what the 10% rule gives (once a company's dividends to you pass ₹10,000 in FY 2025-26; ₹5,000 "
-             "before) unless your file gave it; Form 26AS and the AIS have what was actually cut.",
+             "TDS shown is what the rule gives (10% once a company's dividends to you pass ₹10,000 in FY 2025-26; ₹5,000 "
+             "before; 7.5% for payments from 14 May 2020 to 31 March 2021) unless your file gave it; Form 26AS and the AIS "
+             "have what was actually cut.",
              "The five periods are the return's quarterly breakup of dividends for section 234C."]
     if ud:
         notes.append("US dividends are in rupees at SBI's TT buying rate on the last day of the month before each one (Rule 115)"
@@ -420,7 +423,7 @@ def t_tax_paid(g: dict) -> dict:
         rows.append(["TDS you entered (Schedule TDS)", "", r2(g["tds"]), "", ""])
     dt = (g["div_year"] or {}).get("tds") or {}
     if dt.get("expected"):
-        rows.append(["Dividend TDS the 10% rule gives (check Form 26AS)", "", r2(dt["expected"]), "", ""])
+        rows.append(["Dividend TDS the rule gives (check Form 26AS)", "", r2(dt["expected"]), "", ""])
     return table("tax_paid", "Tax paid (Schedule IT and TDS)", ["Kind", "Date of deposit", "Amount", "BSR code", "Challan serial number"], rows,
                  ["From the payments entered in Tax tools: those dated by 31 March are advance tax, those after it self-assessment "
                   "tax. Fill the BSR code and challan serial number from each challan (the AIS's 'Payment of taxes' section has "

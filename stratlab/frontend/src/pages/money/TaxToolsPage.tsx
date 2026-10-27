@@ -22,7 +22,7 @@ type Company = {
 };
 type DivYear = {
   fy: number; label: string; total: number; india_total: number; us_total: number; count: number; companies_count: number; unpriced: number; taxed: boolean;
-  tds: { threshold: number | null; rate: number; section: string; expected: number; companies_over: number; in_file: number | null };
+  tds: { threshold: number | null; rate: number; section: string; note?: string | null; expected: number; companies_over: number; in_file: number | null };
   us: { gross_usd: number; gross: number; rate: number; withheld_usd: number; withheld: number } | null;
   companies: Company[]; locked: boolean; source: "files" | "estimated" | "none"; include: boolean; include_saved: boolean; estimate_total: number | null; ais_note?: string | null;
 };
@@ -215,7 +215,7 @@ function DividendsTab() {
                   {/* RC2B-046: with no US dividends the Indian total is the income above, the same figure twice; its note goes under the income */}
                   {y.us && <Stat label="Indian companies" value={inr(y.india_total)} note={y.tds.threshold != null ? `TDS above ${inr(y.tds.threshold)} a company` : "Exempt that year"} />}
                   {!y.locked && y.tds.threshold != null && (
-                    <Stat label={<>TDS expected <Info label="About TDS on dividends">A company cuts 10% TDS (20% without a PAN) from a resident once its dividends to you in the year are over the threshold, on the whole amount: {inr(y.tds.threshold)} for {y.label} under {y.tds.section}. Form 26AS or the AIS shows what was actually cut.</Info></>}
+                    <Stat label={<>TDS expected <Info label="About TDS on dividends">A company cuts {+(y.tds.rate * 100).toFixed(2)}% TDS (20% without a PAN) from a resident once its dividends to you in the year are over the threshold, on the whole amount: {inr(y.tds.threshold)} for {y.label} under {y.tds.section}.{y.tds.note ? ` ${y.tds.note}` : ""} Form 26AS or the AIS shows what was actually cut.</Info></>}
                       value={inr(y.tds.expected)} note={`${y.tds.companies_over} compan${y.tds.companies_over === 1 ? "y" : "ies"} over the threshold${y.tds.in_file != null ? ` · ${inr(y.tds.in_file)} in your file` : ""}`} />
                   )}
                   {!y.locked && y.us && (

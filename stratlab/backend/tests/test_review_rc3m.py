@@ -73,3 +73,28 @@ def test_a_us_file_past_the_limit_is_refused_not_saved_in_part(w, monkeypatch):
     r = w["client"].post("/money/us-tax/import", headers=world.headers("pro-token"),
                          json={"filename": "d.csv", "data": __import__("base64").b64encode(b"Date,Action,Symbol,Quantity,Price\n2025-04-01,Buy,MSFT,1,300\n").decode()})
     assert r.status_code == 400 and r.json()["detail"]["code"] == "too_many" and "6 US trades" in r.json()["detail"]["message"]
+
+
+# ---------- RC3M-003: dividend TDS at 7.5% from 14 May 2020 to 31 March 2021 ----------
+def test_dividend_tds_was_7_5_percent_for_payments_in_the_covid_relief_window():
+    from app import money_dividends as D
+    assert D.tds_rate("2020-05-13") == 0.10 and D.tds_rate("2020-05-14") == 0.075
+    assert D.tds_rate("2021-03-31") == 0.075 and D.tds_rate("2021-04-01") == 0.10 and D.tds_rate(None) == 0.10
+    row = lambda d, a: {"d": d, "sym": "ITC", "name": "", "isin": "", "qty": None, "ps": None, "amount": a, "tds": None, "cur": "INR", "src": "csv"}
+    # FY 2020-21 (threshold ₹5,000): ₹4,000 on 10 May at 10% and ₹6,000 on 1 Sep at 7.5% -> 400 + 450
+    y = D.year(2020, [row("2020-05-10", 4000), row("2020-09-01", 6000)], None)
+    assert y["tds"]["expected"] == 850.0 and y["tds"]["rate"] == 0.075 and "7.5%" in y["tds"]["note"]
+    assert D.expected_tds(2020, 10000) == 750.0                            # no days given: the year's rate
+    # the other years are as before
+    y = D.year(2024, [row("2025-01-10", 6000)], None)
+    assert y["tds"]["expected"] == 600.0 and y["tds"]["rate"] == 0.10 and y["tds"]["note"] is None
+    assert D.expected_tds(2024, 5001) == 500.1 and D.expected_tds(2025, 12000) == 1200
+    assert D.year(2020, [row("2020-09-01", 5000)], None)["tds"]["expected"] == 0.0        # not over the threshold
+
+
+def test_schedule_os_expects_the_reduced_tds_for_that_year(w):
+    from app import money_itr as I
+    g = {"fy": 2020, "div_lines": [{"d": "2020-09-01", "sym": "ITC", "name": "ITC", "isin": "", "amount": 8000.0, "cur": "INR"}],
+         "us_div": None, "div_source": "files"}
+    row = I.t_os(g)["rows"][0]
+    assert row[-2] == 600.0 and row[-1] == "expected"
