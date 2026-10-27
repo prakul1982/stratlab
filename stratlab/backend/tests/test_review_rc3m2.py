@@ -251,3 +251,46 @@ def test_saved_screen_symbols_use_the_same_rule(screen_world):
     f = screens.clean("IN", {"insider_buy": "no", "insider_days": 365})
     assert screens._symbols("IN", f) == []
     assert screens._symbols("IN", screens.clean("IN", {"insider_buy": "no", "insider_days": 30}))
+
+
+# ---------- RC3M-010: a fund's kind from the name needs clear foreign words, and says it is a guess ----------
+from app import money_mf as MF
+
+
+@pytest.mark.parametrize("name", ["Quant Emerging Equity Fund", "Kotak Emerging Equity Fund", "Aditya Birla World Class Fund",
+                                  "Franklin India Asia Pacific Dividend Fund", "Axis Europe Growth Fund", "ABC Japan Equity Fund",
+                                  "Mirae Hang Seng Fund", "S&P BSE Sensex Index Fund", "Developed India Infra Fund", "Taiwan Cap Fund"])
+def test_a_name_with_emerging_world_asia_and_the_like_is_not_read_as_foreign(name):
+    kind, basis = MF.kind_how("", name)
+    assert kind != "other" and basis == "name", name
+
+
+@pytest.mark.parametrize("name", ["ICICI Prudential US Bluechip Equity Fund", "Motilal Oswal Nasdaq 100 Fund of Fund", "Navi S&P 500 Index Fund",
+                                  "Edelweiss U.S. Technology Equity Fund", "Aditya Birla Global Excellence Equity FoF", "ABC International Opportunities Fund",
+                                  "ABC Overseas Equity Fund", "ABC Emerging Markets Fund", "ABC Feeder Fund", "ABC Offshore Fund", "ABC Foreign Equity Fund"])
+def test_clear_foreign_words_in_the_name_still_make_it_other(name):
+    assert MF.kind_how("", name) == ("other", "name"), name
+
+
+def test_the_official_category_names_an_overseas_fund_without_the_name():
+    assert MF.kind_how("Other Scheme - FoF Overseas", "Mirae Asset Hang Seng TECH ETF Fund of Fund") == ("other", "category")
+    assert MF.kind_how("Other Scheme - FoF Overseas", "X Japan Equity Fund") == ("other", "category")
+    assert MF.kind_how("Equity Scheme - Sectoral/ Thematic", "X US Bluechip Equity Fund") == ("other", "category")
+    assert MF.kind_how("Equity Scheme - Sectoral/ Thematic", "X Emerging Businesses Fund") == ("equity", "category")
+
+
+def test_the_basis_is_category_hint_or_name():
+    assert MF.kind_how("Debt Scheme - Liquid Fund", "X") == ("debt", "category")
+    assert MF.kind_how("Other Scheme - Index Funds", "X Nifty 50 Index Fund") == ("equity", "category")
+    assert MF.kind_how("", "X Fund", "DEBT") == ("debt", "hint") and MF.kind_how("", "X Fund", "equity") == ("equity", "hint")
+    assert MF.kind_how("", "Unknown Flexi Cap Fund") == ("equity", "name")
+    assert MF.kind_how("", "Mystery Plan") == ("hybrid", "name")               # nothing to go on: a guess, said so
+    assert MF.kind_of("", "Mystery Plan") == "hybrid"
+
+
+def test_a_schemes_row_says_the_kind_was_guessed_from_the_name():
+    data = {"schemes": [{"k": "a", "name": "Quant Emerging Equity Fund", "isin": "", "amfi": "", "hint": ""},
+                        {"k": "b", "name": "Liquid X", "isin": "", "amfi": "", "hint": "DEBT"}], "kinds": {"b": "equity"}}
+    got = MF._resolve(data, {})
+    assert (got["a"]["kind"], got["a"]["kind_basis"]) == ("equity", "name")     # not "other": "emerging" is not a foreign word
+    assert (got["b"]["kind_auto"], got["b"]["kind"], got["b"]["kind_basis"]) == ("debt", "equity", "hint")     # yours wins; the page says "Set by you"

@@ -24,3 +24,12 @@ test("RC3M-009: Screens shows the note when the stored promoter and insider purc
   assert.match(read("src/pages/Screens.tsx"), /\{out\?\.insider_note && <p className="k-note" data-testid="screens-insider-note">\{out\.insider_note\}<\/p>\}/);
   assert.match(read("e2e/pages.spec.ts"), /no company can be shown as having had none/);
 });
+
+test("RC3M-010: a mutual fund's kind says when it was only guessed from the fund's name", () => {
+  const src = read("src/pages/money/MutualFundsPage.tsx");
+  assert.match(src, /kind_basis\?: "category" \| "hint" \| "name"/);
+  assert.match(src, /if \(s\.kind_set\) return "Set by you";/);
+  assert.match(src, /s\.kind_basis === "name"\) return "Guessed from the fund's name; change it if it is wrong"/);
+  assert.match(src, /data-testid="mf-kind-basis">\{kindBasis\(s\)\}/);
+  assert.doesNotMatch(src, /\{s\.kind_set \? "Set by you" : "From the category"\}/);
+});

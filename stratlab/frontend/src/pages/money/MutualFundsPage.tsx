@@ -23,7 +23,7 @@ import { PlanInline } from "../../components/PlanInterest";
 type Kind = "equity" | "debt" | "hybrid" | "other";
 type Scheme = {
   key: string; name: string; amc: string; folio: string; isin: string; amfi: string; category: string; broad: string; sub: string;
-  kind: Kind; kind_auto: Kind; kind_set: boolean; units: number; nav: number | null; nav_date: string | null; nav_source: "daily" | "statement" | null;
+  kind: Kind; kind_auto: Kind; kind_basis?: "category" | "hint" | "name"; kind_set: boolean; units: number; nav: number | null; nav_date: string | null; nav_source: "daily" | "statement" | null;
   invested: number | null; value: number | null; gain: number | null; gain_pct: number | null; xirr: number | null; realised: number | null;
   cost_unknown: boolean; short_units: number | null; short_sale?: number | null; elss_early_units?: number | null; held_days?: number | null; elss: { locked_units: number; next_free: string; all_free: string } | null; txns: number;
   fmv_2018: number | null; fmv_yours: boolean;
@@ -358,6 +358,13 @@ function flagsOf(s: Scheme, needsFmv: boolean): string[] {
 
 type SaleIn = Sale & { fy: string };
 
+/** Where the tax kind came from: yours, the category, the statement's own mark, or (RC3M-010) only words in the name, which is a guess. */
+function kindBasis(s: Pick<Scheme, "kind_set" | "kind_basis">): string {
+  if (s.kind_set) return "Set by you";
+  if (s.kind_basis === "name") return "Guessed from the fund's name; change it if it is wrong";
+  return s.kind_basis === "hint" ? "From your statement" : "From the category";
+}
+
 /** A scheme's own facts, in its fold: folio, units, NAV, what went in and how it is taxed, and what is wrong with them if something is. */
 function SchemeHolding({ s, setKind }: { s: Scheme; setKind: (key: string, kind: Kind | null) => void }) {
   return (
@@ -370,7 +377,7 @@ function SchemeHolding({ s, setKind }: { s: Scheme; setKind: (key: string, kind:
         <div><dt>Invested</dt><dd>{inr(s.invested)}</dd></div>
         <div><dt>Taxed as</dt><dd>
           <Select label={`How ${s.name} is taxed`} value={s.kind} onChange={(k) => setKind(s.key, k === s.kind_auto ? null : k as Kind)} options={(Object.keys(KIND_SHORT) as Kind[]).map((k) => ({ value: k, label: KIND_SHORT[k] }))} />
-          <span className="k-sub-line">{s.kind_set ? "Set by you" : "From the category"}</span>
+          <span className="k-sub-line" data-testid="mf-kind-basis">{kindBasis(s)}</span>
         </dd></div>
       </dl>
       {s.elss && <p className="k-note">ELSS lock-in: {qtyText(s.elss.locked_units)} units locked; the next free on {dateOnly(s.elss.next_free)}, all by {dateOnly(s.elss.all_free)}.</p>}
