@@ -3566,7 +3566,8 @@ _corp_fetching: set[str] = set()
 def _corp_histories(uid: str, symbols: list[str], today) -> int:
     """Fetch the histories of held stocks that have none (a few now) or an old one (in the background). Returns
     how many are still being fetched."""
-    missing = [s for s in symbols if not corp_actions.hist_load("IN", s)["at"]]
+    # a history kept before every bonus and split was counts as none: the tax report needs the old ones (RC3M-001)
+    missing = [s for s in symbols if not corp_actions.hist_kept("IN", s)]
     sources = corp_job.sources()
     now = missing[:HOLDINGS_CA_NOW]
     if now:
