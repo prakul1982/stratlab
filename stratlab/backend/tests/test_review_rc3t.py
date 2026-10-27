@@ -225,3 +225,15 @@ def test_the_journal_charges_an_etf_as_units_when_the_file_lists_no_charges():
     same = trade("NIFTYBEES", "2026-10-01", "2026-10-01")
     assert same == pytest.approx(C.total(C.order_costs("in_etf", "buy", 100, 1000.0, s["brokerage_other"]))
                                  + C.total(C.order_costs("in_etf", "sell", 100, 1010.0, s["brokerage_other"])))
+
+
+# ---------- RC3T-011: a library card's unseen-data line matches what happened there ----------
+def test_a_library_entry_with_a_few_unseen_trades_does_not_say_none_happened():
+    from app import library as L
+    base = {"verdict": {"verdict": "mixed", "passed": 2, "total": 4, "checks": [{"id": "unseen", "status": "warn"}, {"id": "nearby", "status": "pass"},
+                                                                                  {"id": "shuffle", "status": "pass"}, {"id": "sample", "status": "pass"}]},
+            "stats": {"ret": 20.0, "buy_hold": 10.0, "trades": 40, "unseen": 3.2}, "range": {"from": "2021-01-01", "to": "2026-01-01"}}
+    few = " ".join(L.restated(base)["fact_summary"].split("\n"))
+    assert "Only a few trades closed in the years it wasn't tuned on (+3.2% in all)" in few and "No trades happened" not in few
+    none = L.restated({**base, "stats": {**base["stats"], "unseen": None}})["fact_summary"]
+    assert "No trades happened in the years it wasn't tuned on" in none and "Only a few" not in none
