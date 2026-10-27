@@ -27,7 +27,7 @@ test("UI-FIX-1 (R9): the stat rows, form grids, health grids and tile grids use 
   assert.match(read("src/components/kit/Form.tsx"), /useNoOrphan/);
   assert.match(read("src/components/kit/Health.tsx"), /useNoOrphan/);
   assert.match(read("src/components/TileGrid.tsx"), /useNoOrphan/);
-  assert.match(read("src/pages/NavPages.tsx"), /<TileGrid className="nav-cards">/);
+  assert.match(read("src/pages/NavPages.tsx"), /<TileGrid className="nav-cards" fill>/);
   assert.match(read("src/components/Explore.tsx"), /<TileGrid className="explore-grid">/);
 });
 

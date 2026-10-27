@@ -44,7 +44,7 @@ export const PHASE_TEXT: Record<Phase, string> = {
   none: "No closing auction on this day's timetable.",
   holiday: "The market is closed: not a trading day, so no auction today.",
   preopen: "The market is closed until it opens at 09:15. The auction runs from 15:15.",
-  before: "Continuous trading. The auction starts at 15:15.",
+  before: "Orders match continuously now; the auction starts at 15:15.",   // (VR3-015: the badge beside it already says "Continuous trading")
   transition: "Continuous trading has ended for F&O stocks. The exchange is setting reference prices; orders open at 15:20.",
   entry: "Order entry is open. Indicative prices change until the auction ends.",
   matching: "Order entry has closed. Orders are being matched at each stock's equilibrium price.",

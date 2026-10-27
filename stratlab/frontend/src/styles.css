@@ -777,6 +777,7 @@ td.num, .num { font-family: var(--sans); }
 .lp-money { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .lp-money .lp-beyond-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
 .lp-money .lp-fix { margin-top: auto; font-size: 13px; }
+@media (min-width: 1001px) { .lp-money.lp-money-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1000px) { .lp-money { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .lp-money { grid-template-columns: minmax(0, 1fr); } }   /* CK-2 (R19): in 139px columns each tag ("An estimate for your CA") wrapped to two lines inside its pill */
 @media (max-width: 600px) {
@@ -1286,6 +1287,10 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 .screens-table td:first-child > .tiny.muted { display: block; }
 /* Checklist rows: the value lines up on the right; a check without data says so in its badge alone, not with a dash too */
 .check-row > .num { text-align: right; }
+/* VR3-011: a figure with a sentence in it (who bought and who sold) goes under its rule across the row, not into a narrow column five lines tall */
+@media (min-width: 521px) { .check-row:has(> .num.long) > .k-stack { grid-column: 1 / 3; }
+  .check-row > .num.long { grid-column: 1 / 3; grid-row: 2; text-align: left; }
+  .check-row:has(> .num.long) > .badge { grid-column: 3; grid-row: 1 / span 2; } }
 /* Options: stop loss and target as two equal halves */
 
 /* ---------- ETF price against NAV: a factual gap, the same quiet look as the surveillance flags ---------- */
@@ -1558,6 +1563,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-label-row { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 22px; }
 .k-label-row label { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .k-label-row .opt { font-weight: 400; color: var(--muted); }
+@media (max-width: 640px) { .k-label-quiet { display: none; } }   /* VR3-007: the empty line that keeps a lone box level with its neighbours is not needed once the form is one column */
 .k-input { height: var(--ctl); width: 100%; padding: 0 14px; border-radius: var(--r-ctl); border: 1px solid var(--line-2); background: var(--paper); font-size: var(--t-body); min-width: 0; }
 .k-input::placeholder { color: var(--muted); opacity: .8; }
 .k-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
@@ -1720,6 +1726,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-row.top { align-items: flex-start; }
 .k-row.end { align-items: flex-end; }
 .k-spread { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+/* VR3-010: the look-back box and its button on one line, the box as wide as its words in both deep-dive cards (it filled the row and sent the button under it) */
+.dd-ask > select.k-input { width: auto; flex: none; min-width: 150px; }
 .k-note { font-size: var(--t-note); color: var(--muted); }
 .k-note.k-down, .k-small.k-down { color: var(--down); }
 .k-sub { font-size: var(--t-body); font-weight: 600; }
@@ -1819,6 +1827,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: stretch; }   /* two cards side by side end level, not one short with dead space under it (MO-4b); a pair that differs a lot belongs in one column instead */
 @media (max-width: 900px) { .k-two { grid-template-columns: minmax(0, 1fr); } }
 .k-two.k-two-start { align-items: start; }   /* the pickers beside a short list of changes: each its own height (VR1-065) */
+@media (min-width: 901px) { .k-two.cmp-top { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }   /* VR3-017: the two run pickers need the width of their names */
 .k-label-row .k-lbl { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-picks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
@@ -1891,8 +1900,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
   .k-rows.two { grid-auto-flow: row dense; }
   .k-rows.two > div.wide { grid-column: 1 / -1; }
   .k-rows.two > div:nth-last-child(-n+2):nth-child(odd), .k-rows.two > div:last-child { border-bottom: 0; } }
-.k-rows > div > span { color: var(--muted); }
-.k-rows > div > b { font-weight: 600; }
+/* VR3-005: a long label wraps beside its value rather than dropping the value under it (on a phone one row of the invite list stood
+ * label-over-value while its neighbours sat label-left, value-right); a value too long for a line still goes under its label */
+.k-rows > div > span { color: var(--muted); flex: 1 1 8rem; min-width: 0; }
+.k-rows > div > b { font-weight: 600; text-align: right; }
 .k-rows > div.hl > span { color: var(--ink-2); }
 
 /* ---------- navigation: breadcrumb, group pages, All features, My space ---------- */
@@ -2226,7 +2237,10 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .lp-demo-tabs button[aria-selected="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
 .lp-demo-tabs button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .lp-sample { flex: none; padding: 1px 10px; border-radius: 999px; border: 1px dashed var(--line-2); color: var(--ink-2); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
-.lp-space .lp-space-art .badge { font-size: 12.5px; }
+/* VR3-014: the Trade picture's four tags and its headline each ran to a second line, so it stood taller than the other two and left a gap
+ * above their "See ..." links: tighter tags and a headline that fits one line make the three pictures about as tall */
+.lp-space .lp-space-art .badge { font-size: 12.5px; padding-inline: 8px; }
+.lp-space-art .lp-space-big { font-size: 23px; }
 .lp-art { position: relative; }
 /* Safari on a phone sized the drawings from the SVG's own width and pushed the right-hand column 14px past the screen
  * (R6V-006): every grid cell may shrink, and a drawing never outgrows its card */

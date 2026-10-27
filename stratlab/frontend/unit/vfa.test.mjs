@@ -121,7 +121,7 @@ test("VR1-060, VR1-061, VR1-063, VR1-064, VR1-065: the experiment page's layout"
   assert.match(tcss, /\.k-verdict-hero > \.k-card \{ flex: none; width: 290px;/);
   assert.match(tcss, /\.k-verdict-hero \.k-card-titlerow > \.verdict-head \{ display: inline;/);
   const cmp = read("src/pages/CompareExperiments.tsx");
-  assert.match(cmp, /<div className="k-two k-two-start">\s*\{pickers\}\s*<Card label="What changed">/);
+  assert.match(cmp, /<div className="k-two k-two-start cmp-top">\s*\{pickers\}\s*<Card label="What changed">/);
 });
 
 test("VR1-070, VR1-071, VR1-072, VR1-073: Positioning", async () => {

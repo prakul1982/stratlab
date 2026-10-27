@@ -34,7 +34,7 @@ export function GroupPage() {
   return (
     <div className="stack nav-page" data-testid="group-page" data-group={g.group.id}>
       <PageHeader eyebrow={`${NAV[g.space].label} · ${g.group.label}`} title={g.group.label} lede={g.group.blurb} />
-      <TileGrid className="nav-cards">
+      <TileGrid className="nav-cards" fill>
         {g.group.pages.map((p) => <FeatureCard key={p.to} page={p} />)}
       </TileGrid>
     </div>

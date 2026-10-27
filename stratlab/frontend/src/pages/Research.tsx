@@ -948,7 +948,8 @@ export function WatchlistPage() {
                   {x != null && <span className="k-sub-line"><Delta value={x}>{pct(x, 2)}</Delta>{d && <span data-testid="watch-change-day"> · {fmtDate(d, { weekday: true, year: false })}</span>}</span>}
                   {at && <span className="k-sub-line">{at}</span>}{settling && <span className="k-sub-line" data-testid="watch-settling">{SETTLING}</span>}</>;
               } },
-              { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm icon-only" aria-label={`Remove ${w.symbol} from your watchlist`} title="Remove" onClick={() => remove(w)}><Trash size={16} /></button> },
+              // on a phone card Remove sits at the card's top right, not alone on a last row of its own (VR3-006)
+              { key: "r", header: "", action: true, corner: true, cell: (w) => <button className="btn quiet sm icon-only" aria-label={`Remove ${w.symbol} from your watchlist`} title="Remove" onClick={() => remove(w)}><Trash size={16} /></button> },
             ]} />
         </Card>
       )}

@@ -73,10 +73,11 @@ export function Field({ label, info, infoLabel, optional, unit, wide, id, childr
 }
 
 /** A label (and its (i)) over a control that brings its own name (a Seg, a search box): the same look as a Field's label. */
-export function FieldGroup({ label, info, infoLabel, wide, children }: { label: string; info?: ReactNode; infoLabel?: string; wide?: boolean; children: ReactNode }) {
+export function FieldGroup({ label, info, infoLabel, wide, quietLabel, children }: { label: string; info?: ReactNode; infoLabel?: string; wide?: boolean; quietLabel?: boolean; children: ReactNode }) {
   return (
     <div className={`k-field${wide ? " wide" : ""}`} role="group" aria-label={label}>
-      <div className="k-label-row"><span className="k-lbl">{label}</span>{info && <Info label={infoLabel ?? `About ${label.toLowerCase()}`}>{info}</Info>}</div>
+      {/* `quietLabel`: the group is named for assistive tools only, its one box saying what it is; an empty line keeps the box level with its neighbours' (VR3-007) */}
+      <div className={`k-label-row${quietLabel ? " k-label-quiet" : ""}`}>{quietLabel ? <span className="k-lbl" aria-hidden="true">&nbsp;</span> : <span className="k-lbl">{label}</span>}{info && !quietLabel && <Info label={infoLabel ?? `About ${label.toLowerCase()}`}>{info}</Info>}</div>
       {children}
     </div>
   );

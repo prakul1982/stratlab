@@ -287,7 +287,7 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
         <h3 className="k-sub">Or one company's filings</h3>
         <FormGrid label="Which filings" onSubmit={(e) => e.preventDefault()}>
           <Field label="Company" optional>
-            {(id) => <StockPicker id={id} market="US" value={symbol} placeholder="A US ticker or name, like AAPL" onPick={(s) => setParam({ symbol: s })} />}
+            {(id) => <StockPicker id={id} market="US" value={symbol} placeholder="Like AAPL or Apple" onPick={(s) => setParam({ symbol: s })} />   /* VR3-019: the longer hint ran past the box */}
           </Field>
           <FieldGroup label="Kind of filing" info="A 13D is filed by an investor who may want to influence the company; a 13G by one that holds a stake without that aim. An amendment updates an earlier filing; one at or below 5% reports that the stake has fallen under the level that needs these filings.">
             <Seg label="Kind of filing" value={form} onChange={(v) => setParam({ form: v || null })} options={FORMS} />

@@ -410,7 +410,8 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             <div className="lp-money">{PORTFOLIO.slice(0, 8).map(moneyCard)}</div>
             <details className="lp-more">
               <summary>{PORTFOLIO.length - 8} more Money tools</summary>
-              <div className="lp-money">{PORTFOLIO.slice(8).map(moneyCard)}</div>
+              {/* six more in four columns left two on a second line; in three they are two full rows (VR3-013) */}
+              <div className={`lp-money${(PORTFOLIO.length - 8) % 4 !== 0 && (PORTFOLIO.length - 8) % 3 === 0 ? " lp-money-3" : ""}`}>{PORTFOLIO.slice(8).map(moneyCard)}</div>
             </details>
           </div>
         </div>

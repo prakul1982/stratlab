@@ -267,7 +267,8 @@ export function ScanPage() {
       )}
       <p className="k-note inv-text">
         {/* (VR1-101: "a match says the rule held" is the card's own Rules line, so the footnote doesn't say it twice) */}
-        {scan.id === "st_s2" ? "Stage uses the 150-day average and its 20-day slope; Supertrend uses 10 days and 3× the average daily range (ATR). " : ""}
+        {/* (VR3-004: the scan's sentence and its Rules line already give the 150-day average, Supertrend 10 and 3×; only what they leave out is here) */}
+        {scan.id === "st_s2" ? "A rising average is one whose 20-day slope is up. " : ""}
         Past signals don't predict future returns, and nothing here is investment advice.
       </p>
     </div>
@@ -392,7 +393,8 @@ export function RotationPage() {
         {slow && <p className="k-small k-muted" role="status" data-testid="rotation-slow">Still working: the first look after the close reads the day's closes for every member. It can take up to a minute, and the answer is kept for the next visit.</p>}</Card>}
       {out && (
         <ChartFrame title={`${out.name} vs ${out.benchmark}`}
-          actions={<div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
+          // the four-box key under the title names the same four tags with their counts: the legend is only for a chart with no key (VR3-018)
+          actions={rows.length > 0 ? undefined : <div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
           footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row below, to follow one.</p> : undefined}>
           <div className="k-stack">
             <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${step === 1 ? `from ${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago` : `${unit} ${step - 1} of ${out.tail}`}` : ""}{out.kept ? " · kept from the last close; it updates when the market reopens" : ""}</span>
@@ -512,7 +514,9 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
                   actions={<>{r.stale && <Badge tone="plain">Last read, not refreshed</Badge>}{r.stored && <Badge tone="plain">From the evening's read{r.as_of ? ` (${asOf(r.as_of)})` : ""}</Badge>}<Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link></>} />
                 <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} rowsHaveFundRaise={!!r.summary.fund_raise_last && r.flags.some((i) => i.at.slice(0, 10) === r.summary.fund_raise_last!.slice(0, 10))} />
                 {r.flags.length > 0 ? <div className="inv-rows">{r.flags.map((i) => <FilingRow key={i.id} i={i} />)}</div>
-                  : <span className="k-small k-muted">Nothing flagged in the last {data.days} days.</span>}
+                  /* the summary above already says "0 red flags, 0 to look closer at": only a company whose list came back empty
+                   * although it counted some says it here, so a clean card is not told twice (VR3-003) */
+                  : r.summary.red + r.summary.amber > 0 && <span className="k-small k-muted">Nothing flagged in the last {data.days} days.</span>}
               </Card>
             ))}
             {data.problems.length > 0 && (() => {
