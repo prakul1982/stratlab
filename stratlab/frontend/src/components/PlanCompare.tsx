@@ -29,7 +29,8 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   ];
   const everyone: Row[] = EVERYONE.map((label) => ({ id: label, label, cell: () => "✓" }));
   const columns = (first: string): Column<Row>[] => [
-    { key: "label", header: first, wrap: true, cell: (r) => nameOf(r.label) },
+    // the group's name is the heading just above the table: said again as the first column's header it was the same word twice, so it is named for assistive tools only (VR3-016)
+    { key: "label", header: <span className="sr-only">{first}</span>, wrap: true, cell: (r) => nameOf(r.label) },
     ...ids.map((p) => ({ key: p, header: names[p], numeric: true, cell: (r: Row) => valueOf(r.cell(p)) })),
   ];
   // one table per group, each with the plan names on top; the header stays in view as the page scrolls past it

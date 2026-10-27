@@ -18,12 +18,12 @@ interface CalendarView {
 }
 
 /** Ex-dates in day groups. */
-function DayGroups({ rows, today }: { rows: CorpAction[]; today: string }) {
+function DayGroups({ rows, today, showMine }: { rows: CorpAction[]; today: string; showMine: boolean }) {
   const days = [...new Set(rows.map((r) => r.ex_date))];
   return <div className="inv-days">{days.map((d) => (
     <div key={d} className="inv-day">
       <span className="k-eyebrow">Ex-date {exDay(d)}{d === today ? " · today" : ""}</span>
-      <div className="inv-rows">{rows.filter((r) => r.ex_date === d).map((r) => <ActionLine key={r.id} a={r} showEx={false} />)}</div>
+      <div className="inv-rows">{rows.filter((r) => r.ex_date === d).map((r) => <ActionLine key={r.id} a={r} showEx={false} showMine={showMine} />)}</div>
     </div>
   ))}</div>;
 }
@@ -115,13 +115,13 @@ export function CorpActionsPage() {
           {/* always there, and when it has nothing it says why (RC1-006: the US list was empty with no word) */}
           <Card>
             <CardHead title="Coming up" />
-            {data.ahead.length === 0 ? <span className="k-small k-muted" data-testid="ahead-note">{data.ahead_note ?? "Nothing announced with an ex-date ahead."}</span> : <DayGroups rows={data.ahead} today={data.today} />}
+            {data.ahead.length === 0 ? <span className="k-small k-muted" data-testid="ahead-note">{data.ahead_note ?? "Nothing announced with an ex-date ahead."}</span> : <DayGroups rows={data.ahead} today={data.today} showMine={scope === "all"} />}
           </Card>
           {/* ex-dates gone by fold under one line, open only when there is nothing ahead to show */}
           {data.recent.length > 0 && (
             <Card label={lookBack}>
               <Earlier label={lookBack} count={data.recent.length} open={!data.ahead_known && !data.ahead.length}>
-                <DayGroups rows={data.recent} today={data.today} />
+                <DayGroups rows={data.recent} today={data.today} showMine={scope === "all"} />
               </Earlier>
             </Card>
           )}

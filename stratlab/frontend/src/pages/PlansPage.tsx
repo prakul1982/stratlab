@@ -118,8 +118,9 @@ export function PlansPage() {
         actions={<Link to="/account" className="btn quiet sm">← Account</Link>} />
       <PromoCountdown plansLink={false} />
       {!billing && me && (
+        // the line above already says Basic and Pro aren't on sale yet: this box only offers the way to hear when they are (VR3-012)
         <Notice label="Paid plans aren't on sale yet" actions={<PlanInterestButton source="plans" />}>
-          Basic and Pro aren't on sale yet. Press the button and we'll tell you the day they open.
+          Press the button and we'll tell you the day they open.
         </Notice>
       )}
       {(pricing || (billing && yearlyOk)) && (

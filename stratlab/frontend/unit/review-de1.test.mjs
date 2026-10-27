@@ -109,7 +109,7 @@ test("DE-028/DE-029/DE-031: dividends ahead in the US, a distribution's parts, t
   const p = read("src/pages/CorpActionsPage.tsx");
   assert.doesNotMatch(p, /Only ex-dates that have already happened are available for the US/);
   assert.doesNotMatch(p, /in India it's also the record date/);
-  assert.match(p, /<ActionLine key=\{r\.id\} a=\{r\} showEx=\{false\} \/>/);
+  assert.match(p, /<ActionLine key=\{r\.id\} a=\{r\} showEx=\{false\} showMine=\{showMine\} \/>/);
   assert.match(p, /placeholder=\{region === "IN" \? "Like TCS or Infosys" : "Like AAPL or Apple"\}/);
   assert.match(read("src/components/CorpActions.tsx"), /dividend: "Dividends and distributions"/);
 });

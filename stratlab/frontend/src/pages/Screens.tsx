@@ -314,7 +314,7 @@ export function ScreensPage() {
             <CardHead title={open ? `Screen: ${open.name}` : "Save this screen"} info="Saved screens keep your conditions. Turn on the weekly email to hear on Saturday mornings which companies newly meet them. Your plan sets how many you can keep." />
             <FormGrid label="Save this screen" onSubmit={(e) => e.preventDefault()}>
               <Field label="Name" maxLength={60} placeholder="Like: Low debt" value={name} onChange={(e) => setName(e.target.value)} />
-              <FieldGroup label="Email">
+              <FieldGroup label="Email" quietLabel>
                 <CheckField label="Weekly email of new matches" checked={weekly} onChange={setWeekly} />
               </FieldGroup>
               <FormActions>

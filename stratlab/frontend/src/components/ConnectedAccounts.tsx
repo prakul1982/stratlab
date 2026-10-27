@@ -164,7 +164,8 @@ function InboxCard({ c, set, load }: P) {
         <FormGrid label="Upload a statement">
           <Field label="Password" optional type="password" autoComplete="off" value={upPw} maxLength={64} onChange={(e) => setUpPw(e.target.value)}
             info="Needed when no statement password is saved above. It is used once to open the file." />
-          {!i.has_password && i.ready && <CheckField label="Save this password for next time" checked={remember} onChange={setRemember} />}
+          {/* on its own line under the box: squeezed into the grid's next 190px column its label ran over two lines (VR3-008) */}
+          {!i.has_password && i.ready && <div className="k-field wide"><CheckField label="Save this password for next time" checked={remember} onChange={setRemember} /></div>}
           <FormActions><UploadButton label="Upload a statement" accept="application/pdf,.pdf" ariaLabel="Statement PDF" busy={busy} onFiles={(f, r) => void upload(f, r)} /></FormActions>
         </FormGrid>
         {result && <Notice role="status" label="Statement result">{result}</Notice>}
