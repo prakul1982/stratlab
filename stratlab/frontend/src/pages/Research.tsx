@@ -922,7 +922,9 @@ export function WatchlistPage() {
       ) : (
         <Card>
           <CardHead title={`Your ${REGION_NAME[region]} watchlist`} actions={<AlertButton region={region} choices={mine.map((w) => ({ region: w.region, symbol: w.symbol }))} />} />
-          <DataTable label="Your watchlist" rows={mine} rowKey={(w) => `${w.region}:${w.symbol}`}
+          {/* cards on a phone from the start: the badges under a name arrive after the first draw, so the overflow check alone
+              could still leave Actions past the edge (UI checker R18) */}
+          <DataTable label="Your watchlist" stack rows={mine} rowKey={(w) => `${w.region}:${w.symbol}`}
             columns={[
               { key: "s", header: "Company", rowHeader: true, wrap: true, cell: (w) => (
                 // the flags sit under the name, not in a column of their own, so a phone fits the row and its Remove (R63-003)
