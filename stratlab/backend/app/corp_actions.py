@@ -12,7 +12,8 @@ already happened, so the dividends declared with an ex-date ahead come from the 
 for the next four weeks (DE-028); splits ahead aren't in either.
 
 Each region's calendar is stored as corpact:cal:<region>, a rolling window from four weeks back to two months
-ahead; one company's history (three years) as corpact:hist:<region>:<symbol>. Facts only: the action as the company
+ahead; one company's history (three years of dividends and the like, and every bonus and split of any age, which the tax
+report needs to count old lots in the shares of the day they are sold) as corpact:hist:<region>:<symbol>. Facts only: the action as the company
 announced it and the dates. Never a view on it."""
 import json
 import math
@@ -27,7 +28,7 @@ from .intel.net import SourceError, TTLCache
 from .results import REGIONS, TZ, dates_in, local_today, parse_day
 
 KEY = "corpact:cal:"                 # corpact:cal:<region> = {"at": ISO time, "rows": [...]}
-HIST = "corpact:hist:"               # corpact:hist:<region>:<symbol> = {"at": ISO time (UTC), "rows": [...]}
+HIST = "corpact:hist:"               # corpact:hist:<region>:<symbol> = {"at": ISO time (UTC), "v": HIST_V, "rows": [...]}
 ALERT_KEY = "corpactalert:"          # corpactalert:<uid> = "off" when someone turned the messages off
 AHEAD_DAYS = 60                      # how far ahead each refresh asks for
 BEHIND_DAYS = 7                      # ...and how far back
@@ -35,6 +36,7 @@ KEEP_DAYS = 28                       # past actions stay in the calendar this lo
 RECENT_DAYS = 14                     # ...and are listed on the page this long
 HIST_DAYS = 3 * 366                  # one company's history goes back this far
 HIST_MAX_AGE = 20 * 3600             # a stored history older than this is fetched again when asked for
+HIST_V = 2                           # India's stored histories keep every bonus and split, not only the last three years' (RC3M-001)
 MAX_ROWS = 4000
 MAX_LOOKUPS = 80                     # per-company lookups in one refresh
 US_AHEAD_DAYS = 28                   # US: the market calendar's declared dividends are read this far ahead (a day at a time)
@@ -429,11 +431,11 @@ def prefetch(region: str, symbols) -> None:
 def hist_load(region: str, symbol: str) -> dict:
     got = db.json_value(db.get_setting(f"{HIST}{region}:{symbol.upper()}"), {})
     got = got if isinstance(got, dict) else {}
-    return {"at": got.get("at"), "rows": restated([r for r in got.get("rows") or [] if isinstance(r, dict) and r.get("ex_date") and r.get("id")])}
+    return {"at": got.get("at"), "v": got.get("v"), "rows": restated([r for r in got.get("rows") or [] if isinstance(r, dict) and r.get("ex_date") and r.get("id")])}
 
 
 def hist_save(region: str, symbol: str, rows: list[dict]):
-    db.set_setting(f"{HIST}{region}:{symbol.upper()}", json.dumps({"at": datetime.now(timezone.utc).isoformat(timespec="minutes"),
+    db.set_setting(f"{HIST}{region}:{symbol.upper()}", json.dumps({"at": datetime.now(timezone.utc).isoformat(timespec="minutes"), "v": HIST_V,
                                                                   "rows": sorted(rows, key=lambda r: r["ex_date"])[-200:]}))
 
 
@@ -444,8 +446,23 @@ def _stale(at: str | None) -> bool:
         return True
 
 
+def hist_kept(region: str, symbol: str) -> bool:
+    """Whether a company has a stored history of the current kind (see hist_stale)."""
+    got = hist_load(region, symbol)
+    return bool(got["at"]) and (region != "IN" or got.get("v") == HIST_V)
+
+
+def hist_stale(region: str, got: dict) -> bool:
+    """Whether a stored history (hist_load's) is to be read again: a day old, or (India) kept before every bonus and split
+    of any age was (RC3M-001: a 2021 bonus was missing from a 2026 tax report, whose lots from before it were then too few for
+    the shares sold). A history never stored is stale too; one stored by an older kind is, from the first look."""
+    return _stale(got.get("at")) or (region == "IN" and got.get("v") != HIST_V)
+
+
 def fetch_history(region: str, symbol: str, sources: dict, today: date) -> list[dict]:
-    """One company's actions over the last three years (and any ahead), straight from the feed."""
+    """One company's actions over the last three years (and any ahead), straight from the feed, and every bonus and split of
+    any age: the tax report counts a lot bought before one in the shares of the day it was sold, so a 2021 bonus matters to a
+    2026 sale (RC3M-001: they stopped at three years, and the sale of 200 shares of a lot of 100 had 100 left unmatched)."""
     symbol = symbol.upper()
     if region == "IN":
         where, raw = sources["in"].actions_of(symbol)
@@ -453,7 +470,7 @@ def fetch_history(region: str, symbol: str, sources: dict, today: date) -> list[
     else:
         rows = us_rows(symbol, sources["us"].events(symbol))
     frm = (today - timedelta(days=HIST_DAYS)).isoformat()
-    return list({r["id"]: r for r in rows if r["ex_date"] >= frm}.values())
+    return list({r["id"]: r for r in rows if r["ex_date"] >= frm or adjusts(r)}.values())
 
 
 def history(region: str, symbol: str, sources: dict | None, today: date | None = None, fetch: bool = True,
@@ -463,7 +480,7 @@ def history(region: str, symbol: str, sources: dict | None, today: date | None =
     empty answer is remembered in memory only, so made-up tickers can't fill the database."""
     today = today or local_today(region)
     got = hist_load(region, symbol)
-    if fetch and sources is not None and _stale(got["at"]):
+    if fetch and sources is not None and hist_stale(region, got):
         if not keep_empty and not got["at"] and _empty.get((region, symbol.upper())):
             return []
         try:
@@ -623,7 +640,7 @@ def refresh_histories(region: str, sources: dict, symbols: set[str], today: date
     for sym in sorted(symbols):
         if n >= budget:
             break
-        if not _stale(hist_load(region, sym)["at"]):
+        if not hist_stale(region, hist_load(region, sym)):
             continue
         n += 1
         try:
@@ -1204,6 +1221,9 @@ def company(region: str, symbol: str, sources: dict | None, today: date | None =
     False: the stored history as it is, however old (the rest as `fetch` says)."""
     today = today or local_today(region)
     rows = actions_for(region, symbol, sources, today, fetch if fetch_history is None else fetch_history, keep_empty=False)
+    # the card is of the last three years: the older bonuses and splits the history keeps are for the tax report (RC3M-001)
+    first = (today - timedelta(days=HIST_DAYS)).isoformat()
+    rows = [r for r in rows if r["ex_date"] >= first]
     if region == "US" and fetch and sources and sources.get("us") is not None:
         rows = sorted(rows + home_listing_dividends(symbol, rows, sources["us"], today), key=lambda r: r["ex_date"])
     t = today.isoformat()

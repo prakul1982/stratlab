@@ -80,8 +80,8 @@ function WalkForwardInner({ nb, e }: { nb: Notebook; e: Experiment }) {
           <p className="k-note">
             Each step tried {w.grid_size} nearby settings around your {w.tuned?.join(" and ")} on the past and kept the best.
             {w.efficiency != null && ` Unseen blocks earned ${Math.round(w.efficiency * 100)}% of the yearly return the tuning showed`}
-            {w.efficiency != null && (w.efficiency >= 0.5 ? " (50% or more means most of it carried over)." : " (under 50% means the tuning flattered it).")}
-            {w.settings_used! > 3 && " The best settings kept changing, which suggests they're fitting noise."}
+            {w.efficiency != null && (w.efficiency >= 0.5 ? " (50% or more means most of it carried over)." : " (under 50% means most of it did not carry over).")}
+            {w.settings_used! > 3 && " The best settings changed from one step to the next."}
           </p>
           <DataTable label="Walk-forward windows" columns={cols} rows={w.windows} rowKey={(x) => x.test_from} />
         </>}

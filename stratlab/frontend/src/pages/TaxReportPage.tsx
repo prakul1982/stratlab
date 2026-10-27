@@ -63,6 +63,8 @@ type Report = {
   kinds?: Record<string, string>; unit_notes?: string[];
   rules: string[]; notes: string[]; disclaimer: string; files: { name: string; broker: string; kind: string; trades: number; at: string }[];
   updated_at: string | null; trades: number; business_lines: number; prices: boolean; prices_at: string | null; max_trades: number;
+  /** Companies whose bonuses and splits couldn't be read yet (RC3M-006): their lots may be counted in the wrong shares. */
+  corp_left?: number;
   mf?: { allowed: boolean; count: number; plan: string };
   us_trades?: number;
   payable?: Payable | null;
@@ -302,6 +304,11 @@ export function TaxReportPage() {
             {result.not_listed.length > 0 && <p className="k-note">No listed company matched {result.not_listed.slice(0, 8).join(", ")}{result.not_listed.length > 8 ? "…" : ""}. Their gains still count, without today's prices or bonus and split data.</p>}
             {result.problems.length > 0 && <DataTable label="Lines left out" columns={problemCols} rows={result.problems.map((u, i) => ({ ...u, i }))} rowKey={(u) => String(u.i)} />}
           </div>
+        )}
+        {has && rep && (rep.corp_left ?? 0) > 0 && (
+          <p className="k-note" data-testid="tax-corp-left">
+            The bonuses and splits of {rep.corp_left} {rep.corp_left === 1 ? "company" : "companies"} couldn't be read yet, so the shares you bought before one are counted as they were bought. Open the report again in a minute.
+          </p>
         )}
         {has && rep && rep.files.length > 0 && (
           <p className="k-note">

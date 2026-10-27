@@ -46,9 +46,12 @@ def lot_of(inst: dict) -> float:
     return 0.0
 
 
-def market_open(inst: dict, now: datetime) -> bool:
-    """Whether the instrument's market is trading now: its hours on a trading day (crypto always)."""
-    from .data.calendar import is_trading_day
+def market_open(inst: dict, now: datetime, kind: str | None = None) -> bool:
+    """Whether the instrument is trading now: its hours on a trading day (crypto always). For Indian instruments the hours
+    are the timetable's for the kind of instrument (data/sessions.py; `kind` from live.session_kind): futures and options
+    to 15:40 and a stock with derivatives to 15:15 since the closing auction began; MCX to 23:30, or 23:55 while US daylight
+    saving is off (RC3T-006: a signal for a NIFTY future at 15:35 was refused as "the market was closed")."""
+    from .data.calendar import day_close, is_trading_day
     from .data.markets import BY_ID
     mid = inst.get("market", "IN")
     m = BY_ID.get(mid)
@@ -63,7 +66,15 @@ def market_open(inst: dict, now: datetime) -> bool:
     if not hours.get("open"):
         return True
     hhmm = local.strftime("%H:%M")
-    return hours["open"] <= hhmm < hours["close"]
+    open_, close = hours["open"], day_close(mid, local.date()) or hours["close"]
+    if mid == "IN":
+        from .data import sessions as S
+        start, end = S.continuous(kind or S.kind_of(inst), local.date())
+        open_, close = start.strftime("%H:%M"), end.strftime("%H:%M")
+    elif mid == "MCX":
+        from .options.data import expiry_time
+        close = expiry_time("MCX", local.date()) or close
+    return open_ <= hhmm < close
 
 
 class SignalSession:
@@ -80,6 +91,8 @@ class SignalSession:
         self.prov = mgr.markets.provider(self.market) if mgr.markets else None
         if self.prov is None:
             raise ValueError("That market isn't connected.")
+        from .live import session_kind          # a stock with derivatives stops at 15:15, futures and options at 15:40
+        self.session_kind = "cash" if self.polled else session_kind(getattr(mgr, "kite", None), self.inst)
         st = row.get("state") or {}
         self.capital = float(self.settings["capital"])
         self.cash = float(st.get("cash", self.capital))
@@ -96,6 +109,7 @@ class SignalSession:
         self.seen: list[str] = list(st.get("seen") or [])
         self.equity_curve: list[dict] = list(st.get("equity_curve") or [])
         self.cost_items: dict[str, float] = dict(st.get("cost_items") or {})
+        self.dp_day: str | None = st.get("dp_day")      # the last day a delivery sale paid the depository charge (RC3T-002)
         self.last_price: float | None = st.get("last_price")
         self.last_tick_at: str | None = None
         self._tick_ts = 0.0
@@ -155,7 +169,7 @@ class SignalSession:
         if not self.polled or time.time() < self._next_mark:
             return
         self._next_mark = time.time() + MARK_EVERY
-        if self.pos and market_open(self.inst, now):
+        if self.pos and market_open(self.inst, now, self.session_kind):
             px = self._fetch()
             if px is not None:
                 with self.lock:
@@ -190,6 +204,11 @@ class SignalSession:
         if k == "flat":
             return 0.0
         items = C.order_costs(k, side, qty, px, float(self.settings["brokerage"]))
+        today = datetime.now(IST).date().isoformat()
+        if k in C.DP_KINDS and side == "sell" and self.pos > 0 and self.dp_day != today:
+            # a delivery sale of shares held pays the depository charge, once for the stock each day (RC3T-002)
+            items["dp"] = C.dp_charge()
+            self.dp_day = today
         for key, v in items.items():
             self.cost_items[key] = self.cost_items.get(key, 0.0) + v
         return C.total(items)
@@ -282,7 +301,9 @@ class SignalSession:
             return f"The alert was {delay / 60:.0f} minutes old when it arrived (over {SG.STALE_SECONDS // 60} minutes is refused)."
         if delay is not None and delay < -120:
             return "The alert's time is in the future. Check the time it sends."
-        if not market_open(self.inst, arrived):
+        if not market_open(self.inst, arrived, self.session_kind):
+            if self.session_kind == "cas" and market_open(self.inst, arrived):
+                return "Continuous trading in this stock had ended for the day: it closes in the closing auction."
             return "The market was closed."
         return None
 
@@ -339,7 +360,7 @@ class SignalSession:
         return {"cash": self.cash, "pos": self.pos, "avg": self.avg, "entry_t": self.entry_t, "entry_cost": self.entry_cost,
                 "trades": self.trades[-1000:], "events": self.events[-1000:], "signals": self.signals[-KEEP_SIGNALS:],
                 "seen": self.seen[-KEEP_IDS:], "equity_curve": self.equity_curve[-500:], "cost_items": self.cost_items,
-                "last_price": self.last_price, "corp_cash": self.corp_cash,
+                "dp_day": self.dp_day, "last_price": self.last_price, "corp_cash": self.corp_cash,
                 "totals": {"realised": self.realised_total, "count": self.trade_count, "wins": self.win_count}, **self.corp.dump()}
 
     def signal_counts(self, day: str) -> dict:
@@ -363,7 +384,7 @@ class SignalSession:
             return {"id": self.id, "name": self.name, "kind": KIND, "status": "running", "instrument": self.inst,
                     "settings": self.settings, "started_at": self.started_at, "last_price": px, "last_tick_at": self.last_tick_at,
                     "feed_connected": self.feed_ok if self.polled else self.mgr.hub.connected,
-                    "market_open": market_open(self.inst, datetime.now(timezone.utc)),
+                    "market_open": market_open(self.inst, datetime.now(timezone.utc), self.session_kind),
                     "events": self.events[-200:], "signals": self.signals[-200:], "equity_curve": self.equity_curve,
                     "trade_list": self.trades[-200:], "costs": C.breakdown(self.cost_items),
                     "account": {"capital": self.capital, "equity": eq, "cash": self.cash, "qty": abs(self.pos),

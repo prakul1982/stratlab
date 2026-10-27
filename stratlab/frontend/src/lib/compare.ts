@@ -34,10 +34,15 @@ export function spanIn(days: number): string {
   return days >= 365 && days % 365 === 0 ? periodName(days) : `${days.toLocaleString("en-IN")} day${days === 1 ? "" : "s"}`;
 }
 
-/** How a run sizes its trades, in words, with its own currency. */
-function sizing(r: Risk, cur: string | null | undefined): string {
-  if ((r.sizing ?? "risk") === "risk") return "by risk";
+/** What bold means in the compare page's table of numbers: the higher figure on a line, and the lower one for costs. It said "the
+ * larger", which the bold costs of the cheaper run contradicted (RC3T-005). */
+export const BOLD_NOTE = "Bold marks the higher figure on a line, and for costs the lower one. A higher backtest figure is not proof: the verdict's honesty checks are what test for luck.";
+
+/** How a run sizes its trades, in words, with its own currency. Leverage is said for either way of sizing: it widens the most a
+ * trade can take on a risk-sized run too, so a change in it changes the result (RC3T-004: it was left out when sizing by risk). */
+export function sizing(r: Risk, cur: string | null | undefined): string {
   const lev = (r.leverage ?? 1) > 1 ? ` × ${r.leverage} leverage` : "";
+  if ((r.sizing ?? "risk") === "risk") return `by risk${lev}`;
   return r.perTrade ? `fixed ${money(r.perTrade, cur)} a trade${lev}` : `fixed capital per trade${lev}`;
 }
 

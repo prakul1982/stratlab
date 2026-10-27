@@ -151,7 +151,8 @@ export function flatLine(snap: OptionSnapshot, closedToday: number, market: Mark
   if (s.signal) return `${none} Enters when ${s.signal.name} signals, from ${s.timing.entry}.`;
   const hm = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: IST });
   const wd = now.toLocaleDateString("en-GB", { weekday: "short", timeZone: IST });
-  if (wd === "Sat" || wd === "Sun" || hm > s.timing.lastEntry) return `${none} Next entry ${s.timing.entry} on the next market day.`;
+  // from the last entry's minute on, the window is shut: the session enters before it, not at it (RC3T-007)
+  if (wd === "Sat" || wd === "Sun" || hm >= s.timing.lastEntry) return `${none} Next entry ${s.timing.entry} on the next market day.`;
   // the gap the rules keep between trades, still running after a trade closed (R7T-013)
   const gap = gapLine(a, s.timing.cooldown, s.timing.lastEntry, s.timing.entry, now);
   if (gap) return `${none} ${gap}`;
@@ -165,7 +166,7 @@ export function startWhenText(t: { entry: string; lastEntry: string }, signal: {
   if (signal) return `whenever "${signal.name}" signals a trade (from ${t.entry}) on market days`;
   const hm = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: IST });
   const wd = now.toLocaleDateString("en-GB", { weekday: "short", timeZone: IST });
-  if (wd !== "Sat" && wd !== "Sun" && hm >= t.entry && hm <= t.lastEntry) return `now if prices are live, because today's window is open (${t.entry} to ${t.lastEntry}), and again on later market days`;
+  if (wd !== "Sat" && wd !== "Sun" && hm >= t.entry && hm < t.lastEntry) return `now if prices are live, because today's window is open (${t.entry} to ${t.lastEntry}), and again on later market days`;
   return `at ${t.entry} on market days`;
 }
 
@@ -309,9 +310,10 @@ export function timingIssues(t: { entry: string; lastEntry: string; squareoff: s
 }
 
 /** An exchange's usual hours, for the check above when the server's list of markets hasn't been read (it is the list's own
- * figures that count when it has: MCX's close moves with US daylight saving, India's F&O close moved to 15:40). */
+ * figures that count when it has: MCX's close moves with US daylight saving, India's F&O close moved to 15:40, and
+ * the stand-in here still said 15:30: RC3T-008). */
 export const FALLBACK_HOURS: Record<string, { open: string; close: string }> = {
-  NFO: { open: "09:15", close: "15:30" }, BFO: { open: "09:15", close: "15:30" }, MCX: { open: "09:00", close: "23:30" }, CDS: { open: "09:00", close: "17:00" },
+  NFO: { open: "09:15", close: "15:40" }, BFO: { open: "09:15", close: "15:40" }, MCX: { open: "09:00", close: "23:30" }, CDS: { open: "09:00", close: "17:00" },
 };
 
 /** A number box's range in words, for the line under it: "1 to 50", "a whole number from −100 to 100". */

@@ -72,7 +72,8 @@ HOLDS = [("m15", "Under 15 minutes"), ("h1", "15 minutes to 1 hour"), ("day", "O
 R_BUCKETS = [(-math.inf, -2, "Under −2R"), (-2, -1, "−2 to −1R"), (-1, 0, "−1 to 0R"), (0, 1, "0 to 1R"), (1, 2, "1 to 2R"),
              (2, 3, "2 to 3R"), (3, math.inf, "3R or more")]
 ASSUMPTIONS = ("Round trips are paired first in, first out per instrument, from flat to flat. Charges on tradebook lines "
-               "are STT/CTT, exchange and SEBI fees, stamp duty and GST at today's published rates, the depository (DP) charge "
+               "are STT/CTT, exchange and SEBI fees, stamp duty and GST at today's published rates (an ETF's units: no STT on a purchase, "
+               "0.001% on a sale), the depository (DP) charge "
                "of ₹15.34 for each stock sold from delivery on a day, and the brokerage you set: a flat amount on each line of "
                "the file; tax P&L lines keep the charges your broker listed, the same ones your tax report uses. An option in a tradebook "
                "with no exit by its expiry is counted as expiring at ₹0 (one that expired in the money settled at a price "
@@ -109,7 +110,9 @@ def classify(symbol: str, exchange: str = "", seg: str = "") -> dict:
     s, ex, sg = clean_symbol(symbol), str(exchange or "").upper(), str(seg or "").upper()
     opt, fut = bool(OPT.search(s)), bool(FUT.search(s))
     if not (opt or fut):
-        return {"u": s, "group": "eq", "kind": "in_eq", "opt": False}
+        # a fund's units pay no STT on a purchase and 0.001% on a sale, not a share's 0.1% each way (RC3T-001: the tradebook's
+        # NIFTYBEES lines were charged as shares wherever the file listed no charges)
+        return {"u": s, "group": "eq", "kind": "in_etf" if C.is_india_etf({"type": "EQ", "exchange": "NSE", "symbol": s}) else "in_eq", "opt": False}
     u = hf.underlying(s)
     if ex == "MCX" or "MCX" in sg or "COM" in sg or hf.COMMODITIES.match(u):
         return {"u": u, "group": "com", "kind": "in_mcx_opt" if opt else "in_mcx_fut", "opt": opt}
@@ -570,13 +573,14 @@ def _hid(*parts) -> str:
     return hashlib.sha1("|".join(str(p) for p in parts).encode()).hexdigest()[:12]
 
 
-def _brokerage(kind: str, s: dict) -> float:
-    return s["brokerage_delivery"] if kind == "in_eq" else s["brokerage_other"]
+def _brokerage(kind: str, s: dict, intraday: bool = False) -> float:
+    return s["brokerage_delivery"] if kind in C.DP_KINDS and not intraday else s["brokerage_other"]
 
 
-def _dp(kind: str) -> float:
-    """The DP charge on a delivery sale (one sale day), none on intraday or F&O (DB-040)."""
-    return C.dp_charge() if kind == "in_eq" else 0.0
+def _dp(kind: str, intraday: bool = False) -> float:
+    """The DP charge on a delivery sale (one sale day), none on intraday or F&O (DB-040); a fund's units sit in the demat
+    account too."""
+    return C.dp_charge() if kind in C.DP_KINDS and not intraday else 0.0
 
 
 def _cost(kind: str, side: str, qty: float, price: float, brokerage: float) -> float:
@@ -613,7 +617,7 @@ class _Episode:
         bv = sum(f["price"] * q for f, q in bought)
         sv = sum(f["price"] * q for f, q in sold)
         charges, srcs = 0.0, set()
-        if kind == "in_eq":
+        if kind in C.DP_KINDS and not intraday:
             # the DP charge, once for each day shares were sold from delivery (DB-040); a file's charges already hold it
             days = {f["d"] for f, _ in sold if not f.get("expired") and not file_charged(f)}
             charges += C.dp_charge() * len(days)
@@ -625,7 +629,7 @@ class _Episode:
                     charges += fill_charges(f, q, side, kind == "in_eq_mis")
                     srcs.add("file")
                 else:
-                    charges += _cost(kind, side, q, f["price"], _brokerage(kind, s) * (q / f["qty"]))
+                    charges += _cost(kind, side, q, f["price"], _brokerage(kind, s, intraday) * (q / f["qty"]))
                     srcs.add("rates")
         qty = sum(q for _, q in self.entries)
         entry = sum(f["price"] * q for f, q in self.entries) / qty
@@ -759,8 +763,8 @@ def line_trades(lines: list[dict], s: dict) -> list[dict]:
         qty = x["qty"]
         bp, sp = x["bv"] / qty, x["sv"] / qty
         if x.get("charges") is None:
-            brk = _brokerage(kind, s)
-            charges, src = _cost(kind, "buy", qty, bp, brk) + _cost(kind, "sell", qty, sp, brk) + _dp(kind), "rates"
+            brk = _brokerage(kind, s, intraday)
+            charges, src = _cost(kind, "buy", qty, bp, brk) + _cost(kind, "sell", qty, sp, brk) + _dp(kind, intraday), "rates"
         else:
             charges, src = float(x["charges"]), "file"
         hold_s, days = _hold(x["ed"], x.get("et") or "", x["xd"], x.get("xt") or "")
@@ -796,9 +800,9 @@ def manual_trades(manual: list[dict], s: dict, src: str = "manual") -> list[dict
         elif info["kind"] is None:
             charges, src_c = 0.0, "none"
         else:
-            brk = _brokerage(kind, s)
+            brk = _brokerage(kind, s, intraday)
             buy_px, sell_px = (m["entry"], m["exit"]) if sign > 0 else (m["exit"], m["entry"])
-            charges, src_c = _cost(kind, "buy", qty, buy_px, brk) + _cost(kind, "sell", qty, sell_px, brk) + _dp(kind), "rates"
+            charges, src_c = _cost(kind, "buy", qty, buy_px, brk) + _cost(kind, "sell", qty, sell_px, brk) + _dp(kind, intraday), "rates"
         hold_s, days = _hold(m["ed"], m.get("et") or "", m["xd"], m.get("xt") or "")
         out.append({"id": m["id"], "symbol": clean_symbol(m["sym"]), "u": info["u"], "segment": _seg(info["group"], intraday),
                     "side": m["side"], "entry_t": _at(m["ed"], m.get("et") or ""), "exit_t": _at(m["xd"], m.get("xt") or ""),

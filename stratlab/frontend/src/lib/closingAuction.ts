@@ -21,7 +21,7 @@ export type CasView = {
   expiry: { series: string[]; settlement: string; proposal: string; positions: CasPosition[] };
   history: { allowed: boolean; plan: string; days: number }; sources: Record<string, string>; note: string;
 };
-export type CasDay = { day: string; stocks: number; avg_abs_gap: number | null; up: number; down: number;
+export type CasDay = { day: string; stocks: number; compared?: number; avg_abs_gap: number | null; up: number; down: number;
   widest?: { symbol: string; gap: number | null }; indices: { name: string; start: number | null; close: number | null; gap: number | null }[];
   stock?: { ref: number | null; final: number | null; qty: number | null; gap: number | null } | null };
 export type CasHistory = { days: CasDay[]; symbol: string | null; note: string };
@@ -64,9 +64,12 @@ export function qtyExact(v: number | null | undefined): string {
 }
 
 /** "181 above · 4 unchanged · 28 below": the three add up to the day's stocks (DC-012: "181 / 28" of 213). */
-export function aboveBelow(d: { stocks: number; up: number; down: number }): string {
-  const same = Math.max(0, d.stocks - d.up - d.down);
-  return `${d.up} above · ${same} unchanged · ${d.down} below`;
+export function aboveBelow(d: { stocks: number; compared?: number; up: number; down: number }): string {
+  // a stock with no reference price has no gap: it is none of the three, not "unchanged" (RC3T-009)
+  const compared = d.compared ?? d.stocks;
+  const same = Math.max(0, compared - d.up - d.down);
+  const none = Math.max(0, d.stocks - compared);
+  return `${d.up} above · ${same} unchanged · ${d.down} below${none ? ` · ${none} without a gap` : ""}`;
 }
 
 /** Whether a column has anything to show on any row (a column of dashes, or of zeros, is left out: DC-010, DC-011). */
