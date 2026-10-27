@@ -1479,7 +1479,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
    number below its neighbours' */
 .k-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s4) var(--s5); }
 /* VR2-020: the funds' cost and behaviour card holds seven figures: four across (4 + 3), not five (5 + 2, a second row of two) */
-.mf-stats .k-stats { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.mf-stats .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* never 3 across: seven made 3 + 3 + 1 at 1280 (UI checker R9) */
+@media (min-width: 1000px) { .mf-stats .k-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .k-stats > .k-stat { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
 .k-stats > .k-stat > * + * { margin-top: 2px; }
 .k-stats > .k-stat > .k-stat-k { align-self: end; }

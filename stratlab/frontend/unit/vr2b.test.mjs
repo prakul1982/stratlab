@@ -38,7 +38,7 @@ test("VR2-019: the IPO alert events and markets share one row of chips", () => {
 });
 
 test("VR2-020: the funds' cost and behaviour card is four figures across (4 + 3), not five (5 + 2)", () => {
-  assert.match(css, /\n\.mf-stats \.k-stats \{ grid-template-columns: repeat\(auto-fit, minmax\(220px, 1fr\)\); \}/);
+  assert.match(css, /@media \(min-width: 1000px\) \{ \.mf-stats \.k-stats \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\); \} \}/);
 });
 
 test("VR2-021: Invest home's red flags say the window once, not at the start of every line", () => {
