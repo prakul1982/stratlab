@@ -90,4 +90,14 @@ test("the unseen-data help states the rule it applies; Sharpe's help is true of 
   assert.match(HELP.sharpe, /near 0 or below/);
   assert.match(HELP.keep, /depository \(DP\) charge on Indian shares sold from delivery/);
   assert.doesNotMatch(HELP.winRate, /is fine/);
+  assert.doesNotMatch(HELP.walkforward, /really have earned/);
+  assert.doesNotMatch(HELP.basket, /more likely a real pattern|probably that chart/);
+  assert.match(HELP.basket, /most making money means the result isn't limited to your pick/);
+});
+
+test("the walk-forward card states what happened, not why (RC3T-010)", () => {
+  const s = read("src/pages/ExperimentPage.tsx");
+  assert.doesNotMatch(s, /flattered it|fitting noise/);
+  assert.match(s, /under 50% means most of it did not carry over/);
+  assert.match(s, /The best settings changed from one step to the next\./);
 });
