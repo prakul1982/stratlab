@@ -18,3 +18,9 @@ test("RC3M-007: the ETFs and gold bonds card shows the indexed and 10% heads, an
   assert.match(src, /but the cost can't be indexed \(bought before the index starts\), so not worked out/);
   assert.doesNotMatch(src, /Sold before 23 Jul 2024 under the old long-term rules \(indexation\), not worked out here/);
 });
+
+test("RC3M-009: Screens shows the note when the stored promoter and insider purchases don't reach back over the window", () => {
+  assert.match(read("src/lib/screens.ts"), /insider_note\?: string \| null/);
+  assert.match(read("src/pages/Screens.tsx"), /\{out\?\.insider_note && <p className="k-note" data-testid="screens-insider-note">\{out\.insider_note\}<\/p>\}/);
+  assert.match(read("e2e/pages.spec.ts"), /no company can be shown as having had none/);
+});

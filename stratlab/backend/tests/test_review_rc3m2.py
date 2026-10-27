@@ -1,7 +1,12 @@
 """RC3-M2: the Money findings RC3-M left open (RC3M-007 to RC3M-011), each fixed at the root. Each test names its finding."""
-import pytest
+import json
+from datetime import date, datetime, timedelta, timezone
 
-from app import cii, instrument_kinds as I, money_itr, tax_export, tax_lots as T, tax_total
+import pytest
+import time_machine
+
+from app import cii, db, deals, instrument_kinds as I, money_itr, screens, tax_export, tax_lots as T, tax_total
+from tests import world as W
 from tests.test_instrument_kinds import lots
 
 TODAY = "2025-10-01"
@@ -157,3 +162,92 @@ def test_the_surcharge_parts_add_up_with_uncapped_gains():
     t = surcharge_case(2021, "lt_usi")
     assert sum(t["parts"].values()) == pytest.approx(t["total"], abs=0.05)
     assert t["total"] == pytest.approx((t["slab_tax"] + t["special_tax"] + t["surcharge"]) * 1.04, abs=1.0)
+
+
+# ---------- RC3M-009: "no promoter or insider bought in N days" needs purchase dates that reach back N days ----------
+DAY = date(2026, 10, 14)
+
+
+def ago(days):
+    return (DAY - timedelta(days=days)).isoformat()
+
+
+@pytest.fixture
+def screen_world(monkeypatch):
+    world = W.build(monkeypatch)
+    deals._cache.clear()
+    screens._mem.clear()
+    with time_machine.travel(datetime(DAY.year, DAY.month, DAY.day, 6, 30, tzinfo=timezone.utc), tick=False):
+        yield world
+    world["close"]()
+    deals._cache.clear()
+    screens._mem.clear()
+
+
+def index_with(cover):
+    """Three Indian companies; RELIANCE bought 20 days ago, TCS 200 days ago, INFY never; the purchases stored from `cover`."""
+    from tests.test_screens import store_pages
+    store_pages()
+    deals.note_buys([], DAY - timedelta(days=int(cover)), DAY)
+    st = deals.buys_state()
+    st["buys"] = {"RELIANCE": ago(20), "TCS": ago(200)}
+    db.set_setting(deals.BUYS_KEY, json.dumps(st))
+    deals._cache.clear()
+    return screens.build_index("IN")
+
+
+def names(out):
+    return sorted(r["symbol"] for r in out["rows"])
+
+
+def test_a_window_longer_than_the_stored_purchases_shows_nobody_as_having_none_and_says_so(screen_world):
+    idx = index_with(60)                                        # purchases stored from 60 days ago
+    assert idx["insider_from"] == ago(60)
+    yes30 = screens.run("IN", {"insider_buy": "yes", "insider_days": 30}, index=idx)
+    no30 = screens.run("IN", {"insider_buy": "no", "insider_days": 30}, index=idx)
+    assert "RELIANCE" in names(yes30) and "RELIANCE" not in names(no30) and len(names(no30)) > 0     # 30 days are covered
+    assert yes30["insider_note"] is None and no30["insider_note"] is None
+    no90 = screens.run("IN", {"insider_buy": "no", "insider_days": 90}, index=idx)
+    assert names(no90) == [] and no90["total"] == 0                                  # INFY might have bought 80 days ago: not known
+    assert no90["insider_note"] == (f"Promoter and insider purchases are stored only from {screens.fmt_day(ago(60))}, which is less "
+                                    "than the last 90 days, so no company can be shown as having had none in that time. Pick a shorter period.")
+    yes90 = screens.run("IN", {"insider_buy": "yes", "insider_days": 90}, index=idx)
+    assert "RELIANCE" in names(yes90) and "TCS" not in names(yes90)
+    assert yes90["insider_note"].endswith("a purchase from before then is not in this list.") and "stored only from" in yes90["insider_note"]
+    assert screens.run("IN", {}, index=idx)["insider_note"] is None                  # no such condition: nothing to say
+
+
+def test_a_window_inside_the_stored_purchases_works_as_before(screen_world):
+    idx = index_with(400)
+    out = screens.run("IN", {"insider_buy": "no", "insider_days": 365}, index=idx)
+    assert out["insider_note"] is None and "RELIANCE" not in names(out) and "TCS" not in names(out) and names(out)
+    assert "TCS" in names(screens.run("IN", {"insider_buy": "yes", "insider_days": 365}, index=idx))
+
+
+def test_no_stored_purchases_at_all_is_said_and_matches_nobody_for_no(screen_world):
+    from tests.test_screens import store_pages
+    store_pages()
+    idx = screens.build_index("IN")
+    assert idx["insider_from"] is None
+    out = screens.run("IN", {"insider_buy": "no", "insider_days": 30}, index=idx)
+    assert names(out) == [] and "aren't stored yet" in out["insider_note"]
+
+
+def test_the_coverage_is_the_one_the_index_was_built_with_and_survives_storage(screen_world):
+    idx = index_with(60)
+    again = screens.load_index("IN")
+    assert again["insider_from"] == ago(60)
+    deals.note_buys([], DAY - timedelta(days=400), DAY)                              # the job backfills further after the build
+    deals._cache.clear()
+    assert screens.insider_cover("IN", again) == ago(60)                             # the rows were built without those days
+    assert screens.insider_cover("US", again) is None
+    old = {k: v for k, v in again.items() if k != "insider_from"}                    # an index built before the day was kept
+    assert screens.insider_cover("IN", old) == ago(400)
+
+
+def test_saved_screen_symbols_use_the_same_rule(screen_world):
+    index_with(60)
+    screens._mem.clear()
+    f = screens.clean("IN", {"insider_buy": "no", "insider_days": 365})
+    assert screens._symbols("IN", f) == []
+    assert screens._symbols("IN", screens.clean("IN", {"insider_buy": "no", "insider_days": 30}))

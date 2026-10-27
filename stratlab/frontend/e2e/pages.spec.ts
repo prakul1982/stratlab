@@ -1218,10 +1218,17 @@ test("screens: promoter or insider bought in the last N days", async ({ page }, 
   const group = page.getByRole("radiogroup", { name: "Promoter or insider bought" });
   await group.getByRole("radio", { name: "Yes" }).click();
   await expect(page.getByText(/5 of 20 companies match/)).toBeVisible();
+  await expect(page.getByTestId("screens-insider-note")).toHaveCount(0);                 // the stored dates cover 90 days
   await page.getByLabel("Promoter or insider bought: in the last").selectOption("365");
   await expect(page.getByText(/10 of 20 companies match/)).toBeVisible();
+  // the demo's stored purchases reach back 120 days (RC3M-009): a year is said to be wider than that, and "No" shows nobody
+  await expect(page.getByTestId("screens-insider-note")).toContainText("are stored only from");
   await group.getByRole("radio", { name: "No" }).click();
-  await expect(page.getByText(/10 of 20 companies match/)).toBeVisible();
+  await expect(page.getByText(/0 of 20 companies match/)).toBeVisible();
+  await expect(page.getByTestId("screens-insider-note")).toContainText("no company can be shown as having had none");
+  await page.getByLabel("Promoter or insider bought: in the last").selectOption("90");
+  await expect(page.getByText(/15 of 20 companies match/)).toBeVisible();
+  await expect(page.getByTestId("screens-insider-note")).toHaveCount(0);
   if (info.project.name === "phone") await touchable(page);
   await page.getByRole("button", { name: "What is Promoter or insider bought?" }).click();
   await expect(page.getByRole("note")).toContainText("insider-trading disclosures");
