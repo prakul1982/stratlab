@@ -7,7 +7,7 @@ import { uploadedLine } from "../lib/journalTax";
 import { homeOf, startView } from "../lib/spaces";
 import { homeRegion } from "../lib/homeMarket";
 import { usTodayNote } from "../lib/marketHours";
-import { dayLabel, pnlLabel, priceNote, type Closes } from "../lib/holdingsEdit";
+import { pnlLabel, priceNote, type Closes } from "../lib/holdingsEdit";
 import { NAV_GROUPS } from "../lib/navGroups";
 import { pageAt } from "../lib/nav";
 import { PageTags } from "../components/PageTags";
@@ -469,7 +469,8 @@ function HoldingsSummary() {
               <Fig label={pnlLabel("Gain or loss", h.totals.pnl_partial)} tone={signCls(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
                 note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signCls(h.totals.pnl)} missing={gainMissing(h.totals)} />
               {/* "Today" only of today's session: the session the change belongs to is named when it is an earlier day (R41A) */}
-              {h.totals.day != null && <Fig label={dayLabel(h.totals.session, istToday(), (d) => fmtDate(d, { weekday: true, year: false }))} tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
+              {/* VR2-003: the label does not carry the date here: "Last session (Mon 26 Oct)" wrapped to three lines and staggered the three labels; "Prices as of" below says the day */}
+              {h.totals.day != null && <Fig label={h.totals.session && h.totals.session < istToday() ? "Last session" : "Today"} tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
               {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")}
                 note={h.us.in_total && h.usd_inr ? `at ₹${h.usd_inr.toFixed(2)} a dollar` : undefined} />}
             </div>
@@ -496,7 +497,7 @@ function TaxSummary() {
   // CK-2 (R1/R13): what the estimate assumes is behind the card's (i), not a three-line paragraph that made this card taller than My Holdings beside it
   const how = year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge.";
   return (
-    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} info={how} right={<Link to={year ? fyLink("/tax-report", year.fy) : "/tax-report"} className="link" data-money="/tax-report">Open Tax report →</Link>}>
+    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} info={how} right={<Link to={year ? fyLink("/tax-report", year.fy) : "/tax-report"} className="link" data-money="/tax-report">Tax report →</Link>}>
       {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !taxHasData(t) ? (
