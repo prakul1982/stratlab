@@ -121,7 +121,9 @@ def to_csv(y: dict, rows: list[dict], names: dict) -> str:
                     f"{r['sale']:.2f}", f"{r['gain']:.2f}", "Long-term" if r["term"] == "LT" else "Short-term", _pct(r["rate"]), note])
     units = y.get("units")
     if units:                                  # gold, silver, international and debt ETFs and gold bonds: their own heads
-        heads = {"slab": "Short-term, slab rate", "lt": "Long-term, 12.5% (section 112)", "exempt": "Exempt", "old": "Old rules (not worked out)"}
+        heads = {"slab": "Short-term, slab rate", "lt": "Long-term, 12.5% (section 112)", "exempt": "Exempt",
+                 "lt_idx": "Long-term, 20% with indexation (section 112)", "lt_10": "Long-term, 10% without indexation (section 112 proviso)",
+                 "old": "Old rules (not worked out)"}
         w.writerow([])
         w.writerow(["ETFs and gold bonds taxed under other rules"])
         w.writerow(["Unit", "Type", "Bought", "Sold", "Quantity", "Cost (with charges)", "Sale (after charges)", "Gain or loss", "Head", "Why"])

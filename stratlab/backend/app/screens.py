@@ -18,7 +18,7 @@ import re
 import secrets
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from . import db, deals, leader, memguard, sector_members, stock_pages, surveillance
 from .newsletter import job as news_job
@@ -286,6 +286,8 @@ def build_index(region: str, store: bool = True) -> dict:
     else:
         rows = with_ranks(one_per_company(rows, stock_pages.nse_twins()))
     index = {"region": region, "at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "rows": rows}
+    if region == "IN":              # the first day the purchase dates above cover (RC3M-009)
+        index["insider_from"] = deals.buys().get("from")
     if store:
         db.set_setting(INDEX_KEY + region, json.dumps(index))
         with _mem_lock:
@@ -316,7 +318,8 @@ def load_index(region: str) -> dict:
         index = db.json_value(db.get_setting(INDEX_KEY + region), {})
     except Exception:            # storage down: an empty index, tried again next time
         return {"region": region, "at": None, "rows": []}
-    index = {"region": region, "at": index.get("at"), "rows": [r for r in index.get("rows") or [] if isinstance(r, dict) and r.get("symbol")]}
+    kept = {"insider_from": index["insider_from"]} if "insider_from" in index else {}      # RC3M-009
+    index = {"region": region, "at": index.get("at"), "rows": [r for r in index.get("rows") or [] if isinstance(r, dict) and r.get("symbol")], **kept}
     if region == "US":
         with_us_red(index["rows"])               # always the newest stored count, whenever the index was built
     else:                                        # an index stored before: each company once, ranked by size
@@ -473,8 +476,44 @@ def with_ranks(rows: list[dict]) -> list[dict]:
     return rows
 
 
-def matches(region: str, r: dict, f: dict) -> bool:
-    """The company meets every condition. A number the company doesn't report never meets a condition on it."""
+_LIVE = object()
+
+
+def insider_cover(region: str, index: dict) -> str | None:
+    """The first day the stored promoter and insider purchases cover, as the index was built with them (RC3M-009), else
+    the day they cover now (an index built before it was kept). None when none are stored (or not India)."""
+    if region != "IN":
+        return None
+    return index["insider_from"] if "insider_from" in index else deals.buys().get("from")
+
+
+def insider_cut(f: dict) -> str:
+    """The first day of the window "bought in the last N days" asks about."""
+    return (deals.ist_now().date() - timedelta(days=f.get("insider_days") or INSIDER_DAYS)).isoformat()
+
+
+def insider_note(f: dict, cover: str | None) -> str | None:
+    """Said when the purchases stored don't reach back over the whole window picked (RC3M-009): a company with none stored
+    may have bought before the first stored day, so "no promoter or insider bought" can't be told for any company."""
+    if not f.get("insider_buy") or (cover is not None and cover <= insider_cut(f)):
+        return None
+    days = f.get("insider_days") or INSIDER_DAYS
+    since = f"are stored only from {fmt_day(cover)}" if cover else "aren't stored yet"
+    if f["insider_buy"] == "no":
+        return (f"Promoter and insider purchases {since}, which is less than the last {days} days, so no company can be shown "
+                "as having had none in that time. Pick a shorter period.")
+    return (f"Promoter and insider purchases {since}, which is less than the last {days} days: a purchase from before then "
+            "is not in this list.")
+
+
+def fmt_day(d: str) -> str:
+    return date.fromisoformat(d).strftime("%-d %b %Y")
+
+
+def matches(region: str, r: dict, f: dict, cover=_LIVE) -> bool:
+    """The company meets every condition. A number the company doesn't report never meets a condition on it. `cover`: the
+    first day of the stored promoter and insider purchases (insider_cover); with a window longer than that, nobody meets
+    "no promoter or insider bought" (RC3M-009), as a purchase before the first stored day can't be ruled out."""
     if f["sector"] and r.get("sector") not in f["sector"]:
         return False
     if f["cap"] and not _in_band(region, r, f["cap"]):
@@ -486,7 +525,11 @@ def matches(region: str, r: dict, f: dict) -> bool:
         if n is None or (f["red_flags"] == "yes") != (n > 0):
             return False
     if f.get("insider_buy"):
-        cut = (deals.ist_now().date() - timedelta(days=f.get("insider_days") or INSIDER_DAYS)).isoformat()
+        cut = insider_cut(f)
+        if cover is _LIVE:
+            cover = deals.buys().get("from")
+        if f["insider_buy"] == "no" and (cover is None or cover > cut):
+            return False
         if (f["insider_buy"] == "yes") != (str(r.get("insider_buy_at") or "") >= cut):
             return False
     if f.get("surveillance"):
@@ -510,7 +553,8 @@ def run(region: str, filters: dict, sort: str = "market_cap", desc: bool | None 
     if sort not in COLUMNS:
         raise ScreenError("Sort by one of the table's columns.")
     index = index or load_index(region)
-    hit = [r for r in index["rows"] if matches(region, r, f)]
+    cover = insider_cover(region, index)
+    hit = [r for r in index["rows"] if matches(region, r, f, cover)]
     flags = surveillance.snapshot()["flags"] if region == "IN" else {}
     text = sort in ("name", "symbol", "sector")
     have = [r for r in hit if r.get(sort) is not None]
@@ -523,17 +567,17 @@ def run(region: str, filters: dict, sort: str = "market_cap", desc: bool | None 
     oldest, newest = rows_as_of(page, as_of(index))
     return {"region": region, "filters": f, "sort": sort, "desc": bool(desc), "total": len(rows), "offset": offset,
             "rows": page, "indexed": len(index["rows"]), "as_of": oldest, "as_of_newest": newest, "stale": stale_rows(page), "index_at": index.get("at"),
-            "no_value": no_value(region, index["rows"], f) if offset == 0 else {}}
+            "no_value": no_value(region, index["rows"], f, cover) if offset == 0 else {}, "insider_note": insider_note(f, cover)}
 
 
-def no_value(region: str, rows: list[dict], f: dict) -> dict[str, int]:
+def no_value(region: str, rows: list[dict], f: dict, cover=_LIVE) -> dict[str, int]:
     """For each number or Stage condition, how many companies meet every other condition but have no value for this one,
     so are left out by it (DE-009: TCS and INFY, with no Stage worked out, dropped from a Stage 1 screen without a word).
     {column: count}, only the ones above zero."""
     out = {}
     for k in (["stage"] if f["stage"] else []) + list(f["ranges"]):
         rest = {**f, "stage": [] if k == "stage" else f["stage"], "ranges": {x: b for x, b in f["ranges"].items() if x != k}}
-        n = sum(1 for r in rows if _num(r.get(k)) is None and matches(region, r, rest))
+        n = sum(1 for r in rows if _num(r.get(k)) is None and matches(region, r, rest, cover))
         if n:
             out[k] = n
     return out
@@ -634,7 +678,9 @@ def _clean_saved(req: dict) -> dict:
 
 
 def _symbols(region: str, f: dict) -> list[str]:
-    return sorted(r["symbol"] for r in load_index(region)["rows"] if matches(region, r, f))
+    index = load_index(region)
+    cover = insider_cover(region, index)
+    return sorted(r["symbol"] for r in index["rows"] if matches(region, r, f, cover))
 
 
 def save(uid: str, req: dict, limit: int, sid: str | None = None) -> dict | None:
@@ -810,7 +856,8 @@ def _weekly_one(uid: str, now: datetime, profile_fn, limit_fn, send, known: dict
             index = load_index(s["region"])
             if not index["rows"]:
                 continue
-            now_match = [r for r in index["rows"] if matches(s["region"], r, f)]
+            cover = insider_cover(s["region"], index)
+            now_match = [r for r in index["rows"] if matches(s["region"], r, f, cover)]
             before, seen = set(s.get("matched") or []), known.get(s["region"])
             matched[s["id"]] = sorted(r["symbol"] for r in now_match)
             new = [r for r in now_match if r["symbol"] not in before and (seen is None or r["symbol"] in seen)]

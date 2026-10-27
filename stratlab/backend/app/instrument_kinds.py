@@ -15,9 +15,16 @@ Tax, as the law stands (each rule's source is next to it). Facts and arithmetic;
 - Debt ETFs (more than 65% in debt): bought from 1 Apr 2023, always short term at slab rates (section 50AA);
   bought earlier, as gold ETFs.
 - SGBs: redemption at maturity exempt for an individual (section 47(viic)); a sale on the exchange is a capital
-  gain, long term after 12 months, 12.5% from 23 Jul 2024. The 2.5% interest is taxed at slab rates."""
+  gain, long term after 12 months, 12.5% from 23 Jul 2024. The 2.5% interest is taxed at slab rates.
+- Sold before 23 Jul 2024 (RC3M-007): gold, silver and international ETF units and debt ETF units bought before
+  1 Apr 2023 are long term after 36 months, taxed under section 112 at 20% on the gain after indexing the cost with
+  the Cost Inflation Index (cii.py). A listed gold bond is a bond, not a unit, so the proviso to section 112(1)
+  applies: the tax is the lower of 20% on the indexed gain and 10% on the gain without indexation. Units have no
+  10% option: the proviso is for "listed securities (other than a unit)"."""
 import re
 from datetime import date
+
+from . import cii
 
 RATE_CHANGE = "2024-07-23"        # Finance (No.2) Act 2024: new rates and holding periods for transfers from this day
 SPECIFIED_FROM = "2023-04-01"     # Finance Act 2023, section 50AA: specified mutual fund units bought from this day
@@ -174,8 +181,8 @@ def _after_months(buy: str, sell: str, months: int) -> bool:
 
 def treatment(code: str, symbol: str, bought: str, sold: str, fy: int) -> tuple[str, str]:
     """(head, why) for one non-equity sale: "slab" (short term at slab rates), "lt" (long term at 12.5% under
-    section 112), "exempt", or "old" (a sale before 23 Jul 2024 taxed under the old rules with indexation, shown
-    but not worked out)."""
+    section 112), "exempt", or "old" (long term and sold before 23 Jul 2024, under the old rules with indexation:
+    `old_rules` works it out, from the amounts)."""
     tc = tax_class(code)
     if tc == "sgb":
         mat = sgb_maturity(symbol)
@@ -187,7 +194,7 @@ def treatment(code: str, symbol: str, bought: str, sold: str, fy: int) -> tuple[
         if not _after_months(bought, sold, 12):
             return "slab", "Gold bond sold within 12 months: short-term gain at slab rates."
         if sold < RATE_CHANGE:
-            return "old", "Gold bond sold on the exchange before 23 Jul 2024: long term under the old rules (10%, or 20% with indexation)."
+            return "old", "Gold bond sold on the exchange before 23 Jul 2024 after 12 months: long term under the old rules."
         return "lt", "Gold bond sold on the exchange after 12 months: long-term gain at 12.5% (section 112)."
     if bought >= SPECIFIED_FROM and (tc == "debt" or sold < SPECIFIED_NEW_DEF):
         return "slab", ("Bought from 1 Apr 2023: a specified mutual fund (section 50AA), so the gain is short term at slab "
@@ -197,7 +204,7 @@ def treatment(code: str, symbol: str, bought: str, sold: str, fy: int) -> tuple[
             return "lt", "Listed fund units held over 12 months: long-term gain at 12.5% (section 112), no exemption."
         return "slab", "Held 12 months or less: short-term gain at slab rates."
     if _after_months(bought, sold, 36):
-        return "old", "Sold before 23 Jul 2024 after 36 months: long term under the old rules (20% with indexation)."
+        return "old", "Sold before 23 Jul 2024 after 36 months: long term under the old rules."
     return "slab", "Sold before 23 Jul 2024 within 36 months: short-term gain at slab rates."
 
 
@@ -219,18 +226,71 @@ def split(realised: list[dict], names: dict) -> tuple[list[dict], list[dict]]:
     return eq, other
 
 
-BUCKET_OF = {"slab": "st_unit", "lt": "lt_unit"}   # the tax_lots buckets the slab and 12.5% heads go into
+BUCKET_OF = {"slab": "st_unit", "lt": "lt_unit", "lt_idx": "lt_uniti", "lt_10": "lt_unit10"}   # the tax_lots buckets each head goes into
+IDX_RATE, PLAIN_RATE = 0.20, 0.10     # section 112 before 23 Jul 2024: 20% with indexation; 10% without it (the listed-bond proviso)
+
+
+def _fy(d: str) -> int:
+    return int(d[:4]) if int(d[5:7]) >= 4 else int(d[:4]) - 1
+
+
+def _fy_name(fy: int) -> str:
+    return f"FY {fy}-{str(fy + 1)[2:]}"
+
+
+def old_rules(code: str, bought: str, sold: str, cost: float, sale: float) -> dict:
+    """(RC3M-007) A long-term sale before 23 Jul 2024, worked out: the cost indexed by the Cost Inflation Index of the
+    sale's year over the purchase's, then section 112 at 20% on that gain. A gold bond (a bond, not a unit) is taxed at
+    the lower of that and 10% on the gain without indexation (proviso to section 112(1)); an indexed result at or below
+    nil is a loss as the law computes it, and stands as one. Returns head ("lt_idx", "lt_10", or "old" when the cost
+    can't be indexed), why, `cost` and `gain` as taxed, and `indexed_cost`."""
+    from .tax_lots import money
+    fb, fs = _fy(bought), _fy(sold)
+    ratio = cii.ratio(fb, fs)
+    gain = sale - cost
+    if ratio is None:
+        return {"head": "old", "cost": cost, "gain": gain, "indexed_cost": None,
+                "why": f"Sold before 23 Jul 2024 after a long hold: bought in {_fy_name(fb)}, before the index table starts "
+                       "(1 Apr 2001), so the cost would be its 1 April 2001 value, which the files don't have. Not worked out."}
+    idx_cost = cost * ratio
+    idx_gain = sale - idx_cost
+    working = (f"Cost {money(cost)} × {cii.CII[fs]}/{cii.CII[fb]} (cost inflation index, {_fy_name(fs)} over {_fy_name(fb)}) "
+               f"= {money(idx_cost)} indexed")
+    if base(code) == "sgb":
+        tax_idx, tax_plain = IDX_RATE * max(0.0, idx_gain), PLAIN_RATE * max(0.0, gain)
+        head = "lt_10" if idx_gain > 0 and tax_plain < tax_idx else "lt_idx"
+        pair = (f"20% on the indexed gain {money(idx_gain)} is {money(tax_idx)}; 10% on the gain without indexation "
+                f"{money(gain)} is {money(tax_plain)}")
+        why = (f"Gold bond sold on the exchange before 23 Jul 2024 after 12 months: {working}. {pair}; the lower is "
+               + ("10% without indexation" if head == "lt_10" else "20% with indexation") + " (proviso to section 112(1)).")
+        return {"head": head, "why": why, "cost": cost if head == "lt_10" else idx_cost, "gain": gain if head == "lt_10" else idx_gain,
+                "indexed_cost": idx_cost}
+    why = (f"Sold before 23 Jul 2024 after 36 months: long term, 20% with indexation (section 112). {working}; gain taxed "
+           f"{money(idx_gain)}. The 10% option is only for listed shares and bonds, not units.")
+    return {"head": "lt_idx", "why": why, "cost": idx_cost, "gain": idx_gain, "indexed_cost": idx_cost}
+
+
+def worked(r: dict, n: dict, fy: int) -> tuple[str, str, dict]:
+    """(head, why, row) for one sale: treatment(), and for a long-term sale under the old rules the row with the cost and
+    gain as taxed (`old_rules`), the cost as bought in `plain_cost` and the sale's own gain in `plain_gain`."""
+    code = code_of(n)
+    head, why = treatment(code, n.get("symbol") or r["key"], r["bought"], r["sold"], fy)
+    if head != "old":
+        return head, why, r
+    w = old_rules(code, r["bought"], r["sold"], r["cost"], r["sale"])
+    return w["head"], w["why"], {**r, "cost": w["cost"], "gain": w["gain"], "plain_cost": r["cost"], "plain_gain": r["gain"],
+                                 "indexed_cost": w["indexed_cost"]}
 
 
 def bucket_rows(rows: list[dict], names: dict) -> list[dict]:
-    """The sales under the slab and 12.5% heads, each tagged with its tax_lots bucket, for the year's set-off with
-    share sales (sections 70, 71 and 74). Exempt and old-rule sales are left out."""
+    """The sales under the slab, 12.5% and old-rule long-term heads, each tagged with its tax_lots bucket, for the year's
+    set-off with share sales (sections 70, 71 and 74); an old-rule row carries its indexed cost and taxed gain. Exempt
+    sales and the ones that can't be worked out are left out."""
     out = []
     for r in rows:
-        n = names.get(r["key"]) or {}
-        head, _ = treatment(code_of(n), n.get("symbol") or r["key"], r["bought"], r["sold"], r["fy"])
+        head, _, row = worked(r, names.get(r["key"]) or {}, r["fy"])
         if head in BUCKET_OF:
-            out.append({**r, "bucket": BUCKET_OF[head]})
+            out.append({**row, "bucket": BUCKET_OF[head]})
     return out
 
 
@@ -238,39 +298,55 @@ def _r(v, dp=2):
     return None if v is None else round(v, dp)
 
 
+LT_HEADS = (("lt_idx", IDX_RATE), ("lt", LT_RATE), ("lt_10", PLAIN_RATE))      # highest rate first, the order losses are set off in
+
+
 def other_year(fy: int, rows: list[dict], names: dict) -> dict | None:
     """One financial year's non-equity sales: each with its head, the totals and the set-off among these sales alone
-    (short-term losses against any gains, long-term losses only against long-term gains). The tax estimate sets them
-    off together with share sales (tax_lots.year with bucket_rows). None when the year has none."""
+    (short-term losses against any gains, long-term losses only against long-term gains, highest rate first). The tax
+    estimate sets them off together with share sales (tax_lots.year with bucket_rows). None when the year has none."""
     mine = [r for r in rows if r["fy"] == fy]
     if not mine:
         return None
-    out_rows, sums = [], {"slab": [0.0, 0.0], "lt": [0.0, 0.0]}
+    out_rows = []
+    sums = {h: [0.0, 0.0] for h in ("slab", "lt_idx", "lt", "lt_10")}
     exempt = old = 0.0
     for r in sorted(mine, key=lambda r: (r["sold"], r["key"])):
         n = names.get(r["key"]) or {}
+        head, why, w = worked(r, n, fy)
         code = code_of(n)
-        head, why = treatment(code, n.get("symbol") or r["key"], r["bought"], r["sold"], fy)
         if head in sums:
-            sums[head][0 if r["gain"] >= 0 else 1] += abs(r["gain"])
+            sums[head][0 if w["gain"] >= 0 else 1] += abs(w["gain"])
         elif head == "exempt":
             exempt += r["gain"]
         else:
             old += r["gain"]
         out_rows.append({"key": r["key"], "kind": code, "label": label(code), "bought": r["bought"], "sold": r["sold"],
                          "qty": round(r["qty"], 4), "cost": _r(r["cost"]), "sale": _r(r["sale"]), "gain": _r(r["gain"]),
-                         "head": head, "why": why})
+                         "head": head, "why": why,
+                         **({"indexed_cost": _r(w["indexed_cost"]), "taxed_gain": _r(w["gain"])} if "plain_cost" in w else {})})
     slab_gain, slab_loss = sums["slab"]
-    lt_gain, lt_loss = sums["lt"]
     st_left = max(0.0, slab_loss - slab_gain)
     slab_net = max(0.0, slab_gain - slab_loss)
-    take = min(st_left, max(0.0, lt_gain - lt_loss))
-    st_left -= take
-    lt_net = max(0.0, lt_gain - lt_loss - take)
-    lt_left = max(0.0, lt_loss - lt_gain)
+    net = {h: sums[h][0] for h, _ in LT_HEADS}
+    lt_loss = sum(sums[h][1] for h, _ in LT_HEADS)
+
+    def use(loss: float) -> float:
+        for h, _ in LT_HEADS:
+            take = min(net[h], loss)
+            net[h] -= take
+            loss -= take
+        return loss
+    lt_left = use(lt_loss)
+    st_left = use(st_left)
+    tax = {h: net[h] * rate for h, rate in LT_HEADS}
+    group = lambda h, rate: {"gains": _r(sums[h][0]), "losses": _r(sums[h][1]), "taxable": _r(net[h]), "rate": rate, "tax": _r(tax[h])}
     return {"rows": out_rows[:500], "count": len(out_rows),
             "slab": {"gains": _r(slab_gain), "losses": _r(slab_loss), "taxable": _r(slab_net)},
-            "lt": {"gains": _r(lt_gain), "losses": _r(lt_loss), "taxable": _r(lt_net), "rate": LT_RATE, "tax": _r(lt_net * LT_RATE)},
+            "lt": group("lt", LT_RATE),
+            # the old-rule heads, only in a year that has sales under them (RC3M-007)
+            "lt_idx": group("lt_idx", IDX_RATE) if any(x["head"] == "lt_idx" for x in out_rows) else None,
+            "lt_10": group("lt_10", PLAIN_RATE) if any(x["head"] == "lt_10" for x in out_rows) else None,
             "exempt": _r(exempt), "old": _r(old) if any(x["head"] == "old" for x in out_rows) else None,
             "carry_forward": {"st": _r(st_left), "lt": _r(lt_left)}}
 
@@ -279,6 +355,11 @@ NOTES = [
     "Equity ETFs (65% or more in Indian shares), REIT and InvIT units are taxed like shares: sections 111A and 112A, "
     "long term after 12 months, and their gains share the ₹1.25 lakh exemption.",
     "REIT and InvIT units sold before 23 Jul 2024 were long term only after 36 months.",
+    "Gold, silver, international and debt ETF units (bought before 1 Apr 2023 for debt ones) sold before 23 Jul 2024 after "
+    "36 months are worked out under the old rules: section 112 at 20% on the gain after indexing the cost with the Cost "
+    "Inflation Index. A gold bond sold on the exchange before that day after 12 months pays the lower of 20% with "
+    "indexation and 10% without it, decided sale by sale before the year's set-off; units have no 10% option. A sale "
+    "whose cost can't be indexed stays marked as not worked out, with the reason.",
     "Gold, silver and international ETFs: long term after 12 months at 12.5% (section 112, no exemption); short term at "
     "your slab rate. Units bought from 1 Apr 2023 and sold before 1 Apr 2025 were short term at slab rates whatever the "
     "holding (section 50AA).",

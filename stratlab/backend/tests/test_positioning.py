@@ -433,7 +433,8 @@ def test_chain_view_falls_back_to_the_newest_recording(w, monkeypatch):
     today = date.today()
     FP.record_days(db.add_option_snapshot, "BANKNIFTY", FP.weekdays_before(today, 2), spot=55000.0, gap=100)
     v = P.chain_view(main.options_data, "BANKNIFTY", "next")
-    assert v["source"] == "recorded" and v["expiry"] == v["expiries"][1] and v["rows"]
+    # on a monthly expiry day the expiring series is gone from the list, so "next" can be the only one left (27 Oct 2026)
+    assert v["source"] == "recorded" and v["rows"] and v["expiry"] == v["expiries"][min(1, len(v["expiries"]) - 1)]
     assert P.chain_view(main.options_data, "FINNIFTY", "current")["source"] is None     # never recorded: nothing to show
     table = {r["name"]: r for r in P.pcr_table(main.options_data)}
     assert table["BANKNIFTY"]["source"] == "recorded" and table["SENSEX"]["source"] is None

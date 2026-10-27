@@ -209,6 +209,7 @@ export function ScreensPage() {
         lede="Pick the conditions; see every company that meets them. Nothing here scores companies: the list starts with the largest market value; sort by any column." />
       {latestDue(out?.as_of_newest ?? out?.as_of, out?.pending) && <p className="k-note" data-testid="screens-pending">{latestDue(out?.as_of_newest ?? out?.as_of, out?.pending)}</p>}
       {staleNote(out?.stale) && <p className="k-note" data-testid="screens-stale">{staleNote(out?.stale)}</p>}
+      {out?.insider_note && <p className="k-note" data-testid="screens-insider-note">{out.insider_note}</p>}
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={pickRegion} /></div>
 
       {saved && saved.items.length > 0 && (

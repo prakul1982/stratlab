@@ -425,7 +425,10 @@ def screen_index():
                 r["insider_buy_at"] = (date.today() - timedelta(days=10 if i % 4 == 1 else 200)).isoformat() if i % 2 else None
             rows.append(r)
         rows.sort(key=lambda r: r["name"].lower())
-        db.set_setting(screens.INDEX_KEY + region, json.dumps({"region": region, "at": f"{today}T06:00:00+00:00", "rows": rows}))
+        index = {"region": region, "at": f"{today}T06:00:00+00:00", "rows": rows}
+        if region == "IN":          # the stored purchase dates reach back 120 days: the 30 and 90 day windows are covered, 180 and 365 not (RC3M-009)
+            index["insider_from"] = (date.today() - timedelta(days=120)).isoformat()
+        db.set_setting(screens.INDEX_KEY + region, json.dumps(index))
 
 
 if __name__ == "__main__":
