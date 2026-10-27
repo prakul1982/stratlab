@@ -5,15 +5,15 @@
 .k-end { margin-left: auto; }
 .k-mono { font-family: var(--mono); }
 .k-tight { gap: var(--s1); }
-.k-textarea { width: 100%; min-height: 130px; padding: 12px 14px; border-radius: var(--r-ctl); border: 1px solid var(--line-2); background: var(--paper); font-size: var(--t-label); line-height: 1.5; resize: vertical; }
-.k-textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.k-textarea { width: 100%; min-height: 130px; padding: 12px 14px; border-radius: var(--r-ctl); border: 1px solid var(--field-line); background: var(--paper); font-size: var(--t-label); line-height: 1.5; resize: vertical; }
+.k-textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue), 0 0 0 4px var(--blue-soft); }
 .k-drop { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; padding: var(--s4); border: 1.5px dashed var(--line-2); border-radius: var(--r-ctl); background: var(--paper); color: var(--ink-2); }
 /* a touch screen has nothing to drag a file from: the hint to drop one is left out (R13S-016) */
 @media (hover: none) and (pointer: coarse) { .k-drop-hint { display: none; } }
 .k-routes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--s3); }
 .k-routes li { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--paper-2); }
-.k-search { position: relative; display: flex; align-items: center; gap: var(--s2); flex: 1 1 260px; min-width: 0; height: var(--ctl); padding: 0 14px; background: var(--paper); border: 1px solid var(--line-2); border-radius: var(--r-ctl); }
-.k-search:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.k-search { position: relative; display: flex; align-items: center; gap: var(--s2); flex: 1 1 260px; min-width: 0; height: var(--ctl); padding: 0 14px; background: var(--paper); border: 1px solid var(--field-line); border-radius: var(--r-ctl); }
+.k-search:focus-within { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue), 0 0 0 4px var(--blue-soft); }
 .k-search input { flex: 1; border: 0; background: transparent; font-size: var(--t-body); outline: none; min-width: 0; height: 100%; }
 .k-search svg { flex: none; color: var(--muted); }
 .k-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: var(--s4); align-items: start; }
