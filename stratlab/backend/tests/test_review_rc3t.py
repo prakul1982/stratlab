@@ -237,3 +237,53 @@ def test_a_library_entry_with_a_few_unseen_trades_does_not_say_none_happened():
     assert "Only a few trades closed in the years it wasn't tuned on (+3.2% in all)" in few and "No trades happened" not in few
     none = L.restated({**base, "stats": {**base["stats"], "unseen": None}})["fact_summary"]
     assert "No trades happened in the years it wasn't tuned on" in none and "Only a few" not in none
+
+
+def test_a_group_of_delivery_stocks_pays_the_depository_charge_for_each_stock_it_sells_and_still_adds_up():
+    from app.engine import portfolio
+    from tests.test_engine import bars_from
+    s = Strategy(entry=[{"l": {"t": "price"}, "op": "xa", "r": {"t": "num", "v": 10}}],
+                 exit=[{"l": {"t": "price"}, "op": "xb", "r": {"t": "num", "v": 10}}],
+                 risk={"capital": 300000, "riskPct": 100, "maxAlloc": 30, "sl": 0, "brokerage": 20, "slippage": 0})
+    closes = [9.0] * 20 + [11.0] * 10 + [9.0] * 10
+    ds = [{"inst": {"symbol": f"S{k}", "id": f"X:{k}"}, "bars": bars_from([c + 0.01 * k for c in closes]), "start": 5, "lot": 1, "kind": "in_eq"}
+          for k in range(3)]
+    out = portfolio.run(ds, s, max_open=3)
+    assert len(out["trades"]) == 3 and not out["open_trades"]
+    dp = next(i for i in out["costs"]["items"] if i["label"] == "Depository (DP) charge")
+    assert dp["amount"] == pytest.approx(3 * C.dp_charge())
+    assert sum(t["pnl"] for t in out["trades"]) == pytest.approx(out["equity"][-1] - 300000, abs=0.05)
+    assert out["costs"]["net_pnl"] == pytest.approx(out["equity"][-1] - 300000, abs=0.05)
+
+
+# ---------- the same through the API: an experiment on an ETF and on a share ----------
+@pytest.fixture
+def w(monkeypatch):
+    from tests import world
+    built = world.build(monkeypatch)
+    yield built
+    built["close"]()
+
+
+def test_an_experiment_on_an_etf_is_charged_as_units_and_one_on_a_share_as_shares(w):
+    from app import main
+    c, h = w["client"], w["headers"]("pro-token")
+    main.kite._load_instruments()
+    etf = next(r for r in main.kite._inst if r["symbol"] == "NIFTYBEES" and r["exchange"] == "NSE")
+    share = next(r for r in main.kite._inst if r["symbol"] == "TCS" and r["exchange"] == "NSE")
+    assert C.kind_of(etf) == "in_etf" and C.kind_of(share) == "in_eq"
+    rules = {"name": "Cross", "tf": "1d",
+             "entry": [{"l": {"t": "ema", "p": 5}, "op": "xa", "r": {"t": "ema", "p": 15}}],
+             "exit": [{"l": {"t": "ema", "p": 5}, "op": "xb", "r": {"t": "ema", "p": 15}}],
+             "risk": {"capital": 500000, "riskPct": 100, "maxAlloc": 50, "sl": 0, "tgt": 0, "brokerage": 20, "slippage": 0.05}}
+    got = {}
+    for name, inst in (("etf", etf), ("share", share)):
+        nb = c.post("/notebooks", headers=h, json={"name": f"RC3T {name}", "strategy": rules, "instrument": inst["id"]}).json()
+        r = c.post(f"/notebooks/{nb['id']}/experiments", headers=h, json={"days": 730})
+        assert r.status_code == 200, r.text
+        exp = r.json()["experiment"]
+        assert exp["stats"]["n"] >= 2, name
+        got[name] = {i["label"]: i["amount"] for i in exp["costs"]["items"]}
+        assert exp["costs"]["net_pnl"] == pytest.approx(sum(t["pnl"] for t in exp["trades"]), abs=0.05) or exp["stats"]["n"] > len(exp["trades"])
+        assert "Depository (DP) charge" in got[name]
+    assert got["share"]["STT / CTT"] > 20 * got["etf"]["STT / CTT"]          # 0.1% a side against 0.001% on the sale only
