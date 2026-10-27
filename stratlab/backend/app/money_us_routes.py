@@ -361,7 +361,10 @@ def _import(profile, data: bytes, filename: str):
         M.err(400, "bad_file", str(e))
     for r in got["rows"]:
         r["id"] = uuid.uuid4().hex[:12]
-    added, dup = us.add(profile["id"], got["rows"], filename)
+    try:
+        added, dup = us.add(profile["id"], got["rows"], filename)
+    except holdings_file.FileError as e:
+        M.err(400, "too_many", str(e))
     return M.ok({"read": len(got["rows"]), "added": added, "duplicates": dup, "problems": got["problems"][:50],
                  "month_first": got["month_first"], "date_note": got["date_note"], "note": got["note"], "us": view(profile)})
 

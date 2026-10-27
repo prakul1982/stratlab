@@ -56,3 +56,20 @@ def test_a_history_stored_before_old_bonuses_were_kept_is_read_again(w, monkeypa
     assert feed.asked == ["Y"]
     C.history("IN", "Y", {"in": feed}, TODAY)
     assert feed.asked == ["Y"]                                      # the new copy stands for the day
+
+
+# ---------- RC3M-002: a US trades file that would pass the limit is refused whole ----------
+def test_a_us_file_past_the_limit_is_refused_not_saved_in_part(w, monkeypatch):
+    from app import money_us_tax as us
+    uid = "u-pro"
+    monkeypatch.setattr(us, "MAX_TRADES", 5)
+    rows = lambda n, d: [{"d": d, "side": "B", "sym": "AAPL", "qty": float(i + 1), "price": 100.0, "fees": 0.0, "src": "file"} for i in range(n)]
+    assert us.add(uid, rows(3, "2025-01-02"), "a.csv") == (3, 0)
+    with pytest.raises(Exception) as e:
+        us.add(uid, rows(4, "2025-02-03"), "b.csv")                 # 7 in all: the newest used to vanish, the page saying 4 were added
+    assert "7 US trades" in str(e.value) and "up to 5" in str(e.value)
+    assert len(us.load(uid)["trades"]) == 3 and len(us.load(uid)["files"]) == 1
+    assert us.add(uid, rows(2, "2025-03-04"), "c.csv") == (2, 0) and len(us.load(uid)["trades"]) == 5
+    r = w["client"].post("/money/us-tax/import", headers=world.headers("pro-token"),
+                         json={"filename": "d.csv", "data": __import__("base64").b64encode(b"Date,Action,Symbol,Quantity,Price\n2025-04-01,Buy,MSFT,1,300\n").decode()})
+    assert r.status_code == 400 and r.json()["detail"]["code"] == "too_many" and "6 US trades" in r.json()["detail"]["message"]
