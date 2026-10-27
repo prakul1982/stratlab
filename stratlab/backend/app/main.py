@@ -3563,6 +3563,8 @@ HOLDINGS_CA_NOW = 8                # held stocks without a stored history fetche
 TAX_CA_WAIT = 25.0                 # seconds the tax report waits for the histories of the companies it counts (RC3M-006)
 TAX_CA_NOW = 60                    # ...at most this many at once (the pool is shared); the rest in the background
 _corp_fetching: set[str] = set()
+CORP_RETRY = 600.0                 # seconds before a company whose history wasn't stored is asked for while a page waits again
+_corp_asked: dict[str, float] = {}  # symbol -> when it was asked for and not stored (a feed that is down isn't waited on every visit)
 
 
 def _corp_histories(uid: str, symbols: list[str], today, sync: int = HOLDINGS_CA_NOW, wait: float = 12.0) -> int:
@@ -3571,9 +3573,17 @@ def _corp_histories(uid: str, symbols: list[str], today, sync: int = HOLDINGS_CA
     # a history kept before every bonus and split was counts as none: the tax report needs the old ones (RC3M-001)
     missing = [s for s in symbols if not corp_actions.hist_kept("IN", s)]
     sources = corp_job.sources()
-    now = missing[:sync]
+    t0 = time.monotonic()
+    now = [s for s in missing if t0 - _corp_asked.get(s, -CORP_RETRY) >= CORP_RETRY][:sync]
     if now:
         wait_all([_holdings_pool.submit(corp_actions.history, "IN", s, sources, today) for s in now], timeout=wait)
+        if len(_corp_asked) > 5000:
+            _corp_asked.clear()
+        for s in now:
+            if corp_actions.hist_kept("IN", s):
+                _corp_asked.pop(s, None)
+            else:
+                _corp_asked[s] = t0
     rest = [s for s in symbols if s not in now]
     if rest and uid not in _corp_fetching:
         _corp_fetching.add(uid)

@@ -189,3 +189,20 @@ def test_the_dividends_page_says_how_many_stocks_it_is_still_reading(w, monkeypa
     monkeypatch.setattr(C, "refresh_histories", real)
     real("IN", {"in": feed}, set(syms), TODAY)
     assert w["client"].get("/money/dividends", headers=world.headers("pro-token")).json()["checking"] == 0
+
+
+def test_a_company_the_feed_would_not_answer_for_is_not_waited_on_at_every_visit(w, monkeypatch):
+    from app.intel.net import SourceError
+    asked = []
+
+    class Down(FakeIndia):
+        def actions_of(self, symbol):
+            asked.append(symbol)
+            raise SourceError("the exchange", "busy", busy=True)
+    monkeypatch.setattr(main.corp_job, "sources", lambda: {"in": Down(), "us": None, "cal": None})
+    monkeypatch.setattr(C, "refresh_histories", lambda *a, **k: 0)          # the background read apart: this is what a page waits for
+    assert [main._corp_histories("u-pro", ["GONE"], TODAY, sync=60, wait=5) for _ in range(3)] == [0, 1, 1]      # then still counted as being read
+    assert asked == ["GONE"]                                    # the first visit asked; the next two within ten minutes did not
+    main._corp_asked["GONE"] -= main.CORP_RETRY + 1             # ten minutes on
+    main._corp_histories("u-pro", ["GONE"], TODAY, sync=60, wait=5)
+    assert asked.count("GONE") == 2
