@@ -156,10 +156,14 @@ function sources(dir) {
 
 test("an ad slot is drawn in exactly these places, and in none of the money, account, admin, sign-in or payment files", () => {
   const users = sources("src").filter((f) => /AdUnit|AiAd|PublicAd/.test(read(f)) && !/^src\/components\/(AdUnit|AiAd)\.tsx$/.test(f)).sort();
-  assert.deepEqual(users, ["src/components/Research.tsx", "src/components/Tracking.tsx", "src/pages/Login.tsx", "src/pages/PublicLibrary.tsx", "src/pages/PublicVerdict.tsx"]);
+  // the banner reads its settings from lib/adsConfig.ts, not the slot's code, so a page without a slot never loads it (R8V-013)
+  assert.deepEqual(users, ["src/components/Research.tsx", "src/pages/Login.tsx", "src/pages/PublicLibrary.tsx", "src/pages/PublicVerdict.tsx"]);
+  assert.match(read("src/components/Tracking.tsx"), /import \{ CONFIG \} from "\.\.\/lib\/adsConfig";/);
+  // the library loads the slot's code only when ads can draw there
+  assert.match(read("src/pages/PublicLibrary.tsx"), /const PublicAd = \(\) => \(ADS_HERE \? <Suspense fallback=\{null\}><PublicAdLazy \/><\/Suspense> : null\);/);
   assert.match(read("src/pages/Login.tsx"), /<div className="lp-wrap"><PublicAd \/><\/div>/);
   assert.equal(read("src/pages/Login.tsx").match(/<PublicAd/g).length, 1, "at most one slot on the landing page");
-  assert.equal(read("src/pages/PublicLibrary.tsx").match(/<PublicAd/g).length, 2, "one on the list and one on a strategy");
+  assert.equal(read("src/pages/PublicLibrary.tsx").match(/<PublicAd \/>/g).length, 2, "one on the list and one on a strategy");
   assert.equal(read("src/pages/PublicVerdict.tsx").match(/<PublicAd/g).length, 1);
   // the hero is above every slot
   const login = read("src/pages/Login.tsx");

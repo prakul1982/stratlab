@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { publicGet, type ApiError } from "../lib/http";
 import { applySeo, seoFor } from "../lib/seo";
@@ -8,7 +8,8 @@ import { pct, TF_NAME } from "../lib/format";
 import { signedInHere, signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
-import { PublicAd } from "../components/AdUnit";
+import { adsLive } from "../lib/ads";
+import { CONFIG } from "../lib/adsConfig";
 import { CHECK_RESULT, CHECKS_NOT_HOLD, checksOf, headTone, HoldLine, LibraryCard, libraryTally, liveOptions, marketChoices, Rules, shownStats, strategyName, libMeta, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
 import { libraryDescription, libraryTitle } from "../lib/libraryText";
 import { Badge } from "../components/kit/Badge";
@@ -19,6 +20,12 @@ import { PageHeader } from "../components/kit/PageHeader";
 import { Stat, StatRow } from "../components/kit/Stat";
 import { EmptyState, ErrorState, Skeleton } from "../components/kit/States";
 import "./trade/trade.css";
+
+// ADS-1: the ad slot's code loads only when ads can draw here; with ads off (the default) the page asks for no extra file
+// (R8V-013 counts the library's files). A public slot with ads off shows nothing either way (lib/ads.ts adMode).
+const ADS_HERE = adsLive(CONFIG, "public");
+const PublicAdLazy = lazy(() => import("../components/AdUnit").then((m) => ({ default: m.PublicAd })));
+const PublicAd = () => (ADS_HERE ? <Suspense fallback={null}><PublicAdLazy /></Suspense> : null);
 
 /* StratLab's own library strategies, open to anyone and read only: the rules that were tested and the verdict each earned,
  * as the app's own backtest gave it. Copying one and re-testing it needs an account, so that button says it goes to Google.

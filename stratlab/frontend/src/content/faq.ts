@@ -31,8 +31,6 @@ export const FAQ: Faq[] = [
   { q: "What does it cost, and can I cancel?",
     a: ["The Free plan costs nothing. Basic and Pro are subscriptions paid monthly or yearly; the Plans page (stratlab.studio/plans) shows each price and what each plan adds.",
       "A paid plan renews until you cancel it, which you can do any time from Account → Plan and usage. Any payment, monthly or yearly, is refunded in full if you ask within 7 days of it; after that the period isn't refunded, but a double charge, a charge after cancelling or a plan that didn't start always is. The Cancellation and refunds page (stratlab.studio/refunds) has the details."] },
-  { q: "Is there an app?",
-    a: ["StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon and sends alerts as notifications."] },
 ];
 
 /** An answer as one block of text, for the page's markup for search engines. */

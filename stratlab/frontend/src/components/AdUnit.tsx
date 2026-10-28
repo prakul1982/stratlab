@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { CFG } from "../lib/config";
-import { adMode, adsConfig, CHOICE_KEY, googleMessageShown, houseCard, onChoice, readChoice, type AdSlotName, type Choice } from "../lib/ads";
+import { CONFIG } from "../lib/adsConfig";
+import { adMode, CHOICE_KEY, googleMessageShown, houseCard, onChoice, readChoice, type AdSlotName, type Choice } from "../lib/ads";
 import { signedInHere } from "../lib/signin";
 
 /* One ad slot (ADS-1). What it shows is decided in lib/ads.ts (adMode): an ad, a StratLab card, or nothing. The question that comes
@@ -9,7 +9,7 @@ import { signedInHere } from "../lib/signin";
  * anything. Imports no account code, so the public pages use it; the Free-account slot under an AI answer (components/AiAd.tsx)
  * adds the plan. */
 
-export const CONFIG = adsConfig(import.meta.env as Record<string, unknown>, CFG as unknown as Record<string, unknown>);
+export { CONFIG };
 
 /** Google's script, added once, and only after "Allow ads" (the question comes first). */
 function addScript(client: string) {

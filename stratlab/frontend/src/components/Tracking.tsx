@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { askNow, CHOICE_KEY, clearChoice, consentWords, onChoice, readChoice, trackersFor, writeChoice, type Choice } from "../lib/ads";
 import { doNotTrack } from "../lib/analytics";
 import { flushSignup, loadPixel, onSignup, pixelPageView, startClarity, stopClarity } from "../lib/track";
-import { CONFIG } from "./AdUnit";
+import { CONFIG } from "../lib/adsConfig";
 
 /* The one question for Google ads, the Meta Pixel and Microsoft Clarity (ADS-1), and the loader for the last two. Mounted once, in
  * the public half and in the app. Nothing is asked, and nothing loads, unless an ad slot is set up or a pixel or Clarity ID is
