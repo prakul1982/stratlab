@@ -242,3 +242,38 @@ def test_a_ticks_bare_exchange_time_is_read_as_india_time():
     assert hub.latest[1002]["t"] == "2026-10-28T04:45:00+00:00"                  # a time with a zone is left alone
     hub.on_tick(1003, {"last_price": 5})
     assert hub.latest[1003]["t"].endswith("+00:00")                                  # none: now, in UTC
+
+
+# ---------- the source's live row is folded into its candle (MWR1-019) ----------
+def live_answer(stamps, closes):
+    """The source's answer for an intraday chart of Apple while the US trades: candles at their starts and, last, one row stamped at
+    the moment of the read (as it sends them)."""
+    ts = [int(datetime.fromisoformat(s).timestamp()) for s in stamps]
+    return {"chart": {"result": [{"meta": {"exchangeTimezoneName": "America/New_York", "currency": "USD"}, "timestamp": ts,
+                                  "indicators": {"quote": [{"open": closes, "high": [c + 0.5 for c in closes], "low": [c - 0.5 for c in closes], "close": closes,
+                                                            "volume": [100] * len(ts)}]}}]}}
+
+
+def read_chart(tf, interval, stamps, closes):
+    from app.intel.yahoo import Yahoo
+    y = Yahoo.__new__(Yahoo)
+    y.fetch = lambda path, params, ttl=None, with_time=False: (live_answer(stamps, closes), 0)
+    return y._chart("AAPL", tf, 5, interval, 60)["candles"]
+
+
+def test_the_live_row_of_an_intraday_answer_is_not_drawn_as_a_candle_of_its_own():
+    et = "-04:00"
+    five = read_chart("5m", "5m", [f"2026-10-28T15:{m}:00{et}" for m in ("00", "05", "10")] + [f"2026-10-28T15:12:53{et}"], [344.8, 344.6, 344.57, 344.39])
+    assert [b["t"][11:19] for b in five] == ["15:00:00", "15:05:00", "15:10:00"]                      # no candle at 15:12:53
+    assert five[-1]["c"] == 344.39 and five[-1]["h"] == pytest.approx(345.07) and five[-1]["l"] == pytest.approx(343.89)    # the latest price is the open candle's close
+    hour = read_chart("1h", "60m", ["2026-10-28T13:30:00-04:00", "2026-10-28T14:30:00-04:00", "2026-10-28T15:12:54-04:00"], [344.66, 344.57, 344.38])
+    assert [b["t"][11:16] for b in hour] == ["13:30", "14:30"] and hour[-1]["c"] == 344.38
+    # a 1-minute answer has no row for the minute in progress but this one: it becomes that minute's candle, on the minute
+    one = read_chart("1m", "1m", [f"2026-10-28T15:1{m}:00{et}" for m in ("0", "1")] + [f"2026-10-28T15:12:54{et}"], [344.57, 344.57, 344.38])
+    assert [b["t"][11:19] for b in one] == ["15:10:00", "15:11:00", "15:12:00"] and one[-1]["c"] == 344.38
+    # the forming candle then grows on the exchange's own grid: the next one starts at 15:13:00, not 15:13:54
+    from app import bar_agg
+    assert [b["t"][11:16] for b in bar_agg.aggregate(one, "3m", "US")] == ["15:09", "15:12"]
+    # an answer with no live row is unchanged
+    plain = read_chart("5m", "5m", [f"2026-10-28T15:{m}:00{et}" for m in ("00", "05")], [344.8, 344.6])
+    assert [b["t"][11:19] for b in plain] == ["15:00:00", "15:05:00"] and plain[-1]["c"] == 344.6
