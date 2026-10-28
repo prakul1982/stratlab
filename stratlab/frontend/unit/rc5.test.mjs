@@ -64,3 +64,10 @@ test("with no connection the idea box says so, not that the AI builder is away (
   // the AI being away keeps its own words
   assert.match(src, /"The AI builder isn't available right now, so the simple converter read your idea/);
 });
+
+test("Paper trading starts a second session from its own page: an options strategy or a notebook (owner, 28 Oct)", () => {
+  const src = read("src/pages/PaperPage.tsx");
+  assert.match(src, /<CardHead title="Your sessions" actions=\{<NewSessionButtons \/>\} \/>/);
+  assert.match(src, /<Link className="btn sm" to="\/options">Build an options strategy<\/Link>/);
+  assert.match(src, /<Link className="btn quiet sm" to="\/notebooks">Paper trade a notebook<\/Link>/);
+});
