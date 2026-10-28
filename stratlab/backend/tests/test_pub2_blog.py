@@ -29,6 +29,11 @@ def test_a_post_has_one_quiet_facts_line_and_one_width_for_its_text_and_its_tabl
     assert ".btbl .l{text-align:left}" in css and "white-space:nowrap" in re.search(r"\.btbl th,\.btbl td\{[^}]*\}", css).group(0)
 
 
+def flat(blocks):
+    """The post's blocks with each market's fold opened (VR7-002: a market's group line and table sit inside its fold)."""
+    return [x for b in blocks for x in (flat(b["blocks"]) if b["t"] == "fold" else [b])]
+
+
 def test_the_strategy_post_shows_its_headline_numbers_as_tiles_and_a_bar_for_each_market(w):
     post = blog_research.classic_strategies(library_rows())
     blocks = post["blocks"]
@@ -49,7 +54,7 @@ def test_the_strategy_post_shows_its_headline_numbers_as_tiles_and_a_bar_for_eac
 
 def test_the_strategy_tables_have_short_unwrapped_headers_fixed_widths_and_no_empty_column(w):
     post = blog_research.classic_strategies(library_rows())
-    tables = [b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Rule set"]
+    tables = [b for b in flat(post["blocks"]) if b["t"] == "table" and b["head"][0] == "Rule set"]
     for t in tables:
         assert t["head"] == ["Rule set", "After costs", "Passive", "Difference", "Trades", "Checks"] and t["align"] == "lrrrrl" and sum(t["widths"]) == 100
         assert len(t["caption"]) < 70 and all(len(r) == 6 for r in t["rows"])                 # a short caption; no "Other period" column
@@ -66,7 +71,7 @@ def test_a_test_over_another_period_says_so_under_its_name_not_in_a_column():
     odd = next(r for r in rows if r["market"] == "IN" and r["seed"]["slug"] == "rsi2-revert")
     odd["range"] = {"from": "2026-09-29", "to": "2026-10-28"}
     post = blog_research.classic_strategies(rows)
-    india = next(b for b in post["blocks"] if b["t"] == "table" and b["caption"].startswith("India"))
+    india = next(b for b in flat(post["blocks"]) if b["t"] == "table" and b["caption"].startswith("India"))
     cell = next(r[0] for r in india["rows"] if isinstance(r[0], list))
     assert cell[1] == {"s": "Tested 29 Sep 2026 to 28 Oct 2026"} and len(india["head"]) == 6
     assert '<small class="sub">Tested 29 Sep 2026 to 28 Oct 2026</small>' in blog.blocks_html([india])

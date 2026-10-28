@@ -244,6 +244,13 @@ def clean_blocks(blocks: list) -> list[dict]:
                     for r in (b.get("rows") or [])[:MAX_ROWS] if isinstance(r, dict) and clean_text(r.get("label"), 40)]
             if len(series) >= 2 and rows:
                 out.append({"t": "bars", "caption": clean_text(b.get("caption"), 200), "series": series, "rows": rows})
+        elif t == "fold":
+            # VR7-002: a section that a phone folds (the strategy post's ten market tables were 10,000px of cards on a phone): a heading, one
+            # small note beside it ("10 tests") and the blocks inside; a desktop shows it open, as the plain heading and blocks it was
+            title = clean_text(b.get("title"), 80)
+            inner = [x for x in clean_blocks(b.get("blocks") or []) if x["t"] != "fold"]
+            if title and inner:
+                out.append({"t": "fold", "title": title, "note": clean_text(b.get("note"), 40), "blocks": inner})
         elif t == "details":
             title = clean_text(b.get("title"), 120)
             items = [x for x in (_inline(i) for i in (b.get("items") or [])[:MAX_ROWS]) if x]
@@ -313,6 +320,9 @@ def blocks_html(blocks: list) -> str:
                 rows += f'<li><span class="k">{_esc(r["label"])}</span><span class="track" role="img" aria-label="{_esc(r["label"])}: {_esc(said)}">{segs}</span><span class="n">{nums}</span></li>'
             cap = f'<figcaption>{_esc(b["caption"])}</figcaption>' if b.get("caption") else ""
             out.append(f'<figure class="hbars">{cap}<p class="key">{legend}</p><ul>{rows}</ul></figure>')
+        elif t == "fold":
+            note = f'<span class="n">{_esc(b["note"])}</span>' if b.get("note") else ""
+            out.append(f'<details class="mk"><summary><h2>{_esc(b["title"])}</h2>{note}</summary>{blocks_html(b["blocks"])}</details>')
         elif t == "details":
             out.append(f'<details class="how card" {"data-words" if b.get("words") else "data-method"}><summary>{_esc(b["title"])}</summary><ul class="small">'
                        + "".join(f"<li>{inline_html(i)}</li>" for i in b["items"]) + "</ul></details>")
@@ -329,6 +339,8 @@ def plain_text(blocks: list) -> str:
         return str(v)
     parts = []
     for b in blocks:
+        if b.get("t") == "fold":
+            parts += [str(b.get("title") or ""), str(b.get("note") or ""), plain_text(b.get("blocks") or [])]
         for k in ("text", "caption"):
             if b.get(k):
                 parts.append(flat(b[k]))

@@ -256,7 +256,7 @@ def test_the_strategy_post_states_the_librarys_own_numbers(w):
     assert post["slug"] == "classic-strategies-ten-markets-after-costs" and post["kind"] == "research"
     text = blog.plain_text(post["blocks"])
     # every table row says the entry's own return, passive return and trade count, and links to its library page
-    tables = [b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Rule set"]     # (the four checks have a table of their own, below)
+    tables = [b for f in post["blocks"] for b in (f["blocks"] if f["t"] == "fold" else [f]) if b["t"] == "table" and b["head"][0] == "Rule set"]     # (VR7-002: each market is a fold; the four checks have a table of their own, below)
     assert len(tables) == 10 and sum(len(t["rows"]) for t in tables) == len(rows)
     by_link = {r[0]["href"]: r for t in tables for r in t["rows"]}
     for e in rows:
