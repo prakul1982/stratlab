@@ -248,7 +248,8 @@ def clean_blocks(blocks: list) -> list[dict]:
             title = clean_text(b.get("title"), 120)
             items = [x for x in (_inline(i) for i in (b.get("items") or [])[:MAX_ROWS]) if x]
             if title and items:
-                out.append({"t": "details", "title": title, "items": items})
+                # `words`: the post's headline figures said in sentences (VR6-006), not its method (the page's tests tell them apart)
+                out.append({"t": "details", "title": title, "items": items, **({"words": True} if b.get("words") else {})})
     return out
 
 
@@ -313,7 +314,7 @@ def blocks_html(blocks: list) -> str:
             cap = f'<figcaption>{_esc(b["caption"])}</figcaption>' if b.get("caption") else ""
             out.append(f'<figure class="hbars">{cap}<p class="key">{legend}</p><ul>{rows}</ul></figure>')
         elif t == "details":
-            out.append(f'<details class="how card" data-method><summary>{_esc(b["title"])}</summary><ul class="small">'
+            out.append(f'<details class="how card" {"data-words" if b.get("words") else "data-method"}><summary>{_esc(b["title"])}</summary><ul class="small">'
                        + "".join(f"<li>{inline_html(i)}</li>" for i in b["items"]) + "</ul></details>")
     return "".join(out)
 

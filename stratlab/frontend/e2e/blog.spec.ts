@@ -84,8 +84,11 @@ test("blog: the list shows the briefs and the research as cards, and a post is a
   await page.locator("ul.posts a.post", { hasText: "India market brief" }).first().click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("India market brief");
   await expect(page.getByRole("heading", { level: 2, name: "Index closes" })).toBeVisible();
-  const table = page.locator(".btbl table").first();
-  await expect(table.locator("tbody tr").first()).toContainText("NIFTY 50");
+  // VR6-005: each index is a tile (its close, its change under it), not a paragraph and a table saying the same figures
+  const tile = page.locator("article ul.kpis li").first();
+  await expect(tile).toContainText("NIFTY 50");
+  await expect(tile).toContainText(/on the day/);
+  await expect(page.locator("article .btbl table")).toHaveCount(0);
   await expect(page.getByText("Facts, not advice.").first()).toBeVisible();
   await expect(page.locator("article").getByRole("link", { name: "Company pages" })).toHaveAttribute("href", "/stocks");
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /^https:\/\/stratlab\.studio\/blog\/india-market-brief-\d{4}-\d{2}-\d{2}$/);

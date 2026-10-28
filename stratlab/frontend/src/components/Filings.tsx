@@ -84,7 +84,8 @@ export function FilingsPanel({ symbol }: { symbol: string }) {
   return (
     <div className="k-stack">
       <SummaryLine s={rep.summary} />
-      {rep.summary.flags.length > 0 && (
+      {/* VR6-030: one kind of flag is already said by the line above and named on its row: the count chips are for two or more kinds */}
+      {rep.summary.flags.length > 1 && (
         <div className="k-row">
           {rep.summary.flags.map((f) => <Badge key={f.category} tone="plain" dot={false}>{f.label} ×{f.count}</Badge>)}
         </div>

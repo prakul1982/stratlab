@@ -49,7 +49,9 @@ def test_the_research_posts_say_their_headline_figures_once_in_tiles_and_keep_th
     assert not any(b["t"] == "ul" and b["items"][0].startswith("Against the passive return") for b in post["blocks"])          # not printed under the tiles and bars
     words = next(b for b in post["blocks"] if b["t"] == "details" and b["title"] == "The headline figures in words")
     assert any(i.startswith("Against the passive return, after costs: ahead in") for i in words["items"])
-    assert blog.blocks_html(post["blocks"]).count("The headline figures in words") == 1
+    html = blog.blocks_html(post["blocks"])
+    assert html.count("The headline figures in words") == 1 and '<details class="how card" data-words><summary>The headline figures in words' in html
+    assert html.count("data-method") == 1                                                      # the method is the one fold the page's tests look for
 
 
 def test_a_table_of_three_or_four_columns_wraps_to_fit_a_phone_and_the_four_checks_go_four_across():

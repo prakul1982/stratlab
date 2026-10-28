@@ -28,6 +28,9 @@ function usePhone(): boolean {
   return phone;
 }
 
+/** How many strategy cards a phone shows before "Show 12 more". */
+export const PHONE_CARDS = 12;
+
 /* /library: rules people published with the verdict they earned, luck included. Copy any of them and re-test it
  * yourself. Built from the kit (components/kit). */
 export function LibraryPage() {
@@ -53,6 +56,9 @@ export function LibraryPage() {
   const [taking, setTaking] = useState<LibEntry | null>(null);
   const [again, setAgain] = useState(0);
   const phone = usePhone();
+  // VR6-024: 43 cards one under another were 19,000px on a phone: the first twelve, and "Show 12 more" (a table on a desktop shows every row)
+  const [cardPages, setCardPages] = useState(1);
+  useEffect(() => { setCardPages(1); }, [q, market, verdict, sort, official]);
   // a dense table to scan many at once, or the cards; remembered on this device (R1-026)
   const [layout, setLayout] = usePersisted<"cards" | "table">("stratlab.library.view", "cards");
 
@@ -148,7 +154,7 @@ export function LibraryPage() {
               </Card>
             ) : (
             <div className="k-cards lib-cards">
-              {rows.map((e) => (
+              {(phone ? rows.slice(0, PHONE_CARDS * cardPages) : rows).map((e) => (
                 <Card key={e.id} label={`${strategyName(e)}, ${libMeta(e)}`} className={`lib-card${shownStats(e).ran ? "" : " lib-unrun"}`}>
                   <LibraryCard e={e} actions={<>
                     {e.mine && e.hidden && <p className="k-small k-down">Hidden from others after reports. The site owner will review it; editing and publishing again won't bring it back sooner.</p>}
@@ -172,6 +178,12 @@ export function LibraryPage() {
                 </Card>
               ))}
             </div>
+            )}
+            {phone && layout !== "table" && rows.length > PHONE_CARDS * cardPages && (
+              <div className="k-row" data-testid="lib-show-more">
+                <span className="k-note">Showing {PHONE_CARDS * cardPages} of {rows.length}.</span>
+                <button type="button" className="btn quiet sm" onClick={() => setCardPages((n) => n + 1)}>Show {Math.min(PHONE_CARDS, rows.length - PHONE_CARDS * cardPages)} more</button>
+              </div>
             )}
           </>
         )}

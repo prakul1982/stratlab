@@ -76,3 +76,30 @@ test("VR6-018: on a wide screen the chart's view buttons join the scale buttons 
   assert.match(src, /<div className="pc-foot-r">\s*\{!phone && viewButtons\}/);
   assert.match(read("src/charts/price/priceChart.css"), /\.pc-foot-r \{ display: flex; flex-wrap: wrap;/);
 });
+
+test("VR6-020: link rows and small buttons are 44px to the thumb on a phone without a taller list (the link keeps its place, its box grows)", () => {
+  const css = read("src/styles.css");
+  const block = css.slice(css.indexOf("/* VR6-020"));
+  assert.match(block, /\.k-page a\.link, a\.link\.k-small, a\.link\.k-any, \.k-spread > a\.link, \.h-filing a\.link \{ padding-block: 12px; margin-block: -4px; \}/);
+  assert.match(block, /a\.tap-link, \.mine-tl-i \.body a \{ min-height: 44px; margin-block: -6px; \}/);
+  assert.match(block, /\.link-btn\.inr-pick, body \.k-search input \{ min-height: 44px; \}/);
+  assert.match(css, /\.ch-bar \.ch-btn, \.ch-bar \.ch-seg button \{ min-height: 44px; \}/);
+});
+
+test("VR6-023: a figure too long for half a line (an eight-digit rupee total) is tried a size down before the figures go one under another", () => {
+  const src = read("src/components/kit/Stat.tsx");
+  assert.match(src, /if \(wraps\) \{ el\.classList\.add\("tight"\); wraps = wrapping\(\); \}/);
+  assert.match(src, /el\.classList\.remove\("duo", "tight"\)/);
+  assert.match(read("src/styles.css"), /\.k-stats\.duo\.tight \.k-stat-v \{ font-size: 22px; \}/);
+});
+
+test("VR6-024: a phone shows twelve strategy cards, ten positions and eight dividends at a time, with Show more", () => {
+  const lib = read("src/pages/LibraryPage.tsx");
+  assert.match(lib, /export const PHONE_CARDS = 12;/);
+  assert.match(lib, /\(phone \? rows\.slice\(0, PHONE_CARDS \* cardPages\) : rows\)\.map/);
+  assert.match(lib, /data-testid="lib-show-more"/);
+  assert.match(read("src/pages/HoldingsPage.tsx"), /<DataTable label="Positions".*stack phonePage=\{10\} \/>/);
+  const act = read("src/components/HoldingsActions.tsx");
+  assert.match(act, /rows=\{data\.ahead\} rowKey=\{key\} stack phonePage=\{8\}/);
+  assert.match(act, /rows=\{received\} rowKey=\{key\} stack phonePage=\{8\}/);
+});

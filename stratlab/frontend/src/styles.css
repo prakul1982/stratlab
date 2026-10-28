@@ -2582,6 +2582,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 640px) {
   .k-stats.duo { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); }
   .k-stats.duo > .k-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .k-stats.duo.tight .k-stat-v { font-size: 22px; }          /* VR6-023: eight-digit rupee totals fit half a line a size down */
 }
 .k-nowrap { white-space: nowrap; }
 @media (max-width: 380px) { .k-nowrap { white-space: normal; } }          /* the plan table's columns are 64px there: the word breaks at its hyphens rather than push the page sideways */

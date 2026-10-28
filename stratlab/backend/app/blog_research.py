@@ -140,7 +140,7 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
                     "head": ["Rule set", "After costs", "Passive", "Difference", "Trades", "Checks"], "rows": table}]
     risk, mrisk = library_seed.RISK, library_seed.MARKET_RISK
     blocks += [
-        {"t": "details", "title": "The headline figures in words", "items": words},
+        {"t": "details", "title": "The headline figures in words", "items": words, "words": True},
         {"t": "details", "title": "How these tests were run", "items": [
             "Data: daily candles from each market's public price data (exchange data for shares and futures, public price feeds for coins and "
             "currency pairs); the intraday rule set uses 15-minute candles. Each test covers about five years of daily candles, or what the market has.",
@@ -279,7 +279,7 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
                {"t": "p", "text": f"Newest listing first{f'; the latest {IPO_ROWS_SHOWN} of {len(have)} are shown, and every figure above counts all {len(have)}' if len(have) > IPO_ROWS_SHOWN else ''}."},
                {"t": "table", "caption": f"IPO listing day in India, {year}: Open and Close are the first day's price against the issue price",
                 "head": ["Issue", "Listed", "Issue price", "Open", "Close", "Subscribed"], "rows": table, "align": "lrrrrr", "widths": [38, 13, 12, 11, 11, 15]},
-               {"t": "details", "title": "The headline figures in words", "items": words},
+               {"t": "details", "title": "The headline figures in words", "items": words, "words": True},
                {"t": "details", "title": "How this was worked out", "items": [
                    "Data: the exchanges' public-issue pages (issue price, dates, bids received) and the exchanges' daily prices after listing. The tracker is "
                    "read every morning and evening.",
