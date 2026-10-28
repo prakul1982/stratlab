@@ -193,6 +193,8 @@ export default function PriceChart(props: PriceChartProps) {
   const [full, setFull] = useState(false);
   const [menu, setMenu] = useState<"studies" | "compare" | null>(null);
   const [edit, setEdit] = useState<string | null>(null);
+  const editBtn = useRef<HTMLElement | null>(null);      // the legend's ⚙ that opened the settings box: Esc or Done hands focus back to it (A11Y-007)
+  const editBox = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<Hover | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "empty" | "error">("loading");
   const [error, setError] = useState("");
@@ -560,11 +562,21 @@ const [saveNote, setSaveNote] = useState("");
   useEffect(() => {
     if (!menu && !edit) return;
     const close = (e: Event) => { if (!(e.target as HTMLElement).closest?.(".pc-wrap, .pc-pop")) { setMenu(null); setEdit(null); } };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { setMenu(null); setEdit(null); } };
+    // (A11Y-007) with focus inside a menu, Esc closes it and focus goes back to its button, not to the top of the page
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const a = document.activeElement as HTMLElement | null;
+      const back = a?.closest(".pc-wrap")?.querySelector<HTMLElement>(":scope > button") ?? (a?.closest(".pc-pop[role=dialog]") ? editBtn.current : null);
+      setMenu(null); setEdit(null);
+      back?.focus();
+    };
     document.addEventListener("pointerdown", close);
     document.addEventListener("keydown", esc);
     return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", esc); };
   }, [menu, edit]);
+
+  // the settings box opens beside the legend, far from the keyboard's place in the page: focus goes into it (A11Y-007)
+  useEffect(() => { if (edit) editBox.current?.querySelector<HTMLElement>("input, button")?.focus(); }, [edit]);
 
   // ---------- the legend ----------
   const e = engineRef.current;
@@ -686,7 +698,7 @@ const [saveNote, setSaveNote] = useState("");
                 {s.lines.map((l) => <span key={l.name} className="num">{s.lines.length > 1 && <span className="k">{l.name}</span>}{i >= 0 ? fmt(l.values[i]) : "–"}</span>)}
                 {s.stage && i >= 0 && Number.isFinite(s.stage[i]) && <span title={STAGE_MEANING[s.stage[i]]}>{STAGE_NAMES[s.stage[i]]}</span>}
                 {s.hist && i >= 0 && <span><span className="k">Gap</span>{fmt(s.hist[i])}</span>}
-                {own && <button type="button" aria-label={`Settings for ${s.label}`} title="Settings" onClick={() => setEdit(edit === s.config.id ? null : s.config.id)}>⚙</button>}
+                {own && <button type="button" aria-label={`Settings for ${s.label}`} title="Settings" onClick={(ev) => { editBtn.current = ev.currentTarget; setEdit(edit === s.config.id ? null : s.config.id); }}>⚙</button>}
                 <button type="button" aria-label={`Remove ${s.label}`} title="Remove" onClick={() => removeStudy(s.config.id)}>✕</button>
               </div>
             );
@@ -696,7 +708,7 @@ const [saveNote, setSaveNote] = useState("");
           const s = studies.find((x) => x.id === edit);
           if (!s) return null;
           return (
-            <div className="pc-pop" style={{ top: 40, left: 8 }} role="dialog" aria-label={`${studyLabel(s)} settings`}>
+            <div className="pc-pop" style={{ top: 40, left: 8 }} role="dialog" aria-label={`${studyLabel(s)} settings`} ref={editBox}>
               <b style={{ padding: "4px 6px" }}>{STUDY[s.type].name}</b>
               {STUDY[s.type].params.map((p, i) => (
                 <label key={p.label}>{p.label}
@@ -705,7 +717,7 @@ const [saveNote, setSaveNote] = useState("");
                 </label>
               ))}
               {!STUDY[s.type].params.length && <span className="pc-note" style={{ padding: "4px 6px" }}>No settings.</span>}
-              <button type="button" className="pc-btn" onClick={() => setEdit(null)}>Done</button>
+              <button type="button" className="pc-btn" onClick={() => { setEdit(null); editBtn.current?.focus(); }}>Done</button>
             </div>
           );
         })()}

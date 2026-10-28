@@ -85,19 +85,24 @@ export function ShortcutsButton() {
 
 /** The list of drawings: show or hide each, lock, delete, and pick one to edit. */
 function DrawList(p: ToolState) {
+  // the rows are the whole of the list: a note or a button among them is not a list item, which a screen reader's list rejects (A11Y-011)
   return (
-    <div className="pc-list" role="list" aria-label="Drawings">
+    <div className="pc-drawlist">
       {!p.drawings.length && <p className="pc-note">Nothing drawn on this chart yet.</p>}
-      {p.drawings.map((d) => (
-        <div key={d.id} role="listitem" className={`pc-row${d.id === p.selected ? " on" : ""}${d.hidden ? " off" : ""}`}>
-          <button type="button" className="pc-row-name" onClick={() => p.onSelect(d.id === p.selected ? null : d.id)}>
-            <span className="pc-ico">{DRAW_ICON[TOOL[d.kind].icon]}</span><span>{drawingTitle(d)}</span>
-          </button>
-          <Btn label={d.hidden ? `Show ${TOOL[d.kind].name}` : `Hide ${TOOL[d.kind].name}`} icon={d.hidden ? "eyeOff" : "eye"} pressed={!d.hidden} onClick={() => p.onUpdate(d.id, { hidden: !d.hidden })} />
-          <Btn label={d.locked ? `Unlock ${TOOL[d.kind].name}` : `Lock ${TOOL[d.kind].name}`} icon={d.locked ? "lock" : "unlock"} pressed={!!d.locked} onClick={() => p.onUpdate(d.id, { locked: !d.locked })} />
-          <Btn label={`Delete ${TOOL[d.kind].name}`} icon="trash" disabled={!!d.locked} onClick={() => p.onDelete(d.id)} />
+      {p.drawings.length > 0 && (
+        <div className="pc-list" role="list" aria-label="Drawings">
+          {p.drawings.map((d) => (
+            <div key={d.id} role="listitem" className={`pc-row${d.id === p.selected ? " on" : ""}${d.hidden ? " off" : ""}`}>
+              <button type="button" className="pc-row-name" onClick={() => p.onSelect(d.id === p.selected ? null : d.id)}>
+                <span className="pc-ico">{DRAW_ICON[TOOL[d.kind].icon]}</span><span>{drawingTitle(d)}</span>
+              </button>
+              <Btn label={d.hidden ? `Show ${TOOL[d.kind].name}` : `Hide ${TOOL[d.kind].name}`} icon={d.hidden ? "eyeOff" : "eye"} pressed={!d.hidden} onClick={() => p.onUpdate(d.id, { hidden: !d.hidden })} />
+              <Btn label={d.locked ? `Unlock ${TOOL[d.kind].name}` : `Lock ${TOOL[d.kind].name}`} icon={d.locked ? "lock" : "unlock"} pressed={!!d.locked} onClick={() => p.onUpdate(d.id, { locked: !d.locked })} />
+              <Btn label={`Delete ${TOOL[d.kind].name}`} icon="trash" disabled={!!d.locked} onClick={() => p.onDelete(d.id)} />
+            </div>
+          ))}
         </div>
-      ))}
+      )}
       {p.drawings.length > 0 && <button type="button" className="btn quiet sm" onClick={p.onClearAll}>Remove all drawings</button>}
     </div>
   );
@@ -175,6 +180,7 @@ export function DrawRail(p: ToolState) {
 /** The same controls as a bottom sheet, for a phone. */
 export function DrawSheet(p: ToolState & { onClose: () => void }) {
   const pick = (k: DrawingKind | null) => { p.onTool(k); p.onClose(); };
+  // its group names are h2: the sheet opens over the chart, which sits under the page's h1 with no heading of its own, so an h3 or h4 here skipped a level (A11Y-011)
   return (
     <div className="pc-sheet" role="dialog" aria-label="Drawing tools">
       <div className="pc-sheet-head">
@@ -189,7 +195,7 @@ export function DrawSheet(p: ToolState & { onClose: () => void }) {
       <div className="pc-sheet-body">
         {TOOL_GROUPS.map((g) => (
           <section key={g.id} aria-label={g.name}>
-            <h4>{g.name}</h4>
+            <h2>{g.name}</h2>
             <div className="pc-tiles">
               {g.kinds.map((k) => (
                 <button key={k} type="button" className="pc-tile" aria-pressed={p.tool === k} onClick={() => pick(k)}>{DRAW_ICON[TOOL[k].icon]}<span>{TOOL[k].name}</span></button>
@@ -198,7 +204,7 @@ export function DrawSheet(p: ToolState & { onClose: () => void }) {
           </section>
         ))}
         <section aria-label="Drawings on this chart">
-          <h4>Drawings ({p.drawings.length})</h4>
+          <h2>Drawings ({p.drawings.length})</h2>
           <DrawList {...p} />
         </section>
       </div>

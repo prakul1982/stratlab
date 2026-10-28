@@ -30,6 +30,7 @@
   color: var(--ink); font: inherit; font-size: 13.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
   white-space: nowrap;
 }
+.pc-sel { border-color: var(--field-line); }   /* (A11Y-001) a drop-down's edge is what shows it is one: 3:1, like the text fields */
 .pc-btn:hover, .pc-sel:hover { border-color: var(--ink); }
 .pc-btn[aria-pressed="true"], .pc-btn[aria-checked="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
 .pc-btn:disabled { opacity: .45; cursor: not-allowed; }
@@ -68,7 +69,7 @@
 .pc-pop button.item:hover, .pc-pop button.item:focus-visible { background: var(--chip); }
 .pc-pop button.item small { color: var(--muted); font-size: 12px; }
 .pc-pop label { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13.5px; padding: 4px 6px; }
-.pc-pop input { width: 90px; min-height: 34px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--paper); padding: 0 8px; }
+.pc-pop input { width: 90px; min-height: 34px; border: 1px solid var(--field-line); border-radius: 8px; background: var(--paper); padding: 0 8px; }
 .pc-wrap { position: relative; display: inline-flex; }
 .pc-btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); justify-content: center; }
 .pc-pop-note { color: var(--muted); font-size: 12px; padding: 2px 6px; }
@@ -117,6 +118,7 @@
 .pc-ico { display: inline-flex; width: 18px; height: 18px; flex: none; }
 .pc-ico svg { width: 18px; height: 18px; }
 .pc-listpop { min-width: 300px; max-width: min(380px, 80vw); }
+.pc-drawlist { display: flex; flex-direction: column; gap: 4px; }
 .pc-list { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow: auto; }
 .pc-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; padding: 0 2px; }
 .pc-row.on { background: var(--chip); }
@@ -140,7 +142,7 @@
 .pc-dot:disabled { opacity: .4; cursor: not-allowed; }
 .pc-dot.sw-ink { background: var(--ink); } .pc-dot.sw-blue { background: var(--blue); } .pc-dot.sw-orange { background: var(--orange); }
 .pc-dot.sw-green { background: var(--pc-s0); } .pc-dot.sw-magenta { background: var(--pc-s1); } .pc-dot.sw-grey { background: var(--muted); }
-.pc-text, .pc-risk input { min-height: 34px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--paper); padding: 0 8px; font: inherit; font-size: 14px; color: var(--ink); }
+.pc-text, .pc-risk input { min-height: 34px; border: 1px solid var(--field-line); border-radius: 8px; background: var(--paper); padding: 0 8px; font: inherit; font-size: 14px; color: var(--ink); }
 .pc-text { width: 180px; max-width: 100%; }
 .pc-risk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .pc-risk input { width: 96px; }
@@ -151,7 +153,7 @@
 .pc-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
 .pc-sheet-acts { display: flex; gap: 6px; align-items: center; }
 .pc-sheet-body { overflow: auto; padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
-.pc-sheet-body h4 { margin: 4px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.pc-sheet-body h2 { margin: 4px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
 .pc-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .pc-tile { min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--line-2); border-radius: 10px;
   background: var(--card); color: var(--ink); font: inherit; font-size: 12.5px; padding: 6px; cursor: pointer; text-align: center; }

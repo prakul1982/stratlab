@@ -16,6 +16,9 @@ export function FormGrid({ onSubmit, children, label, pair, trio, inline }: { on
   return <form className={`k-form${pair ? " k-form-pair" : ""}${trio ? " k-form-trio" : ""}${inline ? " k-form-inline" : ""}`} ref={ref} onSubmit={onSubmit} aria-label={label}>{children}</form>;
 }
 
+/** What a Field hands its own control so a screen reader says what is wrong with it, as it does for a plain box. */
+export type FieldTie = { "aria-invalid"?: true; "aria-describedby"?: string };
+
 type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "children"> & {
   label: string;                            // one line; anything longer goes in `info`
   info?: ReactNode;                         // the (i) next to the label
@@ -24,8 +27,9 @@ type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "children">
   unit?: string;                            // sits inside the box on the right: ₹, %, % / yr
   wide?: boolean;                           // spans the whole row
   id?: string;
-  /** A control that is not a plain text box (a StockPicker, a select with className "k-input"): given the id for the label. */
-  children?: ReactNode | ((id: string) => ReactNode);
+  /** A control that is not a plain text box (a StockPicker, a select with className "k-input"): given the id for the label, and
+   * the two attributes that tie it to the line under it (`aria-invalid`, `aria-describedby`) to spread on the box (A11Y-005). */
+  children?: ReactNode | ((id: string, tie: FieldTie) => ReactNode);
   /** What's wrong with the value, said under the box (and to screen readers); the box gets a red edge. */
   error?: string | null;
   /** A short line under the box: the allowed range ("1 to 28"), a format. Hidden while there's an error. */
@@ -51,9 +55,9 @@ export function Field({ label, info, infoLabel, optional, unit, wide, id, childr
   const shown = hint ?? (rule && touched ? rule : undefined);
   const fid = id ?? auto;
   const msgId = `${fid}-msg`;
-  const box = typeof children === "function" ? children(fid) : children ?? (
-    <input {...input} id={fid} className={`k-input${error ? " bad" : ""}`} aria-invalid={error ? true : undefined}
-      aria-describedby={error || shown ? msgId : undefined} />
+  const tie: FieldTie = { "aria-invalid": error ? true : undefined, "aria-describedby": error || shown ? msgId : undefined };
+  const box = typeof children === "function" ? children(fid, tie) : children ?? (
+    <input {...input} id={fid} className={`k-input${error ? " bad" : ""}`} {...tie} />
   );
   return (
     <div ref={root} className={`k-field${wide ? " wide" : ""}`} onBlur={rule ? () => setTouched(true) : undefined} onInput={rule ? () => setTouched(true) : undefined}>

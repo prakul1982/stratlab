@@ -13,6 +13,7 @@ import { HELP } from "../lib/help";
 import { INDIA_FEED, offlineLine } from "../lib/dataBack";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import "./trade/trade.css";
+import { scrollBehavior } from "../lib/motion";
 
 /* /n/:id/market: pick the market and instrument a notebook tests on, or a group, or your own CSV. Built from the kit
  * (components/kit). */
@@ -52,7 +53,7 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
   useEffect(() => { api<Preset[]>(`/groups?market=${market.id}`).then(setPresets).catch(() => setPresets([])); }, [market.id]);
   useEffect(() => {
     if (location.hash !== "#group") return;
-    const t = window.setTimeout(() => document.getElementById("group-h")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+    const t = window.setTimeout(() => document.getElementById("group-h")?.scrollIntoView({ behavior: scrollBehavior(), block: "start" }), 300);
     return () => window.clearTimeout(t);
   }, [presets]);
   const preset = presets.find((p) => p.id === pick);

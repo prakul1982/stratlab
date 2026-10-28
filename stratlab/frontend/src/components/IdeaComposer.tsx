@@ -10,6 +10,7 @@ import type { Cond, Instrument, Risk, Session, Strategy, Tf, Group } from "../li
 import { Info } from "./ui";
 import { Notice } from "./kit";
 import "../pages/trade/trade.css";
+import { scrollBehavior } from "../lib/motion";
 
 export interface Built {
   strategy: Strategy;
@@ -263,14 +264,14 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
       {note && (
         <Notice tone="warn" role="status" actions={options ? <Link className="btn sm" to="/options">Open the Options builder</Link> : locked ? <>
           <PlanActions />
-          {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: "smooth" })}>Classic ideas</button>}
+          {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: scrollBehavior() })}>Classic ideas</button>}
         </> : pending ? <>
           <button type="button" className="btn sm" disabled={busy} onClick={() => void keep()}>Build with these rules</button>
-          {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: "smooth" })}>Classic ideas (no AI build)</button>}
+          {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: scrollBehavior() })}>Classic ideas (no AI build)</button>}
           {byHand && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void buildByHand()}>Build the rules by hand</button>}
         </> : stuck ? <>
           <button type="button" className="btn sm" disabled={busy} onClick={() => build()}>Try again</button>
-          {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: "smooth" })}>Classic ideas</button>}
+          {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: scrollBehavior() })}>Classic ideas</button>}
           {byHand && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void buildByHand()}>Build the rules by hand</button>}
         </> : undefined}>
           <span className="k-stack k-tight">

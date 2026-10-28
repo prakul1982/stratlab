@@ -326,7 +326,7 @@ export function HoldingsPage() {
               onChange={(m) => { setAdd({ ...add, market: m as Mkt, symbol: add.market === m ? add.symbol : "" }); if (add.market !== m) { setPicked(""); setBoxes((n) => n + 1); } }} />} />
           <div className="hold-add"><FormGrid onSubmit={(e) => { e.preventDefault(); void addOne(); }}>
             <Field label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol." error={addErr.symbol}>
-              {(id) => <StockPicker key={`${add.market}-${boxes}`} id={id} market={add.market} value={picked} placeholder={add.market === "IN" ? "Name or symbol, e.g. Reliance" : "Name or ticker, e.g. Apple"}
+              {(id, tie) => <StockPicker key={`${add.market}-${boxes}`} id={id} tie={tie} market={add.market} value={picked} placeholder={add.market === "IN" ? "Name or symbol, e.g. Reliance" : "Name or ticker, e.g. Apple"}
                 onText={(text) => { setAdd((x) => ({ ...x, symbol: text })); setAddErr((x) => ({ ...x, symbol: undefined })); }}
                 onPick={(s, region) => { setPicked(s); setAdd((x) => ({ ...x, symbol: s, market: region })); setAddErr((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>

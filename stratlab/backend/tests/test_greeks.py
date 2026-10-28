@@ -193,6 +193,15 @@ def build_fixture() -> dict:
     return out
 
 
+def _close(saved: dict, fresh: dict, tol: float) -> None:
+    """Numbers within a hair, anything else (an option type, a None) exactly: newer pytest refuses approx() on a dict with a text
+    value (a TypeError in CI, while the local pytest compared it)."""
+    assert saved.keys() == fresh.keys()
+    num = {k for k, v in fresh.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    assert {k: saved[k] for k in num} == pytest.approx({k: fresh[k] for k in num}, rel=1e-9, abs=tol)
+    assert {k: saved[k] for k in fresh.keys() - num} == {k: fresh[k] for k in fresh.keys() - num}
+
+
 def test_frontend_greeks_fixture_matches_this_module():
     """The frontend's what-if pricing is a port of this module, tested against this fixture (unit/greeks.test.mjs). If
     the maths changes, regenerate it: python -m tests.test_greeks (then the frontend's unit tests show what to port)."""
@@ -201,11 +210,11 @@ def test_frontend_greeks_fixture_matches_this_module():
     assert saved["rate"] == fresh["rate"] and saved["min_vol"] == fresh["min_vol"]
     assert len(saved["prices"]) == len(fresh["prices"]) and len(saved["positions"]) == len(fresh["positions"])
     for a, b in zip(saved["prices"], fresh["prices"]):
-        assert a == pytest.approx(b, rel=1e-9, abs=1e-12)
+        _close(a, b, 1e-12)
     for a, b in zip(saved["positions"], fresh["positions"]):
         assert a["legs"] == b["legs"]
         for x, y in zip(a["cases"], b["cases"]):
-            assert x == pytest.approx(y, rel=1e-9, abs=1e-9)
+            _close(x, y, 1e-9)
         assert a["curve"]["ys"] == pytest.approx(b["curve"]["ys"], rel=1e-9, abs=1e-9)
 
 

@@ -192,7 +192,7 @@ test("DP2-032 / DP1-028: closing the welcome question starts no tour", () => {
 
 test("DI-025..028: the briefs page goes to the issue picked, has older issues, the holiday-aware close and short tabs on a phone", () => {
   const p = read("src/pages/NewsPage.tsx");
-  assert.match(p, /pane\.current\?\.scrollIntoView\(\{ block: "start", behavior: "smooth" \}\)/);
+  assert.match(p, /pane\.current\?\.scrollIntoView\(\{ block: "start", behavior: scrollBehavior\(\) \}\)/);
   assert.match(p, />Show older issues<\/button>/);
   assert.match(p, /day: issue\.close_day \?\? issue\.day/);
   assert.match(p, /\["IN", "Market brief: India", "India"\]/);

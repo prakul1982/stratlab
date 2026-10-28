@@ -527,6 +527,9 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
   // /plans on its own (`top`): the page's one heading and one short line, so the cards are in view on a desktop screen (DK-004: an h1,
   // an eyebrow and a second heading put them 620 px down). The launch offer's longer lede moves under the cards.
   const line = intro.title === "Plans" ? intro.lede : intro.title;
+  // a plan's name is one level under the heading above the cards: the landing page's section title (h2) makes it an h3; on /plans the page's h1 is
+  // the heading above, and an h3 there skipped a level (A11Y-012)
+  const PlanHeading = top ? "h2" : "h3";
   return (
     <section id="pricing" className={`lp-sec${top ? " lp-sec-first" : ""}`} aria-busy={loading}>
       <div className="lp-wrap stack g32">
@@ -570,7 +573,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
             return (
               <div key={p} className={`lp-card lp-price${p === "pro" ? " lp-price-top" : ""}`} data-plan={p}>
                 <div className="stack g2">
-                  <h3 className="h2">{PLAN_NAME[p]}</h3>
+                  <PlanHeading className="h2">{PLAN_NAME[p]}</PlanHeading>
                   <span className="small muted">{WHO[p]}</span>
                 </div>
                 <div className="stack g2">
