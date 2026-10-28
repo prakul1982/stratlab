@@ -1995,34 +1995,41 @@ def description(f: dict) -> str:
 # are the site's own files (the frontend build copies them to /fonts), so a slow or missing font only falls back
 STYLE = """
 @font-face{font-family:"Fraunces";font-style:normal;font-weight:400;font-display:optional;src:url(/fonts/fraunces-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:600;font-display:optional;src:url(/fonts/fraunces-latin-600-normal.woff2) format("woff2")}
 @font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400;font-display:optional;src:url(/fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:500;font-display:optional;src:url(/fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2")}
 @font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:600;font-display:optional;src:url(/fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2")}
 @font-face{font-family:"Montserrat";font-style:normal;font-weight:300;font-display:optional;src:url(/fonts/montserrat-latin-300-normal.woff2) format("woff2")}
 @font-face{font-family:"Montserrat";font-style:normal;font-weight:800;font-display:optional;src:url(/fonts/montserrat-latin-800-normal.woff2) format("woff2")}
 :root{--paper:#F5F1E8;--card:#FFFDF8;--ink:#1D1B17;--ink-2:#2E2B25;--muted:#5C574D;--line:#E2DAC8;--line-2:#D8CFBA;--chip:#ECE6D8;
 --blue:#1F4FB5;--blue-ink:#163A87;--on-ink:#F5F1E8;--orange:#B4500F;--orange-ink:#8A3A0A;--orange-soft:#F8E7D9;--up:#0F7452;--down:#B23B3B;color-scheme:light;
---serif:"Fraunces",Georgia,serif;--sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+--serif:"Fraunces",Georgia,serif;--sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace}
 @media (prefers-color-scheme:dark){:root{--paper:#141311;--card:#1F1D1A;--ink:#EFE9DC;--ink-2:#D8D1C2;--muted:#B3AC9C;--line:#34312A;
 --line-2:#413D34;--chip:#2A2823;--blue:#7EA0F0;--blue-ink:#A9C0F6;--on-ink:#141311;--orange:#E88A4C;--orange-ink:#F2A877;--orange-soft:#3A2416;--up:#3CC48F;--down:#EE7B70;color-scheme:dark}}
 *{box-sizing:border-box}html,body{margin:0}
-body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
-a{color:var(--blue)}a:hover{color:var(--blue-ink)}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;min-height:100vh}
+a{color:var(--blue)}a:hover{color:var(--blue-ink)}:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .skip{position:absolute;left:-9999px;padding:12px 16px}.skip:focus{left:16px;top:8px;z-index:2;background:var(--card);border-radius:10px}
-.nav{max-width:1080px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--line)}
-.brand{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);min-height:44px;font-size:17px}
-.brand svg{height:36px;width:auto}.word{font-family:"Montserrat",var(--sans);font-weight:300;letter-spacing:-.035em}.word b{font-weight:800;letter-spacing:-.045em}
-.nav nav{display:flex;gap:4px;flex:1;flex-wrap:wrap}.nav nav a{color:var(--ink-2);text-decoration:none;padding:10px 10px;border-radius:8px;font-weight:500}
-.nav nav a:hover{background:var(--chip)}
+.nav{display:flex;align-items:center;padding:18px clamp(16px,4vw,48px);border-bottom:1px solid var(--line)}
+.brand{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);min-height:44px;font-size:16.8px}
+.brand svg{height:40px;width:auto}.word{font-family:"Montserrat",var(--sans);font-weight:300;letter-spacing:-.035em}.word b{font-weight:800;letter-spacing:-.045em}
+.nav nav{display:flex;gap:22px;margin-left:auto;margin-right:16px}.nav nav a{display:inline-flex;align-items:center;min-height:36px;color:var(--ink-2);text-decoration:none;font-weight:500;font-size:14.5px}
+.nav nav a:hover{color:var(--ink)}
 .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border-radius:10px;border:1px solid var(--ink);
-background:var(--ink);color:var(--on-ink);text-decoration:none;font-weight:600}.btn:hover{color:var(--on-ink);filter:brightness(1.12)}
+background:var(--ink);color:var(--on-ink);text-decoration:none;font-weight:600;font-size:15px}.btn:hover{color:var(--on-ink);filter:brightness(1.12)}
 .btn.ghost{background:transparent;color:var(--ink)}.btn.ghost:hover{background:var(--card);color:var(--ink);filter:none}
-main{max-width:880px;margin:0 auto;padding:24px 16px 48px}
-h1{font-family:var(--serif);font-weight:400;font-size:clamp(28px,4vw,42px);line-height:1.15;letter-spacing:-.02em;margin:4px 0 6px}
-h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:30px 0 10px}h3{font-size:16px;font-weight:600;margin:14px 0 4px}.faq p{margin:0 0 6px}.muted{color:var(--muted)}.small{font-size:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
-.stat b{display:block;font-size:20px;font-weight:600}.stat span{font-size:13px;color:var(--muted)}
-.note{border-left:3px solid var(--line-2);padding:4px 0 4px 12px;margin:10px 0;font-size:14px;color:var(--ink-2)}
+.btn.sm{min-height:36px;padding:0 12px;font-size:14px}
+main{flex:1 0 auto;width:100%;max-width:960px;margin:0 auto;padding:36px clamp(16px,4vw,32px) 64px}
+h1{font-family:var(--serif);font-weight:400;font-size:clamp(32px,4vw,46px);line-height:1.1;letter-spacing:-.02em;margin:4px 0 8px;text-wrap:balance}
+h2{font-family:var(--serif);font-weight:600;font-size:22px;line-height:1.25;letter-spacing:-.01em;margin:40px 0 12px;text-wrap:balance}h3{font-size:16px;font-weight:600;margin:14px 0 4px}
+main>p{max-width:72ch}.faq p{margin:0 0 6px;max-width:70ch;color:var(--ink-2)}.muted{color:var(--muted)}.small{font-size:14px}
+.eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:4px 20px}
+.stat{min-width:0;margin-bottom:14px}.stat span{display:block;font-size:13.5px;line-height:1.35;color:var(--muted)}.stat b{display:block;font-size:21px;line-height:1.25;font-weight:600}
+@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 2;grid-template-rows:subgrid;gap:0 0;align-content:start}}
+.stat.wide{grid-column:span 2}
+.note{border-left:3px solid var(--line-2);padding:4px 0 4px 12px;margin:10px 0;font-size:14px;color:var(--ink-2);max-width:72ch}
 .note.warn{border-color:var(--orange-ink);background:var(--orange-soft);padding:8px 12px;border-radius:0 10px 10px 0}
 details.how summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:10px;font-weight:600;list-style:none}details.how li{margin:6px 0}
 details.how summary::-webkit-details-marker{display:none}
@@ -2033,25 +2040,36 @@ details.how[open] summary::after{content:"Hide"}
 details.how summary:hover{color:var(--blue-ink)}details.how summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px}
 .tbl{overflow-x:auto;direction:rtl;scroll-snap-type:x proximity;scroll-padding-left:124px}.tbl table{direction:ltr}
 .tbl th:not(:first-child),.tbl td:not(:first-child){scroll-snap-align:end}
-table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:right;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:right;padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--ink-2)}
 th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);box-sizing:border-box;min-width:124px}
 .scroll-cue{display:none;font-size:13px;color:var(--muted);margin:0 0 6px}
-.nav details.menu{display:none;position:relative;margin-left:auto}
+.nav details.menu{display:none;position:relative;margin-left:auto;margin-right:12px}
 .nav details.menu summary{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border:1px solid var(--line-2);border-radius:10px;font-weight:600;color:var(--ink);cursor:pointer;list-style:none}
 .nav details.menu summary::-webkit-details-marker{display:none}
-.nav details.menu nav{display:flex;flex-direction:column;gap:0;position:absolute;right:0;top:calc(100% + 8px);z-index:30;min-width:190px;padding:6px;background:var(--card);border:1px solid var(--line-2);border-radius:12px}
-.nav details.menu nav a{display:flex;align-items:center;min-height:44px;padding:0 12px}
-@media (max-width:640px){.nav>nav{display:none}.nav details.menu{display:block}.nav{justify-content:space-between}.scroll-cue{display:block}}
-ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:8px 0;border-bottom:1px solid var(--line)}
+.nav details.menu nav{display:flex;flex-direction:column;gap:0;margin:0;position:absolute;right:0;top:calc(100% + 8px);z-index:30;min-width:190px;padding:6px;background:var(--card);border:1px solid var(--line-2);border-radius:12px;box-shadow:0 12px 32px rgba(29,27,23,.14)}
+.nav details.menu nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:8px;color:var(--ink)}.nav details.menu nav a:hover{background:var(--chip)}
+@media (max-width:1000px){.nav>nav{display:none}.nav details.menu{display:block}}
+@media (max-width:640px){.nav{justify-content:space-between}.nav .btn.sm{min-height:44px}.scroll-cue{display:block}}
+
+.card>h2:first-child{margin-top:0}.surv{margin:2px 0}.surv summary{cursor:pointer;min-height:44px;display:flex;align-items:center;flex-wrap:wrap;gap:2px 10px}.surv p{margin:0 0 8px}
+.badge{display:inline-block;border:1px solid var(--orange-ink);color:var(--orange-ink);background:var(--orange-soft);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600}
+ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:10px 0;border-bottom:1px solid var(--line)}ul.plain li:last-child{border-bottom:0}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
-ul.dir{list-style:none;padding:0;margin:16px 0;columns:2 300px;column-gap:28px}ul.dir li{padding:2px 0}
-ul.dir a{display:inline-block;min-height:40px;padding:8px 0;line-height:1.3}nav.links{margin:8px 0 4px}
-.links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
-form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:12px 0}form.find select,form.find button{flex:none}form.find input,form.find select{min-height:44px;border:1px solid var(--line-2);border-radius:10px;padding:0 12px;background:var(--card);color:var(--ink);font:inherit}
+ul.dir{list-style:none;padding:0;margin:16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:8px}
+ul.dir li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 14px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+ul.dir li:hover{border-color:var(--line-2)}ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px;line-height:1.3;color:var(--ink);text-decoration:none}
+ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.links{margin:12px 0 6px}
+.links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
+.links a:hover{border-color:var(--line-2);color:var(--ink)}nav.links[data-az] a{min-width:40px;justify-content:center;padding:4px 10px}
+.links a[aria-current=page]{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
+[data-crumbs]{margin:0 0 6px}[data-crumbs] a{color:var(--muted)}h1+.muted{font-size:16px;max-width:64ch;margin:0 0 14px}
+form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:16px 0}form.find select,form.find button{flex:none}form.find input,form.find select{min-height:44px;border:1px solid var(--line-2);border-radius:10px;padding:0 12px;background:var(--card);color:var(--ink);font:inherit}
 form.find input{flex:1;min-width:0}form.find button{cursor:pointer;font:inherit}
-footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:880px;margin:0 auto;padding:20px 16px 40px;font-size:13px;color:var(--muted)}
-footer.site nav{display:flex;flex-wrap:wrap;gap:4px 16px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}
-@media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:44px;padding:10px 0}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
+footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:960px;margin:0 auto;padding:24px clamp(16px,4vw,32px) 40px;font-size:13.5px;color:var(--muted)}
+footer.site p{max-width:72ch;margin:0 0 8px}footer.site nav{display:flex;flex-wrap:wrap;gap:4px 18px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}footer.site nav a:hover{color:var(--ink)}
+@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide{grid-column:1/-1}.card{padding:16px}h2{margin-top:32px}}
+@media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:48px}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .chart-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:6px;min-height:52px}
 .chg{margin:0}.chg b{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}.chg b[data-dir=up]{color:var(--up)}.chg b[data-dir=down]{color:var(--down)}.chg .small{display:block;max-width:46ch}
@@ -2146,7 +2164,7 @@ def _top(sign_in: str | None = None) -> str:
     return (f'<a class="skip" href="#main">Skip to main content</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
             f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{menu}</nav>'
             f'<details class="menu"><summary>Menu</summary><nav aria-label="Site (menu)">{menu}</nav></details>'
-            f'<a class="btn ghost" href="{e(sign_in)}">Sign in</a></header>')
+            f'<a class="btn ghost sm" href="{e(sign_in)}">Sign in</a></header>')
 
 
 INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address as the app's footers (content/seo.ts)
@@ -2154,14 +2172,14 @@ INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address
 
 def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
-    links = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
-                                                                ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us"),
-                                                                ("/pricing", "Plans"), ("/library", "Strategy library"), ("/blog", "Blog")))
-    links += f'<a href="{INSTAGRAM}" rel="me noopener">Instagram</a>'
+    explore = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/library", "Strategy library"), ("/pricing", "Plans"))) + '<a href="/stocks">Companies</a><a href="/blog">Blog</a>'
+    policies = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
+                                                                   ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us")))
+    policies += f'<a href="{INSTAGRAM}" rel="me noopener">Instagram</a>'
     return (f'<footer class="site"><div class="in"><p>Research and paper trading only. No real orders are placed. StratLab shows '
             "facts from reported data for research and education; nothing here is investment advice or a recommendation, and "
             f"past prices don't predict future returns. © {datetime.now(timezone.utc).year} StratLab.</p>"
-            f'<nav aria-label="Policies">{links}</nav></div></footer>')
+            f'<nav aria-label="Explore">{explore}</nav><nav aria-label="Policies">{policies}</nav></div></footer>')
 
 
 def _page(head: str, sign_in: str | None, body: str) -> str:
@@ -2406,13 +2424,14 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
                   {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}, *faq_ld(questions)])
     ind = " · ".join(shown_industry(f.get("industry"), plain=region == "US"))
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
-<p class="muted">{e(f.get("exchange") or country)}{(" · " + e(ind)) if ind else ""}</p>
+<p class="eyebrow">{e(f.get("exchange") or country)}{(" · " + e(ind)) if ind else ""}</p>
 <p class="small muted" data-as-of>{as_of_line}</p>"""]
     about = about_text(f, region, symbol, name) if has_content(f) else ""
     if about:
         parts.append(f'<p data-about>{e(about)}</p>')           # SEO-1: this company's own sentences, from the figures below
+    # the range's two prices are one value across two columns, so "₹1,201.43 to ₹1,551.90" never breaks in the middle
     parts.append('<div class="card grid">' + "".join(
-        f'<div class="stat"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
+        f'<div class="stat{" wide" if " to " in val else ""}"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
     parts += _notes(f)
     parts.append(_how(f))
     parts.append(price_chart_html(f, region, symbol))       # PUB-1: the share price, drawn in the browser from the cached closes
@@ -2436,7 +2455,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
 
 
 def _cta(symbol: str, test: str, deep: str) -> str:
-    return f"""<div class="card"><h2 style="margin-top:0">Go further with {e(symbol)}</h2>
+    return f"""<div class="card"><h2>Go further with {e(symbol)}</h2>
 <p class="muted">Free to start: test a trading idea on {e(symbol)}'s real prices after costs, or open the full deep dive with ten years of numbers, red flags and management's record.</p>
 <div class="ctas"><a class="btn" href="{e(test)}">Test a strategy on {e(symbol)}</a><a class="btn ghost" href="{e(deep)}">Open the full deep dive</a></div></div>"""
 
@@ -2808,14 +2827,11 @@ def surveillance_html(flags: list[dict]) -> str:
     fixed dark amber on the dark card was 2.37:1)."""
     if not flags:
         return ""
-    badge = ("display:inline-block;border:1px solid var(--orange-ink);color:var(--orange-ink);background:var(--orange-soft);"
-             "border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600;margin:0 6px 6px 0")
     items = "".join(
-        f'<details style="margin:6px 0"><summary style="cursor:pointer;min-height:32px;line-height:32px">'
-        f'<span style="{badge}">{e(f["short"])}</span> {e(f["label"])}</summary>'
-        f'<p class="small" style="margin:4px 0 0">{e(f["text"])}'
+        f'<details class="surv"><summary><span class="badge">{e(f["short"])}</span> {e(f["label"])}</summary>'
+        f'<p class="small">{e(f["text"])}'
         f'{" List as of " + e(_date(f["as_of"])) + "." if f.get("as_of") else ""}</p></details>' for f in flags)
-    return (f'<div class="card" data-surveillance><h2 style="margin-top:0">Exchange surveillance</h2>{items}'
+    return (f'<div class="card" data-surveillance><h2>Exchange surveillance</h2>{items}'
             '<p class="small muted">From the exchange\'s published surveillance lists: measures the exchange applies '
             'for a time. They are facts about trading rules, not a view on the company.</p></div>')
 
@@ -2826,7 +2842,7 @@ def with_surveillance(page: str, flags: list[dict]) -> str:
     block = surveillance_html(flags)
     if not block:
         return page
-    for anchor in ('<div class="card grid">', '<div class="card"><h2 style="margin-top:0">Go further'):
+    for anchor in ('<div class="card grid">', '<div class="card"><h2>Go further'):
         i = page.find(anchor)
         if i >= 0:
             return page[:i] + block + page[i:]
@@ -3067,7 +3083,7 @@ def _pager(base, pages: int, page: int) -> str:
     """Links to the other pages of a long list: `base(n)` is page n's address."""
     if pages <= 1:
         return ""
-    items = "".join((f'<a href="{e(base(n))}" aria-current="page" style="font-weight:600">{n}</a>' if n == page
+    items = "".join((f'<a href="{e(base(n))}" aria-current="page">{n}</a>' if n == page
                      else f'<a href="{e(base(n))}">{n}</a>') for n in range(1, pages + 1))
     return f'<nav class="links" aria-label="Pages" data-pager>{items}</nav>'
 
@@ -3128,7 +3144,7 @@ def letter_page(region: str, letter: str, page: int = 1) -> str | None:
             f'<p class="muted">{n:,} companies listed in {where} ({exchange}) {e(what)}{e(of)}, A to Z by name. Each links to its price, '
             "reported results and recent filings. Facts, not advice.</p>"
             f'<nav class="links" aria-label="Letters" data-az>' + "".join(
-                f'<a href="{letter_path(region, L)}"' + (' aria-current="page" style="font-weight:600"' if L == letter else "") + f'>{"0–9" if L == OTHER else L}</a>'
+                f'<a href="{letter_path(region, L)}"' + (' aria-current="page"' if L == letter else "") + f'>{"0–9" if L == OTHER else L}</a>'
                 for L in [*LETTERS, OTHER] if d["count"].get(L)) + "</nav>"
             + _dir_list(region, syms)
             + _pager(lambda k: letter_path(region, letter, k), pages, page)
