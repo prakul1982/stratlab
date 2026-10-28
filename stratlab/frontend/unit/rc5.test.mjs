@@ -56,3 +56,11 @@ test("a long message stays long enough to read, a short one as before (RC5-006)"
   assert.equal(toastMs("x".repeat(2000), false), 15000);
   assert.match(fs.readFileSync(new URL("../src/lib/app.tsx", import.meta.url), "utf8"), /setTimeout\(\(\) => setToast\(null\), toastMs\(msg, !!action\)\)/);
 });
+
+test("with no connection the idea box says so, not that the AI builder is away (RC5-009)", () => {
+  const src = read("src/components/IdeaComposer.tsx");
+  assert.match(src, /err\.code === "network" \|\| err\.code === "no_backend"\s*\n\s*\? `\$\{err\.message\} The simple converter read your idea here/);
+  assert.match(src, /Saving them as a notebook needs the connection\./);
+  // the AI being away keeps its own words
+  assert.match(src, /"The AI builder isn't available right now, so the simple converter read your idea/);
+});

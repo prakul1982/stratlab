@@ -98,8 +98,11 @@ export async function buildIdea(idea: string, market?: string, opts: { allIndica
     if (!(["ai_busy", "ai_limit", "ai_daily_limit", "ai_failed", "no_backend", "network"].includes(err.code || "") || err.status >= 500)) throw e;
     usedAI = false;
     // the converter can get an idea wrong ("crosses below 6" from "idea 6"), so it is said, never used quietly (DP1-004)
+    // no connection is said as that, not as the AI being away (RC5-009)
     fallback = err.code === "ai_limit" || err.code === "ai_daily_limit"
       ? `${err.message} The simple converter read your idea instead, and it can get an idea wrong, so check the rules it made.`
+      : err.code === "network" || err.code === "no_backend"
+      ? `${err.message} The simple converter read your idea here (it understands SMA, EMA, RSI and price rules), and it can get an idea wrong, so check the rules it made. Saving them as a notebook needs the connection.`
       : "The AI builder isn't available right now, so the simple converter read your idea (it understands SMA, EMA, RSI and price rules). It can get an idea wrong, so check the rules it made.";
     const p = parseStrategyText(idea);
     parsedDropped = p.dropped;
