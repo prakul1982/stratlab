@@ -2261,6 +2261,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .plan-lock { display: inline; }
 .k-badge svg.lock-ic { margin-right: 2px; }
 .page-lock { margin-bottom: var(--s4); }
+.page-lock-slot:empty { display: none; }       /* the slot under every page title: nothing in it, no space */
+.page-lock-slot > .page-lock { margin-top: var(--s3); }
 
 /* signed out on an app address, a page that doesn't exist, a page that isn't yours (pages/Gate.tsx) */
 .gate { max-width: 640px; }

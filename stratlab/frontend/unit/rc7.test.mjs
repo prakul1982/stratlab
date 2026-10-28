@@ -48,3 +48,12 @@ test("RC7-002: the welcome question's four choices come before the optional leve
   const phone = css.slice(css.indexOf("@media (max-width: 520px) {\n  .welcome-choices"));
   assert.match(phone, /\.welcome-choices \{ order: 1; \}\s*\.welcome-what \{ order: 2; \}\s*\.welcome-note \{ order: 3; \}\s*\.welcome-level \{ order: 4; \}/);
 });
+
+test("RC7-003: every page title draws the slot the plan-lock note goes into, and the note is portalled into it", () => {
+  const head = read("src/components/kit/PageHeader.tsx");
+  assert.match(head, /<div className="page-lock-slot" ref=\{/);
+  assert.ok(head.indexOf("</header>") < head.indexOf('className="page-lock-slot"'), "the slot is after the title block");
+  const lock = read("src/components/PageLock.tsx");
+  assert.match(lock, /createPortal\(note, slot\)/);
+  assert.match(lock, /useLockSlot\(\)/);
+});

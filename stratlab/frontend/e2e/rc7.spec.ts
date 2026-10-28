@@ -74,3 +74,20 @@ test("RC7-002: the welcome question shows all four choices on a 360 x 640 phone 
   expect(level!.y).toBeGreaterThan(last!.y);
   expect(errors).toEqual([]);
 });
+
+const FREE: Who = { token: "free-token", id: "u-free", email: "free@example.com" };
+
+test("RC7-003: the plan-lock note is one place, straight under the page's title, on every page that has it", async ({ page }) => {
+  const errors = await signIn(page, FREE, "/trade/positioning");
+  for (const path of ["/trade/positioning", "/trade/signals", "/trade/journal", "/options", "/invest/etf-gaps", "/money/us-tax"]) {
+    await page.goto(path);
+    const lock = page.locator("main .page-lock");
+    await expect(lock, path).toHaveCount(1, { timeout: 30_000 });
+    await expect(page.locator("main .k-page-head h1").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("main .page-lock-slot .page-lock"), `${path}: in the title's slot`).toHaveCount(1, { timeout: 30_000 });
+    const [h1, head, note] = [await page.locator("main h1").first().boundingBox(), await page.locator("main .k-page-head").first().boundingBox(), await lock.boundingBox()];
+    expect(note!.y, `${path}: under the title`).toBeGreaterThan(h1!.y + h1!.height - 1);
+    expect(note!.y - (head!.y + head!.height), `${path}: right under the title block, not further down`).toBeLessThan(40);
+  }
+  expect(errors).toEqual([]);
+});
