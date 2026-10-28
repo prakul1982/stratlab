@@ -42,9 +42,10 @@ test("LAND-2: three steps (idea, test, paper trade; Money: files, then value, ga
   assert.match(HOW_STEPS[0][1], /plain words/);
   assert.match(HOW_STEPS[1][1], /four checks/);
   assert.match(HOW_MONEY, /upload your files.*value, gains and tax/);
-  assert.deepEqual(DIFFERENT.map(([t]) => t), ["Facts, not tips", "Real costs, per market", "Four checks for luck", "Ten markets", "Your data stays yours", "Never real orders"]);
+  // VR5-owner-2: "facts, not tips", "ten markets" and "paper trading only / never real orders" are in the intro's one sentence, not again in this list
+  assert.deepEqual(DIFFERENT.map(([t]) => t), ["Real costs, per market", "Four checks for luck", "Your data stays yours"]);
   const summary = home.summary.join(" ").toLowerCase();
-  for (const t of ["how it works", "what makes it different", "facts, not tips", "real costs for each market", "four checks for luck", "ten markets", "your data stays yours", "no real orders"])
+  for (const t of ["how it works", "what makes it different", "real costs for each market", "four checks for luck", "your data stays yours"])
     assert.ok(summary.includes(t), `${t} is in the home page's HTML`);
 });
 
@@ -72,4 +73,19 @@ test("LAND-2: the page draws the intro right under the hero, in heading order, w
   assert.match(css, /@media \(max-width: 760px\) \{ \.lp-steps\.lp-steps-3 \{ grid-template-columns: minmax\(0, 1fr\)/);
   // one h1 for the page: the intro and its parts are h2 and h3
   assert.doesNotMatch(login.slice(intro, trade), /<h1|<h4/);
+});
+
+test("VR5-owner-2: the landing page says 'ten markets', 'paper trading only / never real orders' and 'facts, not tips' once each, in the intro's sentence", () => {
+  const login = read("src/pages/Login.tsx");
+  // the hero's eyebrow and line, the line under the button and Options' tag no longer carry them
+  assert.match(login, /"Trade · Invest · Money"\}<\/span>/);
+  assert.doesNotMatch(login, /Ten markets|Facts and tests, never tips|Paper trading only, no real orders|No real orders, ever/);
+  // nothing else drawn from the intro's data says them again: the sentence is the only place
+  const rest = JSON.stringify([INTRO_SPACES, HOW_STEPS, HOW_MONEY, DIFFERENT]).toLowerCase();
+  for (const claim of ["ten markets", "facts, not tips", "never real orders", "no real orders", "paper trading only", "never buy, sell or hold"])
+    assert.ok(!rest.includes(claim), `${claim} is said again`);
+  // and the page's own HTML says each once, in the same opening sentence
+  const html = home.summary.join(" ").toLowerCase();
+  for (const claim of ["ten markets", "facts, not tips", "never real orders"]) assert.equal(html.split(claim).length - 1, 1, `${claim} once in the home page's HTML`);
+  assert.doesNotMatch(html, /no real orders|never says buy, sell or hold/);
 });

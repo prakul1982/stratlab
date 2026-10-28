@@ -48,8 +48,8 @@ export const PAGES: PageMeta[] = [
       "Invest, research: read any Indian or US company from its own numbers and filings. Company pages show prices, key numbers, results and owners; screens and IPOs filter companies and follow an issue from its dates to its listing; red flags link fund raises, pledges, resignations and defaults to the filing.",
       "Money, what you own: upload your broker's file or fund statement for value, gains and XIRR; a capital gains tax report, US stocks in Indian tax and an ITR-ready export; net worth and a Money calendar of tax dates, results and EMIs.",
       "How it works: describe an idea in plain words, test it on years of real prices after real costs with four checks for luck, then trade it on paper with fake money. For Money, upload your files and see your value, gains and tax worked out.",
-      "What makes it different: facts, not tips; real costs for each market; four checks for luck; ten markets, from India and the US to crypto, forex and commodities; your data stays yours; and no real orders, ever.",
-      "Free to start with no card; Basic and Pro raise the limits. StratLab states facts and never says buy, sell or hold.",
+      "What makes it different: real costs for each market, four checks for luck, and your data stays yours.",
+      "Free to start with no card; Basic and Pro raise the limits.",
       "Browse companies: every Indian and US company page, A to Z, and the NIFTY 50 and S&P 500 lists."] },
   { path: "/pricing", title: "Plans · StratLab",
     description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, canonical: "/plans", updated: "2026-10-08",     // the landing page scrolled to its prices: the plans page is the one address for them (R26-006, RC1-011)

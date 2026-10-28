@@ -58,6 +58,14 @@ article p,article li{max-width:68ch}article ul{padding-left:20px}article li{marg
 .btbl th,.btbl td{text-align:right;white-space:nowrap}.btbl th[scope=row],.btbl thead th:first-child{text-align:left;white-space:normal;min-width:140px;position:static;background:transparent}
 .btbl thead th{font-weight:600;color:var(--ink-2);white-space:normal;vertical-align:bottom}
 .btbl tr:last-child td,.btbl tr:last-child th{border-bottom:0}
+/* VR5-007: on a phone the four columns of a results table fit the screen (the rule set's name wraps, the figures are a size down and
+   closer): at 390px the 140px name column pushed "Difference" and its figures past the edge, cut off */
+@media (max-width:640px){.btbl table{font-size:13px}.btbl th,.btbl td{padding:8px 5px}.btbl th[scope=row],.btbl thead th:first-child{min-width:0}.btbl caption{padding-inline:8px}}
+@media (max-width:640px){.btbl.wide table,.btbl.wide tbody,.btbl.wide caption{display:block}.btbl.wide thead{display:none}
+.btbl.wide tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px;padding:10px 12px;border-bottom:1px solid var(--line)}.btbl.wide tr:last-child{border-bottom:0}
+.btbl.wide th[scope=row]{grid-column:1/-1;padding:0;border:0;font-size:14px}.btbl.wide td{padding:0;border:0;text-align:left;white-space:normal;min-width:0}
+.btbl.wide td::before{content:attr(data-l);display:block;font-size:12px;color:var(--muted)}.btbl.wide td:empty{display:none}
+.btbl.wide td:nth-child(6){grid-column:span 2}}
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.tabs a{display:inline-flex;align-items:center;min-height:44px;padding:4px 16px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink-2);background:var(--card)}
 .tabs a[aria-current=page]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
 ul.posts{list-style:none;padding:0;margin:0}ul.posts li{margin:12px 0}

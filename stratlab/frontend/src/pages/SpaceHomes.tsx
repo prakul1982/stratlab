@@ -238,7 +238,8 @@ export function InvestHome() {
   // the menu's main button), so this page has no second search box (DD-002)
   return (
     <div className="space-home">
-      <Head eyebrow="Invest" title="Invest home">
+      {/* VR5-001: the eyebrow says something the crumb and the title do not (it was "Invest" over "Invest home") */}
+      <Head eyebrow="Invest · companies and markets" title="Invest home">
         What your watchlist, results days and red flags say today, and the market around them. Facts, not tips. To open any
         company, use <Link to={`/research?region=${region}`} className="link">Look up a company</Link>.
       </Head>
@@ -287,20 +288,27 @@ function NextEvents({ limit = 3, testId = "invest-events", region }: { limit?: n
 }
 
 /** The watchlist's prices for the market picked at the top (R9R-008: the US tab left India's panels in place). */
+/** How many watchlist stocks the Invest home's card shows: six (three rows of two); the rest are one tap away. */
+export const WATCH_SHOWN = 6;
+
 function WatchPanel({ region }: { region: Region }) {
   const { items, failed, retry } = useWatchlist();
   const by = (r: Region) => (items ?? []).filter((w) => w.region === r);
   const regions = ([region] as Region[]).filter((r) => by(r).length);
   return (
-    <Panel title="Your watchlist" right={<Link to={withRegion("/research/investor", region)} className="link">At a glance →</Link>}>
+    // VR5-owner-1 (the owner's choice for VR4-016): the first six, and "See all" for the rest in the header beside "At a glance", so the
+    // card does not grow with the list and takes no line of its own under the tiles
+    <Panel title="Your watchlist" right={<span className="k-card-actions">
+      {(by(region).length > WATCH_SHOWN) && <Link to="/research/watchlist" className="link" data-testid="watch-see-all">See all {by(region).length} →</Link>}
+      <Link to={withRegion("/research/investor", region)} className="link">At a glance →</Link></span>}>
       {items === null ? (failed
         ? <p className="small muted" role="alert">Your watchlist couldn't be opened. <button type="button" className="btn quiet sm" onClick={retry}>Try again</button></p>
         : <PanelSkel label="Opening your watchlist" />)
         : !regions.length ? <p className="small muted">{(items ?? []).length ? `None of your watchlist is in ${REGION_NAME[region]}. Press Watch on a ${REGION_NAME[region]} company to keep it here, with live prices.` : "Press Watch on any company to keep it here, with live prices."}</p>
         : regions.map((r) => (
           <div key={r} className="k-stack snug">
-            <span className="eyebrow">{REGION_NAME[r]}</span>
-            <QuoteGrid region={r} symbols={by(r).slice(0, 6).map((w) => w.symbol)} names={Object.fromEntries(by(r).map((w) => [w.symbol, w.name]))} />
+            {/* no "INDIA" over the stocks: the market is the toggle at the top of the page (VR5-owner-1: one line less, so the card ends level with its neighbours) */}
+            <QuoteGrid region={r} symbols={by(r).slice(0, WATCH_SHOWN).map((w) => w.symbol)} names={Object.fromEntries(by(r).map((w) => [w.symbol, w.name]))} />
           </div>
         ))}
     </Panel>

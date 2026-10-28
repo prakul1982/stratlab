@@ -890,7 +890,13 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .consent-btns { display: flex; flex-wrap: wrap; gap: 10px; }
 /* "Allow" and "No thanks" are two answers of equal weight: one width, not 63px beside 90px (VR4-012) */
 .consent-btns .btn { min-width: 104px; justify-content: center; }
-@media (max-width: 640px) { .consent { right: 16px; left: 16px; width: auto; } }
+/* VR5: on a phone the question took 213px, over a quarter of a 360x800 screen: a size down and tighter, the two answers sharing the row */
+@media (max-width: 640px) {
+  .consent { right: 12px; left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; gap: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.4; }
+  .consent-title { font-size: 15px; }
+  .consent-btns { gap: 8px; }
+  .consent-btns .btn { flex: 1 1 0; min-width: 0; }
+}
 
 /* search: one box for everything */
 .search-btn kbd, .palette kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-2); border-radius: 6px; padding: 1px 6px; color: var(--muted); }
@@ -2221,6 +2227,9 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .pub-nav .lp-menu nav a { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; color: var(--ink); text-decoration: none; }
 .pub-nav .lp-menu nav a:hover, .pub-nav .lp-menu nav a:focus-visible { background: var(--chip); }
 .pub-nav .pub-menu { margin-left: auto; margin-right: var(--s3); }
+.pub-nav > a:first-child { flex: none; }                       /* VR5-003: the logo is never squeezed by the buttons beside it (it was clipped under the Menu at 360px) */
+.pub-nav .pub-short { display: none; }
+@media (max-width: 400px) { .pub-nav .pub-long { display: none; } .pub-nav .pub-short { display: inline; } }
 .pub-nav .pub-menu-start nav { left: 0; right: auto; }
 @media (min-width: 641px) { .pub-nav .pub-menu { display: none; } }          /* a phone's Menu: wider screens have the rows on the landing page */
 .pub-links { display: flex; gap: 22px; margin-left: auto; margin-right: var(--s4); }
@@ -2547,4 +2556,44 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   select { min-height: 44px; }
   .k-input.sm, .k-input.k-in { height: 44px; }
   .toast button { min-height: 44px; }
+}
+
+/* VR5-004: a chip or badge whose words are longer than the screen ("Promoter pledge or encumbrance", "Earlier financial statements not to be
+   relied on (Item 4.02)") wraps inside its own rounded box on a small phone (380px and under; wider ones had room), instead of pushing the page sideways (376px on a 360px screen);
+   short ones are unchanged */
+@media (max-width: 380px) {
+  .k-badge { max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; }
+  .k-chip { max-width: 100%; height: auto; min-height: 44px; padding-block: 6px; white-space: normal; text-align: left; line-height: 1.3; }
+}
+
+/* VR5-005: the words of a notebook's rules ("is below", "30", "% stop") were 34px to tap, "+ Add an entry rule" 39px: 40 and 44 on a phone */
+@media (max-width: 640px) {
+  .token { padding: 6px 10px; }
+  .add-rule { min-height: 44px; display: inline-flex; align-items: center; }
+}
+/* VR5-005: the symbol that opens a company from the Invest home's red flags was 35px tall */
+@media (max-width: 640px) { .space-flag > a.link { display: inline-flex; align-items: center; min-height: 44px; } }
+/* VR5-006: two figures across when they fit (StatRow decides, Stat.tsx useDuo); an odd last one takes the line */
+@media (max-width: 640px) {
+  .k-stats.duo { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); }
+  .k-stats.duo > .k-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+.k-nowrap { white-space: nowrap; }
+@media (max-width: 380px) { .k-nowrap { white-space: normal; } }          /* the plan table's columns are 64px there: the word breaks at its hyphens rather than push the page sideways */
+/* VR5-003: at 400px and under the Menu sits near the right edge (the button beside it reads "Sign in"): its list opens leftwards; from its left it ran 31px past the screen */
+@media (max-width: 400px) { .pub-nav .pub-menu.pub-menu-start nav { left: auto; right: 0; } }
+/* VR5-014: on a phone the picker's tiles (Net worth's "Add an entry": fourteen kinds) are rows, the picture beside the words, not a 120px
+   card each with the picture over them: the list was 1,900px of scrolling inside the dialog, now about half */
+@media (max-width: 640px) {
+  .k-tiles { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .k-tile { display: grid; grid-template-columns: 34px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; row-gap: 0; align-items: center; padding: 10px 12px; min-height: 56px; }
+  .k-tile .ic { grid-row: 1 / span 2; }
+  .k-tile:not(:has(.sub)) .ic { grid-row: 1; }
+  .k-tile:not(:has(.ic)) { grid-template-columns: minmax(0, 1fr); }
+}
+/* VR5-015: a fold's one-line summary of what is inside ("entries a day, daily loss cap, trailing, ...", beside "More settings") was a four-line sliver
+   in a 120px column on a phone: it takes its own line under the title */
+@media (max-width: 640px) {
+  .k-disclosure > summary:has(.k-more-what) { flex-wrap: wrap; row-gap: 0; }
+  .k-disclosure > summary .k-more-what { flex: 1 0 100%; padding-left: calc(6px + var(--s2)); }
 }

@@ -63,8 +63,11 @@ export function summaryLines(summary: string | null | undefined): string[] {
  * under the headline already says it. Everything else (too few trades, the yearly rate, notes) stays. */
 export function heroSummary(summary: string | null | undefined, caption = ""): string[] {
   const saysLost = /lost money after costs/i.test(caption);
+  // VR5-010: "Only 11 trades: too few to judge." under the headline, then "Only 11 trades in this period." as the first line of the summary: said once
+  const saysFew = /^Only \d+ trades?: too few to judge/i.test(caption);
   return summaryLines(summary).filter((l) => !/^The strategy returned .+ (more than|less than|about the same as) buying and holding over the same period \(.+\)\.$/.test(l)
-    && !(saysLost && l === "After costs, the strategy lost money over the period."));
+    && !(saysLost && l === "After costs, the strategy lost money over the period.")
+    && !(saysFew && /^Only \d+ trades? in this period\.$/.test(l)));
 }
 
 /** A run's badge words where the plain "Passed the checks" would overstate it: the count when some checks didn't pass

@@ -222,7 +222,8 @@ test("landing: the intro under the hero says what StratLab is, in three columns,
   await expect(intro.locator(".lp-steps li")).toHaveCount(3);
   await expect(intro.locator(".lp-steps li").first()).toContainText("plain words");
   await expect(intro).toContainText("upload your files, then see your value, gains and tax worked out");
-  await expect(intro.locator(".lp-tool b")).toHaveText(["Facts, not tips", "Real costs, per market", "Four checks for luck", "Ten markets", "Your data stays yours", "Never real orders"]);
+  // the three claims the intro's sentence makes are not said again by this list (VR5-owner-2)
+  await expect(intro.locator(".lp-tool b")).toHaveText(["Real costs, per market", "Four checks for luck", "Your data stays yours"]);
   // right under the hero: the section starts within a screen and a half, and comes before every other section
   const top = (await intro.boundingBox())!.y;
   expect(top, "the intro is close under the hero").toBeLessThan(info.project.name === "phone" ? 1700 : 1300);
@@ -321,4 +322,17 @@ test("/library: a result line, the checks and the figures on each card; one summ
   const options = await page.getByLabel("Verdict").locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value));
   for (const v of options.filter(Boolean)) expect(have.has(v), `${v} is offered with no strategy`).toBe(true);
   for (const v of have) expect(options, v).toContain(v);
+});
+
+test("landing: 'ten markets', 'facts, not tips' and 'never real orders' are said once, in the intro's sentence, not again in the hero, under the button or in a list (VR5-owner-2)", async ({ page }) => {
+  const errors = await open(page);
+  const main = (await page.locator("main").innerText()).toLowerCase();
+  const count = (t: string) => main.split(t).length - 1;
+  expect(count("ten markets"), "ten markets").toBe(1);
+  expect(count("facts, not tips"), "facts, not tips").toBe(1);
+  expect(count("never real orders"), "never real orders").toBe(1);
+  const hero = (await page.locator(".lp-hero").innerText()).toLowerCase();
+  expect(hero).not.toMatch(/ten markets|never tips|facts|real orders|paper trading only/);
+  expect(hero).toContain("one place for trading ideas, company research and your own money.");
+  expect(errors).toEqual([]);
 });
