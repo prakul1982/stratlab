@@ -9,6 +9,7 @@ import threading
 import time
 
 from . import name_search
+from .kite_service import NSE_SERIES, UNIT_SERIES
 
 LIMIT = 8
 MEMORY = 1800                          # seconds a market's list is kept before it's gathered again
@@ -74,8 +75,10 @@ def india_rows(equities: list[dict], listed: dict | None = None, twins: dict[str
     out, seen = [], set()
     for r in equities:
         if r.get("exchange") == "NSE":
-            base, _, series = r["symbol"].partition("-")
-            sym = base if series else r["symbol"]
+            # only a real series suffix comes off: BAJAJ-AUTO and MCDOWELL-N are whole symbols (RC5-003: the first was offered as
+            # "BAJAJ", which no page has)
+            base, _, series = r["symbol"].rpartition("-")
+            sym = base if base and series in NSE_SERIES + UNIT_SERIES else r["symbol"]
             if sym in seen:
                 continue
             seen.add(sym)
