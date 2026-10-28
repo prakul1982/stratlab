@@ -2081,6 +2081,9 @@ form.find input{flex:1;min-width:0}form.find button{cursor:pointer;font:inherit}
 footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:960px;margin:0 auto;padding:24px clamp(16px,4vw,32px) 40px;font-size:13.5px;color:var(--muted)}
 footer.site p{max-width:72ch;margin:0 0 8px}footer.site nav{display:flex;flex-wrap:wrap;gap:4px 18px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}footer.site nav a:hover{color:var(--ink)}
 @media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide,.stat.long{grid-column:1/-1}.card{padding:16px}h2{margin-top:32px}}
+@media (max-width:640px){ul.dir[data-short]{grid-template-columns:repeat(2,minmax(0,1fr))}ul.dir[data-short] li{padding:0 12px}}
+/* VR5-008: the two buttons of "Go further" were 246px and 206px wide, left-aligned: one width on a phone */
+@media (max-width:640px){.ctas{flex-direction:column}.ctas .btn{justify-content:center;text-align:center}}
 @media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:48px}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .chart-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:6px;min-height:52px}
@@ -3224,7 +3227,9 @@ def _dir_list(region: str, syms: list[str]) -> str:
     """A directory page's companies: name, then the symbol, one link each, in the order given."""
     cos = companies(region)
     tidy = (lambda s: label_of(region, s, cos.get(s)))
-    return '<ul class="dir" data-companies>' + "".join(
+    # VR5-009: a list of bare symbols (no company name to show) went one per row on a phone, a 58px box each for "AARTIIND": two across
+    short = " data-short" if syms and all(len(tidy(s)) <= 14 for s in syms) else ""
+    return f'<ul class="dir" data-companies{short}>' + "".join(
         f'<li><a href="{e(path(region, s))}">{e(tidy(s))}</a>' + ("" if tidy(s) == s else f' <span class="muted small">{e(s)}</span>') + "</li>"
         for s in syms) + "</ul>"
 

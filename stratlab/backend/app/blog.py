@@ -252,9 +252,13 @@ def blocks_html(blocks: list) -> str:
         elif t == "table":
             cap = f"<caption>{_esc(b['caption'])}</caption>" if b.get("caption") else ""
             head = "".join(f'<th scope="col">{_esc(h)}</th>' for h in b["head"])
-            rows = "".join("<tr>" + "".join((f'<th scope="row">{inline_html(c)}</th>' if n == 0 else f"<td>{inline_html(c)}</td>")
+            # VR5-007: each figure carries its column's name (data-l), so on a phone a table of five columns or more is drawn as one
+            # small card per row (blog_pages.py), instead of a table cut off by the edge of the screen
+            lab = lambda n: f' data-l="{_esc(b["head"][n])}"' if n < len(b["head"]) else ""  # noqa: E731
+            rows = "".join("<tr>" + "".join((f'<th scope="row">{inline_html(c)}</th>' if n == 0 else f"<td{lab(n)}>{inline_html(c)}</td>")
                                             for n, c in enumerate(r)) + "</tr>" for r in b["rows"])
-            out.append(f'<div class="btbl"><table>{cap}<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
+            wide = " wide" if len(b["head"]) >= 5 else ""
+            out.append(f'<div class="btbl{wide}"><table>{cap}<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
     return "".join(out)
 
 
