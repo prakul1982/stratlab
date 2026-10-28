@@ -81,14 +81,20 @@ def _group_in(n: float) -> str:
     return g(str(int(round(n))))
 
 
+def _half_up(x: float, places: int = 1) -> float:
+    from decimal import ROUND_HALF_UP, Decimal
+    return float(Decimal(repr(x)).quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP))
+
+
 def rupees(v: float | None) -> str:
     """₹2.4 crore, ₹35.0 lakh or ₹48,000: how amounts this size are usually written in India."""
     if v is None:
         return "–"
+    # rounded half up, as the page's own tables do: Python's format rounds the exact tie 7.25 to 7.2, the table's 7.3 (RC6-009)
     if v >= 1e7:
-        return f"₹{v / 1e7:,.1f} crore"
+        return f"₹{_half_up(v / 1e7):,.1f} crore"
     if v >= 1e5:
-        return f"₹{v / 1e5:,.1f} lakh"
+        return f"₹{_half_up(v / 1e5):,.1f} lakh"
     return "₹" + _group_in(v)
 
 

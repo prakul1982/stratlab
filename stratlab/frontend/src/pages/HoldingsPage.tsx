@@ -13,7 +13,7 @@ import { HoldingsActionsPanel } from "../components/HoldingsActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Signed, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
+import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Signed, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
 import { dayLabel, dollarRate, editChange, pnlLabel, priceNote, syncedNote, type Change, type Closes, type Mkt } from "../lib/holdingsEdit";
@@ -118,18 +118,19 @@ export function HoldingsPage() {
     api<View>("/holdings").then((v) => { if (n === readSeq.current) setView(v); }).catch(() => undefined);
   }, !!view && view.rows.length > 0 && !busy);
 
+  const { problem, clear: clearProblem, refused } = useUploadProblem();     // a refused file's reason stays beside the upload (RC6-010)
   const pick = async (files: FileList | null, reset: () => void) => {
     const f = files?.[0];
     if (!f) return;
     if (f.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); reset(); return; }
-    setBusy(true);
+    setBusy(true); clearProblem();
     try {
       const data = await dataUrl(f);
       const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode } });
       track("holdings imported", { rows: r.imported, method: mode });
       setResult(r);
       show(r.holdings);
-    } catch (e) { fail(e); } finally {
+    } catch (e) { if (!refused(e)) fail(e); } finally {
       setBusy(false);
       reset();
     }
@@ -232,6 +233,7 @@ export function HoldingsPage() {
           <UploadButton label="Upload holdings file" busy={busy} accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Holdings file" onFiles={pick} />
           <span className="k-note">Excel or CSV, up to {MAX_MB} MB.</span>
         </div>
+        <UploadProblem problem={problem} />
         {view?.zerodha && rows.length === 0 && zerodhaEmpty(view.zerodha)
           ? null      // the empty state below already says Zerodha is connected and returned nothing (R35: said twice)
           : view?.zerodha

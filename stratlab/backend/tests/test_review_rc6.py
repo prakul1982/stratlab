@@ -90,3 +90,12 @@ def test_a_tradebook_with_a_net_rate_and_an_executed_date_and_time_is_read(w):
                json={"filename": "any_broker_tradebook.csv", "data": base64.b64encode(csv.encode()).decode()})
     assert r.status_code == 200, r.text          # 400 "couldn't find a column for the price or value by a name we know"
     assert r.json()["read"] == 2
+
+
+# ---------- RC6-009: an amount's tie rounds up, as the page's table writes it ----------
+def test_a_deals_summary_rounds_a_tie_up_like_the_table_beside_it():
+    from app.deals import flow_text, rupees
+    assert rupees(72_500_000) == "₹7.3 crore"          # Python's own format gave ₹7.2 crore, the table ₹7.3 cr
+    assert rupees(1_225_000) == "₹12.3 lakh" and rupees(24_000_000) == "₹2.4 crore" and rupees(48_000) == "₹48,000"
+    text = flow_text({"buyers": 1, "sellers": 0, "bought": 25_000, "sold": 0, "bought_value": 72_500_000, "sold_value": 0})
+    assert text == "1 person bought 25,000 shares (₹7.3 crore)"

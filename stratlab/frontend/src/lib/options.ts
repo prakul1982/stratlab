@@ -231,6 +231,9 @@ export function payoff(p: OptPreview) {
 
 /** sessionStorage key: an imported options strategy handed from the import dialog to the Options page. */
 export const IMPORTED = "stratlab.options.import";
+/** The Options page's unfinished structure and the notes of an import, kept in this browser between visits. */
+export const OPTIONS_DRAFT = "stratlab.options.draft.v1";
+export const OPTIONS_NOTES = "stratlab.options.importnotes.v1";
 
 /** The line a flat options session shows after a trade closed while the rules' gap between trades still runs (R7T-013: after
  * a 09:41 stop-out with entries 120 minutes apart, "Entries open until 14:45" instead of the next entry's time). Null when

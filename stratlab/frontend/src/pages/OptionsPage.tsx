@@ -6,7 +6,7 @@ import { useMarketRefresh } from "../lib/marketLive";
 import { axisInrFor, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp, exchangeTime, optionsMarket } from "../lib/marketHours";
 import { HELP } from "../lib/help";
-import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoiceLabel, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
+import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoiceLabel, IMPORTED, isAutoName, OPTIONS_DRAFT, OPTIONS_NOTES, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -32,10 +32,9 @@ import { usePlansToast } from "../components/PlanInterest";
  * paper trade it. Built from the kit (components/kit): a picker for what to trade, settings written as sentences, a
  * summary of the most it can make and lose, and the advanced settings folded away. */
 
-const DRAFT = "stratlab.options.draft.v1";
-/** The import's notes, kept beside the draft until "Got it": leaving the page and coming back doesn't drop them, so a
- * structure whose legs were changed on the way in is confirmed before it can start (DB-002 remainder, RC1-010). */
-const NOTES = "stratlab.options.importnotes.v1";
+/** The draft and the import's notes (lib/options): leaving the page and coming back doesn't drop them, so a structure whose legs
+ * were changed on the way in is confirmed before it can start (DB-002 remainder, RC1-010); signing out forgets both (RC6-011). */
+const DRAFT = OPTIONS_DRAFT, NOTES = OPTIONS_NOTES;
 const loadNotes = (): string[] => {
   try {
     const got = JSON.parse(localStorage.getItem(NOTES) || "[]");

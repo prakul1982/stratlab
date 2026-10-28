@@ -96,3 +96,22 @@ test("RC6-004: the invite page and the newsletter settings whose read fails offe
   await expect(page.getByText("Market brief: India")).toBeVisible({ timeout: 30_000 });
   expect(errors.filter((e) => !/Internal Server Error|500/.test(e))).toEqual([]);
 });
+
+test("RC6-010: a holdings file that can't be read keeps its reason on the page beside the upload", async ({ page, request }, info) => {
+  const u = who(148, info.project.name === "phone");
+  await answer(request, u, "money", "money");
+  const errors = await signIn(page, u, "/holdings");
+  await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel("Holdings file").setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("these are not my holdings\n") });
+  const why = page.getByTestId("upload-problem");
+  await expect(why).toContainText("We couldn't find the holdings in that file", { timeout: 30_000 });
+  await expect(page.locator(".toast")).toHaveCount(0, { timeout: 20_000 });          // the toast is gone; the reason is not
+  await expect(why).toBeVisible();
+  // a good file clears it
+  const csv = "Stock Name,Quantity,Average Buy Price\nTCS,10,3200\nINFY,5,1450\n";
+  await page.getByLabel("Holdings file").setInputFiles({ name: "paytm_style.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await expect(page.getByText("2 stocks saved.")).toBeVisible({ timeout: 30_000 });
+  await expect(why).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: /TCS/ }).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});

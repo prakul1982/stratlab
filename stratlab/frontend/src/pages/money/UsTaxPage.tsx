@@ -7,7 +7,7 @@ import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { fyLink, movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
-import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
+import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton, useUploadProblem } from "../../components/kit";
 
 /* /money/us-tax: US share sales in rupees the way the Income-tax Rules convert them, long or short term under the
  * 24-month rule, US dividends with the tax withheld and the foreign tax credit, and the calendar-year Schedule FA table.
@@ -56,7 +56,7 @@ export function UsTaxPage() {
   const [form, setForm] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);      // a refused file stays on the page, not only in a toast (RC2B-015)
+  const { problem: uploadError, clear: clearProblem, refused } = useUploadProblem();      // a refused file stays on the page, not only in a toast (RC2B-015)
   const [getting, setGetting] = useState(false);
   const [asking, setAsking] = useState(false);
 
@@ -109,13 +109,13 @@ export function UsTaxPage() {
     if (!f) return;
     if (f.size > 5 * 1024 * 1024) { notify("That file is larger than 5 MB."); reset(); return; }
     setBusy(true);
-    setUploadError(null);
+    clearProblem();
     try {
       const r = await api<ImportReply>(`/money/us-tax/import?${new URLSearchParams({ filename: f.name.slice(0, 200) })}`, { method: "POST", file: f });
       setV(r.us);
       setNote(`${r.added} trade${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.${r.date_note ? ` ${r.date_note}` : ""}${r.note ? ` ${r.note}` : ""}`);
       track("us trades imported", { rows: r.added });
-    } catch (e) { setUploadError((e as { message?: string })?.message || "That file couldn't be read."); setNote(null); fail(e); } finally { setBusy(false); reset(); }
+    } catch (e) { setNote(null); if (!refused(e)) fail(e); } finally { setBusy(false); reset(); }
   };
   const removeOne = async (id: string) => {
     try { setV(await api<View>(`/money/us-tax/trades/${encodeURIComponent(id)}`, { method: "DELETE" })); } catch (e) { fail(e); }
