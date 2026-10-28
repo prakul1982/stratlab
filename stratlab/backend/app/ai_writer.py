@@ -41,7 +41,8 @@ Reply with ONLY a JSON object.
 
 Schema:
 {
-  "name": short strategy name (max 6 words),
+  "name": short strategy name in plain words, max 6 words, never a code or abbreviation
+          (e.g. "Reliance 20/50 average crossover", not "Rel20x50"),
   "instrument": the stock, index, coin or currency pair the user named: an NSE trading symbol or index name
                 (e.g. "NIFTY 50", "NIFTY BANK", "RELIANCE"), a crypto pair (e.g. "BTC-USD"), a US ticker
                 (e.g. "AAPL", "SPY"), a London (e.g. "VOD.L"), European (e.g. "SAP.DE") or Tokyo (e.g. "7203.T")

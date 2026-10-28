@@ -2664,3 +2664,6 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* the Compare page's qualifier for a figure is a numbered note under its table, not a sentence in the cell (LIVE1A-048) */
 .cmp-foots { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; max-width: 100%; overflow-wrap: anywhere; }
 .cmp-foot-mark { margin-left: 2px; font-size: 11px; color: var(--muted); }
+/* LIVE1A-004: the instrument search's groups (stock, futures, options) have a small heading; the rest of the options are one row away */
+.results .search-group { margin: 0; padding-block: 8px 2px; font-weight: 600; text-transform: none; }
+.results .search-more { justify-content: center; color: var(--blue-ink); font-weight: 600; }

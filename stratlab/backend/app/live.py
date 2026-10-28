@@ -512,13 +512,13 @@ class LiveSession:
             if not self.equity_curve or self.equity_curve[-1]["eq"] != eq:
                 self.equity_curve.append({"t": (now or datetime.now(IST)).isoformat(timespec="seconds"), "eq": eq})
         d = self.state()
-        d["bars"] = [chart_bar(b) for b in self.bars[-150:]]
+        d["bars"] = [chart_bar(b) for b in self.bars[-chart_window(self.strategy, len(self.bars)):]]
         return d
 
     def snapshot(self) -> dict:
         with self.lock:
             e = self.engine
-            n = min(150, len(self.bars))
+            n = chart_window(self.strategy, len(self.bars))
             ctx = Ctx(self.bars, intraday=self.tf != "1d", base_min=TF_MIN.get(self.tf))
             overlays, osc = chart_series(self.strategy, ctx, len(self.bars) - n)
             view = self.bars[-n:]
@@ -549,6 +549,34 @@ class LiveSession:
                     "emptied_on": e.emptied_on,
                 },
             }
+
+
+CHART_BARS, CHART_BARS_MAX = 150, 600
+
+
+def chart_window(strategy, have: int) -> int:
+    """How many of the newest candles the session's chart gets: 150, or enough that the longest average or indicator in the rules is drawn
+    (an entry rule "price above SMA 200" has no line on a chart of 150 daily candles; the legend read "SMA 200 -", LIVE1A-012). The longest
+    period is read from the rules' own references and the window is that plus a screenful, never above CHART_BARS_MAX."""
+    longest = 0
+
+    def walk(x):
+        nonlocal longest
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if k in ("p", "m") and isinstance(v, (int, float)) and not isinstance(v, bool):
+                    longest = max(longest, int(v))
+                else:
+                    walk(v)
+        elif isinstance(x, (list, tuple)):
+            for v in x:
+                walk(v)
+
+    try:
+        walk(strategy.model_dump() if hasattr(strategy, "model_dump") else strategy)
+    except Exception:
+        return min(CHART_BARS, have)
+    return min(have, max(CHART_BARS, min(longest + 100, CHART_BARS_MAX)))
 
 
 def chart_bar(b: dict) -> dict:

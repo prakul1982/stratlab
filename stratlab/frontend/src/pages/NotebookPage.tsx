@@ -526,15 +526,15 @@ function NotebookView() {
 
       {paperAsk && inst && (
         <ConfirmDialog title={`Paper trade on ${inst.symbol}?`} confirmLabel="Start paper trading" danger={false} onConfirm={() => void startSingle()} onClose={() => setPaperAsk(false)}>
-          <span className="k-stack k-tight">
+          {/* three short lines, not four paragraphs of small print (LIVE1A-014): fake money, fills and costs, stopping */}
+          <ul className="k-list paper-ask" data-testid="paper-ask">
+            <li>The rules of "{nb.name}" on {TF_NAME[s.tf]} candles, live, with {money(s.risk.capital, currency)} of fake money. Nothing real is ever placed.</li>
             {/* how fills and fees really work, not "at live prices" (DB-021) */}
-            <span>The rules of "{nb.name}" on {TF_NAME[s.tf]} candles, live, with {money(s.risk.capital, currency)} of fake money. Nothing real is ever placed.</span>
-            <span className="k-note" data-testid="paper-fills">{fillsLine(s.risk, markets.find((m) => m.id === inst.market)?.costs, money(s.risk.brokerage, currency, 2))}</span>
+            <li data-testid="paper-fills">{fillsLine(s.risk, markets.find((m) => m.id === inst.market)?.costs, money(s.risk.brokerage, currency, 2))}</li>
             {/* Free's session is a trial of 5 market days: said here, not "It runs until you stop it" (DP1-013) */}
-            {me?.plan === "free" && trialStartLine(me.trial) ? <span className="k-note" data-testid="paper-trial">{trialStartLine(me.trial)}</span>
-              : <span className="k-note">It runs until you stop it and counts as one of your plan's paper sessions.</span>}
-            <span className="k-note">{STOP_IS_FINAL} A message for each paper trade is {me?.alerts.enabled ? "on" : "off"} in Settings (Notifications).</span>
-          </span>
+            <li>{me?.plan === "free" && trialStartLine(me.trial) ? <span data-testid="paper-trial">{trialStartLine(me.trial)}</span>
+              : "It runs until you stop it and counts as one of your plan's paper sessions."}{" "}{STOP_IS_FINAL} A message for each paper trade is {me?.alerts.enabled ? "on" : "off"} in Settings (Notifications).</li>
+          </ul>
         </ConfirmDialog>
       )}
       {groupStart && group && (

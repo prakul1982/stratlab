@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { STOP_DIALOG } from "../lib/paperText";
 import { useApp } from "../lib/app";
-import { fmtDate, money, price, qty, TF_NAME, tzOf, when } from "../lib/format";
+import { fmtDate, money, price, qtyShort, TF_NAME, tzOf, when } from "../lib/format";
 import { HELP } from "../lib/help";
 import { dayStat, upDown } from "../lib/tradeUi";
 import { ChartEmpty, LineChart } from "./Charts";
@@ -43,7 +43,7 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
   const holdCols: Column<Member>[] = [
     { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
     { key: "side", header: "Side", cell: (m) => (m.position!.side === "short" ? "Short" : "Long") },
-    { key: "qty", header: "Qty", numeric: true, cell: (m) => qty(m.position!.qty, undefined, snap.instrument.market) },
+    { key: "qty", header: "Qty", numeric: true, cell: (m) => qtyShort(m.position!.qty, snap.instrument.market) },
     { key: "entry", header: "Entry", numeric: true, cell: (m) => price(m.position!.entry, cur) },
     { key: "now", header: "Now", numeric: true, cell: (m) => price(m.price, cur) },
     { key: "stop", header: "Stop", numeric: true, cell: (m) => (m.position!.stop ? price(m.position!.stop, cur) : "–") },
@@ -88,7 +88,7 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
           {(() => { const d = dayStat(running, snap.status, running ? a.today : null, 0);
             return <Stat item label={d.label} value={d.text ?? money(d.value, cur)} tone={tone(d.value)} />; })()}
           <Stat item label="Closed trades" value={money(a.realised, cur)} tone={tone(a.realised)} note={`${a.trades} trade${a.trades === 1 ? "" : "s"}`} />
-          <Stat item label="Paper account" value={money(a.equity, cur)} tone={tone(a.equity - a.capital)} note="Fake money" />
+          <Stat item label="Paper account" value={money(a.equity, cur)} tone={tone(a.equity - a.capital)} note={`Started with ${money(a.capital, cur, 0)}. Fake money`} />
         </StatRow>
       </Card>
       <div className="nb-grid">

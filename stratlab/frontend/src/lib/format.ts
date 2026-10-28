@@ -93,6 +93,12 @@ export const signClass = (v: number | null | undefined) => (v == null ? "" : v >
 
 /** A quantity. With `step` (the instrument's smallest unit, 0.00000001 BTC) a fractional quantity keeps that many
  *  decimals, so a column lines up (0.05013551, 0.05091380). */
+/** A held quantity as the orders list writes it: four decimals at most ("0.4121", not "0.41205201"), whole numbers grouped (LIVE1A-045). */
+export function qtyShort(v: number, market?: string | null): string {
+  if (!Number.isFinite(v)) return "–";
+  return Number.isInteger(v) ? qty(v, undefined, market) : v.toLocaleString("en-IN", { maximumFractionDigits: 4 });
+}
+
 export function qty(v: number, step?: number, market?: string | null): string {
   if (!Number.isFinite(v)) return "–";
   if (v === 0) return "0";

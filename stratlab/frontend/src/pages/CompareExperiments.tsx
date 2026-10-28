@@ -42,14 +42,14 @@ export function CompareExperiments() {
   );
   const pick = (k: "a" | "b", v: number) => { const p = new URLSearchParams(params); p.set(k, String(v)); nav(`?${p}`, { replace: true }); };
   const opts = exps.map((e) => ({ value: e.v, label: `v${e.v} · ${e.label}` }));
-  const pickers = (
-    <Card label="Pick two runs">
-      <FormGrid label="Pick two runs">
-        <Field label="Before">{(fid) => <Select id={fid} value={a.v} onChange={(v) => pick("a", Number(v))} options={opts} />}</Field>
-        <Field label="After">{(fid) => <Select id={fid} value={b.v} onChange={(v) => pick("b", Number(v))} options={opts} />}</Field>
-      </FormGrid>
-    </Card>
+  // two selects across the card, each as wide as its half, so a run's whole name shows ("v2 · R test added 200 filter", not "…200 fi") (LIVE1A-009)
+  const selects = (
+    <FormGrid label="Pick two runs" pair>
+      <Field label="Before">{(fid) => <Select id={fid} value={a.v} onChange={(v) => pick("a", Number(v))} options={opts} />}</Field>
+      <Field label="After">{(fid) => <Select id={fid} value={b.v} onChange={(v) => pick("b", Number(v))} options={opts} />}</Field>
+    </FormGrid>
   );
+  const pickers = <Card label="Pick two runs">{selects}</Card>;
   // the same run on both sides: the pickers stay, so either side can be changed
   if (a.v === b.v) return (
     <div className="k-page">
@@ -109,17 +109,16 @@ export function CompareExperiments() {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title={`v${a.v} against v${b.v}`} lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
-      {/* the pickers and what changed in one row: What changed was a full-width card for one bullet (VR1-065) */}
-      {/* the pickers take two thirds: "v2 · 49 months → 26 months" was cut to "26 mont" in half a row (VR3-017) */}
-      <div className="k-two k-two-start cmp-top">
-        {pickers}
-        <Card label="What changed">
-          <CardHead level={3} title="What changed" info="Every difference in the setup between the two experiments. If more than one thing changed, you can't tell which one made the difference: change one thing at a time." infoLabel="About what changed" />
+      {/* the pickers and what changed in one card: a 700px card holding two small selects beside a card of another height left dead space (LIVE1A-009) */}
+      <Card label="Pick two runs">
+        {selects}
+        <div className="k-stack k-tight" data-testid="what-changed">
+          <b className="k-small">What changed</b>
           {diff.length === 0 ? <p className="k-small k-muted">Same setup. The results differ only if the prices did (a later run includes newer candles).</p>
             : <ul className="k-list">{diff.map((d) => <li key={d}>{d}</li>)}</ul>}
-          {diff.length > 2 && <p className="k-note">Several things changed at once, so it's hard to say which one mattered.</p>}
-        </Card>
-      </div>
+          {diff.length > 2 && <p className="k-note">Several things changed at once, so it's hard to say which one mattered. Change one thing at a time to tell.</p>}
+        </div>
+      </Card>
       <div className="k-two">
         {[a, b].map((e) => (
           <Card key={e.v} label={`v${e.v}`}>
@@ -133,8 +132,8 @@ export function CompareExperiments() {
       <Card label="Return over the test">
         <CardHead level={3} title="Return over the test" />
         <XYChart ariaLabel="Both experiments' return over time" height={260} times={dates} x={xs} labels={lbl}
-          series={[{ id: "a", values: lineA, color: "var(--muted)", width: 1.5, dash: "5 4", label: `v${a.v} · ${a.label}` },
-            { id: "b", values: lineB, color: "var(--series-1)", label: `v${b.v} · ${b.label}` }]}
+          series={[{ id: "a", values: lineA, color: "var(--muted)", width: 1.5, dash: "5 4", label: `v${a.v}` },
+            { id: "b", values: lineB, color: "var(--series-1)", label: `v${b.v}` }]}
           format={(v) => pct(v)} signedTip axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
         {apart && <p className="k-note" data-testid="compare-windows">The two runs cover different dates: v{a.v} {spanA}, v{b.v} {spanB}. Each line is drawn over its own run's dates.</p>}
       </Card>

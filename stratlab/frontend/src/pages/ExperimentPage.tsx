@@ -488,7 +488,8 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
           <CardHead title="What you'd keep" info={HELP.keep} infoLabel="About costs" actions={<span className="k-note">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span>} />
           <div className="k-rows two" role="list" aria-label="Profit and costs">
             <div role="listitem"><span>Profit before costs</span><b>{money(e.costs.gross_pnl, cur)}</b></div>
-            {e.costs.items.map((i) => <div role="listitem" key={i.label}><span>{i.label}</span><b>{charge(i.amount, cur)}</b></div>)}
+            {/* the flat brokerage the rules assume is said beside its total, so a person can see what it rests on (LIVE1A-010) */}
+            {e.costs.items.map((i) => <div role="listitem" key={i.label}><span>{i.label === "Brokerage" && e.strategy.risk.brokerage > 0 ? `Brokerage (${money(e.strategy.risk.brokerage, cur)} an order, from the rules)` : i.label}</span><b>{charge(i.amount, cur)}</b></div>)}
             {e.costs.tax.amount != null && <div role="listitem"><span>Tax estimate</span><b>{charge(e.costs.tax.amount, cur)}</b></div>}
             <div role="listitem" className="hl wide"><span>{e.costs.tax.amount != null ? "In your pocket" : "After costs"}</span><b className={upDown(e.costs.kept)}>{money(e.costs.kept, cur)}</b></div>
           </div>

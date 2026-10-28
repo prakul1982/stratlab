@@ -35,7 +35,7 @@ test("RC2A-002: the latest close is dated on the list", () => {
 test("RC2A-006: the list says when the bids were read, and the banner names its own read", () => {
   const list = read("src/pages/IposPage.tsx");
   assert.match(list, /data-testid="ipo-bids-read">Bids read /);
-  assert.match(list, /At the list's read\{d\.problems_at/);
+  assert.match(list, /problemNote\(d\.problems, d\.problems_at/);       // (LIVE1A-061: the sentence is ipoText's problemNote)
 });
 
 test("RC2A-011: alerts switched on with nowhere to send them say so, with the link", () => {

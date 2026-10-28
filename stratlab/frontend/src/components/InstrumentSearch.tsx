@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import type { Instrument, Market } from "../lib/types";
@@ -38,6 +38,21 @@ const instKind = (r: Instrument) =>
     : r.etf || r.type === "ETF" ? "ETF" : r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "FX" ? "Currency pair"
     : r.type === "CRYPTO" ? r.currency : `${r.type}${r.expiry ? " " + r.expiry : ""}`;
 
+/** The suggestions in groups, the stock or index first, then its futures, then its options, and no more than OPTION_ROWS options until asked: one
+ * query ("RELIANCE") was fifty rows, forty of them strikes (LIVE1A-004). */
+export const OPTION_ROWS = 6;
+const GROUPS = ["Stocks, indices and funds", "Futures", "Options"] as const;
+export const groupOf = (r: Pick<Instrument, "type">) => (r.type === "FUT" ? 1 : r.type === "CE" || r.type === "PE" ? 2 : 0);
+export function arrange(found: Instrument[], all: boolean): { rows: Instrument[]; hidden: number; heads: Map<string, string> } {
+  const sorted = found.map((r, i) => ({ r, i })).sort((a, b) => groupOf(a.r) - groupOf(b.r) || a.i - b.i).map((x) => x.r);
+  const opts = sorted.filter((r) => groupOf(r) === 2);
+  const rows = all ? sorted : sorted.filter((r) => groupOf(r) !== 2 || opts.indexOf(r) < OPTION_ROWS);
+  const used = new Set(rows.map(groupOf));
+  const heads = new Map<string, string>();
+  if (used.size > 1) for (const g of [0, 1, 2]) { const first = rows.find((r) => groupOf(r) === g); if (first) heads.set(first.id, GROUPS[g]); }
+  return { rows, hidden: sorted.length - rows.length, heads };
+}
+
 const PLACEHOLDER: Record<string, string> = {
   IN: "Search a stock, index or F&O: RELIANCE, NIFTY 50", CRYPTO: "Search a coin: BTC, ETH, SOL",
   US: "Search a US stock or ETF: AAPL, NVDA", UK: "Search a London listing: Shell, VOD.L",
@@ -70,6 +85,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
   const [results, setResults] = useState<Instrument[] | null>(null);
   const [on, setOn] = useState(-1);
   const [open, setOpen] = useState(false);
+  const [allOpts, setAllOpts] = useState(false);
   const timer = useRef<number>(undefined);
   const asked = useRef(0);
   // a contract isn't listed where it is locked: the owner's "View as Free" asks the server as the owner, and the list showed
@@ -80,6 +96,9 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
   const surv = useSurveillance(market.id === "IN");
 
   useEffect(() => { setQ(""); setResults(null); }, [market.id]);
+  useEffect(() => { setAllOpts(false); }, [q]);
+  const arranged = results ? arrange(results, allOpts) : null;
+  const list = arranged?.rows ?? [];
   useEffect(() => {
     window.clearTimeout(timer.current);
     if (q.trim().length < 2) { setResults(null); setOn(-1); return; }
@@ -102,7 +121,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
     } catch (e) { fail(e); }
   };
   const key = (e: KeyboardEvent<HTMLInputElement>) => {
-    const rows = results ?? [];
+    const rows = list;
     if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setOn((a) => (rows.length ? (a + 1) % rows.length : -1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setOn((a) => (rows.length ? (a <= 0 ? rows.length - 1 : a - 1) : -1)); }
     else if (e.key === "Enter") { if (open && rows[on]) { e.preventDefault(); pick(rows[on]); } else if (rows.length) e.preventDefault(); }
@@ -127,14 +146,20 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
             {/* "NIFTY futures" found nothing on Pro, with no word of how contracts are named (R87-002) */}
             {!fnoLocked && !kinds && market.id === "IN" && results!.length === 0 && /\b(fut|futures?|options?|calls?|puts?|ce|pe)\b/i.test(q) &&
               <p className="k-small k-muted k-pad" role="presentation" data-testid="fno-hint">Contracts are found by their symbol: NIFTY26NOVFUT for a future, NIFTY26NOV22600CE for an option.</p>}
-            {results!.map((r, i) => (
-              <button key={r.id} id={`${fid}-o${i}`} type="button" role="option" aria-selected={i === on} className={i === on ? "on" : undefined}
+            {list.map((r, i) => (
+              <Fragment key={r.id}>
+              {arranged!.heads.has(r.id) && <p className="k-note k-pad search-group" role="presentation">{arranged!.heads.get(r.id)}</p>}
+              <button id={`${fid}-o${i}`} type="button" role="option" aria-selected={i === on} className={i === on ? "on" : undefined}
                 onMouseDown={(e) => e.preventDefault()} onMouseMove={() => setOn(i)} onClick={() => pick(r)}>
                 <span><b>{r.symbol}</b> <span className="small muted">{r.name !== r.symbol ? r.name : ""}</span>
                   {market.id === "IN" && <> <SurvBadges region="IN" symbol={r.symbol} plain /></>}</span>
                 <span className="small muted">{instKind(r)}</span>
               </button>
+              </Fragment>
             ))}
+            {arranged && arranged.hidden > 0 && (
+              <button type="button" className="search-more" role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()} onClick={() => setAllOpts(true)}>Show {arranged.hidden} more option{arranged.hidden === 1 ? "" : "s"}</button>
+            )}
           </div>
         )}
       </div>

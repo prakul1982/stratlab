@@ -30,7 +30,7 @@ export function useCreateNotebook(where?: Where | null) {
   return async (b: Built): Promise<boolean> => {
     // what you picked above wins over what the idea text mentions
     const instrument = where?.instrument ?? (where?.market === "CSV" ? null : b.instrument);
-    const strategy = instrument ? { ...b.strategy, risk: riskForCurrency(b.strategy.risk, instrument.currency) } : b.strategy;
+    const strategy = instrument ? { ...b.strategy, risk: riskForCurrency(b.strategy.risk, instrument.currency, { market: instrument.market, type: instrument.type, tf: b.strategy.tf }) } : b.strategy;
     let nb: Notebook;
     try {
       nb = await api<Notebook>("/notebooks", {
@@ -161,8 +161,14 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
     const usable = (id: string) => markets.some((m) => m.id === id && m.status !== "soon");
     setWhere({ market: usable(last) ? last : markets.find((m) => m.id === "IN" && m.status === "live") ? "IN" : "CRYPTO", instrument: null });
   }, [markets, where.market]);
-  useEffect(() => { if (where.market) try { localStorage.setItem(LAST_MARKET, where.market); } catch { /* private mode */ } }, [where.market]);
-  const create = useCreateNotebook(where);
+  // "where you left off" is the market of the last notebook made here, not of the last chip glanced at: a look at Crypto made the page open on
+  // Crypto for good for a person with no crypto notebook (LIVE1A-003)
+  const make = useCreateNotebook(where);
+  const create = async (b: Built) => {
+    const ok = await make(b);
+    if (ok && where.market) try { localStorage.setItem(LAST_MARKET, where.market); } catch { /* private mode */ }
+    return ok;
+  };
   return (
     <div className="k-page">{/* the same 1080px column as every app page (VR1-040: a 920px column ended 160px short of the rest) */}
       <PageHeader eyebrow="Trade · Build and test" title="What trading idea do you want to test?"
@@ -196,7 +202,8 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
         <h2 className="k-card-title">Or start from a classic idea</h2>
         <Starters where={where} />
       </section>
-      <Explore title="More you can do" hide={hide} />
+      {/* the import button is in the header and the library is in the menu: each is offered once here (LIVE1A-003) */}
+      <Explore title="More you can do" hide={[...hide, "import", "library"]} />
     </div>
   );
 }

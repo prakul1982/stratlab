@@ -22,7 +22,7 @@ test("VR1-062: the experiment's verdict block drops the sentence that restates b
   assert.deepEqual(heroSummary("Only 3 trades in this period. That's too few to tell a real edge from a lucky streak, whatever the return says.", ""), ["Only 3 trades in this period.", "That's too few to tell a real edge from a lucky streak, whatever the return says."]);
   assert.deepEqual(heroSummary(null), []);
   const page = read("src/pages/ExperimentPage.tsx");
-  assert.match(page, /heroSummary\(v\.summary, head\.checks\)/);
+  assert.match(page, /heroSummary\(v\.summary, head\.swapped \? head\.main : head\.checks\)/);
 });
 
 test("VR1-002: the gold line's second half (the world price and the duty) goes behind the Markets card's (i); the one-line fact stays", async () => {
@@ -121,7 +121,7 @@ test("VR1-060, VR1-061, VR1-063, VR1-064, VR1-065: the experiment page's layout"
   assert.match(tcss, /\.k-verdict-hero > \.k-card \{ flex: none; width: 290px;/);
   assert.match(tcss, /\.k-verdict-hero \.k-card-titlerow > \.verdict-head \{ display: inline;/);
   const cmp = read("src/pages/CompareExperiments.tsx");
-  assert.match(cmp, /<div className="k-two k-two-start cmp-top">\s*\{pickers\}\s*<Card label="What changed">/);
+  assert.match(cmp, /<Card label="Pick two runs">\s*\{selects\}\s*<div className="k-stack k-tight" data-testid="what-changed">/);   // LIVE1A-009: one card
 });
 
 test("VR1-070, VR1-071, VR1-072, VR1-073: Positioning", async () => {

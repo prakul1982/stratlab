@@ -69,7 +69,7 @@ function columns(m: Market, tab: Stage): Column<IpoRow>[] {
     cell: (r) => (r.lot ? <>{sharesText(r.lot)} shares<span className="k-sub-line">{minText(r)}</span></> : "–") };
   // the size says whether it is all new shares or new shares plus a sale by existing holders, when the exchange gives the two parts (LIVE1A-030)
   const size: Column<IpoRow> = { key: "size", header: "Issue size", numeric: true,
-    info: "The whole issue: the new shares the company issues plus any shares existing holders sell (an offer for sale). The two parts are under the total when the exchange gives both.",
+    info: "The whole issue: the new shares the company issues plus any shares existing holders put up for sale (an offer for sale). The two parts are under the total when the exchange gives both.",
     cell: (r) => <>{sizeText(r)}{r.size != null && r.size_parts?.fresh_cr != null && r.size_parts?.ofs_cr != null && <span className="k-sub-line" data-testid="ipo-size-parts">{partsText(r.size_parts)}</span>}</> };
   const times: Column<IpoRow> = { key: "times", header: tab === "open" ? "Bids so far" : "Bids received", numeric: true, info: "How many times the shares on offer the bids came to, counting the bids placed on both exchanges (NSE and BSE), as the exchange's issue page totals them. NSE's own count alone is lower. The time of the reading is under each figure.",
     cell: (r) => (r.sub_times != null ? <>{timesText(r.sub_times)}{tab === "open" && r.sub_as_of && <span className="k-sub-line" data-testid="ipo-sub-at">as of {bidsAt(r.sub_as_of)}</span>}</> : <span className="k-muted">–</span>) };

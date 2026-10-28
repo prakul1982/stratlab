@@ -17,7 +17,7 @@ export function stoppedOpenLine(side: string | null | undefined, qty: number, en
 export function fillsLine(r: { slippage: number; brokerage: number }, costs: string | null | undefined, brokerage: string): string {
   const slip = r.slippage > 0 ? `, ${+r.slippage.toFixed(3)}% worse for slippage (your setting)` : "";
   const fees = [costs ? (/^[A-Z][a-z]/.test(costs) ? costs.charAt(0).toLowerCase() + costs.slice(1) : costs) : "", r.brokerage > 0 ? `brokerage of ${brokerage} an order` : ""].filter(Boolean).join(", plus ");
-  return `Orders fill at the close of the candle your rules act on${slip}, not at the live price${fees ? `, and pay ${fees}` : ""}. Unrealised P&L already counts the entry's costs.`;
+  return `Orders fill at the close of the candle your rules act on${slip}, not at the live price${fees ? `, and pay ${fees}` : ""}. Unrealised P&L already counts the entry's costs. The notebook's test fills at the next candle's open instead, so a paper run can differ a little from it.`;
 }
 
 /** The session's rules in a line each, for the session page (DB-022: it had no rules summary). `cond` writes one rule. */
