@@ -46,3 +46,13 @@ test("VR4-014: My space's watchlist card has a title short enough to stay on one
   assert.match(src, /every\(\(m\) => day\(m\)\) \? "Your watchlist" : "Your watchlist today"/);
   assert.doesNotMatch(src, /Your watchlist, last session/);
 });
+
+test("VR4-owner-1: every tile of My space's Markets card is coloured by its own direction, the dollar and gold like the indices", () => {
+  const mine = read("src/lib/mine.ts"), home = read("src/pages/MineHome.tsx");
+  assert.doesNotMatch(mine, /neutral\?: boolean|neutral: true/);
+  assert.match(mine, /\{ id: "usdinr", label: "USD\/INR", from: \{ instrument: "FX:USDINR=X" \}, fmt: fixed\(2\) \}/);
+  assert.match(mine, /\{ id: "gold", label: "Gold", from: \{ instrument: "CMDTY:GC=F" \}, fmt: fixed\(0, "\$"\), unit: "\$\/oz" \}/);
+  assert.doesNotMatch(home, /t\.neutral/);
+  assert.match(home, /<Delta value=\{s\.changePct\}>\{pct\(s\.changePct, 2\)\}<\/Delta>/);
+  assert.match(home, /<Spark values=\{s\.values\} tone=\{s\.changePct != null && s\.changePct < 0 \? "down" : "up"\}/);
+});
