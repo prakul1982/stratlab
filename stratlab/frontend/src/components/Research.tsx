@@ -2,6 +2,7 @@ import { DENSE_BARS, compactValue, labelledBar, shortYear } from "../lib/phoneFi
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
+import { liveQuote, useLiveRefresh } from "../lib/liveRefresh";
 import { aiLimited, aiReason } from "../lib/aiReason";
 import { stageMeaning } from "../lib/stageNote";
 import { writtenAt, fmtDate, marketTz, monthLong, num, pct, price, safeHref, signCls, signedMove } from "../lib/format";
@@ -360,6 +361,11 @@ export function QuoteGrid({ region, symbols, names, empty }: { region: Region; s
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region, key]);
+  // the prices again each minute while they are live (a quote struck in the last quarter hour), each tile kept until its new price
+  // comes; a read that fails changes nothing (LIVE-1: the Invest home's watchlist and a company's similar companies)
+  useLiveRefresh(!!q && Object.values(q).some((x) => liveQuote(x?.at)), () => {
+    researchApi.quotes(region, symbols).then((r) => setQ((cur) => ({ ...cur, ...Object.fromEntries(Object.entries(r).filter(([, x]) => x?.price != null)) }))).catch(() => undefined);
+  });
   if (!symbols.length) return <>{empty}</>;
   return (
     <div className="inv-tiles">
