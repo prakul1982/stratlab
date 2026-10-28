@@ -29,9 +29,12 @@ test("RC5-002: on a phone the tour's second step rings the magnifier, not the pa
   await answer(request, u);
   const errors = await signIn(page, u, "/mine");
   await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
-  await page.evaluate(() => window.dispatchEvent(new Event("stratlab:tour")));
   const tour = page.getByRole("dialog", { name: "A quick tour" });
-  await expect(tour).toBeVisible();
+  // the page may not be listening yet when the event first goes (a busy machine): send it again until the tour is there
+  await expect(async () => {
+    await page.evaluate(() => window.dispatchEvent(new Event("stratlab:tour")));
+    await expect(tour).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
   await tour.getByRole("button", { name: "Next" }).click();
   await expect(tour).toContainText("Ask or do anything");
   await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
