@@ -178,6 +178,11 @@ def _inline(v):
         out = []
         for x in v[:40]:
             if isinstance(x, dict):
+                if x.get("s") is not None:                  # a smaller line under the words before it (a test's own period under its name)
+                    small = clean_text(x.get("s"), 120)
+                    if small:
+                        out.append({"s": small})
+                    continue
                 href = str(x.get("href") or "")
                 text = clean_text(x.get("a"), 200)
                 out.append({"a": text, "href": href} if text and HREF.match(href) else text)
@@ -217,7 +222,33 @@ def clean_blocks(blocks: list) -> list[dict]:
             head = [clean_text(h, 80) for h in (b.get("head") or [])[:10]]
             rows = [[_inline(c) for c in (r or [])[:len(head)]] for r in (b.get("rows") or [])[:MAX_ROWS] if isinstance(r, list)]
             if head and rows:
-                out.append({"t": "table", "caption": clean_text(b.get("caption"), 200), "head": head, "rows": rows})
+                tbl = {"t": "table", "caption": clean_text(b.get("caption"), 200), "head": head, "rows": rows}
+                # PUB-2: which columns are text (l) and which figures (r), and each column's share of the width: the tables of one post line up
+                align = re.sub(r"[^lr]", "", str(b.get("align") or ""))[:len(head)]
+                widths = [int(w) for w in (b.get("widths") or []) if isinstance(w, (int, float)) and not isinstance(w, bool) and 3 <= w <= 90]
+                if len(align) == len(head):
+                    tbl["align"] = align
+                if len(widths) == len(head) and 90 <= sum(widths) <= 110:
+                    tbl["widths"] = widths
+                out.append(tbl)
+        elif t == "stats":
+            # the headline numbers as tiles: a big figure, what it counts, and an optional small line (PUB-2)
+            items = [{"v": clean_text(i.get("v"), 24), "l": clean_text(i.get("l"), 60), "s": clean_text(i.get("s"), 80)}
+                     for i in (b.get("items") or [])[:6] if isinstance(i, dict) and clean_text(i.get("v"), 24) and clean_text(i.get("l"), 60)]
+            if items:
+                out.append({"t": "stats", "items": items})
+        elif t == "bars":
+            # stacked bars of counts, one row each: {"label", "values": [n, ...]} against the series' names (PUB-2)
+            series = [clean_text(x, 40) for x in (b.get("series") or [])[:3]]
+            rows = [{"label": clean_text(r.get("label"), 40), "values": [int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 else 0 for v in (r.get("values") or [])[:len(series)]]}
+                    for r in (b.get("rows") or [])[:MAX_ROWS] if isinstance(r, dict) and clean_text(r.get("label"), 40)]
+            if len(series) >= 2 and rows:
+                out.append({"t": "bars", "caption": clean_text(b.get("caption"), 200), "series": series, "rows": rows})
+        elif t == "details":
+            title = clean_text(b.get("title"), 120)
+            items = [x for x in (_inline(i) for i in (b.get("items") or [])[:MAX_ROWS]) if x]
+            if title and items:
+                out.append({"t": "details", "title": title, "items": items})
     return out
 
 
@@ -230,6 +261,8 @@ def inline_html(v) -> str:
     if isinstance(v, list):
         return "".join(inline_html(x) for x in v)
     if isinstance(v, dict):
+        if v.get("s") is not None:
+            return f'<small class="sub">{_esc(v["s"])}</small>'
         href = str(v.get("href") or "")
         return f'<a href="{_esc(href)}">{_esc(v.get("a"))}</a>' if HREF.match(href) else _esc(v.get("a"))
     return _esc(v)
@@ -251,14 +284,17 @@ def blocks_html(blocks: list) -> str:
             out.append("<ul>" + "".join(f"<li>{inline_html(i)}</li>" for i in b["items"]) + "</ul>")
         elif t == "table":
             cap = f"<caption>{_esc(b['caption'])}</caption>" if b.get("caption") else ""
-            head = "".join(f'<th scope="col">{_esc(h)}</th>' for h in b["head"])
+            align = b.get("align") or "l" + "r" * (len(b["head"]) - 1)          # a table's first column is its row label; a figure sits on the right
+            cls = lambda n: ' class="l"' if align[n] == "l" else ""          # noqa: E731
             # VR5-007: each figure carries its column's name (data-l), so on a phone a table of five columns or more is drawn as one
             # small card per row (blog_pages.py), instead of a table cut off by the edge of the screen
             lab = lambda n: f' data-l="{_esc(b["head"][n])}"' if n < len(b["head"]) else ""  # noqa: E731
-            rows = "".join("<tr>" + "".join((f'<th scope="row">{inline_html(c)}</th>' if n == 0 else f"<td{lab(n)}>{inline_html(c)}</td>")
+            head = "".join(f'<th scope="col"{cls(n)}>{_esc(h)}</th>' for n, h in enumerate(b["head"]))
+            rows = "".join("<tr>" + "".join((f'<th scope="row"{cls(n)}>{inline_html(c)}</th>' if n == 0 else f"<td{cls(n)}{lab(n)}>{inline_html(c)}</td>")
                                             for n, c in enumerate(r)) + "</tr>" for r in b["rows"])
+            cols = "<colgroup>" + "".join(f'<col style="width:{w}%">' for w in b["widths"]) + "</colgroup>" if b.get("widths") else ""
             wide = " wide" if len(b["head"]) >= 5 else ""
-            out.append(f'<div class="btbl{wide}"><table>{cap}<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
+            out.append(f'<div class="btbl{" fx" if cols else ""}{wide}"><table>{cap}{cols}<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
     return "".join(out)
 
 
@@ -275,8 +311,10 @@ def plain_text(blocks: list) -> str:
         for k in ("text", "caption"):
             if b.get(k):
                 parts.append(flat(b[k]))
-        parts += [flat(i) for i in b.get("items") or []] + [str(h) for h in b.get("head") or []]
-        parts += [flat(c) for r in b.get("rows") or [] for c in r]
+        parts += [flat(i) if not isinstance(i, dict) or "v" not in i else f"{i['v']} {i.get('l', '')} {i.get('s', '')}" for i in b.get("items") or []]
+        parts += [str(h) for h in b.get("head") or []] + [b.get("title") or ""] + [str(x) for x in b.get("series") or []]
+        parts += [flat(c) if isinstance(c, (list, str)) else str(c) for r in b.get("rows") or [] if isinstance(r, list) for c in r]
+        parts += [str(r.get("label") or "") for r in b.get("rows") or [] if isinstance(r, dict)]
     return " ".join(parts)
 
 
@@ -434,11 +472,10 @@ def brief_post(issue: dict, now: datetime | None = None) -> dict | None:
         shut = _section(issue, "Market holiday")
         if shut and shut.get("items"):
             blocks += [{"t": "h2", "text": "Market holiday ahead"}, {"t": "p", "text": str(shut["items"][0].get("text") or "")}]
-    blocks += [{"t": "h2", "text": "How this brief is made"},
-               {"t": "p", "text": f"It is built by StratLab's own jobs after the {name} close, from the exchange's daily closing figures. "
+    blocks += [{"t": "details", "title": "How this brief is made", "items": [f"It is built by StratLab's own jobs after the {name} close, from the exchange's daily closing figures. "
                                   "A change on the day is measured from the previous session's close. Sector rotation uses weekly candles; "
                                   "a stock is listed when it newly meets the stated price rule. Nothing here comes from any user's account, "
-                                  "and nothing in it is a view on what prices will do."}]
+                                  "and nothing in it is a view on what prices will do."]}]
     return {"slug": brief_slug(region, iso), "kind": "brief", "market": region, "title": title, "summary": summary, "blocks": blocks,
             "day": iso, "published_at": now_iso(now), "indexable": bool(open_day and lead)}
 

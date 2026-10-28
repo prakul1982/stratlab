@@ -96,8 +96,9 @@ test("company page: the share-price chart has a range switch, the change, a cros
     const page = await ctx.newPage();
     const errors = await open(page, "/stocks/in/RELIANCE", baseURL!);
     const card = page.locator("[data-chart]");
-    // nothing is asked for until the chart is about to be seen (on a phone it is a long way down)
-    if (touch) expect(await page.evaluate(() => performance.getEntriesByType("resource").filter((r) => r.name.includes("prices.json")).length)).toBe(0);
+    // the closes are asked for once, when the chart is about to be seen (PUB-2: it sits right under the price now, so that is on opening the page)
+    await expect(card).toHaveAttribute("data-ready", "1", { timeout: 15_000 });
+    expect(await page.evaluate(() => performance.getEntriesByType("resource").filter((r) => r.name.includes("prices.json")).length)).toBe(1);
     await card.scrollIntoViewIfNeeded();
     await expect(card).toHaveAttribute("data-ready", "1", { timeout: 15_000 });
     const svg = card.locator(".plot svg");
@@ -161,7 +162,7 @@ test("company page: revenue and profit columns show their figures on hover and f
   await ctx.close();
 });
 
-test("VR-4: on a phone the revenue table shows whole years beside its labels, a long figure takes its row, and the chart's text does not repeat its headline", async ({ browser, baseURL }, info) => {
+test("VR-4: on a phone the revenue table shows whole years beside its labels, a long figure stays on one line, and the chart's text does not repeat its headline", async ({ browser, baseURL }, info) => {
   test.skip(info.project.name !== "desktop", "makes its own windows");
   for (const w of [390, 360, 412]) {
     const ctx = await browser.newContext({ viewport: { width: w, height: 800 }, hasTouch: true });
@@ -180,10 +181,10 @@ test("VR-4: on a phone the revenue table shows whole years beside its labels, a 
     // three where the card is 340px wide (a 412px phone), else two: at 390px three columns of ~70px held a figure only in the
     // site's own font, and a first visit draws in the fallback font (font-display: optional), which is wider (CI, 28 Oct)
     expect(cut.seen, `years in view at ${w}px`).toBe(w >= 412 ? 3 : 2);
-    // (VR4-007) the long market value takes the row, so it is not wrapped in half of it
+    // (VR4-007, PUB-2) the long market value is one line in its half-width column, never wrapped; the tiles are two to a row
     const mc = await page.locator(".stat.long").first().evaluate((e) => ({ w: e.getBoundingClientRect().width, lines: Math.round(e.querySelector("b")!.getBoundingClientRect().height / parseFloat(getComputedStyle(e.querySelector("b")!).lineHeight)) }));
     expect(mc.lines, `market value lines at ${w}px`).toBe(1);
-    expect(mc.w).toBeGreaterThan(w * 0.7);
+    expect(mc.w, `a tile's width at ${w}px`).toBeLessThan(w * 0.55);
     await ctx.close();
   }
   // (VR4-003) under the chart: the extremes only; the first and last close are in the headline and the chart's label
@@ -204,4 +205,52 @@ test("VR-4: on a phone the revenue table shows whole years beside its labels, a 
   await open(p2, "/stocks/in", baseURL!);
   await expect(p2.getByRole("heading", { level: 1 })).toHaveText("Companies listed in India");
   await ctx2.close();
+});
+
+test("PUB-2: the company page's top is the price, the chart, then even key figures whose values share a baseline; the explanations are last", async ({ browser, baseURL }, info) => {
+  test.skip(info.project.name !== "desktop", "makes its own windows");
+  for (const [w, cols] of [[1440, 0], [1280, 0], [390, 2], [360, 2]] as const) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: 900 }, hasTouch: w < 600 });
+    const page = await ctx.newPage();
+    const errors = await open(page, "/stocks/in/RELIANCE", baseURL!);
+    // the order down the page: the price, the chart, the key figures, ... the About list, the folded explanations
+    const order = await page.evaluate(() => ["[data-price]", "[data-chart]", ".figs", ".tbl.fin", "[data-faq]", "[data-about]", "[data-how]"].map((q) => document.querySelector(q)!.getBoundingClientRect().top + scrollY));
+    expect(order, `order at ${w}px`).toEqual([...order].sort((a, b) => a - b));
+    await expect(page.locator("[data-how]")).not.toHaveAttribute("open", "");                // folded; its words are in the page
+    expect(await page.locator("[data-how]").textContent()).toContain("P/E");
+    // every tile in a row: label, value and unit line on shared lines (the values sit at one height); no label on more than two lines; no value wraps
+    const rows = await page.evaluate(() => {
+      const out: { top: number; vals: number[]; lines: number[]; wrap: boolean }[] = [];
+      for (const t of Array.from(document.querySelectorAll(".tiles .stat"))) {
+        const b = t.querySelector("b")!.getBoundingClientRect(), span = t.querySelector("span")!, top = Math.round(t.getBoundingClientRect().top);
+        let row = out.find((r) => r.top === top);
+        if (!row) out.push(row = { top, vals: [], lines: [], wrap: false });
+        row.vals.push(Math.round(b.top));
+        row.lines.push(Math.round(span.getBoundingClientRect().height / parseFloat(getComputedStyle(span).lineHeight)));
+        row.wrap ||= b.height > parseFloat(getComputedStyle(t.querySelector("b")!).lineHeight) * 1.5;
+      }
+      return out;
+    });
+    expect(rows.length).toBeGreaterThan(1);
+    for (const r of rows) {
+      expect(new Set(r.vals).size, `values of a row at ${w}px: ${r.vals}`).toBe(1);
+      expect(Math.max(...r.lines), `label lines at ${w}px`).toBeLessThanOrEqual(2);
+      expect(r.wrap, `a value wrapped at ${w}px`).toBe(false);
+    }
+    if (cols) expect(new Set(await page.locator(".tiles .stat").evaluateAll((e) => e.map((x) => Math.round(x.getBoundingClientRect().left)))).size, `tile columns at ${w}px`).toBeLessThanOrEqual(cols);
+    // the range is its own full-width row with the last close marked between the two ends
+    const rng = page.locator("[data-range]");
+    await expect(rng.locator(".rb-dot")).toBeVisible();
+    await expect(rng).toContainText("Low");
+    await expect(rng).toContainText("High");
+    const [rb, fb] = [await rng.boundingBox(), await page.locator(".figs").boundingBox()];
+    expect(rb!.width).toBeGreaterThan(fb!.width - 50);
+    // what it moved on its day, read from the closes beside the price
+    await page.locator("[data-chart]").scrollIntoViewIfNeeded();
+    await expect(page.locator("[data-chart]")).toHaveAttribute("data-ready", "1", { timeout: 15_000 });
+    await expect(page.locator("[data-day]")).toHaveText(/^[+\u2212]₹[\d,]+\.\d\d \([+\u2212]\d+\.\d\d%\)$|^Unchanged on the day$/);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+    expect(errors).toEqual([]);
+    await ctx.close();
+  }
 });

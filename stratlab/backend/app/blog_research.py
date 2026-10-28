@@ -44,6 +44,7 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
     gives them): each strategy's return after costs beside the passive return over the same period, the four checks, and
     the method. None when there are fewer than ten samples (nothing worth a post)."""
     from . import library, library_seed
+    from .data.markets import BY_ID
     rows = [e for e in entries if isinstance(e.get("seed"), dict) and e.get("market") in blog_markets() and isinstance(e.get("stats"), dict)]
     if len(rows) < 10:
         return None
@@ -69,34 +70,48 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
         for c in library.checks_of(e):
             checks.setdefault(c["id"], {}).setdefault(c["status"], 0)
             checks[c["id"]][c["status"]] += 1
-    check_names = {"unseen": "Unseen data (the last 30% of the period traded with fresh capital)", "nearby": "Nearby settings",
-                   "shuffle": "Bad-luck drawdown (trades reshuffled 1,000 times)", "sample": "Enough trades (30 or more is a fair sample)"}
+    # the table's names are short; each check is described in full under "How these tests were run"
+    check_names = {"unseen": "Unseen data", "nearby": "Nearby settings", "shuffle": "Bad-luck drawdown", "sample": "Enough trades"}
     word = {"pass": "passed", "warn": "warning", "fail": "failed", "skip": "not run", "not_passed": "not passed"}
-    check_lines = []
-    for cid in ("unseen", "nearby", "shuffle", "sample"):
-        got = checks.get(cid)
-        if got:
-            check_lines.append(f"{check_names[cid]}: " + ", ".join(f"{k} {word.get(s, s)}" for s, k in sorted(got.items(), key=lambda kv: -kv[1])) + ".")
+    # the four checks as one small table: a row each, a column for each outcome that happened (PUB-2: four sentences of counts)
+    outcomes = [st for st in ("pass", "warn", "fail", "skip", "not_passed") if any(st in checks.get(cid, {}) for cid in check_names)]
+    check_rows = [[check_names[cid]] + [str(checks[cid].get(st, 0)) for st in outcomes] for cid in ("unseen", "nearby", "shuffle", "sample") if checks.get(cid)]
     first, last = (froms[0], tos[-1]) if froms and tos else ("", "")
+    other_n = len(rows) - ahead - behind
+    side = {id(e): h for e, h in versus}
+    market_rows = []
+    for m in live:
+        hs = [side[id(e)] for e in by_market[m]]
+        up = sum(1 for h in hs if h and h["gap"] > 0)
+        down = sum(1 for h in hs if h and h["gap"] < 0)
+        market_rows.append({"label": (BY_ID.get(m) or {}).get("name") or m, "values": [up, down, len(hs) - up - down]})
+    kind_words = [(k, label) for k, label in (("edge", "passed their checks"), ("mixed", "with mixed check results"), ("not_enough", "with too few trades"),
+                                              ("luck", "that failed a robustness check"), ("no_edge", "that lost money after costs")) if kinds.get(k)]
     blocks: list[dict] = [
         {"t": "p", "text": f"{len(rows)} tests of {n_strats} well-known rule sets on a standard group of instruments in each of {len(live)} markets, run on "
                            "StratLab's own backtester with each market's costs applied. Every test is published in the strategy library with its rules, "
-                           "its result and its verdict; this post puts the results side by side."},
+                           "its result and its verdict; this post puts the results side by side. In the tables, After costs is the rule set's return with the "
+                           "market's costs applied, and Passive is the return of owning the same instruments for the whole period."},
         {"t": "h2", "text": "What the tests show"},
+        {"t": "stats", "items": [
+            {"v": f"{ahead} of {len(rows)}", "l": "tests ahead of the passive return", "s": "after costs"},
+            {"v": f"{behind} of {len(rows)}", "l": "tests behind it", "s": f"{other_n} could not be compared" if other_n else "after costs"},
+            {"v": f"{lost} of {len(ran)}", "l": "tests that traded lost money", "s": "after costs"},
+            {"v": f"{kinds.get('edge', 0)} of {len(rows)}", "l": "passed their checks", "s": "the verdict of the four checks"}]},
+        {"t": "bars", "caption": "Tests in each market: return after costs against the passive return", "series": ["Ahead", "Behind", "Not compared"], "rows": market_rows},
         {"t": "ul", "items": [
-            f"Return after costs against the passive return (owning the same instruments for the whole period): ahead in {ahead} of {len(rows)} tests, "
-            f"behind in {behind}" + (f", and {len(rows) - ahead - behind} could not be compared (no trades or no figure)." if len(rows) - ahead - behind else "."),
+            f"Against the passive return, after costs: ahead in {ahead} of {len(rows)} tests, behind in {behind}" + (f", and {other_n} could not be compared (no trades or no figure)." if other_n else "."),
             f"{lost} of the {len(ran)} tests that traded lost money after costs.",
-            "Verdicts as the tests' checks gave them: " + ", ".join(
-                f"{kinds[k]} {label}" for k, label in (("edge", "passed their checks"), ("mixed", "with mixed check results"), ("not_enough", "with too few trades"),
-                                                       ("luck", "that failed a robustness check"), ("no_edge", "that lost money after costs"))
-                if kinds.get(k)) + ".",
-            *check_lines,
+            "Verdicts as the tests' checks gave them: " + ", ".join(f"{kinds[k]} {label}" for k, label in kind_words) + ".",
             (f"Periods: tests run between {short(first)} and {short(last)}; each table gives its own." if first and last else "Each table gives its own period."),
         ]}]
+    if check_rows:
+        k = len(outcomes)
+        blocks += [{"t": "h2", "text": "The four checks"},
+                   {"t": "table", "caption": "Tests by the outcome of each check", "head": ["Check"] + [word[st].capitalize() for st in outcomes],
+                    "rows": check_rows, "align": "l" + "r" * k}]
     for m in live:
         group = sorted(by_market[m], key=lambda e: (names.get(e["seed"].get("slug"), e["name"]), e["id"]))
-        from .data.markets import BY_ID
         mname = (BY_ID.get(m) or {}).get("name") or m
         groups = sorted({(e.get("group") or {}).get("name") or "" for e in group} - {""})
         table, spans = [], []
@@ -111,20 +126,19 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
                           library.label(e)])
             spans.append(f"{short((e.get('range') or {}).get('from'))} to {short((e.get('range') or {}).get('to'))}")
         # one period said once: every row repeated the same "11 Mar 2025 to 28 Oct 2026", which also pushed the table off a phone's
-        # screen (VR4-006). The caption gives the usual period; a column appears only when some test ran over another one
+        # screen (VR4-006). The caption gives the usual period; a test that ran over another one says so in small type under its name,
+        # not in a column of its own that is empty for all the others (PUB-2)
         usual = max(set(spans), key=spans.count) if spans else ""
-        other = any(x != usual for x in spans)
-        if other:
-            for row, x in zip(table, spans):
-                row.append("" if x == usual else x)
+        for row, x in zip(table, spans):
+            if x != usual:
+                row[0] = [row[0], {"s": f"Tested {x}"}]
         blocks += [{"t": "h2", "text": mname},
                    {"t": "p", "text": f"Group: {', '.join(groups)}." if groups else f"{mname} group."},
-                   {"t": "table", "caption": f"{mname}: return after costs and passive return, by rule set, tested {usual}" + (" (the last column names any test that ran over another period)" if other else ""),
-                    "head": ["Rule set", "Return after costs", "Passive return", "Difference", "Trades", "Checks"] + (["Other period"] if other else []), "rows": table}]
+                   {"t": "table", "caption": f"{mname}, tested {usual}", "align": "lrrrrl", "widths": [31, 12, 9, 11, 8, 29],
+                    "head": ["Rule set", "After costs", "Passive", "Difference", "Trades", "Checks"], "rows": table}]
     risk, mrisk = library_seed.RISK, library_seed.MARKET_RISK
     blocks += [
-        {"t": "h2", "text": "Method"},
-        {"t": "ul", "items": [
+        {"t": "details", "title": "How these tests were run", "items": [
             "Data: daily candles from each market's public price data (exchange data for shares and futures, public price feeds for coins and "
             "currency pairs); the intraday rule set uses 15-minute candles. Each test covers about five years of daily candles, or what the market has.",
             "Each rule set runs on every instrument of its group as one pot of capital. Starting capital is "
@@ -229,6 +243,11 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
         {"t": "p", "text": f"How Indian IPOs did on their first day of trading in {year}, for the issues in StratLab's IPO tracker. The change on listing day is the "
                          "first session's close (or opening price) compared with the issue price."},
         {"t": "h2", "text": "What the data shows"},
+        {"t": "stats", "items": [
+            {"v": str(len(facts)), "l": "issue listed" if len(facts) == 1 else "issues listed", "s": f"{short(first)} to {short(last)}"},
+            {"v": f"{len(up)} of {len(have)}", "l": "closed above the issue price", "s": "on listing day"},
+            {"v": p1(median(closes)), "l": "median close against the issue price", "s": f"lowest {p1(min(closes))}, highest {p1(max(closes))}"},
+            *([{"v": p1(median(opens)), "l": "median open against the issue price", "s": f"{len(opens)} {'issue' if len(opens) == 1 else 'issues'}"}] if opens else [])]},
         {"t": "ul", "items": [
             f"{len(facts)} {'issue' if len(facts) == 1 else 'issues'} listed between {short(first)} and {short(last)}; {len(have)} "
             f"{'has' if len(have) == 1 else 'have'} a listing-day close in the tracker and {'is' if len(have) == 1 else 'are'} counted below. "
@@ -241,18 +260,20 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
     if seg:
         blocks += [{"t": "h2", "text": "By segment"},
                    {"t": "table", "caption": "Listing-day close against the issue price, by segment",
-                    "head": ["Segment", "Issues counted", "Closed above issue price", "Closed below", "Median change"], "rows": seg}]
+                    "head": ["Segment", "Issues counted", "Closed above issue price", "Closed below", "Median change"], "rows": seg,
+                    "align": "lrrrr"}]
     if any(b[1] != "0" for b in buckets):
         blocks += [{"t": "h2", "text": "By subscription"},
                    {"t": "p", "text": "Subscription is the number of times the shares offered were applied for, over the whole bidding period. "
                                       "Small groups say little: read the count in the second column before the median." + (f" {nosub} counted {'issue has' if nosub == 1 else 'issues have'} no subscription figure and {'is' if nosub == 1 else 'are'} not in this table." if nosub else "")},
                    {"t": "table", "caption": "Listing-day close against the issue price, by subscription",
-                    "head": ["Subscribed", "Issues", "Median change", "Closed above issue price"], "rows": buckets}]
+                    "head": ["Subscribed", "Issues", "Median change", "Closed above issue price"], "rows": buckets,
+                    "align": "lrrr"}]
     blocks += [{"t": "h2", "text": "Every issue counted"},
                {"t": "p", "text": f"Newest listing first{f'; the latest {IPO_ROWS_SHOWN} of {len(have)} are shown, and every figure above counts all {len(have)}' if len(have) > IPO_ROWS_SHOWN else ''}."},
-               {"t": "table", "caption": f"IPO listing day in India, {year}", "head": ["Issue", "Listed", "Issue price", "Open vs issue price", "Close vs issue price", "Subscription"], "rows": table},
-               {"t": "h2", "text": "Method"},
-               {"t": "ul", "items": [
+               {"t": "table", "caption": f"IPO listing day in India, {year}: Open and Close are the first day's price against the issue price",
+                "head": ["Issue", "Listed", "Issue price", "Open", "Close", "Subscribed"], "rows": table, "align": "lrrrrr", "widths": [38, 13, 12, 11, 11, 15]},
+               {"t": "details", "title": "How this was worked out", "items": [
                    "Data: the exchanges' public-issue pages (issue price, dates, bids received) and the exchanges' daily prices after listing. The tracker is "
                    "read every morning and evening.",
                    "Listing-day close against the issue price is (close ÷ issue price − 1) × 100 on the issue's first trading day. The opening price is the first "
@@ -340,17 +361,25 @@ def sip_vs_lump(closes: dict[str, float], now: datetime | None = None, amount: i
         {"t": "h2", "text": f"The latest {years} years: {short(head['start'])} to {short(head['end'])}"},
         {"t": "p", "text": f"The SIP bought on the first trading day of each of {head['instalments']} months. The lump sum is the SIP's whole total, "
                            f"{inr(head['invested'])}, put in on {short(head['start'])}."},
-        {"t": "table", "caption": f"SIP and lump sum on the NIFTY 50, {short(head['start'])} to {short(head['end'])}", "head": ["", "Monthly SIP", "Lump sum"], "rows": table},
+        {"t": "stats", "items": [
+            {"v": inr(head["value"]), "l": "Monthly SIP: value at the end", "s": f"{inr(head['invested'])} put in"},
+            {"v": inr(lump["value"]), "l": "Lump sum: value at the end", "s": f"{inr(lump['invested'])} put in"},
+            {"v": x(head["xirr"]), "l": "Monthly SIP: annual return", "s": "XIRR"},
+            {"v": x(lump["xirr"]), "l": "Lump sum: annual return", "s": "XIRR"}]},
+        {"t": "table", "caption": f"SIP and lump sum on the NIFTY 50, {short(head['start'])} to {short(head['end'])}", "head": ["", "Monthly SIP", "Lump sum"], "rows": table,
+         "align": "lrr"},
         {"t": "h2", "text": "From every start month"},
         {"t": "p", "text": "The same comparison for every start month the history allows: the SIP runs for the horizon, and the lump sum is that SIP's total put in on its "
                            "first day. 'Ahead' counts the windows in which one ended with the higher value. Windows that start a month apart overlap almost "
                            "entirely, so they are not independent results."},
-        {"t": "table", "caption": "SIP against lump sum across start months", "head": ["Horizon", "Windows", "SIP ahead", "Lump sum ahead", "SIP median annual return",
-                                                                                      "Lump sum median annual return", "SIP lowest", "Lump sum lowest"], "rows": spread},
+        {"t": "bars", "caption": "Start months in which each ended with the higher value", "series": ["SIP ahead", "Lump sum ahead", "Level"],
+         "rows": [{"label": f"{r['years']} years", "values": [r["sip_ahead"], r["lump_ahead"], r["windows"] - r["sip_ahead"] - r["lump_ahead"]]} for r in rows]},
+        {"t": "table", "caption": "SIP against lump sum across start months. Ahead counts windows; median and lowest are annual returns (XIRR)",
+         "head": ["Horizon", "Windows", "SIP ahead", "Lump ahead", "SIP median", "Lump median", "SIP lowest", "Lump lowest"], "rows": spread,
+         "align": "lrrrrrrr", "widths": [12, 12, 12, 13, 13, 13, 12, 13]},
         {"t": "p", "text": " ".join(f"Over {r['years']}-year horizons the lump sum ended ahead in {r['lump_ahead']} of {r['windows']} windows and the SIP in {r['sip_ahead']}."
                                     for r in rows)},
-        {"t": "h2", "text": "Method"},
-        {"t": "ul", "items": [
+        {"t": "details", "title": "How the comparison was run", "items": [
             "Data: the NIFTY 50's daily closes from exchange data, as the app holds them. The index is a price index, so dividends are not included.",
             f"Each instalment of {inr(amount)} is invested at that day's close in whole units, each worth a hundredth of the index level; what a whole unit "
             "can't use waits for the next instalment. The lump sum is invested the same way on its day.",

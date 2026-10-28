@@ -12,6 +12,7 @@ import pytest
 from app import alerts, db, email_kit, email_previews, library, library_seed, main, money_advance_tax, screens, stock_pages, weekly
 from app.config import settings
 from app.engine import verdict
+from tests.tiles import stat
 from tests import world
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -43,7 +44,7 @@ def test_a_bradesco_like_adr_has_no_45_trillion_market_cap():
     assert stock_pages.cap_problem(bbd)
     assert stock_pages.shown_cap(bbd) is None and stock_pages.shown_pe(bbd) is None and stock_pages.cap_text(bbd) == "–"
     page = stock_pages.render(bbd, "US", "BBD", None)
-    assert "<span>Market cap</span><b>n/a</b>" in page and "<span>P/E</span><b>n/a</b>" in page and "data-cap-check" in page
+    assert stat(page, "Market cap") is None and stat(page, "P/E") is None and "data-cap-check" in page       # PUB-2: no tile for a figure that is n/a
     assert "45.90T" not in page and "9,710" not in page
 
 
@@ -165,7 +166,7 @@ def test_a_price_older_than_the_last_close_is_called_last_price(monkeypatch):
     f = us(price_at="2026-10-06")
     assert stock_pages.behind(f) and stock_pages.price_label(f) == "Last price, 6 Oct 2026"
     page = stock_pages.render(f, "US", "ACME", None)
-    assert "<span>Last price, 6 Oct 2026</span>" in page and "<span>Last close" not in page and "data-behind" in page and "6 Oct 2026 close" not in page
+    assert "As of 6 Oct 2026 (the last price this page has" in page and "data-behind" in page and "6 Oct 2026 close" not in page        # PUB-2: the header says it, not a tile
     current = us(price_at="2026-10-08")
     assert not stock_pages.behind(current) and stock_pages.price_label(current) == "Last close, 8 Oct 2026"
 

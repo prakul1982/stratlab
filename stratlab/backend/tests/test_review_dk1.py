@@ -9,6 +9,7 @@ import pytest
 
 from app import db, main, screens, stock_pages
 from tests import world
+from tests.tiles import stat
 
 
 @pytest.fixture
@@ -28,9 +29,6 @@ def facts(**kw) -> dict:
     return {**base, **kw}
 
 
-def stat(page: str, label: str) -> str | None:
-    m = re.search(rf"<span>{re.escape(label)}</span><b>([^<]*)</b>", page)
-    return m.group(1) if m else None
 
 
 # ---------- DK-018: each filing named, linked, and the paperwork left out ----------

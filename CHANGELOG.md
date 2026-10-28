@@ -4,6 +4,24 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 28 October 2026: the blog's posts and lists redrawn (PUB-2)
+
+The posts had two widths (a text column of about 820 px sitting left, tables across about 1,180 px), their headline numbers were a wall of bullet sentences, their tables wrapped headers and names and wandered right-aligned text, and a heavy "Facts, not advice" box and a long Method list sat in the middle.
+
+- **One width:** text, tiles, chart and tables share the page's own 960 px column, centred as a company page is; a wide table scrolls inside its card on a phone.
+- **Headline numbers as tiles, and one small chart:** the strategy post leads with four tiles ("1 of 43 tests ahead of the passive return", "34 of 43 behind it", "25 of 35 that traded lost money", "7 of 43 passed their checks") and a stacked bar for each market (ahead, behind, not compared); the IPO post with its issue count, closes above the issue price and medians; the SIP post with each end value and annual return and a bar for each horizon. The sentences stay below, shorter. The four checks are one small table, not four sentences of counts.
+- **Tables:** short unwrapped headers ("After costs", "Passive"), fixed column widths shared by the tables of a post, names on one line, figures right-aligned and text left-aligned, a short caption; a test run over another period says so in small type under its name instead of an "Other period" column that was blank for the rest.
+- **Quiet facts line** under the byline instead of a boxed paragraph; **the method is folded** ("How these tests were run", "How this was worked out", "How the comparison was run", "How this brief is made"), its words still in the page. The daily briefs get the same width, facts line and folded method; the list cards share one layout (kind and date, title, at most two lines).
+
+### 28 October 2026: the public company page's top half redesigned (PUB-2)
+
+The key figures were misaligned (labels of one, two and three lines left the values at different heights, "P/E" far above its "54.4", the range took two columns and left a hole) and the page led with a dense paragraph, with the explanations under the figures.
+
+- **New order:** the name (the ticker small and muted) with one quiet line under it (exchange · sector · industry in sentence case; the whole industry is its tooltip), the price block (last close large, what it moved that day in colour, "As of 28 Oct 2026 close" small), one short "Not investment advice" line, the share-price chart, the key figures, then the sections as before. "About" (the same sentences, one to a line) comes after "Go further with" and "How these figures are worked out" is last, folded, with the P/E-against-profit and last-12-months notes in it. Every number, the one h1, the heading order, the JSON-LD and the wording that avoids advice are unchanged.
+- **Key figures as tiles:** a short one-line label ("P/E", "Profit, last 12 months", "Profit incl. minorities", "Return on equity"), the value ("₹29,678 cr") and a small line for its unit or period ("on last 12 months' profit", "to shareholders", "year to Mar 2026"); the full wording is each tile's tooltip. Label, value and unit line share rows, so the values of a row sit on one baseline. Four to a row (three where that leaves fewer empty places), two on a phone; a short last row's last tile takes what is left. A figure that is n/a has no tile (the notes say why); a page with none has no card.
+- **The 1-year range** is a full-width row of its own: a bar with the last close marked and the low and high at its ends (intraday).
+- **The day's move** beside the price is read by the chart's script from the same closes, and shown only when the series ends on the page's day and price.
+
 ### 28 October 2026: a correctness review of what shipped on 27-28 October (RC-4)
 
 About 420 company pages, the directories, the redirects, the four blog posts and the consent code were checked against their sources. What it found:
