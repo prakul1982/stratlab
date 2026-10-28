@@ -409,7 +409,7 @@ function SchemeSales({ sales, name }: { sales: SaleIn[]; name: string }) {
   return (
     <section aria-label={`Sales, ${name}`}>
       <h3>Redemptions matched to purchases</h3>
-      <DataTable label="Redemptions matched to purchases" stack columns={cols} rows={(all ? sales : sales.slice(0, 30)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
+      <DataTable label={`Redemptions matched to purchases, ${name}`} stack columns={cols} rows={(all ? sales : sales.slice(0, 30)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
       {sales.length > 30 && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {sales.length}</button>}
     </section>
   );
