@@ -4,6 +4,14 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 28 October 2026: a visual review of that day's pages (VR-4)
+
+- **My space's Markets card:** USD/INR and Gold are coloured by their own direction, line and change pill, like the indices (they were blue and grey).
+- **Said once:** the welcome question no longer repeats the tour's "four spaces"; a company's "What they do" no longer says the description twice or "Listed" under the heading that says it; the Invest breadth card dates its figures only when their days differ; the share-price text under a company chart no longer repeats its headline; a research post's tables give their period once; blog cards drop the day and "Facts, not advice." they already carry; a brief no longer shows "(ST S2)"; a market's own company directory page names its market.
+- **Lined up:** Account's six data cards share the rows (3 + 3); the update filings' titles start at one x; the cookie question's two buttons share a width (also on the server-drawn pages, where the question no longer sits in a box held at 280px).
+- **Phone:** the public company page's revenue table shows whole years beside its labels (three where the card is 320px wide, else two) and a long figure such as the market value takes its row.
+- Live refresh checked with a faked market-open clock for two minutes on My space, Trade, Invest, Money, Holdings and Net worth, at 1440 and 390: no layout shift, no skeleton flash.
+
 ### 28 October 2026: charts on the public company pages, and the public pages made to look like one product (PUB-1)
 
 - **Share-price chart on every company page:** a 1M / 6M / 1Y / 5Y switch, the change over the chosen range above the chart ("Up 12.4% over 1 year, ₹1,246.10 to ₹1,400.00. Price change only; dividends are not included."), a crosshair with the date and the close (mouse, touch and arrow keys), labelled axes at 12 px or more, an accessible name and summary, the closes as a table, and the app's own chart colours in light and dark. One small script (`/stocks/chart.js`, no library) draws it from `/stocks/<market>/<symbol>/prices.json`: every session of the last year and the last close of each week back to five years, about 6 KB. The page also says the close and the 1-year range in words, so with no script nothing is lost. Closing prices only; nothing is predicted or fitted.
