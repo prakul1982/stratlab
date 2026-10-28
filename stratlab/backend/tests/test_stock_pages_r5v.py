@@ -191,8 +191,8 @@ def test_market_caps_read_in_words():
 def test_the_page_wears_the_sites_header_and_footer(w):
     r = w["client"].get("/stocks/in/RELIANCE")
     t = r.text
-    csp = r.headers["content-security-policy"]                  # the site's fonts may load; still no script at all
-    assert "font-src 'self'" in csp and "default-src 'none'" in csp and "script-src" not in csp
+    csp = r.headers["content-security-policy"]                  # the site's fonts may load; its own chart script too, and nothing inline (PUB-1)
+    assert "font-src 'self'" in csp and "default-src 'none'" in csp and "script-src 'self';" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
     for part in ('href="https://stratlab.studio/research/IN/RELIANCE">Sign in</a>', ">Contact us</a>", ">Cancellation and refunds</a>",
                  ">Terms of service</a>", ">Privacy policy</a>", 'href="https://stratlab.studio/pricing"', 'href="/stocks">Companies</a>', 'href="https://stratlab.studio/library">Library</a>', '>Strategy library</a>',
                  "url(/fonts/fraunces-latin-400-normal.woff2)", "<span>Market cap</span><b>₹", " lakh crore</b>", 'id="main"'):

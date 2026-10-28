@@ -36,6 +36,12 @@ HTML_CSP = (b"content-security-policy", b"default-src 'none'; style-src 'unsafe-
                                          b"form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 
 
+# a company's page also runs the site's own chart script and asks the site for its prices, and nothing else: no inline script, no
+# other origin (PUB-1)
+CHART_CSP = (b"content-security-policy", HTML_CSP[1].replace(b"default-src 'none';", b"default-src 'none'; script-src 'self'; connect-src 'self';"))
+COMPANY_PAGE = re.compile(r"^/stocks/(?:in|us)/[^/]+$", re.I)
+
+
 def max_body(scope) -> int:
     """The biggest request body this route takes."""
     return BIG_BODY.get((scope.get("method"), scope.get("path", "").rstrip("/") or "/"), MAX_BODY)
@@ -185,7 +191,7 @@ class Guard:
                 if bad_key and msg.get("status") == 401:
                     self.window.hit(bad_key, BAD_TOKENS_PER_MINUTE)       # a failed token check, counted per address
                 got = {k.lower(): v for k, v in msg.get("headers") or []}
-                extra = HEADERS + ([HTML_CSP] if got.get(b"content-type", b"").startswith(b"text/html") else [])
+                extra = HEADERS + ([CHART_CSP if COMPANY_PAGE.match(path) else HTML_CSP] if got.get(b"content-type", b"").startswith(b"text/html") else [])
                 msg = {**msg, "headers": list(msg.get("headers") or []) + [h for h in extra if h[0] not in got]}
             await send(msg)
 

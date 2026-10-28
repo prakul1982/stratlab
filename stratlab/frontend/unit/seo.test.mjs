@@ -325,7 +325,9 @@ test("the Privacy page lists every AI provider the code can use, says what the b
   assert.match(privacy, /Do Not Track or Global Privacy Control/);
   assert.match(privacy, /random ID made in your browser, not to any account/);
   assert.doesNotMatch(privacy, /linked to your account's internal ID, never your email or name, and without/);
-  assert.match(page, /<main id="main"/, "the policies sit in a main landmark");
+  // (PUB-1: the policies sit in the public frame, which is the page's one main landmark, with the header and footer every public page has)
+  assert.match(page, /<PublicFrame className="legal">/, "the policies sit in the public frame");
+  assert.match(read("src/components/PublicFrame.tsx"), /<main id="main"/, "...whose main landmark holds them");
 });
 
 test("Do Not Track and Global Privacy Control both switch analytics off", async () => {

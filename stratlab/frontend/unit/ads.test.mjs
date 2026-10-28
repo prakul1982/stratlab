@@ -114,7 +114,7 @@ test("the page script and the app share one key and one format", () => {
   const js = read("public/ads.js");
   assert.equal(/var KEY = "([^"]+)"/.exec(js)[1], A.CHOICE_KEY);
   assert.equal(Number(/var DAYS = (\d+)/.exec(js)[1]), A.CHOICE_DAYS);
-  assert.match(js, /JSON\.stringify\(\{ c: c, at: Date\.now\(\) \}\)/);
+  assert.match(js, /var rec = \{ c: c, at: Date\.now\(\) \};[\s\S]*JSON\.stringify\(rec\)/);
   assert.match(js, /typeof j\.at === "number"/);
 });
 
@@ -362,4 +362,28 @@ test("the security policy lets in the pixel's and Clarity's hosts and nothing br
   for (const h of ["https://connect.facebook.net", "https://www.clarity.ms", "https://*.clarity.ms"]) assert.ok(d["script-src"].includes(h), `script-src ${h}`);
   for (const h of ["https://www.facebook.com", "https://connect.facebook.net", "https://www.clarity.ms", "https://*.clarity.ms"]) assert.ok(d["connect-src"].includes(h), `connect-src ${h}`);
   assert.ok(!d["script-src"].includes("'unsafe-inline'") && !d["script-src"].includes("https:"));
+});
+
+test("Do Not Track and Global Privacy Control stop Google ads too: our own card or nothing, and no question (owner, 28 Oct)", async () => {
+  const cfg = on;
+  const base = { cfg, path: "/library", choice: "yes", signedIn: false, plan: null };
+  assert.equal(A.adMode({ ...base, slot: "public" }), "ad");
+  assert.equal(A.adMode({ ...base, slot: "public", dnt: true }), "none");
+  assert.equal(A.adMode({ ...base, slot: "ai", path: "/research/IN/TCS", plan: "free", dnt: true }), "house");
+  assert.equal(A.askNow({ cfg, choice: null, path: "/library" }), true);
+  assert.equal(A.askNow({ cfg, choice: null, path: "/library", dnt: true }), false);
+  const js = readFileSync(new URL("../public/ads.js", import.meta.url), "utf8");
+  assert.match(js, /n\.globalPrivacyControl === true\) \{\s+boxes\.forEach\(drop\); return;/);
+  const { LEGAL_BLOCKS } = await import("../src/content/legal.ts");
+  assert.ok(JSON.stringify(LEGAL_BLOCKS["/privacy"]).includes("Google ads, the Meta Pixel and Clarity do not load"));
+});
+
+test("the morning Zerodha alert links straight to the broker login, which Admin opens at once unless today's login is done", () => {
+  const py = readFileSync(new URL("../../backend/app/kite_auto.py", import.meta.url), "utf8");
+  assert.match(py, /LOGIN_LINK = "\/admin\/data\?kite=login"/);
+  assert.match(py, /url=LOGIN_LINK\)/);
+  const page = read("src/pages/admin/DataSection.tsx");
+  assert.match(page, /params\.get\("kite"\) === "login"/);
+  assert.match(page, /if \(loggedInToday\) \{ notify\("Already logged in to the broker today: nothing to do\."\); return; \}/);
+  assert.match(page, /window\.location\.assign\(url\);/);
 });

@@ -22,9 +22,13 @@
     try { var raw = localStorage.getItem(KEY); if (raw) return parse(raw); } catch (e) { /* storage off */ }
     return memory;
   }
+  // a yes given here answers a question about Google ads alone, so it says so (s: "ads"): the app does not take it as a yes to the
+  // Meta Pixel or Microsoft Clarity, which it asks about itself (src/lib/ads.ts parseAdsOnly)
   function write(c) {
     memory = c;
-    try { localStorage.setItem(KEY, JSON.stringify({ c: c, at: Date.now() })); } catch (e) { /* storage off: this page view only */ }
+    var rec = { c: c, at: Date.now() };
+    if (c === "yes") rec.s = "ads";
+    try { localStorage.setItem(KEY, JSON.stringify(rec)); } catch (e) { /* storage off: this page view only */ }
   }
   // Google's own consent message (AdSense, Privacy & messaging) is on the page: it asks EEA and UK visitors, so ours steps aside
   function googleMessage() {
@@ -107,6 +111,11 @@
   function start() {
     boxes = Array.prototype.slice.call(document.querySelectorAll("[data-ads]"));
     if (!boxes.length) return;
+    // a browser that asks not to be tracked (Do Not Track, Global Privacy Control) gets no Google ad and no question
+    var n = navigator;
+    if ([n.doNotTrack, n.msDoNotTrack, window.doNotTrack].some(function (v) { return v === "1" || v === "yes"; }) || n.globalPrivacyControl === true) {
+      boxes.forEach(drop); return;
+    }
     var choice = read();
     if (choice === "no") { boxes.forEach(drop); return; }
     if (choice === "yes" || googleMessage()) { whenNear(load); return; }

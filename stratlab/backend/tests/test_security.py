@@ -9,7 +9,8 @@ from tests import world as W
 
 PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{token}", "/v/{token}.png", "/v/{token}", "/c/{card}.png", "/c/{card}", "/billing/webhook",
           "/admin/kite/callback", "/unsubscribe", "/email/confirm",
-          "/stocks/{region}/{symbol}", "/robots.txt", "/sitemap.xml", "/sitemaps/{name}.xml",   # public company pages, for search engines
+          "/stocks/{region}/{symbol}", "/stocks/{region}/{symbol}/prices.json", "/stocks/chart.js",       # a company's chart: its script and its closes (PUB-1)
+          "/robots.txt", "/sitemap.xml", "/sitemaps/{name}.xml",   # public company pages, for search engines
           "/stocks", "/stocks/", "/stocks/{region}", "/stocks/{region}/", "/stocks/{region}/{symbol}/",   # their search, and one address each
           # the A-Z and index lists that link every company page (SEO-1)
           "/stocks/{region}/browse/{letter}", "/stocks/{region}/browse/{letter}/{page}", "/stocks/{region}/index/{slug}", "/stocks/{region}/index/{slug}/{page}",
@@ -195,8 +196,12 @@ def test_the_apis_html_pages_run_no_script_and_json_is_left_alone(client):
     from app import guard
     page = client.get("/stocks/in/RELIANCE")
     csp = page.headers["content-security-policy"]
-    assert page.status_code == 200 and csp == guard.HTML_CSP[1].decode()
-    assert "script-src" not in csp and "default-src 'none'" in csp and "frame-ancestors 'none'" in csp
+    # a company's page runs one script of the site's own, for its chart, and asks the site for prices: no inline script, no other origin (PUB-1)
+    assert page.status_code == 200 and csp == guard.CHART_CSP[1].decode()
+    assert "script-src 'self';" in csp and "connect-src 'self';" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
+    assert "default-src 'none'" in csp and "frame-ancestors 'none'" in csp
+    other = client.get("/stocks").headers["content-security-policy"]           # every other page of the API stays script-free
+    assert other == guard.HTML_CSP[1].decode() and "script-src" not in other
     assert "content-security-policy" not in client.get("/plans").headers                     # JSON needs none
     gone = client.get("/unsubscribe", params={"t": "bad"})
     assert "form-action 'self'" in gone.headers.get("content-security-policy", "")           # its button still posts

@@ -324,7 +324,10 @@ def test_a_fund_built_since_the_last_gathering_leaves_the_sitemap(mem, monkeypat
 def test_surveillance_badges_use_the_theme_tokens():
     html = stock_pages.surveillance_html([{"short": "ESM", "label": "Enhanced surveillance", "text": "Trade for trade.", "as_of": "2026-10-08"}])
     assert "#92400e" not in html and "#b45309" not in html
-    assert "color:var(--orange-ink)" in html and "background:var(--orange-soft)" in html
+    # (PUB-1: the badge's colours moved from inline styles to the page's .badge rule, still the theme's tokens)
+    badge = re.search(r"\.badge\{[^}]*\}", stock_pages.STYLE).group(0)
+    assert 'class="badge"' in html and "style=" not in html
+    assert "color:var(--orange-ink)" in badge and "background:var(--orange-soft)" in badge and "border:1px solid var(--orange-ink)" in badge
     assert "--orange-ink:#F2A877" in stock_pages.STYLE and "--orange-soft:#3A2416" in stock_pages.STYLE    # the dark theme's
 
 

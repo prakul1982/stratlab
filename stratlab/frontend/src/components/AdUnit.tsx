@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { CONFIG } from "../lib/adsConfig";
 import { adMode, CHOICE_KEY, googleMessageShown, houseCard, onChoice, readChoice, type AdSlotName, type Choice } from "../lib/ads";
 import { signedInHere } from "../lib/signin";
+import { doNotTrack } from "../lib/analytics";
 
 /* One ad slot (ADS-1). What it shows is decided in lib/ads.ts (adMode): an ad, a StratLab card, or nothing. The question that comes
  * before any ad is the banner (components/Tracking.tsx). Off by default: with no slot ID nothing here loads Google's script or sets
@@ -86,7 +87,7 @@ export function AdUnit({ slot, plan = null, seed = "" }: { slot: AdSlotName; pla
     const off = onChoice(() => setChoice(readChoice()));          // answered or taken back on this page
     return () => { window.removeEventListener("storage", on); off(); };
   }, []);
-  const mode = adMode({ slot, cfg: CONFIG, path: pathname, choice, signedIn: slot === "public" && signedInHere(), plan, cmp: googleMessageShown() });
+  const mode = adMode({ slot, cfg: CONFIG, path: pathname, choice, signedIn: slot === "public" && signedInHere(), plan, cmp: googleMessageShown(), dnt: doNotTrack() });
   if (mode === "none") return null;
   if (mode === "house") return <House seed={seed || pathname} />;
   return <AdBox client={CONFIG.client} slot={CONFIG.slots[slot]} />;

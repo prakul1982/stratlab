@@ -857,16 +857,24 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
             "listed": first["t"][:10], "basis": "prices"}
 
 
-PERF_DAYS = 75                         # issues listed within this many days have their trading since listing kept on the row
+PERF_DAYS = 75                         # issues listed within this many days have their trading since listing read again at every read
+PERF_RETRY_DAYS = 7                    # an older listed issue with no figures yet is tried again after this long
 
 
 def attach_perf(rows: list[dict], now: datetime) -> int:
-    """Store each recently listed issue's trading since its listing on its row (the lists show it without a price call each)."""
+    """Store each recently listed issue's trading since its listing on its row (the lists show it without a price call each).
+    An issue listed longer ago than PERF_DAYS, which the list still holds (KEEP_LISTED_DAYS is 120), is not read again at every read:
+    its listing-day figures never change, so it is read once when it has none (the blog's IPO post counted 62 of 115 issues, the rest
+    being those past the window), and again only after PERF_RETRY_DAYS if that read found nothing (RC4-003)."""
     n, today = 0, now.astimezone(IST).date() if rows and rows[0]["market"] == "IN" else now.astimezone(NY).date()
     for r in rows:
         listed = r.get("listing") if r["market"] == "IN" else r.get("priced")
-        if stage_of(r, now) != "listed" or not listed or (today - date.fromisoformat(listed)).days > PERF_DAYS:
+        if stage_of(r, now) != "listed" or not listed:
             continue
+        if (today - date.fromisoformat(listed)).days > PERF_DAYS:
+            if (r.get("perf") or {}).get("day_change_pct") is not None or str(r.get("perf_tried") or "") > (today - timedelta(days=PERF_RETRY_DAYS)).isoformat():
+                continue
+            r["perf_tried"] = today.isoformat()
         got = performance(r, _wire["yahoo"](), today, now) if _wire["yahoo"] else None
         if got:
             r["perf"] = {**got, "at": now.isoformat(timespec="seconds")}

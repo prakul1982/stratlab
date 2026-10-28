@@ -20,7 +20,9 @@ price, 5 Oct 2026", never "close" (R6V-002).
 Market values are checked before they are shown or ranked (cap_problem): an American depositary share counted as an
 ordinary share, a share count a thousand times off or a shell's stray trade can make a $46 trillion bank. Such a value
 is n/a on the page and left out of every "largest" list, and so is a P/E above 1,000 (R6V-001)."""
+import hashlib
 import json
+import math
 import re
 import threading
 import time
@@ -28,6 +30,7 @@ import unicodedata
 from collections import deque
 from datetime import date, datetime, time as dtime, timedelta, timezone
 from html import escape as e
+from pathlib import Path
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -672,18 +675,22 @@ def fit_to_exchange_range(bars: list[dict], row, report_day: str | None) -> list
         d = str(b.get("t") or "")[:10]
         if not d or d > report_day:
             continue
-        h, l = _num(b.get("h")), _num(b.get("l"))
+        h, l, c = _num(b.get("h")), _num(b.get("l")), _num(b.get("c"))
+        # (a candle's extremes are never brought inside its own close: the exchange's figure leaves out a closing auction's print, and
+        # a page whose "Last close" is beyond its own 1-year range is wrong, RC4-011)
+        top = lambda v: max(float(v), c) if c is not None else float(v)         # noqa: E731
+        bottom = lambda v: min(float(v), c) if c is not None else float(v)      # noqa: E731
         nb = None
         if hi and h is not None:
             if d == hi_day and h < hi <= h * RANGE_SLACK:
-                nb = {**b, "h": float(hi)}
+                nb = {**b, "h": top(hi)}
             elif d >= start and h > hi and h <= hi * RANGE_SLACK:
-                nb = {**b, "h": float(hi)}
+                nb = {**b, "h": top(hi)}
         if lo and l is not None:
             if d == lo_day and l > lo >= l / RANGE_SLACK:
-                nb = {**(nb or b), "l": float(lo)}
+                nb = {**(nb or b), "l": bottom(lo)}
             elif d >= start and l < lo and l >= lo / RANGE_SLACK:
-                nb = {**(nb or b), "l": float(lo)}
+                nb = {**(nb or b), "l": bottom(lo)}
         if nb:
             out = out or list(bars)
             out[i] = nb
@@ -1894,7 +1901,7 @@ def usd_text(v: float) -> str:
     """An amount in $ million in the words people use: "$4.87T", "$85.8B", "$950M", "<$1M"."""
     if round(v / 1e3, 1) >= 1e3:                         # the unit is chosen after rounding
         return f"${v / 1e6:,.2f}T"
-    if v >= 1e3:
+    if round(v) >= 1e3:                                  # $999.5M is "$1.0B", not "$1,000M" (RC4-009)
         return f"${v / 1e3:,.1f}B"
     # $0.5M rounds to "$0M" (TAOP, R6V-011): anything under a whole million is "<$1M"
     return f"${v:,.0f}M" if round(v) >= 1 else "<$1M"
@@ -1992,34 +1999,41 @@ def description(f: dict) -> str:
 # are the site's own files (the frontend build copies them to /fonts), so a slow or missing font only falls back
 STYLE = """
 @font-face{font-family:"Fraunces";font-style:normal;font-weight:400;font-display:optional;src:url(/fonts/fraunces-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:600;font-display:optional;src:url(/fonts/fraunces-latin-600-normal.woff2) format("woff2")}
 @font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400;font-display:optional;src:url(/fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:500;font-display:optional;src:url(/fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2")}
 @font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:600;font-display:optional;src:url(/fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2")}
 @font-face{font-family:"Montserrat";font-style:normal;font-weight:300;font-display:optional;src:url(/fonts/montserrat-latin-300-normal.woff2) format("woff2")}
 @font-face{font-family:"Montserrat";font-style:normal;font-weight:800;font-display:optional;src:url(/fonts/montserrat-latin-800-normal.woff2) format("woff2")}
 :root{--paper:#F5F1E8;--card:#FFFDF8;--ink:#1D1B17;--ink-2:#2E2B25;--muted:#5C574D;--line:#E2DAC8;--line-2:#D8CFBA;--chip:#ECE6D8;
---blue:#1F4FB5;--blue-ink:#163A87;--on-ink:#F5F1E8;--orange-ink:#8A3A0A;--orange-soft:#F8E7D9;color-scheme:light;
---serif:"Fraunces",Georgia,serif;--sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+--blue:#1F4FB5;--blue-ink:#163A87;--on-ink:#F5F1E8;--orange:#B4500F;--orange-ink:#8A3A0A;--orange-soft:#F8E7D9;--up:#0F7452;--down:#B23B3B;color-scheme:light;
+--serif:"Fraunces",Georgia,serif;--sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace}
 @media (prefers-color-scheme:dark){:root{--paper:#141311;--card:#1F1D1A;--ink:#EFE9DC;--ink-2:#D8D1C2;--muted:#B3AC9C;--line:#34312A;
---line-2:#413D34;--chip:#2A2823;--blue:#7EA0F0;--blue-ink:#A9C0F6;--on-ink:#141311;--orange-ink:#F2A877;--orange-soft:#3A2416;color-scheme:dark}}
+--line-2:#413D34;--chip:#2A2823;--blue:#7EA0F0;--blue-ink:#A9C0F6;--on-ink:#141311;--orange:#E88A4C;--orange-ink:#F2A877;--orange-soft:#3A2416;--up:#3CC48F;--down:#EE7B70;color-scheme:dark}}
 *{box-sizing:border-box}html,body{margin:0}
-body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
-a{color:var(--blue)}a:hover{color:var(--blue-ink)}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;min-height:100vh}
+a{color:var(--blue)}a:hover{color:var(--blue-ink)}:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .skip{position:absolute;left:-9999px;padding:12px 16px}.skip:focus{left:16px;top:8px;z-index:2;background:var(--card);border-radius:10px}
-.nav{max-width:1080px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--line)}
-.brand{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);min-height:44px;font-size:17px}
-.brand svg{height:36px;width:auto}.word{font-family:"Montserrat",var(--sans);font-weight:300;letter-spacing:-.035em}.word b{font-weight:800;letter-spacing:-.045em}
-.nav nav{display:flex;gap:4px;flex:1;flex-wrap:wrap}.nav nav a{color:var(--ink-2);text-decoration:none;padding:10px 10px;border-radius:8px;font-weight:500}
-.nav nav a:hover{background:var(--chip)}
+.nav{display:flex;align-items:center;padding:18px clamp(16px,4vw,48px);border-bottom:1px solid var(--line)}
+.brand{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);min-height:44px;font-size:16.8px}
+.brand svg{height:40px;width:auto}.word{font-family:"Montserrat",var(--sans);font-weight:300;letter-spacing:-.035em}.word b{font-weight:800;letter-spacing:-.045em}
+.nav nav{display:flex;gap:22px;margin-left:auto;margin-right:16px}.nav nav a{display:inline-flex;align-items:center;min-height:36px;color:var(--ink-2);text-decoration:none;font-weight:500;font-size:14.5px}
+.nav nav a:hover{color:var(--ink)}
 .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border-radius:10px;border:1px solid var(--ink);
-background:var(--ink);color:var(--on-ink);text-decoration:none;font-weight:600}.btn:hover{color:var(--on-ink);filter:brightness(1.12)}
+background:var(--ink);color:var(--on-ink);text-decoration:none;font-weight:600;font-size:15px}.btn:hover{color:var(--on-ink);filter:brightness(1.12)}
 .btn.ghost{background:transparent;color:var(--ink)}.btn.ghost:hover{background:var(--card);color:var(--ink);filter:none}
-main{max-width:880px;margin:0 auto;padding:24px 16px 48px}
-h1{font-family:var(--serif);font-weight:400;font-size:clamp(28px,4vw,42px);line-height:1.15;letter-spacing:-.02em;margin:4px 0 6px}
-h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:30px 0 10px}h3{font-size:16px;font-weight:600;margin:14px 0 4px}.faq p{margin:0 0 6px}.muted{color:var(--muted)}.small{font-size:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
-.stat b{display:block;font-size:20px;font-weight:600}.stat span{font-size:13px;color:var(--muted)}
-.note{border-left:3px solid var(--line-2);padding:4px 0 4px 12px;margin:10px 0;font-size:14px;color:var(--ink-2)}
+.btn.sm{min-height:36px;padding:0 12px;font-size:14px}
+main{flex:1 0 auto;width:100%;max-width:960px;margin:0 auto;padding:36px clamp(16px,4vw,32px) 64px}
+h1{font-family:var(--serif);font-weight:400;font-size:clamp(32px,4vw,46px);line-height:1.1;letter-spacing:-.02em;margin:4px 0 8px;text-wrap:balance}
+h2{font-family:var(--serif);font-weight:600;font-size:22px;line-height:1.25;letter-spacing:-.01em;margin:40px 0 12px;text-wrap:balance}h3{font-size:16px;font-weight:600;margin:14px 0 4px}
+main>p{max-width:72ch}.faq p{margin:0 0 6px;max-width:70ch;color:var(--ink-2)}.muted{color:var(--muted)}.small{font-size:14px}
+.eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:4px 20px}
+.stat{min-width:0;margin-bottom:14px}.stat span{display:block;font-size:13.5px;line-height:1.35;color:var(--muted)}.stat b{display:block;font-size:21px;line-height:1.25;font-weight:600}
+@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 2;grid-template-rows:subgrid;gap:0 0;align-content:start}}
+.stat.wide{grid-column:span 2}
+.note{border-left:3px solid var(--line-2);padding:4px 0 4px 12px;margin:10px 0;font-size:14px;color:var(--ink-2);max-width:72ch}
 .note.warn{border-color:var(--orange-ink);background:var(--orange-soft);padding:8px 12px;border-radius:0 10px 10px 0}
 details.how summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:10px;font-weight:600;list-style:none}details.how li{margin:6px 0}
 details.how summary::-webkit-details-marker{display:none}
@@ -2030,25 +2044,63 @@ details.how[open] summary::after{content:"Hide"}
 details.how summary:hover{color:var(--blue-ink)}details.how summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px}
 .tbl{overflow-x:auto;direction:rtl;scroll-snap-type:x proximity;scroll-padding-left:124px}.tbl table{direction:ltr}
 .tbl th:not(:first-child),.tbl td:not(:first-child){scroll-snap-align:end}
-table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:right;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:right;padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--ink-2)}
 th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);box-sizing:border-box;min-width:124px}
 .scroll-cue{display:none;font-size:13px;color:var(--muted);margin:0 0 6px}
-.nav details.menu{display:none;position:relative;margin-left:auto}
+.nav details.menu{display:none;position:relative;margin-left:auto;margin-right:12px}
 .nav details.menu summary{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border:1px solid var(--line-2);border-radius:10px;font-weight:600;color:var(--ink);cursor:pointer;list-style:none}
 .nav details.menu summary::-webkit-details-marker{display:none}
-.nav details.menu nav{display:flex;flex-direction:column;gap:0;position:absolute;right:0;top:calc(100% + 8px);z-index:30;min-width:190px;padding:6px;background:var(--card);border:1px solid var(--line-2);border-radius:12px}
-.nav details.menu nav a{display:flex;align-items:center;min-height:44px;padding:0 12px}
-@media (max-width:640px){.nav>nav{display:none}.nav details.menu{display:block}.nav{justify-content:space-between}.scroll-cue{display:block}}
-ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:8px 0;border-bottom:1px solid var(--line)}
+.nav details.menu nav{display:flex;flex-direction:column;gap:0;margin:0;position:absolute;right:0;top:calc(100% + 8px);z-index:30;min-width:190px;padding:6px;background:var(--card);border:1px solid var(--line-2);border-radius:12px;box-shadow:0 12px 32px rgba(29,27,23,.14)}
+.nav details.menu nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:8px;color:var(--ink)}.nav details.menu nav a:hover{background:var(--chip)}
+@media (max-width:1000px){.nav>nav{display:none}.nav details.menu{display:block}}
+@media (max-width:640px){.nav{justify-content:space-between}.nav .btn.sm{min-height:44px}.scroll-cue{display:block}}
+
+.card>h2:first-child{margin-top:0}.surv{margin:2px 0}.surv summary{cursor:pointer;min-height:44px;display:flex;align-items:center;flex-wrap:wrap;gap:2px 10px}.surv p{margin:0 0 8px}
+.badge{display:inline-block;border:1px solid var(--orange-ink);color:var(--orange-ink);background:var(--orange-soft);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600}
+ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:10px 0;border-bottom:1px solid var(--line)}ul.plain li:last-child{border-bottom:0}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
-ul.dir{list-style:none;padding:0;margin:16px 0;columns:2 300px;column-gap:28px}ul.dir li{padding:2px 0}
-ul.dir a{display:inline-block;min-height:40px;padding:8px 0;line-height:1.3}nav.links{margin:8px 0 4px}
-.links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
-form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:12px 0}form.find select,form.find button{flex:none}form.find input,form.find select{min-height:44px;border:1px solid var(--line-2);border-radius:10px;padding:0 12px;background:var(--card);color:var(--ink);font:inherit}
+ul.dir{list-style:none;padding:0;margin:16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:8px}
+ul.dir li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 14px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+ul.dir li:hover{border-color:var(--line-2)}ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px;line-height:1.3;color:var(--ink);text-decoration:none}
+ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.links{margin:12px 0 6px}
+.links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
+.links a:hover{border-color:var(--line-2);color:var(--ink)}nav.links[data-az] a{min-width:40px;justify-content:center;padding:4px 10px}
+.links a[aria-current=page]{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
+[data-crumbs]{margin:0 0 6px}[data-crumbs] a{color:var(--muted)}h1+.muted{font-size:16px;max-width:64ch;margin:0 0 14px}
+form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:16px 0}form.find select,form.find button{flex:none}form.find input,form.find select{min-height:44px;border:1px solid var(--line-2);border-radius:10px;padding:0 12px;background:var(--card);color:var(--ink);font:inherit}
 form.find input{flex:1;min-width:0}form.find button{cursor:pointer;font:inherit}
-footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:880px;margin:0 auto;padding:20px 16px 40px;font-size:13px;color:var(--muted)}
-footer.site nav{display:flex;flex-wrap:wrap;gap:4px 16px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}
-@media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:44px;padding:10px 0}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
+footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:960px;margin:0 auto;padding:24px clamp(16px,4vw,32px) 40px;font-size:13.5px;color:var(--muted)}
+footer.site p{max-width:72ch;margin:0 0 8px}footer.site nav{display:flex;flex-wrap:wrap;gap:4px 18px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}footer.site nav a:hover{color:var(--ink)}
+@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide{grid-column:1/-1}.card{padding:16px}h2{margin-top:32px}}
+@media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:48px}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.chart-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:6px;min-height:52px}
+.chg{margin:0}.chg b{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}.chg b[data-dir=up]{color:var(--up)}.chg b[data-dir=down]{color:var(--down)}.chg .small{display:block;max-width:46ch}
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:var(--chip)}.seg[hidden],.seg button[hidden]{display:none}
+.seg button{font:inherit;font-weight:600;font-size:14px;min-width:48px;min-height:40px;padding:0 10px;border:0;border-radius:9px;background:transparent;color:var(--ink-2);cursor:pointer}
+.seg button:hover:not(:disabled){color:var(--ink)}.seg button[aria-pressed=true]{background:var(--card);color:var(--ink);box-shadow:0 0 0 1px var(--line-2)}
+.seg button:disabled{opacity:.4;cursor:default}.seg button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.plot{position:relative;height:280px}.plot svg{display:block;overflow:visible;max-width:100%;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;font-family:var(--sans);font-variant-numeric:tabular-nums}
+.plot svg:focus{outline:none}.plot svg:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+.plot-note{position:absolute;inset:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;text-align:center;margin:0;padding:0 16px}.plot-note[hidden]{display:none}
+.tip{position:absolute;z-index:3;pointer-events:none;display:flex;flex-direction:column;gap:2px;min-width:128px;background:var(--card);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:14px;box-shadow:0 8px 24px rgba(29,27,23,.14)}
+.tip[hidden]{display:none}.tip span{color:var(--muted);font-size:12.5px;white-space:nowrap}.tip b{font-weight:600}
+.chart [data-summary]{margin:10px 0 0;max-width:72ch}.chart .how{margin-top:4px}.tbl2{overflow-x:auto}.tbl2 td:last-child,.tbl2 th:last-child{text-align:right}
+@media (max-width:640px){.plot{height:210px}.seg button{min-height:44px;min-width:52px}.chg b{font-size:20px}.chart-top{min-height:0}}
+.by{margin:0 0 6px}.by-key{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px;color:var(--ink-2);margin-bottom:26px}
+.by-key .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px}.sw.rev,.by-bar.rev{background:var(--blue)}.sw.pro,.by-bar.pro{background:var(--orange)}
+.by-plot{position:relative;height:180px;margin:0 0 30px 56px}.by-line{position:absolute;left:0;right:0;height:0;border-top:1px solid var(--line)}
+.by-tick{position:absolute;right:calc(100% + 8px);transform:translateY(50%);font-size:12px;line-height:1;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.by-cols{position:absolute;inset:0;display:flex}.by-col{position:relative;flex:1;min-width:0;border-radius:6px;outline-offset:-2px}.by-col:focus-visible{outline:2px solid var(--blue)}
+.by-bar{position:absolute;width:min(20px,40%);border-radius:4px 4px 0 0;transition:opacity .12s}.by-bar.neg{border-radius:0 0 4px 4px}
+.by-bar.rev{left:calc(50% - min(21px,41%))}.by-bar.pro{left:calc(50% + 1px)}
+.by-cols:hover .by-col:not(:hover) .by-bar{opacity:.45}
+.by-x{position:absolute;top:calc(100% + 8px);left:0;right:0;text-align:center;font-size:12px;color:var(--muted);white-space:nowrap}
+.by-tip{display:none;position:absolute;z-index:3;left:50%;bottom:100%;transform:translateX(-50%);flex-direction:column;gap:2px;min-width:150px;margin-bottom:4px;background:var(--card);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:13px;box-shadow:0 8px 24px rgba(29,27,23,.14);pointer-events:none;white-space:nowrap}
+.by-col:first-child .by-tip{left:0;transform:none}.by-col:last-child .by-tip{left:auto;right:0;transform:none}
+.by-col:hover .by-tip,.by-col:focus .by-tip{display:flex}.by-tip .k{color:var(--muted);font-size:12px;margin-top:2px}
+@media (max-width:640px){.by-plot{margin-left:50px;height:160px}}
 @media (max-width:640px){input,select,textarea,form.find input,form.find select{font-size:16px}}
 """
 
@@ -2116,7 +2168,7 @@ def _top(sign_in: str | None = None) -> str:
     return (f'<a class="skip" href="#main">Skip to main content</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
             f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{menu}</nav>'
             f'<details class="menu"><summary>Menu</summary><nav aria-label="Site (menu)">{menu}</nav></details>'
-            f'<a class="btn ghost" href="{e(sign_in)}">Sign in</a></header>')
+            f'<a class="btn ghost sm" href="{e(sign_in)}">Sign in</a></header>')
 
 
 INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address as the app's footers (content/seo.ts)
@@ -2124,14 +2176,14 @@ INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address
 
 def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
-    links = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
-                                                                ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us"),
-                                                                ("/pricing", "Plans"), ("/library", "Strategy library"), ("/blog", "Blog")))
-    links += f'<a href="{INSTAGRAM}" rel="me noopener">Instagram</a>'
+    explore = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/library", "Strategy library"), ("/stocks", "Companies"), ("/blog", "Blog"), ("/pricing", "Plans")))
+    policies = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
+                                                                   ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us")))
+    policies += f'<a href="{INSTAGRAM}" rel="me noopener">Instagram</a>'
     return (f'<footer class="site"><div class="in"><p>Research and paper trading only. No real orders are placed. StratLab shows '
             "facts from reported data for research and education; nothing here is investment advice or a recommendation, and "
             f"past prices don't predict future returns. © {datetime.now(timezone.utc).year} StratLab.</p>"
-            f'<nav aria-label="Policies">{links}</nav></div></footer>')
+            f'<nav aria-label="Explore">{explore}</nav><nav aria-label="Policies">{policies}</nav></div></footer>')
 
 
 def _page(head: str, sign_in: str | None, body: str) -> str:
@@ -2190,13 +2242,19 @@ ADVICE_WORDS = re.compile(r"\b(buy|sell|hold|accumulate|avoid|target|undervalued
 FAQ_HOLDERS = 3                  # named holders the shareholders answer lists
 
 
-def report_amount(f: dict, v) -> str | None:
+def report_amount(f: dict, v, digits: int = 0) -> str | None:
     """A reported figure in the unit the page's table uses, in words: "₹2,67,021 crore", "$391.0B"; a foreign filer's own
-    currency as "12,345 EUR million". None without a figure."""
+    currency as "12,345 EUR million". None without a figure. `digits` 2 is the precision the page's table or key figures use
+    for a small company's amounts (small_digits): "₹0.31 crore", "$12.34M", as shown there, never "<₹1 crore" beside a 0.31
+    (RC4-002: 50 of 410 sampled Indian pages said "net profit of <₹1 crore" and "revenue of ₹41 crore" for 41.37)."""
     v = _num(v)
     if v is None:
         return None
     unit = f.get("unit") or ""
+    if digits >= 2 and unit in ("$ million", "₹ crore") and abs(v) < 100:
+        sign = "-" if v < 0 else ""
+        n = _fmt(abs(v), 2)
+        return f"{sign}${n}M" if unit == "$ million" else f"{sign}₹{n} crore"
     if unit == "$ million":
         return usd_text(v)
     if unit == "₹ crore":
@@ -2237,25 +2295,28 @@ def about_text(f: dict, region: str, symbol: str, name: str) -> str:
     ys = [y for y in f.get("years") or [] if y.get("year")]
     if ys:
         y = ys[-1]
-        sales, profit = report_amount(f, y.get("sales")), _num(y.get("profit"))
+        # the precision the page's own table uses for these years (see _table), so a small company's figure reads as there
+        dy = small_digits(*[x.get(k) for x in f.get("years") or [] for k in (("sales", "profit") if f.get("bank") else ("sales", "profit", "debt"))])
+        sales, profit = report_amount(f, y.get("sales"), dy), _num(y.get("profit"))
         bits = []
         if sales and _num(y.get("sales")) is not None and _num(y["sales"]) > 0:
             bits.append(f"revenue of {sales}")
         if profit is not None:
-            bits.append(f"a net loss of {report_amount(f, -profit)}" if profit < 0 else f"net profit of {report_amount(f, profit)}")
+            bits.append(f"a net loss of {report_amount(f, -profit, dy)}" if profit < 0 else f"net profit of {report_amount(f, profit, dy)}")
         if bits:
             g = f.get("growth") or {}
             grow = [w for w in (growth_words("revenue", g.get("sales_cagr_3y")), growth_words("net profit", g.get("profit_cagr_3y"))) if w]
             out.append(f"In its latest reported year ({y['year']}) it reported " + " and ".join(bits)
                        + (f"; over three years, compounded, its {', and its '.join(grow)}" if grow else "") + ".")
     ttm, owners = _num(f.get("profit_ttm")), owners_profit(f)
+    dt = small_digits(ttm, owners)              # as the key figures show them (_stats)
     if owners is not None or ttm is not None:
         # the page's own two lines for an Indian company whose table profit includes minority holders (_stats): the shareholders'
         if owners is not None:
-            text = f"profit to its shareholders over the last 12 months was {report_amount(f, owners)}"
+            text = f"profit to its shareholders over the last 12 months was {report_amount(f, owners, dt)}"
         else:
-            text = (f"it made a net loss of {report_amount(f, -ttm)} over the last 12 months" if ttm < 0
-                    else f"its net profit over the last 12 months was {report_amount(f, ttm)}")
+            text = (f"it made a net loss of {report_amount(f, -ttm, dt)} over the last 12 months" if ttm < 0
+                    else f"its net profit over the last 12 months was {report_amount(f, ttm, dt)}")
         out.append(text[0].upper() + text[1:] + " (the four latest reported quarters).")
     if cap_text(f) != "–":
         pe = shown_pe(f)
@@ -2295,9 +2356,15 @@ def faq_items(f: dict, region: str, symbol: str, name: str, extras: dict | None 
     cap = cap_text(f)
     if cap != "–":
         pe = shown_pe(f)
+        # the price the value rests on is named as the page names it: a close, or the last price when it is older than the market's
+        # latest close or isn't a close ("as of 5 Oct 2026 (the last price this page has; …): the last close times…" was neither)
+        # (RC4-007)
+        close = _num(f.get("price")) is not None and is_close(f) and not behind(f)
+        basis = "the last close" if close or _num(f.get("price")) is None else "the last price this page has"
+        when = as_of_text(f) if close or not _date(f.get("price_at")) else _date(f["price_at"])
         out.append((f"What is {name}'s market value?",
-                    f"{name}'s market value is {cap} as of {as_of_text(f)}: the last close times the shares in issue."
-                    + (f" Its P/E is {_fmt(pe)}, the last close over earnings per share for the last four reported quarters." if pe is not None else "")))
+                    f"{name}'s market value is {cap} as of {when}: {basis} times the shares in issue."
+                    + (f" Its P/E is {_fmt(pe)}, {basis} over earnings per share for the last four reported quarters." if pe is not None else "")))
     nxt = (extras or {}).get("results")
     if nxt and _date(nxt.get("date")):
         purpose = str(nxt.get("purpose") or "").strip()
@@ -2310,7 +2377,10 @@ def faq_items(f: dict, region: str, symbol: str, name: str, extras: dict | None 
                     + (f" Dates are as the company announced them, on the list of {_date(nxt['as_of'])}." if _date(nxt.get("as_of")) else "")))
     hold = (extras or {}).get("holders")
     if hold and hold.get("holders") and _date(hold.get("quarter")):
-        names = "; ".join(f"{h['name']} ({'promoter group' if h['group'] == 'promoter' else 'public'}) {h['pct']:g}%" for h in hold["holders"])
+        # a holder's name as the pattern files it ("DSP SMALLCAP FUND , DSP MIDCAP FUND"): a space before a comma is closed up, and
+        # a semicolon in it is a comma, since the answer separates holders with one (RC4-008)
+        tidy = lambda n: re.sub(r"\s+", " ", re.sub(r"\s+,", ",", str(n or "").replace(";", ","))).strip()      # noqa: E731
+        names = "; ".join(f"{tidy(h['name'])} ({'promoter group' if h['group'] == 'promoter' else 'public'}) {h['pct']:g}%" for h in hold["holders"])
         out.append((f"Who are {name}'s largest named shareholders?",
                     f"In the shareholding pattern for the quarter ended {_date(hold['quarter'])}, the largest named holders above 1% were: {names}. "
                     "Percentages are of all shares."))
@@ -2376,15 +2446,17 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
                   {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}, *faq_ld(questions)])
     ind = " · ".join(shown_industry(f.get("industry"), plain=region == "US"))
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
-<p class="muted">{e(f.get("exchange") or country)}{(" · " + e(ind)) if ind else ""}</p>
+<p class="eyebrow">{e(f.get("exchange") or country)}{(" · " + e(ind)) if ind else ""}</p>
 <p class="small muted" data-as-of>{as_of_line}</p>"""]
     about = about_text(f, region, symbol, name) if has_content(f) else ""
     if about:
         parts.append(f'<p data-about>{e(about)}</p>')           # SEO-1: this company's own sentences, from the figures below
+    # the range's two prices are one value across two columns, so "₹1,201.43 to ₹1,551.90" never breaks in the middle
     parts.append('<div class="card grid">' + "".join(
-        f'<div class="stat"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
+        f'<div class="stat{" wide" if " to " in val else ""}"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
     parts += _notes(f)
     parts.append(_how(f))
+    parts.append(price_chart_html(f, region, symbol))       # PUB-1: the share price, drawn in the browser from the cached closes
     parts.append(_trend(f))
     parts.append(_table(f))
     shown = [y for y in (filing_entry(x) for x in unique_filings(f.get("filings"))) if y]
@@ -2405,7 +2477,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
 
 
 def _cta(symbol: str, test: str, deep: str) -> str:
-    return f"""<div class="card"><h2 style="margin-top:0">Go further with {e(symbol)}</h2>
+    return f"""<div class="card"><h2>Go further with {e(symbol)}</h2>
 <p class="muted">Free to start: test a trading idea on {e(symbol)}'s real prices after costs, or open the full deep dive with ten years of numbers, red flags and management's record.</p>
 <div class="ctas"><a class="btn" href="{e(test)}">Test a strategy on {e(symbol)}</a><a class="btn ghost" href="{e(deep)}">Open the full deep dive</a></div></div>"""
 
@@ -2609,6 +2681,171 @@ def _trend(f: dict) -> str:
     return '<h2>Price trend</h2><div class="card"><ul class="plain">' + "".join(bits) + "</ul></div>"
 
 
+# ---------- the charts on a company's page (PUB-1) ----------
+# The share-price chart is drawn in the visitor's browser by one small script (stock_chart.js, served as /stocks/chart.js)
+# from a cached list of daily closes (/stocks/<market>/<symbol>/prices.json): the page's stored facts hold no series, and
+# putting five years of closes into 13,000 stored pages was never worth the memory. The page itself says the same facts in
+# words (the last close, the 1-year range) so a crawler, or a visitor without the script, loses only the picture.
+# Revenue and profit are drawn on the server from the years the page already stores: plain HTML and CSS, no script.
+CHART_JS = (Path(__file__).with_name("stock_chart.js")).read_text(encoding="utf-8")
+CHART_JS_V = hashlib.sha1(CHART_JS.encode()).hexdigest()[:8]
+CHART_READ_DAYS = 1850         # five years of daily candles, and a little over, read for the longest range
+CHART_DAILY_DAYS = 372         # the last year (a little over) is kept day by day; before it, the last close of each week
+CHART_SERIES_CACHE = "public, max-age=300, s-maxage=3600, stale-while-revalidate=21600"
+CHART_MISSING_CACHE = "public, max-age=60, s-maxage=300"      # no series (a new listing, a source down): asked again in minutes, not at every view
+
+
+def chart_series(bars: list[dict]) -> dict:
+    """Daily candles as the chart's list of closes: {"t": [days since 1970-01-01], "c": [closes]}, oldest first. The last
+    CHART_DAILY_DAYS days are every session; before them, the last close of each week (some 460 points for five years, about
+    6 KB, and a line no different to the eye). Rounded to the cent, to four decimals under 10 cents. {} when there are
+    fewer than two closes."""
+    rows: dict[str, float] = {}
+    for b in bars or []:
+        c, d = _num(b.get("c")), str(b.get("t") or "")[:10]
+        if c is None or c <= 0 or len(d) != 10:
+            continue
+        try:
+            date.fromisoformat(d)
+        except ValueError:
+            continue
+        rows[d] = c
+    if len(rows) < 2:
+        return {}
+    days = sorted(rows)
+    cut = (date.fromisoformat(days[-1]) - timedelta(days=CHART_DAILY_DAYS)).isoformat()
+    keep, week = [], None
+    for d in days:
+        if d >= cut:
+            keep.append(d)
+            continue
+        iso = date.fromisoformat(d).isocalendar()[:2]
+        if keep and week == iso:
+            keep[-1] = d                                  # a later close of the same week replaces the earlier one
+        else:
+            keep.append(d)
+            week = iso
+    epoch = date(1970, 1, 1)
+    return {"t": [(date.fromisoformat(d) - epoch).days for d in keep],
+            "c": [round(rows[d], 4 if rows[d] < 0.1 else 2) for d in keep]}
+
+
+CHART_ADJ_MAX = 6              # splits, bonus issues and demergers named under the chart (the newest)
+
+
+def chart_adjustments(rows, first_day: str, last_day: str, region: str = "IN") -> list[dict]:
+    """[{"d": ex-date, "k": "split" | "bonus" | "demerger", "t": the action in words}] for the stored corporate actions whose ex-date
+    falls inside the chart's dates, oldest first: what the chart's note says about them. The price sources' earlier closes are
+    adjusted for a split or a bonus issue (no jump, but not the prices that traded) and not for an Indian demerger (a step by the
+    value that moved to the new company). Nothing is read from a source: `rows` is what the app already keeps (RC4-006)."""
+    out = []
+    for a in rows or []:
+        if not isinstance(a, dict):
+            continue
+        ex = str(a.get("ex_date") or "")[:10]
+        if not (first_day < ex <= last_day):
+            continue
+        from .corp_actions import adjusts
+        if adjusts(a):
+            out.append({"d": ex, "k": a["kind"], "t": str(a.get("short") or a["kind"])[:60]})
+        elif a.get("kind") == "demerger" and region == "IN" and a.get("label") == "Demerger":
+            out.append({"d": ex, "k": "demerger"})
+    return sorted(out, key=lambda x: x["d"])[-CHART_ADJ_MAX:]
+
+
+def price_chart_html(f: dict, region: str, symbol: str) -> str:
+    """The share-price card: the change over the chosen range, the 1M / 6M / 1Y / 5Y switch, the chart's place (its height is
+    kept, so nothing moves when it is drawn), the same facts as text, and the closes as a table. Only for a page whose price
+    is a close (a last trade from a quote has no daily series behind it)."""
+    if _num(f.get("price")) is None or not is_close(f) or not f.get("price_at"):
+        return ""
+    low, high = _num(f.get("low52")), _num(f.get("high52"))
+    text = f"Last close {_money(f, f.get('price'))} on {_date(f.get('price_at'))}."
+    if low is not None and high is not None:
+        since = f" since listing on {_date(f['range_since'])}" if f.get("range_since") and _date(f["range_since"]) else " over the last 12 months"
+        text += f" The share price traded between {_money(f, low)} and {_money(f, high)} (intraday){since}."
+    src = f"/stocks/{region.lower()}/{quote(symbol, safe='')}/prices.json"
+    buttons = "".join(f'<button type="button" data-r="{k}" aria-pressed="{"true" if k == "1y" else "false"}">{v}</button>'
+                      for k, v in (("1m", "1M"), ("6m", "6M"), ("1y", "1Y"), ("5y", "5Y")))
+    buttons += '<button type="button" data-r="all" aria-pressed="false" hidden>All</button>'
+    return (f'<h2>Share price</h2><div class="card chart" data-chart data-src="{e(src)}" data-currency="{"USD" if region == "US" else "INR"}">'
+            f'<div class="chart-top"><p class="chg"><b data-change></b><span data-change-note class="muted small"></span></p>'
+            f'<div class="seg" role="group" aria-label="Chart range" hidden>{buttons}</div></div>'
+            '<div class="plot"><p class="plot-note muted small" data-status role="status">Prices load here as you scroll to them.</p>'
+            '<div class="tip" hidden></div></div>'
+            f'<p class="small muted" data-summary>{e(text)}</p><p class="small muted" data-adjust hidden></p>'
+            '<details class="how" data-table><summary>Show the closes as a table</summary>'
+            '<p class="small muted" data-rows></p><div class="tbl2"><table><thead><tr><th scope="col">Date</th><th scope="col">Close</th></tr></thead><tbody></tbody></table></div></details>'
+            '<p class="sr-only" aria-live="polite" data-live></p>'
+            f'<noscript><p class="small muted">The chart needs JavaScript. The close and the 1-year range are above.</p></noscript></div>'
+            f'<script src="/stocks/chart.js?v={CHART_JS_V}" defer></script>')
+
+
+def nice_ticks(lo: float, hi: float, count: int = 4) -> list[float]:
+    """Round axis values reaching from at or below `lo` to at or above `hi`: steps of 1, 2, 2.5 or 5 times a power of ten."""
+    span = (hi - lo) or abs(hi) or 1.0
+    raw = span / count
+    p = 10 ** math.floor(math.log10(raw))
+    step = next(m for m in (1, 2, 2.5, 5, 10) if raw / p <= m + 1e-9) * p
+    first, last = math.floor(lo / step + 1e-9), math.ceil(hi / step - 1e-9)
+    return [round(i * step, 10) for i in range(first, last + 1)]
+
+
+def tick_digits(ticks: list[float]) -> int:
+    """Decimals that write every axis value exactly: none for 0, 250 or 1,000, one for 2.5, two for 0.25. An axis of a small
+    company's amounts (₹ crore under 10: ticks of 0.2 or 2.5) was labelled in whole numbers, so 0.6 and 0.8 both read "1" and
+    2.5 read "2" (RC4-001)."""
+    for d in range(5):
+        if all(abs(t - round(t, d)) < 1e-9 for t in ticks):
+            return d
+    return 4
+
+
+def _short_year(label: str) -> str:
+    """"Mar 2026" as "Mar ’26": a column's label that fits five to a phone's width."""
+    return re.sub(r"\s\d\d(\d\d)$", r" ’\1", label)
+
+
+def bars_chart_html(f: dict, digits: int = 0) -> str:
+    """Revenue and net profit by year as columns, from the years the page stores: HTML and CSS only, each year a focusable
+    group whose figures show on hover or focus, and the table below says the same in numbers. One scale for both (the same
+    unit), a baseline at zero, and a loss below it."""
+    ys = [y for y in (f.get("years") or []) if _num(y.get("sales")) is not None or _num(y.get("profit")) is not None]
+    if len(ys) < 2:
+        return ""
+    vals = [v for y in ys for v in (_num(y.get("sales")), _num(y.get("profit"))) if v is not None]
+    top, bottom = max(max(vals), 0.0), min(min(vals), 0.0)
+    ticks = nice_ticks(bottom, top, 4)
+    hi, lo = ticks[-1], ticks[0]
+    span = (hi - lo) or 1.0
+    pct = lambda v: (v - lo) / span * 100             # noqa: E731  position from the plot's bottom, in percent
+    num = lambda x: f"{x:.2f}".rstrip("0").rstrip(".")           # noqa: E731  a style value: "0", "33.33"
+    at = lambda v: num(pct(v))                                    # noqa: E731
+    td = tick_digits(ticks)
+    grid = "".join(f'<i class="by-line" style="bottom:{at(t)}%"></i><span class="by-tick" style="bottom:{at(t)}%">{e(_amount(f, t, td) if t else "0")}</span>'
+                   for t in ticks)
+    cols = []
+    for y in ys:
+        sales, profit = _num(y.get("sales")), _num(y.get("profit"))
+        label = str(y.get("year") or "")
+        said = ", ".join(x for x in (f"revenue {_amount(f, sales, digits)}" if sales is not None else "",
+                                     f"net profit {_amount(f, profit, digits)}" if profit is not None else "") if x)
+        bars = ""
+        for cls, v in (("rev", sales), ("pro", profit)):
+            if v is None:
+                continue
+            a, b = sorted((pct(0.0), pct(v)))
+            bars += f'<i class="by-bar {cls}{" neg" if v < 0 else ""}" style="bottom:{num(a)}%;height:{num(max(b - a, 0.4))}%"></i>'
+        cols.append(f'<div class="by-col" tabindex="0" role="img" aria-label="{e(label)}: {e(said)} ({e(f.get("unit") or "")})">{bars}'
+                    f'<span class="by-tip"><b>{e(label)}</b>' + (f'<span class="k rev">Revenue</span> {e(_amount(f, sales, digits))}' if sales is not None else "")
+                    + (f'<span class="k pro">Net profit</span> {e(_amount(f, profit, digits))}' if profit is not None else "")
+                    + f'</span><span class="by-x">{e(_short_year(label))}</span></div>')
+    return (f'<figure class="by" aria-label="Revenue and net profit by year, in {e(f.get("unit") or "")}">'
+            '<div class="by-key"><span><i class="sw rev"></i>Revenue</span><span><i class="sw pro"></i>Net profit</span>'
+            f'<span class="muted">{e(f.get("unit") or "")}</span></div>'
+            f'<div class="by-plot">{grid}<div class="by-cols">{"".join(cols)}</div></div></figure>')
+
+
 def growth_words(what: str, v) -> str | None:
     """"revenue grew 6.4% a year", "revenue fell 14.7% a year", "revenue was flat"; None without a figure."""
     v = _num(v)
@@ -2636,7 +2873,7 @@ def _table(f: dict) -> str:
     growth = [w for w in (growth_words("revenue", g.get("sales_cagr_3y")), growth_words("net profit", g.get("profit_cagr_3y"))) if w]
     note = f'<p class="small muted">{e(f.get("unit") or "")}{". Over three years, compounded: " + ", ".join(growth) if growth else ""}.</p>'
     cue = '<p class="scroll-cue" aria-hidden="true">Newest year on the right. Swipe for earlier years →</p>' if len(ys) > 2 else ""
-    return (f'<h2>Revenue and profit</h2><div class="card">{cue}<div class="tbl" tabindex="0" role="region" aria-label="Revenue and profit by year">'
+    return (f'<h2>Revenue and profit</h2><div class="card">{bars_chart_html(f, digits)}{cue}<div class="tbl" tabindex="0" role="region" aria-label="Revenue and profit by year">'
             f'<table><tr><th scope="col">Year</th>{head}</tr>{body}</table></div>{note}</div>')
 
 
@@ -2646,14 +2883,11 @@ def surveillance_html(flags: list[dict]) -> str:
     fixed dark amber on the dark card was 2.37:1)."""
     if not flags:
         return ""
-    badge = ("display:inline-block;border:1px solid var(--orange-ink);color:var(--orange-ink);background:var(--orange-soft);"
-             "border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600;margin:0 6px 6px 0")
     items = "".join(
-        f'<details style="margin:6px 0"><summary style="cursor:pointer;min-height:32px;line-height:32px">'
-        f'<span style="{badge}">{e(f["short"])}</span> {e(f["label"])}</summary>'
-        f'<p class="small" style="margin:4px 0 0">{e(f["text"])}'
+        f'<details class="surv"><summary><span class="badge">{e(f["short"])}</span> {e(f["label"])}</summary>'
+        f'<p class="small">{e(f["text"])}'
         f'{" List as of " + e(_date(f["as_of"])) + "." if f.get("as_of") else ""}</p></details>' for f in flags)
-    return (f'<div class="card" data-surveillance><h2 style="margin-top:0">Exchange surveillance</h2>{items}'
+    return (f'<div class="card" data-surveillance><h2>Exchange surveillance</h2>{items}'
             '<p class="small muted">From the exchange\'s published surveillance lists: measures the exchange applies '
             'for a time. They are facts about trading rules, not a view on the company.</p></div>')
 
@@ -2664,7 +2898,7 @@ def with_surveillance(page: str, flags: list[dict]) -> str:
     block = surveillance_html(flags)
     if not block:
         return page
-    for anchor in ('<div class="card grid">', '<div class="card"><h2 style="margin-top:0">Go further'):
+    for anchor in ('<div class="card grid">', '<div class="card"><h2>Go further'):
         i = page.find(anchor)
         if i >= 0:
             return page[:i] + block + page[i:]
@@ -2905,7 +3139,7 @@ def _pager(base, pages: int, page: int) -> str:
     """Links to the other pages of a long list: `base(n)` is page n's address."""
     if pages <= 1:
         return ""
-    items = "".join((f'<a href="{e(base(n))}" aria-current="page" style="font-weight:600">{n}</a>' if n == page
+    items = "".join((f'<a href="{e(base(n))}" aria-current="page">{n}</a>' if n == page
                      else f'<a href="{e(base(n))}">{n}</a>') for n in range(1, pages + 1))
     return f'<nav class="links" aria-label="Pages" data-pager>{items}</nav>'
 
@@ -2966,7 +3200,7 @@ def letter_page(region: str, letter: str, page: int = 1) -> str | None:
             f'<p class="muted">{n:,} companies listed in {where} ({exchange}) {e(what)}{e(of)}, A to Z by name. Each links to its price, '
             "reported results and recent filings. Facts, not advice.</p>"
             f'<nav class="links" aria-label="Letters" data-az>' + "".join(
-                f'<a href="{letter_path(region, L)}"' + (' aria-current="page" style="font-weight:600"' if L == letter else "") + f'>{"0–9" if L == OTHER else L}</a>'
+                f'<a href="{letter_path(region, L)}"' + (' aria-current="page"' if L == letter else "") + f'>{"0–9" if L == OTHER else L}</a>'
                 for L in [*LETTERS, OTHER] if d["count"].get(L)) + "</nav>"
             + _dir_list(region, syms)
             + _pager(lambda k: letter_path(region, letter, k), pages, page)

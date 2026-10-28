@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Modal } from "../../components/ui";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago, dateOnly, plainDates } from "../../lib/format";
+import { ago, dateOnly, istToday, plainDates } from "../../lib/format";
 import { Card, CardHead, DataTable, Light, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type JobRow } from "./AdminContext";
 import { plainError, services } from "./attention";
@@ -78,6 +79,20 @@ export function DataSection() {
     window.open(url, "_blank", "noopener");
     notify("Broker login opened in a new tab. Come back and refresh when it says it's saved.");
   });
+  // the morning alert's link (kite_auto.LOGIN_LINK): opens Zerodha's own login page in this tab, in one tap from the phone, unless
+  // today's login already went through (an old notification tapped later)
+  const [params, setParams] = useSearchParams();
+  const fromAlert = params.get("kite") === "login";
+  const loggedInToday = !!sv?.kite_ready && sv?.kite_token_day === istToday();
+  useEffect(() => {
+    if (!fromAlert || !sv) return;
+    setParams((p) => { p.delete("kite"); return p; }, { replace: true });
+    if (loggedInToday) { notify("Already logged in to the broker today: nothing to do."); return; }
+    void run("kite", async () => {
+      const { url } = await api<{ url: string }>("/admin/kite/login-url", { method: "POST" });
+      window.location.assign(url);
+    });
+  }, [fromAlert, sv, loggedInToday]);    // eslint-disable-line react-hooks/exhaustive-deps
   const autoLogin = () => run("auto", async () => {
     const r = await api<{ ok: boolean; message: string }>("/admin/kite/auto-login-now", { method: "POST" });
     notify(r.message); await reload();

@@ -350,7 +350,7 @@ def test_the_sip_post_is_the_sip_test_engines_own_arithmetic(w):
     leg = {"symbol": "NIFTY 50", "weight": 1.0, "closes": {d: closes[d] / 100 for d in days}, "days": days, "high": {}, "kind": "in_etf"}
     plan = {"mode": "amount", "amount": 10000, "qty": 1, "freq": "monthly", "dom": 1, "weekday": 0, "step_up": 0.0, "rule": "plain", "dip": 0.1, "extra": 0.5,
             "brokerage": 0.0, "lookback": 252}
-    start = next(d for d in days if d >= sip_test._add_years(days[-1], -8))
+    start = next(d for d in days if d >= sip_test._add_years(days[-1], -9))      # a 9-year series is nine years (RC4-004: it was read as eight)
     head = sip_test.simulate([leg], plan, start, days[-1])
     lump = sip_test._once([leg], {**plan, "amount": head["invested"]}, head["start"], days[-1])
     tab = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "")["rows"]

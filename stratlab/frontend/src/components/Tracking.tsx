@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { askNow, CHOICE_KEY, clearChoice, consentWords, onChoice, readChoice, trackersFor, writeChoice, type Choice } from "../lib/ads";
+import { askNow, CHOICE_KEY, clearChoice, consentWords, declineTrackers, onChoice, readAdsOnly, readChoice, readDeclined, trackersFor, writeChoice, type Choice } from "../lib/ads";
 import { doNotTrack } from "../lib/analytics";
 import { flushSignup, loadPixel, onSignup, pixelPageView, startClarity, stopClarity } from "../lib/track";
 import { CONFIG } from "../lib/adsConfig";
@@ -10,37 +10,39 @@ import { CONFIG } from "../lib/adsConfig";
  * set; no script comes before "Allow"; the private pages (money, tax, holdings, net worth, account, settings, admin, payment) are
  * never asked and load nothing, and Clarity stops there. */
 
-/** The answer, following changes made on this page and in other tabs. */
-export function useChoice(): Choice {
-  const [choice, setChoice] = useState<Choice>(readChoice);
+/** The answer, following changes made on this page and in other tabs, and whether a yes was for Google ads alone (the question a page
+ * the server draws asks, RC4-005). */
+export function useAnswer(): { choice: Choice; adsOnly: boolean; declined: boolean } {
+  const read = () => ({ choice: readChoice(), adsOnly: readAdsOnly(), declined: readDeclined() });
+  const [answer, setAnswer] = useState(read);
   useEffect(() => {
-    const on = (e: StorageEvent) => { if (e.key === CHOICE_KEY) setChoice(readChoice()); };
+    const on = (e: StorageEvent) => { if (e.key === CHOICE_KEY) setAnswer(read()); };
     window.addEventListener("storage", on);
-    const off = onChoice(() => setChoice(readChoice()));
+    const off = onChoice(() => setAnswer(read()));
     return () => { window.removeEventListener("storage", on); off(); };
   }, []);
-  return choice;
+  return answer;
 }
 
 export function Tracking() {
   const { pathname } = useLocation();
-  const choice = useChoice();
-  const want = trackersFor({ cfg: CONFIG, choice, path: pathname, dnt: doNotTrack() });
+  const { choice, adsOnly, declined } = useAnswer();
+  const want = trackersFor({ cfg: CONFIG, choice, path: pathname, dnt: doNotTrack(), adsOnly });
   useEffect(() => {
     if (want.pixel) { loadPixel(CONFIG.pixel); pixelPageView(pathname); flushSignup(); }
     if (want.clarity) startClarity(CONFIG.clarity); else stopClarity();
   }, [want.pixel, want.clarity, pathname]);
   // a sign-up that completes after the page has loaded
   useEffect(() => onSignup(() => { if (want.pixel) flushSignup(); }), [want.pixel]);
-  if (!askNow({ cfg: CONFIG, choice, path: pathname })) return null;
-  const { title, text } = consentWords(CONFIG);
+  if (!askNow({ cfg: CONFIG, choice, path: pathname, adsOnly, declined, dnt: doNotTrack() })) return null;
+  const { title, text } = consentWords(CONFIG, adsOnly);
   return (
     <div className="consent" role="dialog" aria-modal="false" aria-label={`${title} on StratLab`} data-testid="consent">
       <b className="consent-title">{title}</b>
       <p>{text} <Link className="link" to="/privacy">What this means</Link></p>
       <div className="consent-btns">
         <button type="button" className="btn sm" onClick={() => writeChoice("yes")}>Allow</button>
-        <button type="button" className="btn quiet sm" onClick={() => writeChoice("no")}>No thanks</button>
+        <button type="button" className="btn quiet sm" onClick={() => (adsOnly ? declineTrackers() : writeChoice("no"))}>No thanks</button>
       </div>
     </div>
   );
@@ -48,10 +50,10 @@ export function Tracking() {
 
 /** Privacy: the answer, and a way to change it. Taking a yes back reloads the page, so nothing already loaded keeps running. */
 export function ChoiceControl() {
-  const choice = useChoice();
+  const { choice, adsOnly } = useAnswer();
   return (
     <p className="small" data-testid="ad-choice">
-      <b>Your choice here:</b> {choice === "yes" ? "allowed" : choice === "no" ? "no thanks" : "not asked yet"}.{" "}
+      <b>Your choice here:</b> {choice === "yes" ? (adsOnly ? "allowed for Google ads only" : "allowed") : choice === "no" ? "no thanks" : "not asked yet"}.{" "}
       {choice && <button type="button" className="btn quiet sm" onClick={() => { const was = choice; clearChoice(); if (was === "yes") location.reload(); }}>Change my choice</button>}
     </p>
   );

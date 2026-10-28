@@ -10,7 +10,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 /** [published file name, the package it comes from] */
 export const PUBLIC_FONTS = [
   ["fraunces-latin-400-normal.woff2", "@fontsource/fraunces"],
+  ["fraunces-latin-600-normal.woff2", "@fontsource/fraunces"],
   ["ibm-plex-sans-latin-400-normal.woff2", "@fontsource/ibm-plex-sans"],
+  ["ibm-plex-sans-latin-500-normal.woff2", "@fontsource/ibm-plex-sans"],
   ["ibm-plex-sans-latin-600-normal.woff2", "@fontsource/ibm-plex-sans"],
   ["montserrat-latin-300-normal.woff2", "@fontsource/montserrat"],
   ["montserrat-latin-800-normal.woff2", "@fontsource/montserrat"],

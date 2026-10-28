@@ -19,7 +19,7 @@ d.style.cssText="height:250px;background:#bbb;color:#111;display:flex;align-item
 window.adsbygoogle={push:fill};q.forEach(fill)})();`;
 const ON = { ADS_ENABLED: "true", ADSENSE_CLIENT: "ca-pub-1234567890123456", ADSENSE_SLOT_PUBLIC: "1111111111", ADSENSE_SLOT_AI: "2222222222" };
 
-type Setup = { who?: keyof typeof WHO; ads?: boolean; choice?: "yes" | "no"; extra?: Record<string, string> };
+type Setup = { who?: keyof typeof WHO; ads?: boolean; choice?: "yes" | "no"; extra?: Record<string, string>; adsOnly?: boolean };
 
 /** Opens a page. Everything off the machine is answered with nothing, and every request to Google is counted. */
 async function open(page: Page, path: string, ready: string | RegExp, o: Setup = {}) {
@@ -39,12 +39,13 @@ async function open(page: Page, path: string, ready: string | RegExp, o: Setup =
       await r.fulfill({ status: 200, contentType: "text/javascript", body: `${real}\nObject.assign(window.STRATLAB_CONFIG, ${JSON.stringify({ ...(o.ads ? ON : {}), ...o.extra })});\n` });
     });
   }
-  await page.addInitScript(([s, choice]) => {
+  await page.addInitScript(([s, choice, adsOnly]) => {
     if (s) localStorage.setItem("sb-demo-auth-token", JSON.stringify(s));
     localStorage.setItem("stratlab.tour.v1", "1");
     // the saved answer is there on the first load only, so a test can take it back and reload
-    if (choice && !sessionStorage.getItem("seeded")) { localStorage.setItem("stratlab.ads", JSON.stringify({ c: choice, at: Date.now() })); sessionStorage.setItem("seeded", "1"); }
-  }, [o.who ? WHO[o.who] : null, o.choice ?? null] as const);
+    // (adsOnly: the yes a page the server draws saves, which answers the question about Google ads alone)
+    if (choice && !sessionStorage.getItem("seeded")) { localStorage.setItem("stratlab.ads", JSON.stringify({ c: choice, at: Date.now(), ...(adsOnly ? { s: "ads" } : {}) })); sessionStorage.setItem("seeded", "1"); }
+  }, [o.who ? WHO[o.who] : null, o.choice ?? null, !!o.adsOnly] as const);
   await page.goto(path);
   await page.getByText("What brings you here?").waitFor({ timeout: 2500 }).then(() => page.getByRole("dialog").getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
   await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
@@ -324,6 +325,7 @@ test("a server-drawn page: asks first, Allow loads one ad, and the answer is sha
   await expect(page.locator(".ad-label")).toHaveText("Advertisement");
   expect(google.length).toBe(1);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("stratlab.ads")!).c)).toBe("yes");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("stratlab.ads")!).s), "the yes says it was about Google ads alone").toBe("ads");
 });
 
 test("a server-drawn page: No thanks removes the box and loads nothing; a saved answer is not asked again", async ({ page }) => {
@@ -341,4 +343,33 @@ test("a server-drawn page: an answer the app saved (yes) shows the ad at once", 
   await expect(page.locator("[data-fake-ad]")).toBeVisible();
   await expect(page.locator(".ad-ask")).toHaveCount(0);
   expect(google.length).toBe(1);
+});
+
+test("trackers: a yes given for Google ads alone starts neither tracker; the app asks about them, and No thanks keeps the ads allowed", async ({ page }) => {
+  const { google } = await open(page, "/library", "StratLab's own strategies", { extra: TRACK, choice: "yes", adsOnly: true });
+  const ask = page.getByTestId("consent");
+  await expect(ask).toBeVisible();
+  await expect(ask).toContainText("Analytics");
+  await expect(ask).toContainText("Meta's ad measurement and Microsoft Clarity");
+  await expect(ask).not.toContainText("Google");
+  await page.waitForTimeout(800);
+  expect(google, "the yes about ads is not a yes to these").toEqual([]);
+  expect(await pixelCalls(page)).toEqual([]);
+  await ask.getByRole("button", { name: "No thanks" }).click();
+  await expect(page.getByTestId("consent")).toHaveCount(0);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("stratlab.ads")!));
+  expect(saved).toMatchObject({ c: "yes", s: "ads", t: "no" });
+  await page.reload();
+  await page.waitForTimeout(800);
+  await expect(page.getByTestId("consent")).toHaveCount(0);
+  expect(google).toEqual([]);
+});
+
+test("trackers: Allow on that question starts them, and the Privacy page says what the answer covers", async ({ page }) => {
+  const { google } = await open(page, "/library", "StratLab's own strategies", { extra: TRACK, choice: "yes", adsOnly: true });
+  await page.getByTestId("consent").getByRole("button", { name: "Allow" }).click();
+  await expect.poll(() => google.some((u) => /connect\.facebook\.net\/en_US\/fbevents\.js/.test(u))).toBe(true);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("stratlab.ads")!).s)).toBeUndefined();
+  await page.goto("/privacy");
+  await expect(page.getByText("the question is about Google ads only").first()).toBeVisible();
 });

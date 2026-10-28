@@ -245,3 +245,45 @@ def test_a_login_another_run_finished_while_this_one_waited_is_not_repeated(monk
     al.kite.token_day = "2026-09-23"
     release.set()
     assert al.run_once(only_if_due=True, now=now) is True and calls.count("fetch") == 2
+
+
+def captcha_then(ok_after: int):
+    """Zerodha that demands a CAPTCHA on the first `ok_after` password posts, then lets the login through."""
+    seen = {"login_posts": 0, "agents": set()}
+    inner, _ = fake_zerodha()
+
+    def handler(req: httpx.Request):
+        seen["agents"].add(req.headers.get("user-agent", ""))
+        if req.url.path == "/api/login":
+            seen["login_posts"] += 1
+            if seen["login_posts"] <= ok_after:
+                return httpx.Response(400, json={"status": "error", "message": "Invalid CAPTCHA values."})
+        return inner.handle_request(req)
+
+    return httpx.MockTransport(handler), seen
+
+
+def test_a_captcha_demand_is_tried_again_with_a_fresh_session(monkeypatch):
+    # 27-28 Oct 2026: the 08:00 login met "Invalid CAPTCHA values" and gave up for the day, yet a login a minute later
+    # went through. A CAPTCHA isn't a wrong password: a new session after a short wait is tried.
+    waits = []
+    transport, seen = captcha_then(ok_after=1)
+    assert fetch_request_token(LOGIN_URL, transport, sleep=waits.append) == "TOKEN42"
+    assert seen["login_posts"] == 2 and waits == [kite_auto.CAPTCHA_WAIT_S]
+    assert not any("StratLab" in a for a in seen["agents"]), "a browser's own headers, not a script's name"
+
+
+def test_a_captcha_that_stays_is_left_to_the_daily_loop_not_given_up(monkeypatch):
+    transport, seen = captcha_then(ok_after=99)
+    with pytest.raises(AutoLoginError) as e:
+        fetch_request_token(LOGIN_URL, transport, sleep=lambda s: None)
+    assert e.value.retry is True and "CAPTCHA" in str(e.value) and seen["login_posts"] == 2
+    assert "rejected the user ID or password" not in str(e.value)
+
+
+def test_a_wrong_password_still_stops_at_once(monkeypatch):
+    transport, _ = fake_zerodha(password_ok=False)
+    waits = []
+    with pytest.raises(AutoLoginError) as e:
+        fetch_request_token(LOGIN_URL, transport, sleep=waits.append)
+    assert e.value.retry is False and waits == []
