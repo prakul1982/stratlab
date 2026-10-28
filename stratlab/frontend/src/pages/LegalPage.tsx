@@ -60,7 +60,8 @@ export function LegalPage() {
   return (
     <PublicFrame className="legal">
       <article className="legal-body stack">
-        <nav className="legal-tabs" aria-label="Policies">
+        {/* not "Policies": the footer's row of the same links has that name, and two landmarks with one name can't be told apart (A11Y-2) */}
+        <nav className="legal-tabs" aria-label="Policy pages">
           {LEGAL_PAGES.map((p) => <Link key={p.path} className="k-pagenav-a" to={p.path}
             aria-current={p.path === page.path ? "page" : undefined}>{p.title}</Link>)}
         </nav>

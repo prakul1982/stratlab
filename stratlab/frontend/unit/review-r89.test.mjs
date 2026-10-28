@@ -284,7 +284,7 @@ test("PUB-1: the policies use the public frame (header with the site's links, fo
   const page = read("src/pages/LegalPage.tsx"), css = read("src/styles.css");
   assert.match(page, /<PublicFrame className="legal">/);
   assert.doesNotMatch(page, /legal-head|<Logo|SkipLink/);                                           // the frame brings the logo, the skip link and the header
-  assert.match(page, /<nav className="legal-tabs" aria-label="Policies">/);                        // the other policies stay one tap away
+  assert.match(page, /<nav className="legal-tabs" aria-label="Policy pages">/);                        // the other policies stay one tap away
   assert.match(css, /\.pub-main\.legal \{ max-width: 800px; \}/);
   assert.match(css, /\.legal-body \.h3 \{[^}]*font: 600 21px\/1\.25 var\(--serif\)/);               // a heading for each part, not a bold line of body text
   assert.match(css, /@media \(max-width: 640px\) \{ \.legal-tabs a \{ min-height: 44px; \} \}/);   // a tap target on a phone

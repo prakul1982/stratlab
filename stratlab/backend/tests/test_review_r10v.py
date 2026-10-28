@@ -530,7 +530,7 @@ def test_a_us_company_is_named_the_same_in_title_description_og_tags_and_json_ld
 def test_policy_links_and_email_links_are_44_px_tall_on_phones():
     style = stock_pages.STYLE
     phone = style[style.rindex("@media (max-width:640px){footer.site nav a"):]
-    assert "footer.site nav a{padding:12px 0;min-height:44px}" in phone
+    assert "footer.site nav a{padding:12px 0;min-height:44px;min-width:44px}" in phone
     assert ".links a{min-height:44px}" in phone
     assert 'a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}' in phone
 
