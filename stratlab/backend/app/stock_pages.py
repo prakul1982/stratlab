@@ -2027,13 +2027,19 @@ main{flex:1 0 auto;width:100%;max-width:960px;margin:0 auto;padding:36px clamp(1
 h1{font-family:var(--serif);font-weight:400;font-size:clamp(32px,4vw,46px);line-height:1.1;letter-spacing:-.02em;margin:4px 0 8px;text-wrap:balance}
 h2{font-family:var(--serif);font-weight:600;font-size:22px;line-height:1.25;letter-spacing:-.01em;margin:40px 0 12px;text-wrap:balance}h3{font-size:16px;font-weight:600;margin:14px 0 4px}
 main>p{max-width:72ch}.faq p{margin:0 0 6px;max-width:70ch;color:var(--ink-2)}.muted{color:var(--muted)}.small{font-size:14px}
-.eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:12px 0}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:4px 20px}
-.stat{min-width:0;margin-bottom:14px}.stat span{display:block;font-size:13.5px;line-height:1.35;color:var(--muted)}.stat b{display:block;font-size:21px;line-height:1.25;font-weight:600}
-@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 2;grid-template-rows:subgrid;gap:0 0;align-content:start}}
-.stat.wide{grid-column:span 2}
-/* a long value ("₹18.94 lakh crore") wrapped to two lines in a phone's half-width column, beside a one-line value (VR4-007): on a phone it takes the row */
+.sub{margin:0 0 14px;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}h1>.muted{font-size:.5em;font-weight:400;white-space:nowrap}
+.px{margin:0 0 6px}.px p{margin:0}.px-line{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px}.px-line b{font-size:clamp(34px,5vw,44px);line-height:1.1;font-weight:600;letter-spacing:-.01em}
+.px-chg{font-size:18px;font-weight:600}.px-chg[data-dir=up]{color:var(--up)}.px-chg[data-dir=down]{color:var(--down)}.px-chg[hidden]{display:none}
+/* the key figures: even tiles, four across (three when that leaves fewer empty places, two on a phone); a tile is its label, its value and a small line for its unit or period, and the values of a row
+   share one baseline whatever their labels' length (PUB-2: labels wrapping to one, two and three lines left the values at different heights) */
+.figs{padding:18px 20px 6px}.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 24px}.tiles.c3{grid-template-columns:repeat(3,minmax(0,1fr))}.tiles.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.stat{min-width:0;margin:0 0 14px;padding-top:10px;border-top:1px solid var(--line)}.stat span{display:block;font-size:13.5px;line-height:1.35;color:var(--muted)}
+.stat b{display:block;font-size:22px;line-height:1.25;font-weight:600;white-space:nowrap}.stat.long b{font-size:18px;line-height:1.5}.stat.fill2{grid-column:span 2}.stat.fill3{grid-column:span 3}.stat small{display:block;font-size:12.5px;line-height:1.35;color:var(--muted)}
+@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 3;grid-template-rows:subgrid;gap:0 0;align-content:start}.stat span{align-self:end}}
+.range{padding-bottom:14px;margin-bottom:4px}.range-name{margin:0 0 2px;font-size:13.5px;color:var(--muted)}.rbar{display:block;overflow:visible;padding:0 6px;box-sizing:border-box;font-family:var(--sans);max-width:100%}
+.rb-track{stroke:var(--line-2);stroke-width:6;stroke-linecap:round}.rb-dot{fill:var(--blue);stroke:var(--card);stroke-width:2}.rb-now{fill:var(--ink-2);font-size:13px;font-weight:600}
+.range-ends{display:flex;justify-content:space-between;gap:12px;margin:0;font-size:15px}.range-ends small{font-size:12.5px;color:var(--muted)}.range-ends b{font-weight:600}
 .note{border-left:3px solid var(--line-2);padding:4px 0 4px 12px;margin:10px 0;font-size:14px;color:var(--ink-2);max-width:72ch}
 .note.warn{border-color:var(--orange-ink);background:var(--orange-soft);padding:8px 12px;border-radius:0 10px 10px 0}
 details.how summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:10px;font-weight:600;list-style:none}details.how li{margin:6px 0}
@@ -2080,7 +2086,7 @@ form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:16px 0}form.find select,f
 form.find input{flex:1;min-width:0}form.find button{cursor:pointer;font:inherit}
 footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:960px;margin:0 auto;padding:24px clamp(16px,4vw,32px) 40px;font-size:13.5px;color:var(--muted)}
 footer.site p{max-width:72ch;margin:0 0 8px}footer.site nav{display:flex;flex-wrap:wrap;gap:4px 18px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}footer.site nav a:hover{color:var(--ink)}
-@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide,.stat.long{grid-column:1/-1}.card{padding:16px}h2{margin-top:32px}}
+@media (max-width:640px){.tiles,.tiles.c3,.tiles.c4{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.tiles>.stat:last-child:nth-child(odd){grid-column:1/-1}.stat.fill2,.stat.fill3{grid-column:auto}.stat.long b{font-size:17px}.stat b{font-size:20px}.figs{padding:16px 16px 4px}.card{padding:16px}h2{margin-top:32px}}
 @media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:48px}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .chart-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:6px;min-height:52px}
@@ -2279,7 +2285,12 @@ def listed_on(f: dict, region: str, symbol: str) -> str:
 
 
 def about_text(f: dict, region: str, symbol: str, name: str) -> str:
-    """One short paragraph from the company's own figures: its sector, where it is listed, its year's range and last close, the
+    """The sentences of about_parts as one paragraph (the text the checks of SEO-1 read)."""
+    return " ".join(about_parts(f, region, symbol, name))
+
+
+def about_parts(f: dict, region: str, symbol: str, name: str) -> list[str]:
+    """The company's own sentences, one to an item, from the company's own figures: its sector, where it is listed, its year's range and last close, the
     latest reported year's revenue and profit, the last 12 months' profit and its market value. Each sentence is left out when
     its figures are n/a on the page (the same checks the page's figures pass)."""
     out = []
@@ -2329,7 +2340,7 @@ def about_text(f: dict, region: str, symbol: str, name: str) -> str:
     if cap_text(f) != "–":
         pe = shown_pe(f)
         out.append(f"Its market value is {cap_text(f)}" + (f", with a P/E of {_fmt(pe)}" if pe is not None else "") + ".")
-    return " ".join(out)
+    return out
 
 
 def faq_extras(region: str, symbol: str) -> dict:
@@ -2433,19 +2444,6 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
         return _not_company_page(region, symbol, str(f["not_company"]))
     desc = description({**f, "name": name})          # the tidied name, as in the title and the h1 (a filing's capitals stay out of the snippet)
     as_of = as_of_text(f)
-    if _num(f.get("price")) is not None and is_close(f) and behind(f):
-        # "Last price, 8 Oct" above: the line under it says what that price is, never "Prices are closing prices" (R13-006)
-        as_of_line = (f"As of {e(as_of)}. The price shown is the close of {e(_date(f.get('price_at')))}, the last this page has; "
-                      "facts from reported results, exchange filings and daily prices. Not investment advice.")
-    elif _num(f.get("price")) is not None and is_close(f):
-        as_of_line = (f"As of {e(as_of)}. Prices are closing prices; facts from reported results, exchange filings and "
-                      "daily prices. Not investment advice.")
-    elif _num(f.get("price")) is not None:              # a last trade, dated by its session (R7V-004)
-        as_of_line = (f"As of {e(as_of)}. The price is the last trade of that session, not yet its close; facts from "
-                      "reported results, exchange filings and daily prices. Not investment advice.")
-    else:                                 # no price to date the page by: say so, never a bare "As of" over no price
-        as_of_line = ("No recent share price is available for this company. Facts from reported results and exchange "
-                      f"filings{', page built ' + e(as_of) if as_of else ''}. Not investment advice.")
     questions = faq_items(f, region, symbol, name, extras) if has_content(f) else []
     ld = _ld([{"@context": "https://schema.org", "@type": "Corporation", "name": name, "tickerSymbol": symbol,
                "url": canonical, **({"industry": (plain_industry if region == "US" else str)(f["industry"][-1])} if f.get("industry") else {})},
@@ -2453,18 +2451,14 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
                   {"@type": "ListItem", "position": 1, "name": "StratLab", "item": site + "/"},
                   {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}, *faq_ld(questions)])
     ind = " · ".join(shown_industry(f.get("industry"), plain=region == "US"))
+    notes = _notes(f)
+    # PUB-2: the name, one quiet line, the price; then the chart; then the key figures; the explanations come last
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
-<p class="eyebrow">{e(f.get("exchange") or country)}{(" · " + e(ind)) if ind else ""}</p>
-<p class="small muted" data-as-of>{as_of_line}</p>"""]
-    about = about_text(f, region, symbol, name) if has_content(f) else ""
-    if about:
-        parts.append(f'<p data-about>{e(about)}</p>')           # SEO-1: this company's own sentences, from the figures below
-    # the range's two prices are one value across two columns, so "₹1,201.43 to ₹1,551.90" never breaks in the middle
-    parts.append('<div class="card grid">' + "".join(
-        f'<div class="stat{" wide" if " to " in val else " long" if len(val) > 12 else ""}"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
-    parts += _notes(f)
-    parts.append(_how(f))
+{_sub_line(f.get("exchange") or country, ind)}{_price_block(f, as_of)}
+<p class="small muted" data-advice>Facts from reported results and exchange filings. Not investment advice.</p>"""]
     parts.append(price_chart_html(f, region, symbol))       # PUB-1: the share price, drawn in the browser from the cached closes
+    parts.append(_figures(f))
+    parts += [n for n in notes if not _is_basis(n)]
     parts.append(_trend(f))
     parts.append(_table(f))
     shown = [y for y in (filing_entry(x) for x in unique_filings(f.get("filings"))) if y]
@@ -2476,9 +2470,14 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
             + "</li>" for x in unique_filings(shown)) + "</ul></div>")
     parts.append(faq_html(questions, name))
     parts.append(_cta(symbol, test, deep))
+    about = about_parts(f, region, symbol, name) if has_content(f) else []
+    if about:
+        # SEO-1: this company's own sentences, from the figures above, one to a line (PUB-2: not one dense paragraph)
+        parts.append(f'<h2>About {e(name)}</h2><div class="card"><ul class="plain" data-about>' + "".join(f"<li>{e(x)}</li>" for x in about) + "</ul></div>")
     for sec in peer_sections(region, symbol, f.get("industry") or [], shown_cap(f)):
         parts.append(f'<h2>{e(sec["title"])}</h2><p class="small muted" data-peers>{e(sec["caption"])}</p>' + _links(region, sec["rows"]))
     parts.append(browse_block(region, symbol))        # SEO-1: the companies before and after it A to Z, its letter's list and its indexes
+    parts.append(_how(f, [n for n in notes if _is_basis(n)]))       # PUB-2: how each figure is worked out, last and folded
     # a company with a price but no reported numbers to show (a filer whose results aren't filed as data) is a short page
     # for a visitor who looks it up, kept out of search results and the sitemap (see has_content)
     return _page(_head(title, desc, canonical, ld, robots="noindex,follow" if f.get("no_numbers") else "index,follow"), app, "".join(parts))
@@ -2534,6 +2533,119 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
             ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of {'$' if f.get('currency') == 'USD' else '₹'}{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy is not None else "n/a")]
     return [(k, v) for k, v in out if v != "–"]
+
+
+# ---------- the top of a company's page (PUB-2) ----------
+TILE_LABEL_MAX = 24            # a tile's label is one short line (two on a phone), never three: the longer wording is its title and the notes at the foot
+
+
+def _sub_line(exchange: str, industry: str) -> str:
+    """One quiet line under the name: where it is listed, its sector and industry, in sentence case; the whole of it is the line's title,
+    for when a long industry is cut short by the page's edge."""
+    ind = industry[:1] + industry[1:].lower() if industry.isupper() else industry
+    text = " · ".join([exchange] + ([ind] if ind else []))
+    return f'<p class="sub muted" title="{e(text)}">{e(text)}</p>\n'
+
+
+def _price_block(f: dict, as_of: str) -> str:
+    """The last close, large, what it moved on its day (the chart's script fills that in from the closes it reads, so a page
+    with no script has none) and the session it is from, small. With no price, the page says so."""
+    price = _num(f.get("price"))
+    if price is None:
+        return ("<p class=\"small muted\" data-as-of>No recent share price is available for this company."
+                f"{' Page built ' + e(as_of) + '.' if as_of else ''}</p>")
+    return (f'<div class="px"><p class="px-line"><b data-price>{e(_money(f, price))}</b><span class="px-chg" data-day hidden></span></p>'
+            f'<p class="small muted" data-as-of>As of {e(as_of)}.</p></div>')
+
+
+def _short_amount(unit: str, text: str) -> str:
+    """A reported amount with its unit as one short value: "₹29,678 cr", "$128,930M", "INR 16.19M"."""
+    sign, text = ("-", text[1:]) if text[:1] in "-−" else ("", text)
+    parts = unit.split()
+    if unit == "₹ crore":
+        return f"{sign}₹{text} cr"
+    if unit.startswith("$") and len(parts) == 2 and parts[1] in ("million", "billion"):
+        return f"{sign}${text}{parts[1][0].upper()}"
+    if len(parts) == 2 and parts[1] in ("million", "billion"):
+        return f"{sign}{parts[0]} {text}{parts[1][0].upper()}"
+    return f"{sign}{text} {unit}".strip()
+
+
+def _tiles(f: dict) -> list[dict]:
+    """The key figures as tiles: a short label, the value, and a small line under it for its unit or period. Built from _stats
+    (the same figures, the same checks), leaving out the price (the header's) and the range (its own row) and any figure that is
+    n/a, so a company with fewer figures has fewer tiles and no gaps; why a figure isn't there is in the notes."""
+    unit = f.get("unit") or ""
+    end = figures_end(f)
+    year = f"year to {_date(end)[-8:]}" if end and _date(end) else "latest reported year"
+    out = []
+    for label, val in _stats(f):
+        if val == "n/a" or label.startswith(("Last ", "1-year range", "Range since")):
+            continue
+        line = ""
+        if label == "Market cap":
+            short, line = "Market cap", "last close × shares"
+        elif label.startswith("P/E"):
+            short = "P/E"
+            line = "on " + (label[label.index("(") + 1:-1] + " profit" if "(" in label else "last 12 months' profit")
+        elif label.startswith("Profit to shareholders"):
+            short, line, val = "Profit, last 12 months", "to shareholders", _short_amount(unit, val)
+        elif label.startswith("Net profit incl."):
+            short, line, val = "Profit incl. minorities", "last 12 months", _short_amount(unit, val)
+        elif label.startswith("Net profit"):
+            short, line, val = "Net profit", "last 12 months", _short_amount(unit, val)
+        elif label.startswith("Dividend yield"):
+            short, line = "Dividend yield", "last 12 months"
+            special = re.match(r"^(.*?) \(incl\. a special dividend of (.*)\)$", val)
+            if special:
+                val, line = special.group(1), f"last 12 months, with a {special.group(2)} special dividend"
+        else:
+            short = re.sub(r" \(year to .*\)$", "", label)
+            line = year
+        out.append({"label": short, "value": val, "line": line, "title": label, "long": len(val) > 12})
+    return out
+
+
+def _range_row(f: dict) -> str:
+    """The year's lowest and highest price as a bar with the last close marked on it, the two ends named (intraday: the range is
+    the year's highest and lowest trade, not closes). Empty when the page has no range."""
+    low, high, price = _num(f.get("low52")), _num(f.get("high52")), _num(f.get("price"))
+    if low is None or high is None:
+        return ""
+    label = f"Range since listing on {_date(f['range_since'])} (intraday)" if f.get("range_since") and _date(f["range_since"]) else "1-year range (intraday)"
+    lo, hi = _money(f, low), _money(f, high)
+    marker = ""
+    said = f"From a low of {lo} to a high of {hi}"
+    if price is not None:
+        at = 50.0 if high <= low else max(0.0, min(100.0, (price - low) / (high - low) * 100))
+        anchor = "start" if at < 22 else "end" if at > 78 else "middle"
+        now = _money(f, price)
+        said += f", with the last close at {now}"
+        marker = (f'<text class="rb-now" x="{at:.1f}%" y="13" text-anchor="{anchor}">Last close {e(now)}</text>'
+                  f'<circle class="rb-dot" cx="{at:.1f}%" cy="32" r="6"/>')
+    return (f'<div class="range" data-range><p class="range-name">{e(label)}</p>'
+            f'<svg class="rbar" width="100%" height="44" role="img" aria-label="{e(said)}"><line class="rb-track" x1="0" x2="100%" y1="32" y2="32"/>{marker}</svg>'
+            f'<p class="range-ends"><span><small>Low</small> <b>{e(lo)}</b></span><span><small>High</small> <b>{e(hi)}</b></span></p></div>')
+
+
+def _figures(f: dict) -> str:
+    """The key figures: the range, then even tiles (four across, three when that leaves fewer empty places; two on a phone). When the
+    last row is short, its last tile takes the places that are left, so the grid has no hole. A page with neither has no card."""
+    tiles, rng = _tiles(f), _range_row(f)
+    n = len(tiles)
+    if not tiles and not rng:
+        return ""
+    cols = min(4 if (-n) % 4 <= (-n) % 3 else 3, max(n, 2))
+    rest = (-n) % cols
+    cells = "".join(f'<div class="stat{" long" if t["long"] else ""}{f" fill{rest + 1}" if rest and i == n - 1 else ""}" title="{e(t["title"])}">'
+                    f'<span>{e(t["label"])}</span><b>{e(t["value"])}</b><small>{e(t["line"])}</small></div>' for i, t in enumerate(tiles))
+    return f'<h2>Key figures</h2><div class="card figs">{rng}' + (f'<div class="tiles c{cols}">{cells}</div>' if tiles else "") + "</div>"
+
+
+def _is_basis(note: str) -> bool:
+    """The two notes that work out a figure (P/E against the profit shown, the last 12 months against the year): they sit at the foot of the page
+    with how every figure is worked out, not between the figures and the chart's neighbours."""
+    return "data-pe-basis" in note or "data-ttm-basis" in note
 
 
 def pe_profit_gap(f: dict):
@@ -2649,8 +2761,9 @@ YIELD_NOTE = ("Dividend yield: every dividend per share with an ex-date in the 1
               "dividends included, as a share of that close. n/a when the company's dividends couldn't be read.")
 
 
-def _how(f: dict) -> str:
-    """How each figure is worked out, so a reader can check one against another."""
+def _how(f: dict, notes: list[str] | None = None) -> str:
+    """How each figure is worked out, so a reader can check one against another. Folded at the foot of the page; its text is in the page for
+    anyone who reads it all, with the notes that work a figure out against another (`notes`)."""
     india = f.get("region") == "IN"
     items = [
         "Last close: the closing price on the date shown. The page follows the market's close; it doesn't show prices "
@@ -2670,8 +2783,8 @@ def _how(f: dict) -> str:
         f"n/m: not meaningful. A margin or return beyond ±{NOT_MEANINGFUL:,.0f}% comes from revenue or equity near zero, so it is "
         "not shown as a number.",
     ]
-    return ('<details class="card how"><summary>How these figures are worked out</summary><ul class="small">'
-            + "".join(f"<li>{e(t)}</li>" for t in items) + "</ul></details>")
+    return ('<details class="card how" data-how><summary>How these figures are worked out</summary>' + "".join(notes or [])
+            + '<ul class="small">' + "".join(f"<li>{e(t)}</li>" for t in items) + "</ul></details>")
 
 
 def _trend(f: dict) -> str:
@@ -2776,7 +2889,7 @@ def price_chart_html(f: dict, region: str, symbol: str) -> str:
     buttons = "".join(f'<button type="button" data-r="{k}" aria-pressed="{"true" if k == "1y" else "false"}">{v}</button>'
                       for k, v in (("1m", "1M"), ("6m", "6M"), ("1y", "1Y"), ("5y", "5Y")))
     buttons += '<button type="button" data-r="all" aria-pressed="false" hidden>All</button>'
-    return (f'<h2>Share price</h2><div class="card chart" data-chart data-src="{e(src)}" data-currency="{"USD" if region == "US" else "INR"}">'
+    return (f'<h2>Share price</h2><div class="card chart" data-chart data-src="{e(src)}" data-currency="{"USD" if region == "US" else "INR"}" data-price="{_num(f.get("price"))}" data-price-at="{e(str(f.get("price_at"))[:10])}">'
             f'<div class="chart-top"><p class="chg"><b data-change></b><span data-change-note class="muted small"></span></p>'
             f'<div class="seg" role="group" aria-label="Chart range" hidden>{buttons}</div></div>'
             '<div class="plot"><p class="plot-note muted small" data-status role="status">Prices load here as you scroll to them.</p>'
@@ -2906,7 +3019,7 @@ def with_surveillance(page: str, flags: list[dict]) -> str:
     block = surveillance_html(flags)
     if not block:
         return page
-    for anchor in ('<div class="card grid">', '<div class="card"><h2>Go further'):
+    for anchor in ('<h2>Share price</h2>', '<h2>Key figures</h2>', '<div class="card"><h2>Go further'):
         i = page.find(anchor)
         if i >= 0:
             return page[:i] + block + page[i:]

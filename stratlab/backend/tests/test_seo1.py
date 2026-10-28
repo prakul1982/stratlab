@@ -307,7 +307,9 @@ def stored_facts(sym: str, region: str = "IN") -> dict:
 
 
 def about_of(html: str) -> str:
-    return re.search(r'<p data-about>(.*?)</p>', html, re.S).group(1).replace("&#x27;", "'").replace("&amp;", "&")
+    """The About section's sentences, one to a line (PUB-2), as one text."""
+    items = re.search(r'<ul class="plain" data-about>(.*?)</ul>', html, re.S).group(1)
+    return " ".join(re.findall(r"<li>(.*?)</li>", items, re.S)).replace("&#x27;", "'").replace("&amp;", "&")
 
 
 def rupees(v: float) -> str:
@@ -331,8 +333,9 @@ def test_the_paragraph_uses_the_pages_own_figures_for_an_indian_company(w):
     assert f"In its latest reported year ({last['year']}) it reported revenue of {rupees(last['sales'])} and net profit of {rupees(last['profit'])}" in text
     assert f"its revenue grew {f['growth']['sales_cagr_3y']:,.1f}% a year" in text and f"its net profit grew {f['growth']['profit_cagr_3y']:,.1f}% a year" in text
     assert f"Its market value is {rupees(f['market_cap'])}" in text and f"with a P/E of {f['pe']:,.1f}" in text
-    assert f"<b>₹{f['price']:,.2f}</b>" in t                              # the stat grid below shows the same last close
-    assert t.index("data-about") < t.index('class="card grid"')
+    assert f"<b data-price>₹{f['price']:,.2f}</b>" in t                   # the header shows the same last close
+    assert t.index("Key figures</h2>") < t.index("data-about") < t.index("data-how")      # PUB-2: the About section is near the end, the explanations last
+    assert t.count("<li>") > 5 and "</li>" in t.split("data-about>")[1]
 
 
 def test_the_paragraph_uses_the_pages_own_figures_for_a_us_company(w):
@@ -373,7 +376,7 @@ def test_no_advice_wording_or_vendor_name_in_any_paragraph_question_or_answer(w)
     seen = 0
     for u in ("/stocks/in/RELIANCE", "/stocks/us/AAPL", "/stocks/in/ONGC", "/stocks/us/MSFT"):
         t = c.get(u).text
-        for chunk in re.findall(r'<p data-about>.*?</p>|<div class="card faq" data-faq>.*?</div>', t, re.S):
+        for chunk in re.findall(r'<ul class="plain" data-about>.*?</ul>|<div class="card faq" data-faq>.*?</div>', t, re.S):
             seen += 1
             assert not ADVICE.search(words(chunk)) and not PROVIDERS.search(words(chunk)), (u, ADVICE.search(words(chunk)))
         assert not ADVICE.search(words(t)), (u, ADVICE.search(words(t)).group(0))

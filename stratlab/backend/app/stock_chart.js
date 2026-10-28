@@ -168,6 +168,22 @@
     adjNote.hidden = !bits.length;
   }
 
+  // what the last close moved on its day, beside the price at the top of the page: the last two closes of the series, only when the series
+  // ends on the day and at the price the page shows (a page older than its series, or a price from another source, shows no move)
+  function dayChange() {
+    var out = document.querySelector("[data-day]"), n = data.t.length;
+    if (!out || n < 2) return;
+    var last = data.c[n - 1], prev = data.c[n - 2], shown = parseFloat(root.getAttribute("data-price")), at = Date.parse(root.getAttribute("data-price-at")) / DAY;
+    if (!(shown > 0) || data.t[n - 1] !== at || data.t[n - 1] - data.t[n - 2] > 5 || Math.abs(last - shown) > shown * 0.005 || !(prev > 0)) return;
+    var d = last - prev, pct = d / prev * 100, flat = Math.abs(pct) < 0.005, sign = flat ? "" : d > 0 ? "+" : "\u2212";
+    var sym = cur === "INR" ? "\u20B9" : "$", mag = Math.abs(d);
+    var amt = sym + new Intl.NumberFormat(loc, { minimumFractionDigits: 2, maximumFractionDigits: mag < 0.1 ? 4 : 2 }).format(mag);
+    out.textContent = flat ? "Unchanged on the day" : sign + amt + " (" + sign + Math.abs(pct).toFixed(2) + "%)";
+    out.setAttribute("data-dir", flat ? "flat" : d > 0 ? "up" : "down");
+    out.setAttribute("aria-label", (flat ? "Unchanged" : d > 0 ? "Up " : "Down ") + (flat ? "" : amt + ", " + Math.abs(pct).toFixed(2) + "%") + " on the day");
+    out.hidden = false;
+  }
+
   function show() {
     var s = slice(range), k = stats(s), n = k.n, up = k.pct >= 0.05, down = k.pct <= -0.05;
     status.hidden = true;
@@ -199,6 +215,7 @@
     }).then(function (j) {
       if (!j || !j.t || j.t.length < 2) throw new Error("none");
       data = j;
+      dayChange();
       Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) {
         var ok = available(b.getAttribute("data-r"));
         b.disabled = !ok;

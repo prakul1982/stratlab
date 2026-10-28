@@ -347,8 +347,8 @@ def test_the_long_tail_is_retried_within_minutes_on_a_fresh_read():
 
 def test_a_page_on_an_older_close_never_says_prices_are_closing_prices_beside_last_price():
     page = stock_pages.render(facts_page(at="2026-09-30"), "US", "RDY", None)
-    assert "Last price, 30 Sep 2026" in page and "Prices are closing prices" not in page
-    assert "The price shown is the close of 30 Sep 2026, the last this page has" in page
+    assert "As of 30 Sep 2026 (the last price this page has" in page and "Prices are closing prices" not in page
+    assert "The price shown is from 30 Sep 2026. The market has closed since" in page          # (PUB-2: the header's line and the note under the figures)
 
 
 # ---------- R13-008: one 365-day window for the US range ----------

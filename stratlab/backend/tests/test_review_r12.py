@@ -330,7 +330,7 @@ def test_pulse_headlines_and_the_mood_never_carry_a_buy_level():
 # ---------- R12-005: BP's market cap, and the item always there ----------
 def test_a_page_with_no_market_cap_always_shows_the_item_and_says_why():
     page = stock_pages.render(facts_page("Mar 2026", market_cap=None, pe=None), "US", "BP", None)
-    assert stat(page, "Market cap") == "n/a" and "data-cap-missing" in page
+    assert stat(page, "Market cap") is None and "data-cap-missing" in page
     assert stock_pages.cap_missing_reason(facts_page("Mar 2026", market_cap=None, pe=None)) == "unknown"
     assert stock_pages.cap_missing_reason(facts_page("Mar 2026", market_cap=None, pe=None, price=None)) is None
 

@@ -239,9 +239,9 @@ def test_public_company_page_shows_the_flags(w):
     block = stock_pages.surveillance_html(S.flags_for("RELIANCE"))
     assert block in page and not PROVIDERS.search(block) and not ADVICE.search(block)
     assert "Exchange surveillance" not in w["client"].get("/stocks/in/TCS").text
-    stored = '<h1>X</h1><div class="card grid"></div>'
+    stored = '<h1>X</h1><h2>Share price</h2><div class="card chart"></div>'
     flags = S.flags_for("RELIANCE")
-    assert stock_pages.with_surveillance(stored, flags).index("data-surveillance") < stored.index("card grid") + 60
+    assert stock_pages.with_surveillance(stored, flags).index("data-surveillance") < stored.index("Share price") + 60          # under the heading, above the chart (PUB-2)
     assert stock_pages.with_surveillance(stored, []) == stored
     assert "&lt;b&gt;" in stock_pages.surveillance_html([{"short": "<b>", "label": "x", "text": "y", "as_of": None}])
 

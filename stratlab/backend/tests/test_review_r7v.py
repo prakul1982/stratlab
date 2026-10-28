@@ -15,6 +15,7 @@ import pytest
 from app import main  # noqa: F401, I001  (first: the app loads the newsletter job before the modules built on it)
 from app import corp_actions, db, library_seed, screens, stock_pages
 from app.intel import net, routes as research_routes, sec
+from tests.tiles import stat
 
 FIX = Path(__file__).parent / "fixtures" / "sec_r7v"
 ROOT = Path(__file__).resolve().parents[2]
@@ -141,12 +142,12 @@ def test_a_pe_on_a_year_that_ended_over_15_months_ago_is_na_and_a_yearly_one_is_
     old = us(symbol="TSM", unit="TWD million", pe=65.5, pe_basis="year", pe_end="2024-12-31", price_at="2026-10-08")
     assert stock_pages.pe_stale(old) and stock_pages.shown_pe(old) is None
     page = stock_pages.render(old, "US", "TSM", None)
-    assert "<span>P/E (year to Dec 2024)</span><b>n/a</b>" in page and "data-pe-old" in page and "65.5" not in page
+    assert stat(page, "P/E (year to Dec 2024)") is None and "data-pe-old" in page and "65.5" not in page
     new = {**old, "pe": 44.7, "pe_end": "2025-12-31"}
     assert not stock_pages.pe_stale(new) and stock_pages.shown_pe(new) == 44.7
-    assert "<span>P/E (year to Dec 2025)</span><b>44.7</b>" in stock_pages.render(new, "US", "TSM", None)
+    assert stat(stock_pages.render(new, "US", "TSM", None), "P/E (year to Dec 2025)") == "44.7"
     # the last four quarters' earnings: plain "P/E"
-    assert "<span>P/E</span><b>20.0</b>" in stock_pages.render(us(pe_basis="ttm", pe_end="2026-06-30"), "US", "ACME", None)
+    assert stat(stock_pages.render(us(pe_basis="ttm", pe_end="2026-06-30"), "US", "ACME", None), "P/E") == "20.0"
 
 
 def test_santander_chiles_2021_profit_isnt_a_loss():
