@@ -20,6 +20,7 @@
 }
 
 .pc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.pc-endtools { display: inline-flex; align-items: center; gap: 6px; }
 .pc-bar .pc-end { display: flex; align-items: center; gap: 6px; margin-left: auto; }   /* the view buttons wrap as one group, kept to the right */
 /* "+ Custom" opens its box over the chart, not in the toolbar's flow, so the toolbar and chart don't jump down (DD-045) */
 .pc-bar .k-chipwrap { position: relative; }

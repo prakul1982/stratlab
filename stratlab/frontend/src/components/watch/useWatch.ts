@@ -2,6 +2,7 @@
  * the same moment; a change the server refuses puts the lists back as the server has them and says why. */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../../lib/app";
+import { adoptWatchlist, onWatchlistSaved, type Region } from "../../lib/research";
 import { createList, deleteList, getLists, putItems, putOrder, renameList, type WatchAnswer } from "../../lib/watchApi";
 import { DEFAULT_ID, type WatchItem, type WatchLimits, type WatchList } from "../../lib/watch";
 
@@ -16,9 +17,17 @@ export function useWatch() {
   const [failed, setFailed] = useState(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const take = useCallback((a: WatchAnswer) => { kept = a; if (alive.current) { setData(a); setFailed(false); } }, []);
+  const take = useCallback((a: WatchAnswer) => {
+    kept = a;
+    if (alive.current) { setData(a); setFailed(false); }
+    // the first list is the Research watchlist: its stocks and ETFs are that list's copy too (MWR1-007)
+    const first = a.lists.find((l) => l.default);
+    if (first) adoptWatchlist(first.items.filter((i) => (i.market === "IN" || i.market === "US") && (i.kind === "stock" || i.kind === "etf")).map((i) => ({ region: i.market as Region, symbol: i.symbol, name: i.name })));
+  }, []);
   const reload = useCallback(() => getLists().then(take).catch((e) => { if (alive.current && !kept) setFailed(true); else if (alive.current) fail(e); }), [take, fail]);
   useEffect(() => { void reload(); }, [reload, me?.id]);
+  // a stock starred (or removed) on a company page while the panel is open: read the lists again, so the next change here is made on them (MWR1-007)
+  useEffect(() => onWatchlistSaved(() => { void reload(); }), [reload]);
 
   /** Change the lists at once on the page, send the change, and take the server's answer; refused: take the server's lists back and say why. */
   const change = useCallback(async (local: (lists: WatchList[]) => WatchList[], send: () => Promise<WatchAnswer>) => {

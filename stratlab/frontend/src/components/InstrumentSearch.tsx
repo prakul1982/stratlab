@@ -52,11 +52,13 @@ const PLACEHOLDER: Record<string, string> = {
  * down move, Enter picks, Esc closes. `kinds` keeps only some instrument types (a SIP takes stocks and ETFs, "EQ" and
  * "ETF"; Indian ETFs trade as "EQ"), in the suggestions and the quick picks alike, and `placeholder` says what fits.
  * The quick picks are the person's own holdings first, then the market's popular ones. */
-export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, placeholder, label, accept }: {
+export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, placeholder, label, accept, noNote }: {
   market: Market; onPick: (i: Instrument) => void; autoFocus?: boolean; compact?: boolean;
   kinds?: string[]; placeholder?: string; label?: string;
   /** A rule beyond `kinds` for what can be picked (Market Watch: no contracts, only the indices it can chart). */
   accept?: (i: Instrument) => boolean;
+  /** Leave out the line explaining the surveillance tags (Market Watch's narrow panel: a paragraph of small print under every result, MWR1-018). */
+  noNote?: boolean;
 }) {
   const { fail, me } = useApp();
   // Indian futures and options are Pro's: on Free and Basic the search finds no contracts, so it says so instead of
@@ -154,7 +156,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
           )}
         </div>
       )}
-      {surv && [...(results ?? []), ...defaults].some((i) => surv.flags[i.symbol]) && <p className="k-note">Small tags such as LT-ASM 2, T2T or F&amp;O ban are the exchange's
+      {!noNote && surv && [...(results ?? []), ...defaults].some((i) => surv.flags[i.symbol]) && <p className="k-note">Small tags such as LT-ASM 2, T2T or F&amp;O ban are the exchange's
         surveillance lists today; a stock's company page explains each.</p>}
     </div>
   );

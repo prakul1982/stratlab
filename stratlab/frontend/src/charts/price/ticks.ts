@@ -17,8 +17,28 @@ export const TF_MS: Record<string, number | null> = {
   "1h": 3_600_000, "2h": 7_200_000, "4h": 14_400_000, "1d": null, "1w": null, "1mo": null,
 };
 
-/** When each market that streams trades, as minutes after midnight on the exchange's clock: [open, close). */
-export const SESSION_MIN: Record<string, [number, number]> = { IN: [9 * 60 + 15, 15 * 60 + 30], MCX: [9 * 60, 23 * 60 + 30], CDS: [9 * 60, 17 * 60] };
+/** When each market that has a session trades, as minutes after midnight on the exchange's clock: [open, close). Crypto, forex and
+ * global commodities trade round the clock and have none. A market read every few seconds (US, UK, Europe, Japan) is in it too:
+ * the source's last price carries the time of the closing print, which must not start a candle after the close (MWR1-001). */
+export const SESSION_MIN: Record<string, [number, number]> = {
+  IN: [9 * 60 + 15, 15 * 60 + 30], MCX: [9 * 60, 23 * 60 + 30], CDS: [9 * 60, 17 * 60],
+  US: [9 * 60 + 30, 16 * 60], UK: [8 * 60, 16 * 60 + 30], EU: [9 * 60, 17 * 60 + 30], JP: [9 * 60, 15 * 60 + 30],
+};
+
+/** A market's session at a moment: MCX's evening session ends at 23:55 while US daylight saving is off (from early November to
+ * March) and at 23:30 while it is on (MWR1-017: a fixed 23:30 stopped the forming candle and the countdown 25 minutes early all winter). */
+export function sessionOf(market: string, at: number): [number, number] | undefined {
+  const s = SESSION_MIN[market];
+  if (!s || market !== "MCX") return s;
+  try {
+    const zone = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", timeZoneName: "short" }).formatToParts(at).find((p) => p.type === "timeZoneName")?.value;
+    return zone === "EST" ? [s[0], 23 * 60 + 55] : s;
+  } catch { return s; }
+}
+
+/** Whether a wall-clock time falls on a Saturday or Sunday: no market with a session trades then, so a price stamped then (a source
+ * that sent no time, read as now) starts no candle. */
+const weekend = (wall: number): boolean => { const d = new Date(wall).getUTCDay(); return d === 0 || d === 6; };
 
 /** The volume this tick adds: what traded since the previous one. The first tick of a chart only sets the mark (what traded
  * before it is in the candles already); a lower number than before is a new day, so it starts again. */
@@ -40,24 +60,41 @@ export function applyTick(last: Bar | undefined, tick: Tick, tf: string, vol: Vo
     // a daily, weekly or monthly candle takes the tick only while the tick is still in its own day, week or month
     const wall = tick.t + (last.w - last.t);
     const same = tf === "1d" ? dayOf(wall) === last.day : periodStart(wall, tf === "1w" ? "week" : "month") === periodStart(last.w, tf === "1w" ? "week" : "month");
-    return same ? { bar: grow(last), isNew: false } : null;
+    if (same) return { bar: grow(last), isNew: false };
+    // the first price of a later trading day starts that day's candle (a chart left open over the open used to stay on
+    // yesterday's until it was reloaded: MWR1-003); only inside the session, and not before the candle's own time
+    if (tf !== "1d" || tick.t <= last.t || dayOf(wall) < last.day) return null;
+    const [open, close] = sessionOf(market, tick.t) ?? [0, 1440];
+    const minutes = ((wall % 86_400_000) / 60_000) | 0;
+    if (minutes < open || minutes >= close || (market in SESSION_MIN && weekend(wall))) return null;
+    const midnight = dayOf(wall) * 86_400_000;
+    return { bar: { t: midnight - (last.w - last.t), w: midnight, o: tick.p, h: tick.p, l: tick.p, c: tick.p, v: add, day: dayOf(wall) }, isNew: true };
   }
   if (tick.t < last.t) return null;
   if (tick.t < last.t + ms) return { bar: grow(last), isNew: false };
   const start = last.t + Math.floor((tick.t - last.t) / ms) * ms;
   const wall = start + (last.w - last.t);
-  const [open, close] = SESSION_MIN[market] ?? [0, 1440];
+  const [open, close] = sessionOf(market, tick.t) ?? [0, 1440];
   const minutes = ((wall % 86_400_000) / 60_000) | 0;
-  if (minutes < open || minutes >= close) return null;
+  if (minutes < open || minutes >= close || (market in SESSION_MIN && weekend(wall))) return null;
   return { bar: { t: start, w: wall, o: tick.p, h: tick.p, l: tick.p, c: tick.p, v: add, day: dayOf(wall) }, isNew: true };
 }
 
 /** Seconds left in the forming candle ("closes in 04:32"), or null when none is forming now: the newest candle's window must
- * hold the present moment. Daily and longer candles have no countdown. */
-export function closesIn(last: Bar | undefined, tf: string, now: number): number | null {
+ * hold the present moment. Daily and longer candles have no countdown. The last candle of a session ends when the market
+ * closes, not when its length is up (a 30-minute candle from 15:15 closes at 15:30; MWR1-002), so with `market` the
+ * countdown stops there. */
+export function closesIn(last: Bar | undefined, tf: string, now: number, market?: string): number | null {
   const ms = TF_MS[tf];
-  if (!last || ms == null || now < last.t || now >= last.t + ms) return null;
-  return Math.max(0, Math.ceil((last.t + ms - now) / 1000));
+  if (!last || ms == null || now < last.t) return null;
+  let end = last.t + ms;
+  const session = market ? sessionOf(market, last.t) : undefined;
+  if (session) {
+    const dayStart = Math.floor(last.w / 86_400_000) * 86_400_000;
+    end = Math.min(end, dayStart + session[1] * 60_000 - (last.w - last.t));
+  }
+  if (now >= end) return null;
+  return Math.max(0, Math.ceil((end - now) / 1000));
 }
 
 /** "4:32", or "1:04:32" from an hour up. */

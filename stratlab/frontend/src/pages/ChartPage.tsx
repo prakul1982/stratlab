@@ -54,7 +54,7 @@ export function ChartPage() {
       <PageHeader eyebrow={MARKET_NAME[item.market]} title={labelOf(item)} lede={subtitleOf(item) !== MARKET_NAME[item.market] ? subtitleOf(item) : undefined}
         actions={<>
           {where ? <span className="k-note">On your list {where.default ? "Watchlist" : where.name}</span>
-            : lists.lists && <Select small label="Add to a list" value="" onChange={(v) => v && void addTo(v)} options={[{ value: "", label: "Add to a list…" }, ...lists.lists.map((l) => ({ value: l.id, label: l.name }))]} />}
+            : lists.lists && <span className="chart-add"><Select small label="Add to a list" value="" onChange={(v) => v && void addTo(v)} options={[{ value: "", label: "Add to a list…" }, ...lists.lists.map((l) => ({ value: l.id, label: l.name }))]} /></span>}
           <button type="button" className="btn quiet sm" onClick={() => openMarkets({ open: true })}>Open Market Watch</button>
         </>} />
       <Card>

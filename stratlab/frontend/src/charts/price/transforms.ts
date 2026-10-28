@@ -155,6 +155,16 @@ export function indexAtOrBefore(bars: { t: number }[], t: number): number {
   return ans;
 }
 
+/** The bars [from, to] (indices) to show when `count` of them are in view around bar `center` of `n`: the window sits inside the
+ * data, so near either end the bar is off the middle rather than the view running past the data (a timeframe change keeps
+ * the moment it was looking at: MWR1-004). */
+export function windowAround(n: number, center: number, count: number): [number, number] {
+  const want = Math.max(2, Math.min(n, Math.round(count)));
+  const c = Math.max(0, Math.min(n - 1, center));
+  const from = Math.max(0, Math.min(n - want, Math.round(c - want / 2)));
+  return [from, from + want - 1];
+}
+
 /** The values the legend, tooltip, change and last-price tag read: always the real bars. Heikin-Ashi changes only how the
  * candle bodies are drawn, so its synthetic opens and closes never reach a number (the replay fills at the real close). */
 export function readoutAt(bars: Bar[], i: number): { bar: Bar; prev: Bar | null } | null {

@@ -43,19 +43,19 @@ def _check_plan(profile, region: str, symbol: str, req: DS.Payload) -> None:
         err(402, "plan_limit", _says(plan, "chart_indicators", "indicators on a chart"))
     if charts is not None and (req.drawings or studies):
         idx = DS._index(profile["id"])
-        if f"{region}:{symbol}" not in idx and len(idx) >= charts:
+        if not DS.holds_work(idx, f"{region}:{symbol}") and DS.kept_charts(idx) >= charts:
             err(402, "plan_limit", _says(plan, "chart_saves", "charts with saved drawings and indicators"))
 
 
 @router.get("/summary")
 def summary(region: str | None = None, symbol: str | None = None, profile=Depends(current_profile)):
-    """How many charts keep drawings, against the plan: for the chart to say so before the limit is met. With a `region` and
+    """How many charts keep drawings or indicators, against the plan: for the chart to say so before the limit is met. With a `region` and
     `symbol`, also whether that chart is one of them."""
     plan = profile["_plan"]
     idx = DS._index(profile["id"])
     r, s = DS.region_of(region or ""), DS.symbol_of(symbol or "")
-    return ok({"charts": len(idx), "limit": PLANS[plan]["chart_saves"], "indicators": PLANS[plan]["chart_indicators"],
-               "saved": bool(r and s and f"{r}:{s}" in idx),
+    return ok({"charts": DS.kept_charts(idx), "limit": PLANS[plan]["chart_saves"], "indicators": PLANS[plan]["chart_indicators"],
+               "saved": bool(r and s and DS.holds_work(idx, f"{r}:{s}")),
                "next": {"charts": bigger_plan(plan, "chart_saves"), "indicators": bigger_plan(plan, "chart_indicators")}})
 
 

@@ -51,8 +51,8 @@ test("a tick after the candle's end starts the next one on the same grid, and no
   const closing = bar("2026-10-23T15:29:00+05:30", 100, 101, 99, 100, 0);
   assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-23T15:31:00+05:30") }, "1m", { cum: null }), null);
   assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-23T15:29:30+05:30") }, "1m", { cum: null }).isNew, false);
-  assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-24T09:00:00+05:30") }, "1m", { cum: null }), null);
-  assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-24T09:15:05+05:30") }, "1m", { cum: null }).bar.t, at("2026-10-24T09:15:00+05:30"));
+  assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-26T09:00:00+05:30") }, "1m", { cum: null }), null);
+  assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-26T09:15:05+05:30") }, "1m", { cum: null }).bar.t, at("2026-10-26T09:15:00+05:30"));
   // an older tick, or a made-up one, is ignored
   assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-23T15:10:00+05:30") }, "1m", { cum: null }), null);
   assert.equal(T.applyTick(closing, { p: NaN, v: null, t: Date.now() }, "1m", { cum: null }), null);
@@ -63,7 +63,8 @@ test("a daily, weekly or monthly candle takes ticks only inside its own day, wee
   const d = bar("2026-10-23T00:00:00+05:30", 100, 105, 98, 101, 9000);
   const same = T.applyTick(d, { p: 107, v: null, t: at("2026-10-23T12:00:00+05:30") }, "1d", { cum: null });
   assert.deepEqual([same.bar.h, same.bar.c, same.isNew], [107, 107, false]);
-  assert.equal(T.applyTick(d, { p: 107, v: null, t: at("2026-10-24T10:00:00+05:30") }, "1d", { cum: null }), null);
+  // the next trading day's first price starts its candle (MWR1-003), only inside the session
+  assert.equal(T.applyTick(d, { p: 107, v: null, t: at("2026-10-26T08:00:00+05:30") }, "1d", { cum: null }), null);
   const w = bar("2026-10-19T00:00:00+05:30", 90, 99, 88, 95, 1);
   assert.ok(T.applyTick(w, { p: 96, v: null, t: at("2026-10-23T10:00:00+05:30") }, "1w", { cum: null }));
   assert.equal(T.applyTick(w, { p: 96, v: null, t: at("2026-10-26T10:00:00+05:30") }, "1w", { cum: null }), null);

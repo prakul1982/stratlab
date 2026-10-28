@@ -23,7 +23,7 @@ const asItem = (r: Row): WatchItem => {
 export default function PublicBoard({ layout, vw, onClose }: { layout: PanelLayout; patch: (p: Partial<PanelLayout>) => void; vw: number; vh: number; onClose: () => void }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [failed, setFailed] = useState(false);
-  const box = useRef<HTMLElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   const sheet = isSheet(vw);
   useDialogFocus(box, sheet, { onEscape: onClose, initial: () => box.current?.querySelector<HTMLElement>(".mw-close") });
   useEffect(() => {
@@ -39,12 +39,12 @@ export default function PublicBoard({ layout, vw, onClose }: { layout: PanelLayo
   }, []);
   const style = { ["--mw-w" as string]: `${layout.w}px`, ["--mw-h" as string]: `${layout.h}px`, ["--mw-x" as string]: "auto", ["--mw-y" as string]: "auto" };
   return (
-    <aside ref={box} className={`mw mw-${sheet ? "sheet" : "dock"} mw-public`} style={style} aria-label="Market Watch" data-testid="market-watch"
+    <div ref={box} className={`mw mw-${sheet ? "sheet" : "dock"} mw-public`} style={style} aria-label="Market Watch" data-testid="market-watch"
       {...(sheet ? { role: "dialog", "aria-modal": true } : { role: "complementary" })}>
-      <header className="mw-head">
+      <div className="mw-head">
         <h2 className="mw-title">Markets</h2>
         <span className="mw-head-btns"><button type="button" className="mw-ic mw-close" aria-label="Close Market Watch" onClick={onClose}><Close size={18} /></button></span>
-      </header>
+      </div>
       <div className="mw-scroll">
         {failed && !rows && <p className="mw-limit" role="status">The prices couldn't be read just now. Trying again in a few seconds.</p>}
         {!rows && !failed && <p className="k-small k-muted mw-pad" role="status">Loading the markets…</p>}
@@ -70,10 +70,10 @@ export default function PublicBoard({ layout, vw, onClose }: { layout: PanelLayo
           </ul>
         )}
       </div>
-      <footer className="mw-foot mw-signin">
+      <div className="mw-foot mw-signin">
         <span>Prices can be delayed. Sign in to keep your own lists, add any market and chart them with drawings and indicators.</span>
         <a className="btn sm" href="/login">Sign in</a>
-      </footer>
-    </aside>
+      </div>
+    </div>
   );
 }
