@@ -2020,7 +2020,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);-webkit
 a{color:var(--blue)}a:hover{color:var(--blue-ink)}:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 main:focus,[data-ads]:focus{outline:none}
 .skip{position:absolute;left:-9999px;padding:12px 16px}.skip:focus{left:16px;top:8px;z-index:2;background:var(--card);border-radius:10px}
-.nav{display:flex;align-items:center;padding:18px clamp(16px,4vw,48px);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;padding:18px max(clamp(16px,4vw,48px),calc((100% - 960px)/2 + clamp(16px,4vw,32px)));border-bottom:1px solid var(--line)}
 .brand{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);min-height:44px;font-size:16.8px}
 .brand svg{height:40px;width:auto}.word{font-family:"Montserrat",var(--sans);font-weight:300;letter-spacing:-.035em}.word b{font-weight:800;letter-spacing:-.045em}
 .nav nav{display:flex;gap:22px;margin-left:auto;margin-right:16px}.nav nav a{display:inline-flex;align-items:center;min-height:36px;color:var(--ink-2);text-decoration:none;font-weight:500;font-size:14.5px}

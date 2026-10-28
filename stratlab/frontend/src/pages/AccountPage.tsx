@@ -22,13 +22,14 @@ const PLAN_NAME: Record<string, string> = { free: "Free", basic: "Basic", pro: "
 
 /** Where each kind of saved data can be deleted on its own page: each one links to the page that has its own delete button.
  * The card also has one download of everything (`/me/export`) and one delete-everything button. */
+// the delete instruction is said once, in the card's line above them (LIVE1B-087: "Delete them on that page" six times)
 const DATA: { to: string; title: string; what: string }[] = [
-  { to: "/holdings", title: "My Holdings", what: "Your shares and ETFs. Delete them on that page." },
-  { to: "/tax-report", title: "Tax report", what: "Your uploaded tradebooks. Delete them on that page." },
-  { to: "/money/mutual-funds", title: "Mutual funds", what: "Your statement and its schemes. Delete them on that page." },
-  { to: "/money/net-worth", title: "Net worth", what: "What you own and owe. Delete it on that page." },
-  { to: "/notebooks", title: "Notebooks and experiments", what: "Your strategies and their results. Delete a notebook from its own page." },
-  { to: "/alerts", title: "Stock alerts", what: "Each alert has its own Delete button." },
+  { to: "/holdings", title: "My Holdings", what: "Your shares and ETFs." },
+  { to: "/tax-report", title: "Tax report", what: "Your uploaded tradebooks." },
+  { to: "/money/mutual-funds", title: "Mutual funds", what: "Your statement and its schemes." },
+  { to: "/money/net-worth", title: "Net worth", what: "What you own and owe." },
+  { to: "/notebooks", title: "Notebooks and experiments", what: "Your strategies and their results." },
+  { to: "/alerts", title: "Stock alerts", what: "The alerts you set." },
 ];
 
 export function AccountPage() {
@@ -145,7 +146,7 @@ export function AccountPage() {
 
       <Card id="data" label="Your data">
         <CardHead title="Your data" info="Download everything StratLab keeps for you as one file (tokens and passwords are left out), delete each kind of data on its own page, or delete all of it at once below." />
-        <p className="k-small k-muted k-hint-line">What you have saved stays with your account and is never shared. Each kind can be deleted on its own page.</p>
+        <p className="k-small k-muted k-hint-line">What you have saved stays with your account and is never shared. Open one of these to delete just that kind: each page has its own Delete button.</p>
         {/* six cards share the row: in four columns the last two left the right half of a row empty (VR4-001) */}
         <TileGrid className="k-linkcards" fill>{DATA.map((d) => <LinkCard key={d.to} to={d.to} title={d.title}>{d.what}</LinkCard>)}</TileGrid>
         <h3 className="k-sub">Download everything</h3>

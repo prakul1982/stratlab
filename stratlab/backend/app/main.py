@@ -3400,7 +3400,8 @@ def zerodha_read(profile) -> dict | None:
 @app.get("/holdings")
 def my_holdings(profile=Depends(current_profile)):
     """The user's holdings at today's prices: value, gain or loss, the day's change and the mix by sector."""
-    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile)})
+    # `zerodha_open`: whether Zerodha login is open for this account, so the page doesn't offer a connection that isn't there (LIVE1B-042)
+    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile), "zerodha_open": bool(_quiet(connect_kite.allowed, profile))})
 
 
 @app.get("/holdings/facts")
@@ -3920,8 +3921,9 @@ def tax_view(profile) -> dict:
     i = tax_inputs(profile)
     mf = tax_mf(profile)
     usr = money_us_routes.for_tax(profile)
+    div_in, div_out = money_routes.dividends_split(profile)
     rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"],
-                          extra=mf["rows"] + usr["rows"], dividends=money_routes.dividends_for_tax(profile), more_years=set(usr["years"]))
+                          extra=mf["rows"] + usr["rows"], dividends=div_in, more_years=set(usr["years"]))
     rep["names"].update(mf["names"])
     rep["names"].update(usr["names"])
     # RC2B-005: the 31 Jan 2018 price is asked for shares only. A fund's sale carries its own grandfathered NAV (the Money
@@ -3929,6 +3931,7 @@ def tax_view(profile) -> dict:
     rep["pre_2018"] = [k for k in rep["pre_2018"] if k in set(i["pre"])]
     for y in rep["years"]:
         y["mutual_funds"] = mf["years"].get(y["fy"])
+        y["dividends_left_out"] = round(div_out.get(y["fy"], 0.0), 2)       # LIVE1B-029: dividends the total doesn't count, said beside it
         y["us"] = {**usr["years"][y["fy"]], "allowed": usr["allowed"], "plan": usr.get("plan")} if y["fy"] in usr["years"] else None
     return {**rep, "corp_left": i["corp_left"], "us_trades": usr["count"], "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
                           "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),

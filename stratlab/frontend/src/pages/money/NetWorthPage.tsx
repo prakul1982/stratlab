@@ -547,7 +547,7 @@ export function NetWorthPage() {
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
                 columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dateOnly(h.d) }, { key: "net", header: "Net worth", numeric: true, cell: (h) => <>{inr(h.net)}{h.partial?.length ? <span className="k-sub-line">partial</span> : null}</> },
                   { key: "a", header: "Assets", numeric: true, cell: (h) => inr(h.assets) }, { key: "l", header: "Loans", numeric: true, cell: (h) => inr(h.liabilities) }] }}>
-              <XYChart series={[{ values: shown.map((h) => h.net), color: "var(--series-1)", label: "Net worth", area: { color: "var(--series-1)", base: Math.min(0, ...shown.map((h) => h.net)) } }]}
+              <XYChart series={[{ values: shown.map((h) => h.net), color: "var(--series-1)", label: "Net worth", area: { color: "var(--series-1)", base: 0 } }]}
                 times={shown.map((h) => h.d)} points={marked} format={(v) => inr(v)} axisFormat={(v) => axisInr(v)} ariaLabel="Net worth over time" height={220} testId="networth-chart" ranges={false} table={false} />
             </ChartFrame>
           )}
@@ -596,7 +596,8 @@ export function NetWorthPage() {
       {adding && view && (
         <Modal title={step === "form" ? `Add: ${FORM[kind].title}` : "Add to your net worth"} onClose={() => { setAdding(false); setStep("pick"); }} wide>
           <div className="k-stack">
-            {view.limit != null && <span className="k-note">{view.count} of {view.limit} entries on your plan · <Link className="link" to="/plans">more with Basic</Link></span>}
+            {/* LIVE1B-073: at the limit the note below says it (and the page behind it says the count): not three times in one dialog */}
+            {view.limit != null && !full && <span className="k-note">{view.count} of {view.limit} entries on your plan · <Link className="link" to="/plans">more with Basic</Link></span>}
             {/* the one lock wording (DP2-022): the plan and its count, then what Basic gives; the note adds the price */}
             {full ? <PlanNote plan="basic">Your {me?.plan_info.name ?? "Free"} plan keeps {view.limit} entries. Delete one to add another. Basic has no limit on entries, and adds the monthly history chart.</PlanNote>
               : step === "pick" ? <TilePicker label="What is it?" groups={TILES} value={kind} onChange={(k) => { setKind(k as Kind); setAddStart(fresh(k as Kind)); setStep("form"); setFieldErrs(null); }} />

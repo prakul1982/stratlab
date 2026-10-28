@@ -15,7 +15,7 @@ export const BROWSE_COMPANIES: [string, string][] = [["/stocks/in", "India A–Z
   ["/stocks/in/index/nifty-50", "NIFTY 50"], ["/stocks/us/index/sp-500", "S&P 500"]];
 // the words people search for, not only the tagline (DK-013: "test it, research it, track it" names no keyword)
 export const HOME_TITLE = "StratLab: backtest trading ideas, research stocks, track money";
-export const HOME_DESCRIPTION = "Test trading ideas on years of real prices and paper trade them; options are paper trading only. Research Indian and US companies from their own filings. Track your holdings, funds and tax. Facts, not tips.";
+export const HOME_DESCRIPTION = "Backtest trading ideas on years of real prices and paper trade them; options are paper trading only. Research companies, track your money. Facts, not tips.";
 
 export type PageMeta = {
   /** the address the page lives at */

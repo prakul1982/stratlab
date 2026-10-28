@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, CFG } from "../../lib/api";
+import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { inr, fmtDate } from "../../lib/format";
 import { Copy, Trash } from "../../components/Icons";
@@ -36,8 +36,9 @@ const monthName = (y: number, m: number) => new Date(y, m, 1).toLocaleDateString
 
 /** The feed's full address, for a calendar app (webcal:// opens the subscribe dialog on Apple devices). */
 function feedUrl(path: string): string {
-  const base = (CFG.API_BASE || window.location.origin).replace(/\/$/, "");
-  return base + path;
+  // LIVE1B-071: the link is the site's own address, not the hosting provider's (every subscribed calendar would have kept it): vercel.json
+  // forwards /money/calendar/feed/ to the server, as the dev and preview servers do
+  return window.location.origin.replace(/\/$/, "") + path;
 }
 
 function EventRow({ e, past }: { e: Ev; past: boolean }) {
@@ -284,8 +285,9 @@ export function MoneyCalendarPage() {
         )}
       </Card>
 
-      <div className="k-two mc-grid">
-        <Card label="Your own dates">
+      {/* LIVE1B-031: the form for your own dates takes the row (its boxes in one line), and the feed and the reminders share the next row
+          at one height: the form beside two stacked cards left 90px of nothing under it */}
+      <Card label="Your own dates">
           <CardHead title={form.id ? "Change your date" : "Add your own date"} info="A fixed deposit maturing, an insurance premium, an EMI, a rent increase: once, or every month or year." />
           <FormGrid onSubmit={(e) => { e.preventDefault(); void saveEvent(); }} label="Your own date">
             <DateField label="Date" value={form.date} onChange={(date) => setForm({ ...form, date })} placeholder={`e.g. ${fmtDate(parse(addDays(today, 30)))}`} />
@@ -304,7 +306,7 @@ export function MoneyCalendarPage() {
           </Earlier>
         </Card>
 
-        <div className="k-page">
+      <div className="k-two mc-grid">
           <Card label="Calendar feed">
             <CardHead title="In your calendar app" info="The link works without signing in, so treat it like a password. Make a new one if it's been shared, or turn it off. Calendar apps check it every few hours." />
             <p className="k-small k-muted">A private link with these dates for the past month and the next year. In Google Calendar: Other calendars, then From URL. On an iPhone or Mac: add a calendar subscription.</p>
@@ -312,7 +314,8 @@ export function MoneyCalendarPage() {
             {view.feed ? (
               <>
                 <input className="k-input mc-url" readOnly value={url} aria-label="Your calendar link" onFocus={(e) => e.target.select()} />
-                <div className="k-row">
+                {/* LIVE1B-072: four buttons of one height in a grid that wraps two and two, not "Turn off" alone on a second row */}
+                <div className="mc-actions">
                   <button type="button" className="btn" onClick={() => copy(url)}><Copy size={16} />Copy link</button>
                   <a className="btn quiet" href={url.replace(/^https?:\/\//, "webcal://")}>Open in calendar app</a>
                   <button type="button" className="btn quiet" disabled={busy} onClick={newFeed}>New link</button>
@@ -346,7 +349,6 @@ export function MoneyCalendarPage() {
               </FormGrid>
             )}
           </Card>
-        </div>
       </div>
 
       <section className="k-stack">

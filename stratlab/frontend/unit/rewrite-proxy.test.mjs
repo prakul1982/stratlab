@@ -14,7 +14,8 @@ test("the forwarded paths are exactly vercel.json's rewrites to the API", () => 
   // /unsubscribe and /email/confirm: email links on the site's own domain, answered by the API (R6V-016); /news-link: a
   // brief's headline in the plain-text email, a short address that forwards to the story (R13-003, added on purpose)
   // /blog: the blog's lists, posts and feed, pages of the API like the company pages (BLOG-1)
-  assert.deepEqual(forwardedPaths().sort(), ["/blog/:path*", "/c/:token", "/email/confirm", "/news-link/:issue/:n", "/sitemap.xml", "/sitemaps/:path*", "/stocks/:path*", "/unsubscribe", "/v/:token"]);
+  // /money/calendar/feed: the Money calendar's private link, on the site's own address (LIVE1B-071: it was the hosting provider's)
+  assert.deepEqual(forwardedPaths().sort(), ["/blog/:path*", "/c/:token", "/email/confirm", "/money/calendar/feed/:token", "/news-link/:issue/:n", "/sitemap.xml", "/sitemaps/:path*", "/stocks/:path*", "/unsubscribe", "/v/:token"]);
   assert.deepEqual(forwardedPaths(), vercel.rewrites.filter(external).map((r) => r.source));
   // the only other rewrite is the app's own catch-all
   assert.deepEqual(vercel.rewrites.filter((r) => !external(r)).map((r) => r.destination), ["/index.html"]);

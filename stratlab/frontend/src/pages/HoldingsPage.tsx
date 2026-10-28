@@ -7,6 +7,7 @@ import { useMarketRefresh } from "../lib/marketLive";
 import { usTodayNote } from "../lib/marketHours";
 import { aFile, ago, asOf as asOfText, dateOnly, fmtDate, inr, istToday, marketTz, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
+import { NoBreak } from "../components/NoBreak";
 import { Trash } from "../components/Icons";
 import { track } from "../lib/analytics";
 import { HoldingsActionsPanel } from "../components/HoldingsActions";
@@ -40,6 +41,8 @@ type View = {
   us?: UsTotals | null; usd_inr?: number | null; usd_inr_at?: string | null; us_prices?: boolean | null;
   /** the connected Zerodha account's last read (R7M-009); absent when it isn't connected */
   zerodha?: ZerodhaRead | null;
+  /** whether Zerodha login is open for this account (LIVE1B-042: "Connect Zerodha" was offered where it isn't there) */
+  zerodha_open?: boolean;
 };
 type Facts = {
   stage: number | null; st_up: boolean | null; signal: string | null; red: number | null; amber: number | null; flags: string[];
@@ -236,7 +239,7 @@ export function HoldingsPage() {
 
       <Card>
         <CardHead title="Import from your broker" info={<>Download your holdings as Excel or CSV from {BROKERS} (usually Portfolio › Holdings › Download), then upload it here. Any other CSV works too with columns for Symbol (or ISIN), Quantity and Average price.</>}
-          actions={rows.length > 0 ? <Seg label="What the file does" options={[{ value: "replace", label: "Replace my holdings" }, { value: "add", label: "Add to them" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} /> : undefined} />
+          actions={rows.length > 0 ? <Seg label="What the file does" options={[{ value: "add", label: "Add to my holdings" }, { value: "replace", label: "Start again with this file" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} /> : undefined} />
         <div className="k-row">
           <UploadButton label="Upload holdings file" busy={reading} accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Holdings file" onFiles={pick} />
           <span className="k-note">Excel or CSV, up to {MAX_MB} MB.</span>
@@ -246,12 +249,12 @@ export function HoldingsPage() {
           ? null      // the empty state below already says Zerodha is connected and returned nothing (R35: said twice)
           : view?.zerodha
           ? <p className="k-note">Zerodha is connected. <Link to="/settings#accounts">Refresh it or connect your statement inbox in Settings</Link>, so this stays up to date without uploads.</p>
-          : <p className="k-note">Prefer not to upload each time? <Link to="/settings#accounts">Connect Zerodha or your statement inbox once</Link> and this stays up to date by itself.</p>}
+          : <p className="k-note">Prefer not to upload each time? <Link to="/settings#accounts">{view?.zerodha_open === false ? "Connect your statement inbox once" : "Connect Zerodha or your statement inbox once"}</Link> and this stays up to date by itself.</p>}
         {result && (
           <div className="k-stack" role="status">
             <p className="k-small">
               <b>Read as {aFile(result.broker)}:</b>{" "}
-              {result.duplicate ? "you added this same file before, so your holdings are unchanged. To read it again, choose Replace my holdings."
+              {result.duplicate ? "you added this same file before, so your holdings are unchanged. To read it again, choose Start again with this file."
                 : result.saved ? `${result.imported} stock${result.imported === 1 ? "" : "s"} saved.${result.replaced && result.usKept > 0 ? ` Your ${result.usKept} US stock${result.usKept === 1 ? " is" : "s are"} kept: a file replaces your Indian holdings only.` : ""}`
                 : "nothing matched, so your saved holdings are unchanged."}
               {result.unmatched_count > 0 && ` ${result.unmatched_count} line${result.unmatched_count === 1 ? "" : "s"} couldn't be matched (below).`}
@@ -299,7 +302,7 @@ export function HoldingsPage() {
                 Add {t.no_cost.count === 1 ? "its buy price" : "their buy prices"} with Edit to count {t.no_cost.count === 1 ? "it" : "them"}.
               </p>
             )}
-            {view.us && usTodayNote(markets, view.us, view.usd_inr, new Date(), false) && <p className="k-note" data-testid="us-today">{usTodayNote(markets, view.us, view.usd_inr, new Date(), false)}</p>}
+            {view.us && usTodayNote(markets, view.us, view.usd_inr, new Date(), false) && <p className="k-note" data-testid="us-today"><NoBreak text={usTodayNote(markets, view.us, view.usd_inr, new Date(), false)!} /></p>}
             {t.session && (t.other_session?.length ?? 0) > 0 && (
               <p className="k-note">Today is the {fmtDate(t.session, { year: false })} session. {t.other_session!.join(", ")} {t.other_session!.length === 1 ? "has" : "have"} not traded in it yet, so {t.other_session!.length === 1 ? "its" : "their"} last change is left out of Today.</p>
             )}

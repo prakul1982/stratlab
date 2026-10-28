@@ -86,7 +86,7 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   assert.match(evc, /\.ev-weekgrid > \.ev-week \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\);/);
   assert.match(evc, /\.ev-remind \{ display: grid; grid-template-columns: minmax\(0, 1\.4fr\) minmax\(0, 1fr\);/);
   // the plans: each card its own height, its button under its list
-  assert.match(css, /\.k-plans \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\); gap: var\(--s4\); align-items: start; \}/);
+  assert.match(css, /\.k-plans \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\); gap: var\(--s4\); align-items: stretch; \}/);
   const allow = JSON.parse(read("e2e/ui-lint.allow.json")).allow;
   assert.deepEqual(allow.map((x) => `${x.page} ${x.rule} ${x.element}`), ["/plans R1 k-plan"]);
   // the company page: the peers' tiles in equal rows, the news under them

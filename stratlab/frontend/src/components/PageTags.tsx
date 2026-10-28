@@ -4,7 +4,7 @@ import { planOf } from "../lib/plans";
 import type { NavPage } from "../lib/nav";
 import { useApp } from "../lib/app";
 import { featureTag } from "../lib/offer";
-import { gateFor } from "../lib/gates";
+import { gateFor, PART_WORDS } from "../lib/gates";
 
 /** The small tag on a page's card: the plan, when the page is on a paid one this viewer lacks (no "New" tags: everything
  * is new at launch, owner 25 Oct). A paid
@@ -20,7 +20,7 @@ export function PageTags({ page }: { page: NavPage }) {
   // lib/gates.ts: the lock is for whole pages only (as in the menu); a page with a paid part and no gate of its own says so in
   // nav.ts (`part`: My Holdings' filings and dividends, DP2-009)
   const part = gate ? gate.whole === false : !!page.part;
-  const got = featureTag(plan, me?.offer, { paid: me?.paid_plan ?? me?.plan, canUse: !!(flag && me?.plan_info?.features?.[flag]), part });
+  const got = featureTag(plan, me?.offer, { paid: me?.paid_plan ?? me?.plan, canUse: !!(flag && me?.plan_info?.features?.[flag]), part, what: flag ? PART_WORDS[flag] : undefined });
   // a page the person's own plan has needs no plan badge: badges say what is locked (or open only for now) for this viewer
   // (DI-031: Basic saw "Basic (On the Basic plan)" on every page it already had)
   const tag = got && (got.locked || got.label !== (plan === "pro" ? "Pro" : "Basic")) ? got : null;

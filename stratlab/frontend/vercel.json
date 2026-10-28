@@ -143,6 +143,10 @@
       "destination": "https://stratlab-production-ca25.up.railway.app/c/:token"
     },
     {
+      "source": "/money/calendar/feed/:token",
+      "destination": "https://stratlab-production-ca25.up.railway.app/money/calendar/feed/:token"
+    },
+    {
       "source": "/stocks/:path*",
       "destination": "https://stratlab-production-ca25.up.railway.app/stocks/:path*"
     },

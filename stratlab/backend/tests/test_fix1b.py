@@ -122,3 +122,117 @@ def test_live1b_064_a_category_keeps_no_stray_hyphen():
     assert money_mf.broad_of("Equity Scheme - Flexi Cap Fund", "equity") == ("Equity", "Flexi Cap Fund")
     assert money_mf.broad_of("Debt Scheme - Short Duration Fund", "debt") == ("Debt", "Short Duration Fund")
     assert money_mf.broad_of("Other Scheme - Index Funds", "equity") == ("Equity", "Index funds")
+
+
+# ---------- Net worth ----------
+@pytest.fixture
+def nw_w(monkeypatch):
+    """The page is read on Monday 5 October 2026, 10:30 IST (as tests/test_money_networth.py reads it)."""
+    import time_machine
+    from tests import fake_prices
+    day = datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(fake_prices, "FROZEN", day)
+    with time_machine.travel(day, tick=True):
+        built = world.build(monkeypatch)
+        main._nw_prices.clear()
+        yield built
+        main._nw_prices.clear()
+        built["close"]()
+
+
+def test_live1b_023_the_total_is_the_sum_of_the_rows_as_shown(nw_w):
+    c = nw_w["client"]
+    for v in (1000.4, 2000.4, 3000.4):
+        r = c.post("/money/net-worth/items", headers=PRO, json={"kind": "cash", "value": v})
+        assert r.status_code == 200, r.text
+    got = c.get("/money/net-worth", headers=PRO).json()
+    shown = sum(round(r["value"]) for r in got["assets"])
+    assert shown == 6000 and got["totals"]["assets"] == 6000 and got["totals"]["net"] == 6000       # not 6001 over rows that add to 6000
+    assert got["allocation"][0]["value"] == 6000
+
+
+def test_live1b_063_todays_snapshot_follows_the_page_when_my_holdings_move(nw_w):
+    c = nw_w["client"]
+    assert c.post("/money/net-worth/items", headers=PRO, json={"kind": "cash", "value": 50000}).status_code == 200
+    first = c.get("/money/net-worth", headers=PRO).json()
+    assert first["history"][-1]["net"] == first["totals"]["net"] == 50000
+    # My Holdings change after the entry did: the headline moves, and today's snapshot with it
+    holdings.save("u-pro", [{"symbol": "RELIANCE", "exchange": "NSE", "name": "Reliance", "qty": 10.0, "avg": 2400.0}], "Manual")
+    second = c.get("/money/net-worth", headers=PRO).json()
+    assert second["totals"]["net"] > 50000
+    assert second["history"][-1]["net"] == second["totals"]["net"] and second["history"][-1]["d"] == first["history"][-1]["d"]
+    assert len(second["history"]) == len(first["history"])                                      # the same day's snapshot, not a new one
+    # a snapshot of an earlier day is that day's fact
+    from app import money_networth as nw
+    nw.record("u-pro", {"net": 1.0, "assets": 1.0, "liabilities": 0.0}, "month", datetime(2026, 9, 1).date())
+    third = c.get("/money/net-worth", headers=PRO).json()
+    assert [h["net"] for h in third["history"] if h["d"] == "2026-09-01"] == [1.0]
+
+
+
+# ---------- Tax tools and the tax report ----------
+def test_live1b_034_the_dividends_page_waits_only_a_few_seconds_for_company_histories(w, monkeypatch):
+    from app import money_routes
+    seen = {}
+    monkeypatch.setattr(main, "_corp_histories", lambda uid, syms, today, sync=8, wait=12.0: seen.setdefault("wait", wait) or 0)
+    holdings.save("u-pro", [{"symbol": "TCS", "exchange": "NSE", "name": "TCS", "qty": 5.0, "avg": 3000.0}], "Manual")
+    assert w["client"].get("/money/dividends", headers=PRO).status_code == 200
+    assert seen["wait"] == money_routes.DIVIDEND_WAIT <= 6.0
+
+
+def test_live1b_029_dividends_left_out_of_the_total_are_said_beside_it(w, monkeypatch):
+    from app import money_routes
+    c = w["client"]
+    monkeypatch.setattr(money_routes, "dividend_parts", lambda uid, fetch=True: (
+        {"rows": [], "files": [], "include": {}, "updated_at": None},
+        [{"d": "2025-06-10", "sym": "INFY", "qty": 100.0, "ps": 18.0, "amount": 1800.0, "cur": "INR", "src": "estimated", "label": "Dividend", "ex": "2025-06-10", "country": "IN"}],
+        [], None))
+    got = money_routes.dividends_split({"id": "u-pro"})
+    assert got[0] == {} and got[1].get(2025) == 1800.0                    # estimated: left out until included, and said
+    assert c.post("/tax/import", headers=PRO, json={"filename": "t.csv", "data": base64.b64encode(
+        b"Date,Symbol,ISIN,Type,Quantity,Price\n2025-05-02,INFY,INE009A01021,BUY,10,1500\n2025-11-03,INFY,INE009A01021,SELL,10,1400\n").decode(), "mode": "replace"}).status_code == 200
+    rep = c.get("/tax", headers=PRO).json()
+    y = next(x for x in rep["years"] if x["fy"] == 2025)
+    assert y["dividends_left_out"] == 1800.0
+
+
+def test_live1b_039_a_return_not_needed_says_when_dividends_are_not_in_it(w, monkeypatch):
+    from app import money_routes
+    c = w["client"]
+    monkeypatch.setattr(money_routes, "dividend_parts", lambda uid, fetch=True: (
+        {"rows": [], "files": [], "include": {}, "updated_at": None},
+        [{"d": "2025-06-10", "sym": "INFY", "qty": 100.0, "ps": 18.0, "amount": 1800.0, "cur": "INR", "src": "estimated", "label": "Dividend", "ex": "2025-06-10", "country": "IN"}],
+        [], None))
+    assert c.post("/tax/import", headers=PRO, json={"filename": "t.csv", "data": base64.b64encode(
+        b"Date,Symbol,ISIN,Type,Quantity,Price\n2025-05-02,INFY,INE009A01021,BUY,10,1500\n2025-11-03,INFY,INE009A01021,SELL,10,1400\n").decode(), "mode": "replace"}).status_code == 200
+    got = c.get("/money/itr?fy=2025", headers=PRO).json()
+    by = {s["label"]: s["value"] for s in got["summary"]}
+    assert by["Dividends in the year (India)"] == "₹1,800"
+    # within the basic exemption: the answer names what it leaves out
+    assert "dividends of ₹1,800 are not counted in it" in by["Return needed"]
+
+
+# ---------- US stocks tax ----------
+def test_live1b_060_a_made_up_us_ticker_is_refused_under_its_box(w, monkeypatch):
+    c = w["client"]
+    monkeypatch.setattr(main, "_sec_companies", lambda: [{"symbol": "AAPL", "name": "Apple Inc.", "cik": 320193}])
+    main.suggester.clear()
+    # the fake price feed prices any ticker: only the list of US companies decides here
+    monkeypatch.setattr(main, "_us_find", lambda sym: main.suggester.find(sym, "US"))
+    bad = c.post("/money/us-tax/trades", headers=PRO, json={"d": "2024-01-05", "side": "S", "sym": "ZZZZ", "qty": 1, "price": 100, "fees": 0})
+    assert bad.status_code == 422, bad.text
+    d = bad.json()["detail"]
+    assert d["fields"]["sym"] == "No US-listed company has the ticker ZZZZ. Check the spelling." and d["code"] == "unknown_ticker"
+    ok = c.post("/money/us-tax/trades", headers=PRO, json={"d": "2024-01-05", "side": "B", "sym": "AAPL", "qty": 1, "price": 100, "fees": 0})
+    assert ok.status_code == 200, ok.text
+    assert [t["sym"] for t in ok.json()["trades"]] == ["AAPL"]                  # the refused one was not kept
+
+
+# ---------- Blog ----------
+def test_live1b_082_the_blogs_lists_are_kept_by_the_cache_for_minutes_not_a_day(w):
+    c = w["client"]
+    for path in ("/blog", "/blog/briefs", "/blog/research"):
+        r = c.get(path)
+        assert r.status_code == 200, path
+        cc = r.headers["cache-control"]
+        assert "s-maxage=600" in cc and "s-maxage=86400" not in cc, f"{path}: {cc}"

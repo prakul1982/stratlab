@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../../lib/api";
+import { api, type ApiError } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ET, ago, dateOnly, dayIn, inr, money, qty as qtyText, signTone } from "../../lib/format";
 import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { fyLink, movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
+import { tradeProblems } from "../../lib/validate";
 import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton, useUploadProblem } from "../../components/kit";
 
 /* /money/us-tax: US share sales in rupees the way the Income-tax Rules convert them, long or short term under the
@@ -93,16 +94,25 @@ export function UsTaxPage() {
     return () => { live = false; };
   }, [asked, fail, tries]);
 
+  // each box's problem is said under it (LIVE1B-061: a negative share count was refused with no words, and a made-up ticker was kept)
+  const [errs, setErrs] = useState<Partial<Record<"d" | "sym" | "qty" | "price" | "fees", string>>>({});
   const add = async () => {
     const body = { d: form.d, side: form.side, sym: form.sym.trim().toUpperCase(), qty: Number(form.qty), price: Number(form.price), fees: Number(form.fees || 0) };
-    if (!body.d || !body.sym || !(body.qty > 0) || !(body.price >= 0) || form.price === "") { notify("Fill in the date, ticker, shares and price."); return; }
+    const bad = tradeProblems(form);
+    setErrs(bad);
+    if (Object.keys(bad).length) return;
     setBusy(true);
     try {
       setV(await api<View>("/money/us-tax/trades", { method: "POST", body }));
       setForm(blank);
+      setErrs({});
       notify(`${body.side === "B" ? "Purchase" : "Sale"} of ${body.sym} added.`);
       track("us trade added", { side: body.side });
-    } catch (e) { fail(e); } finally { setBusy(false); }
+    } catch (e) {
+      const f = (e as ApiError).fields;
+      if (f && Object.keys(f).length) setErrs(f as typeof errs);       // the server's own check, under its box
+      else fail(e);
+    } finally { setBusy(false); }
   };
   const pick = async (files: FileList | null, reset: () => void) => {
     const f = files?.[0];
@@ -136,7 +146,10 @@ export function UsTaxPage() {
   };
 
   const y = v?.years.find((x) => x.fy === v.fy) ?? v?.years[0];
-  const set = (k: keyof typeof blank) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k: keyof typeof blank) => (e: { target: { value: string } }) => {
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+    setErrs((x) => ({ ...x, [k]: undefined }));
+  };
 
   const tradeCols: Column<Trade>[] = [
     { key: "d", header: "Date", rowHeader: true, cell: (t) => dateOnly(t.d) },
@@ -152,12 +165,10 @@ export function UsTaxPage() {
     { key: "bought", header: "Bought", numeric: true, cell: (r) => dateOnly(r.bought) },
     { key: "sold", header: "Sold", numeric: true, cell: (r) => dateOnly(r.sold) },
     { key: "qty", header: "Shares", numeric: true, cell: (r) => qtyText(r.qty) },
-    { key: "cost", header: "Cost", numeric: true, cell: (r) => usd(r.cost_usd) },
-    { key: "rb", header: "Rate used", cardLabel: "Rate used at purchase", cell: (r) => rateText(r.rate_buy) },
-    { key: "costinr", header: "Cost (₹)", numeric: true, cell: (r) => <>{inr(r.indexed_cost ?? r.cost)}{r.indexed_cost != null && <span className="k-sub-line">indexed</span>}</> },
-    { key: "sale", header: "Sale", numeric: true, cell: (r) => usd(r.sale_usd) },
-    { key: "rs", header: "Rate used", cardLabel: "Rate used at sale", cell: (r) => rateText(r.rate_sell) },
-    { key: "saleinr", header: "Sale (₹)", numeric: true, cell: (r) => inr(r.sale) },
+    // LIVE1B-027: twelve columns ran past the card and cut off the sale's rupees; each rupee figure carries its dollars and the rate used
+    // under it, so the row is eight columns and fits
+    { key: "costinr", header: "Cost (₹)", numeric: true, wrap: true, cell: (r) => <>{inr(r.indexed_cost ?? r.cost)}<span className="k-sub-line">{usd(r.cost_usd)} at {rateText(r.rate_buy)}{r.indexed_cost != null ? ", indexed" : ""}</span></> },
+    { key: "saleinr", header: "Sale (₹)", numeric: true, wrap: true, cell: (r) => <>{inr(r.sale)}<span className="k-sub-line">{usd(r.sale_usd)} at {rateText(r.rate_sell)}</span></> },
     { key: "gain", header: "Gain (₹)", numeric: true, up: true, cell: (r) => <span className={tone(r.gain)}>{inr(r.gain)}</span> },
     { key: "term", header: "Term", cell: (r) => (r.term === "LT" ? `Long, ${r.rate === 0.2 ? "20%" : "12.5%"}` : "Short, slab") },
   ];
@@ -204,12 +215,12 @@ export function UsTaxPage() {
         {uploadError && <p className="k-small k-down" role="alert" data-testid="us-upload-error">{uploadError}</p>}
         <div role="group" aria-label="Add a trade" className="us-add">
           <FormGrid onSubmit={(e) => { e.preventDefault(); void add(); }}>
-            <DateField label="Date" value={form.d} max={today()} onChange={(d) => set("d")({ target: { value: d } })} ariaLabel="Trade date" />
+            <DateField label="Date" value={form.d} max={today()} onChange={(d) => set("d")({ target: { value: d } })} ariaLabel="Trade date" error={errs.d} />
             <Field label="Trade">{(id) => <Select id={id} value={form.side} label="Purchase or sale" onChange={(x) => setForm((f) => ({ ...f, side: x as "B" | "S" }))} options={[{ value: "B", label: "Purchase" }, { value: "S", label: "Sale" }]} />}</Field>
-            <Field label="Ticker" value={form.sym} onChange={set("sym")} placeholder="AAPL" maxLength={10} aria-label="Ticker" />
-            <Field label="Shares" type="number" inputMode="decimal" min={0} step="any" value={form.qty} onChange={set("qty")} aria-label="Shares" />
-            <Field label="Price" unit="$" type="number" inputMode="decimal" min={0} step="any" value={form.price} onChange={set("price")} aria-label="Price in dollars" />
-            <Field label="Fees" optional unit="$" type="number" inputMode="decimal" min={0} step="any" value={form.fees} onChange={set("fees")} aria-label="Fees in dollars" />
+            <Field label="Ticker" value={form.sym} onChange={set("sym")} placeholder="AAPL" maxLength={10} aria-label="Ticker" error={errs.sym} />
+            <Field label="Shares" type="number" inputMode="decimal" step="any" value={form.qty} onChange={set("qty")} aria-label="Shares" error={errs.qty} />
+            <Field label="Price" unit="$" type="number" inputMode="decimal" step="any" value={form.price} onChange={set("price")} aria-label="Price in dollars" error={errs.price} />
+            <Field label="Fees" optional unit="$" type="number" inputMode="decimal" step="any" value={form.fees} onChange={set("fees")} aria-label="Fees in dollars" error={errs.fees} />
             <FormActions><button type="submit" className="btn" disabled={busy}>Add trade</button></FormActions>
           </FormGrid>
         </div>
@@ -227,7 +238,7 @@ export function UsTaxPage() {
           <p className="k-small">The split history of {v.missing_history.join(", ")} couldn't be read, so no splits are applied to {v.missing_history.length === 1 ? "its" : "their"} trades; check them against your broker's statement.</p>
         )}
         {v && Object.keys(v.short).length > 0 && (
-          <p className="k-small">Sold with no purchase in your trades: {Object.entries(v.short).map(([s, q]) => `${s} (${qtyText(q)} shares)`).join(", ")}. Their gain isn't counted; add the purchases.</p>
+          <p className="k-small">Sold with no purchase in your trades: {Object.entries(v.short).map(([s, q]) => `${s} (${qtyText(q)} share${q === 1 ? "" : "s"})`).join(", ")}. Their gain isn't counted; add the purchases.</p>
         )}
         {v && v.trades.length > 0 && (
           <Disclosure summary={<>{v.trades.length} trade{v.trades.length === 1 ? "" : "s"}{v.files.length ? ` · last file ${ago(v.files[v.files.length - 1].at)}` : ""}</>}>

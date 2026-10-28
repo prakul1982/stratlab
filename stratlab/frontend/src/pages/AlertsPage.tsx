@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { ago } from "../lib/format";
-import { eyebrowOf } from "../lib/eyebrow";
 import { CHANNEL_NAME, alertsApi, type AlertsPage as Page, type StockAlert } from "../lib/alerts";
 import { AlertForm } from "../components/AlertForm";
 import { Bell, Pencil, Trash } from "../components/Icons";
@@ -51,7 +50,8 @@ export function AlertsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/alerts")} title="Your stock alerts"
+      {/* no eyebrow: this page is in Invest's map and in My space's menu, and the breadcrumb above says where it was opened from (LIVE1B-044: "INVEST · WATCH" over "My space › Stock alerts") */}
+      <PageHeader title="Your stock alerts"
         lede="A message when a stock crosses a price, an average or an RSI level, moves a lot in a day, or makes a 52-week high or low. Checked every minute while its market is open." />
       {error && <ErrorState title="Your alerts couldn't be opened" action={{ label: "Try again", onClick: load }}>{error}</ErrorState>}
       {!page && !error && <Card><Skeleton label="Opening your alerts" lines={3} /></Card>}

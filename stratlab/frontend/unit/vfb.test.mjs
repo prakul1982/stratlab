@@ -18,7 +18,9 @@ test("VR1-147: the US tax tables are phone cards, with a sale's gain right under
   const p = read("src/pages/money/UsTaxPage.tsx");
   for (const l of ["US trades", "US sales in rupees", "US dividends and credit", "Open US lots", "Schedule FA"]) assert.match(p, new RegExp(`<DataTable stack (phonePage=\\{10\\} )?label="${l}"`));
   assert.match(p, /key: "gain", header: "Gain \(₹\)", numeric: true, up: true/);
-  assert.match(p, /cardLabel: "Rate used at purchase"/);
+  // LIVE1B-027: the rates used sit under each rupee figure (twelve columns ran past the card): they are still said, for the purchase and the sale
+  assert.match(p, /\{usd\(r\.cost_usd\)\} at \{rateText\(r\.rate_buy\)\}/);
+  assert.match(p, /\{usd\(r\.sale_usd\)\} at \{rateText\(r\.rate_sell\)\}/);
   assert.match(read("src/components/kit/DataTable.tsx"), /c\.up && "k-first"/);
   assert.match(css, /\.k-tbl-wrap\.stack\.has-up \.k-table td\.k-first \{ order: -1; \}/);
 });

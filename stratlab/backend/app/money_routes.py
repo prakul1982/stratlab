@@ -56,6 +56,9 @@ def today() -> date:
     return datetime.now(IST).date()
 
 
+DIVIDEND_WAIT = 5.0              # seconds the dividends page waits on company histories it has to fetch (LIVE1B-034)
+
+
 # ---------- dividends ----------
 def dividend_parts(uid: str, fetch: bool = True) -> tuple[dict, list[dict], list[dict], float | None]:
     """(stored, estimated, ahead, rupees a dollar) for the user: what they uploaded, and the estimate from My Holdings
@@ -69,7 +72,9 @@ def dividend_parts(uid: str, fetch: bool = True) -> tuple[dict, list[dict], list
     syms = [i["symbol"] for i in ind]
     corp_actions.prefetch("IN", syms)
     if fetch and syms:
-        M._corp_histories(uid, syms, t)
+        # LIVE1B-034: a first read for an account of ~170 stocks held the page for 19.9 s waiting on company histories (12 s here, then the
+        # rest of the work): the page waits a few seconds, the rest are read in the background and the page says it is still reading
+        M._corp_histories(uid, syms, t, wait=DIVIDEND_WAIT)
     cal = corp_actions.load("IN")["rows"]
     acts = {s: corp_actions.actions_for("IN", s, None, t, fetch=False, cal=cal) for s in syms}
     paid, ahead = divs.estimate(ind, acts, t, h["updated_at"])
@@ -97,14 +102,23 @@ def dividend_view(profile, fetch: bool = True) -> dict:
     return out
 
 
-def dividends_for_tax(profile) -> dict[int, float]:
-    """{fy: dividends} the user includes in the tax report's total estimate. Never stops the report."""
+def dividends_split(profile) -> tuple[dict[int, float], dict[int, float]]:
+    """({fy: dividends} the user includes in the tax report's total estimate, {fy: dividends} that exist and are taxable but are
+    left out of it). Estimated dividends are left out until the person includes them (LIVE1B-029), and a total that leaves them out
+    says so beside its figure. Never stops the report."""
     try:
         stored, est, ahead, rate = dividend_parts(profile["id"], fetch=False)
-        return divs.for_total(divs.view(stored, est, ahead, rate, today()))
+        v = divs.view(stored, est, ahead, rate, today())
+        out = {y["fy"]: y["total"] for y in v["years"] if y["taxed"] and y["source"] != "none" and not y["include"] and y["total"] > 0}
+        return divs.for_total(v), out
     except Exception as e:
         print("dividends for the tax report:", str(e)[:160])
-        return {}
+        return {}, {}
+
+
+def dividends_for_tax(profile) -> dict[int, float]:
+    """{fy: dividends} the user includes in the tax report's total estimate. Never stops the report."""
+    return dividends_split(profile)[0]
 
 
 def import_from_tax_file(profile, data: bytes, filename: str) -> int:

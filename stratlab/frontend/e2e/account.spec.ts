@@ -289,7 +289,7 @@ test("settings: what you see first, theme, connected accounts and the connection
   // focus and experience save with the same call as before
   await main.getByRole("radiogroup", { name: "What you're here for" }).getByRole("radio", { name: "Invest" }).click();
   await expect.poll(async () => (await (await request.get(`${API}/me`, { headers: auth(u) })).json()).prefs).toMatchObject({ focus: "invest", space: "invest" });
-  await main.getByRole("radiogroup", { name: "Experience" }).getByRole("radio", { name: "I do this actively" }).click();
+  await main.getByRole("radiogroup", { name: "How experienced you are" }).getByRole("radio", { name: "I do this actively" }).click();
   await expect.poll(async () => (await (await request.get(`${API}/me`, { headers: auth(u) })).json()).prefs.level).toBe("pro");
   await expect(main).toContainText("Every tool in view");
 

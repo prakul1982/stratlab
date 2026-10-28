@@ -25,7 +25,7 @@ export function restatedNote(hist: { d: string; m?: number }[], valuation: numbe
   today: string = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })): string | null {
   if (valuation == null || !hist.some((h) => (h.m ?? 1) !== valuation)) return null;
   const first = hist.find((h) => (h.m ?? 1) === valuation);
-  return `Holdings are valued a different way since ${day((first?.d ?? today))}, so the change since an earlier day isn't shown. It shows from the next day's snapshot.`;
+  return `Holdings are valued a different way from ${day((first?.d ?? today))}, so no change is shown against earlier days. A change shows from the next day.`;
 }
 
 /** The expected-rate note under a repo-linked loan; says so when there is no repo history to work the spread from, and

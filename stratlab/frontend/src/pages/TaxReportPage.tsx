@@ -49,6 +49,8 @@ type Year = {
   intraday: { count: number; buy: number; sell: number; pnl: number; turnover: number; stt?: number; stt_estimated?: boolean }; gf_missing: number; gf_applied: number; count: number; rows: Sale[];
   business: Business; total: Total; inputs: Inputs; other_regime: { regime: "new" | "old"; total: number } | null; filing: string[]; turnover: number;
   mutual_funds?: MfYear | null;
+  /** dividends of the year that exist but are not in the total (estimated ones are left out until included in Tax tools), LIVE1B-029 */
+  dividends_left_out?: number;
   units?: Units | null;
   us?: UsYear;
 };
@@ -520,6 +522,11 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
       <CardHead title={`Total tax estimate, ${y.label}`} infoLabel="What the total covers"
         info="Slab tax on your other income, intraday and F&O results, plus tax on share gains at the special rates, less the section 87A rebate where it applies, plus surcharge and 4% cess. It is worked out for an individual of the age band and residency you choose below. Advance tax and TDS already paid aren't taken off." />
       <p className="k-small k-muted">Covers only the income you enter or import here: the trades in your files and the other income you type below, for an individual of the age band and residency you choose. House property, foreign income, other capital assets and anything else left out aren't counted, and advance tax and TDS already paid aren't included.{filing && <> <a className="link" href="#tax-filing">Which return and whether a tax audit applies</a>.</>}</p>
+      {(y.dividends_left_out ?? 0) > 0 && (
+        <Notice tone="warn" label="Dividends left out" role="note" action={{ label: "Include them in Tax tools", to: fyLink("/money/tax-tools", y.fy) }}>
+          <b>Dividends of {inr(y.dividends_left_out)} in {y.label} are not counted in this total.</b> They are taxable income; the total counts them once you include them in Tax tools.
+        </Notice>
+      )}
       {t.confirmed === false && <p className="k-small k-down" role="note"><b>Rules for this year not yet confirmed.</b> The figures repeat the year before until they are checked against the Finance Act.</p>}
       {t.available ? (
         <>

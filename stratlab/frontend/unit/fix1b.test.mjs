@@ -168,3 +168,138 @@ test("LIVE1B-017: a total with nothing to say is left out of the costs and habit
 test("LIVE1B-064: the footer date is the day it was worked out, not a second 'as of'", () => {
   assert.match(read("src/pages/money/MutualFundsPage.tsx"), /Worked out on \{dateOnly\(view\.as_of\)\}\./);
 });
+
+// ---------- Money home, Net worth, US tax, ITR, Tax tools, Calendar, Journal ----------
+test("LIVE1B-020: a signed US figure is one unbreakable piece; the US tile's label is short", async () => {
+  const nb = read("src/components/NoBreak.tsx");
+  assert.match(nb, /text\.split\(\/\(\[−\+-\]\?\[\$₹\]\[\\d,\]\+\(\?:\\\.\\d\+\)\?\)\/\)/);
+  assert.match(nb, /className="k-nb"/);
+  assert.match(read("src/styles.css"), /\.k-nb \{ white-space: nowrap; \}/);
+  for (const f of ["src/pages/HoldingsPage.tsx", "src/pages/MineHome.tsx", "src/pages/SpaceHomes.tsx"]) assert.match(read(f), /<NoBreak text=/, f);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /<Fig label="US stocks" value=\{money\(h\.us\.value, "USD"\)\}/);
+});
+
+test("LIVE1B-021: Money home's two summary cards are one height", () => {
+  assert.match(read("src/styles.css"), /\.space-panels\.money-panels \{ align-items: stretch; \}/);
+});
+
+test("LIVE1B-022: a part-paid page's tag says which part", async () => {
+  const { featureTag } = await import("../src/lib/offer.ts");
+  assert.equal(featureTag("pro", null, { canUse: false, part: true, what: "advance tax" }).label, "Pro for advance tax");
+  assert.equal(featureTag("basic", null, { canUse: false, part: true }).label, "Basic for part");        // a page with no named part keeps the old words
+  const { PART_WORDS } = await import("../src/lib/gates.ts");
+  for (const f of ["tax_tools", "us_tax", "itr_export"]) assert.ok(PART_WORDS[f], f);
+  assert.match(read("src/components/PageTags.tsx"), /what: flag \? PART_WORDS\[flag\] : undefined/);
+});
+
+test("LIVE1B-024: the restated-holdings note is plain words", async () => {
+  const { restatedNote } = await import("../src/lib/networth.ts");
+  const n = restatedNote([{ d: "2026-10-28", m: 1 }, { d: "2026-10-29", m: 2 }], 2, (d) => d, "2026-10-29");
+  assert.equal(n, "Holdings are valued a different way from 2026-10-29, so no change is shown against earlier days. A change shows from the next day.");
+  assert.doesNotMatch(n, /snapshot/);
+});
+
+test("LIVE1B-025: a group of two, three or five tiles fills its row", () => {
+  assert.match(read("src/components/kit/TilePicker.tsx"), /<div className="k-tiles" data-n=\{g\.tiles\.length\}>/);
+  const css = read("src/styles.css");
+  assert.match(css, /@container \(min-width: 720px\) \{\n  \.k-tiles\[data-n="2"\] \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}\n  \.k-tiles\[data-n="3"\] \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}\n  \.k-tiles\[data-n="5"\] \{ grid-template-columns: repeat\(5, minmax\(0, 1fr\)\); \}/);
+});
+
+test("LIVE1B-026: the loan sentence is not a live region; LIVE1B-073: a full plan says its limit once in the dialog", () => {
+  assert.doesNotMatch(read("src/pages/money/LoanCheck.tsx"), /<p className="k-small" role="status">Your entered rate is/);
+  assert.match(read("src/pages/money/NetWorthPage.tsx"), /\{view\.limit != null && !full && <span className="k-note">/);
+});
+
+test("LIVE1B-027: each sale in rupees is eight columns, the rate under each rupee figure", () => {
+  const p = read("src/pages/money/UsTaxPage.tsx");
+  const cols = p.slice(p.indexOf("const saleCols"), p.indexOf("const divCols"));
+  assert.equal((cols.match(/\{ key: "/g) ?? []).length, 8);
+  assert.doesNotMatch(cols, /header: "Rate used"/);
+});
+
+test("LIVE1B-060, 061: the add-a-trade form says what is wrong under each box", async () => {
+  const { tradeProblems } = await import("../src/lib/validate.ts");
+  assert.deepEqual(tradeProblems({ d: "2024-01-05", sym: "AAPL", qty: "2", price: "100", fees: "" }), {});
+  const bad = tradeProblems({ d: "", sym: " ", qty: "-3", price: "", fees: "-1" });
+  assert.equal(bad.d, "Pick the date.");
+  assert.equal(bad.sym, "Type the ticker, like AAPL.");
+  assert.equal(bad.qty, "Enter more than 0 shares.");
+  assert.equal(bad.price, "Enter the price in dollars.");
+  assert.match(bad.fees, /^Enter \$0 or more\./);
+  assert.equal(tradeProblems({ d: "2024-01-05", sym: "A", qty: "", price: "5", fees: "" }).qty, "Enter the number of shares.");
+  const p = read("src/pages/money/UsTaxPage.tsx");
+  assert.match(p, /error=\{errs\.sym\}/);
+  assert.match(p, /error=\{errs\.qty\}/);
+  assert.doesNotMatch(p, /min=\{0\} step="any"/);                                              // the browser's own bubble no longer stops a negative count silently
+  assert.match(p, /share\$\{q === 1 \? "" : "s"\}/);                                            // "1 share", not "1 shares"
+});
+
+test("LIVE1B-028: the ITR page's answers are tiles, its other figures a list, its schedules one card, its sources a fold", () => {
+  const p = read("src/pages/money/ItrExportPage.tsx");
+  assert.match(p, /const HEADLINE = \/\^\(Total tax estimate\|Payable now\)\/;/);
+  assert.match(p, /<dl className="k-dl figs" aria-label="The year's figures">/);
+  assert.match(p, /<ul className="k-fold-rows" aria-label="Schedules with lines">/);
+  assert.match(p, /<Disclosure summary="Where the figures come from, and the assumptions">/);
+  assert.match(read("src/styles.css"), /\.k-dl\.figs > div \{ flex-direction: row; justify-content: space-between;/);
+});
+
+test("LIVE1B-029: dividends left out of the total are said beside it", () => {
+  const t = read("src/pages/TaxReportPage.tsx");
+  assert.match(t, /dividends_left_out\?: number;/);
+  assert.match(t, /<Notice tone="warn" label="Dividends left out"/);
+  assert.match(t, /are not counted in this total\.<\/b>/);
+});
+
+test("LIVE1B-030: the Tax tools page is titled Tax tools", () => {
+  assert.match(read("src/pages/money/TaxToolsPage.tsx"), /<PageHeader eyebrow="Money · Tax" title="Tax tools"/);
+});
+
+test("LIVE1B-031, 072: the form for your own dates takes the row; the feed's four buttons are one height", () => {
+  const p = read("src/pages/money/MoneyCalendarPage.tsx");
+  assert.match(p, /<Card label="Your own dates">/);
+  assert.match(p, /<div className="k-two mc-grid">\n\s*<Card label="Calendar feed">/);
+  assert.match(p, /<div className="mc-actions">/);
+  assert.match(read("src/styles.css"), /\.mc-actions \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(150px, 1fr\)\);/);
+});
+
+test("LIVE1B-032, 050: the trade journal is a private page for the question and the trackers; the question's height is kept clear at the page's foot", async () => {
+  const ads = await import("../src/lib/ads.ts");
+  assert.equal(ads.trackAllowedOn("/trade/journal"), false);
+  assert.equal(ads.adsAllowedOn("/trade/journal"), false);
+  assert.equal(ads.trackAllowedOn("/trade/positioning"), true);
+  assert.match(read("src/components/Tracking.tsx"), /root\.style\.setProperty\("--consent-h", `\$\{el\.offsetHeight \+ 16\}px`\)/);
+  const css = read("src/styles.css");
+  assert.match(css, /body:not\(:has\(\.shell\)\) \{ padding-bottom: var\(--consent-h, 0px\); \}/);
+  assert.match(css, /@media \(max-width: 900px\) \{ \.shell \{ padding-bottom: var\(--consent-h, 0px\); \} \}/);
+});
+
+test("LIVE1B-033, 056, 057, 058: the journal's line under the title is one sentence, its choice a compact control, its checks two by two, its curve placed by date", async () => {
+  const { JOURNAL_LEDE, JOURNAL_COVERS } = await import("../src/lib/journalTax.ts");
+  assert.ok(JOURNAL_LEDE.length < 90 && JOURNAL_COVERS.length > JOURNAL_LEDE.length);
+  const p = read("src/pages/trade/JournalPage.tsx");
+  assert.match(p, /\{anyTrades && <Seg label="What the file does" options=\{\[\{ value: "add", label: "Add to my trades" \}, \{ value: "replace", label: "Replace imported trades" \}\]\}/);
+  assert.doesNotMatch(p, /label="Add to or replace the imported trades"/);
+  assert.doesNotMatch(p, /<p className="k-mono k-small">(Yours|Gross)/);
+  assert.match(p, /x=\{pts\.map\(\(p\) => Date\.parse\(p\.t\)\)\}/);
+  assert.match(read("src/pages/trade/journal.css"), /minmax\(min\(100%, 380px\), 1fr\)/);
+});
+
+test("LIVE1B-062: a line below zero gets a tick at or below its lowest point; the area runs to the zero line", () => {
+  const x = read("src/components/chart/XYChart.tsx");
+  assert.match(x, /if \(ymin < 0 && all\.length && all\[0\] > floor\)/);
+  assert.match(read("src/pages/money/NetWorthPage.tsx"), /area: \{ color: "var\(--series-1\)", base: 0 \}/);
+});
+
+test("LIVE1B-071: the calendar's link is on the site, forwarded to the server", () => {
+  const v = JSON.parse(read("vercel.json"));
+  const r = v.rewrites.find((x) => x.source === "/money/calendar/feed/:token");
+  assert.equal(r.destination, "https://stratlab-production-ca25.up.railway.app/money/calendar/feed/:token");
+  assert.ok(v.rewrites.indexOf(r) < v.rewrites.findIndex((x) => x.destination === "/index.html"), "before the page rewrite that would catch /money/...");
+  const p = read("src/pages/money/MoneyCalendarPage.tsx");
+  assert.match(p, /return window\.location\.origin\.replace\(\/\\\/\$\/, ""\) \+ path;/);
+  assert.doesNotMatch(p, /CFG\.API_BASE/);
+});
+
+test("LIVE1B-019, 037: a Stat in a half-width tile still fits (the duo check counts a shrunk figure as not fitting)", () => {
+  assert.match(read("src/components/kit/Stat.tsx"), /\(v\.classList\.contains\("one"\) \? fitFigure\(v\)/);
+});

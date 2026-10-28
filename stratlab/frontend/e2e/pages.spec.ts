@@ -88,7 +88,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Invest home"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "Briefs"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Tax tools"], ["/news", "Briefs"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
   ["/admin", "Needs your attention"], ["/admin/data", "Background jobs"], ["/admin/system", "Check every feature"], ["/admin/users", "Paper trading now"],
   ["/admin/money", "Prices outside India"], ["/admin/quality", "Rates and rules"], ["/admin/emails", "Confirm your email"],
@@ -334,7 +334,7 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await expect(table.getByRole("columnheader", { name: "Trend", exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Recent filings")).toBeVisible();
   expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
-  await page.getByRole("radio", { name: "Add to them" }).click();
+  await page.getByRole("radio", { name: "Add to my holdings" }).click();
   await page.locator("input[type=file]").setInputFiles(HOLDINGS_FILES + "groww_holdings_statement.xlsx");
   await expect(page.getByText("Read as a Groww file")).toBeVisible({ timeout: 30_000 });   // matching a first file reads the stock lists
   const missed = page.getByRole("table", { name: "Lines that couldn't be matched" });
@@ -1597,7 +1597,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   expect((await request.put(`${API}/tax/inputs`, { headers: auth, data: { fy, regime: "new", other: 2000000, salary: 2000000, deductions: 0 } })).ok()).toBeTruthy();
 
-  const errors = await open(page, "/money/tax-tools", "Dividends, advance tax and the long-term exemption", sessionAs(token, id, email));
+  const errors = await open(page, "/money/tax-tools", "Tax tools", sessionAs(token, id, email));
   await settle(page);
   await expect(page.getByText(/not tax advice/).first()).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
@@ -1661,6 +1661,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   await settle(page);
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("link", { name: "Tax tools" })).toBeVisible();      // a line in the total's card, no card of its own (LIVE1B-011)
   await page.getByLabel("Financial year").selectOption(String(fy));
+  await page.getByRole("region", { name: "Total tax estimate" }).getByText("How we got here").click();        // the workings are folded (LIVE1B-010)
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByText(/Dividends of ₹15,000 are income from other sources/)).toBeVisible();
   expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
 });

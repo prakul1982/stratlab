@@ -47,6 +47,20 @@ export function qtyProblem(text: string, market: "IN" | "US", lim: Limits, kept?
   return null;
 }
 
+/** Each box of the add-a-trade form that can't be sent, with why (the date is checked by its own picker's limit). */
+export function tradeProblems(f: { d: string; sym: string; qty: string; price: string; fees: string }): Partial<Record<"d" | "sym" | "qty" | "price" | "fees", string>> {
+  const out: Partial<Record<"d" | "sym" | "qty" | "price" | "fees", string>> = {};
+  if (!f.d) out.d = "Pick the date.";
+  if (!f.sym.trim()) out.sym = "Type the ticker, like AAPL.";
+  const q = numberProblem(f.qty, { min: 0, above: true });
+  if (q) out.qty = q === "Fill this in." ? "Enter the number of shares." : q.startsWith("Enter more than") ? "Enter more than 0 shares." : q;
+  const p = numberProblem(f.price, { min: 0, max: 1e7, unit: "$" });
+  if (p) out.price = p === "Fill this in." ? "Enter the price in dollars." : p;
+  const fee = numberProblem(f.fees, { min: 0, optional: true, unit: "$" });
+  if (fee) out.fees = fee;
+  return out;
+}
+
 /** The problems of a whole form: field key → message, only for the fields with one. */
 export function problems<K extends string>(checks: Record<K, string | null>): Partial<Record<K, string>> {
   const out: Partial<Record<K, string>> = {};

@@ -107,6 +107,12 @@ export function PlansPage() {
     return `${rs}${chargeAboutNote(!!shown.charged, shown.shown, shown.about)}${shown.charged || currency === "INR" ? "" : ` (shown as ${shown.shown})`}, every ${period}`;
   };
 
+  /** The amount charged, alone, for the dialog's button (LIVE1B-079: "Continue to payment" did not say what it would charge). */
+  const chargeAmount = (p: "basic" | "pro") => {
+    const own = row && currency !== "INR" && (period === "year" ? row.yearly_charged_in : row.charged_in) === currency;
+    return own ? money(row, (row as unknown as Record<string, number>)[period === "year" ? `${p}_year` : p], currency) : rupeeCharge(rupees(p, period), gst);
+  };
+
   const ownCurrency = row && currency !== "INR" && (period === "year" ? row.yearly_charged_in : row.charged_in) === currency ? currency : undefined;
 
   // signed in: hold until the account has answered, so the signed-out page is never drawn for someone who is signed in
@@ -204,7 +210,7 @@ export function PlansPage() {
       <LegalLinks blog />
       {switching && (
         <ConfirmDialog title={paid !== "free" && me ? `Switch to ${planName(switching)}?` : `Subscribe to ${planName(switching)}?`}
-          confirmLabel="Continue to payment" danger={false}
+          confirmLabel={`Continue to payment · ${chargeAmount(switching)}`} danger={false}
           onClose={() => setSwitching(null)} onConfirm={() => { const p = switching; setSwitching(null); void subscribe(p); }}>
           <span data-testid="plan-confirm">
             {planName(switching)} plan, billed {period === "year" ? "yearly" : "monthly"}: {chargeWords(switching)}. It renews automatically

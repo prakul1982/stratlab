@@ -82,8 +82,9 @@ function ExperienceCards() {
             onChange={(f) => void savePrefs({ focus: f as Focus, space: viewForFocus(f as Focus)! })} />
           {focus && <p className="k-small k-muted k-hint-line">{FOCUSES.find(([f]) => f === focus)?.[2]}</p>}
         </FieldGroup>
-        <FieldGroup label="Experience">
-          <Seg label="Experience" options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} value={level ?? ""} onChange={(l) => void setLevel(l as Level)} />
+        {/* LIVE1B-041: named for what it asks, not for the tab it is in */}
+        <FieldGroup label="How experienced you are">
+          <Seg label="How experienced you are" options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} value={level ?? ""} onChange={(l) => void setLevel(l as Level)} />
           {level && <p className="k-small k-muted k-hint-line">{LEVELS.find(([l]) => l === level)?.[2]}</p>}
         </FieldGroup>
         </div>
@@ -127,7 +128,7 @@ function ConnectedAccounts() {
         <LinkCard to="/money/mutual-funds" title="Mutual funds statement" note={note(mf, noun(mf?.count, "scheme", "schemes"))}>Upload your Consolidated Account Statement (PDF or CSV).</LinkCard>
         <LinkCard to="/tax-report" title="Broker tradebooks" note={note(tax, noun(tax?.count, "file", "files"))}>Upload tradebooks and tax P&amp;L files from any broker for your capital gains.</LinkCard>
       </TileGrid>
-      <Notice label="Keeping up to date">A file stays as it was until you upload a newer one. Connect once below and statements, Zerodha and US stocks update by themselves.</Notice>
+      <Notice label="Keeping up to date">A file stays as it was until you upload a newer one. Connect once below and what a connection covers updates by itself.</Notice>
     </Card>
   );
 }

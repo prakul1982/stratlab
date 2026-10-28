@@ -34,7 +34,11 @@ export function AlertSettingsCard() {
     : routes != null && !routes.length ? `Send a test works once alerts have somewhere to go: ${ways.length > 1 ? `${ways.slice(0, -1).join(", ")} or ${ways[ways.length - 1]}` : ways[0] ?? "turn on phone notifications"}.`
     : null;
 
+  const [emailErr, setEmailErr] = useState<string | null>(null);
   const save = async (emailsBackOn = false) => {
+    // LIVE1B-066: a malformed address is said under its box in the app's words (the browser's own bubble pointed into the hint text)
+    if (alerts.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(alerts.email.trim())) { setEmailErr("That email address doesn't look right. It needs an @ and a domain, like name@example.com."); return; }
+    setEmailErr(null);
     try {
       await api("/me/alerts", { method: "PUT", body: { alerts_enabled: canAlert && alerts.enabled, telegram_chat_id: alerts.tg.trim() || null, alert_email: alerts.email.trim() || null, daily_report: alerts.daily, ...(emailsBackOn ? { alert_emails: true } : {}) } });
       await refreshMe(); setCode("");
@@ -65,7 +69,7 @@ export function AlertSettingsCard() {
     // named apart from Invest's stock alerts (/alerts): these are the paper trades' messages and the daily report (DI-017)
     <Card id="alerts" label="Paper-trade alerts and the daily report">
       <CardHead title="Paper-trade alerts and the daily report" info={HELP.alerts} actions={!canReport ? <Badge tone="warn">Basic</Badge> : undefined} />
-      <FormGrid label="Alerts" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+      <FormGrid label="Alerts" noValidate onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <FieldGroup label="What to send" wide>
           <div className="k-stack">
             {/* off and marked Basic on a plan without it, never ticked-and-grey as if it were on (DP2-030) */}
@@ -75,7 +79,7 @@ export function AlertSettingsCard() {
               label={<>A message for every paper trade{!canAlert && <span className="k-inline-badge"><Badge tone="warn">Basic</Badge></span>}</>} />  {/* on Basic, as Plans lists it (R6O-012) */}
           </div>
         </FieldGroup>
-        {ch.telegram && <Field label="Telegram chat ID" optional info="Open the StratLab bot and press Start, then message @userinfobot to find your chat ID."
+        {ch.telegram && <Field label="Telegram chat ID" optional wide info="Open the StratLab bot and press Start, then message @userinfobot to find your chat ID."
           value={alerts.tg} disabled={!canReport} inputMode="numeric" maxLength={40} onChange={(e) => setAlerts({ ...alerts, tg: e.target.value })} />}
         {ch.telegram && tgState === "verified" && <p className="k-small k-hint-line" data-testid="telegram-verified">Verified</p>}
         {ch.telegram && tgState === "unsaved" && !!alerts.tg.trim() && <p className="k-small k-muted k-hint-line">After you save, we'll send a code to this chat. Enter it here to turn on Telegram alerts.</p>}
@@ -88,8 +92,11 @@ export function AlertSettingsCard() {
           </FormActions>
         </div>}
         {/* empty, alerts go to the address you sign in with: shown in the box, so an empty box doesn't read as "no email" (DP2-030) */}
-        {ch.email && <Field label="Email" optional type="email" value={alerts.email} disabled={!canReport} maxLength={200} placeholder={me.email ?? ""}
-          hint={!alerts.email.trim() && me.email ? "Empty: alerts go to the email you sign in with." : undefined} onChange={(e) => setAlerts({ ...alerts, email: e.target.value })} />}
+        {/* LIVE1B-040, 070: the box takes the row (the address was cut off at 190px and its hint squeezed beneath it), and its placeholder
+            says what an empty box means instead of an address that reads as filled in */}
+        {ch.email && <Field label="Email" optional wide type="email" value={alerts.email} disabled={!canReport} maxLength={200} placeholder={me.email ? "Your sign-in email" : ""}
+          hint={!alerts.email.trim() && me.email ? "Empty: alerts go to the email you sign in with." : undefined} error={emailErr}
+          onChange={(e) => { setAlerts({ ...alerts, email: e.target.value }); setEmailErr(null); }} />}
         {/* which alerts this card holds and which are chosen elsewhere: an alert email's "Manage emails" opens the page its
             alerts were set on, and the rest land here (R69-002); across the form's width, not squeezed into one column (DP2-030) */}
         {ch.email && <p className="k-small k-muted k-hint-line k-form-wide" data-testid="alert-where">Price alerts, scan and filing alerts, event

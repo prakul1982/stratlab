@@ -119,6 +119,7 @@ def gather(profile, fy: int) -> dict:
             "audit": tax_total.audit_applies(fy, y.get("turnover") or 0, business), "business": business,
             "fno_lines": int(sum(b["trades"] for b in i["business"] if b["fy"] == fy)), "rows": [r for r in equity if r["fy"] == fy], "unit_rows": [r for r in unit_rows if r["fy"] == fy], "names": c["names"], "files": i["data"]["files"],
             "fmv_src": i["fmv_src"], "div_lines": lines, "div_source": src, "div_year": dyear,
+            "div_left_out": round(dyear["total"], 2) if dyear and dyear.get("taxed") and src != "none" and not dyear.get("include") and dyear.get("total", 0) > 0 else 0.0,
             "us_div": money_us_routes.us_dividends(profile, fy, y), "fa": money_us_routes.fa_for(profile, fy),
             "us_count": usr["count"], "us_allowed": usr["allowed"], "us_warning": ((usr.get("years") or {}).get(fy) or {}).get("warning"),
             "tds": saved["tds"], "paid": saved["paid"],
@@ -651,7 +652,8 @@ def summary(g: dict) -> list[tuple[str, str]]:
         out.append(("Interest under sections 234A, 234B and 234C", money(p["interest_234a"] + p["interest_234b"] + p["interest_234c"])))
         out.append(("Payable now, with the interest" + (" and late fee" if p["fee_234f"] else ""), money(p["total"])))
         if not p.get("return_needed", True):       # RC2B-003: a year within the basic exemption needs no return, so no late fee
-            out.append(("Return needed", f"No: total income {money(p['income'])} is within the {money(p['exempt'])} basic exemption limit (section 139(1))"))
+            left = (f"; dividends of {money(g['div_left_out'])} are not counted in it (include them in Tax tools)" if g.get("div_left_out") else "")
+            out.append(("Return needed", f"No: total income {money(p['income'])} is within the {money(p['exempt'])} basic exemption limit (section 139(1)){left}"))
     if g.get("audit"):
         out.append(("Tax audit (section 44AB)", "Applies: report by " + tax_due.day(tax_due.due(g["fy"], "audit_report")["date"])
                     + ", return by " + tax_due.day(tax_due.due(g["fy"], "audit")["date"])))
