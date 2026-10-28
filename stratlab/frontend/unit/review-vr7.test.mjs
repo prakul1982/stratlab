@@ -39,3 +39,21 @@ test("VR7-007: on a visitor's wide page the cookie question is a slim bar along 
   assert.match(css, /@media \(min-width: 901px\) \{\n  body:not\(:has\(\.shell\)\) \.consent \{ left: 16px; right: 16px; width: auto; flex-direction: row;/);
   assert.match(css, /\.consent \{ position: fixed; right: 16px; bottom: 16px;/);          // the corner card is still the base
 });
+
+test("VR7-008: a chart with a drawing rail is at least as tall as the rail (the Market Watch panel's 260px chart had a rail 100px taller hanging below it)", () => {
+  const css = read("src/charts/price/priceChart.css");
+  assert.match(css, /\.pc-main:has\(> \.pc-rail\) \{ align-items: stretch; \}/);
+  assert.match(css, /\.pc-main:has\(> \.pc-rail\) > \.pc-stage \{ height: auto; min-height: var\(--pc-h, 420px\); \}/);
+});
+
+test("VR7-009: the Market Watch panel's controls are 44px targets on a phone or a touch screen", () => {
+  const css = read("src/components/watch/watch.css");
+  const block = css.slice(css.indexOf("VR7-009"));
+  assert.match(block, /@media \(max-width: 900px\), \(pointer: coarse\) \{/);
+  for (const rule of [/\.mw-ic \{ width: 44px; height: 44px; \}/, /\.mw-tab \{ min-height: 44px; \}/, /\.mw-grip \{ width: 44px; \}/, /\.mw-dots \{ width: 44px; height: 44px; \}/, /\.mw-back \{ min-height: 44px; \}/]) assert.match(block, rule);
+});
+
+test("VR7-010: on a phone the chart's reset and full-screen buttons sit after the scale buttons in the foot, not alone on a line of the toolbar", () => {
+  const css = read("src/charts/price/priceChart.css");
+  assert.match(css, /\.pc-foot-r \{ flex-wrap: nowrap; justify-content: stretch; gap: 6px; \}\n  \.pc-foot-r \.pc-end \{ order: 2; \}/);
+});

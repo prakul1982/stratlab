@@ -44,6 +44,10 @@
 
 .pc-main { display: flex; gap: 6px; align-items: flex-start; min-width: 0; }
 .pc-main .pc-stage { flex: 1 1 auto; min-width: 0; }
+/* VR7-008: a short chart (the Market Watch panel's 260px) had a drawing rail of nine tools 100px taller than itself, hanging below the chart: the chart is at
+   least as tall as its rail (the rail sets the row's height, the chart takes it) */
+.pc-main:has(> .pc-rail) { align-items: stretch; }
+.pc-main:has(> .pc-rail) > .pc-stage { height: auto; min-height: var(--pc-h, 420px); }
 .pc-stage { position: relative; height: var(--pc-h, 420px); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
   background: var(--card); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .pc-stage:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
@@ -196,13 +200,14 @@
   /* VR7-001: the range and scale buttons were 44 high but only 32 wide (eleven of them) and eight ranges of 44px do not fit a 326px card on one row.
      The ranges are two rows of four, the scale buttons one row, both across the card, so each is 44px or more each way and none is hidden */
   .pc-foot { flex-direction: column; align-items: stretch; gap: 8px; }
-  .pc-foot-r { justify-content: stretch; }
+  .pc-foot-r { flex-wrap: nowrap; justify-content: stretch; gap: 6px; }
+  .pc-foot-r .pc-end { order: 2; }
   .pc-foot .pc-seg { display: flex; width: 100%; }
   .pc-foot .pc-seg .pc-btn { flex: 1 1 0; min-width: 44px; justify-content: center; padding: 0 4px; }
   .pc-foot .pc-seg[aria-label="Range"] { display: grid; grid-template-columns: repeat(4, 1fr); }
   .pc-foot .pc-seg[aria-label="Range"] .pc-btn:nth-child(n+5) { border-top: 1px solid var(--line); }
   .pc-foot .pc-seg[aria-label="Range"] .pc-btn:nth-child(4n+1) { border-left: 0; }
-  .pc-foot-r .pc-seg { flex: 1 1 100%; }
+  .pc-foot-r .pc-seg { flex: 1 1 0; min-width: 0; width: auto; }
 }
 
 /* How current the prices are, and the countdown to the forming candle's close (MW-1). Words, never colour alone. */

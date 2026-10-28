@@ -108,3 +108,16 @@
   .mw-head { padding-top: calc(var(--s2) + env(safe-area-inset-top, 0px)); }
   .mw-open { min-height: 60px; }
 }
+/* VR7-009: on a phone or a touch screen every control of the panel is a 44px target (A11Y-2): the close, back and full-page buttons were 36, the list tabs 40
+   and the "new list" tab 30 wide, a row's drag handle 22 wide and its actions button 32; the sparkline and the gaps give the room to the name */
+@media (max-width: 900px), (pointer: coarse) {
+  .mw-ic { width: 44px; height: 44px; }
+  .mw-back { min-height: 44px; }
+  .mw-tab { min-height: 44px; }
+  .mw-tab.add { min-width: 44px; justify-content: center; }
+  .mw-grip { width: 44px; }
+  .mw-dots { width: 44px; height: 44px; }
+  .mw-row { gap: 0; padding: 0 0 0 0; }
+  .mw-open { grid-template-columns: minmax(0, 1fr) 48px minmax(76px, auto); gap: var(--s2); }
+  .mw-menu > button, .mw-menu > a, .mw-menu-sub > button { min-height: 44px; }
+}
