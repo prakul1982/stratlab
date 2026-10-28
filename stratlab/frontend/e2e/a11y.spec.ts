@@ -251,6 +251,7 @@ test("removing a holding moves focus to the next row's Edit button, not the top 
   const third = (await edits.nth(2).getAttribute("aria-label"))!;
   await edits.nth(1).click();
   await page.getByRole("dialog").getByRole("button", { name: /Remove from holdings/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /Yes, remove/ }).click();      // asks first (LIVE1B-048)
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(edits).toHaveCount(2);
   await expect(page.getByRole("button", { name: third })).toBeFocused();

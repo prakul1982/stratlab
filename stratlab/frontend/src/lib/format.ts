@@ -86,7 +86,9 @@ export function bigMoney(v: number | null | undefined, currency: string): string
 export function pct(v: number | null | undefined, dp = 1): string {
   if (v == null || !Number.isFinite(v)) return "–";
   const shown = Math.abs(v).toFixed(dp);
-  return (+shown === 0 ? "" : v > 0 ? "+" : "−") + shown + "%";           // a change that rounds to nothing has no sign: "0.0%", not "−0.0%"
+  // thousands are grouped like every other figure (LIVE1B-019: "+13605.8%")
+  const text = Math.abs(v) >= 1000 ? Math.abs(v).toLocaleString("en-IN", { minimumFractionDigits: dp, maximumFractionDigits: dp }) : shown;
+  return (+shown === 0 ? "" : v > 0 ? "+" : "−") + text + "%";           // a change that rounds to nothing has no sign: "0.0%", not "−0.0%"
 }
 
 export const signClass = (v: number | null | undefined) => (v == null ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "");
@@ -370,6 +372,18 @@ export function inrCompact(v: number | null | undefined): string {
   return `${Math.round(a) === 0 ? "" : sign}₹${nf(Math.round(a), 0)}`;   // ₹0.4 is ₹0, with no sign
 }
 
+/** A rupee amount of ₹100 crore or more (ten digits or more) in crore, "₹6,85,30,01,63,680" → "₹68,530 cr", for a tile too narrow
+ * for its digits (LIVE1B-019); null for a shorter amount or any other text. */
+export function longRupees(text: string): string | null {
+  const m = /^([−-]?)₹([\d,]+)$/.exec(text.trim());
+  if (!m || m[2].replace(/,/g, "").length < 10) return null;
+  const n = Number(m[2].replace(/,/g, "")) * (m[1] ? -1 : 1);
+  return Number.isFinite(n) ? inrCompact(n) : null;
+}
+
+/** Whether a figure's text is one unbroken word (no space to wrap at). */
+export const isOneWord = (text: string): boolean => text.length > 0 && !/\s/.test(text.trim());
+
 /** The same, with a leading + for gains: +₹296 cr, −₹18 cr. */
 export function signedInrCompact(v: number | null | undefined): string {
   if (!ok(v)) return "–";
@@ -510,6 +524,12 @@ export function sourceWords(source: string): string {
   if (source === "Zerodha Kite file") return "your Zerodha Kite file";      // the Kite web export uploaded by hand (RC2B-009)
   if (source === "Interactive Brokers") return "your Interactive Brokers account";
   return `your ${source} file`;
+}
+
+/** "a Zerodha Kite file", "an Angel One file": a name with its article (LIVE1B-004: "a Angel One", "a HDFC Securities", "a
+ * ICICI Direct"). Letters said as vowels (HDFC, ICICI, IDBI, IIFL, SBI) and names that start with a vowel take "an". */
+export function aFile(name: string, what = "file"): string {
+  return `${/^(?:[aeiou]|hdfc|icici|idbi|iifl|sbi|nse|mf)/i.test(name.trim()) ? "an" : "a"} ${name} ${what}`;
 }
 
 /** Long words with soft hyphens where a syllable may end (after a vowel, before a consonant, four letters in from each

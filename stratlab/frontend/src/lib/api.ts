@@ -79,6 +79,7 @@ export async function api<T = any>(path: string, { method = "GET", body, raw = f
     e.code = d?.code;
     if (d?.plan === "basic" || d?.plan === "pro") e.plan = d.plan;
     if (Array.isArray(d)) e.fields = serverProblems(d);
+    else if (d && typeof d.fields === "object" && d.fields) e.fields = d.fields;      // a check of the server's own, per field (LIVE1B-003)
     if (r.status === 401) onUnauthorized();
     if (d?.code === "data_offline") onOffline();
     throw e;

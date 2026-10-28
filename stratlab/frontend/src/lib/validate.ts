@@ -36,6 +36,17 @@ export function numberProblem(text: string, lim: Limits = {}): string | null {
   return null;
 }
 
+/** What is wrong with a quantity typed for a stock: the number's own limits, and for a stock listed in India that shares come in
+ * whole units (LIVE1B-046: TCS 2.5 was saved); US brokers sell fractions. `kept`: a quantity the row already has, which stays
+ * allowed untouched (a bonus can leave a fraction). */
+export function qtyProblem(text: string, market: "IN" | "US", lim: Limits, kept?: number): string | null {
+  const p = numberProblem(text, lim);
+  if (p) return p;
+  const n = Number(text.trim().replace(/,/g, ""));
+  if (market !== "US" && !Number.isInteger(n) && n !== kept) return "Whole shares only: Indian shares trade in whole units.";
+  return null;
+}
+
 /** The problems of a whole form: field key → message, only for the fields with one. */
 export function problems<K extends string>(checks: Record<K, string | null>): Partial<Record<K, string>> {
   const out: Partial<Record<K, string>> = {};

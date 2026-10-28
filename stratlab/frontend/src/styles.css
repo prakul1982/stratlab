@@ -95,6 +95,8 @@ h1.eyebrow { font-weight: 400; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 /* VR1-150: a disabled main button was the main button at half strength, a muddy grey-beige that read as a grey secondary one: it is an empty outline with muted words instead */
 .btn:disabled:not(.quiet):not(.blue):not(.outline) { opacity: 1; background: transparent; border: 1px dashed var(--dash); color: var(--muted); }
+/* LIVE1B-016, 047: a button that is working (it says "Adding…") keeps its fill, dimmed: the dashed outline is for one that cannot be pressed yet */
+.btn:disabled[aria-busy="true"]:not(.quiet):not(.blue):not(.outline):not(.danger) { opacity: .6; background: var(--ink); border: 1px solid var(--ink); color: var(--on-ink); cursor: progress; }
 .btn.blue { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
 .btn.outline { background: transparent; color: var(--ink); }
 .btn.outline:hover { background: var(--card); color: var(--ink); filter: none; }
@@ -1544,6 +1546,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-stat-k { font-size: var(--t-note); color: var(--muted); }
 .k-stat-k .info { margin-block: -4px; }   /* VR1-149: the (i) is not taller than a line of the label, so a label with one sits on the same baseline as its neighbours */
 .k-stat-v { font-size: var(--t-stat); font-weight: 600; letter-spacing: -.02em; line-height: 1.2; overflow-wrap: anywhere; }
+.k-stat-v.one { white-space: nowrap; overflow: hidden; }       /* a one-word figure is fitted (lib/fitFigure), never broken inside its digits (LIVE1B-019) */
 .k-stat-d { font-size: var(--t-note); color: var(--muted); }
 .k-delta { display: inline-flex; align-items: center; gap: var(--s1); font-weight: 600; font-size: var(--t-note); padding: 2px var(--s2); border-radius: 999px; white-space: nowrap; }
 .k-delta.up { background: var(--up-soft); color: var(--up); }

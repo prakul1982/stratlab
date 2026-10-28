@@ -1,6 +1,7 @@
-import { Children, createContext, useContext, useLayoutEffect, type ReactNode } from "react";
-import { changeDir, minusNode } from "../../lib/format";
+import { Children, createContext, useContext, useLayoutEffect, useRef, type ReactNode } from "react";
+import { changeDir, isOneWord, longRupees, minusNode } from "../../lib/format";
 import { useNoOrphan } from "../../lib/noOrphan";
+import { fitFigure } from "../../lib/fitFigure";
 
 /** Inside a labelled StatRow (a list for screen readers), each Stat is one of its items. */
 const InList = createContext(false);
@@ -32,10 +33,24 @@ export function Delta({ value, children, tone = "auto" }: { value: number | null
  * (`item` is the old way to say so). */
 export function Stat({ label, value, note, delta, tone, item, testId }: { label: ReactNode; value: ReactNode; note?: ReactNode; delta?: ReactNode; tone?: "up" | "down"; item?: boolean; testId?: string }) {
   const listed = useContext(InList) || item;
+  const text = typeof value === "string" ? minusNode(value) : typeof value === "number" ? minusNode(String(value)) : null;
+  const short = text ? longRupees(text) : null;             // ₹100 crore and more in crore, the whole figure kept (LIVE1B-019)
+  const one = text != null && isOneWord(short ?? text);     // a one-word figure is fitted to its box, never broken in its digits
+  const v = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = v.current;
+    if (!el || !one) return;
+    fitFigure(el);
+    const ro = new ResizeObserver(() => { fitFigure(el); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [one, text]);
   return (
     <div className="k-stat" role={listed ? "listitem" : undefined} data-testid={testId}>
       <span className="k-stat-k">{label}</span>
-      <span className={`k-stat-v${tone ? ` k-${tone}` : ""}`}>{minusNode(value)}</span>
+      <span ref={v} className={`k-stat-v${tone ? ` k-${tone}` : ""}${one ? " one" : ""}`} title={short ? text ?? undefined : undefined}>
+        {short ? <><span aria-hidden="true">{short}</span><span className="sr-only">{text}</span></> : minusNode(value)}
+      </span>
       {(delta || note) && <span className="k-stat-d">{delta}{delta && note ? " " : ""}{note}</span>}
     </div>
   );
@@ -55,7 +70,8 @@ function useDuo(ref: { current: HTMLDivElement | null }) {
       const cols = getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length;
       if (cols !== 1) return;
       el.classList.add("duo");
-      const wrapping = () => Array.from(el.querySelectorAll<HTMLElement>(".k-stat-v")).some((v) => v.getBoundingClientRect().height > parseFloat(getComputedStyle(v).lineHeight) * 1.5);
+      // a one-word figure does not wrap, it shrinks: one that had to shrink a good deal counts as not fitting here
+      const wrapping = () => Array.from(el.querySelectorAll<HTMLElement>(".k-stat-v")).some((v) => (v.classList.contains("one") ? fitFigure(v) : v.getBoundingClientRect().height > parseFloat(getComputedStyle(v).lineHeight) * 1.5));
       // VR6-023: "₹1,06,50,136" did not fit half a line at 28px and kept the three totals one under another: a size down (22px) is tried first
       let wraps = wrapping();
       if (wraps) { el.classList.add("tight"); wraps = wrapping(); }
@@ -66,7 +82,10 @@ function useDuo(ref: { current: HTMLDivElement | null }) {
         rows.set(top, [...(rows.get(top) ?? []), Math.round(k.getBoundingClientRect().height)]);
       });
       const uneven = Array.from(rows.values()).some((hs) => Math.max(...hs) - Math.min(...hs) > 3);
-      if (wraps || uneven) el.classList.remove("duo", "tight");
+      if (wraps || uneven) {
+        el.classList.remove("duo", "tight");
+        el.querySelectorAll<HTMLElement>(".k-stat-v.one").forEach((v) => { fitFigure(v); });      // back to the one-per-row size
+      }
     };
     const ro = new ResizeObserver(() => { const w = el.clientWidth; if (w !== width) { width = w; fix(); } });
     const mo = new MutationObserver(fix);
