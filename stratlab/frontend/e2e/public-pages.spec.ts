@@ -9,7 +9,9 @@ const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 const PAGES = ["/stocks", "/stocks/in", "/stocks/in/RELIANCE", "/stocks/us/AAPL", "/stocks/in/browse/r", "/stocks/in/index/nifty-50", "/stocks/in/NOSUCHCO", "/blog", "/blog/briefs"];
 
 async function open(page: Page, path: string, web: string) {
-  await page.route("**/fonts/**", (r) => r.continue({ url: web + new URL(r.request().url()).pathname }));
+  // fetched and handed back rather than continued to another origin: Chromium blocks a continued request whose host changes
+  // (net::ERR_BLOCKED_BY_CLIENT in CI)
+  await page.route("**/fonts/**", async (r) => r.fulfill({ response: await r.fetch({ url: web + new URL(r.request().url()).pathname }) }));
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
