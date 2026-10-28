@@ -766,8 +766,8 @@ const [saveNote, setSaveNote] = useState("");
           )}
         </div>
         {phone && <button type="button" className="pc-btn" aria-haspopup="dialog" aria-expanded={sheet} aria-pressed={!!tool || sheet} onClick={() => setSheet(!sheet)}>Draw</button>}
-        <HistoryButtons canUndo={ui.canUndo} canRedo={ui.canRedo} onUndo={drawProps.onUndo} onRedo={drawProps.onRedo} />
-        <ShortcutsButton />
+        {/* undo, redo and the shortcuts wrap as one group: the (i) was left alone on a row in a narrow panel (MWR1-011) */}
+        <span className="pc-endtools"><HistoryButtons canUndo={ui.canUndo} canRedo={ui.canRedo} onUndo={drawProps.onUndo} onRedo={drawProps.onRedo} /><ShortcutsButton /></span>
         {askClear && (
           <ConfirmDialog title="Remove every drawing on this chart?" confirmLabel="Remove drawings" onClose={() => setAskClear(false)}
             onConfirm={() => { engineRef.current?.clearDrawings(); setAskClear(false); }}>The lines and shapes you drew here are removed. You can undo this with Ctrl/Cmd+Z. The chart itself is not changed.</ConfirmDialog>
