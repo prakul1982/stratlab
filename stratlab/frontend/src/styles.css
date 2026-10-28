@@ -2582,3 +2582,18 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 380px) { .k-nowrap { white-space: normal; } }          /* the plan table's columns are 64px there: the word breaks at its hyphens rather than push the page sideways */
 /* VR5-003: at 400px and under the Menu sits near the right edge (the button beside it reads "Sign in"): its list opens leftwards; from its left it ran 31px past the screen */
 @media (max-width: 400px) { .pub-nav .pub-menu.pub-menu-start nav { left: auto; right: 0; } }
+/* VR5-014: on a phone the picker's tiles (Net worth's "Add an entry": fourteen kinds) are rows, the picture beside the words, not a 120px
+   card each with the picture over them: the list was 1,900px of scrolling inside the dialog, now about half */
+@media (max-width: 640px) {
+  .k-tiles { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .k-tile { display: grid; grid-template-columns: 34px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; row-gap: 0; align-items: center; padding: 10px 12px; min-height: 56px; }
+  .k-tile .ic { grid-row: 1 / span 2; }
+  .k-tile:not(:has(.sub)) .ic { grid-row: 1; }
+  .k-tile:not(:has(.ic)) { grid-template-columns: minmax(0, 1fr); }
+}
+/* VR5-015: a fold's one-line summary of what is inside ("entries a day, daily loss cap, trailing, ...", beside "More settings") was a four-line sliver
+   in a 120px column on a phone: it takes its own line under the title */
+@media (max-width: 640px) {
+  .k-disclosure > summary:has(.k-more-what) { flex-wrap: wrap; row-gap: 0; }
+  .k-disclosure > summary .k-more-what { flex: 1 0 100%; padding-left: calc(6px + var(--s2)); }
+}

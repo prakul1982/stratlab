@@ -102,3 +102,14 @@ test("VR5-013: the cookie question takes under a quarter of a 360x800 phone scre
   const w = await ask.getByRole("button").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));
   expect(new Set(w).size, `answer widths ${w}`).toBe(1);
 });
+
+test("VR5-014: Net worth's 'Add an entry' kinds are short rows on a phone (the picture beside the words), not 120px cards one under another", async ({ page }) => {
+  await open(page, "/money/net-worth", ADMIN, 360);
+  await page.getByRole("button", { name: /Add an entry/ }).first().click();
+  const tiles = page.getByRole("dialog").locator(".k-tile");
+  await expect(tiles.first()).toBeVisible({ timeout: 30_000 });
+  const hs = await tiles.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+  expect(Math.max(...hs), `tile heights ${hs}`).toBeLessThan(80);
+  const dlg = await page.getByRole("dialog").evaluate((e) => e.scrollHeight);
+  expect(dlg, "the dialog's whole height").toBeLessThan(1300);
+});

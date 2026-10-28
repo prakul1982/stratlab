@@ -69,3 +69,13 @@ test("VR5-012: the business-update chart's axis names only the period; the note 
   assert.match(src, /axisLabels=\{pts\.map\(\(p\) => periodName\(p\.period, m\.span\)\)\}/);
   assert.match(src, /\(as stated a year later\)/);
 });
+
+test("VR5-014: on a phone the tile picker's tiles are rows with the picture beside the words", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /@media \(max-width: 640px\) \{\n  \.k-tiles \{ grid-template-columns: minmax\(0, 1fr\); gap: 8px; \}/);
+  assert.match(css, /\.k-tile \{ display: grid; grid-template-columns: 34px minmax\(0, 1fr\);/);
+});
+
+test("VR5-015: a fold's 'what is inside' line takes its own line under its title on a phone", () => {
+  assert.match(read("src/styles.css"), /\.k-disclosure > summary \.k-more-what \{ flex: 1 0 100%;/);
+});
