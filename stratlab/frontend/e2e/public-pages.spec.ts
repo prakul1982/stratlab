@@ -11,7 +11,10 @@ const PAGES = ["/stocks", "/stocks/in", "/stocks/in/RELIANCE", "/stocks/us/AAPL"
 async function open(page: Page, path: string, web: string) {
   // fetched and handed back rather than continued to another origin: Chromium blocks a continued request whose host changes
   // (net::ERR_BLOCKED_BY_CLIENT in CI)
-  await page.route("**/fonts/**", async (r) => r.fulfill({ response: await r.fetch({ url: web + new URL(r.request().url()).pathname }) }));
+  await page.route("**/fonts/**", async (r) => {
+    try { await r.fulfill({ response: await r.fetch({ url: web + new URL(r.request().url()).pathname }) }); }
+    catch { /* the page was closed while a font was still on its way: nothing left to hand it to */ }
+  });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });

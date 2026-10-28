@@ -74,8 +74,8 @@ export function trackersFor(o: { cfg: AdsConfig; choice: Choice; path: string; d
 
 /** The question is shown: something needs a yes, none was given, and the page is not one of the private ones. A yes that was about
  * Google ads alone (`adsOnly`) leaves the question open for the pixel and Clarity, when either is set (RC4-005). */
-export const askNow = (o: { cfg: AdsConfig; choice: Choice; path: string; adsOnly?: boolean; declined?: boolean }): boolean =>
-  trackAllowedOn(o.path) && (o.choice === null ? askNeeded(o.cfg) : o.choice === "yes" && !!o.adsOnly && !o.declined && !!(o.cfg.pixel || o.cfg.clarity));
+export const askNow = (o: { cfg: AdsConfig; choice: Choice; path: string; adsOnly?: boolean; declined?: boolean; dnt?: boolean }): boolean =>
+  !o.dnt && trackAllowedOn(o.path) && (o.choice === null ? askNeeded(o.cfg) : o.choice === "yes" && !!o.adsOnly && !o.declined && !!(o.cfg.pixel || o.cfg.clarity));
 
 /** The question's words, naming only what is switched on. */
 export function consentWords(cfg: AdsConfig, adsOnly = false): { title: string; text: string } {
@@ -169,6 +169,8 @@ export interface AdContext {
   signedIn: boolean; plan: "free" | "basic" | "pro" | null;
   /** Google's consent message is shown (googleMessageShown) */
   cmp?: boolean;
+  /** the browser asks not to be tracked (Do Not Track, Global Privacy Control): no Google ad either, only our own card */
+  dnt?: boolean;
 }
 
 /** What a slot shows.
@@ -181,7 +183,7 @@ export function adMode(c: AdContext): AdMode {
   if (c.slot === "ai") { if (c.plan !== "free") return "none"; }
   else if (c.signedIn || c.plan) return "none";
   const own = c.slot === "ai" ? "house" : "none";
-  if (!adsLive(c.cfg, c.slot)) return own;
+  if (c.dnt || !adsLive(c.cfg, c.slot)) return own;
   if (c.choice === "yes" || (c.cmp && c.choice !== "no")) return "ad";
   return own;
 }

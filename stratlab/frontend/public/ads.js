@@ -111,6 +111,11 @@
   function start() {
     boxes = Array.prototype.slice.call(document.querySelectorAll("[data-ads]"));
     if (!boxes.length) return;
+    // a browser that asks not to be tracked (Do Not Track, Global Privacy Control) gets no Google ad and no question
+    var n = navigator;
+    if ([n.doNotTrack, n.msDoNotTrack, window.doNotTrack].some(function (v) { return v === "1" || v === "yes"; }) || n.globalPrivacyControl === true) {
+      boxes.forEach(drop); return;
+    }
     var choice = read();
     if (choice === "no") { boxes.forEach(drop); return; }
     if (choice === "yes" || googleMessage()) { whenNear(load); return; }

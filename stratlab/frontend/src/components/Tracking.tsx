@@ -34,7 +34,7 @@ export function Tracking() {
   }, [want.pixel, want.clarity, pathname]);
   // a sign-up that completes after the page has loaded
   useEffect(() => onSignup(() => { if (want.pixel) flushSignup(); }), [want.pixel]);
-  if (!askNow({ cfg: CONFIG, choice, path: pathname, adsOnly, declined })) return null;
+  if (!askNow({ cfg: CONFIG, choice, path: pathname, adsOnly, declined, dnt: doNotTrack() })) return null;
   const { title, text } = consentWords(CONFIG, adsOnly);
   return (
     <div className="consent" role="dialog" aria-modal="false" aria-label={`${title} on StratLab`} data-testid="consent">

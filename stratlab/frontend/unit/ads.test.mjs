@@ -363,3 +363,17 @@ test("the security policy lets in the pixel's and Clarity's hosts and nothing br
   for (const h of ["https://www.facebook.com", "https://connect.facebook.net", "https://www.clarity.ms", "https://*.clarity.ms"]) assert.ok(d["connect-src"].includes(h), `connect-src ${h}`);
   assert.ok(!d["script-src"].includes("'unsafe-inline'") && !d["script-src"].includes("https:"));
 });
+
+test("Do Not Track and Global Privacy Control stop Google ads too: our own card or nothing, and no question (owner, 28 Oct)", async () => {
+  const cfg = on;
+  const base = { cfg, path: "/library", choice: "yes", signedIn: false, plan: null };
+  assert.equal(A.adMode({ ...base, slot: "public" }), "ad");
+  assert.equal(A.adMode({ ...base, slot: "public", dnt: true }), "none");
+  assert.equal(A.adMode({ ...base, slot: "ai", path: "/research/IN/TCS", plan: "free", dnt: true }), "house");
+  assert.equal(A.askNow({ cfg, choice: null, path: "/library" }), true);
+  assert.equal(A.askNow({ cfg, choice: null, path: "/library", dnt: true }), false);
+  const js = readFileSync(new URL("../public/ads.js", import.meta.url), "utf8");
+  assert.match(js, /n\.globalPrivacyControl === true\) \{\s+boxes\.forEach\(drop\); return;/);
+  const { LEGAL_BLOCKS } = await import("../src/content/legal.ts");
+  assert.ok(JSON.stringify(LEGAL_BLOCKS["/privacy"]).includes("Google ads, the Meta Pixel and Clarity do not load"));
+});

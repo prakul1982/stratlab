@@ -77,7 +77,7 @@ test("RC4-005: No thanks to the others keeps the ads allowed; the app's Allow re
 test("RC4-005: the banner and the Privacy page follow the answer's scope", () => {
   const t = read("src/components/Tracking.tsx");
   assert.match(t, /trackersFor\(\{ cfg: CONFIG, choice, path: pathname, dnt: doNotTrack\(\), adsOnly \}\)/);
-  assert.match(t, /askNow\(\{ cfg: CONFIG, choice, path: pathname, adsOnly, declined \}\)/);
+  assert.match(t, /askNow\(\{ cfg: CONFIG, choice, path: pathname, adsOnly, declined, dnt: doNotTrack\(\) \}\)/);
   assert.match(t, /adsOnly \? declineTrackers\(\) : writeChoice\("no"\)/);
   assert.match(t, /allowed for Google ads only/);
   const legal = read("src/content/legal.ts");
