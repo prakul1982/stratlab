@@ -37,7 +37,7 @@ test("VR2-006, VR2-007: market events are two to a row; Key numbers' last row fi
 
 test("VR2-008: a long usage value on Account takes the whole row", () => {
   // (VR6-014: usageSpans also widens a row that would stand alone beside an empty cell)
-  assert.match(read("src/pages/AccountPage.tsx"), /usageSpans\(usage\.map\(\(\[, v\]\) => v\.length > 44\)\)\.map\(\(wide, i\) => <div key=\{usage\[i\]\[0\]\} className=\{wide \? "wide" : undefined\}>/);
+  assert.match(read("src/pages/AccountPage.tsx"), /usageSpans\(usage\.map\(\(\[, v\]\) => v\.length > 44\)\)\.map\(\(wide, i\) => <div key=\{usage\[i\]\[0\]\} className=\{\[wide \? "wide" : "", usage\[i\]\[1\]\.length > 44 \? "long" : ""\]/);     // (VR7-012 adds "long": a phone reads it from the left)
   assert.match(css, /\.k-rows\.two > div\.wide \{ grid-column: 1 \/ -1; \}/);
 });
 

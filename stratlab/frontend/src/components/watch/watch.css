@@ -51,6 +51,8 @@
 .mw-limit a { white-space: nowrap; }
 
 .mw-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* VR7-011: only the list scrolls and shrinks: with the add-symbol form open in a short panel the list tabs (a clipping strip) shrank to an 8px sliver, the first tab gone */
+.mw > :not(.mw-scroll):not(.mw-chartview) { flex-shrink: 0; }
 .mw-skel, .mw-scroll > .k-state { margin: var(--s3); }
 .mw-pad { padding: var(--s4); }
 .mw-rows { list-style: none; margin: 0; padding: 0; }
@@ -116,8 +118,10 @@
   .mw-tab { min-height: 44px; }
   .mw-tab.add { min-width: 44px; justify-content: center; }
   .mw-grip { width: 44px; }
+  .mw-grip.off { width: var(--s3); }          /* nothing to drag (sorted another way, or a visitor's board): a small margin, not a 44px blank */
   .mw-dots { width: 44px; height: 44px; }
-  .mw-row { gap: 0; padding: 0 0 0 0; }
+  .mw-row { gap: 0; padding: 0 var(--s2) 0 0; }
+  .mw-row.static { padding-right: var(--s4); }
   .mw-open { grid-template-columns: minmax(0, 1fr) 48px minmax(76px, auto); gap: var(--s2); }
   .mw-menu > button, .mw-menu > a, .mw-menu-sub > button { min-height: 44px; }
 }

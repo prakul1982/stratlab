@@ -57,3 +57,24 @@ test("VR7-010: on a phone the chart's reset and full-screen buttons sit after th
   const css = read("src/charts/price/priceChart.css");
   assert.match(css, /\.pc-foot-r \{ flex-wrap: nowrap; justify-content: stretch; gap: 6px; \}\n  \.pc-foot-r \.pc-end \{ order: 2; \}/);
 });
+
+test("VR7-011: only the Market Watch list scrolls and shrinks: the list tabs do not collapse when the add-symbol form is open", () => {
+  assert.match(read("src/components/watch/watch.css"), /\.mw > :not\(\.mw-scroll\):not\(\.mw-chartview\) \{ flex-shrink: 0; \}/);
+});
+
+test("VR7-012: a long usage value on Account reads from the left on a phone", () => {
+  assert.match(read("src/styles.css"), /@media \(max-width: 899px\) \{ \.k-rows > div\.long > b \{ flex: 1 1 100%; text-align: left; \} \}/);
+});
+
+test("VR7-013: the first plan table fits its card at 390px and 360px", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /@media \(max-width: 410px\) \{ \.k-nowrap \{ white-space: normal; \} \}/);
+  assert.match(css, /@media \(max-width: 380px\) \{ \.k-compare \.k-table th, \.k-compare \.k-table td,[^}]*font-size: 13px; padding-left: 4px; padding-right: 4px; \} \}/);
+});
+
+test("VR7-014, VR7-015: the 52-week phrase is a line of its own on a phone; a holdings filing's pill takes its own line when it does not fit beside the date", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /@media \(max-width: 420px\) \{ \.nowrap\.fit \{ display: block; white-space: normal; \} \.fit-dot \{ display: none; \} \}/);
+  assert.match(read("src/pages/Research.tsx"), /below its <span className="nowrap">52-week<\/span> high/);
+  assert.match(css, /@media \(max-width: 420px\) \{ \.h-filing \{ display: flex; flex-wrap: wrap;/);
+});
