@@ -39,6 +39,16 @@
     box.setAttribute("role", "alert");
     if (slow) box.setAttribute("data-slow", "1");
     main.appendChild(box);
+    // the logo above the words: the card is StratLab's, not a bare browser page (RC7-001)
+    var brand = document.createElement("span");
+    brand.className = "boot-brand";
+    var logo = document.createElement("img");
+    logo.src = "/favicon.svg"; logo.alt = ""; logo.width = 24; logo.height = 24;
+    logo.onerror = function () { logo.style.display = "none"; };      // no connection and no kept copy: the name alone, not a broken picture
+    brand.appendChild(logo);
+    var name = document.createElement("span");
+    name.textContent = "StratLab";
+    brand.appendChild(name);
     var h = document.createElement("h1");
     h.textContent = slow ? "Taking longer than usual" : "Couldn't load StratLab.";
     var p = document.createElement("p");
@@ -49,14 +59,14 @@
     b.className = "boot-btn";
     b.textContent = "Reload";
     b.addEventListener("click", function () { location.reload(); });
-    box.appendChild(h); box.appendChild(p); box.appendChild(b);
+    box.appendChild(brand); box.appendChild(h); box.appendChild(p); box.appendChild(b);
     said = { main: main, slow: !!slow };
     if (owned) {
-      box.style.paddingTop = "16px";
+      box.className += " boot-above";       // above the page, so it sits close to the top (the card's own margin, in index.html)
       main.setAttribute("role", "presentation");
       root.parentNode.insertBefore(main, root);
     } else if (keep) {
-      box.style.paddingTop = "16px";
+      box.className += " boot-above";
       main.setAttribute("role", "presentation");      // the page's own main stays the main landmark
       root.insertBefore(main, root.firstChild);
       if (keep.classList) keep.classList.remove("boot-wait");     // shown now, not after the fade-in delay

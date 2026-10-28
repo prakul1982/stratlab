@@ -19,12 +19,21 @@ self.addEventListener("install", (e) => {
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function offlinePage(path) {
   const to = esc(path || "/");
+  // in StratLab's own paper, ink and card, light and dark (RC7-001: it was a bare white page, plain text in the device's default font)
+  const css = ':root{--p:#F5F1E8;--c:#FFFDF8;--i:#1D1B17;--m:#5C574D;--l:#E2DAC8;--o:#F5F1E8;color-scheme:light}'
+    + '@media (prefers-color-scheme:dark){:root{--p:#141311;--c:#1F1D1A;--i:#EFE9DC;--m:#B3AC9C;--l:#34312A;--o:#141311;color-scheme:dark}}'
+    + 'body{margin:0;background:var(--p);color:var(--i);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}'
+    + 'main{box-sizing:border-box;max-width:min(480px,calc(100% - 32px));margin:16vh auto 0;padding:24px;background:var(--c);border:1px solid var(--l);border-radius:14px;display:flex;flex-direction:column;gap:12px}'
+    + '.b{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--m)}.b img{width:24px;height:24px}'
+    + 'h1{font:600 26px/1.2 Georgia,serif;margin:0}p{margin:0;color:var(--m)}form{margin:0}'
+    + 'button{font:600 15px system-ui,sans-serif;min-height:44px;padding:0 24px;border:0;border-radius:10px;background:var(--i);color:var(--o);cursor:pointer}'
+    + 'button:focus-visible{outline:2px solid var(--i);outline-offset:3px}';
   return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<meta name="color-scheme" content="light dark">'
-    + '<title>StratLab: offline</title></head><body style="font-family:system-ui,sans-serif;margin:0;padding:48px 16px;text-align:center">'
-    + '<main><h1 style="font-size:22px">StratLab can\'t be reached</h1><p>Check the connection, then reload. This page also tries again by itself in 30 seconds.</p>'
-    + '<form method="get" action="' + to + '"><button type="submit" data-testid="offline-reload" style="font:inherit;padding:10px 20px;border-radius:8px;'
-    + 'border:1px solid currentColor;background:none;color:inherit;cursor:pointer">Reload</button></form></main>'
+    + '<title>StratLab: offline</title><style>' + css + '</style></head><body>'
+    + '<main><span class="b"><img src="/favicon.svg" alt="" width="24" height="24">StratLab</span>'
+    + '<h1>StratLab can\'t be reached</h1><p>Check the connection, then reload. This page also tries again by itself in 30 seconds.</p>'
+    + '<form method="get" action="' + to + '"><button type="submit" data-testid="offline-reload">Reload</button></form></main>'
     + '<script>setTimeout(function(){location.reload()},30000)</script></body></html>';
 }
 function offline(path) {
@@ -70,6 +79,11 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin === self.location.origin && STATIC.includes(url.pathname)) {
     e.respondWith(staticFile(req, url.pathname));
+    return;
+  }
+  // the logo the start-up and offline cards carry (RC7-001): the copy kept at install, so it shows with no connection
+  if (url.origin === self.location.origin && url.pathname === "/favicon.svg") {
+    e.respondWith(caches.match("/favicon.svg").then((hit) => hit || fetch(req)).catch(() => Response.error()));
     return;
   }
   if (req.mode !== "navigate") return;
