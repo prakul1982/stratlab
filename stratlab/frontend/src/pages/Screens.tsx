@@ -233,7 +233,7 @@ export function ScreensPage() {
             <CardHead title="Filters" actions={<>
               <button className="btn quiet sm inv-toggle" aria-expanded={showFilters} onClick={() => setShowFilters((s) => !s)}>{showFilters ? "Hide filters" : "Show filters"}{n ? ` (${n})` : ""}</button>
               <button className="btn quiet sm" onClick={clear} disabled={!n && sort === "market_cap" && desc}>Clear</button></>} />
-            {!meta ? <Skeleton label="Loading the filters" lines={4} /> : showFilters && <>
+            {!meta ? <div className="screens-filters-wait"><Skeleton label="Loading the filters" lines={4} /></div> : showFilters && <>
               <Group title={sectorName} help={help.sector}>
                 {meta.sectors.length === 0 ? <p className="k-small k-muted">No companies gathered yet.</p>
                   : <ChipSet label={sectorName} options={meta.sectors.map((s) => ({ value: s, label: s }))} on={filters.sector} onToggle={(v) => toggle("sector", v)} />}

@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { candleSpan, charge, fall, fmtDate, money, monthYear, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
-import { CHECKS, checkTone, checksLine, heroSummary, qtyNote, readablePoints, tradeListFacts, upDown, verdictLines } from "../lib/tradeUi";
+import { CHECKS, checkTone, checksLine, heroSummary, qtyNote, readablePoints, SHARPE_MIN_DAYS, runDays, tradeListFacts, upDown, verdictLines } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
 import { pctTick, moneyCompact } from "../lib/chartFormat";
@@ -385,7 +385,8 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     ["Worst fall", fall(st.mdd), st.mdd, HELP.worstFall],
     ["Win rate", st.n ? `${st.win.toFixed(0)}%` : "–", null, HELP.winRate],
     ["Profit factor", st.pf == null ? "∞" : !st.n ? "–" : st.pf > 100 ? "> 100" : st.pf.toFixed(2), null, HELP.profitFactor],
-    ["Sharpe ratio", num(st.sharpe, 2), null, HELP.sharpe],
+    // a yearly ratio worked out from under six months of days is not a measure (LIVE1A-028: -9.69 from two months of a re-test)
+    ["Sharpe ratio", runDays(e) < SHARPE_MIN_DAYS ? "–" : num(st.sharpe, 2), null, runDays(e) < SHARPE_MIN_DAYS ? `${HELP.sharpe} Not shown for a test under six months: a yearly ratio from so few days is not a measure.` : HELP.sharpe],
     ["Average trade", money(st.avg, cur), st.avg, HELP.avgTrade],
     // the period as the value, the candles in its (i): a note under one stat made its row taller than the first and lifted this card
     // above "What you'd keep" beside it (VR1-061, VR2-014)

@@ -5,7 +5,7 @@ import type { Experiment } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
 import { VerdictBadge } from "../components/ui";
-import { badgeLabel, checksCell } from "../lib/tradeUi";
+import { badgeLabel, checksCell, runDays, SHARPE_MIN_DAYS } from "../lib/tradeUi";
 import { compareGap, legacyNote, splitLegacy } from "../lib/legacyRun";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, Select, Signed, Skeleton, type Column } from "../components/kit";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
@@ -88,7 +88,7 @@ export function CompareExperiments() {
     ["Worst fall", (e) => pct(-Math.abs(e.stats.mdd)), (e) => -Math.abs(e.stats.mdd), true, true],
     ["Trades", (e) => String(e.stats.n), () => null, false],
     ["Win rate", (e) => e.stats.n ? `${e.stats.win.toFixed(0)}%` : "–", (e) => e.stats.win, true],
-    ["Sharpe", (e) => num(e.stats.sharpe, 2), (e) => e.stats.sharpe, true],
+    ["Sharpe", (e) => (runDays(e) < SHARPE_MIN_DAYS ? "–" : num(e.stats.sharpe, 2)), (e) => (runDays(e) < SHARPE_MIN_DAYS ? null : e.stats.sharpe), true],
     // each run's costs in its own currency (v1 on NIFTY in rupees beside v2 on AAPL in dollars)
     // ...and never marked the smaller of two currencies
     ["Costs paid", (e) => money(e.costs.total, e.instrument?.currency), (e) => -e.costs.total, (a.instrument?.currency || "") === (b.instrument?.currency || "")],

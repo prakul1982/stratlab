@@ -82,3 +82,57 @@ def test_a_sessions_chart_holds_enough_candles_for_its_longest_average():
     assert live.chart_window(short, 1000) == 150
     huge = Strategy(name="t", entry=[{"l": {"t": "price"}, "op": "gt", "r": {"t": "sma", "p": 500}}])
     assert live.chart_window(huge, 5000) == live.CHART_BARS_MAX
+
+
+def test_a_journal_with_real_trades_shows_them_by_default_not_the_replay_practice():
+    """LIVE1A-059: after an upload the page stayed on "Both", so a practice trade from the chart replay counted in the stats and the verdict."""
+    from pathlib import Path
+    from app import journal as J
+    from tests import world
+    from tests.test_journal import PRO, manual
+    import pytest as _p
+    mp = _p.MonkeyPatch()
+    built = world.build(mp)
+    try:
+        J._paired.clear()
+        c = built["client"]
+        assert manual(c).status_code == 200
+        j = c.get("/trade/journal", headers=PRO).json()
+        assert j["show"] == "all" and j["count"] == 1                    # no practice trade: nothing to filter
+        uid = c.get("/me", headers=PRO).json()["id"]
+        data = J.load(uid)
+        data["practice"] = [{**data["manual"][0], "id": "practice-1", "symbol": "TCS", "entry_price": 3000, "exit_price": 2900}]
+        J.save(uid, data)
+        J._paired.clear()
+        j = c.get("/trade/journal", headers=PRO).json()
+        assert j["show"] == "real" and j["count"] == 1 and j["practice_count"] == 1 and j["real_count"] == 1
+        # a person's own pick stands
+        j = c.put("/trade/journal/settings", headers=PRO, json={"show": "all"}).json()
+        assert j["show"] == "all" and j["count"] == 2
+    finally:
+        J._paired.clear()
+        built["close"]()
+        mp.undo()
+
+
+def test_news_of_a_partnership_or_a_regulation_30_update_is_not_a_business_update():
+    """LIVE1A-064: Reliance's "business updates" listed a Regulation 30 update, a media release and a franchise partnership."""
+    from app import biz_updates as B
+    url = "https://nsearchives.nseindia.com/corporate/RELIANCE_28102026.pdf"
+    for subject in ("Update to disclosures dated 24-03-2017 and 05-11-2020 under Regulation 30 of SEBI (LODR)",
+                    "Reliance and Surrey announce their partnership in Oval Invincibles franchise in The Hundred"):
+        assert not B.is_update({"subject": subject, "text": "", "url": url})
+    assert B.is_update({"subject": "Monthly Business Update for September 2026", "text": "", "url": url})
+    # an update word far down a long description of something else does not count
+    assert not B.is_update({"subject": "General Updates", "text": "x" * 500 + " sales volumes rose", "url": url})
+
+
+def test_the_company_directory_names_both_markets_and_carries_structured_data():
+    """LIVE1A-065/066: /stocks' description read "listed in US" (a loop overwrote the page's own wording), and the page had no JSON-LD."""
+    from app import stock_pages
+    page = stock_pages.index_page(None, "")
+    assert 'content="Find any company listed in India or the US: price, results, margins, debt and filings, from reported data."' in page
+    assert "application/ld+json" in page and "BreadcrumbList" in page
+    assert "listed in US:" not in page
+    # a search stays out of the index and carries none
+    assert "application/ld+json" not in stock_pages.index_page(None, "tata")

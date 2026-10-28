@@ -181,8 +181,15 @@ const TERMS: Record<string, string> = {
   "3Y CAGR": "Compound annual growth rate: the steady yearly growth that gets from the start to the end of the period.",
 };
 
+/** A note longer than this under a figure is a footnote under the grid ("Jun 2025 had other income of Rs 15,119 crore against a median of Rs 4,464 crore...": five
+ * lines beside a -24.6%, so its row was four times as tall as its neighbours, LIVE1A-062). A short one stays under its label. */
+const LONG_NOTE = 90;
+
 export function MetricsGrid({ groups, currency, industry }: { groups: MetricGroup[]; currency: string; industry?: string | null }) {
   const used = Object.entries(TERMS).filter(([k]) => groups.some((g) => g.items.some((m) => m.label === k)));
+  const foot: { n: number; label: string; text: string }[] = [];
+  for (const g of groups) for (const m of g.items) if (m.note && m.note.length > LONG_NOTE) foot.push({ n: foot.length + 1, label: m.label, text: m.note });
+  const mark = (m: { label: string; note?: string | null }) => foot.find((f) => f.label === m.label && f.text === m.note);
   return (
     <>
       <div className="inv-metrics">
@@ -195,7 +202,7 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                 return (
                   <div key={m.label} className="inv-metric">
                     {/* a note says what a figure counts (a dividend yield with a special dividend in it) */}
-                    <span className="k-small k-muted">{m.label}{m.note && <span className="k-sub-line">{m.note}</span>}</span>
+                    <span className="k-small k-muted">{m.label}{m.note && !mark(m) && <span className="k-sub-line">{m.note}</span>}{mark(m) && <sup className="cmp-foot-mark" aria-label={`see note ${mark(m)!.n}`}>{mark(m)!.n}</sup>}</span>
                     <span className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}</span>
                     {b ? (
                       <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><title>Where this figure sits on a typical range</title>
@@ -217,6 +224,7 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
           <p className={`k-note inv-metrics-note${groups.length % 3 === 0 ? " row" : ""}`} data-testid="krail-legend">The small bar beside a figure shows where it sits on a typical range for that measure; the two ticks are the range's cut-off points.</p>
         )}
       </div>
+      {foot.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">{foot.map((f) => <li key={f.n}><sup>{f.n}</sup> {f.label}: {f.text}</li>)}</ul>}
       {used.length > 0 && (
         <Disclosure summary="What these terms mean">
           <dl className="inv-terms">{used.map(([k, v]) => <div key={k}><dt>{k === "3Y CAGR" ? "CAGR" : k}</dt><dd>{v}</dd></div>)}</dl>

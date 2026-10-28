@@ -2,6 +2,7 @@ import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent } from
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import type { Instrument, Market } from "../lib/types";
+import { arrange } from "../lib/instrumentGroups";
 import { useSurveillance } from "../lib/surveillance";
 import { Search } from "./Icons";
 import { SurvBadges } from "./Surveillance";
@@ -37,21 +38,6 @@ const instKind = (r: Instrument) =>
   r.market === "MCX" ? `MCX futures · ${r.contract ?? ""}`.trim() : r.market === "CDS" ? `Currency futures · ${r.contract ?? ""}`.trim() : r.market === "CMDTY" ? "Futures, front month"
     : r.etf || r.type === "ETF" ? "ETF" : r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "FX" ? "Currency pair"
     : r.type === "CRYPTO" ? r.currency : `${r.type}${r.expiry ? " " + r.expiry : ""}`;
-
-/** The suggestions in groups, the stock or index first, then its futures, then its options, and no more than OPTION_ROWS options until asked: one
- * query ("RELIANCE") was fifty rows, forty of them strikes (LIVE1A-004). */
-export const OPTION_ROWS = 6;
-const GROUPS = ["Stocks, indices and funds", "Futures", "Options"] as const;
-export const groupOf = (r: Pick<Instrument, "type">) => (r.type === "FUT" ? 1 : r.type === "CE" || r.type === "PE" ? 2 : 0);
-export function arrange(found: Instrument[], all: boolean): { rows: Instrument[]; hidden: number; heads: Map<string, string> } {
-  const sorted = found.map((r, i) => ({ r, i })).sort((a, b) => groupOf(a.r) - groupOf(b.r) || a.i - b.i).map((x) => x.r);
-  const opts = sorted.filter((r) => groupOf(r) === 2);
-  const rows = all ? sorted : sorted.filter((r) => groupOf(r) !== 2 || opts.indexOf(r) < OPTION_ROWS);
-  const used = new Set(rows.map(groupOf));
-  const heads = new Map<string, string>();
-  if (used.size > 1) for (const g of [0, 1, 2]) { const first = rows.find((r) => groupOf(r) === g); if (first) heads.set(first.id, GROUPS[g]); }
-  return { rows, hidden: sorted.length - rows.length, heads };
-}
 
 const PLACEHOLDER: Record<string, string> = {
   IN: "Search a stock, index or F&O: RELIANCE, NIFTY 50", CRYPTO: "Search a coin: BTC, ETH, SOL",

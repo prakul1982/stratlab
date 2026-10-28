@@ -218,8 +218,7 @@ export function ScanPage() {
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>
-                  {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}
-                  <Link className="link k-small" to={`${link(r.symbol)}/deep`}>Deep dive →</Link></>) },
+                  {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}</>) },   // (no "Deep dive →" under every row: the name is the link, LIVE1A-032)
               { key: "p", header: "Price", numeric: true, cell: (r) => (
                 <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
               { key: "m", header: `Matches ${scan.name.toLowerCase()}`, wrap: true, lead: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago, preset.basis ? "whole" : preset.live ? "live" : undefined)}</span></> },
@@ -258,8 +257,7 @@ export function ScanPage() {
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>
-                  {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}
-                  <Link className="link k-small" to={`${link(r.symbol)}/deep`}>Deep dive →</Link></>) },
+                  {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}</>) },   // (no "Deep dive →" under every row: the name is the link, LIVE1A-032)
               { key: "p", header: "Price", numeric: true, cell: (r) => (
                 <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
               { key: "st", header: "Stage", info: STAGES_EXPLAINED, cell: (r) => <>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <span className="k-sub-line">{stageDaysText(r.stage_days, r.stage_capped)}</span> : null}</> },
@@ -348,7 +346,12 @@ export function RotationPage() {
   const drilled = setId.startsWith("sector:");
   const openStocks = (r: RotationRow) => { setBackTo(setId); setSetId(`sector:${r.symbol}`); };
   const all = out?.rows ?? [];
-  const isOn = (r: RotationRow) => (picked ? picked.has(r.id) : r.core !== false);
+  // the chart opens on the main sectors, and when they are more than six, the five furthest from the centre: twelve trails criss-crossed into a
+  // tangle nobody could follow (LIVE1A-034). The table ticks more.
+  const mainRows = all.filter((r) => r.core !== false);
+  const far = (r: RotationRow) => Math.hypot(r.x - 100, r.y - 100);
+  const defaultIds = new Set((mainRows.length > 6 ? [...mainRows].sort((a, b) => far(b) - far(a)).slice(0, 5) : mainRows).map((r) => r.id));
+  const isOn = (r: RotationRow) => (picked ? picked.has(r.id) : defaultIds.has(r.id));
   const rows = all.filter(isOn);
   const toggle = (r: RotationRow) => {
     const next = new Set(all.filter(isOn).map((x) => x.id));
@@ -413,6 +416,7 @@ export function RotationPage() {
             )}
             {rows.length === 0 ? <EmptyState title={all.length ? "Nothing is ticked" : "Not enough price history to draw this yet"}>{all.length ? "Tick a few in the table below to draw them." : "It fills in as more closes are stored."}</EmptyState>
               : <RotationChart rows={rows} benchmark={out.benchmark} step={step} focus={focus} onFocus={setFocus} />}
+            {picked === null && mainRows.length > 6 && rows.length > 0 && <p className="k-note" data-testid="rot-default-note">Drawn: the {rows.length} furthest from the centre of {mainRows.length} main {isIndex ? "indices" : "stocks"}. Tick more in the table below.</p>}
           </div>
         </ChartFrame>
       )}
@@ -420,14 +424,16 @@ export function RotationPage() {
         <Card>
           <CardHead title={isIndex ? "The indices" : "The stocks"} actions={<>
             <button className="btn quiet sm" onClick={() => setPicked(new Set(all.map((r) => r.id)))}>Show all {all.length}</button>
-            {all.some((r) => r.core === false) && <button className="btn quiet sm" onClick={() => setPicked(null)}>Main sectors only</button>}
+            {picked !== null && <button className="btn quiet sm" onClick={() => setPicked(null)}>{mainRows.length > 6 ? "The 5 furthest out" : "Main sectors only"}</button>}
             <button className="btn quiet sm" onClick={() => setPicked(new Set())}>Clear</button></>} />
           <DataTable stack label="Where each one stands" rows={all} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
             columns={[
               { key: "on", header: <span className="sr-only">Show on chart</span>, cell: (r) => <label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label> },
               { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, cell: (r) => (isIndex
                 ? <span className="k-row">{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}
-                    {(r.stocks ?? 0) > 0 && <button className="btn quiet sm" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>}</span>
+                    {(r.stocks ?? 0) > 0
+                      ? <button className="btn quiet sm" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>
+                      : <button className="btn quiet sm" disabled title="No list of this index's main stocks is kept here">Stocks →</button>}</span>
                 : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link>) },
               { key: "q", header: "Now", cell: (r) => <QuadrantTag q={r.quadrant} /> },
               { key: "x", header: "Strength", numeric: true, info: ROTATION_UNITS, cell: (r) => r.x.toFixed(2) },
@@ -516,6 +522,8 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
               <Card key={r.symbol}>
                 <CardHead title={<Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}>{r.symbol}</Link>}
                   actions={<>{r.stale && <Badge tone="plain">Last read, not refreshed</Badge>}{r.stored && <Badge tone="plain">From the evening's read{r.as_of ? ` (${asOf(r.as_of)})` : ""}</Badge>}<Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link></>} />
+                {/* a row kept from the last good read says so before its counts: "0 red flags" under a company that was not read just now was a false all-clear (LIVE1A-039) */}
+                {r.stale && <span className="k-small k-muted" data-testid="filings-not-refreshed">Not checked just now: the exchange's list didn't answer. What follows is from the last read, and may be missing newer filings.</span>}
                 <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} rowsHaveFundRaise={!!r.summary.fund_raise_last && r.flags.some((i) => i.at.slice(0, 10) === r.summary.fund_raise_last!.slice(0, 10))} />
                 {r.flags.length > 0 ? <div className="inv-rows">{r.flags.map((i) => <FilingRow key={i.id} i={i} />)}</div>
                   /* the summary above already says "0 red flags, 0 to look closer at": only a company whose list came back empty

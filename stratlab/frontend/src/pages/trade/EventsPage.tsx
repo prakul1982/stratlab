@@ -69,11 +69,11 @@ function RemindCard({ v, onSave }: { v: EventsView; onSave: (p: Partial<EvPrefs>
   );
 }
 
-function IndexChanges({ rows }: { rows: IndexChange[] }) {
+function IndexChanges({ rows, failed }: { rows: IndexChange[]; failed: string | null }) {
   const shown = rows.filter((c) => c.sections.length);
   // a notice whose stocks couldn't be read is still listed, with its link, never dropped (DC-013: 9 of 12 hidden)
   const unread = rows.filter((c) => !c.sections.length);
-  if (!shown.length && !unread.length) return null;
+  if (!shown.length && !unread.length && !failed) return null;
   const names = (list: [string, string][]) => list.length
     // each comma stays with the name before it, so a wrapped line never starts with one (R54-011)
     ? list.map(([sym, name], j) => <span key={sym}><span className="nowrap"><Link className="link tap" to={`/research/IN/${encodeURIComponent(sym)}`} title={name}>{sym}</Link>{j < list.length - 1 ? "," : ""}</span>{j < list.length - 1 ? " " : ""}</span>)
@@ -95,6 +95,7 @@ function IndexChanges({ rows }: { rows: IndexChange[] }) {
   return (
     <section className="k-stack" aria-labelledby="ev-idx-h">
       <h2 id="ev-idx-h" className="k-sub">Index changes</h2>
+      {failed && <p className="k-callout k-small" role="status" data-testid="ev-failed">{failed}</p>}
       {unread.length > 0 && (
         <Card testId="ev-index-unread" label="Index notices not read into stocks">
           <CardHead level={3} title={`Notices not read into stocks here (${unread.length})`} />
@@ -208,7 +209,8 @@ export function EventsPage() {
         : !v ? <Card><Skeleton label="Reading the market events" /></Card>
         : (
           <>
-            {failedLine(v.sources, (d) => asOf(d) ?? d) && <p className="k-callout k-small" role="status" data-testid="ev-failed">{failedLine(v.sources, (d) => asOf(d) ?? d)}</p>}
+            {/* the index provider's failure is said over the index changes it affects, not above the whole calendar (LIVE1A-021) */}
+            {failedLine(v.sources.filter((x) => x.id !== "index"), (d) => asOf(d) ?? d) && <p className="k-callout k-small" role="status" data-testid="ev-failed">{failedLine(v.sources.filter((x) => x.id !== "index"), (d) => asOf(d) ?? d)}</p>}
             {/* CK-2 (R1, R13): the week card is the full width, its events side by side and its three count lines in a column beside them, and the
                 reminders card under it is full width with its controls in two columns: neither is stretched beside the other into a blank band */}
             <Card label="The next seven days">
@@ -245,7 +247,7 @@ export function EventsPage() {
                   render={(e) => { const m = byId.get(e.id); return m ? <Detail e={m} /> : null; }} />
               )}
             </Card>
-            <IndexChanges rows={v.index_changes} />
+            <IndexChanges rows={v.index_changes} failed={failedLine(v.sources.filter((x) => x.id === "index"), (d) => asOf(d) ?? d)} />
             {me?.is_admin && <AdminPanel v={v} reload={reload} />}
             <p className="k-note">{v.note}</p>
           </>

@@ -31,7 +31,7 @@ test("VR7-006: Key numbers are three equal columns, so a second row's figures si
   assert.doesNotMatch(inv, /\.inv-metrics > :last-child:nth-child\(3n\+1\) \{ grid-column: span 6; \}/);       // no widened last row
   const src = read("src/components/Research.tsx");
   assert.match(src, /className=\{`k-note inv-metrics-note\$\{groups\.length % 3 === 0 \? " row" : ""\}`\} data-testid="krail-legend"/);
-  assert.match(src, /<\/p>\n\s*\)\}\n\s*<\/div>\n\s*\{used\.length > 0/);       // the note is the grid's last cell; the terms stay under the grid
+  assert.match(src, /<\/p>\n\s*\)\}\n\s*<\/div>\n\s*\{foot\.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">.*<\/ul>\}\n\s*\{used\.length > 0/);       // (LIVE1A-062: a long note is a footnote under the grid)       // the note is the grid's last cell; the terms stay under the grid
 });
 
 test("VR7-007: on a visitor's wide page the cookie question is a slim bar along the foot of the window, in the app it stays the corner card", () => {

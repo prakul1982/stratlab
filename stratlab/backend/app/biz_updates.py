@@ -120,14 +120,18 @@ UPDATE = re.compile(
 UPDATE_FILE = re.compile(r"operat(?:ing|ional)update|businessupdate|generationupdate|trafficupdate|productionupdate|salesupdate|(?:" + MONTHS + r")salesrelease|salesdata|salesvolume|sales(?:" + MONTHS + r")|productionvolume|prod(?:uction)?(?:" + MONTHS +
                          r")|businessupdate|financialupdate|financialdisclosure|initial(?:financial|final)disclosure", re.I)
 NOT_UPDATE = re.compile(r"\bsale of\b|slump sale|offer for sale|sales tax|record date|trading window|newspaper|"
-                        r"transcript|recording|schedule of (?:analyst|investor|meet)", re.I)
+                        r"transcript|recording|schedule of (?:analyst|investor|meet)|"
+                        # a Regulation 30 "update to disclosures", and news of a tie-up or a franchise, are filings but not business figures
+                        # (LIVE1A-064: Reliance's list held three of them as "business updates")
+                        r"\bupdate to (?:the )?disclosures?\b|\b(?:partnership|franchise|tie-?up)\b", re.I)
 GENERIC = re.compile(r"^(?:general updates?|updates?|press release|other|-)$", re.I)
 
 
 def is_update(item: dict) -> bool:
     """A filing that carries a monthly or quarterly business update, from its subject, summary or file name."""
     subject, text, url = str(item.get("subject") or ""), str(item.get("text") or ""), str(item.get("url") or "")
-    hay = f"{subject} {text}"
+    # the subject and the start of the description: an update word deep in a long description of something else does not make it one
+    hay = f"{subject} {text[:400]}"
     if NOT_UPDATE.search(hay) or not url:
         return False
     if UPDATE.search(hay):

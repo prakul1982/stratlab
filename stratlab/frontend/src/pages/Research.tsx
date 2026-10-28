@@ -393,23 +393,6 @@ function CompanyView() {
       {!c.delisted && <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>}
       {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} quiet />}
 
-      {/* (the facts under "What they do": not the market cap, which has its own place, nor where it is listed, which the heading says) */}
-      <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
-        {(wiki || c.about.profile) && (
-          <Card>
-            <CardHead title="What they do" info="From an encyclopedia entry and the company's own profile: facts, not AI." />
-            {/* the one-line description ("Indian multinational conglomerate") and then the entry's first sentence, which says it again; and "Listed: NSE ·
-                RELIANCE" under a page headed "NSE · RELIANCE" (VR4-013): each is said once */}
-            {wiki?.description && !(wiki.extract && wiki.extract.toLowerCase().includes(wiki.description.toLowerCase())) && <p className="k-sub">{wiki.description}</p>}
-            <p className="k-small">{wiki?.extract || c.about.profile}</p>
-            {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
-            {shownFacts.length > 0 && <dl className="k-dl pairs">{shownFacts.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
-            {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
-          </Card>
-        )}
-        {c.margins && c.margins.gross != null && <Card><CardHead title="Where a sale goes" info={HELP.researchMargins} /><MarginCascade {...c.margins} /></Card>}
-      </div>
-
       {c.metrics.length > 0 && (
         <Card id="co-numbers">
           <CardHead title="Key numbers" info={HELP.researchMetrics} actions={<Link className="btn quiet sm" to={deepTo}>10 years in the deep dive →</Link>} />
@@ -428,8 +411,28 @@ function CompanyView() {
             <TrendBars points={trend.prof.points} label={trend.t.profit_label} unit={trend.prof.unit}
               baseSales={trend.rev.points.find((p) => p.y === trend.prof.points[0]?.y)?.v ?? null} />
           </div>
+          {/* bars written "10.56L" are lakh crore under a title that says crore: said once under both charts (LIVE1A-063) */}
+          {[trend.rev, trend.prof].some((x) => /cr/i.test(x.unit) && !/lakh/i.test(x.unit) && x.points.some((p) => trendValue(p.v, x.unit).length > 7)) && <p className="k-note" data-testid="trend-lakh">A figure written with L is in lakh crore (1 lakh crore is 1,00,000 crore).</p>}
         </ChartFrame>
       )}
+
+      {/* the description comes after the figures: it sat between the chart and the key numbers (LIVE1A-062; owner pattern 14: the visual, the figures, then the words) */}
+      {/* (the facts under "What they do": not the market cap, which has its own place, nor where it is listed, which the heading says) */}
+      <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
+        {(wiki || c.about.profile) && (
+          <Card>
+            <CardHead title="What they do" info="From an encyclopedia entry and the company's own profile: facts, not AI." />
+            {/* the one-line description ("Indian multinational conglomerate") and then the entry's first sentence, which says it again; and "Listed: NSE ·
+                RELIANCE" under a page headed "NSE · RELIANCE" (VR4-013): each is said once */}
+            {wiki?.description && !(wiki.extract && wiki.extract.toLowerCase().includes(wiki.description.toLowerCase())) && <p className="k-sub">{wiki.description}</p>}
+            <p className="k-small">{wiki?.extract || c.about.profile}</p>
+            {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
+            {shownFacts.length > 0 && <dl className="k-dl pairs">{shownFacts.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
+            {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
+          </Card>
+        )}
+        {c.margins && c.margins.gross != null && <Card><CardHead title="Where a sale goes" info={HELP.researchMargins} /><MarginCascade {...c.margins} /></Card>}
+      </div>
 
       <div className="k-cols">
         {c.earnings.length > 1 && <Card><CardHead title="Results versus expectations" info={HELP.researchEarnings} /><EarningsBars rows={c.earnings} basis={c.earnings_basis} /></Card>}
@@ -929,7 +932,7 @@ export function WatchlistPage() {
   const factText = (sym: string) => {
     const f = facts?.[sym];
     if (!f) return null;
-    const parts = [f.pe != null ? `P/E ${f.pe.toFixed(1)}` : null,
+    const parts = [f.pe != null ? `P/E ${f.pe.toFixed(2)}` : null,
       f.from_high != null ? (f.from_high > -0.5 ? "near its 52-week high" : `${Math.abs(f.from_high).toFixed(1)}% below its 52-week high`) : null].filter(Boolean);
     return parts.length ? parts.join(" · ") : null;
   };

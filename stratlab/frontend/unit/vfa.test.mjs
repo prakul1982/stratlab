@@ -162,5 +162,5 @@ test("VR1-090, VR1-091, VR1-092, VR1-093, VR1-094, VR1-095: Paper, Options, Jour
   assert.match(j, /\{!\(!has && taxTrades > 0 && j\.show !== "practice"\) && <button type="button" className="btn outline"/);
   assert.match(read("src/pages/trade/journal.css"), /\[data-testid="j-how"\] \.k-disclosure-body \{ padding-left: 0; max-width: 72ch; \}/);
   const sig = read("src/pages/trade/SignalsPage.tsx");
-  assert.match(sig, /<FormActions>\s*<CheckField label="Allow short positions"/);
+  assert.match(sig, /<div className="k-field wide"><CheckField label="Allow short positions" checked=\{short\} onChange=\{setShort\} \/><\/div>\s*<FormActions>/);       // (LIVE1A-025: the option is a box of the form, the button has its own row)
 });

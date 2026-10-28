@@ -51,6 +51,14 @@ export function splitHeadline(headline: string): { main: string; checks: string 
   return { main: headline.slice(0, i).replace(/\.$/, "") + ".", checks: checks.charAt(0).toUpperCase() + checks.slice(1) };
 }
 
+/** A test shorter than this has no Sharpe ratio shown (it is a yearly figure). */
+export const SHARPE_MIN_DAYS = 180;
+/** The days a run's candles actually cover (what was asked for can be more than the data gives). */
+export const runDays = (e: { range: { from: string; to: string }; days: number }): number => {
+  const a = Date.parse(e.range.from), b = Date.parse(e.range.to);
+  return Number.isFinite(a) && Number.isFinite(b) && b > a ? (b - a) / 86400000 : e.days;
+};
+
 /** "11438.7 points" as "11,439 points": a gap is written with its thousands separators, and without a decimal once it is 1,000 or more
  *  (LIVE1A-051: "11438.7 points behind buy and hold after costs" over a run that made +191%). Other text is left as it is. */
 export function readablePoints(text: string): string {

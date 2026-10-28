@@ -69,8 +69,8 @@ test("options builder: charges to open and close, and breakevens after them, on 
   await expect(box).toBeVisible();
   await expect(box).toContainText("Charges to open and close₹135.84");
   // a short straddle's most it can make is its premium: one figure, not the same one twice
-  await expect(box).toContainText("Share of the premium (also the most it can make)0.77%");
-  await expect(box).not.toContainText("Share of the most it can make");
+  await expect(box).toContainText("Charges as % of premium0.77%");
+  await expect(box).not.toContainText("Charges as % of the most it can make");
   await expect(box).toContainText("Premium kept after charges₹17,414");
   await expect(page.getByTestId("opt-breakevens")).toContainText("Breaks even at 22,130 and 22,670 before charges. After charges: 22,132 and 22,668.");
   await expect(page.getByTestId("opt-max-profit")).toContainText("₹17,550₹17,414 after charges");
@@ -98,7 +98,7 @@ test("options builder: charges to open and close, and breakevens after them, on 
   // a spread whose charges are bigger than the most it can make: no breakeven after charges, said plainly
   await page.getByRole("button", { name: "Price again" }).click();
   await expect(page.getByTestId("opt-breakevens")).toContainText("Breaks even at 22,500 before charges. After charges it doesn't break even at any price.");
-  await expect(box).toContainText("Share of the most it can make385.15%");
+  await expect(box).toContainText("Charges as % of the most it can make385.15%");
   await expect(box).toContainText("Most it can make after charges−₹92.68");
   await expect(box).not.toContainText("Premium kept");
   await expect(page.getByTestId("opt-max-loss")).toContainText("−₹6,468−₹6,593 after charges");
@@ -109,7 +109,7 @@ test("options builder: charges to open and close, and breakevens after them, on 
   await page.getByRole("button", { name: "Price again" }).click();
   await expect(page.getByTestId("opt-max-profit")).toContainText("₹14,48,200₹14,48,134 after charges");
   await expect(page.getByTestId("opt-max-loss")).toContainText("−₹7,800−₹7,866 after charges");
-  await expect(box).toContainText("Share of the most it can makeunder 0.01%");
+  await expect(box).toContainText("Charges as % of the most it can makeunder 0.01%");
   await expect(page.getByTestId("opt-breakevens")).toContainText("The most it can make is reached at 0, outside the chart.");
   await page.getByTestId("opt-max-profit").scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${SHOTS}/breakeven-put-${info.project.name}.png`, fullPage: false });

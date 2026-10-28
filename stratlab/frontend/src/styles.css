@@ -830,7 +830,7 @@ kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radi
 table.legs select, table.legs input { height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); padding: 0 8px; font: inherit; }
 table.legs td { vertical-align: middle; }
 .opt-charge-lines > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--muted); }
-.opt-charge-lines table { width: 100%; max-width: 360px; margin: 4px 0 8px; }
+.opt-charge-lines table { width: 100%; max-width: none; margin: 4px 0 8px; }   /* fills its box: it was 360px in a 460px one (LIVE1A-017) */
 .opt-charge-lines td { padding: 3px 0; }
 .opt-charge-lines td.num { text-align: right; }
 
@@ -1087,6 +1087,7 @@ label.btn.disabled { opacity: .5; }
 
 /* while the first matches load: the table's own height, so the card below doesn't jump when they arrive */
 .screens-wait { min-height: 70vh; }
+.screens-filters-wait { min-height: min(70vh, 640px); }   /* the filter card keeps its height while it loads, so the page does not jump beside the 70vh results (LIVE1A-035) */
 .screens-table { margin: 0 -24px; }
 @media (max-width: 640px) { .screens-table { margin: 0 -16px; } }
 .screens-table td:first-child { white-space: normal; min-width: 180px; }
@@ -2667,3 +2668,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* LIVE1A-004: the instrument search's groups (stock, futures, options) have a small heading; the rest of the options are one row away */
 .results .search-group { margin: 0; padding-block: 8px 2px; font-weight: 600; text-transform: none; }
 .results .search-more { justify-content: center; color: var(--blue-ink); font-weight: 600; }
+/* LIVE1A-018: the options builder's "More settings" are one grid of four columns, not rows of 5, 3 and 1 */
+.k-form.k-form-quad { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .k-form.k-form-quad { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .k-form.k-form-quad { grid-template-columns: minmax(0, 1fr); } }
