@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, dateOnly, inr, price, qty as qtyText, signTone } from "../lib/format";
+import { aFile, ago, dateOnly, inr, price, qty as qtyText, signTone } from "../lib/format";
 import { Info } from "../components/ui";
 import { Download, Trash } from "../components/Icons";
 import { track } from "../lib/analytics";
@@ -123,8 +123,8 @@ export function TaxReportPage() {
   const [allSales, setAllSales] = useState(false);
   const [asking, setAsking] = useState(false);
   // each wide table leads with what the tax works out from; the rest is a click away, so it fits a laptop
-  const salesMore = useMoreColumns("tax-sales", 3);
-  const lotsMore = useMoreColumns("tax-below", 3);
+  const salesMore = useMoreColumns("tax-sales", 3, true);       // all columns from a laptop up unless the person folded them (LIVE1B-012)
+  const lotsMore = useMoreColumns("tax-below", 3, true);
   const [getting, setGetting] = useState<"csv" | "pdf" | null>(null);
 
   const asked = useAskedFy();         // a link's year ("?fy=2025", as in tax tools) is the year it opens on
@@ -259,9 +259,19 @@ export function TaxReportPage() {
       <PageHeader eyebrow="Money · Tax" title="Capital gains on your shares" asOf={rep?.below_cost.open ? rep.prices_at : undefined} asOfLabel="Prices as of"
         lede="Your tradebooks from every broker, matched first in, first out: short- and long-term gains for each financial year, with the exemption and set-off."
         info="Add F&O and your other income for the year's total tax. Only you can see your trades." infoLabel="About the tax report" />
-      <Notice label="Estimate only"><b>Estimate only.</b> {rep?.disclaimer ?? "An estimate from the files you uploaded and the income you entered, not tax advice. It covers only the income you enter or import here, for an individual of the age band and residency you choose. Slab tax depends on your full income, and advance tax and TDS already paid aren't included. Check it with a chartered accountant (CA) before you file or pay tax."}</Notice>
-
+      {/* LIVE1B-068: a year with no trades (a link to this year, or a returning visit) says so, and where the trades are, beside the
+          figure, not two screens down; LIVE1B-069: the figure comes before the estimate note */}
+      {rep && has && y && !hasTrades(y) && (() => {
+        const other = rep.years.filter((x) => x.fy !== y.fy && hasTrades(x)).sort((a, b) => b.fy - a.fy)[0];
+        return other ? (
+          <Notice label="A year with trades" action={{ label: `Show ${other.label}`, onClick: () => { setFy(other.fy); setMovedFrom(null); setAllSales(false); } }}>
+            No trades in {y.label}. {other.label} has trades in your files.
+          </Notice>
+        ) : null;
+      })()}
       {rep && has && y && <Headline y={y} payable={rep.payable?.fy === y.fy ? rep.payable : null} />}
+      {/* LIVE1B-010: the note is one sentence; what the estimate covers is said once, in the total's card */}
+      <Notice label="Estimate only"><b>Estimate only.</b> An estimate from the files you uploaded and the income you entered, not tax advice. Check it with a chartered accountant (CA) before you file or pay tax.</Notice>
 
       <Card>
         <CardHead title="Upload your trades"
@@ -275,7 +285,7 @@ export function TaxReportPage() {
         {result && (
           <div className="k-stack" role="status">
             <p className="k-small">
-              <b>{result.picked ? `Read ${result.picked} files` : result.broker === "CSV" ? "Read as a CSV file" : `Read as a ${result.broker} ${result.kind === "trades" ? "tradebook" : "tax P&L"}`}:</b>{" "}
+              <b>{result.picked ? `Read ${result.picked} files` : `Read as ${aFile(result.broker, result.kind === "trades" ? "tradebook" : "tax P&L")}`}:</b>{" "}
               {result.added} trade{result.added === 1 ? "" : "s"} added{result.duplicates > 0 && `, ${result.duplicates} already uploaded (skipped)`}.
               {result.business.lines > 0 && (result.business.overlap && !result.business.added && !result.business.replaced && !result.business.same
                 ? ` ${result.business.lines.toLocaleString("en-IN")} F&O, commodity and currency line${result.business.lines === 1 ? "" : "s"} read but not added: the dates overlap an earlier file's (below).`
@@ -329,32 +339,20 @@ export function TaxReportPage() {
           <Card compact>
             <CardHead title="Financial year" actions={<>
               <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
-                options={rep.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === rep.current_fy ? " (this year)" : ""}` }))} />
-              <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("csv")}><Download size={16} />{getting === "csv" ? "Making the CSV…" : "Download CSV"}</button>
-              <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("pdf")}><Download size={16} />{getting === "pdf" ? "Making the PDF…" : "Download PDF summary"}</button>
+                options={rep.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === rep.current_fy ? " (this year)" : ""}${hasTrades(x) ? "" : " · no trades"}` }))} />
+              {/* LIVE1B-069: the two downloads are one pair of equal buttons (two widths on a phone) */}
+              <span className="k-btn-pair">
+                <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("csv")}><Download size={16} />{getting === "csv" ? "Making the CSV…" : "Download CSV"}</button>
+                <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("pdf")}><Download size={16} />{getting === "pdf" ? "Making the PDF…" : "Download PDF summary"}</button>
+              </span>
             </>} />
             {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="tax-moved-year">{movedYearNote(movedFrom, y.fy, rep.current_fy, "trades")}</p>}
           </Card>
-
-          {!hasTrades(y) && (() => {
-            const other = rep.years.filter((x) => x.fy !== y.fy && hasTrades(x)).sort((a, b) => b.fy - a.fy)[0];
-            return other ? (
-              <Notice label="A year with trades" action={{ label: `Show ${other.label}`, onClick: () => { setFy(other.fy); setMovedFrom(null); setAllSales(false); } }}>
-                No trades in {y.label}. {other.label} has trades in your files.
-              </Notice>
-            ) : null;
-          })()}
 
           <PageNav items={[{ id: "tax-total", label: "Total tax" }, { id: "tax-gains", label: "Gains" }, ...(y.count > 0 ? [{ id: "tax-sales", label: "Each sale" }] : []),
             { id: "tax-below", label: "Lots below cost" }, { id: "tax-how", label: "How it works" }]} />
 
           <TotalCard y={y} onSave={saveInputs} filing={y.filing.length > 0} />
-
-          <Card label="Tax tools">
-            <CardHead title="Dividends, advance tax and the long-term exemption" />
-            <p className="k-small k-muted">Dividend income with the TDS on it (and whether it goes into the estimate above), the advance tax due by each date with TDS and payments taken off, and how much of this year's long-term exemption is used.</p>
-            <Link className="btn quiet sm k-btn-end" to={fyLink("/money/tax-tools", y.fy)}>Open tax tools</Link>
-          </Card>
 
           <Card id="tax-gains">
             <CardHead title={`Gains in ${y.label}`} />
@@ -362,20 +360,21 @@ export function TaxReportPage() {
               <Stat label={gainLabel("st", !!y.foreign)} value={inr(y.stcg.net)} tone={signTone(y.stcg.net)} note={`${inr(y.stcg.gains)} gains · ${inr(y.stcg.losses)} losses`} />
               <Stat label={gainLabel("lt", !!y.foreign)} value={inr(y.ltcg.net)} tone={signTone(y.ltcg.net)} note={`${inr(y.ltcg.gains)} gains · ${inr(y.ltcg.losses)} losses`} />
               <Stat label="Long-term exemption used" value={inr(y.exemption.used)} note={`of ${inr(y.exemption.limit)}${y.exemption.limit ? ` · ${inr(y.exemption.left)} left` : ""}`} />
-              <Stat label={<>Tax on share gains <Info label="How the tax is estimated">Short-term gains on listed shares are taxed at 15% for sales before 23 July 2024 and 20% from that day; long-term gains (held more than 12 months) at 10% and 12.5%, above the yearly exemption. Gains times rates, before any unused basic exemption, the 87A rebate, surcharge and the 4% cess; the total tax estimate below applies them.</Info></>}
-                value={inr(y.tax)} note={`before basic exemption, rebate and surcharge; ${inr(y.tax_with_cess)} with 4% cess`} />   {/* CK-2 (R16): the qualifier moved from the label (3 lines beside one-line labels) to the note */}
             </StatRow>
             {y.exemption.limit > 0 && y.exemption.used > 0 && <Meter pct={Math.max(0, Math.min(100, (y.exemption.used / y.exemption.limit) * 100))} />}
             {y.foreign && <p className="k-small k-muted" data-testid="tax-us-apart">{usSharesNote(y.foreign.st.net, y.foreign.lt.net, inr)} Their tax is added in the year's total tax estimate; the US card below has each sale.</p>}
           </Card>
 
           <Card>
-            <CardHead title={`How ${y.label} adds up`} />
+            <CardHead title={`How ${y.label} adds up`} infoLabel="How the tax is estimated"
+              info="Short-term gains on listed shares are taxed at 15% for sales before 23 July 2024 and 20% from that day; long-term gains (held more than 12 months) at 10% and 12.5%, above the yearly exemption. Gains times rates, before any unused basic exemption, the 87A rebate, surcharge and the 4% cess; the total tax estimate above applies them." />
             {y.buckets.length === 0 ? <EmptyState title={`No gains or losses in ${y.label}`}>No capital gains or losses were realised in {y.label}.</EmptyState>
               : <DataTable stack label="Gains by rate" columns={bucketCols} rows={[...y.buckets, ...lossRows]} rowKey={(b) => b.key}
                   foot={lossRows.length ? { kind: "Net", gains: inr(y.buckets.reduce((n, b) => n + b.gains, 0) + lossRows.reduce((n, b) => n + b.gains, 0)),
                     after: inr(y.buckets.reduce((n, b) => n + b.after_setoff, 0) + lossRows.reduce((n, b) => n + b.after_setoff, 0)) } : undefined} />}
             {y.steps.length > 0 && <ul className="k-list">{y.steps.map((s, i) => <li key={i}>{s}</li>)}</ul>}
+            {/* LIVE1B-009: the tax at the special rates is a step toward the total, said as that under the table, not a second headline figure */}
+            {y.buckets.length > 0 && <p className="k-note">Tax at these rates: {inr(y.tax)} ({inr(y.tax_with_cess)} with 4% cess), before the unused basic exemption, the 87A rebate and surcharge. The total tax estimate above applies them.</p>}
             {y.exempt_old != null && <p className="k-note">Long-term results on sales before 1 April 2018 ({inr(y.exempt_old)}) were exempt under the old section 10(38), so they aren't counted.</p>}
             {y.gf_missing > 0 && <p className="k-small"><b>{y.gf_missing} sale{y.gf_missing === 1 ? "" : "s"}</b> of shares held on 31 Jan 2018 used the actual cost, because their 31 Jan 2018 price isn't known. Grandfathering could lower that gain; enter the price below.</p>}
             {y.gf_applied > 0 && <p className="k-note">{y.gf_applied} sale{y.gf_applied === 1 ? " was" : "s were"} grandfathered: the cost is the higher of the actual cost and the 31 Jan 2018 price (but not above the sale value).</p>}
@@ -488,7 +487,7 @@ function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
   return (
     <Card compact label="The year's tax">
       <StatRow>
-        <Stat label={`Total tax estimate, ${y.label}`} value={<span aria-label="Total tax estimate">{inr(t.total)}</span>}
+        <Stat label={`Estimated tax for ${y.label}`} value={<span aria-label="Total tax estimate">{inr(t.total)}</span>}
           note={<>{rounds && t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B). ` : ""}<a className="link" href="#tax-total">How it is worked out</a></>} />
         {payable && !payable.locked && payable.total != null && (
           <Stat label="Payable now, with interest" value={<span aria-label="Payable now">{inr(payable.total)}</span>}
@@ -520,7 +519,7 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
     <Card id="tax-total" label="Total tax estimate">
       <CardHead title={`Total tax estimate, ${y.label}`} infoLabel="What the total covers"
         info="Slab tax on your other income, intraday and F&O results, plus tax on share gains at the special rates, less the section 87A rebate where it applies, plus surcharge and 4% cess. It is worked out for an individual of the age band and residency you choose below. Advance tax and TDS already paid aren't taken off." />
-      <p className="k-small k-muted">Covers only the income you enter or import here: the trades in your files and the other income you type below. House property, foreign income, other capital assets and anything else left out aren't counted.{filing && <> <a className="link" href="#tax-filing">Which return and whether a tax audit applies</a>.</>}</p>
+      <p className="k-small k-muted">Covers only the income you enter or import here: the trades in your files and the other income you type below, for an individual of the age band and residency you choose. House property, foreign income, other capital assets and anything else left out aren't counted, and advance tax and TDS already paid aren't included.{filing && <> <a className="link" href="#tax-filing">Which return and whether a tax audit applies</a>.</>}</p>
       {t.confirmed === false && <p className="k-small k-down" role="note"><b>Rules for this year not yet confirmed.</b> The figures repeat the year before until they are checked against the Finance Act.</p>}
       {t.available ? (
         <>
@@ -539,8 +538,11 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
         </>
       ) : <p className="k-small k-muted">{t.reason}</p>}
       <InputsPanel key={y.fy} y={y} onSave={onSave} />
+      {/* LIVE1B-011: the dividends, advance tax and the exemption are a line here, not a card holding one sentence and a button */}
+      <p className="k-small k-muted">Dividends with their TDS, the advance tax due by each date and the long-term exemption used are in <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>Tax tools</Link>.</p>
+      {/* LIVE1B-010: folded: the steps and the table below them said the same figures twice, open, under the inputs */}
       {t.available && (
-        <Disclosure summary="How we got here" open>
+        <Disclosure summary="How we got here">
           <ol className="k-list">{t.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
           {(t.notes ?? []).length > 0 && <ul className="k-list muted" aria-label="Notes on the estimate">{t.notes!.map((n) => <li key={n}>{n}</li>)}</ul>}
           <DataTable label="Total tax breakdown" columns={lineCols} rows={t.lines.map((l, i) => ({ ...l, i }))} rowKey={(l) => String(l.i)} />

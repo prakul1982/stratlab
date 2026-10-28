@@ -78,7 +78,7 @@ test("a refused file's reason stays on the page beside every upload, kept by one
     const src = read(f);
     assert.match(src, /useUploadProblem\(\)/, f);
     assert.match(src, /if \(!refused\(e\)\) fail\(e\)|if \(!refused\(e\)\) fail\(e\);/, f);
-    assert.match(src, /UploadProblem problem=\{problem\}|uploadError &&/, f);
+    assert.match(src, /UploadProblem problem=\{(?:passwordProblem \? null : )?problem\}|uploadError &&/, f);      // the funds page says a wrong password under its box instead (LIVE1B-049)
   }
 });
 

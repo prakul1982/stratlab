@@ -456,9 +456,11 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   const sales = page.getByRole("table", { name: "Realised sales" });
   await expect(sales.getByText("RELIANCE").first()).toBeVisible();
   await expect(sales.getByText("grandfathered")).toBeVisible();                                   // WIPRO, from the tax P&L
-  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(0);
-  await page.getByTestId("cols-tax-sales").click();
-  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toBeVisible();
+  // a laptop shows every column of the sales at once (LIVE1B-012: the purchase date was folded away at 1440px); a phone leads with what the tax works out from
+  const wideScreen = (page.viewportSize()?.width ?? 0) >= 1280;
+  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(wideScreen ? 1 : 0);
+  await page.getByTestId("cols-tax-sales").click();                                                // the button flips it either way
+  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(wideScreen ? 0 : 1);
   await expect(page.getByRole("table", { name: "Open lots below cost" }).getByText("TCS")).toBeVisible();
   await expect(page.getByText("Shares held on 31 Jan 2018")).toBeVisible();
   await page.getByRole("button", { name: "What is tax-loss harvesting?" }).click();
@@ -512,6 +514,8 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   // the total, at the top of the year, with where it comes from
   const total = page.getByRole("region", { name: "Total tax estimate" });
   await expect(total.getByRole("heading", { name: "Total tax estimate, FY 2024-25" })).toBeVisible();
+  await expect(total.getByRole("table", { name: "Total tax breakdown" }), "the workings are folded until asked for (LIVE1B-010)").toBeHidden();
+  await total.getByText("How we got here").click();
   const chips = total.getByRole("list", { name: "Where the tax comes from" });
   await expect(chips.getByRole("listitem")).toHaveCount(4);
   for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("listitem").filter({ hasText: c })).toHaveCount(1);
@@ -1655,7 +1659,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   // the tax report links here, and its estimate for the year now counts the dividends
   await page.goto("/tax-report");
   await settle(page);
-  await expect(page.getByRole("region", { name: "Tax tools" }).getByRole("link", { name: "Open tax tools" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("link", { name: "Tax tools" })).toBeVisible();      // a line in the total's card, no card of its own (LIVE1B-011)
   await page.getByLabel("Financial year").selectOption(String(fy));
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByText(/Dividends of ₹15,000 are income from other sources/)).toBeVisible();
   expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();

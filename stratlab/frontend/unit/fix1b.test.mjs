@@ -98,3 +98,73 @@ test("LIVE1B-019: a figure never breaks inside its digits; ₹100 crore and more
   assert.match(stat, /fitFigure\(el\)/);
   assert.match(read("src/styles.css"), /\.k-stat-v\.one \{ white-space: nowrap; overflow: hidden; \}/);
 });
+
+// ---------- Tax report ----------
+test("LIVE1B-009, 010, 011: one tax figure beside the total; the notes said once; the workings folded; no card for one link", () => {
+  const t = read("src/pages/TaxReportPage.tsx");
+  assert.doesNotMatch(t, /<Stat label=\{<>Tax on share gains/);                                      // 009: no second tax figure in the gains card
+  assert.match(t, /<Stat label=\{`Estimated tax for \$\{y\.label\}`\}/);                           // 010: the top figure is not the next card's heading again
+  assert.match(t, /<CardHead title=\{`Total tax estimate, \$\{y\.label\}`\}/);
+  assert.doesNotMatch(t, /rep\?\.disclaimer/);                                                      // the long note was the "Covers only..." paragraph twice
+  assert.match(t, /for an individual of the age band and residency you choose\. House property, foreign income[^"]*advance tax and TDS already paid aren't included\./);
+  assert.match(t, /<Disclosure summary="How we got here">/);                                        // folded
+  assert.doesNotMatch(t, /<Disclosure summary="How we got here" open>/);
+  assert.doesNotMatch(t, /<Card label="Tax tools">/);                                              // 011
+  assert.match(t, /are in <Link className="link" to=\{fyLink\("\/money\/tax-tools", y\.fy\)\}>Tax tools<\/Link>\./);
+});
+
+test("LIVE1B-012: the sales table opens with every column from 1280px up", () => {
+  const m = read("src/components/MoreColumns.tsx");
+  assert.match(m, /export const WIDE_FROM = 1280;/);
+  assert.match(m, /stored\(key\) \?\? \(wide && typeof window !== "undefined" && window\.innerWidth >= WIDE_FROM\)/);
+  const t = read("src/pages/TaxReportPage.tsx");
+  assert.match(t, /useMoreColumns\("tax-sales", 3, true\)/);
+  assert.match(t, /useMoreColumns\("tax-below", 3, true\)/);
+});
+
+test("LIVE1B-013: the tax upload says 'an Angel One tradebook'", () => {
+  assert.match(read("src/pages/TaxReportPage.tsx"), /`Read as \$\{aFile\(result\.broker, result\.kind === "trades" \? "tradebook" : "tax P&L"\)\}`/);
+});
+
+test("LIVE1B-014: a year with no trades says so in the year list", () => {
+  assert.match(read("src/pages/TaxReportPage.tsx"), /\$\{hasTrades\(x\) \? "" : " · no trades"\}/);
+});
+
+test("LIVE1B-068, 069: a year with no trades says so above the figure; the note comes after it; the two downloads are one pair", () => {
+  const t = read("src/pages/TaxReportPage.tsx");
+  const hint = t.indexOf('label="A year with trades"'), head = t.indexOf("<Headline y={y}"), note = t.indexOf('<Notice label="Estimate only">');
+  assert.ok(hint > 0 && hint < head && head < note, "hint, then the figure, then the estimate note");
+  assert.equal(t.split('label="A year with trades"').length - 1, 1);                                // said once
+  assert.match(t, /<span className="k-btn-pair">/);
+  assert.match(read("src/styles.css"), /@media \(max-width: 640px\) \{ \.k-btn-pair \{ display: grid; grid-template-columns: 1fr; width: 100%; \} \.k-btn-pair \.btn \{ width: 100%; \} \}/);
+});
+
+// ---------- Mutual funds ----------
+test("LIVE1B-015: nothing held says so first; no empty tiles or table", () => {
+  const p = read("src/pages/money/MutualFundsPage.tsx");
+  assert.match(p, /<EmptyState title="Every scheme in your files has been fully redeemed">/);
+  assert.match(p, /\{held\.length > 0 && <Card className="mf-stats">/);
+  assert.match(p, /\{held\.length > 0 && <FoldTable label="Schemes" columns=\{schemeCols\} rows=\{held\}/);
+  assert.doesNotMatch(p, /<p className="k-note">Every scheme in your files has been fully redeemed\.<\/p>/);
+});
+
+test("LIVE1B-016, 018, 049: the 'pick first' hint goes after a read, the choice goes back to Add, a wrong password is said under its box", () => {
+  const p = read("src/pages/money/MutualFundsPage.tsx");
+  assert.match(p, /\{!picked && !result && <span className="k-note">Pick your statement first\./);
+  assert.match(p, /setMode\("add"\);/);
+  assert.match(p, /const passwordProblem = isPdf && problem && \/password\/i\.test\(problem\) \? problem : null;/);
+  assert.match(p, /label="PDF password"[^\n]*error=\{passwordProblem\}/);
+});
+
+test("LIVE1B-017: a total with nothing to say is left out of the costs and habits row", () => {
+  const c = read("src/pages/money/FundCosts.tsx");
+  assert.match(c, /export const costStatsShown = \(q: CostsQuery\) => q\.c\?\.state === "ok" && !!q\.c\.total && q\.c\.total\.funds > 0;/);
+  const b = read("src/pages/money/FundBehaviour.tsx");
+  assert.match(b, /return \{ gap: t\.compared > 0, sips: \(t\.sips \?\? 0\) > 0, falls: b\.pending > 0 \|\| \(t\.falls \?\? 0\) > 0, held: t\.avg_days_held != null, long: t\.long_share != null \};/);
+  assert.match(b, /\{parts\.sips && <Stat label="SIPs"/);
+  assert.match(read("src/pages/money/MutualFundsPage.tsx"), /\{\(costStatsShown\(costs\) \|\| behaviourStatsShown\(habits\)\) && <StatRow>/);
+});
+
+test("LIVE1B-064: the footer date is the day it was worked out, not a second 'as of'", () => {
+  assert.match(read("src/pages/money/MutualFundsPage.tsx"), /Worked out on \{dateOnly\(view\.as_of\)\}\./);
+});

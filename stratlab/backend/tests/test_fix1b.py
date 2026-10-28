@@ -113,3 +113,12 @@ def test_live1b_008_a_list_of_both_markets_has_a_stamp_for_each(w, monkeypatch):
                             {"symbol": "AAPL", "exchange": "US", "name": "Apple", "market": "US", "currency": "USD", "qty": 3.0, "avg": 150.0}], "Manual")
     got = c.get("/holdings", headers=PRO).json()
     assert "us_prices_at" in got and "prices_at" in got
+
+
+# ---------- Mutual funds ----------
+def test_live1b_064_a_category_keeps_no_stray_hyphen():
+    from app import money_mf
+    assert money_mf.broad_of("Equity Scheme - ELSS- Tax Saver Fund", "equity") == ("Equity", "ELSS Tax Saver Fund")
+    assert money_mf.broad_of("Equity Scheme - Flexi Cap Fund", "equity") == ("Equity", "Flexi Cap Fund")
+    assert money_mf.broad_of("Debt Scheme - Short Duration Fund", "debt") == ("Debt", "Short Duration Fund")
+    assert money_mf.broad_of("Other Scheme - Index Funds", "equity") == ("Equity", "Index funds")

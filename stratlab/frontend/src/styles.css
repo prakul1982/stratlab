@@ -2652,3 +2652,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .link-btn.inr-pick, body .k-search input { min-height: 44px; }
   .nw-snaps .btn.quiet.sm { min-width: 44px; }
 }
+
+/* LIVE1B-069: two buttons that go together (the tax report's downloads) are one width each: side by side on a laptop, one under the other, full width, on a phone */
+.k-btn-pair { display: inline-flex; flex-wrap: wrap; gap: var(--s2); }
+@media (max-width: 640px) { .k-btn-pair { display: grid; grid-template-columns: 1fr; width: 100%; } .k-btn-pair .btn { width: 100%; } }
