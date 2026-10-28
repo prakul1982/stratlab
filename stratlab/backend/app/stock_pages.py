@@ -2089,7 +2089,9 @@ ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.link
 /* VR6-022: A to Z in two rows of thirteen on a wide screen, not nineteen and an orphan row of seven (44 px taps, A11Y-2) */
 @media (min-width:641px){nav.links[data-az]{display:grid;grid-template-columns:repeat(13,44px)}}
 /* VR7-003: on a phone the same letters fill the row (a 44 px box each, the row as wide as the screen) in as many columns as leave the last row nearly
-   full (--az7 for a screen 375px and wider, --az6 for a narrower one), not a last row of one or two letters */
+   full (data-c7 for a screen 375px and wider, data-c6 for a narrower one), not a last row of one or two letters */
+nav.links[data-c7="1"]{--az7:1}nav.links[data-c7="2"]{--az7:2}nav.links[data-c7="3"]{--az7:3}nav.links[data-c7="4"]{--az7:4}nav.links[data-c7="5"]{--az7:5}nav.links[data-c7="6"]{--az7:6}nav.links[data-c7="7"]{--az7:7}
+nav.links[data-c6="1"]{--az6:1}nav.links[data-c6="2"]{--az6:2}nav.links[data-c6="3"]{--az6:3}nav.links[data-c6="4"]{--az6:4}nav.links[data-c6="5"]{--az6:5}nav.links[data-c6="6"]{--az6:6}
 @media (max-width:640px){nav.links[data-az]{display:grid;grid-template-columns:repeat(var(--az7,7),minmax(0,1fr))}nav.links[data-az] a{min-width:0;padding:4px 0}}
 @media (max-width:374px){nav.links[data-az]{grid-template-columns:repeat(var(--az6,6),minmax(0,1fr))}}
 .links a[aria-current=page]{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
@@ -3318,7 +3320,8 @@ def _az_cols(n: int, widest: int) -> int:
 
 
 def _az_style(n: int) -> str:
-    return f' style="--az7:{_az_cols(n, 7)};--az6:{_az_cols(n, 6)}"'
+    """The columns as two attributes (the page's body carries no inline style): data-c7 for a screen 375px and wider, data-c6 for a narrower one."""
+    return f' data-c7="{_az_cols(n, 7)}" data-c6="{_az_cols(n, 6)}"'
 
 
 def az_nav(region: str) -> str:

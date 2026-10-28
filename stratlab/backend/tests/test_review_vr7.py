@@ -48,7 +48,7 @@ def test_vr7_003_a_to_z_on_a_phone_fills_its_rows_and_leaves_no_row_of_one():
             assert widest - 2 <= c <= widest and (n % c or c) > 1, (n, widest, c)            # never a last row of one
     assert (cols(26, 7), cols(27, 7), cols(22, 6)) == (7, 7, 6)
     src = open(stock_pages.__file__, encoding="utf-8").read()
-    assert "repeat(var(--az7,7),minmax(0,1fr))" in src and "repeat(var(--az6,6),minmax(0,1fr))" in src and "nav.links[data-az] a{min-width:44px;min-height:44px" in src
+    assert "repeat(var(--az7,7),minmax(0,1fr))" in src and 'nav.links[data-c7="7"]{--az7:7}' in src and "repeat(var(--az6,6),minmax(0,1fr))" in src and "nav.links[data-az] a{min-width:44px;min-height:44px" in src
 
 
 def test_vr7_005_the_blog_links_on_a_phone_are_44px_to_tap_without_moving_a_line():
