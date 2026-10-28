@@ -896,6 +896,13 @@ def put_watchlist(req: WatchReq, profile=Depends(current_profile)):
     before = get_watchlist(profile)["items"]
     before = before if isinstance(before, list) else []
     had = {(i.get("region"), str(i.get("symbol") or "").upper()) for i in before if isinstance(i, dict)}
+    # Market Watch's limit on the first list (MW-1): a list may shrink or stay, and grows only to what the plan keeps
+    from ..plans import PLANS, bigger_plan
+    cap = PLANS[profile["_plan"]]["watchlist_symbols"]
+    if cap is not None and len(items) > max(cap, len(before)) and any((i["region"], i["symbol"].upper()) not in had for i in items):
+        nxt = bigger_plan(profile["_plan"], "watchlist_symbols")
+        err(402, "plan_limit", f"The {PLANS[profile['_plan']]['name']} plan keeps {cap} symbols in a list."
+            + (f" {nxt} {'keeps ' + str(PLANS[nxt.lower()]['watchlist_symbols']) if PLANS[nxt.lower()]['watchlist_symbols'] else 'has no limit'}." if nxt else ""))
     # a symbol added must be a listed company or fund: one typed and saved as it was ("ZZZZQQ") showed a row of dashes, was
     # counted on At a glance and offered a deep dive (DD-070). One already on the list stays; a list that can't be read to
     # tell (None) doesn't stop the save
