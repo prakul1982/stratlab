@@ -25,6 +25,17 @@ export const SESSION_MIN: Record<string, [number, number]> = {
   US: [9 * 60 + 30, 16 * 60], UK: [8 * 60, 16 * 60 + 30], EU: [9 * 60, 17 * 60 + 30], JP: [9 * 60, 15 * 60 + 30],
 };
 
+/** A market's session at a moment: MCX's evening session ends at 23:55 while US daylight saving is off (from early November to
+ * March) and at 23:30 while it is on (MWR1-017: a fixed 23:30 stopped the forming candle and the countdown 25 minutes early all winter). */
+export function sessionOf(market: string, at: number): [number, number] | undefined {
+  const s = SESSION_MIN[market];
+  if (!s || market !== "MCX") return s;
+  try {
+    const zone = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", timeZoneName: "short" }).formatToParts(at).find((p) => p.type === "timeZoneName")?.value;
+    return zone === "EST" ? [s[0], 23 * 60 + 55] : s;
+  } catch { return s; }
+}
+
 /** Whether a wall-clock time falls on a Saturday or Sunday: no market with a session trades then, so a price stamped then (a source
  * that sent no time, read as now) starts no candle. */
 const weekend = (wall: number): boolean => { const d = new Date(wall).getUTCDay(); return d === 0 || d === 6; };
@@ -53,7 +64,7 @@ export function applyTick(last: Bar | undefined, tick: Tick, tf: string, vol: Vo
     // the first price of a later trading day starts that day's candle (a chart left open over the open used to stay on
     // yesterday's until it was reloaded: MWR1-003); only inside the session, and not before the candle's own time
     if (tf !== "1d" || tick.t <= last.t || dayOf(wall) < last.day) return null;
-    const [open, close] = SESSION_MIN[market] ?? [0, 1440];
+    const [open, close] = sessionOf(market, tick.t) ?? [0, 1440];
     const minutes = ((wall % 86_400_000) / 60_000) | 0;
     if (minutes < open || minutes >= close || (market in SESSION_MIN && weekend(wall))) return null;
     const midnight = dayOf(wall) * 86_400_000;
@@ -63,7 +74,7 @@ export function applyTick(last: Bar | undefined, tick: Tick, tf: string, vol: Vo
   if (tick.t < last.t + ms) return { bar: grow(last), isNew: false };
   const start = last.t + Math.floor((tick.t - last.t) / ms) * ms;
   const wall = start + (last.w - last.t);
-  const [open, close] = SESSION_MIN[market] ?? [0, 1440];
+  const [open, close] = sessionOf(market, tick.t) ?? [0, 1440];
   const minutes = ((wall % 86_400_000) / 60_000) | 0;
   if (minutes < open || minutes >= close || (market in SESSION_MIN && weekend(wall))) return null;
   return { bar: { t: start, w: wall, o: tick.p, h: tick.p, l: tick.p, c: tick.p, v: add, day: dayOf(wall) }, isNew: true };
@@ -77,7 +88,7 @@ export function closesIn(last: Bar | undefined, tf: string, now: number, market?
   const ms = TF_MS[tf];
   if (!last || ms == null || now < last.t) return null;
   let end = last.t + ms;
-  const session = market ? SESSION_MIN[market] : undefined;
+  const session = market ? sessionOf(market, last.t) : undefined;
   if (session) {
     const dayStart = Math.floor(last.w / 86_400_000) * 86_400_000;
     end = Math.min(end, dayStart + session[1] * 60_000 - (last.w - last.t));

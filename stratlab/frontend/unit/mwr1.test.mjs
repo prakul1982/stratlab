@@ -62,6 +62,18 @@ test("the last candle of a session counts down to the close, not to the end of i
   assert.equal(T.closesIn(mcx, "30m", at("2026-10-23T23:20:00+05:30"), "MCX"), 600);
 });
 
+// ---------- MWR1-017: MCX's evening session ends at 23:55 in winter ----------
+test("MCX's last candle runs to 23:30 while US daylight saving is on and to 23:55 while it is off", () => {
+  const summer = bar("2026-10-27T23:25:00+05:30", 1, 1, 1, 1), winter = bar("2026-11-03T23:25:00+05:30", 1, 1, 1, 1);
+  assert.deepEqual(T.sessionOf("MCX", at("2026-10-27T12:00:00+05:30")), [540, 1410]);
+  assert.deepEqual(T.sessionOf("MCX", at("2026-11-03T12:00:00+05:30")), [540, 1435]);
+  assert.deepEqual(T.sessionOf("IN", at("2026-11-03T12:00:00+05:30")), [555, 930]);
+  assert.equal(T.applyTick(summer, { p: 1, v: null, t: at("2026-10-27T23:31:00+05:30") }, "5m", fresh(), "MCX"), null);
+  assert.equal(T.applyTick(winter, { p: 1, v: null, t: at("2026-11-03T23:31:00+05:30") }, "5m", fresh(), "MCX").isNew, true);
+  assert.equal(T.closesIn(winter, "30m", at("2026-11-03T23:40:00+05:30"), "MCX"), 900);
+  assert.equal(T.closesIn(summer, "30m", at("2026-10-27T23:29:00+05:30"), "MCX"), 60);
+});
+
 // ---------- MWR1-003: a daily chart left open over the open starts the new day's candle ----------
 test("the first price of the next trading day starts its daily candle, inside the session only", () => {
   const fri = bar("2026-10-23T00:00:00+05:30", 100, 105, 98, 101, 9000);
