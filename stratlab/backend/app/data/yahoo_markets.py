@@ -199,6 +199,18 @@ class YahooProvider:
             return bars
         return [{**b, "o": b["o"] * k, "h": b["h"] * k, "l": b["l"] * k, "c": b["c"] * k} for b in bars]
 
+    def minute_history(self, inst: dict, start, end) -> list[dict]:
+        """1-minute candles from `start` to `end` (aware times): the source keeps about a week of them, so older ones are not
+        there. Pence and cents converted as in `history`; never a weekend candle for a weekday market (MW-1)."""
+        from .. import chart_feed
+        try:
+            c = self.yahoo._chart(inst["token"], "1m", chart_feed.MINUTE_REACH["delayed"], "1m", 60)
+        except SourceError as e:
+            raise DataError(str(e)) from None
+        k = self._scale(inst, c["meta"])
+        bars = chart_feed.between(trading_bars(self.market, c["candles"], "1m"), start, end)
+        return bars if k == 1.0 else [{**b, "o": b["o"] * k, "h": b["h"] * k, "l": b["l"] * k, "c": b["c"] * k} for b in bars]
+
     def closed_candles(self, inst: dict, tf: str, since: str | None) -> list[dict]:
         """Candles that have fully closed after `since`, for live paper trading."""
         from datetime import datetime

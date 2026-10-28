@@ -154,7 +154,7 @@ def test_instrument_candles_for_notebooks_and_paper(w):
     assert old and old[-1]["t"] < first
     assert c.get(f"/chart/candles/{inst['id']}?tf=5m", headers=PRO).json()["candles"]
     assert c.get("/chart/candles/US:AAPL?tf=1h", headers=PRO).json()["candles"]
-    assert c.get(f"/chart/candles/{inst['id']}?tf=1w", headers=PRO).status_code == 400
+    assert c.get(f"/chart/candles/{inst['id']}?tf=2m", headers=PRO).status_code == 400   # 1W is valid since MW-1
     assert c.get("/chart/candles/IN:999999999?tf=1d", headers=PRO).status_code == 404
 
 

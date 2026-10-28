@@ -905,7 +905,51 @@ class Research:
     # ---------- charts ----------
     def chart(self, region: str, symbol: str, rng: str = "1y", tf: str = "1d", before: str = "") -> dict:
         """Candles for the price chart: a range of daily ones, a recent window of intraday ones, or (with
-        `before`) the page of older candles before a time. `more` says whether older candles exist."""
+        `before`) the page of older candles before a time. `more` says whether older candles exist. `live` and `delayed`
+        say how current the newest candle is: the broker's are live; the other source's are delayed (MW-1)."""
+        got = self._chart(region, symbol, rng, tf, before)
+        kite_on = region == "IN" and got.get("source") == "Kite"
+        return {**got, "live": kite_on, "delayed": not kite_on}
+
+    def _chart(self, region: str, symbol: str, rng: str, tf: str, before: str) -> dict:
+        """The candles of one timeframe: the broker's for an Indian stock or index while its login is on, else the other
+        source's. 3m, 10m, 30m, 2h, 4h, 1W and 1M are built from smaller candles on the exchange's session clock; 1m comes
+        in blocks the broker's reads share (KiteService.history_range)."""
+        from .. import bar_agg, chart_feed
+        from ..chart_data import parse_before
+        from ..us_ticker import canon
+        base = bar_agg.base_of(tf)
+        if tf == "1m" or base == "1m":
+            return self._chart_minutes(region, canon(region, symbol), tf, parse_before(before))
+        if base != tf:
+            got = self._chart_native(region, symbol, rng, base, before)
+            return {**got, "tf": tf, "candles": chart_feed.build(got["candles"], region, tf, None, bool(got.get("more")))}
+        return self._chart_native(region, symbol, rng, tf, before)
+
+    def _chart_minutes(self, region: str, symbol: str, tf: str, until) -> dict:
+        """1-minute (and 3-minute) candles of a company or index: the broker's blocks for an Indian one while its login is
+        on, else a week of them from the other source (delayed)."""
+        from .. import chart_feed
+        inst = None
+        if region == "IN" and self._kite():
+            inst = self._kite_index(symbol) if symbol in KITE_INDEX else self.kite.equity(symbol) or self.kite.by_symbol(symbol)
+        kind = "kite" if inst else "delayed"
+        start, end, more = chart_feed.minute_window(tf, kind, until)
+        if inst:
+            try:
+                raw = self.kite.history_range(inst["token"], "1m", start, end)
+                return {"currency": "INR", "source": "Kite", "tf": tf, "more": more,
+                        "candles": chart_feed.build(raw, region, tf, until, more)}
+            except Exception:
+                kind = "delayed"
+                start, end, more = chart_feed.minute_window(tf, kind, until)
+        ysym = _yahoo_in(symbol) if region == "IN" and not symbol.startswith("^") else symbol
+        c = self.yahoo._chart(ysym, "1m", chart_feed.MINUTE_REACH["delayed"], "1m", 60)
+        raw = chart_feed.between(c["candles"], start, end)
+        return {"currency": c["meta"].get("currency") or ("INR" if region == "IN" else "USD"), "source": "Yahoo Finance",
+                "tf": tf, "more": more, "candles": chart_feed.build(raw, region, tf, until, more)}
+
+    def _chart_native(self, region: str, symbol: str, rng: str, tf: str, before: str) -> dict:
         from ..chart_data import older, parse_before, window
         from ..us_ticker import canon
         symbol = canon(region, symbol)                   # BRK.B's candles are BRK-B's (R13-001)

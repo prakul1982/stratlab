@@ -517,10 +517,12 @@ def _refresh_history(region: str, symbol: str, sources: dict) -> None:
 @router.get("/chart/{region}/{symbol}")
 def chart(region: str, symbol: str, range: str = "1y", tf: str = "1d", before: str | None = None,
           profile=Depends(current_profile)):
-    """A company's candles. `tf` is 5m, 15m, 1h or 1d; `before` (an ISO time) asks for the page of older
-    candles when the chart is scrolled back, and `more` says whether still older ones exist."""
-    if tf not in ("5m", "15m", "1h", "1d"):
-        err(400, "bad_tf", "Pick 5m, 15m, 1h or 1d candles.")
+    """A company's candles. `tf` is any size from 1m to 1mo (chart_data.TFS); `before` (an ISO time) asks for the page of
+    older candles when the chart is scrolled back, and `more` says whether still older ones exist. `live` and `delayed` say
+    how current the newest candle is (MW-1)."""
+    from .. import chart_data
+    if tf not in chart_data.TFS:
+        err(400, "bad_tf", "Pick a candle size from 1 minute to 1 month.")
     r = region_of(region)
     s = symbol_of(symbol, r)
     return ok(source_call(lambda: hub.chart(r, s, range[:5], tf, (before or "")[:40])))
