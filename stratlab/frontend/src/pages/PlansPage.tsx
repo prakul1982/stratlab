@@ -11,13 +11,11 @@ import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanCompare } from "../components/PlanCompare";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
-import { FEATURES, LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
+import { FEATURES, LIMITS, PRICE, splitFeatures, WHO, type Limits, type PlanId } from "../lib/plans";
 import { readViewAs } from "../lib/viewAs";
 import { canBuy, chargeAboutNote, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 
 const planName = (p: PlanId) => ({ free: "Free", basic: "Basic", pro: "Pro" }[p]);
-/** How many of a plan's lines its card shows before "N more included" (the cards' eight lines each made three uneven walls of text). */
-export const PLAN_LINES_SHOWN = 5;
 
 export function PlansPage() {
   const { me, session, ready, fail, notify, refreshMe, viewAs: viewAsMe } = useApp();
@@ -158,18 +156,18 @@ export function PlansPage() {
                 {price.inr && gst && <span className="k-note">incl. GST</span>}
                 {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}
               </div>
-              {/* VR6-013: the first five lines of each card, the rest one tap away: the three cards stood 984, 1,176 and 1,015px tall, each a wall of
-                  small text that the Side by side tables below say again in full (every line is still in the page, and on the Basic and Pro cards "Everything in ..." stays first) */}
+              {/* VR6-013: about 400 characters of each card's lines, the rest one tap away (lib/plans.ts splitFeatures): the three cards stood 984, 1,176 and
+                  1,015px tall, each a wall of small text that the Side by side tables below say again; every line is still in the page */}
               {(() => {
                 const line = (f: string) => f.endsWith(":") ? <li key={f} className="head">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>;
-                const head = FEATURES[p].filter((f) => f.endsWith(":")), items = FEATURES[p].filter((f) => !f.endsWith(":"));
+                const { head, shown, more } = splitFeatures(FEATURES[p]);
                 return (
                   <>
-                    <ul className="k-plan-list">{[...head, ...items.slice(0, PLAN_LINES_SHOWN)].map(line)}</ul>
-                    {items.length > PLAN_LINES_SHOWN && (
+                    <ul className="k-plan-list">{[...head, ...shown].map(line)}</ul>
+                    {more.length > 0 && (
                       <details className="k-plan-more" data-testid={`plan-more-${p}`}>
-                        <summary>{items.length - PLAN_LINES_SHOWN} more included in {planName(p)}</summary>
-                        <ul className="k-plan-list">{items.slice(PLAN_LINES_SHOWN).map(line)}</ul>
+                        <summary>{more.length} more included in {planName(p)}</summary>
+                        <ul className="k-plan-list">{more.map(line)}</ul>
                       </details>
                     )}
                   </>

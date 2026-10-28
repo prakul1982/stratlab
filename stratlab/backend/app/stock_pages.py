@@ -2088,11 +2088,14 @@ form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:16px 0}form.find select,f
 form.find input{flex:1;min-width:0}form.find button{cursor:pointer;font:inherit}
 footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:960px;margin:0 auto;padding:24px clamp(16px,4vw,32px) 40px;font-size:13.5px;color:var(--muted)}
 footer.site p{max-width:72ch;margin:0 0 8px}footer.site nav{display:flex;flex-wrap:wrap;gap:4px 18px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}footer.site nav a:hover{color:var(--ink)}
-@media (max-width:640px){.sub{white-space:normal;overflow:visible}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide,.stat.long{grid-column:1/-1}.card{padding:16px}h2{margin-top:32px}}
+/* VR6-027: the line under the name wraps on a phone. VR6-003: no forced full row for a long tile: the merge of PUB-2 kept the older rule here
+   (.grid, .stat.long{grid-column:1/-1}), so a market cap took a row of its own beside tiles that are two to a row, and the last-child rule below
+   then stranded the tile before it; the long tile is half a row at 17px, as PUB-2 drew it */
+@media (max-width:640px){.sub{white-space:normal;overflow:visible}}
 @media (max-width:640px){ul.dir[data-short]{grid-template-columns:repeat(2,minmax(0,1fr))}ul.dir[data-short] li{padding:0 12px}}
 /* VR5-008: the two buttons of "Go further" were 246px and 206px wide, left-aligned: one width on a phone */
 @media (max-width:640px){.ctas{flex-direction:column}.ctas .btn{justify-content:center;text-align:center}}
-@media (max-width:640px){.tiles,.tiles.c3,.tiles.c4{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.tiles{grid-auto-flow:row dense}.stat.fill2,.stat.fill3{grid-column:auto}.tiles>.stat.lone{grid-column:1/-1}.stat.long b{font-size:17px}.stat b{font-size:20px}.figs{padding:16px 16px 4px}.card{padding:16px}h2{margin-top:32px}}
+@media (max-width:640px){.tiles,.tiles.c3,.tiles.c4{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.tiles>.stat:last-child:nth-child(odd){grid-column:1/-1}.stat.fill2,.stat.fill3{grid-column:auto}.stat.long b{font-size:17px}.stat b{font-size:20px}.figs{padding:16px 16px 4px}.card{padding:16px}h2{margin-top:32px}}
 @media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:48px}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .chart-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:6px;min-height:52px}
@@ -2643,11 +2646,7 @@ def _figures(f: dict) -> str:
         return ""
     cols = min(4 if (-n) % 4 <= (-n) % 3 else 3, max(n, 2))
     rest = (-n) % cols
-    # on a phone a long tile takes a row and the others go two across; when those are an odd number the last of them takes its row
-    # (VR6-003: with one long tile and an even number of the others, the last-child rule left "Net margin" alone above "Dividend yield")
-    short = [i for i, t in enumerate(tiles) if not t["long"]]
-    lone = short[-1] if len(short) % 2 else -1
-    cells = "".join(f'<div class="stat{" long" if t["long"] else ""}{" lone" if i == lone else ""}{f" fill{rest + 1}" if rest and i == n - 1 else ""}" title="{e(t["title"])}">'
+    cells = "".join(f'<div class="stat{" long" if t["long"] else ""}{f" fill{rest + 1}" if rest and i == n - 1 else ""}" title="{e(t["title"])}">'
                     f'<span>{e(t["label"])}</span><b>{e(t["value"])}</b><small>{e(t["line"])}</small></div>' for i, t in enumerate(tiles))
     return f'<h2>Key figures</h2><div class="card figs">{rng}' + (f'<div class="tiles c{cols}">{cells}</div>' if tiles else "") + "</div>"
 

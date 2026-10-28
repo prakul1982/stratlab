@@ -65,17 +65,14 @@ def test_a_table_of_three_or_four_columns_wraps_to_fit_a_phone_and_the_four_chec
     assert '<div class="btbl wide">' in blog.blocks_html(six)
 
 
-def test_a_long_tile_takes_its_row_on_a_phone_and_only_the_odd_one_out_of_the_rest_is_alone():
+def test_a_long_tile_is_half_a_row_on_a_phone_like_the_others_and_only_an_odd_last_tile_takes_its_row():
+    """The merge of PUB-2 kept an older rule that gave a long tile (a market cap in lakh crore) a row of its own, so the last-child rule
+    stranded the tile before it ("Net margin" alone above "Dividend yield")."""
     css = stock_pages.STYLE
-    assert ".tiles>.stat.lone{grid-column:1/-1}" in css and "last-child:nth-child(odd)" not in css.split(".tiles{grid-auto-flow")[1].split("}")[0]
-    # a long market cap and an even number of short tiles: none is "lone" (the last-child rule used to strand "Net margin" above "Dividend yield")
-    def classes(t):
-        return re.findall(r'<div class="stat([^"]*)" title=', t)
-    for page in (_page(market_cap=1895000.0, profit_ttm=88167.0), _page(market_cap=1895000.0, profit_ttm=88167.0, div_yield=None)):
-        c = classes(page)
-        short = [x for x in c if "long" not in x]
-        assert sum("long" in x for x in c) == 1
-        assert sum("lone" in x for x in c) == len(short) % 2                                    # the odd one out of the short tiles takes its row; none when they pair up
+    assert ".stat.wide,.stat.long{grid-column:1/-1}" not in css and ".grid{grid-template-columns:repeat(2" not in css
+    assert ".tiles>.stat:last-child:nth-child(odd){grid-column:1/-1}" in css and ".stat.long b{font-size:17px}" in css
+    t = _page(market_cap=1895000.0, profit_ttm=88167.0)
+    assert re.search(r'<div class="stat long"[^>]*><span>Market cap</span>', t)               # still marked long (a smaller figure), and no longer a row of its own
 
 
 def test_surveillance_comes_after_the_key_figures_with_a_heading_like_the_others_and_no_grey_paragraph_of_its_own():

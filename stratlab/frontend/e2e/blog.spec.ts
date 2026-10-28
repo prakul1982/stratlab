@@ -185,7 +185,8 @@ test("PUB-2: a post has one content width, headline numbers as tiles, tables tha
   expect(await t.locator("thead th").evaluateAll((e) => e.every((x) => x.getBoundingClientRect().height < 40))).toBe(true);        // no header wraps
   expect(await t.locator("tbody th[scope=row]").evaluateAll((e) => e.every((x) => x.querySelector("a")!.getBoundingClientRect().height < 30 && x.scrollWidth <= x.clientWidth + 1))).toBe(true);   // no name wraps or is cut
   expect(await t.locator("td").evaluateAll((e) => e.every((x) => x.scrollWidth <= x.clientWidth + 1))).toBe(true);                       // no figure or check is cut
-  expect(await t.locator("tbody tr").first().locator("td").evaluateAll((e) => e.map((x) => getComputedStyle(x).textAlign))).toEqual(["right", "right", "right", "right", "left"]);
+  // (on a phone a table of five columns or more is a card per row, VR5-007: its figures are laid out left, each under its column's name)
+  if (!phone) expect(await t.locator("tbody tr").first().locator("td").evaluateAll((e) => e.map((x) => getComputedStyle(x).textAlign))).toEqual(["right", "right", "right", "right", "left"]);
   await noSideways(page);
   expect(errors).toEqual([]);
 });

@@ -114,7 +114,7 @@ def test_the_css_gives_each_row_one_baseline_and_two_to_a_row_on_a_phone():
     assert "@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 3;grid-template-rows:subgrid" in css and ".stat span{align-self:end}" in css
     assert ".stat b{display:block;font-size:22px;line-height:1.25;font-weight:600;white-space:nowrap}" in css
     assert ".tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))" in css and ".tiles.c3{grid-template-columns:repeat(3,minmax(0,1fr))}" in css
-    assert "@media (max-width:640px){.tiles,.tiles.c3,.tiles.c4{grid-template-columns:repeat(2,minmax(0,1fr))" in css and ".tiles>.stat.lone{grid-column:1/-1}" in css
+    assert "@media (max-width:640px){.tiles,.tiles.c3,.tiles.c4{grid-template-columns:repeat(2,minmax(0,1fr))" in css and ".tiles>.stat:last-child:nth-child(odd){grid-column:1/-1}" in css
     assert ".stat small{display:block;font-size:12.5px" in css and ".rb-now{fill:var(--ink-2);font-size:13px" in css      # nothing under 12 px
 
 

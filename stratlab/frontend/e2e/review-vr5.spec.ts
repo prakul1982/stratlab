@@ -64,7 +64,8 @@ test("VR5-003: at 360px the signed-out library's header has the logo whole besid
 
 test("VR5-007: a research post's six-column tables are cards on a phone, and none runs past the screen", async ({ page }) => {
   await open(page, "/blog/classic-strategies-ten-markets-after-costs", null, 360);
-  const table = page.locator(".btbl.wide").first();
+  // (VR6-008: the post's first card table is now "The four checks"; the rule sets' tables are the ones with a Trades column)
+  const table = page.locator('.btbl.wide:has(td[data-l="Trades"])').first();
   await expect(table).toBeVisible({ timeout: 30_000 });
   const clipped = await page.locator(".btbl").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).length);
   expect(clipped, "tables wider than their box").toBe(0);
