@@ -55,6 +55,7 @@ By default it only reports. With `UI_LINT_STRICT=1` any problem that is not acce
 | R23 | Header wrap mismatch: cards side by side whose headers differ in height because one header's controls wrapped |
 | R24 | A faint checkbox: an unchecked box or radio whose border and fill are both under 3:1 against what is behind them |
 | R25 | The same sentence twice: one sentence of 30 characters or more said twice in one card (table rows are left out) |
+| R26 | Content past its card: a table, picture, control or tile whose right edge is more than 3px past the right edge of the card that holds it, with no scrolling or clipping box between |
 
 The thresholds live in `ui-lint-rules.ts`; the table above is the same text as the rule list at the top of
 `ui-lint.spec.ts`, which is what the report prints.
@@ -89,7 +90,7 @@ Options, all environment variables:
 ## The allowlist
 
 `stratlab/frontend/e2e/ui-lint.allow.json` lists layout problems accepted on purpose. An entry names the page (a route such
-as `/plans`, or `*` for every page), the rule (`R1` to `R25`), a piece of the element's label as the report prints it,
+as `/plans`, or `*` for every page), the rule (`R1` to `R26`), a piece of the element's label as the report prints it,
 and a **reason**. An entry without a reason does nothing. The report still lists an accepted problem, marked allowed, so
 the list stays honest.
 
