@@ -7,6 +7,7 @@ import "../pages/trade/trade.css";
 import "../pages/trade/positioning.css";
 import { asOf, fmtDate, IST } from "../lib/format";
 import { chainWithTime, strike, VIX_IV_LABEL, vixIvLine } from "../lib/positioning";
+import { useMarketRefresh } from "../lib/marketLive";
 const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /* India VIX on the Positioning page: the value now and its change, the day's range, where it sits among the past year's
@@ -24,6 +25,9 @@ export function VixPanel() {
   useEffect(() => {
     api<Vix>("/trade/vix").then(setV).catch((e) => setError(e instanceof ApiError ? e.message : "India VIX couldn't be read just now."));
   }, []);
+  // the value, its day range, the percentile and NIFTY's ATM IV again each minute while India trades; a read that fails keeps the
+  // figures shown (LIVE-1)
+  useMarketRefresh(["IN"], () => { api<Vix>("/trade/vix").then(setV).catch(() => undefined); }, !!v);
   const year = useMemo(() => {
     if (!v) return null;
     const iv = new Map(v.nifty_iv.series.map((p) => [p.day, p.iv]));

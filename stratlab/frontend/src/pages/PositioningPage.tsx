@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useMarketRefresh } from "../lib/marketLive";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -205,6 +206,8 @@ function PcrTable({ coverage }: { coverage?: Coverage }) {
     }, 15000);
     return () => window.clearTimeout(t);
   }, [waiting, tries]);
+  // the put-call ratios again each minute while India trades, in place; a read that fails keeps the table shown (LIVE-1)
+  useMarketRefresh(["IN"], () => { api<{ pcr: PcrRow[] }>("/trade/positioning/pcr").then((d) => setRows(d.pcr)).catch(() => undefined); }, Array.isArray(rows));
   const cols: Column<PcrRow>[] = [
     { key: "name", header: <>Index <span className="k-note">· expiry</span></>, rowHeader: true, cell: (r) => <>{r.name}{r.source && <span className="k-sub-line" data-testid="pcr-expiry">{r.expiry ? `${shortDay(r.expiry)}${r.cycle ? ` · ${r.cycle}` : ""}` : "–"}</span>}</> },
     { key: "oi", header: "PCR (OI)", numeric: true, cell: (r) => ratio(r.pcr_oi) },
@@ -257,6 +260,10 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
     }, 15000);
     return () => { live = false; window.clearTimeout(t); };
   }, [waiting, tries, name, expiry]);
+  // the open chain again each minute while India trades, in place, for the index and expiry shown (LIVE-1)
+  useMarketRefresh(["IN"], () => {
+    api<ChainFacts>(`/trade/positioning/chain?name=${name}&expiry=${expiry}`).then((d) => setC((cur) => (cur && cur !== "error" && cur.name === d.name ? d : cur))).catch(() => undefined);
+  }, !!c && c !== "error" && !c.reading);
   const hasChg = c && c !== "error" && c.rows.some((r) => r.call_chg != null || r.put_chg != null);
   type CR = ChainFacts["rows"][number];
   // contracts (lots), as the exchange's chain and the participant table count them; shares only when the lot isn't known (R7T-002)
