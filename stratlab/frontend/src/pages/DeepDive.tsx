@@ -6,7 +6,7 @@ import { useApp } from "../lib/app";
 import { deepDiveLimitLine } from "../lib/account";
 import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, signTone, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { millionsOf, scaleFor, usdAmount } from "../lib/research";
+import { marginText, millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { Badge, Card, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow } from "../components/kit";
@@ -268,7 +268,7 @@ export function DeepDivePage() {
                 columns={[{ key: "q", header: <>Quarter <span className="k-note">({qS.unit})</span></>, rowHeader: true, cell: (q) => q.quarter },
                   { key: "s", header: "Sales", numeric: true, cell: (q) => qS.fmt(q.sales) },
                   { key: "y", header: "vs a year ago", numeric: true, cell: (q) => (q.sales_yoy == null ? "–" : <Signed value={q.sales_yoy}>{pct(q.sales_yoy)}</Signed>) },
-                  ...(n.bank && n.quarters.slice(-8).every((q) => q.opm == null) ? [] : [{ key: "o", header: n.bank ? "Financing margin" : "EBITDA margin", numeric: true, cell: (q: (typeof n.quarters)[number]) => pc(q.opm) }]),
+                  ...(n.bank && n.quarters.slice(-8).every((q) => q.opm == null) ? [] : [{ key: "o", header: n.bank ? "Financing margin" : "EBITDA margin", numeric: true, cell: (q: (typeof n.quarters)[number]) => marginText(q.opm) }]),
                   { key: "p", header: "Net profit", numeric: true, cell: (q) => qS.fmt(q.profit) }]} />
             )}
           </Panel>

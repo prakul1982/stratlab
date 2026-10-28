@@ -12,8 +12,10 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 test("R68-004: the start-up error card's link button is readable, and the notices don't stack or empty the app's elements", () => {
   const html = read("index.html");
-  assert.match(html, /\.boot-btn, \.boot a\.boot-btn \{[^}]*color: #fff;/);          // beats ".boot a { color: inherit }"
-  assert.match(html, /\.boot-btn, \.boot a\.boot-btn \{ background: #eee; color: #1d1b17; \}/);
+  // the button is ink with paper-coloured words (beats ".boot a { color: inherit }"), and the dark theme swaps the two (RC7-001: through
+  // the --b-ink / --b-on-ink tokens, which the dark blocks redefine, so it is readable on the paper in both themes)
+  assert.match(html, /\.boot-btn, \.boot a\.boot-btn \{[^}]*background: var\(--b-ink\); color: var\(--b-on-ink\);/);
+  assert.match(html, /--b-ink: #EFE9DC;[^}]*--b-on-ink: #141311;/);
   assert.match(html, /body:has\(#root \[role="alert"\]\) > main > \.boot-now \{ display: none; \}/);
   const boot = read("public/boot.js");
   assert.match(boot, /k\.indexOf\("__reactContainer"\) === 0/);

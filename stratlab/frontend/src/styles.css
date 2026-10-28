@@ -1159,6 +1159,16 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 /* The welcome question opens with what StratLab is, in the landing page's own sentence: body ink, a touch larger than the
    muted line under it, so it reads first */
 .welcome-what { margin: 0; font-size: 15.5px; line-height: 1.45; color: var(--ink); }
+/* a phone: the four choices come straight under the title, then the intro and the note, then the optional level question, so all four
+   are on screen at 360 x 640 with no scroll (RC7-002). The order is the stylesheet's; the page's own order (intro, note, choices,
+   level) is the reading order, and the only controls are the choices and then the level, in the order they are drawn. */
+@media (max-width: 520px) {
+  .welcome-choices { order: 1; }
+  .welcome-what { order: 2; }
+  .welcome-note { order: 3; }
+  .welcome-level { order: 4; }
+  .welcome { gap: var(--s3); }
+}
 @media (max-width: 760px) { .lp-spaces { grid-template-columns: minmax(0, 1fr); } }
 .space-tag { flex: none; align-self: center; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
 /* Money: net worth */
@@ -2256,6 +2266,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .plan-lock { display: inline; }
 .k-badge svg.lock-ic { margin-right: 2px; }
 .page-lock { margin-bottom: var(--s4); }
+.page-lock-slot:empty { display: none; }       /* the slot under every page title: nothing in it, no space */
+.page-lock-slot > .page-lock { margin-top: var(--s3); }
 
 /* signed out on an app address, a page that doesn't exist, a page that isn't yours (pages/Gate.tsx) */
 .gate { max-width: 640px; }

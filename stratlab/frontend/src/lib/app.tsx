@@ -3,6 +3,7 @@ import type { Session } from "@supabase/auth-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
 import { clearLocalData } from "./localData";
 import { signOutHere } from "./signout";
+import { clearSignInEnded, noteSignInEnded } from "./signin";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
 import { identify, resetAnalytics, track, trackSignup } from "./analytics";
@@ -152,7 +153,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
 
   useEffect(() => {
     setApiHandlers({
-      unauthorized: () => { void signOutHere(supabase.auth); },
+      unauthorized: () => { noteSignInEnded(); void signOutHere(supabase.auth); },
       offline: () => setDataOffline(true),
     });
     // a saved sign-in that can't be renewed right now (no answer) comes back as "no session" with the saved one kept: ask
@@ -167,7 +168,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     const { data } = supabase.auth.onAuthStateChange((e, s) => {
       if (e === "SIGNED_OUT") { writeViewAs(null); clearLocalData(); }          // "View as" is the owner's, on this device: it doesn't outlive the sign-in
       setSession(s);
-      if (s) setReady(true);
+      if (s) { setReady(true); clearSignInEnded(); }        // signed in again: a later sign-out is the person's own
     });
     return () => { live = false; data.subscription.unsubscribe(); };
   }, []);
