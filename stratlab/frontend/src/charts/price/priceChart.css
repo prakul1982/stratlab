@@ -193,6 +193,16 @@
 @media (max-width: 640px) {
   .pc-btn, .pc-sel, .pc-seg .pc-btn { min-height: 44px; }
   .pc-btn.icon { width: 44px; }
+  /* VR7-001: the range and scale buttons were 44 high but only 32 wide (eleven of them) and eight ranges of 44px do not fit a 326px card on one row.
+     The ranges are two rows of four, the scale buttons one row, both across the card, so each is 44px or more each way and none is hidden */
+  .pc-foot { flex-direction: column; align-items: stretch; gap: 8px; }
+  .pc-foot-r { justify-content: stretch; }
+  .pc-foot .pc-seg { display: flex; width: 100%; }
+  .pc-foot .pc-seg .pc-btn { flex: 1 1 0; min-width: 44px; justify-content: center; padding: 0 4px; }
+  .pc-foot .pc-seg[aria-label="Range"] { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .pc-foot .pc-seg[aria-label="Range"] .pc-btn:nth-child(n+5) { border-top: 1px solid var(--line); }
+  .pc-foot .pc-seg[aria-label="Range"] .pc-btn:nth-child(4n+1) { border-left: 0; }
+  .pc-foot-r .pc-seg { flex: 1 1 100%; }
 }
 
 /* How current the prices are, and the countdown to the forming candle's close (MW-1). Words, never colour alone. */
