@@ -217,6 +217,10 @@ def sizes(row: dict) -> dict:
         return {"amount": None, "basis": None, "parts": parts}
     if fresh_cr or ofs_cr:
         stated = round((fresh_cr or 0) + (ofs_cr or 0), 2)
+        if fresh_cr and ofs_cr:
+            # both parts in rupees: the total, and the two parts it is made of, so "Issue size" says what is new shares and what is a sale
+            # by existing holders (LIVE1A-030: SFC Environmental's ₹668 cr against the exchange's share count times the band)
+            return {"amount": stated, "basis": "stated", "parts": {"fresh_cr": fresh_cr, "ofs_cr": ofs_cr, "fresh": None, "ofs": None}}
     elif row.get("total_cr"):
         stated = row["total_cr"]
     if stated:
@@ -797,6 +801,15 @@ def _settle(row: dict, bars: list[dict], first: dict | None, now: datetime) -> t
     """The daily candles of an Indian issue with the closes the exchange calls official (RC2A-002: the list's "latest close" for ZETWERK was
     the 15:25 five-minute price, ₹140.70, the day's official close being ₹138.25). The latest day's close and the listing day's are the
     exchange's own when it is out and on the candle's basis; a session still going on is not a close at all and is left out."""
+    if row["market"] == "US" and bars:
+        # a US session still going on is not a close either: the 12:00 ET read put a midday price under "Close 28 Oct" (AMRO $6.07, the
+        # close $5.86; LIVE1A-060). The last close is the one the session before it ended on.
+        ny = now.astimezone(NY)
+        if bars[-1]["t"][:10] == ny.date().isoformat() and (ny.hour, ny.minute) < US_CLOSE_SETTLED:
+            bars = bars[:-1]
+            if first and first["t"][:10] == ny.date().isoformat():
+                first = None
+        return bars, first
     if row["market"] != "IN" or not bars:
         return bars, first
     today = now.astimezone(IST).date().isoformat()
@@ -857,6 +870,8 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
             "listed": first["t"][:10], "basis": "prices"}
 
 
+US_CLOSE_SETTLED = (16, 15)            # New York time: after the 16:00 close and the closing print, a US daily candle is the day's close (LIVE1A-060)
+SLOT_UNTIL = {"us-close": "05:30"}     # IST: a slot that may only run in the small hours (LIVE1A-060)
 PERF_DAYS = 75                         # issues listed within this many days have their trading since listing read again at every read
 PERF_RETRY_DAYS = 7                    # an older listed issue with no figures yet is tried again after this long
 
@@ -1105,11 +1120,11 @@ def run_marker(name: str) -> str | None:
 
 class Job:
     """Reads the sources on a schedule: India's before the open and in the evening, the US calendar morning and evening (IST);
-    every quarter hour through the bidding hours it reads the bids of the issues open; the exchange's final figures after
+    the US closes again at 03:30 IST (after the New York close, so the listed issues' latest close is the day's); every quarter hour through the bidding hours it reads the bids of the issues open; the exchange's final figures after
     19:20; then the offer documents and their summaries, a few each pass. IPO alerts go out at 08:00 IST (India's dates)
     and 19:00 IST (the US dates, the New York morning). One leader container runs it; a run marker per slot and day means a
     restart never sends twice."""
-    SLOTS = (("in-am", "07:40"), ("in-alert", "08:00"), ("us-am", "08:30"), ("us-alert", "19:00"), ("in-final", FINAL_AT), ("in-pm", "20:10"), ("us-pm", "21:30"))
+    SLOTS = (("in-am", "07:40"), ("in-alert", "08:00"), ("us-am", "08:30"), ("us-alert", "19:00"), ("in-final", FINAL_AT), ("in-pm", "20:10"), ("us-pm", "21:30"), ("us-close", "03:30"))
 
     def __init__(self, sleep=time.sleep):
         self.sleep = sleep
@@ -1134,6 +1149,8 @@ class Job:
     def due(self, name: str, at: str, now: datetime) -> str | None:
         local = now.astimezone(IST)
         day = local.date().isoformat()
+        if name in SLOT_UNTIL and local.strftime("%H:%M") > SLOT_UNTIL[name]:
+            return None                       # the after-the-close read is for the small hours: later, the 08:30 and 21:30 reads have the same day's data
         if local.strftime("%H:%M") >= at and run_marker(name) != day and (local.strftime("%H:%M") < "23:30"):
             return day
         return None
@@ -1157,7 +1174,7 @@ class Job:
                 elif name in ("in-final",):
                     self.read_open(now, final=True)
                 else:
-                    self.read(name[:2].upper(), now, perf=name.endswith("-pm"))
+                    self.read(name[:2].upper(), now, perf=name.endswith(("-pm", "-close")))
                 ran.append(name)
             if self.live_due(now):
                 self.read_open(now)

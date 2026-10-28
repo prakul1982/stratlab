@@ -80,7 +80,9 @@ test("RC2A-027: a US company's page has holders above 5% and its flagged filings
 });
 
 test("RC2A-028: a qualifier the company page gives a figure stays with it in the comparison", () => {
-  assert.match(read("src/pages/Research.tsx"), /QUALIFIES\.test\(note\) && <span className="k-sub-line" data-testid="cmp-note">/);
+  // LIVE1A-048: the sentence is a numbered note under its table (it ran out of its cell), not a line in each cell
+  assert.match(read("src/pages/Research.tsx"), /const qualifier = .*QUALIFIES\.test\(note\)/);
+  assert.match(read("src/pages/Research.tsx"), /className="k-note cmp-foots" data-testid="cmp-note"/);
 });
 
 test("RC2A-031: the start dialog says when the session will enter", async () => {

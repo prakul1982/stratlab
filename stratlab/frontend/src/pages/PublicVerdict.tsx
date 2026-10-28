@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { publicGet, type ApiError } from "../lib/http";
 import { asDate, money, monthShort, pct, TF_NAME } from "../lib/format";
-import { upDown, checkTone } from "../lib/tradeUi";
+import { upDown, checkTone, readablePoints } from "../lib/tradeUi";
 import type { CheckStatus, Stats, VerdictKind } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { moneyCompact } from "../lib/chartFormat";
@@ -93,8 +93,8 @@ export function PublicVerdict({ token }: { token: string }) {
                 {snap.name} · {snap.group ? `${snap.group.name} (${snap.group.members.length})` : snap.instrument.symbol} · {TF_NAME[snap.tf] ?? snap.tf} candles
                 {snap.range ? ` · ${d(snap.range.from)} – ${d(snap.range.to)}` : ""}
               </span>
-              <h1 className={`verdict-head pub-head ${v.verdict}`}>{v.headline}</h1>
-              <p className="k-lede">{v.summary}</p>
+              <h1 className={`verdict-head pub-head ${v.verdict}`}>{readablePoints(v.headline)}</h1>
+              <p className="k-lede">{readablePoints(v.summary)}</p>
               {snap.question && <p className="k-small k-muted">The question: {snap.question}</p>}
             </div>
 

@@ -51,6 +51,29 @@ export function splitHeadline(headline: string): { main: string; checks: string 
   return { main: headline.slice(0, i).replace(/\.$/, "") + ".", checks: checks.charAt(0).toUpperCase() + checks.slice(1) };
 }
 
+/** "11438.7 points" as "11,439 points": a gap is written with its thousands separators, and without a decimal once it is 1,000 or more
+ *  (LIVE1A-051: "11438.7 points behind buy and hold after costs" over a run that made +191%). Other text is left as it is. */
+export function readablePoints(text: string): string {
+  return text.replace(/(\d[\d,]*(?:\.\d+)?) points\b/g, (_m, n: string) => {
+    const v = Number(n.replace(/,/g, ""));
+    if (!Number.isFinite(v)) return _m;
+    return `${v >= 1000 ? Math.round(v).toLocaleString("en-US") : v.toLocaleString("en-US", { minimumFractionDigits: n.includes(".") ? 1 : 0, maximumFractionDigits: 1 })} points`;
+  });
+}
+
+/** The two lines of a verdict's headline, the loudest one first. The stored headline leads with the comparison with buy and hold
+ *  ("3.8 points ahead of buy and hold after costs; only 9 trades: too few to judge."), which for a run of too few trades, or one that
+ *  lost money, put the opposite of the verdict in the biggest type (LIVE1A-006): there the verdict's own words lead and the comparison
+ *  is the line under them. A run that made money with enough trades keeps the comparison first. */
+export function verdictLines(headline: string, verdict: string): { main: string; checks: string; swapped: boolean } {
+  const h = splitHeadline(headline);
+  const lead = h.checks && (verdict === "not_enough" || /^Lost money after costs/i.test(h.checks));
+  const one = (t: string) => readablePoints(t);
+  if (!lead) return { main: one(h.main), checks: one(h.checks), swapped: false };
+  const second = h.main.replace(/\.$/, "");
+  return { main: one(h.checks), checks: one(second.charAt(0).toUpperCase() + second.slice(1) + "."), swapped: true };
+}
+
 /** A verdict's summary as short lines, one sentence each (DA-028: a group's summary, with its notes, was one wall of text). A
  * sentence ends at a full stop before a capital letter or a sign, so "62.5 points" and "+4.1%" stay whole. */
 export function summaryLines(summary: string | null | undefined): string[] {
