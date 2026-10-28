@@ -21,7 +21,7 @@ export function AddSymbol({ onAdd }: { onAdd: (it: WatchItem) => void }) {
       <div className="mw-add-row">
         <Select small label="Market" value={market} onChange={setMarket} options={(offered.length ? offered : MARKET_IDS).map((id) => ({ value: id, label: markets.find((x) => x.id === id)?.name ?? MARKET_NAME[id] ?? id }))} />
       </div>
-      {m && <InstrumentSearch market={m} onPick={pick} compact accept={acceptable} label={`Search ${m.name} to add`}
+      {m && <InstrumentSearch market={m} onPick={pick} compact noNote accept={acceptable} label={`Search ${m.name} to add`}
         placeholder={market === "IN" ? "A stock, ETF or index: RELIANCE, NIFTY 50" : undefined} />}
     </div>
   );

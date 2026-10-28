@@ -4,6 +4,22 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 28 October 2026: Market Watch and the chart workspace, reviewed as a trader would use them (MWR-1)
+
+Every built timeframe was checked against the session's own minutes (India and the US, a holiday, weekly and monthly), then the panel and the charts were used end to end in the test world, on a phone, in both themes, with the accessibility checker. What it found and fixed:
+
+- **A candle after the close:** a price read every few seconds (US, UK, European and Japanese stocks) carries the time of the closing print, which started a one-candle phantom after the close on a minute chart; those markets now have their sessions, and no market with one starts a candle on a Saturday or Sunday. MCX's evening session runs to 23:55 while US daylight saving is off, not a fixed 23:30.
+- **The countdown:** the last candle of a session counted down to the end of its length (a 30-minute candle from 15:15 said 15 minutes at 15:30); it now stops at the close.
+- **A daily chart left open over the open** stayed on yesterday's candle until it was reloaded; the first price of the new day now starts its candle.
+- **Changing the timeframe** jumped back to the newest candle; it now keeps the candle in the middle of the chart and how many are in view, reading older pages until that moment is covered.
+- **A 3-minute chart (or 10-minute, 30-minute, 2-hour) with only one day of candles in its window** (a Tuesday before the open) was empty; the day stays.
+- **A Free person's three charts** were used up by changing the timeframe on three charts, with nothing drawn on them; only charts that keep drawings or indicators count now.
+- **Two copies of one list:** a stock starred on a company page while the panel was open, then another added in the panel, lost the first (each side saved from its own stale copy), and the reverse. A change on either side now reaches the other.
+- **Erasing your data or closing the account** left every Market Watch list behind, and the data export did not hold them; both do now.
+- **A tick's time:** a bare exchange time was read in the browser's own zone; it is India time.
+- **Memory and reads:** the broker's minute blocks are kept as flat numbers (48 bytes a candle: 16 MB holds a hundred blocks, not ten, so ten open charts no longer make every scroll a request), the crypto exchange's minute chunks are shared on a fixed grid and capped at 48, a pause in chart reads ("a lot of chart reads") no longer ends a chart's history, and the rows' lines of closes are read once while on their way.
+- **The panel:** the list tabs work from the keyboard (the arrow keys, Home and End), keep their row when the add box opens, the add box no longer prints the surveillance-tag paragraph under every result, undo, redo and the shortcuts button wrap as one group, the chart page's "Add to a list" box is one box wide, and the accessibility checker reports nothing on the open panel (list, chart, phone sheet, visitor board, both themes).
+- **Next, for trader-level charting:** more indicators (ADX, stochastic, ATR, volume profile), one indicator set for every symbol, alerts from a chart's price lines, a live crypto feed, a licensed intraday source for the US, and incremental indicator updates.
 ### 28 October 2026: Market Watch, a floating panel of lists and charts on every page (MW-1)
 
 - **A "Markets" button on every page** (bottom right on a laptop, in the top bar on a phone; a visitor gets a small round one) opens a panel that stays open from page to page, because the Shell draws it once. On a window 1600px wide or more it docks to the right edge (the page makes room, and the cookie question moves out from under it); on a narrower one it floats in the corner above the cookie question and leaves the page as it is, because the pages are drawn for a wide window (drag its title bar, resize from its corner); on a phone it is a full-height sheet. Where it was, how big, which list and which chart are remembered on the device.
