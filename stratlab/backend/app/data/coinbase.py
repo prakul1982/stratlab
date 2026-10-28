@@ -191,6 +191,29 @@ class CoinbaseProvider:
             self._cache.pop(next(iter(self._cache)))
         return bars
 
+    def minute_history(self, inst: dict, start, end) -> list[dict]:
+        """1-minute candles from `start` to `end` (aware times). The exchange sends 300 a request, so a day is five requests,
+        paced like every other read here; a finished hour is kept for ten minutes and shared by everyone charting the pair,
+        the hour still forming for 20 seconds (MW-1)."""
+        rows: dict[int, dict] = {}
+        t = start.timestamp()
+        stop = min(end.timestamp(), time.time())
+        while t < stop:
+            to = min(t + 300 * 60, stop)
+            key = (inst["token"], "1m", int(t // 60), int(to // 60))
+            hit = self._cache.get(key)
+            if hit and time.time() - hit[0] < (1200 if to < time.time() - 3600 else 20):
+                got = hit[1]
+            else:
+                got = [_bar(c) for c in _candles(self._get(f"/products/{inst['token']}/candles", granularity=60, start=_iso(t), end=_iso(to)))]
+                self._cache[key] = (time.time(), got)
+                if len(self._cache) > 400:
+                    self._cache.pop(next(iter(self._cache)))
+            for b in got:
+                rows[int(datetime.fromisoformat(b["t"]).timestamp())] = b
+            t = to
+        return [rows[k] for k in sorted(rows)]
+
     def closed_candles(self, inst: dict, tf: str, since: str | None) -> list[dict]:
         """Candles that have fully closed after `since`, for live paper trading."""
         g = GRANULARITY[tf]

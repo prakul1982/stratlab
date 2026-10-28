@@ -12,14 +12,18 @@ export const PRICE: Record<PlanId, [number, number]> = { free: [0, 0], basic: [6
 export type Limits = { backtests_per_month: number | null; ai_builds_per_month: number | null; live_limit: number; group_size: number;
   deepdives_per_month: number | null; decks_per_month: number | null; stock_alerts: number; screens: number; holdings: number;
   networth_items: number | null; mf_schemes: number | null; journal_trades: number | null;
+  /** Market Watch (MW-1): lists, symbols in one list, charts whose drawings are kept, indicators on one chart. null: no limit. */
+  watchlists: number | null; watchlist_symbols: number | null; chart_saves: number | null; chart_indicators: number | null;
   /** Fresh AI reads a day (plans.ai_reads_per_day): a company's read already written today and the market mood never count. */
   ai_reads_per_day: number | null; features: string[] };
 
 export const LIMITS: Record<PlanId, Limits> = {
   free: { backtests_per_month: 10, ai_builds_per_month: 10, live_limit: 1, group_size: 10, deepdives_per_month: 2, decks_per_month: 1,
-    stock_alerts: 5, screens: 2, holdings: 30, networth_items: 5, mf_schemes: 5, journal_trades: 50, ai_reads_per_day: 60, features: [] },
+    stock_alerts: 5, screens: 2, holdings: 30, networth_items: 5, mf_schemes: 5, journal_trades: 50,
+    watchlists: 1, watchlist_symbols: 20, chart_saves: 3, chart_indicators: 3, ai_reads_per_day: 60, features: [] },
   basic: { backtests_per_month: 100, ai_builds_per_month: 100, live_limit: 2, group_size: 25, deepdives_per_month: 15, decks_per_month: 5,
-    stock_alerts: 25, screens: 10, holdings: 100, networth_items: null, mf_schemes: null, journal_trades: null, ai_reads_per_day: 60,
+    stock_alerts: 25, screens: 10, holdings: 100, networth_items: null, mf_schemes: null, journal_trades: null,
+    watchlists: 10, watchlist_symbols: 100, chart_saves: null, chart_indicators: 10, ai_reads_per_day: 60,
     features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter",
       "chart_replay",
       "event_reminders",
@@ -28,7 +32,8 @@ export const LIMITS: Record<PlanId, Limits> = {
       "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
       "ipo_summary", "ipo_alerts"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
-    stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null, ai_reads_per_day: null,
+    stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
+    watchlists: null, watchlist_symbols: null, chart_saves: null, chart_indicators: null, ai_reads_per_day: null,
     features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
       "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "cas_history",
       "vix_filter", "strike_rules",
@@ -62,7 +67,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     // a deep dive on Free has the report card and checklist too (DP1-021); a company's PDF and PowerPoint are one deck (DP1-026)
     `${L.free.deepdives_per_month} company deep dives a month, each with the report card and checklist, and ${L.free.decks_per_month} company slide deck (its PDF and PowerPoint count as one)`,
     "Price charts, screens, sector rotation, today's market breadth, ETF prices against NAV and red flags on every company",
-    `${L.free.stock_alerts} stock alerts and ${L.free.screens} saved screens; import up to ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds and ${L.free.networth_items} net worth entries`,
+    `${L.free.stock_alerts} stock alerts and ${L.free.screens} saved screens; import up to ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds and ${L.free.networth_items} net worth entries; Market Watch with ${L.free.watchlists} list of ${L.free.watchlist_symbols} symbols and drawings kept on ${L.free.chart_saves} charts`,
     // the same words as the table's row (DP2-010: "a weekly My Stocks email" here, "Weekly Market Brief and My Stocks" there)
     "Tax report, money calendar, the Market Brief on News, the weekly Market Brief and My Stocks emails, every market we cover and your own CSV"],
   basic: ["Everything in Free, plus:",
@@ -74,7 +79,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} company slide decks a month, business updates in numbers, named-holder search and IPO offer document summaries`,
     "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags (and each holding's filings and results date), Watchlist at a glance, market breadth charts, margin funding history",
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, deposit rates after your own tax, a floating-rate loan check",
-    `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings`],
+    `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, ${L.basic.watchlists} Market Watch lists of ${L.basic.watchlist_symbols}, drawings kept on every chart`],
   pro: ["Everything in Basic, plus:", `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`,
     `Paper trade ${L.pro.live_limit} strategies at a time; group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
     "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan",
@@ -82,7 +87,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     "Export a notebook's rules and trades, forward-test alert webhooks in paper trading, and StratLab in your AI assistant",
     "Advance tax amounts and the long-term exemption lot by lot",
     "US stocks in Indian tax sale by sale, and ITR-ready schedules with a PDF pack for your CA",
-    `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings`],
+    `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings, unlimited Market Watch lists and indicators`],
 };
 
 /** Ads (ADS-1), one row of the comparison table: Free accounts and signed-out pages may show Google ads, only after the visitor allows
@@ -93,6 +98,8 @@ export const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backt
   ["live_limit", "Paper trading sessions at a time"], ["group_size", "Instruments in a group test"], ["deepdives_per_month", "Company deep dives a month"],
   ["decks_per_month", "Company slide decks a month (a company's PDF and PowerPoint are one deck)"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"],
   ["mf_schemes", "Mutual fund schemes kept"], ["networth_items", "Net worth entries"], ["journal_trades", "Trades the journal keeps"],
+  ["watchlists", "Market Watch lists (the first is your Research watchlist)"], ["watchlist_symbols", "Symbols in one Market Watch list"],
+  ["chart_saves", "Charts that keep your drawings and indicators"], ["chart_indicators", "Indicators on one chart"],
   ["ai_reads_per_day", "Fresh AI reads a day (a company's read already written today, and the market mood, never count)"]];
 export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in strategy rules"], ["group_live", "Paper trade a whole group (on 5-minute, 15-minute or 1-hour candles)"], ["options", "Options paper trading at set times"],
   ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks by email"],
@@ -135,6 +142,7 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
+  "Market Watch on every page: lists across every market we cover, live prices, and charts from 1 minute to 1 month with drawings",
   "Options builder: charges to open and close, breakevens and the most it can make or lose after them", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
   "Corporate actions, deals and surveillance lists", "Today's market breadth numbers", "Derivatives positioning today: participant OI, FII/DII flows, PCR and the option chain facts",
   "F&O contract changes: stocks entering and leaving F&O, lot sizes and expiry days",

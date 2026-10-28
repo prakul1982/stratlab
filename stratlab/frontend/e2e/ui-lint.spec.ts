@@ -16,7 +16,8 @@ import { seedWorld, session, WEB, type Route } from "./ui-lint-world";
 // violation not in ui-lint.allow.json fails the run. It is its own project (playwright.config.ts) so the default runs skip it:
 //   npm run build && npm run ui-lint
 // Env: UI_LINT_OUT (output folder), UI_LINT_STRICT=1, UI_LINT_LIGHT=1 (also 1440 in the light theme), UI_LINT_ROUTES=<regex>,
-//      UI_LINT_WIDTHS=1440,390, UI_LINT_LANES=6 (pages measured at once), UI_LINT_SHOTS=0 (no screenshots).
+//      UI_LINT_WIDTHS=1440,390, UI_LINT_LANES=6 (pages measured at once), UI_LINT_SHOTS=0 (no screenshots),
+//      UI_LINT_PANEL=1 (Market Watch open, docked, on the desktop widths).
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(process.env.UI_LINT_OUT ?? resolve(HERE, "../test-results/ui-lint"));
 const STRICT = process.env.UI_LINT_STRICT === "1";
@@ -83,21 +84,26 @@ async function newContext(browser: Browser, size: (typeof SIZES)[number], theme:
     const host = new URL(r.request().url()).hostname;
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
-  await ctx.addInitScript(([s, signedIn, theme, spaces]) => {
+  // UI_LINT_PANEL=1 (MW-1): every page measured with Market Watch open, docked to the right edge (a phone's is a sheet: it is not opened)
+  const panel = process.env.UI_LINT_PANEL === "1" && size.width > 900;
+  await ctx.addInitScript(([s, signedIn, theme, spaces, panel]) => {
     if (signedIn) localStorage.setItem("sb-demo-auth-token", JSON.stringify(s));
+    if (signedIn && panel) localStorage.setItem(`stratlab.watch.layout.${(s as { user: { id: string } }).user.id}`, JSON.stringify({ open: true, mode: "dock", w: 380 }));
     localStorage.setItem("stratlab.tour.v1", "1");
     localStorage.setItem("stratlab-theme", theme as string);
     // the menu follows the page's own space (Trade's menu lists the notebooks, and so on), as it does for a person who came through it
     const space = (spaces as Record<string, string>)[location.pathname];
     if (space) localStorage.setItem("stratlab.space", space); else localStorage.removeItem("stratlab.space");
-  }, [session, signedIn, theme, spaces] as const);
+  }, [session, signedIn, theme, spaces, panel] as const);
   return ctx;
 }
 
 /** Opens a route, waits for it to be drawn, measures it, and (when it has violations) saves a shot with the offenders outlined. */
 async function measure(page: Page, r: Route, size: (typeof SIZES)[number], theme: string, shots: string): Promise<{ rows: Row[]; note?: string; frame?: PageFrame | null }> {
   await page.goto(WEB + r.path);
-  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
+  // (with Market Watch open the page is never network-idle: its prices refresh every few seconds, so it gets a short wait instead)
+  if (process.env.UI_LINT_PANEL === "1" && size.width > 900) await page.waitForTimeout(1200);
+  else await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
   let note: string | undefined;
   await expect(page.locator(".spinner")).toHaveCount(0, { timeout: 15_000 }).catch(() => { note = "still loading after 15s"; });
   // a card still reading its data shows a skeleton (role=status, aria-busy): measuring that would report the loading state, not the page

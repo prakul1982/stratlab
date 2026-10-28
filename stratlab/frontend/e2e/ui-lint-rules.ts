@@ -30,7 +30,7 @@
 //   R13 empty inside a box (G1)             any bordered/filled box >= 140px tall (cards inside cards too, not only side by side): the biggest
 //                                            empty band, at the bottom or between two blocks of content (a note pinned to the bottom edge), is
 //                                            > 70px AND > 25% of its height (a box whose content is centred is left out)
-//   R14 overlay on content (G2)             a fixed/sticky box that is not app chrome (menu, dialog, toast) covers text or a control in main by
+//   R14 overlay on content (G2)             a fixed/sticky box that is not app chrome (menu, dialog, toast, Market Watch's button and panel) covers text or a control in main by
 //                                            > 6px each way, with the page scrolled to the top, middle or bottom
 //   R15 icon glued to its label (G3)        an (i) or icon button < 3px from the text beside it while level with it (or overlapping it)
 //   R16 uneven stat row (G4)                3+ stat values >= 20px in one group: a word among numbers, a value wrapped over 2+ lines, or
@@ -743,7 +743,7 @@ export function lintPage(opts: LintOpts): LintResult {
   // a fixed/sticky box that is not app chrome: the notebook's "Lab notes" pill sat over a row's delete button, the end of "Edit in words"
   // and the "Testing on" box. Content is measured once on the page, the overlay's own box at the top, middle and bottom of the scroll.
   {
-    const CHROME = "header, aside, nav, [role=dialog], [role=alertdialog], [aria-modal=true], [role=status], [role=alert], [role=tooltip], .toast, .modal-back, .scrim, .topbar, .sidebar, .side-show, .side-pop, .side-pop-back, .k-coach, .skip-link, .lp-nav, .info-pop, .popover, .palette, table";
+    const CHROME = "header, aside, nav, [role=dialog], [role=alertdialog], [aria-modal=true], [role=status], [role=alert], [role=tooltip], .toast, .modal-back, .scrim, .topbar, .sidebar, .side-show, .side-pop, .side-pop-back, .k-coach, .skip-link, .lp-nav, .info-pop, .popover, .palette, .mw-launch, .mw, table";
     const pos = (e: Element) => S(e).position;
     const overlays = all.filter((e) => (pos(e) === "fixed" || pos(e) === "sticky") && shown(e) && !e.closest(CHROME) && (pos(e) === "fixed" || R(e).width < 0.7 * vw) && !e.matches("body, html"));
     const top = overlays.filter((e) => !overlays.some((o) => o !== e && o.contains(e)));

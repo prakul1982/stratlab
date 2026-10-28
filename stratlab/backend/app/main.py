@@ -45,7 +45,7 @@ from . import journal_routes
 from . import user_data
 from .connect import routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
-from . import drawings_routes
+from . import drawings_routes, watch_routes
 from . import maindb, market_store, memguard, storage, usage_slots
 from . import official_close
 from . import ads
@@ -456,6 +456,8 @@ from . import admin_jobs as _admin_jobs  # noqa: E402
 app.include_router(_admin_jobs.router)           # /admin/jobs: every background job, for Admin -> Data and jobs
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(drawings_routes.router)    # /me/drawings/{region}/{symbol}: drawings and layout saved per user
+app.include_router(watch_routes.router)       # /watch: Market Watch lists, prices and the live stream (MW-1)
+app.include_router(watch_routes.public_router)  # /public/markets/watch: the visitor's fixed board
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps

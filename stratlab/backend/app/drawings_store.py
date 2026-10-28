@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from . import chart_data, db
+from . import bar_agg, chart_data, db
 
 KEY = "drawings:"            # drawings:{uid}:{REGION}:{SYMBOL}
 INDEX = "drawings_idx:"      # drawings_idx:{uid}  -> {"REGION:SYMBOL": saved-at}
@@ -30,7 +30,7 @@ POINTS = {"trend": 2, "ray": 2, "hline": 1, "hray": 1, "vline": 1, "rect": 2, "c
           "measure": 2, "prange": 2, "drange": 2, "text": 1, "arrow": 2}
 COLORS = ("ink", "blue", "orange", "green", "magenta", "grey")
 STUDIES = ("sma", "ema", "rsi", "vwap", "supertrend", "stage", "bb", "macd", "hl52")
-TFS = ("5m", "15m", "1h", "1d", "1w", "1mo")
+TFS = bar_agg.TFS            # every size the chart offers, 1m to 1M (a chart workspace keeps the one it was last on)
 CHART_TYPES = ("candles", "hollow", "heikin", "bars", "line", "area", "baseline")
 
 

@@ -134,6 +134,8 @@ export interface PlanInfo {
   fno: boolean;
   price_year?: number; group_size?: number; holdings?: number; stock_alerts?: number; screens?: number;
   deepdives_per_month?: number | null; decks_per_month?: number | null; features?: Record<string, boolean>;
+  /** Market Watch (MW-1): lists, symbols in a list, charts that keep drawings, indicators on a chart. null: no limit. */
+  watchlists?: number | null; watchlist_symbols?: number | null; chart_saves?: number | null; chart_indicators?: number | null;
 }
 /** Experience: only changes defaults (what starts open, which tools are suggested), never what's allowed. */
 export type Level = "new" | "some" | "pro";

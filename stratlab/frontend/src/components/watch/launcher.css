@@ -1,0 +1,18 @@
+/* Market Watch's button and where the page makes room for the panel (MW-1). The panel's own look is in watch.css, which loads with it. */
+.mw-launch {
+  position: fixed; right: 16px; bottom: calc(16px + var(--mw-lift, 0px) + env(safe-area-inset-bottom, 0px)); z-index: 55;
+  display: inline-flex; align-items: center; gap: 8px; min-height: var(--ctl); padding: 0 16px 0 14px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: var(--card); color: var(--ink); font-size: var(--t-label); font-weight: 600; cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.mw-launch:hover { border-color: var(--ink); }
+/* the app's phone has Markets in its top bar; a visitor's phone keeps a round button, so it covers as little as it can */
+@media (max-width: 900px) {
+  .mw-launch.app { display: none; }
+  .mw-launch.public { width: var(--ctl); padding: 0; justify-content: center; }
+  .mw-launch.public span { display: none; }
+}
+/* a docked panel takes its width from the page, and the cookie question moves out from under it */
+body.mw-docked .shell { padding-right: var(--mw-dock, 0px); }
+body.mw-docked .consent { right: calc(var(--mw-dock, 0px) + 16px); }
+@media (max-width: 900px) { body.mw-docked .shell { padding-right: 0; } }

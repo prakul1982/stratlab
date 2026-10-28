@@ -8,11 +8,14 @@ from datetime import datetime, timezone
 
 from . import db
 
-TFS = ("5m", "15m", "1h", "1d")
+from . import bar_agg
+
+# every timeframe the chart offers (MW-1): 1m to 4h, 1D, 1W and 1M; the ones a source doesn't send are built from smaller ones
+TFS = bar_agg.TFS
 # the first read for each timeframe when no range is asked for: enough candles to fill a screen and warm up indicators
-FIRST = {"5m": 10, "15m": 30, "1h": 120, "1d": 366}
+FIRST = {"1m": 3, "3m": 5, "5m": 10, "10m": 15, "15m": 30, "30m": 45, "1h": 120, "2h": 200, "4h": 300, "1d": 366, "1w": 1830, "1mo": 10950}
 # each older page read when the chart is scrolled back
-PAGE = {"5m": 10, "15m": 30, "1h": 120, "1d": 1100}
+PAGE = {"1m": 5, "3m": 10, "5m": 10, "10m": 20, "15m": 30, "30m": 60, "1h": 120, "2h": 240, "4h": 365, "1d": 1100, "1w": 1830, "1mo": 10950}
 RANGES = {"1d": 4, "5d": 8, "1m": 31, "3m": 93, "6m": 186, "ytd": None, "1y": 366, "3y": 1100, "5y": 1830, "max": 3650 * 3}
 
 KEY = "chart_drawings:"
@@ -42,7 +45,7 @@ def window(tf: str, rng: str | None, before: datetime | None, max_days: int | No
     cap = max_days or 3650
     if before is not None:
         days = max(1, (now - before).days + 1) + PAGE[tf]
-    elif rng in RANGES and tf == "1d":
+    elif rng in RANGES and tf in ("1d", "1w", "1mo"):
         days = RANGES[rng] if rng != "ytd" else (now.date() - now.date().replace(month=1, day=1)).days + 8
     else:
         days = FIRST[tf]
