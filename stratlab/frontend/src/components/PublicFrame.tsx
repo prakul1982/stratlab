@@ -5,6 +5,7 @@ import { Logo } from "./Logo";
 import { SkipLink } from "./SkipLink";
 import { signedInHere, signIn, warmSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
+import { BROWSE_COMPANIES } from "../content/seo";
 
 /** The landing page's sections, Plans, the library, the companies and the blog, for the phone Menu (the company pages carry the same links). */
 export const PUBLIC_MENU: [string, string][] = [["/#trade", "Trade"], ["/#invest", "Invest"], ["/#money", "Money"], ["/#alerts", "Alerts"], ["/pricing", "Plans"], ["/#faq", "FAQ"],
@@ -12,14 +13,21 @@ export const PUBLIC_MENU: [string, string][] = [["/#trade", "Trade"], ["/#invest
 
 /** The footer's way to the public pages that show real work: the strategy library with the verdict each earned, the
  * company pages (DK-008: the library was reachable from one link far down the landing page) and the blog, the daily
- * market briefs and research (BLOG-1; a page of the API, like the companies, so a plain link). */
+ * market briefs and research (BLOG-1; a page of the API, like the companies, so a plain link). Under them, the company
+ * directories (SEO-1), so every company page is a few links from any public page: plain links, the API serves them. */
 export const SiteLinks = () => (
-  <nav className="k-row k-small legal-links" aria-label="Explore">
-    <Link className="muted" to="/library">Strategy library</Link>
-    <a className="muted" href="/stocks">Companies</a>
-    <a className="muted" href="/blog">Blog</a>
-    <Link className="muted" to="/plans">Plans</Link>
-  </nav>
+  <>
+    <nav className="k-row k-small legal-links" aria-label="Explore">
+      <Link className="muted" to="/library">Strategy library</Link>
+      <a className="muted" href="/stocks">Companies</a>
+      <a className="muted" href="/blog">Blog</a>
+      <Link className="muted" to="/plans">Plans</Link>
+    </nav>
+    <nav className="k-row k-small legal-links" aria-label="Browse companies" data-browse-companies>
+      <span className="muted">Browse companies:</span>
+      {BROWSE_COMPANIES.map(([to, name]) => <a key={to} className="muted" href={to}>{name}</a>)}
+    </nav>
+  </>
 );
 
 /** For someone already signed in: a plain link (a whole page load, so the app starts, not the visitor's landing page). */

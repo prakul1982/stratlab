@@ -152,8 +152,18 @@ sitemap index as `sitemaps/blog.xml`). Two kinds of post, each one small row in 
   changed keeps its date of last change.
 
 The **Blog** panel (Data and jobs) lists the posts with **Hide** / **Publish** (a hidden post answers 404 and leaves the lists, the sitemap and the
-feed), **Add posts for stored briefs** (the newest 60 stored briefs of each market that have no post yet, for when the blog opens) and the last
+feed; the host's cache keeps a page up to a day, so a hidden post can still be served from it for that long), **Add posts for stored briefs** (the newest 60 stored briefs of each market that have no post yet, for when the blog opens) and the last
 research run. The routes are `GET /admin/blog`, `POST /admin/blog/posts/<slug>/published`, `POST /admin/blog/briefs` and `POST /admin/blog/research`.
+
+### Company page directories
+
+The public company pages are linked from lists, so search engines can reach every one: `/stocks/in/browse/<letter>` and `/stocks/us/browse/<letter>`
+(A to Z by name, `0-9` for digits, 400 links a page, later pages at `/<n>`) and `/stocks/in/index/<nifty-50|nifty-bank|nifty-500|nifty-midcap-150|nifty-smallcap-250>`
+and `/stocks/us/index/sp-500`, listed in the sitemap index as `sitemaps/directory.xml`. They are built from the stored companies list and the
+members the app already keeps (the NIFTY 50 and Bank groups, the breadth run's last good lists, the committed S&P 500 list), cached an hour in memory
+as symbols only, and need no job. An index with no stored members is left out. The host's cache keeps company, directory and blog pages a day
+(`s-maxage=86400`, a week stale while it is read again); a company whose price is a close behind its market's is kept a minute. A ticker with no page
+that was renamed or merged redirects to the new company (F&O rename circulars, merged companies, known symbol changes, one-company aliases).
 
 ### Rates and rules
 

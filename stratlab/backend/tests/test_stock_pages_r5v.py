@@ -68,11 +68,12 @@ def test_a_stored_page_is_rebuilt_once_its_market_closes_again():
     assert not stock_pages.fresh({"ts": close - 60, "facts": None}, "IN", now=close + stock_pages.EMPTY_FOR)  # ...hours later
 
 
-def test_the_page_says_last_close_and_the_cache_is_minutes_not_a_day(w):
+def test_the_page_says_last_close_and_the_edge_keeps_it_a_day(w):
+    # SEO-1: browsers five minutes, the site's cache a day (the "As of" date says which close the copy is of)
     r = w["client"].get("/stocks/in/RELIANCE")
     cc = r.headers["cache-control"]
-    assert int(re.search(r"s-maxage=(\d+)", cc).group(1)) <= 900 and int(re.search(r"max-age=(\d+)", cc).group(1)) <= 300
-    assert int(re.search(r"stale-while-revalidate=(\d+)", cc).group(1)) <= 3600
+    assert int(re.search(r"max-age=(\d+)", cc).group(1)) <= 300 and int(re.search(r"s-maxage=(\d+)", cc).group(1)) == 86400
+    assert int(re.search(r"stale-while-revalidate=(\d+)", cc).group(1)) == 604800
     t = r.text
     assert "Last price" not in t and re.search(r"As of \d{1,2} \w{3} 20\d\d close", t) and re.search(r"Last close, \d{1,2} \w{3}", t)
 

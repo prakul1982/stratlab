@@ -27,9 +27,11 @@ from .responses import err, ok
 router = APIRouter(tags=["blog"], include_in_schema=False)
 admin_router = APIRouter(tags=["admin"])
 
-# a post is fixed once published, a list grows by a post or two a day; the host's cache keeps either for ten minutes at most, so a
-# post an admin hides is gone from the public soon
-CACHE = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
+# a post is fixed once published and a list grows by a post or two a day, so the host keeps a page a day (SEO-1: cold responses took
+# 0.6 to 1.8 s, which Google counts against crawling a site); a post an admin hides is gone from the public within that day. The
+# feed is read by programs that poll it, so it stays at ten minutes.
+CACHE = sp.CACHE_CONTROL
+FEED_CACHE = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
 FACTS = ("Facts, not advice. This post reports data and method for research and education. It is not investment advice or a "
          "recommendation about any security.")
 KIND_NAME = {"brief": "Market brief", "research": "Research"}
@@ -261,7 +263,7 @@ def blog_research_list(page: str = "1"):
 @router.get("/blog/feed.xml")
 def blog_feed():
     try:
-        return Response(feed_xml(), media_type="application/atom+xml", headers={"Cache-Control": CACHE})
+        return Response(feed_xml(), media_type="application/atom+xml", headers={"Cache-Control": FEED_CACHE})
     except Exception as ex:
         print("blog feed failed:", type(ex).__name__, str(ex)[:160])
         return Response("The feed can't be read right now.", status_code=503, media_type="text/plain", headers={"Retry-After": "120", "Cache-Control": "no-store"})

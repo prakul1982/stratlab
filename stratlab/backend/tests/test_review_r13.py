@@ -326,13 +326,14 @@ def test_a_us_price_between_the_close_and_its_settle_point_is_still_settling():
 
 
 # ---------- R13-006: public pages after the close ----------
-def test_no_cached_copy_of_a_public_page_outlives_the_next_settle_point():
+def test_a_page_that_is_a_close_behind_is_kept_a_minute_and_an_up_to_date_one_follows_the_edge_policy():
+    # R13-006 ended every copy at the market's next settle point; SEO-1 keeps an up-to-date page a day at the edge (the page says
+    # which close it is "As of"), and only a page already behind its market's close is kept a minute, so it follows its refresh
     f = facts_page(at="2026-10-09", region="US")
-    early = stock_pages.cache_control("US", f, datetime(2026, 10, 9, 13, 0, tzinfo=UTC))        # 09:00 ET: hours to go
-    assert early == stock_pages.CACHE_CONTROL
-    near = stock_pages.cache_control("US", f, et(16, 40))                                      # five minutes before it
-    assert "s-maxage=300" in near and "stale-while-revalidate=0" in near
-    assert stock_pages.html_ttl("US", et(16, 40)) == 300
+    for when in (datetime(2026, 10, 9, 13, 0, tzinfo=UTC), et(16, 40)):
+        assert stock_pages.cache_control("US", f, when) == stock_pages.CACHE_CONTROL
+    assert "s-maxage=86400" in stock_pages.CACHE_CONTROL
+    assert stock_pages.html_ttl("US", et(16, 40)) == 300                                       # what the server keeps in memory still ends at the settle point
     behind = facts_page(at="2026-10-08", region="US")                                          # the page still on 8 Oct
     assert stock_pages.cache_control("US", behind, et(17, 28)) == stock_pages.BEHIND_CACHE
 

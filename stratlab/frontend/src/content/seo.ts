@@ -6,6 +6,11 @@
 export const SITE = "https://stratlab.studio";
 
 export const TAGLINE = "Test it, research it, track it.";
+
+/** The company directories (SEO-1): every company page is a few links from the home page. [address, name]; the pages are the
+ * API's (backend/app/stock_pages.py: A-Z letters under /stocks/in and /stocks/us, index lists), so plain links, not routes. */
+export const BROWSE_COMPANIES: [string, string][] = [["/stocks/in", "India A–Z"], ["/stocks/us", "US A–Z"],
+  ["/stocks/in/index/nifty-50", "NIFTY 50"], ["/stocks/us/index/sp-500", "S&P 500"]];
 // the words people search for, not only the tagline (DK-013: "test it, research it, track it" names no keyword)
 export const HOME_TITLE = "StratLab: backtest trading ideas, research stocks, track money";
 export const HOME_DESCRIPTION = "Test trading ideas on years of real prices and paper trade them; options are paper trading only. Research Indian and US companies from their own filings. Track your holdings, funds and tax. Facts, not tips.";
@@ -42,7 +47,8 @@ export const PAGES: PageMeta[] = [
       "Money, what you own: upload your broker's file or fund statement for value, gains and XIRR; a capital gains tax report, US stocks in Indian tax and an ITR-ready export; net worth and a Money calendar of tax dates, results and EMIs.",
       "How it works: describe an idea in plain words, test it on years of real prices after real costs with four checks for luck, then trade it on paper with fake money. For Money, upload your files and see your value, gains and tax worked out.",
       "What makes it different: facts, not tips; real costs for each market; four checks for luck; ten markets, from India and the US to crypto, forex and commodities; your data stays yours; and no real orders, ever.",
-      "Free to start with no card; Basic and Pro raise the limits. StratLab states facts and never says buy, sell or hold."] },
+      "Free to start with no card; Basic and Pro raise the limits. StratLab states facts and never says buy, sell or hold.",
+      "Browse companies: every Indian and US company page, A to Z, and the NIFTY 50 and S&P 500 lists."] },
   { path: "/pricing", title: "Plans · StratLab",
     description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, canonical: "/plans", updated: "2026-10-08",     // the landing page scrolled to its prices: the plans page is the one address for them (R26-006, RC1-011)
     heading: "Plans and prices",

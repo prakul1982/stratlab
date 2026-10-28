@@ -8,7 +8,7 @@
 // unit/seo.test.mjs checks the output of these functions.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { absolute, HOME_DESCRIPTION, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
+import { absolute, BROWSE_COMPANIES, HOME_DESCRIPTION, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
 import { FAQ, faqText } from "../src/content/faq.ts";
 import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED } from "../src/content/legal.ts";
 
@@ -87,13 +87,16 @@ export function pageHtml(template, { title, description, canonical, index, jsonl
  * (R45B-006: the served /library page named none of them). */
 export const LIBRARY_LINKS = `\n<ul class="boot-links">\n${LIBRARY_SEEDS.map(([id, name]) => `<li><a href="/library/${id}">${text(name)}</a></li>`).join("\n")}\n</ul>`;
 
+/** The home page's way to the company directories (SEO-1), as plain links under its opening words, for a crawler that runs no script. */
+export const HOME_LINKS = `\n<ul class="boot-links">\n${BROWSE_COMPANIES.map(([to, name]) => `<li><a href="${attr(to)}">${text(name)}</a></li>`).join("\n")}\n</ul>`;
+
 /** Every file to write, as [path under dist, html]. The home page replaces index.html itself. */
 export function pageFiles(template) {
   const files = PAGES.map((p) => [p.path === "/" ? "index.html" : `${p.path.slice(1)}/index.html`,
     pageHtml(template, { title: p.title, description: p.description, canonical: p.index ? absolute(p.canonical ?? p.path) : null, index: p.index,
       jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : "", heading: p.heading, summary: p.summary,
       body: LEGAL_BLOCKS[p.path] ? legalBody(p.path, p.heading) : "",
-      after: p.path === "/library" ? LIBRARY_LINKS : "",
+      after: p.path === "/library" ? LIBRARY_LINKS : p.path === "/" ? HOME_LINKS : "",
       faq: p.path === "/faq" })]);
   files.push(["404.html", pageHtml(template, { title: "Page not found · StratLab", description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
     heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION], after: NOT_FOUND_LINKS, readable: true })]);
