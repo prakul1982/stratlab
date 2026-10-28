@@ -4,6 +4,15 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 28 October 2026: the main review of the whole app, as a newcomer, a trader, an investor and a money user (RC-5)
+
+- **Bajaj Auto and any company whose symbol has a dash:** the company search cut every dash off an NSE symbol (to drop a series suffix like -BE), so "Bajaj Auto" was offered as BAJAJ, which has no page, and the Watchlist saved it. Only a real series suffix comes off now, so `BAJAJ-AUTO` and `MCDOWELL-N` stay whole.
+- **The phone tour's second step** pointed at the page's heading, where the menu's search button had just been, instead of the magnifier; it now waits for the menu to slide away.
+- **Retries and messages:** a deep dive that can't be opened offers Try again; an IPO address no issue has says so and no longer offers a retry that could never help; a refused upload's explanation (and any long message) stays long enough to read, up to 15 seconds; the idea box says it can't reach StratLab instead of blaming the AI builder when the connection is down.
+- **Alerts:** "Sent by This page only" reads "Shown on this page only", and an unconfirmed email is explained once.
+- **Checked and unchanged:** deleting all data leaves nothing behind (every store scanned), other accounts' notebooks, sessions and alerts answer 404, plan limits hold under parallel requests, and the FIFO tax, mutual fund XIRR and options figures match a recomputation.
+- **Checks:** `tests/test_review_rc5.py`, `unit/rc5.test.mjs` and `e2e/rc5.spec.ts`.
+
 ### 28 October 2026: charts on the public company pages, and the public pages made to look like one product (PUB-1)
 
 - **Share-price chart on every company page:** a 1M / 6M / 1Y / 5Y switch, the change over the chosen range above the chart ("Up 12.4% over 1 year, ₹1,246.10 to ₹1,400.00. Price change only; dividends are not included."), a crosshair with the date and the close (mouse, touch and arrow keys), labelled axes at 12 px or more, an accessible name and summary, the closes as a table, and the app's own chart colours in light and dark. One small script (`/stocks/chart.js`, no library) draws it from `/stocks/<market>/<symbol>/prices.json`: every session of the last year and the last close of each week back to five years, about 6 KB. The page also says the close and the 1-year range in words, so with no script nothing is lost. Closing prices only; nothing is predicted or fitted.
