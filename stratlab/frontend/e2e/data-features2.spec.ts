@@ -141,12 +141,19 @@ test("business updates: my stocks first, more sectors, month by month with the c
   await sane(page, errors);
 });
 
+// on a phone the library pages its cards (VR6-024: "Show 12 more"); open every page so a check reads the whole library
+async function showAllCards(page: import("@playwright/test").Page) {
+  const more = page.getByTestId("lib-show-more").getByRole("button", { name: /^Show \d+ more$/ });
+  for (let i = 0; i < 20 && await more.isVisible(); i++) await more.click();
+}
+
 test("strategy library: StratLab's own strategies, badged, each with the verdict it earned", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/library", "Strategy library", phone ? 292 : 289);
   await page.getByRole("radio", { name: "StratLab's own" }).click();
   const cards = page.locator(".k-cards > section");
   await expect(cards.first()).toBeVisible({ timeout: 20_000 });
+  await showAllCards(page);
   expect(await cards.count()).toBeGreaterThanOrEqual(10);
   for (const name of ["Stage 2 + Supertrend", "20/50 EMA cross", "RSI(2) mean reversion", "52-week breakout with ATR stop", "Bollinger squeeze breakout",
     "Opening-range breakout (intraday)", "Golden cross", "Donchian 20/10 (turtle-style)"]) {
