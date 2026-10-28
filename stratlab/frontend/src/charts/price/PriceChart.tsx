@@ -606,6 +606,17 @@ const [saveNote, setSaveNote] = useState("");
   const ownPanes = studies.filter((s) => STUDY[s.type]?.pane === "own").length;
   const stageH = height + ownPanes * PANE_ADD;
 
+  // VR6-018: the view buttons (zoom, reset, picture, full screen) sat alone on a second line at the right of the toolbar on a laptop;
+  // on a wide screen they now join the scale buttons under the chart (one row of controls there, with room), on a phone they stay in the bar
+  const viewButtons = (
+    <span className="pc-end">
+      <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom out" title="Zoom out" onClick={() => engineRef.current?.zoomBy(0.8)}>{ICON.zoomOut}</button>
+      <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom in" title="Zoom in" onClick={() => engineRef.current?.zoomBy(1.25)}>{ICON.zoomIn}</button>
+      <button type="button" className="pc-btn icon" aria-label="Reset the view" title="Reset the view (double-click the chart)" onClick={() => { engineRef.current?.resetView(); if (range) applyRange(range); }}>{ICON.reset}</button>
+      <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Download as PNG" title="Download as PNG" onClick={shot}>{ICON.camera}</button>
+      <button type="button" className="pc-btn icon" aria-label={full ? "Exit full screen" : "Full screen"} title={full ? "Exit full screen" : "Full screen"} aria-pressed={full} onClick={toggleFull}>{full ? ICON.exit : ICON.full}</button>
+    </span>
+  );
   return (
     <div ref={rootRef} className={`pc${full ? " pc-full" : ""}`} data-testid="price-chart" data-height={stageH} style={{ ["--pc-h" as string]: `${stageH}px` }}>
       <div className="pc-bar" role="toolbar" aria-label="Chart tools">
@@ -656,13 +667,7 @@ const [saveNote, setSaveNote] = useState("");
             )}
           </div>
         )}
-        <span className="pc-end">
-          <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom out" title="Zoom out" onClick={() => engineRef.current?.zoomBy(0.8)}>{ICON.zoomOut}</button>
-          <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom in" title="Zoom in" onClick={() => engineRef.current?.zoomBy(1.25)}>{ICON.zoomIn}</button>
-          <button type="button" className="pc-btn icon" aria-label="Reset the view" title="Reset the view (double-click the chart)" onClick={() => { engineRef.current?.resetView(); if (range) applyRange(range); }}>{ICON.reset}</button>
-          <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Download as PNG" title="Download as PNG" onClick={shot}>{ICON.camera}</button>
-          <button type="button" className="pc-btn icon" aria-label={full ? "Exit full screen" : "Full screen"} title={full ? "Exit full screen" : "Full screen"} aria-pressed={full} onClick={toggleFull}>{full ? ICON.exit : ICON.full}</button>
-        </span>
+        {phone && viewButtons}
       </div>
 
       <div className="pc-main" onKeyDown={(ev) => {
@@ -741,12 +746,15 @@ const [saveNote, setSaveNote] = useState("");
             ))}
           </div>
         ) : <span className="pc-note">{TF_LONG[tf]} candles</span>}
-        <div className="pc-seg" role="group" aria-label="Scale">
-          {!props.noVolume && <button type="button" className="pc-btn" aria-pressed={volume} onClick={() => { touched.current = true; setVolume(!volume); }} title="Volume bars">Vol</button>}
-          <button type="button" className="pc-btn" aria-pressed={mode === "percent"} onClick={() => setMode(mode === "percent" ? "normal" : "percent")} title="Percent scale, from the first candle on screen">%</button>
-          <button type="button" className="pc-btn" aria-pressed={mode === "log"} onClick={() => setMode(mode === "log" ? "normal" : "log")} title="Log scale">Log</button>
-          <button type="button" className="pc-btn" aria-pressed={auto} onClick={() => { engineRef.current?.setAuto(!auto); setAuto(!auto); }} title="Fit prices to the candles on screen">Auto</button>
-          <button type="button" className="pc-btn" aria-pressed={table} onClick={() => { setTable(!table); setTick((x) => x + 1); }} title="The candles as a table">Table</button>
+        <div className="pc-foot-r">
+          {!phone && viewButtons}
+          <div className="pc-seg" role="group" aria-label="Scale">
+            {!props.noVolume && <button type="button" className="pc-btn" aria-pressed={volume} onClick={() => { touched.current = true; setVolume(!volume); }} title="Volume bars">Vol</button>}
+            <button type="button" className="pc-btn" aria-pressed={mode === "percent"} onClick={() => setMode(mode === "percent" ? "normal" : "percent")} title="Percent scale, from the first candle on screen">%</button>
+            <button type="button" className="pc-btn" aria-pressed={mode === "log"} onClick={() => setMode(mode === "log" ? "normal" : "log")} title="Log scale">Log</button>
+            <button type="button" className="pc-btn" aria-pressed={auto} onClick={() => { engineRef.current?.setAuto(!auto); setAuto(!auto); }} title="Fit prices to the candles on screen">Auto</button>
+            <button type="button" className="pc-btn" aria-pressed={table} onClick={() => { setTable(!table); setTick((x) => x + 1); }} title="The candles as a table">Table</button>
+          </div>
         </div>
       </div>
       {saveNote && <p className="pc-note" role="alert">{saveNote}</p>}

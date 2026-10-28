@@ -50,12 +50,15 @@ function useDuo(ref: { current: HTMLDivElement | null }) {
     if (!el) return;
     let width = -1;
     const fix = () => {
-      el.classList.remove("duo");
+      el.classList.remove("duo", "tight");
       if (window.innerWidth > 640 || el.children.length < 2) return;
       const cols = getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length;
       if (cols !== 1) return;
       el.classList.add("duo");
-      const wraps = Array.from(el.querySelectorAll<HTMLElement>(".k-stat-v")).some((v) => v.getBoundingClientRect().height > parseFloat(getComputedStyle(v).lineHeight) * 1.5);
+      const wrapping = () => Array.from(el.querySelectorAll<HTMLElement>(".k-stat-v")).some((v) => v.getBoundingClientRect().height > parseFloat(getComputedStyle(v).lineHeight) * 1.5);
+      // VR6-023: "₹1,06,50,136" did not fit half a line at 28px and kept the three totals one under another: a size down (22px) is tried first
+      let wraps = wrapping();
+      if (wraps) { el.classList.add("tight"); wraps = wrapping(); }
       // labels of different heights in one row (one wrapping to three lines beside one of a line) are the uneven row the owner dislikes
       const rows = new Map<number, number[]>();
       el.querySelectorAll<HTMLElement>(".k-stat-k").forEach((k) => {
@@ -63,7 +66,7 @@ function useDuo(ref: { current: HTMLDivElement | null }) {
         rows.set(top, [...(rows.get(top) ?? []), Math.round(k.getBoundingClientRect().height)]);
       });
       const uneven = Array.from(rows.values()).some((hs) => Math.max(...hs) - Math.min(...hs) > 3);
-      if (wraps || uneven) el.classList.remove("duo");
+      if (wraps || uneven) el.classList.remove("duo", "tight");
     };
     const ro = new ResizeObserver(() => { const w = el.clientWidth; if (w !== width) { width = w; fix(); } });
     const mo = new MutationObserver(fix);

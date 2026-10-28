@@ -56,8 +56,8 @@ def test_the_strategy_tables_have_short_unwrapped_headers_fixed_widths_and_no_em
     checks = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Check")
     assert checks["head"][1:] == ["Passed", "Failed", "Not run"] and len(checks["rows"]) == 4 and checks["align"] == "lrrr" and "widths" not in checks      # a small table sizes itself to a phone
     html = blog.blocks_html([tables[0]])
-    # a table of five columns or more also carries "wide" and each figure its column's name (VR5-007: cards on a phone)
-    assert '<div class="btbl fx wide"><table>' in html and "<colgroup>" in html and html.count('<th scope="col" class="l">') == 2 and html.count('<td class="l" data-l=') == len(tables[0]["rows"])
+    # (VR5-007's data-l names each figure's column, and a table of five columns or more is also drawn as cards on a phone: "wide")
+    assert '<div class="btbl fx wide"><table>' in html and "<colgroup>" in html and html.count('<th scope="col" class="l">') == 2 and html.count('<td class="l" data-l="Checks">') == len(tables[0]["rows"])
     assert 'scope="row" class="l"' in html
 
 

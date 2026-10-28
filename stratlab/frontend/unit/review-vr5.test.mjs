@@ -46,7 +46,7 @@ test("VR5-006: a row of figures goes two across on a phone when each fits its ha
   const src = read("src/components/kit/Stat.tsx");
   assert.match(src, /function useDuo/);
   assert.match(src, /classList\.add\("duo"\)/);
-  assert.match(src, /if \(wraps \|\| uneven\) el\.classList\.remove\("duo"\)/);          // a figure that would wrap keeps the old one-per-row
+  assert.match(src, /if \(wraps \|\| uneven\) el\.classList\.remove\("duo", "tight"\)/);          // a figure that would wrap keeps the old one-per-row
   const css = read("src/styles.css");
   assert.match(css, /\.k-stats\.duo \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
   assert.match(css, /\.k-stats\.duo > \.k-stat:last-child:nth-child\(odd\) \{ grid-column: 1 \/ -1; \}/);

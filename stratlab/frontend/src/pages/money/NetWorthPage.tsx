@@ -410,7 +410,8 @@ export function NetWorthPage() {
   const assetCols: Column<Row>[] = [
     { key: "asset", header: "Asset, and how it's worked out", rowHeader: true, wrap: true, cell: (r) => (
       <>
-        <b>{r.name}</b>{r.name !== r.label && <span className="k-note"> · {r.label}</span>}{r.basis === "as entered" && <span className="k-note"> · as entered</span>}
+        {/* VR6-015: "My Holdings: Indian stocks · Indian stocks": the kind is not said again when the name ends with it */}
+        <b>{r.name}</b>{!r.name.endsWith(r.label) && <span className="k-note"> · {r.label}</span>}{r.basis === "as entered" && <span className="k-note"> · as entered</span>}
         <span className="k-sub-line">{r.rule}</span><Facts r={r} tax={view?.deposit_tax} />
       </>) },
     { key: "value", header: "Value", numeric: true, cell: (r) => <>{r.value == null ? "–" : inr(r.value)}{!oneDay && <span className="k-sub-line">as of {day(r.as_of)}</span>}</> },
@@ -502,6 +503,8 @@ export function NetWorthPage() {
             {!view.history_allowed
               ? <PlanNote>The net worth history is on the Basic plan{view.history_count ? ` (${view.history_count} snapshot${view.history_count === 1 ? "" : "s"} recorded so far)` : ""}.</PlanNote>
               : hist.length < 3 && !empty && <p className="k-note">History: a snapshot is taken on the 1st of each month and whenever you change an entry; the chart starts at the third{hist.length > 0 ? ` (${hist.length === 1 ? `the first is from ${day(hist[0].d)}` : `${hist.length} so far, the latest from ${day(hist[hist.length - 1].d)}`})` : ""}.</p>}
+            {/* VR6-012: with no chart yet the snapshots list sits in this card under that line, not in a card of its own with one line in it (DP2-006's "empty-looking card" was still 97px of it) */}
+            {view.history_allowed && hist.length > 0 && whole.length < 3 && snapsList("nw-snaps")}
           </Card>
 
           {/* MO-2 (owner, 25 Oct): one tap to the usual kinds, so adding a deposit, EPF, gold or a loan is never hunted for */}
@@ -548,9 +551,6 @@ export function NetWorthPage() {
                 times={shown.map((h) => h.d)} points={marked} format={(v) => inr(v)} axisFormat={(v) => axisInr(v)} ariaLabel="Net worth over time" height={220} testId="networth-chart" ranges={false} table={false} />
             </ChartFrame>
           )}
-
-          {/* with a chart, the snapshots list sits under it; alone it was an empty-looking card of its own (DP2-006) */}
-          {view.history_allowed && hist.length > 0 && whole.length < 3 && snapsList("k-card nw-snaps")}
 
           {view.assets.length > 0 && (
             <Card>
