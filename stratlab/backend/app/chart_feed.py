@@ -60,14 +60,17 @@ def delivery(market: str, kite_ready: bool) -> dict:
 def drop_partial_first(bars: list[dict], more: bool, market: str | None, tf: str) -> list[dict]:
     """Built candles without the first calendar day (or week, month) when older ones exist: the read began part way through
     it, so its first candle would be short, and the page before could never fill it in (it asks for candles before this
-    candle's start)."""
+    candle's start). When that day is all there is, it stays: a window that held one day only (a Tuesday before the open, the
+    day after a long weekend) left the chart empty (MWR1-006)."""
     if not more or not bars or tf in ("1d",):
         return bars
-    zone, _ = bar_agg._zone(market)
     if tf in bar_agg.MINUTES:
+        zone, _ = bar_agg._zone(market)
         first = bar_agg._parse(bars[0]["t"], zone).date()
-        return [b for b in bars if bar_agg._parse(b["t"], zone).date() > first]
-    return bars[1:]
+        rest = [b for b in bars if bar_agg._parse(b["t"], zone).date() > first]
+    else:
+        rest = bars[1:]
+    return rest or bars
 
 
 def build(bars: list[dict], market: str | None, tf: str, until: datetime | None, more: bool) -> list[dict]:
