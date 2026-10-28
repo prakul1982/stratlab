@@ -95,7 +95,7 @@ details.mk>summary h2{margin:0;font-size:18px;flex:1}details.mk>summary .n{font-
 details.mk>summary::before{content:"";flex:none;width:9px;height:9px;margin-left:2px;border-right:2px solid var(--blue);border-bottom:2px solid var(--blue);transform:rotate(-45deg);transition:transform .15s}details.mk[open]>summary::before{transform:rotate(45deg)}
 details.mk>summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:12px}
 /* VR7-005: a rule set's name in a card and the crumb links ("Blog", "Research") were 17px tall to tap: 45px by padding with a negative margin, so no line moves */
-.btbl.wide th[scope=row] a{display:inline-block;padding:14px 0;margin:-14px 0}.blog-eyebrow a{display:inline-block;padding:14px 4px;margin:-14px -4px}
+.btbl.wide th[scope=row] a{display:inline-block;padding:14px 0;margin:-14px 0}article>p>a:only-child{display:inline-block;padding:14px 0;margin:-14px 0}.blog-eyebrow a{display:inline-block;padding:14px 4px;margin:-14px -4px}
 details.mk>p{margin:0;padding:0 14px 6px}details.mk .btbl{margin:0;border:0;border-top:1px solid var(--line);border-radius:0 0 12px 12px}}
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.tabs a{display:inline-flex;align-items:center;min-height:44px;padding:4px 16px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink-2);background:var(--card)}
 .tabs a[aria-current=page]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}

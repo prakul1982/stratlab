@@ -55,3 +55,4 @@ def test_vr7_005_the_blog_links_on_a_phone_are_44px_to_tap_without_moving_a_line
     css = blog_pages.STYLE
     assert ".btbl.wide th[scope=row] a{display:inline-block;padding:14px 0;margin:-14px 0}" in css
     assert ".blog-eyebrow a{display:inline-block;padding:14px 4px;margin:-14px -4px}" in css
+    assert "article>p>a:only-child{display:inline-block;padding:14px 0;margin:-14px 0}" in css       # a paragraph that is a link ("Open the rotation chart")
