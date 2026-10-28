@@ -293,6 +293,52 @@ def find(region: str, symbol: str) -> tuple[str, dict] | None:
     return None
 
 
+RENAME_HOPS = 3                  # an old symbol that was renamed again is followed this far
+
+
+def _rename_of(region: str, symbol: str) -> str | None:
+    """What one old symbol became, from the places the app already records it: the exchange's F&O circulars that rename a
+    stock (fo_changes), a company merged into another (intel.company.MERGED), the known symbol changes the company-data reader
+    keeps (Tata Motors' demerger), and the short names and former names the search resolves to exactly one company
+    (name_search.ALIASES: ZOMATO is ETERNAL). None when nothing says."""
+    if region == "IN":
+        try:
+            from . import fo_changes
+            events = [x for x in fo_changes.load_events() if x.get("kind") == "rename" and str(x.get("was_symbol") or "").upper() == symbol and x.get("symbol")]
+            if events:
+                return str(max(events, key=lambda x: str(x.get("effective") or ""))["symbol"]).upper()
+        except Exception as ex:                  # storage down: the other sources still answer
+            print("stock pages: renames not read:", str(ex)[:120])
+        from .intel.company import MERGED
+        from .intel.screener import Screener
+        into = (MERGED.get(symbol) or {}).get("into_symbol") or Screener.RENAMED.get(symbol)
+        if into:
+            return into
+    from . import name_search
+    one = name_search.ALIASES.get(region, {}).get(symbol) or []
+    return one[0] if len(one) == 1 else None
+
+
+def renamed_to(region: str, symbol: str) -> str | None:
+    """The page symbol a company's old ticker now has (ZOMATO -> ETERNAL), for a ticker with no page of its own: the address
+    then redirects there for good, so the pages Google found under the old ticker pass to the new one. None for a ticker
+    nothing says was renamed, which stays a 404."""
+    cur = (symbol or "").strip().upper()
+    if not cur or len(cur) > 20 or region not in REGIONS.values():
+        return None
+    seen = {cur}
+    for _ in range(RENAME_HOPS):
+        nxt = _rename_of(region, cur)
+        if not nxt or nxt in seen:
+            return None
+        seen.add(nxt)
+        hit = find(region, nxt)
+        if hit:
+            return hit[0]
+        cur = nxt
+    return None
+
+
 share_class_page = None          # (US ticker) -> the page symbol of the same company's other class, or None (set by main)
 
 

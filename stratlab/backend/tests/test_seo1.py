@@ -237,3 +237,64 @@ def test_vercel_caches_the_rewritten_pages_so_the_edge_headers_are_kept():
     for src in ("/stocks/:path*", "/blog/:path*", "/sitemap.xml", "/sitemaps/:path*"):
         assert rewrites[src] == {"x-vercel-enable-rewrite-caching": "1"}, src
         assert not any("cache-control" in k.lower() for k in rewrites[src])         # the origin's Cache-Control (with s-maxage) is the policy
+
+
+# ---------- 3. renamed and merged tickers ----------
+def _renames(*pairs):
+    """Store F&O rename circulars (old symbol, new symbol, effective day), as the F&O changes desk keeps them."""
+    from app import fo_changes
+    db.set_setting(fo_changes.EVENTS_KEY, json.dumps([{"id": f"rename:{a}>{b}", "kind": "rename", "symbol": b, "was_symbol": a, "segment": "stock", "effective": d}
+                                                      for a, b, d in pairs]))
+    fo_changes._cache.clear()
+
+
+def test_an_old_ticker_redirects_for_good_to_the_company_it_became(w):
+    c = w["client"]
+    assert stock_pages.find("IN", "ZOMATO") is None and stock_pages.find("IN", "ETERNAL")
+    for src, dst in (("/stocks/in/ZOMATO", "/stocks/in/ETERNAL"), ("/stocks/in/zomato", "/stocks/in/ETERNAL"), ("/stocks/IN/Zomato", "/stocks/in/ETERNAL"),
+                     ("/stocks/in/ZOMATO/", "/stocks/in/ETERNAL"), ("/stocks/ZOMATO", "/stocks/in/ETERNAL"),
+                     ("/stocks/in/TATAMOTORS", "/stocks/in/TMPV"),                    # the known symbol change the company-data reader keeps
+                     ("/stocks/in/HDFC", "/stocks/in/HDFCBANK"),                      # a company merged into another
+                     ("/stocks/us/FACEBOOK", "/stocks/us/META"), ("/stocks/us/AT%26T", "/stocks/us/T")):
+        r = c.get(src, follow_redirects=False)
+        assert r.status_code == 301 and r.headers["location"] == dst, (src, r.status_code, r.headers.get("location"))
+    r = c.get("/stocks/in/ZOMATO", follow_redirects=True)
+    assert r.status_code == 200 and str(r.url).endswith("/stocks/in/ETERNAL") and "ETERNAL" in r.text
+    # a shared card's invite code goes with it
+    code = "abc123xy"
+    from app import referrals
+    if referrals.CODE.match(code):
+        assert c.get(f"/stocks/in/ZOMATO?ref={code}", follow_redirects=False).headers["location"] == f"/stocks/in/ETERNAL?ref={code}"
+
+
+def test_renames_come_from_the_f_and_o_circulars_and_follow_a_chain_but_not_a_loop(w):
+    c = w["client"]
+    _renames(("OLDCO", "MIDCO", "2026-01-05"), ("MIDCO", "RELIANCE", "2026-06-01"), ("LOOPA", "LOOPB", "2026-01-01"), ("LOOPB", "LOOPA", "2026-02-01"),
+             ("GHOSTA", "NOSUCHCO", "2026-03-01"))
+    assert c.get("/stocks/in/OLDCO", follow_redirects=False).headers["location"] == "/stocks/in/RELIANCE"
+    assert c.get("/stocks/in/MIDCO", follow_redirects=False).headers["location"] == "/stocks/in/RELIANCE"
+    for u in ("/stocks/in/LOOPA", "/stocks/in/GHOSTA"):         # a loop, or a new name that has no page: still a 404
+        r = c.get(u, follow_redirects=False)
+        assert r.status_code == 404 and "noindex" in r.text, u
+    _renames(("OLDCO", "TCS", "2025-01-01"), ("OLDCO", "RELIANCE", "2026-01-01"))
+    assert stock_pages.renamed_to("IN", "OLDCO") == "RELIANCE"          # renamed twice: the latest says
+
+
+def test_an_unknown_ticker_stays_a_404_with_noindex_and_a_company_is_never_redirected(w, monkeypatch):
+    c = w["client"]
+    for u in ("/stocks/in/ZZNOPE", "/stocks/us/ZOMATO", "/stocks/ZZNOPE", "/stocks/in/ZZNOPE/", "/stocks/in/NIFTY"):
+        r = c.get(u, follow_redirects=False)
+        assert r.status_code in (404, 200) and r.status_code != 301, u
+    r = c.get("/stocks/in/ZZNOPE")
+    assert r.status_code == 404 and "noindex" in r.text and "canonical" not in r.text
+    assert stock_pages.renamed_to("IN", "ZZNOPE") is None and stock_pages.renamed_to("XX", "ZOMATO") is None and stock_pages.renamed_to("IN", "") is None
+    assert stock_pages.renamed_to("IN", "Z" * 40) is None
+    # an alias whose target has no page, or that names two companies, is not a rename
+    from app import name_search
+    monkeypatch.setitem(name_search.ALIASES["IN"], "GONEALIAS", ["NOSUCHCO"])
+    monkeypatch.setitem(name_search.ALIASES["IN"], "TWOALIAS", ["RELIANCE", "TCS"])
+    assert c.get("/stocks/in/GONEALIAS", follow_redirects=False).status_code == 404
+    assert c.get("/stocks/in/TWOALIAS", follow_redirects=False).status_code == 404
+    # a company that has a page is served, not redirected, whatever the alias table says
+    monkeypatch.setitem(name_search.ALIASES["IN"], "RELIANCE", ["TCS"])
+    assert c.get("/stocks/in/RELIANCE", follow_redirects=False).status_code == 200

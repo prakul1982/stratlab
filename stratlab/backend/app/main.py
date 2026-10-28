@@ -4682,6 +4682,15 @@ def stock_list_job():
         time.sleep(next_pass_in(bool(failed), tries))
 
 
+def _renamed_redirect(region: str | None, symbol: str, ref: str | None = None):
+    """A ticker with no page that was renamed or merged (ZOMATO is ETERNAL now): a permanent redirect to the new company's page.
+    None for any other symbol, which stays a 404 (SEO-1: /stocks/in/ZOMATO was a 404 Google had already found)."""
+    new = stock_pages.renamed_to(region, symbol) if region and len(symbol) <= 20 else None
+    if not new:
+        return None
+    return RedirectResponse(stock_pages.path(region, new) + (f"?ref={ref}" if ref else ""), status_code=301, headers=PAGE_HEADERS)
+
+
 @app.get("/stocks", response_class=HTMLResponse)
 @app.get("/stocks/", response_class=HTMLResponse, include_in_schema=False)
 def stock_index(q: str = "", m: str = ""):
@@ -4701,6 +4710,10 @@ def stock_region_index(region: str, q: str = ""):
             hit = stock_pages.find(reg, region) if reg else None
             if hit:
                 return RedirectResponse(stock_pages.path(reg, hit[0]), status_code=301)
+        for key in ("in", "us"):                 # a renamed ticker typed without its market (SEO-1)
+            moved = _renamed_redirect(stock_pages.REGIONS[key], region)
+            if moved:
+                return moved
         return HTMLResponse(stock_pages.not_found(None, region), status_code=404)
     if region != region.lower():
         return RedirectResponse(f"/stocks/{region.lower()}", status_code=301)
@@ -4751,7 +4764,7 @@ def stock_page_slash(region: str, symbol: str):
     r = stock_pages.REGIONS.get(region.lower())
     hit = stock_pages.find(r, symbol) if r else None
     if not hit:
-        return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
+        return _renamed_redirect(r, symbol) or HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
     return RedirectResponse(stock_pages.path(r, hit[0]), status_code=301)
 
 
@@ -4764,7 +4777,8 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     if not hit and r and symbol.lower() in ("browse", "index"):
         return RedirectResponse(f"/stocks/{r.lower()}", status_code=301)       # /stocks/in/browse: the lists' parent
     if not hit:
-        return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
+        moved = _renamed_redirect(r, symbol, ref if ref and referrals.CODE.match(ref) else None)
+        return moved or HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
     sym, co = hit
     ref = ref if ref and referrals.CODE.match(ref) else None
     if region != region.lower() or symbol != sym:          # one address per company
