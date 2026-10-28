@@ -56,7 +56,14 @@ function useDuo(ref: { current: HTMLDivElement | null }) {
       if (cols !== 1) return;
       el.classList.add("duo");
       const wraps = Array.from(el.querySelectorAll<HTMLElement>(".k-stat-v")).some((v) => v.getBoundingClientRect().height > parseFloat(getComputedStyle(v).lineHeight) * 1.5);
-      if (wraps) el.classList.remove("duo");
+      // labels of different heights in one row (one wrapping to three lines beside one of a line) are the uneven row the owner dislikes
+      const rows = new Map<number, number[]>();
+      el.querySelectorAll<HTMLElement>(".k-stat-k").forEach((k) => {
+        const top = Math.round(k.parentElement!.getBoundingClientRect().top);
+        rows.set(top, [...(rows.get(top) ?? []), Math.round(k.getBoundingClientRect().height)]);
+      });
+      const uneven = Array.from(rows.values()).some((hs) => Math.max(...hs) - Math.min(...hs) > 3);
+      if (wraps || uneven) el.classList.remove("duo");
     };
     const ro = new ResizeObserver(() => { const w = el.clientWidth; if (w !== width) { width = w; fix(); } });
     const mo = new MutationObserver(fix);

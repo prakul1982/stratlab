@@ -2559,9 +2559,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 }
 
 /* VR5-004: a chip or badge whose words are longer than the screen ("Promoter pledge or encumbrance", "Earlier financial statements not to be
-   relied on (Item 4.02)") wraps inside its own rounded box on a phone, instead of pushing the page sideways (376px on a 360px screen);
+   relied on (Item 4.02)") wraps inside its own rounded box on a small phone (380px and under; wider ones had room), instead of pushing the page sideways (376px on a 360px screen);
    short ones are unchanged */
-@media (max-width: 640px) {
+@media (max-width: 380px) {
   .k-badge { max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; }
   .k-chip { max-width: 100%; height: auto; min-height: 44px; padding-block: 6px; white-space: normal; text-align: left; line-height: 1.3; }
 }
@@ -2578,3 +2578,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-stats.duo { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); }
   .k-stats.duo > .k-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
+.k-nowrap { white-space: nowrap; }
+@media (max-width: 380px) { .k-nowrap { white-space: normal; } }          /* the plan table's columns are 64px there: the word breaks at its hyphens rather than push the page sideways */
+/* VR5-003: at 400px and under the Menu sits near the right edge (the button beside it reads "Sign in"): its list opens leftwards; from its left it ran 31px past the screen */
+@media (max-width: 400px) { .pub-nav .pub-menu.pub-menu-start nav { left: auto; right: 0; } }
