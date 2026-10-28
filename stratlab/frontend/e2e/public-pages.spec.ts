@@ -177,7 +177,9 @@ test("VR-4: on a phone the revenue table shows whole years beside its labels, a 
       return { seen: seen.length, half: half.length, total: heads.length };
     });
     expect(cut.half, `a year half under the labels at ${w}px`).toBe(0);
-    expect(cut.seen, `years in view at ${w}px`).toBe(w >= 380 ? 3 : 2);        // three where the card is 320px wide, else two
+    // three where the card is 340px wide (a 412px phone), else two: at 390px three columns of ~70px held a figure only in the
+    // site's own font, and a first visit draws in the fallback font (font-display: optional), which is wider (CI, 28 Oct)
+    expect(cut.seen, `years in view at ${w}px`).toBe(w >= 412 ? 3 : 2);
     // (VR4-007) the long market value takes the row, so it is not wrapped in half of it
     const mc = await page.locator(".stat.long").first().evaluate((e) => ({ w: e.getBoundingClientRect().width, lines: Math.round(e.querySelector("b")!.getBoundingClientRect().height / parseFloat(getComputedStyle(e.querySelector("b")!).lineHeight)) }));
     expect(mc.lines, `market value lines at ${w}px`).toBe(1);
