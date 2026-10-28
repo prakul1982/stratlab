@@ -167,6 +167,16 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
     else if (naming === "rename") await w.rename(listId, n);
     setNaming(null); setName("");
   };
+  // the tabs are one stop in the tab order (the open list's); the arrow keys, Home and End move along them (MWR1-008)
+  const tabKey = (e: React.KeyboardEvent) => {
+    const ids = w.lists?.map((l) => l.id) ?? [];
+    const i = ids.indexOf(listId);
+    const to = e.key === "ArrowRight" ? ids[(i + 1) % ids.length] : e.key === "ArrowLeft" ? ids[(i - 1 + ids.length) % ids.length] : e.key === "Home" ? ids[0] : e.key === "End" ? ids[ids.length - 1] : null;
+    if (!to || to === listId) return;
+    e.preventDefault();
+    patch({ list: to });
+    window.setTimeout(() => document.getElementById(`mw-tab-${to}`)?.focus(), 0);
+  };
   const tabsFull = w.lists && w.limits?.lists != null && w.lists.length >= w.limits.lists;
   const menuTrigger = useRef<HTMLButtonElement>(null), menuBox = useRef<HTMLDivElement>(null);
   const [listMenu, setListMenu] = useState(false);
@@ -242,7 +252,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
         </div>
       ) : (
         <>
-          <div className="mw-tabs" role="tablist" aria-label="Your lists">
+          <div className="mw-tabs" role="tablist" aria-label="Your lists" onKeyDown={tabKey}>
             {w.lists?.map((l) => (
               <button key={l.id} type="button" role="tab" id={`mw-tab-${l.id}`} className="mw-tab" aria-selected={l.id === listId} tabIndex={l.id === listId ? 0 : -1}
                 onClick={() => patch({ list: l.id })} title={l.default ? "Your Research watchlist" : l.name}>{l.name}<small aria-hidden="true">{l.items.length}</small></button>
@@ -277,7 +287,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
           {adding && list && <AddSymbol onAdd={add} />}
           {full && list && <p className="mw-limit" role="status">{said} <Link to="/plans">See plans</Link></p>}
 
-          <div className="mw-scroll" ref={scroller}>
+          <div className="mw-scroll" ref={scroller} role="tabpanel" aria-labelledby={`mw-tab-${listId}`}>
             {w.failed && <ErrorState title="Your lists couldn't be read" action={{ label: "Try again", onClick: () => void w.reload() }}>Check your connection. Nothing was lost.</ErrorState>}
             {!w.lists && !w.failed && <div className="mw-skel"><Skeleton label="Loading your lists" lines={5} /></div>}
             {list && list.items.length === 0 && (

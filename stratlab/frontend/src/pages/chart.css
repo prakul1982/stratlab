@@ -1,3 +1,5 @@
 /* The chart page's quote line (MW-1): the last price large, the day's change beside it. */
 .chart-quote { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); margin-bottom: var(--s3); font-variant-numeric: tabular-nums; }
 .chart-px { font-size: var(--t-stat); font-weight: 600; line-height: 1.1; }
+/* the "Add to a list" box is one control's width, beside the Market Watch button, not a row of its own (MWR1-010) */
+.chart-add { width: 200px; max-width: 100%; }

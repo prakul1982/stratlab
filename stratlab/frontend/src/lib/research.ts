@@ -258,6 +258,23 @@ function loadWatch(): Promise<WatchItem[]> {
   return watchLoad;
 }
 
+/* Market Watch's first list is this list (MWR1-007). Each side keeps its own copy for the life of the page, and a change that
+ * is saved from a stale copy replaces the other side's: a stock added in the panel was lost when another was starred on a
+ * company page, and the reverse. So a save here is announced, and Market Watch hands its copy over when it changes. */
+const watchHear = new Set<() => void>();
+/** `fn` is called after a change of the watchlist is saved from the Research pages; returns how to stop listening. */
+export function onWatchlistSaved(fn: () => void): () => void {
+  watchHear.add(fn);
+  return () => { watchHear.delete(fn); };
+}
+/** The stocks and ETFs of the first Market Watch list as this list's copy, when it differs from it. */
+export function adoptWatchlist(items: WatchItem[]): void {
+  const key = (xs: WatchItem[]) => xs.map((i) => `${i.region}:${i.symbol}`).join(",");
+  if (watchCache && key(watchCache) === key(items)) return;
+  watchCache = items;
+  watchSubs.forEach((f) => f(items));
+}
+
 /** What an add / remove / save says when the saved list could not be read first. */
 export const WATCH_UNREAD = "Your watchlist couldn't be read, so nothing was changed. Try again.";
 
@@ -295,7 +312,7 @@ export function useWatchlist() {
     if (list === cur) return;                     // nothing to change: no save
     const prev = watchCache;
     watchCache = list; watchSubs.forEach((f) => f(list));
-    try { await api("/research/watchlist", { method: "PUT", body: { items: list } }); }
+    try { await api("/research/watchlist", { method: "PUT", body: { items: list } }); watchHear.forEach((f) => f()); }
     catch (e) { watchCache = prev; watchSubs.forEach((f) => f(prev ?? [])); throw e; }
   }, []);
   const has = (r: Region, s: string) => !!items?.some((i) => i.region === r && i.symbol === s);
