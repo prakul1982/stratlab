@@ -4,6 +4,15 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 28 October 2026: the blog's posts and lists redrawn (PUB-2)
+
+The posts had two widths (a text column of about 820 px sitting left, tables across about 1,180 px), their headline numbers were a wall of bullet sentences, their tables wrapped headers and names and wandered right-aligned text, and a heavy "Facts, not advice" box and a long Method list sat in the middle.
+
+- **One width:** text, tiles, chart and tables share the page's own 960 px column, centred as a company page is; a wide table scrolls inside its card on a phone.
+- **Headline numbers as tiles, and one small chart:** the strategy post leads with four tiles ("1 of 43 tests ahead of the passive return", "34 of 43 behind it", "25 of 35 that traded lost money", "7 of 43 passed their checks") and a stacked bar for each market (ahead, behind, not compared); the IPO post with its issue count, closes above the issue price and medians; the SIP post with each end value and annual return and a bar for each horizon. The sentences stay below, shorter. The four checks are one small table, not four sentences of counts.
+- **Tables:** short unwrapped headers ("After costs", "Passive"), fixed column widths shared by the tables of a post, names on one line, figures right-aligned and text left-aligned, a short caption; a test run over another period says so in small type under its name instead of an "Other period" column that was blank for the rest.
+- **Quiet facts line** under the byline instead of a boxed paragraph; **the method is folded** ("How these tests were run", "How this was worked out", "How the comparison was run", "How this brief is made"), its words still in the page. The daily briefs get the same width, facts line and folded method; the list cards share one layout (kind and date, title, at most two lines).
+
 ### 28 October 2026: the public company page's top half redesigned (PUB-2)
 
 The key figures were misaligned (labels of one, two and three lines left the values at different heights, "P/E" far above its "54.4", the range took two columns and left a hole) and the page led with a dense paragraph, with the explanations under the figures.

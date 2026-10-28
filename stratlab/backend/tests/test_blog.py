@@ -256,7 +256,7 @@ def test_the_strategy_post_states_the_librarys_own_numbers(w):
     assert post["slug"] == "classic-strategies-ten-markets-after-costs" and post["kind"] == "research"
     text = blog.plain_text(post["blocks"])
     # every table row says the entry's own return, passive return and trade count, and links to its library page
-    tables = [b for b in post["blocks"] if b["t"] == "table"]
+    tables = [b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Rule set"]     # (the four checks have a table of their own, below)
     assert len(tables) == 10 and sum(len(t["rows"]) for t in tables) == len(rows)
     by_link = {r[0]["href"]: r for t in tables for r in t["rows"]}
     for e in rows:
@@ -275,7 +275,7 @@ def test_the_strategy_post_states_the_librarys_own_numbers(w):
     assert f"ahead in {ahead} of {len(rows)} tests, behind in {behind}" in text
     lost = sum(1 for e in rows if e["stats"]["trades"] and e["stats"]["ret"] < 0)
     assert f"{lost} of the {len(rows) - 1} tests that traded lost money after costs" in text
-    for must in ("Method", "Limits", "slippage", "four checks", "70/30", "1,000 times", "past prices", "StratLab's own backtester"):
+    for must in ("How these tests were run", "Limits", "slippage", "four checks", "70/30", "1,000 times", "past prices", "StratLab's own backtester"):
         assert must in text, must
     assert blog_research.classic_strategies(rows[:9]) is None               # too few tests for a post
 
@@ -372,7 +372,7 @@ def test_the_sip_post_is_the_sip_test_engines_own_arithmetic(w):
         lump_ahead += b["value"] > a["value"]
     assert spread[1][1:4] == [str(windows), str(ahead), str(lump_ahead)]
     text = blog.plain_text(post["blocks"])
-    for must in ("price index", "dividends are not included", "stamp duty", "Limits", "Method", "no sale is made"):
+    for must in ("price index", "dividends are not included", "stamp duty", "Limits", "How the comparison was run", "no sale is made"):
         assert must.lower() in text.lower(), must
     assert blog_research.sip_vs_lump({d: v for d, v in list(closes.items())[:300]}) is None            # under four years of history
 
