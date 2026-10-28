@@ -377,3 +377,13 @@ test("Do Not Track and Global Privacy Control stop Google ads too: our own card 
   const { LEGAL_BLOCKS } = await import("../src/content/legal.ts");
   assert.ok(JSON.stringify(LEGAL_BLOCKS["/privacy"]).includes("Google ads, the Meta Pixel and Clarity do not load"));
 });
+
+test("the morning Zerodha alert links straight to the broker login, which Admin opens at once unless today's login is done", () => {
+  const py = readFileSync(new URL("../../backend/app/kite_auto.py", import.meta.url), "utf8");
+  assert.match(py, /LOGIN_LINK = "\/admin\/data\?kite=login"/);
+  assert.match(py, /url=LOGIN_LINK\)/);
+  const page = read("src/pages/admin/DataSection.tsx");
+  assert.match(page, /params\.get\("kite"\) === "login"/);
+  assert.match(page, /if \(loggedInToday\) \{ notify\("Already logged in to the broker today: nothing to do\."\); return; \}/);
+  assert.match(page, /window\.location\.assign\(url\);/);
+});

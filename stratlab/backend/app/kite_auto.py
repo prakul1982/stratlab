@@ -33,6 +33,8 @@ BASE = "https://kite.zerodha.com"
 RETRY_MINUTES = 5
 MAX_ATTEMPTS = 6
 CAPTCHA_WAIT_S = 30
+# Admin -> Data and jobs, which opens Zerodha's login page at once when it is reached from this link
+LOGIN_LINK = "/admin/data?kite=login"
 # a browser's own headers: a login that names itself a script is the kind Zerodha meets with a CAPTCHA
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
                          "Chrome/130.0.0.0 Safari/537.36",
@@ -247,12 +249,12 @@ class AutoLogin:
         self._alert(text)
         return True
 
-    def _alert(self, text: str):
+    def _alert(self, text: str, url: str = "/admin"):
         from .alerts import tell_admins
         from .errors import note
         note(text)
         try:
-            tell_admins(text.split(". ")[0][:120], text)
+            tell_admins(text.split(". ")[0][:120], text, url=url)
         except Exception as e:
             print("admin alert failed:", e)
         if settings.ADMIN_TELEGRAM_CHAT_ID:
@@ -293,8 +295,9 @@ class AutoLogin:
                     self.run_once(only_if_due=True)
                 except Exception as e:
                     if self._gave_up or self._attempts >= MAX_ATTEMPTS:
-                        self._alert(f"StratLab: Kite auto-login failed and won't retry today. {e} "
-                                    f"Log in by hand from the Admin page (Log in to Kite).")
+                        # to every admin's phone and email: the link opens Zerodha's own login page in one tap
+                        self._alert(f"StratLab: today's Zerodha login needs you. {e} Tap to log in to Zerodha "
+                                    f"(about 10 seconds); Indian live data comes back as soon as you do.", url=LOGIN_LINK)
                     time.sleep(RETRY_MINUTES * 60)
                     continue
             time.sleep(30)
