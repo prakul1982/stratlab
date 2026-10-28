@@ -3,6 +3,7 @@ with, renamed tickers, and the sentences and FAQ built from each company's own f
 import json
 import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from urllib.parse import unquote
 
 import pytest
@@ -183,3 +184,56 @@ def test_the_directory_sitemap_lists_every_letter_page_and_index_and_is_in_the_i
         assert page.status_code == 200 and f'<link rel="canonical" href="{u}">' in page.text and "noindex" not in page.text, u
     assert ET.fromstring(r.content).tag == NS + "urlset"
     assert {"pages", "blog"} <= {n.rsplit("/", 1)[1][:-4] for n in names}       # the blog still owns sitemaps/blog.xml
+
+
+# ---------- 2. the edge keeps the pages ----------
+LONG = "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800"
+
+
+def test_company_directory_and_list_pages_are_kept_a_day_by_the_edge_and_feeds_minutes(w):
+    c = w["client"]
+    for u in ("/stocks/in/RELIANCE", "/stocks/us/AAPL", "/stocks", "/stocks/in", "/stocks/us", "/stocks/in/browse/r", "/stocks/in/index/nifty-50",
+              "/stocks/us/index/sp-500"):
+        r = c.get(u)
+        assert r.status_code == 200 and r.headers["cache-control"] == LONG, (u, r.headers.get("cache-control"))
+    # browsers still ask again after five minutes
+    assert int(re.search(r"(?<!s-)max-age=(\d+)", LONG).group(1)) == 300
+    short = stock_pages.FEED_CACHE
+    assert "s-maxage=900" in short
+    for u in ("/stocks?q=rel", "/stocks/in?q=rel", "/sitemap.xml", "/sitemaps/pages.xml", "/sitemaps/directory.xml", "/sitemaps/stocks-in-1.xml", "/robots.txt"):
+        assert c.get(u).headers["cache-control"] == short, u
+    # a page that is being prepared is never kept; a page that is a close behind is kept a minute
+    assert stock_pages.cache_control("IN", {"region": "IN", "price_at": "2000-01-03"}) == stock_pages.BEHIND_CACHE
+
+
+def test_a_page_still_waiting_for_its_new_close_is_kept_a_minute_and_a_busy_one_not_at_all(w, monkeypatch):
+    c = w["client"]
+    assert c.get("/stocks/in/RELIANCE").headers["cache-control"] == LONG
+    main.stock_page_store.mem.clear()
+    monkeypatch.setattr(stock_pages, "behind", lambda f, now=None: True)          # its price is a close older than the market's
+    assert c.get("/stocks/in/RELIANCE").headers["cache-control"] == stock_pages.BEHIND_CACHE
+    monkeypatch.undo()
+    main.stock_page_store.mem.clear()
+    monkeypatch.setattr(main.stock_page_store, "per_minute", 0)
+    r = c.get("/stocks/in/INFY")
+    assert r.status_code == 503 and r.headers["cache-control"] == "no-store"
+
+
+def test_blog_pages_are_kept_a_day_and_the_feed_ten_minutes(w):
+    from app import blog
+    blog.add_once({"slug": "seo1-post", "kind": "research", "title": "A post", "summary": "A post.", "blocks": [{"t": "p", "text": "Facts."}], "published": True})
+    c = w["client"]
+    for u in ("/blog", "/blog/research", "/blog/seo1-post"):
+        r = c.get(u)
+        assert r.status_code == 200 and r.headers["cache-control"] == LONG, (u, r.headers.get("cache-control"))
+    assert c.get("/blog/feed.xml").headers["cache-control"] == "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
+
+
+def test_vercel_caches_the_rewritten_pages_so_the_edge_headers_are_kept():
+    """vercel.json: the pages the API serves through a rewrite are cached by the host when the rewrite says so (the live site
+    answers a company page with x-vercel-cache: HIT and an age under its s-maxage), so no header of ours is overridden there."""
+    conf = json.loads((Path(__file__).resolve().parents[2] / "frontend" / "vercel.json").read_text())
+    rewrites = {h["source"]: {x["key"]: x["value"] for x in h["headers"]} for h in conf["headers"]}
+    for src in ("/stocks/:path*", "/blog/:path*", "/sitemap.xml", "/sitemaps/:path*"):
+        assert rewrites[src] == {"x-vercel-enable-rewrite-caching": "1"}, src
+        assert not any("cache-control" in k.lower() for k in rewrites[src])         # the origin's Cache-Control (with s-maxage) is the policy

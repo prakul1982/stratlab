@@ -4646,7 +4646,8 @@ stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILD
 stock_page_store.adjust = lambda r, s, f: stock_pages.with_week52_report(f, official_close.ranges(), s) if r == "IN" else f   # R10O-007
 research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the app's US P/E on the public page's EPS (R7O-004)
 research_routes.filed_numbers = lambda s: sec_feed.company(s)               # a page stored before its quarterly EPS was kept (RC1 DD-030)
-SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
+SEO_HEADERS = {"Cache-Control": stock_pages.FEED_CACHE}           # robots, the sitemaps and search results: kept minutes
+PAGE_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}       # the lists of companies and the directories: kept a day by the site's cache (SEO-1)
 
 
 def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str] | None:
@@ -4686,7 +4687,7 @@ def stock_list_job():
 def stock_index(q: str = "", m: str = ""):
     """Every company page's way in: search by name or symbol (`m`: in or us), and each market's largest companies."""
     r = stock_pages.REGIONS.get((m or "").lower())
-    return HTMLResponse(stock_pages.index_page(r if q else None, q), headers=SEO_HEADERS)
+    return HTMLResponse(stock_pages.index_page(r if q else None, q), headers=SEO_HEADERS if q.strip() else PAGE_HEADERS)
 
 
 @app.get("/stocks/{region}", response_class=HTMLResponse)
@@ -4703,7 +4704,7 @@ def stock_region_index(region: str, q: str = ""):
         return HTMLResponse(stock_pages.not_found(None, region), status_code=404)
     if region != region.lower():
         return RedirectResponse(f"/stocks/{region.lower()}", status_code=301)
-    return HTMLResponse(stock_pages.index_page(r, q), headers=SEO_HEADERS)
+    return HTMLResponse(stock_pages.index_page(r, q), headers=SEO_HEADERS if q.strip() else PAGE_HEADERS)
 
 
 def _dir_page(request: Request, region: str, want: str, build):
@@ -4717,7 +4718,7 @@ def _dir_page(request: Request, region: str, want: str, build):
     body = build(r)
     if body is None:
         return HTMLResponse(stock_pages.dir_not_found(r), status_code=404)
-    return HTMLResponse(body, headers=SEO_HEADERS)
+    return HTMLResponse(body, headers=PAGE_HEADERS)
 
 
 def _dir_number(page: str) -> int:
@@ -4782,7 +4783,9 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
         page = stock_pages.with_surveillance(page, surveillance.flags_for(sym))
     # kept by the site's cache no longer than the next close's settle point, and a minute while it waits for its new close,
     # so no compressed copy outlives the refresh (R13-006)
-    headers = {"Cache-Control": stock_pages.cache_control(r, stored.get("facts") if isinstance(stored, dict) else None)}
+    # (`stored` is the page's facts themselves, as Pages keeps them in memory: reading ["facts"] off them found nothing, so a page a
+    # close behind was kept as long as any other)
+    headers = {"Cache-Control": stock_pages.cache_control(r, stored if isinstance(stored, dict) else None)}
     page = ads.add_to_page(page, "company")        # ADS-1: as the page is sent, so the stored copy never holds an ad; "" while ads are off
     return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=headers)
 

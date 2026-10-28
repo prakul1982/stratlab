@@ -65,9 +65,13 @@ PE_STALE_DAYS = 456            # a P/E on a year that ended more than about 15 m
 ANNUAL_BEHIND_DAYS = 395       # a newest annual report filed this long after the table's newest year ended isn't in the table
 CHUNK = 5000                   # companies per sitemap file (the limit is 50,000; smaller files are quicker to fetch)
 PEERS = 12
-# browsers keep a page five minutes and the site's cache fifteen: a page follows its market's close within minutes, never
-# a day later (a stored page itself is rebuilt after each close, see Pages.get)
-CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=600"
+# SEO-1: a company, directory or blog page is kept by the site's cache (the host's edge, which serves the API's pages through a
+# rewrite: vercel.json's x-vercel-enable-rewrite-caching) for a day, and stale for a week while it is read again. A cold build
+# took 0.6 to 1.8 s, which Google counts against crawling a site it has found 13,000 addresses on and not yet read. The price on
+# a page is the close its "As of" names, so a copy a day old still says what is true of it; only a page that is already a close
+# behind (BEHIND_CACHE) is kept a minute, so it follows its refresh at once. Browsers keep a page five minutes.
+CACHE_CONTROL = "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800"
+FEED_CACHE = "public, max-age=300, s-maxage=900, stale-while-revalidate=600"     # robots, the sitemaps and search results: a list that changes by the hour
 BEHIND_CACHE = "public, max-age=60, s-maxage=60, stale-while-revalidate=30"   # a page waiting for its new close
 MIN_CACHE = 60
 EXTREME = 100.0                # a margin beyond ±100% says revenue is tiny next to costs or profit
@@ -353,23 +357,14 @@ def next_settle(region: str, now: datetime | None = None) -> datetime | None:
 
 
 def cache_control(region: str | None, f: dict | None = None, now: datetime | None = None) -> str:
-    """A company page's Cache-Control. The site's cache keeps one copy per compression (identity, gzip, br, zstd), each
-    from when it was first asked for, so a copy cached just before the close settled outlived the page's refresh by up
-    to s-maxage plus stale-while-revalidate: browsers (gzip, br) got 8 Oct's page until 20:59 UTC while plain requests
-    had 9 Oct's from 20:51 (R13-006). So no copy is kept past the market's next settle point, and a page still waiting
-    for its new close is kept a minute, so every copy follows the refresh within a minute or two."""
-    now = now or datetime.now(timezone.utc)
+    """A company page's Cache-Control: the day-long CACHE_CONTROL, or a minute (BEHIND_CACHE) for a page whose price is from
+    before its market's latest close, so that page follows its refresh within a minute or two and never says "the market
+    has closed since" for long after it has caught up (R13-006). A page that is up to date says "As of <the close>" and stays
+    true of that close whenever it is read (SEO-1: this used to end every copy at the market's next settle point, so a crawler
+    met a cold build on most requests)."""
     if f and region and behind(f, now):
         return BEHIND_CACHE
-    nxt = next_settle(region, now) if region else None
-    if nxt is None:
-        return CACHE_CONTROL
-    left = int((nxt - now).total_seconds())
-    if left >= 900 + 600:
-        return CACHE_CONTROL
-    s_max = max(MIN_CACHE, min(900, left))
-    swr = max(0, min(600, left - s_max))
-    return f"public, max-age={min(300, s_max)}, s-maxage={s_max}, stale-while-revalidate={swr}"
+    return CACHE_CONTROL
 
 
 def html_ttl(region: str | None, now: datetime | None = None) -> int:
