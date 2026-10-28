@@ -2685,3 +2685,16 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* LIVE1B-042: a password box is as long as a password, not as wide as the card it sits in */
 .k-field-short { max-width: 320px; }
+
+/* LIVE1B-036, 055, 070: what a thumb has to hit on a phone is 44px each way: every small button, the date picker's button, a breadcrumb step, a fold's
+   bar, a summary line (Help's 46 explanations were 32px, edge to edge), the public Menu, and a card's name link (a link keeps the place it had: the
+   padding is what takes the tap, the negative margin gives the room back) */
+@media (max-width: 640px) {
+  .btn.sm { min-height: 44px; }
+  .k-input.sm { height: 44px; }
+  .k-date-btn { width: 44px; height: 44px; right: 0; }
+  .k-crumb a, .k-crumb-btn, .k-crumb li > [aria-current="page"] { min-height: 44px; }
+  .k-fold, .k-disclosure > summary, .help-topic summary, .lp-faq summary, .lp-menu > summary, .pub-menu > summary { min-height: 44px; }
+  .k-tbl-wrap.stack th[scope="row"] a.link, .k-tbl-wrap.stack td a.link { padding-block: 13px; margin-block: -13px; }
+  .k-page a.link.k-small { padding-block: 13px; margin-block: -5px; }
+}

@@ -293,7 +293,8 @@ def test_the_pages_palette_is_the_apps_own():
 def test_the_header_and_footer_are_the_apps(w):
     t = w["client"].get("/stocks/in/RELIANCE").text
     css = re.search(r"<style>(.*?)</style>", t, re.S).group(1)
-    assert ".nav{display:flex;align-items:center;padding:18px clamp(16px,4vw,48px);border-bottom:1px solid var(--line)}" in css      # full width, 18 px, a rule
+    # full width, 18 px, a rule; its logo and button on the page's own 960px column's edges (LIVE1B-052)
+    assert ".nav{display:flex;align-items:center;padding:18px max(clamp(16px,4vw,48px),calc((100% - 960px)/2 + clamp(16px,4vw,32px)));border-bottom:1px solid var(--line)}" in css
     assert ".brand svg{height:40px" in css and ".btn.sm{min-height:36px" in css and "@media (max-width:1000px){.nav>nav{display:none}.nav details.menu{display:block}}" in css
     assert 'class="btn ghost sm"' in t and "main{flex:1 0 auto;width:100%;max-width:960px" in css and "min-height:100vh" in css       # a short page keeps its footer at the bottom
     foot = re.search(r"<footer class=\"site\">.*?</footer>", t, re.S).group(0)

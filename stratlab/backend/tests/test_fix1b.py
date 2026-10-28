@@ -236,3 +236,16 @@ def test_live1b_082_the_blogs_lists_are_kept_by_the_cache_for_minutes_not_a_day(
         assert r.status_code == 200, path
         cc = r.headers["cache-control"]
         assert "s-maxage=600" in cc and "s-maxage=86400" not in cc, f"{path}: {cc}"
+
+
+# ---------- Public company pages ----------
+def test_live1b_074_an_exchange_low_set_before_the_pages_year_is_not_taken_in():
+    from app import stock_pages
+    report = {"day": "2026-10-27", "rows": {"SBIN": [1_100.0, "2026-06-02", 906.0, "2025-10-27"]}}
+    page = {"region": "IN", "symbol": "SBIN", "price_at": "2026-10-28", "high52": 1_090.0, "low52": 917.7}
+    got = stock_pages.with_week52_report(page, report, "SBIN")
+    assert got["low52"] == 917.7 and got["high52"] == 1_100.0                  # the 27 Oct 2025 low is outside the year to 28 Oct 2026; the June high is inside
+    inside = {**page, "price_at": "2026-10-26"}                                 # the year to 26 Oct 2026 starts after 26 Oct 2025: 27 Oct 2025 is in it
+    assert stock_pages.with_week52_report(inside, report, "SBIN")["low52"] == 906.0
+    held = {"day": "2026-10-27", "rows": {"SBIN": [1_100.0, "2026-06-02", 906.0, "2025-11-03"]}}
+    assert stock_pages.with_week52_report(page, held, "SBIN")["low52"] == 906.0

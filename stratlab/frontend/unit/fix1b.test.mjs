@@ -303,3 +303,46 @@ test("LIVE1B-071: the calendar's link is on the site, forwarded to the server", 
 test("LIVE1B-019, 037: a Stat in a half-width tile still fits (the duo check counts a shrunk figure as not fitting)", () => {
   assert.match(read("src/components/kit/Stat.tsx"), /\(v\.classList\.contains\("one"\) \? fitFigure\(v\)/);
 });
+
+// ---------- Public pages, phone targets, Help ----------
+test("LIVE1B-051: the home page's description fits a search result and still says options are paper trading", async () => {
+  const { HOME_DESCRIPTION } = await import("../src/content/seo.ts");
+  assert.ok(HOME_DESCRIPTION.length <= 160, `${HOME_DESCRIPTION.length} characters`);
+  assert.match(HOME_DESCRIPTION, /paper trade them; options are paper trading only\./);
+  assert.ok(read("index.html").includes(`content="${HOME_DESCRIPTION}"`));
+});
+
+test("LIVE1B-036, 055, 070: a phone's small controls are 44px", () => {
+  const css = read("src/styles.css");
+  const phone = css.slice(css.lastIndexOf("LIVE1B-036, 055, 070"));
+  for (const re of [/\.btn\.sm \{ min-height: 44px; \}/, /\.k-date-btn \{ width: 44px; height: 44px;/, /\.help-topic summary/, /\.k-crumb a, \.k-crumb-btn/, /\.k-tbl-wrap\.stack th\[scope="row"\] a\.link/]) assert.match(phone, re);
+});
+
+test("LIVE1B-043: Help is at the page's width and its explanations are in groups", async () => {
+  const { HELP_GROUPS, HELP_TOPICS } = await import("../src/lib/helpTopics.ts");
+  assert.ok(HELP_TOPICS.every((t) => HELP_GROUPS.some(([g]) => g === t.group)), "every explanation has a group");
+  assert.ok(HELP_GROUPS.length >= 4);
+  const p = read("src/pages/AppGates.tsx");
+  assert.match(p, /<div className="k-page">\n\s*<PageHeader title="Help"/);
+  assert.match(p, /<h3 className="k-sub">\{g\}<\/h3>/);
+});
+
+test("LIVE1B-044, 045, 041, 087: the alerts page has no second 'space', the tour names the Account button, one sentence for the newsletter email, the delete line once", () => {
+  assert.doesNotMatch(read("src/pages/AlertsPage.tsx"), /eyebrow=\{eyebrowOf/);
+  assert.match(read("src/components/Tour.tsx"), /The Account button opens your plan, Settings and Help\./);
+  assert.match(read("src/components/NewslettersCard.tsx"), /\{!prefs\.confirmed && "\. Newsletters start once you've confirmed it\."\}/);
+  assert.equal((read("src/pages/AccountPage.tsx").match(/Delete them on that page/g) ?? []).length, 0);
+});
+
+test("LIVE1B-066, 040, 042: a bad email is said in the app's words; the email box takes the row; no Zerodha offer where it isn't open", () => {
+  const a = read("src/components/AlertSettings.tsx");
+  assert.match(a, /<FormGrid label="Alerts" noValidate/);
+  assert.match(a, /That email address doesn't look right\./);
+  assert.match(a, /<Field label="Email" optional wide/);
+  assert.match(read("src/pages/HoldingsPage.tsx"), /view\?\.zerodha_open === false \? "Connect your statement inbox once"/);
+});
+
+test("LIVE1B-077, 079: plan cards end level and the payment button names its amount", () => {
+  assert.match(read("src/pages/PlansPage.tsx"), /confirmLabel=\{`Continue to payment · \$\{chargeAmount\(switching\)\}`\}/);
+  assert.match(read("src/styles.css"), /\.k-plans \{ display: grid;[^}]*align-items: stretch; \}/);
+});

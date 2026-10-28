@@ -62,7 +62,7 @@ def test_key_figures_are_tiles_with_a_short_label_a_value_and_a_unit_line():
     t = _page()
     tiles = re.findall(r'<div class="stat[^"]*" title="([^"]*)"><span>([^<]*)</span><b>([^<]*)</b><small>([^<]*)</small></div>', t)
     got = {label: (value, unescape(line)) for _, label, value, line in tiles}
-    assert got["Market cap"] == ("₹7.70 lakh crore", "last close × shares") and got["P/E"] == ("14.3", "on last 12 months' profit")
+    assert got["Market cap"] == ("₹7.70 lakh crore", "last close × shares") and got["P/E"] == ("14.3", "on reported profit, last four quarters")
     assert got["Return on equity"][1] == "year to Mar 2026" and got["EBITDA margin"][0] == "28%" and got["Debt to equity"][0] == "0.10"
     assert got["Dividend yield"] == ("1.10%", "last 12 months") and got["Net margin"][0] == "19.4%"
     assert all(len(label) <= stock_pages.TILE_LABEL_MAX for _, label, _, _ in tiles)            # a label is short: one line, two on a phone, never three
