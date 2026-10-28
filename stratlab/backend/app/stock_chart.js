@@ -29,10 +29,9 @@
     return e;
   };
 
-  /* a range needs history back to its start (a share listed within the year has no 1Y) */
   function available(r) {
     var last = data.t[data.t.length - 1];
-    return r === "all" || data.t[0] <= last - RANGES[r][0] + 4;       /* RC4-012 */
+    return r === "all" || data.t[0] <= last - RANGES[r][0] + 4;
   }
   function slice(r) {
     var t = data.t, n = t.length, from = r === "all" ? t[0] : t[n - 1] - RANGES[r][0], i = 0;
@@ -73,10 +72,13 @@
     for (var i = 1; i < n; i++) { if (s.c[i] > s.c[hi]) hi = i; if (s.c[i] < s.c[lo]) lo = i; }
     return { n: n, hi: hi, lo: lo, pct: (s.c[n - 1] / s.c[0] - 1) * 100 };
   }
+  function extremes(s) {
+    var k = stats(s);
+    return "Highest close " + price(s.c[k.hi]) + " on " + dlabel(s.t[k.hi]) + "; lowest close " + price(s.c[k.lo]) + " on " + dlabel(s.t[k.lo]) + ".";
+  }
   function words(s) {
-    var k = stats(s), n = k.n;
-    return "The close was " + price(s.c[0]) + " on " + dlabel(s.t[0]) + " and " + price(s.c[n - 1]) + " on " + dlabel(s.t[n - 1]) +
-      ". Highest close " + price(s.c[k.hi]) + " on " + dlabel(s.t[k.hi]) + "; lowest close " + price(s.c[k.lo]) + " on " + dlabel(s.t[k.lo]) + ".";
+    var n = s.c.length;
+    return "The close was " + price(s.c[0]) + " on " + dlabel(s.t[0]) + " and " + price(s.c[n - 1]) + " on " + dlabel(s.t[n - 1]) + ". " + extremes(s);
   }
 
   function draw() {
@@ -172,11 +174,10 @@
     chg.textContent = up ? "Up " + k.pct.toFixed(1) + "%" : down ? "Down " + Math.abs(k.pct).toFixed(1) + "%" : "Unchanged";
     chg.setAttribute("data-dir", up ? "up" : down ? "down" : "flat");
     note.textContent = " over " + RANGES[range][1] + ", " + price(s.c[0]) + " to " + price(s.c[n - 1]) + ". Price change only; dividends are not included.";
-    sum.textContent = words(s) + " Closing prices.";
+    sum.textContent = extremes(s) + " Closing prices.";
     adjustNote(s);
     Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-r") === range)); });
     draw();
-    /* the closes as a table: up to 24 evenly spaced dates */
     var rows = Math.min(n, 24), body = "";
     for (var j = 0; j < rows; j++) {
       var i = Math.round(j * (n - 1) / (rows - 1));
@@ -210,7 +211,7 @@
       seg.hidden = false;
       show();
     }).catch(function (err) {
-      var none = err.message === "none";          /* a new listing: no "try again" (RC4-013) */
+      var none = err.message === "none";
       started = none;
       status.hidden = false;
       status.textContent = none ? "No price chart is available for this company yet. The figures here are unaffected." : "The price chart couldn't be loaded just now. The figures on this page are unaffected. ";
@@ -230,7 +231,6 @@
   });
   var timer = 0;
   window.addEventListener("resize", function () { clearTimeout(timer); timer = setTimeout(function () { if (data) draw(); }, 120); });
-  /* asked for only when about to be seen: a crawler costs the server nothing */
   if ("IntersectionObserver" in window) {
     var io = new IntersectionObserver(function (e) { if (e[0].isIntersecting) { io.disconnect(); load(); } }, { rootMargin: "300px 0px" });
     io.observe(root);

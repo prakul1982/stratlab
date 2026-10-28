@@ -22,6 +22,7 @@ test("the Invest breadth card dates today's counts and the last close's highs an
   const live = { state: "final", day: "2026-10-16", as_of: "15:30", latest: { adv: 1 } };
   assert.deepEqual(cardDates({ live, today: { day: "2026-10-15" } }), { counts: "Today, 16 Oct", highs: "Close of 15 Oct" });
   assert.equal(cardDates({ live, today: null }).highs, null);
+  assert.equal(cardDates({ live, today: { day: "2026-10-16" } }), null);           // all three figures today's: said once in the heading, not under each (VR4-011)
   assert.equal(cardDates({ live: null, today: { day: "2026-10-15" } }), null);       // one day for every figure: nothing to separate
   assert.match(fs.readFileSync(new URL("../src/components/BreadthCard.tsx", import.meta.url), "utf8"), /label="52-week highs \/ lows" value=.* note=\{dates\?\.highs\}/);
 });

@@ -28,7 +28,8 @@ STYLE = (".ad{margin:40px 0 8px;padding-top:8px;border-top:1px solid var(--line,
          ".ad-ask p{margin:0}.ad-ask .ad-btns{display:flex;flex-wrap:wrap;gap:10px}"
          ".ad-ask button{min-height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--ink,#1D1B17);font:inherit;font-weight:600;cursor:pointer;"
          "background:var(--ink,#1D1B17);color:var(--on-ink,#F5F1E8)}"
-         ".ad-ask button.ad-no{background:transparent;color:var(--ink,#1D1B17)}")
+         ".ad-ask button.ad-no{background:transparent;color:var(--ink,#1D1B17)}"
+         ".ad-ask button{min-width:112px}")       # the two answers, one width (VR4-015)
 
 
 def client() -> str:

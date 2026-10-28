@@ -106,8 +106,9 @@ export function shortDay(iso: string): string {
 export function cardDates(d: Pick<BreadthView, "today" | "live">): { counts: string; highs: string | null } | null {
   const live = d.live && (d.live.state === "live" || d.live.state === "final") && d.live.latest ? d.live : null;
   if (!live) return null;
-  const sameDay = d.today?.day === live.day;
-  return { counts: `Today, ${shortDay(live.day)}`, highs: d.today ? (sameDay ? `Today, ${shortDay(d.today.day)}` : `Close of ${shortDay(d.today.day)}`) : null };
+  // every figure from one day: the card's heading already says it is today's, so no "Today, 28 Oct" under each of the three (VR4-011)
+  if (d.today?.day === live.day) return null;
+  return { counts: `Today, ${shortDay(live.day)}`, highs: d.today ? `Close of ${shortDay(d.today.day)}` : null };
 }
 
 /** What the Invest home's breadth card shows: while the market is open, the newest live count (R7T-010: the card showed

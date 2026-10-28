@@ -160,3 +160,48 @@ test("company page: revenue and profit columns show their figures on hover and f
   expect(await page.locator("script:not([src]):not([type='application/ld+json'])").count()).toBe(0);
   await ctx.close();
 });
+
+test("VR-4: on a phone the revenue table shows whole years beside its labels, a long figure takes its row, and the chart's text does not repeat its headline", async ({ browser, baseURL }, info) => {
+  test.skip(info.project.name !== "desktop", "makes its own windows");
+  for (const w of [390, 360, 412]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: 800 }, hasTouch: true });
+    const page = await ctx.newPage();
+    await open(page, "/stocks/in/RELIANCE", baseURL!);
+    // (VR4-009) every year column is wholly inside the scroller to the right of the label column, or wholly outside it: none half under the labels
+    const cut = await page.evaluate(() => {
+      const box = document.querySelector(".tbl.fin")!.getBoundingClientRect();
+      const label = document.querySelector(".tbl.fin th:first-child")!.getBoundingClientRect();
+      const heads = Array.from(document.querySelectorAll(".tbl.fin th:not(:first-child)")).map((e) => e.getBoundingClientRect());
+      const seen = heads.filter((r) => r.left >= label.right - 1 && r.right <= box.right + 1);
+      const half = heads.filter((r) => r.right > label.right + 1 && r.left < label.right - 1);
+      return { seen: seen.length, half: half.length, total: heads.length };
+    });
+    expect(cut.half, `a year half under the labels at ${w}px`).toBe(0);
+    // three where the card is 340px wide (a 412px phone), else two: at 390px three columns of ~70px held a figure only in the
+    // site's own font, and a first visit draws in the fallback font (font-display: optional), which is wider (CI, 28 Oct)
+    expect(cut.seen, `years in view at ${w}px`).toBe(w >= 412 ? 3 : 2);
+    // (VR4-007) the long market value takes the row, so it is not wrapped in half of it
+    const mc = await page.locator(".stat.long").first().evaluate((e) => ({ w: e.getBoundingClientRect().width, lines: Math.round(e.querySelector("b")!.getBoundingClientRect().height / parseFloat(getComputedStyle(e.querySelector("b")!).lineHeight)) }));
+    expect(mc.lines, `market value lines at ${w}px`).toBe(1);
+    expect(mc.w).toBeGreaterThan(w * 0.7);
+    await ctx.close();
+  }
+  // (VR4-003) under the chart: the extremes only; the first and last close are in the headline and the chart's label
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await ctx.newPage();
+  await open(page, "/stocks/in/RELIANCE", baseURL!);
+  const card = page.locator("[data-chart]");
+  await card.scrollIntoViewIfNeeded();
+  await expect(card).toHaveAttribute("data-ready", "1", { timeout: 15_000 });
+  const text = await card.locator("[data-summary]").innerText();
+  expect(text).toMatch(/^Highest close ₹[\d,.]+ on /);
+  expect(text).not.toContain("The close was");
+  expect(await card.locator(".plot svg").getAttribute("aria-label")).toContain("The close was");
+  await ctx.close();
+  // (VR4-002) a market's own directory page names its market
+  const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const p2 = await ctx2.newPage();
+  await open(p2, "/stocks/in", baseURL!);
+  await expect(p2.getByRole("heading", { level: 1 })).toHaveText("Companies listed in India");
+  await ctx2.close();
+});

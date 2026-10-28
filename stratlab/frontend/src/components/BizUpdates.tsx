@@ -115,7 +115,7 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
         <ul className="k-list plain biz-filings k-small" aria-label="Business update filings">
           {files.map((f) => (
             <li key={f.id} className="k-spread">
-              <span><span className="k-note">{day(f.at)}</span> {f.title}</span>
+              <span><span className="k-note biz-day">{day(f.at)}</span> {f.title}</span>
               <a className="link" href={safeHref(f.url)} target="_blank" rel="noopener noreferrer">{f.exchange ?? "Exchange"} filing ↗</a>
             </li>))}
         </ul>

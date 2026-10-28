@@ -11,6 +11,7 @@ lists, the sitemap and the feed; a post an admin has hidden answers 404. Nothing
 The admin routes (/admin/blog...) list the posts, show or hide one, add posts for the stored daily briefs, and run the
 research generator (blog_research.py) in the background."""
 import json
+import re
 import threading
 from datetime import datetime, timezone
 from html import escape as e
@@ -133,6 +134,16 @@ def _tabs(kind: str | None) -> str:
         for k, label in ((None, "All posts"), ("brief", "Market briefs"), ("research", "Research"))) + "</nav>"
 
 
+def _card_text(r: dict) -> str:
+    """A post's line on the list: the summary without what the card already says. A brief's title holds its day, and the page's own
+    lead says "Facts, not advice", so the card kept neither "Tuesday 27 October 2026:" nor a "Facts, not advice." on every post
+    (VR4-010). The summary itself, in full, stays the post's description and the feed's."""
+    t = re.sub(r"\s*Facts, not advice\.$", "", str(r.get("summary") or ""))
+    if r.get("kind") == "brief":
+        t = re.sub(r"^[A-Z][a-z]+day \d{1,2} [A-Z][a-z]+ \d{4}: ", "", t)
+    return t
+
+
 def list_page(kind: str | None, page: int) -> HTMLResponse:
     site, path = _site(), PATHS[kind]
     rows, total = blog.listing(kind, None, page)
@@ -145,7 +156,7 @@ def list_page(kind: str | None, page: int) -> HTMLResponse:
         title, desc = title.replace(" · StratLab", "") + f" (page {page}) · StratLab", desc
     cards = "".join(
         f'<li><a class="post" href="/blog/{e(r["slug"])}"><span class="kind">{e(_kind_line(r))} · {e(_when(r["published_at"]))}</span>'
-        f'<h2>{e(r["title"])}</h2><p>{e(_shorten(r["summary"], 220))}</p></a></li>' for r in rows)
+        f'<h2>{e(r["title"])}</h2><p>{e(_shorten(_card_text(r), 220))}</p></a></li>' for r in rows)
     pager = ""
     links = []
     if page > 1:

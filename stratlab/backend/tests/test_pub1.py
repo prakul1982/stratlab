@@ -168,9 +168,10 @@ def test_the_page_has_the_chart_card_with_its_text_and_its_table(w):
         assert part in t, part
     # the same facts as words, so a crawler or a visitor with no script reads them: the close and the year's range
     summary = re.search(r"<p class=\"small muted\" data-summary>(.*?)</p>", t).group(1)
-    last = re.search(r"Last close, [^<]*</span><b>(₹[\d,.]+)</b>", t).group(1)
+    day, last = re.search(r"Last close, ([^<]*)</span><b>(₹[\d,.]+)</b>", t).groups()
     rng = re.search(r"1-year range \(intraday\)</span><b>(₹[\d,.]+) to (₹[\d,.]+)</b>", t).groups()
-    assert f"Last close {last} on 27 Oct 2026." in summary and f"traded between {rng[0]} and {rng[1]} (intraday)" in summary
+    # the day the page's own figures give, not a fixed date: the test world's clock moves with the real one
+    assert f"Last close {last} on {day}." in summary and f"traded between {rng[0]} and {rng[1]} (intraday)" in summary
     assert t.index("Share price</h2>") < t.index("Price trend</h2>")             # after the figures, before the numbers by year
     us = w["client"].get("/stocks/us/AAPL").text
     assert 'data-currency="USD"' in us and 'data-src="/stocks/us/AAPL/prices.json"' in us
@@ -319,7 +320,7 @@ def test_the_figures_grid_lines_up_and_the_range_is_one_value(w):
     assert t.count('class="stat wide"') == 1                                         # only the range spans two columns
     css = stock_pages.STYLE
     assert "@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 2;grid-template-rows:subgrid" in css      # labels and values line up row by row
-    assert "@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide{grid-column:1/-1}" in css  # two to a row on a phone, not one
+    assert "@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide,.stat.long{grid-column:1/-1}" in css  # two to a row on a phone, not one; a long value or the range takes the row (VR4-007)
 
 
 def test_a_directory_is_a_list_of_rows_and_a_short_page_keeps_its_footer_down(w):
