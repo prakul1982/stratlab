@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, dayIn, firstName, inr, inrCompact, pct, price, signedInrCompact } from "../lib/format";
-import { netWorthDelta, restatedNote, sinceNote } from "../lib/networth";
+import { IST, asOf, dayIn, firstName, fmtTime, inr, inrCompact, pct, price, signedInrCompact } from "../lib/format";
+import { mergeLiveNetWorth, netWorthDelta, pricedMarkets, restatedNote, sinceNote } from "../lib/networth";
 import { inWords, marketState, usSettling, usTodayNote } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
-import { MARKET_TILES, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUpAll, useMarketStrip, type Up } from "../lib/mine";
+import { useLiveRefresh } from "../lib/liveRefresh";
+import { useMarketsLive } from "../lib/marketLive";
+import { MARKET_TILES, STRIP_MARKETS, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUpAll, useMarketStrip, type Up } from "../lib/mine";
 import { goldLineParts, type IndiaGold } from "../lib/gold";
 import { fmtDate, monthShort } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, slotSpans, type CardId, type Layout } from "../lib/mineLayout";
@@ -145,6 +147,12 @@ type NwView = {
 function NetWorthCard() {
   const [v, setV] = useState<NwView | null | "none">(null);
   useEffect(() => { api<NwView>("/money/net-worth").then(setV).catch(() => setV("none")); }, []);
+  // the values again each minute while a market trades: only what moves with prices (the server leaves out the history and the
+  // deposits' tax), merged into the page as it is; a read that fails changes nothing (LIVE-1)
+  const live = useMarketsLive(v !== null && v !== "none" ? pricedMarkets(v.assets as { kind: string; basis?: string }[]) : []);
+  useLiveRefresh(live, () => {
+    api<Partial<NwView>>("/money/net-worth?live=true").then((x) => setV((cur) => (cur && cur !== "none" ? mergeLiveNetWorth(cur, x) : cur))).catch(() => undefined);
+  });
   if (v === null) return <Card testId="mine-networth"><Skeleton label="Adding up what you own" lines={5} /></Card>;
   if (v === "none" || v.assets.length + v.liabilities.length === 0) {
     return (
@@ -188,6 +196,9 @@ function PnlCard() {
   const { markets } = useApp();
   const [h, setH] = useState<Holdings | null | "none">(null);
   useEffect(() => { api<Holdings>("/holdings").then(setH).catch(() => setH("none")); }, []);
+  // the day's change and the prices' time again each minute while the stocks' markets trade; a read that fails keeps the last (LIVE-1)
+  const live = useMarketsLive(["IN", "US"]);
+  useLiveRefresh(live && h !== null && h !== "none" && h.rows.length > 0, () => { api<Holdings>("/holdings").then(setH).catch(() => undefined); });
   if (h === null) return <Card testId="mine-pnl"><Skeleton label="Reading your holdings" lines={5} /></Card>;
   if (h === "none" || !h.rows.length) {
     return (
@@ -241,10 +252,15 @@ function PaperCard() {
 
 /* ---------- the markets ---------- */
 function MarketsCard({ later }: { later: boolean }) {
-  const series = useMarketStrip(later);
+  // the six levels (and gold in rupees) are read again each minute while India, the US, the dollar or gold trades (LIVE-1)
+  const live = useMarketsLive(STRIP_MARKETS);
+  const series = useMarketStrip(later, live);
   const [gold, setGold] = useState<IndiaGold | null>(null);
   useEffect(() => { if (later) api<IndiaGold>("/money/gold").then(setGold).catch(() => setGold(null)); }, [later]);
+  useLiveRefresh(later && live, () => { api<IndiaGold>("/money/gold").then(setGold).catch(() => undefined); });
   const { markets } = useApp();
+  // when the levels were read, for the line under the tiles: the newest of the six
+  const readAt = Math.max(0, ...Object.values(series).map((s) => s?.at ?? 0));
   const closed = (id: string | null) => { const m = id ? markets.find((x) => x.id === id) : null; return !!m && !marketState(m).open; };
   // the US closing prints settle about 50 minutes after the bell (the server's SETTLE_MIN): until then a tile's last value is the last trade
   const settling = (id: string | null) => usSettling(id === "US" ? markets.find((x) => x.id === id) : null);
@@ -277,6 +293,8 @@ function MarketsCard({ later }: { later: boolean }) {
       {/* gold's rupee price as one short line under the tiles (inside its tile it ran to ten lines and made every tile as tall, UI-FIX-1); the world
           price and the duty between them, and what the line colours mean, are behind the (i) (VR1-002: two paragraphs of small print on a home card) */}
       {goldShort && <p className="k-note k-muted" data-testid="mine-gold-inr">Gold: {goldShort}</p>}
+      {/* when the levels were read: the time moves with them as they are read again (LIVE-1); the same words whether a market is open or not, so the card does not change height at the open */}
+      {readAt > 0 && <p className="k-note k-muted" data-testid="mine-mkt-at">Levels read at {fmtTime(readAt, { tz: IST, zone: true })}, and again each minute while a market is open.</p>}
     </Card>
   );
 }
@@ -317,20 +335,26 @@ function WatchCard() {
   const { markets } = useApp();
   const day = (m: Mover) => { const mk = markets.find((x) => x.id === m.region); return moverDay(m.region, m.q, new Date(), !!mk && mk.status !== "soon" && !marketState(mk).open); };
   const [movers, setMovers] = useState<Mover[] | null>(null);
-  useEffect(() => {
-    if (items === null) return;
-    if (!items.length) { setMovers([]); return; }
-    let live = true;
+  // the prices of the watchlist's first 24 in each market, biggest movers first: read when the list arrives and again each minute
+  // while a market trades, the rows shown kept when a read fails or finds no price (LIVE-1)
+  const read = useCallback((items: NonNullable<ReturnType<typeof useWatchlist>["items"]>) =>
     Promise.all((["IN", "US"] as Region[]).map(async (r) => {
       const mine = items.filter((w) => w.region === r).slice(0, 24);
       if (!mine.length) return [] as Mover[];
       const q = await researchApi.quotes(r, mine.map((w) => w.symbol)).catch(() => ({} as Record<string, Quote | null>));
       return mine.flatMap((w) => (q[w.symbol]?.price != null ? [{ region: r, symbol: w.symbol, name: w.name, q: q[w.symbol]! }] : []));
-    })).then((parts) => {
-      if (live) setMovers(parts.flat().sort((a, b) => Math.abs(b.q.change_pct ?? 0) - Math.abs(a.q.change_pct ?? 0)).slice(0, 6));
-    });
+    })).then((parts) => parts.flat().sort((a, b) => Math.abs(b.q.change_pct ?? 0) - Math.abs(a.q.change_pct ?? 0)).slice(0, 6)), []);
+  useEffect(() => {
+    if (items === null) return;
+    if (!items.length) { setMovers([]); return; }
+    let live = true;
+    read(items).then((m) => { if (live) setMovers(m); });
     return () => { live = false; };
-  }, [items]);
+  }, [items, read]);
+  const on = useRef(true);
+  useEffect(() => { on.current = true; return () => { on.current = false; }; }, []);
+  const trading = useMarketsLive(["IN", "US"]);
+  useLiveRefresh(trading && !!items?.length && movers !== null, () => { void read(items!).then((m) => { if (on.current && m.length) setMovers(m); }); });
   // VR2-004: six rows each said "Mon 26 Oct" under the name: when every row is from the same earlier day it is said once, under the list
   const days = (movers ?? []).map((m) => day(m));
   const sameDay = days.length > 1 && days[0] && days.every((d) => d === days[0]) ? days[0] : null;
