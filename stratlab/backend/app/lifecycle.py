@@ -323,10 +323,16 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
         else:
             first = ("A friend you invited is now using StratLab, so you and your friend each get a free month of the "
                      "Basic plan.")
-        rule = ("How it works: a friend who joins with your link and uses StratLab on 3 different days in their first "
-                "2 weeks gets a month of Basic free. You get a free month for each of your first 2 friends who do "
-                "this each year, and for each of your first 2 friends who subscribe. After that, every friend who "
-                "subscribes adds 8 days, up to 8 times in a year.")
+        # the rules and Basic's limits as two short cards, not two walls of text (LIVE1C-036: a 71-word paragraph)
+        rules = kit.card("How it works", [
+            kit.Row("Your friend", sub="Joins with your link, uses StratLab on 3 different days in their first 2 weeks, and gets a month of Basic free."),
+            kit.Row("You", sub="Get a free month for each of your first 2 friends who do this each year, and for each of your first 2 friends who subscribe."),
+            kit.Row("After that", sub="Every friend who subscribes adds 8 days, up to 8 times in a year.")])
+        b = PLANS["basic"]
+        includes = kit.card("Basic includes", [
+            kit.Row("Backtests", value=f"{b['backtests_per_month']} a month"), kit.Row("AI strategy builds", value=f"{b['ai_builds_per_month']} a month"),
+            kit.Row("Paper trading", value=f"{b['live_limit']} sessions at a time"), kit.Row("Company deep dives", value=f"{b['deepdives_per_month']} a month"),
+            kit.Row("Decks", value=f"{b['decks_per_month']} a month")], foot="Every indicator, trade notifications and the daily newsletters too.")
         until = ctx.get("until")
         if ctx.get("banked") and not until:
             when = ("You're on a paid plan, so the free time is kept for you: it starts if your account moves to the "
@@ -339,9 +345,8 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             when = "Your free Basic has started."
         title = (f"You've got {ctx.get('days') or 8} extra days of StratLab Basic" if how == "extra"
                  else "You've got a free month of StratLab Basic")
-        return _compose(title, [first, when, basic_includes(), rule,
-                        "Nothing to pay and nothing to set up. Invite more friends from the Invite friends page."],
-                        ("See your invites", "/invite"), transactional=tx, label="Invite reward")
+        return _compose(title, [first, when, "Nothing to pay and nothing to set up. Invite more friends from the Invite friends page."],
+                        ("See your invites", "/invite"), transactional=tx, label="Invite reward", extra=[includes, rules])
     raise ValueError(f"Unknown email: {kind}")
 
 
@@ -388,10 +393,12 @@ def sample(kind: str, now: datetime | None = None) -> dict:
     """Made-up details for Admin's preview and test send."""
     now = _now(now)
     tomorrow = now.astimezone(IST).date() + timedelta(days=1)
+    # the offer ends at the end of an Indian day, as plans.set_promo makes it (LIVE1C-037: "1:56 am" in one sample and "4:56 am" in the other)
+    midnight = lambda d: datetime.combine(d + timedelta(days=1), datetime.min.time(), IST)           # noqa: E731
     if kind in ("trial_before", "promo_before"):
-        return {"last_day": tomorrow, "end": now + timedelta(days=1)}
+        return {"last_day": tomorrow, "end": midnight(tomorrow)}
     if kind in ("trial_end", "promo_end"):
-        return {"last_day": now.astimezone(IST).date(), "end": now + timedelta(hours=3)}
+        return {"last_day": now.astimezone(IST).date(), "end": midnight(now.astimezone(IST).date())}
     if kind == "receipt":
         return {"plan": "pro", "period": "month", "invoice": sample_invoice(now)}
     if kind == "plan_ended":

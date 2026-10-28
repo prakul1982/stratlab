@@ -116,21 +116,27 @@ def _pct(x: float) -> str:
 
 
 def text(market_name: str, day: str, rows: list[dict]) -> str:
+    """The report in the shape the alert emails read: each session a small card (its name over rows "label: figure"), the signed amounts in
+    green and red, and the same lines as plain text for a phone message (LIVE1C-034: every session was a block of one-weight sentences)."""
     from .email_kit import fmt_date
     d = fmt_date(day, year=False, weekday=True)
     lines = [f"StratLab daily report: {market_name}, {d}", ""]
     for r in rows:
         total = r["equity"] - r["capital"]
         pct = total / r["capital"] * 100 if r["capital"] else 0
-        today = (f"{r['closed']} trade{'s' if r['closed'] != 1 else ''} closed ({r['wins']} won), {_money(r['pnl'], r['currency'])}"
-                 if r["closed"] else "No trades closed")
-        still = f"; {r['open']} open, {_money(r['unrealised'], r['currency'])} on paper" if r["open"] else ""
-        lines.append(f"{r['name']}\n  Today: {today}{still}\n  Since start: {_money(total, r['currency'])} ({_pct(pct)})")
+        lines.append(f"{r['name']}:")
+        if r["closed"]:
+            lines += [f"- Trades closed today: {r['closed']} ({r['wins']} won)", f"- Result of those: {_money(r['pnl'], r['currency'])}"]
+        else:
+            lines.append("- Trades closed today: none")
+        if r["open"]:
+            lines.append(f"- Open now: {r['open']}, {_money(r['unrealised'], r['currency'])} on paper")
+        lines.append(f"- Since the start: {_money(total, r['currency'])} ({_pct(pct)})")
         sig = r.get("signals")
         if sig and sig["received"]:
             extra = [f"{sig['late']} late" if sig["late"] else "", f"{sig['refused']} refused" if sig["refused"] else ""]
             extra = [x for x in extra if x]
-            lines.append(f"  Signals: {sig['received']} arrived" + (f" ({', '.join(extra)}; see the session's signal log)" if extra else ""))
+            lines.append(f"- Signals: {sig['received']} arrived" + (f" ({', '.join(extra)}; see the session's signal log)" if extra else ""))
     lines += ["", "Paper trading only: no real orders. Turn this report off in Settings → Notifications → Alerts."]
     return "\n".join(lines)
 

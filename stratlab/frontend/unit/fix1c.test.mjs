@@ -122,3 +122,10 @@ test("LIVE1C-023: on a phone the long section names lose their tail visually and
   assert.match(read("src/pages/AdminPage.tsx"), /<span className="adm-tail">/);
   assert.match(read("src/pages/admin/admin.css"), /\.adm-tail \{ position: absolute; width: 1px/);
 });
+
+test("LIVE1C-038, LIVE1C-039: the email list says what StratLab does not send; the sample mark sits above the email", () => {
+  assert.match(read("src/pages/admin/EmailSection.tsx"), /data-testid="not-sent-here"/);
+  const css = read("src/pages/admin/admin.css");
+  assert.match(css, /\.adm-mail-stage\.sample::before \{ content: "SAMPLE · made-up details"/);
+  assert.doesNotMatch(css, /adm-mail-stage\.sample::after/);
+});

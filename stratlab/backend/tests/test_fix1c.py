@@ -209,3 +209,110 @@ def test_021_a_running_session_has_a_price_so_far_and_a_currency_pair_its_pips(m
     from datetime import datetime, timezone
     r = pc.check_market(Reg(), "FX", now=datetime(2026, 10, 28, 20, 30, tzinfo=timezone.utc))
     assert r["state"] == "pass" and "price so far" in r["detail"] and "1.1084" in r["detail"] and "close" not in r["detail"]
+
+
+# ---------- LIVE1C-030, LIVE1C-031: the brief's headlines and its dates ----------
+INDICES_28_OCT = [{"name": "NIFTY 50", "price": 22698.85, "change_pct": -0.22}, {"name": "SENSEX", "price": 73246.03, "change_pct": -0.48},
+                  {"name": "NIFTY BANK", "price": 54267.40, "change_pct": 0.54}]
+
+
+@pytest.mark.parametrize("title", [
+    "Sensex recovers over 700 pts; Nifty above 24,700; what's keeping markets on edge?",       # the review's: 24,700 over a 22,699 close
+    "Market fall explained: Sensex dives 995 points intraday, Nifty at 22,500",                # a fall of 995 points over a day of 350, and "intraday"
+    "Nifty 50 rebounds as Sensex gains 400 pts",                                                 # Sensex closed lower
+])
+def test_030_a_headline_that_the_close_contradicts_is_not_carried(title):
+    from app.newsletter import content as C
+    assert not C.headline_ok("IN", title, indices=INDICES_28_OCT), title
+
+
+def test_030_a_headline_that_agrees_with_the_close_stays():
+    from app.newsletter import content as C
+    for title in ("Sensex falls 356 points, Nifty 50 slips 65 points as banks hold up", "Nifty ends near 22,700 as banks gain; Sensex lower",
+                  "Stock market today: Nifty at 22,650 after a choppy session"):
+        assert C.headline_ok("IN", title, indices=INDICES_28_OCT), title
+
+
+def test_031_s_and_p_global_is_a_ratings_company_not_the_us_market():
+    from app.newsletter import content as C
+    assert not C.headline_ok("US", "Moody's and S&P Global hold France's credit rating as markets wait")
+    assert C.headline_ok("US", "S&P 500 ends the week higher as Treasury yields ease")
+
+
+def test_031_a_weekly_brief_names_the_last_close_not_the_saturday():
+    from app.newsletter import write
+    issue = {"weekly": True, "day": "2026-10-24", "region": "US"}            # a Saturday: the week ran to Friday 23 Oct
+    assert write.close_date_words("Stocks fell over the week ending 24 Oct, led by tech.", issue) == "Stocks fell over the week ending 23 Oct, led by tech."
+    assert write.close_date_words("Over the week ending 24 Oct.", {**issue, "weekly": False}) == "Over the week ending 24 Oct."
+
+
+# ---------- the sample emails (032 to 038) ----------
+def test_032_the_stage_line_says_what_it_means_first_and_a_sample_has_no_real_as_of_time():
+    from app import email_previews as P
+    from app.newsletter import write
+    lines = [x["text"] for x in write.stock_lines({"symbol": "ABC", "region": "IN", "price": 100.0, "change_pct": 1.0, "stage": 2, "stage_before": 1, "stage_changed": True}, "2026-10-01")]
+    assert "The price is above a rising 150-day average: now Stage 2 (advancing), was Stage 1 (basing)" in lines
+    assert not any(") (" in x for x in lines)
+    _, html, text = P._my_stocks()
+    assert "Prices and numbers as of" not in text and "Prices and numbers as of" not in html
+
+
+def test_033_the_events_sample_names_a_tuesday_for_the_nifty_expiry():
+    import re
+    from app import email_previews as P
+    _, _, text = P._events()
+    assert "NIFTY weekly expiry" in text
+    head = re.search(r"MARKET EVENTS (.+)", text).group(1)
+    assert "TUE" in head                                                 # a Tuesday (and "tomorrow" or "in N days" as the day really is)
+
+
+def test_034_the_paper_report_is_a_card_per_session_with_signed_amounts_in_colour():
+    import re
+    from app import email_previews as P
+    subject, html, text = P._daily_report()
+    flat = re.sub(r"[ \t]+", " ", text)
+    assert "Trades closed today 2 (1 won)" in flat and "Since the start +₹12,400 (+2.5%)" in flat
+    assert "NIFTY SUPERTREND" in flat and "BANKNIFTY BREAKOUT" in flat            # each session its own card, with its name over its rows
+    assert "Daily report" in flat.splitlines()[0]
+    assert 'class="c-up"' in html and 'class="c-down"' in html            # +₹1,840 green, −₹620 red
+
+
+def test_035_the_admin_weekly_sample_has_round_made_up_figures():
+    from app import email_previews as P
+    _, _, text = P._weekly_admin()
+    assert "100 in all" in text.replace("\n", " ") or "100" in text
+    assert "10 in all" not in text and "42 experiments" not in text
+
+
+def test_036_the_invite_email_is_short_cards_not_a_wall_of_text():
+    from datetime import datetime, timezone
+    from app import lifecycle
+    _, html, text = lifecycle.build("invite_reward", {"id": "u", "email": "x@example.com"}, lifecycle.sample("invite_reward", datetime.now(timezone.utc)))
+    assert "HOW IT WORKS" in text and "BASIC INCLUDES" in text and "Backtests" in text
+    assert "How it works: a friend who joins" not in text
+    longest = max(len(line.split()) for line in text.splitlines())
+    assert longest < 40, longest
+
+
+def test_037_the_launch_offer_ends_at_midnight_india_time_in_the_samples_and_when_started(monkeypatch):
+    from datetime import datetime, timezone
+    from app import lifecycle, plans
+    now = datetime(2026, 10, 28, 20, 26, tzinfo=timezone.utc)                 # 01:56 IST
+    for kind in ("promo_before", "promo_end"):
+        end = lifecycle.sample(kind, now)["end"].astimezone(plans.IST)
+        assert (end.hour, end.minute) == (0, 0), kind
+    store = {}
+    from app import db
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    until = plans.set_promo(2)
+    ist = until.astimezone(plans.IST)
+    assert (ist.hour, ist.minute, ist.second) == (0, 0, 0) and 2 <= (until - datetime.now(timezone.utc)).total_seconds() / 86400 < 3.01
+    plans._promo.update(read_at=0.0, until=None)
+
+
+def test_038_the_broker_login_alert_is_previewable_and_names_no_vendor():
+    import re
+    from app import email_previews as P
+    assert "broker_login" in P.registry()
+    d = P.describe("broker_login", True)
+    assert "login needs you" in d["subject"] and not re.search(r"zerodha|kite", d["html"] + d["text"], re.I)

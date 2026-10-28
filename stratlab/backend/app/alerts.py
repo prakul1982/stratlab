@@ -341,6 +341,8 @@ def send_message(to: str, subject: str, text: str, path: str = "/account", label
     List-Unsubscribe headers, so the mail service's tracking link isn't the one a mail app offers (R9P-001)."""
     from . import email_kit as kit
     what = unsub if unsub in OWN_UNSUBSCRIBE else ALERT_EMAILS
+    if what == "daily_report" and label == "Alert":
+        label = "Daily report"                 # a daily report's tag is not "Alert" (LIVE1C-034)
     html, plain = kit.message(subject, text, path, label, why, button_label=button_label, date=kit.today_label(),
                               unsubscribe=OWN_UNSUBSCRIBE.get(what, ALERT_UNSUB_WORDS) if uid else None, manage=manage_path(path))
     html, plain, own = kit.finish(html, plain, uid, what if uid else None)

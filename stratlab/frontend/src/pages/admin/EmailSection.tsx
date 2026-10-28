@@ -41,6 +41,11 @@ function List({ items }: { items: Item[] }) {
           </div>
         ))}
       </div>
+      <p className="k-small k-muted" data-testid="not-sent-here">
+        Not in this list because StratLab does not send them: sign-in links and password resets (the sign-in service sends those), and failed-payment or
+        cancelled-subscription notices (the payment service emails the customer). StratLab sends the receipt, which is also the confirmation of a new plan,
+        and the plan-changed email when a subscription stops.
+      </p>
     </Card>
   );
 }

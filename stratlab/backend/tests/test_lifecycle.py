@@ -541,7 +541,7 @@ def test_r23_005_the_welcome_promises_the_brief_the_plan_gives(w):
     plans.set_promo(7)                                                     # the launch offer: daily for now, said with its end
     try:
         text = lifecycle.build("welcome", free)[2]
-        assert "a short email after each market closes during the launch offer, which ends on " in text
+        assert "a short email after each market closes during the launch offer, which ends at the end of " in text      # (the offer ends at midnight India time, LIVE1C-037)
         assert "then a weekly email on Saturday morning on the Free plan" in text
         assert daily in lifecycle.build("welcome", basic)[2]
     finally:

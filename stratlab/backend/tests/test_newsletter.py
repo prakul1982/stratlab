@@ -914,10 +914,12 @@ def test_one_click_header_only_goes_with_a_tokenised_unsubscribe_link(monkeypatc
 def test_a_stage_in_the_email_says_what_it_means():
     """Round 39: "Now Stage 1 (basing)" alone told a reader nothing."""
     lines = write.stock_lines({"symbol": "ABC", "region": "IN", "stage": 3, "stage_before": 2, "stage_changed": True}, "2026-10-01")
-    now = next(x["text"] for x in lines if x["text"].startswith("Now Stage"))
-    assert now.startswith("Now Stage 3 (topping) (the 150-day average has stopped rising") and now.endswith("was Stage 2 (advancing)")
+    # (LIVE1C-032: what it means first, the name once, no bracket inside brackets)
+    now = next(x["text"] for x in lines if "now Stage" in x["text"])
+    assert now.startswith("The 150-day average has stopped rising") and now.endswith(": now Stage 3 (topping), was Stage 2 (advancing)")
+    assert ") (" not in now
     still = write.stock_lines({"symbol": "ABC", "region": "IN", "stage": 1}, "2026-10-01")
-    assert any(x["text"].startswith("Still Stage 1 (basing) (the 150-day average has stopped falling") for x in still)
+    assert any(x["text"].startswith("The 150-day average has stopped falling") and x["text"].endswith(": still Stage 1 (basing)") for x in still)
 
 
 def test_a_weekly_issue_sent_on_saturday_is_the_week_to_fridays_close(w, monkeypatch):

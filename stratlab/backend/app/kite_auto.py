@@ -41,6 +41,12 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
            "Accept-Language": "en-IN,en;q=0.9", "X-Kite-Version": "3", "Origin": BASE, "Referer": f"{BASE}/"}
 
 
+def login_needed_text(reason: str) -> str:
+    """The admin alert when the automatic login gave up (also what Admin's email previews show, LIVE1C-038)."""
+    return (f"StratLab: today's broker login needs you. {reason} Tap to log in "
+            "(about 10 seconds); Indian live data comes back as soon as you do.")
+
+
 def is_captcha(message: str) -> bool:
     return "captcha" in (message or "").lower()
 
@@ -297,8 +303,7 @@ class AutoLogin:
                 except Exception as e:
                     if self._gave_up or self._attempts >= MAX_ATTEMPTS:
                         # to every admin's phone and email: the link opens Zerodha's own login page in one tap
-                        self._alert(f"StratLab: today's Zerodha login needs you. {e} Tap to log in to Zerodha "
-                                    f"(about 10 seconds); Indian live data comes back as soon as you do.", url=LOGIN_LINK)
+                        self._alert(login_needed_text(str(e)), url=LOGIN_LINK)
                     time.sleep(RETRY_MINUTES * 60)
                     continue
             time.sleep(30)

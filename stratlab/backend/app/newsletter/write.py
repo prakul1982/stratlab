@@ -175,13 +175,15 @@ def stock_lines(r: dict, since: str, day: str | None = None) -> list[dict]:
     lines = []
     if r.get("change_pct") is not None:
         lines.append({"text": f"Price {_price(r['price'], r.get('region'))}, {_pct(r['change_pct'])} {_move_span(r, since, day)}", "url": None})
+    # what the stage means first, then its name: "The price is above a rising 150-day average: now Stage 2 (advancing), was Stage 1 (basing)",
+    # not "Now Stage 2 (advancing) (the price is above …), was …" with a bracket inside a sentence of brackets (LIVE1C-032)
     if r.get("stage_changed"):
-        lines.append({"text": f"Now {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}"
-                              + (f" ({STAGE_WHY[r['stage']]})" if r['stage'] in STAGE_WHY else "")
-                              + f", was {STAGE_NAME.get(r['stage_before'], 'Stage ' + str(r['stage_before']))}", "url": None})
+        now = STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))
+        was = STAGE_NAME.get(r['stage_before'], 'Stage ' + str(r['stage_before']))
+        lines.append({"text": (f"{STAGE_WHY[r['stage']][0].upper()}{STAGE_WHY[r['stage']][1:]}: now {now}, was {was}" if r['stage'] in STAGE_WHY else f"Now {now}, was {was}"), "url": None})
     elif r.get("stage"):
-        lines.append({"text": f"Still {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}"
-                              + (f" ({STAGE_WHY[r['stage']]})" if r['stage'] in STAGE_WHY else ""), "url": None})
+        now = STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))
+        lines.append({"text": (f"{STAGE_WHY[r['stage']][0].upper()}{STAGE_WHY[r['stage']][1:]}: still {now}" if r['stage'] in STAGE_WHY else f"Still {now}"), "url": None})
     if r.get("st_s2"):
         lines.append({"text": "Matches the Stage 2 rule with the price above its Supertrend (ST S2)", "url": None})
     for i in r.get("filings") or []:
@@ -383,7 +385,7 @@ def ai_summary(f: dict) -> str | None:
         text = str(extract_json(raw).get("summary") or "").strip()
     except (AIError, ValueError, AttributeError, TypeError):
         return None
-    text = day_first(no_scan_moves(not_the_indices(two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f)), f), scan_names(f)))
+    text = close_date_words(day_first(no_scan_moves(not_the_indices(two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f)), f), scan_names(f))), f)
     return text if text and grounded(text, f) and not robotic(text) else None
 
 
@@ -630,6 +632,19 @@ def day_first(text: str | None) -> str | None:
     return _US_DATE.sub(lambda m: f"{int(m.group(2))} {m.group(1)[:3]}" + (f" {m.group(4)}" if m.group(4) else ""), text)
 
 
+def close_date_words(text: str | None, f: dict) -> str | None:
+    """A weekly brief's own Saturday or Sunday written as the week's end ("over the week ending 24 Oct") as the last close's day, the
+    Friday its header and its figures say ("Week to Fri 23 Oct"): one date in one brief (LIVE1C-031)."""
+    if not text or not f.get("weekly") or not f.get("day"):
+        return text
+    try:
+        sent = date.fromisoformat(str(f["day"])[:10])
+        end = date.fromisoformat(_week_end(f["day"], f.get("region") or "IN"))
+    except ValueError:
+        return text
+    return text if end == sent else re.sub(rf"\b0?{sent.day} {sent:%b}\b", f"{end.day} {end:%b}", text)
+
+
 def render(issue: dict) -> tuple[str, str]:
     """(html, text) for one issue, in the shared email design. The footer carries the {unsubscribe_url} placeholder
     for the sender."""
@@ -653,7 +668,7 @@ def render(issue: dict) -> tuple[str, str]:
     if issue.get("ai_summary"):
         # every brief opens with the same facts line; the AI's words, when they passed the checks, come under it (R8B-007),
         # with the index numbers printed as the tiles print them (R23-007)
-        blocks.insert(0, kit.para(house_numbers(issue["ai_summary"], indices)))
+        blocks.insert(0, kit.para(house_numbers(close_date_words(issue["ai_summary"], issue), indices)))
     n = 0
     frozen = issue.get("links") if isinstance(issue.get("links"), list) else None
     for sec in issue.get("sections") or []:
@@ -675,7 +690,8 @@ def render(issue: dict) -> tuple[str, str]:
                 n += 1
             rows.append(_row(it))
         blocks.append(kit.card(sec["title"], rows))
-    when = close_stamp({**issue, "kind": kind}) or as_of(issue.get("at"), region)
+    # made-up figures (an Admin preview) carry no "as of" time: the moment they were built beside invented numbers read as a real reading (LIVE1C-032)
+    when = None if issue.get("sample") else close_stamp({**issue, "kind": kind}) or as_of(issue.get("at"), region)
     if when:
         blocks.append(kit.note(f"Prices and numbers as of {when}"))
     # the link says what the page it opens asks about, in the words of the line above it (R67-009: "India briefs" in the

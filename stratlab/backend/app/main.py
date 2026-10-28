@@ -7293,7 +7293,7 @@ def news_view(issue: dict) -> dict:
     issue = news.write.regional_links(issue)          # rotation links open the brief's own market (R28-006)
     out = {k: issue.get(k) for k in NEWS_FIELDS if k != "ai_summary" or issue.get(k)}
     if out.get("ai_summary"):          # index levels as the tiles print them: two decimals (R28-009)
-        out["ai_summary"] = news.write.house_numbers(out["ai_summary"], issue.get("indices"))
+        out["ai_summary"] = news.write.house_numbers(news.write.close_date_words(out["ai_summary"], issue), issue.get("indices"))
     # the email as it is sent: written from the stored issue the page shows (R7T-009)
     out["html"] = (news.email_of(issue)[0] if issue.get("subject") else out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     # the session the numbers are the close of, holidays known: the page said "the close of 2 Oct", a holiday (DI-026)

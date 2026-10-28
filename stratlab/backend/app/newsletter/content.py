@@ -149,7 +149,7 @@ MARKET_WORDS = {
     "IN": re.compile(r"\b(sensex|nifty|bse|nse|dalal street|stock markets?|stocks?|shares?|equit\w*|markets?|investors?|"
                      r"rupee|rbi|repo|inflation|cpi|gdp|economy|economic|fii|fiis|dii|diis|fpi|fpis|ipo|ipos|sebi|"
                      r"smallcap|midcap|small-cap|mid-cap|crude|bond yields?|m-cap|market cap|lakh crore|trade deficit)\b", re.I),
-    "US": re.compile(r"\b(s&p|s&amp;p|dow|nasdaq|wall street|stock markets?|stocks?|shares?|equit\w*|markets?|investors?|"
+    "US": re.compile(r"\b(s&p(?!\s+global)|s&amp;p(?!\s+global)|dow|nasdaq|wall street|stock markets?|stocks?|shares?|equit\w*|markets?|investors?|"
                      r"fed(?!\s+up)|federal reserve|powell|treasur\w*|yields?|inflation|cpi|pce|jobs report|payrolls|unemployment|gdp|"
                      r"economy|economic|earnings|ipo|ipos|dollar|oil prices?|crude|tariffs?|recession|rate cuts?|rate hikes?)\b", re.I),
 }
@@ -231,7 +231,7 @@ OTHER_MARKETS = {
     "IN": re.compile(r"\b(london stocks|ftse|gilts?|stoxx|dax|cac|nikkei|topix|hang seng|asx|tsx|bovespa|"
                      r"gulf (stocks|shares|markets?|bourses?)|mideast (stocks|shares|markets?)|saudi (stocks|shares|bourse)|tadawul)\b", re.I),
 }
-OWN_MARKET = {"US": re.compile(r"\b(s&p|s&amp;p|dow|nasdaq|wall street|u\.s\.|us stocks|american)\b", re.I),
+OWN_MARKET = {"US": re.compile(r"\b(s&p(?!\s+global)|s&amp;p(?!\s+global)|dow|nasdaq|wall street|u\.s\.|us stocks|american)\b", re.I),
               "IN": re.compile(r"\b(sensex|nifty|dalal street|india\w*|rupee)\b", re.I)}
 
 
@@ -257,9 +257,11 @@ _TITLE_DATE = re.compile(r"\b(?:(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may
                          r"|(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?)(?![\d,])", re.I)
 # an index named with a move: "Sensex settles 685 pts higher", "Nifty 50 rises 220 pts", "Dow falls 300 points"
 _IDX_WORDS = {"IN": [("NIFTY BANK", r"bank\s*nifty|nifty\s*bank"), ("SENSEX", r"sensex"), ("NIFTY 50", r"nifty(?:\s*50)?(?!\s*bank)")],
-              "US": [("S&P 500", r"s&p(?:\s*500)?"), ("NASDAQ", r"nasdaq"), ("DOW JONES", r"\bdow(?:\s+jones)?")]}
-_UP = r"(gains?|gained|rises?|rose|rising|soaring|jumps?|jumped|rall(?:y|ies|ied)|surges?|surged|climbs?|climbed|soars?|soared|settles?[^,;]{0,25}higher|ends?[^,;]{0,25}higher|up|higher|advances?|extends? gains)"
-_DOWN = r"(falls?|fell|falling|drops?|dropped|tanks?|tanked|slumps?|slumped|crash(?:es|ed|ing)?|sinks?|sinking|sank|plunges?|plunged|slides?|slid|declines?|declined|tumbles?|tumbled|down|lower|sheds?|slips?|slipped|settles?[^,;]{0,25}lower|ends?[^,;]{0,25}lower)"
+              "US": [("S&P 500", r"s&p(?!\s+global)(?:\s*500)?"), ("NASDAQ", r"nasdaq"), ("DOW JONES", r"\bdow(?:\s+jones)?")]}
+# (recovers, rebounds, dives, dips and the like count too: "Sensex dives 995 points" over a day it fell 350 and "Sensex recovers over 700 pts" were
+# not weighed against the brief's close, LIVE1C-030)
+_UP = r"(gains?|gained|rises?|rose|rising|soaring|jumps?|jumped|rall(?:y|ies|ied)|surges?|surged|climbs?|climbed|soars?|soared|recover(?:s|ed|ing)?|rebound(?:s|ed|ing)?|bounces?|bounced|spikes?|spiked|leaps?|leapt|settles?[^,;]{0,25}higher|ends?[^,;]{0,25}higher|up|higher|advances?|extends? gains)"
+_DOWN = r"(falls?|fell|falling|drops?|dropped|tanks?|tanked|slumps?|slumped|crash(?:es|ed|ing)?|sinks?|sinking|sank|plunges?|plunged|slides?|slid|declines?|declined|tumbles?|tumbled|dives?|dived|dips?|dipped|retreats?|retreated|skids?|skidded|nosedives?|nosedived|cracks?|cracked|erodes?|eroded|reels?|reeled|down|lower|sheds?|slips?|slipped|settles?[^,;]{0,25}lower|ends?[^,;]{0,25}lower)"
 
 
 def title_dates(title: str, year: int) -> list[str]:
@@ -287,6 +289,15 @@ def contradicts(title: str, region: str, indices: list[dict] | None) -> bool:
         i = by.get(name)
         if not i:
             continue
+        # an index level written in the headline ("Nifty above 24,700") against the close, a few percent either way for a day's range
+        lvl = re.search(r"\b(?:" + rx + r")\b[^,;:|]{0,24}?\b(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{4,6}(?:\.\d+)?)\b(?!\s*(?:pts|points|pt|%|percent))", title, re.I)
+        if lvl:
+            try:
+                level, close = float(lvl.group(1).replace(",", "")), float(i["price"])
+            except ValueError:
+                level, close = 0.0, 0.0
+            if level >= 1000 and close > 0 and abs(level / close - 1) > LEVEL_OFF:
+                return True
         m = re.search(r"\b(?:" + rx + r")\b[^,;:|]{0,40}?\b" + "(?:" + _UP + "|" + _DOWN + r")\b", title, re.I)
         if not m:
             continue
@@ -330,10 +341,11 @@ def contradicts(title: str, region: str, indices: list[dict] | None) -> bool:
 
 
 MAIN_INDEX = {"IN": "NIFTY 50", "US": "S&P 500"}
+LEVEL_OFF = 0.07       # a level named in a headline more than this far from the brief's close is another day's (24,700 over a 22,699 close)
 _OPEN_WORD = r"(?:mixed|flat|higher|lower|positive|negative|muted|weak|strong|firm|soft|cautious|subdued|tepid|quiet|steady|gap-?up|gap-?down)"
 # a story about one moment before the close (the open, early trade, the morning): the brief reports the day's close
 _EARLY = re.compile(r"\b(early (?:session|trade|trading|deals|hours)|opening (?:bell|trade|session|deals)|pre-?open(?:ing)?|"
-                    r"mid-?session|morning (?:trade|session|deals)|intraday (?:trade|trading|deals|session)|"
+                    r"mid-?session|morning (?:trade|session|deals)|intraday|"
                     r"(?:set|poised|likely|seen|expected) (?:for|to) (?:a |an )?(?:" + _OPEN_WORD + r" )?(?:open|start)\b(?! to (?:the )?year)|(?:mixed|flat|higher|lower|positive|negative|muted|weak|strong|gap-?up|gap-?down) "
                     r"(?:open|opening|start)|opens? (?:higher|lower|flat|in the green|in the red))\b", re.I)
 
