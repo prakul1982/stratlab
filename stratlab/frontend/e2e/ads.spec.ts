@@ -201,7 +201,8 @@ test("ads on: the public library shows one ad after Allow in the banner, below t
   await expect(slot.locator("[data-fake-ad]")).toBeVisible();
   await expect(slot.locator("ins.adsbygoogle")).toHaveAttribute("data-ad-slot", "1111111111");
   await expect(page.locator(".ad")).toHaveCount(1);
-  const last = await page.locator(".lib-card").last().boundingBox(), s = await slot.boundingBox();
+  // (VR7-004: on a phone the cards past the first twelve are in the page but hidden until "Show more": the last one drawn)
+  const last = await page.locator(".lib-card:visible").last().boundingBox(), s = await slot.boundingBox();
   expect(s!.y).toBeGreaterThan(last!.y + last!.height);
   await noSideways(page);
   expect(errors).toEqual([]);

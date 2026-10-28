@@ -2563,6 +2563,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* RC2B-034: the "In India? Show prices in ₹" link is a tap target on a phone like every other control (it measured 20 px) */
 .link-btn.inr-pick { min-height: 40px; display: inline-flex; align-items: center; }
+/* VR7-020: on a wide screen the link sat level with the "Prices in" label above the select; it is level with the select, the control it belongs to */
+@media (min-width: 641px) { .k-form > .link-btn.inr-pick, .k-formgrid > .link-btn.inr-pick { align-self: end; } }
 @media (max-width: 640px) { .link-btn.inr-pick { min-height: 44px; } }      /* the 40px above came after the phone rule for .link-btn and won (A11Y-2) */
 
 /* VR2-010: on a phone the buttons of one segmented control are the same width (they were sized by their words: "Off | ₹ | % of premium" were a sliver, a sliver and a wide block); a longer label still makes room for itself (min-width above) */
