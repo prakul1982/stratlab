@@ -325,7 +325,7 @@ def test_the_figures_grid_lines_up_and_the_range_is_one_value(w):
 def test_a_directory_is_a_list_of_rows_and_a_short_page_keeps_its_footer_down(w):
     c = w["client"]
     t = c.get("/stocks/in/browse/r").text
-    assert '<ul class="dir" data-companies>' in t and re.search(r'<li><a href="/stocks/in/RELIANCE">', t)
+    assert re.search(r'<ul class="dir" data-companies(?: data-short)?>', t) and re.search(r'<li><a href="/stocks/in/RELIANCE">', t)       # (data-short: a list of bare symbols goes two across on a phone, VR5-009)
     css = re.search(r"<style>(.*?)</style>", t, re.S).group(1)
     assert "ul.dir li{display:flex;align-items:center;justify-content:space-between;" in css and "ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px" in css
     assert "columns:2 300px" not in css                                               # no loose two-column text

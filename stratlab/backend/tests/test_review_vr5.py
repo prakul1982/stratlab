@@ -1,4 +1,4 @@
-"""VR-5 (29 Oct 2026): the visual review of the server-drawn pages on a phone. Each test is a fact about a page that looked wrong by eye."""
+"""VR-5 (28 Oct 2026): the visual review of the server-drawn pages on a phone. Each test is a fact about a page that looked wrong by eye."""
 import re
 
 from app import blog, blog_pages, stock_pages

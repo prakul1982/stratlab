@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// VR-5 (29 Oct 2026): what a harsh phone-first visual review found, checked on the drawn pages. Each test sets its own width (390 or 360),
+// VR-5 (28 Oct 2026): what a harsh phone-first visual review found, checked on the drawn pages. Each test sets its own width (390 or 360),
 // so it is the same on the desktop and phone projects.
 const session = (token: string, id: string, email: string) => ({ access_token: token, token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
   refresh_token: "r", user: { id, aud: "authenticated", email, role: "authenticated", app_metadata: {}, user_metadata: {} } });

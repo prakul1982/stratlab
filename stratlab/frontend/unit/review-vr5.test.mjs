@@ -1,4 +1,4 @@
-// VR-5 (29 Oct 2026): the visual review of the most-used pages on a phone. Run: npm run test:unit
+// VR-5 (28 Oct 2026): the visual review of the most-used pages on a phone. Run: npm run test:unit
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
