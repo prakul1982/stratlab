@@ -2514,6 +2514,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 640px), (pointer: coarse) {
   .info-btn { --hit: 44px; }
   .brand { min-height: 44px; }
+  .side-top { padding-top: 12px; padding-bottom: 8px; }   /* the 4px the 44px logo link adds, given back so the menu keeps its height */
   select { min-height: 44px; }
   .k-input.sm, .k-input.k-in { height: 44px; }
   .toast button { min-height: 44px; }
