@@ -10,7 +10,7 @@ test("the welcome pop-up opens with the landing page's 'What StratLab is' senten
   const src = read("src/components/LevelPrompt.tsx");
   assert.match(src, /import \{ INTRO_LINE \} from "\.\.\/content\/intro";/);
   const what = src.indexOf('<p className="welcome-what">{INTRO_LINE}</p>');
-  assert.ok(what > 0 && what < src.indexOf("StratLab has four spaces"));       // first, before the spaces line
+  assert.ok(what > 0 && what < src.indexOf("The others stay one tap away"));       // first, before the line about where things are
   assert.match(read("src/content/intro.ts"), /paper trading only \(never real orders\) and facts, not tips/);
   assert.match(read("src/styles.css"), /\.welcome-what \{ margin: 0;/);
 });

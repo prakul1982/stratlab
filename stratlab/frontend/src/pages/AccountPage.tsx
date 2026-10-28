@@ -15,6 +15,7 @@ import { AccountWait } from "../components/AccountWait";
 import { Modal } from "../components/ui";
 import { aiBuildsUse, confirmMatches, keptRow, monthlyUse, planLabel, planRow, planRun, sessionsRunning, signedInWith, trialUse, type KeptLimit } from "../lib/account";
 import { aiReadsUse } from "../lib/aiReason";
+import { TileGrid } from "../components/TileGrid";
 
 const PLAN_NAME: Record<string, string> = { free: "Free", basic: "Basic", pro: "Pro" };
 
@@ -144,7 +145,8 @@ export function AccountPage() {
       <Card id="data" label="Your data">
         <CardHead title="Your data" info="Download everything StratLab keeps for you as one file (tokens and passwords are left out), delete each kind of data on its own page, or delete all of it at once below." />
         <p className="k-small k-muted k-hint-line">What you have saved stays with your account and is never shared. Each kind can be deleted on its own page.</p>
-        <div className="k-linkcards">{DATA.map((d) => <LinkCard key={d.to} to={d.to} title={d.title}>{d.what}</LinkCard>)}</div>
+        {/* six cards share the row: in four columns the last two left the right half of a row empty (VR4-001) */}
+        <TileGrid className="k-linkcards" fill>{DATA.map((d) => <LinkCard key={d.to} to={d.to} title={d.title}>{d.what}</LinkCard>)}</TileGrid>
         <h3 className="k-sub">Download everything</h3>
         <p className="k-small k-muted k-hint-line">One JSON file with everything StratLab keeps for you: your profile, holdings, tradebooks and funds, net worth,
           notebooks and experiments, journal, drawings, alerts and preferences. Tokens and passwords are left out.</p>

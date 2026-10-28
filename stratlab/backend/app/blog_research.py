@@ -99,7 +99,7 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
         from .data.markets import BY_ID
         mname = (BY_ID.get(m) or {}).get("name") or m
         groups = sorted({(e.get("group") or {}).get("name") or "" for e in group} - {""})
-        table = []
+        table, spans = [], []
         for e in group:
             h = library.versus_hold(e)
             st = e["stats"]
@@ -108,12 +108,19 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
                           p1(st["buy_hold"]) if isinstance(st.get("buy_hold"), (int, float)) else "–",
                           (f"{blog.MINUS if h['gap'] <= -0.05 else '+' if h['gap'] >= 0.05 else ''}{abs(h['gap']):.1f} pts") if h else "–",
                           str(st["trades"]) if isinstance(st.get("trades"), int) else "–",
-                          library.label(e),
-                          f"{short((e.get('range') or {}).get('from'))} to {short((e.get('range') or {}).get('to'))}"])
+                          library.label(e)])
+            spans.append(f"{short((e.get('range') or {}).get('from'))} to {short((e.get('range') or {}).get('to'))}")
+        # one period said once: every row repeated the same "11 Mar 2025 to 28 Oct 2026", which also pushed the table off a phone's
+        # screen (VR4-006). The caption gives the usual period; a column appears only when some test ran over another one
+        usual = max(set(spans), key=spans.count) if spans else ""
+        other = any(x != usual for x in spans)
+        if other:
+            for row, x in zip(table, spans):
+                row.append("" if x == usual else x)
         blocks += [{"t": "h2", "text": mname},
                    {"t": "p", "text": f"Group: {', '.join(groups)}." if groups else f"{mname} group."},
-                   {"t": "table", "caption": f"{mname}: return after costs and passive return, by rule set",
-                    "head": ["Rule set", "Return after costs", "Passive return", "Difference", "Trades", "Checks", "Period"], "rows": table}]
+                   {"t": "table", "caption": f"{mname}: return after costs and passive return, by rule set, tested {usual}" + (" (the last column names any test that ran over another period)" if other else ""),
+                    "head": ["Rule set", "Return after costs", "Passive return", "Difference", "Trades", "Checks"] + (["Other period"] if other else []), "rows": table}]
     risk, mrisk = library_seed.RISK, library_seed.MARKET_RISK
     blocks += [
         {"t": "h2", "text": "Method"},

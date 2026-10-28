@@ -90,6 +90,9 @@
     var area = box.querySelector(".ad-box");
     if (!area) return;
     area.textContent = "";
+    // the 280px held for an ad is for the ad: the question is short, and sat in the top of a mostly empty box (VR4-015). The box takes
+    // its height back with "Allow", where the page below moving follows the person's own click
+    area.style.minHeight = "0";
     var label = box.querySelector(".ad-label");
     if (label) label.textContent = "Ads on StratLab";        // the question is not an ad, so it is not labelled as one
     box.setAttribute("aria-label", "Ads on StratLab");
@@ -101,7 +104,7 @@
     var yes = el("button", "ad-yes", "Allow ads");
     var no = el("button", "ad-no", "No thanks");
     yes.type = "button"; no.type = "button";
-    yes.addEventListener("click", function () { write("yes"); if (label) label.textContent = "Advertisement"; box.setAttribute("aria-label", "Advertisement"); load(); });
+    yes.addEventListener("click", function () { write("yes"); area.style.minHeight = ""; if (label) label.textContent = "Advertisement"; box.setAttribute("aria-label", "Advertisement"); load(); });
     no.addEventListener("click", function () { write("no"); boxes.forEach(drop); });
     row.appendChild(yes); row.appendChild(no);
     card.appendChild(row);

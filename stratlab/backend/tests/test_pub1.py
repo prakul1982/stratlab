@@ -319,7 +319,7 @@ def test_the_figures_grid_lines_up_and_the_range_is_one_value(w):
     assert t.count('class="stat wide"') == 1                                         # only the range spans two columns
     css = stock_pages.STYLE
     assert "@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 2;grid-template-rows:subgrid" in css      # labels and values line up row by row
-    assert "@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide{grid-column:1/-1}" in css  # two to a row on a phone, not one
+    assert "@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide,.stat.long{grid-column:1/-1}" in css  # two to a row on a phone, not one; a long value or the range takes the row (VR4-007)
 
 
 def test_a_directory_is_a_list_of_rows_and_a_short_page_keeps_its_footer_down(w):

@@ -341,7 +341,8 @@ def _stocks(region: str, sec: dict | None) -> list:
             continue
         sym = m.group(1)
         href = company_path(region, sym)
-        tail = str(it["text"])[len(sym):]
+        # "(ST S2)" is the scan's own shorthand: a reader of the post is told the rule in words, just before (VR4-004)
+        tail = str(it["text"])[len(sym):].replace(" (ST S2)", "")
         out.append([{"a": sym, "href": href} if href else sym, tail])
     return out
 

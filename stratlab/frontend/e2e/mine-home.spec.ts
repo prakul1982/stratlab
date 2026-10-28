@@ -220,6 +220,13 @@ test("my space: greets by first name, writes the dollar rate without a rupee sig
   const v = fx.locator(".mine-mkt-v");
   if (await v.count()) await expect(v).toHaveText(/^\d[\d,]*\.\d{2}$/);
   await expect(page.locator('.mine-mkt[data-market="gold"] .k-stat-k')).toContainText("$/oz");
+  // VR4-owner-1: the dollar and gold are coloured by their own direction like the indices: a green or red pill and line, never grey and blue
+  for (const id of ["usdinr", "gold"]) {
+    const tile = page.locator(`.mine-mkt[data-market="${id}"]`);
+    if (!(await tile.locator(".k-delta").count())) continue;
+    expect(await tile.locator(".k-delta").getAttribute("class"), id).toMatch(/\b(up|down)\b/);
+    expect(await tile.locator("svg.k-spark").getAttribute("class"), id).toMatch(/\b(up|down)\b/);
+  }
   const nw = page.getByTestId("mine-networth");
   // VR1-005: no boxed placeholder chart until there is a history to draw: the figure stands alone
   await expect(nw.getByTestId("mine-nw-placeholder")).toHaveCount(0);

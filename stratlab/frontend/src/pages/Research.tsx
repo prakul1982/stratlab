@@ -308,6 +308,7 @@ function CompanyView() {
 
   const ccy = c.currency || (region === "IN" ? "INR" : "USD");
   const wiki = c.about.wiki;
+  const shownFacts = c.facts.filter((f) => !/market cap/i.test(f.label) && !(/^listed$/i.test(f.label) && f.value.includes(c.symbol)));
   const deepTo = `/research/${region}/${encodeURIComponent(c.symbol)}/deep`;
   const lead = focus === "invest" || !c.testable ? "deep" : "test";
   const deep = (cls: string) => <Link className={`btn ${cls} sm`} to={deepTo} title="Business, capex and management">Deep dive →</Link>;
@@ -381,14 +382,17 @@ function CompanyView() {
       {!c.delisted && <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>}
       {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} quiet />}
 
+      {/* (the facts under "What they do": not the market cap, which has its own place, nor where it is listed, which the heading says) */}
       <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
         {(wiki || c.about.profile) && (
           <Card>
             <CardHead title="What they do" info="From an encyclopedia entry and the company's own profile: facts, not AI." />
-            {wiki?.description && <p className="k-sub">{wiki.description}</p>}
+            {/* the one-line description ("Indian multinational conglomerate") and then the entry's first sentence, which says it again; and "Listed: NSE ·
+                RELIANCE" under a page headed "NSE · RELIANCE" (VR4-013): each is said once */}
+            {wiki?.description && !(wiki.extract && wiki.extract.toLowerCase().includes(wiki.description.toLowerCase())) && <p className="k-sub">{wiki.description}</p>}
             <p className="k-small">{wiki?.extract || c.about.profile}</p>
             {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
-            {c.facts.some((f) => !/market cap/i.test(f.label)) && <dl className="k-dl pairs">{c.facts.filter((f) => !/market cap/i.test(f.label)).map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
+            {shownFacts.length > 0 && <dl className="k-dl pairs">{shownFacts.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
             {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
           </Card>
         )}
