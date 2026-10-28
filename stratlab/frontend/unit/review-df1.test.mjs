@@ -121,7 +121,8 @@ test("DF-023: Invest home's first steps in one line, the next expiry in Coming u
   assert.match(home, /<Top compact \/>/);
   assert.match(home, /e\.kind === "expiry"/);
   // VR1-010/011 replaced the two equal-height pairs: the watchlist beside Coming up and Results today stacked
-  assert.match(home, /<WatchPanel region=\{region\} \/>\s*<div className="space-col">\s*<NextEvents region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>/);
+  // (VR6-011: with nothing watched the three stack across the page instead; the pair stays as it was when there is a watchlist)
+  assert.match(home, /<WatchPanel region=\{region\} \/>\s*\{nothingWatched \? <><NextEvents region=\{region\} \/><ResultsToday region=\{region\} \/><\/> : \(\s*<div className="space-col">\s*<NextEvents region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>/);
   assert.match(read("src/components/FirstSteps.tsx"), /if \(compact\) \{/);
   assert.match(read("src/styles.css"), /\.space-panels\.even \{ align-items: stretch; \}/);
 });

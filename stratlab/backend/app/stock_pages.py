@@ -2080,6 +2080,8 @@ ul.dir li:hover{border-color:var(--line-2)}ul.dir a{display:flex;align-items:cen
 ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.links{margin:12px 0 6px}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
 .links a:hover{border-color:var(--line-2);color:var(--ink)}nav.links[data-az] a{min-width:40px;justify-content:center;padding:4px 10px}
+/* VR6-022: A to Z in two rows of thirteen on a wide screen, not nineteen and an orphan row of seven */
+@media (min-width:641px){nav.links[data-az]{display:grid;grid-template-columns:repeat(13,40px)}}
 .links a[aria-current=page]{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
 [data-crumbs]{margin:0 0 6px}[data-crumbs] a{color:var(--muted)}h1+.muted{font-size:16px;max-width:64ch;margin:0 0 14px}
 form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:16px 0}form.find select,form.find button{flex:none}form.find input,form.find select{min-height:44px;border:1px solid var(--line-2);border-radius:10px;padding:0 12px;background:var(--card);color:var(--ink);font:inherit}
@@ -3324,21 +3326,22 @@ def letter_page(region: str, letter: str, page: int = 1) -> str | None:
         return None
     site = settings.PUBLIC_SITE_URL
     where = "India" if region == "IN" else "US"
-    exchange = "NSE and BSE" if region == "IN" else "the US"
+    # VR6-021: "listed in US (the US)": the US has no exchange to name in brackets (India's two are named)
+    place = "India (NSE and BSE)" if region == "IN" else "the US"
     show = "0–9" if letter == OTHER else letter
     syms = d["order"][d["start"][letter]:d["start"][letter] + n][(page - 1) * DIR_PAGE:page * DIR_PAGE]
     pages = pages_of(n)
     of = f", page {page} of {pages}" if pages > 1 else ""
     what = "starting with a digit or a symbol" if letter == OTHER else f"starting with {letter}"
     title = f"{where} listed companies {what}{of} · StratLab"
-    desc = (f"{n:,} companies listed in {where} ({exchange}) {what}{of}, {_span_text(region, syms)}. Each links to its price, "
+    desc = (f"{n:,} companies listed in {place} {what}{of}, {_span_text(region, syms)}. Each links to its price, "
             "results and filings.")
     if len(desc) > DESCRIPTION_MAX:
         desc = f"{n:,} companies listed in {where} {what}{of}. Each links to its price, results and filings."
     canonical = site + letter_path(region, letter, page)
     crumbs, ld = _crumbs([("Companies", "/stocks"), (where, f"/stocks/{region.lower()}"), (f"A to Z: {show}", letter_path(region, letter, page))])
     body = (f"{crumbs}<h1>{where} companies {e(what)}</h1>"
-            f'<p class="muted">{n:,} companies listed in {where} ({exchange}) {e(what)}{e(of)}, A to Z by name. Each links to its price, '
+            f'<p class="muted">{n:,} companies listed in {place} {e(what)}{e(of)}, A to Z by name. Each links to its price, '
             "reported results and recent filings. Facts, not advice.</p>"
             f'<nav class="links" aria-label="Letters" data-az>' + "".join(
                 f'<a href="{letter_path(region, L)}"' + (' aria-current="page"' if L == letter else "") + f'>{"0–9" if L == OTHER else L}</a>'

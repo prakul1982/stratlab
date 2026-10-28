@@ -2488,7 +2488,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .search-box input { min-height: 44px; }
   .k-table th .link-btn, .k-table td .link-btn { padding-block: 11px; margin-block: -11px; }
   .link-btn.small, .link-btn.k-small { min-height: 44px; display: inline-flex; align-items: center; }      /* (UI-FIX-1, R11: also on a narrow window without touch) */
-  .ch-bar .ch-btn, .ch-bar .ch-seg button { min-height: 40px; }
+  .ch-bar .ch-btn, .ch-bar .ch-seg button { min-height: 44px; }
 }
 
 /* a hint that a wide grid scrolls sideways, said on a phone only (DF-014) */
@@ -2601,4 +2601,14 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 640px) {
   .k-disclosure > summary:has(.k-more-what) { flex-wrap: wrap; row-gap: 0; }
   .k-disclosure > summary .k-more-what { flex: 1 0 100%; padding-left: calc(6px + var(--s2)); }
+}
+/* VR6-020 (A11Y2-009/010, "phone touch"): link rows of 32 to 36px and a few buttons of 32 to 40px are 44px to the thumb without a taller list:
+   a link keeps the place it had on the page (the negative margin) and its box, the part that takes the tap, is 44px tall (the padding). A link
+   inside a sentence is inline: the padding only widens what takes the tap, the lines stay put. */
+@media (max-width: 640px) {
+  .k-page a.link, a.link.k-small, a.link.k-any, .k-spread > a.link, .h-filing a.link { padding-block: 12px; margin-block: -4px; }
+  .k-stat-d a.link { padding-block: 14px; margin-block: -8px; }
+  a.tap-link, .mine-tl-i .body a { min-height: 44px; margin-block: -6px; }
+  .link-btn.inr-pick, body .k-search input { min-height: 44px; }
+  .nw-snaps .btn.quiet.sm { min-width: 44px; }
 }
