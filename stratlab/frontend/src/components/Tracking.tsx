@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { askNow, CHOICE_KEY, clearChoice, consentWords, declineTrackers, onChoice, readAdsOnly, readChoice, readDeclined, trackersFor, writeChoice, type Choice } from "../lib/ads";
 import { doNotTrack } from "../lib/analytics";
@@ -35,11 +35,29 @@ export function Tracking() {
   // a sign-up that completes after the page has loaded
   useEffect(() => onSignup(() => { if (want.pixel) flushSignup(); }), [want.pixel]);
   if (!askNow({ cfg: CONFIG, choice, path: pathname, adsOnly, declined, dnt: doNotTrack() })) return null;
-  const { title, text } = consentWords(CONFIG, adsOnly);
+  return <ConsentCard adsOnly={adsOnly} />;
+}
+
+/** The question itself. It stands over the bottom of the page, so while it is up the page keeps what has focus clear of it: a link or
+ * button the keyboard reaches near the bottom scrolls up above the card, not under it (A11Y-2, WCAG 2.4.11). The page's own scroll
+ * padding is the card's height, kept in step with it, and given back when the card goes. */
+function ConsentCard({ adsOnly }: { adsOnly: boolean }) {
+  const card = useRef<HTMLDivElement>(null);
+  const text = useId();
+  useEffect(() => {
+    const el = card.current, root = document.documentElement;
+    if (!el) return;
+    const keep = () => root.style.setProperty("scroll-padding-bottom", `${el.offsetHeight + 24}px`);
+    keep();
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(keep) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty("scroll-padding-bottom"); };
+  }, []);
+  const { title, text: words } = consentWords(CONFIG, adsOnly);
   return (
-    <div className="consent" role="dialog" aria-modal="false" aria-label={`${title} on StratLab`} data-testid="consent">
+    <div ref={card} className="consent" role="dialog" aria-modal="false" aria-label={`${title} on StratLab`} aria-describedby={text} data-testid="consent">
       <b className="consent-title">{title}</b>
-      <p>{text} <Link className="link" to="/privacy">What this means</Link></p>
+      <p id={text}>{words} <Link className="link" to="/privacy">What this means</Link></p>
       <div className="consent-btns">
         <button type="button" className="btn sm" onClick={() => writeChoice("yes")}>Allow</button>
         <button type="button" className="btn quiet sm" onClick={() => (adsOnly ? declineTrackers() : writeChoice("no"))}>No thanks</button>

@@ -332,9 +332,11 @@ function App() {
   const goToPlans = useCallback(() => nav("/plans"), [nav]);
   return (
     <AppProvider goToPlans={goToPlans}>
+      {/* first in the page's order, so the keyboard and a screen reader meet the question before a hundred controls, not after them (it stands
+          over the corner of the page either way; A11Y-2: it was the 127th Tab stop) */}
+      <Tracking />
       <Routed />
       <Toast />
-      <Tracking />
     </AppProvider>
   );
 }
