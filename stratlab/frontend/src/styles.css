@@ -925,6 +925,8 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 /* up to four figures in one row (the tax card with intraday income had "Long-term gains" alone on a second row and stood 120px
    taller than My Holdings beside it); the year is in the card's heading, so the total's label doesn't repeat it */
 .money-panels .k-stats { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: var(--s3) var(--s4); }
+/* VR6-016: four figures on a phone are two and two, not three (labels wrapping to two lines) and one left alone below */
+@media (max-width: 640px) { .money-panels .k-stats:has(> .k-stat:nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); }
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
@@ -2116,6 +2118,9 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-plan-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: var(--s2); align-items: start; }
 .k-plan-list li > span { color: var(--blue); font-weight: 700; }
 .k-plan-list li.head { display: block; color: var(--muted); font-weight: 600; }
+/* VR6-013: the card's remaining lines, folded; the summary is a full-width 44px row so it is easy to hit on a phone */
+.k-plan-more summary { cursor: pointer; display: flex; align-items: center; min-height: 44px; color: var(--blue); font-size: var(--t-label); font-weight: 600; }
+.k-plan-more[open] > summary { margin-bottom: var(--s2); }
 
 /* the landing page's own small helpers */
 .stack.g1, .row.g1 { gap: 1px; } .stack.g2, .row.g2 { gap: 2px; } .stack.g4, .row.g4 { gap: 4px; } .stack.g6 { gap: 6px; } 

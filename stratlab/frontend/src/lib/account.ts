@@ -125,3 +125,14 @@ export function trialUse(me: Pick<Me, "plan" | "view_as" | "trial" | "live_runni
   const left = t.days_left;
   return `${base} · trial: ${left != null ? `${left} market day${left === 1 ? "" : "s"} left` : "running"}${end ? `, until ${end}` : ""}`;
 }
+
+/** Which rows of the two-column usage list take a whole line: the long ones, and any row that would otherwise stand alone beside an empty cell. */
+export function usageSpans(long: boolean[]): boolean[] {
+  const out = [...long];
+  let col = 0;
+  out.forEach((w, i) => {
+    if (w) { if (col === 1) out[i - 1] = true; col = 0; } else col = (col + 1) % 2;
+  });
+  if (col === 1) out[out.length - 1] = true;
+  return out;
+}
