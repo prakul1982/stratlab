@@ -1,0 +1,59 @@
+// VR-5 (29 Oct 2026): the visual review of the most-used pages on a phone. Run: npm run test:unit
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { register } from "node:module";
+
+// the source's own imports have no .ts ending
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
+
+const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+
+test("VR5-001 and VR5-002: the Invest home's eyebrow says something its crumb and title do not, and the breadth card's live words have no second Live pill", () => {
+  assert.match(read("src/pages/SpaceHomes.tsx"), /<Head eyebrow="Invest · companies and markets" title="Invest home">/);
+  const card = read("src/components/BreadthCard.tsx");
+  assert.doesNotMatch(card, /tone="live"/);
+  assert.match(card, /<StatRow>/);                                   // and its three figures go two across on a phone (VR5-006)
+});
+
+test("VR5-003: the public library's header button reads 'Sign in' on a small phone, and the logo is never squeezed", () => {
+  const src = read("src/pages/PublicLibrary.tsx");
+  assert.match(src, /<span className="pub-long">\{label\}<\/span><span className="pub-short" aria-hidden="true">Sign in<\/span>/);
+  assert.match(src, /"aria-label": label/);                          // a screen reader still hears "Continue with Google"
+  const css = read("src/styles.css");
+  assert.match(css, /\.pub-nav > a:first-child \{ flex: none; \}/);
+  assert.match(css, /@media \(max-width: 400px\) \{ \.pub-nav \.pub-long \{ display: none; \} \.pub-nav \.pub-short \{ display: inline; \} \}/);
+});
+
+test("VR5-004: a chip or badge longer than the screen wraps in its own box on a phone instead of pushing the page sideways; the cookie question is smaller", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.k-badge \{ max-width: 100%; white-space: normal;/);
+  assert.match(css, /\.k-chip \{ max-width: 100%; height: auto; min-height: 44px;/);
+  assert.match(css, /\.consent \{ right: 12px; left: 12px; .* font-size: 13px;/);
+  assert.match(css, /\.consent-btns \.btn \{ flex: 1 1 0; min-width: 0; \}/);          // still one width for Allow and No thanks (VR4-012)
+});
+
+test("VR5-005: the words of a notebook's rules and the Invest red flags' symbols are bigger to tap on a phone", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.token \{ padding: 6px 10px; \}/);
+  assert.match(css, /\.add-rule \{ min-height: 44px;/);
+  assert.match(css, /\.space-flag > a\.link \{ display: inline-flex; align-items: center; min-height: 44px; \}/);
+});
+
+test("VR5-006: a row of figures goes two across on a phone when each fits its half on one line", () => {
+  const src = read("src/components/kit/Stat.tsx");
+  assert.match(src, /function useDuo/);
+  assert.match(src, /classList\.add\("duo"\)/);
+  assert.match(src, /if \(wraps\) el\.classList\.remove\("duo"\)/);          // a figure that would wrap keeps the old one-per-row
+  const css = read("src/styles.css");
+  assert.match(css, /\.k-stats\.duo \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(css, /\.k-stats\.duo > \.k-stat:last-child:nth-child\(odd\) \{ grid-column: 1 \/ -1; \}/);
+});
+
+test("VR5-010: 'Only 11 trades: too few to judge.' under the verdict headline and 'Only 11 trades in this period.' in the summary are one statement", async () => {
+  const { heroSummary } = await import("../src/lib/tradeUi.ts");
+  const few = "Only 11 trades in this period. That's too few to tell a real edge from a lucky streak, whatever the return says.";
+  assert.deepEqual(heroSummary(few, "Only 11 trades: too few to judge."), ["That's too few to tell a real edge from a lucky streak, whatever the return says."]);
+  assert.deepEqual(heroSummary(few, ""), ["Only 11 trades in this period.", "That's too few to tell a real edge from a lucky streak, whatever the return says."]);
+});
