@@ -425,3 +425,83 @@ def test_the_questions_are_only_those_the_page_can_answer_and_the_json_ld_matche
 def test_a_page_with_nothing_to_show_has_no_paragraph_and_no_questions(w):
     t = w["client"].get("/stocks/in/TCS").text            # no numbers: a short noindex page
     assert "data-about" not in t and "data-faq" not in t and "FAQPage" not in t
+
+
+# ---------- 5. Search Console: the sitemaps still validate ----------
+def all_sitemaps(c) -> dict[str, list[tuple[str, str | None]]]:
+    index = ET.fromstring(c.get("/sitemap.xml").content)
+    assert index.tag == NS + "sitemapindex"
+    out = {}
+    for s in index:
+        loc = s.find(NS + "loc").text
+        r = c.get(loc.replace("https://stratlab.studio", ""))
+        assert r.status_code == 200 and r.headers["content-type"].startswith("application/xml"), loc
+        root = ET.fromstring(r.content)
+        assert root.tag == NS + "urlset"
+        out[loc] = [(u.find(NS + "loc").text, u.find(NS + "lastmod").text if u.find(NS + "lastmod") is not None else None) for u in root]
+    return out
+
+
+def test_every_sitemap_in_the_index_is_valid_and_no_address_is_listed_twice(w):
+    c = w["client"]
+    stock_pages.save_list("IN", alpha_list(900))
+    maps = all_sitemaps(c)
+    names = {k.rsplit("/", 1)[1] for k in maps}
+    assert {"pages.xml", "blog.xml", "directory.xml", "stocks-in-1.xml", "stocks-us-1.xml"} <= names
+    seen: dict[str, str] = {}
+    for loc, rows in maps.items():
+        assert 0 < len(rows) <= 50_000, loc
+        for url, day in rows:
+            assert url.startswith("https://stratlab.studio/") and "?" not in url and "#" not in url and url == url.strip(), url
+            assert day is None or re.fullmatch(r"\d{4}-\d{2}-\d{2}", day), (url, day)
+            assert url not in seen, (url, seen.get(url), loc)
+            seen[url] = loc
+    assert maps["https://stratlab.studio/sitemaps/blog.xml"] is not None            # the blog still owns its file
+    assert "https://stratlab.studio/stocks/in/browse/a/3" in seen and "https://stratlab.studio/stocks/in/RELIANCE" in seen
+
+
+def test_the_sitemap_company_files_are_unchanged_by_the_directories(w):
+    """The company chunks list exactly the companies with a page that has facts, as before: the directories are a file of their own."""
+    c = w["client"]
+    before = locs(c.get("/sitemaps/stocks-in-1.xml").content)
+    stock_pages.save_list("IN", alpha_list(900))
+    after = locs(c.get("/sitemaps/stocks-in-1.xml").content)
+    assert set(before) <= set(after) and len(after) == len(before) + 900
+    assert not any("/browse/" in u or "/index/" in u for u in after)
+
+
+def test_thirteen_thousand_companies_make_a_small_bounded_directory(w):
+    """The market sizes Search Console reported (about 6,000 Indian and 7,300 US pages): every page is linked once from a letter
+    page of at most 400 links, the sitemap stays tiny, and the directory holds symbols and positions only."""
+    import time
+    import tracemalloc
+    c = w["client"]
+    letters = "ABCDEFGHIJKLMNOPRSTUVW"
+    def rows(n, tag):
+        return [{"symbol": f"{tag}{i:05d}", "name": f"{letters[(i * 7) % len(letters)]}{letters[(i * 3) % len(letters)].lower()}nova {i} Ltd"} for i in range(n)]
+    stock_pages.save_list("IN", rows(6000, "I"))
+    stock_pages.save_list("US", rows(7300, "U"))
+    stock_pages._dir.clear()
+    stock_pages.companies("IN"), stock_pages.companies("US")        # the companies list is the app's own, kept anyway: not the directory's
+    tracemalloc.start()
+    t0 = time.time()
+    d_in, d_us = stock_pages.directory("IN"), stock_pages.directory("US")
+    took = time.time() - t0
+    current, _peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    assert len(d_in["order"]) >= 6000 and len(d_us["order"]) >= 7300 and took < 5
+    assert current < 3_000_000, current                      # kept: the symbols and their positions, a megabyte or two
+    linked = {"IN": set(), "US": set()}
+    for region in ("in", "us"):
+        R = region.upper()
+        d = stock_pages.directory(R)
+        for L in [*stock_pages.LETTERS, stock_pages.OTHER]:
+            if not d["count"].get(L):
+                continue
+            for page in range(1, stock_pages.pages_of(d["count"][L]) + 1):
+                got = linked_companies(stock_pages.letter_page(R, L, page), region)
+                assert 0 < len(got) <= stock_pages.DIR_PAGE
+                linked[R] |= got
+        assert linked[R] == set(d["order"])
+    got = locs(c.get("/sitemaps/directory.xml").content)
+    assert 50 < len(got) < 200
