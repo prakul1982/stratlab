@@ -25,7 +25,10 @@ test("a public company page wears the site's header, footer and type, and dates 
   for (const name of ["Terms of service", "Privacy policy", "Cancellation and refunds", "Contact us"]) await expect(foot.getByRole("link", { name })).toBeVisible();
   // one price rule: the last close with its date, never "Last price"
   await expect(page.getByText(/^As of \d{1,2} \w{3} \d{4} close\./)).toBeVisible();
-  await expect(page.locator(".stat", { hasText: /Last close, \d{1,2} \w{3} \d{4}/ })).toHaveCount(1);
+  // (PUB-2) the price is one block under the name, the close large and its session small; no tile repeats it
+  await expect(page.locator(".px [data-price]")).toHaveCount(1);
+  await expect(page.locator(".px [data-as-of]")).toHaveText(/^As of \d{1,2} \w{3} \d{4} close\./);
+  await expect(page.locator(".stat", { hasText: /^Last (close|price)/ })).toHaveCount(0);
   await expect(page.locator("main")).not.toContainText("Last price");
   await expect(page.locator(".stat", { hasText: "Market cap" }).locator("b")).toHaveText(/^₹[\d.,]+ (lakh crore|crore)$/);
   await expect(page.locator(".stat", { hasText: "EBITDA margin" })).toHaveCount(1);
