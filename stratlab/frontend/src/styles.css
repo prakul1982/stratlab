@@ -75,6 +75,8 @@ h1.eyebrow { font-weight: 400; }
 .lp-own-h1 { font-size: clamp(40px, 6vw, 64px); }   /* an address's own heading in the hero (DI-033) */     /* a landing address's own heading (/pricing: "Plans and prices"), drawn as the eyebrow */
 .ruled { background-image: linear-gradient(var(--rule) 1px, transparent 1px); background-size: 100% 34px; }
 .nowrap { white-space: nowrap; }   /* a short phrase like "on 16 Oct" wraps as one */
+/* VR7-014: a longer one ("3.5% below its 52-week high", 170px) is a line of its own on a phone, without the dot before it: in a 150px market tile it ran into the next tile's words */
+@media (max-width: 420px) { .nowrap.fit { display: block; white-space: normal; } .fit-dot { display: none; } }
 .hyphens { -webkit-hyphens: auto; hyphens: auto; }   /* a long word too wide for its cell breaks with a hyphen */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* "Skip to content": the first Tab stop on every page; hidden like .sr-only until it has focus */
@@ -890,6 +892,14 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .consent-btns { display: flex; flex-wrap: wrap; gap: 10px; }
 /* "Allow" and "No thanks" are two answers of equal weight: one width, not 63px beside 90px (VR4-012) */
 .consent-btns .btn { min-width: 104px; justify-content: center; }
+/* VR7-007: on a visitor's wide page (no side menu) the question is one slim bar along the foot of the window, not a 400px card standing over
+   the landing page's example panel until it is answered (the Markets button still rises above it, consentLift.ts); in the app it stays the corner card */
+@media (min-width: 901px) {
+  body:not(:has(.shell)) .consent { left: 16px; right: 16px; width: auto; flex-direction: row; align-items: center; gap: 8px 20px; padding: 12px 18px; }
+  body:not(:has(.shell)) .consent-title { flex: none; }
+  body:not(:has(.shell)) .consent p { flex: 1 1 auto; }
+  body:not(:has(.shell)) .consent-btns { flex: none; flex-wrap: nowrap; }
+}
 /* VR5: on a phone the question took 213px, over a quarter of a 360x800 screen: a size down and tighter, the two answers sharing the row */
 @media (max-width: 640px) {
   .consent { right: 12px; left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; gap: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.4; }
@@ -1945,6 +1955,9 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
  * label-over-value while its neighbours sat label-left, value-right); a value too long for a line still goes under its label */
 .k-rows > div > span { color: var(--muted); flex: 1 1 8rem; min-width: 0; }
 .k-rows > div > b { font-weight: 600; text-align: right; }
+/* VR7-012: a long value that takes its own line under its label (Account's plan and usage: "No end date. Nothing renews and there's nothing to cancel.") read from the left on a
+   phone, not as two lines ragged on the left */
+@media (max-width: 899px) { .k-rows > div.long > b { flex: 1 1 100%; text-align: left; } }
 .k-rows > div.hl > span { color: var(--ink-2); }
 
 /* ---------- navigation: breadcrumb, group pages, All features, My space ---------- */
@@ -2543,6 +2556,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .h-filing > :first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h-filing > :nth-child(2) { justify-self: start; }
 @media (max-width: 640px) { .h-filing { grid-template-columns: 7.5em minmax(0, 1fr); } .h-filing > :nth-child(3) { grid-column: 1 / -1; } }
+/* VR7-015: at 360px the date left 165px for "Promoter pledge or encumbrance", which broke onto two lines in its pill: the date and the pill share a line while the pill fits
+   and the pill takes the next line whole when it does not (the date keeps its 7.5em, so the pills of the rows that share a line still start together) */
+@media (max-width: 420px) { .h-filing { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s3); } .h-filing > :first-child { min-width: 7.5em; } .h-filing > :nth-child(3) { flex: 1 1 100%; } }
 
 .watch-add .k-field, .watch-add .k-field > * { max-width: none; width: 100%; }
 
@@ -2559,6 +2575,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* RC2B-034: the "In India? Show prices in ₹" link is a tap target on a phone like every other control (it measured 20 px) */
 .link-btn.inr-pick { min-height: 40px; display: inline-flex; align-items: center; }
+/* VR7-020: on a wide screen the link sat level with the "Prices in" label above the select; it is level with the select, the control it belongs to */
+@media (min-width: 641px) { .k-form > .link-btn.inr-pick, .k-formgrid > .link-btn.inr-pick { align-self: end; } }
 @media (max-width: 640px) { .link-btn.inr-pick { min-height: 44px; } }      /* the 40px above came after the phone rule for .link-btn and won (A11Y-2) */
 
 /* VR2-010: on a phone the buttons of one segmented control are the same width (they were sized by their words: "Off | ₹ | % of premium" were a sliver, a sliver and a wide block); a longer label still makes room for itself (min-width above) */
@@ -2599,7 +2617,11 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-stats.duo.tight .k-stat-v { font-size: 22px; }          /* VR6-023: eight-digit rupee totals fit half a line a size down */
 }
 .k-nowrap { white-space: nowrap; }
-@media (max-width: 380px) { .k-nowrap { white-space: normal; } }          /* the plan table's columns are 64px there: the word breaks at its hyphens rather than push the page sideways */
+/* the plan table's columns are 64px there: the word breaks at its hyphens rather than push the page sideways. VR7-013: up to 410px, not 380: at 390px the
+   whole word ("(5-market-day") made the first plan table 349px in a 322px card, its Pro column over the card's edge */
+@media (max-width: 410px) { .k-nowrap { white-space: normal; } }
+/* ...and at 360px even so the first plan table was 311px in 292px ("Unlimited" and its cell padding): a size and a padding down in the plan tables */
+@media (max-width: 380px) { .k-compare .k-table th, .k-compare .k-table td, .k-tbl-wrap.pinhead .k-table th, .k-tbl-wrap.pinhead .k-table td { font-size: 13px; padding-left: 4px; padding-right: 4px; } }
 /* VR5-003: at 400px and under the Menu sits near the right edge (the button beside it reads "Sign in"): its list opens leftwards; from its left it ran 31px past the screen */
 @media (max-width: 400px) { .pub-nav .pub-menu.pub-menu-start nav { left: auto; right: 0; } }
 /* VR5-014: on a phone the picker's tiles (Net worth's "Add an entry": fourteen kinds) are rows, the picture beside the words, not a 120px

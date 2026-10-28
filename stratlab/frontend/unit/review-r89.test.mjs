@@ -272,10 +272,10 @@ test("DOC-2: the landing page names the newer tools, its lists keep full grid ro
     assert.match(login, new RegExp(`\\["${t}",`), t);
   assert.match(login, /"Trade · Invest · Money"/);                              // ("Ten markets" is in the intro's sentence only: VR5-owner-2)
   assert.doesNotMatch(login, /Yahoo|Screener|Finnhub|Kite|Zerodha Kite/);        // no data vendor named on the page
-  // docs/UI_CHECKER.md names every rule the checker has, R1 to R25
+  // docs/UI_CHECKER.md names every rule the checker has, R1 to R26 (VR7 added R26)
   const rules = read("e2e/ui-lint.spec.ts").match(/^  R\d+: /gm) ?? [];
   const doc = readFileSync(new URL("../../../docs/UI_CHECKER.md", import.meta.url), "utf8");
-  assert.equal(rules.length, 25);
+  assert.equal(rules.length, 26);
   for (let i = 1; i <= rules.length; i++) assert.match(doc, new RegExp(`\\| R${i} \\|`), `R${i}`);
 });
 

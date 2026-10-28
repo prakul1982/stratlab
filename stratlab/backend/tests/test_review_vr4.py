@@ -9,10 +9,15 @@ from tests.test_blog import entry, issue_for, library_rows, page, w  # noqa: F40
 APP = Path(__file__).resolve().parents[1] / "app"
 
 
+def _flat(blocks):
+    """The post's blocks with each market's fold opened (VR7-002)."""
+    return [x for b in blocks for x in (_flat(b["blocks"]) if b["t"] == "fold" else [b])]
+
+
 def test_a_research_posts_table_says_its_period_once_and_a_column_only_where_one_test_differs(w):
     rows = library_rows()
     post = blog_research.classic_strategies(rows, datetime(2026, 11, 3, tzinfo=timezone.utc))
-    tables = [b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Rule set"]     # (the four checks have a table of their own)
+    tables = [b for b in _flat(post["blocks"]) if b["t"] == "table" and b["head"][0] == "Rule set"]     # (the four checks have a table of their own)
     assert tables and all("Period" not in t["head"] and "Other period" not in t["head"] for t in tables)        # every row had the same period
     assert all(len(r) == 6 for t in tables for r in t["rows"])
     assert all("tested 1 Oct 2021 to 30 Sep 2026" in t["caption"] for t in tables), tables[0]["caption"]
@@ -20,7 +25,7 @@ def test_a_research_posts_table_says_its_period_once_and_a_column_only_where_one
     other = library_rows()
     other[0] = entry("ema-20-50", "IN", "20/50 EMA cross", 10.0, 20.0, frm="2026-09-29")
     post = blog_research.classic_strategies(other, datetime(2026, 11, 3, tzinfo=timezone.utc))
-    india = next(b for b in post["blocks"] if b["t"] == "table" and b["caption"].startswith("India"))
+    india = next(b for b in _flat(post["blocks"]) if b["t"] == "table" and b["caption"].startswith("India"))
     assert "Other period" not in india["head"] and all(len(r) == 6 for r in india["rows"])
     named = [r[0][1]["s"] for r in india["rows"] if isinstance(r[0], list)]
     assert named == ["Tested 29 Sep 2026 to 30 Sep 2026"] and len(india["rows"]) > 1

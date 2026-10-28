@@ -30,13 +30,14 @@ test("VR2-004, VR2-005: the watchlist says its day once; an Open button stays at
 test("VR2-006, VR2-007: market events are two to a row; Key numbers' last row fills its width", () => {
   assert.match(read("src/pages/trade/events.css"), /\.ev-weekgrid > \.ev-week \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\);/);
   const inv = read("src/styles-invest.css");
-  assert.match(inv, /\.inv-metrics > :last-child:nth-child\(3n\+1\) \{ grid-column: span 6; \}/);
-  assert.match(inv, /\.inv-metrics > :nth-last-child\(2\):nth-child\(3n\+1\), \.inv-metrics > :last-child:nth-child\(3n\+2\) \{ grid-column: span 3; \}/);
+  // (VR7-006: the last row no longer widens its groups, which left its figures out of line with the first row's; the note on the bars fills the free slot instead)
+  assert.match(inv, /\.inv-metrics \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/);
+  assert.match(inv, /\.inv-metrics-note\.row \{ grid-column: 1 \/ -1; \}/);
 });
 
 test("VR2-008: a long usage value on Account takes the whole row", () => {
   // (VR6-014: usageSpans also widens a row that would stand alone beside an empty cell)
-  assert.match(read("src/pages/AccountPage.tsx"), /usageSpans\(usage\.map\(\(\[, v\]\) => v\.length > 44\)\)\.map\(\(wide, i\) => <div key=\{usage\[i\]\[0\]\} className=\{wide \? "wide" : undefined\}>/);
+  assert.match(read("src/pages/AccountPage.tsx"), /usageSpans\(usage\.map\(\(\[, v\]\) => v\.length > 44\)\)\.map\(\(wide, i\) => <div key=\{usage\[i\]\[0\]\} className=\{\[wide \? "wide" : "", usage\[i\]\[1\]\.length > 44 \? "long" : ""\]/);     // (VR7-012 adds "long": a phone reads it from the left)
   assert.match(css, /\.k-rows\.two > div\.wide \{ grid-column: 1 \/ -1; \}/);
 });
 

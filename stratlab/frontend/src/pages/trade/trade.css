@@ -71,6 +71,9 @@
 .lib-clamp { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .lib-reason { margin: 0; }
 .k-cards.lib-cards { align-items: stretch; }
+/* VR7-004: the signed-out library's cards past the first twelve are all in the page; a phone hides them until "Show more", a desktop shows them all and has no such button */
+.k-row.lib-more { display: none; }
+@media (max-width: 640px) { .k-cards.lib-cards > .k-card.lib-extra { display: none; } .k-row.lib-more { display: flex; } }
 /* the notebook list: one height per row, the verdict line along the bottom, the question in two lines (DA-032) */
 .k-cards.nb-cards { align-items: stretch; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
 /* VR1-030: two notebooks fill the row (auto-fit) instead of two thirds of a three-column grid, one alone stays a card's width, and the pin is an icon at the

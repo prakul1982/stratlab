@@ -502,7 +502,7 @@ export function NetWorthPage() {
             {/* the history has a card once there is a chart to draw; until then, one line here says when it starts */}
             {!view.history_allowed
               ? <PlanNote>The net worth history is on the Basic plan{view.history_count ? ` (${view.history_count} snapshot${view.history_count === 1 ? "" : "s"} recorded so far)` : ""}.</PlanNote>
-              : hist.length < 3 && !empty && <p className="k-note">History: a snapshot is taken on the 1st of each month and whenever you change an entry; the chart starts at the third{hist.length > 0 ? ` (${hist.length === 1 ? `the first is from ${day(hist[0].d)}` : `${hist.length} so far, the latest from ${day(hist[hist.length - 1].d)}`})` : ""}.</p>}
+              : hist.length < 3 && !empty && <p className="k-note">A snapshot is taken on the 1st of each month and whenever you change an entry; the chart starts at the third{hist.length > 0 ? ` (${hist.length === 1 ? `the first is from ${day(hist[0].d)}` : `${hist.length} so far, the latest from ${day(hist[hist.length - 1].d)}`})` : ""}.</p>}
             {/* VR6-012: with no chart yet the snapshots list sits in this card under that line, not in a card of its own with one line in it (DP2-006's "empty-looking card" was still 97px of it) */}
             {view.history_allowed && hist.length > 0 && whole.length < 3 && snapsList("nw-snaps")}
           </Card>

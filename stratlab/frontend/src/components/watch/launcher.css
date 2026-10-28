@@ -12,6 +12,13 @@
   .mw-launch.public { width: var(--ctl); padding: 0; justify-content: center; }
   .mw-launch.public span { display: none; }
 }
+/* VR7-019: on a laptop the page's content runs to within 56px of the window's edge, so the 108px "Markets" pill stood over the right end of the cards behind it (the
+   "Calendar →" on Invest, the corner of the last Money card). Under 1600px it is a round 44px button that fits the margin (its name is its tooltip and its label for a
+   screen reader); from 1600px the margin is 136px or more and the pill keeps its word */
+@media (min-width: 901px) and (max-width: 1599px) {
+  .mw-launch.app { width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 6px; }
+  .mw-launch.app span { display: none; }
+}
 /* a docked panel takes its width from the page, and the cookie question moves out from under it */
 body.mw-docked .shell { padding-right: var(--mw-dock, 0px); }
 body.mw-docked .consent { right: calc(var(--mw-dock, 0px) + 16px); }

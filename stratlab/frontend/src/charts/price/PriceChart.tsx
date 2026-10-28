@@ -732,7 +732,8 @@ const [saveNote, setSaveNote] = useState("");
   const stageH = height + ownPanes * PANE_ADD;
 
   // VR6-018: the view buttons (zoom, reset, picture, full screen) sat alone on a second line at the right of the toolbar on a laptop;
-  // on a wide screen they now join the scale buttons under the chart (one row of controls there, with room), on a phone they stay in the bar
+  // they now join the scale buttons under the chart (one row of controls there, with room). VR7-010: on a phone too (reset and full screen after the
+  // scale buttons): in the bar they were alone on a third line at the right of a 360px screen
   const viewButtons = (
     <span className="pc-end">
       <button type="button" className="pc-btn icon pc-hide-phone" aria-label="Zoom out" title="Zoom out" onClick={() => engineRef.current?.zoomBy(0.8)}>{ICON.zoomOut}</button>
@@ -793,7 +794,6 @@ const [saveNote, setSaveNote] = useState("");
             )}
           </div>
         )}
-        {phone && viewButtons}
       </div>
 
       <div className="pc-main" onKeyDown={(ev) => {
@@ -885,7 +885,7 @@ const [saveNote, setSaveNote] = useState("");
           </div>
         ) : <span className="pc-note">{TF_LONG[tf]} candles</span>}
         <div className="pc-foot-r">
-          {!phone && viewButtons}
+          {viewButtons}
           <div className="pc-seg" role="group" aria-label="Scale">
             {!props.noVolume && <button type="button" className="pc-btn" aria-pressed={volume} onClick={() => { touched.current = true; setVolume(!volume); }} title="Volume bars">Vol</button>}
             <button type="button" className="pc-btn" aria-pressed={mode === "percent"} onClick={() => setMode(mode === "percent" ? "normal" : "percent")} title="Percent scale, from the first candle on screen">%</button>

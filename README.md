@@ -244,7 +244,7 @@ stratlab/
 ├── frontend/src/     pages/ (trade/, money/ and the rest), components/ (chart/: the shared chart system), charts/price/
 │                     (the price chart), lib/ (API client, plans, spaces, Greeks, formatting, analytics)
 ├── frontend/e2e/     Playwright: every page on desktop and phone, every route at several sizes, the landing page, and the
-│                     UI checker (ui-lint.spec.ts: layout rules R1 to R25 on every page)
+│                     UI checker (ui-lint.spec.ts: layout rules R1 to R26 on every page)
 ├── frontend/scripts/ docs-shots: retakes the README's screenshots from the fake world
 └── supabase/         schema.sql
 docs/                 FEATURES.md, ADMIN.md, ROADMAP.md, AI_ASSISTANT.md, UI_CHECKER.md, images/, screenshots/

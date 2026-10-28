@@ -62,6 +62,7 @@ export const RULES: Record<string, string> = {
   R23: "Header wrap parity: cards side by side whose headers differ by > 12px because one header's controls wrapped",
   R24: "Faint checkbox: an unchecked checkbox/radio whose border and fill are both < 3:1 against what is behind it",
   R25: "Same sentence twice: one sentence (30+ characters) said twice in one card (table rows left out)",
+  R26: "Content past its card: a table, picture, control or tile whose right edge is > 3px past the right edge of the card that holds it",
 };
 
 interface Row extends Violation { page: string; label: string; width: number; theme: string; shot?: string; allowed?: string }
@@ -288,6 +289,10 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
   // R25 one sentence twice in one entry (a filing's title printed again as its body)
   expect(await fire(`<div class="k-card"><div><b>Disclosure of creation of pledge by promoter</b><p style="margin:0">Disclosure of creation of pledge by promoter.</p></div></div>`), "R25 title said again").toContain("R25");
   expect(await fire(`<div class="k-card"><div style="display:flex;gap:20px"><small class="k-stat-d">last 12 months vs the 12 before</small><small class="k-stat-d">last 12 months vs the 12 before</small></div></div>`), "R25 same caption on two stats").not.toContain("R25");
+  // R26 a table wider than its card (the plans page's first table, 349px in a 322px card), and one that fits
+  expect(await fire(`<div class="k-card" style="width:322px"><table style="width:349px"><tr><td>Backtests</td><td>10</td><td>Unlimited</td></tr></table></div>`), "R26 table past its card").toContain("R26");
+  expect(await fire(`<div class="k-card" style="width:322px"><table style="width:280px"><tr><td>Backtests</td><td>10</td><td>Unlimited</td></tr></table></div>`), "R26 table inside its card").not.toContain("R26");
+  expect(await fire(`<div class="k-card" style="width:322px"><div style="overflow-x:auto"><table style="width:600px"><tr><td>Backtests</td></tr></table></div></div>`), "R26 a scrolling box").not.toContain("R26");
   // R12 caption under a list
   expect(await fire(`<ul><li>One</li><li>Two</li></ul><p style="font-size:12px">Dots: each notebook's last verdict.</p>`), "R12 caption").toContain("R12");
 });

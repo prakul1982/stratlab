@@ -134,10 +134,12 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
         for row, x in zip(table, spans):
             if x != usual:
                 row[0] = [row[0], {"s": f"Tested {x}"}]
-        blocks += [{"t": "h2", "text": mname},
+        # VR7-002: one fold for each market (open on a desktop; a phone shows the ten markets as ten lines and opens one at a time:
+        # the ten tables were 10,000px of cards on a phone). Every figure stays in the page.
+        blocks += [{"t": "fold", "title": mname, "note": f"{len(group)} tests", "blocks": [
                    {"t": "p", "text": f"Group: {', '.join(groups)}." if groups else f"{mname} group."},
                    {"t": "table", "caption": f"{mname}, tested {usual}", "align": "lrrrrl", "widths": [34, 12, 9, 11, 8, 26],
-                    "head": ["Rule set", "After costs", "Passive", "Difference", "Trades", "Checks"], "rows": table}]
+                    "head": ["Rule set", "After costs", "Passive", "Difference", "Trades", "Checks"], "rows": table}]}]
     risk, mrisk = library_seed.RISK, library_seed.MARKET_RISK
     blocks += [
         {"t": "details", "title": "The headline figures in words", "items": words, "words": True},

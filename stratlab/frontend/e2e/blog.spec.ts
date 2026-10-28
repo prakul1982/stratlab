@@ -181,9 +181,11 @@ test("PUB-2: a post has one content width, headline numbers as tiles, tables tha
   // the method is folded (its text is in the page); a table's names don't wrap, its numbers sit right, its text left
   await expect(page.locator("details[data-method]").first()).not.toHaveAttribute("open", "");
   expect(await page.locator("details[data-method]").first().textContent()).toContain("slippage");
+  // (VR7-002: on a phone each market is a fold, closed: the first is opened to measure its table)
+  if (phone) await page.locator("details.mk").first().evaluate((e) => { (e as HTMLDetailsElement).open = true; });
   const t = page.locator(".btbl.fx").filter({ hasText: "Rule set" }).first();
   expect(await t.locator("thead th").evaluateAll((e) => e.every((x) => x.getBoundingClientRect().height < 40))).toBe(true);        // no header wraps
-  expect(await t.locator("tbody th[scope=row]").evaluateAll((e) => e.every((x) => x.querySelector("a")!.getBoundingClientRect().height < 30 && x.scrollWidth <= x.clientWidth + 1))).toBe(true);   // no name wraps or is cut
+  expect(await t.locator("tbody th[scope=row]").evaluateAll((e) => e.every((x) => (() => { const a = x.querySelector("a")!, cs = getComputedStyle(a); return a.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) < 30; })() && x.scrollWidth <= x.clientWidth + 1))).toBe(true);   // no name wraps or is cut
   expect(await t.locator("td").evaluateAll((e) => e.every((x) => x.scrollWidth <= x.clientWidth + 1))).toBe(true);                       // no figure or check is cut
   // (on a phone a table of five columns or more is a card per row, VR5-007: its figures are laid out left, each under its column's name)
   if (!phone) expect(await t.locator("tbody tr").first().locator("td").evaluateAll((e) => e.map((x) => getComputedStyle(x).textAlign))).toEqual(["right", "right", "right", "right", "left"]);

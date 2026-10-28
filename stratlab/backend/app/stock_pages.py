@@ -2085,9 +2085,15 @@ ul.dir li{display:flex;align-items:center;justify-content:space-between;gap:12px
 ul.dir li:hover{border-color:var(--line-2)}ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px;line-height:1.3;color:var(--ink);text-decoration:none}
 ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.links{margin:12px 0 6px}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
-.links a:hover{border-color:var(--line-2);color:var(--ink)}nav.links[data-az] a{min-width:44px;justify-content:center;padding:4px 10px}
+.links a:hover{border-color:var(--line-2);color:var(--ink)}nav.links[data-az] a{min-width:44px;min-height:44px;justify-content:center;padding:4px 10px}
 /* VR6-022: A to Z in two rows of thirteen on a wide screen, not nineteen and an orphan row of seven (44 px taps, A11Y-2) */
 @media (min-width:641px){nav.links[data-az]{display:grid;grid-template-columns:repeat(13,44px)}}
+/* VR7-003: on a phone the same letters fill the row (a 44 px box each, the row as wide as the screen) in as many columns as leave the last row nearly
+   full (data-c7 for a screen 375px and wider, data-c6 for a narrower one), not a last row of one or two letters */
+nav.links[data-c7="1"]{--az7:1}nav.links[data-c7="2"]{--az7:2}nav.links[data-c7="3"]{--az7:3}nav.links[data-c7="4"]{--az7:4}nav.links[data-c7="5"]{--az7:5}nav.links[data-c7="6"]{--az7:6}nav.links[data-c7="7"]{--az7:7}
+nav.links[data-c6="1"]{--az6:1}nav.links[data-c6="2"]{--az6:2}nav.links[data-c6="3"]{--az6:3}nav.links[data-c6="4"]{--az6:4}nav.links[data-c6="5"]{--az6:5}nav.links[data-c6="6"]{--az6:6}
+@media (max-width:640px){nav.links[data-az]{display:grid;grid-template-columns:repeat(var(--az7,7),minmax(0,1fr))}nav.links[data-az] a{min-width:0;padding:4px 0}}
+@media (max-width:374px){nav.links[data-az]{grid-template-columns:repeat(var(--az6,6),minmax(0,1fr))}}
 .links a[aria-current=page]{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
 [data-crumbs]{margin:0 0 6px}[data-crumbs] a{color:var(--muted)}h1+.muted{font-size:16px;max-width:64ch;margin:0 0 14px}
 form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:16px 0}form.find select,form.find button{flex:none}form.find input,form.find select{min-height:44px;border:1px solid var(--line-2);border-radius:10px;padding:0 12px;background:var(--card);color:var(--ink);font:inherit}
@@ -3307,6 +3313,17 @@ def index_links(region: str) -> str:
             + "".join(f'<a href="{index_path(region, slug)}">{e(name)}</a>' for slug, (name, _s, _d) in idx.items()) + "</nav>")
 
 
+def _az_cols(n: int, widest: int) -> int:
+    """How many columns of 44px letter boxes (at most `widest`) leave the last row of `n` letters nearest to full: 26 letters are 7, 7, 7 and 5 in
+    seven columns, not 6, 6, 6, 6 and 2 in six (VR7-003). The wider is taken when two fill the same."""
+    return max(range(max(2, widest - 2), widest + 1), key=lambda c: ((n % c or c) / c, c)) if n > widest else max(n, 1)
+
+
+def _az_style(n: int) -> str:
+    """The columns as two attributes (the page's body carries no inline style): data-c7 for a screen 375px and wider, data-c6 for a narrower one."""
+    return f' data-c7="{_az_cols(n, 7)}" data-c6="{_az_cols(n, 6)}"'
+
+
 def az_nav(region: str) -> str:
     """The market's A-Z letters (those with companies) and its index lists, as links: on /stocks, the exchange pages and the
     letter pages."""
@@ -3314,7 +3331,8 @@ def az_nav(region: str) -> str:
     d = directory(region)
     where = "India" if region == "IN" else "US"
     letters = "".join(f'<a href="{letter_path(region, L)}">{"0–9" if L == OTHER else L}</a>' for L in [*LETTERS, OTHER] if d["count"].get(L))
-    out = f'<h2>Browse {where} companies A to Z</h2><nav class="links" aria-label="{where} companies by first letter" data-az>{letters}</nav>' if letters else ""
+    n = sum(1 for L in [*LETTERS, OTHER] if d["count"].get(L))
+    out = f'<h2>Browse {where} companies A to Z</h2><nav class="links" aria-label="{where} companies by first letter" data-az{_az_style(n)}>{letters}</nav>' if letters else ""
     return out + index_links(region)
 
 
@@ -3353,7 +3371,7 @@ def letter_page(region: str, letter: str, page: int = 1) -> str | None:
     body = (f"{crumbs}<h1>{where} companies {e(what)}</h1>"
             f'<p class="muted">{n:,} companies listed in {place} {e(what)}{e(of)}, A to Z by name. Each links to its price, '
             "reported results and recent filings. Facts, not advice.</p>"
-            f'<nav class="links" aria-label="Letters" data-az>' + "".join(
+            f'<nav class="links" aria-label="Letters" data-az{_az_style(sum(1 for L in [*LETTERS, OTHER] if d["count"].get(L)))}>' + "".join(
                 f'<a href="{letter_path(region, L)}"' + (' aria-current="page"' if L == letter else "") + f'>{"0–9" if L == OTHER else L}</a>'
                 for L in [*LETTERS, OTHER] if d["count"].get(L)) + "</nav>"
             + _dir_list(region, syms)

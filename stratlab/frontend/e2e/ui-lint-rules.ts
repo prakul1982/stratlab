@@ -46,6 +46,9 @@
 //   R23 header wrap parity (G13)            cards side by side whose headers differ in height by > 12px because one header's controls wrapped
 //   R24 faint checkbox (G12)                an unchecked checkbox/radio whose border and fill are both < 3:1 against what is behind it
 //   R25 same sentence twice (G9)            the same sentence (>= 30 characters) twice in one card, outside a table's repeating rows
+// VR-7: what the review found by eye on a phone and the checker could not see:
+//   R26 content past its card (VR7-013)     a table, picture, control or tile inside a card (no scrolling box between) whose right edge is > 3px past the card's right edge
+//                                            (the first plan table was 349px in a 322px card: its last column over the border)
 export interface Violation { rule: string; element: string; key: string; detail: string }
 export interface LintOpts { phone: boolean; mark: boolean }
 export interface PageFrame { h1Top: number; h1Left: number; right: number }
@@ -739,6 +742,21 @@ export function lintPage(opts: LintOpts): LintResult {
     }
   }
 
+  // ---- R26 content past its card (VR7-013) ----------------------------------------------------------------------------------------------------------
+  for (const c of all) {
+    if (!isCard(c) || !shown(c) || !/^(visible)$/.test(S(c).overflowX)) continue;
+    const cr = R(c);
+    for (const d of Array.from(c.querySelectorAll("table, img, canvas, svg, input, select, textarea, button, .k-stat, .k-badge, .k-chip"))) {
+      if (!shown(d) || d.closest(SKIP + ", .sr-only") || !inFlow(d) || scrollsOnPurpose(d) || (d.tagName.toLowerCase() !== "svg" && d.closest("svg"))) continue;
+      const r = R(d);
+      if (r.width < 4 || r.right <= cr.right + 3) continue;
+      const clipper = (() => { for (let p: Element | null = d.parentElement; p && p !== c; p = p.parentElement) if (!/^visible$/.test(S(p).overflowX)) return p; return null; })();
+      if (clipper) continue;                                          // a box in between clips or scrolls it
+      add("R26", d, `reaches ${Math.round(r.right)}px in a card ending at ${Math.round(cr.right)}px`);
+      break;
+    }
+  }
+
   // ---- R14 overlay on content (G2) --------------------------------------------------------------------------------------------------------------------
   // a fixed/sticky box that is not app chrome: the notebook's "Lab notes" pill sat over a row's delete button, the end of "Edit in words"
   // and the "Testing on" box. Content is measured once on the page, the overlay's own box at the top, middle and bottom of the scroll.
@@ -806,7 +824,7 @@ export function lintPage(opts: LintOpts): LintResult {
     if (counts[f.rule] <= 25) violations.push({ rule: f.rule, element: f.el === document.body ? "body" : labelOf(f.el), key: f.el === document.body ? "body" : keyOf(f.el), detail: f.detail });
   }
   if (opts.mark) {
-    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6" };
+    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6", R26: "#ff4500" };
     const st = document.createElement("style");
     st.textContent = Object.entries(colour).map(([r, c]) => `[data-uilint~="${r}"]{outline:3px solid ${c} !important;outline-offset:-2px !important}`).join("\n");
     document.head.appendChild(st);

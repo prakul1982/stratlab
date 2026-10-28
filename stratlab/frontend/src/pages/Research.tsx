@@ -83,7 +83,7 @@ export function IndexStrip({ indices, missing }: { indices: IndexLevel[] | null;
       {indices.map((i) => (
         <Stat key={i.name} item label={i.name} value={indexLevel(i.name, i.price)}
           delta={i.change_pct != null ? <Delta value={i.change_pct} tone={i.stale ? "neutral" : "auto"}>{pct(i.change_pct, 2)}</Delta> : undefined}
-          note={<span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{indexWhen(i, (d) => fmtDate(d, { year: false }))}{i.from_high_pct != null && <> · <span className="nowrap">{i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its 52-week high`}</span></>}</span>} />
+          note={<span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{indexWhen(i, (d) => fmtDate(d, { year: false }))}{i.from_high_pct != null && <><span className="fit-dot"> · </span><span className="nowrap fit">{i.from_high_pct > -0.5 ? "near its 52-week high" : <>{Math.abs(i.from_high_pct).toFixed(1)}% below its <span className="nowrap">52-week</span> high</>}</span></>}</span>} />
       ))}
     </StatRow>
     {!!missing?.length && <p className="k-small k-muted" data-testid="index-missing">{missing.join(", ")} couldn't load.</p>}

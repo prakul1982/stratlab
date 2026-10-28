@@ -211,10 +211,12 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
             </div>
           </div>
         ))}
+        {/* VR7-006: the groups are three equal columns, so the second row's figures sit under the first row's; the note on the bars takes the free cell a
+            last row of one or two groups leaves (not a row of its own under a hole), and with a full last row it is a row of its own */}
+        {groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry))) && (
+          <p className={`k-note inv-metrics-note${groups.length % 3 === 0 ? " row" : ""}`} data-testid="krail-legend">The small bar beside a figure shows where it sits on a typical range for that measure; the two ticks are the range's cut-off points.</p>
+        )}
       </div>
-      {groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry))) && (
-        <p className="k-note" data-testid="krail-legend">The small bar beside a figure shows where it sits on a typical range for that measure; the two ticks are the range's cut-off points.</p>
-      )}
       {used.length > 0 && (
         <Disclosure summary="What these terms mean">
           <dl className="inv-terms">{used.map(([k, v]) => <div key={k}><dt>{k === "3Y CAGR" ? "CAGR" : k}</dt><dd>{v}</dd></div>)}</dl>

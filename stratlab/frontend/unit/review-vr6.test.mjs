@@ -82,10 +82,10 @@ test("VR6-017: an empty Paper sessions card on My space has the shape of its nei
   assert.match(src, /<Link className="btn sm" to="\/paper">Start paper trading<\/Link>/);
 });
 
-test("VR6-018: on a wide screen the chart's view buttons join the scale buttons under the chart; on a phone they stay in the bar", () => {
+test("VR6-018: the chart's view buttons join the scale buttons under the chart (VR7-010: on a phone too, they were alone on a third line of a 360px toolbar)", () => {
   const src = read("src/charts/price/PriceChart.tsx");
-  assert.match(src, /\{phone && viewButtons\}/);
-  assert.match(src, /<div className="pc-foot-r">\s*\{!phone && viewButtons\}/);
+  assert.doesNotMatch(src, /\{phone && viewButtons\}/);
+  assert.match(src, /<div className="pc-foot-r">\s*\{viewButtons\}/);
   assert.match(read("src/charts/price/priceChart.css"), /\.pc-foot-r \{ display: flex; flex-wrap: wrap;/);
 });
 

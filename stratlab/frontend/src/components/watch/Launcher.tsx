@@ -80,7 +80,7 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
   return (
     <>
       {!shown && (
-        <button ref={btn} type="button" className={`mw-launch ${button}`} aria-label="Open Market Watch" aria-expanded={false} data-testid="markets-launch"
+        <button ref={btn} type="button" className={`mw-launch ${button}`} aria-label="Open Market Watch" title="Markets" aria-expanded={false} data-testid="markets-launch"
           onClick={() => openIt()} onPointerEnter={() => void (mode === "app" ? loadApp() : loadPublic()).catch(() => undefined)} onFocus={() => void (mode === "app" ? loadApp() : loadPublic()).catch(() => undefined)}>
           <Markets size={18} /><span>Markets</span>
         </button>
