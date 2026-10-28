@@ -675,18 +675,22 @@ def fit_to_exchange_range(bars: list[dict], row, report_day: str | None) -> list
         d = str(b.get("t") or "")[:10]
         if not d or d > report_day:
             continue
-        h, l = _num(b.get("h")), _num(b.get("l"))
+        h, l, c = _num(b.get("h")), _num(b.get("l")), _num(b.get("c"))
+        # (a candle's extremes are never brought inside its own close: the exchange's figure leaves out a closing auction's print, and
+        # a page whose "Last close" is beyond its own 1-year range is wrong, RC4-011)
+        top = lambda v: max(float(v), c) if c is not None else float(v)         # noqa: E731
+        bottom = lambda v: min(float(v), c) if c is not None else float(v)      # noqa: E731
         nb = None
         if hi and h is not None:
             if d == hi_day and h < hi <= h * RANGE_SLACK:
-                nb = {**b, "h": float(hi)}
+                nb = {**b, "h": top(hi)}
             elif d >= start and h > hi and h <= hi * RANGE_SLACK:
-                nb = {**b, "h": float(hi)}
+                nb = {**b, "h": top(hi)}
         if lo and l is not None:
             if d == lo_day and l > lo >= l / RANGE_SLACK:
-                nb = {**(nb or b), "l": float(lo)}
+                nb = {**(nb or b), "l": bottom(lo)}
             elif d >= start and l < lo and l >= lo / RANGE_SLACK:
-                nb = {**(nb or b), "l": float(lo)}
+                nb = {**(nb or b), "l": bottom(lo)}
         if nb:
             out = out or list(bars)
             out[i] = nb
@@ -1897,7 +1901,7 @@ def usd_text(v: float) -> str:
     """An amount in $ million in the words people use: "$4.87T", "$85.8B", "$950M", "<$1M"."""
     if round(v / 1e3, 1) >= 1e3:                         # the unit is chosen after rounding
         return f"${v / 1e6:,.2f}T"
-    if v >= 1e3:
+    if round(v) >= 1e3:                                  # $999.5M is "$1.0B", not "$1,000M" (RC4-009)
         return f"${v / 1e3:,.1f}B"
     # $0.5M rounds to "$0M" (TAOP, R6V-011): anything under a whole million is "<$1M"
     return f"${v:,.0f}M" if round(v) >= 1 else "<$1M"
@@ -2238,13 +2242,19 @@ ADVICE_WORDS = re.compile(r"\b(buy|sell|hold|accumulate|avoid|target|undervalued
 FAQ_HOLDERS = 3                  # named holders the shareholders answer lists
 
 
-def report_amount(f: dict, v) -> str | None:
+def report_amount(f: dict, v, digits: int = 0) -> str | None:
     """A reported figure in the unit the page's table uses, in words: "₹2,67,021 crore", "$391.0B"; a foreign filer's own
-    currency as "12,345 EUR million". None without a figure."""
+    currency as "12,345 EUR million". None without a figure. `digits` 2 is the precision the page's table or key figures use
+    for a small company's amounts (small_digits): "₹0.31 crore", "$12.34M", as shown there, never "<₹1 crore" beside a 0.31
+    (RC4-002: 50 of 410 sampled Indian pages said "net profit of <₹1 crore" and "revenue of ₹41 crore" for 41.37)."""
     v = _num(v)
     if v is None:
         return None
     unit = f.get("unit") or ""
+    if digits >= 2 and unit in ("$ million", "₹ crore") and abs(v) < 100:
+        sign = "-" if v < 0 else ""
+        n = _fmt(abs(v), 2)
+        return f"{sign}${n}M" if unit == "$ million" else f"{sign}₹{n} crore"
     if unit == "$ million":
         return usd_text(v)
     if unit == "₹ crore":
@@ -2285,25 +2295,28 @@ def about_text(f: dict, region: str, symbol: str, name: str) -> str:
     ys = [y for y in f.get("years") or [] if y.get("year")]
     if ys:
         y = ys[-1]
-        sales, profit = report_amount(f, y.get("sales")), _num(y.get("profit"))
+        # the precision the page's own table uses for these years (see _table), so a small company's figure reads as there
+        dy = small_digits(*[x.get(k) for x in f.get("years") or [] for k in (("sales", "profit") if f.get("bank") else ("sales", "profit", "debt"))])
+        sales, profit = report_amount(f, y.get("sales"), dy), _num(y.get("profit"))
         bits = []
         if sales and _num(y.get("sales")) is not None and _num(y["sales"]) > 0:
             bits.append(f"revenue of {sales}")
         if profit is not None:
-            bits.append(f"a net loss of {report_amount(f, -profit)}" if profit < 0 else f"net profit of {report_amount(f, profit)}")
+            bits.append(f"a net loss of {report_amount(f, -profit, dy)}" if profit < 0 else f"net profit of {report_amount(f, profit, dy)}")
         if bits:
             g = f.get("growth") or {}
             grow = [w for w in (growth_words("revenue", g.get("sales_cagr_3y")), growth_words("net profit", g.get("profit_cagr_3y"))) if w]
             out.append(f"In its latest reported year ({y['year']}) it reported " + " and ".join(bits)
                        + (f"; over three years, compounded, its {', and its '.join(grow)}" if grow else "") + ".")
     ttm, owners = _num(f.get("profit_ttm")), owners_profit(f)
+    dt = small_digits(ttm, owners)              # as the key figures show them (_stats)
     if owners is not None or ttm is not None:
         # the page's own two lines for an Indian company whose table profit includes minority holders (_stats): the shareholders'
         if owners is not None:
-            text = f"profit to its shareholders over the last 12 months was {report_amount(f, owners)}"
+            text = f"profit to its shareholders over the last 12 months was {report_amount(f, owners, dt)}"
         else:
-            text = (f"it made a net loss of {report_amount(f, -ttm)} over the last 12 months" if ttm < 0
-                    else f"its net profit over the last 12 months was {report_amount(f, ttm)}")
+            text = (f"it made a net loss of {report_amount(f, -ttm, dt)} over the last 12 months" if ttm < 0
+                    else f"its net profit over the last 12 months was {report_amount(f, ttm, dt)}")
         out.append(text[0].upper() + text[1:] + " (the four latest reported quarters).")
     if cap_text(f) != "–":
         pe = shown_pe(f)
@@ -2343,9 +2356,15 @@ def faq_items(f: dict, region: str, symbol: str, name: str, extras: dict | None 
     cap = cap_text(f)
     if cap != "–":
         pe = shown_pe(f)
+        # the price the value rests on is named as the page names it: a close, or the last price when it is older than the market's
+        # latest close or isn't a close ("as of 5 Oct 2026 (the last price this page has; …): the last close times…" was neither)
+        # (RC4-007)
+        close = _num(f.get("price")) is not None and is_close(f) and not behind(f)
+        basis = "the last close" if close or _num(f.get("price")) is None else "the last price this page has"
+        when = as_of_text(f) if close or not _date(f.get("price_at")) else _date(f["price_at"])
         out.append((f"What is {name}'s market value?",
-                    f"{name}'s market value is {cap} as of {as_of_text(f)}: the last close times the shares in issue."
-                    + (f" Its P/E is {_fmt(pe)}, the last close over earnings per share for the last four reported quarters." if pe is not None else "")))
+                    f"{name}'s market value is {cap} as of {when}: {basis} times the shares in issue."
+                    + (f" Its P/E is {_fmt(pe)}, {basis} over earnings per share for the last four reported quarters." if pe is not None else "")))
     nxt = (extras or {}).get("results")
     if nxt and _date(nxt.get("date")):
         purpose = str(nxt.get("purpose") or "").strip()
@@ -2358,7 +2377,10 @@ def faq_items(f: dict, region: str, symbol: str, name: str, extras: dict | None 
                     + (f" Dates are as the company announced them, on the list of {_date(nxt['as_of'])}." if _date(nxt.get("as_of")) else "")))
     hold = (extras or {}).get("holders")
     if hold and hold.get("holders") and _date(hold.get("quarter")):
-        names = "; ".join(f"{h['name']} ({'promoter group' if h['group'] == 'promoter' else 'public'}) {h['pct']:g}%" for h in hold["holders"])
+        # a holder's name as the pattern files it ("DSP SMALLCAP FUND , DSP MIDCAP FUND"): a space before a comma is closed up, and
+        # a semicolon in it is a comma, since the answer separates holders with one (RC4-008)
+        tidy = lambda n: re.sub(r"\s+", " ", re.sub(r"\s+,", ",", str(n or "").replace(";", ","))).strip()      # noqa: E731
+        names = "; ".join(f"{tidy(h['name'])} ({'promoter group' if h['group'] == 'promoter' else 'public'}) {h['pct']:g}%" for h in hold["holders"])
         out.append((f"Who are {name}'s largest named shareholders?",
                     f"In the shareholding pattern for the quarter ended {_date(hold['quarter'])}, the largest named holders above 1% were: {names}. "
                     "Percentages are of all shares."))
@@ -2708,6 +2730,29 @@ def chart_series(bars: list[dict]) -> dict:
             "c": [round(rows[d], 4 if rows[d] < 0.1 else 2) for d in keep]}
 
 
+CHART_ADJ_MAX = 6              # splits, bonus issues and demergers named under the chart (the newest)
+
+
+def chart_adjustments(rows, first_day: str, last_day: str, region: str = "IN") -> list[dict]:
+    """[{"d": ex-date, "k": "split" | "bonus" | "demerger", "t": the action in words}] for the stored corporate actions whose ex-date
+    falls inside the chart's dates, oldest first: what the chart's note says about them. The price sources' earlier closes are
+    adjusted for a split or a bonus issue (no jump, but not the prices that traded) and not for an Indian demerger (a step by the
+    value that moved to the new company). Nothing is read from a source: `rows` is what the app already keeps (RC4-006)."""
+    out = []
+    for a in rows or []:
+        if not isinstance(a, dict):
+            continue
+        ex = str(a.get("ex_date") or "")[:10]
+        if not (first_day < ex <= last_day):
+            continue
+        from .corp_actions import adjusts
+        if adjusts(a):
+            out.append({"d": ex, "k": a["kind"], "t": str(a.get("short") or a["kind"])[:60]})
+        elif a.get("kind") == "demerger" and region == "IN" and a.get("label") == "Demerger":
+            out.append({"d": ex, "k": "demerger"})
+    return sorted(out, key=lambda x: x["d"])[-CHART_ADJ_MAX:]
+
+
 def price_chart_html(f: dict, region: str, symbol: str) -> str:
     """The share-price card: the change over the chosen range, the 1M / 6M / 1Y / 5Y switch, the chart's place (its height is
     kept, so nothing moves when it is drawn), the same facts as text, and the closes as a table. Only for a page whose price
@@ -2728,7 +2773,7 @@ def price_chart_html(f: dict, region: str, symbol: str) -> str:
             f'<div class="seg" role="group" aria-label="Chart range" hidden>{buttons}</div></div>'
             '<div class="plot"><p class="plot-note muted small" data-status role="status">Prices load here as you scroll to them.</p>'
             '<div class="tip" hidden></div></div>'
-            f'<p class="small muted" data-summary>{e(text)}</p>'
+            f'<p class="small muted" data-summary>{e(text)}</p><p class="small muted" data-adjust hidden></p>'
             '<details class="how" data-table><summary>Show the closes as a table</summary>'
             '<p class="small muted" data-rows></p><div class="tbl2"><table><thead><tr><th scope="col">Date</th><th scope="col">Close</th></tr></thead><tbody></tbody></table></div></details>'
             '<p class="sr-only" aria-live="polite" data-live></p>'
@@ -2744,6 +2789,16 @@ def nice_ticks(lo: float, hi: float, count: int = 4) -> list[float]:
     step = next(m for m in (1, 2, 2.5, 5, 10) if raw / p <= m + 1e-9) * p
     first, last = math.floor(lo / step + 1e-9), math.ceil(hi / step - 1e-9)
     return [round(i * step, 10) for i in range(first, last + 1)]
+
+
+def tick_digits(ticks: list[float]) -> int:
+    """Decimals that write every axis value exactly: none for 0, 250 or 1,000, one for 2.5, two for 0.25. An axis of a small
+    company's amounts (₹ crore under 10: ticks of 0.2 or 2.5) was labelled in whole numbers, so 0.6 and 0.8 both read "1" and
+    2.5 read "2" (RC4-001)."""
+    for d in range(5):
+        if all(abs(t - round(t, d)) < 1e-9 for t in ticks):
+            return d
+    return 4
 
 
 def _short_year(label: str) -> str:
@@ -2766,7 +2821,8 @@ def bars_chart_html(f: dict, digits: int = 0) -> str:
     pct = lambda v: (v - lo) / span * 100             # noqa: E731  position from the plot's bottom, in percent
     num = lambda x: f"{x:.2f}".rstrip("0").rstrip(".")           # noqa: E731  a style value: "0", "33.33"
     at = lambda v: num(pct(v))                                    # noqa: E731
-    grid = "".join(f'<i class="by-line" style="bottom:{at(t)}%"></i><span class="by-tick" style="bottom:{at(t)}%">{e(_amount(f, t, 0))}</span>'
+    td = tick_digits(ticks)
+    grid = "".join(f'<i class="by-line" style="bottom:{at(t)}%"></i><span class="by-tick" style="bottom:{at(t)}%">{e(_amount(f, t, td) if t else "0")}</span>'
                    for t in ticks)
     cols = []
     for y in ys:

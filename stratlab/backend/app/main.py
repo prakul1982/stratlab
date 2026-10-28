@@ -4725,11 +4725,28 @@ def stock_page_series(region: str, co: dict) -> dict:
                     long = prov.yahoo.chart(inst["token"], "1d", stock_pages.CHART_READ_DAYS, exact=True)["candles"]
             except (AttributeError, TypeError):          # a source without those controls: its ordinary read
                 long = prov.history(inst, "1d", stock_pages.CHART_READ_DAYS)
+            if region == "IN":
+                # the same candles as the recent year's (stock_page_bars): the broker's scaling for an extraordinary dividend undone, or
+                # the line stepped by that dividend's share where the two meet, a year back (RC4-006)
+                try:
+                    long = stock_pages.as_traded(long, india_page_dividends(co["sym"], co, fetch=False, listed=True) or [])
+                except Exception as ex:
+                    print("stock chart: as-traded closes not worked out:", co.get("sym"), str(ex)[:120])
             first = str(recent[0].get("t") or "")[:10]
             older = [b for b in long if str(b.get("t") or "")[:10] < first]
     except Exception as ex:
         print("stock chart: the longer history wasn't read:", region, co.get("sym"), str(ex)[:120])
-    return stock_pages.chart_series(older + recent)
+    series = stock_pages.chart_series(older + recent)
+    if series:
+        try:         # the splits, bonus issues and demergers inside the chart's dates, from what is already stored (RC4-006)
+            epoch = date(1970, 1, 1)
+            first, last = (epoch + timedelta(days=series["t"][0])).isoformat(), (epoch + timedelta(days=series["t"][-1])).isoformat()
+            adj = stock_pages.chart_adjustments(corp_actions.actions_for(region, co["sym"], None, fetch=False), first, last, region)
+            if adj:
+                series["adj"] = adj
+        except Exception as ex:
+            print("stock chart: adjustments not read:", region, co.get("sym"), str(ex)[:120])
+    return series
 
 
 def _chart_ttl(region: str) -> int:
