@@ -78,3 +78,9 @@ test("VR7-014, VR7-015: the 52-week phrase is a line of its own on a phone; a ho
   assert.match(read("src/pages/Research.tsx"), /below its <span className="nowrap">52-week<\/span> high/);
   assert.match(css, /@media \(max-width: 420px\) \{ \.h-filing \{ display: flex; flex-wrap: wrap;/);
 });
+
+test("VR7-019: on a laptop the Markets button is a round 44px button that fits the page's right margin; from 1600px it keeps its word", () => {
+  const css = read("src/components/watch/launcher.css");
+  assert.match(css, /@media \(min-width: 901px\) and \(max-width: 1599px\) \{\n  \.mw-launch\.app \{ width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 6px; \}\n  \.mw-launch\.app span \{ display: none; \}/);
+  assert.match(read("src/components/watch/Launcher.tsx"), /aria-label="Open Market Watch" title="Markets"/);
+});
