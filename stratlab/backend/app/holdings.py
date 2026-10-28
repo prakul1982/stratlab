@@ -152,7 +152,7 @@ def symbols(uid: str) -> list[str]:
 def clean_symbol(s: str) -> str:
     """A symbol as brokers write it, without the exchange around it: "NSE:SBIN", "SBIN-EQ", "SBIN.NS" -> "SBIN"."""
     s = re.sub(r"^(NSE|BSE)[:\s]+", "", (s or "").strip().upper())
-    s = re.sub(r"(\.NS|\.BO|-EQ)$", "", s)
+    s = re.sub(r"(\.NS|\.BO|-EQ|\s+EQ)$", "", s)
     return s if re.fullmatch(r"[A-Z0-9&\-._]{1,20}", s) else ""
 
 
@@ -195,6 +195,11 @@ class Matcher:
             got = self.by_name(row["name"])
             if got:
                 return {"symbol": got["symbol"], "exchange": got["exchange"], "name": got.get("name") or got["symbol"]}, None
+        # a "Stock name" or "Scrip" column that holds the exchange's symbol (TCS, RELIANCE-EQ, INFY EQ) is the symbol (RC6-003: a file
+        # with only TCS in its name column was refused as "no listed company")
+        hit = self._inst(clean_symbol(row.get("name") or ""))
+        if hit:
+            return hit, None
         kept = self._unit(row)
         if kept:
             return kept, None

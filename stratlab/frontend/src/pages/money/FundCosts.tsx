@@ -68,7 +68,7 @@ export function CostStats({ q }: { q: CostsQuery }) {
 /** What the costs need said under their stats: why there are none yet, the funds left out, what the plan keeps back. */
 export function CostNotes({ q }: { q: CostsQuery }) {
   const { c, failed, retry } = q;
-  if (failed) return <EmptyState title="Fund costs couldn't be loaded" action={{ label: "Try again", onClick: retry }}>Fund costs couldn't be loaded just now. Reload the page to try again.</EmptyState>;
+  if (failed) return <EmptyState title="Fund costs couldn't be loaded" action={{ label: "Try again", onClick: retry }}>Fund costs couldn't be read just now.</EmptyState>;
   if (c?.state === "reading") return <EmptyState title="Reading each fund's costs">Costs are being read; check back shortly.</EmptyState>;
   if (c?.state === "unavailable") return <EmptyState title="Fund costs aren't available">Fund costs aren't available right now. They are read again every few hours.</EmptyState>;
   if (!c || !c.total) return null;

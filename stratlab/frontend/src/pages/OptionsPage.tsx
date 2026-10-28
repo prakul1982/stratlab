@@ -382,6 +382,7 @@ export function OptionsPage() {
   const [restored, setRestored] = useState(hadDraft);
   const [unds, setUnds] = useState<Underlying[] | null>(null);
   const [offline, setOffline] = useState<string | null>(null);
+  const [recheck, setRecheck] = useState(0);        // "Check again" under the offline note reads the underlyings again (RC6-007)
   const [preview, setPreview] = useState<OptPreview | null>(null);
   const [pricing, setPricing] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -393,10 +394,11 @@ export function OptionsPage() {
 
   useEffect(() => {
     // offline, the indices with a recorded chain are what can be priced, on that recording (DB-001)
-    api<Underlying[]>("/options/underlyings").then(setUnds).catch((e: ApiError) => {
+    api<Underlying[]>("/options/underlyings").then((u) => { setUnds(u); setOffline(null); }).catch((e: ApiError) => {
       setOffline(e.message);
       api<Underlying[]>("/options/recorded").then(setUnds).catch(() => setUnds([]));
     });
+    if (recheck) return;                             // the sessions, the draft and an imported structure are read once
     api<LiveRow[]>("/live/sessions").then((r) => setRows(r.filter((x) => x.instrument?.type === "OPTIONS"))).catch(() => setRows([]));
     try {
       const imp = sessionStorage.getItem(IMPORTED);
@@ -406,7 +408,7 @@ export function OptionsPage() {
         setS(mergeDraft(blankOptions(), d.strategy)); setNotes(d.notes || []); setRestored(false);
       }
     } catch { /* nothing imported */ }
-  }, []);
+  }, [recheck]);
   useEffect(() => { try { localStorage.setItem(DRAFT, JSON.stringify(s)); } catch { /* storage off */ } }, [s]);
   useEffect(() => { try { if (notes.length) localStorage.setItem(NOTES, JSON.stringify(notes)); else localStorage.removeItem(NOTES); } catch { /* storage off */ } }, [notes]);
 
@@ -560,7 +562,7 @@ export function OptionsPage() {
         lede="Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask; a contract with none is priced from its last trade, and the page says so."
         actions={<span title={HELP.optBacktest}><Badge tone="plain" dot={false}>Live paper trading only</Badge></span>} />
 
-      {offline && <Notice tone="warn">{offline}</Notice>}
+      {offline && <Notice tone="warn" actions={<button type="button" className="btn quiet sm" onClick={() => setRecheck((n) => n + 1)}>Check again</button>}>{offline}</Notice>}
       {restored && s.name !== blankOptions().name && (
         <p className="k-note" data-testid="opt-restored">This is "{s.name}", kept from your last visit in this browser. Start over for a fresh structure.</p>
       )}

@@ -275,6 +275,11 @@ def find(region: str, symbol: str) -> tuple[str, dict] | None:
     s = (symbol or "").strip().upper()
     if s in cos:
         return s, cos[s]
+    if region == "IN":
+        from .us_ticker import canon_in
+        s = canon_in(s)          # TCS.NS, TCS.BO and NSE:TCS are TCS's page, at TCS's address (RC5-010)
+        if s in cos:
+            return s, cos[s]
     twin = getattr(cos, "twins", {}).get(s)          # a BSE listing of a company NSE lists too: its one page is NSE's (DK-025)
     if twin in cos:
         return twin, cos[twin]
