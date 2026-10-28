@@ -20,7 +20,7 @@ test("VR4-005: the business-update filings' titles start at one x, whatever the 
 test("VR4-008: the welcome pop-up no longer says the four spaces, which the tour's first step says straight after", () => {
   const src = read("src/components/LevelPrompt.tsx");
   assert.doesNotMatch(src, /<p className="k-muted">StratLab has four spaces/);
-  assert.match(src, /<p className="k-muted">\{here \?/);
+  assert.match(src, /<p className="k-muted welcome-note">\{here \?/);
   assert.match(src, /pick \$\{SPACES\[here\]\.label\} to stay, or another to open its home\./);           // the part that is about where they are stays
 });
 
