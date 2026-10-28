@@ -2045,11 +2045,13 @@ table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:right;
 th{font-weight:600;color:var(--ink-2)}
 th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);box-sizing:border-box;min-width:124px}
 .scroll-cue{display:none;font-size:13px;color:var(--muted);margin:0 0 6px}
-/* on a phone the years are cut to whole columns: three at a time beside the label column, whatever the width, so no year is cut by the edge or
-   by the label column laid over it (VR4-009: "24", "35" and "88" showed where "Mar 2024" slid under the labels) */
-@media (max-width:640px){.tbl.fin{container-type:inline-size;scroll-padding-left:120px}.fin table{font-size:14px}.fin th,.fin td{padding:9px 6px}
-.fin th:first-child,.fin td:first-child{min-width:120px;width:120px}
-.fin th:not(:first-child),.fin td:not(:first-child){min-width:calc((100cqw - 120px) / 3);width:calc((100cqw - 120px) / 3)}}
+/* on a phone the years are cut to whole columns beside the label column: three at a time where the card is wide enough for them, else two,
+   whatever the phone's width, so no year is cut by the edge or by the label column laid over it (VR4-009: "24", "35" and "88" showed
+   where "Mar 2024" slid under the labels) */
+@media (max-width:640px){.tbl.fin{container-type:inline-size;scroll-padding-left:110px}.fin table{font-size:13px}.fin th,.fin td{padding:9px 4px}
+.fin th:first-child,.fin td:first-child{min-width:110px;width:110px}
+.fin th:not(:first-child),.fin td:not(:first-child){min-width:calc((100cqw - 110px) / 2);width:calc((100cqw - 110px) / 2)}
+@container (min-width:320px){.fin th:not(:first-child),.fin td:not(:first-child){min-width:calc((100cqw - 110px) / 3);width:calc((100cqw - 110px) / 3)}}}
 .nav details.menu{display:none;position:relative;margin-left:auto;margin-right:12px}
 .nav details.menu summary{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border:1px solid var(--line-2);border-radius:10px;font-weight:600;color:var(--ink);cursor:pointer;list-style:none}
 .nav details.menu summary::-webkit-details-marker{display:none}

@@ -60,8 +60,8 @@ def test_the_company_pages_figures_and_table_fit_a_phone():
     src = (APP / "stock_pages.py").read_text()
     # a long value takes the row on a phone, so "₹18.94 lakh crore" is not wrapped in a half-width column beside a one-line value
     assert 'else " long" if len(val) > 12 else ""' in src and ".stat.wide,.stat.long{grid-column:1/-1}" in src
-    # the revenue table shows whole years, three at a time beside the labels, whatever the phone's width
-    assert 'class="tbl fin"' in src and "(100cqw - 120px) / 3" in src and ".tbl.fin{container-type:inline-size;scroll-padding-left:120px}" in src
+    # the revenue table shows whole years, three at a time (two on a narrower card) beside the labels, whatever the phone's width
+    assert 'class="tbl fin"' in src and "(100cqw - 110px) / 3" in src and "(100cqw - 110px) / 2" in src and ".tbl.fin{container-type:inline-size;scroll-padding-left:110px}" in src
 
 
 def test_the_share_price_text_under_the_chart_does_not_say_the_headline_again():

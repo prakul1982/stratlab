@@ -161,7 +161,7 @@
     chg.setAttribute("data-dir", up ? "up" : down ? "down" : "flat");
     note.textContent = " over " + RANGES[range][1] + ", " + price(s.c[0]) + " to " + price(s.c[n - 1]) + ". Price change only; dividends are not included.";
     /* the headline above the chart already gives the first and last close ("over 1 year, A to B"): the text under it said them again with
-       their dates (VR4-006), so it keeps the extremes, and the full sentence stays in the chart's label for a screen reader */
+       their dates (VR4-003), so it keeps the extremes, and the full sentence stays in the chart's label for a screen reader */
     sum.textContent = extremes(s) + " Closing prices.";
     Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-r") === range)); });
     draw();
