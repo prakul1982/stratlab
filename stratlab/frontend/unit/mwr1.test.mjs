@@ -90,6 +90,7 @@ test("the window of candles around a moment sits inside the data and keeps its s
   assert.match(src, /void restoreView\(kv, req\)/);
   assert.match(src, /baseRef\.current\[0\]\.t > kv\.center/);                                                         // older pages are read until the moment is covered
   assert.match(src, /pages < 8/);                                                                                       // ...a few at most
+  assert.match(src, /status === 429\) \{ window\.setTimeout\(\(\) => maybeMoreRef\.current\?\.\(\), 4000\)/);     // "a lot of reads" is a pause, not the end of the history (MWR1-013)
   const eng = read("src/charts/price/engine.ts");
   assert.match(eng, /viewSpan\(\)/);
   assert.match(eng, /showAround\(center: number, count: number\)/);
@@ -117,4 +118,12 @@ test("the list tabs move with the arrow keys and the tab row keeps its height", 
   assert.match(css, /\.mw-tabs \{ flex: none;/);                       // a column's overflow row shrank to nothing when the add box opened
   assert.match(css, /\.mw-bar \{ flex: none;/);
   assert.match(css, /\.mw-add \{ flex: none; max-height: 50%; overflow-y: auto;/);
+});
+
+// ---------- MWR1-014: a line of closes being read is read once ----------
+test("the rows' lines of closes are asked for once while on their way", () => {
+  const api = read("src/lib/watchApi.ts");
+  assert.match(api, /const sparkWait = new Map<string, Promise<number\[\] \| undefined>>\(\)/);
+  assert.match(api, /else if \(sparkWait\.has\(k\)\) waits\.push\(\[k, sparkWait\.get\(k\)!\]\)/);
+  assert.match(api, /for \(const k of need\) sparkWait\.delete\(k\)/);
 });

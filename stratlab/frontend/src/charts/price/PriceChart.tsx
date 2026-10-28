@@ -507,7 +507,12 @@ const [saveNote, setSaveNote] = useState("");
     if (e.visibleRange()[0] > 30) return;
     loadingMore.current = true; setFetchingMore(true);
     olderPage(reqRef.current)
-      .catch(() => { moreRef.current = false; setMore(false); })
+      .catch((err) => {
+        // "a lot of chart reads in a minute" is a pause, not the end of the history: ask again in a few seconds (MWR1-013: a fast
+        // scroll back left the chart with no older candles for good)
+        if ((err as { status?: number })?.status === 429) { window.setTimeout(() => maybeMoreRef.current?.(), 4000); return; }
+        moreRef.current = false; setMore(false);
+      })
       .finally(() => { loadingMore.current = false; setFetchingMore(false); });
   }, [load, olderPage]);
   maybeMoreRef.current = maybeMore;

@@ -18,17 +18,32 @@ export async function getQuotes(keys: string[]): Promise<Record<string, WatchQuo
   return (await api<{ quotes: Record<string, WatchQuote | null> }>(`/watch/quotes?ids=${ids(keys)}`)).quotes ?? {};
 }
 
-/** Lines of recent closes for the rows, kept on this page for 30 minutes (the server keeps them as long). */
+/** Lines of recent closes for the rows, kept on this page for 30 minutes (the server keeps them as long). A line being read is
+ * read once: the panel asks again for the rows in view each time its list of them changes, and each ask used to start its own read
+ * of every line still on its way (MWR1-014: five reads of the same seven lines in the first seconds). */
 const sparkKept = new Map<string, { at: number; v: number[] }>();
+const sparkWait = new Map<string, Promise<number[] | undefined>>();
 export async function getSparks(keys: string[]): Promise<Record<string, number[]>> {
-  const now = Date.now(), out: Record<string, number[]> = {}, need: string[] = [];
+  const now = Date.now(), out: Record<string, number[]> = {}, need: string[] = [], waits: [string, Promise<number[] | undefined>][] = [];
   for (const k of keys) {
     const hit = sparkKept.get(k);
-    if (hit && now - hit.at < 30 * 60_000) out[k] = hit.v; else need.push(k);
+    if (hit && now - hit.at < 30 * 60_000) out[k] = hit.v;
+    else if (sparkWait.has(k)) waits.push([k, sparkWait.get(k)!]);
+    else need.push(k);
   }
   if (need.length) {
-    const got = (await api<{ sparks: Record<string, number[]> }>(`/watch/spark?ids=${ids(need)}`)).sparks ?? {};
-    for (const [k, v] of Object.entries(got)) {
+    const read = api<{ sparks: Record<string, number[]> }>(`/watch/spark?ids=${ids(need)}`).then((r) => r.sparks ?? {});
+    for (const k of need) {
+      const one = read.then((got) => got[k], () => undefined);
+      sparkWait.set(k, one);
+      waits.push([k, one]);
+    }
+    read.then(() => undefined, () => undefined).then(() => { for (const k of need) sparkWait.delete(k); });
+    try { await read; } catch (e) { if (!waits.length) throw e; }
+  }
+  for (const [k, w] of waits) {
+    const v = await w;
+    if (v) {
       sparkKept.set(k, { at: now, v }); out[k] = v;
       if (sparkKept.size > 300) sparkKept.delete(sparkKept.keys().next().value!);
     }
