@@ -13,7 +13,7 @@ import { InvoicesCard } from "../components/InvoicesCard";
 import { Badge, Card, CardHead, ConfirmDialog, Field, FormActions, FormGrid, LinkCard, PageHeader } from "../components/kit";
 import { AccountWait } from "../components/AccountWait";
 import { Modal } from "../components/ui";
-import { aiBuildsUse, confirmMatches, keptRow, monthlyUse, planLabel, planRow, planRun, sessionsRunning, signedInWith, trialUse, type KeptLimit } from "../lib/account";
+import { aiBuildsUse, confirmMatches, keptRow, monthlyUse, planLabel, planRow, planRun, sessionsRunning, signedInWith, trialUse, usageSpans, type KeptLimit } from "../lib/account";
 import { aiReadsUse } from "../lib/aiReason";
 import { TileGrid } from "../components/TileGrid";
 
@@ -112,7 +112,8 @@ export function AccountPage() {
         {/* View as shows the viewed plan's limits beside the account's own use: said, so "5 of 2" never reads as a fault (R6O-013) */}
         {me.view_as && <p className="k-small k-muted k-hint-line" data-testid="viewas-usage">Your own use this month, against the {me.plan_info.name} plan's limits you're viewing as. Your real plan's limits are unchanged.</p>}
         {/* VR2-008: a long value takes the whole row (it wrapped to a second line and made its neighbour in the other column as tall) */}
-        <div className={`k-rows${usage.length > 6 ? " two" : ""}`}>{usage.map(([k, v]) => <div key={k} className={v.length > 44 ? "wide" : undefined}><span>{k}</span><b>{v}</b></div>)}</div>
+        {/* VR6-014: a row left alone in its line (the last one when the count is odd, or one before a long value) takes the whole line, so no cell stands empty beside it */}
+        <div className={`k-rows${usage.length > 6 ? " two" : ""}`}>{usageSpans(usage.map(([, v]) => v.length > 44)).map((wide, i) => <div key={usage[i][0]} className={wide ? "wide" : undefined}><span>{usage[i][0]}</span><b>{usage[i][1]}</b></div>)}</div>
         <div className="k-row">
           {run === "free" ? <Link to="/plans" className="btn">See paid plans</Link>
             : run === "given" ? <Link to="/plans" className="btn outline">Compare plans</Link>

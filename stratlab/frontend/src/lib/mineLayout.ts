@@ -27,8 +27,9 @@ const WANT: Record<CardId, number> = { networth: 4, pnl: 4, paper: 4, markets: 1
 
 /** Each shown card's width (of 12) on a wide screen, from its place in the person's order: cards go into rows in that order,
  * and a row a card no longer fits in is closed and its cards widened to fill it. The grid used to fill gaps by itself and
- * moved a card the person had put second below the two after it, leaving a hole in the first row (DI-005). */
-export function slotSpans(shown: CardId[]): Record<string, number> {
+ * moved a card the person had put second below the two after it, leaving a hole in the first row (DI-005). `alone` names cards
+ * that always take a row of their own. */
+export function slotSpans(shown: CardId[], alone: CardId[] = []): Record<string, number> {
   const out: Record<string, number> = {};
   let row: CardId[] = [], used = 0;
   const close = () => {
@@ -42,6 +43,8 @@ export function slotSpans(shown: CardId[]): Record<string, number> {
     row = []; used = 0;
   };
   for (const id of shown) {
+    // a card with nothing to list (an empty watchlist) takes a row of its own, so it never stands beside a long list with blank space under it (VR6-010)
+    if (alone.includes(id)) { close(); row = [id]; used = 12; close(); continue; }
     const w = WANT[id] ?? 12;
     if (used + w > 12) close();
     row.push(id); used += w;

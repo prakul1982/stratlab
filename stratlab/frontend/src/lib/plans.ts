@@ -90,6 +90,17 @@ export const FEATURES: Record<PlanId, string[]> = {
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings, unlimited Market Watch lists and indicators`],
 };
 
+/** A plan card's lines split for its card (VR6-013): the lines of text are as long as they are, so a count of lines left Basic's card 200px taller than Free's
+ * (five long lines against five short ones). A card shows lines until their words add up to about this many characters (the line that crosses it
+ * included, never fewer than three); the rest are folded under "N more included" and stay in the page. */
+export const CARD_TEXT_BUDGET = 400;
+export function splitFeatures(lines: string[], budget = CARD_TEXT_BUDGET): { head: string[]; shown: string[]; more: string[] } {
+  const head = lines.filter((f) => f.endsWith(":")), items = lines.filter((f) => !f.endsWith(":"));
+  let total = 0, n = 0;
+  while (n < items.length && (n < 3 || total < budget)) total += items[n++].length;
+  return { head, shown: items.slice(0, n), more: items.slice(n) };
+}
+
 /** Ads (ADS-1), one row of the comparison table: Free accounts and signed-out pages may show Google ads, only after the visitor allows
  * them (lib/ads.ts); Basic and Pro never do. The cards say it once, on the plan that adds it (Basic; Pro includes Basic). */
 export const ADS: Record<PlanId, string> = { free: "After you allow them", basic: "None", pro: "None" };

@@ -925,6 +925,8 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 /* up to four figures in one row (the tax card with intraday income had "Long-term gains" alone on a second row and stood 120px
    taller than My Holdings beside it); the year is in the card's heading, so the total's label doesn't repeat it */
 .money-panels .k-stats { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: var(--s3) var(--s4); }
+/* VR6-016: four figures on a phone are two and two, not three (labels wrapping to two lines) and one left alone below */
+@media (max-width: 640px) { .money-panels .k-stats:has(> .k-stat:nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); }
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
@@ -2116,6 +2118,9 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-plan-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: var(--s2); align-items: start; }
 .k-plan-list li > span { color: var(--blue); font-weight: 700; }
 .k-plan-list li.head { display: block; color: var(--muted); font-weight: 600; }
+/* VR6-013: the card's remaining lines, folded; the summary is a full-width 44px row so it is easy to hit on a phone */
+.k-plan-more summary { cursor: pointer; display: flex; align-items: center; min-height: 44px; color: var(--blue); font-size: var(--t-label); font-weight: 600; }
+.k-plan-more[open] > summary { margin-bottom: var(--s2); }
 
 /* the landing page's own small helpers */
 .stack.g1, .row.g1 { gap: 1px; } .stack.g2, .row.g2 { gap: 2px; } .stack.g4, .row.g4 { gap: 4px; } .stack.g6 { gap: 6px; } 
@@ -2484,7 +2489,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .search-box input { min-height: 44px; }
   .k-table th .link-btn, .k-table td .link-btn { padding-block: 11px; margin-block: -11px; }
   .link-btn.small, .link-btn.k-small { min-height: 44px; display: inline-flex; align-items: center; }      /* (UI-FIX-1, R11: also on a narrow window without touch) */
-  .ch-bar .ch-btn, .ch-bar .ch-seg button { min-height: 40px; }
+  .ch-bar .ch-btn, .ch-bar .ch-seg button { min-height: 44px; }
 }
 
 /* a hint that a wide grid scrolls sideways, said on a phone only (DF-014) */
@@ -2579,6 +2584,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 640px) {
   .k-stats.duo { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); }
   .k-stats.duo > .k-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .k-stats.duo.tight .k-stat-v { font-size: 22px; }          /* VR6-023: eight-digit rupee totals fit half a line a size down */
 }
 .k-nowrap { white-space: nowrap; }
 @media (max-width: 380px) { .k-nowrap { white-space: normal; } }          /* the plan table's columns are 64px there: the word breaks at its hyphens rather than push the page sideways */
@@ -2598,4 +2604,14 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 640px) {
   .k-disclosure > summary:has(.k-more-what) { flex-wrap: wrap; row-gap: 0; }
   .k-disclosure > summary .k-more-what { flex: 1 0 100%; padding-left: calc(6px + var(--s2)); }
+}
+/* VR6-020 (A11Y2-009/010, "phone touch"): link rows of 32 to 36px and a few buttons of 32 to 40px are 44px to the thumb without a taller list:
+   a link keeps the place it had on the page (the negative margin) and its box, the part that takes the tap, is 44px tall (the padding). A link
+   inside a sentence is inline: the padding only widens what takes the tap, the lines stay put. */
+@media (max-width: 640px) {
+  .k-page a.link, a.link.k-small, a.link.k-any, .k-spread > a.link, .h-filing a.link { padding-block: 12px; margin-block: -4px; }
+  .k-stat-d a.link { padding-block: 14px; margin-block: -8px; }
+  a.tap-link, .mine-tl-i .body a { min-height: 44px; margin-block: -6px; }
+  .link-btn.inr-pick, body .k-search input { min-height: 44px; }
+  .nw-snaps .btn.quiet.sm { min-width: 44px; }
 }

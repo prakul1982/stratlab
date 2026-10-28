@@ -76,6 +76,8 @@
 .pc-pop-err { color: var(--down); font-size: 12.5px; padding: 2px 6px; }
 
 .pc-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.pc-foot-r { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 12px; }
+.pc-foot .pc-end { display: flex; align-items: center; gap: 6px; }
 .pc-note { font-size: 12.5px; color: var(--muted); }
 /* the candles as a table: as tall as the chart, not an eight-row box (DD-045) */
 .pc-table { max-height: max(360px, var(--pc-h, 420px)); overflow: auto; border: 1px solid var(--line); border-radius: 10px; }

@@ -234,6 +234,8 @@ export function InvestHome() {
   const [region, setRegion] = useState<Region>(homeRegion);
   // every card and link opens its page on the market picked here (review 5c)
   const tools: Tool[] = investStrip(region).map((t) => ({ ...INVEST_STRIP[t.key], to: t.to }));
+  const { items: watching } = useWatchlist();
+  const nothingWatched = watching !== null && !watching.some((w) => w.region === region);
   // the one Invest home: what you follow and the market around it. Looking up a company is its own page (Look up a company,
   // the menu's main button), so this page has no second search box (DD-002)
   return (
@@ -251,12 +253,16 @@ export function InvestHome() {
       {/* the watchlist beside the two short dated cards stacked (their heights add up to about its), then the red flags across the page,
           each flag on one line, then breadth: two short cards side by side left one with 40% of it empty, and the red flags beside the
           watchlist ended 100px short of it (VR1-010, VR1-011; before: DF-023, UI-FIX-1 R1/R2) */}
-      <div className="grid2 space-panels">
+      {/* VR6-011: with nothing watched in this market the watchlist is one line: beside the two dated cards it stood 225px short of them,
+          so the three stack across the page instead */}
+      <div className={nothingWatched ? "space-col" : "grid2 space-panels"}>
         <WatchPanel region={region} />
-        <div className="space-col">
-          <NextEvents region={region} />
-          <ResultsToday region={region} />
-        </div>
+        {nothingWatched ? <><NextEvents region={region} /><ResultsToday region={region} /></> : (
+          <div className="space-col">
+            <NextEvents region={region} />
+            <ResultsToday region={region} />
+          </div>
+        )}
       </div>
       <RedFlags region={region} />
       <BreadthCard region={region} />

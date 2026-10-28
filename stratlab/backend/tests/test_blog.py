@@ -139,7 +139,7 @@ def test_a_post_is_real_html_with_canonical_tags_json_ld_and_links(w):
     assert a["publisher"]["name"] == "StratLab" and a["publisher"]["logo"]["url"].endswith("/icon-512.png")
     assert a["mainEntityOfPage"]["@id"] == "https://stratlab.studio/blog/india-market-brief-2026-10-01"
     assert "Facts, not advice." in html and "not investment advice" in html
-    assert "<h1>India market brief, 1 Oct 2026: NIFTY 50 +0.42%</h1>" in html and "<h2>Index closes</h2>" in html and "<table>" in html
+    assert "<h1>India market brief, 1 Oct 2026: NIFTY 50 +0.42%</h1>" in html and "<h2>Index closes</h2>" in html and '<ul class="kpis"><li><b>24,812.30</b><span>NIFTY 50</span><small>+0.42% on the day</small></li>' in html     # each index a tile (VR6-005)
     assert "Nifty IT moved from Improving to Leading" in html
     assert '<a href="/stocks/in/TCS">TCS</a> matches the Stage 2 rule' in html            # a company name goes to its page
     for link in ('href="/library"', 'href="/new"', 'href="/stocks"', 'href="/blog/briefs"', 'href="/research/rotation?region=IN"'):

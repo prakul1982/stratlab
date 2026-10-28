@@ -164,7 +164,7 @@ def test_the_page_has_the_chart_card_with_its_text_and_its_table(w):
     t = w["client"].get("/stocks/in/RELIANCE").text
     for part in ('<h2>Share price</h2>', 'data-chart', 'data-src="/stocks/in/RELIANCE/prices.json"', 'data-currency="INR"',
                  'data-r="1m"', 'data-r="6m"', 'data-r="1y"', 'data-r="5y"', 'aria-label="Chart range"', "data-change", "data-summary",
-                 "Show the closes as a table", 'aria-live="polite"', "<noscript>", 'src="/stocks/chart.js?v=' + stock_pages.CHART_JS_V + '" defer'):
+                 "The closes as a table", 'aria-live="polite"', "<noscript>", 'src="/stocks/chart.js?v=' + stock_pages.CHART_JS_V + '" defer'):
         assert part in t, part
     # the same facts as words, so a crawler or a visitor with no script reads them: the close and the year's range
     summary = re.search(r"<p class=\"small muted\" data-summary>(.*?)</p>", t).group(1)

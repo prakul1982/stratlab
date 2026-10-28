@@ -35,7 +35,8 @@ test("VR2-006, VR2-007: market events are two to a row; Key numbers' last row fi
 });
 
 test("VR2-008: a long usage value on Account takes the whole row", () => {
-  assert.match(read("src/pages/AccountPage.tsx"), /className=\{v\.length > 44 \? "wide" : undefined\}/);
+  // (VR6-014: usageSpans also widens a row that would stand alone beside an empty cell)
+  assert.match(read("src/pages/AccountPage.tsx"), /usageSpans\(usage\.map\(\(\[, v\]\) => v\.length > 44\)\)\.map\(\(wide, i\) => <div key=\{usage\[i\]\[0\]\} className=\{wide \? "wide" : undefined\}>/);
   assert.match(css, /\.k-rows\.two > div\.wide \{ grid-column: 1 \/ -1; \}/);
 });
 
