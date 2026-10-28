@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
-from . import admin, blog, blog_research, stock_pages as sp
+from . import admin, ads, blog, blog_research, stock_pages as sp
 from .config import settings
 from .responses import err, ok
 
@@ -211,7 +211,8 @@ def post_page(slug: str) -> HTMLResponse:
             + '<section class="more" aria-label="More on StratLab"><h2>More on StratLab</h2><ul>'
             + "".join(f'<li><a href="{e(h)}">{e(t)}</a></li>' for h, t in more) + "</ul></section>" + nav + "</article>")
     head = sp._head(title, desc, canonical, extra, robots=robots, og_type="article")
-    return _html(sp._page(head, None, body), headers={"Cache-Control": CACHE, **({} if indexable else {"X-Robots-Tag": "noindex, follow"})})
+    page = ads.add_to_page(sp._page(head, None, body), "blog")        # ADS-1: as the page is sent; unchanged while ads are off
+    return _html(page, headers={"Cache-Control": CACHE, **({} if indexable else {"X-Robots-Tag": "noindex, follow"})})
 
 
 # ---------- the feed ----------

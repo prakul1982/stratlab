@@ -505,3 +505,18 @@ def test_generate_reads_the_apps_own_library_ipo_tracker_and_index_history(w, mo
     assert all(urls(w["client"].get("/sitemaps/blog.xml").content).get(f"https://stratlab.studio/blog/{m['slug']}") for m in out["made"])
     again = blog_research.generate(now, builders=blog_research.source_posts())
     assert [m["result"] for m in again["made"]] == ["same", "same", "same"]
+
+
+def test_a_post_carries_the_ad_slot_only_while_ads_are_on(w, monkeypatch):
+    # ADS-1 on the blog: the slot is added as the page is sent, so it follows the switch and a stored post never holds one
+    from app.config import settings
+    blog.save_brief(issue_for("IN"), datetime(2026, 10, 1, 11, 0, tzinfo=timezone.utc))
+    c = w["client"]
+    monkeypatch.setattr(settings, "ADS_ENABLED", False)
+    assert 'class="ad"' not in c.get("/blog/india-market-brief-2026-10-01").text
+    monkeypatch.setattr(settings, "ADS_ENABLED", True)
+    monkeypatch.setattr(settings, "ADSENSE_CLIENT", "ca-pub-8125241692814953")
+    monkeypatch.setattr(settings, "ADSENSE_SLOT_PUBLIC", "1234567890")
+    html = c.get("/blog/india-market-brief-2026-10-01").text
+    assert html.count('class="ad"') == 1 and '/ads.js' in html
+    assert 'class="ad"' not in c.get("/blog").text                  # the lists stay plain
