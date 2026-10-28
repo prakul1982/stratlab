@@ -57,3 +57,30 @@ test("RC7-003: every page title draws the slot the plan-lock note goes into, and
   assert.match(lock, /createPortal\(note, slot\)/);
   assert.match(lock, /useLockSlot\(\)/);
 });
+
+test("RC7-004: the screens write a market value as the company's page does, for India and the US", async () => {
+  const { screenCap } = await import("../src/lib/researchFormat.ts");
+  const { bigMoney, CRORE } = await import("../src/lib/format.ts");
+  for (const cr of [1894550, 1103520, 92248, 53696]) assert.equal(screenCap(cr, "IN"), bigMoney(cr * CRORE, "INR"));      // the company page's header
+  assert.equal(screenCap(1894550, "IN"), "₹18.95 lakh cr");
+  assert.equal(screenCap(92248, "IN"), "₹92,248 cr");
+  assert.equal(screenCap(2764692, "US"), bigMoney(2764692 * 1e6, "USD"));
+  assert.equal(screenCap(2764692, "US"), "$2.76T");
+});
+
+test("RC7-005: a P/E, a dividend yield and an EBITDA margin are written the same on the company page, the screens, the deep dive and the public page", async () => {
+  const { metricText, marginText } = await import("../src/lib/researchFormat.ts");
+  assert.equal(metricText({ label: "P/E", value: 22.8, unit: "x" }, "INR"), "22.8");          // the screens, watchlist, deep dive and public page: one decimal
+  assert.equal(metricText({ label: "P/E", value: 128.456, unit: "x" }, "INR"), "128.5");
+  assert.equal(metricText({ label: "Fwd P/E", value: 26.4, unit: "x" }, "USD"), "26.4");
+  assert.equal(metricText({ label: "P/B", value: 2.247, unit: "x" }, "INR"), "2.25");          // a book multiple keeps two (it sits near 1)
+  assert.equal(metricText({ label: "Div yield", value: 0.71, unit: "%" }, "INR"), "0.71%");    // the screens and the public page: two decimals
+  assert.equal(metricText({ label: "Div yield", value: 0, unit: "%" }, "INR"), "0.00%");
+  assert.equal(metricText({ label: "EBITDA margin", value: 17, unit: "%" }, "INR"), "17%");     // whole when the source gives it whole, as the public page writes it
+  assert.equal(metricText({ label: "EBITDA margin", value: 17.54, unit: "%" }, "INR"), "17.5%");
+  assert.equal(marginText(null), "–");
+  assert.equal(marginText(-3), "−3%");
+  const screens = read("src/pages/Screens.tsx"), deep = read("src/pages/DeepDive.tsx");
+  assert.match(screens, /\{ id: "opm", label: "EBITDA margin", cell: \(r\) => marginText\(r\.opm\) \}/);
+  assert.match(deep, /cell: \(q: \(typeof n\.quarters\)\[number\]\) => marginText\(q\.opm\)/);
+});

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { asOf, fmtDate, latestDue, marketTz, pct, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { REGION_NAME, screenCap, screenNum, useRegion, type Region } from "../lib/research";
+import { REGION_NAME, marginText, screenCap, screenNum, useRegion, type Region } from "../lib/research";
 import {
   NO_FILTERS, conditionCount, screensApi, staleNote, type Bound, type Filters, type RangeId, type SavedPage, type SavedScreen,
   type ScreenMeta, type ScreenResult, type ScreenRow,
@@ -33,7 +33,7 @@ const COLS: Col[] = [
   { id: "from_high", label: "vs 52-week high", cell: (r) => (r.from_high == null ? "–" : pct(r.from_high)) },
   { id: "sales_cagr_3y", label: "Revenue growth, 3y", cell: (r) => (r.sales_cagr_3y == null ? "–" : <Signed value={r.sales_cagr_3y}>{pct(r.sales_cagr_3y)}</Signed>) },
   { id: "net_margin", label: "Net margin", cell: (r) => num(r.net_margin, 1, "%") },
-  { id: "opm", label: "EBITDA margin", cell: (r) => num(r.opm, 1, "%") },
+  { id: "opm", label: "EBITDA margin", cell: (r) => marginText(r.opm) },
   { id: "debt_equity", label: "Debt to equity", cell: (r) => num(r.debt_equity, 2) },
   { id: "roe", label: "ROE", cell: (r) => num(r.roe, 1, "%") },
   { id: "roce", label: "ROCE", cell: (r) => num(r.roce, 1, "%") },
