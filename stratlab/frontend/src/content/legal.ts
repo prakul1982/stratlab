@@ -15,7 +15,7 @@ export const DEFAULT_BUSINESS: Business = { name: "StratLab", email: "support@st
   privacy: "privacy@stratlab.studio", address: "", gstin: "" };
 
 /** The day each page's words last changed (the sitemap's dates, backend/app/site_pages.py, say the same). */
-export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "26 October 2026", "/refunds": "25 October 2026", "/contact": "26 September 2026" };
+export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "28 October 2026", "/refunds": "25 October 2026", "/contact": "26 September 2026" };
 
 export type Tok = { t: "text" | "b" | "code"; s: string } | { t: "link"; s: string; to: string } | { t: "mail"; s: string; to: string };
 
@@ -85,10 +85,20 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
       "**Technical logs:** request logs and error reports kept to run and fix the service. Error reports carry no email, IP address or request contents.",
     ] },
     { h: "How it's used" },
-    { p: "Only to run StratLab: sign-in, running your tests and paper sessions, sending the alerts you asked for, billing, preventing abuse, and fixing problems. We don't sell your data, and there are no advertising trackers." },
+    { p: "Only to run StratLab: sign-in, running your tests and paper sessions, sending the alerts you asked for, billing, preventing abuse, and fixing problems. We don't sell your data. The only advertising is the Google ads described under Ads, below, which load only if you allow them." },
+    { h: "Ads" },
+    { p: "Public pages (the landing page, company pages, the strategy library and shared verdicts) and Free accounts may show ads from Google AdSense. Basic and Pro have no ads." },
+    { ul: [
+      "**Only after you say yes.** Before any ad, StratLab asks \"Allow ads\" or \"No thanks\". Google's ad script is not downloaded until you choose Allow ads.",
+      "**What Google may set.** Cookies and similar storage in your browser, and it may read your IP address and device details, to choose, limit and measure ads and to prevent fraud. StratLab gives Google none of your email, holdings, notebooks or anything you type.",
+      "**How to say no.** Choose No thanks: no ad is loaded and nothing from Google is set. A Free account then sees a StratLab card in the ad's place. Basic and Pro never see ads.",
+      "**To change your answer.** It is kept in this browser for a year; clear this site's data in your browser's settings and the question comes back. Google's own ad settings are at adssettings.google.com.",
+      "**Never on personal money pages.** No ad appears on Money, tax, holdings, net worth, Account, Admin, sign-in or payment pages, or in emails.",
+    ] },
     { h: "Who processes it for us" },
     { ul: [
       "Supabase (database and sign-in), Railway (server) and Vercel (website) host the service.",
+      "Google (AdSense) serves the ads on public pages and to Free accounts, only if you allow ads.",
       "Razorpay processes payments.",
       "AI providers receive the text you type into AI features, like an idea to turn into rules, but not your email. StratLab can send it to any of these eleven: Anthropic, Cerebras, Cloudflare Workers AI, Google Gemini, Groq, Hugging Face, Mistral, NVIDIA API catalog, OpenRouter, SambaNova and Z.ai. Which one answers a given request varies, and only those with a key set up on the server are used. Z.ai is a China-based service. Mistral and Google Gemini also read the public company filings that are scanned pictures. Some of these services are used on their free plans, whose terms let the provider keep what is sent and use it to improve or train their models (Google Gemini's free tier and Mistral's free plan say so): don't type anything into an AI feature that you wouldn't want a provider to keep.",
       "Our email provider delivers the alerts you turn on by email, and Telegram delivers them if it is offered in Settings and you connect it. Sentry receives error reports without personal details.",
@@ -96,9 +106,10 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
     ] },
     { p: "Some of these providers store data outside India, under their own security and privacy commitments." },
     { h: "Cookies and storage" },
-    { p: "StratLab sets no cookies itself. It uses your browser's local storage, which stays on your device until you clear it, and session storage, which goes when you close the tab. Nothing is used for advertising." },
+    { p: "StratLab sets no cookies itself. It uses your browser's local storage, which stays on your device until you clear it, and session storage, which goes when you close the tab. Nothing StratLab stores is used for advertising. Google's ad script, if you allow ads, can set its own cookies; see Ads, above." },
     { ul: [
       "**Before you sign in**, on your first visit: a preference for light or dark mode and for the currency prices are shown in, a note that the page reloaded once if a file failed to load, and, when usage analytics are on, one entry from PostHog (its name starts with `ph_`) holding a random anonymous ID and session details. That PostHog entry is not made, and no analytics request is sent, if your browser sends Do Not Track or Global Privacy Control.",
+      "**Your answer about ads:** `stratlab.ads`, \"yes\" or \"no\" with the date, kept in your browser for a year. It stays on your device.",
       "**While Google sign-in runs:** the page to come back to, and an invite code if you arrived by a friend's link.",
       "**After you sign in:** your sign-in session, which the sign-in service refreshes, and a few choices such as which menu is open and whether you have seen the tour.",
       "**To pay:** Razorpay's payment window can set its own cookies and storage on its own pages and windows.",

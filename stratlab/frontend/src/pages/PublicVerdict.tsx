@@ -7,6 +7,7 @@ import { XYChart } from "../components/Charts";
 import { moneyCompact } from "../lib/chartFormat";
 import { checksRun } from "../lib/shareText";
 import { PublicFrame } from "../components/PublicFrame";
+import { PublicAd } from "../components/AdUnit";
 import { STATUS_NAME } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
 import { Card, CardHead } from "../components/kit/Card";
@@ -137,6 +138,8 @@ export function PublicVerdict({ token }: { token: string }) {
               <a className="btn k-btn-end" href="/">Test your own idea free</a>
             </Card>
             <p className="k-note">Shared from StratLab. Research and paper trading only: past results don't predict future returns, and this isn't investment advice. The strategy's rules are private to the person who shared it.</p>
+            {/* ADS-1: after the closing note, clear of the "Test your own idea" button; nothing while ads are off */}
+            <PublicAd />
           </>
         )}
     </PublicFrame>

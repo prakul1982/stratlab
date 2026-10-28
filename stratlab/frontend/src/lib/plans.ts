@@ -66,7 +66,8 @@ export const FEATURES: Record<PlanId, string[]> = {
     // the same words as the table's row (DP2-010: "a weekly My Stocks email" here, "Weekly Market Brief and My Stocks" there)
     "Tax report, money calendar, the Market Brief on News, the weekly Market Brief and My Stocks emails, every market we cover and your own CSV"],
   basic: ["Everything in Free, plus:",
-    `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month, with all 20+ indicators: MACD, Supertrend, VWAP and more`,
+    // "No ads" opens the first line: a ninth line would break the card's six to eight (DK-003)
+    `No ads, ${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month, with all 20+ indicators: MACD, Supertrend, VWAP and more`,
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups on intraday candles and options at set times, with trade notifications and a daily report`,
     "Trading tools: full trade journal, positioning history, stock futures history, closing auction history, chart replay practice, an India VIX entry filter, SIP dip rules",
     "Alerts: F&O change alerts, ETF gap alerts, IPO alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email",
@@ -83,6 +84,10 @@ export const FEATURES: Record<PlanId, string[]> = {
     "US stocks in Indian tax sale by sale, and ITR-ready schedules with a PDF pack for your CA",
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings`],
 };
+
+/** Ads (ADS-1), one row of the comparison table: Free accounts and signed-out pages may show Google ads, only after the visitor allows
+ * them (lib/ads.ts); Basic and Pro never do. The cards say it once, on the plan that adds it (Basic; Pro includes Basic). */
+export const ADS: Record<PlanId, string> = { free: "After you allow them", basic: "None", pro: "None" };
 
 export const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backtests a month, each with a verdict"], ["ai_builds_per_month", "AI strategy builds a month"],
   ["live_limit", "Paper trading sessions at a time"], ["group_size", "Instruments in a group test"], ["deepdives_per_month", "Company deep dives a month"],

@@ -8,7 +8,9 @@ declare global {
   interface Window {
     STRATLAB_CONFIG?: { API_BASE: string; SUPABASE_URL: string; SUPABASE_ANON_KEY: string; SENTRY_DSN?: string;
       BUSINESS_NAME?: string; CONTACT_EMAIL?: string; PRIVACY_EMAIL?: string; BILLING_EMAIL?: string; BUSINESS_ADDRESS?: string;
-      BUSINESS_GSTIN?: string; POSTHOG_KEY?: string; POSTHOG_HOST?: string };
+      BUSINESS_GSTIN?: string; POSTHOG_KEY?: string; POSTHOG_HOST?: string;
+      /** Ads (lib/ads.ts, ADS-1): optional here, over the build's VITE_ADSENSE_* settings; ADS_ENABLED "false" turns ads off without a rebuild */
+      ADS_ENABLED?: string; ADSENSE_CLIENT?: string; ADSENSE_SLOT_PUBLIC?: string; ADSENSE_SLOT_AI?: string };
     Razorpay?: any;
   }
 }

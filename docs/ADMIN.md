@@ -363,6 +363,60 @@ market data login every day: its tokens end each morning at about 6 am.
 - Give StratLab its own API app. A new login to the same app cancels the previous token, so a bot sharing the key would
   knock StratLab out; StratLab notices, goes offline with a message and does not log in again by itself.
 
+## Ads (Google AdSense)
+
+Ads are built in and **off**. Nothing on the site changes until you do the steps below, and the kill switch turns them off again.
+The publisher ID (`ca-pub-8125241692814953`) is already the default in both places, so only the ad units and the switch are left.
+
+**Where they can show**
+
+- Signed-out pages that visitors land on: the company pages (`/stocks/...`), the strategy library, a shared verdict, and one
+  slot in the landing page's lower sections (never the top). The blog uses the same helper (see below).
+- Inside the app, one slot, for **Free accounts only**, under a written AI read on a company page. Basic and Pro never see it.
+  While ads are off (or after "No thanks") a Free account sees a small StratLab card there instead (Basic's limits, the four
+  luck checks, or the briefs): our own words, nothing tracked.
+- Never on Money, tax, holdings, net worth, Account, Admin, sign-in or payment pages, and never in emails.
+
+**Every ad is asked about first.** The visitor sees "Allow ads / No thanks" in the slot's own place; Google's script is not
+downloaded until "Allow ads". The answer is kept in the browser (`stratlab.ads`, one year). Privacy and the FAQ say all of
+this in plain words; the privacy policy's "Ads" part is the text to keep in step if you change what is shown.
+
+**To switch ads on**
+
+1. In AdSense, add `stratlab.studio`, wait for the site to be approved, and create two **display ad units** (responsive):
+   one for public pages, one for the app. Note each unit's numeric slot ID.
+2. In **AdSense → Privacy & messaging**, turn on the GDPR message for the EEA and the UK (Google requires its own certified
+   message there). StratLab's question stays for everyone; if both show, both are fine.
+3. Set these, then redeploy:
+
+| Where | Setting | Value |
+| --- | --- | --- |
+| Railway (the server) | `ADS_ENABLED` | `true` (anything else, or unset, is off) |
+| Railway | `ADSENSE_SLOT_PUBLIC` | the public unit's slot ID (digits) |
+| Railway | `ADSENSE_CLIENT` | only to use another account; the default is already set |
+| Vercel (the site, build settings) | `VITE_ADS_ENABLED` | `true` |
+| Vercel | `VITE_ADSENSE_SLOT_PUBLIC` | the same public slot ID |
+| Vercel | `VITE_ADSENSE_SLOT_AI` | the app unit's slot ID |
+| Vercel | `VITE_ADSENSE_CLIENT` | only to use another account |
+
+An ad appears only when the switch is on **and** the publisher ID **and** that slot's ID are set **and** the visitor allowed it.
+The server pages change within about 15 minutes (their pages are cached); the site's slots on the next deploy.
+
+**To switch ads off:** set `ADS_ENABLED` to anything but `true` on Railway (server pages), and `ADS_ENABLED: "false"` in
+`frontend/public/config.js` (this switches the site's slots off without a rebuild), or unset the `VITE_` settings and redeploy.
+
+**ads.txt** (`stratlab.studio/ads.txt`) is a plain file in the site's `public` folder with the line AdSense asks for.
+
+**Security headers.** `frontend/vercel.json`'s Content-Security-Policy lets in only Google's ad hosts
+(`pagead2.googlesyndication.com`, `googleads.g.doubleclick.net`, `tpc.googlesyndication.com`, `adservice.google.com`,
+`www.google.com` for frames, `*.adtrafficquality.google`). A header file cannot depend on a setting, so they are allowed
+whether or not ads are on; nothing asks for them while ads are off. Everything else in the policy is as strict as before.
+
+**The blog and other server-drawn pages.** `app/ads.py`: `ads.add_to_page(html, "blog")` puts the labelled box above `</main>` and
+the script before the page ends, or call `ads.ad_slot_html("blog")` and place it by hand, once per page, below the fold and away from
+buttons. Both return the page unchanged while ads are off. Do the call as the page is sent, not when it is stored. A page kind with
+its own ad unit can set `ADSENSE_SLOT_<NAME>`; others share the public one.
+
 ## View as a plan
 
 **Overview → View as a plan** (or **View as:** in the account menu) with Free, Basic, Pro or Off: the app reads as that

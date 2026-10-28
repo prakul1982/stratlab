@@ -875,6 +875,16 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .pub-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 640px) { .pub-checks { grid-template-columns: 1fr; } }
 
+/* ADS-1: an ad slot, and the question or StratLab card that holds its place. Not a card: no box, no fill, only a hairline above and the
+   word "Advertisement" (AdSense policy), so it cannot be taken for StratLab's own content. The box holds the ad's height from the
+   start, so the page does not jump when the ad arrives. The same rules are inline in backend/app/ads.py for the server-drawn pages. */
+.ad { margin: var(--s6) 0 var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); clear: both; }
+.ad-label { margin: 0 0 6px; font-size: var(--t-eyebrow); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ad-box { min-height: 280px; display: block; overflow: hidden; }
+.ad-ask { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; max-width: 520px; font-size: var(--t-label); line-height: 1.5; color: var(--ink-2); }
+.ad-ask p { margin: 0; }
+.ad-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+
 /* search: one box for everything */
 .search-btn kbd, .palette kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-2); border-radius: 6px; padding: 1px 6px; color: var(--muted); }
 .palette-back { place-items: start center; padding-top: min(12vh, 110px); }
