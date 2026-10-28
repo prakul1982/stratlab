@@ -4980,7 +4980,7 @@ def breadth_view_shared(group: str, range_: str, full: bool, brief: bool) -> dic
 
 
 @app.get("/invest/breadth")
-def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool = False, live_only: bool = False, profile=Depends(current_profile)):
+def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool = False, profile=Depends(current_profile), live_only: bool = False):
     """A group of stocks' breadth: today's numbers on every plan; the history, charts and sector table on Basic and up.
     `live_only`: just the live card's points and the "next count due" note, for a page already open (LIVE-1: it asks each minute
     while India trades, and has the history already)."""
