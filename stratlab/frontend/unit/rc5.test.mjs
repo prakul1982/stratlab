@@ -41,3 +41,18 @@ test("the alerts summary reads in whole sentences, and the unconfirmed email is 
   // the second note shows only when something else already receives the alerts
   assert.match(src, /\{page\.channels\.length > 0 && page\.email && !page\.email_confirmed && /);
 });
+
+test("a long message stays long enough to read, a short one as before (RC5-006)", async () => {
+  const { register } = await import("node:module");
+  register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+    try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
+  const { toastMs } = await import("../src/lib/toastTime.ts");
+  assert.equal(toastMs("Saved.", false), 4500);
+  assert.equal(toastMs("Saved.", true), 9000);
+  // the holdings upload's refusal, 190 characters: about 14 s, not 4.5
+  const refusal = "We couldn't find the holdings in that file. It needs a column for the stock (symbol, ISIN or name) and one for the quantity. If your broker isn't listed, make a CSV with the columns Symbol, Quantity, Average price.";
+  assert.ok(refusal.length > 190);
+  assert.ok(toastMs(refusal, false) >= 12000 && toastMs(refusal, false) <= 15000, String(toastMs(refusal, false)));
+  assert.equal(toastMs("x".repeat(2000), false), 15000);
+  assert.match(fs.readFileSync(new URL("../src/lib/app.tsx", import.meta.url), "utf8"), /setTimeout\(\(\) => setToast\(null\), toastMs\(msg, !!action\)\)/);
+});
