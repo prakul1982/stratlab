@@ -14,7 +14,7 @@ export const INTRO_SPACES: IntroSpace[] = [
   { id: "trade", name: "Trade", sub: "The strategy lab", line: "Test a trading idea on years of real prices, then paper trade it.",
     things: [["Notebooks", "Ideas in plain words, four checks for luck."],
       ["Strategy library", "StratLab's own strategies, each checked."],
-      ["Paper trading, options and the F&O desk", "Live prices, fake money, no real orders."]] },
+      ["Paper trading, options and the F&O desk", "Live prices, fake money."]] },
   { id: "invest", name: "Invest", sub: "Research", line: "Read any Indian or US company from its own numbers and filings.",
     things: [["Company pages", "Prices, key numbers, results, owners."],
       ["Screens and IPOs", "Filter by size, growth and debt; IPO dates."],
@@ -35,11 +35,10 @@ export const HOW_STEPS: [string, string][] = [
 export const HOW_MONEY = "Money works the same way: upload your files, then see your value, gains and tax worked out.";
 
 export const DIFF_TITLE = "What makes it different";
+// VR5-owner-2 (the owner's choice for VR4-018): "ten markets", "paper trading only / never real orders" and "facts, not tips" are said once on the
+// landing page, in INTRO_LINE above; this list used to say each again, beside the hero's eyebrow and line, the line under the button and a tag on Options
 export const DIFFERENT: [string, string][] = [
-  ["Facts, not tips", "Numbers, filings and test results. Never buy, sell or hold, and never a target."],
   ["Real costs, per market", "Brokerage, taxes, exchange fees and slippage of each market, taken off every trade."],
   ["Four checks for luck", "Unseen years, nearby settings, a bad-luck shuffle and enough trades."],
-  ["Ten markets", "From India and the US to crypto, forex and commodities, or your own data."],
   ["Your data stays yours", "Holdings, funds and tax figures are seen only by you, and deleted in one step."],
-  ["Never real orders", "Paper trading only: fake money on real prices."],
 ];
