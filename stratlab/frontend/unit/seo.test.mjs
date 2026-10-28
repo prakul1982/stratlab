@@ -302,7 +302,7 @@ test("the landing page: one tagline, sample labels, no old pricing variant, no v
   assert.match(login, /rule template to test/i);
   assert.match(login, /not a suggestion/);
   assert.ok((login.match(/<span className="lp-sample">/g) ?? []).length >= 1, "the hero demo says it is a sample");
-  assert.ok((login.match(/\{ILLUSTRATION\}/g) ?? []).length >= 2, "the Trade and Money pictures say they are made-up figures");
+  assert.ok((login.match(/className="lp-illus"/g) ?? []).length >= 1, "the research sample says it is made-up figures");
   assert.doesNotMatch(login, /aria-pressed/, "tabs use aria-selected");
   assert.match(login, /role="tab"/);
   assert.match(login, /tabIndex=\{k === i \? 0 : -1\}/);

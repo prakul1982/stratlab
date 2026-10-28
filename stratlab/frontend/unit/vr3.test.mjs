@@ -80,10 +80,10 @@ test("VR3-012: the Plans page says 'Basic and Pro aren't on sale yet' once (its 
   assert.match(plans, /Press the button and we'll tell you the day they open\./);
 });
 
-test("VR3-013, VR3-014: the landing page's six extra Money tools are two rows of three, and the Trade picture is no taller than its neighbours", () => {
+test("VR3-013: the landing page's six extra Money tools are two rows of three (VR3-014's space pictures went with LAND-2's intro)", () => {
   assert.match(read("src/pages/Login.tsx"), /lp-money-3/);
   assert.match(css, /\.lp-money\.lp-money-3 \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/);
-  assert.match(css, /\.lp-space-art \.lp-space-big \{ font-size: 23px; \}/);
+  assert.doesNotMatch(css, /lp-space-art|lp-space-big/);
 });
 
 test("VR3-015: the closing-auction status does not say 'Continuous trading' beside a badge that says it", async () => {
