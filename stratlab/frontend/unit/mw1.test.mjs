@@ -63,7 +63,8 @@ test("a daily, weekly or monthly candle takes ticks only inside its own day, wee
   const d = bar("2026-10-23T00:00:00+05:30", 100, 105, 98, 101, 9000);
   const same = T.applyTick(d, { p: 107, v: null, t: at("2026-10-23T12:00:00+05:30") }, "1d", { cum: null });
   assert.deepEqual([same.bar.h, same.bar.c, same.isNew], [107, 107, false]);
-  assert.equal(T.applyTick(d, { p: 107, v: null, t: at("2026-10-24T10:00:00+05:30") }, "1d", { cum: null }), null);
+  // the next trading day's first price starts its candle (MWR1-003), only inside the session
+  assert.equal(T.applyTick(d, { p: 107, v: null, t: at("2026-10-26T08:00:00+05:30") }, "1d", { cum: null }), null);
   const w = bar("2026-10-19T00:00:00+05:30", 90, 99, 88, 95, 1);
   assert.ok(T.applyTick(w, { p: 96, v: null, t: at("2026-10-23T10:00:00+05:30") }, "1w", { cum: null }));
   assert.equal(T.applyTick(w, { p: 96, v: null, t: at("2026-10-26T10:00:00+05:30") }, "1w", { cum: null }), null);

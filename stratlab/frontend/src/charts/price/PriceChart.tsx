@@ -407,6 +407,22 @@ const [saveNote, setSaveNote] = useState("");
   // monthly candles leave out a lone bad print from the source (DD-043); weekly and shorter candles are shown as read
   const shownFrom = useCallback((base: Bar[], t: Tf) => (t === "1w" ? aggregate(base, "week") : t === "1mo" ? dropSpikes(aggregate(base, "month")) : base), []);
 
+  /** One page of older candles put in front of the loaded ones: whether there were any. */
+  const olderPage = useCallback((req: number): Promise<boolean> => {
+    const e = engineRef.current;
+    const base: BaseTf = tf === "1w" || tf === "1mo" ? "1d" : tf;
+    if (!e || !load || !baseRef.current.length) return Promise.resolve(false);
+    return load(base, { before: isoOf(baseRef.current[0].t) }).then((r) => {
+      if (req !== reqRef.current) return false;
+      const older = toBars(r.candles ?? []).filter((b) => b.t < baseRef.current[0].t);
+      moreRef.current = !!r.more && older.length > 0; setMore(moreRef.current);
+      if (!older.length) return false;
+      baseRef.current = [...older, ...baseRef.current];
+      e.replaceOlder(shownFrom(baseRef.current, tf));
+      syncData();
+      return true;
+    });
+  }, [load, tf, shownFrom, syncData]);
   const openFromRef = useRef(props.openFrom);
   openFromRef.current = props.openFrom;
   /** The first view from `openFrom`, when no range is picked: from the first candle on or after that day. */
@@ -436,6 +452,21 @@ const [saveNote, setSaveNote] = useState("");
     e.showFrom(from);
   }, []);
 
+  /** Show again the moment a timeframe change started from: older candles are read until it is covered (a few pages at most),
+   * then the same number of candles are put around it (MWR1-004). */
+  const restoreView = useCallback(async (kv: { center: number; count: number }, req: number) => {
+    const e = engineRef.current;
+    if (!e) return;
+    loadingMore.current = true;
+    try {
+      for (let pages = 0; pages < 8 && req === reqRef.current && moreRef.current && baseRef.current.length && baseRef.current[0].t > kv.center; pages++) {
+        if (!(await olderPage(req))) break;
+      }
+    } catch { moreRef.current = false; setMore(false); }
+    loadingMore.current = false;
+    if (req === reqRef.current) e.showAround(kv.center, kv.count);
+  }, [olderPage]);
+
   useEffect(() => {
     if (!load) return;
     const e = engineRef.current!;
@@ -459,12 +490,15 @@ const [saveNote, setSaveNote] = useState("");
         e.setData(shownFrom(bars, tf));
         setStatus(bars.length ? "ready" : "empty");
         setTick((x) => x + 1);
+        const kv = keepView.current;
+        keepView.current = null;
         if (range) applyRange(range);
+        else if (kv && bars.length) void restoreView(kv, req);
         else applyOpenFrom();
         syncData();
       })
       .catch((err) => { if (req === reqRef.current) { setStatus("error"); setError((err as Error).message || "Couldn't load prices."); } });
-  }, [load, tf, range, shownFrom, applyRange, applyOpenFrom, syncData, attempt]);
+  }, [load, tf, range, shownFrom, applyRange, applyOpenFrom, restoreView, syncData, attempt]);
 
   // older candles when the chart is scrolled back to its first ones
   const maybeMore = useCallback(() => {
@@ -472,21 +506,10 @@ const [saveNote, setSaveNote] = useState("");
     if (!e || !load || !moreRef.current || loadingMore.current || !baseRef.current.length) return;
     if (e.visibleRange()[0] > 30) return;
     loadingMore.current = true; setFetchingMore(true);
-    const req = reqRef.current;
-    const base: BaseTf = tf === "1w" || tf === "1mo" ? "1d" : tf;
-    load(base, { before: isoOf(baseRef.current[0].t) })
-      .then((r) => {
-        if (req !== reqRef.current) return;
-        const older = toBars(r.candles ?? []).filter((b) => b.t < baseRef.current[0].t);
-        moreRef.current = !!r.more && older.length > 0; setMore(moreRef.current);
-        if (!older.length) return;
-        baseRef.current = [...older, ...baseRef.current];
-        e.replaceOlder(shownFrom(baseRef.current, tf));
-        syncData();
-      })
+    olderPage(reqRef.current)
       .catch(() => { moreRef.current = false; setMore(false); })
       .finally(() => { loadingMore.current = false; setFetchingMore(false); });
-  }, [load, tf, shownFrom, syncData]);
+  }, [load, olderPage]);
   maybeMoreRef.current = maybeMore;
 
   // fixed or live candles (paper trading): patched in place as they grow
@@ -542,7 +565,15 @@ const [saveNote, setSaveNote] = useState("");
   }, [me, storageKey, load, list.length > 0]);          // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- actions ----------
-  const pickTf = (t: Tf) => { if (own) touched.current = true; setRange(null); setTf(t); setMenu(null); };
+  // a timeframe change keeps what the person was looking at: the same moment in the middle and as many candles in view (MWR1-004);
+  // a chart showing the newest candle just shows the newest of the new size
+  const keepView = useRef<{ center: number; count: number } | null>(null);
+  const pickTf = (t: Tf) => {
+    if (own) touched.current = true;
+    const v = t !== tf ? engineRef.current?.viewSpan() : null;
+    keepView.current = v && !v.live ? { center: v.center, count: v.count } : null;
+    setRange(null); setTf(t); setMenu(null);
+  };
   const pickRange = (r: RangeKey) => {
     if (own) touched.current = true;
     const want = props.rangesKeepTf ? tf : RANGES.find((x) => x.key === r)!.tf;
@@ -691,7 +722,7 @@ const [saveNote, setSaveNote] = useState("");
   const nextWith = (key: "chart_indicators" | "chart_saves") => (me ? nextPlanWith(me.plan, key) : null);
   const studyLimit = me ? indicatorsSaid({ indicators: me.plan_info.chart_indicators ?? null, next: { indicators: nextWith("chart_indicators") } }, mine.length, planName) : null;
   const keptSaid = kept && me && (list.length > 0 || mine.length > 0) ? chartsSaid(me.plan_info.chart_saves ?? null, kept.charts, kept.saved, nextWith("chart_saves"), planName) : null;
-  const formingIn = flags.live ? closesIn(e?.bars[e.bars.length - 1], tf, now) : null;
+  const formingIn = flags.live ? closesIn(e?.bars[e.bars.length - 1], tf, now, props.feed?.market) : null;
   const pill = marketPill(props.marketOpen, flags, streaming, formingIn != null);
   const stageH = height + ownPanes * PANE_ADD;
 
