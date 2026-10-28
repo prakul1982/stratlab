@@ -132,3 +132,14 @@ test("the rows' lines of closes are asked for once while on their way", () => {
   assert.match(api, /else if \(sparkWait\.has\(k\)\) waits\.push\(\[k, sparkWait\.get\(k\)!\]\)/);
   assert.match(api, /for \(const k of need\) sparkWait\.delete\(k\)/);
 });
+
+// ---------- MWR1-016: what a screen reader's checker (axe) found on the panel ----------
+test("the panel's roles are allowed ones: tablist holds tabs only, a sheet is a dialog on a div, the resize bar has its value", () => {
+  const p = read("src/components/watch/WatchPanel.tsx"), pub = read("src/components/watch/PublicBoard.tsx");
+  assert.match(p, /<div className="mw-tablist" role="tablist" aria-label="Your lists" onKeyDown=\{tabKey\}>/);
+  assert.doesNotMatch(p, /<aside|<header|<footer/);                    // an aside may not be a dialog; a header or footer in one is the page's banner and footer again
+  assert.doesNotMatch(pub, /<aside|<header|<footer/);
+  assert.match(p, /role="separator"[^>]*aria-valuemin=\{MIN_W\} aria-valuemax=\{MAX_W\} aria-valuenow=\{layout\.w\}/);
+  // the "new list" button and the limit's words sit beside the tablist, not inside it
+  assert.match(p, /<\/div>\s*\{naming \? null : tabsFull/);
+});

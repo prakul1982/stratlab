@@ -29,6 +29,7 @@
 
 .mw-tabs { flex: none; display: flex; align-items: flex-end; gap: 2px; padding: 0 var(--s3); border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .mw-tabs::-webkit-scrollbar { display: none; }
+.mw-tablist { flex: none; display: flex; align-items: flex-end; gap: 2px; }
 .mw-tab { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 var(--s3); border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font-weight: 500; cursor: pointer; white-space: nowrap; }
 .mw-tab:hover { color: var(--ink); }
 .mw-tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }

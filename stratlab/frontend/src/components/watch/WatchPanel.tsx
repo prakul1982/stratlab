@@ -22,7 +22,7 @@ import {
   changeOf, changeText, currencyOf, DEFAULT_ID, itemFromPath, labelOf, listsSaid, moveItem, POPULAR, priceText, SORTS, sortItems,
   subtitleOf, symbolsSaid, type SortMode, type WatchItem, type WatchQuote,
 } from "../../lib/watch";
-import { dragged, DOCK_FROM, isSheet, MIN_H, resized, shapeOf, type PanelLayout } from "../../lib/watchLayout";
+import { dragged, DOCK_FROM, isSheet, MAX_W, MIN_H, MIN_W, resized, shapeOf, type PanelLayout } from "../../lib/watchLayout";
 import "./watch.css";
 
 export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout: PanelLayout; patch: (p: Partial<PanelLayout>) => void; vw: number; vh: number; onClose: () => void }) {
@@ -32,7 +32,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const shape = shapeOf(layout, vw);
   // the layout as drawn: a "docked" panel on a window too narrow to dock in floats in the corner (watchLayout.DOCK_FROM)
   const drawn: PanelLayout = shape === "dock" ? layout : { ...layout, mode: "float" };
-  const box = useRef<HTMLElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   const plan = me?.plan_info.name ?? "Free";
   const listId = w.lists?.some((l) => l.id === layout.list) ? layout.list! : DEFAULT_ID;
   const list = w.lists?.find((l) => l.id === listId) ?? null;
@@ -220,10 +220,12 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const listsLine = listsSaid(w.limits, w.lists?.length ?? 0, plan);
 
   return (
-    <aside ref={box} className={`mw mw-${shape}`} style={style} data-testid="market-watch" aria-label="Market Watch"
+    // a sheet is a dialog, which an aside element may not be; and the panel's top and bottom bars are not the page's banner and footer (MWR1-016)
+    <div ref={box} className={`mw mw-${shape}`} style={style} data-testid="market-watch" aria-label="Market Watch"
       {...(sheet ? { role: "dialog", "aria-modal": true } : { role: "complementary" })}>
-      {!sheet && <div className="mw-size" role="separator" aria-orientation="vertical" aria-label="Resize the panel. Use the left and right arrow keys." tabIndex={0} onPointerDown={grab("size")} onKeyDown={sizeKey} />}
-      <header className="mw-head" onPointerDown={grab("move")}>
+      {!sheet && <div className="mw-size" role="separator" aria-orientation="vertical" aria-valuemin={MIN_W} aria-valuemax={MAX_W} aria-valuenow={layout.w} aria-valuetext={`${layout.w} pixels wide`}
+        aria-label="Resize the panel. Use the left and right arrow keys." tabIndex={0} onPointerDown={grab("size")} onKeyDown={sizeKey} />}
+      <div className="mw-head" onPointerDown={grab("move")}>
         {chartItem
           ? <button type="button" className="mw-back" onClick={() => patch({ chart: null })} aria-label="Back to the list"><span className="mw-back-ic" aria-hidden="true"><Chevron size={16} /></span>Lists</button>
           : <h2 className="mw-title">Markets</h2>}
@@ -237,7 +239,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
           </button>}
           <button type="button" className="mw-ic mw-close" aria-label="Close Market Watch" onClick={onClose}><Close size={18} /></button>
         </span>
-      </header>
+      </div>
 
       {chartItem ? (
         <div className="mw-chartview">
@@ -252,11 +254,13 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
         </div>
       ) : (
         <>
-          <div className="mw-tabs" role="tablist" aria-label="Your lists" onKeyDown={tabKey}>
-            {w.lists?.map((l) => (
-              <button key={l.id} type="button" role="tab" id={`mw-tab-${l.id}`} className="mw-tab" aria-selected={l.id === listId} tabIndex={l.id === listId ? 0 : -1}
-                onClick={() => patch({ list: l.id })} title={l.default ? "Your Research watchlist" : l.name}>{l.name}<small aria-hidden="true">{l.items.length}</small></button>
-            ))}
+          <div className="mw-tabs">
+            <div className="mw-tablist" role="tablist" aria-label="Your lists" onKeyDown={tabKey}>
+              {w.lists?.map((l) => (
+                <button key={l.id} type="button" role="tab" id={`mw-tab-${l.id}`} className="mw-tab" aria-selected={l.id === listId} tabIndex={l.id === listId ? 0 : -1}
+                  onClick={() => patch({ list: l.id })} title={l.default ? "Your Research watchlist" : l.name}>{l.name}<small aria-hidden="true">{l.items.length}</small></button>
+              ))}
+            </div>
             {naming ? null : tabsFull
               ? <span className="mw-tab-full">{listsLine}</span>
               : <button type="button" className="mw-tab add" onClick={() => { setName(""); setNaming("new"); }} aria-label="New list" title="New list"><Plus size={14} /></button>}
@@ -313,10 +317,10 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
               </ul>
             )}
           </div>
-          <footer className="mw-foot">
+          <div className="mw-foot">
             {list && w.limits?.symbols != null && !full && said ? <span role="status">{said} <Link to="/plans">See plans</Link></span>
               : <span className="mw-foot-note">{list ? `${used} ${used === 1 ? "symbol" : "symbols"}` : ""}</span>}
-          </footer>
+          </div>
         </>
       )}
       {askDelete && list && (
@@ -325,7 +329,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
           The list and its {list.items.length} {list.items.length === 1 ? "symbol" : "symbols"} are removed. Your charts and drawings are not.
         </ConfirmDialog>
       )}
-    </aside>
+    </div>
   );
 }
 
