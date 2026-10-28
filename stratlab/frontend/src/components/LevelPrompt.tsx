@@ -50,7 +50,8 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answere
         {/* what StratLab is, before where things are: the landing page's own sentence (content/intro.ts), so a new account
             reads the same promise it signed up on */}
         <p className="welcome-what">{INTRO_LINE}</p>
-        <p className="k-muted">StratLab has four spaces: Trade, Invest, Money and My space, your own summary of all three. {here ? `You're on ${SPACES[here].label} now: pick ${SPACES[here].label} to stay, or another to open its home.` : "We'll open the one you pick."} The others stay one tap away, and you can change this any time in Settings.</p>
+        {/* not "StratLab has four spaces...": the tour's first step says that straight after this, so a new account read it twice in a row (VR4-008) */}
+        <p className="k-muted">{here ? `You're on ${SPACES[here].label} now: pick ${SPACES[here].label} to stay, or another to open its home.` : "We'll open the one you pick."} The others stay one tap away, and you can change this any time in Settings.</p>
         <div className="k-stack snug">
           <span className="k-small k-muted">How much have you done? · optional</span>
           <Seg label="Experience" value={chosen} onChange={(v) => setChosen(v as Level)} options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} />

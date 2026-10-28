@@ -888,6 +888,8 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .consent p { margin: 0; color: var(--ink-2); }
 .consent-title { font-size: var(--t-body); }
 .consent-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+/* "Allow" and "No thanks" are two answers of equal weight: one width, not 63px beside 90px (VR4-012) */
+.consent-btns .btn { min-width: 104px; justify-content: center; }
 @media (max-width: 640px) { .consent { right: 16px; left: 16px; width: auto; } }
 
 /* search: one box for everything */
@@ -1429,6 +1431,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 
 .biz-filings { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .biz-filings li { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+/* the titles start at one x: "1 Oct 2026" and "1 May 2026" are not the same width, so each row's title sat a few pixels off its neighbours' (VR4-005) */
+.biz-day { display: inline-block; min-width: 6.5em; font-variant-numeric: tabular-nums; }
 
 .holder-names label { align-items: center; }
 

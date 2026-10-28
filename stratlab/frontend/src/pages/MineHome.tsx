@@ -360,7 +360,7 @@ function WatchCard() {
   const sameDay = days.length > 1 && days[0] && days.every((d) => d === days[0]) ? days[0] : null;
   return (
     <Card testId="mine-watch">
-      <CardHead title={movers?.length && movers.every((m) => day(m)) ? "Your watchlist, last session" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist" aria-label="Open the watchlist">Open</Link>} />
+      <CardHead title={movers?.length && movers.every((m) => day(m)) ? "Your watchlist" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist" aria-label="Open the watchlist">Open</Link>} />
       {failed ? <ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed.</ErrorState>
         : movers === null ? <Skeleton label="Reading your watchlist prices" lines={3} />
         : !movers.length ? (

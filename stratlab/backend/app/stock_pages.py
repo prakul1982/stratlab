@@ -2029,6 +2029,7 @@ main>p{max-width:72ch}.faq p{margin:0 0 6px;max-width:70ch;color:var(--ink-2)}.m
 .stat{min-width:0;margin-bottom:14px}.stat span{display:block;font-size:13.5px;line-height:1.35;color:var(--muted)}.stat b{display:block;font-size:21px;line-height:1.25;font-weight:600}
 @supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 2;grid-template-rows:subgrid;gap:0 0;align-content:start}}
 .stat.wide{grid-column:span 2}
+/* a long value ("₹18.94 lakh crore") wrapped to two lines in a phone's half-width column, beside a one-line value (VR4-007): on a phone it takes the row */
 .note{border-left:3px solid var(--line-2);padding:4px 0 4px 12px;margin:10px 0;font-size:14px;color:var(--ink-2);max-width:72ch}
 .note.warn{border-color:var(--orange-ink);background:var(--orange-soft);padding:8px 12px;border-radius:0 10px 10px 0}
 details.how summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:10px;font-weight:600;list-style:none}details.how li{margin:6px 0}
@@ -2044,6 +2045,11 @@ table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:right;
 th{font-weight:600;color:var(--ink-2)}
 th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);box-sizing:border-box;min-width:124px}
 .scroll-cue{display:none;font-size:13px;color:var(--muted);margin:0 0 6px}
+/* on a phone the years are cut to whole columns: three at a time beside the label column, whatever the width, so no year is cut by the edge or
+   by the label column laid over it (VR4-009: "24", "35" and "88" showed where "Mar 2024" slid under the labels) */
+@media (max-width:640px){.tbl.fin{container-type:inline-size;scroll-padding-left:120px}.fin table{font-size:14px}.fin th,.fin td{padding:9px 6px}
+.fin th:first-child,.fin td:first-child{min-width:120px;width:120px}
+.fin th:not(:first-child),.fin td:not(:first-child){min-width:calc((100cqw - 120px) / 3);width:calc((100cqw - 120px) / 3)}}
 .nav details.menu{display:none;position:relative;margin-left:auto;margin-right:12px}
 .nav details.menu summary{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border:1px solid var(--line-2);border-radius:10px;font-weight:600;color:var(--ink);cursor:pointer;list-style:none}
 .nav details.menu summary::-webkit-details-marker{display:none}
@@ -2068,7 +2074,7 @@ form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:16px 0}form.find select,f
 form.find input{flex:1;min-width:0}form.find button{cursor:pointer;font:inherit}
 footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:960px;margin:0 auto;padding:24px clamp(16px,4vw,32px) 40px;font-size:13.5px;color:var(--muted)}
 footer.site p{max-width:72ch;margin:0 0 8px}footer.site nav{display:flex;flex-wrap:wrap;gap:4px 18px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}footer.site nav a:hover{color:var(--ink)}
-@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide{grid-column:1/-1}.card{padding:16px}h2{margin-top:32px}}
+@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide,.stat.long{grid-column:1/-1}.card{padding:16px}h2{margin-top:32px}}
 @media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:48px}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .chart-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:6px;min-height:52px}
@@ -2431,7 +2437,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
         parts.append(f'<p data-about>{e(about)}</p>')           # SEO-1: this company's own sentences, from the figures below
     # the range's two prices are one value across two columns, so "₹1,201.43 to ₹1,551.90" never breaks in the middle
     parts.append('<div class="card grid">' + "".join(
-        f'<div class="stat{" wide" if " to " in val else ""}"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
+        f'<div class="stat{" wide" if " to " in val else " long" if len(val) > 12 else ""}"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
     parts += _notes(f)
     parts.append(_how(f))
     parts.append(price_chart_html(f, region, symbol))       # PUB-1: the share price, drawn in the browser from the cached closes
@@ -2817,7 +2823,7 @@ def _table(f: dict) -> str:
     growth = [w for w in (growth_words("revenue", g.get("sales_cagr_3y")), growth_words("net profit", g.get("profit_cagr_3y"))) if w]
     note = f'<p class="small muted">{e(f.get("unit") or "")}{". Over three years, compounded: " + ", ".join(growth) if growth else ""}.</p>'
     cue = '<p class="scroll-cue" aria-hidden="true">Newest year on the right. Swipe for earlier years →</p>' if len(ys) > 2 else ""
-    return (f'<h2>Revenue and profit</h2><div class="card">{bars_chart_html(f, digits)}{cue}<div class="tbl" tabindex="0" role="region" aria-label="Revenue and profit by year">'
+    return (f'<h2>Revenue and profit</h2><div class="card">{bars_chart_html(f, digits)}{cue}<div class="tbl fin" tabindex="0" role="region" aria-label="Revenue and profit by year">'
             f'<table><tr><th scope="col">Year</th>{head}</tr>{body}</table></div>{note}</div>')
 
 
@@ -2916,7 +2922,10 @@ def index_page(region: str | None, q: str = "") -> str:
     site = settings.PUBLIC_SITE_URL
     q = (q or "").strip()[:40]
     regions = [region] if region else ["IN", "US"]
-    body = ['<h1>Company pages</h1><p class="muted">Every company listed in India (NSE and BSE) and the US: its last close, '
+    # a market's own page says its market: "Company pages" with "India and the US" under it, above a list of India only, said two things (VR4-002)
+    where = {"IN": "India (NSE and BSE)", "US": "the US"}.get(region or "", "India (NSE and BSE) and the US")
+    heading = {"IN": "Companies listed in India", "US": "Companies listed in the US"}.get(region or "", "Company pages")
+    body = [f'<h1>{heading}</h1><p class="muted">Every company listed in {where}: its last close, '
             "reported results, margins, debt and recent filings. Facts, not advice.</p>", _find_form(region, q)]
     crumbs = ld = ""
     if region and not q:
@@ -2943,7 +2952,8 @@ def index_page(region: str | None, q: str = "") -> str:
                 body.append(f"<h2>{head}</h2>{cap}{_links(r.lower(), big)}")
             body.append(az_nav(r))                    # SEO-1: every company a click or two from here
     canonical = site + (f"/stocks/{region.lower()}" if region else "/stocks")
-    return _page(_head("Company pages: India and US · StratLab", "Find any company listed in India or the US: price, results, "
+    return _page(_head({"IN": "Company pages: India · StratLab", "US": "Company pages: US · StratLab"}.get(region or "", "Company pages: India and US · StratLab"),
+                       f"Find any company listed in {where.replace(' (NSE and BSE)', '').replace('India and the US', 'India or the US')}: price, results, "
                        "margins, debt and filings, from reported data.", canonical, ld, robots="noindex,follow" if q else "index,follow"),
                  None, "".join(body))
 

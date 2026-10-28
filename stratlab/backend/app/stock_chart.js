@@ -69,10 +69,14 @@
     for (var i = 1; i < n; i++) { if (s.c[i] > s.c[hi]) hi = i; if (s.c[i] < s.c[lo]) lo = i; }
     return { n: n, hi: hi, lo: lo, pct: (s.c[n - 1] / s.c[0] - 1) * 100 };
   }
+  function extremes(s) {
+    var k = stats(s);
+    return "Highest close " + price(s.c[k.hi]) + " on " + dlabel(s.t[k.hi]) + "; lowest close " + price(s.c[k.lo]) + " on " + dlabel(s.t[k.lo]) + ".";
+  }
+  /* the chart's text for a screen reader: where it starts and ends, then the extremes */
   function words(s) {
-    var k = stats(s), n = k.n;
-    return "The close was " + price(s.c[0]) + " on " + dlabel(s.t[0]) + " and " + price(s.c[n - 1]) + " on " + dlabel(s.t[n - 1]) +
-      ". Highest close " + price(s.c[k.hi]) + " on " + dlabel(s.t[k.hi]) + "; lowest close " + price(s.c[k.lo]) + " on " + dlabel(s.t[k.lo]) + ".";
+    var n = s.c.length;
+    return "The close was " + price(s.c[0]) + " on " + dlabel(s.t[0]) + " and " + price(s.c[n - 1]) + " on " + dlabel(s.t[n - 1]) + ". " + extremes(s);
   }
 
   function draw() {
@@ -156,7 +160,9 @@
     chg.textContent = up ? "Up " + k.pct.toFixed(1) + "%" : down ? "Down " + Math.abs(k.pct).toFixed(1) + "%" : "Unchanged";
     chg.setAttribute("data-dir", up ? "up" : down ? "down" : "flat");
     note.textContent = " over " + RANGES[range][1] + ", " + price(s.c[0]) + " to " + price(s.c[n - 1]) + ". Price change only; dividends are not included.";
-    sum.textContent = words(s) + " Closing prices.";
+    /* the headline above the chart already gives the first and last close ("over 1 year, A to B"): the text under it said them again with
+       their dates (VR4-006), so it keeps the extremes, and the full sentence stays in the chart's label for a screen reader */
+    sum.textContent = extremes(s) + " Closing prices.";
     Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-r") === range)); });
     draw();
     /* the same closes as a table: up to 24 evenly spaced dates, the first and the last among them */
