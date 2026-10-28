@@ -2829,6 +2829,17 @@ def candle_day(t) -> str | None:
     return s[:10] if len(s) <= 10 or s[11:19] in ("00:00:00", "") else s
 
 
+def pre_issue_cap(snap: dict, p: dict, listed_on: str | None) -> dict:
+    """A share that listed after its latest balance sheet: the source's own market value, on the shares in issue now, not the
+    balance sheet's older share count (which lacks the shares issued in the IPO). The company page does this (DD-011); the
+    deep dive and the public page counted the old shares, 4% low (LIVE1C-019: Paras Healthcare 7,410 against 7,719 cr)."""
+    if not listed_on:
+        return snap
+    from .intel.company import balance_before, num as _num
+    cap = _num((p.get("ratios") or {}).get("Market Cap"))
+    return {**snap, "market_cap_cr": cap} if cap and balance_before(p, listed_on) else snap
+
+
 def deep_view(sym: str, base: dict) -> dict:
     p = base["p"]
     us = p.get("region") == "US"
@@ -2840,6 +2851,8 @@ def deep_view(sym: str, base: dict) -> dict:
     card_view = report_card.view(card, nums)
     snap = screener_summary(p)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
+        # a share listed in the last weeks (its candles are too few to scan): the source's value on the shares in issue now, not the old balance sheet's
+        snap = pre_issue_cap(snap, p, (datetime.now(IST).date() - timedelta(days=60)).isoformat() if base.get("trend_why") == "new" else None)
         snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
         # the public page's market value check: a failed value is blank here too, with the P/E, the deck's tile, the
         # valuation and the P/E worked out from it (R10C-001)
@@ -4364,12 +4377,15 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         if e.busy:
             raise
         return None                       # no company page at the source
-    trend = prices = None
+    trend = prices = listed_on = None
     try:
         # closed sessions only, read after the close settled: the page's price is the last close, with its date, never
         # a session still trading or a cached read from before the close (R6V-002)
         bars = stock_pages.closed_bars(stock_page_bars(region, co), region)
         if bars:
+            if region == "IN":
+                from .intel.company import listing_day
+                listed_on = listing_day(bars)             # a share listed within the year: its first day of trading
             trend, prices = scan.analyse(bars), stock_pages.price_facts(bars)
     except Exception:                     # no prices: the page goes without the price facts
         pass
@@ -4409,6 +4425,7 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     nums = deepdive.numbers(p)
     snap = screener_summary(p)
     if region == "IN":
+        snap = pre_issue_cap(snap, p, listed_on)
         if not close:
             # no daily candles: the exchange's own close of the market's last session, dated (R7V-004), before the
             # fundamentals source's undated price
@@ -6051,7 +6068,7 @@ def server_status() -> dict:
             "auto_login_configured": auto_login_configured(),
             # when the next automatic login runs, so a cancelled login says when it comes back (R46-001)
             "auto_login_next": next_auto_login(),
-            "billing_enabled": billing.enabled(), "ai": ai_health(),
+            "billing_enabled": billing.enabled(), "billing_hook": billing.hook_status(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(RECENT_ERRORS)], "server_started_at": SERVER_STARTED_AT,
             "calendar": calendar_status(), "invoice_seller": invoices.readiness(), "build": build_info.info(),
@@ -6291,10 +6308,14 @@ def admin_delete_user_data(user_id: str, who=Depends(admin.admin_profile)):
 
 
 @app.get("/admin/sessions")
-def admin_sessions(_=Depends(admin.admin_profile)):
+def admin_sessions(test: bool = False, _=Depends(admin.admin_profile)):
+    """The paper sessions running now. The test accounts' are left out unless `test`, as every other count in Admin leaves them out
+    (LIVE1C-011: the list showed the reviewers' sessions with 'Show test accounts' off)."""
     emails = {}
     out = []
+    owners: dict[str, str | None] = {}                        # session id -> its user's id, for the test filter below
     for s in list(manager.sessions.values()):
+        owners[s.id] = s.user_id
         try:
             if s.user_id not in emails:
                 emails[s.user_id] = (db.get_profile(s.user_id) or {}).get("email")
@@ -6317,10 +6338,14 @@ def admin_sessions(_=Depends(admin.admin_profile)):
             except Exception as e:
                 print("admin sessions:", r.get("id"), e)
             market = inst.get("market")
+            owners[r["id"]] = r.get("user_id")
             out.append({"id": r["id"], "name": r.get("name"), "email": emails.get(r.get("user_id")), "symbol": inst.get("symbol"),
                         "market": market, "kind": manager.row_kind(r), "started_at": r.get("started_at"),
                         "capital": ((r.get("strategy") or {}).get("risk") or {}).get("capital"), "equity": None, "trades": None,
                         "currency": inst.get("currency") or ("INR" if market == "IN" else "USD")})
+    if not test:
+        tests = admin.recorded_tests()
+        out = [o for o in out if owners.get(o["id"]) not in tests and not admin.is_test_email(o.get("email"))]
     return out
 
 
@@ -6338,6 +6363,19 @@ def admin_billing_activity(_=Depends(admin.admin_profile)):
     """Subscriptions, refunds and failed payments straight from Razorpay, with the mode, the last webhook's time and the
     currencies with plans of their own (DJ-016, DJ-017), and the invoices' revenue by month. Read only."""
     out = billing.activity()
+    # who each subscription is for (LIVE1C-007): the address of a real user, "Test account" for one of the owner's test aliases
+    ids = sorted({x["user_id"] for x in out.get("subscriptions") or [] if x.get("user_id")})
+    who: dict[str, str] = {}
+    if ids:
+        try:
+            tests = admin.recorded_tests()
+            for r in db.sb().table("profiles").select("id,email").in_("id", ids).limit(200).execute().data or []:
+                who[r["id"]] = "Test account" if r["id"] in tests or admin.is_test_email(r.get("email")) else (r.get("email") or "")
+        except Exception as e:
+            print("admin subscriptions' users not read:", str(e)[:160])
+    for x in out.get("subscriptions") or []:
+        x["user"] = who.get(x.get("user_id") or "") or None
+        x.pop("user_id", None)
     months: dict[str, dict[str, float]] = {}
     now = datetime.now(timezone.utc)
     for y in sorted({invoices.fy(now), invoices.fy(now - timedelta(days=365))}):

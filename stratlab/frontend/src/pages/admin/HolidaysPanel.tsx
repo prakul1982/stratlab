@@ -40,7 +40,7 @@ export function HolidaysPanel({ status, onSaved }: { status: CalendarStatus; onS
   return (
     <Card label="Exchange holidays">
       <CardHead title="Exchange holidays" actions={<button type="button" className="btn quiet sm" disabled={busy} onClick={refresh}>Read the exchange's list now</button>} />
-      {status.markets && status.markets.length > 0 && <DataTable label="Holidays by market" rows={status.markets} rowKey={(r) => r.market} columns={COLUMNS} />}
+      {status.markets && status.markets.length > 0 && <div className="adm-holidays"><DataTable label="Holidays by market" rows={status.markets} rowKey={(r) => r.market} columns={COLUMNS} /></div>}
       <h3 className="adm-sub">India</h3>
       <p className={`k-small ${low ? "k-down" : "k-muted"}`}>
         {status.covered_until ? <>Known until <b>{dateOnly(status.covered_until)}</b>{status.days_left != null && ` (${status.days_left} days)`}. </> : "No holiday calendar loaded. "}

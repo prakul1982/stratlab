@@ -169,5 +169,5 @@ test("VR1-171, VR1-173, VR1-180, VR1-181: the library's width, count line, level
   assert.match(p, /<ChipBar label="Market" options=\{markets\} value=\{market\} onChange=\{setMarket\} wrap \/>/);
   assert.match(read("src/pages/LibraryPage.tsx"), /<ChipBar label="Market" options=\{choices\} value=\{market\} onChange=\{setMarket\} wrap \/>/);
   assert.match(read("src/pages/trade/trade.css"), /\.lib-card \.lib-head > \.k-card-head \{ margin-top: auto; \}/);
-  assert.match(read("src/pages/admin/admin.css"), /\.adm-plan \{ align-items: flex-start; gap: 2px; min-height: 48px; \}/);
+  assert.match(read("src/pages/admin/admin.css"), /\.adm-plan \{ align-items: flex-start; justify-content: center; gap: 2px; min-height: 48px; \}/);
 });

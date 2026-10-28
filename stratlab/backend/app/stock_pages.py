@@ -932,7 +932,12 @@ def india_snap_checked(snap: dict, p: dict) -> dict:
     years = [{"year": c, "sales": s} for c, s in zip(pl.get("cols") or [], sales) if str(c).strip().upper() != "TTM"][-5:]
     why = cap_problem({"region": "IN", "market_cap": snap.get("market_cap_cr"), "price": snap.get("price"),
                        "unit": p.get("unit") or "₹ crore", "market_cap_unit": "₹ crore", "years": years})
-    return {**snap, "market_cap_cr": None, "pe": None, "cap_problem": why} if why else snap
+    if why:
+        return {**snap, "market_cap_cr": None, "pe": None, "cap_problem": why}
+    # the P/E left out where it is far off the profit, as the public page leaves it out (shown_pe, LIVE1C-019); the audit says so
+    if snap.get("pe") and pe_off_profit({"region": "IN", "pe": snap["pe"], "market_cap": snap.get("market_cap_cr"), "profit_ttm": _ttm_profit(p)}):
+        return {**snap, "pe": None, "pe_off_profit": snap["pe"]}
+    return snap
 
 
 def foreign_filer(f: dict | None) -> bool:
@@ -1069,11 +1074,26 @@ def pe_label(f: dict | None) -> str:
     return "P/E"
 
 
+def pe_off_profit(f: dict | None, pe: float | None = None) -> bool:
+    """Whether an Indian company's stated P/E and its market value over the last 12 months' net profit are more than PE_GAP
+    times apart, either way. A minority holders' share or a one-off explains a gap of a few tenths (pe_profit_gap says it
+    on the page), not a P/E of 48 beside 627, so the P/E is left out rather than shown beside a profit it cannot match
+    (LIVE1C-019: five companies with the page's P/E 1.3 to 13 times off market cap over profit)."""
+    f = f or {}
+    if f.get("region") != "IN":
+        return False
+    pe = pe if pe is not None else _num(f.get("pe"))
+    cap, profit = _num(f.get("market_cap")), _num(f.get("profit_ttm"))
+    if not pe or pe <= 0 or not cap or cap <= 0 or not profit or profit <= 0:
+        return False
+    return not 1 / PE_GAP <= pe / (cap / profit) <= PE_GAP
+
+
 def shown_pe(f: dict | None):
-    """The P/E to show: None for a loss, a P/E above PE_MAX, a market value that fails a check, or earnings from a year
-    that ended more than about 15 months before the price (pe_stale)."""
+    """The P/E to show: None for a loss, a P/E above PE_MAX, a market value that fails a check, earnings from a year
+    that ended more than about 15 months before the price (pe_stale), or an Indian P/E far off the profit (pe_off_profit)."""
     pe = _num((f or {}).get("pe"))
-    if pe is None or pe <= 0 or pe > PE_MAX or cap_problem(f) or pe_stale(f):
+    if pe is None or pe <= 0 or pe > PE_MAX or cap_problem(f) or pe_stale(f) or pe_off_profit(f, pe):
         return None
     return pe
 

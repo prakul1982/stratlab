@@ -205,12 +205,13 @@ class AutoLogin:
                 if isinstance(e, AutoLoginError) and not e.retry:
                     self._gave_up = True
                 raise
-            self._record(True, "Logged in to Kite.")
+            self._record(True, "Logged in to Kite.", "by the daily run" if only_if_due else "started from Admin")
         self.on_login()
         return True
 
-    def _record(self, ok: bool, message: str):
-        self.last = {"at": datetime.now(IST).isoformat(), "ok": ok, "message": message}
+    def _record(self, ok: bool, message: str, how: str | None = None):
+        """`how`: what started a login that worked, so Admin says why it happened when it did (LIVE1C-016)."""
+        self.last = {"at": datetime.now(IST).isoformat(), "ok": ok, "message": message, **({"how": how} if how else {})}
         print("Kite auto-login:", message)
         try:  # kept in the database so a restart (the one after a manual login, say) doesn't lose it
             from . import db

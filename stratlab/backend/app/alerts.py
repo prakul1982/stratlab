@@ -112,6 +112,7 @@ def _send_brevo(to: str, subject: str, body: str, html: str | None = None, heade
 BREVO_QUOTA_FOR = 600.0
 _brevo_quota: dict = {"at": 0.0, "value": None}
 BREVO_DASHBOARD = "https://app.brevo.com/billing/account/plans"
+BREVO_FREE_PER_DAY = 300            # the free plan's daily send limit
 
 
 def brevo_quota(fresh: bool = False) -> dict | None:
@@ -144,6 +145,10 @@ def brevo_quota(fresh: bool = False) -> dict | None:
             out["sent_today"] = int(rep.json()["requests"])
     except Exception as e:
         out["error"] = f"Brevo didn't say: {str(e)[:120]}"
+    # the day's report not read (or empty) while the plan's own daily count is: a free plan sends 300 a day, so what is left says what was
+    # sent (LIVE1C-006: "Emails sent today –" beside "294 left of today's limit")
+    if out["sent_today"] is None and out["left_today"] is not None and str(out["plan"]).lower() == "free":
+        out["sent_today"] = max(0, BREVO_FREE_PER_DAY - out["left_today"])
     _brevo_quota.update(at=_time.monotonic(), value=out)
     return out
 

@@ -51,7 +51,7 @@ export function OverviewSection() {
           <div className="adm-todo">
             {todo.map((x, i) => (
               <div key={i}>
-                <span className="adm-todo-t"><Badge tone={x.bad ? "warn" : "plain"}>{x.bad ? "Fix" : "Look"}</Badge><span title={x.full}>{x.text}</span><Link className="link" to={x.to}>Open {x.label} →</Link></span>
+                <span className="adm-todo-t"><Badge tone={x.bad ? "warn" : "plain"}>{x.bad ? "Fix" : "Look"}</Badge><span className="adm-todo-body"><span title={x.full}>{x.text}</span><Link className="link" to={x.to}>Open {x.label} →</Link></span></span>
               </div>
             ))}
           </div>
@@ -72,7 +72,7 @@ export function OverviewSection() {
       </Card>
 
       <Card label="Money, use and limits">
-        <CardHead title="Money, use and limits" info="What StratLab itself can read: its own invoices, who used it, and the email service's daily limit. Bills it can't read (hosting, AI, payments) are linked to their own dashboards rather than guessed." />
+        <CardHead title="Money, use and limits" info="What StratLab itself can read: its own invoices, who used it, this month's experiments and AI builds, and the email service's daily limit. Bills it can't read (hosting, AI, payments) are linked to their own dashboards rather than guessed." />
         <StatRow label="Money and use">
           <Stat item label="Revenue, last 30 days" value={st.revenue_30d ? revenueText(st.revenue_30d.by_currency, (v, c) => money(v, c)) : "–"}
             note={st.revenue_30d ? `${st.revenue_30d.count} invoice${st.revenue_30d.count === 1 ? "" : "s"}` : "Not read"} />
@@ -80,6 +80,9 @@ export function OverviewSection() {
           {st.plan_interest != null && <Stat item label="Waiting for plans" value={st.plan_interest} note={st.plan_interest === 1 ? "person asked to be told when plans open" : "people asked to be told when plans open"} />}
           <Stat item label="Emails sent today" value={sv.admin_alerts?.quota?.sent_today ?? "–"}
             note={quota?.left ?? (sv.admin_alerts?.via === "Brevo" ? "Brevo didn't say" : `Not read from ${sv.admin_alerts?.via ?? "the email service"}`)} />
+          {/* the month's two counts sit with the other counts, not alone in a full-width card (LIVE1C-005) */}
+          <Stat item label="Experiments this month" value={st.experiments_month} note="all users" />
+          <Stat item label="AI builds this month" value={st.ai_month} note={`all users${st.ai_reads_month != null ? `; ${st.ai_reads_month} AI reads` : ""}`} />
         </StatRow>
         <p className="k-small k-muted" data-testid="cost-links">
           Bills StratLab can't read: <a className="link" href="https://railway.com/dashboard" target="_blank" rel="noopener noreferrer">Railway (usage and bill)</a>
@@ -87,6 +90,7 @@ export function OverviewSection() {
           {" · "}<a className="link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noopener noreferrer">Supabase (usage)</a>
           {sv.admin_alerts?.quota?.dashboard && <>{" · "}<a className="link" href={safeHref(sv.admin_alerts.quota.dashboard)} target="_blank" rel="noopener noreferrer">Brevo plan</a></>}
           {aiOut > 0 && <>{" · "}{aiOut} AI provider{aiOut === 1 ? " is" : "s are"} out of free quota (<Link className="link" to="/admin/system">System</Link>)</>}
+          {dash && <>{" · "}<a className="link" href={safeHref(dash)} target="_blank" rel="noopener noreferrer" data-testid="posthog-dashboard">Usage analytics dashboard</a></>}
         </p>
       </Card>
 
@@ -116,20 +120,6 @@ export function OverviewSection() {
               </Disclosure>
             )}
           </>
-        )}
-      </Card>
-
-      <Card label="This month">
-        <CardHead title="This month" />
-        <StatRow label="This month">
-          <Stat item label="Experiments" value={st.experiments_month} note="this month, all users" />
-          <Stat item label="AI builds" value={st.ai_month} note={`this month, all users${st.ai_reads_month != null ? `; ${st.ai_reads_month} AI reads` : ""}`} />
-        </StatRow>
-        {dash && (
-          <div className="k-row">
-            <span className="k-small k-muted">Usage analytics are on: page views and the sign-up to payment funnel, by user id only.</span>
-            <a className="btn outline sm" href={safeHref(dash)} target="_blank" rel="noopener noreferrer" data-testid="posthog-dashboard">Open the PostHog dashboard</a>
-          </div>
         )}
       </Card>
 

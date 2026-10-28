@@ -93,10 +93,17 @@ function InviteRewards({ onChanged }: { onChanged: () => void }) {
     <Card testId="invite-rewards" label="Invite rewards">
       <CardHead title="Invite rewards" info="A friend who joins through someone's link and uses the app on 3 different days in their first 2 weeks gets a free month of Basic. The inviter gets a free month for each of their first 2 such friends in a rolling year (Use), and for each of their first 2 friends whose first real payment comes within 90 days of joining (Payment); after that each paying friend gives them 25% of a month as 8 days of free time, at most 8 a year. One reward per friend; a refund or dispute within 7 days of the payment takes it back. More than 5 sign-ups through one link in a day wait here; the sign-ups themselves go through."
         actions={<span className="k-small k-muted">{v.months_given} free {v.months_given === 1 ? "month" : "months"} given · {v.extras_given ?? 0} extra credits · {v.waiting} waiting for the friend to be active · {v.waiting_to_subscribe ?? 0} waiting to subscribe</span>} />
-      <h3 className="adm-sub">Waiting for your review ({v.review.length})</h3>
-      <DataTable label="Invite rewards waiting for review" rows={v.review} rowKey={(r) => r.newcomer} columns={review} empty="Nothing to review." />
-      <h3 className="adm-sub">Given</h3>
-      <DataTable label="Invite rewards given" rows={v.given.slice(0, 50)} rowKey={(r) => r.newcomer} columns={given} empty="None yet." />
+      {/* two empty tables with full headers were 100px of nothing: one line until there is a row (LIVE1C-012) */}
+      {!v.review.length && !v.given.length ? <p className="k-small k-muted" data-testid="rewards-none">No invite rewards yet: nothing waits for your review and none has been given.</p> : (
+        <>
+          <h3 className="adm-sub">Waiting for your review ({v.review.length})</h3>
+          {v.review.length ? <DataTable label="Invite rewards waiting for review" rows={v.review} rowKey={(r) => r.newcomer} columns={review} />
+            : <p className="k-small k-muted">Nothing to review.</p>}
+          <h3 className="adm-sub">Given</h3>
+          {v.given.length ? <DataTable label="Invite rewards given" rows={v.given.slice(0, 50)} rowKey={(r) => r.newcomer} columns={given} />
+            : <p className="k-small k-muted">None yet.</p>}
+        </>
+      )}
     </Card>
   );
 }
@@ -126,7 +133,8 @@ export function UsersSection() {
     const n = ++seq.current;
     try { const r = await api<UserRow[]>(usersPath(query, on, showTest)); if (n === seq.current) { setUsers(r); setUsersFailed(false); } } catch (e) { if (n === seq.current) { setUsersFailed(true); fail(e); } }
   }, [fail, showTest]);
-  const loadSessions = useCallback(async () => { try { setSessions(await api<SessionRow[]>("/admin/sessions")); setSessionsFailed(false); } catch (e) { setSessionsFailed(true); fail(e); } }, [fail]);
+  // the test accounts' sessions follow the same switch as the users and every count (LIVE1C-011)
+  const loadSessions = useCallback(async () => { try { setSessions(await api<SessionRow[]>(`/admin/sessions${showTest ? "?test=1" : ""}`)); setSessionsFailed(false); } catch (e) { setSessionsFailed(true); fail(e); } }, [fail, showTest]);
   useEffect(() => {
     if (!me?.is_admin) return;
     const t = window.setTimeout(() => loadUsers(q, plan), q ? 300 : 0);
@@ -226,7 +234,7 @@ export function UsersSection() {
           <FormGrid label="Start the launch offer" onSubmit={(e) => { e.preventDefault(); setPromo("start"); }}>
             <p className="k-small k-muted">Start it to give everyone every Pro feature free for a while, e.g. at launch. Payments keep working, so people can still subscribe.</p>
             <Field label="Days" type="number" min={1} max={90} value={promoDays} onChange={(e) => setPromoDays(e.target.value)} />
-            <FormActions><button type="submit" className="btn sm">Start now</button></FormActions>
+            <FormActions><button type="submit" className="btn outline sm">Start now</button></FormActions>
           </FormGrid>
         )}
       </Card>

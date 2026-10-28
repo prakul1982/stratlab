@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, money } from "../../lib/format";
-import { Card, CardHead, DataTable, ErrorState, Notice, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, Disclosure, ErrorState, Notice, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin } from "./AdminContext";
 import { invoiceWarning } from "./attention";
 import { InvoiceAdminPanel } from "./InvoiceAdminPanel";
@@ -14,7 +14,9 @@ interface BillingCheck {
   international?: { enabled: boolean | null; info?: boolean; detail: string }; currencies?: string[];
 }
 
-type Sub = { id: string; status: string; plan: string | null; plan_id: string | null; created_at: string | null; current_end: string | null; paid_count: number | null };
+type Sub = { id: string; status: string; plan: string | null; plan_id: string | null; created_at: string | null; current_end: string | null; paid_count: number | null;
+  /** who it is for (a real user's address, "Test account"), what it charges and how often (LIVE1C-007) */
+  user?: string | null; amount?: number | null; currency?: string | null; period?: string | null };
 type Refund = { id: string; payment_id: string; amount: number; currency: string; status: string; created_at: string | null };
 type Failed = { id: string; amount: number; currency: string; created_at: string | null; why: string | null };
 /** Straight from Razorpay (DJ-016, DJ-017), read only: the key's mode, the last webhook, and the newest subscriptions,
@@ -23,8 +25,10 @@ export type Activity = { mode: string; enabled: boolean; last_webhook: { at: str
   subscriptions: Sub[]; refunds: Refund[]; failed: Failed[]; errors: Record<string, string>; revenue_by_month?: { month: string; by_currency: Record<string, number> }[] };
 
 const SUBS: Column<Sub>[] = [
-  { key: "id", header: "Subscription", rowHeader: true, cell: (x) => <span className="adm-mono">{x.id}</span> },
+  { key: "user", header: "User", rowHeader: true, wrap: true, cell: (x) => (
+    <span className="k-stack tight"><span className="adm-break">{x.user ?? "Unknown user"}</span><span className="adm-mono k-muted">{x.id}</span></span>) },
   { key: "plan", header: "Plan", cell: (x) => (x.plan ? x.plan[0].toUpperCase() + x.plan.slice(1) : x.plan_id ?? "–") },
+  { key: "amt", header: "Amount", numeric: true, cell: (x) => (x.amount != null ? `${money(x.amount, x.currency ?? "INR")} ${x.period === "year" ? "a year" : "a month"}` : "–") },
   { key: "st", header: "Status", cell: (x) => x.status },
   { key: "made", header: "Started", cell: (x) => dateOnly(x.created_at) },
   { key: "end", header: "Paid to", cell: (x) => dateOnly(x.current_end) },
@@ -43,6 +47,14 @@ const FAILED: Column<Failed>[] = [
   { key: "why", header: "Why", wrap: true, cell: (x) => x.why ?? "–" },
   { key: "at", header: "When", cell: (x) => dateOnly(x.created_at) },
 ];
+
+/** One line over the subscriptions: how many were started, how many were paid even once, and how many payments failed (LIVE1C-007: 25 bare
+ * IDs, every one an unpaid checkout, read as 25 problems). */
+export function subsSummary(a: Pick<Activity, "subscriptions" | "failed">): string {
+  const started = a.subscriptions.length, paid = a.subscriptions.filter((x) => (x.paid_count ?? 0) > 0).length, failed = a.failed.length;
+  const open = a.subscriptions.filter((x) => x.status === "created").length;
+  return `${started} started, ${paid} paid, ${failed} failed payment${failed === 1 ? "" : "s"}${open ? `; ${open} ${open === 1 ? "checkout was" : "checkouts were"} opened and never paid` : ""}.`;
+}
 
 /** The Payments row's facts (DJ-017): the mode, when Razorpay last reached us, and which currencies charge as themselves. */
 export function paymentsFacts(a: Activity | null): string {
@@ -78,7 +90,8 @@ export function MoneySection() {
       <Card label="Payments">
         <CardHead title="Payments" actions={<button type="button" className="btn quiet sm" disabled={busy} onClick={run}>{busy ? "Asking Razorpay…" : "Check payments setup"}</button>} />
         <StatusList label="Payments">
-          <StatusRow state={on ? "ok" : "warn"} label="Razorpay" detail={on ? `Connected${act ? ` · ${paymentsFacts(act)}` : ""}` : "Not set up, so paid plans show \"Coming soon\". Grant plans by hand in Users and growth."} />
+          <StatusRow state={on ? (act && act.mode === "live" && !act.last_webhook?.at ? "warn" : "ok") : "warn"} label="Razorpay"
+            detail={on ? `Connected${act ? ` · ${paymentsFacts(act)}` : ""}${act && act.mode === "live" && !act.last_webhook?.at ? ". Send a test event from Razorpay's dashboard before the first payment: without a webhook a paid plan is not switched on by itself" : ""}` : "Not set up, so paid plans show \"Coming soon\". Grant plans by hand in Users and growth."} />
           {check && <>
             <StatusRow state={check.keys_ok ? "ok" : "bad"} label={`Keys (${check.mode} mode)`}
               detail={check.keys_ok ? `Razorpay accepts key ${check.key_id}` : `Key ${check.key_id}, secret ${check.secret_length} characters: ${check.keys_error}. Regenerate the key in Razorpay and paste BOTH the new Key ID and secret into Railway.`} />
@@ -98,8 +111,17 @@ export function MoneySection() {
               <p className="k-small" data-testid="revenue-months"><b>Revenue by month:</b> {act.revenue_by_month.map((m) => `${m.month}: ${Object.entries(m.by_currency).map(([c, v]) => money(v, c)).join(" + ")}`).join(" · ")}</p>
             )}
             <h3 className="adm-sub">Subscriptions ({act.subscriptions.length})</h3>
-            {act.errors.subscriptions ? <p className="k-small k-down">{act.errors.subscriptions}</p>
-              : <DataTable label="Subscriptions" rows={act.subscriptions} rowKey={(x) => x.id} columns={SUBS} empty="No subscriptions yet." stack />}
+            {act.errors.subscriptions ? <p className="k-small k-down">{act.errors.subscriptions}</p> : (
+              <>
+                <p className="k-small" data-testid="subs-summary">{subsSummary(act)}</p>
+                <DataTable label="Subscriptions" rows={act.subscriptions.filter((x) => x.status !== "created")} rowKey={(x) => x.id} columns={SUBS} empty="No subscription has been paid yet." stack />
+                {act.subscriptions.some((x) => x.status === "created") && (
+                  <Disclosure summary={`Show the ${act.subscriptions.filter((x) => x.status === "created").length} unpaid checkouts`} testId="subs-unpaid">
+                    <DataTable label="Unpaid checkouts" rows={act.subscriptions.filter((x) => x.status === "created")} rowKey={(x) => x.id} columns={SUBS} stack />
+                  </Disclosure>
+                )}
+              </>
+            )}
             <h3 className="adm-sub">Refunds ({act.refunds.length})</h3>
             {act.errors.refunds ? <p className="k-small k-down">{act.errors.refunds}</p>
               : <DataTable label="Refunds" rows={act.refunds} rowKey={(x) => x.id} columns={REFUNDS} empty="No refunds." stack />}
