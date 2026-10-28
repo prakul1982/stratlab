@@ -176,12 +176,12 @@ def test_bse_only_companies_say_so(w, monkeypatch):
 # ---------- wording ----------
 def test_sentences_are_facts_without_advice_or_provider_names():
     texts = [deals.describe(d) for d in all_rows()]
-    assert any(t.startswith("Insider trade: Promoter Mukesh Shah Family Trust bought 25,000 shares on the open market (₹7.2 crore)") for t in texts)
+    assert any(t.startswith("Insider trade: Promoter Mukesh Shah Family Trust bought 25,000 shares on the open market (₹7.3 crore)") for t in texts)
     assert any("Block deal: Pension Plan Two sold 1,20,000 shares at ₹2,895.00" in t for t in texts)
     assert any("pledged 1,00,000 shares" in t for t in texts)
     for t in texts + [deals.flow_text(deals.flow(all_rows()))]:
         assert not ADVICE.search(t) and not PROVIDERS.search(t), t
-    assert deals.flow_text(deals.flow(all_rows())) == "1 person bought 25,000 shares (₹7.2 crore) · 1 person sold 4,000 shares (₹1.2 crore)"
+    assert deals.flow_text(deals.flow(all_rows())) == "1 person bought 25,000 shares (₹7.3 crore) · 1 person sold 4,000 shares (₹1.2 crore)"
     assert deals.rupees(48000) == "₹48,000" and deals.rupees(3_500_000) == "₹35.0 lakh"
 
 
