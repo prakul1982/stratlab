@@ -32,7 +32,7 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   expect(await page.locator("main section[id]").evaluateAll((els) => els.map((e) => e.id).filter((id) => id !== "top"))).toEqual(order);
   await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies"]);
   await expect(page.locator(".lp-space")).toHaveText([/Trade/, /Invest/, /Money/]);
-  await expect(page.locator(".lp-space .lp-space-art"), "each space shows a picture of itself").toHaveCount(3);
+  await expect(page.locator(".lp-space .lp-space-list li"), "each space lists three things it does").toHaveCount(9);
   await expect(page.locator("#trade .lp-options")).toContainText("Paper trade option structures");
   // what search engines and link previews show says the same
   await expect(page).toHaveTitle("StratLab: backtest trading ideas, research stocks, track money");
@@ -192,8 +192,9 @@ test("landing: no fake buttons, no card that looks picked, the bitcoin sign, and
 
 test("landing: the sample cards are labelled illustrations of made-up companies, never a real company with invented numbers", async ({ page }) => {
   const errors = await open(page);
-  const cards = page.locator(".lp-space .lp-space-art, .lp-rmock");
-  await expect(cards).toHaveCount(4);
+  const cards = page.locator(".lp-rmock");          // the three space cards' pictures went with the intro (LAND-2)
+  await expect(cards).toHaveCount(1);
+  await expect(page.locator(".lp-space .lp-illus"), "the intro's columns hold words, not invented figures").toHaveCount(0);
   for (const card of await cards.all()) {
     // the label is in the card, readable: body-sized ink, not 12px grey
     const label = card.locator(".lp-illus");
@@ -207,6 +208,33 @@ test("landing: the sample cards are labelled illustrations of made-up companies,
     for (const bad of [/RELIANCE/i, /NVIDIA/i, /\bNVDA\b/, /\bNASDAQ\b/, /\bNSE\b/, /BTC/, /\btoday\b/i, /\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/])
       expect(text, `${bad} in a sample card`).not.toMatch(bad);
   }
+  expect(errors).toEqual([]);
+});
+
+test("landing: the intro under the hero says what StratLab is, in three columns, three steps and what sets it apart (LAND-2)", async ({ page }, info) => {
+  const errors = await open(page);
+  const intro = page.locator("section.lp-spaces-sec");
+  await expect(intro.getByRole("heading", { level: 2, name: "What StratLab is" })).toBeVisible();
+  await expect(intro).toContainText("a lab for testing trading ideas and understanding your own money, across ten markets, on real prices with real costs");
+  await expect(intro).toContainText("never real orders");
+  await expect(intro.getByRole("heading", { level: 3 })).toHaveText(["Trade", "Invest", "Money", "How it works", "What makes it different"]);
+  await expect(page.locator("h1")).toHaveCount(1);
+  await expect(intro.locator(".lp-steps li")).toHaveCount(3);
+  await expect(intro.locator(".lp-steps li").first()).toContainText("plain words");
+  await expect(intro).toContainText("upload your files, then see your value, gains and tax worked out");
+  await expect(intro.locator(".lp-tool b")).toHaveText(["Facts, not tips", "Real costs, per market", "Four checks for luck", "Ten markets", "Your data stays yours", "Never real orders"]);
+  // right under the hero: the section starts within a screen and a half, and comes before every other section
+  const top = (await intro.boundingBox())!.y;
+  expect(top, "the intro is close under the hero").toBeLessThan(info.project.name === "phone" ? 1700 : 1300);
+  expect(top).toBeLessThan((await page.locator("section#trade").boundingBox())!.y);
+  // three columns side by side on a desktop, stacked on a phone, and never a sideways scroll
+  const xs = await page.locator(".lp-space").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+  if (info.project.name === "phone") expect(new Set(xs).size, "the columns stack").toBe(1);
+  else expect(new Set(xs).size, "three columns").toBe(3);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // the "See Trade" link goes to Trade
+  await intro.getByRole("link", { name: /See Money/ }).click();
+  await expect(page.locator("#money")).toBeInViewport();
   expect(errors).toEqual([]);
 });
 
