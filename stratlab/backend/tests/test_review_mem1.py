@@ -47,7 +47,9 @@ def test_a_job_holding_the_turn_can_start_another_inside_it():
     assert not memguard.TURNS.holds()
 
 
-def test_a_job_that_waits_too_long_runs_anyway():
+def test_a_job_that_waits_too_long_runs_anyway(monkeypatch):
+    # a queue of its own, as above: another test's background job asking for a turn left waiting() at 1 in CI (28 Oct)
+    monkeypatch.setattr(memguard, "TURNS", memguard._Turns())
     done = []
     holder = threading.Event()
 

@@ -2055,7 +2055,7 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 @media (max-width:640px){.tbl.fin{container-type:inline-size;scroll-padding-left:110px}.fin table{font-size:13px}.fin th,.fin td{padding:9px 4px}
 .fin th:first-child,.fin td:first-child{min-width:110px;width:110px}
 .fin th:not(:first-child),.fin td:not(:first-child){min-width:calc((100cqw - 110px) / 2);width:calc((100cqw - 110px) / 2)}
-@container (min-width:320px){.fin th:not(:first-child),.fin td:not(:first-child){min-width:calc((100cqw - 110px) / 3);width:calc((100cqw - 110px) / 3)}}}
+@container (min-width:340px){.fin th:not(:first-child),.fin td:not(:first-child){min-width:calc((100cqw - 110px) / 3);width:calc((100cqw - 110px) / 3)}}}
 .nav details.menu{display:none;position:relative;margin-left:auto;margin-right:12px}
 .nav details.menu summary{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border:1px solid var(--line-2);border-radius:10px;font-weight:600;color:var(--ink);cursor:pointer;list-style:none}
 .nav details.menu summary::-webkit-details-marker{display:none}
