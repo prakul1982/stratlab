@@ -99,11 +99,25 @@ create table if not exists app.option_snapshots (
   chain jsonb not null
 );
 create index if not exists option_snapshots_lookup on app.option_snapshots (name, expiry, taken_at);
+create table if not exists app.blog_posts (
+  slug text primary key,
+  kind text not null,
+  market text,
+  title text not null,
+  summary text not null,
+  body jsonb not null,
+  day text,
+  published_at timestamptz not null,
+  updated_at timestamptz not null,
+  indexable boolean not null default true,
+  published boolean not null default true
+);
+create index if not exists blog_posts_new on app.blog_posts (published_at desc);
 """
 
-TABLES = ("profiles", "usage_events", "strategies", "live_sessions", "live_orders", "app_settings", "option_snapshots")
-KEY = {"app_settings": "key"}                       # each table's primary key (the rest: id)
-JSON_COLS = {"strategies": {"body"}, "live_sessions": {"strategy", "instrument", "state"}, "option_snapshots": {"chain"}}
+TABLES = ("profiles", "usage_events", "strategies", "live_sessions", "live_orders", "app_settings", "option_snapshots", "blog_posts")
+KEY = {"app_settings": "key", "blog_posts": "slug"}                       # each table's primary key (the rest: id)
+JSON_COLS = {"strategies": {"body"}, "live_sessions": {"strategy", "instrument", "state"}, "option_snapshots": {"chain"}, "blog_posts": {"body"}}
 
 # The size readout (storage.report): the same shape as Supabase's stratlab_db_usage, for the app schema.
 USAGE_SQL = """

@@ -911,7 +911,36 @@ class Job:
                     self.sleep(pause)
                     continue
                 return self._start_failed(region, day, weekly, e, problems)
+        self.post_brief(issue, weekly)
         return self._send(region, issue, weekly, problems), True
+
+    def post_brief(self, issue: dict, weekly: bool) -> bool:
+        """The day's Market Brief also goes on the public blog (BLOG-1), once per market per day: a post made from the issue's
+        market-level facts, never from a reader's. Whatever goes wrong here is logged and never stops the send."""
+        if weekly:
+            return False
+        try:
+            from .. import blog
+            return blog.save_brief(issue)
+        except Exception as e:
+            print("newsletters: the brief's blog post failed:", str(e)[:160])
+            return False
+
+    def research_posts(self, now: datetime) -> None:
+        """Once a month, from the third day, the blog's research posts are written again from the app's own data
+        (blog_research.py). The month is remembered in memory after the first look, so a tick that has nothing to do reads
+        nothing."""
+        local = now.astimezone(ZoneInfo("Asia/Kolkata"))
+        month = f"{local:%Y-%m}"
+        if self.last.get("blog-research") == month:
+            return
+        from .. import blog_research
+        try:
+            blog_research.run_monthly(now)
+        except Exception as e:                      # the month is marked first (run_monthly), so a failure is tried again from Admin
+            print("newsletters: the blog's research run failed:", str(e)[:160])
+        if local.day >= blog_research.RESEARCH_DAY:
+            self.last["blog-research"] = month         # done now, or done before (a restart): not looked at again this month
 
     def _start_failed(self, region: str, day: date, weekly: bool, e: Exception, problems: list) -> tuple[int, bool]:
         """Said in Admin and the log, per region; the day stays open, so the next check tries again."""
@@ -969,6 +998,7 @@ class Job:
                 problems.append(f"My stocks weekly: {str(e)[:160]}")
                 ran = True
         sent += self.catch_up(now, problems)
+        self.research_posts(now)
         if ran:
             self.status.update(last_run=now.isoformat(), sent=sent, problems=problems[:5], last_error=problems[0][:200] if problems else None)
         return sent

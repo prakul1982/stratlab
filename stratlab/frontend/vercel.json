@@ -97,6 +97,15 @@
       ]
     },
     {
+      "source": "/blog/:path*",
+      "headers": [
+        {
+          "key": "x-vercel-enable-rewrite-caching",
+          "value": "1"
+        }
+      ]
+    },
+    {
       "source": "/sitemap.xml",
       "headers": [
         {
@@ -136,6 +145,10 @@
     {
       "source": "/stocks/:path*",
       "destination": "https://stratlab-production-ca25.up.railway.app/stocks/:path*"
+    },
+    {
+      "source": "/blog/:path*",
+      "destination": "https://stratlab-production-ca25.up.railway.app/blog/:path*"
     },
     {
       "source": "/sitemap.xml",

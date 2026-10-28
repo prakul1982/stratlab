@@ -30,7 +30,7 @@ from html import escape as e
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from . import db, instrument_kinds, memguard, sector_members, site_pages, universes
+from . import blog, db, instrument_kinds, memguard, sector_members, site_pages, universes
 from .branding import public_text
 from .config import settings
 from .intel.net import TTLCache
@@ -2010,7 +2010,7 @@ LOGO = ('<svg viewBox="254 174 156 382" aria-hidden="true" focusable="false"><de
         'V405L306,399V453Q306,457 302,457H261Q257,457 257,453Z"/></svg>')
 
 
-def _head(title: str, desc: str, canonical: str, extra: str = "", robots: str = "index,follow") -> str:
+def _head(title: str, desc: str, canonical: str, extra: str = "", robots: str = "index,follow", og_type: str = "website") -> str:
     # a page kept out of search results names no canonical address: it would point a search engine at a page it was told
     # not to list (R10V-005: the 404 for a company that doesn't exist said its canonical address was /stocks)
     site = settings.PUBLIC_SITE_URL
@@ -2028,7 +2028,7 @@ def _head(title: str, desc: str, canonical: str, extra: str = "", robots: str = 
 <meta name="robots" content="{robots}">
 {link}<link rel="icon" href="{site}/favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#F5F1E8" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
-<meta property="og:type" content="website"><meta property="og:site_name" content="StratLab">
+<meta property="og:type" content="{og_type}"><meta property="og:site_name" content="StratLab">
 <meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}">
 {og_url}<meta property="og:image" content="{site}/og-image.png">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{e(title)}"><meta name="twitter:description" content="{e(desc)}"><meta name="twitter:image" content="{site}/og-image.png">
@@ -2056,7 +2056,7 @@ def _top(sign_in: str | None = None) -> str:
     # the landing page's own sections, in its order, then company search (R43B-007: the two menus differed)
     links = "".join(f'<a href="{site}/#{k}">{v}</a>' for k, v in (("trade", "Trade"), ("invest", "Invest"), ("money", "Money"), ("alerts", "Alerts")))
     # the strategy library beside Companies, as on the landing page and the other public pages (DK-008)
-    menu = f'{links}<a href="{site}/pricing">Plans</a><a href="{site}/#faq">FAQ</a><a href="{site}/library">Library</a><a href="/stocks">Companies</a>'
+    menu = f'{links}<a href="{site}/pricing">Plans</a><a href="{site}/#faq">FAQ</a><a href="{site}/library">Library</a><a href="/stocks">Companies</a><a href="/blog">Blog</a>'
     return (f'<a class="skip" href="#main">Skip to main content</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
             f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{menu}</nav>'
             f'<details class="menu"><summary>Menu</summary><nav aria-label="Site (menu)">{menu}</nav></details>'
@@ -2067,7 +2067,7 @@ def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
     links = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                 ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us"),
-                                                                ("/pricing", "Plans"), ("/library", "Strategy library")))
+                                                                ("/pricing", "Plans"), ("/library", "Strategy library"), ("/blog", "Blog")))
     return (f'<footer class="site"><div class="in"><p>Research and paper trading only. No real orders are placed. StratLab shows '
             "facts from reported data for research and education; nothing here is investment advice or a recommendation, and "
             f"past prices don't predict future returns. © {datetime.now(timezone.utc).year} StratLab.</p>"
@@ -2558,15 +2558,21 @@ SCRAPERS = "".join(f"User-agent: {b}\n" for b in SCRAPER_BOTS) + "Disallow: /\n\
 
 def robots() -> str:
     site = settings.PUBLIC_SITE_URL
-    return SCRAPERS + f"User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /account\n\nSitemap: {site}/sitemap.xml\n"
+    return SCRAPERS + f"User-agent: *\nAllow: /\nAllow: /blog\nDisallow: /admin\nDisallow: /account\n\nSitemap: {site}/sitemap.xml\n"
 
 
 def sitemap_index() -> str:
     site = settings.PUBLIC_SITE_URL
-    names = ["pages"] + [f"stocks-{r}-{i + 1}" for r, R in REGIONS.items() for i in range(max(1, -(-len(companies(R)) // CHUNK)))]
+    names = ["pages", "blog"] + [f"stocks-{r}-{i + 1}" for r, R in REGIONS.items() for i in range(max(1, -(-len(companies(R)) // CHUNK)))]
     def day(n: str) -> str:
         if n == "pages":
             return max(d for _, d in site_pages.PAGES)
+        if n == "blog":                   # the day the newest post changed (BLOG-1); none when the posts can't be read
+            try:
+                return blog.latest_day()
+            except Exception as ex:
+                print("sitemap: the blog's day couldn't be read:", str(ex)[:120])
+                return ""
         return str(((_setting(f"stocks:list:{REGIONS[n.split('-')[1]]}") or {}).get("at")) or "")[:10]
     items = "".join(f"<sitemap><loc>{site}/sitemaps/{n}.xml</loc>" + (f"<lastmod>{d}</lastmod>" if (d := day(n)) else "") + "</sitemap>" for n in names)
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</sitemapindex>\n'
@@ -2583,7 +2589,7 @@ def _urlset(rows: list) -> str:
 
 def sitemap(name: str) -> str | None:
     """One sitemap file: "pages" (the public site pages, with the day each last changed, and StratLab's own library
-    strategies) or "stocks-in-1", "stocks-us-2"… (companies whose page has facts to show; the day is when the list of
+    strategies), "blog" (the blog's lists and posts) or "stocks-in-1", "stocks-us-2"… (companies whose page has facts to show; the day is when the list of
     listed companies was last refreshed); None for any other name."""
     site = settings.PUBLIC_SITE_URL
     if name == "pages":
@@ -2591,6 +2597,8 @@ def sitemap(name: str) -> str | None:
         listed = max((str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] for R in REGIONS.values()), default="")
         return _urlset([(site + p, d) for p, d in site_pages.PAGES] + [(site + p, listed or max(d for _, d in site_pages.PAGES)) for p in ["/stocks"] + [f"/stocks/{r}" for r in REGIONS]]
                        + [(site + p, d) for p, d in site_pages.library_pages()])
+    if name == "blog":                   # the blog's lists and posts (BLOG-1), each with the day it last changed
+        return _urlset(blog.sitemap_urls(site))
     bits = name.split("-")
     if len(bits) != 3 or bits[0] != "stocks" or bits[1] not in REGIONS or not bits[2].isdigit() or len(bits[2]) > 6:
         return None

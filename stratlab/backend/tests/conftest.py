@@ -36,6 +36,16 @@ def fresh_kept_answers():
 
 
 @pytest.fixture(autouse=True)
+def no_monthly_blog_research(monkeypatch):
+    """The newsletter job's monthly run of the blog's research generator (app/blog_research.py) reads the library, the IPO
+    tracker and the index history; a newsletter test whose clock is past the third of a month writes no research posts. The
+    blog's own tests (tests/test_blog.py) pass their own builders."""
+    import importlib
+    monkeypatch.setattr(importlib.import_module("app.blog_research"), "POSTS", ())
+    yield
+
+
+@pytest.fixture(autouse=True)
 def razorpay_confirms_what_the_event_says(monkeypatch):
     """A webhook's subscription is checked against Razorpay's own copy (app/billing.py _confirmed) before anything acts on
     it; tests have no Razorpay, so the event's copy stands for it. tests/test_billing_events.py checks _confirmed itself."""
