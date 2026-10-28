@@ -43,3 +43,14 @@ test("RC4-012: a range needs its history to within a weekend, not ten days (1M w
   assert.equal(available(last - 300, last, "1y"), false, "ten months have no 1Y");
   assert.equal(available(last - 5, last, "all"), true);
 });
+
+test("RC4-013: a company the server has no closes for (a new listing) is told so, with no Try again; a failed read still gets one", () => {
+  const js = read("src/../../backend/app/stock_chart.js");
+  assert.match(js, /if \(r\.status === 404\) throw new Error\("none"\);\s*if \(!r\.ok\) throw new Error\(String\(r\.status\)\);/);
+  assert.match(js, /j\.t\.length < 2\) throw new Error\("none"\)/);
+  assert.match(js, /var none = err\.message === "none";[^\n]*\n\s*started = none;/, "a 404 is not asked for again by the Try again button");
+  assert.match(js, /No price chart is available for this company yet\./);
+  assert.match(js, /if \(none\) return;\s*var b = document\.createElement\("button"\);/, "the button is for a read that failed");
+  assert.match(js, /The price chart couldn't be loaded just now\./);
+  assert.ok(js.length < 14000);
+});

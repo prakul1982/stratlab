@@ -1,5 +1,5 @@
 /* The share-price chart on a company's public page (PUB-1). One small script, no library: the app's own chart look (a 2px line, a
- * 10% tint, a hairline grid, a crosshair with the date and the close) drawn from /stocks/<market>/<symbol>/prices.json, a cached
+ * 10% tint, a hairline grid, a crosshair) drawn from /stocks/<market>/<symbol>/prices.json, a cached
  * read-only list of daily closes (a week apart before the last year). The page holds the same figures as text, so with no script
  * the chart is simply absent. Daily closes; nothing is predicted, fitted or extended. Served as /stocks/chart.js. */
 (function () {
@@ -29,10 +29,10 @@
     return e;
   };
 
-  /* what each range can show: it needs history reaching back to its start (a share listed within the year has no 1Y) */
+  /* a range needs history back to its start (a share listed within the year has no 1Y) */
   function available(r) {
     var last = data.t[data.t.length - 1];
-    return r === "all" || data.t[0] <= last - RANGES[r][0] + 4;       /* a weekend at the start (RC4-012) */
+    return r === "all" || data.t[0] <= last - RANGES[r][0] + 4;       /* RC4-012 */
   }
   function slice(r) {
     var t = data.t, n = t.length, from = r === "all" ? t[0] : t[n - 1] - RANGES[r][0], i = 0;
@@ -176,7 +176,7 @@
     adjustNote(s);
     Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-r") === range)); });
     draw();
-    /* the same closes as a table: up to 24 evenly spaced dates, the first and the last among them */
+    /* the closes as a table: up to 24 evenly spaced dates */
     var rows = Math.min(n, 24), body = "";
     for (var j = 0; j < rows; j++) {
       var i = Math.round(j * (n - 1) / (rows - 1));
@@ -192,10 +192,11 @@
     status.hidden = false;
     status.textContent = "Loading prices…";
     fetch(root.getAttribute("data-src"), { headers: { Accept: "application/json" } }).then(function (r) {
+      if (r.status === 404) throw new Error("none");
       if (!r.ok) throw new Error(String(r.status));
       return r.json();
     }).then(function (j) {
-      if (!j || !j.t || j.t.length < 2) throw new Error("empty");
+      if (!j || !j.t || j.t.length < 2) throw new Error("none");
       data = j;
       Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) {
         var ok = available(b.getAttribute("data-r"));
@@ -208,10 +209,12 @@
       root.setAttribute("data-ready", "1");
       seg.hidden = false;
       show();
-    }).catch(function () {
-      started = false;
+    }).catch(function (err) {
+      var none = err.message === "none";          /* a new listing: no "try again" (RC4-013) */
+      started = none;
       status.hidden = false;
-      status.textContent = "The price chart couldn't be loaded just now. The figures on this page are unaffected. ";
+      status.textContent = none ? "No price chart is available for this company yet. The figures here are unaffected." : "The price chart couldn't be loaded just now. The figures on this page are unaffected. ";
+      if (none) return;
       var b = document.createElement("button");
       b.type = "button"; b.className = "btn ghost"; b.textContent = "Try again";
       b.addEventListener("click", load);
@@ -227,7 +230,7 @@
   });
   var timer = 0;
   window.addEventListener("resize", function () { clearTimeout(timer); timer = setTimeout(function () { if (data) draw(); }, 120); });
-  /* asked for only when the chart is about to be seen: a crawler, or a visitor who never scrolls this far, costs the server nothing */
+  /* asked for only when about to be seen: a crawler costs the server nothing */
   if ("IntersectionObserver" in window) {
     var io = new IntersectionObserver(function (e) { if (e[0].isIntersecting) { io.disconnect(); load(); } }, { rootMargin: "300px 0px" });
     io.observe(root);
