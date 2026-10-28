@@ -55,7 +55,7 @@ test("VR7-009: the Market Watch panel's controls are 44px targets on a phone or 
 
 test("VR7-010: on a phone the chart's reset and full-screen buttons sit after the scale buttons in the foot, not alone on a line of the toolbar", () => {
   const css = read("src/charts/price/priceChart.css");
-  assert.match(css, /\.pc-foot-r \{ flex-wrap: nowrap; justify-content: stretch; gap: 6px; \}\n  \.pc-foot-r \.pc-end \{ order: 2; \}/);
+  assert.match(css, /\.pc-foot-r \{ flex-wrap: wrap; justify-content: stretch; gap: 6px; \}\n  \.pc-foot-r \.pc-end \{ order: 2; margin-left: auto; \}/);
 });
 
 test("VR7-011: only the Market Watch list scrolls and shrinks: the list tabs do not collapse when the add-symbol form is open", () => {
