@@ -108,3 +108,21 @@ test("RC7-008: a page whose first read takes more than ten seconds says so, inst
   await expect(page.getByText("Results this week and next")).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("RC7-009: a sign-in the server turns down in the middle of a visit says 'You were signed out', not 'Sign in to see…' as for a first visit", async ({ page }) => {
+  await signIn(page, PRO, "/research/watchlist");
+  await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
+  let ended = false;
+  await page.route(`${API}/**`, (r) => (ended ? r.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Not authenticated" }) }) : r.fallback()));
+  ended = true;
+  await page.evaluate(() => { const a = document.querySelector('a[href="/research/results"]') as HTMLAnchorElement; a.click(); });
+  await expect(page.getByRole("heading", { name: "You were signed out" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Your sign-in ended")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  // a visitor who was never signed in sees the ordinary gate
+  const fresh = await page.context().browser()!.newContext();
+  const p2 = await fresh.newPage();
+  await p2.goto("/research/results");
+  await expect(p2.getByRole("heading", { name: /Sign in to see/ })).toBeVisible({ timeout: 30_000 });
+  await fresh.close();
+});

@@ -116,3 +116,15 @@ test("RC7-008: every loading placeholder says so when a read takes longer than t
   assert.doesNotMatch(skel, /if \(!canRetry\) return;/);                    // the clock runs for every placeholder
   assert.match(skel, /\{slow && \(onRetry\s*\? <span className="k-row" data-testid="skel-slow">[\s\S]*Retry<\/button><\/span>\s*: <span className="k-stat-d" data-testid="skel-slow">\{SLOW_LOAD_NOTE\}<\/span>\)\}/);
 });
+
+test("RC7-009: a 401 mid-visit is remembered for the tab, the sign-in page says it, signing in again forgets it", () => {
+  const app = read("src/lib/app.tsx"), gate = read("src/pages/Gate.tsx"), signin = read("src/lib/signin.ts");
+  assert.match(app, /unauthorized: \(\) => \{ noteSignInEnded\(\); void signOutHere\(supabase\.auth\); \}/);
+  assert.match(app, /if \(s\) \{ setReady\(true\); clearSignInEnded\(\); \}/);
+  assert.match(gate, /const ended = !none && signInEnded\(\);/);
+  assert.match(gate, /ended \? "You were signed out"/);
+  assert.match(gate, /Your sign-in ended, so StratLab can't show \$\{what\} until you sign in again\./);
+  assert.match(signin, /export async function signIn\(next\?: string \| null\) \{\n  clearSignInEnded\(\);/);
+  // the user's own Sign out never sets it: only the 401 handler does
+  assert.equal((read("src/pages/AccountPage.tsx").match(/noteSignInEnded/g) ?? []).length, 0);
+});

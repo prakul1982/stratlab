@@ -7,7 +7,7 @@ import { Google } from "../components/Icons";
 import { PublicFrame } from "../components/PublicFrame";
 import { publicGet, type ApiError } from "../lib/http";
 import { describePath } from "../lib/deepLinks";
-import { signIn } from "../lib/signin";
+import { signIn, signInEnded } from "../lib/signin";
 import { hasSavedSession } from "../lib/entry";
 import { LoadFailed } from "../components/LoadGuard";
 import { useDocTitle, withBrand } from "../lib/title";
@@ -47,7 +47,9 @@ export function SignInGate() {
   const deep = !!d.company?.deep;
   const none = !!d.company && look.state === "none";
   const what = d.company ? (co ? (deep ? `the deep dive on ${co.name}` : co.name) : deep ? "this company's deep dive" : "this company's page") : d.what;
-  const title = none ? `No company page for ${symbol}` : d.restricted ? "Sign in to StratLab" : `Sign in to see ${what}`;
+  // signed out by the server in the middle of a visit (a 401): said so, with where they were kept, so it isn't taken for a first visit (RC7-009)
+  const ended = !none && signInEnded();
+  const title = none ? `No company page for ${symbol}` : ended ? "You were signed out" : d.restricted ? "Sign in to StratLab" : `Sign in to see ${what}`;
   useEffect(() => {
     if (none) document.title = withBrand("Company not found");
     else if (co) document.title = withBrand(`Sign in · ${co.name}`);
@@ -73,6 +75,7 @@ export function SignInGate() {
     <PublicFrame className="gate">
       <PageHeader eyebrow="StratLab" title={title}
         lede={none ? "StratLab has no company page at this address. Check the symbol, or sign in with Google to search every listed company."
+          : ended ? `Your sign-in ended, so StratLab can't show ${what} until you sign in again. Sign in with Google and this page opens where you left it. What you saved is still in your account.`
           : d.company ? "Company pages, with their numbers, filings, owners and charts, are inside StratLab. It's free to start: sign in with Google and the page opens if StratLab has one for this company."
           : d.restricted ? "Sign in with Google to continue. It's free to start."
           : `${what.charAt(0).toUpperCase()}${what.slice(1)} ${/s$/.test(what) && !/^this /.test(what) ? "are" : "is"} in your StratLab account. Sign in with Google and this page opens.`} />
