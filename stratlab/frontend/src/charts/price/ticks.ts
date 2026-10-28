@@ -25,6 +25,10 @@ export const SESSION_MIN: Record<string, [number, number]> = {
   US: [9 * 60 + 30, 16 * 60], UK: [8 * 60, 16 * 60 + 30], EU: [9 * 60, 17 * 60 + 30], JP: [9 * 60, 15 * 60 + 30],
 };
 
+/** Whether a wall-clock time falls on a Saturday or Sunday: no market with a session trades then, so a price stamped then (a source
+ * that sent no time, read as now) starts no candle. */
+const weekend = (wall: number): boolean => { const d = new Date(wall).getUTCDay(); return d === 0 || d === 6; };
+
 /** The volume this tick adds: what traded since the previous one. The first tick of a chart only sets the mark (what traded
  * before it is in the candles already); a lower number than before is a new day, so it starts again. */
 export function volumeSince(state: VolState, v: number | null): number {
@@ -51,7 +55,7 @@ export function applyTick(last: Bar | undefined, tick: Tick, tf: string, vol: Vo
     if (tf !== "1d" || tick.t <= last.t || dayOf(wall) < last.day) return null;
     const [open, close] = SESSION_MIN[market] ?? [0, 1440];
     const minutes = ((wall % 86_400_000) / 60_000) | 0;
-    if (minutes < open || minutes >= close) return null;
+    if (minutes < open || minutes >= close || (market in SESSION_MIN && weekend(wall))) return null;
     const midnight = dayOf(wall) * 86_400_000;
     return { bar: { t: midnight - (last.w - last.t), w: midnight, o: tick.p, h: tick.p, l: tick.p, c: tick.p, v: add, day: dayOf(wall) }, isNew: true };
   }
@@ -61,7 +65,7 @@ export function applyTick(last: Bar | undefined, tick: Tick, tf: string, vol: Vo
   const wall = start + (last.w - last.t);
   const [open, close] = SESSION_MIN[market] ?? [0, 1440];
   const minutes = ((wall % 86_400_000) / 60_000) | 0;
-  if (minutes < open || minutes >= close) return null;
+  if (minutes < open || minutes >= close || (market in SESSION_MIN && weekend(wall))) return null;
   return { bar: { t: start, w: wall, o: tick.p, h: tick.p, l: tick.p, c: tick.p, v: add, day: dayOf(wall) }, isNew: true };
 }
 

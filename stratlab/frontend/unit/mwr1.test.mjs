@@ -32,6 +32,11 @@ test("a price stamped at the close starts no candle in the US, UK, Europe or Jap
     assert.equal(T.applyTick(mid, { p: 100.5, v: null, t: at(`2026-10-23T${inside.slice(0, 2)}:${String(+inside.slice(3) + 1).padStart(2, "0")}:05${off}`) }, "1m", fresh(), market).isNew, true, `${market} next minute`);
     assert.equal(T.applyTick(last, { p: 100, v: null, t: at(`2026-10-26T${before}:00${off}`) }, "1m", fresh(), market), null, `${market} before the open`);
   }
+  // no candle on a Saturday or Sunday (a source that sent no time is read as now), in any market with a session
+  const fri = bar("2026-10-23T15:59:00-04:00", 100, 101, 99, 100);
+  assert.equal(T.applyTick(fri, { p: 100, v: null, t: at("2026-10-24T11:00:00-04:00") }, "1m", fresh(), "US"), null);
+  const ist = bar("2026-10-23T15:29:00+05:30", 100, 101, 99, 100);
+  assert.equal(T.applyTick(ist, { p: 100, v: null, t: at("2026-10-25T10:00:00+05:30") }, "1m", fresh(), "IN"), null);
   // crypto and forex trade round the clock: no session to keep inside
   const c = bar("2026-10-23T23:59:00+00:00", 100, 101, 99, 100);
   assert.equal(T.applyTick(c, { p: 100, v: null, t: at("2026-10-24T00:00:10+00:00") }, "1m", fresh(), "CRYPTO").isNew, true);

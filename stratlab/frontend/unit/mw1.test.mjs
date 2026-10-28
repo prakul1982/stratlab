@@ -51,8 +51,8 @@ test("a tick after the candle's end starts the next one on the same grid, and no
   const closing = bar("2026-10-23T15:29:00+05:30", 100, 101, 99, 100, 0);
   assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-23T15:31:00+05:30") }, "1m", { cum: null }), null);
   assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-23T15:29:30+05:30") }, "1m", { cum: null }).isNew, false);
-  assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-24T09:00:00+05:30") }, "1m", { cum: null }), null);
-  assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-24T09:15:05+05:30") }, "1m", { cum: null }).bar.t, at("2026-10-24T09:15:00+05:30"));
+  assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-26T09:00:00+05:30") }, "1m", { cum: null }), null);
+  assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-26T09:15:05+05:30") }, "1m", { cum: null }).bar.t, at("2026-10-26T09:15:00+05:30"));
   // an older tick, or a made-up one, is ignored
   assert.equal(T.applyTick(closing, { p: 100, v: null, t: at("2026-10-23T15:10:00+05:30") }, "1m", { cum: null }), null);
   assert.equal(T.applyTick(closing, { p: NaN, v: null, t: Date.now() }, "1m", { cum: null }), null);
