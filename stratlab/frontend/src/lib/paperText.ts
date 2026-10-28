@@ -41,7 +41,7 @@ export function trialLastDay(endsAt: string): string {
 export function trialStartLine(trial: { started: boolean; active: boolean; ends_at: string | null; days?: number } | null | undefined): string | null {
   if (!trial) return null;
   const days = trial.days ?? 5;
-  if (!trial.started) return `On Free, paper trading is a trial of ${days} Indian market days from this first start (weekends and market holidays don't count, even for crypto). It ends at midnight India time after the ${days === 5 ? "fifth" : `${days}th`}, and the session stops then unless you upgrade.`;
+  if (!trial.started) return `On Free, paper trading is a trial of ${days} Indian market days from this first start (a start after the 3:30 PM close counts from the next market day; weekends and market holidays don't count, even for crypto). It ends at midnight India time after the ${days === 5 ? "fifth" : `${days}th`}, and the session stops then unless you upgrade.`;
   if (trial.active && trial.ends_at) return `Your Free trial runs until the end of ${trialLastDay(trial.ends_at)} (India time); the session stops then unless you upgrade.`;
   return "Your Free paper trading trial has ended, so a new session needs Basic or Pro.";
 }
