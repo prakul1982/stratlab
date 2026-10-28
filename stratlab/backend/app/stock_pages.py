@@ -2172,7 +2172,7 @@ INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address
 
 def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
-    explore = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/library", "Strategy library"), ("/pricing", "Plans"))) + '<a href="/stocks">Companies</a><a href="/blog">Blog</a>'
+    explore = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/library", "Strategy library"), ("/stocks", "Companies"), ("/blog", "Blog"), ("/pricing", "Plans")))
     policies = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                    ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us")))
     policies += f'<a href="{INSTAGRAM}" rel="me noopener">Instagram</a>'

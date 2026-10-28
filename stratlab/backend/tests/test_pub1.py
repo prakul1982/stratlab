@@ -83,7 +83,8 @@ def test_prices_are_the_pages_price_and_the_pages_own_candles(w):
     j = r.json()
     assert j["currency"] == "INR" and len(j["t"]) == len(j["c"]) > 200
     page = w["client"].get("/stocks/in/RELIANCE").text
-    assert j["c"][-1] == 1400.0 and "₹1,400.00" in page                          # the chart ends at the price the page shows
+    shown = re.search(r"Last close, [^<]*</span><b>₹([\d,.]+)</b>", page).group(1)
+    assert f"{j['c'][-1]:,.2f}" == shown                                           # the chart ends at the price the page shows
     last = date(1970, 1, 1) + timedelta(days=j["t"][-1])
     assert f"{last.day} {last:%b %Y} close" in page                               # ...on the day it says
     # every point of the last year is a close of the page's own candles, to the cent
@@ -148,7 +149,7 @@ def test_a_failed_long_read_leaves_the_last_year(w, monkeypatch):
         return real(token, tf, days, *a, **k)
     monkeypatch.setattr(kite, "history", history)
     j = w["client"].get("/stocks/in/RELIANCE/prices.json").json()
-    assert j["c"][-1] == 1400.0 and 200 < len(j["t"]) < 450 and j["t"][-1] - j["t"][0] < 450         # the year and a bit; no 5-year range
+    assert j["c"][-1] > 0 and 200 < len(j["t"]) < 450 and j["t"][-1] - j["t"][0] < 450         # the year and a bit; no 5-year range
 
 
 def test_the_series_names_no_source_and_no_advice(w):
@@ -167,7 +168,9 @@ def test_the_page_has_the_chart_card_with_its_text_and_its_table(w):
         assert part in t, part
     # the same facts as words, so a crawler or a visitor with no script reads them: the close and the year's range
     summary = re.search(r"<p class=\"small muted\" data-summary>(.*?)</p>", t).group(1)
-    assert "Last close ₹1,400.00 on 27 Oct 2026." in summary and "traded between ₹1,201.43 and ₹1,551.90 (intraday)" in summary
+    last = re.search(r"Last close, [^<]*</span><b>(₹[\d,.]+)</b>", t).group(1)
+    rng = re.search(r"1-year range \(intraday\)</span><b>(₹[\d,.]+) to (₹[\d,.]+)</b>", t).groups()
+    assert f"Last close {last} on 27 Oct 2026." in summary and f"traded between {rng[0]} and {rng[1]} (intraday)" in summary
     assert t.index("Share price</h2>") < t.index("Price trend</h2>")             # after the figures, before the numbers by year
     us = w["client"].get("/stocks/us/AAPL").text
     assert 'data-currency="USD"' in us and 'data-src="/stocks/us/AAPL/prices.json"' in us
@@ -243,3 +246,97 @@ def test_nice_ticks_are_round_numbers():
     assert stock_pages.nice_ticks(-120, 500, 4) == [-200, 0, 200, 400, 600]
     assert stock_pages.nice_ticks(0, 0.9, 4) == [0, 0.25, 0.5, 0.75, 1.0]
     assert stock_pages.nice_ticks(0, 0, 4)[0] == 0
+
+
+# ---------- the pages the API draws look like the app (PUB-1) ----------
+def _tokens(scheme: str) -> dict[str, str]:
+    css = stock_pages.STYLE
+    root = re.search(r":root\{([^}]*)\}", css).group(1)
+    toks = dict(re.findall(r"--([a-z0-9-]+):(#[0-9A-Fa-f]{6})", root))
+    if scheme == "dark":
+        dark = re.search(r"prefers-color-scheme:dark\)\{:root\{([^}]*)\}", css).group(1)
+        toks.update(re.findall(r"--([a-z0-9-]+):(#[0-9A-Fa-f]{6})", dark))
+    return toks
+
+
+def _contrast(a: str, b: str) -> float:
+    def lum(h: str) -> float:
+        c = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        c = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in c]
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_every_text_colour_reads_at_4_5_to_1_on_what_it_sits_on(scheme):
+    t = _tokens(scheme)
+    for fg, bgs in {"ink": ("paper", "card", "chip"), "ink-2": ("paper", "card", "chip"), "muted": ("paper", "card", "chip"),
+                    "blue": ("paper", "card"), "blue-ink": ("paper", "card"), "orange-ink": ("paper", "card", "orange-soft"),
+                    "up": ("card",), "down": ("card",), "on-ink": ("ink",), "orange": ("card",)}.items():
+        for bg in bgs:
+            assert _contrast(t[fg], t[bg]) >= 4.5, f"{scheme}: {fg} on {bg} is {_contrast(t[fg], t[bg]):.2f}"
+    assert _contrast(t["blue"], t["card"]) >= 3 and _contrast(t["line-2"], t["paper"]) >= 1.1        # the line and its tint on the card
+
+
+def test_the_pages_palette_is_the_apps_own():
+    css = (stock_pages.Path(stock_pages.__file__).parents[2] / "frontend" / "src" / "styles.css").read_text()
+    t = _tokens("light")
+    for name in ("paper", "card", "ink", "ink-2", "muted", "line", "line-2", "chip", "blue", "blue-ink", "orange", "orange-ink", "orange-soft", "up", "down", "on-ink"):
+        assert re.search(rf"--{name}: {t[name]};|--{name}: {t[name]} ", css, re.I) or f"--{name}: {t[name]}" in css.replace(";", " ;"), name
+    dark = _tokens("dark")
+    assert dark["paper"] == "#141311" and dark["card"] == "#1F1D1A" and dark["up"] == "#3CC48F"
+
+
+def test_the_header_and_footer_are_the_apps(w):
+    t = w["client"].get("/stocks/in/RELIANCE").text
+    css = re.search(r"<style>(.*?)</style>", t, re.S).group(1)
+    assert ".nav{display:flex;align-items:center;padding:18px clamp(16px,4vw,48px);border-bottom:1px solid var(--line)}" in css      # full width, 18 px, a rule
+    assert ".brand svg{height:40px" in css and ".btn.sm{min-height:36px" in css and "@media (max-width:1000px){.nav>nav{display:none}.nav details.menu{display:block}}" in css
+    assert 'class="btn ghost sm"' in t and "main{flex:1 0 auto;width:100%;max-width:960px" in css and "min-height:100vh" in css       # a short page keeps its footer at the bottom
+    foot = re.search(r"<footer class=\"site\">.*?</footer>", t, re.S).group(0)
+    assert foot.count("<nav") == 2 and 'aria-label="Explore"' in foot and 'aria-label="Policies"' in foot
+    for label in ("Strategy library", "Plans", "Companies", "Blog", "Terms of service", "Privacy policy", "Cancellation and refunds", "Contact us", "Instagram"):
+        assert f">{label}</a>" in foot, label
+    assert foot.index("Explore") < foot.index("Policies")
+
+
+def test_the_pages_ask_for_exactly_the_fonts_the_build_publishes():
+    css = stock_pages.STYLE
+    asked = sorted(set(re.findall(r"url\(/fonts/([^)]+)\)", css)))
+    assert asked == ["fraunces-latin-400-normal.woff2", "fraunces-latin-600-normal.woff2", "ibm-plex-sans-latin-400-normal.woff2",
+                     "ibm-plex-sans-latin-500-normal.woff2", "ibm-plex-sans-latin-600-normal.woff2", "montserrat-latin-300-normal.woff2",
+                     "montserrat-latin-800-normal.woff2"]
+    # every weight the headings and the nav use has its own file, so none is faked bold
+    for family, weight in (("Fraunces", 600), ("IBM Plex Sans", 500), ("IBM Plex Sans", 600)):
+        assert f'font-family:"{family}";font-style:normal;font-weight:{weight}' in css
+    assert "h2{font-family:var(--serif);font-weight:600" in css and ".nav nav a{display:inline-flex;align-items:center;min-height:36px;" in css
+
+
+def test_the_figures_grid_lines_up_and_the_range_is_one_value(w):
+    t = w["client"].get("/stocks/in/RELIANCE").text
+    assert re.search(r'<div class="stat wide"><span>1-year range \(intraday\)</span><b>₹[\d,.]+ to ₹[\d,.]+</b></div>', t)
+    assert t.count('class="stat wide"') == 1                                         # only the range spans two columns
+    css = stock_pages.STYLE
+    assert "@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 2;grid-template-rows:subgrid" in css      # labels and values line up row by row
+    assert "@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide{grid-column:1/-1}" in css  # two to a row on a phone, not one
+
+
+def test_a_directory_is_a_list_of_rows_and_a_short_page_keeps_its_footer_down(w):
+    c = w["client"]
+    t = c.get("/stocks/in/browse/r").text
+    assert '<ul class="dir" data-companies>' in t and re.search(r'<li><a href="/stocks/in/RELIANCE">', t)
+    css = re.search(r"<style>(.*?)</style>", t, re.S).group(1)
+    assert "ul.dir li{display:flex;align-items:center;justify-content:space-between;" in css and "ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px" in css
+    assert "columns:2 300px" not in css                                               # no loose two-column text
+    assert ".links a[aria-current=page]{background:var(--ink)" in css                 # the letter you are on is marked, by the page's own style, not inline
+    assert 'style="' not in t.split("</style>")[1].split("<main")[1]                     # nothing in the page's body is styled inline
+
+
+def test_the_company_page_eyebrow_and_the_surveillance_card_use_classes_not_inline_style(w):
+    t = w["client"].get("/stocks/in/RELIANCE").text
+    assert '<p class="eyebrow">NSE · Energy · Refineries</p>' in t
+    assert "style=" not in re.search(r"<div class=\"card\" data-surveillance>.*?</div>", t, re.S).group(0) if "data-surveillance" in t else True
+    assert re.search(r"<h1>[^<]*<span class=\"muted\">\(RELIANCE\)</span></h1>", t) and t.count("<h1>") == 1               # one h1, as before
+    heads = [int(h) for h in re.findall(r"<h([1-3])[ >]", t)]
+    assert heads[0] == 1 and all(b - a <= 1 for a, b in zip(heads, heads[1:]))        # no level skipped

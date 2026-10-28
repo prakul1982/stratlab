@@ -278,3 +278,32 @@ test("DOC-2: the landing page names the newer tools, its lists keep full grid ro
   assert.equal(rules.length, 25);
   for (let i = 1; i <= rules.length; i++) assert.match(doc, new RegExp(`\\| R${i} \\|`), `R${i}`);
 });
+
+// ---------- PUB-1: the public pages look like one product ----------
+test("PUB-1: the policies use the public frame (header with the site's links, footer with the explore links), not a header of their own", () => {
+  const page = read("src/pages/LegalPage.tsx"), css = read("src/styles.css");
+  assert.match(page, /<PublicFrame className="legal">/);
+  assert.doesNotMatch(page, /legal-head|<Logo|SkipLink/);                                           // the frame brings the logo, the skip link and the header
+  assert.match(page, /<nav className="legal-tabs" aria-label="Policies">/);                        // the other policies stay one tap away
+  assert.match(css, /\.pub-main\.legal \{ max-width: 800px; \}/);
+  assert.match(css, /\.legal-body \.h3 \{[^}]*font: 600 21px\/1\.25 var\(--serif\)/);               // a heading for each part, not a bold line of body text
+  assert.match(css, /@media \(max-width: 640px\) \{ \.legal-tabs a \{ min-height: 44px; \} \}/);   // a tap target on a phone
+  assert.doesNotMatch(css, /\.legal-head/);
+});
+
+test("PUB-1: the server-drawn public pages carry the app's own fonts, header height and colour tokens", async () => {
+  const { PUBLIC_FONTS } = await import("../scripts/publicFonts.mjs");
+  const files = PUBLIC_FONTS.map(([f]) => f);
+  for (const f of ["fraunces-latin-600-normal.woff2", "ibm-plex-sans-latin-500-normal.woff2"]) assert.ok(files.includes(f), `${f} is published for the API's pages`);
+  const py = readFileSync(new URL("../../backend/app/stock_pages.py", import.meta.url), "utf8");
+  const style = py.slice(py.indexOf('STYLE = """'), py.indexOf('"""', py.indexOf('STYLE = """') + 12));
+  for (const f of files) assert.ok(style.includes(`/fonts/${f}`), `${f} is asked for by the pages`);        // the pages ask for every font the build publishes, and no other
+  const css = read("src/styles.css");
+  for (const token of ["--paper", "--card", "--ink", "--muted", "--line", "--blue", "--orange"]) {                // one palette: the pages' light values are the app's
+    const app = css.match(new RegExp(`${token}: (#[0-9A-Fa-f]{6})`))?.[1], srv = style.match(new RegExp(`${token}:(#[0-9A-Fa-f]{6})`))?.[1];
+    assert.equal(srv?.toLowerCase(), app?.toLowerCase(), token);
+  }
+  assert.match(style, /\.nav\{display:flex;align-items:center;padding:18px clamp\(16px,4vw,48px\);border-bottom:1px solid var\(--line\)\}/);   // the app's public header: full width, 18px
+  assert.match(style, /\.brand svg\{height:40px/);                                                                // the logo at the app's size
+  assert.match(css, /\.pub-nav \{[^}]*padding: 18px clamp\(16px, 4vw, 48px\)/);
+});
