@@ -94,6 +94,7 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
       "**Microsoft Clarity:** when it is on, it records how pages are used (scrolls, taps and where people get stuck) as a replayable session with all text and form fields hidden. Microsoft may set cookies and process the recording.",
       "**Where none of them run:** no ad, pixel or recording is on Money, tax, holdings, net worth, Account, Settings, Admin, sign-in or payment pages, or in emails. A recording that was running stops when you open one of them.",
       "**Your browser can say no for you:** if it sends Do Not Track or Global Privacy Control, the Meta Pixel and Clarity do not load. StratLab gives none of these your email, holdings, notebooks or anything you type.",
+      "**Asked about ads alone:** on a company page, the question is about Google ads only, and \"Allow\" there lets those ads load and nothing else. Meta's and Microsoft's are asked about separately and stay off until you allow them.",
       "**To change your answer,** use \"Change my choice\" on this page (taking a yes back reloads the page), or clear this site's data in your browser's settings. Google's own ad settings are at adssettings.google.com.",
     ] },
     { h: "Who processes it for us" },
@@ -110,7 +111,7 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
     { p: "StratLab sets no cookies itself. It uses your browser's local storage, which stays on your device until you clear it, and session storage, which goes when you close the tab. Nothing StratLab stores is used for advertising. The ad and analytics scripts described above, if you allow them, can set their own cookies." },
     { ul: [
       "**Before you sign in**, on your first visit: a preference for light or dark mode and for the currency prices are shown in, a note that the page reloaded once if a file failed to load, and, when usage analytics are on, one entry from PostHog (its name starts with `ph_`) holding a random anonymous ID and session details. That PostHog entry is not made, and no analytics request is sent, if your browser sends Do Not Track or Global Privacy Control.",
-      "**Your answer about ads and analytics:** `stratlab.ads`, \"yes\" or \"no\" with the date, kept in your browser for a year. It stays on your device.",
+      "**Your answer about ads and analytics:** `stratlab.ads`, \"yes\" or \"no\" with the date (and, for a yes about Google ads alone, a note saying so), kept in your browser for a year. It stays on your device.",
       "**While Google sign-in runs:** the page to come back to, and an invite code if you arrived by a friend's link.",
       "**After you sign in:** your sign-in session, which the sign-in service refreshes, and a few choices such as which menu is open and whether you have seen the tour.",
       "**To pay:** Razorpay's payment window can set its own cookies and storage on its own pages and windows.",

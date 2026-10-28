@@ -114,7 +114,7 @@ test("the page script and the app share one key and one format", () => {
   const js = read("public/ads.js");
   assert.equal(/var KEY = "([^"]+)"/.exec(js)[1], A.CHOICE_KEY);
   assert.equal(Number(/var DAYS = (\d+)/.exec(js)[1]), A.CHOICE_DAYS);
-  assert.match(js, /JSON\.stringify\(\{ c: c, at: Date\.now\(\) \}\)/);
+  assert.match(js, /var rec = \{ c: c, at: Date\.now\(\) \};[\s\S]*JSON\.stringify\(rec\)/);
   assert.match(js, /typeof j\.at === "number"/);
 });
 
