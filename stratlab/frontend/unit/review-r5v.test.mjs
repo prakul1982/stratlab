@@ -10,14 +10,18 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 test("the landing's sample cards name no real company and show no quote 'today' (R5V-002, R5V-003)", () => {
   const login = read("src/pages/Login.tsx");
-  const samples = login.slice(login.indexOf("function SpaceArt"), login.indexOf("/* small illustrations for the four checks */"));
+  // the three space cards' pictures went with the intro (LAND-2); the company research sample is the one card of made-up figures left
+  const samples = login.slice(login.indexOf("function ResearchMock"), login.indexOf("/** A few of StratLab's own library strategies"));
   assert.ok(samples.length > 500, "found the sample cards");
   for (const bad of [/RELIANCE/, /NVIDIA/, /\bNVDA\b/, /NASDAQ/, /\bNSE\b/, /BTC/, /\btoday\b/, /18 Oct/, /symbol=/])
     assert.doesNotMatch(samples, bad, `${bad} in the landing's sample cards`);
-  // every card carries the readable label, not the old 12px grey line
-  assert.equal((samples.match(/className="lp-illus"/g) || []).length, 4);
-  assert.match(login, /const ILLUSTRATION = "Illustration: made-up figures"/);
+  // the card carries the readable label, not the old 12px grey line
+  assert.equal((samples.match(/className="lp-illus"/g) || []).length, 1);
+  assert.doesNotMatch(login, /SpaceArt|const ILLUSTRATION/);
   assert.doesNotMatch(samples, /tiny muted">Sample figures/);
+  // and the intro that took the pictures' place shows no invented figure at all
+  const intro = read("src/content/intro.ts");
+  assert.doesNotMatch(intro, /₹\s?\d|\$\s?\d|\d%|\d,\d{3}/, "the intro states no made-up amount");
   const css = read("src/styles.css");
   assert.match(css, /\.lp-illus \{[^}]*font: 600 var\(--t-label\)/);
 });
