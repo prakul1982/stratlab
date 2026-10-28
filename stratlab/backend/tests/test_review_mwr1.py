@@ -203,3 +203,28 @@ def test_two_reads_a_few_minutes_apart_share_the_exchanges_finished_chunks():
         for i in range(1, 80):
             p.minute_history(inst, now - timedelta(days=i), now - timedelta(days=i) + timedelta(hours=1))
         assert len(p.__dict__["_minutes"]) <= CoinbaseProvider.MINUTE_CHUNKS
+
+
+# ---------- erasing and exporting a person's data takes Market Watch's lists with it (MWR1-012) ----------
+def test_erasing_a_persons_data_removes_their_market_watch_lists_and_export_has_them(w):
+    from app import db, user_data
+    c = w["client"]
+    PRO = world.headers("pro-token")
+    for h in (BASIC, PRO):
+        c.post("/watch/lists", headers=h, json={"name": "Mine two"})
+        c.put("/watch/lists/default/items", headers=h, json={"items": [{"market": "CRYPTO", "symbol": "BTC-USD", "name": "Bitcoin"}, {"market": "IN", "symbol": "INFY", "name": "Infosys"}]})
+    ids = {c.get("/watch/lists", headers=h).json()["lists"][1]["id"] for h in (BASIC, PRO)}
+    assert len(ids) == 2
+    rows = lambda uid: db.sb().table("watchlists").select("id").eq("user_id", uid).execute().data
+    assert len(rows("u-basic")) == 2 and len(rows("u-pro")) == 2                 # the second list, and the first list's extra row (bitcoin)
+    out = user_data.export(db.get_profile("u-basic"))
+    assert out["not_included"] == []
+    mw = out["market_watch"]["lists"]
+    assert [l["name"] for l in mw] == ["Watchlist", "Mine two"] and mw[0]["first_list"] is True
+    assert {(i["market"], i["symbol"]) for i in mw[0]["items"]} == {("CRYPTO", "BTC-USD"), ("IN", "INFY")}
+    done = {d["key"]: d for d in user_data.erase("u-basic")["done"]}
+    assert done["watchlist"]["count"] >= 3                                      # the Research watchlist, the second list and the extra row
+    assert rows("u-basic") == [] and db.get_setting("watchlist:u-basic") is None
+    assert c.get("/watch/lists", headers=BASIC).json()["lists"][0]["items"] == []
+    assert len(rows("u-pro")) == 2                                              # nobody else's is touched
+    assert len(c.get("/watch/lists", headers=PRO).json()["lists"][0]["items"]) == 2
