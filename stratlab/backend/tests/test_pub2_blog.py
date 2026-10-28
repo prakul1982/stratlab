@@ -53,6 +53,9 @@ def test_the_strategy_tables_have_short_unwrapped_headers_fixed_widths_and_no_em
     for t in tables:
         assert t["head"] == ["Rule set", "After costs", "Passive", "Difference", "Trades", "Checks"] and t["align"] == "lrrrrl" and sum(t["widths"]) == 100
         assert len(t["caption"]) < 70 and all(len(r) == 6 for r in t["rows"])                 # a short caption; no "Other period" column
+        # the name column holds "Opening-range breakout (intraday)" on one line in the wide fallback font a first visit draws in
+        # (262px in DejaVu Sans at 15px; the column is ~34% of a ~900px table less its padding), not only in the site's own font (CI, 28 Oct)
+        assert t["widths"][0] >= 34 and t["widths"][5] >= 24
     checks = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Check")
     assert checks["head"][1:] == ["Passed", "Failed", "Not run"] and len(checks["rows"]) == 4 and checks["align"] == "lrrr" and "widths" not in checks      # a small table sizes itself to a phone
     html = blog.blocks_html([tables[0]])

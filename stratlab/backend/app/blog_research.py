@@ -136,7 +136,7 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
                 row[0] = [row[0], {"s": f"Tested {x}"}]
         blocks += [{"t": "h2", "text": mname},
                    {"t": "p", "text": f"Group: {', '.join(groups)}." if groups else f"{mname} group."},
-                   {"t": "table", "caption": f"{mname}, tested {usual}", "align": "lrrrrl", "widths": [31, 12, 9, 11, 8, 29],
+                   {"t": "table", "caption": f"{mname}, tested {usual}", "align": "lrrrrl", "widths": [34, 12, 9, 11, 8, 26],
                     "head": ["Rule set", "After costs", "Passive", "Difference", "Trades", "Checks"], "rows": table}]
     risk, mrisk = library_seed.RISK, library_seed.MARKET_RISK
     blocks += [
