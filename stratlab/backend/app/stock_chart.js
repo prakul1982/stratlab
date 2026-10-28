@@ -1,8 +1,7 @@
-/* The share-price chart on a company's public page (PUB-1). One small script, no library: it draws the app's own chart
- * look (one 2px line, a 10% tint, hairline grid, a crosshair with the date and the close) from
- * /stocks/<market>/<symbol>/prices.json, a cached read-only list of daily closes (a week apart before the last year).
- * The page already holds the same figures as text, so with no script the chart is simply absent and nothing else changes.
- * Closing prices as they traded; nothing is predicted, fitted or extended. Served as /stocks/chart.js by the API. */
+/* The share-price chart on a company's public page (PUB-1). One small script, no library: the app's own chart look (a 2px line, a
+ * 10% tint, a hairline grid, a crosshair) drawn from /stocks/<market>/<symbol>/prices.json, a cached
+ * read-only list of daily closes (a week apart before the last year). The page holds the same figures as text, so with no script
+ * the chart is simply absent. Daily closes; nothing is predicted, fitted or extended. Served as /stocks/chart.js. */
 (function () {
   "use strict";
   var root = document.querySelector("[data-chart]");
@@ -11,10 +10,10 @@
   var plot = root.querySelector(".plot"), tip = root.querySelector(".tip"), status = root.querySelector("[data-status]");
   var sum = root.querySelector("[data-summary]"), chg = root.querySelector("[data-change]"), note = root.querySelector("[data-change-note]");
   var seg = root.querySelector(".seg"), table = root.querySelector("[data-table]"), live = root.querySelector("[data-live]");
+  var adjNote = root.querySelector("[data-adjust]");
   var cur = root.getAttribute("data-currency") || "INR", loc = cur === "INR" ? "en-IN" : "en-US";
   var money = new Intl.NumberFormat(loc, { style: "currency", currency: cur, minimumFractionDigits: 2, maximumFractionDigits: 2 });
   var money4 = new Intl.NumberFormat(loc, { style: "currency", currency: cur, minimumFractionDigits: 4, maximumFractionDigits: 4 });
-  var plain = new Intl.NumberFormat(loc, { maximumFractionDigits: 2 });
   var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   var WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var RANGES = { "1m": [31, "1 month"], "6m": [183, "6 months"], "1y": [366, "1 year"], "5y": [1830, "5 years"], all: [1e5, "the time since its first day of trading"] };
@@ -30,10 +29,10 @@
     return e;
   };
 
-  /* what each range can show: it needs history reaching back to its start (a share listed within the year has no 1Y) */
+  /* a range needs history back to its start (a share listed within the year has no 1Y) */
   function available(r) {
     var last = data.t[data.t.length - 1];
-    return r === "all" || data.t[0] <= last - RANGES[r][0] + 10;
+    return r === "all" || data.t[0] <= last - RANGES[r][0] + 4;       /* RC4-012 */
   }
   function slice(r) {
     var t = data.t, n = t.length, from = r === "all" ? t[0] : t[n - 1] - RANGES[r][0], i = 0;
@@ -45,6 +44,11 @@
     var step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p, out = [];
     for (var v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(8));
     return out;
+  }
+  function tickFormat(ticks) {
+    var d = 0;
+    while (d < 6 && !ticks.every(function (v) { return Math.abs(v - +v.toFixed(d)) < 1e-9; })) d++;
+    return new Intl.NumberFormat(loc, { minimumFractionDigits: d, maximumFractionDigits: d });
   }
   function xticks(s, r, max) {
     var out = [], t0 = s.t[0], t1 = s.t[s.t.length - 1], d0 = day(t0);
@@ -81,7 +85,7 @@
     var W = Math.max(260, Math.round(plot.clientWidth)), H = W < 560 ? 210 : 280, padT = 10, padB = 26;
     var lo = Math.min.apply(null, s.c), hi = Math.max.apply(null, s.c), pad = (hi - lo) * 0.06 || hi * 0.02 || 1;
     var ticks = nice(lo - pad, hi + pad, W < 560 ? 4 : 5), ylo = Math.min(lo - pad, ticks[0]), yhi = Math.max(hi + pad, ticks[ticks.length - 1]);
-    var fmt = function (v) { return plain.format(v); };
+    var nf = tickFormat(ticks), fmt = function (v) { return nf.format(v); };
     var padL = Math.max.apply(null, ticks.map(function (v) { return fmt(v).length; })) * 7 + 12, padR = 12;
     var x0 = s.t[0], x1 = s.t[n - 1];
     var sx = function (t) { return padL + (t - x0) / (x1 - x0 || 1) * (W - padL - padR); };
@@ -150,6 +154,18 @@
     });
   }
 
+  function adjustNote(s) {
+    if (!adjNote) return;
+    var from = s.t[0], to = s.t[s.t.length - 1], bits = [];
+    (data.adj || []).forEach(function (a) {
+      var t = Date.parse(a.d) / DAY;
+      if (t > from && t <= to) bits.push(a.k === "demerger" ? dlabel(t) + ": a demerger. Closes aren't adjusted for it, so the line steps by the value moved to the new company."
+        : "Closes before " + dlabel(t) + " are adjusted for the " + (a.t || a.k) + ": no jump, but not the prices traded then.");
+    });
+    adjNote.textContent = bits.join(" ");
+    adjNote.hidden = !bits.length;
+  }
+
   function show() {
     var s = slice(range), k = stats(s), n = k.n, up = k.pct >= 0.05, down = k.pct <= -0.05;
     status.hidden = true;
@@ -157,9 +173,10 @@
     chg.setAttribute("data-dir", up ? "up" : down ? "down" : "flat");
     note.textContent = " over " + RANGES[range][1] + ", " + price(s.c[0]) + " to " + price(s.c[n - 1]) + ". Price change only; dividends are not included.";
     sum.textContent = words(s) + " Closing prices.";
+    adjustNote(s);
     Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-r") === range)); });
     draw();
-    /* the same closes as a table: up to 24 evenly spaced dates, the first and the last among them */
+    /* the closes as a table: up to 24 evenly spaced dates */
     var rows = Math.min(n, 24), body = "";
     for (var j = 0; j < rows; j++) {
       var i = Math.round(j * (n - 1) / (rows - 1));
@@ -175,10 +192,11 @@
     status.hidden = false;
     status.textContent = "Loading prices…";
     fetch(root.getAttribute("data-src"), { headers: { Accept: "application/json" } }).then(function (r) {
+      if (r.status === 404) throw new Error("none");
       if (!r.ok) throw new Error(String(r.status));
       return r.json();
     }).then(function (j) {
-      if (!j || !j.t || j.t.length < 2) throw new Error("empty");
+      if (!j || !j.t || j.t.length < 2) throw new Error("none");
       data = j;
       Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) {
         var ok = available(b.getAttribute("data-r"));
@@ -191,10 +209,12 @@
       root.setAttribute("data-ready", "1");
       seg.hidden = false;
       show();
-    }).catch(function () {
-      started = false;
+    }).catch(function (err) {
+      var none = err.message === "none";          /* a new listing: no "try again" (RC4-013) */
+      started = none;
       status.hidden = false;
-      status.textContent = "The price chart couldn't be loaded just now. The figures on this page are unaffected. ";
+      status.textContent = none ? "No price chart is available for this company yet. The figures here are unaffected." : "The price chart couldn't be loaded just now. The figures on this page are unaffected. ";
+      if (none) return;
       var b = document.createElement("button");
       b.type = "button"; b.className = "btn ghost"; b.textContent = "Try again";
       b.addEventListener("click", load);
@@ -210,7 +230,7 @@
   });
   var timer = 0;
   window.addEventListener("resize", function () { clearTimeout(timer); timer = setTimeout(function () { if (data) draw(); }, 120); });
-  /* asked for only when the chart is about to be seen: a crawler, or a visitor who never scrolls this far, costs the server nothing */
+  /* asked for only when about to be seen: a crawler costs the server nothing */
   if ("IntersectionObserver" in window) {
     var io = new IntersectionObserver(function (e) { if (e[0].isIntersecting) { io.disconnect(); load(); } }, { rootMargin: "300px 0px" });
     io.observe(root);

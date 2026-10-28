@@ -171,7 +171,8 @@ def ipo_facts(rows: list[dict], now: datetime | None = None) -> list[dict]:
             continue
         perf = ipo.official_perf(r, r.get("perf"), now) or {}
         sub = (r.get("sub") or {}).get("times")
-        out.append({"name": r.get("name") or r.get("symbol") or "", "symbol": r.get("symbol"), "segment": r.get("segment") or "mainboard",
+        # (a row no list named, kept from BSE's table of listed issues, has no segment: it is not called a main board issue, RC4-003)
+        out.append({"name": r.get("name") or r.get("symbol") or "", "symbol": r.get("symbol"), "segment": r.get("segment") or None,
                     "listing": str(r["listing"])[:10], "issue_price": r.get("price") or perf.get("issue_price"),
                     "open_pct": perf.get("listing_change_pct"), "close_pct": perf.get("day_change_pct"),
                     "sub_times": sub if isinstance(sub, (int, float)) and sub > 0 else None})
@@ -200,7 +201,7 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
     days = sorted(f["listing"] for f in facts)
     first, last = days[0], days[-1]
     seg = []
-    for key, label in (("mainboard", "Main board"), ("sme", "SME")):
+    for key, label in (("mainboard", "Main board"), ("sme", "SME"), (None, "Segment not recorded")):
         part = [f for f in have if f["segment"] == key]
         if part:
             seg.append([label, str(len(part)), str(sum(1 for f in part if round(f["close_pct"], 2) > 0)),
@@ -256,7 +257,8 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
                    "The tracker keeps an issue for a limited time after its listing, so this post covers the issues it holds, not every issue of the year. "
                    f"The first listing it holds is {short(first)}.",
                    "One day is a short window: what an issue did on later days is not in these figures.",
-                   "Main board and SME issues differ in size and trading rules; the segment table keeps them apart.",
+                   "Main board and SME issues differ in size and trading rules; the segment table keeps them apart" + (
+                       ", and an issue whose segment the tracker did not record has a line of its own." if any(f["segment"] is None for f in have) else "."),
                    "Only official numbers are used: no grey market premium, which is not an official figure.",
                    "This is a record of what happened, not a view on any issue and not a pointer to the next one."]},
                {"t": "p", "text": [{"a": "See the IPO tracker", "href": "/invest/ipos"}, " for open and upcoming issues, or ", {"a": "read about any listed company", "href": "/stocks"}, "."]}]
@@ -276,7 +278,9 @@ def sip_vs_lump(closes: dict[str, float], now: datetime | None = None, amount: i
     if len(days) < 400:
         return None
     first_day, last_day = days[0], days[-1]
-    years = min(10, int((date.fromisoformat(last_day) - date.fromisoformat(first_day)).days // 365.25))
+    # (the first close is the first session on or after the day the history was asked from, up to a week later: 10 years less 4 days
+    # of closes are ten years, not nine, RC4-004)
+    years = min(10, int(((date.fromisoformat(last_day) - date.fromisoformat(first_day)).days + 10) // 365.25))
     if years < 4:
         return None
     # units are a hundredth of the index, so a month's instalment buys whole units (the index itself is worth more than an instalment)
@@ -319,7 +323,7 @@ def sip_vs_lump(closes: dict[str, float], now: datetime | None = None, amount: i
              ["Value at the end", inr(head["value"]), inr(lump["value"])],
              ["Gain", inr(head["gain"]), inr(lump["gain"])],
              ["Annual return (XIRR)", x(head["xirr"]), x(lump["xirr"])],
-             ["Deepest fall of the pot", p1(head["deepest_fall_pct"]), p1(lump["deepest_fall_pct"])],
+             ["Deepest fall of the units' price", p1(head["deepest_fall_pct"]), p1(lump["deepest_fall_pct"])],
              ["Charges paid", inr(head["charges"]), inr(lump["charges"])]]
     spread = [[f"{r['years']} years", str(r["windows"]), str(r["sip_ahead"]), str(r["lump_ahead"]), x(r["sip_median"]), x(r["lump_median"]),
                x(r["sip_low"]), x(r["lump_low"])] for r in rows]
@@ -345,8 +349,11 @@ def sip_vs_lump(closes: dict[str, float], now: datetime | None = None, amount: i
             "can't use waits for the next instalment. The lump sum is invested the same way on its day.",
             "Charges are those of purchasing exchange-traded fund units in India: no STT on units, exchange and SEBI fees with GST, and stamp duty on the purchase. "
             "Brokerage is set to zero, since it differs by broker. No sale is made, so no charges on a sale and no tax are counted.",
-            "The annual return is the XIRR of the dated payments in and the value at the end. The deepest fall is the pot's largest drop from a high, leaving out the "
-            "instalments themselves."]},
+            "The annual return is the XIRR of the dated payments in and the value at the end. The deepest fall is the largest drop of the units' price from a high "
+            "(the pot's value with the instalments taken out), so it is the same number for the SIP and the lump sum: both own the same units through the same "
+            "prices. What differs is how much money was in the pot when the fall came, which the SIP's instalments built up over the years.",
+            "Charges are a share of each purchase (no flat fee, brokerage set to zero), so the same total put in costs the same whether it goes in at once or in "
+            "instalments."]},
         {"t": "h2", "text": "Limits"},
         {"t": "ul", "items": [
             "The index can't be bought as such: this models units that follow it exactly, with no fund expense ratio and no tracking difference.",

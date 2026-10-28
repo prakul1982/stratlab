@@ -65,18 +65,21 @@ export const trackAllowedOn = (path: string): boolean => !TRACK_NEVER.test(path.
 export const askNeeded = (cfg: AdsConfig): boolean => !!(adsLive(cfg, "public") || adsLive(cfg, "ai") || cfg.pixel || cfg.clarity);
 
 /** What to load now. Needs the saved yes, a page that allows trackers, and a browser that doesn't ask not to be tracked (Do Not
- * Track, Global Privacy Control: the same rule as the usage analytics). */
-export function trackersFor(o: { cfg: AdsConfig; choice: Choice; path: string; dnt?: boolean }): { pixel: boolean; clarity: boolean } {
-  const ok = o.choice === "yes" && !o.dnt && trackAllowedOn(o.path);
+ * Track, Global Privacy Control: the same rule as the usage analytics). A yes given on a page the server draws (public/ads.js)
+ * answered a question about Google ads alone (`adsOnly`), so it does not start the pixel or Clarity (RC4-005). */
+export function trackersFor(o: { cfg: AdsConfig; choice: Choice; path: string; dnt?: boolean; adsOnly?: boolean }): { pixel: boolean; clarity: boolean } {
+  const ok = o.choice === "yes" && !o.adsOnly && !o.dnt && trackAllowedOn(o.path);
   return { pixel: ok && !!o.cfg.pixel, clarity: ok && !!o.cfg.clarity };
 }
 
-/** The question is shown: something needs a yes, none was given, and the page is not one of the private ones. */
-export const askNow = (o: { cfg: AdsConfig; choice: Choice; path: string }): boolean => askNeeded(o.cfg) && o.choice === null && trackAllowedOn(o.path);
+/** The question is shown: something needs a yes, none was given, and the page is not one of the private ones. A yes that was about
+ * Google ads alone (`adsOnly`) leaves the question open for the pixel and Clarity, when either is set (RC4-005). */
+export const askNow = (o: { cfg: AdsConfig; choice: Choice; path: string; adsOnly?: boolean; declined?: boolean }): boolean =>
+  trackAllowedOn(o.path) && (o.choice === null ? askNeeded(o.cfg) : o.choice === "yes" && !!o.adsOnly && !o.declined && !!(o.cfg.pixel || o.cfg.clarity));
 
 /** The question's words, naming only what is switched on. */
-export function consentWords(cfg: AdsConfig): { title: string; text: string } {
-  const ads = adsLive(cfg, "public") || adsLive(cfg, "ai");
+export function consentWords(cfg: AdsConfig, adsOnly = false): { title: string; text: string } {
+  const ads = !adsOnly && (adsLive(cfg, "public") || adsLive(cfg, "ai"));         // already answered, for ads alone
   const parts = [ads && "Google ads", cfg.pixel && "Meta's ad measurement", cfg.clarity && "Microsoft Clarity, which records how pages are used with all text hidden"].filter(Boolean) as string[];
   const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? "";
   const title = ads && (cfg.pixel || cfg.clarity) ? "Ads and analytics" : ads ? "Ads" : "Analytics";
@@ -98,24 +101,59 @@ export function parseChoice(raw: string | null | undefined, now = Date.now()): C
   } catch { /* not ours */ }
   return null;
 }
-export const encodeChoice = (c: "yes" | "no", now = Date.now()): string => JSON.stringify({ c, at: now });
+/** Written as `{c, at}`; a yes given on a page the server draws, which asks about Google ads alone, also carries `s: "ads"`, and
+ * `t: "no"` once the app's own question about the pixel and Clarity was answered No thanks (the ads stay allowed). */
+export const encodeChoice = (c: "yes" | "no", now = Date.now(), scope?: "ads"): string => JSON.stringify(scope ? { c, at: now, s: scope } : { c, at: now });
+
+/** The saved yes was given for Google ads alone (public/ads.js writes `s: "ads"`): it covers the ad slots, not the pixel or Clarity. */
+export function parseAdsOnly(raw: string | null | undefined, now = Date.now()): boolean {
+  if (parseChoice(raw, now) !== "yes") return false;
+  try { return (JSON.parse(raw as string) as { s?: unknown }).s === "ads"; } catch { return false; }
+}
 
 let memory: Choice = null;      // the answer for this page view when storage is off
 export function readChoice(): Choice {
   try { const raw = localStorage.getItem(CHOICE_KEY); if (raw) return parseChoice(raw); } catch { /* storage off */ }
   return memory;
 }
+/** Whether the saved yes was for Google ads alone (see parseAdsOnly). An answer given on this page (memory) is a full one. */
+export function readAdsOnly(): boolean {
+  try { const raw = localStorage.getItem(CHOICE_KEY); if (raw) return parseAdsOnly(raw); } catch { /* storage off */ }
+  return false;
+}
+/** A yes for ads alone, and the question about the pixel and Clarity was answered No thanks. */
+export function parseDeclined(raw: string | null | undefined, now = Date.now()): boolean {
+  if (!parseAdsOnly(raw, now)) return false;
+  try { return (JSON.parse(raw as string) as { t?: unknown }).t === "no"; } catch { return false; }
+}
+let memoryDeclined = false;
+export function readDeclined(): boolean {
+  try { const raw = localStorage.getItem(CHOICE_KEY); if (raw) return parseDeclined(raw); } catch { /* storage off */ }
+  return memoryDeclined;
+}
+/** "No thanks" to the pixel and Clarity from a visitor who allowed Google ads alone: the ads stay allowed, the question is not asked again. */
+export function declineTrackers(): void {
+  memoryDeclined = true;
+  try {
+    const raw = localStorage.getItem(CHOICE_KEY);
+    const j = raw && parseAdsOnly(raw) ? (JSON.parse(raw) as Record<string, unknown>) : null;
+    if (j) localStorage.setItem(CHOICE_KEY, JSON.stringify({ ...j, t: "no" }));
+  } catch { /* storage off: kept for this page view only */ }
+  listeners.forEach((fn) => fn());
+}
 const listeners = new Set<() => void>();
 /** Runs `fn` when the answer is given or taken back on this page (a slot and the banner follow it). Returns the way to stop. */
 export function onChoice(fn: () => void): () => void { listeners.add(fn); return () => { listeners.delete(fn); }; }
 export function writeChoice(c: "yes" | "no"): void {
   memory = c;
+  memoryDeclined = false;
   try { localStorage.setItem(CHOICE_KEY, encodeChoice(c)); } catch { /* storage off: kept for this page view only */ }
   listeners.forEach((fn) => fn());
 }
 /** Forget the answer, so the question comes back (Privacy: "Change my choice"). */
 export function clearChoice(): void {
   memory = null;
+  memoryDeclined = false;
   try { localStorage.removeItem(CHOICE_KEY); } catch { /* storage off */ }
   listeners.forEach((fn) => fn());
 }

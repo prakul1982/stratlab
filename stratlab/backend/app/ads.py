@@ -63,8 +63,9 @@ def ad_slot_html(slot_name: str = "public") -> str:
 
 def add_to_page(page: str, slot_name: str = "public") -> str:
     """A finished page with its ad added at the end of the main content (below the fold, clear of the page's buttons), or the
-    page unchanged when ads are off or the page has no `</main>`. Done as the page is sent, never stored with it: switching ads
-    on or off then shows on the next request, and the stored copy never carries an ad."""
+    page unchanged when ads are off or the page has no `</main>`. Done as the page is sent, never stored with it: the stored copy
+    never carries an ad, and switching ads on or off shows on the next request the API answers. The site's cache keeps a company
+    or blog page up to a day (stock_pages.CACHE_CONTROL), so a copy it holds changes within that day (RC4-010)."""
     block = ad_slot_html(slot_name)
     i = page.rfind("</main>")
     return page if not block or i < 0 else page[:i] + block + page[i:]
