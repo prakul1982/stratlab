@@ -1,11 +1,12 @@
 /* The "Markets" button and the panel it opens (MW-1), drawn once for the whole page: in the signed-in app by the Shell, in the public
- * half by the visitor app. This file is in the first download of both, so it holds only the button, the panel's place on the
- * page and the loading of the panel itself; the panel (and the chart, and the account code behind it) loads when it is first opened,
+ * half by the visitor app (which draws the button itself, from PublicLauncher, so a policy page's download stays small: R5V-020).
+ * It holds the button, the panel's place on the page and the loading of the panel itself; the panel (and the chart, and the account code behind it) loads when it is first opened,
  * or when the button is pointed at. The visitor's panel is a read-only board and loads no account code. */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { usePersisted } from "../../lib/persist";
 import { importWithRetry } from "../../lib/lazyRetry";
 import { clampLayout, dockWidth, DEFAULT_LAYOUT, isSheet, LAYOUT_KEY, type PanelLayout } from "../../lib/watchLayout";
+import { useConsentLift } from "../../lib/consentLift";
 import { Markets } from "../Icons";
 import "./launcher.css";
 
@@ -30,28 +31,9 @@ function useViewport(): [number, number] {
   return v;
 }
 
-/** The consent question sits in the same corner: the button rises above it, whatever its height, and a docked panel moves it aside. */
-function useConsentLift(on: boolean) {
-  useEffect(() => {
-    const root = document.documentElement;
-    if (!on) return;
-    let ro: ResizeObserver | null = null;
-    const look = () => {
-      const el = document.querySelector<HTMLElement>(".consent");
-      ro?.disconnect();
-      if (!el) { root.style.removeProperty("--mw-lift"); return; }
-      const set = () => root.style.setProperty("--mw-lift", `${el.offsetHeight + 12}px`);
-      set();
-      if (typeof ResizeObserver !== "undefined") { ro = new ResizeObserver(set); ro.observe(el); }
-    };
-    look();
-    const mo = new MutationObserver(look);
-    mo.observe(document.body, { childList: true });
-    return () => { mo.disconnect(); ro?.disconnect(); root.style.removeProperty("--mw-lift"); };
-  }, [on]);
-}
-
-export function MarketsLauncher({ mode, userId }: { mode: "app" | "public"; userId?: string }) {
+/** `button`: how the button is drawn when it differs from the panel (someone signed in on a public page has the app's panel and the visitor's button);
+ * `autoOpen`: open at once (the visitor's button has just been pressed and this is its code arriving). */
+export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mode: "app" | "public"; userId?: string; button?: "app" | "public"; autoOpen?: boolean }) {
   const [raw, setRaw] = usePersisted<PanelLayout>(`${LAYOUT_KEY}.${mode === "app" ? userId ?? "guest" : "visitor"}`, DEFAULT_LAYOUT);
   const [vw, vh] = useViewport();
   const layout = useMemo(() => clampLayout(raw, vw, vh), [raw, vw, vh]);
@@ -66,6 +48,7 @@ export function MarketsLauncher({ mode, userId }: { mode: "app" | "public"; user
   const asked = useRef(!isSheet(window.innerWidth));
   const openIt = useCallback((p: Partial<PanelLayout> = {}) => { asked.current = true; patch({ ...p, open: true }); }, [patch]);
 
+  useEffect(() => { if (autoOpen) openIt(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- once, as this mounts
   useEffect(() => {
     const on = (e: Event) => {
       const d = ((e as CustomEvent).detail ?? {}) as { open?: boolean | "toggle"; chart?: string };
@@ -98,7 +81,7 @@ export function MarketsLauncher({ mode, userId }: { mode: "app" | "public"; user
   return (
     <>
       {!shown && (
-        <button ref={btn} type="button" className={`mw-launch ${mode}`} aria-label="Open Market Watch" aria-expanded={false} data-testid="markets-launch"
+        <button ref={btn} type="button" className={`mw-launch ${button}`} aria-label="Open Market Watch" aria-expanded={false} data-testid="markets-launch"
           onClick={() => openIt()} onPointerEnter={() => void (mode === "app" ? loadApp() : loadPublic()).catch(() => undefined)} onFocus={() => void (mode === "app" ? loadApp() : loadPublic()).catch(() => undefined)}>
           <Markets size={18} /><span>Markets</span>
         </button>

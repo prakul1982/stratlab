@@ -411,7 +411,12 @@ test("the button holds no account code or chart: the panel and the chart load wh
   const ph = read("src/lib/watchLayout.ts"), pw = read("src/lib/watch.ts");
   for (const f of [ph, pw]) assert.doesNotMatch(f, /from "\.\/(api|app)"/);
   // the visitor half
-  assert.match(read("src/visitor/VisitorApp.tsx"), /<MarketsLauncher mode=\{userId \? "app" : "public"\}/);
+  assert.match(read("src/visitor/VisitorApp.tsx"), /<PublicMarkets userId=\{userId\} \/>/);
+  // a policy page is held to a download size (R5V-020): the visitor's first download has the button, and the launcher comes on the first press
+  const pub = read("src/components/watch/PublicLauncher.tsx");
+  assert.doesNotMatch(pub, /^import[^;]*from "\.\/Launcher"/m, "the launcher is not in a visitor's first download");
+  assert.match(pub, /import\("\.\/Launcher"\)/);
+  for (const i of [...pub.matchAll(/^import[^;]*?from\s+"([^"]+)"/gms)].map((m) => m[1])) assert.doesNotMatch(i, /watchLayout|(^|\/)lib\/(api|app)$|WatchPanel|PublicBoard/, `PublicLauncher imports ${i}`);
 });
 
 test("nothing on the panel or its words names a data source, and it gives no advice", () => {

@@ -192,12 +192,11 @@ export default function PriceChart(props: PriceChartProps) {
   const lay0 = saved0.current;
   // every chart opens on the page's own timeframe and range (a year of daily candles), never the one picked on an earlier
   // visit: RELIANCE opened at 1 hour, TCS at daily and AAPL at monthly (DD-041)
-  // ...except the chart workspace (`rememberView`), which is a tool the person comes back to: it opens on the timeframe and range
-  // this symbol was last read on, kept with its drawings
+  // (the chart workspace, `rememberView`, is a tool the person comes back to: it saves its timeframe and range with the drawings, and
+  // its page passes them back in as `tf` and `range`)
   const own = !!props.rememberView && !!load;
-  const savedTf = own && lay0?.tf && offered.includes(lay0.tf as Tf) ? (lay0.tf as Tf) : null;
-  const [tf, setTf] = useState<Tf>(savedTf ?? (props.tf && offered.includes(props.tf) ? props.tf : offered.includes("1d") ? "1d" : offered[0]));
-  const [range, setRange] = useState<RangeKey | null>(() => (load ? (savedTf ? (RANGE_KEYS.includes(lay0?.range as RangeKey) ? (lay0!.range as RangeKey) : null) : props.range === undefined ? "1Y" : props.range) : null));
+  const [tf, setTf] = useState<Tf>(props.tf && offered.includes(props.tf) ? props.tf : offered.includes("1d") ? "1d" : offered[0]);
+  const [range, setRange] = useState<RangeKey | null>(() => (load ? (props.range === undefined ? "1Y" : props.range) : null));
   const [type, setType] = useState<ChartType>(() => { const t = lay0?.type ?? lsGet<string>(LS.type, "candles"); return CHART_TYPES.some((c) => c.type === t) ? t as ChartType : "candles"; });
   const [attempt, setAttempt] = useState(0);          // "Try again" after a failed read reads the same candles again
   const [volume, setVolume] = useState(() => (lay0?.volume ?? lsGet<unknown>(LS.volume, true)) !== false);

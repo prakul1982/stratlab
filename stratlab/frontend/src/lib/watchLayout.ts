@@ -2,6 +2,7 @@
  * size and place, the list and sort last used, and the chart last open in it. Pure (no page, no storage) apart from the key, so
  * the unit tests run it; the panel reads and writes it through usePersisted. */
 import type { SortMode } from "./watch";
+import { LAYOUT_KEY, isSheet } from "./watchKey";
 
 export type PanelMode = "dock" | "float";
 export interface PanelLayout {
@@ -13,12 +14,10 @@ export interface PanelLayout {
   chart: string | null;
 }
 
-export const LAYOUT_KEY = "stratlab.watch.layout";
+export { LAYOUT_KEY, isSheet };
 export const MIN_W = 300, MAX_W = 720, MIN_H = 320;
 export const DEFAULT_LAYOUT: PanelLayout = { open: false, mode: "dock", w: 380, h: 560, x: null, y: null, list: null, sort: "custom", chart: null };
 
-/** A phone's width and under: the panel is a full-height sheet, with no size or place of its own. */
-export const isSheet = (vw: number): boolean => vw <= 900;
 
 const num = (v: unknown, lo: number, hi: number, d: number): number => (typeof v === "number" && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : d);
 

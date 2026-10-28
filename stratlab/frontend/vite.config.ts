@@ -41,6 +41,8 @@ export default defineConfig({
             // forty files and 100 kB a visitor's /library waited for (R8V-013); the market chips and the card's details fold are here too (MO-5)
             { name: "kit-public", includeDependenciesRecursively: false, test: /src[\\/]components[\\/]kit[\\/](Badge|Card|ChipBar|DataTable|Disclosure|Stat|States|Form|PageHeader|LinkCard|Signed|Spark)\.tsx$/ },
             { name: "kit", includeDependenciesRecursively: false, test: /src[\\/](components[\\/]kit[\\/](?!index|Notice|StockPicker|Seg|Dialog)[^\\/]+\.tsx?|lib[\\/]dateInput\.ts)$/ },
+            // Market Watch's launcher: the signed-in app has it in its first download, a visitor only when they press the button
+            { name: "markets", includeDependenciesRecursively: false, test: /src[\\/](components[\\/]watch[\\/]Launcher\.tsx|lib[\\/]watchLayout\.ts)$/ },
             { name: "kit-account", includeDependenciesRecursively: false, test: /src[\\/]components[\\/]kit[\\/](Notice|StockPicker)\.tsx$/ },
             { name: "account", includeDependenciesRecursively: false, test: /src[\\/](lib[\\/](api|app)|components[\\/]CompanySearch)\.tsx?$/ },
           ],

@@ -7,7 +7,7 @@ import { heldStartup } from "../lib/held";
 import { NOT_FOUND_TITLE, signedOutTitle } from "../lib/title";
 import { Opening } from "../components/LoadGuard";
 import { importWithRetry } from "../lib/lazyRetry";
-import { MarketsLauncher } from "../components/watch/Launcher";
+import { PublicMarkets } from "../components/watch/PublicLauncher";
 
 /* What someone without an account sees, at any address: the landing page (at a section, or with a sign-in panel), the
  * policies, a shared verdict, StratLab's own strategy library, "Sign in to see …" on an address inside the app, or "Page
@@ -76,7 +76,7 @@ export function VisitorApp({ userId }: { userId?: string } = {}) {
         : <NotFound signedIn={false} />}
     </Suspense>
     {/* the read-only board of main markets, on every public page, outside the page's own loading (MW-1) */}
-    <MarketsLauncher mode={userId ? "app" : "public"} userId={userId} />
+    <PublicMarkets userId={userId} />
     </>
   );
 }
