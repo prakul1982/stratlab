@@ -79,3 +79,12 @@ test("VR5-014: on a phone the tile picker's tiles are rows with the picture besi
 test("VR5-015: a fold's 'what is inside' line takes its own line under its title on a phone", () => {
   assert.match(read("src/styles.css"), /\.k-disclosure > summary \.k-more-what \{ flex: 1 0 100%;/);
 });
+
+test("VR5-owner-1: the Invest home's watchlist shows six, with See all in its header for a longer list, and no market label over the stocks", () => {
+  const src = read("src/pages/SpaceHomes.tsx");
+  assert.match(src, /export const WATCH_SHOWN = 6;/);
+  assert.match(src, /symbols=\{by\(r\)\.slice\(0, WATCH_SHOWN\)\.map/);
+  assert.match(src, /\(by\(region\)\.length > WATCH_SHOWN\) && <Link to="\/research\/watchlist" className="link" data-testid="watch-see-all">See all \{by\(region\)\.length\} →<\/Link>/);
+  assert.doesNotMatch(src, /<span className="eyebrow">\{REGION_NAME\[r\]\}<\/span>\n\s+<QuoteGrid/);
+  assert.match(read("src/styles-invest.css"), /\.inv-tile \{ display: flex; flex-direction: column; gap: 3px; padding: 10px 10px;/);
+});

@@ -113,3 +113,47 @@ test("VR5-014: Net worth's 'Add an entry' kinds are short rows on a phone (the p
   const dlg = await page.getByRole("dialog").evaluate((e) => e.scrollHeight);
   expect(dlg, "the dialog's whole height").toBeLessThan(1300);
 });
+
+// VR5-owner-1 (the owner's choice for VR4-016): the Invest home's watchlist shows its first six stocks and "See all" for the rest
+test("VR5-owner-1: the Invest home's watchlist card shows six of a longer list, with See all to the full watchlist, and ends near its neighbour column", async ({ page, request }, info) => {
+  const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
+  const head = { Authorization: "Bearer admin-token" };
+  const before = await (await request.get(`${API}/research/watchlist`, { headers: head })).json();
+  const eight = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ITC", "SBIN", "WIPRO", "AXISBANK"].map((symbol) => ({ region: "IN", symbol }));
+  try {
+    await request.put(`${API}/research/watchlist`, { headers: head, data: { items: eight } });
+    await open(page, "/invest", ADMIN, info.project.name === "phone" ? 390 : 1440);
+    const card = page.locator(".k-card", { has: page.getByRole("heading", { name: "Your watchlist" }) });
+    await expect(card.locator(".inv-tile").first()).toBeVisible({ timeout: 30_000 });
+    await expect(card.locator(".inv-tile")).toHaveCount(6);
+    await expect(card.getByTestId("watch-see-all")).toHaveText("See all 8 →");
+    await expect(card.getByTestId("watch-see-all")).toHaveAttribute("href", "/research/watchlist");
+    await expect(card.getByText(/^India$/i)).toHaveCount(0);           // the market is the toggle above, not a label again over the stocks
+    if (info.project.name !== "phone") {
+      await expect(page.getByRole("heading", { name: "Results today" })).toBeVisible();
+      const ends = await page.locator(".k-card").evaluateAll((els) => {
+        const by = (t: string) => els.find((e) => e.querySelector("h2, h3")?.textContent?.trim() === t)!.getBoundingClientRect().bottom;
+        return [by("Your watchlist"), by("Results today")];
+      });
+      expect(Math.abs(ends[0] - ends[1]), `bottoms ${ends}`).toBeLessThan(80);
+    }
+    await card.getByTestId("watch-see-all").click();
+    await expect(page).toHaveURL(/\/research\/watchlist/);
+  } finally {
+    await request.put(`${API}/research/watchlist`, { headers: head, data: { items: before.items ?? [] } });
+  }
+});
+
+test("VR5-owner-1: a list of six or fewer has no See all", async ({ page, request }) => {
+  const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
+  const head = { Authorization: "Bearer admin-token" };
+  const before = await (await request.get(`${API}/research/watchlist`, { headers: head })).json();
+  try {
+    await request.put(`${API}/research/watchlist`, { headers: head, data: { items: ["RELIANCE", "TCS", "INFY"].map((symbol) => ({ region: "IN", symbol })) } });
+    await open(page, "/invest", ADMIN, 390);
+    await expect(page.locator(".inv-tile").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("watch-see-all")).toHaveCount(0);
+  } finally {
+    await request.put(`${API}/research/watchlist`, { headers: head, data: { items: before.items ?? [] } });
+  }
+});
