@@ -167,7 +167,7 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
     const quota = quotaLine(a.quota);
     out.push({ key: "mail", label: "Alert emails", state: !a.email_ready ? "bad" : quota?.low ? "warn" : "ok", to: "/admin/system",
       detail: a.email_ready ? `${a.via ? `Sent through ${a.via}` : "Ready"}${quota ? ` · ${quota.text}` : ""}` : "Not set up: no email service on the server",
-      fix: a.email_ready ? `Emailed to ${a.to.join(", ")}${a.via ? ` through ${a.via}` : ""}${quota ? ` (${quota.text})` : ""}, plus your phone or Telegram if set in Account.`
+      fix: a.email_ready ? `Emailed to ${a.to.join(", ")}${a.via ? ` through ${a.via}` : ""}${quota ? `; ${quota.text}` : ""}, plus your phone or Telegram if set in Account.`
         : "No email service is set up on the server. Add one in Railway: RESEND_API_KEY (a free account at resend.com made with this address), "
           + "or BREVO_API_KEY, or SMTP_HOST, SMTP_USER and SMTP_PASSWORD. Until then alerts reach only your phone or Telegram." });
   }

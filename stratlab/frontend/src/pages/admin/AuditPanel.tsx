@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, fmtDate, openDays, openFor } from "../../lib/format";
-import { Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, Field, FieldGroup, FormActions, Meter, Notice, Select, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, Disclosure, EmptyState, Field, FormActions, Meter, Notice, Select, Skeleton, type Column } from "../../components/kit";
 
 /** fact: true of the company (a recent listing, no calls held), not a gap of ours; pending: a source turned the check away, so it runs again. */
 type Level = "mismatch" | "gap" | "error" | "fact" | "pending";
@@ -69,15 +69,18 @@ export function AuditPanel({ region }: { region: Region }) {
       <CardHead title="Data audit" info="Runs every company in a set through the deep dive on this server: numbers, prices, industry, valuation, checklist and documents, each compared with its source. Mismatches are numbers that disagree with the source; gaps are things a user would still have to look up elsewhere. No AI is used. About 3 to 10 seconds a company." />
       {!s ? <Skeleton label="Loading the audit" lines={3} /> : (
         <>
-          <form className="k-form" onSubmit={(e) => { e.preventDefault(); start(); }} aria-label="Run an audit">
-            <Field label="Companies to check">{(id) => <Select id={id} value={set} onChange={setSet} disabled={s.running || !!custom.trim()} options={s.sets.map((x) => ({ value: x.id, label: `${x.name} (${x.count})` }))} />}</Field>
-            <Field label="Or symbols" optional placeholder="INFY TITAN" value={custom} onChange={(e) => setCustom(e.target.value)} disabled={s.running} />
-            {region === "IN" && <FieldGroup label="Documents" wide><CheckField label="Also try reading documents (slower)" checked={docs} onChange={setDocs} disabled={s.running} /></FieldGroup>}
-            <FormActions>
-              <button type="submit" className="btn sm" disabled={s.running}>{s.running ? `Checking ${s.done ?? 0} of ${s.total}…` : "Run audit"}</button>
-              {s.running && <button type="button" className="btn quiet sm" onClick={stop}>Stop</button>}
-            </FormActions>
-          </form>
+          {/* the run controls behind one fold, open while a run is going: the results are what the page is for (LIVE1C-020) */}
+          <Disclosure summary={s.running ? `Running: ${s.done ?? 0} of ${s.total}` : "Run an audit"} open={s.running ? true : undefined} testId="audit-run">
+            <form className="k-form" onSubmit={(e) => { e.preventDefault(); start(); }} aria-label="Run an audit">
+              <Field label="Companies to check">{(id) => <Select id={id} value={set} onChange={setSet} disabled={s.running || !!custom.trim()} options={s.sets.map((x) => ({ value: x.id, label: `${x.name} (${x.count})` }))} />}</Field>
+              <Field label="Or symbols" optional placeholder="INFY TITAN" value={custom} onChange={(e) => setCustom(e.target.value)} disabled={s.running} />
+              <FormActions>
+                <button type="submit" className="btn sm" disabled={s.running}>{s.running ? `Checking ${s.done ?? 0} of ${s.total}…` : "Run audit"}</button>
+                {s.running && <button type="button" className="btn quiet sm" onClick={stop}>Stop</button>}
+                {region === "IN" && <CheckField label="Also try reading documents (slower)" checked={docs} onChange={setDocs} disabled={s.running} />}
+              </FormActions>
+            </form>
+          </Disclosure>
           {sum && s.label && (
             <>
               <p className="k-small"><b>{s.label}</b>{s.docs ? " with documents" : ""} · {s.running ? `started ${ago(s.started_at!)}` : s.finished_at ? `${s.cancelled ? "stopped" : "finished"} ${ago(s.finished_at)}` : ""}
@@ -202,15 +205,18 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
               {m.retry?.next && new Date(m.retry.next).getTime() > Date.now() ? ` Next batch of ${m.retry.batch} ${until(m.retry.next)}.` : ` Retried ${m.retry?.batch ?? 20} at a time, every hour.`}
             </Notice>
           )}
-          <div className="k-row">
-            <button type="button" className="btn sm" disabled={busy} onClick={() => setAsking(true)}>Reset and check everything again</button>
-            {!full?.running && !!m.pending && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => send({ retry: true })}>Re-check the {m.pending.toLocaleString("en-IN")} not checked yet</button>}
-            <button type="button" className="btn quiet sm" disabled={busy} onClick={() => send({ read_list: true })}>Read the list now</button>
-          </div>
-          <div className="k-row">
-            <CheckField label="Full re-check on the 1st of each month" checked={!!m.monthly?.on} disabled={busy} onChange={(on) => send({ monthly: on })} />
-            <span className="k-small k-muted">{m.monthly?.on && m.monthly.next ? `Next full check: ${dayMonth(m.monthly.next)}` : "Only new listings, until you reset"}</span>
-          </div>
+          <p className="k-small k-muted">{m.monthly?.on && m.monthly.next ? `Next full check: ${dayMonth(m.monthly.next)}` : "Only new listings, until you reset"}</p>
+          {/* the four ways to act on the check behind one fold, the reset the quietest (LIVE1C-020: seven buttons at one weight) */}
+          <Disclosure summary="Manage this check" testId="market-manage">
+            <div className="k-stack">
+              <div className="k-row">
+                {!full?.running && !!m.pending && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => send({ retry: true })}>Re-check the {m.pending.toLocaleString("en-IN")} not checked yet</button>}
+                <button type="button" className="btn quiet sm" disabled={busy} onClick={() => send({ read_list: true })}>Read the list now</button>
+                <button type="button" className="btn quiet sm danger" disabled={busy} onClick={() => setAsking(true)}>Reset and check everything again</button>
+              </div>
+              <CheckField label="Full re-check on the 1st of each month" checked={!!m.monthly?.on} disabled={busy} onChange={(on) => send({ monthly: on })} />
+            </div>
+          </Disclosure>
           {!!m.ages?.open && (
             <p className="k-small" data-testid="audit-ages">
               Problems standing: {m.ages.open.toLocaleString("en-IN")} ({m.ages.today.toLocaleString("en-IN")} found today

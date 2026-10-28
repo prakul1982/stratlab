@@ -25,6 +25,8 @@ function OldTab() {
   return hit && hit.path ? <Navigate to={`/admin/${hit.path}`} replace /> : <OverviewSection />;
 }
 
+const TAIL = / (and growth|and jobs|previews)$/;       // the part of a section's name a phone leaves out of its pill
+
 function Menu() {
   const { ov, reported, jobs } = useAdmin();
   const n = attention(ov, reported, jobs).length;
@@ -32,7 +34,8 @@ function Menu() {
     <nav className="adm-menu" aria-label="Admin sections">
       {SECTIONS.map((s) => (
         <NavLink key={s.path} to={s.path ? `/admin/${s.path}` : "/admin"} end={s.path === ""} className="adm-link">
-          {s.label}
+          {/* on a phone the longer names lose their tail, so the seven pills fit two rows, not three (LIVE1C-023); the tail stays in the name for screen readers */}
+          <span>{s.label.replace(TAIL, "")}{TAIL.test(s.label) && <span className="adm-tail">{s.label.match(TAIL)![0]}</span>}</span>
           {s.path === "" && n > 0 && <span className="adm-count" aria-label={`${n} need attention`}>{n}</span>}
         </NavLink>
       ))}

@@ -7,6 +7,7 @@ import { useAdmin } from "./AdminContext";
 import { invoiceWarning } from "./attention";
 import { InvoiceAdminPanel } from "./InvoiceAdminPanel";
 import { PricesPanel } from "./PricesPanel";
+import { subsSummary } from "./subs";
 
 interface BillingCheck {
   key_id: string; mode: string; secret_length: number; webhook_secret_set: boolean; keys_ok: boolean; keys_error: string | null;
@@ -47,14 +48,6 @@ const FAILED: Column<Failed>[] = [
   { key: "why", header: "Why", wrap: true, cell: (x) => x.why ?? "–" },
   { key: "at", header: "When", cell: (x) => dateOnly(x.created_at) },
 ];
-
-/** One line over the subscriptions: how many were started, how many were paid even once, and how many payments failed (LIVE1C-007: 25 bare
- * IDs, every one an unpaid checkout, read as 25 problems). */
-export function subsSummary(a: Pick<Activity, "subscriptions" | "failed">): string {
-  const started = a.subscriptions.length, paid = a.subscriptions.filter((x) => (x.paid_count ?? 0) > 0).length, failed = a.failed.length;
-  const open = a.subscriptions.filter((x) => x.status === "created").length;
-  return `${started} started, ${paid} paid, ${failed} failed payment${failed === 1 ? "" : "s"}${open ? `; ${open} ${open === 1 ? "checkout was" : "checkouts were"} opened and never paid` : ""}.`;
-}
 
 /** The Payments row's facts (DJ-017): the mode, when Razorpay last reached us, and which currencies charge as themselves. */
 export function paymentsFacts(a: Activity | null): string {

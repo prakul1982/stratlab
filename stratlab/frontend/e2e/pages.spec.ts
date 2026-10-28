@@ -1433,6 +1433,7 @@ test("admin: the whole-market audit tells facts and companies not checked yet ap
   await india.getByRole("button", { name: "Not checked yet", exact: true }).click();
   await expect(india.getByText("Tiny Co Ltd")).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
+  await india.locator("summary", { hasText: "Manage this check" }).click();                  // the check's buttons are behind one fold (LIVE1C-020)
   await india.getByRole("button", { name: "Re-check the 2 not checked yet" }).click();
   await expect.poll(() => sent).toEqual([{ region: "IN", retry: true }]);
   await expect(india.getByText("Re-checking companies not checked yet:")).toBeVisible();
@@ -1486,7 +1487,8 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   await expect(india.getByTestId("audit-age")).toHaveText(" · open 3 days");
   await india.getByRole("button", { name: "Re-check Acme Ltd" }).click();
   await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", recheck: "ACME" });
-  // the monthly check can be switched off
+  // the monthly check can be switched off (its buttons are behind one fold, LIVE1C-020)
+  await india.locator("summary", { hasText: "Manage this check" }).click();
   await india.getByRole("checkbox", { name: "Full re-check on the 1st of each month" }).click();
   await expect(india.getByText("Only new listings, until you reset")).toBeVisible();
   // reset asks first, in the page (never the browser's own box): Cancel does nothing, confirming clears and starts from 0

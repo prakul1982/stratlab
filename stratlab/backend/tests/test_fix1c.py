@@ -184,3 +184,28 @@ def test_014_every_job_row_carries_its_next_run_where_it_has_clock_times(world):
     assert all("next" in j for j in jobs)
     events = next(j for j in jobs if j["id"] == "events")
     assert events["next"] and events["next"].endswith("IST") and len(events["next"]) < 40
+
+
+# ---------- LIVE1C-021: the feature check says what a price is ----------
+def test_021_a_running_session_has_a_price_so_far_and_a_currency_pair_its_pips(monkeypatch):
+    from datetime import date
+    from app import platform_check as pc
+    assert pc._px(1.10846) == "1.1085" and pc._px(4079.1) == "4,079.10" and pc._px(96.2) == "96.20"
+    assert "currency futures contract" in pc.FUTURES["CDS"] and pc.FUTURES["CMDTY"] == "futures contract"
+
+    class Prov:
+        def ready(self):
+            return True
+
+        def defaults(self):
+            return [{"symbol": "EURUSD", "token": "x"}]
+
+        def history(self, inst, tf, n):
+            return [{"t": f"2026-10-{d}T00:00:00+00:00", "o": 1.1, "h": 1.12, "l": 1.09, "c": 1.1084, "v": 1} for d in (26, 27, 28)]
+
+    class Reg:
+        def provider(self, m):
+            return Prov()
+    from datetime import datetime, timezone
+    r = pc.check_market(Reg(), "FX", now=datetime(2026, 10, 28, 20, 30, tzinfo=timezone.utc))
+    assert r["state"] == "pass" and "price so far" in r["detail"] and "1.1084" in r["detail"] and "close" not in r["detail"]
