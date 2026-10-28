@@ -100,3 +100,7 @@ test("signing out also forgets the options structure being built, so the next pe
   } finally { delete globalThis.window; delete globalThis.localStorage; delete globalThis.sessionStorage; }
   assert.match(read("src/pages/OptionsPage.tsx"), /const DRAFT = OPTIONS_DRAFT, NOTES = OPTIONS_NOTES;/);
 });
+
+test("a P/E's note about a lifted quarter shows on the side-by-side page too (RC6-012)", () => {
+  assert.match(read("src/pages/Research.tsx"), /const QUALIFIES = \/special\|like-for-like\|against a quarter\|other income\|n\\\/m\|not meaningful\/i;/);
+});

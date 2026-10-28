@@ -211,12 +211,13 @@ def _groups(*groups) -> list[dict]:
     return out
 
 
-def _of(item: dict, period: str | None) -> dict:
+def _of(item: dict, period: str | None, more: str | None = None) -> dict:
     """A Key numbers item with the period it is of, said under its label and to the AI read (DD-015: a P/E on the last
-    12 months sat beside margins of the last reported year, none of them saying so). A note it has already stays."""
+    12 months sat beside margins of the last reported year, none of them saying so). A note it has already stays; `more` is
+    a fact added to it (RC6-012: the quarter whose other income is in the earnings behind a P/E)."""
     if not period or item.get("value") is None:
         return item
-    return {**item, "period": period, "note": item.get("note") or period}
+    return {**item, "period": period, "note": item.get("note") or (f"{period}. {more}" if more else period)}
 
 
 def _nm(item: dict, nm: dict | None, unit_word: str = "₹") -> dict:
@@ -321,8 +322,21 @@ def base_effects(scr: dict | None) -> list[dict]:
         if t is not None and len(rates) >= 3 and abs(t - (mt := median(rates))) >= 8:
             bits.append(f"a tax rate of {t:.0f}% against a median of {mt:.0f}%")
         if bits:
-            out.append({"quarter": col, "text": f"{col} had {' and '.join(bits)}: a change measured against {col} is against a quarter moved by them."})
+            out.append({"quarter": col, "text": f"{col} had {' and '.join(bits)}: a change measured against {col} is against a quarter moved by them.",
+                        **({"other_income": bits[0]} if bits[0].startswith("other income") else {})})
     return out
+
+
+def pe_one_off_note(effects: list[dict], scr: dict | None) -> str | None:
+    """What the P/E on the last four reported quarters has in it, when one of those quarters had other income at least twice
+    the usual and a sizeable part of the profit before tax (base_effects): "Sep 2025 had other income of ₹81,507 crore against a
+    median of ₹2,360 crore in the other quarters shown". The P/E is the close over those quarters' earnings per share, a gain
+    booked in one of them included, so a company that booked a demerger's gain shows a P/E of 1.2 (RC6-012: TMPV). A plain
+    fact beside the figure, no judgement. None when none of the four had such a lift."""
+    cols = [str(c).strip() for c in ((scr or {}).get("quarters") or {}).get("cols") or []]
+    last4 = set(cols[-4:])
+    hit = next((e for e in effects if e.get("other_income") and e["quarter"] in last4), None)
+    return f"{hit['quarter']} had {hit['other_income']}" if hit else None
 
 
 def at_live_price(s: dict, live: float | None, symbol: str | None = None, since=None) -> dict:
@@ -1435,6 +1449,8 @@ class Research:
         span = lambda n: merger_note(merged, fy_cols[-(n + 1):])                     # noqa: E731
         nm = mine.get("nm") or {}
         effects = base_effects(scr)
+        # a P/E on the four latest quarters has a lifted quarter in it: said beside the figure (RC6-012)
+        lifted = pe_one_off_note(effects, scr) if s.get("pe_basis") == "ttm" else None
         ly = s.get("latest_yoy") or {}
         ago = str(ly.get("of") or "").split(" vs ")[-1] if ly.get("basis") == "quarter" else None
         base_hit = next((e for e in effects if e["quarter"] == ago), None)
@@ -1464,7 +1480,7 @@ class Research:
             "quote": quote, "range52": {"low": lo52, "high": hi52, **({"since": listed_on} if listed_on else {})},
             "margins": None,
             "metrics": _groups(
-                ("Valuation", [_of(_item("P/E", s.get("pe")), pe_of), _of(_item("P/B", s.get("pb")), f"Book value as of {s['book_as_of']}" if s.get("book_as_of") else None),
+                ("Valuation", [_of(_item("P/E", s.get("pe")), pe_of, lifted), _of(_item("P/B", s.get("pb")), f"Book value as of {s['book_as_of']}" if s.get("book_as_of") else None),
                                _item("Div yield", s.get("div_yield"), "%"), _of(_item("Book value", s.get("book_value"), "money"), f"as of {s['book_as_of']}" if s.get("book_as_of") else None),
                                _item("Face value", s.get("face_value"), "money")]),
                 # a bank's or lender's "operating profit" is after interest paid, so an EBITDA margin (ICICIBANK -20.0%)

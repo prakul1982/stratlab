@@ -772,7 +772,7 @@ export function ComparePage() {
   // can differ, and a bare "Latest YoY" read as one period for both (R50-003)
   // and a qualifier the company's page gives a figure stays with it: TCS's 4.4% yield says it counts a ₹46 special dividend and is 2.6% without
   // it (RC2A-028)
-  const QUALIFIES = /special|like-for-like|against a quarter|n\/m|not meaningful/i;
+  const QUALIFIES = /special|like-for-like|against a quarter|other income|n\/m|not meaningful/i;
   const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => {
     if (!m) return "–";
     const note = (m as { note?: string }).note;
