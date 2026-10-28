@@ -319,7 +319,10 @@ test("a server-drawn page: asks first, Allow loads one ad, and the answer is sha
   await expect(page.locator(".ad-ask")).toBeVisible();
   await expect(page.locator(".ad-label")).toHaveText("Ads on StratLab");
   expect(google).toEqual([]);
+  // (VR4-015) the question does not sit in a box held at 280px for an ad that is not coming yet
+  expect((await page.locator(".ad-box").boundingBox())!.height).toBeLessThan(200);
   await page.getByRole("button", { name: "Allow ads" }).click();
+  await expect(page.locator(".ad-box")).toHaveCSS("min-height", "280px");
   await expect(page.locator("[data-fake-ad]")).toBeVisible();
   await expect(page.locator(".ad-label")).toHaveText("Advertisement");
   expect(google.length).toBe(1);
