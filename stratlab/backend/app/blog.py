@@ -295,6 +295,26 @@ def blocks_html(blocks: list) -> str:
             cols = "<colgroup>" + "".join(f'<col style="width:{w}%">' for w in b["widths"]) + "</colgroup>" if b.get("widths") else ""
             wide = " wide" if len(b["head"]) >= 5 else ""
             out.append(f'<div class="btbl{" fx" if cols else ""}{wide}"><table>{cap}{cols}<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
+        elif t == "stats":
+            out.append('<ul class="kpis">' + "".join(
+                f'<li><b>{_esc(i["v"])}</b><span>{_esc(i["l"])}</span>' + (f'<small>{_esc(i["s"])}</small>' if i.get("s") else "") + "</li>"
+                for i in b["items"]) + "</ul>")
+        elif t == "bars":
+            top = max(sum(r["values"]) for r in b["rows"]) or 1
+            tone = ("one", "two", "none")
+            legend = "".join(f'<span><i class="sw {tone[n]}"></i>{_esc(x)}</span>' for n, x in enumerate(b["series"]))
+            rows = ""
+            for r in b["rows"]:
+                said = ", ".join(f"{v} {b['series'][n].lower()}" for n, v in enumerate(r["values"]))
+                segs = "".join(f'<i class="seg {tone[n]}" style="width:{v / top * 100:.2f}%" title="{_esc(r["label"])}: {v} {_esc(b["series"][n].lower())}"></i>'
+                               for n, v in enumerate(r["values"]) if v)
+                nums = "".join(f'<span><i class="sw {tone[n]}"></i>{v}</span>' for n, v in enumerate(r["values"]))
+                rows += f'<li><span class="k">{_esc(r["label"])}</span><span class="track" role="img" aria-label="{_esc(r["label"])}: {_esc(said)}">{segs}</span><span class="n">{nums}</span></li>'
+            cap = f'<figcaption>{_esc(b["caption"])}</figcaption>' if b.get("caption") else ""
+            out.append(f'<figure class="hbars">{cap}<p class="key">{legend}</p><ul>{rows}</ul></figure>')
+        elif t == "details":
+            out.append(f'<details class="how card" data-method><summary>{_esc(b["title"])}</summary><ul class="small">'
+                       + "".join(f"<li>{inline_html(i)}</li>" for i in b["items"]) + "</ul></details>")
     return "".join(out)
 
 
