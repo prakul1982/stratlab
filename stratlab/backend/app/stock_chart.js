@@ -230,6 +230,7 @@
     }).catch(function (err) {
       var none = err.message === "none";
       started = none;
+      root.setAttribute("data-empty", "1");       // no chart: a short card, not 280px of nothing (VR6-004)
       status.hidden = false;
       status.textContent = none ? "No price chart is available for this company yet. The figures here are unaffected." : "The price chart couldn't be loaded just now. The figures on this page are unaffected. ";
       if (none) return;

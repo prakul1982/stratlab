@@ -99,12 +99,14 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
             {"v": f"{lost} of {len(ran)}", "l": "tests that traded lost money", "s": "after costs"},
             {"v": f"{kinds.get('edge', 0)} of {len(rows)}", "l": "passed their checks", "s": "the verdict of the four checks"}]},
         {"t": "bars", "caption": "Tests in each market: return after costs against the passive return", "series": ["Ahead", "Behind", "Not compared"], "rows": market_rows},
-        {"t": "ul", "items": [
+        ]
+    # VR6-006: said by the tiles and the bars above; the sentences stay in the page, folded (see the IPO post)
+    words = [
             f"Against the passive return, after costs: ahead in {ahead} of {len(rows)} tests, behind in {behind}" + (f", and {other_n} could not be compared (no trades or no figure)." if other_n else "."),
             f"{lost} of the {len(ran)} tests that traded lost money after costs.",
             "Verdicts as the tests' checks gave them: " + ", ".join(f"{kinds[k]} {label}" for k, label in kind_words) + ".",
             (f"Periods: tests run between {short(first)} and {short(last)}; each table gives its own." if first and last else "Each table gives its own period."),
-        ]}]
+    ]
     if check_rows:
         k = len(outcomes)
         blocks += [{"t": "h2", "text": "The four checks"},
@@ -138,6 +140,7 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
                     "head": ["Rule set", "After costs", "Passive", "Difference", "Trades", "Checks"], "rows": table}]
     risk, mrisk = library_seed.RISK, library_seed.MARKET_RISK
     blocks += [
+        {"t": "details", "title": "The headline figures in words", "items": words},
         {"t": "details", "title": "How these tests were run", "items": [
             "Data: daily candles from each market's public price data (exchange data for shares and futures, public price feeds for coins and "
             "currency pairs); the intraday rule set uses 15-minute candles. Each test covers about five years of daily candles, or what the market has.",
@@ -248,7 +251,10 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
             {"v": f"{len(up)} of {len(have)}", "l": "closed above the issue price", "s": "on listing day"},
             {"v": p1(median(closes)), "l": "median close against the issue price", "s": f"lowest {p1(min(closes))}, highest {p1(max(closes))}"},
             *([{"v": p1(median(opens)), "l": "median open against the issue price", "s": f"{len(opens)} {'issue' if len(opens) == 1 else 'issues'}"}] if opens else [])]},
-        {"t": "ul", "items": [
+        ]
+    # VR6-006: the tiles say the headline figures; the same four sentences were printed under them (a wall of text saying each number twice).
+    # They stay in the page, folded, for a reader who wants them in words and for a crawler
+    words = [
             f"{len(facts)} {'issue' if len(facts) == 1 else 'issues'} listed between {short(first)} and {short(last)}; {len(have)} "
             f"{'has' if len(have) == 1 else 'have'} a listing-day close in the tracker and {'is' if len(have) == 1 else 'are'} counted below. "
             f"{lack} {'lacks' if lack == 1 else 'lack'} it and {'is' if lack == 1 else 'are'} left out of every figure.",
@@ -256,7 +262,7 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
             f"The middle issue (median) closed {p1(median(closes))} from its issue price; the lowest was {p1(min(closes))} and the highest {p1(max(closes))}.",
             (f"Opening price against the issue price: median {p1(median(opens))} across the {len(opens)} issues with an opening price." if opens
              else "No issue has an opening price in the tracker."),
-        ]}]
+    ]
     if seg:
         blocks += [{"t": "h2", "text": "By segment"},
                    {"t": "table", "caption": "Listing-day close against the issue price, by segment",
@@ -273,6 +279,7 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
                {"t": "p", "text": f"Newest listing first{f'; the latest {IPO_ROWS_SHOWN} of {len(have)} are shown, and every figure above counts all {len(have)}' if len(have) > IPO_ROWS_SHOWN else ''}."},
                {"t": "table", "caption": f"IPO listing day in India, {year}: Open and Close are the first day's price against the issue price",
                 "head": ["Issue", "Listed", "Issue price", "Open", "Close", "Subscribed"], "rows": table, "align": "lrrrrr", "widths": [38, 13, 12, 11, 11, 15]},
+               {"t": "details", "title": "The headline figures in words", "items": words},
                {"t": "details", "title": "How this was worked out", "items": [
                    "Data: the exchanges' public-issue pages (issue price, dates, bids received) and the exchanges' daily prices after listing. The tracker is "
                    "read every morning and evening.",

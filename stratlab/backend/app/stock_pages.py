@@ -2026,7 +2026,7 @@ background:var(--ink);color:var(--on-ink);text-decoration:none;font-weight:600;f
 main{flex:1 0 auto;width:100%;max-width:960px;margin:0 auto;padding:36px clamp(16px,4vw,32px) 64px}
 h1{font-family:var(--serif);font-weight:400;font-size:clamp(32px,4vw,46px);line-height:1.1;letter-spacing:-.02em;margin:4px 0 8px;text-wrap:balance}
 h2{font-family:var(--serif);font-weight:600;font-size:22px;line-height:1.25;letter-spacing:-.01em;margin:40px 0 12px;text-wrap:balance}h3{font-size:16px;font-weight:600;margin:14px 0 4px}
-main>p{max-width:72ch}.faq p{margin:0 0 6px;max-width:70ch;color:var(--ink-2)}.muted{color:var(--muted)}.small{font-size:14px}
+main>p{max-width:72ch}.faq p{margin:0 0 6px;color:var(--ink-2)}.muted{color:var(--muted)}.small{font-size:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:12px 0}
 .sub{margin:0 0 14px;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}h1>.muted{font-size:.5em;font-weight:400;white-space:nowrap}
 .px{margin:0 0 6px}.px p{margin:0}.px-line{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px}.px-line b{font-size:clamp(34px,5vw,44px);line-height:1.1;font-weight:600;letter-spacing:-.01em}
@@ -2086,11 +2086,11 @@ form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:16px 0}form.find select,f
 form.find input{flex:1;min-width:0}form.find button{cursor:pointer;font:inherit}
 footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:960px;margin:0 auto;padding:24px clamp(16px,4vw,32px) 40px;font-size:13.5px;color:var(--muted)}
 footer.site p{max-width:72ch;margin:0 0 8px}footer.site nav{display:flex;flex-wrap:wrap;gap:4px 18px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}footer.site nav a:hover{color:var(--ink)}
-@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide,.stat.long{grid-column:1/-1}.card{padding:16px}h2{margin-top:32px}}
+@media (max-width:640px){.sub{white-space:normal;overflow:visible}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide,.stat.long{grid-column:1/-1}.card{padding:16px}h2{margin-top:32px}}
 @media (max-width:640px){ul.dir[data-short]{grid-template-columns:repeat(2,minmax(0,1fr))}ul.dir[data-short] li{padding:0 12px}}
 /* VR5-008: the two buttons of "Go further" were 246px and 206px wide, left-aligned: one width on a phone */
 @media (max-width:640px){.ctas{flex-direction:column}.ctas .btn{justify-content:center;text-align:center}}
-@media (max-width:640px){.tiles,.tiles.c3,.tiles.c4{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.tiles>.stat:last-child:nth-child(odd){grid-column:1/-1}.stat.fill2,.stat.fill3{grid-column:auto}.stat.long b{font-size:17px}.stat b{font-size:20px}.figs{padding:16px 16px 4px}.card{padding:16px}h2{margin-top:32px}}
+@media (max-width:640px){.tiles,.tiles.c3,.tiles.c4{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.tiles{grid-auto-flow:row dense}.stat.fill2,.stat.fill3{grid-column:auto}.tiles>.stat.lone{grid-column:1/-1}.stat.long b{font-size:17px}.stat b{font-size:20px}.figs{padding:16px 16px 4px}.card{padding:16px}h2{margin-top:32px}}
 @media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:48px}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .chart-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:6px;min-height:52px}
@@ -2099,7 +2099,7 @@ footer.site p{max-width:72ch;margin:0 0 8px}footer.site nav{display:flex;flex-wr
 .seg button{font:inherit;font-weight:600;font-size:14px;min-width:48px;min-height:40px;padding:0 10px;border:0;border-radius:9px;background:transparent;color:var(--ink-2);cursor:pointer}
 .seg button:hover:not(:disabled){color:var(--ink)}.seg button[aria-pressed=true]{background:var(--card);color:var(--ink);box-shadow:0 0 0 1px var(--line-2)}
 .seg button:disabled{opacity:.4;cursor:default}.seg button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
-.plot{position:relative;height:280px}.plot svg{display:block;overflow:visible;max-width:100%;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;font-family:var(--sans);font-variant-numeric:tabular-nums}
+.plot{position:relative;height:280px}[data-empty] .plot{height:96px}.plot svg{display:block;overflow:visible;max-width:100%;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;font-family:var(--sans);font-variant-numeric:tabular-nums}
 .plot svg:focus{outline:none}.plot svg:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
 .plot-note{position:absolute;inset:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;text-align:center;margin:0;padding:0 16px}.plot-note[hidden]{display:none}
 .tip{position:absolute;z-index:3;pointer-events:none;display:flex;flex-direction:column;gap:2px;min-width:128px;background:var(--card);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:14px;box-shadow:0 8px 24px rgba(29,27,23,.14)}
@@ -2641,7 +2641,11 @@ def _figures(f: dict) -> str:
         return ""
     cols = min(4 if (-n) % 4 <= (-n) % 3 else 3, max(n, 2))
     rest = (-n) % cols
-    cells = "".join(f'<div class="stat{" long" if t["long"] else ""}{f" fill{rest + 1}" if rest and i == n - 1 else ""}" title="{e(t["title"])}">'
+    # on a phone a long tile takes a row and the others go two across; when those are an odd number the last of them takes its row
+    # (VR6-003: with one long tile and an even number of the others, the last-child rule left "Net margin" alone above "Dividend yield")
+    short = [i for i, t in enumerate(tiles) if not t["long"]]
+    lone = short[-1] if len(short) % 2 else -1
+    cells = "".join(f'<div class="stat{" long" if t["long"] else ""}{" lone" if i == lone else ""}{f" fill{rest + 1}" if rest and i == n - 1 else ""}" title="{e(t["title"])}">'
                     f'<span>{e(t["label"])}</span><b>{e(t["value"])}</b><small>{e(t["line"])}</small></div>' for i, t in enumerate(tiles))
     return f'<h2>Key figures</h2><div class="card figs">{rng}' + (f'<div class="tiles c{cols}">{cells}</div>' if tiles else "") + "</div>"
 
@@ -2724,7 +2728,7 @@ def _notes(f: dict) -> list[str]:
         out.append(f'<p class="note" data-cap-missing>Market cap and reported figures aren\'t shown: {e(public_text(str(f.get("no_numbers"))))}</p>')
     elif why == "unknown":
         out.append('<p class="note" data-cap-missing>Market cap isn\'t shown: this page has no count of the shares in issue to '
-                   "multiply the price by. It is worked out again when the page is next rebuilt.</p>")
+                   "multiply the price by.</p>")
     if figures_stale(f):
         out.append(f'<p class="note" data-figures-old>Return on equity, margins and debt to equity aren\'t shown: the newest year in '
                    f'the table ended on {e(_date(figures_end(f)))}, more than 15 months before this price, and a newer annual '
@@ -2791,6 +2795,11 @@ def _how(f: dict, notes: list[str] | None = None) -> str:
             + '<ul class="small">' + "".join(f"<li>{e(t)}</li>" for t in items) + "</ul></details>")
 
 
+def _trading_days(n) -> str:
+    """"1 trading day", "16 trading days" (VR6: the page said "for 1 trading days")."""
+    return f"{n} trading {'day' if n == 1 else 'days'}"
+
+
 def _trend(f: dict) -> str:
     s = f.get("stage")
     if not s and f.get("st_up") is None:
@@ -2798,11 +2807,11 @@ def _trend(f: dict) -> str:
     bits = []
     if s in STAGE:
         days = f.get("stage_days")
-        bits.append(f"<li><b>{STAGE[s]}</b>: {STAGE_WHY[s]}{f', for {days} trading days' if days else ''}.</li>")
+        bits.append(f"<li><b>{STAGE[s]}</b>: {STAGE_WHY[s]}{', for ' + _trading_days(days) if days else ''}.</li>")
     if f.get("st_up") is not None:
         side = "above" if f["st_up"] else "below"
         d = f.get("st_days")
-        bits.append(f"<li><b>Supertrend (10, 3)</b>: the price has closed {side} the line{f' for {d} trading days' if d else ''}.</li>")
+        bits.append(f"<li><b>Supertrend (10, 3)</b>: the price has closed {side} the line{' for ' + _trading_days(d) if d else ''}.</li>")
     return '<h2>Price trend</h2><div class="card"><ul class="plain">' + "".join(bits) + "</ul></div>"
 
 
@@ -2899,7 +2908,7 @@ def price_chart_html(f: dict, region: str, symbol: str) -> str:
             '<div class="plot"><p class="plot-note muted small" data-status role="status">Prices load here as you scroll to them.</p>'
             '<div class="tip" hidden></div></div>'
             f'<p class="small muted" data-summary>{e(text)}</p><p class="small muted" data-adjust hidden></p>'
-            '<details class="how" data-table><summary>Show the closes as a table</summary>'
+            '<details class="how" data-table><summary>The closes as a table</summary>'
             '<p class="small muted" data-rows></p><div class="tbl2"><table><thead><tr><th scope="col">Date</th><th scope="col">Close</th></tr></thead><tbody></tbody></table></div></details>'
             '<p class="sr-only" aria-live="polite" data-live></p>'
             f'<noscript><p class="small muted">The chart needs JavaScript. The close and the 1-year range are above.</p></noscript></div>'
@@ -3005,25 +3014,28 @@ def _table(f: dict) -> str:
 def surveillance_html(flags: list[dict]) -> str:
     """The stock's exchange surveillance flags as small badges, each opening to what the exchange's measure is and
     the date of the list. The badge's colours are the page's theme tokens, so it reads in dark mode too (R8V-009: a
-    fixed dark amber on the dark card was 2.37:1)."""
+    fixed dark amber on the dark card was 2.37:1). A heading like the page's other sections, and no grey paragraph of its own:
+    that the measures are facts about trading rules, not a view, is said inside each flag when it is opened (VR6-002)."""
     if not flags:
         return ""
     items = "".join(
         f'<details class="surv"><summary><span class="badge">{e(f["short"])}</span> {e(f["label"])}</summary>'
         f'<p class="small">{e(f["text"])}'
-        f'{" List as of " + e(_date(f["as_of"])) + "." if f.get("as_of") else ""}</p></details>' for f in flags)
-    return (f'<div class="card" data-surveillance><h2>Exchange surveillance</h2>{items}'
-            '<p class="small muted">From the exchange\'s published surveillance lists: measures the exchange applies '
-            'for a time. They are facts about trading rules, not a view on the company.</p></div>')
+        f'{" List as of " + e(_date(f["as_of"])) + "." if f.get("as_of") else ""}'
+        " From the exchange's published surveillance lists: a measure the exchange applies for a time. It is a fact about trading rules, not a view on the company.</p></details>"
+        for f in flags)
+    return f'<h2>Exchange surveillance</h2><div class="card" data-surveillance>{items}</div>'
 
 
 def with_surveillance(page: str, flags: list[dict]) -> str:
-    """A stored page with today's surveillance flags added under the heading (the lists change daily; the page is
-    kept until the next close)."""
+    """A stored page with today's surveillance flags added (the lists change daily; the page is kept until the next close).
+    They come after the name, the price, the chart and the key figures, before the sections of detail (VR6-002: a heading and a
+    grey explanation sat between the price and the chart)."""
     block = surveillance_html(flags)
     if not block:
         return page
-    for anchor in ('<h2>Share price</h2>', '<h2>Key figures</h2>', '<div class="card"><h2>Go further'):
+    for anchor in ('<h2>Price trend</h2>', '<h2>Revenue and profit</h2>', '<h2>Recent filings</h2>', '<h2>Questions about', '<div class="card"><h2>Go further',
+                   '<h2>About '):
         i = page.find(anchor)
         if i >= 0:
             return page[:i] + block + page[i:]

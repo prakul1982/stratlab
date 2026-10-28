@@ -293,7 +293,7 @@ def blocks_html(blocks: list) -> str:
             rows = "".join("<tr>" + "".join((f'<th scope="row"{cls(n)}>{inline_html(c)}</th>' if n == 0 else f"<td{cls(n)}{lab(n)}>{inline_html(c)}</td>")
                                             for n, c in enumerate(r)) + "</tr>" for r in b["rows"])
             cols = "<colgroup>" + "".join(f'<col style="width:{w}%">' for w in b["widths"]) + "</colgroup>" if b.get("widths") else ""
-            wide = " wide" if len(b["head"]) >= 5 else ""
+            wide = (" wide" + (" w4" if len(b["head"]) == 5 else "")) if len(b["head"]) >= 5 else ""
             out.append(f'<div class="btbl{" fx" if cols else ""}{wide}"><table>{cap}{cols}<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
         elif t == "stats":
             out.append('<ul class="kpis">' + "".join(
@@ -456,19 +456,14 @@ def brief_post(issue: dict, now: datetime | None = None) -> dict | None:
             summary = f"{long_day(day)}: " + ", ".join(bits) + ". Facts, not advice."
         else:
             summary = f"The {name} market brief for {long_day(day)}."
-        sentences = []
-        for i in indices:
-            s = f"The {i['name']} closed at {level(i['price'], region)}"
-            if isinstance(i.get("change_pct"), (int, float)):
-                s += f", {move_words(i['change_pct'])}"
-            sentences.append(s + ".")
-        blocks.append({"t": "p", "text": f"The {name} market on {long_day(day)}, from the day's closing figures. " + " ".join(sentences)
-                       if sentences else f"The {name} market on {long_day(day)}."})
+        # VR6-005: one line of words, then each index as a tile (its close big, its change under it): the paragraph of sentences said every
+        # figure once, then the table said it again
+        blocks.append({"t": "p", "text": f"The {name} market on {long_day(day)}, from the day's closing figures."})
         if indices:
             blocks += [{"t": "h2", "text": "Index closes"},
-                       {"t": "table", "caption": f"{name} index closes on {short_day(day)}", "head": ["Index", "Close", "Change on the day"],
-                        "rows": [[i["name"], level(i["price"], region), pct(i["change_pct"]) if isinstance(i.get("change_pct"), (int, float)) else "–"]
-                                 for i in indices]}]
+                       {"t": "stats", "items": [{"v": level(i["price"], region), "l": i["name"],
+                                                 "s": f"{pct(i['change_pct'])} on the day" if isinstance(i.get("change_pct"), (int, float)) else ""}
+                                                for i in indices[:6]]}]
         rot = _section(issue, "Sector rotation")
         if rot and rot.get("items"):
             blocks += [{"t": "h2", "text": "Sector rotation"},

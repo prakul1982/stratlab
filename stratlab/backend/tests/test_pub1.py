@@ -164,7 +164,7 @@ def test_the_page_has_the_chart_card_with_its_text_and_its_table(w):
     t = w["client"].get("/stocks/in/RELIANCE").text
     for part in ('<h2>Share price</h2>', 'data-chart', 'data-src="/stocks/in/RELIANCE/prices.json"', 'data-currency="INR"',
                  'data-r="1m"', 'data-r="6m"', 'data-r="1y"', 'data-r="5y"', 'aria-label="Chart range"', "data-change", "data-summary",
-                 "Show the closes as a table", 'aria-live="polite"', "<noscript>", 'src="/stocks/chart.js?v=' + stock_pages.CHART_JS_V + '" defer'):
+                 "The closes as a table", 'aria-live="polite"', "<noscript>", 'src="/stocks/chart.js?v=' + stock_pages.CHART_JS_V + '" defer'):
         assert part in t, part
     # the same facts as words, so a crawler or a visitor with no script reads them: the close and the year's range
     summary = re.search(r"<p class=\"small muted\" data-summary>(.*?)</p>", t).group(1)
@@ -327,7 +327,7 @@ def test_the_key_figures_are_even_tiles_on_one_baseline_and_the_range_is_its_own
     assert "@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 3;grid-template-rows:subgrid" in css and ".stat span{align-self:end}" in css
     assert ".stat b{display:block;font-size:22px;line-height:1.25;font-weight:600;white-space:nowrap}" in css      # a value never wraps
     # two to a row on a phone, an odd last tile takes the row, so no empty place
-    assert "@media (max-width:640px){.tiles,.tiles.c3,.tiles.c4{grid-template-columns:repeat(2,minmax(0,1fr))" in css and ".tiles>.stat:last-child:nth-child(odd){grid-column:1/-1}" in css
+    assert "@media (max-width:640px){.tiles,.tiles.c3,.tiles.c4{grid-template-columns:repeat(2,minmax(0,1fr))" in css and ".tiles>.stat.lone{grid-column:1/-1}" in css
 
 
 def test_a_directory_is_a_list_of_rows_and_a_short_page_keeps_its_footer_down(w):

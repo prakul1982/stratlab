@@ -79,6 +79,11 @@ article details.how{margin:22px 0 8px}article details.how ul{margin:4px 0 8px}
 .btbl.wide th[scope=row]{grid-column:1/-1;padding:0;border:0;font-size:14px}.btbl.wide td{padding:0;border:0;text-align:left;white-space:normal;min-width:0}
 .btbl.wide td::before{content:attr(data-l);display:block;font-size:12px;color:var(--muted)}.btbl.wide td:empty{display:none}
 .btbl.wide td:nth-child(6){grid-column:span 2}.btbl.wide.fx table{min-width:0}.btbl.wide.fx td{overflow:visible}}
+/* VR6-007: a table of three or four columns stays a table on a phone and must fit it: its headers, its row names and its caption wrap
+   (only a figure keeps to one line); at 390px "Lump sum" and the last column of the subscription table ran past the edge, cut off, with no cue.
+   VR6-008: four figures to a card across, not three and an orphan (the four checks). VR6-009: an odd last tile takes its row */
+@media (max-width:640px){.btbl:not(.wide) thead th,.btbl:not(.wide) tbody th,.btbl caption{white-space:normal}.btbl:not(.wide) thead th{vertical-align:bottom}
+.btbl.wide.w4 tr{grid-template-columns:repeat(4,minmax(0,1fr))}.kpis li:last-child:nth-child(odd){grid-column:1/-1}}
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.tabs a{display:inline-flex;align-items:center;min-height:44px;padding:4px 16px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink-2);background:var(--card)}
 .tabs a[aria-current=page]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
 ul.posts{list-style:none;padding:0;margin:0}ul.posts li{margin:12px 0}
