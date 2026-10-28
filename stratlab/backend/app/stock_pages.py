@@ -2021,6 +2021,7 @@ def _head(title: str, desc: str, canonical: str, extra: str = "", robots: str = 
     # swapped in after it, moving the list and the search under a heading that rewraps (R75-002: /stocks' layout shift)
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google-adsense-account" content="ca-pub-8125241692814953">
 <link rel="preload" href="/fonts/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <title>{e(title)}</title>
