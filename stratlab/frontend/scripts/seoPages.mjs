@@ -8,7 +8,7 @@
 // unit/seo.test.mjs checks the output of these functions.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { absolute, BROWSE_COMPANIES, HOME_DESCRIPTION, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
+import { absolute, BROWSE_COMPANIES, HOME_DESCRIPTION, INSTAGRAM, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
 import { FAQ, faqText } from "../src/content/faq.ts";
 import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED } from "../src/content/legal.ts";
 
@@ -24,7 +24,7 @@ const faqPage = () => ({ "@context": "https://schema.org", "@type": "FAQPage",
 /** The home page's structured data: who runs it, the site, and the questions the page answers (the page's own FAQ). */
 export function homeJsonLd() {
   return ld([
-    { "@context": "https://schema.org", "@type": "Organization", name: "StratLab", url: `${SITE}/`, logo: `${SITE}/icon-512.png`, description: HOME_DESCRIPTION },
+    { "@context": "https://schema.org", "@type": "Organization", name: "StratLab", url: `${SITE}/`, logo: `${SITE}/icon-512.png`, description: HOME_DESCRIPTION, sameAs: [INSTAGRAM] },
     { "@context": "https://schema.org", "@type": "WebSite", name: "StratLab", url: `${SITE}/`, description: HOME_DESCRIPTION },
     faqPage(),
   ]);

@@ -2119,11 +2119,15 @@ def _top(sign_in: str | None = None) -> str:
             f'<a class="btn ghost" href="{e(sign_in)}">Sign in</a></header>')
 
 
+INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address as the app's footers (content/seo.ts)
+
+
 def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
     links = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                 ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us"),
                                                                 ("/pricing", "Plans"), ("/library", "Strategy library"), ("/blog", "Blog")))
+    links += f'<a href="{INSTAGRAM}" rel="me noopener">Instagram</a>'
     return (f'<footer class="site"><div class="in"><p>Research and paper trading only. No real orders are placed. StratLab shows '
             "facts from reported data for research and education; nothing here is investment advice or a recommendation, and "
             f"past prices don't predict future returns. © {datetime.now(timezone.utc).year} StratLab.</p>"
