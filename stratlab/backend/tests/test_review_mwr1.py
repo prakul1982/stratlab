@@ -228,3 +228,17 @@ def test_erasing_a_persons_data_removes_their_market_watch_lists_and_export_has_
     assert c.get("/watch/lists", headers=BASIC).json()["lists"][0]["items"] == []
     assert len(rows("u-pro")) == 2                                              # nobody else's is touched
     assert len(c.get("/watch/lists", headers=PRO).json()["lists"][0]["items"]) == 2
+
+
+# ---------- a tick's time carries its zone (MWR1-015) ----------
+def test_a_ticks_bare_exchange_time_is_read_as_india_time():
+    from app import watch_stream as WSH
+    ticks = type("T", (), {"add": lambda *a, **k: None, "remove": lambda *a: None, "started": True})()
+    hub = WSH.StreamHub(ticks, lambda k: 1001, start_timer=lambda *a: None)
+    hub.on_tick(1001, {"last_price": 101.5, "volume_traded": 10, "exchange_timestamp": datetime(2026, 10, 28, 10, 15, 3)})
+    row = hub.latest[1001]
+    assert row["t"] == "2026-10-28T10:15:03+05:30"                                  # a browser in London or New York would have read it in its own zone
+    hub.on_tick(1002, {"last_price": 5, "last_trade_time": datetime(2026, 10, 28, 4, 45, tzinfo=timezone.utc)})
+    assert hub.latest[1002]["t"] == "2026-10-28T04:45:00+00:00"                  # a time with a zone is left alone
+    hub.on_tick(1003, {"last_price": 5})
+    assert hub.latest[1003]["t"].endswith("+00:00")                                  # none: now, in UTC

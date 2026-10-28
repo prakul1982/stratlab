@@ -17,6 +17,9 @@ import asyncio
 import threading
 import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo("Asia/Kolkata")
 
 MAX_TOKENS = 250            # instruments streamed at once, for everyone
 MAX_PER_CONN = 40           # instruments in one stream
@@ -141,6 +144,8 @@ class StreamHub:
         if price is None:
             return
         ts = tick.get("exchange_timestamp") or tick.get("last_trade_time")
+        if hasattr(ts, "isoformat") and getattr(ts, "tzinfo", None) is None:
+            ts = ts.replace(tzinfo=IST)         # the broker's times are the exchange's wall clock: a bare one read as the browser's own zone put candles hours off (MWR1-015)
         at = ts.isoformat() if hasattr(ts, "isoformat") else datetime.now(timezone.utc).isoformat(timespec="seconds")
         row = {"p": float(price), "v": tick.get("volume_traded"), "t": at}
         with self.lock:
