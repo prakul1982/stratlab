@@ -170,6 +170,7 @@ def test_minute_blocks_are_bounded_by_bytes():
     k = kite_now()
     cache = k._blocks()
     assert cache.max_bytes == k.BLOCK_BYTES and cache.max == 400
+    assert k.BLOCK_BYTES <= 16 * 1024 * 1024          # the minute blocks stay a small share of a $20/month server
 
 
 def test_the_brokers_requests_are_paced_in_the_order_they_asked():

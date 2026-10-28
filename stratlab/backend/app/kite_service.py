@@ -678,7 +678,7 @@ class KiteService:
     BLOCK_DAYS = 5                       # calendar days in one cached block of minute candles: one request to the broker
     BLOCK_LIVE = 15.0                    # seconds a block that holds today is reused: the forming candle comes from the ticks
     BLOCK_KEEP = 12 * 3600               # a block of past days is final: kept this long
-    BLOCK_BYTES = 48 * 1024 * 1024       # all blocks together, shared by every viewer of an instrument; the least recently used go first
+    BLOCK_BYTES = 16 * 1024 * 1024       # all blocks together (memory is Railway's bill: ~40 five-day minute blocks), shared by every viewer of an instrument; the least recently used go first
 
     def _blocks(self):
         b = self.__dict__.get("_block_cache")
