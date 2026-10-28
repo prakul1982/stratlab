@@ -134,7 +134,7 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
 
 ["fo_alerts", "Alerts when an F&O exit, lot size or expiry change touches your watchlist or paper sessions"],
   ["options_whatif", "Options what-if: move the underlying, shift IV and pass days, and preview rolling a leg"],
-  ["cas_history", "Closing auction history: 60 days of auction closes against the reference price, and index closes"],
+  ["cas_history", "Closing auction history: up to 60 days of auction closes against the reference price, and index closes"],
   ["vix_filter", "Options sessions that enter only inside an India VIX band"],
   ["strike_rules", "Option strikes picked by model delta, a delta range, premium or a share of the ATM straddle"],
   ["chart_replay", "Chart replay practice on past candles, logged to the journal"],

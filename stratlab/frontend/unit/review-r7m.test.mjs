@@ -118,7 +118,7 @@ test("Zerodha connected with nothing: Holdings says so with the time, and the ca
   for (const s of [zerodhaLine({ live: true, refreshed_label: "x", count: 0 }), zerodhaLine({ live: false, refreshed_label: null, count: null })]) assert.doesNotMatch(s, /tap to refresh|refreshed/);
   const page = read("src/pages/HoldingsPage.tsx");
   assert.match(page, /<EmptyState title=\{zerodhaEmpty\(view\.zerodha\) \?\? "Zerodha is connected; it returned 0 holdings"\}>/);
-  assert.match(page, /view\?\.zerodha\s*\?\s*<p className="k-note">Zerodha is connected\./);        // not "Connect Zerodha once" to someone who has
+  assert.match(page, /view\?\.zerodha\s*\?\s*<div className="k-row" data-testid="zerodha-refresh">\s*<span className="k-note">Zerodha is connected/);        // not "Connect Zerodha once" to someone who has
 });
 
 test("Trade journal: why its numbers differ from the tax report, and no promise it does not keep (R7M-013)", async () => {

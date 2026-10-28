@@ -144,12 +144,15 @@ type VixBrief = { value: number | null; value_day?: string | null; quote?: VixQu
  * shows its own day; one that can't be read says so and the others stay. */
 function MarketStrip() {
   const [b, setB] = useState<Brief | null | "none">(null);
-  const [vix, setVix] = useState<VixBrief | null | "none">(null);
+  const [vix, setVix] = useState<VixBrief | null | "none" | "slow">(null);
   useEffect(() => { api<Brief>("/trade/positioning?brief=true&pcr=false").then(setB).catch(() => setB("none")); }, []);
   useEffect(() => { api<VixBrief>("/trade/vix").then(setVix).catch(() => setVix("none")); }, []);
+  // the one read that goes to a live feed can be slower than its three neighbours: after a few seconds the tile says so instead of a grey bar that
+  // never ends, and takes the figure when it comes (LIVE1C-070)
+  useEffect(() => { const t = window.setTimeout(() => setVix((v) => (v === null ? "slow" : v)), 6000); return () => window.clearTimeout(t); }, []);
   // India VIX is the one live figure here (the rest are the exchange's daily files): read again each minute while India trades,
   // the tile keeping its last value when a read fails (LIVE-1)
-  useMarketRefresh(["IN"], () => { api<VixBrief>("/trade/vix").then(setVix).catch(() => undefined); }, vix !== null && vix !== "none");
+  useMarketRefresh(["IN"], () => { api<VixBrief>("/trade/vix").then(setVix).catch(() => undefined); }, vix !== null && vix !== "none" && vix !== "slow");
   const ev = useEvents();
   const today = istToday();
   const expiry = ev?.events.find((e) => e.kind === "expiry" && e.date >= today && !e.title.startsWith("SENSEX"));
@@ -157,9 +160,10 @@ function MarketStrip() {
   const ban = b && b !== "none" ? b.fo_ban ?? [] : null;
   const crore = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} cr`;
   const tiles: { to: string; k: string; v: ReactNode; note: string; id: string }[] = [
-    { id: "vix", to: "/trade/positioning#india-vix", k: "India VIX", v: vix === null ? null : vix === "none" || vix.value == null ? "–" : vix.value.toFixed(2),
+    { id: "vix", to: "/trade/positioning#india-vix", k: "India VIX", v: vix === null ? null : vix === "none" || vix === "slow" || vix.value == null ? "–" : vix.value.toFixed(2),
       // a live quote comes with no day (the value is now's): its change stands in the line, so the tile is as tall as its three neighbours (VR2-013)
-      note: vix && vix !== "none" && vix.value_day ? fmtDate(vix.value_day, { year: false }) : vix === "none" ? "couldn't be read" : vixChange(vix?.quote ?? null) ?? "" },
+      note: vix && vix !== "none" && vix !== "slow" && vix.value_day ? fmtDate(vix.value_day, { year: false }) : vix === "none" ? "couldn't be read" : vix === "slow" ? "taking longer than usual"
+        : vixChange(vix ? vix.quote ?? null : null) ?? "" },
     { id: "fii", to: "/trade/positioning#pos-cash", k: "FII/FPI cash, net", v: b === null ? null : fii == null ? "–" : <span className={signCls(fii)}>{crore(fii)}</span>,
       note: b && b !== "none" && b.cash?.as_of ? fmtDate(b.cash.as_of, { year: false }) : b === "none" ? "couldn't be read" : "" },
     { id: "expiry", to: "/trade/events", k: "Next F&O expiry", v: ev === null ? null : expiry ? fmtDate(expiry.date, { weekday: true, year: false }) : "–",
@@ -235,7 +239,9 @@ export function InvestHome() {
   // every card and link opens its page on the market picked here (review 5c)
   const tools: Tool[] = investStrip(region).map((t) => ({ ...INVEST_STRIP[t.key], to: t.to }));
   const { items: watching } = useWatchlist();
-  const nothingWatched = watching !== null && !watching.some((w) => w.region === region);
+  // with nothing watched in this market, or one or two stocks (VR6-011): one or two stocks make a card a third as wide as the two dated cards stacked beside it, with an empty half under it and beside the tiles: with so
+  // few they stack across the page as with none (LIVE1C-090)
+  const fewWatched = watching !== null && watching.filter((w) => w.region === region).length <= 2;
   // the one Invest home: what you follow and the market around it. Looking up a company is its own page (Look up a company,
   // the menu's main button), so this page has no second search box (DD-002)
   return (
@@ -255,9 +261,9 @@ export function InvestHome() {
           watchlist ended 100px short of it (VR1-010, VR1-011; before: DF-023, UI-FIX-1 R1/R2) */}
       {/* VR6-011: with nothing watched in this market the watchlist is one line: beside the two dated cards it stood 225px short of them,
           so the three stack across the page instead */}
-      <div className={nothingWatched ? "space-col" : "grid2 space-panels"}>
+      <div className={fewWatched ? "space-col" : "grid2 space-panels"}>
         <WatchPanel region={region} />
-        {nothingWatched ? <><NextEvents region={region} /><ResultsToday region={region} /></> : (
+        {fewWatched ? <><NextEvents region={region} /><ResultsToday region={region} /></> : (
           <div className="space-col">
             <NextEvents region={region} />
             <ResultsToday region={region} />
@@ -314,7 +320,7 @@ function WatchPanel({ region }: { region: Region }) {
         : regions.map((r) => (
           <div key={r} className="k-stack snug">
             {/* no "INDIA" over the stocks: the market is the toggle at the top of the page (VR5-owner-1: one line less, so the card ends level with its neighbours) */}
-            <QuoteGrid region={r} symbols={by(r).slice(0, WATCH_SHOWN).map((w) => w.symbol)} names={Object.fromEntries(by(r).map((w) => [w.symbol, w.name]))} />
+            <QuoteGrid region={r} fill={by(r).length <= 2} symbols={by(r).slice(0, WATCH_SHOWN).map((w) => w.symbol)} names={Object.fromEntries(by(r).map((w) => [w.symbol, w.name]))} />
           </div>
         ))}
     </Panel>

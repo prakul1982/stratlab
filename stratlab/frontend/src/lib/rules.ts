@@ -573,5 +573,7 @@ export function copyNeeds(s: Strategy, groupSize: number, plan: { allIndicators:
     if (groupSize > plan.basicCap) needs = "Pro";
   }
   if (!parts.length) return null;
-  return `Runs on ${needs}: ${parts.join(", and ")}. A copy is yours to edit on any plan.`;
+  // (the sentence that a copy is yours to edit on any plan is said once for the list, COPY_ANY_PLAN, not on every card: LIVE1C-076)
+  return `Runs on ${needs}: ${parts.join(", and ")}.`;
 }
+export const COPY_ANY_PLAN = "A copy is yours to edit on any plan, including one a plan can't run yet.";

@@ -177,3 +177,55 @@ test("LIVE1C-060: the calendar's form and reminders share a row; the link has th
   assert.ok(src.indexOf('<Card label="Reminders">') < src.indexOf('<Card label="Calendar feed">'));
   assert.ok(src.indexOf('<Card label="Calendar feed">') > src.indexOf("</div>\n\n      {/* LIVE1C-060"));
 });
+
+test("LIVE1C-070: the VIX tile says it is slow after a few seconds instead of a grey bar that never ends", () => {
+  const src = read("src/pages/SpaceHomes.tsx");
+  assert.match(src, /window\.setTimeout\(\(\) => setVix\(\(v\) => \(v === null \? "slow" : v\)\), 6000\)/);
+  assert.match(src, /"taking longer than usual"/);
+});
+
+test("LIVE1C-071, LIVE1C-076: a plan tag speaks its first sentence once; a library card's lock line is short and the rest is said once", async () => {
+  assert.match(read("src/components/PageTags.tsx"), /tag\.why\.split\(\/\(\?<=\\\.\)\\s\/\)\[0\]/);
+  const R = await import("../src/lib/rules.ts");
+  const st = { ...R.blankStrategy(), entry: [{ l: { t: "price" }, op: "gt", r: { t: "supertrend", p: 10, m: 3 } }] };
+  assert.equal(R.copyNeeds(st, 20, { allIndicators: false, groupCap: 10, basicCap: 25, proCap: 50 }), "Runs on Basic: it uses Supertrend, and its group of 20 is over your plan's 10.");
+  assert.match(R.COPY_ANY_PLAN, /^A copy is yours to edit on any plan/);
+  assert.match(read("src/pages/LibraryPage.tsx"), /<> \{COPY_ANY_PLAN\}<\/>/);
+});
+
+test("LIVE1C-072: the closing-auction lock says up to 60 days, every day saved", () => {
+  assert.match(read("src/pages/trade/ClosingAuctionPage.tsx"), /Up to 60 days of auction closes \(every day StratLab has saved\)/);
+  assert.match(read("src/lib/plans.ts"), /up to 60 days of auction closes/);
+});
+
+test("LIVE1C-074: the View as choice shows as pressed at once", () => {
+  const v = read("src/components/ViewAs.tsx");
+  assert.match(v, /value=\{pick \?\? planToChoice\(viewAs\)\}/);
+});
+
+test("LIVE1C-077: the foot of a page keeps the cookie question's height free", () => {
+  assert.match(read("src/styles.css"), /\.shell \.page \{ padding-bottom: var\(--mw-lift, 0px\); \}/);
+});
+
+test("LIVE1C-090, LIVE1C-091: few watched stocks stack the Invest cards and fill the row; Coming up is shorter beside a short watchlist and reads date and title together", () => {
+  const inv = read("src/pages/SpaceHomes.tsx");
+  assert.match(inv, /const fewWatched = watching !== null && watching\.filter\(\(w\) => w\.region === region\)\.length <= 2;/);
+  assert.match(inv, /fill=\{by\(r\)\.length <= 2\}/);
+  assert.match(read("src/styles-invest.css"), /\.inv-tiles\.fill \{ grid-template-columns: repeat\(auto-fit, minmax\(160px, 1fr\)\); \}/);
+  assert.match(read("src/styles-invest.css"), /\.inv-tile \.surv-badge\.fo-badge \{ white-space: normal;/);
+  const mine = read("src/pages/MineHome.tsx");
+  assert.match(mine, /watchItems\.length <= 3 \? coming\.slice\(0, Math\.max\(3, watchItems\.length \+ 2\)\)/);
+  assert.match(mine, /<span className="sr-only">\{d\.w\} \{d\.d\} \{d\.m\}: <\/span>/);
+});
+
+test("LIVE1C-092: the plan cards end level with their buttons at the foot; the full comparison is a closed fold in the app", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.k-plan > :last-child \{ margin-top: auto; \}/);
+  assert.match(read("src/pages/PlansPage.tsx"), /<PlanCompare folded /);
+  assert.match(read("src/components/PlanCompare.tsx"), /testId="plans-compare-fold"/);
+});
+
+test("LIVE1C-093: Account's AI builds line is shorter for an admin", async () => {
+  const { aiBuildsUse } = await import("../src/lib/account.ts");
+  assert.equal(aiBuildsUse(28, null, 200, true), "28 (unlimited; up to 200 a day, not enforced for you)");
+});

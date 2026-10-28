@@ -25,9 +25,10 @@ export function PageTags({ page }: { page: NavPage }) {
   // (DI-031: Basic saw "Basic (On the Basic plan)" on every page it already had)
   const tag = got && (got.locked || got.label !== (plan === "pro" ? "Pro" : "Basic")) ? got : null;
   if (!tag) return null;
+  // the tooltip has the whole line; a screen reader hears its first sentence, not "See the plans to upgrade" seven times down one page (LIVE1C-071)
   return (
     <span className="page-tags">
-      {tag && <span title={tag.why}><Badge tone="plain" dot={false}>{tag.locked && <Lock size={12} />}{tag.label}</Badge><span className="sr-only"> ({tag.why})</span></span>}
+      {tag && <span title={tag.why}><Badge tone="plain" dot={false}>{tag.locked && <Lock size={12} />}{tag.label}</Badge><span className="sr-only"> ({tag.why.split(/(?<=\.)\s/)[0]})</span></span>}
     </span>
   );
 }

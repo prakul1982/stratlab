@@ -7,7 +7,7 @@ import { ADS, EVERYONE, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimit
 
 /** Every limit and feature side by side, from the server's plans when signed in; signed out, the
  * same tables from the app's own copy of the limits (R60-012: a visitor comparing plans saw less than a signed-in user). */
-export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
+export function PlanCompare({ plans, folded }: { plans?: Record<string, Partial<Limits>>; folded?: boolean }) {
   const lim = (p: PlanId): Limits => ({ ...LIMITS[p], ...(plans?.[p] ?? {}) });
   const num = (p: PlanId, k: keyof Limits) => {
     const v = lim(p)[k] as number | null;
@@ -38,9 +38,7 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
     ...ids.map((p) => ({ key: p, header: names[p], numeric: true, cell: (r: Row) => valueOf(r.cell(p)) })),
   ];
   // one table per group, each with the plan names on top; the header stays in view as the page scrolls past it
-  return (
-    <Card id="compare" className="k-compare">
-      <CardHead title="Side by side" />
+  const body = (<>
       {groups.map((g, i) => (
         <div key={g.id} className="k-stack" data-plans-group={g.id}>
           {g.sub && groups[i - 1]?.sub !== g.sub && <h3 className="k-sub">{g.sub}</h3>}
@@ -54,6 +52,12 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
           <ul className="k-list">{everyone.map((r) => <li key={r.id}>{r.label}</li>)}</ul>
         </Disclosure>
       </div>
+  </>);
+  // in the app the three cards above already list each plan: the full comparison is one fold, closed (LIVE1C-092: the same facts three times down a 10,000px page)
+  return (
+    <Card id="compare" className="k-compare">
+      <CardHead title="Side by side" />
+      {folded ? <Disclosure summary="Compare every limit and feature side by side" testId="plans-compare-fold"><div className="k-stack">{body}</div></Disclosure> : body}
     </Card>
   );
 }

@@ -344,6 +344,9 @@ a.link { margin-inline: -2px; }
 .brand:hover { color: var(--ink); }
 .main { min-width: 0; padding: 40px clamp(24px, 4vw, 56px) 80px; }
 .page { max-width: 1320px; margin: 0 auto; }
+/* the question stands over the corner while it is up (--mw-lift is its height, lib/consentLift): the foot of the page keeps that much room, so the last
+   rows can be scrolled clear of it instead of sitting under it (LIVE1C-077: the PCR table's edge and a library card's text) */
+.shell .page { padding-bottom: var(--mw-lift, 0px); }
 .topbar { display: none; }
 /* the menu folded away on a laptop (Shell "slim"): the page takes the whole width, one button brings the menu back */
 .side-hide, .side-show { display: none; }
@@ -2145,7 +2148,10 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-progress::-moz-progress-bar { background: var(--blue); border-radius: 99px; }
 
 /* plans */
-.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a 260px band in the middle */
+/* LIVE1C-092: the three cards end level with their buttons (or the line that stands for one) on one line at the foot; CK-2 (R13) had each its own height
+   because a stretched list left a 260px band in the middle of the Free card: the lists are folded to about 400 characters now (VR6-013), and the band, if any, is above the button */
+.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: stretch; }
+.k-plan > :last-child { margin-top: auto; }
 .k-plan.pro { border: 2px solid var(--ink); }
 @media (min-width: 601px) and (max-width: 1000px) { /* a tablet: two columns, the last plan across both, never one narrow column */
   .k-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2153,7 +2159,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 }
 .k-plan-price { font-family: var(--serif); font-size: 44px; letter-spacing: -.02em; line-height: 1.1; }
 .k-plan-price span { font-family: var(--sans); font-size: var(--t-label); color: var(--muted); letter-spacing: 0; }
-.k-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); flex: 1; font-size: var(--t-label); }
+.k-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); flex: none; font-size: var(--t-label); }
 .k-plan-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: var(--s2); align-items: start; }
 .k-plan-list li > span { color: var(--blue); font-weight: 700; }
 .k-plan-list li.head { display: block; color: var(--muted); font-weight: 600; }

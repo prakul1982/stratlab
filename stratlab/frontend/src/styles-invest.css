@@ -40,6 +40,7 @@
 
 /* company tiles */
 .inv-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s2); }
+.inv-tiles.fill { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }   /* LIVE1C-090: one or two stocks share the card's width, not a third of it */
 /* CK-2 (R9): the peers fill the card in equal rows (6 = 3 + 3, 4 = 2 + 2), never five across and one left over */
 .co-peers-1 .inv-tiles { grid-template-columns: minmax(0, 1fr); } .co-peers-2 .inv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .co-peers-3 .inv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 640px) { .co-peers .inv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -49,6 +50,8 @@
 .inv-tile-top b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inv-tile-px { font-weight: 500; white-space: nowrap; }
 .inv-tile-chg { display: flex; flex-wrap: wrap; gap: var(--s1) 6px; align-items: center; min-height: 22px; }
+/* LIVE1C-090: a tile's F&O note ("Lot 225→250 from the Jan 2027 series") wraps inside its pill rather than being cut off with an ellipsis */
+.inv-tile .surv-badge.fo-badge { white-space: normal; overflow: visible; text-overflow: clip; border-radius: 12px; line-height: 1.3; }
 
 /* headlines */
 .inv-news { display: flex; flex-direction: column; }

@@ -73,7 +73,7 @@ export function deepDiveLimitLine(deepdiveUsed: number, deepdiveLimit: number, d
  * the Plans card names (R9P-005); for an admin the cap isn't enforced, and the line says so. */
 export function aiBuildsUse(used: number, limit: number | null | undefined, perDay?: number | null, admin?: boolean): string {
   if (limit != null || perDay == null) return monthlyUse(used, limit);
-  return `${used} (unlimited; up to ${perDay.toLocaleString("en-IN")} a day${admin ? ", not enforced for you as an admin" : ""})`;
+  return `${used} (unlimited; up to ${perDay.toLocaleString("en-IN")} a day${admin ? ", not enforced for you" : ""})`;
 }
 
 /** The plan's row in "Plan and usage", or null for Free. */

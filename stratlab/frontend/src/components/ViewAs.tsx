@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useApp } from "../lib/app";
-import { VIEW_AS_CHOICES, choiceToPlan, planToChoice, viewAsBanner } from "../lib/viewAs";
+import { VIEW_AS_CHOICES, choiceToPlan, planToChoice, viewAsBanner, type ViewAsChoice } from "../lib/viewAs";
 import { Card, CardHead, Notice, Seg } from "./kit";
 
 /** On every page while the site owner views the app as a plan: which plan, that the real one is unchanged, and the way
@@ -19,11 +20,15 @@ export function ViewAsBanner() {
  * prompts and monthly limits can be reviewed on the live site. Billing, the stored plan and Admin itself are unchanged. */
 export function ViewAsCard() {
   const { viewAs, setViewAs } = useApp();
+  // the pressed choice shows as chosen at once, while the server answers and the app reloads as that plan (LIVE1C-074: no choice looked
+  // selected for several seconds on a slow answer); a refusal puts the old one back
+  const [pick, setPick] = useState<ViewAsChoice | null>(null);
+  const choose = (c: string) => { setPick(c as ViewAsChoice); void setViewAs(choiceToPlan(c)).finally(() => setPick(null)); };
   return (
     <Card label="View as a plan">
       <CardHead title="View as a plan"
         info="See the whole app as a Free, Basic or Pro user does: their locks, upgrade prompts and monthly limits, with the launch offer left out. Only you see it. Your real plan, billing and Admin are unchanged, and it stays on until you turn it off." />
-      <Seg label="View as" value={planToChoice(viewAs)} options={VIEW_AS_CHOICES} onChange={(v) => { void setViewAs(choiceToPlan(v)); }} />
+      <Seg label="View as" value={pick ?? planToChoice(viewAs)} options={VIEW_AS_CHOICES} onChange={choose} />
       <p className="k-note">Shows the plan's limits as they'll be after the launch offer ends.</p>
     </Card>
   );
