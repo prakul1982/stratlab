@@ -7,7 +7,7 @@ import { HELP } from "../lib/help";
 import { marketState } from "../lib/marketHours";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, SETTLING, holderRowName, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
+  REGION_NAME, SETTLING, atPrice, holderRowName, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
   type Company, type CompareAI, type Idea, type IndexLevel, type PulseAI, type PulseData, type Quote, type Region, type SectorAI, type WatchItem,
 } from "../lib/research";
 import { askAgain, PULSE_PENDING_EVERY_MS, PULSE_SLOW_MS, pulseLoad } from "../lib/pulseLoad";
@@ -268,7 +268,8 @@ function CompanyView() {
     if (!s0) return;
     researchApi.quotes(region, [s0]).then((q) => {
       const x = q[s0];
-      if (x?.price != null) setC((cur) => (cur && cur.symbol === s0 ? { ...cur, quote: { ...cur.quote, ...x }, as_of: x.at ?? cur.as_of } : cur));
+      // the market value, the P/E and the year's range move with the price (RC7-007), not only the price beside them
+      if (x?.price != null) setC((cur) => (cur && cur.symbol === s0 ? { ...atPrice(cur, cur.quote?.price, x.price), quote: { ...cur.quote, ...x }, as_of: x.at ?? cur.as_of } : cur));
     }).catch(() => undefined);
   });
   useEffect(() => {
@@ -742,7 +743,7 @@ export function ComparePage() {
     const [sa, sb] = [res!.a.symbol, res!.b.symbol];
     researchApi.quotes(region, [sa, sb]).then((q) => {
       if (pair.current !== key) return;
-      const lay = (c: Company, x: Quote | null | undefined) => (x?.price != null ? { ...c, quote: { ...c.quote, ...x }, as_of: x.at ?? c.as_of } : c);
+      const lay = (c: Company, x: Quote | null | undefined) => (x?.price != null ? { ...atPrice(c, c.quote?.price, x.price), quote: { ...c.quote, ...x }, as_of: x.at ?? c.as_of } : c);
       setRes((cur) => (cur && cur.a.symbol === sa && cur.b.symbol === sb ? { ...cur, a: lay(cur.a, q[sa]), b: lay(cur.b, q[sb]) } : cur));
     }).catch(() => undefined);
   });

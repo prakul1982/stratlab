@@ -1,7 +1,7 @@
 /* Formatting for the research pages that needs no browser: the unit a group of amounts reads in, trend values,
  * metric figures, and the market read's focus parameter. Re-exported by research.ts. */
 import { CRORE, bigMoney, inrCompact, minus, currencySymbol } from "./format";
-import type { MetricItem } from "./research";
+import type { MetricGroup, MetricItem } from "./research";
 
 /** What a price read between a market's close and its settle point is called (the company header, the scans, Pulse). */
 export const SETTLING = "Latest, closing prints still settling";
@@ -284,4 +284,29 @@ const LINK_BY_KIND: Record<string, string> = { quote: "Quote page", profile: "Pr
 /** The label of an outside link on a company page, from the kind of page it opens; an exchange's own page keeps its label. */
 export function linkLabel(l: { label: string; kind?: string }): string {
   return (l.kind && LINK_BY_KIND[l.kind]) || l.label;
+}
+
+
+/** A company's figures that rest on the price, moved to a newer price (the page reads the price again each minute while the market
+ * trades): the market value and the multiples of price move with it, the dividend yield against it, and the year's range takes in
+ * the new price. Without this the price moved and the market value, P/E and range beside it stayed at the first read (RC7-007). Pure:
+ * the figures that don't follow the price (EV/EBITDA, margins, growth) are left as they were. */
+export function atPrice<T extends { market_cap: number | null; metrics: MetricGroup[]; range52: { low: number | null; high: number | null; since?: string | null } }>(
+  c: T, was: number | null | undefined, now: number | null | undefined,
+): T {
+  if (!was || !now || !(was > 0) || !(now > 0) || was === now) return c;
+  const k = now / was;
+  const by = (i: MetricItem): MetricItem => {
+    if (i.value == null) return i;
+    if (i.unit === "x" && /^(Fwd P\/E|P\/E|P\/S|P\/B)$/.test(i.label)) return { ...i, value: i.value * k };
+    if (i.unit === "%" && i.label === "Div yield") return { ...i, value: i.value / k };
+    return i;
+  };
+  const r = c.range52;
+  return {
+    ...c,
+    market_cap: c.market_cap == null ? null : c.market_cap * k,
+    metrics: c.metrics.map((g) => ({ ...g, items: g.items.map(by) })),
+    range52: { ...r, low: r.low != null ? Math.min(r.low, now) : r.low, high: r.high != null ? Math.max(r.high, now) : r.high },
+  };
 }

@@ -84,3 +84,27 @@ test("RC7-005: a P/E, a dividend yield and an EBITDA margin are written the same
   assert.match(screens, /\{ id: "opm", label: "EBITDA margin", cell: \(r\) => marginText\(r\.opm\) \}/);
   assert.match(deep, /cell: \(q: \(typeof n\.quarters\)\[number\]\) => marginText\(q\.opm\)/);
 });
+
+test("RC7-007: a price read again moves the market value, the P/E and the range with it, so the header never disagrees with itself", async () => {
+  const { atPrice } = await import("../src/lib/researchFormat.ts");
+  const co = {
+    market_cap: 18945500000000, range52: { low: 1190.7, high: 1538.04, since: null },
+    metrics: [{ title: "Valuation", items: [{ label: "P/E", value: 22.8, unit: "x" }, { label: "P/B", value: 2.25, unit: "x" }, { label: "Div yield", value: 0.71, unit: "%" }, { label: "EV/EBITDA", value: 20.3, unit: "x" }] },
+      { title: "Returns", items: [{ label: "ROE", value: 8.5, unit: "%" }] }],
+  };
+  const up = atPrice(co, 1400, 1428);                      // +2%
+  assert.ok(Math.abs(up.market_cap / co.market_cap - 1.02) < 1e-9);
+  const item = (c, l) => c.metrics.flatMap((g) => g.items).find((i) => i.label === l).value;
+  assert.ok(Math.abs(item(up, "P/E") - 22.8 * 1.02) < 1e-9 && Math.abs(item(up, "P/B") - 2.25 * 1.02) < 1e-9);
+  assert.ok(Math.abs(item(up, "Div yield") - 0.71 / 1.02) < 1e-9);          // a yield falls as the price rises
+  assert.equal(item(up, "EV/EBITDA"), 20.3);                               // not proportional to the price: left as read
+  assert.equal(item(up, "ROE"), 8.5);
+  assert.deepEqual(up.range52, { low: 1190.7, high: 1538.04, since: null });
+  assert.equal(atPrice(co, 1400, 1600).range52.high, 1600);                // a new high is the high
+  assert.equal(atPrice(co, 1400, 1100).range52.low, 1100);
+  assert.equal(atPrice(co, 1400, 1400), co);                               // no move, nothing changes
+  assert.equal(atPrice(co, null, 1400), co);
+  assert.equal(atPrice({ ...co, market_cap: null }, 1400, 1428).market_cap, null);
+  const page = read("src/pages/Research.tsx");
+  assert.equal((page.match(/atPrice\(/g) ?? []).length, 2);                // the company page and the side-by-side page both
+});
