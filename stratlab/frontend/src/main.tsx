@@ -11,6 +11,7 @@ import { Shell } from "./components/Shell";
 import { PageLock } from "./components/PageLock";
 import { ViewAsBanner } from "./components/ViewAs";
 import { Toast } from "./components/Toast";
+import { Tracking } from "./components/Tracking";
 import { VisitorApp } from "./visitor/VisitorApp";
 import { LoadFailed, LoadGuard, Opening, PageBoundary } from "./components/LoadGuard";
 import { AccountRetry, AccountWait } from "./components/AccountWait";
@@ -333,6 +334,7 @@ function App() {
     <AppProvider goToPlans={goToPlans}>
       <Routed />
       <Toast />
+      <Tracking />
     </AppProvider>
   );
 }

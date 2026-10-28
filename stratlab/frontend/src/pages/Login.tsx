@@ -12,6 +12,7 @@ import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
 import { PUBLIC_MENU, SiteLinks } from "../components/PublicFrame";
+import { PublicAd } from "../components/AdUnit";
 import { SkipLink } from "../components/SkipLink";
 import { Seg } from "../components/kit/Seg";
 import { Dialog } from "../components/kit/Dialog";
@@ -178,7 +179,7 @@ const SECTIONS: [string, string][] = [["trade", "Trade"], ["invest", "Invest"], 
  * and the company pages (DK-008: the library was reachable only from one link far down the page). /plans has no sections to
  * scroll to, so it carries the same links as every other public page (DK-004). */
 const NAV_LINKS = (plansOnly: boolean): [string, string][] => (plansOnly ? PUBLIC_MENU
-  : [...SECTIONS.map(([id, label]): [string, string] => [`#${id}`, label]), ["/library", "Library"], ["/stocks", "Companies"]]);
+  : [...SECTIONS.map(([id, label]): [string, string] => [`#${id}`, label]), ["/library", "Library"], ["/stocks", "Companies"], ["/blog", "Blog"]]);
 
 /** A section's eyebrow, heading and one line under it. */
 function Head({ eyebrow, title, children, h1 }: { eyebrow: string; title: string; children?: ReactNode; h1?: boolean }) {
@@ -433,6 +434,9 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
           <ToolList items={ALERTS} label="kinds of alert" shown={3} three />
         </div>
       </section>
+
+      {/* ADS-1: the landing page's one slot, among the lower sections (not the hero, not beside a sign-in button); nothing while ads are off */}
+      <div className="lp-wrap"><PublicAd /></div>
       </>}
 
       </>}

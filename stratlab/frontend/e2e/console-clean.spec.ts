@@ -41,7 +41,7 @@ for (const path of PATHS) {
   test(`${path}: no console errors, no 500s, no dead links`, async ({ page }) => {
     const problems = await visit(page, path);
     const hrefs = await page.evaluate(() => [...new Set(Array.from(document.querySelectorAll("a[href^='/']")).map((a) => (a as HTMLAnchorElement).getAttribute("href") || ""))]);
-    const dead = hrefs.map((h) => h.split(/[?#]/)[0]).filter((h) => h && h !== "/" && !/^\/(api|assets|v|c|stocks|sitemaps?)(\/|$)/.test(h) && !opens(h));
+    const dead = hrefs.map((h) => h.split(/[?#]/)[0]).filter((h) => h && h !== "/" && !/^\/(api|assets|v|c|stocks|blog|sitemaps?)(\/|$)/.test(h) && !opens(h));
     expect(problems, "errors while the page loaded").toEqual([]);
     expect(dead, "links that open no page").toEqual([]);
   });

@@ -65,8 +65,8 @@ class Query:
         self.op, self.payload = "insert", payload
         return self
 
-    def upsert(self, payload, ignore_duplicates=False):
-        self.op, self.payload, self.ignore = "upsert", payload, ignore_duplicates
+    def upsert(self, payload, ignore_duplicates=False, on_conflict=None):
+        self.op, self.payload, self.ignore, self.on_conflict = "upsert", payload, ignore_duplicates, on_conflict
         return self
 
     def update(self, payload, count=None, returning=None):
@@ -118,7 +118,7 @@ class Query:
                 rows += new
                 return SimpleNamespace(data=copy.deepcopy(new), count=None)
             if self.op == "upsert":
-                key = "key" if self.table == "app_settings" else "id"
+                key = getattr(self, "on_conflict", None) or ("key" if self.table == "app_settings" else "id")
                 out = []
                 for p in self.payload if isinstance(self.payload, list) else [self.payload]:
                     old = next((r for r in rows if r.get(key) == p.get(key)), None)
@@ -157,9 +157,13 @@ class Query:
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc).isoformat()
         r = copy.deepcopy(p)
-        if self.table != "app_settings":
+        if self.table not in ("app_settings", "blog_posts"):       # these two are keyed by "key" and "slug"
             r.setdefault("id", str(uuid.uuid4()))
-        r.setdefault("created_at", now)
+        if self.table != "blog_posts":
+            r.setdefault("created_at", now)
+        else:
+            r.setdefault("indexable", True)
+            r.setdefault("published", True)
         if self.table in ("profiles", "strategies", "app_settings"):
             r.setdefault("updated_at", now)
         if self.table == "profiles":

@@ -22,7 +22,7 @@ Admin is its own area with a left menu of seven sections. **Refresh** at the top
 | **Overview** | **Needs your attention**, worst first (the broker not logged in or its automatic login failing, the live price feed, AI providers down, email not set up, server errors, library entries users reported, a data job that failed or needs a look, holidays running out, rate or rule sources that changed, whole-market audit mismatches, invoice details missing, payments not connected). **Today's numbers** (sign-ups, revenue, server errors since the last restart), **Money, use and limits** (30-day revenue, active users, emails sent today against the email service's daily limit, links to the bills StratLab can't read), **Services** (one light each for the live price feed, AI providers, the broker login, the automatic login, alert emails, US company data, payments and exchange holidays), **Data feeds** (a light per background job), **This month** with a link to the PostHog dashboard once a key is set, and **View as a plan** (see [View as](#view-as-a-plan)) |
 | **Users and growth** | **Plans ending and sign-ins without a profile**; **Invite rewards** (given, and waiting for review); **Users** (search by email, filter by plan, experiments and AI builds this month, invites and free months earned; **Change plan** grants Basic or Pro for 30 days, 90 days, a year or with no end, and **Delete data** removes one person's app data behind a confirmation); the **Launch offer**; **Paper trading now** lists every running session with **Stop** |
 | **Money** | **Payments** (Razorpay connected, the webhook secret, international cards; **Check payments setup**), **Subscriptions and payments** (the newest 50 of each, refunds and failed payments, revenue by month), **Prices outside India** and **Invoice details** with every invoice |
-| **Data and jobs** | **Background jobs**: every job with its status, last run, schedule and a **Run now** where it has one, and a **Log** of what it reported; **India broker data** (the broker login state, **Log in to the broker**, **Run the automatic login now**); **Exchange holidays** for every market; **Storage** (see [Storage](#storage)) |
+| **Data and jobs** | **Background jobs**: every job with its status, last run, schedule and a **Run now** where it has one, and a **Log** of what it reported; **India broker data** (the broker login state, **Log in to the broker**, **Run the automatic login now**); **Exchange holidays** for every market; **Blog** (see [Blog](#blog)); **Storage** (see [Storage](#storage)) |
 | **Quality** | The **Data audit** and the **Whole market** audit for India or the US, **Reported strategies** (strategy-library entries people reported: **Restore**, **Hide** or **Delete**), and **Rates and rules** |
 | **System** | **Server errors** (the last 25 unexpected errors with the request, the error, the line of code and the ref code the user saw, kept across restarts), **Other services** (alert channels, US company data, alert email with **Send a test email**, **Email a reviewer sign-in link** and **Send this week's summary now**, the exchange filings feed with **Check filings feed**), **Build** (which commit each host runs), the **AI providers** (see [AI providers](#ai-providers)), **Check every feature** and **Real prices for testing** |
 | **Email previews** | Every email StratLab sends, as a reader gets it, at desktop or phone width or as text. The market briefs are the newest real issues; the rest use made-up details and say so. Nothing here is sent except **Send me a test** to your own address |
@@ -135,6 +135,25 @@ about 3 to 10 seconds a company.
   `/admin/results/refresh`, `/admin/corp-actions/refresh`, `/admin/surveillance/refresh`, `/admin/events/refresh`,
   `/admin/ipos/refresh` and `/admin/fo-changes/refresh`) for after an outage. Corporate actions also has **Read the whole
   US universe**.
+
+### Blog
+
+The public blog at `stratlab.studio/blog` (lists at `/blog`, `/blog/briefs` and `/blog/research`, a feed at `/blog/feed.xml`, the posts in the
+sitemap index as `sitemaps/blog.xml`). Two kinds of post, each one small row in the `app.blog_posts` table:
+
+- **Market briefs.** After each daily Market Brief is built (India after the close, the US after its close) the newsletter job saves it as a post,
+  once per market per day (`india-market-brief-2026-10-27`). Only the market-level facts are used (index closes, sector rotation, the stocks the
+  scan named); a My Stocks issue is refused. A day with too little to say (a holiday, no index figure) is stored with `indexable` off: it answers with
+  a noindex tag and is left out of the lists, the sitemap and the feed.
+- **Research posts**, built from StratLab's own data and never from a number typed in: classic strategies across ten markets after costs (the
+  library's samples), IPO listing day in India this year (the IPO tracker's listed issues; the issues without data are counted and said), and SIP vs
+  lump sum on the NIFTY 50 (the SIP test engine on the index history). Each states its data (by kind, never by vendor), period, method and limits.
+  They are written once a month, from the third, by the newsletter job's clock, and by **Write the research posts**; a post whose words haven't
+  changed keeps its date of last change.
+
+The **Blog** panel (Data and jobs) lists the posts with **Hide** / **Publish** (a hidden post answers 404 and leaves the lists, the sitemap and the
+feed), **Add posts for stored briefs** (the newest 60 stored briefs of each market that have no post yet, for when the blog opens) and the last
+research run. The routes are `GET /admin/blog`, `POST /admin/blog/posts/<slug>/published`, `POST /admin/blog/briefs` and `POST /admin/blog/research`.
 
 ### Rates and rules
 
@@ -362,6 +381,76 @@ market data login every day: its tokens end each morning at about 6 am.
   login on the same account) so the failures don't repeat.
 - Give StratLab its own API app. A new login to the same app cancels the previous token, so a bot sharing the key would
   knock StratLab out; StratLab notices, goes offline with a message and does not log in again by itself.
+
+## Ads (Google AdSense)
+
+Ads are built in and **off**. Nothing on the site changes until you do the steps below, and the kill switch turns them off again.
+The publisher ID (`ca-pub-8125241692814953`) is already the default in both places, so only the ad units and the switch are left.
+
+**Where they can show**
+
+- Signed-out pages that visitors land on: the company pages (`/stocks/...`), the strategy library, a shared verdict, and one
+  slot in the landing page's lower sections (never the top). The blog uses the same helper (see below).
+- Inside the app, one slot, for **Free accounts only**, under a written AI read on a company page. Basic and Pro never see it.
+  While ads are off (or after "No thanks") a Free account sees a small StratLab card there instead (Basic's limits, the four
+  luck checks, or the briefs): our own words, nothing tracked.
+- Never on Money, tax, holdings, net worth, Account, Admin, sign-in or payment pages, and never in emails.
+
+**Every ad is asked about first.** The visitor answers "Allow" / "No thanks" on the card at the corner of the screen (the
+server-drawn company pages ask in the ad's own place); Google's script is not downloaded until "Allow". The answer is kept in the browser (`stratlab.ads`, one year). Privacy and the FAQ say all of
+this in plain words; the privacy policy's "Ads" part is the text to keep in step if you change what is shown.
+
+**To switch ads on**
+
+1. In AdSense, add `stratlab.studio`, wait for the site to be approved, and create two **display ad units** (responsive):
+   one for public pages, one for the app. Note each unit's numeric slot ID.
+2. In **AdSense → Privacy & messaging**, turn on the GDPR message for the EEA and the UK (Google requires its own certified
+   message there). StratLab's question stays for everyone; if both show, both are fine.
+3. Set these, then redeploy:
+
+| Where | Setting | Value |
+| --- | --- | --- |
+| Railway (the server) | `ADS_ENABLED` | `true` (anything else, or unset, is off) |
+| Railway | `ADSENSE_SLOT_PUBLIC` | the public unit's slot ID (digits) |
+| Railway | `ADSENSE_CLIENT` | only to use another account; the default is already set |
+| Vercel (the site, build settings) | `VITE_ADS_ENABLED` | `true` |
+| Vercel | `VITE_ADSENSE_SLOT_PUBLIC` | the same public slot ID |
+| Vercel | `VITE_ADSENSE_SLOT_AI` | the app unit's slot ID |
+| Vercel | `VITE_ADSENSE_CLIENT` | only to use another account |
+
+An ad appears only when the switch is on **and** the publisher ID **and** that slot's ID are set **and** the visitor allowed it.
+The server pages change within about 15 minutes (their pages are cached); the site's slots on the next deploy.
+
+**Analytics: Microsoft Clarity and the Meta Pixel** use the same question (the "Allow" / "No thanks" card at the corner of the screen,
+asked once; Privacy and the FAQ name both). Nothing loads before "Allow", never on Money, tax, holdings, net worth, Account,
+Settings, Admin or payment pages (a running Clarity recording stops there, and the pixel sends nothing), and not for a browser that
+sends Do Not Track or Global Privacy Control. Visitors can change their answer on the Privacy page ("Change my choice").
+
+| Where | Setting | Value |
+| --- | --- | --- |
+| Vercel (build) or `public/config.js` | `VITE_CLARITY_ID` / `CLARITY_PROJECT_ID` | the Clarity project ID; the default is the owner's project (`z4n5s4xn12`); set it to empty to turn Clarity off |
+| Vercel (build) or `public/config.js` | `VITE_META_PIXEL_ID` / `META_PIXEL_ID` | the pixel's ID (digits); empty by default, so no pixel |
+
+Clarity records with every word masked (`data-clarity-mask` on the page's root); in the Clarity project, also set **Settings → Masking
+→ Strict**. The pixel sends only PageView (each page opened) and CompleteRegistration (once, when a sign-up completes); its automatic
+button and page-detail events are off. Both run on the site's own pages (the landing page, the library, the app), not on the
+server-drawn company pages. Their hosts are in the Content-Security-Policy (`connect.facebook.net`, `www.facebook.com`, `*.clarity.ms`);
+a header file cannot depend on a setting, so they are allowed whether or not an ID is set.
+
+**To switch ads off:** set `ADS_ENABLED` to anything but `true` on Railway (server pages), and `ADS_ENABLED: "false"` in
+`frontend/public/config.js` (this switches the site's slots off without a rebuild), or unset the `VITE_` settings and redeploy.
+
+**ads.txt** (`stratlab.studio/ads.txt`) is a plain file in the site's `public` folder with the line AdSense asks for.
+
+**Security headers.** `frontend/vercel.json`'s Content-Security-Policy lets in only Google's ad hosts
+(`pagead2.googlesyndication.com`, `googleads.g.doubleclick.net`, `tpc.googlesyndication.com`, `adservice.google.com`,
+`www.google.com` for frames, `*.adtrafficquality.google`). A header file cannot depend on a setting, so they are allowed
+whether or not ads are on; nothing asks for them while ads are off. Everything else in the policy is as strict as before.
+
+**The blog and other server-drawn pages.** `app/ads.py`: `ads.add_to_page(html, "blog")` puts the labelled box above `</main>` and
+the script before the page ends, or call `ads.ad_slot_html("blog")` and place it by hand, once per page, below the fold and away from
+buttons. Both return the page unchanged while ads are off. Do the call as the page is sent, not when it is stored. A page kind with
+its own ad unit can set `ADSENSE_SLOT_<NAME>`; others share the public one.
 
 ## View as a plan
 
@@ -603,7 +692,7 @@ out; and the trigger that gives each new sign-up a profile is attached to `auth.
 - **Backend (Railway):** one process (`uvicorn app.main:app --host 0.0.0.0 --port $PORT`, no extra workers). Live
   sessions, the tick feed and the daily login live in memory, so hosts that sleep when idle break paper trading.
 - **Frontend (Vercel):** root `stratlab/frontend`; `vercel.json` sets the build, the security headers and CSP, and
-  forwards `/v/*`, `/c/*`, `/stocks/*`, `/sitemap.xml` and `/sitemaps/*` to the backend. `public/config.js` holds the
+  forwards `/v/*`, `/c/*`, `/stocks/*`, `/blog/*`, `/sitemap.xml` and `/sitemaps/*` to the backend. `public/config.js` holds the
   API address and the public keys, read at runtime.
 - Pull requests merge once the backend, frontend and browser tests pass and the preview builds; Railway and Vercel then
   deploy. After a deploy, run **Check every feature**.

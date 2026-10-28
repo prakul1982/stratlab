@@ -17,6 +17,7 @@ import { Info } from "./ui";
 import { BarList, Card, CardHead, DataTable, Delta, Disclosure, Notice, Seg, Signed, Skeleton } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { FoBadges } from "./FoBadges";
+import { AiAd } from "./AiAd";
 import { track } from "../lib/analytics";
 
 export { CompanySearch } from "./CompanySearch";
@@ -489,6 +490,8 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
             </>
           )}
       </Card>
+      {/* ADS-1: under a written read only (not while it loads or when there is none), and for Free accounts only: AiAd shows nothing on Basic and Pro */}
+      {r && !error && <AiAd seed={symbol} />}
     </div>
   );
 }

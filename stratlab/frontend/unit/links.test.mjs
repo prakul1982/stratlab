@@ -33,7 +33,7 @@ test("every literal in-app link, redirect and navigate call has a route", () => 
     const s = fs.readFileSync(f, "utf8");
     for (const m of s.matchAll(re)) {
       const p = m[1];
-      if (p === "/" || p.endsWith("/") || /^\/(api|assets|v|c|stocks|sitemaps?|robots|og-image|favicon|public)(\/|$)/.test(p)) continue;   // a prefix a path is added to, or the API and the site's own files
+      if (p === "/" || p.endsWith("/") || /^\/(api|assets|v|c|stocks|blog|sitemaps?|robots|og-image|favicon|public)(\/|$)/.test(p)) continue;   // a prefix a path is added to, or the API and the site's own files
       if (!opens(p)) bad.push(`${p} (${path.relative(root, f)}:${s.slice(0, m.index).split("\n").length})`);
     }
   }

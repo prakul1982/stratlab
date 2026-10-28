@@ -164,7 +164,7 @@ export function AccountPage() {
         <div className="k-row"><button type="button" className="btn quiet danger" onClick={() => setAsk("close")}>Delete my account…</button></div>
       </Card>
 
-      <LegalLinks />
+      <LegalLinks blog />
 
       {ask === "cancel" && <ConfirmDialog title="Cancel your subscription?" confirmLabel="Cancel subscription" busy={busy} onConfirm={() => void cancel()} onClose={() => setAsk(null)}>
         You keep your plan until the end of the period you've paid for{until}, and you won't be charged again.</ConfirmDialog>}

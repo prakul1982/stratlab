@@ -48,6 +48,7 @@ from . import chart_routes
 from . import drawings_routes
 from . import maindb, market_store, memguard, storage, usage_slots
 from . import official_close
+from . import ads
 from . import last_session
 from . import money_itr, money_us_routes
 from . import rules, rules_watch
@@ -94,7 +95,7 @@ from . import email_kit
 from . import mail_pages
 from . import leader
 from . import swr
-from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
+from . import ask, blog_pages, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from .newsletter import write as news_write
 from . import results as results_calendar
@@ -435,6 +436,8 @@ app.include_router(money_mf_ter.router)      # /money/mutual-funds/costs
 app.include_router(money_mf_ter.admin_router)  # /admin/ter
 app.include_router(money_mf_behaviour.router)  # /money/mutual-funds/behaviour
 app.include_router(sip_test.router)            # /invest/sip-test
+app.include_router(blog_pages.router)          # /blog, /blog/<post>, /blog/feed.xml: the public blog's pages (BLOG-1)
+app.include_router(blog_pages.admin_router)    # /admin/blog: its posts and the research generator
 app.include_router(fixed_income.router)        # /money/rates
 app.include_router(loan_check.router)          # /money/loans/check
 app.include_router(money_routes.router)
@@ -574,7 +577,7 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # outermost: JSON and pages go compressed (a chart is 5x smaller)
 
 
-HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
+HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|blog(?:/.*)?|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
 
 
 class HeadAsGet:
@@ -4741,6 +4744,7 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     # kept by the site's cache no longer than the next close's settle point, and a minute while it waits for its new close,
     # so no compressed copy outlives the refresh (R13-006)
     headers = {"Cache-Control": stock_pages.cache_control(r, stored.get("facts") if isinstance(stored, dict) else None)}
+    page = ads.add_to_page(page, "company")        # ADS-1: as the page is sent, so the stored copy never holds an ad; "" while ads are off
     return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=headers)
 
 

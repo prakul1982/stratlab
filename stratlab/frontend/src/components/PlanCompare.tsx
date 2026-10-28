@@ -3,7 +3,7 @@ import { DataTable, type Column } from "./kit/DataTable";
 import { Disclosure } from "./kit/Disclosure";
 import type { ReactNode } from "react";
 import { Info } from "./ui";
-import { EVERYONE, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimitedLabel, type Limits, type PlanId } from "../lib/plans";
+import { ADS, EVERYONE, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimitedLabel, type Limits, type PlanId } from "../lib/plans";
 
 /** Every limit and feature side by side, from the server's plans when signed in; signed out, the
  * same tables from the app's own copy of the limits (R60-012: a visitor comparing plans saw less than a signed-in user). */
@@ -24,7 +24,9 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   const flagRows = (g: string) => FLAGS.filter(([f]) => (FLAG_GROUP[f] ?? "research") === g)
     .map(([f, label]) => ({ id: String(f), label, cell: (p: PlanId) => (lim(p).features.includes(f) ? "✓" : "–") }));
   const groups: { id: string; title: string; sub?: string; rows: Row[] }[] = [
-    { id: "limits", title: "How much", rows: NUMBERS.map(([k, label]) => ({ id: String(k), label, cell: (p: PlanId) => num(p, k) })) },
+    // "Ads" closes the limits: a fact about the plan like the numbers above it (ADS-1)
+    { id: "limits", title: "How much", rows: [...NUMBERS.map(([k, label]) => ({ id: String(k), label, cell: (p: PlanId) => num(p, k) })),
+      { id: "ads", label: "Ads on StratLab (Google ads on public pages and under AI answers)", cell: (p: PlanId) => ADS[p] }] },
     ...FLAG_GROUPS.map((g) => ({ id: `paid-${g.id}`, title: g.title, sub: "What each plan adds", rows: flagRows(g.id) })),
   ];
   const everyone: Row[] = EVERYONE.map((label) => ({ id: label, label, cell: () => "✓" }));

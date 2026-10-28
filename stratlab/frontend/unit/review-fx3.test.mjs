@@ -99,7 +99,7 @@ test("RC2B-031: Account has Delete my account, typed-email confirmed, and nothin
   // the privacy page names the button the same way, with a new updated date
   const legal = read("src/content/legal.ts");
   assert.match(legal, /\\"Delete my account\\" to erase it and delete your sign-in account too/);
-  assert.match(legal, /"\/privacy": "26 October 2026"/);
-  assert.match(read("src/content/seo.ts"), /delete your data\.", index: true, updated: "2026-10-26"/);
-  assert.match(read("../backend/app/site_pages.py"), /\("\/privacy", "2026-10-26"\)/);
+  assert.match(legal, /"\/privacy": "28 October 2026"/);
+  assert.match(read("src/content/seo.ts"), /delete your data\.", index: true, updated: "2026-10-28"/);
+  assert.match(read("../backend/app/site_pages.py"), /\("\/privacy", "2026-10-28"\)/);
 });

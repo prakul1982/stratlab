@@ -2,6 +2,7 @@ import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, useLocation } from "react-router-dom";
 import { LoadGuard } from "../components/LoadGuard";
+import { Tracking } from "../components/Tracking";
 import { pageview } from "../lib/analytics";
 import { isPublicForAll, wantsAccount } from "../lib/entry";
 import { VisitorApp } from "./VisitorApp";
@@ -34,6 +35,7 @@ export function startVisitor(root: HTMLElement) {
         <BrowserRouter>
           <Watch />
           <VisitorApp />
+          <Tracking />
         </BrowserRouter>
       </LoadGuard>
     </StrictMode>,

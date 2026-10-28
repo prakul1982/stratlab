@@ -15,7 +15,7 @@ export const DEFAULT_BUSINESS: Business = { name: "StratLab", email: "support@st
   privacy: "privacy@stratlab.studio", address: "", gstin: "" };
 
 /** The day each page's words last changed (the sitemap's dates, backend/app/site_pages.py, say the same). */
-export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "26 October 2026", "/refunds": "25 October 2026", "/contact": "26 September 2026" };
+export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "28 October 2026", "/refunds": "25 October 2026", "/contact": "26 September 2026" };
 
 export type Tok = { t: "text" | "b" | "code"; s: string } | { t: "link"; s: string; to: string } | { t: "mail"; s: string; to: string };
 
@@ -85,10 +85,21 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
       "**Technical logs:** request logs and error reports kept to run and fix the service. Error reports carry no email, IP address or request contents.",
     ] },
     { h: "How it's used" },
-    { p: "Only to run StratLab: sign-in, running your tests and paper sessions, sending the alerts you asked for, billing, preventing abuse, and fixing problems. We don't sell your data, and there are no advertising trackers." },
+    { p: "Only to run StratLab: sign-in, running your tests and paper sessions, sending the alerts you asked for, billing, preventing abuse, and fixing problems. We don't sell your data. The ads and analytics described below load only if you allow them." },
+    { h: "Ads and analytics, only if you allow them" },
+    { p: "StratLab asks once, with an \"Allow\" and a \"No thanks\" button, before it loads any of the following. Say no and none of them is downloaded or sets anything. Basic and Pro have no ads." },
+    { ul: [
+      "**Google ads (AdSense):** public pages (the landing page, company pages, the strategy library and shared verdicts) and Free accounts may show ads. Google may set cookies and similar storage in your browser, and may read your IP address and device details, to choose, limit and measure ads and to prevent fraud.",
+      "**Meta Pixel (Facebook and Instagram):** when it is switched on, it tells Meta which StratLab pages you opened and when you finished creating an account, so StratLab can measure its own advertising on Meta. It sends no email, holdings, notebooks or typed text, and its automatic button and page-detail tracking is off.",
+      "**Microsoft Clarity:** when it is on, it records how pages are used (scrolls, taps and where people get stuck) as a replayable session with all text and form fields hidden. Microsoft may set cookies and process the recording.",
+      "**Where none of them run:** no ad, pixel or recording is on Money, tax, holdings, net worth, Account, Settings, Admin, sign-in or payment pages, or in emails. A recording that was running stops when you open one of them.",
+      "**Your browser can say no for you:** if it sends Do Not Track or Global Privacy Control, the Meta Pixel and Clarity do not load. StratLab gives none of these your email, holdings, notebooks or anything you type.",
+      "**To change your answer,** use \"Change my choice\" on this page (taking a yes back reloads the page), or clear this site's data in your browser's settings. Google's own ad settings are at adssettings.google.com.",
+    ] },
     { h: "Who processes it for us" },
     { ul: [
       "Supabase (database and sign-in), Railway (server) and Vercel (website) host the service.",
+      "Google (AdSense) serves the ads on public pages and to Free accounts, Meta (the Meta Pixel) measures StratLab's own advertising, and Microsoft (Clarity) records how pages are used, each only if you allow it.",
       "Razorpay processes payments.",
       "AI providers receive the text you type into AI features, like an idea to turn into rules, but not your email. StratLab can send it to any of these eleven: Anthropic, Cerebras, Cloudflare Workers AI, Google Gemini, Groq, Hugging Face, Mistral, NVIDIA API catalog, OpenRouter, SambaNova and Z.ai. Which one answers a given request varies, and only those with a key set up on the server are used. Z.ai is a China-based service. Mistral and Google Gemini also read the public company filings that are scanned pictures. Some of these services are used on their free plans, whose terms let the provider keep what is sent and use it to improve or train their models (Google Gemini's free tier and Mistral's free plan say so): don't type anything into an AI feature that you wouldn't want a provider to keep.",
       "Our email provider delivers the alerts you turn on by email, and Telegram delivers them if it is offered in Settings and you connect it. Sentry receives error reports without personal details.",
@@ -96,9 +107,10 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
     ] },
     { p: "Some of these providers store data outside India, under their own security and privacy commitments." },
     { h: "Cookies and storage" },
-    { p: "StratLab sets no cookies itself. It uses your browser's local storage, which stays on your device until you clear it, and session storage, which goes when you close the tab. Nothing is used for advertising." },
+    { p: "StratLab sets no cookies itself. It uses your browser's local storage, which stays on your device until you clear it, and session storage, which goes when you close the tab. Nothing StratLab stores is used for advertising. The ad and analytics scripts described above, if you allow them, can set their own cookies." },
     { ul: [
       "**Before you sign in**, on your first visit: a preference for light or dark mode and for the currency prices are shown in, a note that the page reloaded once if a file failed to load, and, when usage analytics are on, one entry from PostHog (its name starts with `ph_`) holding a random anonymous ID and session details. That PostHog entry is not made, and no analytics request is sent, if your browser sends Do Not Track or Global Privacy Control.",
+      "**Your answer about ads and analytics:** `stratlab.ads`, \"yes\" or \"no\" with the date, kept in your browser for a year. It stays on your device.",
       "**While Google sign-in runs:** the page to come back to, and an invite code if you arrived by a friend's link.",
       "**After you sign in:** your sign-in session, which the sign-in service refreshes, and a few choices such as which menu is open and whether you have seen the tour.",
       "**To pay:** Razorpay's payment window can set its own cookies and storage on its own pages and windows.",
