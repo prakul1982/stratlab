@@ -24,3 +24,18 @@ test("VR7-004: the signed-out library keeps every card in the page and a phone s
   assert.match(css, /@media \(max-width: 640px\) \{ \.k-cards\.lib-cards > \.k-card\.lib-extra \{ display: none; \} \.k-row\.lib-more \{ display: flex; \} \}/);
   assert.match(css, /\.k-row\.lib-more \{ display: none; \}/);                        // a desktop has no such button
 });
+
+test("VR7-006: Key numbers are three equal columns, so a second row's figures sit under the first row's; the note on the bars fills the free cell", () => {
+  const inv = read("src/styles-invest.css");
+  assert.match(inv, /@media \(min-width: 1200px\) \{\n  \.inv-metrics \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}\n\}/);
+  assert.doesNotMatch(inv, /\.inv-metrics > :last-child:nth-child\(3n\+1\) \{ grid-column: span 6; \}/);       // no widened last row
+  const src = read("src/components/Research.tsx");
+  assert.match(src, /className=\{`k-note inv-metrics-note\$\{groups\.length % 3 === 0 \? " row" : ""\}`\} data-testid="krail-legend"/);
+  assert.match(src, /<\/p>\n\s*\)\}\n\s*<\/div>\n\s*\{used\.length > 0/);       // the note is the grid's last cell; the terms stay under the grid
+});
+
+test("VR7-007: on a visitor's wide page the cookie question is a slim bar along the foot of the window, in the app it stays the corner card", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /@media \(min-width: 901px\) \{\n  body:not\(:has\(\.shell\)\) \.consent \{ left: 16px; right: 16px; width: auto; flex-direction: row;/);
+  assert.match(css, /\.consent \{ position: fixed; right: 16px; bottom: 16px;/);          // the corner card is still the base
+});

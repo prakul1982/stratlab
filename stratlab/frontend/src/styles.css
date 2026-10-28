@@ -890,6 +890,14 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .consent-btns { display: flex; flex-wrap: wrap; gap: 10px; }
 /* "Allow" and "No thanks" are two answers of equal weight: one width, not 63px beside 90px (VR4-012) */
 .consent-btns .btn { min-width: 104px; justify-content: center; }
+/* VR7-007: on a visitor's wide page (no side menu) the question is one slim bar along the foot of the window, not a 400px card standing over
+   the landing page's example panel until it is answered (the Markets button still rises above it, consentLift.ts); in the app it stays the corner card */
+@media (min-width: 901px) {
+  body:not(:has(.shell)) .consent { left: 16px; right: 16px; width: auto; flex-direction: row; align-items: center; gap: 8px 20px; padding: 12px 18px; }
+  body:not(:has(.shell)) .consent-title { flex: none; }
+  body:not(:has(.shell)) .consent p { flex: 1 1 auto; }
+  body:not(:has(.shell)) .consent-btns { flex: none; flex-wrap: nowrap; }
+}
 /* VR5: on a phone the question took 213px, over a quarter of a 360x800 screen: a size down and tighter, the two answers sharing the row */
 @media (max-width: 640px) {
   .consent { right: 12px; left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; gap: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.4; }

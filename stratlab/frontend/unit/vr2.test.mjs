@@ -30,8 +30,9 @@ test("VR2-004, VR2-005: the watchlist says its day once; an Open button stays at
 test("VR2-006, VR2-007: market events are two to a row; Key numbers' last row fills its width", () => {
   assert.match(read("src/pages/trade/events.css"), /\.ev-weekgrid > \.ev-week \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\);/);
   const inv = read("src/styles-invest.css");
-  assert.match(inv, /\.inv-metrics > :last-child:nth-child\(3n\+1\) \{ grid-column: span 6; \}/);
-  assert.match(inv, /\.inv-metrics > :nth-last-child\(2\):nth-child\(3n\+1\), \.inv-metrics > :last-child:nth-child\(3n\+2\) \{ grid-column: span 3; \}/);
+  // (VR7-006: the last row no longer widens its groups, which left its figures out of line with the first row's; the note on the bars fills the free slot instead)
+  assert.match(inv, /\.inv-metrics \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/);
+  assert.match(inv, /\.inv-metrics-note\.row \{ grid-column: 1 \/ -1; \}/);
 });
 
 test("VR2-008: a long usage value on Account takes the whole row", () => {
