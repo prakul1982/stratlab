@@ -277,3 +277,16 @@ def test_the_live_row_of_an_intraday_answer_is_not_drawn_as_a_candle_of_its_own(
     # an answer with no live row is unchanged
     plain = read_chart("5m", "5m", [f"2026-10-28T15:{m}:00{et}" for m in ("00", "05")], [344.8, 344.6])
     assert [b["t"][11:19] for b in plain] == ["15:00:00", "15:05:00"] and plain[-1]["c"] == 344.6
+
+
+# ---------- one person cannot queue everyone behind minute-candle reads (MWR1-020) ----------
+def test_minute_chart_reads_are_limited_per_person_and_other_sizes_are_not(w):
+    from app.intel.routes import MINUTE_READS
+    c = w["client"]
+    PRO = world.headers("pro-token")
+    codes = [c.get("/research/chart/IN/INFY?tf=1m", headers=PRO).status_code for _ in range(MINUTE_READS + 3)]
+    assert codes[:MINUTE_READS] == [200] * MINUTE_READS and codes[MINUTE_READS:] == [429] * 3
+    assert "minute-chart reads" in c.get("/research/chart/IN/INFY?tf=3m", headers=PRO).text
+    assert c.get("/research/chart/IN/INFY?tf=1d", headers=PRO).status_code == 200            # a daily or hourly chart is not limited
+    assert c.get("/research/chart/IN/INFY?tf=1h", headers=PRO).status_code == 200
+    assert c.get("/research/chart/IN/INFY?tf=1m", headers=BASIC).status_code == 200          # nor is anyone else

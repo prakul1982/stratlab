@@ -517,6 +517,9 @@ def _refresh_history(region: str, symbol: str, sources: dict) -> None:
     _hist_pool.submit(run)
 
 
+MINUTE_READS = 45          # reads of 1-minute and 3-minute candles per person per minute (a scroll back is one a second or so)
+
+
 @router.get("/chart/{region}/{symbol}")
 def chart(region: str, symbol: str, range: str = "1y", tf: str = "1d", before: str | None = None,
           profile=Depends(current_profile)):
@@ -526,6 +529,11 @@ def chart(region: str, symbol: str, range: str = "1y", tf: str = "1d", before: s
     from .. import chart_data
     if tf not in chart_data.TFS:
         err(400, "bad_tf", "Pick a candle size from 1 minute to 1 month.")
+    if tf in ("1m", "3m"):
+        # a page of minute candles can be a request to the broker, whose feed every page of the app shares at about three a second:
+        # one person scrolling back as fast as the network allows (or a script) must not queue everyone else behind them (MWR1-020)
+        from .. import main
+        main.throttle(profile, "chart_minutes", MINUTE_READS, 60, "That's a lot of minute-chart reads in a minute. Wait a moment and try again.")
     r = region_of(region)
     s = symbol_of(symbol, r)
     return ok(source_call(lambda: hub.chart(r, s, range[:5], tf, (before or "")[:40])))
