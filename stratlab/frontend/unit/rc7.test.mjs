@@ -35,3 +35,16 @@ test("RC7-001: the service worker's offline page is the same card, in both theme
   assert.match(sw, /url\.pathname === "\/favicon\.svg"[\s\S]{0,200}caches\.match\("\/favicon\.svg"\)/);
   assert.match(sw, /data-testid="offline-reload">Reload<\/button>/);      // the button the tests and the page's own reload use
 });
+
+test("RC7-002: the welcome question's four choices come before the optional level question, and on a phone before the intro too", () => {
+  const src = read("src/components/LevelPrompt.tsx");
+  const at = (s) => { const i = src.indexOf(s); assert.ok(i > 0, s); return i; };
+  assert.ok(at('className="welcome-what"') < at('className="k-muted welcome-note"'));
+  assert.ok(at('className="k-muted welcome-note"') < at('className="k-stack welcome-choices"'));
+  assert.ok(at('className="k-stack welcome-choices"') < at('className="k-stack snug welcome-level"'));
+  // the owner's words are all still in the file, unchanged
+  for (const w of ["How much have you done? · optional", "We'll open the one you pick.", "The others stay one tap away, and you can change this any time in Settings.", "Every space side by side, starting on My space."]) assert.ok(src.includes(w), w);
+  const css = read("src/styles.css");
+  const phone = css.slice(css.indexOf("@media (max-width: 520px) {\n  .welcome-choices"));
+  assert.match(phone, /\.welcome-choices \{ order: 1; \}\s*\.welcome-what \{ order: 2; \}\s*\.welcome-note \{ order: 3; \}\s*\.welcome-level \{ order: 4; \}/);
+});
