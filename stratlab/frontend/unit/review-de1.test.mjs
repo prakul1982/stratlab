@@ -63,7 +63,7 @@ test("DE-013: the theme page names no unlisted company and shows the exchange's 
 test("DE-017: index cards show the level to two decimals and keep the 52-week phrase on one line; repeats say so", () => {
   const s = read("src/pages/Research.tsx");
   assert.match(s, /minimumFractionDigits: 2, maximumFractionDigits: 2/);
-  assert.match(s, /<span className="nowrap">\{i\.from_high_pct > -0\.5/);
+  assert.match(s, /<span className="nowrap fit">\{i\.from_high_pct > -0\.5/);       // (VR7-014: "fit" lets a phone put it on a line of its own)
   assert.match(read("src/components/Research.tsx"), /n\.similar \? `\$\{n\.similar\} similar/);
 });
 
