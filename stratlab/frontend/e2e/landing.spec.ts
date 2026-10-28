@@ -30,7 +30,7 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   }
   // the sections, and the menu, go Trade, Invest, Money: the strategy lab is where StratLab began
   expect(await page.locator("main section[id]").evaluateAll((els) => els.map((e) => e.id).filter((id) => id !== "top"))).toEqual(order);
-  await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies"]);
+  await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies", "Blog"]);
   await expect(page.locator(".lp-space")).toHaveText([/Trade/, /Invest/, /Money/]);
   await expect(page.locator(".lp-space .lp-space-list li"), "each space lists three things it does").toHaveCount(9);
   await expect(page.locator("#trade .lp-options")).toContainText("Paper trade option structures");
@@ -174,7 +174,7 @@ test("landing: no fake buttons, no card that looks picked, the bitcoin sign, and
     expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(40);
     await summary.click();
     const menu = page.getByRole("navigation", { name: "Sections (menu)" });
-    await expect(menu.getByRole("link")).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies"]);
+    await expect(menu.getByRole("link")).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies", "Blog"]);
     await page.keyboard.press("Escape");                                          // Esc closes it, and focus goes back to the button
     await expect(menu).toBeHidden();
     await expect(summary).toBeFocused();
@@ -260,7 +260,7 @@ test("/plans: one heading and one line, the cards in view, the public header, in
   const top = (await free.boundingBox())!.y;
   if (info.project.name !== "phone") expect(top, "the cards start above the fold").toBeLessThan(420);
   // the same header as the other public pages
-  if (info.project.name !== "phone") await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies"]);
+  if (info.project.name !== "phone") await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies", "Blog"]);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://stratlab.studio/plans");
   // Free, Basic and Pro stand at the same x in each table (wide screens: a phone's tables scroll or wrap)

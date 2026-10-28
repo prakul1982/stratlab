@@ -120,6 +120,22 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- The public blog (BLOG-1): daily market briefs and research posts, read by the backend and drawn as pages (backend/app/blog.py).
+create table if not exists public.blog_posts (
+  slug text primary key,
+  kind text not null check (kind in ('brief','research')),
+  market text,
+  title text not null,
+  summary text not null,
+  body jsonb not null,                      -- structured blocks, cleaned before they are stored
+  day text,                                 -- a brief's market day
+  published_at timestamptz not null,
+  updated_at timestamptz not null,
+  indexable boolean not null default true,  -- false: a day with too little to say; served with noindex, kept out of the sitemap
+  published boolean not null default true   -- false: hidden by an admin
+);
+create index if not exists blog_posts_new on public.blog_posts (published_at desc);
+
 -- Row level security: the browser only ever talks to the FastAPI backend,
 -- which uses the service-role key. Users may read their own rows; nothing else.
 alter table public.profiles      enable row level security;
@@ -129,6 +145,7 @@ alter table public.live_sessions enable row level security;
 alter table public.live_orders   enable row level security;
 alter table public.app_settings  enable row level security;
 alter table public.option_snapshots enable row level security;
+alter table public.blog_posts    enable row level security;
 
 drop policy if exists "own profile" on public.profiles;
 create policy "own profile" on public.profiles for select using (auth.uid() = id);

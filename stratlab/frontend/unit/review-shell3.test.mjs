@@ -164,7 +164,7 @@ test("the service worker keeps only the app's own pages as the app shell, and dr
   for (const path of ["/", "/mine", "/holdings", "/research/IN/TCS", "/n/abc/e/2", "/account", "/trade/signals", "/admin/system", "/paper/s1"]) {
     assert.equal(await w.visit(path), 1, `${path} is the app: kept`);
   }
-  for (const path of ["/stocks/in/TCS", "/stocks", "/c/abc", "/v/abc", "/unsubscribe", "/email/confirm", "/news-link/12/3", "/library", "/library/seed-x", "/terms", "/privacy", "/refunds",
+  for (const path of ["/stocks/in/TCS", "/stocks", "/c/abc", "/v/abc", "/unsubscribe", "/email/confirm", "/news-link/12/3", "/blog", "/blog/briefs", "/blog/india-market-brief-2026-10-27", "/library", "/library/seed-x", "/terms", "/privacy", "/refunds",
     "/contact", "/pricing", "/faq", "/about", "/help", "/login", "/signup", "/plans", "/verdict/abc", "/mineral", "/newsletter", "/nothing"]) {
     assert.equal(await w.visit(path), 0, `${path} is a page of its own: never kept as the app`);
   }

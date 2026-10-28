@@ -8,6 +8,7 @@ import { pct, TF_NAME } from "../lib/format";
 import { signedInHere, signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
+import { PublicAd } from "../components/AdUnit";
 import { CHECK_RESULT, CHECKS_NOT_HOLD, checksOf, headTone, HoldLine, LibraryCard, libraryTally, liveOptions, marketChoices, Rules, shownStats, strategyName, libMeta, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
 import { libraryDescription, libraryTitle } from "../lib/libraryText";
 import { Badge } from "../components/kit/Badge";
@@ -103,6 +104,8 @@ export function PublicLibrary() {
           </>
         )}
       <p className="k-note">{NOTE}</p>
+      {/* ADS-1: one slot, below the list (a page with nothing on it yet has no ad), clear of the cards' buttons; nothing while ads are off */}
+      {shown.length > 0 && <PublicAd />}
     </PublicFrame>
   );
 }
@@ -185,6 +188,7 @@ export function PublicLibraryEntry({ id }: { id: string }) {
                 <div className="k-row"><GoogleCopy /><Link className="btn quiet" to="/library">All StratLab strategies</Link></div></>}
           </Card>
           <p className="k-note">{NOTE}</p>
+          <PublicAd />
         </>
       )}
     </PublicFrame>

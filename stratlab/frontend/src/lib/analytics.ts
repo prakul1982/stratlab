@@ -10,6 +10,8 @@
 // the slim build: capture and identify only, no recorder, surveys or other add-ons (about a third of the full size)
 import type { PostHog } from "posthog-js/dist/module.slim.no-external";
 
+import { markSignup } from "./track";
+
 type Value = string | number | boolean | null | undefined;
 export type Props = Record<string, Value>;
 
@@ -219,4 +221,5 @@ export function trackSignup(userId: string, createdAt?: string | null) {
   const key = "stratlab.signedup";
   try { if (localStorage.getItem(key) === userId) return; localStorage.setItem(key, userId); } catch { /* storage off */ }
   track("signed up");
+  markSignup();          // the Meta Pixel's CompleteRegistration, if the visitor allowed it (lib/track.ts)
 }

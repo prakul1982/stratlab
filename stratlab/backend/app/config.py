@@ -139,6 +139,12 @@ class Settings:
     VAPID_SUBJECT = _env("VAPID_SUBJECT")
     SENTRY_DSN = _env("SENTRY_DSN")                               # optional: send server errors to Sentry
     SENTRY_ENV = _env("SENTRY_ENV", "production")
+    # Google AdSense on the public server-rendered pages (app/ads.py, ADS-1). Nothing is drawn unless the switch is on AND the
+    # publisher ID (ca-pub-…) and the slot ID are both set; docs/ADMIN.md has the steps. The app (frontend) has its own
+    # VITE_ADSENSE_* settings for the same values.
+    ADS_ENABLED = _env("ADS_ENABLED", "false").lower() == "true"
+    ADSENSE_CLIENT = _env("ADSENSE_CLIENT", "ca-pub-8125241692814953")      # the owner's publisher ID (public, not a secret); the env can override it
+    ADSENSE_SLOT_PUBLIC = _env("ADSENSE_SLOT_PUBLIC")
     # optional usage analytics: the PostHog project key (phc_…) sends "payment completed" from the server
     POSTHOG_KEY = _env("POSTHOG_KEY")
     POSTHOG_HOST = _env("POSTHOG_HOST", "https://us.i.posthog.com").rstrip("/")
