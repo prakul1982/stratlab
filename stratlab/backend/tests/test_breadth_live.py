@@ -246,3 +246,49 @@ def test_early_close_moves_fixed_times_the_open_check_and_the_finished_candle(me
     job = scan.Alerts(None, None, None)
     assert job.due("US", datetime(2026, 11, 27, 18, 45, tzinfo=timezone.utc)) is None            # 13:45 ET, before 13:50
     assert job.due("US", datetime(2026, 11, 27, 18, 55, tzinfo=timezone.utc)) == "2026-11-27"    # 13:55 ET
+
+
+def test_live_only_carries_the_live_card_and_the_next_count_note_without_the_history(w, monkeypatch, request):
+    """LIVE-1: the breadth page asks each minute while India trades; it has the history already."""
+    from app import main
+    from tests.test_breadth import stored
+    paid(monkeypatch)
+    stored()
+    clock = time_machine.travel(IST_OPEN)
+    clock.start()
+    request.addfinalizer(clock.stop)
+    monkeypatch.setattr(breadth_live, "is_open", lambda region, now: region == "IN")
+    c, h = w["client"], headers("pro-token")
+    v = c.get("/invest/breadth?group=nifty500&live_only=true", headers=h).json()
+    assert set(v) == {"live", "pending", "as_of"}
+    assert v["live"]["state"] == "unavailable" and v["as_of"] == "2026-01-03"
+    # with the day's rounds stored, the points come whole (the page draws the day's line), not the brief's newest one
+    day = IST_OPEN.astimezone(breadth_live.IST).date().isoformat()
+    monkeypatch.setattr(main.kite, "ready", lambda: True)
+    breadth_live.save("nifty500", day, [["10:00", 1, 1, 1, 1, 3, 1, 3, 1, 3, 24000.0, 3, 0], ["10:15", 2, 1, 0, 1, 3, 1, 3, 1, 3, 24010.0, 3, 0]])
+    v = c.get("/invest/breadth?group=nifty500&live_only=true", headers=h).json()
+    assert v["live"]["state"] == "live" and len(v["live"]["points"]) == 2 and v["live"]["latest"]["adv"] == 2
+    brief = c.get("/invest/breadth?group=nifty500&brief=true", headers=h).json()
+    assert len(brief["live"]["points"]) == 1
+    assert c.get("/invest/breadth?group=us_large&live_only=true", headers=h).json()["live"] is None
+
+
+def test_the_stored_days_behind_the_breadth_route_are_read_once_for_pages_asking_within_seconds(w, monkeypatch):
+    from app import main
+    from tests.test_breadth import stored
+    paid(monkeypatch)
+    stored()
+    reads = []
+    real = breadth.view
+    monkeypatch.setattr(breadth, "view", lambda *a, **k: (reads.append(1), real(*a, **k))[1])
+    c, h = w["client"], headers("pro-token")
+    for _ in range(3):
+        assert c.get("/invest/breadth?group=nifty500&brief=true", headers=h).json()["today"]["day"] == "2026-01-03"
+    assert len(reads) == 1                                              # three pages, one read of the stored days
+    main._breadth_views.clear()
+    c.get("/invest/breadth?group=nifty500&brief=true", headers=h)
+    assert len(reads) == 2
+    # a different view of the group is its own entry, and one request's additions never leak into the kept copy
+    full = c.get("/invest/breadth?group=nifty500&range=all", headers=h).json()
+    assert full["history"] is not None and len(reads) == 3
+    assert c.get("/invest/breadth?group=nifty500&brief=true", headers=h).json()["history"] is None

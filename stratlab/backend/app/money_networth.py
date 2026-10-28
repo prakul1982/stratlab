@@ -1174,11 +1174,20 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         return {**v, "deposit_tax": dep, "history": hist if allowed else None, "history_allowed": allowed, "history_count": len(hist), "valuation": VALUATION,
                 "limit": limit, "count": len(items), "kinds": {k: LABEL[k] for k in KINDS}}
 
+    def priced(profile) -> dict:
+        """Only what moves with prices: the totals, the allocation and the rows, built from the entries, My Holdings and the
+        funds, as `page` builds them. No history, deposit tax or snapshot is read or written (LIVE-1: the page asks this
+        each minute while a market trades, to keep its values current without redoing the rest)."""
+        uid = profile["id"]
+        items = load(uid)["items"]
+        f_stocks, f_mf = POOL.submit(stocks, profile), POOL.submit(mf_value, uid)
+        return build(items, f_stocks.result(), f_mf.result(), prices)
+
     @r.get("")
-    def networth(profile=Depends(current_profile)):
+    def networth(live: bool = Query(False), profile=Depends(current_profile)):
         """Net worth today: assets (My Holdings, mutual funds and typed-in entries) minus loans, with the allocation,
-        the history (Basic and up) and the insurance register."""
-        return page(profile)
+        the history (Basic and up) and the insurance register. `live`: only the price-dependent part (see `priced`)."""
+        return priced(profile) if live else page(profile)
 
     def _limit_check(profile, n: int):
         cap = item_limit(profile["_plan"])

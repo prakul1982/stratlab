@@ -669,3 +669,30 @@ def test_the_month_start_snapshot_retries_a_user_whose_read_failed(w, monkeypatc
     assert job.tick(datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)) == 1           # u1 now
     assert calls["u1"] == 2 and [h["d"][:7] for h in nw.history("u1")] == ["2026-11"]
     assert job.status["last_error"] is None
+
+
+# ---------- LIVE-1: the page reads only what moves with prices each minute ----------
+def test_the_live_read_is_the_priced_part_only_and_writes_nothing(w, monkeypatch):
+    c = w["client"]
+    main._nw_prices["gold"] = (time.time(), (7000.0, "2026-10-04T10:00+00:00"))
+    assert c.put("/holdings", headers=PRO, json={"items": [{"symbol": "RELIANCE", "qty": 10, "avg": 2500}]}).status_code == 200
+    add(c, {"kind": "gold", "grams": 10, "purity": 22})
+    add(c, {"kind": "fd", "name": "SBI FD", "principal": 100000, "rate": 7, "start": "2025-10-04", "maturity": "2027-10-04"})
+    full = c.get("/money/net-worth", headers=PRO).json()
+    # a snapshot of the month is taken by the page, never by the minute's read
+    monkeypatch.setattr(nw, "record", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the live read must not write a snapshot")))
+    live = c.get("/money/net-worth?live=true", headers=PRO)
+    assert live.status_code == 200
+    v = live.json()
+    for k in ("history", "history_allowed", "deposit_tax", "limit", "count", "kinds", "valuation"):
+        assert k not in v, k                                      # no history, no tax work, no plan limits
+    assert v["totals"] == full["totals"] and [r["id"] for r in v["assets"]] == [r["id"] for r in full["assets"]]
+    stocks = next(r for r in v["assets"] if r["kind"] == "stocks_in")
+    assert stocks["basis"] == "market price" and stocks["value"] > 0 and stocks["as_of"]
+    # a price that moves moves the live read, with no other read
+    main._nw_prices["gold"] = (time.time(), (7100.0, "2026-10-05T10:00+00:00"))
+    again = c.get("/money/net-worth?live=true", headers=PRO).json()
+    assert next(r for r in again["assets"] if r["kind"] == "gold")["value"] == pytest.approx(10 * 7100 * 22 / 24, abs=0.01)
+    # privacy and access are the page's
+    assert c.get("/money/net-worth?live=true").status_code == 401
+    assert c.get("/money/net-worth?live=true", headers=FREE).json()["assets"] == []
