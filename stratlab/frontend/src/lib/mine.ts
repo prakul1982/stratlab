@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { useLiveRefresh } from "./liveRefresh";
 import { happened, istHm, loadEvents, type EvKind } from "./marketEvents";
 import type { Region } from "./research";
 import { istToday } from "./format";
@@ -33,8 +34,13 @@ export const MARKET_TILES: MarketTile[] = [
 /** Gold in rupees for 10 grams, from its dollars an ounce and the dollar in rupees (31.1035 grams to a troy ounce). */
 export const goldInr10g = (usdPerOz: number, inrPerUsd: number) => (usdPerOz * inrPerUsd / 31.1035) * 10;
 
-/** `day`: the session of the last close (its calendar day in the market's zone), so a move that isn't today's says its day. */
-export interface Series { values: number[]; last: number; prev: number | null; changePct: number | null; day?: string | null }
+/** `day`: the session of the last close (its calendar day in the market's zone), so a move that isn't today's says its day.
+ * `at`: when the candles were read (ms), the time the card says its prices are from (LIVE-1). */
+export interface Series { values: number[]; last: number; prev: number | null; changePct: number | null; day?: string | null; at?: number }
+
+/** The markets whose prices the strip shows: India and the US for their indices, and the dollar and gold, which trade round
+ * the clock from Sunday evening to Friday evening. The strip reads again each minute while one of them trades. */
+export const STRIP_MARKETS = ["IN", "US", "FX", "CMDTY"] as const;
 type Candle = { c: number | null; t: string };
 
 /** The tiles' markets' zones, for the day of their last candle. */
@@ -86,10 +92,14 @@ export function tileToday(t: MarketTile, now = new Date()): string {
 
 const candleDay = (t: string, tz: string) => (/^\d{4}-\d{2}-\d{2}$/.test(t) ? t : /^\d{4}-\d{2}-\d{2}T00:00:00/.test(t) ? t.slice(0, 10) : new Date(t).toLocaleDateString("en-CA", { timeZone: tz }));
 const seriesCache = new Map<string, { at: number; p: Promise<Series | null> }>();
+/** How long a tile's candles are reused: five minutes with its market shut, under a minute while it trades, so the level a
+ * visit opens on is the market's now and not the one from the last visit (LIVE-1). */
+export const SERIES_KEEP_MS = 5 * 60_000;
+export const SERIES_LIVE_KEEP_MS = 45_000;
 
-function loadSeries(t: MarketTile): Promise<Series | null> {
+function loadSeries(t: MarketTile, keep = SERIES_KEEP_MS): Promise<Series | null> {
   const hit = seriesCache.get(t.id);
-  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.p;
+  if (hit && Date.now() - hit.at < keep) return hit.p;
   const url = "research" in t.from
     ? `/research/chart/${t.from.research[0]}/${encodeURIComponent(t.from.research[1])}?tf=1d&range=1m`
     : `/chart/candles/${encodeURIComponent(t.from.instrument)}?tf=1d&range=1m`;
@@ -99,21 +109,30 @@ function loadSeries(t: MarketTile): Promise<Series | null> {
     const values = rows.map((c) => c.c);
     if (!values.length) return null;
     const last = values[values.length - 1], prev = values.length > 1 ? values[values.length - 2] : null;
-    return { values, last, prev, changePct: prev ? (last / prev - 1) * 100 : null, day: candleDay(rows[rows.length - 1].t, tz) };
+    return { values, last, prev, changePct: prev ? (last / prev - 1) * 100 : null, day: candleDay(rows[rows.length - 1].t, tz), at: Date.now() };
   }).catch(() => { seriesCache.delete(t.id); return null; });
   seriesCache.set(t.id, { at: Date.now(), p });
   return p;
 }
 
-/** Each tile's last month of daily closes: undefined while loading, null when it cannot be read. */
-export function useMarketStrip(enabled = true): Record<string, Series | null | undefined> {
+/** Each tile's last month of daily closes: undefined while loading, null when it cannot be read. `live`: one of the
+ * strip's markets trades now, so the levels are read again each minute (while the tab is in view), each tile kept as it
+ * was until its new one comes (a read that fails changes nothing). The newest candle is today's, still forming: the
+ * server brings it to the market's live price (research chart's `forming`, the candle reads' short keep). */
+export function useMarketStrip(enabled = true, live = false): Record<string, Series | null | undefined> {
   const [out, setOut] = useState<Record<string, Series | null | undefined>>({});
+  const on = useRef(false);
+  const liveNow = useRef(live);
+  liveNow.current = live;
   useEffect(() => {
     if (!enabled) return;
-    let live = true;
-    MARKET_TILES.forEach((t) => loadSeries(t).then((s) => { if (live) setOut((o) => ({ ...o, [t.id]: s })); }));
-    return () => { live = false; };
+    on.current = true;
+    MARKET_TILES.forEach((t) => loadSeries(t, liveNow.current ? SERIES_LIVE_KEEP_MS : SERIES_KEEP_MS).then((s) => { if (on.current) setOut((o) => ({ ...o, [t.id]: s })); }));
+    return () => { on.current = false; };
   }, [enabled]);
+  useLiveRefresh(enabled && live, () => {
+    MARKET_TILES.forEach((t) => loadSeries(t, SERIES_LIVE_KEEP_MS).then((s) => { if (on.current && s) setOut((o) => ({ ...o, [t.id]: s })); }));
+  });
   return out;
 }
 

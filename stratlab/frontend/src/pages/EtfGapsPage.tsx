@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { asOf, dayIn, fmtDate, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
+import { useMarketRefresh } from "../lib/marketLive";
 import { FUND_NAME, dayCount, gapAtLastTrade, gapShort, loadEtfGaps, type EtfGap, type EtfGaps, type Fund } from "../lib/etfGaps";
 import { EtfGapDetailView } from "../components/EtfGap";
 import { Badge, Card, CardHead, ChipBar, DataTable, ErrorState, Field, FieldGroup, FormGrid, PageHeader, Select, Skeleton, StockPicker, type Column } from "../components/kit";
@@ -45,6 +46,9 @@ export function EtfGapsPage() {
     loadEtfGaps(true).then((x) => { if (!live) return; if (x) setData(x); else setError("The ETF list couldn't be opened just now. Try again in a few minutes."); });
     return () => { live = false; };
   }, [tries]);
+
+  // the prices, gaps and their times again each minute while India trades, in place; the list keeps what it has when a read fails (LIVE-1)
+  useMarketRefresh(["IN"], () => { void loadEtfGaps(true).then((x) => { if (x) setData(x); }); }, !!data);
 
   const rows = useMemo(() => {
     const t = q.trim().toUpperCase();

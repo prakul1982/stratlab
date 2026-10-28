@@ -68,7 +68,7 @@ test("R9R-010: the lower cards of My space read their data after the first paint
   assert.match(mine, /<MarketsCard later=\{later\} \/>/);
   const lib = read("src/lib/mine.ts");
   assert.match(lib, /export function useComingUp\(limit = 6, enabled = true\)/);
-  assert.match(lib, /export function useMarketStrip\(enabled = true\)/);
+  assert.match(lib, /export function useMarketStrip\(enabled = true, live = false\)/);
   // the helper waits for a frame, then a pause, and can be cancelled
   const { afterPaint, DEFER_MS } = await import("../src/lib/defer.ts");
   assert.ok(DEFER_MS >= 500 && DEFER_MS <= 3000);

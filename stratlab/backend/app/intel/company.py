@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from datetime import time as dtime
 
-from .. import name_search
+from .. import name_search, quote_share
 from ..kite_service import KiteService
 from .finnhub import Finnhub
 from .net import NotFound, SourceError, num, rate_wait, with_rate_wait
@@ -874,7 +874,9 @@ class Research:
             return {}
         if region == "IN" and self._kite():
             try:
-                got = self.kite.quote(symbols)
+                # one read of the broker's feed shared by everyone for a few seconds, not one for each page open (LIVE-1: the pages
+                # read their prices again each minute)
+                got = quote_share.read(self.kite, symbols)
             except Exception:
                 got = None
             if got is not None:

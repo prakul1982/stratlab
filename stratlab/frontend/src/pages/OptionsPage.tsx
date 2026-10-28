@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
+import { useMarketRefresh } from "../lib/marketLive";
 import { axisInrFor, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp, exchangeTime, optionsMarket } from "../lib/marketHours";
 import { HELP } from "../lib/help";
@@ -310,6 +311,10 @@ function Chain({ s, offline }: { s: OptionStrategy; offline: boolean }) {
     try { setChain(await api<OptChain>(`/options/chain?exchange=${s.exchange}&underlying=${encodeURIComponent(s.underlying)}&expiry=${s.expiry}`)); }
     catch (e) { fail(e); } finally { setBusy(false); }
   };
+  // the open chain again each minute while its exchange trades, in place (no skeleton); a read that fails keeps the chain shown (LIVE-1)
+  useMarketRefresh([s.exchange === "NFO" || s.exchange === "BFO" ? "IN" : s.exchange], () => {
+    api<OptChain>(`/options/chain?exchange=${s.exchange}&underlying=${encodeURIComponent(s.underlying)}&expiry=${s.expiry}`).then(setChain).catch(() => undefined);
+  }, !!chain && !busy);
   const [view, setView] = useState<"quotes" | "greeks">("quotes");
   type CRow = OptChain["rows"][number];
   const q = (x: { bid: number | null; ask: number | null; ltp: number | null } | null) => x ? `${x.bid ?? "–"} / ${x.ask ?? "–"}` : "–";

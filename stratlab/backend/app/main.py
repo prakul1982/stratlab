@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field, ValidationError
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
-from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_export, tax_lots, tax_total
+from . import holdings, holdings_file, instrument_kinds, money_calendar, quote_share, tax_export, tax_lots, tax_total
 from . import money_mf
 from . import money_mf_nav
 from . import money_mf_ter
@@ -3318,7 +3318,8 @@ def _read_prices(ind: list[dict], us: list[str]) -> dict:
     quotes, live = {}, bool(ind) and kite.ready()
     if live:
         try:
-            quotes = kite.quote([i["symbol"] for i in ind])
+            # shared with every other person's page for a few seconds (LIVE-1): My space, Holdings and Money read these each minute
+            quotes = quote_share.read(kite, [i["symbol"] for i in ind])
         except Exception:
             live = False
     todo = [i for i in ind if not (quotes.get(i["symbol"]) or {}).get("price")]
@@ -3657,7 +3658,7 @@ def holdings_delete(profile=Depends(current_profile)):
 
 # ---------- Money: net worth (stocks from My Holdings, everything else typed in; Free keeps 5 entries) ----------
 _nw_prices: dict = {}                  # {"gold": (time read, (rupees a gram, as of))}, {"BTC": (time read, dollars)}
-NW_PRICE_TTL = 600.0
+NW_PRICE_TTL = 60.0                    # one read of gold or a coin for everyone each minute: the pages show it as the markets trade (LIVE-1)
 
 
 def _nw_cached(key: str, read):
@@ -4646,7 +4647,8 @@ stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILD
 stock_page_store.adjust = lambda r, s, f: stock_pages.with_week52_report(f, official_close.ranges(), s) if r == "IN" else f   # R10O-007
 research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the app's US P/E on the public page's EPS (R7O-004)
 research_routes.filed_numbers = lambda s: sec_feed.company(s)               # a page stored before its quarterly EPS was kept (RC1 DD-030)
-SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
+SEO_HEADERS = {"Cache-Control": stock_pages.FEED_CACHE}           # robots, the sitemaps and search results: kept minutes
+PAGE_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}       # the lists of companies and the directories: kept a day by the site's cache (SEO-1)
 
 
 def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str] | None:
@@ -4681,12 +4683,21 @@ def stock_list_job():
         time.sleep(next_pass_in(bool(failed), tries))
 
 
+def _renamed_redirect(region: str | None, symbol: str, ref: str | None = None):
+    """A ticker with no page that was renamed or merged (ZOMATO is ETERNAL now): a permanent redirect to the new company's page.
+    None for any other symbol, which stays a 404 (SEO-1: /stocks/in/ZOMATO was a 404 Google had already found)."""
+    new = stock_pages.renamed_to(region, symbol) if region and len(symbol) <= 20 else None
+    if not new:
+        return None
+    return RedirectResponse(stock_pages.path(region, new) + (f"?ref={ref}" if ref else ""), status_code=301, headers=PAGE_HEADERS)
+
+
 @app.get("/stocks", response_class=HTMLResponse)
 @app.get("/stocks/", response_class=HTMLResponse, include_in_schema=False)
 def stock_index(q: str = "", m: str = ""):
     """Every company page's way in: search by name or symbol (`m`: in or us), and each market's largest companies."""
     r = stock_pages.REGIONS.get((m or "").lower())
-    return HTMLResponse(stock_pages.index_page(r if q else None, q), headers=SEO_HEADERS)
+    return HTMLResponse(stock_pages.index_page(r if q else None, q), headers=SEO_HEADERS if q.strip() else PAGE_HEADERS)
 
 
 @app.get("/stocks/{region}", response_class=HTMLResponse)
@@ -4700,10 +4711,51 @@ def stock_region_index(region: str, q: str = ""):
             hit = stock_pages.find(reg, region) if reg else None
             if hit:
                 return RedirectResponse(stock_pages.path(reg, hit[0]), status_code=301)
+        for key in ("in", "us"):                 # a renamed ticker typed without its market (SEO-1)
+            moved = _renamed_redirect(stock_pages.REGIONS[key], region)
+            if moved:
+                return moved
         return HTMLResponse(stock_pages.not_found(None, region), status_code=404)
     if region != region.lower():
         return RedirectResponse(f"/stocks/{region.lower()}", status_code=301)
-    return HTMLResponse(stock_pages.index_page(r, q), headers=SEO_HEADERS)
+    return HTMLResponse(stock_pages.index_page(r, q), headers=SEO_HEADERS if q.strip() else PAGE_HEADERS)
+
+
+def _dir_page(request: Request, region: str, want: str, build):
+    """A directory page at its one address: another spelling (capitals, "/1", a leading zero) goes there with a 301; no list
+    behind it is a 404 kept out of search results. `want` is the address, or None when the list can't exist."""
+    r = stock_pages.REGIONS.get(region.lower())
+    if not r or not want:
+        return HTMLResponse(stock_pages.dir_not_found(r), status_code=404)
+    if request.url.path.rstrip("/") != want:
+        return RedirectResponse(want, status_code=301)
+    body = build(r)
+    if body is None:
+        return HTMLResponse(stock_pages.dir_not_found(r), status_code=404)
+    return HTMLResponse(body, headers=PAGE_HEADERS)
+
+
+def _dir_number(page: str) -> int:
+    return int(page) if page.isdigit() and len(page) <= 4 and int(page) >= 1 else 0
+
+
+@app.get("/stocks/{region}/browse/{letter}", response_class=HTMLResponse)
+@app.get("/stocks/{region}/browse/{letter}/{page}", response_class=HTMLResponse, include_in_schema=False)
+def stock_browse(request: Request, region: str, letter: str, page: str = "1"):
+    """SEO-1: the companies of a market whose name starts with a letter, A to Z, each linked (400 to a page)."""
+    pg, L = _dir_number(page), letter.upper()
+    ok = stock_pages.REGIONS.get(region.lower()) and pg and (L in stock_pages.LETTERS or L == stock_pages.OTHER)
+    want = stock_pages.letter_path(region, L, pg) if ok else None
+    return _dir_page(request, region, want, lambda r: stock_pages.letter_page(r, L, pg))
+
+
+@app.get("/stocks/{region}/index/{slug}", response_class=HTMLResponse)
+@app.get("/stocks/{region}/index/{slug}/{page}", response_class=HTMLResponse, include_in_schema=False)
+def stock_index_list(request: Request, region: str, slug: str, page: str = "1"):
+    """SEO-1: an index's members that have a page (NIFTY 50, S&P 500…), A to Z, from the members the app already keeps."""
+    pg = _dir_number(page)
+    want = stock_pages.index_path(region, slug.lower(), pg) if stock_pages.REGIONS.get(region.lower()) and pg and len(slug) <= 40 else None
+    return _dir_page(request, region, want, lambda r: stock_pages.index_page_of_list(r, slug.lower(), pg))
 
 
 @app.get("/stocks/{region}/{symbol}/", include_in_schema=False)
@@ -4713,7 +4765,7 @@ def stock_page_slash(region: str, symbol: str):
     r = stock_pages.REGIONS.get(region.lower())
     hit = stock_pages.find(r, symbol) if r else None
     if not hit:
-        return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
+        return _renamed_redirect(r, symbol) or HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
     return RedirectResponse(stock_pages.path(r, hit[0]), status_code=301)
 
 
@@ -4723,8 +4775,11 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     card, `ref` is the sharer's invite code, and the page's links into the app carry it."""
     r = stock_pages.REGIONS.get(region.lower())
     hit = stock_pages.find(r, symbol) if r else None
+    if not hit and r and symbol.lower() in ("browse", "index"):
+        return RedirectResponse(f"/stocks/{r.lower()}", status_code=301)       # /stocks/in/browse: the lists' parent
     if not hit:
-        return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
+        moved = _renamed_redirect(r, symbol, ref if ref and referrals.CODE.match(ref) else None)
+        return moved or HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
     sym, co = hit
     ref = ref if ref and referrals.CODE.match(ref) else None
     if region != region.lower() or symbol != sym:          # one address per company
@@ -4743,7 +4798,9 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
         page = stock_pages.with_surveillance(page, surveillance.flags_for(sym))
     # kept by the site's cache no longer than the next close's settle point, and a minute while it waits for its new close,
     # so no compressed copy outlives the refresh (R13-006)
-    headers = {"Cache-Control": stock_pages.cache_control(r, stored.get("facts") if isinstance(stored, dict) else None)}
+    # (`stored` is the page's facts themselves, as Pages keeps them in memory: reading ["facts"] off them found nothing, so a page a
+    # close behind was kept as long as any other)
+    headers = {"Cache-Control": stock_pages.cache_control(r, stored if isinstance(stored, dict) else None)}
     page = ads.add_to_page(page, "company")        # ADS-1: as the page is sent, so the stored copy never holds an ad; "" while ads are off
     return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=headers)
 
@@ -4963,14 +5020,31 @@ breadth_live_runner = breadth_live.Live(
 breadth_live_job = breadth_live.LiveJob(breadth_live_runner)
 
 
+_breadth_views = TTLCache(max_items=60, max_bytes=16 * 1024 * 1024)
+BREADTH_VIEW_FOR = 20                  # seconds one reading of a group's stored days is shared by every page (LIVE-1: pages read it each minute)
+
+
+def breadth_view_shared(group: str, range_: str, full: bool, brief: bool) -> dict:
+    """The stored days' view of a group (parsed from its stored history, the costly part of the answer), kept for a few seconds
+    for everyone; a copy, since the route adds to it. The live points are not in it: they are read for each request."""
+    key = (group, range_, full, brief)
+    hit = _breadth_views.get(key)
+    if hit is None:
+        hit = breadth.view(group, range_, full=full, brief=brief)
+        _breadth_views.set(key, hit, BREADTH_VIEW_FOR)
+    return dict(hit)
+
+
 @app.get("/invest/breadth")
-def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool = False, profile=Depends(current_profile)):
-    """A group of stocks' breadth: today's numbers on every plan; the history, charts and sector table on Basic and up."""
+def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool = False, profile=Depends(current_profile), live_only: bool = False):
+    """A group of stocks' breadth: today's numbers on every plan; the history, charts and sector table on Basic and up.
+    `live_only`: just the live card's points and the "next count due" note, for a page already open (LIVE-1: it asks each minute
+    while India trades, and has the history already)."""
     if group not in breadth.GROUPS:
         err(404, "not_found", "Pick a group of stocks from the list.")
     if range not in breadth.RANGES:
         err(400, "bad_range", "Pick a time range from the list.")
-    out = breadth.view(group, range, full=allows(profile["_plan"], "breadth"), brief=brief)
+    out = breadth_view_shared(group, range, allows(profile["_plan"], "breadth"), brief or live_only)
     out["plan_needed"] = PLANS[FEATURE_PLAN["breadth"]]["name"]
     live = breadth_live.settled(breadth_live.view(group, ready=kite.ready()), (out.get("today") or {}).get("day"))
     if brief and live:
@@ -4985,6 +5059,8 @@ def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool 
                                          due=breadth.due_label(region), during=region not in breadth_live.LIVE_REGIONS)
     if out["pending"] and breadth.update_failed(region, out["pending"]):
         out["pending"] = {**out["pending"], "failed": True}
+    if live_only:
+        return ok({"live": out["live"], "pending": out["pending"], "as_of": out.get("as_of")})
     return ok(out)
 
 

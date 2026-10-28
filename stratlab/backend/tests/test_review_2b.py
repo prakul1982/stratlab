@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app import main  # noqa: F401,I001  (first: the app wires the modules)
-from app import holdings, library
+from app import holdings, library, quote_share
 from tests import world as W
 from tests.fake_db import headers
 from tests.fake_kite import IST, session_clock
@@ -70,6 +70,7 @@ def test_pages_opened_seconds_apart_share_one_reading(w, monkeypatch):
     a, b = main.holdings_view(p), main.holdings_view(p)
     assert len(calls) == 1 and a["totals"] == b["totals"] and a["prices_at"] == b["prices_at"]
     main._PRICED.clear()
+    quote_share.forget()                                                           # (LIVE-1: the feed's own quotes are shared a few seconds too)
     main.holdings_view(p)
     assert len(calls) == 2                                                         # after the window, a fresh reading
     holdings.delete("u-share")

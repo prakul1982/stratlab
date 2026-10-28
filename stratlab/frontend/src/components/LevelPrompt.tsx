@@ -6,6 +6,7 @@ import type { Focus, Level } from "../lib/types";
 import { homeOf, SPACE_HOMES, SPACE_IDS, SPACES, viewForFocus } from "../lib/spaces";
 import { Modal } from "./ui";
 import { track } from "../lib/analytics";
+import { INTRO_LINE } from "../content/intro";
 
 export const LEVELS: [Level, string, string][] = [
   ["new", "New to this", "Guided start: examples to try, explanations up front, advanced settings folded away."],
@@ -46,6 +47,9 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answere
     // Esc and × close it for good, as an answer does, but start no tour: closing it is "not now" (DP2-032, DP1-028)
     <Modal title="What brings you here?" startOnClose onClose={() => onDone(savePrefs({ focus: focus ?? "both", level: lvl }), false)}>
       <div className="k-stack">
+        {/* what StratLab is, before where things are: the landing page's own sentence (content/intro.ts), so a new account
+            reads the same promise it signed up on */}
+        <p className="welcome-what">{INTRO_LINE}</p>
         <p className="k-muted">StratLab has four spaces: Trade, Invest, Money and My space, your own summary of all three. {here ? `You're on ${SPACES[here].label} now: pick ${SPACES[here].label} to stay, or another to open its home.` : "We'll open the one you pick."} The others stay one tap away, and you can change this any time in Settings.</p>
         <div className="k-stack snug">
           <span className="k-small k-muted">How much have you done? · optional</span>

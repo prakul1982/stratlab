@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { SETTLE_US_MIN, marketState, minutesSinceClose } from "./marketHours";
+import type { Market } from "./types";
 
 /* Prices on a page left open while the market trades (R63-002: TCS stayed at ₹2,480.00 on its page from 09:36 to 09:38
  * while NIFTY moved 90 points): the page reads them again once a minute, only while its tab is in view, and once on
@@ -30,4 +32,25 @@ export function useLiveRefresh(on: boolean, tick: () => void, ms = LIVE_REFRESH_
     document.addEventListener("visibilitychange", back);
     return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", back); };
   }, [on, ms]);
+}
+
+/** How long after a market's close its pages still read prices again, to pick up the closing prints (the US's settle for
+ * longer: SETTLE_US_MIN, as its pages call them provisional until then). */
+export const LIVE_GRACE_MIN = 15;
+
+/** Whether any of these markets (by id: IN, US, FX, CMDTY, MCX, CRYPTO...) is trading now, or closed only minutes ago: the
+ * pages that show its prices read them again each minute then, and stop when it is shut (LIVE-1). Crypto never closes and
+ * FX and global commodities trade from Sunday evening to Friday evening New York time. Judged by the hours alone, not the
+ * market's `status` from the one list read at sign-in: a feed that was off then may be on now, and a page left open across
+ * the open must start reading when it opens. */
+export function marketsLive(markets: readonly Market[], ids: readonly string[], now: number = Date.now()): boolean {
+  const at = new Date(now);
+  return ids.some((id) => {
+    const m = markets.find((x) => x.id === id);
+    if (!m || m.status === "soon") return false;
+    const st = marketState({ ...m, status: "live" }, at);
+    if (st.open) return true;
+    const since = minutesSinceClose(m, at);
+    return since != null && since < (id === "US" ? SETTLE_US_MIN : LIVE_GRACE_MIN);
+  });
 }

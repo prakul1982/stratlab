@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { asOf, dayIn, num, pct, price, fmtDate } from "../lib/format";
+import { useMarketRefresh } from "../lib/marketLive";
 import { etfGapApi, gapAtPrice, gapShort, gapWords, useEtfGaps, type EtfGapDetail } from "../lib/etfGaps";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
@@ -42,6 +43,8 @@ export function EtfGapDetailView({ symbol, quiet, price: shown, day: shownDay }:
     etfGapApi.detail(symbol).then((x) => live && setD(x)).catch((e) => live && setError((e as Error).message));
     return () => { live = false; };
   }, [symbol, quiet, known]);
+  // the price, the gap and their times again each minute while India trades, in place (LIVE-1)
+  useMarketRefresh(["IN"], () => { etfGapApi.detail(symbol).then((x) => setD((cur) => (cur && cur.row.symbol === x.row.symbol ? x : cur))).catch(() => undefined); }, !!d);
   if (quiet && !known) return null;
   if (error) return quiet ? null : <ErrorState title={`${symbol} couldn't be read`}>{error}</ErrorState>;
   if (!d) return quiet ? null : <Skeleton label={`Reading ${symbol}`} lines={3} />;

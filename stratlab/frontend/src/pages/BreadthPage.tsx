@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
+import { useMarketRefresh } from "../lib/marketLive";
 import {
-  BROAD_GROUP, breadthApi, breadthChipLabel, dailyTitle, breadthStart, count, delta, liveReadLine, MOVES_LABEL, MOVES_TITLE, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, spikeCap, thrustDays,
+  BROAD_GROUP, breadthApi, breadthChipLabel, dailyTitle, breadthStart, count, delta, liveReadLine, withLive, MOVES_LABEL, MOVES_TITLE, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, spikeCap, thrustDays,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -63,6 +64,16 @@ export function BreadthPage() {
       })
       .finally(() => { if (n === seq.current) setLoading(false); });
   }, [group, fail, tries]);
+
+  // India's live counts (a round every quarter hour while it trades) again each minute, in place: the history and charts are not read
+  // again, only the live card and the next count's note; a read that fails keeps what is shown (LIVE-1)
+  useMarketRefresh(["IN"], () => {
+    const g = group;
+    breadthApi.live(g).then((x) => setData((cur) => {
+      const next = withLive(cur, x, g);
+      return next === "error" ? cur : next;
+    })).catch(() => undefined);
+  }, !!data?.today && data.group.region === "IN");
 
   // the days stored, the periods that tell apart, and the history cut to the one chosen
   const all = data?.history ?? null;

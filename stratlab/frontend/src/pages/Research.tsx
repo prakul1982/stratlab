@@ -722,6 +722,16 @@ export function ComparePage() {
     });
     return () => { live = false; };
   }, [a, b, region, same]);
+  // both prices and day moves again each minute while their market trades; the rest of the page stays as read (LIVE-1)
+  useLiveRefresh(!!res && [res.a, res.b].some((c) => c.market_open && (c.quote?.at == null || liveQuote(c.quote.at))), () => {
+    const key = shownKey;
+    const [sa, sb] = [res!.a.symbol, res!.b.symbol];
+    researchApi.quotes(region, [sa, sb]).then((q) => {
+      if (pair.current !== key) return;
+      const lay = (c: Company, x: Quote | null | undefined) => (x?.price != null ? { ...c, quote: { ...c.quote, ...x }, as_of: x.at ?? c.as_of } : c);
+      setRes((cur) => (cur && cur.a.symbol === sa && cur.b.symbol === sb ? { ...cur, a: lay(cur.a, q[sa]), b: lay(cur.b, q[sb]) } : cur));
+    }).catch(() => undefined);
+  });
   // only the AI's part is asked again; the numbers already on the page stay. The answer is put on the page only while
   // the same pair is shown (a late answer for an earlier pair is dropped)
   const askAgain = () => {

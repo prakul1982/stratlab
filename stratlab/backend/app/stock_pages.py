@@ -24,6 +24,7 @@ import json
 import re
 import threading
 import time
+import unicodedata
 from collections import deque
 from datetime import date, datetime, time as dtime, timedelta, timezone
 from html import escape as e
@@ -64,9 +65,13 @@ PE_STALE_DAYS = 456            # a P/E on a year that ended more than about 15 m
 ANNUAL_BEHIND_DAYS = 395       # a newest annual report filed this long after the table's newest year ended isn't in the table
 CHUNK = 5000                   # companies per sitemap file (the limit is 50,000; smaller files are quicker to fetch)
 PEERS = 12
-# browsers keep a page five minutes and the site's cache fifteen: a page follows its market's close within minutes, never
-# a day later (a stored page itself is rebuilt after each close, see Pages.get)
-CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=600"
+# SEO-1: a company, directory or blog page is kept by the site's cache (the host's edge, which serves the API's pages through a
+# rewrite: vercel.json's x-vercel-enable-rewrite-caching) for a day, and stale for a week while it is read again. A cold build
+# took 0.6 to 1.8 s, which Google counts against crawling a site it has found 13,000 addresses on and not yet read. The price on
+# a page is the close its "As of" names, so a copy a day old still says what is true of it; only a page that is already a close
+# behind (BEHIND_CACHE) is kept a minute, so it follows its refresh at once. Browsers keep a page five minutes.
+CACHE_CONTROL = "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800"
+FEED_CACHE = "public, max-age=300, s-maxage=900, stale-while-revalidate=600"     # robots, the sitemaps and search results: a list that changes by the hour
 BEHIND_CACHE = "public, max-age=60, s-maxage=60, stale-while-revalidate=30"   # a page waiting for its new close
 MIN_CACHE = 60
 EXTREME = 100.0                # a margin beyond ±100% says revenue is tiny next to costs or profit
@@ -146,6 +151,8 @@ def save_list(region: str, rows: list[dict]):
         _put(f"stocks:list:{region}", {"at": datetime.now(timezone.utc).isoformat(),
                                        "rows": {r["symbol"]: r.get("name") or r["symbol"] for r in rows if r.get("symbol")}})
         _companies.pop(region, None)
+        _dir.pop(region, None)
+        _dir_index.pop(region, None)
 
 
 def _seeds(region: str) -> set[str]:
@@ -286,6 +293,52 @@ def find(region: str, symbol: str) -> tuple[str, dict] | None:
     return None
 
 
+RENAME_HOPS = 3                  # an old symbol that was renamed again is followed this far
+
+
+def _rename_of(region: str, symbol: str) -> str | None:
+    """What one old symbol became, from the places the app already records it: the exchange's F&O circulars that rename a
+    stock (fo_changes), a company merged into another (intel.company.MERGED), the known symbol changes the company-data reader
+    keeps (Tata Motors' demerger), and the short names and former names the search resolves to exactly one company
+    (name_search.ALIASES: ZOMATO is ETERNAL). None when nothing says."""
+    if region == "IN":
+        try:
+            from . import fo_changes
+            events = [x for x in fo_changes.load_events() if x.get("kind") == "rename" and str(x.get("was_symbol") or "").upper() == symbol and x.get("symbol")]
+            if events:
+                return str(max(events, key=lambda x: str(x.get("effective") or ""))["symbol"]).upper()
+        except Exception as ex:                  # storage down: the other sources still answer
+            print("stock pages: renames not read:", str(ex)[:120])
+        from .intel.company import MERGED
+        from .intel.screener import Screener
+        into = (MERGED.get(symbol) or {}).get("into_symbol") or Screener.RENAMED.get(symbol)
+        if into:
+            return into
+    from . import name_search
+    one = name_search.ALIASES.get(region, {}).get(symbol) or []
+    return one[0] if len(one) == 1 else None
+
+
+def renamed_to(region: str, symbol: str) -> str | None:
+    """The page symbol a company's old ticker now has (ZOMATO -> ETERNAL), for a ticker with no page of its own: the address
+    then redirects there for good, so the pages Google found under the old ticker pass to the new one. None for a ticker
+    nothing says was renamed, which stays a 404."""
+    cur = (symbol or "").strip().upper()
+    if not cur or len(cur) > 20 or region not in REGIONS.values():
+        return None
+    seen = {cur}
+    for _ in range(RENAME_HOPS):
+        nxt = _rename_of(region, cur)
+        if not nxt or nxt in seen:
+            return None
+        seen.add(nxt)
+        hit = find(region, nxt)
+        if hit:
+            return hit[0]
+        cur = nxt
+    return None
+
+
 share_class_page = None          # (US ticker) -> the page symbol of the same company's other class, or None (set by main)
 
 
@@ -350,23 +403,14 @@ def next_settle(region: str, now: datetime | None = None) -> datetime | None:
 
 
 def cache_control(region: str | None, f: dict | None = None, now: datetime | None = None) -> str:
-    """A company page's Cache-Control. The site's cache keeps one copy per compression (identity, gzip, br, zstd), each
-    from when it was first asked for, so a copy cached just before the close settled outlived the page's refresh by up
-    to s-maxage plus stale-while-revalidate: browsers (gzip, br) got 8 Oct's page until 20:59 UTC while plain requests
-    had 9 Oct's from 20:51 (R13-006). So no copy is kept past the market's next settle point, and a page still waiting
-    for its new close is kept a minute, so every copy follows the refresh within a minute or two."""
-    now = now or datetime.now(timezone.utc)
+    """A company page's Cache-Control: the day-long CACHE_CONTROL, or a minute (BEHIND_CACHE) for a page whose price is from
+    before its market's latest close, so that page follows its refresh within a minute or two and never says "the market
+    has closed since" for long after it has caught up (R13-006). A page that is up to date says "As of <the close>" and stays
+    true of that close whenever it is read (SEO-1: this used to end every copy at the market's next settle point, so a crawler
+    met a cold build on most requests)."""
     if f and region and behind(f, now):
         return BEHIND_CACHE
-    nxt = next_settle(region, now) if region else None
-    if nxt is None:
-        return CACHE_CONTROL
-    left = int((nxt - now).total_seconds())
-    if left >= 900 + 600:
-        return CACHE_CONTROL
-    s_max = max(MIN_CACHE, min(900, left))
-    swr = max(0, min(600, left - s_max))
-    return f"public, max-age={min(300, s_max)}, s-maxage={s_max}, stale-while-revalidate={swr}"
+    return CACHE_CONTROL
 
 
 def html_ttl(region: str | None, now: datetime | None = None) -> int:
@@ -1546,7 +1590,8 @@ class Pages:
         key = f"html:{region}:{symbol}"
         hit = self.mem.get(key)
         if hit is None:
-            hit = render(self.get(region, symbol, co), region, symbol, co["name"])
+            f = self.get(region, symbol, co)
+            hit = render(f, region, symbol, co["name"], faq_extras(region, symbol) if has_content(f) else None)
             self.mem.set(key, hit, html_ttl(region))      # never served past the next close's settle point (R13-006)
         return hit
 
@@ -1845,22 +1890,30 @@ def _inr_group(v: float) -> str:
     return ("-" if v < 0 else "") + (head + "," + tail if head else tail)
 
 
+def usd_text(v: float) -> str:
+    """An amount in $ million in the words people use: "$4.87T", "$85.8B", "$950M", "<$1M"."""
+    if round(v / 1e3, 1) >= 1e3:                         # the unit is chosen after rounding
+        return f"${v / 1e6:,.2f}T"
+    if v >= 1e3:
+        return f"${v / 1e3:,.1f}B"
+    # $0.5M rounds to "$0M" (TAOP, R6V-011): anything under a whole million is "<$1M"
+    return f"${v:,.0f}M" if round(v) >= 1 else "<$1M"
+
+
+def inr_text(v: float) -> str:
+    """An amount in ₹ crore: "₹7.70 lakh crore", "₹20,345 crore", "<₹1 crore"."""
+    if round(v) >= 1e5:
+        return f"₹{v / 1e5:,.2f} lakh crore"
+    return f"₹{_inr_group(v)} crore" if round(v) >= 1 else "<₹1 crore"
+
+
 def cap_text(f: dict) -> str:
     """Market value in the words people use: "$4.87T", "$85.8B", "$950M", "<$1M"; "₹7.70 lakh crore", "₹20,345 crore".
     "–" when there is none or it failed its checks (cap_problem)."""
     v = shown_cap(f)
     if v is None:
         return "–"
-    if f.get("currency") == "USD":                       # stored in $ million
-        if round(v / 1e3, 1) >= 1e3:                     # the unit is chosen after rounding
-            return f"${v / 1e6:,.2f}T"
-        if v >= 1e3:
-            return f"${v / 1e3:,.1f}B"
-        # $0.5M rounds to "$0M" (TAOP, R6V-011): anything under a whole million is "<$1M"
-        return f"${v:,.0f}M" if round(v) >= 1 else "<$1M"
-    if round(v) >= 1e5:                                   # stored in ₹ crore
-        return f"₹{v / 1e5:,.2f} lakh crore"
-    return f"₹{_inr_group(v)} crore" if round(v) >= 1 else "<₹1 crore"
+    return usd_text(v) if f.get("currency") == "USD" else inr_text(v)         # stored in $ million, ₹ crore
 
 
 def _date(iso: str | None) -> str:
@@ -1962,7 +2015,7 @@ background:var(--ink);color:var(--on-ink);text-decoration:none;font-weight:600}.
 .btn.ghost{background:transparent;color:var(--ink)}.btn.ghost:hover{background:var(--card);color:var(--ink);filter:none}
 main{max-width:880px;margin:0 auto;padding:24px 16px 48px}
 h1{font-family:var(--serif);font-weight:400;font-size:clamp(28px,4vw,42px);line-height:1.15;letter-spacing:-.02em;margin:4px 0 6px}
-h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:30px 0 10px}.muted{color:var(--muted)}.small{font-size:14px}
+h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:30px 0 10px}h3{font-size:16px;font-weight:600;margin:14px 0 4px}.faq p{margin:0 0 6px}.muted{color:var(--muted)}.small{font-size:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
 .stat b{display:block;font-size:20px;font-weight:600}.stat span{font-size:13px;color:var(--muted)}
@@ -1988,12 +2041,14 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 @media (max-width:640px){.nav>nav{display:none}.nav details.menu{display:block}.nav{justify-content:space-between}.scroll-cue{display:block}}
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:8px 0;border-bottom:1px solid var(--line)}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+ul.dir{list-style:none;padding:0;margin:16px 0;columns:2 300px;column-gap:28px}ul.dir li{padding:2px 0}
+ul.dir a{display:inline-block;min-height:40px;padding:8px 0;line-height:1.3}nav.links{margin:8px 0 4px}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
 form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:12px 0}form.find select,form.find button{flex:none}form.find input,form.find select{min-height:44px;border:1px solid var(--line-2);border-radius:10px;padding:0 12px;background:var(--card);color:var(--ink);font:inherit}
 form.find input{flex:1;min-width:0}form.find button{cursor:pointer;font:inherit}
 footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:880px;margin:0 auto;padding:20px 16px 40px;font-size:13px;color:var(--muted)}
 footer.site nav{display:flex;flex-wrap:wrap;gap:4px 16px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}
-@media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
+@media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:44px;padding:10px 0}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
 @media (max-width:640px){input,select,textarea,form.find input,form.find select{font-size:16px}}
 """
 
@@ -2064,11 +2119,15 @@ def _top(sign_in: str | None = None) -> str:
             f'<a class="btn ghost" href="{e(sign_in)}">Sign in</a></header>')
 
 
+INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address as the app's footers (content/seo.ts)
+
+
 def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
     links = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                 ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us"),
                                                                 ("/pricing", "Plans"), ("/library", "Strategy library"), ("/blog", "Blog")))
+    links += f'<a href="{INSTAGRAM}" rel="me noopener">Instagram</a>'
     return (f'<footer class="site"><div class="in"><p>Research and paper trading only. No real orders are placed. StratLab shows '
             "facts from reported data for research and education; nothing here is investment advice or a recommendation, and "
             f"past prices don't predict future returns. © {datetime.now(timezone.utc).year} StratLab.</p>"
@@ -2123,8 +2182,159 @@ def proper_name(name: str | None) -> str | None:
     return re.sub(r"\bAmazon Com\b", "Amazon.com", " ".join(word(w) for w in name.split(" ")))
 
 
-def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
-    """The page. `f` is None when the sources had nothing on a listed company: a short page, kept out of the index."""
+# ---------- a company's own words: one short paragraph and the questions its page can answer (SEO-1) ----------
+# Every company page had the same sentences round different numbers, which Google calls thin. These are sentences built from the
+# page's own figures (nothing new is fetched or made up), worded as facts: no buy, sell, hold or target (SEBI's research analyst
+# rules), no data vendor's name.
+ADVICE_WORDS = re.compile(r"\b(buy|sell|hold|accumulate|avoid|target|undervalued|overvalued|recommend\w*|outperform\w*|upgrade\w*|downgrade\w*)\b", re.I)
+FAQ_HOLDERS = 3                  # named holders the shareholders answer lists
+
+
+def report_amount(f: dict, v) -> str | None:
+    """A reported figure in the unit the page's table uses, in words: "₹2,67,021 crore", "$391.0B"; a foreign filer's own
+    currency as "12,345 EUR million". None without a figure."""
+    v = _num(v)
+    if v is None:
+        return None
+    unit = f.get("unit") or ""
+    if unit == "$ million":
+        return usd_text(v)
+    if unit == "₹ crore":
+        return inr_text(v)
+    return f"{_amount(f, v)} {unit}".strip()
+
+
+def listed_on(f: dict, region: str, symbol: str) -> str:
+    """"on NSE and BSE", "on BSE", "in the US": where the company's shares are listed, as far as the app knows."""
+    if region == "US":
+        return "in the US"
+    ex = str(f.get("exchange") or "NSE")
+    return "on NSE and BSE" if ex == "NSE" and symbol in set(nse_twins().values()) else f"on {ex}"
+
+
+def about_text(f: dict, region: str, symbol: str, name: str) -> str:
+    """One short paragraph from the company's own figures: its sector, where it is listed, its year's range and last close, the
+    latest reported year's revenue and profit, the last 12 months' profit and its market value. Each sentence is left out when
+    its figures are n/a on the page (the same checks the page's figures pass)."""
+    out = []
+    ind = shown_industry(f.get("industry"), plain=region == "US")
+    where = ""
+    if region == "IN" and ind:
+        where = f"is in the {ind[0]} sector" + (f", in the {ind[-1]} industry," if len(ind) > 1 and ind[-1] != ind[0] else ",")
+    elif ind:
+        where = f"is in the {ind[-1]} industry,"
+    out.append(f"{name} {where} listed {listed_on(f, region, symbol)}.".replace(" ,", ",") if where else f"{name} is listed {listed_on(f, region, symbol)}.")
+    price = _num(f.get("price"))
+    if price is not None:
+        word = "last price" if behind(f) or not is_close(f) else "last close"
+        when = f" on {_date(f['price_at'])}" if _date(f.get("price_at")) else ""
+        bit = f"Its {word} was {_money(f, price)}{when}"
+        if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None:
+            span = (f"since its listing on {_date(f['range_since'])}" if f.get("range_since") and _date(f.get("range_since"))
+                    else "over the last 12 months")
+            bit += f"; {span} its share price traded between {_money(f, f['low52'])} and {_money(f, f['high52'])} (intraday)"
+        out.append(bit + ".")
+    ys = [y for y in f.get("years") or [] if y.get("year")]
+    if ys:
+        y = ys[-1]
+        sales, profit = report_amount(f, y.get("sales")), _num(y.get("profit"))
+        bits = []
+        if sales and _num(y.get("sales")) is not None and _num(y["sales"]) > 0:
+            bits.append(f"revenue of {sales}")
+        if profit is not None:
+            bits.append(f"a net loss of {report_amount(f, -profit)}" if profit < 0 else f"net profit of {report_amount(f, profit)}")
+        if bits:
+            g = f.get("growth") or {}
+            grow = [w for w in (growth_words("revenue", g.get("sales_cagr_3y")), growth_words("net profit", g.get("profit_cagr_3y"))) if w]
+            out.append(f"In its latest reported year ({y['year']}) it reported " + " and ".join(bits)
+                       + (f"; over three years, compounded, its {', and its '.join(grow)}" if grow else "") + ".")
+    ttm, owners = _num(f.get("profit_ttm")), owners_profit(f)
+    if owners is not None or ttm is not None:
+        # the page's own two lines for an Indian company whose table profit includes minority holders (_stats): the shareholders'
+        if owners is not None:
+            text = f"profit to its shareholders over the last 12 months was {report_amount(f, owners)}"
+        else:
+            text = (f"it made a net loss of {report_amount(f, -ttm)} over the last 12 months" if ttm < 0
+                    else f"its net profit over the last 12 months was {report_amount(f, ttm)}")
+        out.append(text[0].upper() + text[1:] + " (the four latest reported quarters).")
+    if cap_text(f) != "–":
+        pe = shown_pe(f)
+        out.append(f"Its market value is {cap_text(f)}" + (f", with a P/E of {_fmt(pe)}" if pe is not None else "") + ".")
+    return " ".join(out)
+
+
+def faq_extras(region: str, symbol: str) -> dict:
+    """What the company's page can say that is stored apart from its facts, read without asking any source: its next results
+    date (the results calendar) and the named holders above 1% in its latest shareholding pattern (India). Empty parts when
+    nothing is stored."""
+    got: dict = {}
+    try:
+        from . import results
+        cal = results.load(region)
+        nxt = results.lookup(region, symbol)["next"] if cal["rows"] else None
+        if nxt:
+            got["results"] = {"date": nxt["date"], "when": nxt.get("when"), "purpose": nxt.get("purpose"), "as_of": str(cal.get("at") or "")[:10]}
+    except Exception as ex:                      # the calendar unreadable: no such question
+        print("stock pages: results date not read:", symbol, str(ex)[:120])
+    if region == "IN":
+        try:
+            from . import shareholders
+            view = shareholders.company_view(symbol)
+            if view and view.get("holders"):
+                top = sorted(view["holders"], key=lambda h: -h["pct"])[:FAQ_HOLDERS]
+                got["holders"] = {"quarter": view["quarter"], "holders": [{"name": h["name"], "pct": h["pct"], "group": h["group"]} for h in top]}
+        except Exception as ex:
+            print("stock pages: holders not read:", symbol, str(ex)[:120])
+    return got
+
+
+def faq_items(f: dict, region: str, symbol: str, name: str, extras: dict | None = None) -> list[tuple[str, str]]:
+    """[(question, answer)] the page answers from facts it holds: its market value, its next results date and its largest named
+    holders. A question whose answer isn't known is left out, never answered with "not available"."""
+    out = []
+    cap = cap_text(f)
+    if cap != "–":
+        pe = shown_pe(f)
+        out.append((f"What is {name}'s market value?",
+                    f"{name}'s market value is {cap} as of {as_of_text(f)}: the last close times the shares in issue."
+                    + (f" Its P/E is {_fmt(pe)}, the last close over earnings per share for the last four reported quarters." if pe is not None else "")))
+    nxt = (extras or {}).get("results")
+    if nxt and _date(nxt.get("date")):
+        purpose = str(nxt.get("purpose") or "").strip()
+        purpose = "" if ADVICE_WORDS.search(purpose) else purpose
+        from . import results
+        when = results.WHEN.get(nxt.get("when") or "")
+        out.append((f"When are {name}'s next results?",
+                    f"{name}'s next results are listed for {_date(nxt['date'])}" + (f", {when}" if when else "")
+                    + (f" (the exchange's notice: {purpose})" if purpose else "") + "."
+                    + (f" Dates are as the company announced them, on the list of {_date(nxt['as_of'])}." if _date(nxt.get("as_of")) else "")))
+    hold = (extras or {}).get("holders")
+    if hold and hold.get("holders") and _date(hold.get("quarter")):
+        names = "; ".join(f"{h['name']} ({'promoter group' if h['group'] == 'promoter' else 'public'}) {h['pct']:g}%" for h in hold["holders"])
+        out.append((f"Who are {name}'s largest named shareholders?",
+                    f"In the shareholding pattern for the quarter ended {_date(hold['quarter'])}, the largest named holders above 1% were: {names}. "
+                    "Percentages are of all shares."))
+    return out
+
+
+def faq_html(items: list[tuple[str, str]], name: str) -> str:
+    if not items:
+        return ""
+    return (f'<h2>Questions about {e(name)}</h2><div class="card faq" data-faq>'
+            + "".join(f"<h3>{e(q)}</h3><p>{e(a)}</p>" for q, a in items) + "</div>")
+
+
+def faq_ld(items: list[tuple[str, str]]) -> list[dict]:
+    """The FAQPage structured data for the questions the page shows, word for word."""
+    if not items:
+        return []
+    return [{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in items]}]
+
+
+def render(f: dict | None, region: str, symbol: str, name: str | None, extras: dict | None = None) -> str:
+    """The page. `f` is None when the sources had nothing on a listed company: a short page, kept out of the index. `extras` is
+    what faq_extras read from the stores (the next results date, the named holders), for the questions it answers."""
     site = settings.PUBLIC_SITE_URL
     canonical = site + path(region, symbol)
     name = (f or {}).get("name") or name or symbol
@@ -2158,15 +2368,19 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
     else:                                 # no price to date the page by: say so, never a bare "As of" over no price
         as_of_line = ("No recent share price is available for this company. Facts from reported results and exchange "
                       f"filings{', page built ' + e(as_of) if as_of else ''}. Not investment advice.")
+    questions = faq_items(f, region, symbol, name, extras) if has_content(f) else []
     ld = _ld([{"@context": "https://schema.org", "@type": "Corporation", "name": name, "tickerSymbol": symbol,
                "url": canonical, **({"industry": (plain_industry if region == "US" else str)(f["industry"][-1])} if f.get("industry") else {})},
               {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
                   {"@type": "ListItem", "position": 1, "name": "StratLab", "item": site + "/"},
-                  {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}])
+                  {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}, *faq_ld(questions)])
     ind = " · ".join(shown_industry(f.get("industry"), plain=region == "US"))
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
 <p class="muted">{e(f.get("exchange") or country)}{(" · " + e(ind)) if ind else ""}</p>
 <p class="small muted" data-as-of>{as_of_line}</p>"""]
+    about = about_text(f, region, symbol, name) if has_content(f) else ""
+    if about:
+        parts.append(f'<p data-about>{e(about)}</p>')           # SEO-1: this company's own sentences, from the figures below
     parts.append('<div class="card grid">' + "".join(
         f'<div class="stat"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
     parts += _notes(f)
@@ -2180,9 +2394,11 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
             f'<li><span class="muted small">{e(_date(x["at"]))}</span><br>'
             + (f'<a href="{e(x["url"])}" rel="noopener nofollow">{e(x["name"])}</a>' if x.get("url") else e(x["name"]))
             + "</li>" for x in unique_filings(shown)) + "</ul></div>")
+    parts.append(faq_html(questions, name))
     parts.append(_cta(symbol, test, deep))
     for sec in peer_sections(region, symbol, f.get("industry") or [], shown_cap(f)):
         parts.append(f'<h2>{e(sec["title"])}</h2><p class="small muted" data-peers>{e(sec["caption"])}</p>' + _links(region, sec["rows"]))
+    parts.append(browse_block(region, symbol))        # SEO-1: the companies before and after it A to Z, its letter's list and its indexes
     # a company with a price but no reported numbers to show (a filer whose results aren't filed as data) is a short page
     # for a visitor who looks it up, kept out of search results and the sitemap (see has_content)
     return _page(_head(title, desc, canonical, ld, robots="noindex,follow" if f.get("no_numbers") else "index,follow"), app, "".join(parts))
@@ -2524,6 +2740,10 @@ def index_page(region: str | None, q: str = "") -> str:
     regions = [region] if region else ["IN", "US"]
     body = ['<h1>Company pages</h1><p class="muted">Every company listed in India (NSE and BSE) and the US: its last close, '
             "reported results, margins, debt and recent filings. Facts, not advice.</p>", _find_form(region, q)]
+    crumbs = ld = ""
+    if region and not q:
+        crumbs, ld = _crumbs([("Companies", "/stocks"), ("India" if region == "IN" else "US", f"/stocks/{region.lower()}")])
+        body.insert(0, crumbs)
     if q:
         for r in regions:
             got = search(r, q, SEARCH_SHOWN + 1)
@@ -2543,10 +2763,289 @@ def index_page(region: str | None, q: str = "") -> str:
                 cap = ('<p class="small muted">By market value, among companies whose value passed StratLab\'s checks against '
                        "their reported figures. Funds and notes are left out.</p>" if ranked else "")
                 body.append(f"<h2>{head}</h2>{cap}{_links(r.lower(), big)}")
+            body.append(az_nav(r))                    # SEO-1: every company a click or two from here
     canonical = site + (f"/stocks/{region.lower()}" if region else "/stocks")
     return _page(_head("Company pages: India and US · StratLab", "Find any company listed in India or the US: price, results, "
-                       "margins, debt and filings, from reported data.", canonical, robots="noindex,follow" if q else "index,follow"),
+                       "margins, debt and filings, from reported data.", canonical, ld, robots="noindex,follow" if q else "index,follow"),
                  None, "".join(body))
+
+
+# ---------- company directories: A-Z and by index, so every page is a few links from the home page (SEO-1) ----------
+# Google found the sitemaps' addresses and judged 13,131 of them not worth crawling yet, partly because almost nothing linked to
+# them. These pages link every company that has a page: /stocks/in/browse/s (companies by the first letter of their name, in
+# pages of DIR_PAGE links) and /stocks/in/index/nifty-50 (an index's members), from /stocks, the exchange pages, the home page
+# and each company's own page. Built from the list the app already holds (companies) and the stored pages' marks (listable),
+# never from the data sources, and kept as lists of symbols: a few hundred KB for both markets.
+DIR_PAGE = 400                  # company links on one directory page
+DIR_FRESH = 3600                # a built directory is kept this long (the companies list itself is kept an hour)
+LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+OTHER = "0-9"                   # names that start with a digit or with nothing a Latin letter can stand for
+MIN_INDEX = 10                  # an index list with fewer pages than this is a broken read, not shown
+# {region: [(address part, name, where the app keeps its members, key)]}; an index the app holds no members for is not listed
+INDEX_LISTS = {
+    "IN": [("nifty-50", "NIFTY 50", "preset", "nifty50"), ("nifty-bank", "NIFTY Bank", "preset", "banknifty"),
+           ("nifty-500", "NIFTY 500", "breadth", "nifty500"), ("nifty-midcap-150", "NIFTY Midcap 150", "breadth", "midcap150"),
+           ("nifty-smallcap-250", "NIFTY Smallcap 250", "breadth", "smallcap250")],
+    "US": [("sp-500", "S&P 500", "sp500", "sp500")],
+}
+_dir: dict[str, tuple[float, object, dict]] = {}          # {region: (built at, the companies list it was built from, directory)}
+_dir_index: dict[str, tuple[float, object, dict]] = {}    # {region: (built at, companies list, {address part: (name, [page symbols], as of)})}
+_dir_lock = threading.Lock()
+
+
+def _fold(name) -> str:
+    """A name as it sorts in the directory: lower case, accents dropped, without leading punctuation ("3M" and "&Co" aside)."""
+    t = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"^[^a-z0-9]+", "", t)
+
+
+def letter_of(name) -> str:
+    """The directory page a name belongs on: its first letter, or OTHER."""
+    first = _fold(name)[:1]
+    return first.upper() if first.isalpha() else OTHER
+
+
+def label_of(region: str, symbol: str, co: dict | None = None) -> str:
+    """A company's name as the directory lists and sorts it: tidy case for US filings' capitals, the symbol for a company
+    with no name."""
+    co = co if co is not None else companies(region).get(symbol) or {}
+    name = co.get("name")
+    return str((proper_name(name) if region == "US" else name) or symbol)
+
+
+def directory(region: str) -> dict:
+    """{"order": every company that is listed, A to Z by name, "pos": {symbol: index in order}, "start": {letter: its first
+    index in order}, "count": {letter: companies}}. The companies are those whose page is in the sitemap (listable), so the
+    directory never links a page that is kept out of search results."""
+    cos = companies(region)
+    with _dir_lock:
+        hit = _dir.get(region)
+        if hit and hit[1] is cos and time.time() - hit[0] < DIR_FRESH:
+            return hit[2]
+    known = listing(region)
+    keyed = sorted((_fold(label_of(region, s, v)), s) for s, v in cos.items() if listable(region, s, known))
+    order = [s for _, s in keyed]
+    start: dict[str, int] = {}
+    count: dict[str, int] = {}
+    for i, (key, _s) in enumerate(keyed):
+        letter = key[:1].upper() if key[:1].isalpha() else OTHER
+        start.setdefault(letter, i)
+        count[letter] = count.get(letter, 0) + 1
+    out = {"order": order, "pos": {s: i for i, s in enumerate(order)}, "start": start, "count": count}
+    with _dir_lock:
+        _dir[region] = (time.time(), cos, out)
+    return out
+
+
+def _members(region: str, kind: str, key: str) -> tuple[list[str], str | None]:
+    """(member symbols, the day the list is of) of an index list, from what the app already keeps: the ready-made group, the
+    breadth run's last good list, or the committed S&P 500 list. Nothing is fetched."""
+    if kind == "preset":
+        p = universes.current(next(q for q in universes.PRESETS[region] if q["id"] == key))
+        return list(p["symbols"]), p.get("as_of")
+    if kind == "breadth":
+        from . import breadth
+        got = db.json_value(db.get_setting(breadth.MEMBERS_KEY + key), [])
+        return [s for s in got if isinstance(s, str)], None
+    doc = universes.sp500_doc()
+    return [r[0] for r in doc["rows"]], doc.get("as_of")
+
+
+def index_lists(region: str) -> dict[str, tuple[str, list[str], str | None]]:
+    """{address part: (name, page symbols A to Z by name, as of)} for each index list of the market with enough listed
+    companies (MIN_INDEX)."""
+    cos = companies(region)
+    with _dir_lock:
+        hit = _dir_index.get(region)
+        if hit and hit[1] is cos and time.time() - hit[0] < DIR_FRESH:
+            return hit[2]
+    known = listing(region)
+    out = {}
+    for slug, name, kind, key in INDEX_LISTS.get(region, []):
+        try:
+            syms, as_of = _members(region, kind, key)
+        except Exception as ex:                  # storage down, or no list yet: the index is left out for now
+            print("stock directory: members of", name, str(ex)[:120])
+            continue
+        pages = {}
+        for s in syms:
+            hit_ = find(region, str(s))
+            if hit_ and listable(region, hit_[0], known):
+                pages[hit_[0]] = _fold(label_of(region, hit_[0], hit_[1]))
+        if len(pages) >= MIN_INDEX:
+            out[slug] = (name, sorted(pages, key=lambda s: (pages[s], s)), as_of)
+    with _dir_lock:
+        _dir_index[region] = (time.time(), cos, out)
+    return out
+
+
+def letter_path(region: str, letter: str, page: int = 1) -> str:
+    return f"/stocks/{region.lower()}/browse/{letter.lower()}" + (f"/{page}" if page > 1 else "")
+
+
+def index_path(region: str, slug: str, page: int = 1) -> str:
+    return f"/stocks/{region.lower()}/index/{slug}" + (f"/{page}" if page > 1 else "")
+
+
+def pages_of(n: int) -> int:
+    return max(1, -(-n // DIR_PAGE))
+
+
+def _crumbs(trail: list[tuple[str, str]]) -> tuple[str, str]:
+    """(the visible breadcrumb line, its BreadcrumbList JSON-LD) for [(name, address)]; the last is the page itself."""
+    site = settings.PUBLIC_SITE_URL
+    line = " › ".join(f'<a href="{e(a)}">{e(n)}</a>' for n, a in trail[:-1]) + (" › " if len(trail) > 1 else "") + e(trail[-1][0])
+    ld = _ld({"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
+        {"@type": "ListItem", "position": i + 1, "name": n, "item": a if a.startswith("http") else site + a}
+        for i, (n, a) in enumerate([("StratLab", site + "/")] + trail)]})
+    return f'<p class="small muted" data-crumbs>{line}</p>', ld
+
+
+def _pager(base, pages: int, page: int) -> str:
+    """Links to the other pages of a long list: `base(n)` is page n's address."""
+    if pages <= 1:
+        return ""
+    items = "".join((f'<a href="{e(base(n))}" aria-current="page" style="font-weight:600">{n}</a>' if n == page
+                     else f'<a href="{e(base(n))}">{n}</a>') for n in range(1, pages + 1))
+    return f'<nav class="links" aria-label="Pages" data-pager>{items}</nav>'
+
+
+def index_links(region: str) -> str:
+    """The market's index lists as links, or nothing when the app holds no members for any."""
+    idx = index_lists(region)
+    if not idx:
+        return ""
+    where = "India" if region == "IN" else "US"
+    return (f'<h2>{where} companies by index</h2><nav class="links" aria-label="{where} index lists" data-by-index>'
+            + "".join(f'<a href="{index_path(region, slug)}">{e(name)}</a>' for slug, (name, _s, _d) in idx.items()) + "</nav>")
+
+
+def az_nav(region: str) -> str:
+    """The market's A-Z letters (those with companies) and its index lists, as links: on /stocks, the exchange pages and the
+    letter pages."""
+    r = region.lower()
+    d = directory(region)
+    where = "India" if region == "IN" else "US"
+    letters = "".join(f'<a href="{letter_path(region, L)}">{"0–9" if L == OTHER else L}</a>' for L in [*LETTERS, OTHER] if d["count"].get(L))
+    out = f'<h2>Browse {where} companies A to Z</h2><nav class="links" aria-label="{where} companies by first letter" data-az>{letters}</nav>' if letters else ""
+    return out + index_links(region)
+
+
+def _span_text(region: str, syms: list[str]) -> str:
+    """"from Sagar Cements Ltd to Szabo Ltd" for a list of page symbols, or "" for none."""
+    if not syms:
+        return ""
+    first, last = (label_of(region, syms[0]), label_of(region, syms[-1]))
+    return f"from {first} to {last}" if first != last else f"({first})"
+
+
+def letter_page(region: str, letter: str, page: int = 1) -> str | None:
+    """/stocks/in/browse/s and its later pages: the companies whose name starts with the letter, A to Z, each linked. None
+    for a letter with no companies or a page past the last."""
+    letter = letter.upper()
+    d = directory(region)
+    n = d["count"].get(letter, 0)
+    if not n or page < 1 or page > pages_of(n):
+        return None
+    site = settings.PUBLIC_SITE_URL
+    where = "India" if region == "IN" else "US"
+    exchange = "NSE and BSE" if region == "IN" else "the US"
+    show = "0–9" if letter == OTHER else letter
+    syms = d["order"][d["start"][letter]:d["start"][letter] + n][(page - 1) * DIR_PAGE:page * DIR_PAGE]
+    pages = pages_of(n)
+    of = f", page {page} of {pages}" if pages > 1 else ""
+    what = "starting with a digit or a symbol" if letter == OTHER else f"starting with {letter}"
+    title = f"{where} listed companies {what}{of} · StratLab"
+    desc = (f"{n:,} companies listed in {where} ({exchange}) {what}{of}, {_span_text(region, syms)}. Each links to its price, "
+            "results and filings.")
+    if len(desc) > DESCRIPTION_MAX:
+        desc = f"{n:,} companies listed in {where} {what}{of}. Each links to its price, results and filings."
+    canonical = site + letter_path(region, letter, page)
+    crumbs, ld = _crumbs([("Companies", "/stocks"), (where, f"/stocks/{region.lower()}"), (f"A to Z: {show}", letter_path(region, letter, page))])
+    body = (f"{crumbs}<h1>{where} companies {e(what)}</h1>"
+            f'<p class="muted">{n:,} companies listed in {where} ({exchange}) {e(what)}{e(of)}, A to Z by name. Each links to its price, '
+            "reported results and recent filings. Facts, not advice.</p>"
+            f'<nav class="links" aria-label="Letters" data-az>' + "".join(
+                f'<a href="{letter_path(region, L)}"' + (' aria-current="page" style="font-weight:600"' if L == letter else "") + f'>{"0–9" if L == OTHER else L}</a>'
+                for L in [*LETTERS, OTHER] if d["count"].get(L)) + "</nav>"
+            + _dir_list(region, syms)
+            + _pager(lambda k: letter_path(region, letter, k), pages, page)
+            + index_links(region))
+    return _page(_head(title, desc, canonical, ld), None, body)
+
+
+def _dir_list(region: str, syms: list[str]) -> str:
+    """A directory page's companies: name, then the symbol, one link each, in the order given."""
+    cos = companies(region)
+    tidy = (lambda s: label_of(region, s, cos.get(s)))
+    return '<ul class="dir" data-companies>' + "".join(
+        f'<li><a href="{e(path(region, s))}">{e(tidy(s))}</a>' + ("" if tidy(s) == s else f' <span class="muted small">{e(s)}</span>') + "</li>"
+        for s in syms) + "</ul>"
+
+
+def index_page_of_list(region: str, slug: str, page: int = 1) -> str | None:
+    """/stocks/in/index/nifty-50: the index's members that have a page, A to Z by name. None when the app holds no list for it."""
+    got = index_lists(region).get(slug)
+    if not got:
+        return None
+    name, syms, as_of = got
+    pages = pages_of(len(syms))
+    if page < 1 or page > pages:
+        return None
+    site = settings.PUBLIC_SITE_URL
+    where = "India" if region == "IN" else "US"
+    of = f", page {page} of {pages}" if pages > 1 else ""
+    when = f" The list is as of {as_of}." if as_of else ""
+    shown = syms[(page - 1) * DIR_PAGE:page * DIR_PAGE]
+    title = f"{name} companies: all {len(syms):,} members{of} · StratLab"
+    desc = f"The {len(syms):,} companies in the {name} that have a StratLab page{of}, A to Z, each with its price, results and filings."
+    canonical = site + index_path(region, slug, page)
+    crumbs, ld = _crumbs([("Companies", "/stocks"), (where, f"/stocks/{region.lower()}"), (name, index_path(region, slug, page))])
+    body = (f"{crumbs}<h1>{e(name)} companies</h1>"
+            f'<p class="muted">The {len(syms):,} members of the {e(name)} that have a page here, A to Z by name.{e(when)} '
+            "An index's members change from time to time. Each links to its price, reported results and recent filings. Facts, not advice.</p>"
+            + _dir_list(region, shown) + _pager(lambda k: index_path(region, slug, k), pages, page)
+            + az_nav(region))
+    return _page(_head(title, desc, canonical, ld), None, body)
+
+
+def dir_not_found(region: str | None) -> str:
+    """A directory address with no list behind it: a letter with no companies, a page past the last, an index the app holds no
+    members for. Kept out of search results."""
+    site = settings.PUBLIC_SITE_URL
+    body = ('<h1>No such list</h1><p class="muted">There is no list of companies at this address. Find the company by its name, '
+            f'or <a href="/stocks{"/" + region.lower() if region else ""}">browse the companies</a>.</p>' + _find_form(region))
+    return _page(_head("List not found · StratLab", "No such list of companies.", site + "/stocks", robots="noindex,follow"), None, body)
+
+
+def indexes_of(region: str, symbol: str) -> list[tuple[str, str]]:
+    """[(address part, name)] of the index lists a company is in."""
+    return [(slug, name) for slug, (name, syms, _d) in index_lists(region).items() if symbol in syms]
+
+
+def browse_block(region: str, symbol: str) -> str:
+    """A company page's way on to the rest of the directory: the companies before and after it A to Z, its letter's list and the
+    index lists it is in. Empty for a company that isn't in the directory (a page kept out of search results)."""
+    d = directory(region)
+    i = d["pos"].get(symbol)
+    if i is None:
+        return ""
+    order = d["order"]
+    letter = letter_of(label_of(region, symbol))
+    start = d["start"].get(letter)
+    where = "India" if region == "IN" else "US"
+    links = []
+    if i > 0:
+        links.append(f'<a rel="prev" href="{e(path(region, order[i - 1]))}">← {e(label_of(region, order[i - 1]))}</a>')
+    if i + 1 < len(order):
+        links.append(f'<a rel="next" href="{e(path(region, order[i + 1]))}">{e(label_of(region, order[i + 1]))} →</a>')
+    if start is not None:
+        links.append(f'<a href="{e(letter_path(region, letter, (i - start) // DIR_PAGE + 1))}">'
+                     f'All {where} companies starting with {"a digit or symbol" if letter == OTHER else e(letter)}</a>')
+    links += [f'<a href="{e(index_path(region, slug))}">{e(name)} companies</a>' for slug, name in indexes_of(region, symbol)]
+    links.append(f'<a href="/stocks/{region.lower()}">All {where} companies</a>')
+    return ('<h2>Browse companies</h2><p class="small muted" data-browse>The companies before and after this one, A to Z, '
+            "and the lists it is in.</p>" f'<nav class="links" aria-label="Browse companies">{"".join(links)}</nav>')
 
 
 # ---------- robots and sitemaps ----------
@@ -2564,7 +3063,7 @@ def robots() -> str:
 
 def sitemap_index() -> str:
     site = settings.PUBLIC_SITE_URL
-    names = ["pages", "blog"] + [f"stocks-{r}-{i + 1}" for r, R in REGIONS.items() for i in range(max(1, -(-len(companies(R)) // CHUNK)))]
+    names = ["pages", "blog", "directory"] + [f"stocks-{r}-{i + 1}" for r, R in REGIONS.items() for i in range(max(1, -(-len(companies(R)) // CHUNK)))]
     def day(n: str) -> str:
         if n == "pages":
             return max(d for _, d in site_pages.PAGES)
@@ -2574,6 +3073,8 @@ def sitemap_index() -> str:
             except Exception as ex:
                 print("sitemap: the blog's day couldn't be read:", str(ex)[:120])
                 return ""
+        if n == "directory":              # the A-Z and index lists change with the companies list (SEO-1)
+            return max((str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] for R in REGIONS.values()), default="")
         return str(((_setting(f"stocks:list:{REGIONS[n.split('-')[1]]}") or {}).get("at")) or "")[:10]
     items = "".join(f"<sitemap><loc>{site}/sitemaps/{n}.xml</loc>" + (f"<lastmod>{d}</lastmod>" if (d := day(n)) else "") + "</sitemap>" for n in names)
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</sitemapindex>\n'
@@ -2600,6 +3101,8 @@ def sitemap(name: str) -> str | None:
                        + [(site + p, d) for p, d in site_pages.library_pages()])
     if name == "blog":                   # the blog's lists and posts (BLOG-1), each with the day it last changed
         return _urlset(blog.sitemap_urls(site))
+    if name == "directory":              # the A-Z and index lists that link every company page (SEO-1)
+        return _urlset(directory_urls())
     bits = name.split("-")
     if len(bits) != 3 or bits[0] != "stocks" or bits[1] not in REGIONS or not bits[2].isdigit() or len(bits[2]) > 6:
         return None
@@ -2611,6 +3114,21 @@ def sitemap(name: str) -> str | None:
     day = str(((_setting(f"stocks:list:{region}") or {}).get("at")) or "")[:10] or None
     known = listing(region)
     return _urlset([(site + path(bits[1], s), day) for s in syms[i * CHUNK:(i + 1) * CHUNK] if listable(region, s, known)])
+
+
+def directory_urls() -> list[tuple[str, str | None]]:
+    """(address, day) of every directory page: each market's letter pages (and their later pages) and index lists. The day is
+    that of the companies list, which these pages change with."""
+    site = settings.PUBLIC_SITE_URL
+    out = []
+    for r, R in REGIONS.items():
+        day = str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] or None
+        d = directory(R)
+        for L in [*LETTERS, OTHER]:
+            out += [(site + letter_path(R, L, k), day) for k in range(1, pages_of(d["count"].get(L, 0)) + 1) if d["count"].get(L)]
+        for slug, (_name, syms, _as_of) in index_lists(R).items():
+            out += [(site + index_path(R, slug, k), day) for k in range(1, pages_of(len(syms)) + 1)]
+    return out
 
 
 def listing(region: str) -> tuple[set, set, set, bool]:

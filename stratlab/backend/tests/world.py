@@ -401,6 +401,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     main._twins.update(day=None, map={})        # the BSE codes of NSE companies another test read (DD-003)
     from app import stock_pages
     stock_pages._companies.clear()              # public company pages: the list and built pages another test made
+    stock_pages._dir.clear()                    # the A-Z and index directories built from it (SEO-1)
+    stock_pages._dir_index.clear()
     main.stock_page_store.mem.clear()
     main.stock_page_store.recent.clear()
     main._isin.update(day=None, map={}, tried=0.0)   # the ISIN list another test loaded

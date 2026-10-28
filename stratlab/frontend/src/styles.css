@@ -1143,6 +1143,9 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .lp-spaces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .lp-space { display: flex; flex-direction: column; gap: 6px; color: var(--ink); text-decoration: none; }
 .lp-space-name { font-size: 28px; font-weight: 400; letter-spacing: -.02em; margin: 0; }
+/* The welcome question opens with what StratLab is, in the landing page's own sentence: body ink, a touch larger than the
+   muted line under it, so it reads first */
+.welcome-what { margin: 0; font-size: 15.5px; line-height: 1.45; color: var(--ink); }
 @media (max-width: 760px) { .lp-spaces { grid-template-columns: minmax(0, 1fr); } }
 .space-tag { flex: none; align-self: center; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
 /* Money: net worth */

@@ -12,6 +12,7 @@ import { JOINED, JOIN_LABEL, joinInterest, resetInterest } from "./planInterest"
 import { readViewAs, writeViewAs, type ViewAs } from "./viewAs";
 import { CFG } from "./config";
 import { hasSavedSession } from "./entry";
+import { useLiveRefresh } from "./liveRefresh";
 import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
 
 const ME_RETRY_MS = 1500;
@@ -178,6 +179,13 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     refreshNotebooks();
     api<Market[]>("/markets").then(setMarkets).catch(() => {});
   }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the markets' list again each minute while the tab is in view (LIVE-1): the side menu's and the pages' "open / closes in" read the
+  // hours from it, and a feed that was off at sign-in, a holiday added or a market's status changing reaches a page left open. The list
+  // is replaced only when it changed, so nothing that reads it runs again for nothing.
+  useLiveRefresh(!!session, () => {
+    api<Market[]>("/markets").then((m) => setMarkets((cur) => (JSON.stringify(cur) === JSON.stringify(m) ? cur : m))).catch(() => undefined);
+  });
 
   // usage analytics: this account by its id only, with its plan (does nothing without a key)
   useEffect(() => {

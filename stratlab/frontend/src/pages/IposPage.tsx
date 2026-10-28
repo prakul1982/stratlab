@@ -146,7 +146,7 @@ export function IposPage() {
   }, [market]);
   useEffect(() => { load(); }, [load]);
   // the open tab's bids move through the day: the page reads them again once a minute while an issue is open
-  useLiveRefresh(!!d && d.counts.open > 0, () => load(true), 120_000);
+  useLiveRefresh(!!d && d.counts.open > 0, () => load(true));       // each minute while an issue is open (LIVE-1; was every two)
 
   // the tab asked for in the address, else the first with something in it, the open tab first when issues are open
   const first = useMemo(() => {

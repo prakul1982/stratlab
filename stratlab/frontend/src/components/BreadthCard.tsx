@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { BROAD_GROUP, breadthApi, cardDates, cardFigures, count, savedPick, share, type BreadthView } from "../lib/breadth";
+import { BROAD_GROUP, breadthApi, cardDates, cardFigures, count, savedPick, share, withLive, type BreadthView } from "../lib/breadth";
 import { homeRegion } from "../lib/homeMarket";
 import { Panel } from "./Research";
 import { AsOf, PanelSkel } from "./ui";
 import { Badge, Stat } from "./kit";
 import { marketTz } from "../lib/format";
+import { useMarketRefresh } from "../lib/marketLive";
 
 /** Market breadth on the Invest home: the latest day's numbers for a market (every plan): the group last picked for it,
  * else the market's own group (the S&P 500 for the US), or its broad group while that one has no counts yet (R6O-007).
@@ -21,6 +22,13 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
       .then((v) => (!v.today && !pick.picked && BROAD_GROUP[region] !== pick.group ? breadthApi.get(BROAD_GROUP[region], "1y", true) : v))
       .then(setD).catch(() => setD("error"));
   }, [region]);
+  // India's counts are worked out every quarter hour while it trades (the server's live round): the card reads the newest each
+  // minute, in place, keeping the shown counts when a read fails (LIVE-1). The US has daily counts only.
+  useMarketRefresh(["IN"], () => {
+    if (!d || d === "error") return;
+    const group = d.group.id;
+    breadthApi.live(group).then((x) => setD((cur) => withLive(cur, x, group))).catch(() => undefined);
+  }, region === "IN" && d !== null && d !== "error");
   const f = d && d !== "error" ? cardFigures(d) : null;
   const dates = d && d !== "error" ? cardDates(d) : null;
   // the page opens on the group this card shows (or, before it has loaded, on this market), not the reader's own market

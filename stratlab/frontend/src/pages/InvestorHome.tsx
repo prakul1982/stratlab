@@ -8,7 +8,9 @@ import { inr, marketTz, money, pct, quoteAt } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { RegionSwitch } from "../components/Research";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
-import { useRegion } from "../lib/research";
+import { researchApi, useRegion, type Quote } from "../lib/research";
+import { quotesInBatches } from "../lib/investUi";
+import { useMarketRefresh } from "../lib/marketLive";
 import { Badge, Card, CardHead, Delta, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, Stat, StatRow } from "../components/kit";
 
 type Row = {
@@ -49,6 +51,15 @@ export function InvestorHomePage() {
       .catch((e) => { if (live) setError((e as Error).message); });       // the error card says it; no toast as well
     return () => { live = false; };
   }, [pro, region, tries]);
+
+  // each company's price and day move again each minute while its market trades; the checks, trend and filings beside them are as
+  // read (the whole page is a heavy read), and a company whose price does not come keeps its last (LIVE-1)
+  useMarketRefresh([region], () => {
+    const syms = (rows ?? []).filter((r) => !r.unknown).map((r) => r.symbol);
+    void quotesInBatches((s) => researchApi.quotes(region, s), syms, () => undefined).then((got) => {
+      setRows((cur) => cur && cur.map((r) => { const q: Quote | null | undefined = got[r.symbol]; return q?.price != null ? { ...r, price: q.price, chg: q.change_pct ?? r.chg, price_at: q.at ?? r.price_at } : r; }));
+    });
+  }, !!rows?.length && pro);
 
   const shown = useMemo(() => (rows && order === "attention" ? [...rows].sort((a, b) => attention(b) - attention(a)) : rows), [rows, order]);
   const s2 = rows?.filter((r) => r.stage === 2).length ?? 0;
