@@ -70,6 +70,8 @@ export const SHORTCUTS: { keys: string; what: string }[] = [
   { keys: "Shift + L", what: "Lock or unlock the selected drawing" },
   { keys: "Ctrl/Cmd + Z", what: "Undo" },
   { keys: "Ctrl/Cmd + Shift + Z", what: "Redo" },
+  { keys: "1 to 0", what: "Timeframe: 1m, 3m, 5m, 10m, 15m, 30m, 1h, 4h, 1D, 1W" },
+  { keys: "[ and ]", what: "The next smaller or larger timeframe (2h and 1M are here)" },
   { keys: "Arrow keys", what: "Move the chart (a drawing's handle stays where it is)" },
   { keys: "+ and -", what: "Zoom the chart" },
 ];

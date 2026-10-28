@@ -52,9 +52,11 @@ const PLACEHOLDER: Record<string, string> = {
  * down move, Enter picks, Esc closes. `kinds` keeps only some instrument types (a SIP takes stocks and ETFs, "EQ" and
  * "ETF"; Indian ETFs trade as "EQ"), in the suggestions and the quick picks alike, and `placeholder` says what fits.
  * The quick picks are the person's own holdings first, then the market's popular ones. */
-export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, placeholder, label }: {
+export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, placeholder, label, accept }: {
   market: Market; onPick: (i: Instrument) => void; autoFocus?: boolean; compact?: boolean;
   kinds?: string[]; placeholder?: string; label?: string;
+  /** A rule beyond `kinds` for what can be picked (Market Watch: no contracts, only the indices it can chart). */
+  accept?: (i: Instrument) => boolean;
 }) {
   const { fail, me } = useApp();
   // Indian futures and options are Pro's: on Free and Basic the search finds no contracts, so it says so instead of
@@ -70,7 +72,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
   const asked = useRef(0);
   // a contract isn't listed where it is locked: the owner's "View as Free" asks the server as the owner, and the list showed
   // NIFTY26NOVFUT beside "contracts are on the Pro plan" (R87-002)
-  const fits = (i: Instrument) => (!kinds || kinds.includes(i.type ?? "")) && !(fnoLocked && (i.fno || ["FUT", "CE", "PE"].includes(i.type ?? "")));
+  const fits = (i: Instrument) => (!kinds || kinds.includes(i.type ?? "")) && !(fnoLocked && (i.fno || ["FUT", "CE", "PE"].includes(i.type ?? ""))) && (!accept || accept(i));
   const defaults = useDefaults().filter((d) => d.market === market.id && fits(d));
   const held = useHeld(market.id === "IN").filter((s) => !defaults.some((d) => d.symbol === s)).slice(0, 4);
   const surv = useSurveillance(market.id === "IN");

@@ -17,7 +17,7 @@ export const APP_ROUTES = [
   "/watchlist", "/research/screens", "/research/rotation", "/invest/breadth", "/invest/etf-gaps", "/invest/holders",
   "/invest/business-updates", "/invest/stock-lending", "/invest/margin-funding", "/invest/ipos", "/invest/ipos/:id", "/dev/kit", "/research/filings",
   "/research/results", "/research/corporate-actions", "/research/IN/:symbol/deep", "/research/US/:symbol/deep",
-  "/research/investor", "/research/:region/:symbol", "/login", "/signup", "/about",
+  "/research/investor", "/chart/:market/:symbol", "/research/:region/:symbol", "/login", "/signup", "/about",
 ];
 
 const PATTERNS = APP_ROUTES.map((r) => new RegExp("^" + r.replace(/\/\*$/, "(/.*)?").replace(/:[A-Za-z]+/g, "[^/]+") + "/?$"));
@@ -67,6 +67,7 @@ export function describePath(path: string): Described | null {
     const deep = !!co[3];
     return { what: deep ? `the deep dive on ${symbol}` : symbol, company: { region: co[1].toUpperCase() as "IN" | "US", symbol, deep } };
   }
+  if (/^\/chart\/[^/]+\/[^/]+$/.test(p)) return { what: "this chart" };
   if (/^\/n\/[^/]+\/e\//.test(p)) return { what: "this experiment" };
   if (/^\/n\/[^/]+\/compare$/.test(p)) return { what: "this comparison of experiments" };
   if (/^\/n\/[^/]+/.test(p)) return { what: "this notebook" };

@@ -9,7 +9,7 @@ import type { BaseTf, Loader } from "./PriceChart";
 import type { RawCandle } from "./transforms";
 import type { StudyConfig, StudyType } from "./studies";
 
-export type { PriceChartProps, Tf, RangeKey, Loader } from "./PriceChart";
+export type { PriceChartProps, Tf, RangeKey, Loader, LiveFeed } from "./PriceChart";
 export type { QuoteReading } from "./settle";
 
 const load = () => import("./PriceChart");
@@ -29,7 +29,7 @@ export function PriceChart(props: PriceChartProps) {
   );
 }
 
-type Answer = { candles: RawCandle[]; more?: boolean; currency?: string };
+type Answer = { candles: RawCandle[]; more?: boolean; currency?: string; live?: boolean; delayed?: boolean };
 
 /** Candles of a company on the research pages (India or the US). With `reading`, the newest candle is the page's own price. */
 /** A company's candles as last read, kept a few minutes: the page reads its price again each minute while the market
@@ -38,16 +38,16 @@ type Answer = { candles: RawCandle[]; more?: boolean; currency?: string };
  * moves on too. */
 const CHART_KEEP_MS = 5 * 60_000;
 const kept = new Map<string, { at: number; got: Promise<Answer> }>();
-export function companyLoader(region: string, symbol: string, reading?: QuoteReading | null): Loader {
+export function companyLoader(region: string, symbol: string, reading?: QuoteReading | null, fresh = false): Loader {
   return (tf: BaseTf, o) => {
     const url = `/research/chart/${region}/${encodeURIComponent(symbol)}?tf=${tf}&range=${(o.range ?? "1y").toLowerCase()}${o.before ? `&before=${encodeURIComponent(o.before)}` : ""}`;
     // the older candles a scrolled-back chart asks for are kept too: each minute's new price draws the chart again, and it
     // asked for them again each time (R65-001)
-    const hit = kept.get(url);
+    const hit = fresh ? undefined : kept.get(url);        // `fresh`: the chart workspace's minute charts must not open on a five-minute-old copy
     let got = hit && Date.now() - hit.at < CHART_KEEP_MS ? hit.got : undefined;
     if (!got) {
       got = api<Answer>(url);
-      kept.set(url, { at: Date.now(), got });
+      if (!fresh) kept.set(url, { at: Date.now(), got });
       got.catch(() => kept.delete(url));
       if (kept.size > 40) kept.delete(kept.keys().next().value!);
     }
