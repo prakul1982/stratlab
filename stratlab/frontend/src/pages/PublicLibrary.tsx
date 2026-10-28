@@ -49,9 +49,12 @@ export const GROUP_BASIS = "Every stock in the group was tested as one pot of ca
 const where = (e: LibEntry) => e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market;
 const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? "up" as const : "down" as const);
 
+// VR5-003: in the header a small phone (360px) has no room for "Continue with Google" beside the logo and the Menu, so it shows "Sign in"
+// there (the name a screen reader hears stays the long one)
 /** Signed in already (a saved sign-in in this browser): "Open StratLab" instead of a sign-in that is not needed. */
 const GoogleCopy = ({ label = "Continue with Google to copy and re-test", small = false }: { label?: string; small?: boolean }) => (
-  signedInHere() ? <OpenApp className={small ? "btn sm" : "btn"} /> : <button type="button" className={small ? "btn sm" : "btn"} onClick={() => void signIn("/library")}>{label}</button>
+  signedInHere() ? <OpenApp className={small ? "btn sm" : "btn"} /> : <button type="button" className={small ? "btn sm" : "btn"} onClick={() => void signIn("/library")}
+    {...(small ? { "aria-label": label } : {})}>{small ? <><span className="pub-long">{label}</span><span className="pub-short" aria-hidden="true">Sign in</span></> : label}</button>
 );
 
 /** /library, signed out: StratLab's own strategies with their verdicts. */

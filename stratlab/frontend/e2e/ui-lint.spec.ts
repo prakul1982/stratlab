@@ -22,11 +22,14 @@ const OUT = resolve(process.env.UI_LINT_OUT ?? resolve(HERE, "../test-results/ui
 const STRICT = process.env.UI_LINT_STRICT === "1";
 const LANES = Number(process.env.UI_LINT_LANES ?? 6);
 
+// 360 (a small Android) and 430 (a big iPhone) are measured only when asked for (UI_LINT_WIDTHS=360,430): the default run keeps its three.
 const SIZES = [
   { width: 1440, height: 900, touch: false },
   { width: 1280, height: 800, touch: false },
   { width: 390, height: 844, touch: true },
-].filter((s) => !process.env.UI_LINT_WIDTHS || process.env.UI_LINT_WIDTHS.split(",").includes(String(s.width)));
+  { width: 360, height: 780, touch: true },
+  { width: 430, height: 932, touch: true },
+].filter((s) => process.env.UI_LINT_WIDTHS ? process.env.UI_LINT_WIDTHS.split(",").includes(String(s.width)) : s.width >= 390 && s.width !== 430);
 const PASSES: { size: (typeof SIZES)[number]; theme: "dark" | "light" }[] = [
   ...SIZES.map((size) => ({ size, theme: "dark" as const })),
   ...(process.env.UI_LINT_LIGHT === "1" ? [{ size: SIZES[0] ?? { width: 1440, height: 900, touch: false }, theme: "light" as const }] : []),

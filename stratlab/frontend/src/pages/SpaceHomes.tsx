@@ -238,7 +238,8 @@ export function InvestHome() {
   // the menu's main button), so this page has no second search box (DD-002)
   return (
     <div className="space-home">
-      <Head eyebrow="Invest" title="Invest home">
+      {/* VR5-001: the eyebrow says something the crumb and the title do not (it was "Invest" over "Invest home") */}
+      <Head eyebrow="Invest · companies and markets" title="Invest home">
         What your watchlist, results days and red flags say today, and the market around them. Facts, not tips. To open any
         company, use <Link to={`/research?region=${region}`} className="link">Look up a company</Link>.
       </Head>

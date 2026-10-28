@@ -20,7 +20,7 @@ test("DD-001: the mood card leads with the mood and the main story, and says whe
 
 test("DD-002: one Invest home, no second company search box; Look up a company is the search", () => {
   const homes = read("src/pages/SpaceHomes.tsx");
-  assert.match(homes, /<Head eyebrow="Invest" title="Invest home">/);
+  assert.match(homes, /<Head eyebrow="Invest · companies and markets" title="Invest home">/);
   assert.doesNotMatch(homes, /<CompanySearch|Jump to a company|Your research desk/);
   assert.match(homes, /<Link to=\{`\/research\?region=\$\{region\}`\} className="link">Look up a company<\/Link>/);
   const lookup = read("src/pages/Research.tsx");
