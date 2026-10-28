@@ -20,7 +20,9 @@ price, 5 Oct 2026", never "close" (R6V-002).
 Market values are checked before they are shown or ranked (cap_problem): an American depositary share counted as an
 ordinary share, a share count a thousand times off or a shell's stray trade can make a $46 trillion bank. Such a value
 is n/a on the page and left out of every "largest" list, and so is a P/E above 1,000 (R6V-001)."""
+import hashlib
 import json
+import math
 import re
 import threading
 import time
@@ -28,6 +30,7 @@ import unicodedata
 from collections import deque
 from datetime import date, datetime, time as dtime, timedelta, timezone
 from html import escape as e
+from pathlib import Path
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -1997,10 +2000,10 @@ STYLE = """
 @font-face{font-family:"Montserrat";font-style:normal;font-weight:300;font-display:optional;src:url(/fonts/montserrat-latin-300-normal.woff2) format("woff2")}
 @font-face{font-family:"Montserrat";font-style:normal;font-weight:800;font-display:optional;src:url(/fonts/montserrat-latin-800-normal.woff2) format("woff2")}
 :root{--paper:#F5F1E8;--card:#FFFDF8;--ink:#1D1B17;--ink-2:#2E2B25;--muted:#5C574D;--line:#E2DAC8;--line-2:#D8CFBA;--chip:#ECE6D8;
---blue:#1F4FB5;--blue-ink:#163A87;--on-ink:#F5F1E8;--orange-ink:#8A3A0A;--orange-soft:#F8E7D9;color-scheme:light;
+--blue:#1F4FB5;--blue-ink:#163A87;--on-ink:#F5F1E8;--orange:#B4500F;--orange-ink:#8A3A0A;--orange-soft:#F8E7D9;--up:#0F7452;--down:#B23B3B;color-scheme:light;
 --serif:"Fraunces",Georgia,serif;--sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
 @media (prefers-color-scheme:dark){:root{--paper:#141311;--card:#1F1D1A;--ink:#EFE9DC;--ink-2:#D8D1C2;--muted:#B3AC9C;--line:#34312A;
---line-2:#413D34;--chip:#2A2823;--blue:#7EA0F0;--blue-ink:#A9C0F6;--on-ink:#141311;--orange-ink:#F2A877;--orange-soft:#3A2416;color-scheme:dark}}
+--line-2:#413D34;--chip:#2A2823;--blue:#7EA0F0;--blue-ink:#A9C0F6;--on-ink:#141311;--orange:#E88A4C;--orange-ink:#F2A877;--orange-soft:#3A2416;--up:#3CC48F;--down:#EE7B70;color-scheme:dark}}
 *{box-sizing:border-box}html,body{margin:0}
 body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
 a{color:var(--blue)}a:hover{color:var(--blue-ink)}
@@ -2049,6 +2052,33 @@ form.find input{flex:1;min-width:0}form.find button{cursor:pointer;font:inherit}
 footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:880px;margin:0 auto;padding:20px 16px 40px;font-size:13px;color:var(--muted)}
 footer.site nav{display:flex;flex-wrap:wrap;gap:4px 16px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}
 @media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}ul.dir a{min-height:44px;padding:10px 0}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.chart-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:6px;min-height:52px}
+.chg{margin:0}.chg b{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}.chg b[data-dir=up]{color:var(--up)}.chg b[data-dir=down]{color:var(--down)}.chg .small{display:block;max-width:46ch}
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:var(--chip)}.seg[hidden],.seg button[hidden]{display:none}
+.seg button{font:inherit;font-weight:600;font-size:14px;min-width:48px;min-height:40px;padding:0 10px;border:0;border-radius:9px;background:transparent;color:var(--ink-2);cursor:pointer}
+.seg button:hover:not(:disabled){color:var(--ink)}.seg button[aria-pressed=true]{background:var(--card);color:var(--ink);box-shadow:0 0 0 1px var(--line-2)}
+.seg button:disabled{opacity:.4;cursor:default}.seg button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.plot{position:relative;height:280px}.plot svg{display:block;overflow:visible;max-width:100%;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;font-family:var(--sans);font-variant-numeric:tabular-nums}
+.plot svg:focus{outline:none}.plot svg:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+.plot-note{position:absolute;inset:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;text-align:center;margin:0;padding:0 16px}.plot-note[hidden]{display:none}
+.tip{position:absolute;z-index:3;pointer-events:none;display:flex;flex-direction:column;gap:2px;min-width:128px;background:var(--card);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:14px;box-shadow:0 8px 24px rgba(29,27,23,.14)}
+.tip[hidden]{display:none}.tip span{color:var(--muted);font-size:12.5px;white-space:nowrap}.tip b{font-weight:600}
+.chart [data-summary]{margin:10px 0 0;max-width:72ch}.chart .how{margin-top:4px}.tbl2{overflow-x:auto}.tbl2 td:last-child,.tbl2 th:last-child{text-align:right}
+@media (max-width:640px){.plot{height:210px}.seg button{min-height:44px;min-width:52px}.chg b{font-size:20px}.chart-top{min-height:0}}
+.by{margin:0 0 6px}.by-key{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px;color:var(--ink-2);margin-bottom:26px}
+.by-key .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px}.sw.rev,.by-bar.rev{background:var(--blue)}.sw.pro,.by-bar.pro{background:var(--orange)}
+.by-plot{position:relative;height:180px;margin:0 0 30px 56px}.by-line{position:absolute;left:0;right:0;height:0;border-top:1px solid var(--line)}
+.by-tick{position:absolute;right:calc(100% + 8px);transform:translateY(50%);font-size:12px;line-height:1;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.by-cols{position:absolute;inset:0;display:flex}.by-col{position:relative;flex:1;min-width:0;border-radius:6px;outline-offset:-2px}.by-col:focus-visible{outline:2px solid var(--blue)}
+.by-bar{position:absolute;width:min(20px,40%);border-radius:4px 4px 0 0;transition:opacity .12s}.by-bar.neg{border-radius:0 0 4px 4px}
+.by-bar.rev{left:calc(50% - min(21px,41%))}.by-bar.pro{left:calc(50% + 1px)}
+.by-cols:hover .by-col:not(:hover) .by-bar{opacity:.45}
+.by-x{position:absolute;top:calc(100% + 8px);left:0;right:0;text-align:center;font-size:12px;color:var(--muted);white-space:nowrap}
+.by-tip{display:none;position:absolute;z-index:3;left:50%;bottom:100%;transform:translateX(-50%);flex-direction:column;gap:2px;min-width:150px;margin-bottom:4px;background:var(--card);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:13px;box-shadow:0 8px 24px rgba(29,27,23,.14);pointer-events:none;white-space:nowrap}
+.by-col:first-child .by-tip{left:0;transform:none}.by-col:last-child .by-tip{left:auto;right:0;transform:none}
+.by-col:hover .by-tip,.by-col:focus .by-tip{display:flex}.by-tip .k{color:var(--muted);font-size:12px;margin-top:2px}
+@media (max-width:640px){.by-plot{margin-left:50px;height:160px}}
 @media (max-width:640px){input,select,textarea,form.find input,form.find select{font-size:16px}}
 """
 
@@ -2385,6 +2415,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
         f'<div class="stat"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
     parts += _notes(f)
     parts.append(_how(f))
+    parts.append(price_chart_html(f, region, symbol))       # PUB-1: the share price, drawn in the browser from the cached closes
     parts.append(_trend(f))
     parts.append(_table(f))
     shown = [y for y in (filing_entry(x) for x in unique_filings(f.get("filings"))) if y]
@@ -2609,6 +2640,137 @@ def _trend(f: dict) -> str:
     return '<h2>Price trend</h2><div class="card"><ul class="plain">' + "".join(bits) + "</ul></div>"
 
 
+# ---------- the charts on a company's page (PUB-1) ----------
+# The share-price chart is drawn in the visitor's browser by one small script (stock_chart.js, served as /stocks/chart.js)
+# from a cached list of daily closes (/stocks/<market>/<symbol>/prices.json): the page's stored facts hold no series, and
+# putting five years of closes into 13,000 stored pages was never worth the memory. The page itself says the same facts in
+# words (the last close, the 1-year range) so a crawler, or a visitor without the script, loses only the picture.
+# Revenue and profit are drawn on the server from the years the page already stores: plain HTML and CSS, no script.
+CHART_JS = (Path(__file__).with_name("stock_chart.js")).read_text(encoding="utf-8")
+CHART_JS_V = hashlib.sha1(CHART_JS.encode()).hexdigest()[:8]
+CHART_READ_DAYS = 1850         # five years of daily candles, and a little over, read for the longest range
+CHART_DAILY_DAYS = 372         # the last year (a little over) is kept day by day; before it, the last close of each week
+CHART_SERIES_CACHE = "public, max-age=300, s-maxage=3600, stale-while-revalidate=21600"
+CHART_MISSING_CACHE = "public, max-age=60, s-maxage=300"      # no series (a new listing, a source down): asked again in minutes, not at every view
+
+
+def chart_series(bars: list[dict]) -> dict:
+    """Daily candles as the chart's list of closes: {"t": [days since 1970-01-01], "c": [closes]}, oldest first. The last
+    CHART_DAILY_DAYS days are every session; before them, the last close of each week (some 460 points for five years, about
+    6 KB, and a line no different to the eye). Rounded to the cent, to four decimals under 10 cents. {} when there are
+    fewer than two closes."""
+    rows: dict[str, float] = {}
+    for b in bars or []:
+        c, d = _num(b.get("c")), str(b.get("t") or "")[:10]
+        if c is None or c <= 0 or len(d) != 10:
+            continue
+        try:
+            date.fromisoformat(d)
+        except ValueError:
+            continue
+        rows[d] = c
+    if len(rows) < 2:
+        return {}
+    days = sorted(rows)
+    cut = (date.fromisoformat(days[-1]) - timedelta(days=CHART_DAILY_DAYS)).isoformat()
+    keep, week = [], None
+    for d in days:
+        if d >= cut:
+            keep.append(d)
+            continue
+        iso = date.fromisoformat(d).isocalendar()[:2]
+        if keep and week == iso:
+            keep[-1] = d                                  # a later close of the same week replaces the earlier one
+        else:
+            keep.append(d)
+            week = iso
+    epoch = date(1970, 1, 1)
+    return {"t": [(date.fromisoformat(d) - epoch).days for d in keep],
+            "c": [round(rows[d], 4 if rows[d] < 0.1 else 2) for d in keep]}
+
+
+def price_chart_html(f: dict, region: str, symbol: str) -> str:
+    """The share-price card: the change over the chosen range, the 1M / 6M / 1Y / 5Y switch, the chart's place (its height is
+    kept, so nothing moves when it is drawn), the same facts as text, and the closes as a table. Only for a page whose price
+    is a close (a last trade from a quote has no daily series behind it)."""
+    if _num(f.get("price")) is None or not is_close(f) or not f.get("price_at"):
+        return ""
+    low, high = _num(f.get("low52")), _num(f.get("high52"))
+    text = f"Last close {_money(f, f.get('price'))} on {_date(f.get('price_at'))}."
+    if low is not None and high is not None:
+        since = f" since listing on {_date(f['range_since'])}" if f.get("range_since") and _date(f["range_since"]) else " over the last 12 months"
+        text += f" The share price traded between {_money(f, low)} and {_money(f, high)} (intraday){since}."
+    src = f"/stocks/{region.lower()}/{quote(symbol, safe='')}/prices.json"
+    buttons = "".join(f'<button type="button" data-r="{k}" aria-pressed="{"true" if k == "1y" else "false"}">{v}</button>'
+                      for k, v in (("1m", "1M"), ("6m", "6M"), ("1y", "1Y"), ("5y", "5Y")))
+    buttons += '<button type="button" data-r="all" aria-pressed="false" hidden>All</button>'
+    return (f'<h2>Share price</h2><div class="card chart" data-chart data-src="{e(src)}" data-currency="{"USD" if region == "US" else "INR"}">'
+            f'<div class="chart-top"><p class="chg"><b data-change></b><span data-change-note class="muted small"></span></p>'
+            f'<div class="seg" role="group" aria-label="Chart range" hidden>{buttons}</div></div>'
+            '<div class="plot"><p class="plot-note muted small" data-status role="status">Prices load here as you scroll to them.</p>'
+            '<div class="tip" hidden></div></div>'
+            f'<p class="small muted" data-summary>{e(text)}</p>'
+            '<details class="how" data-table><summary>Show the closes as a table</summary>'
+            '<p class="small muted" data-rows></p><div class="tbl2"><table><thead><tr><th scope="col">Date</th><th scope="col">Close</th></tr></thead><tbody></tbody></table></div></details>'
+            '<p class="sr-only" aria-live="polite" data-live></p>'
+            f'<noscript><p class="small muted">The chart needs JavaScript. The close and the 1-year range are above.</p></noscript></div>'
+            f'<script src="/stocks/chart.js?v={CHART_JS_V}" defer></script>')
+
+
+def nice_ticks(lo: float, hi: float, count: int = 4) -> list[float]:
+    """Round axis values reaching from at or below `lo` to at or above `hi`: steps of 1, 2, 2.5 or 5 times a power of ten."""
+    span = (hi - lo) or abs(hi) or 1.0
+    raw = span / count
+    p = 10 ** math.floor(math.log10(raw))
+    step = next(m for m in (1, 2, 2.5, 5, 10) if raw / p <= m + 1e-9) * p
+    first, last = math.floor(lo / step + 1e-9), math.ceil(hi / step - 1e-9)
+    return [round(i * step, 10) for i in range(first, last + 1)]
+
+
+def _short_year(label: str) -> str:
+    """"Mar 2026" as "Mar ’26": a column's label that fits five to a phone's width."""
+    return re.sub(r"\s\d\d(\d\d)$", r" ’\1", label)
+
+
+def bars_chart_html(f: dict, digits: int = 0) -> str:
+    """Revenue and net profit by year as columns, from the years the page stores: HTML and CSS only, each year a focusable
+    group whose figures show on hover or focus, and the table below says the same in numbers. One scale for both (the same
+    unit), a baseline at zero, and a loss below it."""
+    ys = [y for y in (f.get("years") or []) if _num(y.get("sales")) is not None or _num(y.get("profit")) is not None]
+    if len(ys) < 2:
+        return ""
+    vals = [v for y in ys for v in (_num(y.get("sales")), _num(y.get("profit"))) if v is not None]
+    top, bottom = max(max(vals), 0.0), min(min(vals), 0.0)
+    ticks = nice_ticks(bottom, top, 4)
+    hi, lo = ticks[-1], ticks[0]
+    span = (hi - lo) or 1.0
+    pct = lambda v: (v - lo) / span * 100             # noqa: E731  position from the plot's bottom, in percent
+    num = lambda x: f"{x:.2f}".rstrip("0").rstrip(".")           # noqa: E731  a style value: "0", "33.33"
+    at = lambda v: num(pct(v))                                    # noqa: E731
+    grid = "".join(f'<i class="by-line" style="bottom:{at(t)}%"></i><span class="by-tick" style="bottom:{at(t)}%">{e(_amount(f, t, 0))}</span>'
+                   for t in ticks)
+    cols = []
+    for y in ys:
+        sales, profit = _num(y.get("sales")), _num(y.get("profit"))
+        label = str(y.get("year") or "")
+        said = ", ".join(x for x in (f"revenue {_amount(f, sales, digits)}" if sales is not None else "",
+                                     f"net profit {_amount(f, profit, digits)}" if profit is not None else "") if x)
+        bars = ""
+        for cls, v in (("rev", sales), ("pro", profit)):
+            if v is None:
+                continue
+            a, b = sorted((pct(0.0), pct(v)))
+            bars += f'<i class="by-bar {cls}{" neg" if v < 0 else ""}" style="bottom:{num(a)}%;height:{num(max(b - a, 0.4))}%"></i>'
+        cols.append(f'<div class="by-col" tabindex="0" role="img" aria-label="{e(label)}: {e(said)} ({e(f.get("unit") or "")})">{bars}'
+                    f'<span class="by-tip"><b>{e(label)}</b>' + (f'<span class="k rev">Revenue</span> {e(_amount(f, sales, digits))}' if sales is not None else "")
+                    + (f'<span class="k pro">Net profit</span> {e(_amount(f, profit, digits))}' if profit is not None else "")
+                    + f'</span><span class="by-x">{e(_short_year(label))}</span></div>')
+    return (f'<figure class="by" aria-label="Revenue and net profit by year, in {e(f.get("unit") or "")}">'
+            '<div class="by-key"><span><i class="sw rev"></i>Revenue</span><span><i class="sw pro"></i>Net profit</span>'
+            f'<span class="muted">{e(f.get("unit") or "")}</span></div>'
+            f'<div class="by-plot">{grid}<div class="by-cols">{"".join(cols)}</div></div></figure>')
+
+
 def growth_words(what: str, v) -> str | None:
     """"revenue grew 6.4% a year", "revenue fell 14.7% a year", "revenue was flat"; None without a figure."""
     v = _num(v)
@@ -2636,7 +2798,7 @@ def _table(f: dict) -> str:
     growth = [w for w in (growth_words("revenue", g.get("sales_cagr_3y")), growth_words("net profit", g.get("profit_cagr_3y"))) if w]
     note = f'<p class="small muted">{e(f.get("unit") or "")}{". Over three years, compounded: " + ", ".join(growth) if growth else ""}.</p>'
     cue = '<p class="scroll-cue" aria-hidden="true">Newest year on the right. Swipe for earlier years →</p>' if len(ys) > 2 else ""
-    return (f'<h2>Revenue and profit</h2><div class="card">{cue}<div class="tbl" tabindex="0" role="region" aria-label="Revenue and profit by year">'
+    return (f'<h2>Revenue and profit</h2><div class="card">{bars_chart_html(f, digits)}{cue}<div class="tbl" tabindex="0" role="region" aria-label="Revenue and profit by year">'
             f'<table><tr><th scope="col">Year</th>{head}</tr>{body}</table></div>{note}</div>')
 
 

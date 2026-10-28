@@ -404,6 +404,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     stock_pages._dir.clear()                    # the A-Z and index directories built from it (SEO-1)
     stock_pages._dir_index.clear()
     main.stock_page_store.mem.clear()
+    main.chart_cache.clear()                    # a company's chart closes another test read (PUB-1)
+    main.chart_reads._d.clear()                 # ...and the reads it was held to
     main.stock_page_store.recent.clear()
     main._isin.update(day=None, map={}, tried=0.0)   # the ISIN list another test loaded
     from app import scan as _scan
