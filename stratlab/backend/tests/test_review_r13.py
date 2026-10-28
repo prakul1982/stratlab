@@ -398,6 +398,8 @@ def test_after_the_close_the_mood_is_one_read_per_close(monkeypatch):
             return [{"name": "S&P 500", "price": 7811.54, "change_pct": 0.59, "day": "2026-10-09", "live": False}]
     monkeypatch.setattr(routes, "hub", Hub())
     monkeypatch.setattr(routes, "market_open", lambda r, now=None: False)
+    # the closes have settled (pinned: on the real clock, the half hour after the US close reads "settling", R89-007)
+    monkeypatch.setattr(stock_pages, "settling", lambda r, now=None: None)
     monkeypatch.setattr(routes, "ai_call", lambda profile, kind, key, ttl, refresh, build, counted=True, min_age=0:
                         got.update(key=key, ttl=ttl, min_age=min_age) or {"tone": "x"})
     routes.pulse_ai(region="US", refresh=True, profile={"id": "u"})
