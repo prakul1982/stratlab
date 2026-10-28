@@ -4706,6 +4706,43 @@ def stock_region_index(region: str, q: str = ""):
     return HTMLResponse(stock_pages.index_page(r, q), headers=SEO_HEADERS)
 
 
+def _dir_page(request: Request, region: str, want: str, build):
+    """A directory page at its one address: another spelling (capitals, "/1", a leading zero) goes there with a 301; no list
+    behind it is a 404 kept out of search results. `want` is the address, or None when the list can't exist."""
+    r = stock_pages.REGIONS.get(region.lower())
+    if not r or not want:
+        return HTMLResponse(stock_pages.dir_not_found(r), status_code=404)
+    if request.url.path.rstrip("/") != want:
+        return RedirectResponse(want, status_code=301)
+    body = build(r)
+    if body is None:
+        return HTMLResponse(stock_pages.dir_not_found(r), status_code=404)
+    return HTMLResponse(body, headers=SEO_HEADERS)
+
+
+def _dir_number(page: str) -> int:
+    return int(page) if page.isdigit() and len(page) <= 4 and int(page) >= 1 else 0
+
+
+@app.get("/stocks/{region}/browse/{letter}", response_class=HTMLResponse)
+@app.get("/stocks/{region}/browse/{letter}/{page}", response_class=HTMLResponse, include_in_schema=False)
+def stock_browse(request: Request, region: str, letter: str, page: str = "1"):
+    """SEO-1: the companies of a market whose name starts with a letter, A to Z, each linked (400 to a page)."""
+    pg, L = _dir_number(page), letter.upper()
+    ok = stock_pages.REGIONS.get(region.lower()) and pg and (L in stock_pages.LETTERS or L == stock_pages.OTHER)
+    want = stock_pages.letter_path(region, L, pg) if ok else None
+    return _dir_page(request, region, want, lambda r: stock_pages.letter_page(r, L, pg))
+
+
+@app.get("/stocks/{region}/index/{slug}", response_class=HTMLResponse)
+@app.get("/stocks/{region}/index/{slug}/{page}", response_class=HTMLResponse, include_in_schema=False)
+def stock_index_list(request: Request, region: str, slug: str, page: str = "1"):
+    """SEO-1: an index's members that have a page (NIFTY 50, S&P 500…), A to Z, from the members the app already keeps."""
+    pg = _dir_number(page)
+    want = stock_pages.index_path(region, slug.lower(), pg) if stock_pages.REGIONS.get(region.lower()) and pg and len(slug) <= 40 else None
+    return _dir_page(request, region, want, lambda r: stock_pages.index_page_of_list(r, slug.lower(), pg))
+
+
 @app.get("/stocks/{region}/{symbol}/", include_in_schema=False)
 def stock_page_slash(region: str, symbol: str):
     """An address with a trailing slash: one address per company, without it (a relative redirect, so it stays on the
@@ -4723,6 +4760,8 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     card, `ref` is the sharer's invite code, and the page's links into the app carry it."""
     r = stock_pages.REGIONS.get(region.lower())
     hit = stock_pages.find(r, symbol) if r else None
+    if not hit and r and symbol.lower() in ("browse", "index"):
+        return RedirectResponse(f"/stocks/{r.lower()}", status_code=301)       # /stocks/in/browse: the lists' parent
     if not hit:
         return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
     sym, co = hit
