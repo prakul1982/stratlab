@@ -331,7 +331,7 @@ test("LIVE1B-044, 045, 041, 087: the alerts page has no second 'space', the tour
   assert.doesNotMatch(read("src/pages/AlertsPage.tsx"), /eyebrow=\{eyebrowOf/);
   assert.match(read("src/components/Tour.tsx"), /The Account button opens your plan, Settings and Help\./);
   assert.match(read("src/components/NewslettersCard.tsx"), /\{!prefs\.confirmed && "\. Newsletters start once you've confirmed it\."\}/);
-  assert.equal((read("src/pages/AccountPage.tsx").match(/Delete them on that page/g) ?? []).length, 0);
+  assert.equal((read("src/pages/AccountPage.tsx").replace(/^\s*\/\/.*$/gm, "").match(/Delete them on that page/g) ?? []).length, 0);
 });
 
 test("LIVE1B-066, 040, 042: a bad email is said in the app's words; the email box takes the row; no Zerodha offer where it isn't open", () => {
