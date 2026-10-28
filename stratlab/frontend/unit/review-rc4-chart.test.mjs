@@ -15,7 +15,7 @@ test("RC4-006: the share-price chart labels its axis with the decimals its ticks
   assert.match(js, /not the prices traded then/);
   assert.match(js, /adjNote\.hidden = !bits\.length;/);
   assert.match(js, /adjustNote\(s\);/, "show() calls it");
-  assert.ok(js.length < 14000, "still a small script");
+  assert.ok(js.length < 14500, "still a small script");      // 13,749 before the slider's value and the range announcement (A11Y-2)
 });
 
 test("RC4-006: the axis of a stock under ten cents, and of a small one, reads as its ticks are", () => {
@@ -52,5 +52,5 @@ test("RC4-013: a company the server has no closes for (a new listing) is told so
   assert.match(js, /No price chart is available for this company yet\./);
   assert.match(js, /if \(none\) return;\s*var b = document\.createElement\("button"\);/, "the button is for a read that failed");
   assert.match(js, /The price chart couldn't be loaded just now\./);
-  assert.ok(js.length < 14000);
+  assert.ok(js.length < 14500);      // was 14000 for 13,749 bytes (A11Y-2: the slider values and the range announcement)
 });

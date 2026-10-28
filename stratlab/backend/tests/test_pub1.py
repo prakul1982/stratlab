@@ -204,7 +204,7 @@ def test_the_script_is_a_chart_people_can_use():
         assert part in js, part
     assert "font-size\": 12" in js and "font-size\": 1" not in js.replace('"font-size": 12', "")      # no axis text under 12 px
     assert "XMLHttpRequest" not in js and "eval(" not in js and "innerHTML = body" in js            # the table's rows are numbers and dates the script made itself
-    assert len(js) < 14000                                                                            # a small script, no library
+    assert len(js) < 14500                                                                            # a small script, no library (A11Y-2: 13,749 before the slider's value and the range announcement)
 
 
 # ---------- revenue and profit, drawn on the server ----------

@@ -81,6 +81,9 @@
     return "The close was " + price(s.c[0]) + " on " + dlabel(s.t[0]) + " and " + price(s.c[n - 1]) + " on " + dlabel(s.t[n - 1]) + ". " + extremes(s);
   }
 
+  /* a close as words, for a screen reader */
+  function reading(s, i) { return WD[day(s.t[i]).getUTCDay()] + " " + dlabel(s.t[i]) + ": " + price(s.c[i]); }
+
   function draw() {
     var r = range, s = slice(r), n = s.c.length;
     if (n < 2) return;
@@ -95,7 +98,9 @@
     plot.style.height = H + "px";
     var old = plot.querySelector("svg");
     if (old) plot.removeChild(old);
-    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", tabindex: "0",
+    // a slider over the closes: on an image a screen reader keeps the arrow keys, on a slider it hands them over and says each value (A11Y-2)
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "slider", tabindex: "0",
+      "aria-valuemin": 1, "aria-valuemax": n, "aria-valuenow": n, "aria-valuetext": reading(s, n - 1),
       "aria-label": "Share price over " + RANGES[r][1] + ". " + words(s) + " Use the left and right arrow keys to read each close." });
     svg.style.touchAction = "pan-y";
     ticks.forEach(function (v) {
@@ -116,7 +121,7 @@
     plot.insertBefore(svg, tip);
     state = { at: -1 };
 
-    function at(i, announce) {
+    function at(i) {
       i = Math.max(0, Math.min(n - 1, i));
       state.at = i;
       var x = sx(s.t[i]), y = sy(s.c[i]);
@@ -132,9 +137,10 @@
       var w = tip.offsetWidth, left = Math.min(Math.max(x - w / 2, 0), W - w);
       tip.style.left = left + "px";
       tip.style.top = Math.max(0, Math.min(y - 60, H - padB - 46)) + "px";
-      if (announce && live) live.textContent = a.textContent + ": " + b.textContent;
+      say(i);
     }
-    function off() { cross.setAttribute("visibility", "hidden"); end.setAttribute("visibility", "visible"); tip.hidden = true; state.at = -1; }
+    function say(i) { svg.setAttribute("aria-valuenow", i + 1); svg.setAttribute("aria-valuetext", reading(s, i)); }
+    function off() { cross.setAttribute("visibility", "hidden"); end.setAttribute("visibility", "visible"); tip.hidden = true; state.at = -1; say(n - 1); }
     function nearest(ev) {
       var rect = svg.getBoundingClientRect(), px = (ev.clientX - rect.left) * (W / rect.width), a = 0, b = n - 1;
       while (a < b) { var m = (a + b) >> 1; if (sx(s.t[m]) < px) a = m + 1; else b = m; }
@@ -152,7 +158,7 @@
       else if (k === "End") i = n - 1;
       else if (k === "Escape") { off(); return; }
       else return;
-      ev.preventDefault(); at(i, true);
+      ev.preventDefault(); at(i);
     });
   }
 
@@ -228,6 +234,8 @@
     if (!b || b.disabled || !data) return;
     range = b.getAttribute("data-r");
     show();
+    // the buttons say which is pressed; what the range shows is said here, once (A11Y-2)
+    if (live) live.textContent = chg.textContent + note.textContent;
   });
   var timer = 0;
   window.addEventListener("resize", function () { clearTimeout(timer); timer = setTimeout(function () { if (data) draw(); }, 120); });
