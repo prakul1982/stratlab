@@ -115,3 +115,29 @@ test("RC6-010: a holdings file that can't be read keeps its reason on the page b
   await expect(page.getByRole("cell", { name: /TCS/ }).first()).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("RC6-014: deleting a notebook with a running paper session says the session stays", async ({ page, request }, info) => {
+  const u = who(150, info.project.name === "phone");
+  await answer(request, u, "trade", "trade");
+  const EMA = { name: "R6 trend", tf: "1d", entry: [{ l: { t: "ema", p: 10 }, op: "xa", r: { t: "ema", p: 30 } }], exit: [{ l: { t: "ema", p: 10 }, op: "xb", r: { t: "ema", p: 30 } }],
+    risk: { capital: 10000, riskPct: 2, sl: 4, tgt: 0, brokerage: 0, slippage: 0.05 } };
+  const nb = await (await request.post(`${API}/notebooks`, { headers: auth(u), data: { name: "R6 trend", question: "q", strategy: EMA, instrument: "CRYPTO:BTC-USD" } })).json();
+  const quiet = await (await request.post(`${API}/notebooks`, { headers: auth(u), data: { name: "R6 quiet", question: "q", strategy: { ...EMA, name: "R6 quiet" }, instrument: "CRYPTO:ETH-USD" } })).json();
+  const run = await request.post(`${API}/live/sessions`, { headers: auth(u), data: { notebook_id: nb.id, strategy: EMA, instrument: "CRYPTO:BTC-USD", name: "R6 trend", capital: 10000 } });
+  expect(run.ok()).toBeTruthy();
+  const errors = await signIn(page, u, `/n/${nb.id}`);
+  await expect(page.getByRole("link", { name: /Paper trading · open/ })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "More" }).first().click();
+  await page.getByRole("menuitem", { name: "Delete notebook" }).click();
+  const dlg = page.getByRole("dialog", { name: /Delete the notebook/ });
+  await expect(dlg).toContainText("Its paper session is running and stays running");
+  await expect(dlg.getByRole("link", { name: "Paper trading" })).toBeVisible();
+  await dlg.getByRole("button", { name: "Cancel" }).click();
+  // a notebook with no session says nothing of one
+  await page.goto(`/n/${quiet.id}`);
+  await expect(page.locator("main h1, main input").first()).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "More" }).first().click();
+  await page.getByRole("menuitem", { name: "Delete notebook" }).click();
+  await expect(page.getByRole("dialog", { name: /Delete the notebook/ })).not.toContainText("paper session");
+  expect(errors).toEqual([]);
+});

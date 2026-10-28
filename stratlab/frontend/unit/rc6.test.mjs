@@ -104,3 +104,8 @@ test("signing out also forgets the options structure being built, so the next pe
 test("a P/E's note about a lifted quarter shows on the side-by-side page too (RC6-012)", () => {
   assert.match(read("src/pages/Research.tsx"), /const QUALIFIES = \/special\|like-for-like\|against a quarter\|other income\|n\\\/m\|not meaningful\/i;/);
 });
+
+test("the notebook's delete question says a running paper session stays running (RC6-014)", () => {
+  const src = read("src/pages/NotebookPage.tsx");
+  assert.match(src, /\{live && <> Its paper session is running and stays running: stop it on the <Link className="link" to="\/paper">Paper trading<\/Link> page\.<\/>\}/);
+});
