@@ -262,7 +262,7 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
                {"t": "p", "text": [{"a": "See the IPO tracker", "href": "/invest/ipos"}, " for open and upcoming issues, or ", {"a": "read about any listed company", "href": "/stocks"}, "."]}]
     return {"slug": f"ipo-listing-day-india-{year}-so-far", "kind": "research", "market": "IN", "title": f"IPO listing day in India, {year} so far",
             "summary": f"{len(have)} Indian IPOs that listed between {short(first)} and {short(last)}: first-day close and open against the issue price, by segment and "
-                       f"subscription. {lack} {'issue lacks' if lack == 1 else 'issues lack'} price data and {'is' if lack == 1 else 'are'} not counted.",
+                       f"subscription." + (f" {lack} {'issue lacks' if lack == 1 else 'issues lack'} price data and {'is' if lack == 1 else 'are'} not counted." if lack else ""),
             "blocks": blocks, "published_at": blog.now_iso(now)}
 
 
