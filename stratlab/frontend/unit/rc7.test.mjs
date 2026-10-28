@@ -108,3 +108,11 @@ test("RC7-007: a price read again moves the market value, the P/E and the range 
   const page = read("src/pages/Research.tsx");
   assert.equal((page.match(/atPrice\(/g) ?? []).length, 2);                // the company page and the side-by-side page both
 });
+
+test("RC7-008: every loading placeholder says so when a read takes longer than the slow-load time, with Retry only where there is one", () => {
+  const src = read("src/components/kit/States.tsx");
+  const skel = src.slice(src.indexOf("export function Skeleton"));
+  assert.match(skel, /const t = window\.setTimeout\(\(\) => setSlow\(true\), slowAfter\);/);
+  assert.doesNotMatch(skel, /if \(!canRetry\) return;/);                    // the clock runs for every placeholder
+  assert.match(skel, /\{slow && \(onRetry\s*\? <span className="k-row" data-testid="skel-slow">[\s\S]*Retry<\/button><\/span>\s*: <span className="k-stat-d" data-testid="skel-slow">\{SLOW_LOAD_NOTE\}<\/span>\)\}/);
+});

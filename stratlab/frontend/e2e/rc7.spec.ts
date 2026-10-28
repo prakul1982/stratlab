@@ -91,3 +91,20 @@ test("RC7-003: the plan-lock note is one place, straight under the page's title,
   }
   expect(errors).toEqual([]);
 });
+
+const PRO: Who = { token: "pro-token", id: "u-pro", email: "pro@example.com" };
+
+test("RC7-008: a page whose first read takes more than ten seconds says so, instead of sitting on the same shimmer", async ({ page }) => {
+  const errors = await signIn(page, PRO, "/research/watchlist");
+  await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
+  let slow = true;
+  await page.route(`${API}/research/results**`, async (r) => { if (slow) await new Promise((s) => setTimeout(s, 14_000)); await r.fallback().catch(() => undefined); });
+  await page.evaluate(() => { const a = document.querySelector('a[href="/research/results"]') as HTMLAnchorElement | null; if (a) a.click(); else { history.pushState({}, "", "/research/results"); dispatchEvent(new PopStateEvent("popstate")); } });
+  const skel = page.getByRole("status", { name: "Opening the results calendar" });
+  await expect(skel).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("skel-slow")).toHaveCount(0);            // not at once
+  await expect(page.getByTestId("skel-slow")).toContainText("Still loading", { timeout: 15_000 });
+  slow = false;
+  await expect(page.getByText("Results this week and next")).toBeVisible();
+  expect(errors).toEqual([]);
+});
