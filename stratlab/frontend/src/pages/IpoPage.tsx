@@ -268,11 +268,16 @@ export function IpoPage() {
   const { fail } = useApp();
   const [d, setD] = useState<IpoDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gone, setGone] = useState(false);            // the address names no issue: nothing to try again (RC5-004)
   const [busy, setBusy] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
   const load = useCallback((quiet = false) => {
-    if (!quiet) { setD(null); setError(null); }
-    ipoApi.one(id).then(setD).catch((e) => !quiet && setError(e instanceof ApiError ? e.message : "This IPO couldn't be read just now."));
+    if (!quiet) { setD(null); setError(null); setGone(false); }
+    ipoApi.one(id).then(setD).catch((e) => {
+      if (quiet) return;
+      setGone(e instanceof ApiError && e.status === 404);
+      setError(e instanceof ApiError ? e.message : "This IPO couldn't be read just now.");
+    });
   }, [id]);
   useEffect(() => { load(); }, [load]);
   useLiveRefresh(d?.ipo.stage === "open", () => load(true));       // each minute while bidding is open (LIVE-1; was every two)
@@ -295,7 +300,8 @@ export function IpoPage() {
         lede={r ? <>{r.market === "IN" ? `${r.segment === "sme" ? "SME" : "Main board"} issue` : "US offering"}{r.symbol ? ` · ${r.symbol}` : ""}{r.open && r.close ? ` · bidding ${spanText(r.open, r.close)}` : r.priced ? ` · ${r.stage === "listed" ? "trading from" : "priced for"} ${fmtDate(r.priced)}` : r.expected ? ` · expected to price ${fmtDate(r.expected)}` : ""}</> : undefined}
         actions={badge ? <Badge tone={badge.tone}>{badge.word}</Badge> : undefined} />
       <p className="k-small"><Link className="link" to={`/invest/ipos?m=${r?.market ?? "IN"}`}>← All IPOs</Link></p>
-      {error ? <ErrorState title="This IPO couldn't be read" action={{ label: "Try again", onClick: () => load() }}>{error}</ErrorState>
+      {error ? (gone ? <ErrorState title="That IPO isn't on the list">The address may be old, or the issue was taken off the list. Every issue the exchanges list is on the IPOs page.</ErrorState>
+        : <ErrorState title="This IPO couldn't be read" action={{ label: "Try again", onClick: () => load() }}>{error}</ErrorState>)
         : !d ? <Card><Skeleton label="Reading the issue" lines={5} /></Card> : (
         <>
           {d.ipo.stage === "withdrawn" && <p className="k-callout k-small" role="status" data-testid="ipo-not-gone-ahead">The exchange lists this issue as {(d.ipo.issue_status ?? "withdrawn")}. The dates and price band below are the ones announced before; no bidding, allotment or listing follows from them.</p>}

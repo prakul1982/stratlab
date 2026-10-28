@@ -62,13 +62,15 @@ export function AlertsPage() {
             actions={<button className="btn sm" onClick={() => setAdding(true)}><Bell size={17} />New alert</button>} />
           {/* one sentence row, not two stats beside a three-line note with the settings link alone under them (VR1-130); where a
               fired alert goes, in plain words (DP2-023, DP1-023: "Sent by: Nowhere yet") */}
-          <p className="k-small" data-testid="alerts-summary"><b>{page.count} of {page.limit}</b> alerts on · Sent by <b>{page.channels.length ? page.channels.map((c) => CHANNEL_NAME[c] ?? c).join(", ") : "This page only"}</b>
+          <p className="k-small" data-testid="alerts-summary"><b>{page.count} of {page.limit}</b> alerts on · {page.channels.length ? <>Sent by <b>{page.channels.map((c) => CHANNEL_NAME[c] ?? c).join(", ")}</b></> : <>Shown <b>on this page only</b></>}
             {" · "}<Link className="link" to="/settings#notifications">Where alerts go and what to send</Link></p>
+          {/* one note for the state, not two: an address that isn't confirmed is the reason nothing is sent, so it is said once, with what to do (RC5-005) */}
           <p className="k-note">{page.channels.length ? "At most a few messages an hour: alerts that fire faster wait and go out together."
+            : page.email && !page.email_confirmed ? "Your email isn't confirmed, and no phone or Telegram is set up, so a fired alert is listed here and nowhere else. Confirm the address in Settings (Notifications) and alerts go to it."
             : "No phone, Telegram or confirmed email is set up, so a fired alert is listed here and nowhere else."}</p>
           {full && limit && (limit.next ? <PlanNote plan={limit.next}>{limit.text}</PlanNote> : <Notice>{limit.text}</Notice>)}
           {/* the address itself stays in Settings, not printed on this page (DP1-023) */}
-          {page.email && !page.email_confirmed && <p className="k-note">Alerts go to your email once you've confirmed the address in Settings (Notifications).</p>}
+          {page.channels.length > 0 && page.email && !page.email_confirmed && <p className="k-note">Alerts go to your email too once you've confirmed the address in Settings (Notifications).</p>}
         </Card>
 
         <Card>

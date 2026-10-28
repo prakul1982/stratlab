@@ -78,3 +78,28 @@ test("RC5-003: searching Bajaj Auto offers BAJAJ-AUTO, and its page opens", asyn
   await expect(page.locator("main h1")).toContainText("Bajaj Auto", { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
+
+test("RC5-004: an IPO address no issue has says so, with no Try again", async ({ page, request }, info) => {
+  const u = who(279, info.project.name === "phone");
+  await answer(request, u);
+  const errors = await signIn(page, u, "/invest/ipos/no-such-issue");
+  await expect(page.getByText("That IPO isn't on the list").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "← All IPOs" })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("RC5-005: with nowhere to send alerts the Alerts page says it once, in whole sentences", async ({ page, request }, info) => {
+  const u = who(265, info.project.name === "phone");
+  await answer(request, u);
+  const errors = await signIn(page, u, "/alerts");
+  const summary = page.getByTestId("alerts-summary");
+  await expect(summary).toBeVisible({ timeout: 30_000 });
+  await expect(summary).toContainText("Shown on this page only");
+  await expect(summary).not.toContainText("Sent by");
+  const main = page.locator("main");
+  // one explanation of why nothing is sent, not the same one twice
+  expect(await main.getByText(/listed here and nowhere else/).count()).toBe(1);
+  await expect(main.getByText("Alerts go to your email once you've confirmed")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

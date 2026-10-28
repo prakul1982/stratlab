@@ -23,3 +23,21 @@ test("on a phone the tour waits for the menu to slide away before it points at t
   // it waits as long as the menu takes to come in
   assert.equal([...src.matchAll(/window\.setTimeout\(\(\) => set(MenuShown|Sliding)\((true|false)\), 320\)/g)].length, 2);
 });
+
+test("an IPO address no issue has says so and offers no Try again, which could never help (RC5-004)", () => {
+  const src = read("src/pages/IpoPage.tsx");
+  assert.match(src, /setGone\(e instanceof ApiError && e\.status === 404\)/);
+  assert.match(src, /gone \? <ErrorState title="That IPO isn't on the list">/);
+  // a read that fails for any other reason still offers it
+  assert.match(src, /<ErrorState title="This IPO couldn't be read" action=\{\{ label: "Try again", onClick: \(\) => load\(\) \}\}>/);
+});
+
+test("the alerts summary reads in whole sentences, and the unconfirmed email is said once (RC5-005)", () => {
+  const src = read("src/pages/AlertsPage.tsx");
+  // was "Sent by This page only": a capital mid-sentence and a "by" that names no one
+  assert.doesNotMatch(src, /Sent by <b>\{page\.channels\.length \?/);
+  assert.match(src, /Shown <b>on this page only<\/b>/);
+  assert.match(src, /Your email isn't confirmed, and no phone or Telegram is set up, so a fired alert is listed here and nowhere else\./);
+  // the second note shows only when something else already receives the alerts
+  assert.match(src, /\{page\.channels\.length > 0 && page\.email && !page\.email_confirmed && /);
+});
