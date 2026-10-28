@@ -22,13 +22,16 @@ import {
   changeOf, changeText, currencyOf, DEFAULT_ID, itemFromPath, labelOf, listsSaid, moveItem, POPULAR, priceText, SORTS, sortItems,
   subtitleOf, symbolsSaid, type SortMode, type WatchItem, type WatchQuote,
 } from "../../lib/watch";
-import { dragged, isSheet, MIN_H, resized, type PanelLayout } from "../../lib/watchLayout";
+import { dragged, DOCK_FROM, isSheet, MIN_H, resized, shapeOf, type PanelLayout } from "../../lib/watchLayout";
 import "./watch.css";
 
 export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout: PanelLayout; patch: (p: Partial<PanelLayout>) => void; vw: number; vh: number; onClose: () => void }) {
   const { markets, me, notify } = useApp();
   const w = useWatch();
   const sheet = isSheet(vw);
+  const shape = shapeOf(layout, vw);
+  // the layout as drawn: a "docked" panel on a window too narrow to dock in floats in the corner (watchLayout.DOCK_FROM)
+  const drawn: PanelLayout = shape === "dock" ? layout : { ...layout, mode: "float" };
   const box = useRef<HTMLElement>(null);
   const plan = me?.plan_info.name ?? "Free";
   const listId = w.lists?.some((l) => l.id === layout.list) ? layout.list! : DEFAULT_ID;
@@ -180,13 +183,13 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
 
   // ---------- the panel's place: a floating one is dragged by its header, any one but a sheet is resized from its edge ----------
   const grab = (kind: "move" | "size") => (e: RPointerEvent<HTMLElement>) => {
-    if (sheet || (kind === "move" && (layout.mode !== "float" || (e.target as HTMLElement).closest("button, a")))) return;
+    if (sheet || (kind === "move" && (shape !== "float" || (e.target as HTMLElement).closest("button, a")))) return;
     e.preventDefault();
     const x0 = e.clientX, y0 = e.clientY;
-    let latest = layout;
+    let latest = drawn;
     const move = (ev: PointerEvent) => {
-      latest = kind === "move" ? dragged(layout, ev.clientX - x0, ev.clientY - y0, vw, vh) : resized(layout, ev.clientX - x0, ev.clientY - y0, vw, vh);
-      patch({ w: latest.w, h: latest.h, x: latest.x, y: latest.y });
+      latest = kind === "move" ? dragged(drawn, ev.clientX - x0, ev.clientY - y0, vw, vh) : resized(drawn, ev.clientX - x0, ev.clientY - y0, vw, vh);
+      patch(kind === "move" ? { w: latest.w, h: latest.h, x: latest.x, y: latest.y, mode: "float" } : { w: latest.w, h: latest.h, x: latest.x, y: latest.y });
     };
     const end = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); };
     window.addEventListener("pointermove", move);
@@ -196,18 +199,18 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
     const by = e.key === "ArrowLeft" ? -24 : e.key === "ArrowRight" ? 24 : 0;
     if (!by) return;
     e.preventDefault();
-    const r = resized(layout, by * -1, 0, vw, vh);
+    const r = resized(drawn, by * -1, 0, vw, vh);
     patch({ w: r.w, x: r.x });
   };
 
-  const chartH = Math.max(260, Math.min(640, (sheet || layout.mode === "dock" ? vh : layout.h) - 300));          // the header, the chart's toolbar and its range row take about 300px
+  const chartH = Math.max(260, Math.min(640, (shape === "float" ? layout.h : vh) - 300));          // the header, the chart's toolbar and its range row take about 300px
   const style = { ["--mw-w" as string]: `${layout.w}px`, ["--mw-h" as string]: `${Math.max(MIN_H, layout.h)}px`, ["--mw-x" as string]: layout.x == null ? "auto" : `${layout.x}px`, ["--mw-y" as string]: layout.y == null ? "auto" : `${layout.y}px` };
   const used = list?.items.length ?? 0;
   const said = list ? symbolsSaid(w.limits, used, plan) : null;
   const listsLine = listsSaid(w.limits, w.lists?.length ?? 0, plan);
 
   return (
-    <aside ref={box} className={`mw mw-${sheet ? "sheet" : layout.mode}`} style={style} data-testid="market-watch" aria-label="Market Watch"
+    <aside ref={box} className={`mw mw-${shape}`} style={style} data-testid="market-watch" aria-label="Market Watch"
       {...(sheet ? { role: "dialog", "aria-modal": true } : { role: "complementary" })}>
       {!sheet && <div className="mw-size" role="separator" aria-orientation="vertical" aria-label="Resize the panel. Use the left and right arrow keys." tabIndex={0} onPointerDown={grab("size")} onKeyDown={sizeKey} />}
       <header className="mw-head" onPointerDown={grab("move")}>
@@ -218,9 +221,9 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
           {chartItem && <Link className="mw-ic" to={`/chart/${chartItem.market}/${encodeURIComponent(chartItem.symbol)}`} aria-label="Open as a full page" title="Open as a full page" onClick={() => { if (sheet) onClose(); }}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
           </Link>}
-          {!sheet && <button type="button" className="mw-ic" aria-label={layout.mode === "dock" ? "Float the panel over the page" : "Dock the panel to the right"} title={layout.mode === "dock" ? "Float over the page" : "Dock to the right"}
-            onClick={() => patch(layout.mode === "dock" ? { mode: "float", x: Math.max(0, vw - layout.w - 24), y: Math.max(0, vh - layout.h - 24) } : { mode: "dock", x: null, y: null })}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d={layout.mode === "dock" ? "M8 4.5v15" : "M14 4.5v15"} /></svg>
+          {!sheet && vw >= DOCK_FROM && <button type="button" className="mw-ic" aria-label={shape === "dock" ? "Float the panel over the page" : "Dock the panel to the right"} title={shape === "dock" ? "Float over the page" : "Dock to the right"}
+            onClick={() => patch(shape === "dock" ? { mode: "float", x: Math.max(0, vw - layout.w - 24), y: Math.max(0, vh - layout.h - 24) } : { mode: "dock", x: null, y: null })}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d={shape === "dock" ? "M8 4.5v15" : "M14 4.5v15"} /></svg>
           </button>}
           <button type="button" className="mw-ic mw-close" aria-label="Close Market Watch" onClick={onClose}><Close size={18} /></button>
         </span>

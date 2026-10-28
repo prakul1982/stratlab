@@ -4,7 +4,8 @@
   border: 1px solid var(--line-2); container: mw / inline-size; font-size: var(--t-label);
 }
 .mw-dock { top: 0; right: 0; bottom: 0; width: var(--mw-w); border-width: 0 0 0 1px; }
-.mw-float { right: 16px; bottom: 16px; left: var(--mw-x); top: var(--mw-y); width: var(--mw-w); height: var(--mw-h); border-radius: var(--r-card); box-shadow: var(--shadow); }
+/* a floating panel rests in the corner above the cookie question (--mw-lift is its height) and never grows past the window */
+.mw-float { right: 16px; bottom: calc(16px + var(--mw-lift, 0px)); left: var(--mw-x); top: var(--mw-y); width: var(--mw-w); height: var(--mw-h); max-height: calc(100vh - 32px - var(--mw-lift, 0px)); border-radius: var(--r-card); box-shadow: var(--shadow); }
 .mw-sheet { inset: 0; width: auto; height: auto; border: 0; border-radius: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .mw-wait { min-height: 120px; }
 

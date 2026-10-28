@@ -5,7 +5,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { usePersisted } from "../../lib/persist";
 import { importWithRetry } from "../../lib/lazyRetry";
-import { clampLayout, dockWidth, DEFAULT_LAYOUT, isSheet, LAYOUT_KEY, type PanelLayout } from "../../lib/watchLayout";
+import { clampLayout, dockWidth, DEFAULT_LAYOUT, isSheet, LAYOUT_KEY, shapeOf, type PanelLayout } from "../../lib/watchLayout";
 import { useConsentLift } from "../../lib/consentLift";
 import { Markets } from "../Icons";
 import "./launcher.css";
@@ -37,7 +37,6 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
   const [raw, setRaw] = usePersisted<PanelLayout>(`${LAYOUT_KEY}.${mode === "app" ? userId ?? "guest" : "visitor"}`, DEFAULT_LAYOUT);
   const [vw, vh] = useViewport();
   const layout = useMemo(() => clampLayout(raw, vw, vh), [raw, vw, vh]);
-  const sheet = isSheet(vw);
   const patch = useCallback((p: Partial<PanelLayout>) => setRaw((o) => ({ ...clampLayout(o, window.innerWidth, window.innerHeight), ...p })), [setRaw]);
   const [opened, setOpened] = useState(false);          // the panel's code has been asked for: it stays mounted after that, so a re-open is instant
   const btn = useRef<HTMLButtonElement>(null);
@@ -69,7 +68,7 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
     document.body.classList.toggle("mw-docked", dock > 0);
     return () => { document.body.classList.remove("mw-docked"); root.style.removeProperty("--mw-dock"); };
   }, [dock]);
-  useConsentLift(!shown);
+  useConsentLift(true);          // the button, and a floating panel, rise above the question
   // focus goes back to the button when the panel closes with focus inside it
   useEffect(() => {
     if (shown) { had.current = true; return; }
@@ -87,7 +86,7 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
         </button>
       )}
       {opened && (
-        <Suspense fallback={shown ? <div className={`mw mw-${sheet ? "sheet" : layout.mode} mw-wait`} role="status" aria-label="Opening Market Watch" /> : null}>
+        <Suspense fallback={shown ? <div className={`mw mw-${shapeOf(layout, vw)} mw-wait`} role="status" aria-label="Opening Market Watch" /> : null}>
           {shown && <Panel layout={layout} patch={patch} vw={vw} vh={vh} onClose={close} />}
         </Suspense>
       )}

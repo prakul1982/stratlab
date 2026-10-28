@@ -223,12 +223,12 @@ test("the panel never covers the cookie question or the page's main actions", as
   expect(l.y + l.height).toBeLessThanOrEqual(a.y);
   await launch(page).click();
   const p = (await panel(page).boundingBox())!;
-  // a docked panel moves the question out from under it, and the page's main button stays clear of it
+  // at this window width the panel floats in the corner above the question and leaves the page as it is (the page keeps its width)
   const a2 = (await ask.boundingBox())!;
-  expect(a2.x + a2.width, "the cookie question is left of the panel").toBeLessThanOrEqual(p.x + 1);
+  expect(gone(p, a2), `the panel ${JSON.stringify(p)} covers the question ${JSON.stringify(a2)}`).toBe(true);
   await expect(ask.getByRole("button", { name: "Allow" })).toBeVisible();
   const main = (await page.locator("#main").boundingBox())!;
-  expect(main.x + main.width, "the page makes room").toBeLessThanOrEqual(p.x + 1);
+  expect(main.x + main.width, "the page keeps its width").toBeGreaterThan(p.x + 100);
   const action = (await page.locator(".side-new").first().boundingBox())!;
   expect(gone(action, p)).toBe(true);
   // closing it brings the button back, above the question again
@@ -243,7 +243,8 @@ test("the panel can float, be dragged and be resized, and remembers where it was
   test.skip(info.project.name === "phone", "desktop only");
   await open(page, "/");
   const mw = await openPanel(page);
-  await mw.getByRole("button", { name: "Float the panel over the page" }).click();
+  // on a window under 1600px wide there is no dock to choose: it floats, and says so by having no dock button
+  await expect(mw.getByRole("button", { name: /Dock the panel|Float the panel/ })).toHaveCount(0);
   const before = (await mw.boundingBox())!;
   expect(before.height).toBeLessThan(page.viewportSize()!.height);
   // dragged by its title bar
@@ -264,10 +265,30 @@ test("the panel can float, be dragged and be resized, and remembers where it was
   await page.reload();
   const again = (await panel(page).boundingBox())!;
   expect(Math.abs(again.x - bigger.x)).toBeLessThan(2); expect(Math.abs(again.width - bigger.width)).toBeLessThan(2);
-  await panel(page).getByRole("button", { name: "Dock the panel to the right" }).click();
-  const dock = (await panel(page).boundingBox())!;
-  expect(Math.round(dock.x + dock.width)).toBe(page.viewportSize()!.width);
-  expect(Math.round(dock.height)).toBe(page.viewportSize()!.height);
+});
+
+test.describe("on a wide window", () => {
+  test.use({ viewport: { width: 1680, height: 1000 } });
+  test("the panel docks to the right edge, the page makes room, and it can be floated and docked again", async ({ page }, info) => {
+    test.skip(info.project.name === "phone", "desktop only");
+    await open(page, "/", { ads: true });
+    const ask = page.getByTestId("consent");
+    await expect(ask).toBeVisible();
+    await launch(page).click();
+    const p = (await panel(page).boundingBox())!;
+    expect(Math.round(p.x + p.width)).toBe(1680);
+    expect(Math.round(p.height)).toBe(1000);
+    const main = (await page.locator("#main").boundingBox())!;
+    expect(main.x + main.width, "the page makes room").toBeLessThanOrEqual(p.x + 1);
+    const a2 = (await ask.boundingBox())!;
+    expect(a2.x + a2.width, "the cookie question is left of the panel").toBeLessThanOrEqual(p.x + 1);
+    await panel(page).getByRole("button", { name: "Float the panel over the page" }).click();
+    expect((await panel(page).boundingBox())!.height).toBeLessThan(1000);
+    await panel(page).getByRole("button", { name: "Dock the panel to the right" }).click();
+    const dock = (await panel(page).boundingBox())!;
+    expect(Math.round(dock.x + dock.width)).toBe(1680);
+    expect(Math.round(dock.height)).toBe(1000);
+  });
 });
 
 test("a visitor sees a read-only board of the main markets, with no account calls", async ({ page }, info) => {

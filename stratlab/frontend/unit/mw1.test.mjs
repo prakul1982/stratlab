@@ -233,11 +233,14 @@ test("the panel's layout is kept safe: unknown values dropped, sizes inside the 
 
 test("a docked panel makes room, a floating one and a sheet do not; dragging and sizing stay inside the window", () => {
   const dock = { ...L.DEFAULT_LAYOUT, open: true, mode: "dock", w: 400 };
-  assert.equal(L.dockWidth(dock, 1440), 400);
-  assert.equal(L.dockWidth({ ...dock, open: false }, 1440), 0);
-  assert.equal(L.dockWidth({ ...dock, mode: "float" }, 1440), 0);
+  assert.equal(L.dockWidth(dock, 1920), 400);
+  assert.equal(L.dockWidth({ ...dock, open: false }, 1920), 0);
+  assert.equal(L.dockWidth({ ...dock, mode: "float" }, 1920), 0);
   assert.equal(L.dockWidth(dock, 800), 0);                                // a phone: a sheet
-  assert.equal(L.dockWidth({ ...dock, w: 720 }, 1000), 680);              // never more than leaves 320 for the page
+  assert.equal(L.dockWidth(dock, 1440), 0);                               // under 1600px the page keeps its width and the panel floats
+  assert.equal(L.shapeOf(dock, 1440), "float"); assert.equal(L.shapeOf(dock, 1600), "dock"); assert.equal(L.shapeOf(dock, 390), "sheet");
+  assert.equal(L.dockWidth({ ...dock, w: 720 }, 1600), 720);
+  assert.equal(L.dockWidth({ ...dock, w: 720 }, 1000), 0);
   const fl = { ...L.DEFAULT_LAYOUT, mode: "float", w: 400, h: 500, x: 100, y: 100 };
   const m = L.dragged(fl, -500, 9000, 1440, 900);
   assert.deepEqual([m.x, m.y], [0, 400]);

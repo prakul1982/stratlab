@@ -98,7 +98,9 @@ async function newContext(browser: Browser, size: (typeof SIZES)[number], theme:
 /** Opens a route, waits for it to be drawn, measures it, and (when it has violations) saves a shot with the offenders outlined. */
 async function measure(page: Page, r: Route, size: (typeof SIZES)[number], theme: string, shots: string): Promise<{ rows: Row[]; note?: string; frame?: PageFrame | null }> {
   await page.goto(WEB + r.path);
-  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
+  // (with Market Watch open the page is never network-idle: its prices refresh every few seconds, so it gets a short wait instead)
+  if (process.env.UI_LINT_PANEL === "1" && size.width > 900) await page.waitForTimeout(1200);
+  else await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
   let note: string | undefined;
   await expect(page.locator(".spinner")).toHaveCount(0, { timeout: 15_000 }).catch(() => { note = "still loading after 15s"; });
   // a card still reading its data shows a skeleton (role=status, aria-busy): measuring that would report the loading state, not the page

@@ -38,9 +38,18 @@ export function clampLayout(raw: unknown, vw: number, vh: number): PanelLayout {
   };
 }
 
+/** A docked panel takes its width from the page, and a page drawn for a wide window is only right while it keeps about 1200px: under
+ * this window width a "docked" panel floats in the bottom-right corner instead and the page is left as it is (found by the layout
+ * lint, which showed pages built for a desktop window breaking at a docked panel's width). */
+export const DOCK_FROM = 1600;
+
+export type PanelShape = "sheet" | "dock" | "float";
+/** How the panel is drawn at this window width. */
+export const shapeOf = (l: PanelLayout, vw: number): PanelShape => (isSheet(vw) ? "sheet" : l.mode === "dock" && vw >= DOCK_FROM ? "dock" : "float");
+
 /** The panel's width a docked panel takes from the page (0 when shut, floating, or a sheet). */
 export function dockWidth(l: PanelLayout, vw: number): number {
-  return l.open && l.mode === "dock" && !isSheet(vw) ? Math.min(l.w, vw - 320) : 0;
+  return l.open && shapeOf(l, vw) === "dock" ? Math.min(l.w, vw - 320) : 0;
 }
 
 /** A floating panel dragged by `dx`, `dy`, kept inside the window. */
