@@ -5,7 +5,10 @@ the API key being revoked. It is off unless KITE_USER_ID, KITE_PASSWORD and KITE
 are all set. Credentials are only read from the environment and never logged.
 
 Zerodha locks an account after repeated wrong passwords or codes, so a rejected password is
-not retried until the next day. A rejected code gets exactly one more try with the next
+not retried until the next day. A CAPTCHA demand is different: the password was right, but Zerodha wants a picture
+puzzle for this session (it asks now and then for a fresh, unfamiliar session, most mornings on 27-28 Oct 2026). A new
+session a little later goes through without one, so it is tried again with a fresh session: once after 30 s within
+the run, then by the daily loop every few minutes, as a network error is. A rejected code gets exactly one more try with the next
 30-second code: Zerodha refuses a code that was already used, which happens when another
 program logs in to the same account in the same window. Network errors are retried a few times."""
 import base64
@@ -29,6 +32,15 @@ from .kite_service import IST, KiteService
 BASE = "https://kite.zerodha.com"
 RETRY_MINUTES = 5
 MAX_ATTEMPTS = 6
+CAPTCHA_WAIT_S = 30
+# a browser's own headers: a login that names itself a script is the kind Zerodha meets with a CAPTCHA
+HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+                         "Chrome/130.0.0.0 Safari/537.36",
+           "Accept-Language": "en-IN,en;q=0.9", "X-Kite-Version": "3", "Origin": BASE, "Referer": f"{BASE}/"}
+
+
+def is_captcha(message: str) -> bool:
+    return "captcha" in (message or "").lower()
 
 
 def configured() -> bool:
@@ -73,16 +85,33 @@ def _json(r: httpx.Response) -> dict:
     return body if isinstance(body, dict) else {}
 
 
-def fetch_request_token(login_url: str, transport: httpx.BaseTransport | None = None) -> str:
+def fetch_request_token(login_url: str, transport: httpx.BaseTransport | None = None,
+                        sleep=time.sleep) -> str:
     clean_secret(settings.KITE_TOTP_SECRET)
-    with httpx.Client(timeout=20, transport=transport, follow_redirects=False,
-                      headers={"User-Agent": "Mozilla/5.0 (StratLab auto-login)"}) as c:
+    for session in (1, 2):
+        try:
+            return _login_once(login_url, transport)
+        except AutoLoginError as e:
+            if not getattr(e, "captcha", False) or session == 2:
+                raise
+            sleep(CAPTCHA_WAIT_S)          # a new session in a moment usually goes through without the puzzle
+    raise AssertionError("unreachable")
+
+
+def _login_once(login_url: str, transport: httpx.BaseTransport | None) -> str:
+    with httpx.Client(timeout=20, transport=transport, follow_redirects=False, headers=HEADERS) as c:
         c.get(login_url, follow_redirects=True)  # picks up Kite's session cookies
         body = _json(c.post(f"{BASE}/api/login",
                             data={"user_id": settings.KITE_USER_ID, "password": settings.KITE_PASSWORD}))
         if body.get("status") != "success":
-            raise AutoLoginError(f"Zerodha rejected the user ID or password: {body.get('message', 'no reason given')}",
-                                 retry=False)
+            reason = body.get("message", "no reason given")
+            if is_captcha(reason):
+                # the password was accepted as far as Zerodha says; it wants a CAPTCHA for this session: try again later
+                err = AutoLoginError("Zerodha asked for a CAPTCHA for this login session; trying again with a new "
+                                     "session shortly.", retry=True)
+                err.captcha = True
+                raise err
+            raise AutoLoginError(f"Zerodha rejected the user ID or password: {reason}", retry=False)
         request_id = (body.get("data") or {}).get("request_id")
         if not request_id:
             raise AutoLoginError("Zerodha's login reply had no request ID.")
