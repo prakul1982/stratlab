@@ -14,6 +14,7 @@ import { CFG } from "./config";
 import { hasSavedSession } from "./entry";
 import { useLiveRefresh } from "./liveRefresh";
 import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
+import { toastMs } from "./toastTime";
 
 const ME_RETRY_MS = 1500;
 const SESSION_RETRY_MS = [2000, 5000];
@@ -98,7 +99,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const notify = useCallback((msg: string, action?: { label: string; run: () => void }) => {
     setToast({ msg, action });
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setToast(null), action ? 9000 : 4500);
+    timer.current = window.setTimeout(() => setToast(null), toastMs(msg, !!action));
   }, []);
 
   // goToPlans changes with every page change; read it through a ref so `fail` stays the same function and

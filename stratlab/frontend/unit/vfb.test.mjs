@@ -107,7 +107,7 @@ test("VR1-121, VR1-122, VR1-123, VR1-124, VR1-125: IPO badge, fold width, the is
 test("VR1-130: the alerts summary is one sentence row with the settings link in it", () => {
   const a = read("src/pages/AlertsPage.tsx");
   assert.match(a, /data-testid="alerts-summary"/);
-  assert.match(a, /: "This page only"\}/);
+  assert.match(a, /Shown <b>on this page only<\/b>/);
   assert.equal((a.match(/Where alerts go and what to send/g) ?? []).length, 1);
 });
 

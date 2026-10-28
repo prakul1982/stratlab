@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Coachmark } from "./kit";
 
 /** One step: a short title and line, pointed at the real control it is about (the desktop menu's, then the phone's
@@ -44,16 +44,27 @@ export function Tour({ onClose, paused = false, main }: { onClose: (done: boolea
   const inMenu = phone && !!step.menu;
   // the drawer slides in: the pointer waits for it, so it lands on the thing and not where the drawer was
   const [menuShown, setMenuShown] = useState(false);
+  // ...and it slides away again after the menu's last step: the pointer waits for that too, or the next step's ring is
+  // placed where the menu's own button still was (RC5-002: "Ask or do anything" on a phone ringed the page's heading)
+  const [sliding, setSliding] = useState(false);
+  const wasInMenu = useRef(false);
   useEffect(() => {
     if (paused) return;
     holdMenu(inMenu);
-    if (!inMenu) { setMenuShown(false); return; }
-    const t = window.setTimeout(() => setMenuShown(true), 320);
+    let t: number | undefined;
+    if (inMenu) t = window.setTimeout(() => setMenuShown(true), 320);
+    else {
+      setMenuShown(false);
+      const leaving = wasInMenu.current;
+      setSliding(leaving);
+      if (leaving) t = window.setTimeout(() => setSliding(false), 320);
+    }
+    wasInMenu.current = inMenu;
     return () => window.clearTimeout(t);
   }, [inMenu, paused]);
   useEffect(() => () => holdMenu(false), []);
   if (paused) return null;          // another dialog (the search palette, say) is in front: the tour waits, on the same step
-  if (inMenu && !menuShown) return null;
+  if ((inMenu && !menuShown) || sliding) return null;
   const finish = (done: boolean) => { holdMenu(false); onClose(done); };
   return (
     <Coachmark anchor={step.at} label="A quick tour" onClose={() => finish(false)}>
