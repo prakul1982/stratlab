@@ -4,6 +4,8 @@
  * the tags right while someone moves between pages). Plain data: no React. */
 
 export const SITE = "https://stratlab.studio";
+/** StratLab's Instagram: linked from every footer and named in the home page's Organization data (sameAs). */
+export const INSTAGRAM = "https://www.instagram.com/stratlab.studio/";
 
 export const TAGLINE = "Test it, research it, track it.";
 // the words people search for, not only the tagline (DK-013: "test it, research it, track it" names no keyword)
