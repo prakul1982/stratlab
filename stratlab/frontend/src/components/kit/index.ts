@@ -21,7 +21,7 @@ export { BarList, Meter } from "./BarList";
 export { Disclosure } from "./Disclosure";
 export { FoldTable } from "./FoldTable";
 export { Pager } from "./Pager";
-export { UploadButton } from "./UploadButton";
+export { UploadButton, UploadProblem, useUploadProblem } from "./UploadButton";
 export { ChipSet, CheckField } from "./Choices";
 export { EmptyState, ErrorState, Skeleton, type StateAction } from "./States";
 export { ChartFrame } from "./ChartFrame";

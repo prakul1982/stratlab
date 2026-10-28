@@ -6,7 +6,7 @@ import { asOf as asOfText, dateOnly, inr, money, qty as qtyText, signTone } from
 import { Info } from "../../components/ui";
 import { Lock, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
+import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, UploadProblem, useUploadProblem } from "../../components/kit";
 import { fyLink, movedYearNote, openFy } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { usSharesNote } from "../../lib/usGains";
@@ -138,11 +138,12 @@ function DividendsTab() {
     return () => { live = false; };
   }, [show, fail, tries]);
 
+  const { problem, clear: clearProblem, refused } = useUploadProblem();     // a refused file's reason stays beside the upload (RC6-010)
   const pick = async (files: FileList | null, reset: () => void) => {
     const f = files?.[0];
     if (!f) return;
     if (f.size > 10 * 1024 * 1024) { notify("That file is larger than 10 MB."); reset(); return; }
-    setBusy(true);
+    setBusy(true); clearProblem();
     try {
       const r = await api<{ read: number; added: number; duplicates: number; problems: { line: number; text: string; reason: string }[]; date_note?: string | null; dividends: Dividends }>(
         `/money/dividends/import?${new URLSearchParams({ filename: f.name.slice(0, 200) })}`, { method: "POST", file: f });
@@ -150,7 +151,7 @@ function DividendsTab() {
       setFy(null);
       show(r.dividends);
       track("dividends imported", { rows: r.added });
-    } catch (e) { fail(e); } finally { setBusy(false); reset(); }
+    } catch (e) { if (!refused(e)) fail(e); } finally { setBusy(false); reset(); }
   };
   const include = async (year: number, on: boolean) => {
     try { show(await api<Dividends>("/money/dividends/include", { method: "PUT", body: { fy: year, include: on } })); notify(on ? "Included in the total tax estimate." : "Left out of the total tax estimate."); }
@@ -189,6 +190,7 @@ function DividendsTab() {
         <Card compact={!note && v.files.length === 0}>
           <CardHead title="Your dividends" info={DIVIDEND_INFO} actions={uploadBtn} />
           {note && <p className="k-small" role="status">{note}</p>}
+          <UploadProblem problem={problem} />
           {v.files.length > 0 && <p className="k-note">From {v.files.map((f) => f.name).join(", ")}. {deleteBtn}</p>}
         </Card>
       )}
@@ -204,6 +206,7 @@ function DividendsTab() {
               {uploadBtn}
             </>} />
             {note && <p className="k-small" role="status">{note}</p>}
+            <UploadProblem problem={problem} />
             {v.files.length > 0 && <p className="k-note">From {v.files.map((f) => f.name).join(", ")}. {deleteBtn}</p>}
             {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="dividends-moved-year">{movedYearNote(movedFrom, y.fy, v.current_fy, "dividends")}</p>}
             {y.source !== "none" && y.taxed && (

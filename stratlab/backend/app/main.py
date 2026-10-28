@@ -4421,6 +4421,9 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         dy = page_dividend_yield("IN", sym, close, (prices or {}).get("price_at"), co)
         spec = stock_pages.special_in_year(india_page_dividends(sym, co, False) or [], (prices or {}).get("price_at")) if dy else None
         snap = {**snap, "div_yield": dy, "div_special": spec}
+        if snap.get("pe") is not None and snap.get("pe_basis") == "ttm":
+            from .intel.company import base_effects, pe_one_off_note
+            checks["pe_oneoff"] = pe_one_off_note(base_effects(p), p)      # other income lifting one of the four quarters behind the P/E (RC6-012)
     return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red, checks)
 
 

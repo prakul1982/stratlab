@@ -79,7 +79,7 @@ export function BehaviourStats({ q }: { q: BehaviourQuery }) {
 /** What the habits need said under their stats: why there are none, what the plan keeps back, how far the SIPs are counted. */
 export function BehaviourNotes({ q }: { q: BehaviourQuery }) {
   const { b, failed, retry } = q;
-  if (failed) return <EmptyState title="This couldn't be loaded" action={{ label: "Try again", onClick: retry }}>This couldn't be loaded just now. Reload the page to try again.</EmptyState>;
+  if (failed) return <EmptyState title="This couldn't be loaded" action={{ label: "Try again", onClick: retry }}>This couldn't be loaded just now.</EmptyState>;
   if (!b || !b.total || !b.schemes.length) return null;
   return (
     <>

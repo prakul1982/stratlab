@@ -78,6 +78,9 @@ export function ScanPage() {
   const { fail, notify, refreshNotebooks, me, markets } = useApp();
   const nav = useNavigate();
   const [sets, setSets] = useState<ScanSets | null>(null);
+  // the groups couldn't be read: said on the page with a Try again, not an empty box and a toast (RC6-005)
+  const [setsFailed, setSetsFailed] = useState(false);
+  const [setsTry, setSetsTry] = useState(0);
   const [setId, setSetId] = useState(() => params.get("set") || "watchlist");
   const scanId = params.get("scan") || "st_s2";
   // the group the reader chooses is kept in the address (replaced, not pushed), so Back from a stock opens the same group
@@ -103,12 +106,13 @@ export function ScanPage() {
 
   useEffect(() => {
     drop();
+    setSetsFailed(false);
     api<ScanSets>(`/research/scan/sets?region=${region}`).then((s) => {
       setSets(s);
       const usable = (x: SetInfo) => (x.id !== "watchlist" && !x.stored) || !!x.count;
       setSetId((cur) => s.sets.some((x) => x.id === cur && usable(x)) ? cur : (s.sets.find(usable)?.id ?? "watchlist"));
-    }).catch(fail);
-  }, [region, fail]);
+    }).catch(() => setSetsFailed(true));
+  }, [region, setsTry]);
 
   const pickScan = (v: string) => {
     const p = new URLSearchParams(params); p.set("scan", v); setParams(p, { replace: true });
@@ -166,7 +170,7 @@ export function ScanPage() {
         asOf={preset?.as_of} asOfTz={marketTz(region)} info="The rules: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend." infoLabel="Which rules" />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       {!pro && me && <PlanNote>The trend scans and the Stage 2 + Supertrend alert are on the Basic plan.</PlanNote>}
-      <Card>
+      {setsFailed ? <Card><ErrorState title="The groups to scan couldn't be loaded" action={{ label: "Try again", onClick: () => setSetsTry((n) => n + 1) }}>They couldn't be read just now.</ErrorState></Card> : <Card>
         <CardHead title="Scan a group" />
         <FormGrid label="Scan a group" onSubmit={runScan}>
           <FieldGroup label="Scan" wide info={<>Each scan is a short list of chart rules, all of which must hold. Pick one to read its rules below.</>}>
@@ -192,7 +196,7 @@ export function ScanPage() {
             <p className="k-note k-field wide" data-testid="scan-alert-nowhere">The alert is on, but nothing is set up to reach you: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>
           )}
         </FormGrid>
-      </Card>
+      </Card>}
       {emptyWatch && <Card compact><EmptyState title={`Your ${REGION_NAME[region]} watchlist is empty`} action={{ label: "Find a company", to: `/research?region=${region}` }}>Press Watch on company pages to add stocks, or scan a ready-made group.</EmptyState></Card>}
       {notRead && <Card compact><EmptyState title={`${cur?.name} hasn't been read yet`}>This group is worked out once a day after the market closes. Scan a smaller group meanwhile.</EmptyState></Card>}
       {scanErr && !busy && <ErrorState title="The scan didn't run" action={scanOffline ? undefined : { label: "Try again", onClick: () => void runScan() }}>{scanErr}</ErrorState>}

@@ -28,14 +28,16 @@ export function NewslettersCard() {
   // a Daily picked on a plan with the weekly editions only: said with its plan and price, not a dead button (DP2-030)
   const [asked, setAsked] = useState<{ key: Key; plan: string } | null>(null);
   const loc = useLocation();
+  const [tries, setTries] = useState(0);
 
   useEffect(() => {
     let live = true;
+    setState("loading");
     api<NewsletterPrefs>("/me/newsletters")
       .then((p) => { if (!live) return; if (p && p.market_in) { setPrefs(p); setState("ready"); } else setState("missing"); })
       .catch((e: ApiError) => { if (live) setState(e.status === 404 ? "missing" : "error"); });
     return () => { live = false; };
-  }, []);
+  }, [tries]);
 
   // the News page links here: bring the card into view once it has its final height
   useEffect(() => {
@@ -68,7 +70,7 @@ export function NewslettersCard() {
       <CardHead title="Newsletters" info={HELP.newsletters} actions={<Link to="/news" className="btn quiet sm">Read past issues</Link>} />
       {state === "loading" && <Skeleton label="Loading your newsletter settings" lines={3} />}
       {state === "missing" && <p className="k-small k-muted">Newsletter settings aren't available yet. Check back soon.</p>}
-      {state === "error" && <ErrorState title="Couldn't load your newsletter settings">Reload the page to try again.</ErrorState>}
+      {state === "error" && <ErrorState title="Couldn't load your newsletter settings" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>They couldn't be read just now.</ErrorState>}
       {state === "ready" && prefs && <>
         <div>
           {ROWS.map(([key, title]) => (

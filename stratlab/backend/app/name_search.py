@@ -28,6 +28,7 @@ LEGAL = {"ltd", "limited", "inc", "incorporated", "corp", "corporation", "plc", 
 # the broker's list cuts long names short: "APOLLO HOSPITALS ENTER. L", "TATA CONSULTANCY SERV LT"
 CUT_LIMITED = {"l", "li", "lim", "limi", "limit", "lt", "ltd"}
 ISIN = re.compile(r"[A-Z]{2}[A-Z0-9]{9}[0-9]")
+_listing_affix = re.compile(r"^(?:NSE|BSE)\s*[:/]\s*|(?:\.NS|\.BO|\.NSE|\.BSE|-EQ)$", re.I)
 _TOKEN = re.compile(r"[a-z0-9&]+")
 
 # short names people use for a company, by market: name -> symbols it means (the first listed first)
@@ -180,6 +181,8 @@ class NameIndex:
         raw = str(q or "").strip()
         if not raw:
             return []
+        # a symbol as another site writes it (TCS.NS, NSE:TCS, TCS-EQ) is the company's own symbol (RC6-001: they found nothing)
+        raw = _listing_affix.sub("", raw).strip() or raw
         qs, qw = _sym_key(raw), tokens(raw)
         qc = "".join(qw)
         best: dict[int, int] = {}
@@ -189,6 +192,7 @@ class NameIndex:
                 if best.get(i, NOT_FOUND) > tier:
                     best[i] = tier
         put(self._exact.get(qs, ()), EXACT)
+        put(self._exact.get(re.sub(r"[-./]", "", qs), ()), EXACT)      # BRK.B and BRK/B are BRK-B (the index keeps it as BRKB too)
         if ISIN.fullmatch(qs):                  # an ISIN is only ever an exact match
             return self._ordered(best, qw, limit, keep)
         if qc:

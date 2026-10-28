@@ -105,7 +105,12 @@ export { SETTLING } from "./researchFormat";
  * $120B too low; the public pages already send BRK.B to BRK-B). Other tickers upper-cased, as typed. */
 export function canonTicker(region: string, symbol: string): string {
   const s = String(symbol ?? "").trim().toUpperCase();
-  if (String(region).toUpperCase() !== "US") return s;
+  if (String(region).toUpperCase() !== "US") {
+    // an Indian symbol as a price site or a broker writes it (TCS.NS, TCS.BO, TCS-EQ, NSE:TCS) is the company's own symbol (RC5-010:
+    // /research/IN/TCS.NS said no such company); a lone affix is left as typed
+    const bare = s.replace(/^(?:NSE|BSE)\s*[:/]\s*|(?:\.NS|\.BO|\.NSE|\.BSE|-EQ)$/g, "").trim();
+    return bare && bare !== s && !/(?:\.NS|\.BO|-EQ)$/.test(bare) ? bare : s;
+  }
   const m = /^([A-Z][A-Z0-9]{0,5})[./]([A-Z])$/.exec(s);
   return m ? `${m[1]}-${m[2]}` : s;
 }

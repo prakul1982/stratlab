@@ -77,7 +77,10 @@ test("RC2B-013, RC2B-015: the US page adds no month-first line to ISO dates, and
   const src = read("src/pages/money/UsTaxPage.tsx");
   assert.doesNotMatch(src, /read month first, the US way/);
   assert.match(src, /data-testid="us-upload-error"/);
-  assert.match(src, /setUploadError\(\(e as \{ message\?: string \}\)\?\.message/);
+  // the reason is kept by the shared hook (RC6-010), shown under the upload and not only in a toast
+  assert.match(src, /const \{ problem: uploadError, clear: clearProblem, refused \} = useUploadProblem\(\)/);
+  assert.match(src, /if \(!refused\(e\)\) fail\(e\)/);
+  assert.match(src, /\{uploadError && <p className="k-small k-down" role="alert" data-testid="us-upload-error">/);
 });
 
 test("RC2B-017, RC2B-048: the ITR page says the lock once and the year is not a third 'Financial year'", () => {

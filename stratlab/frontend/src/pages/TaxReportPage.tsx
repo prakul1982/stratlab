@@ -9,7 +9,7 @@ import { track } from "../lib/analytics";
 import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
 import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
 import { useAskedFy } from "../lib/useFy";
 import { gainLabel, usSharesNote } from "../lib/usGains";
@@ -140,6 +140,7 @@ export function TaxReportPage() {
   }, [show, fail]);
   useEffect(() => { load(); }, [load]);
 
+  const { problem, clear: clearProblem, refused } = useUploadProblem();     // a refused file's reason stays beside the upload (RC6-010)
   const pick = async (files: FileList | null, reset: () => void) => {
     const all = Array.from(files ?? []);
     if (!all.length) return;
@@ -151,7 +152,7 @@ export function TaxReportPage() {
     const list = all.filter((f) => f.size <= capMb(f.name) * 1024 * 1024);
     for (const f of all) if (f.size > capMb(f.name) * 1024 * 1024) notify(`${f.name} is larger than ${capMb(f.name)} MB. Split it by year (or quarter) and upload each one.`);
     if (!list.length) { reset(); return; }
-    setBusy(true);
+    setBusy(true); clearProblem();
     let got: ImportReply | null = null;
     try {
       for (const [i, f] of list.entries()) {
@@ -161,7 +162,7 @@ export function TaxReportPage() {
         got = combine(got, one);
         track("tax file imported", { rows: one.added, method: mode, zip: /\.zip$/i.test(f.name) });
       }
-    } catch (e) { fail(e); } finally {
+    } catch (e) { if (!refused(e)) fail(e); } finally {
       // a later file that failed doesn't hide the files before it: those are stored, so the page shows them, then the error stands
       if (got) { setResult(got); setRep(got.report); setFy(open(got.report, null)); setMode("add"); }
       setBusy(false);
@@ -270,6 +271,7 @@ export function TaxReportPage() {
           <UploadButton label="Upload tradebook or tax P&L" busy={busy} multiple accept=".csv,.xlsx,.xls,.txt,.zip,text/csv,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Tradebook or tax P&L file" onFiles={pick} />
           <span className="k-note">Excel, CSV or ZIP, from any broker.</span>
         </div>
+        <UploadProblem problem={problem} />
         {result && (
           <div className="k-stack" role="status">
             <p className="k-small">

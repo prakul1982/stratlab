@@ -97,9 +97,9 @@ test("the closing auction keeps its data on a failed poll, says so, and keeps po
 
 test("a later file that fails doesn't hide the files stored before it", () => {
   const tax = read("src/pages/TaxReportPage.tsx");
-  assert.match(tax, /catch \(e\) \{ fail\(e\); \} finally \{\s*\/\/[^\n]*\n\s*if \(got\) \{ setResult\(got\); setRep\(got\.report\)/);
+  assert.match(tax, /catch \(e\) \{ if \(!refused\(e\)\) fail\(e\); \} finally \{\s*\/\/[^\n]*\n\s*if \(got\) \{ setResult\(got\); setRep\(got\.report\)/);
   const journal = read("src/pages/trade/JournalPage.tsx");
-  assert.match(journal, /catch \(e\) \{ fail\(e\); \} finally \{\s*\/\/[^\n]*\n\s*if \(last\) \{ setResult\(\{ \.\.\.last, added, duplicates: dup \}\); adopt\(last\.journal\)/);
+  assert.match(journal, /catch \(e\) \{ if \(!refused\(e\)\) fail\(e\); \} finally \{\s*\/\/[^\n]*\n\s*if \(last\) \{ setResult\(\{ \.\.\.last, added, duplicates: dup \}\); adopt\(last\.journal\)/);
 });
 
 test("the money calendar shows only the answer to the last window asked", () => {

@@ -70,7 +70,12 @@ export function moneyShort(v: number, currency?: string | null): string {
 export function bigMoney(v: number | null | undefined, currency: string): string {
   if (v == null || !Number.isFinite(v)) return "–";
   const s = currencySymbol(currency);
-  if (currency === "INR") return inrCompact(v);
+  if (currency === "INR") {
+    // a lakh crore and more always with two decimals, as the company's public page writes it (RC6-008: "₹18.9 lakh cr" here, "₹18.95 lakh crore"
+    // there, for the same market value)
+    if (Math.round(Math.abs(v) / CRORE) >= LAKH) return `${v < 0 ? "−" : ""}₹${(Math.abs(v) / LAKH_CRORE).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lakh cr`;
+    return inrCompact(v);
+  }
   const a = Math.abs(v);
   const step = shortStep(a, [[1e12, "T", 2], [1e9, "B", 1], [1e6, "M", 0]]);      // $999.96B reads $1.00T, not $1000.0B
   const sign = v < 0 ? "−" : "";

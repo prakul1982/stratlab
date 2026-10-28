@@ -4,6 +4,17 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 28 October 2026: the main review, the whole app end to end (RC-6)
+
+A Free newcomer, a trader, an investor, a money user and an admin, in the test world at 1440, 390 and 360 px, with the live site's public pages checked against the exchange's closes. What it found:
+
+- **Tickers:** `TCS.NS`, `TCS.BO`, `TCS-EQ` and `NSE:TCS` are TCS in the search, the research address, the public page address (a 301) and the alerts; `BRK.B` finds Berkshire in the search box. A company typed under the wrong market (a US name with India chosen) is offered under the right one instead of a dead end.
+- **Uploads:** a broker file whose "Stock Name" column holds the symbol is read; a tradebook with "Net Rate" and "Executed date and time" is read; a refused file's reason stays on the page beside the upload (Holdings, Tax report, Trade journal, Dividends, Mutual funds, statements, US tax) instead of a toast that disappeared.
+- **A P/E with a booked gain in it:** where one of the four quarters behind a trailing P/E had other income at least twice the usual (Tata Motors Passenger Vehicles' demerger gain, P/E 1.2; Hindustan Unilever's), the company page, its public page and the side-by-side page say which quarter and how much, as a fact beside the figure.
+- **Same figure, same words:** a market value of a lakh crore or more has two decimals (₹18.95 lakh cr) as on the public page; a deals summary rounds a tie up, as its table does.
+- **Try again:** the invite page, newsletter settings, trend scan groups, named holders and the options builder's offline note offer a button when their read failed; the two fund notes no longer also tell the person to reload.
+- **Sign-out:** the options structure being built is forgotten with the rest of what the browser kept.
+- **Checked and right:** the RC-5 fixes, alerts' bad input, every main page with the API at 500 or down, the Free plan's 37 pages, 33 pages at 360 and 390 px, the admin jobs, the tax report's holding periods, IPO, breadth and ETF arithmetic, and 20 live public pages against the exchange's closes.
 ### 28 October 2026: the blog's posts and lists redrawn (PUB-2)
 
 The posts had two widths (a text column of about 820 px sitting left, tables across about 1,180 px), their headline numbers were a wall of bullet sentences, their tables wrapped headers and names and wandered right-aligned text, and a heavy "Facts, not advice" box and a long Method list sat in the middle.

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly } from "../lib/format";
-import { Badge, Card, CardHead, CheckField, ConfirmDialog, DateField, Disclosure, Field, FormActions, FormGrid, Notice, Skeleton, UploadButton } from "./kit";
+import { Badge, Card, CardHead, CheckField, ConfirmDialog, DateField, Disclosure, Field, FormActions, FormGrid, Notice, Skeleton, UploadButton, UploadProblem, useUploadProblem } from "./kit";
 
 /* Settings -> Connected accounts, the "connect once" cards: the statement inbox, Zerodha, Interactive Brokers, and the EPF, NPS and
  * AIS uploads. Every figure on them is a fact about the connection (a date, a count, a status); passwords and tokens are typed
@@ -88,18 +88,19 @@ function InboxCard({ c, set, load }: P) {
   const copy = async () => {
     try { await navigator.clipboard.writeText(i.address ?? ""); notify("Address copied."); } catch { notify("Select the address and copy it."); }
   };
+  const { problem, clear: clearProblem, refused } = useUploadProblem();     // a wrong password or a file that isn't a statement stays beside the upload (RC6-010)
   const upload = async (files: FileList | null, reset: () => void) => {
     const f = files?.[0];
     reset();
     if (!f) return;
     if (f.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A statement is usually much smaller.`); return; }
     setBusy(true);
-    setResult(null);
+    setResult(null); clearProblem();
     try {
       const r = await api<{ detail: string; connect: Conn }>("/connect/statement", { method: "POST", body: { filename: f.name, data: await dataUrl(f), password: upPw, remember } });
       set(r.connect);
       setResult(r.detail || "Read and saved.");
-    } catch (e) { fail(e); } finally { setUpPw(""); setBusy(false); load?.(); }
+    } catch (e) { if (!refused(e)) fail(e); } finally { setUpPw(""); setBusy(false); load?.(); }
   };
 
   return (
@@ -168,6 +169,7 @@ function InboxCard({ c, set, load }: P) {
           {!i.has_password && i.ready && <div className="k-field wide"><CheckField label="Save this password for next time" checked={remember} onChange={setRemember} /></div>}
           <FormActions><UploadButton label="Upload a statement" accept="application/pdf,.pdf" ariaLabel="Statement PDF" busy={busy} onFiles={(f, r) => void upload(f, r)} /></FormActions>
         </FormGrid>
+        <UploadProblem problem={problem} />
         {result && <Notice role="status" label="Statement result">{result}</Notice>}
       </div>
       {i.address && <div><button type="button" className="btn quiet sm" onClick={() => setAsking(true)}>Turn off the inbox</button></div>}
@@ -298,18 +300,19 @@ function DocUpload({ kind, saved, set }: { kind: keyof typeof DOCS; saved: Recor
   const [read, setRead] = useState<Read | null>(null);
   const [vals, setVals] = useState<Record<string, string>>({});
   const [tds, setTds] = useState(false);
+  const { problem, clear: clearProblem, refused } = useUploadProblem();
   const pick = async (files: FileList | null, reset: () => void) => {
     const f = files?.[0];
     reset();
     if (!f) return;
     if (f.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB.`); return; }
-    setBusy(true);
+    setBusy(true); clearProblem();
     try {
       const r = await api<Read>("/connect/docs/read", { method: "POST", body: { kind, filename: f.name, data: await dataUrl(f), password: pw } });
       setRead(r);
       setVals(Object.fromEntries(r.figures.map((x) => [x.key, x.value == null ? "" : String(x.value)])));
       notify(r.found ? "Check the figures below, then save them." : "Nothing could be read from that file. Type the figures in.");
-    } catch (e) { fail(e); } finally { setPw(""); setBusy(false); }
+    } catch (e) { if (!refused(e)) fail(e); } finally { setPw(""); setBusy(false); }
   };
   const save = async () => {
     if (!read) return;
@@ -331,6 +334,7 @@ function DocUpload({ kind, saved, set }: { kind: keyof typeof DOCS; saved: Recor
       {!read && <>
         <p className="k-small k-muted">{d.help}</p>
         {kind !== "ais" && <Field label="File password" optional type="password" autoComplete="off" value={pw} maxLength={64} onChange={(e) => setPw(e.target.value)} />}
+        <UploadProblem problem={problem} />
       </>}
       {read && (
         <FormGrid label={`${d.title} figures`} onSubmit={(e) => { e.preventDefault(); void save(); }}>

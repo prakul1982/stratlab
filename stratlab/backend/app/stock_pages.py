@@ -275,6 +275,11 @@ def find(region: str, symbol: str) -> tuple[str, dict] | None:
     s = (symbol or "").strip().upper()
     if s in cos:
         return s, cos[s]
+    if region == "IN":
+        from .us_ticker import canon_in
+        s = canon_in(s)          # TCS.NS, TCS.BO and NSE:TCS are TCS's page, at TCS's address (RC5-010)
+        if s in cos:
+            return s, cos[s]
     twin = getattr(cos, "twins", {}).get(s)          # a BSE listing of a company NSE lists too: its one page is NSE's (DK-025)
     if twin in cos:
         return twin, cos[twin]
@@ -1165,7 +1170,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
                                                       "foreign", "profit_usd", "annual_unread", "annual_filed", "no_numbers", "cap_why",
-                                                      "type_unread", "eps_q", "no_interest")
+                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],
@@ -2744,6 +2749,10 @@ def _notes(f: dict) -> list[str]:
                    f'market cap divided by that gives {implied:,.1f}. '
                    "The last 12 months are the four latest reported quarters, so their profit can differ from the newest year's in "
                    'the table below.</p>')
+    if f.get("pe_oneoff") and shown_pe(f) is not None:
+        # a gain booked in one of the four quarters is in the earnings behind the P/E (RC6-012: TMPV's 1.2): said, as a fact
+        out.append(f'<p class="note" data-pe-oneoff>P/E {shown_pe(f):,.1f} is on the last four reported quarters. {e(str(f["pe_oneoff"]))}, '
+                   "so that income is in the earnings behind the figure.</p>")
     if ttm_year_gap(f):
         out.append('<p class="note" data-ttm-basis>The net profit for the last 12 months is the four latest reported quarters, so it '
                    "can differ from the newest year's in the table below.</p>")

@@ -7,7 +7,7 @@ import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { LIMITS } from "../../lib/plans";
-import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column, UploadProblem, useUploadProblem } from "../../components/kit";
 import { CostCell, CostDetail, CostHow, CostNotes, CostStats, costsShown, useFundCosts } from "./FundCosts";
 import { BehaviourDetail, BehaviourHow, BehaviourNotes, BehaviourStats, GapCell, behaviourShown, hasGap, useFundBehaviour } from "./FundBehaviour";
 import { Earlier } from "../../components/Earlier";
@@ -86,11 +86,12 @@ export function MutualFundsPage() {
   }, [show, fail]);
   useEffect(() => { load(); }, [load]);
 
+  const { problem, clear: clearProblem, refused } = useUploadProblem();     // a wrong password or a file that isn't a statement stays beside the upload (RC6-010)
   const isPdf = !!picked && (/\.pdf$/i.test(picked.name) || picked.type === "application/pdf");
   const send = async () => {
     if (!picked) { notify("Pick your CAS PDF or a CSV first."); return; }
     if (picked.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A CAS is usually much smaller.`); return; }
-    setBusy(true);
+    setBusy(true); clearProblem();
     try {
       const data = await dataUrl(picked);
       const r = await api<ImportReply>("/money/mutual-funds/import", { method: "POST", body: { filename: picked.name, data, password: isPdf ? password : "", mode } });
@@ -99,7 +100,7 @@ export function MutualFundsPage() {
       show(r.view);
       setPicked(null);
       resetFile.current();
-    } catch (e) { fail(e); } finally {
+    } catch (e) { if (!refused(e)) fail(e); } finally {
       setPassword("");          // used once to open the file, then forgotten
       setBusy(false);
     }
@@ -217,6 +218,7 @@ export function MutualFundsPage() {
             {!picked && <span className="k-note">Pick your statement first. A PDF asks for its password here once picked.</span>}
           </FormActions>
         </FormGrid>
+        <UploadProblem problem={problem} />
         {result && (
           <div className="k-stack" role="status">
             <p className="k-small">

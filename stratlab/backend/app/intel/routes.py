@@ -48,6 +48,9 @@ def symbol_of(symbol: str, region: str | None = None) -> str:
     """A ticker checked, and as the app keeps it: with `region` "US", a share class with a dash (BRK.B -> BRK-B), so every
     source is asked for the one listing the canonical page shows (R13-001)."""
     s = symbol.strip().upper()
+    if (region or "").upper() == "IN":
+        from ..us_ticker import canon_in
+        s = canon_in(s)                 # NSE:TCS, TCS.NS and TCS-EQ are TCS (RC5-010); the exchange's prefix has a colon the check below refuses
     # a letter or digit first (or ^ for an index): "..", "-x" and the like never reach a data source's address
     if not s or len(s) > 20 or not (s[0].isalnum() or s[0] == "^") or not all(ch.isalnum() or ch in "&-._^/" for ch in s):
         err(400, "bad_symbol", "That doesn't look like a ticker.")
