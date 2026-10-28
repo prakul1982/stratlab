@@ -56,7 +56,8 @@ def test_the_strategy_tables_have_short_unwrapped_headers_fixed_widths_and_no_em
     checks = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Check")
     assert checks["head"][1:] == ["Passed", "Failed", "Not run"] and len(checks["rows"]) == 4 and checks["align"] == "lrrr" and "widths" not in checks      # a small table sizes itself to a phone
     html = blog.blocks_html([tables[0]])
-    assert '<div class="btbl fx"><table>' in html and "<colgroup>" in html and html.count('<th scope="col" class="l">') == 2 and html.count('<td class="l">') == len(tables[0]["rows"])
+    # a table of five columns or more also carries "wide" and each figure its column's name (VR5-007: cards on a phone)
+    assert '<div class="btbl fx wide"><table>' in html and "<colgroup>" in html and html.count('<th scope="col" class="l">') == 2 and html.count('<td class="l" data-l=') == len(tables[0]["rows"])
     assert 'scope="row" class="l"' in html
 
 
@@ -95,7 +96,7 @@ def test_a_brief_folds_how_it_is_made_and_the_old_blocks_still_draw():
     # a stored post written before the tiles, with a "Method" heading and a table with no widths, is drawn as it was
     old = [{"t": "h2", "text": "Method"}, {"t": "ul", "items": ["Data."]}, {"t": "table", "caption": "c", "head": ["A", "B"], "rows": [["x", "1"]]}]
     html = blog.blocks_html(old)
-    assert "<h2>Method</h2>" in html and '<div class="btbl"><table>' in html and "<colgroup>" not in html and '<td>1</td>' in html
+    assert "<h2>Method</h2>" in html and '<div class="btbl"><table>' in html and "<colgroup>" not in html and '<td data-l="B">1</td>' in html
 
 
 def test_the_block_cleaner_keeps_only_the_new_blocks_it_knows():
