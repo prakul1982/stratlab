@@ -490,8 +490,9 @@ export function NetWorthPage() {
             <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined} />
             <StatRow>
               <Stat label="Net worth" value={inr(t.net)} delta={move ? <Delta value={move.change}>{signedInrCompact(move.change)}</Delta> : undefined} note={move ? sinceNote(move, day, inrCompact) : restatedNote(hist, view?.valuation, day) ?? undefined} />
-              <Stat label="Assets" value={inr(t.assets)} />
-              <Stat label="Loans" value={inr(t.liabilities)} />
+              {/* with no loans the assets are the net worth: the same figure said again is left out (LIVE1C-056: ₹20,33,027 five times) */}
+              {t.liabilities > 0 && <Stat label="Assets" value={inr(t.assets)} />}
+              {t.liabilities > 0 && <Stat label="Loans" value={inr(t.liabilities)} />}
             </StatRow>
             {/* a source that couldn't be read or valued: named; snapshots of such a total are marked partial */}
             {/* DG-016: something with no price yet is a routine note; a source that couldn't be read is the warning */}
@@ -533,7 +534,8 @@ export function NetWorthPage() {
             </Notice>
           )}
 
-          {view.allocation.length > 0 && (
+          {/* a single class is a bar at 100% that says nothing the table does not (LIVE1C-056) */}
+          {view.allocation.length > 1 && (
             <Card>
               <CardHead title="By asset class" />
               <BarList label="Assets by class" footnote="Share of total assets, before loans."

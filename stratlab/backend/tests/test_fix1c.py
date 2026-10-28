@@ -316,3 +316,77 @@ def test_038_the_broker_login_alert_is_previewable_and_names_no_vendor():
     assert "broker_login" in P.registry()
     d = P.describe("broker_login", True)
     assert "login needs you" in d["subject"] and not re.search(r"zerodha|kite", d["html"] + d["text"], re.I)
+
+
+# ---------- Money (052 to 054) ----------
+def test_052_a_passed_audit_date_is_said_as_passed():
+    from datetime import date
+    from app import tax_due
+    today = date(2026, 10, 28)
+    assert tax_due.deadline(2025, "audit_report", today).startswith("was due on 21 October 2026 (7 days ago; extended from 30 September by CBDT Circular 7/2026")
+    assert tax_due.deadline(2025, "audit", today).startswith("by 21 November 2026 (extended from 31 October by CBDT Circular 7/2026")
+    both = tax_due.audit_dates(2025, today)
+    assert "Tax audit report (Form 3CA or 3CB, with Form 3CD) was due on 21 October 2026" in both and "; the return by 21 November 2026" in both
+    assert tax_due.deadline(2025, "audit_report", date(2026, 10, 21)).startswith("by 21 October 2026")        # the day itself is not late
+
+
+def test_053_the_itr_file_line_agrees_with_the_tax_reports_count():
+    from app import money_itr as I
+    from tests.test_review_dh1 import _g
+    g = {**_g(), "files": [{"name": "taxpnl.zip", "broker": "Zerodha", "trades": 38, "fno_lines": 1, "at": "2026-10-04T10:00"}],
+         "fno_lines_all": 111202, "fno_lines": 111202}
+    lines = I.sources(g)
+    assert "38 trades" in lines[0] and "F&O" not in lines[0]
+    assert any("F&O, commodity and currency lines added up as business income, all years: 111,202." in x for x in lines)
+    ok = I.sources({**g, "files": [{**g["files"][0], "fno_lines": 111202}]})
+    assert "38 trades, 111,202 F&O, commodity and currency lines" in ok[0]
+
+
+def test_054_the_rates_page_counts_the_business_income_in_the_files_in_the_users_rate(monkeypatch):
+    from app import fixed_income as FI, tax_lots
+    chunk = {"seg": "fno", "fy": 2025, "first": "2025-04-02", "last": "2026-03-30", "trades": 111202, "pnl": 25_311_666.0, "charges": 0.0, "stt": 0.0,
+             "turnover": 1.0, "turnover_contract": 1.0, "by": []}
+    monkeypatch.setattr(tax_lots, "load", lambda uid: {"trades": [], "files": [], "fmv": {}, "business": [chunk], "updated_at": None})
+    monkeypatch.setattr(FI, "saved_inputs", lambda uid, fy: (2025, {"regime": "new", "other": 0.0, "salary": None, "deductions": 0.0, "age": "below60", "resident": True, "saved": True}))
+    monkeypatch.setattr(FI, "today", lambda: __import__("datetime").date(2026, 10, 28))
+    pro = {"id": "u", "_plan": "pro"}
+    t, basis, mine, fy = FI.tax_basis(pro, None, True)
+    assert basis == "estimate" and mine["business"] == 25_311_666.0 and mine["fy"] == 2025
+    assert 0.38 < t < 0.40                                                  # 30% with the 25% surcharge and 4% cess, not 0%
+    monkeypatch.setattr(tax_lots, "load", lambda uid: {"trades": [], "files": [], "fmv": {}, "business": [], "updated_at": None})
+    t0, basis0, mine0, _ = FI.tax_basis(pro, None, True)
+    assert basis0 == "estimate" and t0 == 0.0 and "business" not in mine0   # only typed-in income, none: the page says why it is 0%
+
+
+def test_055_me_says_whether_there_are_holdings(world):
+    from tests.fake_db import headers
+    c = world["client"]
+    assert c.get("/me", headers=headers("pro-token")).json()["has_holdings"] in (True, False)
+    from app import holdings
+    assert main.has_holdings("nobody-has-this-id") is False
+    assert isinstance(holdings.load("nobody-has-this-id")["items"], list)
+
+
+def test_058_a_name_the_exchange_cut_at_21_letters_is_given_in_full(monkeypatch):
+    monkeypatch.setattr(main.kite, "company_name", lambda s: {"ZEEL": "Zee Entertainment Enterprises Limited", "ITC": "ITC Limited"}.get(s))
+    items = [{"symbol": "ZEEL", "name": "ZEE ENTERTAINMENT ENT", "kind": "stock"}, {"symbol": "ITC", "name": "ITC", "kind": "stock"},
+             {"symbol": "RELIANCE", "name": "RELIANCE INDUSTRIES", "kind": "stock"}]
+    got = {i["symbol"]: i["name"] for i in main._full_names(items)}
+    assert got == {"ZEEL": "ZEE ENTERTAINMENT ENTERPRISES", "ITC": "ITC", "RELIANCE": "RELIANCE INDUSTRIES"}
+
+
+def test_059_the_itr_list_says_when_the_dividends_are_not_in_the_total():
+    from app import money_itr as I
+    from tests.test_review_dh1 import _g
+    g = {**_g(), "div_lines": [{"amount": 59540.0}], "div_in_total": False}
+    labels = [k for k, _ in I.summary(g)]
+    assert "Dividends in the year (India), not in the total tax estimate below" in labels
+    labels_in = [k for k, _ in I.summary({**g, "div_in_total": True})]
+    assert "Dividends in the year (India)" in labels_in
+
+
+def test_060_the_new_years_none_due_says_the_old_years_tax_is_its_own_item():
+    import inspect
+    from app import money_routes
+    src = inspect.getsource(money_routes)
+    assert "the tax still unpaid for the year before is its own item in this calendar" in src

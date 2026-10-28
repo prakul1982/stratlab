@@ -356,7 +356,13 @@ def calendar_dates(uid: str, days: int = 90, frm: date | None = None) -> list[di
     except Exception as e:
         print("calendar instalments:", type(e).__name__)
     try:
-        out += _unpaid_date(profile, cur, i, t)
+        unpaid = _unpaid_date(profile, cur, i, t)
+        out += unpaid
+        # "none due for FY 2026-27" beside a year-old tax still unpaid reads as owing nothing in December: said on the item (LIVE1C-060)
+        if unpaid:
+            for e in out:
+                if e.get("kind") == "advance_none":
+                    e["detail"] += " This is the new year's only: the tax still unpaid for the year before is its own item in this calendar."
     except Exception as e:
         print("calendar unpaid tax:", type(e).__name__)
     return out

@@ -18,7 +18,7 @@ import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { AsOf, Fig, Loading, PanelSkel, VerdictBadge } from "../components/ui";
-import { Card, CardHead, PageHeader, Seg } from "../components/kit";
+import { Card, CardHead, Disclosure, PageHeader, Seg } from "../components/kit";
 import { Panel, QuoteGrid } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
@@ -541,7 +541,8 @@ function TaxSummary() {
               <Fig label="Short-term gains" tone={signCls(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
               <Fig label="Long-term gains" tone={signCls(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>
-            {year?.audit && <p className="small">{year.audit}</p>}
+            {/* the tax audit fact (turnover, the report's date, the penalty) is seven lines: behind a fold, so this card is not twice My Holdings' height (LIVE1C-051) */}
+            {year?.audit && <Disclosure summary="Tax audit (section 44AB)" testId="tax-audit"><p className="small">{year.audit}</p></Disclosure>}
             <p className="tiny muted">{year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
             {(t.updated_at || t.last_trade) && <p className="tiny muted" data-testid="tax-uploaded">{uploadedLine(t.updated_at, t.last_trade, (iso) => fmtDate(iso, { tz: "Asia/Kolkata" }))}</p>}
             {/* no "Prices as of": nothing on this card is at today's price, only sales already made (R66-008) */}

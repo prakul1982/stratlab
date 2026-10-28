@@ -129,3 +129,51 @@ test("LIVE1C-038, LIVE1C-039: the email list says what StratLab does not send; t
   assert.match(css, /\.adm-mail-stage\.sample::before \{ content: "SAMPLE · made-up details"/);
   assert.doesNotMatch(css, /adm-mail-stage\.sample::after/);
 });
+
+test("LIVE1C-050, LIVE1C-051: Money home's figures never break inside their digits; four or more are two across; the audit fact is folded", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.money-panels \.k-stat-v \{ font-size: clamp\(20px, 1\.7vw, 28px\); white-space: nowrap; overflow-wrap: normal; \}/);
+  assert.match(css, /\.money-panels \.k-stats:has\(> \.k-stat:nth-child\(4\)\) \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(css, /\.money-panels \.k-stats \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}\n  \.money-panels \.k-stats > \.k-stat:last-child:nth-child\(odd\)/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /<Disclosure summary="Tax audit \(section 44AB\)" testId="tax-audit">/);
+});
+
+test("LIVE1C-055: the Money space's main button says Update holdings once there are holdings", async () => {
+  const shell = read("src/components/Shell.tsx");
+  assert.match(shell, /label: hasHoldings \? "Update holdings" : "Add your holdings"/);
+  assert.match(shell, /mainAction\(space, focus, !!me\?\.has_holdings\)/);
+  const { tourSteps } = await import("../src/components/Tour.tsx").catch(() => ({ tourSteps: null }));
+  assert.match(read("src/components/Tour.tsx"), /main === "Update holdings"/);
+  if (tourSteps) assert.match(tourSteps("Update holdings")[2].body, /^This space's main button\. Update holdings:/);
+});
+
+test("LIVE1C-056: no repeated totals on Net worth, and the tax report's working is the table with the words behind a fold", () => {
+  const nw = read("src/pages/money/NetWorthPage.tsx");
+  assert.match(nw, /\{t\.liabilities > 0 && <Stat label="Assets"/);
+  assert.match(nw, /view\.allocation\.length > 1 && \(/);
+  const tax = read("src/pages/TaxReportPage.tsx");
+  assert.match(tax, /<Disclosure summary="The same working in words">/);
+});
+
+test("LIVE1C-057, LIVE1C-058: Holdings reads Zerodha again from the page; the page is named like its card; a repeated total is one tile", () => {
+  const h = read("src/pages/HoldingsPage.tsx");
+  assert.match(h, /Read from Zerodha now/);
+  assert.match(h, /"\/connect\/kite\/refresh"/);
+  assert.match(h, /title="My Holdings"/);
+  const a = read("src/components/HoldingsActions.tsx");
+  assert.match(a, /, the same as the last 12 months/);
+});
+
+test("LIVE1C-054: the rate sentence counts the files' F&O result, or says why it is 0%", () => {
+  const r = read("src/pages/money/RatesPage.tsx");
+  assert.match(r, /is counted with it; gains on shares in your files are not/);
+  assert.match(r, /data-testid="rate-zero"/);
+  assert.match(r, /header: "How it is paid"/);
+  assert.match(read("src/styles.css"), /\.rates-page \.k-table \{ table-layout: fixed; width: 100%; \}/);
+});
+
+test("LIVE1C-060: the calendar's form and reminders share a row; the link has the row under them", () => {
+  const src = read("src/pages/money/MoneyCalendarPage.tsx");
+  assert.ok(src.indexOf('<Card label="Reminders">') < src.indexOf('<Card label="Calendar feed">'));
+  assert.ok(src.indexOf('<Card label="Calendar feed">') > src.indexOf("</div>\n\n      {/* LIVE1C-060"));
+});

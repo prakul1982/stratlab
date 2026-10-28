@@ -983,6 +983,8 @@ def me(profile=Depends(current_profile)):
         "offer": offer_state(promo=not seen),
         "onboarding": onboarding_of(profile["id"]),
         "established": established_of(profile["id"]),
+        # whether My Holdings has any stock, so the Money space's main button says "Update holdings", not "Add your holdings" (LIVE1C-055)
+        "has_holdings": has_holdings(profile["id"]),
         "is_admin": admin.is_admin(profile),
     })
 
@@ -1144,6 +1146,13 @@ def onboarding_of(uid: str) -> dict:
     o = o if isinstance(o, dict) else {}
     return {"welcome": o.get("welcome") if isinstance(o.get("welcome"), str) else None,
             "tour": o.get("tour") if o.get("tour") in ("done", "skipped") else None}
+
+
+def has_holdings(uid: str) -> bool:
+    try:
+        return bool(holdings.load(uid)["items"])
+    except Exception:
+        return False
 
 
 def established_of(uid: str) -> bool:
@@ -3366,6 +3375,25 @@ def _etf_named(items: list[dict]) -> list[dict]:
     return out
 
 
+def _full_names(items: list[dict]) -> list[dict]:
+    """A stock saved under the instrument list's name, which the exchange cuts at 21 letters ("ZEE ENTERTAINMENT ENT"), named in full as the
+    exchange's list of companies has it, in the same capitals (LIVE1C-058). Only a name that is the start of the full one is replaced."""
+    out = []
+    for i in items:
+        nm = str(i.get("name") or "")
+        if nm and nm != i.get("symbol") and holdings.market_of(i) == "IN" and not str(i.get("kind") or "").startswith("etf") and len(nm) >= 18:
+            try:
+                full = kite.company_name(i["symbol"])
+            except Exception:
+                full = None
+            if full:
+                full = re.sub(r"\s+(limited|ltd\.?)$", "", full, flags=re.I).upper()
+                if len(full) > len(nm) and full.startswith(nm.upper()):
+                    i = {**i, "name": full}
+        out.append(i)
+    return out
+
+
 def holdings_view(profile) -> dict:
     """The person's holdings at today's prices. The prices are read once and shared for a few seconds, so My space, Money,
     Holdings and the net worth add up to the same rupees when opened one after another."""
@@ -3385,7 +3413,7 @@ def holdings_view(profile) -> dict:
                     _PRICED.pop(k, None)
             _PRICED[key] = (time.monotonic(), got)
     live, us_quotes = got["live"], got["us_quotes"]
-    return {**holdings.view(_etf_named(h["items"]), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
+    return {**holdings.view(_full_names(_etf_named(h["items"])), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
             "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "closes": got.get("closes"),
             "us_prices": bool(us_quotes) if us else None, "usd_inr_at": got.get("rate_at") if us and got["rate"] else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
@@ -3981,8 +4009,9 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     files = [] if mode == "replace" else before["files"]
     business, b_added, b_replaced, b_same, b_overlaps = tax_lots.merge_business([] if mode == "replace" else before["business"],
                                                                                parsed.get("business") or [])
-    lines = sum(f["lines"] for f in parsed.get("files", []) if f["section"] in holdings_file.SEGMENT_NAMES.values()) or \
-        sum(b["trades"] for b in parsed.get("business") or [])
+    # the file's F&O lines as the tax report counts them (the trades its segments hold), not the rows of its sheet (LIVE1C-053)
+    lines = sum(b["trades"] for b in parsed.get("business") or []) or \
+        sum(f["lines"] for f in parsed.get("files", []) if f["section"] in holdings_file.SEGMENT_NAMES.values())
     if added or b_added or b_replaced:
         files = files + [{"name": (filename or "file")[:80], "broker": parsed["broker"], "kind": parsed["kind"], "trades": added,
                           "fno_lines": lines if (b_added or b_replaced) else 0, "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}]

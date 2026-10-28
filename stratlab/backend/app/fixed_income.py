@@ -92,18 +92,35 @@ def slab_rate(slab: float) -> float:
     return slab / 100 * (1 + CESS)
 
 
-def marginal(fy: int, inputs: dict) -> dict | None:
+def marginal(fy: int, inputs: dict, business: float = 0.0) -> dict | None:
     """The tax on the next ₹10,000 of interest at the user's own inputs (rebate, surcharge and cess included), as a
-    fraction, with the estimate's taxable income. None when there is no estimate for the year."""
+    fraction, with the estimate's taxable income. None when there is no estimate for the year. `business`: the year's F&O,
+    commodity and currency result from the user's files, which the tax report adds to the income (LIVE1C-054: a rate of 0%
+    for a person whose report shows ₹77 lakh of tax, because only the typed-in income was counted)."""
     v = tax_total.clean(inputs)
     salary = v["other"] if v["salary"] is None else v["salary"]
     base = {**v, "salary": salary}
-    a = tax_total.estimate(fy, base, [], 0.0, 0.0)
-    b = tax_total.estimate(fy, {**base, "other": v["other"] + PROBE}, [], 0.0, 0.0)
+    a = tax_total.estimate(fy, base, [], 0.0, business)
+    b = tax_total.estimate(fy, {**base, "other": v["other"] + PROBE}, [], 0.0, business)
     if not a.get("available") or not b.get("available"):
         return None
     return {"rate": round((b["total"] - a["total"]) / PROBE, 4), "regime": v["regime"], "income": v["other"],
-            "age": v["age"], "fy": fy}
+            "age": v["age"], "fy": fy, **({"business": round(business, 2)} if business else {})}
+
+
+def files_business(uid: str, fy: int) -> tuple[int, float] | None:
+    """(the year, its F&O, commodity and currency result after charges) from the user's tax files: the latest year up to `fy`
+    that has any, when the result is not nil. None without files. Read from the stored year totals, not the lots, so the page stays quick."""
+    try:
+        chunks = tax_lots.load(uid)["business"]
+        years = sorted({c["fy"] for c in chunks if c["fy"] <= fy})
+        for y in reversed(years):
+            net = tax_lots.business_year(y, chunks)["net"]
+            if net:
+                return y, float(net)
+    except Exception as e:
+        print("rates: the files' business income:", type(e).__name__)
+    return None
 
 
 def after(rate: float | None, tax: str, t: float) -> float | None:
@@ -154,7 +171,15 @@ def tax_basis(profile: dict, slab: float | None, own: bool) -> tuple[float, str,
     mine = None
     if allows(profile["_plan"], "rates_slab") and own:
         found = saved_inputs(profile["id"], fy)
-        if found:
+        # the business income in the person's files counts with the income they typed in, at the year it belongs to (LIVE1C-054)
+        biz = files_business(profile["id"], fy)
+        if biz:
+            by, net = biz
+            inputs = (saved_inputs(profile["id"], by) or (by, tax_total.default_inputs()))[1]
+            mine = marginal(by, inputs, net) or None
+            if mine:
+                mine = {**mine, "fy": by, "rules_fy": by}
+        if not mine and found:
             use, inputs = found
             # the interest is earned this year, so the tax on it is worked out under this year's slabs, rebate and surcharge; the
             # saved year only says what income to work it on (RC3M-005: income saved for FY 2023-24 was taxed under that year's

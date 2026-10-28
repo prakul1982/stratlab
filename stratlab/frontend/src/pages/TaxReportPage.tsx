@@ -541,9 +541,10 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
       <InputsPanel key={y.fy} y={y} onSave={onSave} />
       {t.available && (
         <Disclosure summary="How we got here" open>
-          <ol className="k-list">{t.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
           {(t.notes ?? []).length > 0 && <ul className="k-list muted" aria-label="Notes on the estimate">{t.notes!.map((n) => <li key={n}>{n}</li>)}</ul>}
           <DataTable label="Total tax breakdown" columns={lineCols} rows={t.lines.map((l, i) => ({ ...l, i }))} rowKey={(l) => String(l.i)} />
+          {/* the steps in words say what the table's lines say in figures: one fold under it, not the same working twice in full (LIVE1C-056) */}
+          <Disclosure summary="The same working in words"><ol className="k-list">{t.steps.map((s, i) => <li key={i}>{s}</li>)}</ol></Disclosure>
         </Disclosure>
       )}
     </Card>

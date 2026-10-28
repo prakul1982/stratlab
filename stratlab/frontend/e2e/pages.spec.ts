@@ -557,6 +557,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   if (info.project.name === "phone") await touchable(page);
   await total.getByRole("button", { name: "Save and update" }).click();
   await expect(total.getByText(/resident, aged 60 to 79/)).toBeVisible();
+  await total.locator("summary", { hasText: "The same working in words" }).click();          // the steps in words are one fold under the table (LIVE1C-056)
   await expect(total.getByText(/the old regime's basic exemption is ₹3,00,000/)).toBeVisible();
   const senior = Number((await page.locator('span[aria-label="Total tax estimate"]').innerText()).replace(/[^\d]/g, ""));
   expect(senior).toBeLessThan(Number(amount.replace(/[^\d]/g, "")));

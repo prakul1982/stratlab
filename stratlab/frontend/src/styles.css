@@ -937,7 +937,16 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .money-panels .k-stats { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: var(--s3) var(--s4); }
 /* VR6-016: four figures on a phone are two and two, not three (labels wrapping to two lines) and one left alone below */
 @media (max-width: 640px) { .money-panels .k-stats:has(> .k-stat:nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); }
+.money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); white-space: nowrap; overflow-wrap: normal; }
+/* LIVE1C-050: a figure never breaks inside its digits ("₹77,61,2" over "98" read as two numbers). Four or more figures are two across (a column of
+   a four-across card is under 120px, narrower than "₹2,13,00,765"), three stay in one row; on a phone every card is two across with a last one alone
+   taking the line, and the figure a size down */
+.money-panels .k-stats:has(> .k-stat:nth-child(4)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 640px) {
+  .money-panels .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .money-panels .k-stats > .k-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .money-panels .k-stat-v { font-size: clamp(19px, 5.4vw, 22px); }
+}
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
 @media (max-width: 560px) {
@@ -1870,7 +1879,13 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 }
 .k-table .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-table td.k-wrap, .k-table th.k-wrap { white-space: normal; min-width: 160px; }
-@media (min-width: 900px) { .rates-page .k-table th.k-wrap[scope="row"] { min-width: 260px; } }   /* VR1-151: "Government bond, 6.20% GS 2029" over three lines beside a Tax column with room to spare */
+@media (min-width: 900px) { .rates-page .k-table th.k-wrap[scope="row"] { min-width: 260px; } }
+/* LIVE1C-062: the market and small-savings tables share their column positions (the Rate and After tax figures of one sat left of the other's) */
+@media (min-width: 900px) {
+  .rates-page .k-table { table-layout: fixed; width: 100%; }
+  .rates-page .k-table th:nth-child(1) { width: 32%; } .rates-page .k-table th:nth-child(2), .rates-page .k-table th:nth-child(3) { width: 11%; }
+  .rates-page .k-table th:nth-child(4) { width: 22%; } .rates-page .k-table th:nth-child(5) { width: 24%; }
+}   /* VR1-151: "Government bond, 6.20% GS 2029" over three lines beside a Tax column with room to spare */
 .k-table td.k-act, .k-table th.k-act { text-align: right; width: 1%; padding-left: var(--s1); }
 .k-table td.k-act .k-row { justify-content: flex-end; flex-wrap: nowrap; }
 .k-table td.k-act .k-row.k-col { flex-direction: column; align-items: flex-end; gap: var(--s1); }   /* two actions stacked, so the column stays narrow */

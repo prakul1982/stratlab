@@ -118,6 +118,20 @@ export function HoldingsPage() {
     api<View>("/holdings").then((v) => { if (n === readSeq.current) setView(v); }).catch(() => undefined);
   }, !!view && view.rows.length > 0 && !busy);
 
+  // a connected Zerodha is read again from here, not only from Settings; a login that has ended goes to Zerodha's own sign-in (LIVE1C-057)
+  const refreshZerodha = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ count: number }>("/connect/kite/refresh", { method: "POST" });
+      notify(`Read ${r.count} holding${r.count === 1 ? "" : "s"} from Zerodha.`);
+      load();
+    } catch (e) {
+      if ((e as { code?: string }).code === "login_needed") {
+        try { const r = await api<{ url: string }>("/connect/kite/login"); window.location.href = r.url; return; } catch (e2) { fail(e2); }
+      } else fail(e);
+    } finally { setBusy(false); }
+  };
+
   const { problem, clear: clearProblem, refused } = useUploadProblem();     // a refused file's reason stays beside the upload (RC6-010)
   const pick = async (files: FileList | null, reset: () => void) => {
     const f = files?.[0];
@@ -222,7 +236,7 @@ export function HoldingsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · What you own" title="Your stocks, at the latest prices" asOf={view?.prices_at} asOfLabel="Prices as of"
+      <PageHeader eyebrow="Money · What you own" title="My Holdings" asOf={view?.prices_at} asOfLabel="Prices as of"
         lede="Your broker's holdings file, valued at the latest prices (the last close when the market is shut): each stock's value, gain or loss, and your sector mix."
         info="Facts, not advice. Only you can see your holdings." infoLabel="About your holdings" />
 
@@ -237,7 +251,10 @@ export function HoldingsPage() {
         {view?.zerodha && rows.length === 0 && zerodhaEmpty(view.zerodha)
           ? null      // the empty state below already says Zerodha is connected and returned nothing (R35: said twice)
           : view?.zerodha
-          ? <p className="k-note">Zerodha is connected. <Link to="/settings#accounts">Refresh it or connect your statement inbox in Settings</Link>, so this stays up to date without uploads.</p>
+          ? <div className="k-row" data-testid="zerodha-refresh">
+              <span className="k-note">Zerodha is connected{view.zerodha.read_at ? `, last read ${ago(view.zerodha.read_at)}` : ""}. Zerodha ends its login each morning, so one tap a day keeps this current; <Link to="/settings#accounts">a statement inbox in Settings</Link> does it without a tap.</span>
+              <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void refreshZerodha()}>{busy ? "Reading…" : "Read from Zerodha now"}</button>
+            </div>
           : <p className="k-note">Prefer not to upload each time? <Link to="/settings#accounts">Connect Zerodha or your statement inbox once</Link> and this stays up to date by itself.</p>}
         {result && (
           <div className="k-stack" role="status">
