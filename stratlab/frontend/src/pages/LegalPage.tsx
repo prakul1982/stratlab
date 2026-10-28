@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { CFG } from "../lib/config";
 import { publicGet } from "../lib/http";
-import { Logo } from "../components/Logo";
 import { LEGAL_PAGES } from "../components/LegalLinks";
-import { SkipLink } from "../components/SkipLink";
+import { PublicFrame } from "../components/PublicFrame";
 import { ChoiceControl } from "../components/Tracking";
 import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED, type Business } from "../content/legal";
 
@@ -56,24 +55,20 @@ export function LegalPage() {
     return () => { live = false; window.clearTimeout(slow); };
   }, []);
   const page = LEGAL_PAGES.find((p) => p.path === pathname) ?? LEGAL_PAGES[0];
+  // the same frame as every other public page (header with the site's links and Sign in, the policies and the explore links at the
+  // bottom), not a header of its own with four small links (PUB-1: the policies were the one public page with no way to the rest)
   return (
-    <div className="legal">
-      <SkipLink />
-      <header className="legal-head">
-        <Link to="/" aria-label="StratLab home"><Logo size={30} /></Link>
-        <nav className="row wrap legal-links" aria-label="Policies">
-          {LEGAL_PAGES.map((p) => <Link key={p.path} className={`small ${p.path === page.path ? "" : "muted"}`} to={p.path}
+    <PublicFrame className="legal">
+      <article className="legal-body stack">
+        <nav className="legal-tabs" aria-label="Policies">
+          {LEGAL_PAGES.map((p) => <Link key={p.path} className="k-pagenav-a" to={p.path}
             aria-current={p.path === page.path ? "page" : undefined}>{p.title}</Link>)}
         </nav>
-      </header>
-      <main id="main" tabIndex={-1}>
-        <article className="legal-body stack">
-          <h1 className="page-title">{page.title}</h1>
-          <p className="small muted">Last updated {LEGAL_UPDATED[page.path]}</p>
-          {loaded ? <Policy path={page.path} /> : <p className="small muted" role="status">Loading…</p>}
-          {loaded && page.path === "/privacy" && <ChoiceControl />}{/* ADS-1: the answer about ads and analytics, and a way to change it */}
-        </article>
-      </main>
-    </div>
+        <h1 className="page-title">{page.title}</h1>
+        <p className="small muted">Last updated {LEGAL_UPDATED[page.path]}</p>
+        {loaded ? <Policy path={page.path} /> : <p className="small muted" role="status">Loading…</p>}
+        {loaded && page.path === "/privacy" && <ChoiceControl />}{/* ADS-1: the answer about ads and analytics, and a way to change it */}
+      </article>
+    </PublicFrame>
   );
 }

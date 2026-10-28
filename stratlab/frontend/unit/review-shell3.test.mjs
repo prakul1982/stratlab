@@ -185,7 +185,9 @@ test("a signed-in visitor of a shared library page sees 'Open StratLab', not a s
   assert.match(frame, /\{action \?\? \(signedInHere\(\) \? <OpenApp \/> : <a className="btn outline sm" href="\/" onPointerEnter=\{warmSignIn\} onFocus=\{warmSignIn\} onTouchStart=\{warmSignIn\} onClick=\{\(e\) => \{ e\.preventDefault\(\); void signIn\(\); \}\}>Sign in<\/a>\)\}/);
   assert.match(frame, /<a className=\{className\} href="\/">Open StratLab<\/a>/);            // a whole page load: the app starts, not the visitor's landing page
   const lib = read("src/pages/PublicLibrary.tsx");
-  assert.match(lib, /signedInHere\(\) \? <OpenApp className="btn" \/> : <button type="button" className="btn" onClick=\{\(\) => void signIn\("\/library"\)\}>/);
+  // (PUB-1: the header's button is the small one, like the landing page's, the card's the full-size one)
+  assert.match(lib, /signedInHere\(\) \? <OpenApp className=\{small \? "btn sm" : "btn"\} \/> : <button type="button" className=\{small \? "btn sm" : "btn"\} onClick=\{\(\) => void signIn\("\/library"\)\}>/);
+  assert.equal([...lib.matchAll(/<GoogleCopy label="Continue with Google" small \/>/g)].length, 2);
   assert.equal([...lib.matchAll(/<GoogleCopy/g)].length, 3);                                   // the two headers and the "Test it yourself" card all go through it
 });
 

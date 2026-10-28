@@ -50,8 +50,8 @@ const where = (e: LibEntry) => e.group ? groupLabel(e.group.name, e.group.member
 const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? "up" as const : "down" as const);
 
 /** Signed in already (a saved sign-in in this browser): "Open StratLab" instead of a sign-in that is not needed. */
-const GoogleCopy = ({ label = "Continue with Google to copy and re-test" }: { label?: string }) => (
-  signedInHere() ? <OpenApp className="btn" /> : <button type="button" className="btn" onClick={() => void signIn("/library")}>{label}</button>
+const GoogleCopy = ({ label = "Continue with Google to copy and re-test", small = false }: { label?: string; small?: boolean }) => (
+  signedInHere() ? <OpenApp className={small ? "btn sm" : "btn"} /> : <button type="button" className={small ? "btn sm" : "btn"} onClick={() => void signIn("/library")}>{label}</button>
 );
 
 /** /library, signed out: StratLab's own strategies with their verdicts. */
@@ -77,7 +77,7 @@ export function PublicLibrary() {
   const markets = useMemo(() => marketChoices(counts, rows ?? [], market), [counts, rows, market]);
   const tally = useMemo(() => libraryTally(rows ?? []), [rows]);
   return (
-    <PublicFrame action={<GoogleCopy label="Continue with Google" />}>
+    <PublicFrame action={<GoogleCopy label="Continue with Google" small />}>
       <PageHeader eyebrow="Strategy library" title="StratLab's own strategies"
         lede="Well-known rule sets that StratLab ran through its own backtest and four checks, each shown with the verdict it earned, the ones that failed as plainly as the ones that held up. Open one to read its rules." />
       <Card label="Find a strategy">
@@ -144,7 +144,7 @@ export function PublicLibraryEntry({ id }: { id: string }) {
   }, [e, id]);
   const sh = e ? shownStats(e) : null;
   return (
-    <PublicFrame action={<GoogleCopy label="Continue with Google" />}>
+    <PublicFrame action={<GoogleCopy label="Continue with Google" small />}>
       {!e && !gone && !failed && <><h1 className="sr-only">Opening the strategy</h1><Card><Skeleton label="Opening the strategy" /></Card></>}
       {/* the page's one heading, also when the strategy is gone (R7O-010, axe page-has-heading-one) */}
       {failed && <><h1 className="k-h1">StratLab couldn't load this page</h1><ErrorState title="The strategy couldn't be opened" action={{ label: "Retry", onClick: () => setAgain((x) => x + 1) }}>Check your connection and try again.</ErrorState></>}

@@ -65,7 +65,7 @@ from .config import api_docs_enabled, settings
 from .branding import public_text
 from .errors import report
 from .responses import err, ok
-from .guard import Guard, HeavyGate
+from .guard import Guard, HeavyGate, Window, address as caller_address
 from . import research
 from .engine import walkforward
 from . import rule_check
@@ -4690,6 +4690,95 @@ def _renamed_redirect(region: str | None, symbol: str, ref: str | None = None):
     if not new:
         return None
     return RedirectResponse(stock_pages.path(region, new) + (f"?ref={ref}" if ref else ""), status_code=301, headers=PAGE_HEADERS)
+
+
+# ---------- the share-price chart's closes (PUB-1) ----------
+# Read when a visitor's browser asks for them (the chart script waits until the chart is about to be seen, so a crawler that
+# runs no script never asks), kept a short while in a small bounded cache, held to a few reads a minute over every company
+# and to a few from one address, and cached by the site's edge for an hour (CHART_SERIES_CACHE): 13,000 crawled pages
+# can't turn into 13,000 reads of the price sources. Nothing runs on a schedule and nothing is read at page-build time.
+CHART_BUILDS_PER_MINUTE = 30           # series read from the sources a minute, across every company
+CHART_BUILDS_PER_ADDRESS = 12          # ...and from one address
+chart_cache = TTLCache(max_items=400, max_bytes=8 * 1024 * 1024)          # a series is ~6 KB of numbers
+chart_reads = Window()
+chart_locks: dict[str, threading.Lock] = {}
+chart_lock_guard = threading.Lock()
+
+
+def stock_page_series(region: str, co: dict) -> dict:
+    """A company's daily closes for the chart: the page's own candles (stock_page_bars: the last year as the exchange printed
+    it, so the chart's end is the page's price) and, before them, up to five years from the broker's or the price source's
+    history, read without being kept (a long read of every company viewed would fill their caches). A long read that fails
+    leaves the last year and a bit, with the longer ranges out. {} when there are no candles."""
+    recent = stock_pages.closed_bars(stock_page_bars(region, co), region)
+    if not recent:
+        return {}
+    older: list[dict] = []
+    try:
+        ids, _ = universes.resolve(markets, region, [{"symbol": co["bse"] or co["sym"]}])
+        prov, inst = markets.resolve(ids[0]) if ids else (None, None)
+        if prov and inst:
+            try:
+                if region == "IN":
+                    long = prov.kite.history(inst["token"], "1d", stock_pages.CHART_READ_DAYS, store=False)
+                else:
+                    long = prov.yahoo.chart(inst["token"], "1d", stock_pages.CHART_READ_DAYS, exact=True)["candles"]
+            except (AttributeError, TypeError):          # a source without those controls: its ordinary read
+                long = prov.history(inst, "1d", stock_pages.CHART_READ_DAYS)
+            first = str(recent[0].get("t") or "")[:10]
+            older = [b for b in long if str(b.get("t") or "")[:10] < first]
+    except Exception as ex:
+        print("stock chart: the longer history wasn't read:", region, co.get("sym"), str(ex)[:120])
+    return stock_pages.chart_series(older + recent)
+
+
+def _chart_ttl(region: str) -> int:
+    """An hour, never past the market's next settle point (the next close changes the last point)."""
+    nxt = stock_pages.next_settle(region)
+    return max(stock_pages.MIN_CACHE, min(3600, int((nxt - datetime.now(timezone.utc)).total_seconds()))) if nxt else 3600
+
+
+@app.get("/stocks/chart.js", include_in_schema=False)
+def stock_chart_js():
+    """The chart's script (backend/app/stock_chart.js), addressed by its hash in the page, so it is kept long."""
+    return Response(stock_pages.CHART_JS, media_type="text/javascript",
+                    headers={"Cache-Control": "public, max-age=86400, s-maxage=604800"})
+
+
+@app.get("/stocks/{region}/{symbol}/prices.json", include_in_schema=False)
+def stock_prices(region: str, symbol: str, request: Request):
+    """A listed company's daily closes for its page's chart, {"currency", "t": [days since 1970-01-01], "c": [closes]}: every
+    session of the last year and the last close of each week before it, up to five years. Public, read-only, kept by the
+    site's edge; 404 for a company with no page or no prices."""
+    r = stock_pages.REGIONS.get(region.lower())
+    hit = stock_pages.find(r, symbol) if r and len(symbol) <= 20 else None
+    missing = JSONResponse({"detail": {"code": "no_prices", "message": "No prices to chart for that company."}}, status_code=404,
+                           headers={"Cache-Control": stock_pages.CHART_MISSING_CACHE})
+    if not hit or hit[0] != symbol:
+        return missing
+    sym, co = hit
+    key = f"{r}:{sym}"
+    series = chart_cache.get(key)
+    if series is None:
+        with chart_lock_guard:
+            if len(chart_locks) > 2000:
+                chart_locks.clear()
+            one = chart_locks.setdefault(key, threading.Lock())
+        with one:                                      # two visitors on one company: the second waits for the first's read
+            series = chart_cache.get(key)
+            if series is None:
+                if not (chart_reads.hit("all", CHART_BUILDS_PER_MINUTE) and chart_reads.hit("a:" + caller_address(request.scope), CHART_BUILDS_PER_ADDRESS)):
+                    return JSONResponse({"detail": {"code": "busy", "message": "Prices are busy right now. Try again in a minute."}}, status_code=503,
+                                        headers={"Retry-After": "60", "Cache-Control": "no-store"})
+                try:
+                    series = stock_page_series(r, co)
+                except Exception as ex:
+                    print("stock chart: no series:", r, sym, str(ex)[:120])
+                    series = {}
+                chart_cache.set(key, series, _chart_ttl(r) if series else 120)
+    if not series:
+        return missing
+    return JSONResponse({"currency": "USD" if r == "US" else "INR", **series}, headers={"Cache-Control": stock_pages.CHART_SERIES_CACHE})
 
 
 @app.get("/stocks", response_class=HTMLResponse)
