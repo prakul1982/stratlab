@@ -69,7 +69,7 @@ export const PAGES: PageMeta[] = [
     summary: ["These terms cover your use of StratLab, the website and app at stratlab.studio. StratLab is a research and education tool: you test trading ideas on past market data and paper trade them with simulated money. No real orders are ever placed, and nothing on StratLab is investment advice.",
       "The terms cover your account, plans and payment, fair use, what you publish, market data and AI, liability, ending and changes."] },
   { path: "/privacy", title: "Privacy · StratLab",
-    description: "What StratLab collects and why, who processes it, what your browser stores before and after sign-in, and how to see, correct or delete your data.", index: true, updated: "2026-10-26",
+    description: "What StratLab collects and why, who processes it, what your browser stores before and after sign-in, and how to see, correct or delete your data.", index: true, updated: "2026-10-28",
     heading: "Privacy policy" },
   { path: "/refunds", title: "Refunds · StratLab",
     description: "How to cancel a StratLab plan, the 7-day refund on any payment and how to ask. You can cancel any time from Account.", index: true, updated: "2026-10-25",

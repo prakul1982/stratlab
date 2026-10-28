@@ -48,6 +48,7 @@ from . import chart_routes
 from . import drawings_routes
 from . import maindb, market_store, memguard, storage, usage_slots
 from . import official_close
+from . import ads
 from . import last_session
 from . import money_itr, money_us_routes
 from . import rules, rules_watch
@@ -4743,6 +4744,7 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     # kept by the site's cache no longer than the next close's settle point, and a minute while it waits for its new close,
     # so no compressed copy outlives the refresh (R13-006)
     headers = {"Cache-Control": stock_pages.cache_control(r, stored.get("facts") if isinstance(stored, dict) else None)}
+    page = ads.add_to_page(page, "company")        # ADS-1: as the page is sent, so the stored copy never holds an ad; "" while ads are off
     return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=headers)
 
 
