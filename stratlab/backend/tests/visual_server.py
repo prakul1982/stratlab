@@ -107,6 +107,7 @@ def build():
     # made-up rupees-a-dollar histories (SBI TT buying and RBI reference), for US stocks tax and the ITR export
     from tests import fx_rates
     fx_rates.seed()
+    blog_posts()
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     connect_once(mp)
@@ -267,6 +268,25 @@ def library_seeds():
     finally:
         universes.PRESETS = keep
         library_seed.DAYS.update(days)
+
+
+def blog_posts():
+    """The public blog (e2e/blog.spec.ts): the last three trading days' Market Briefs of each market saved as posts, from the fake
+    world's own closes, and the research posts written from what it holds (the library's samples, the IPO tracker, the index history)."""
+    from datetime import date, timedelta
+    from app import blog, blog_research
+    from app.data.calendar import is_trading_day
+    from app.newsletter import job
+    for region in ("IN", "US"):
+        day, got = date.today(), 0
+        while got < 3:
+            if is_trading_day(region, day):
+                issue = job.build_market(region, day, False, store=False)
+                if issue:
+                    blog.save_brief(issue)
+                got += 1
+            day -= timedelta(days=1)
+    print("blog:", blog_research.generate(builders=blog_research.source_posts()))
 
 
 def invite_rewards():

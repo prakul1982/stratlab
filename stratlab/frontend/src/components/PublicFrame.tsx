@@ -6,16 +6,18 @@ import { SkipLink } from "./SkipLink";
 import { signedInHere, signIn, warmSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 
-/** The landing page's sections, Plans, the library and the companies, for the phone Menu (the company pages carry the same links). */
+/** The landing page's sections, Plans, the library, the companies and the blog, for the phone Menu (the company pages carry the same links). */
 export const PUBLIC_MENU: [string, string][] = [["/#trade", "Trade"], ["/#invest", "Invest"], ["/#money", "Money"], ["/#alerts", "Alerts"], ["/pricing", "Plans"], ["/#faq", "FAQ"],
-  ["/library", "Library"], ["/stocks", "Companies"]];
+  ["/library", "Library"], ["/stocks", "Companies"], ["/blog", "Blog"]];
 
-/** The footer's way to the public pages that show real work: the strategy library with the verdict each earned, and the
- * company pages (DK-008: the library was reachable from one link far down the landing page). */
+/** The footer's way to the public pages that show real work: the strategy library with the verdict each earned, the
+ * company pages (DK-008: the library was reachable from one link far down the landing page) and the blog, the daily
+ * market briefs and research (BLOG-1; a page of the API, like the companies, so a plain link). */
 export const SiteLinks = () => (
   <nav className="k-row k-small legal-links" aria-label="Explore">
     <Link className="muted" to="/library">Strategy library</Link>
     <a className="muted" href="/stocks">Companies</a>
+    <a className="muted" href="/blog">Blog</a>
     <Link className="muted" to="/plans">Plans</Link>
   </nav>
 );

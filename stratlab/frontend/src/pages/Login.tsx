@@ -178,7 +178,7 @@ const SECTIONS: [string, string][] = [["trade", "Trade"], ["invest", "Invest"], 
  * and the company pages (DK-008: the library was reachable only from one link far down the page). /plans has no sections to
  * scroll to, so it carries the same links as every other public page (DK-004). */
 const NAV_LINKS = (plansOnly: boolean): [string, string][] => (plansOnly ? PUBLIC_MENU
-  : [...SECTIONS.map(([id, label]): [string, string] => [`#${id}`, label]), ["/library", "Library"], ["/stocks", "Companies"]]);
+  : [...SECTIONS.map(([id, label]): [string, string] => [`#${id}`, label]), ["/library", "Library"], ["/stocks", "Companies"], ["/blog", "Blog"]]);
 
 /** A section's eyebrow, heading and one line under it. */
 function Head({ eyebrow, title, children, h1 }: { eyebrow: string; title: string; children?: ReactNode; h1?: boolean }) {

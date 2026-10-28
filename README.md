@@ -210,7 +210,7 @@ flowchart LR
 
 - **Frontend** (`stratlab/frontend`): a Vite + React 19 + TypeScript single-page app on **Vercel**. Pages load on
   demand. `public/config.js` holds the API address and public keys and is read at runtime. Vercel forwards `/v/*`,
-  `/c/*`, `/stocks/*`, `/sitemap.xml` and `/sitemaps/*` to the backend, which renders those public pages itself.
+  `/c/*`, `/stocks/*`, `/blog/*`, `/sitemap.xml` and `/sitemaps/*` to the backend, which renders those public pages itself.
 - **Backend** (`stratlab/backend`): **FastAPI** on **Railway**, run as one process, because live paper sessions, the
   tick feed and the scheduled jobs (newsletters, alerts, audits, the daily checks) live in memory. Backtests run in
   worker processes. The backend owns every secret; the browser only talks to it and to Supabase sign-in.
