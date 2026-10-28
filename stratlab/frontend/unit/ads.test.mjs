@@ -18,7 +18,7 @@ const ctx = (o) => ({ slot: "ai", cfg: on, path: "/research/IN/RELIANCE", choice
 
 // ---------- the settings ----------
 test("ads are off unless the switch, the publisher ID and the slot's ID are all set", () => {
-  assert.deepEqual(off, { on: false, client: "ca-pub-8125241692814953", slots: { public: "", ai: "" } }, "the owner's ID is the default; no slot, so nothing draws");
+  assert.deepEqual(off, { on: false, client: "ca-pub-8125241692814953", slots: { public: "", ai: "" }, pixel: "", clarity: "z4n5s4xn12" }, "the owner's IDs are the defaults; no slot, so no ad draws; no pixel");
   assert.equal(A.adsLive(off, "public"), false);
   assert.equal(A.adsLive(on, "public"), true);
   assert.equal(A.adsLive(on, "ai"), true);
@@ -41,9 +41,9 @@ test("/config.js can turn ads off (or set the IDs) without a rebuild", () => {
 });
 
 // ---------- who sees what ----------
-test("the Free-account slot: an ad after Allow, the question before it, a StratLab card otherwise, nothing on Basic or Pro", () => {
+test("the Free-account slot: an ad after Allow, a StratLab card before an answer or after No thanks, nothing on Basic or Pro", () => {
   assert.equal(A.adMode(ctx({ choice: "yes" })), "ad");
-  assert.equal(A.adMode(ctx({ choice: null })), "consent");
+  assert.equal(A.adMode(ctx({ choice: null })), "house");
   assert.equal(A.adMode(ctx({ choice: "no" })), "house");
   for (const plan of ["basic", "pro", null]) for (const choice of ["yes", "no", null]) {
     assert.equal(A.adMode(ctx({ plan, choice })), "none", `${plan} / ${choice}: no ads, no card, nothing while the plan is unknown`);
@@ -60,7 +60,7 @@ test("ads off: Free sees the StratLab card whatever the answer was; no ad and no
 test("the public slot: signed-out visitors only, nothing while ads are off, and no card in its place", () => {
   const pub = (o) => ctx({ slot: "public", path: "/library", signedIn: false, plan: null, ...o });
   assert.equal(A.adMode(pub({ choice: "yes" })), "ad");
-  assert.equal(A.adMode(pub({ choice: null })), "consent");
+  assert.equal(A.adMode(pub({ choice: null })), "none", "no ad before the visitor says yes");
   assert.equal(A.adMode(pub({ choice: "no" })), "none");
   assert.equal(A.adMode(pub({ cfg: off, choice: "yes" })), "none");
   assert.equal(A.adMode(pub({ cfg: off })), "none");
@@ -73,7 +73,7 @@ test("the public slot: signed-out visitors only, nothing while ads are off, and 
 test("Google's own consent message on the page: ours steps aside, unless the visitor already said no", () => {
   assert.equal(A.adMode(ctx({ cmp: true })), "ad");
   assert.equal(A.adMode(ctx({ cmp: true, choice: "no" })), "house");
-  assert.equal(A.adMode(ctx({ cmp: false })), "consent");
+  assert.equal(A.adMode(ctx({ cmp: false })), "house");
 });
 
 test("never on money, tax, holdings, net worth, account, admin, sign-in or payment pages, whatever the plan and answer", () => {
@@ -130,6 +130,7 @@ test("Google's script is loaded only after Allow, below the fold, and never from
   const tsx = read("src/components/AdUnit.tsx");
   assert.equal(tsx.match(/adsbygoogle\.js/g).length, 2, "the duplicate check and the one address");
   assert.match(tsx, /function addScript/);
+  assert.doesNotMatch(tsx, /writeChoice|AdAsk/, "the question is the banner's, not the slot's");
   assert.match(tsx, /rootMargin: "300px 0px"/);
   for (const f of ["index.html", "public/config.js", "public/boot.js"]) assert.doesNotMatch(read(f), /googlesyndication|adsbygoogle/, f);
 });
@@ -155,7 +156,7 @@ function sources(dir) {
 
 test("an ad slot is drawn in exactly these places, and in none of the money, account, admin, sign-in or payment files", () => {
   const users = sources("src").filter((f) => /AdUnit|AiAd|PublicAd/.test(read(f)) && !/^src\/components\/(AdUnit|AiAd)\.tsx$/.test(f)).sort();
-  assert.deepEqual(users, ["src/components/Research.tsx", "src/pages/Login.tsx", "src/pages/PublicLibrary.tsx", "src/pages/PublicVerdict.tsx"]);
+  assert.deepEqual(users, ["src/components/Research.tsx", "src/components/Tracking.tsx", "src/pages/Login.tsx", "src/pages/PublicLibrary.tsx", "src/pages/PublicVerdict.tsx"]);
   assert.match(read("src/pages/Login.tsx"), /<div className="lp-wrap"><PublicAd \/><\/div>/);
   assert.equal(read("src/pages/Login.tsx").match(/<PublicAd/g).length, 1, "at most one slot on the landing page");
   assert.equal(read("src/pages/PublicLibrary.tsx").match(/<PublicAd/g).length, 2, "one on the list and one on a strategy");
@@ -190,14 +191,14 @@ test("the privacy page and the FAQ say plainly: Google ads after consent, what G
   const { LEGAL_BLOCKS, LEGAL_UPDATED } = await import("../src/content/legal.ts");
   const { FAQ, faqText } = await import("../src/content/faq.ts");
   const privacy = JSON.stringify(LEGAL_BLOCKS["/privacy"]);
-  for (const part of ["may show ads from Google AdSense", "Basic and Pro have no ads", "Only after you say yes", "What Google may set", "IP address", "How to say no", "No thanks",
-    "Never on personal money pages", "stratlab.ads", "adssettings.google.com"]) assert.ok(privacy.includes(part), part);
+  for (const part of ["only if you allow them", "Google ads (AdSense)", "Meta Pixel", "Microsoft Clarity", "Basic and Pro have no ads", "IP address", "Do Not Track", "No thanks",
+    "Money, tax, holdings, net worth, Account, Settings, Admin, sign-in or payment pages", "Change my choice", "stratlab.ads", "adssettings.google.com"]) assert.ok(privacy.includes(part), part);
   assert.doesNotMatch(privacy, /no advertising trackers|Nothing is used for advertising/, "the old claims are gone");
   assert.equal(LEGAL_UPDATED["/privacy"], "28 October 2026");
-  const q = FAQ.find((f) => f.q === "Does StratLab show ads?");
+  const q = FAQ.find((f) => f.q === "Does StratLab show ads or track me?");
   assert.ok(q);
   const a = faqText(q);
-  for (const part of ["Google ads", "Allow ads", "No thanks", "Basic and Pro have no ads", "cookies", "Money, tax, holdings, net worth or account pages", "emails"]) assert.ok(a.includes(part), part);
+  for (const part of ["Only if you allow it", "Google ads", "Meta", "Microsoft Clarity", "No thanks", "Basic and Pro have no ads", "cookies", "Money, tax, holdings, net worth, Account or payment pages", "emails"]) assert.ok(a.includes(part), part);
 });
 
 test("the cards that hold a Free account's place state facts: no advice wording, no data vendors, the plan's real numbers", async () => {
@@ -230,4 +231,131 @@ test("the security policy lets in only what AdSense needs and stays strict other
   assert.deepEqual(d["base-uri"], ["'self'"]);
   assert.ok(!d["frame-src"].includes("*") && !d["frame-src"].includes("https:"));
   assert.deepEqual(d["style-src"], ["'self'", "'unsafe-inline'"]);
+});
+
+// ---------- the Meta Pixel and Microsoft Clarity ----------
+const T = { ...A.adsConfig({ VITE_META_PIXEL_ID: "1234567890", VITE_CLARITY_ID: "abc123def4" }) };
+const track = (o) => A.trackersFor({ cfg: T, choice: "yes", path: "/library", ...o });
+
+test("Clarity is the owner's project unless set; an empty setting turns it off; the pixel has no default", () => {
+  assert.equal(A.DEFAULT_CLARITY, "z4n5s4xn12");
+  assert.equal(A.adsConfig({}).clarity, "z4n5s4xn12");
+  assert.equal(A.adsConfig({}).pixel, "");
+  assert.equal(A.adsConfig({ VITE_CLARITY_ID: "" }).clarity, "");
+  assert.equal(A.adsConfig({}, { CLARITY_PROJECT_ID: "" }).clarity, "", "/config.js can switch it off without a rebuild");
+  assert.equal(A.adsConfig({ VITE_CLARITY_ID: "abc123def4" }).clarity, "abc123def4");
+  assert.equal(A.adsConfig({ VITE_CLARITY_ID: "x" }, { CLARITY_PROJECT_ID: "q9w8e7r6t5" }).clarity, "q9w8e7r6t5", "/config.js over the build");
+  assert.equal(A.adsConfig({ VITE_CLARITY_ID: "bad id;<script>" }).clarity, "", "a pasted mistake counts as not set");
+  assert.equal(A.adsConfig({ VITE_META_PIXEL_ID: "1234567890" }).pixel, "1234567890");
+  for (const bad of ["abc", "12", "1234567890'); alert(1);//"]) assert.equal(A.adsConfig({ VITE_META_PIXEL_ID: bad }).pixel, "", bad);
+});
+
+test("nothing loads before Allow: no tracker without a saved yes, whatever the page", () => {
+  for (const choice of [null, "no"]) for (const path of ["/", "/library", "/research/IN/RELIANCE", "/mine"]) assert.deepEqual(track({ choice, path }), { pixel: false, clarity: false }, `${choice} ${path}`);
+  assert.deepEqual(track({}), { pixel: true, clarity: true });
+  assert.deepEqual(track({ path: "/mine" }), { pixel: true, clarity: true }, "the app shell is included");
+  assert.deepEqual(A.trackersFor({ cfg: A.adsConfig({}), choice: "yes", path: "/library" }), { pixel: false, clarity: true }, "no pixel ID: no pixel");
+  assert.deepEqual(A.trackersFor({ cfg: A.adsConfig({}, { CLARITY_PROJECT_ID: "" }), choice: "yes", path: "/library" }), { pixel: false, clarity: false });
+  assert.deepEqual(track({ dnt: true }), { pixel: false, clarity: false }, "Do Not Track and Global Privacy Control win over a yes");
+});
+
+test("neither tracker runs on money, tax, holdings, net worth, account, settings, admin or payment pages", () => {
+  for (const path of ["/money", "/money/net-worth", "/money/tax-tools", "/holdings", "/tax-report", "/account", "/settings", "/admin", "/admin/users", "/checkout", "/upgrade", "/plans", "/login", "/signup", "/money?x=1", "/holdings#a"])
+    assert.deepEqual(track({ path }), { pixel: false, clarity: false }, path);
+  for (const path of ["/", "/pricing", "/library", "/verdict/abc", "/research/US/AAPL", "/trade", "/invest", "/mine", "/news"]) assert.equal(A.trackAllowedOn(path), true, path);
+});
+
+test("the question is asked only when something needs it, once, and not on a private page", () => {
+  const ask = (o) => A.askNow({ cfg: T, choice: null, path: "/library", ...o });
+  assert.equal(ask({}), true);
+  assert.equal(ask({ choice: "yes" }), false);
+  assert.equal(ask({ choice: "no" }), false);
+  for (const path of ["/money", "/holdings", "/account", "/admin", "/plans"]) assert.equal(ask({ path }), false, path);
+  const none = A.adsConfig({}, { CLARITY_PROJECT_ID: "" });
+  assert.equal(A.askNeeded(none), false, "no slot, no pixel, no Clarity: nothing to ask");
+  assert.equal(A.askNow({ cfg: none, choice: null, path: "/library" }), false);
+  assert.equal(A.askNeeded(A.adsConfig(ENV, { CLARITY_PROJECT_ID: "" })), true, "an ad slot alone needs the question");
+  assert.equal(A.askNeeded(A.adsConfig({ VITE_META_PIXEL_ID: "1234567890" }, { CLARITY_PROJECT_ID: "" })), true);
+});
+
+test("the question names only what is switched on, in plain words", () => {
+  const w = (cfg) => A.consentWords(cfg);
+  assert.match(w(A.adsConfig({})).text, /Microsoft Clarity, which records how pages are used with all text hidden/);
+  assert.doesNotMatch(w(A.adsConfig({})).text, /Google|Meta/);
+  assert.equal(w(A.adsConfig({})).title, "Analytics");
+  const all = w(A.adsConfig({ ...ENV, VITE_META_PIXEL_ID: "1234567890" }));
+  assert.equal(all.title, "Ads and analytics");
+  assert.match(all.text, /Google ads, Meta's ad measurement and Microsoft Clarity/);
+  assert.match(all.text, /Say no and none of them load/);
+  assert.equal(w(A.adsConfig(ENV, { CLARITY_PROJECT_ID: "" })).title, "Ads");
+  assert.doesNotMatch(all.text, /\b(buy|sell|hold|target)\b/i);
+});
+
+test("a sign-up is an account made in the last 15 minutes", () => {
+  const now = Date.UTC(2026, 9, 28, 12);
+  assert.equal(A.isNewSignUp(new Date(now - 5 * 60_000).toISOString(), now), true);
+  assert.equal(A.isNewSignUp(new Date(now - 16 * 60_000).toISOString(), now), false);
+  for (const bad of [null, undefined, "", "not a date"]) assert.equal(A.isNewSignUp(bad, now), false);
+});
+
+test("the trackers' scripts are fetched in lib/track.ts only, and only from the component's gated effect", () => {
+  const track = read("src/lib/track.ts"), tracking = read("src/components/Tracking.tsx");
+  assert.match(track, /connect\.facebook\.net\/en_US\/fbevents\.js/);
+  assert.match(track, /www\.clarity\.ms\/tag\//);
+  for (const f of ["index.html", "public/config.js", "public/boot.js", "public/ads.js", "src/components/AdUnit.tsx", "src/lib/ads.ts", "src/lib/analytics.ts"]) assert.doesNotMatch(read(f), /fbevents|clarity\.ms/, f);
+  assert.match(tracking, /if \(want\.pixel\) \{ loadPixel\(CONFIG\.pixel\); pixelPageView\(pathname\); flushSignup\(\); \}/);
+  assert.match(tracking, /if \(want\.clarity\) startClarity\(CONFIG\.clarity\); else stopClarity\(\);/);
+  assert.match(tracking, /askNow\(/);
+  // the sign-up path reaches the pixel through the one gated place
+  assert.match(read("src/lib/analytics.ts"), /markSignup\(\);/);
+  // mounted once in each half of the site
+  assert.match(read("src/visitor/visitorMain.tsx"), /<Tracking \/>/);
+  assert.match(read("src/main.tsx"), /<Tracking \/>/);
+});
+
+test("the pixel and Clarity, run against a stand-in page: nothing before they are called, no extras, strict masking, stop on a private page", async () => {
+  const added = [], attrs = {};
+  const el = (tag) => ({ tag, setAttribute(k, v) { attrs[`${tag}:${k}`] = v; }, set src(v) { this._src = v; }, get src() { return this._src; } });
+  const root = { setAttribute(k, v) { root[k] = v; } }, body = { setAttribute(k, v) { body[k] = v; } };
+  globalThis.window = globalThis;
+  globalThis.document = { createElement: el, head: { appendChild: (n) => added.push(n) }, getElementById: (id) => (id === "root" ? root : null), body };
+  const T2 = await import("../src/lib/track.ts?stand-in");
+  assert.deepEqual(added, [], "importing it loads nothing");
+  assert.equal(globalThis.fbq, undefined);
+  // before the pixel is loaded: no event, a sign-up waits
+  T2.pixelPageView("/library"); T2.markSignup(); T2.flushSignup();
+  assert.deepEqual(added, []);
+  T2.loadPixel("1234567890"); T2.loadPixel("1234567890");
+  assert.equal(added.length, 1, "the script once");
+  assert.equal(added[0].src, "https://connect.facebook.net/en_US/fbevents.js");
+  const calls = globalThis.fbq.queue.map((a) => [...a]);
+  assert.deepEqual(calls, [["set", "autoConfig", false, "1234567890"], ["init", "1234567890"]], "automatic extras off, then init");
+  assert.equal(globalThis.fbq.disablePushState, true);
+  T2.pixelPageView("/library"); T2.pixelPageView("/library"); T2.pixelPageView("/");
+  T2.flushSignup(); T2.flushSignup();
+  assert.deepEqual(globalThis.fbq.queue.slice(2).map((a) => [...a]), [["track", "PageView"], ["track", "PageView"], ["track", "CompleteRegistration"]]);
+  // Clarity: stopping before it started does nothing; starting masks everything and loads the project's tag once
+  T2.stopClarity();
+  assert.equal(globalThis.clarity, undefined);
+  T2.startClarity("abc123def4"); T2.startClarity("abc123def4");
+  assert.equal(added.length, 2);
+  assert.equal(added[1].src, "https://www.clarity.ms/tag/abc123def4");
+  assert.equal(root["data-clarity-mask"], "True"); assert.equal(body["data-clarity-mask"], "True");
+  T2.stopClarity();
+  assert.deepEqual([...globalThis.clarity.q.at(-1)], ["stop"]);
+  T2.stopClarity();
+  assert.equal(globalThis.clarity.q.filter((a) => a[0] === "stop").length, 1, "stopped once");
+  T2.startClarity("abc123def4");
+  assert.deepEqual([...globalThis.clarity.q.at(-1)], ["start"], "started again on an allowed page");
+  assert.equal(added.length, 2, "without a second script");
+  delete globalThis.window; delete globalThis.document; delete globalThis.fbq; delete globalThis._fbq; delete globalThis.clarity;
+});
+
+test("the security policy lets in the pixel's and Clarity's hosts and nothing broader", () => {
+  const v = JSON.parse(read("vercel.json"));
+  const csp = v.headers.flatMap((h) => h.headers).find((h) => h.key === "Content-Security-Policy").value;
+  const d = Object.fromEntries(csp.split(";").map((x) => x.trim().split(/\s+/)).filter((x) => x[0]).map(([k, ...rest]) => [k, rest]));
+  for (const h of ["https://connect.facebook.net", "https://www.clarity.ms", "https://*.clarity.ms"]) assert.ok(d["script-src"].includes(h), `script-src ${h}`);
+  for (const h of ["https://www.facebook.com", "https://connect.facebook.net", "https://www.clarity.ms", "https://*.clarity.ms"]) assert.ok(d["connect-src"].includes(h), `connect-src ${h}`);
+  assert.ok(!d["script-src"].includes("'unsafe-inline'") && !d["script-src"].includes("https:"));
 });

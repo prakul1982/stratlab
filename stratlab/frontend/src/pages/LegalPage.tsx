@@ -5,6 +5,7 @@ import { publicGet } from "../lib/http";
 import { Logo } from "../components/Logo";
 import { LEGAL_PAGES } from "../components/LegalLinks";
 import { SkipLink } from "../components/SkipLink";
+import { ChoiceControl } from "../components/Tracking";
 import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED, type Business } from "../content/legal";
 
 /** Who runs the site, from config.js, so the policies name the real business without a code change. */
@@ -70,6 +71,7 @@ export function LegalPage() {
           <h1 className="page-title">{page.title}</h1>
           <p className="small muted">Last updated {LEGAL_UPDATED[page.path]}</p>
           {loaded ? <Policy path={page.path} /> : <p className="small muted" role="status">Loading…</p>}
+          {loaded && page.path === "/privacy" && <ChoiceControl />}{/* ADS-1: the answer about ads and analytics, and a way to change it */}
         </article>
       </main>
     </div>

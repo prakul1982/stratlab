@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { CFG } from "../lib/config";
-import { adMode, adsConfig, CHOICE_KEY, googleMessageShown, houseCard, readChoice, writeChoice, type AdSlotName, type Choice } from "../lib/ads";
+import { adMode, adsConfig, CHOICE_KEY, googleMessageShown, houseCard, onChoice, readChoice, type AdSlotName, type Choice } from "../lib/ads";
 import { signedInHere } from "../lib/signin";
 
-/* One ad slot (ADS-1). What it shows is decided in lib/ads.ts (adMode): an ad, the question that comes before it, a StratLab
- * card, or nothing. Off by default: with no publisher ID nothing here loads Google's script or sets anything. Imports no account
- * code, so the public pages use it; the Free-account slot under an AI answer (components/AiAd.tsx) adds the plan. */
+/* One ad slot (ADS-1). What it shows is decided in lib/ads.ts (adMode): an ad, a StratLab card, or nothing. The question that comes
+ * before any ad is the banner (components/Tracking.tsx). Off by default: with no slot ID nothing here loads Google's script or sets
+ * anything. Imports no account code, so the public pages use it; the Free-account slot under an AI answer (components/AiAd.tsx)
+ * adds the plan. */
 
-const CONFIG = adsConfig(import.meta.env as Record<string, unknown>, CFG as unknown as Record<string, unknown>);
+export const CONFIG = adsConfig(import.meta.env as Record<string, unknown>, CFG as unknown as Record<string, unknown>);
 
 /** Google's script, added once, and only after "Allow ads" (the question comes first). */
 function addScript(client: string) {
@@ -60,22 +61,6 @@ function AdBox({ client, slot }: { client: string; slot: string }) {
   );
 }
 
-/** The question before any ad: asked in the slot's own place, so it never covers the page. */
-function AdAsk({ onChoose }: { onChoose: (c: "yes" | "no") => void }) {
-  return (
-    <section className="ad" aria-label="Ads on StratLab" data-testid="ad-consent">
-      <p className="ad-label">Ads on StratLab</p>
-      <div className="ad-ask">
-        <p>StratLab shows Google ads on public pages and to Free accounts. They use cookies to choose and measure ads. Say no and no ad is loaded. Basic and Pro have no ads. <Link className="link" to="/privacy">What this means</Link></p>
-        <div className="ad-btns">
-          <button type="button" className="btn sm" onClick={() => onChoose("yes")}>Allow ads</button>
-          <button type="button" className="btn quiet sm" onClick={() => onChoose("no")}>No thanks</button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 /** What holds a Free account's place when ads are off or declined: one of StratLab's own pages. Nothing is loaded or tracked. */
 function House({ seed }: { seed: string }) {
   const c = houseCard(seed);
@@ -98,12 +83,12 @@ export function AdUnit({ slot, plan = null, seed = "" }: { slot: AdSlotName; pla
   useEffect(() => {
     const on = (e: StorageEvent) => { if (e.key === CHOICE_KEY) setChoice(readChoice()); };
     window.addEventListener("storage", on);
-    return () => window.removeEventListener("storage", on);
+    const off = onChoice(() => setChoice(readChoice()));          // answered or taken back on this page
+    return () => { window.removeEventListener("storage", on); off(); };
   }, []);
   const mode = adMode({ slot, cfg: CONFIG, path: pathname, choice, signedIn: slot === "public" && signedInHere(), plan, cmp: googleMessageShown() });
   if (mode === "none") return null;
   if (mode === "house") return <House seed={seed || pathname} />;
-  if (mode === "consent") return <AdAsk onChoose={(c) => { writeChoice(c); setChoice(c); }} />;
   return <AdBox client={CONFIG.client} slot={CONFIG.slots[slot]} />;
 }
 

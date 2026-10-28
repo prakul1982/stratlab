@@ -884,6 +884,14 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .ad-ask { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; max-width: 520px; font-size: var(--t-label); line-height: 1.5; color: var(--ink-2); }
 .ad-ask p { margin: 0; }
 .ad-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+/* ADS-1: the one question for ads and analytics. A small card at the corner of the screen, beside the page (a dialog that does not
+   take focus), until it is answered; on a phone it spans the width. Under the toast. */
+.consent { position: fixed; right: 16px; bottom: 16px; z-index: 65; width: min(400px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 16px; border-radius: var(--r-card); background: var(--card); border: 1px solid var(--line-2); box-shadow: var(--shadow); font-size: var(--t-label); line-height: 1.5; }
+.consent p { margin: 0; color: var(--ink-2); }
+.consent-title { font-size: var(--t-body); }
+.consent-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 640px) { .consent { right: 16px; left: 16px; width: auto; } }
 
 /* search: one box for everything */
 .search-btn kbd, .palette kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line-2); border-radius: 6px; padding: 1px 6px; color: var(--muted); }

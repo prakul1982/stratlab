@@ -377,8 +377,8 @@ The publisher ID (`ca-pub-8125241692814953`) is already the default in both plac
   luck checks, or the briefs): our own words, nothing tracked.
 - Never on Money, tax, holdings, net worth, Account, Admin, sign-in or payment pages, and never in emails.
 
-**Every ad is asked about first.** The visitor sees "Allow ads / No thanks" in the slot's own place; Google's script is not
-downloaded until "Allow ads". The answer is kept in the browser (`stratlab.ads`, one year). Privacy and the FAQ say all of
+**Every ad is asked about first.** The visitor answers "Allow" / "No thanks" on the card at the corner of the screen (the
+server-drawn company pages ask in the ad's own place); Google's script is not downloaded until "Allow". The answer is kept in the browser (`stratlab.ads`, one year). Privacy and the FAQ say all of
 this in plain words; the privacy policy's "Ads" part is the text to keep in step if you change what is shown.
 
 **To switch ads on**
@@ -401,6 +401,22 @@ this in plain words; the privacy policy's "Ads" part is the text to keep in step
 
 An ad appears only when the switch is on **and** the publisher ID **and** that slot's ID are set **and** the visitor allowed it.
 The server pages change within about 15 minutes (their pages are cached); the site's slots on the next deploy.
+
+**Analytics: Microsoft Clarity and the Meta Pixel** use the same question (the "Allow" / "No thanks" card at the corner of the screen,
+asked once; Privacy and the FAQ name both). Nothing loads before "Allow", never on Money, tax, holdings, net worth, Account,
+Settings, Admin or payment pages (a running Clarity recording stops there, and the pixel sends nothing), and not for a browser that
+sends Do Not Track or Global Privacy Control. Visitors can change their answer on the Privacy page ("Change my choice").
+
+| Where | Setting | Value |
+| --- | --- | --- |
+| Vercel (build) or `public/config.js` | `VITE_CLARITY_ID` / `CLARITY_PROJECT_ID` | the Clarity project ID; the default is the owner's project (`z4n5s4xn12`); set it to empty to turn Clarity off |
+| Vercel (build) or `public/config.js` | `VITE_META_PIXEL_ID` / `META_PIXEL_ID` | the pixel's ID (digits); empty by default, so no pixel |
+
+Clarity records with every word masked (`data-clarity-mask` on the page's root); in the Clarity project, also set **Settings → Masking
+→ Strict**. The pixel sends only PageView (each page opened) and CompleteRegistration (once, when a sign-up completes); its automatic
+button and page-detail events are off. Both run on the site's own pages (the landing page, the library, the app), not on the
+server-drawn company pages. Their hosts are in the Content-Security-Policy (`connect.facebook.net`, `www.facebook.com`, `*.clarity.ms`);
+a header file cannot depend on a setting, so they are allowed whether or not an ID is set.
 
 **To switch ads off:** set `ADS_ENABLED` to anything but `true` on Railway (server pages), and `ADS_ENABLED: "false"` in
 `frontend/public/config.js` (this switches the site's slots off without a rebuild), or unset the `VITE_` settings and redeploy.
