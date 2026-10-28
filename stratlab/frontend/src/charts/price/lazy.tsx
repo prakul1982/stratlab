@@ -23,7 +23,7 @@ export function preloadPriceChart() {
 export function PriceChart(props: PriceChartProps) {
   const h = props.height ?? 420;
   return (
-    <Suspense fallback={<div className="chart-skel" style={{ height: h + 92 }} aria-label="Loading the chart" />}>
+    <Suspense fallback={<div className="chart-skel" style={{ height: h + 92 }} role="img" aria-label="Loading the chart" />}>
       <Chart {...props} />
     </Suspense>
   );

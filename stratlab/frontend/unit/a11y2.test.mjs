@@ -43,3 +43,11 @@ test("A11Y-2: on a phone the footer's short links, a one-word chip and the rupee
   assert.match(css, /\.k-chip \{ min-width: 44px; \}/);
   assert.match(css, /@media \(max-width: 640px\) \{ \.link-btn\.inr-pick \{ min-height: 44px; \} \}/);
 });
+
+test("A11Y-2: a loading placeholder that has a name also has a role, so axe allows the label (aria-prohibited-attr on /plans)", () => {
+  // A bare <span>/<div> may not carry aria-label; the skeletons only show while prices or the chart load.
+  for (const [f, name] of [["src/pages/Login.tsx", "Loading the price"], ["src/charts/price/lazy.tsx", "Loading the chart"]]) {
+    const tag = read(f).match(new RegExp(`<(?:span|div)[^>]*aria-label="${name}"[^>]*>`))[0];
+    assert.match(tag, /role="img"/, `${f}: ${tag}`);
+  }
+});

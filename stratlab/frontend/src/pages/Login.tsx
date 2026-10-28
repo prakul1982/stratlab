@@ -588,7 +588,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                   <span className="small muted">{WHO[p]}</span>
                 </div>
                 <div className="stack g2">
-                  {loading ? <span className="lp-skel lp-skel-amount" aria-label="Loading the price" /> : (
+                  {loading ? <span className="lp-skel lp-skel-amount" role="img" aria-label="Loading the price" /> : (
                     <div className="lp-amount-row">
                       <div className="serif lp-amount">{price(p, year)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
                       {about && <span className="small muted" data-testid={`about-${p}`}>{about}</span>}
