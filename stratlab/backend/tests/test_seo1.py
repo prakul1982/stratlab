@@ -1,6 +1,7 @@
 """SEO-1: the company directories (A-Z letter pages and index lists) that link every company page, the cache the pages are sent
 with, renamed tickers, and the sentences and FAQ built from each company's own figures."""
 import json
+from datetime import date
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -298,3 +299,129 @@ def test_an_unknown_ticker_stays_a_404_with_noindex_and_a_company_is_never_redir
     # a company that has a page is served, not redirected, whatever the alias table says
     monkeypatch.setitem(name_search.ALIASES["IN"], "RELIANCE", ["TCS"])
     assert c.get("/stocks/in/RELIANCE", follow_redirects=False).status_code == 200
+
+
+# ---------- 4. a company's own sentences and the questions its page answers ----------
+def stored_facts(sym: str, region: str = "IN") -> dict:
+    return json.loads(db.get_setting(f"stocks:page:{region}:{sym}"))["facts"]
+
+
+def about_of(html: str) -> str:
+    return re.search(r'<p data-about>(.*?)</p>', html, re.S).group(1).replace("&#x27;", "'").replace("&amp;", "&")
+
+
+def rupees(v: float) -> str:
+    """₹ crore as the page words it, written out here independently of the page's code (Indian grouping for under a lakh crore)."""
+    return f"₹{v / 1e5:,.2f} lakh crore" if round(v) >= 1e5 else f"₹{round(v):,} crore"
+
+
+def dollars(v: float) -> str:
+    """$ million as "$416.2B"."""
+    return f"${v / 1e6:,.2f}T" if round(v / 1e3, 1) >= 1e3 else f"${v / 1e3:,.1f}B" if v >= 1e3 else f"${round(v):,}M"
+
+
+def test_the_paragraph_uses_the_pages_own_figures_for_an_indian_company(w):
+    c = w["client"]
+    t = c.get("/stocks/in/RELIANCE").text
+    f = stored_facts("RELIANCE")
+    text = about_of(t)
+    last = f["years"][-1]
+    assert text.startswith("Reliance Industries Ltd is in the Energy sector, in the Refineries industry, listed on NSE.")
+    assert f"Its last close was ₹{f['price']:,.2f} on " in text and f"between ₹{f['low52']:,.2f} and ₹{f['high52']:,.2f} (intraday)" in text
+    assert f"In its latest reported year ({last['year']}) it reported revenue of {rupees(last['sales'])} and net profit of {rupees(last['profit'])}" in text
+    assert f"its revenue grew {f['growth']['sales_cagr_3y']:,.1f}% a year" in text and f"its net profit grew {f['growth']['profit_cagr_3y']:,.1f}% a year" in text
+    assert f"Its market value is {rupees(f['market_cap'])}" in text and f"with a P/E of {f['pe']:,.1f}" in text
+    assert f"<b>₹{f['price']:,.2f}</b>" in t                              # the stat grid below shows the same last close
+    assert t.index("data-about") < t.index('class="card grid"')
+
+
+def test_the_paragraph_uses_the_pages_own_figures_for_a_us_company(w):
+    t = w["client"].get("/stocks/us/AAPL").text
+    f = stored_facts("AAPL", "US")
+    text = about_of(t)
+    last = f["years"][-1]
+    assert text.startswith("Apple Inc. is in the ") and "listed in the US." in text
+    assert f"Its last close was ${f['price']:,.2f} on " in text and f"between ${f['low52']:,.2f} and ${f['high52']:,.2f}" in text
+    assert f"revenue of {dollars(last['sales'])} and net profit of {dollars(last['profit'])}" in text
+    assert f"net profit over the last 12 months was {dollars(f['profit_ttm'])}" in text
+    assert f"Its market value is {dollars(f['market_cap'])}" in text
+
+
+def synthetic(**more) -> dict:
+    f = stock_pages.facts("IN", "ACME", {"name": "Acme Ltd", "industry_path": ["Metals", "Steel"]},
+                          {"years": [{"year": "Mar 2025", "sales": 1200.0, "profit": -35.5, "opm": 10, "debt": 20.0}], "unit": "₹ crore",
+                           "growth": {"sales_cagr_3y": 4.2, "profit_cagr_3y": None}},
+                          {"market_cap_cr": 4321.0, "pe": None}, None, {"price": 250.0, "price_at": "2026-10-27", "price_basis": "close", "low52": 200.0, "high52": 300.0},
+                          [], "BSE")
+    return {**f, **more}
+
+
+def test_losses_missing_figures_and_other_currencies_are_worded_plainly():
+    f = synthetic()
+    text = stock_pages.about_text(f, "IN", "ACME", "Acme Ltd")
+    assert "reported revenue of ₹1,200 crore and a net loss of ₹36 crore; over three years" in text      # as the table rounds -35.5
+    assert "Acme Ltd is in the Metals sector, in the Steel industry, listed on BSE." in text
+    assert "P/E" not in text and "its revenue grew 4.2% a year" in text and "net profit grew" not in text
+    bare = stock_pages.about_text({**f, "years": [], "price": None, "market_cap": None, "profit_ttm": None}, "IN", "ACME", "Acme Ltd")
+    assert bare == "Acme Ltd is in the Metals sector, in the Steel industry, listed on BSE."          # nothing is invented for what is missing
+    foreign = stock_pages.about_text({**f, "region": "US", "currency": "USD", "unit": "EUR million", "industry": ["Banks"]}, "US", "ACME", "Acme Plc")
+    assert "revenue of 1,200 EUR million" in foreign and "listed in the US" in foreign
+
+
+def test_no_advice_wording_or_vendor_name_in_any_paragraph_question_or_answer(w):
+    c = w["client"]
+    seen = 0
+    for u in ("/stocks/in/RELIANCE", "/stocks/us/AAPL", "/stocks/in/ONGC", "/stocks/us/MSFT"):
+        t = c.get(u).text
+        for chunk in re.findall(r'<p data-about>.*?</p>|<div class="card faq" data-faq>.*?</div>', t, re.S):
+            seen += 1
+            assert not ADVICE.search(words(chunk)) and not PROVIDERS.search(words(chunk)), (u, ADVICE.search(words(chunk)))
+        assert not ADVICE.search(words(t)), (u, ADVICE.search(words(t)).group(0))
+    assert seen >= 2
+    # a purpose from the exchange with such a word never reaches the answer
+    items = stock_pages.faq_items(synthetic(), "IN", "ACME", "Acme Ltd", {"results": {"date": "2026-11-05", "when": None, "purpose": "Buy back of shares", "as_of": "2026-10-28"}})
+    answer = dict(items)["When are Acme Ltd's next results?"]
+    assert "5 Nov 2026" in answer and "Buy back" not in answer and not ADVICE.search(answer)
+
+
+def test_the_questions_are_only_those_the_page_can_answer_and_the_json_ld_matches_the_text(w):
+    from app import results, shareholders
+    c = w["client"]
+    main.stock_page_store.mem.clear()
+    t = c.get("/stocks/in/RELIANCE").text
+    qs = re.findall(r"<h3>(.*?)</h3>", t)
+    assert qs == ["What is Reliance Industries Ltd&#x27;s market value?"]                  # no results date or holders are stored: not asked
+    # stored: the results calendar and the shareholding pattern
+    results.save("IN", [results.row("IN", "RELIANCE", date(2026, 11, 6), "Financial Results", when="amc"),
+                        results.row("IN", "RELIANCE", date(2026, 8, 1), "Financial Results")])
+    shareholders.store("RELIANCE", {"quarter": "2026-09-30", "rec": "r1", "filed": "2026-10-20", "url": "https://example.com/x"},
+                       {"name": "Reliance Industries Ltd", "holders": [
+                           {"name": "Promoter Group Trust", "kind": "promoter", "group": "promoter", "shares": 5000, "pct": 50.31},
+                           {"name": "Insurance Corporation", "kind": "public", "group": "public", "shares": 600, "pct": 6.2},
+                           {"name": "Index Fund One", "kind": "public", "group": "public", "shares": 300, "pct": 3.15},
+                           {"name": "Index Fund Two", "kind": "public", "group": "public", "shares": 200, "pct": 2.0},
+                           {"name": "Small Fund", "kind": "public", "group": "public", "shares": 100, "pct": 1.1}]})
+    main.stock_page_store.mem.clear()
+    t = c.get("/stocks/in/RELIANCE").text
+    flat = t.replace("&#x27;", "'")
+    assert re.findall(r"<h3>(.*?)</h3>", flat) == ["What is Reliance Industries Ltd's market value?", "When are Reliance Industries Ltd's next results?",
+                                                   "Who are Reliance Industries Ltd's largest named shareholders?"]
+    assert "next results are listed for 6 Nov 2026, after the close" in flat and "(the exchange's notice: Financial Results)" in flat
+    assert ("the quarter ended 30 Sep 2026, the largest named holders above 1% were: Promoter Group Trust (promoter group) 50.31%; "
+            "Insurance Corporation (public) 6.2%; Index Fund One (public) 3.15%. Percentages are of all shares.") in flat
+    assert "Small Fund" not in flat and "Index Fund Two" not in flat                         # the three largest only
+    ld = [x for x in json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>', t, re.S).group(1)) if x["@type"] == "FAQPage"]
+    assert len(ld) == 1
+    asked = [(q["name"], q["acceptedAnswer"]["text"]) for q in ld[0]["mainEntity"]]
+    shown = [(re.sub(r"<[^>]+>", "", q), re.sub(r"<[^>]+>", "", a)) for q, a in re.findall(r"<h3>(.*?)</h3><p>(.*?)</p>", t, re.S)]
+    unesc = lambda s: s.replace("&#x27;", "'").replace("&amp;", "&")      # noqa: E731
+    assert [(unesc(q), unesc(a)) for q, a in shown] == asked and len(asked) == 3
+    # a company in the US has no holders question; a past results date is not offered
+    results.save("US", [results.row("US", "AAPL", date(2026, 7, 30), "Earnings")])
+    main.stock_page_store.mem.clear()
+    assert "next results" not in c.get("/stocks/us/AAPL").text and "largest named" not in c.get("/stocks/us/AAPL").text
+
+
+def test_a_page_with_nothing_to_show_has_no_paragraph_and_no_questions(w):
+    t = w["client"].get("/stocks/in/TCS").text            # no numbers: a short noindex page
+    assert "data-about" not in t and "data-faq" not in t and "FAQPage" not in t

@@ -1590,7 +1590,8 @@ class Pages:
         key = f"html:{region}:{symbol}"
         hit = self.mem.get(key)
         if hit is None:
-            hit = render(self.get(region, symbol, co), region, symbol, co["name"])
+            f = self.get(region, symbol, co)
+            hit = render(f, region, symbol, co["name"], faq_extras(region, symbol) if has_content(f) else None)
             self.mem.set(key, hit, html_ttl(region))      # never served past the next close's settle point (R13-006)
         return hit
 
@@ -1889,22 +1890,30 @@ def _inr_group(v: float) -> str:
     return ("-" if v < 0 else "") + (head + "," + tail if head else tail)
 
 
+def usd_text(v: float) -> str:
+    """An amount in $ million in the words people use: "$4.87T", "$85.8B", "$950M", "<$1M"."""
+    if round(v / 1e3, 1) >= 1e3:                         # the unit is chosen after rounding
+        return f"${v / 1e6:,.2f}T"
+    if v >= 1e3:
+        return f"${v / 1e3:,.1f}B"
+    # $0.5M rounds to "$0M" (TAOP, R6V-011): anything under a whole million is "<$1M"
+    return f"${v:,.0f}M" if round(v) >= 1 else "<$1M"
+
+
+def inr_text(v: float) -> str:
+    """An amount in ₹ crore: "₹7.70 lakh crore", "₹20,345 crore", "<₹1 crore"."""
+    if round(v) >= 1e5:
+        return f"₹{v / 1e5:,.2f} lakh crore"
+    return f"₹{_inr_group(v)} crore" if round(v) >= 1 else "<₹1 crore"
+
+
 def cap_text(f: dict) -> str:
     """Market value in the words people use: "$4.87T", "$85.8B", "$950M", "<$1M"; "₹7.70 lakh crore", "₹20,345 crore".
     "–" when there is none or it failed its checks (cap_problem)."""
     v = shown_cap(f)
     if v is None:
         return "–"
-    if f.get("currency") == "USD":                       # stored in $ million
-        if round(v / 1e3, 1) >= 1e3:                     # the unit is chosen after rounding
-            return f"${v / 1e6:,.2f}T"
-        if v >= 1e3:
-            return f"${v / 1e3:,.1f}B"
-        # $0.5M rounds to "$0M" (TAOP, R6V-011): anything under a whole million is "<$1M"
-        return f"${v:,.0f}M" if round(v) >= 1 else "<$1M"
-    if round(v) >= 1e5:                                   # stored in ₹ crore
-        return f"₹{v / 1e5:,.2f} lakh crore"
-    return f"₹{_inr_group(v)} crore" if round(v) >= 1 else "<₹1 crore"
+    return usd_text(v) if f.get("currency") == "USD" else inr_text(v)         # stored in $ million, ₹ crore
 
 
 def _date(iso: str | None) -> str:
@@ -2006,7 +2015,7 @@ background:var(--ink);color:var(--on-ink);text-decoration:none;font-weight:600}.
 .btn.ghost{background:transparent;color:var(--ink)}.btn.ghost:hover{background:var(--card);color:var(--ink);filter:none}
 main{max-width:880px;margin:0 auto;padding:24px 16px 48px}
 h1{font-family:var(--serif);font-weight:400;font-size:clamp(28px,4vw,42px);line-height:1.15;letter-spacing:-.02em;margin:4px 0 6px}
-h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:30px 0 10px}.muted{color:var(--muted)}.small{font-size:14px}
+h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:30px 0 10px}h3{font-size:16px;font-weight:600;margin:14px 0 4px}.faq p{margin:0 0 6px}.muted{color:var(--muted)}.small{font-size:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
 .stat b{display:block;font-size:20px;font-weight:600}.stat span{font-size:13px;color:var(--muted)}
@@ -2169,8 +2178,159 @@ def proper_name(name: str | None) -> str | None:
     return re.sub(r"\bAmazon Com\b", "Amazon.com", " ".join(word(w) for w in name.split(" ")))
 
 
-def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
-    """The page. `f` is None when the sources had nothing on a listed company: a short page, kept out of the index."""
+# ---------- a company's own words: one short paragraph and the questions its page can answer (SEO-1) ----------
+# Every company page had the same sentences round different numbers, which Google calls thin. These are sentences built from the
+# page's own figures (nothing new is fetched or made up), worded as facts: no buy, sell, hold or target (SEBI's research analyst
+# rules), no data vendor's name.
+ADVICE_WORDS = re.compile(r"\b(buy|sell|hold|accumulate|avoid|target|undervalued|overvalued|recommend\w*|outperform\w*|upgrade\w*|downgrade\w*)\b", re.I)
+FAQ_HOLDERS = 3                  # named holders the shareholders answer lists
+
+
+def report_amount(f: dict, v) -> str | None:
+    """A reported figure in the unit the page's table uses, in words: "₹2,67,021 crore", "$391.0B"; a foreign filer's own
+    currency as "12,345 EUR million". None without a figure."""
+    v = _num(v)
+    if v is None:
+        return None
+    unit = f.get("unit") or ""
+    if unit == "$ million":
+        return usd_text(v)
+    if unit == "₹ crore":
+        return inr_text(v)
+    return f"{_amount(f, v)} {unit}".strip()
+
+
+def listed_on(f: dict, region: str, symbol: str) -> str:
+    """"on NSE and BSE", "on BSE", "in the US": where the company's shares are listed, as far as the app knows."""
+    if region == "US":
+        return "in the US"
+    ex = str(f.get("exchange") or "NSE")
+    return "on NSE and BSE" if ex == "NSE" and symbol in set(nse_twins().values()) else f"on {ex}"
+
+
+def about_text(f: dict, region: str, symbol: str, name: str) -> str:
+    """One short paragraph from the company's own figures: its sector, where it is listed, its year's range and last close, the
+    latest reported year's revenue and profit, the last 12 months' profit and its market value. Each sentence is left out when
+    its figures are n/a on the page (the same checks the page's figures pass)."""
+    out = []
+    ind = shown_industry(f.get("industry"), plain=region == "US")
+    where = ""
+    if region == "IN" and ind:
+        where = f"is in the {ind[0]} sector" + (f", in the {ind[-1]} industry," if len(ind) > 1 and ind[-1] != ind[0] else ",")
+    elif ind:
+        where = f"is in the {ind[-1]} industry,"
+    out.append(f"{name} {where} listed {listed_on(f, region, symbol)}.".replace(" ,", ",") if where else f"{name} is listed {listed_on(f, region, symbol)}.")
+    price = _num(f.get("price"))
+    if price is not None:
+        word = "last price" if behind(f) or not is_close(f) else "last close"
+        when = f" on {_date(f['price_at'])}" if _date(f.get("price_at")) else ""
+        bit = f"Its {word} was {_money(f, price)}{when}"
+        if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None:
+            span = (f"since its listing on {_date(f['range_since'])}" if f.get("range_since") and _date(f.get("range_since"))
+                    else "over the last 12 months")
+            bit += f"; {span} its share price traded between {_money(f, f['low52'])} and {_money(f, f['high52'])} (intraday)"
+        out.append(bit + ".")
+    ys = [y for y in f.get("years") or [] if y.get("year")]
+    if ys:
+        y = ys[-1]
+        sales, profit = report_amount(f, y.get("sales")), _num(y.get("profit"))
+        bits = []
+        if sales and _num(y.get("sales")) is not None and _num(y["sales"]) > 0:
+            bits.append(f"revenue of {sales}")
+        if profit is not None:
+            bits.append(f"a net loss of {report_amount(f, -profit)}" if profit < 0 else f"net profit of {report_amount(f, profit)}")
+        if bits:
+            g = f.get("growth") or {}
+            grow = [w for w in (growth_words("revenue", g.get("sales_cagr_3y")), growth_words("net profit", g.get("profit_cagr_3y"))) if w]
+            out.append(f"In its latest reported year ({y['year']}) it reported " + " and ".join(bits)
+                       + (f"; over three years, compounded, its {', and its '.join(grow)}" if grow else "") + ".")
+    ttm, owners = _num(f.get("profit_ttm")), owners_profit(f)
+    if owners is not None or ttm is not None:
+        # the page's own two lines for an Indian company whose table profit includes minority holders (_stats): the shareholders'
+        if owners is not None:
+            text = f"profit to its shareholders over the last 12 months was {report_amount(f, owners)}"
+        else:
+            text = (f"it made a net loss of {report_amount(f, -ttm)} over the last 12 months" if ttm < 0
+                    else f"its net profit over the last 12 months was {report_amount(f, ttm)}")
+        out.append(text[0].upper() + text[1:] + " (the four latest reported quarters).")
+    if cap_text(f) != "–":
+        pe = shown_pe(f)
+        out.append(f"Its market value is {cap_text(f)}" + (f", with a P/E of {_fmt(pe)}" if pe is not None else "") + ".")
+    return " ".join(out)
+
+
+def faq_extras(region: str, symbol: str) -> dict:
+    """What the company's page can say that is stored apart from its facts, read without asking any source: its next results
+    date (the results calendar) and the named holders above 1% in its latest shareholding pattern (India). Empty parts when
+    nothing is stored."""
+    got: dict = {}
+    try:
+        from . import results
+        cal = results.load(region)
+        nxt = results.lookup(region, symbol)["next"] if cal["rows"] else None
+        if nxt:
+            got["results"] = {"date": nxt["date"], "when": nxt.get("when"), "purpose": nxt.get("purpose"), "as_of": str(cal.get("at") or "")[:10]}
+    except Exception as ex:                      # the calendar unreadable: no such question
+        print("stock pages: results date not read:", symbol, str(ex)[:120])
+    if region == "IN":
+        try:
+            from . import shareholders
+            view = shareholders.company_view(symbol)
+            if view and view.get("holders"):
+                top = sorted(view["holders"], key=lambda h: -h["pct"])[:FAQ_HOLDERS]
+                got["holders"] = {"quarter": view["quarter"], "holders": [{"name": h["name"], "pct": h["pct"], "group": h["group"]} for h in top]}
+        except Exception as ex:
+            print("stock pages: holders not read:", symbol, str(ex)[:120])
+    return got
+
+
+def faq_items(f: dict, region: str, symbol: str, name: str, extras: dict | None = None) -> list[tuple[str, str]]:
+    """[(question, answer)] the page answers from facts it holds: its market value, its next results date and its largest named
+    holders. A question whose answer isn't known is left out, never answered with "not available"."""
+    out = []
+    cap = cap_text(f)
+    if cap != "–":
+        pe = shown_pe(f)
+        out.append((f"What is {name}'s market value?",
+                    f"{name}'s market value is {cap} as of {as_of_text(f)}: the last close times the shares in issue."
+                    + (f" Its P/E is {_fmt(pe)}, the last close over earnings per share for the last four reported quarters." if pe is not None else "")))
+    nxt = (extras or {}).get("results")
+    if nxt and _date(nxt.get("date")):
+        purpose = str(nxt.get("purpose") or "").strip()
+        purpose = "" if ADVICE_WORDS.search(purpose) else purpose
+        from . import results
+        when = results.WHEN.get(nxt.get("when") or "")
+        out.append((f"When are {name}'s next results?",
+                    f"{name}'s next results are listed for {_date(nxt['date'])}" + (f", {when}" if when else "")
+                    + (f" (the exchange's notice: {purpose})" if purpose else "") + "."
+                    + (f" Dates are as the company announced them, on the list of {_date(nxt['as_of'])}." if _date(nxt.get("as_of")) else "")))
+    hold = (extras or {}).get("holders")
+    if hold and hold.get("holders") and _date(hold.get("quarter")):
+        names = "; ".join(f"{h['name']} ({'promoter group' if h['group'] == 'promoter' else 'public'}) {h['pct']:g}%" for h in hold["holders"])
+        out.append((f"Who are {name}'s largest named shareholders?",
+                    f"In the shareholding pattern for the quarter ended {_date(hold['quarter'])}, the largest named holders above 1% were: {names}. "
+                    "Percentages are of all shares."))
+    return out
+
+
+def faq_html(items: list[tuple[str, str]], name: str) -> str:
+    if not items:
+        return ""
+    return (f'<h2>Questions about {e(name)}</h2><div class="card faq" data-faq>'
+            + "".join(f"<h3>{e(q)}</h3><p>{e(a)}</p>" for q, a in items) + "</div>")
+
+
+def faq_ld(items: list[tuple[str, str]]) -> list[dict]:
+    """The FAQPage structured data for the questions the page shows, word for word."""
+    if not items:
+        return []
+    return [{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in items]}]
+
+
+def render(f: dict | None, region: str, symbol: str, name: str | None, extras: dict | None = None) -> str:
+    """The page. `f` is None when the sources had nothing on a listed company: a short page, kept out of the index. `extras` is
+    what faq_extras read from the stores (the next results date, the named holders), for the questions it answers."""
     site = settings.PUBLIC_SITE_URL
     canonical = site + path(region, symbol)
     name = (f or {}).get("name") or name or symbol
@@ -2204,15 +2364,19 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
     else:                                 # no price to date the page by: say so, never a bare "As of" over no price
         as_of_line = ("No recent share price is available for this company. Facts from reported results and exchange "
                       f"filings{', page built ' + e(as_of) if as_of else ''}. Not investment advice.")
+    questions = faq_items(f, region, symbol, name, extras) if has_content(f) else []
     ld = _ld([{"@context": "https://schema.org", "@type": "Corporation", "name": name, "tickerSymbol": symbol,
                "url": canonical, **({"industry": (plain_industry if region == "US" else str)(f["industry"][-1])} if f.get("industry") else {})},
               {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
                   {"@type": "ListItem", "position": 1, "name": "StratLab", "item": site + "/"},
-                  {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}])
+                  {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}, *faq_ld(questions)])
     ind = " · ".join(shown_industry(f.get("industry"), plain=region == "US"))
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
 <p class="muted">{e(f.get("exchange") or country)}{(" · " + e(ind)) if ind else ""}</p>
 <p class="small muted" data-as-of>{as_of_line}</p>"""]
+    about = about_text(f, region, symbol, name) if has_content(f) else ""
+    if about:
+        parts.append(f'<p data-about>{e(about)}</p>')           # SEO-1: this company's own sentences, from the figures below
     parts.append('<div class="card grid">' + "".join(
         f'<div class="stat"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
     parts += _notes(f)
@@ -2226,6 +2390,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
             f'<li><span class="muted small">{e(_date(x["at"]))}</span><br>'
             + (f'<a href="{e(x["url"])}" rel="noopener nofollow">{e(x["name"])}</a>' if x.get("url") else e(x["name"]))
             + "</li>" for x in unique_filings(shown)) + "</ul></div>")
+    parts.append(faq_html(questions, name))
     parts.append(_cta(symbol, test, deep))
     for sec in peer_sections(region, symbol, f.get("industry") or [], shown_cap(f)):
         parts.append(f'<h2>{e(sec["title"])}</h2><p class="small muted" data-peers>{e(sec["caption"])}</p>' + _links(region, sec["rows"]))
