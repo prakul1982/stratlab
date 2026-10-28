@@ -32,13 +32,16 @@ export type PageMeta = {
 export const PAGES: PageMeta[] = [
   // the home page's heading is the one the landing page draws (R8V-008: the raw page said "StratLab: test it, research it,
   // track it" over a drawn "Test it, research it, track it.")
-  // the home page's opening words for a crawler that doesn't run scripts, the landing page's three spaces in its own order
+  // the home page's opening words for a crawler that doesn't run scripts, the landing page's intro and three spaces in its own order
   // (R43B-006: the served page had about 89 words)
-  { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-27", heading: TAGLINE,
-    summary: [HOME_DESCRIPTION,
-      "Trade: write a trading idea as plain rules, backtest it on years of real prices for Indian and US stocks, index futures, currencies, commodities and crypto, and see the result after brokerage, taxes and slippage beside buy and hold. Four checks test whether the result holds up: the unseen years it wasn't tuned on, nearby settings, a bad-luck shuffle of its trades, and enough trades to tell skill from luck. Then paper trade it on live prices, with no real orders.",
-      "Invest: company pages for Indian and US listed companies with prices, results, filings and ownership, read from the companies' own reports, plus IPOs, scans, market breadth and a results calendar.",
-      "Money: your holdings, mutual funds, net worth, capital gains tax, US stocks in Indian tax and a trade journal in one place, with alerts by email or on your phone.",
+  // LAND-2: the page's "What StratLab is" intro first (content/intro.ts has the same words; unit/land2.test.mjs checks the two agree)
+  { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-28", heading: TAGLINE,
+    summary: ["What StratLab is: StratLab is a lab for testing trading ideas and understanding your own money, across ten markets, on real prices with real costs, with paper trading only (never real orders) and facts, not tips.",
+      "Trade, the strategy lab: test a trading idea on years of real prices, then paper trade it. Notebooks turn an idea written in plain words into a backtest after brokerage, taxes and slippage, with four checks for luck: the unseen years it wasn't tuned on, nearby settings, a bad-luck shuffle of its trades, and enough trades to tell skill from chance. The strategy library holds StratLab's own strategies with their checks, and paper trading, options and the F&O desk run on live prices with fake money.",
+      "Invest, research: read any Indian or US company from its own numbers and filings. Company pages show prices, key numbers, results and owners; screens and IPOs filter companies and follow an issue from its dates to its listing; red flags link fund raises, pledges, resignations and defaults to the filing.",
+      "Money, what you own: upload your broker's file or fund statement for value, gains and XIRR; a capital gains tax report, US stocks in Indian tax and an ITR-ready export; net worth and a Money calendar of tax dates, results and EMIs.",
+      "How it works: describe an idea in plain words, test it on years of real prices after real costs with four checks for luck, then trade it on paper with fake money. For Money, upload your files and see your value, gains and tax worked out.",
+      "What makes it different: facts, not tips; real costs for each market; four checks for luck; ten markets, from India and the US to crypto, forex and commodities; your data stays yours; and no real orders, ever.",
       "Free to start with no card; Basic and Pro raise the limits. StratLab states facts and never says buy, sell or hold."] },
   { path: "/pricing", title: "Plans · StratLab",
     description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, canonical: "/plans", updated: "2026-10-08",     // the landing page scrolled to its prices: the plans page is the one address for them (R26-006, RC1-011)

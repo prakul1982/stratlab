@@ -7,6 +7,7 @@ import { signIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
+import { DIFF_TITLE, DIFFERENT, HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_LINE, INTRO_SPACES, INTRO_TITLE } from "../content/intro";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
@@ -179,13 +180,6 @@ const SECTIONS: [string, string][] = [["trade", "Trade"], ["invest", "Invest"], 
 const NAV_LINKS = (plansOnly: boolean): [string, string][] => (plansOnly ? PUBLIC_MENU
   : [...SECTIONS.map(([id, label]): [string, string] => [`#${id}`, label]), ["/library", "Library"], ["/stocks", "Companies"]]);
 
-/** The three spaces, one line and one small picture of the product each, in the order the page tells them. */
-const SPACES: [string, string, string, string][] = [
-  ["trade", "Trade", "The strategy lab", "Test a trading idea on years of real prices, then paper trade it."],
-  ["invest", "Invest", "Research", "Any Indian or US company from its own numbers and filings."],
-  ["money", "Money", "What you own", "Holdings, funds, net worth and the year's tax, from your files."],
-];
-
 /** A section's eyebrow, heading and one line under it. */
 function Head({ eyebrow, title, children, h1 }: { eyebrow: string; title: string; children?: ReactNode; h1?: boolean }) {
   const H = h1 ? "h1" : "h2";       // /help has no hero above it, so its own heading is the page's (VR1-170)
@@ -314,17 +308,38 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
         </div>
       </section>}
 
-      {(full || slim === "about") && <section className="lp-sec lp-spaces-sec" aria-labelledby="spaces-h">
-        <div id="about" className="lp-wrap stack g24">
-          <h2 id="spaces-h" className="serif lp-h3">Three spaces, one place.</h2>
+      {/* LAND-2: what StratLab is, in the first screens under the hero: one sentence, the three spaces with three real things each, the
+          three steps, and what sets it apart. It replaced the three picture cards and Trade's own four steps, which said the same less
+          plainly. The same words are in the page's HTML for crawlers (content/seo.ts). */}
+      {(full || slim === "about") && <section className="lp-sec lp-spaces-sec" aria-labelledby="intro-h">
+        <div id="about" className="lp-wrap stack g32">
+          <div className="lp-head">
+            <h2 id="intro-h" className="serif lp-h2">{INTRO_TITLE}</h2>
+            <p className="serif lp-intro-line">{INTRO_LINE}</p>
+          </div>
           <div className="lp-spaces">
-            {SPACES.map(([id, name, sub, what]) => (
-              <a key={id} href={`#${id}`} className="lp-card lp-space" data-space={id}>
-                <span className="eyebrow">{sub}</span><b className="serif">{name}</b><p className="small muted">{what}</p>
-                <SpaceArt space={id} />
-                <span className="small lp-space-go">See {name} ↓</span>
-              </a>
+            {INTRO_SPACES.map((sp) => (
+              <div key={sp.id} className="lp-card lp-space" data-space={sp.id}>
+                <span className="eyebrow">{sp.sub}</span><h3 className="serif lp-space-name">{sp.name}</h3><p className="small muted">{sp.line}</p>
+                <ul className="lp-space-list">
+                  {sp.things.map(([t, b]) => <li key={t}><b>{t}</b><span className="small muted">{b}</span></li>)}
+                </ul>
+                <a href={`#${sp.id}`} className="small lp-space-go">See {sp.name} ↓</a>
+              </div>
             ))}
+          </div>
+          <div className="stack g14">
+            <h3 className="serif lp-h3">{HOW_TITLE}</h3>
+            <ol className="lp-steps lp-steps-3">
+              {HOW_STEPS.map(([t, b], k) => <li key={t} className="lp-card"><span className="lp-num">{k + 1}</span><b>{t}</b><p className="small muted">{b}</p></li>)}
+            </ol>
+            <p className="small muted">{HOW_MONEY}</p>
+          </div>
+          <div className="stack g14">
+            <h3 className="serif lp-h3">{DIFF_TITLE}</h3>
+            <div className="lp-tools lp-tools-3">
+              {DIFFERENT.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
+            </div>
           </div>
         </div>
       </section>}
@@ -335,13 +350,6 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
           <Head eyebrow="Trade · the strategy lab" title="From a sentence to a verdict.">
             Most backtests are tuned until the curve looks good. StratLab tests the idea on real prices after real costs, then checks whether the result holds up.
           </Head>
-          <ol className="lp-steps">
-            <li className="lp-card"><span className="lp-num">1</span><b>Describe it</b><p className="small muted">"Buy Reliance when it's above its 200-day average and RSI crosses 50."</p></li>
-            <li className="lp-card"><span className="lp-num">2</span><b>Check the rules</b><p className="small muted">Plain-English rules. Tap any highlighted word to change it.</p></li>
-            <li className="lp-card"><span className="lp-num">3</span><b>Get the verdict</b><p className="small muted">Years of real prices, real costs and four checks.</p></li>
-            <li className="lp-card"><span className="lp-num">4</span><b>Paper trade it</b><p className="small muted">When it holds up, run it live with fake money.</p></li>
-          </ol>
-
           <div id="checks" className="stack lp-anchor g18">
             <h3 className="serif lp-h3">Four questions every strategy has to answer.</h3>
             <div className="lp-checks">
@@ -670,46 +678,6 @@ function HeroDemo() {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-/** What every made-up picture on the landing page says about itself, in readable type. A real company or asset beside
- * invented numbers would contradict its own public page, so the pictures name no real company, ticker or date. */
-const ILLUSTRATION = "Illustration: made-up figures";
-
-/** A small picture of each space as it looks inside, so the three choices show, not tell. */
-function SpaceArt({ space }: { space: string }) {
-  if (space === "trade") return (
-    <div className="lp-space-art" aria-hidden="true">
-      <span className="lp-illus">{ILLUSTRATION}</span>
-      <span className="tiny muted mono">An RSI idea · 61 trades</span>
-      <span className="serif lp-space-big">Held up on unseen years.</span>
-      <span className="row wrap g4">
-        {(["pass", "pass", "warn", "pass"] as Status[]).map((st, k) => <span key={k} className={`badge ${st}`}>{["Unseen", "Nearby", "Drawdown", "Trades"][k]}</span>)}
-      </span>
-    </div>
-  );
-  if (space === "invest") return (
-    <div className="lp-space-art" aria-hidden="true">
-      <span className="lp-illus">{ILLUSTRATION}</span>
-      <span className="tiny muted mono">Sample Industries · a made-up company</span>
-      <span className="lp-space-rows">
-        <span><span className="muted">Sales, 3 years</span><b className="num">+11.2% a year</b></span>
-        <span><span className="muted">Debt to equity</span><b className="num">0.41</b></span>
-        <span><span className="muted">Next results</span><b className="num">in 12 days</b></span>
-      </span>
-    </div>
-  );
-  return (
-    <div className="lp-space-art" aria-hidden="true">
-      <span className="lp-illus">{ILLUSTRATION}</span>
-      <span className="tiny muted mono">My Holdings · 6 stocks</span>
-      <span className="lp-space-rows">
-        <span><span className="muted">Value</span><b className="num">₹7,10,215</b></span>
-        <span><span className="muted">Gain or loss</span><b className="num lp-blue">+₹4,49,403</b></span>
-        <span><span className="muted">Tax this year (estimate)</span><b className="num">₹12,480</b></span>
-      </span>
     </div>
   );
 }

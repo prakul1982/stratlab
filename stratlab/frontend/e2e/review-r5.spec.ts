@@ -182,13 +182,13 @@ test.describe("the hero demo (R5V-017, R5V-018)", () => {
     if (info.project.name === "phone") expect((await demo.boundingBox())!.y, "the demo is below two screens on a phone").toBeLessThan(1000);
   });
 
-  test("the verdict lines are facts about the test, the Trade and Money pictures say they are samples", async ({ page }) => {
+  test("the verdict lines are facts about the test, the research sample says it is made-up", async ({ page }) => {
     await open(page);
     await expect(page.locator("body")).not.toContainText("Likely a real edge");
     await expect(page.locator(".lp-sample")).toHaveCount(3);           // each of the three demo results
-    // the Trade and Money pictures (a made-up company) say so in readable type
-    await expect(page.locator(".lp-space[data-space=trade] .lp-illus")).toHaveText("Illustration: made-up figures");
-    await expect(page.locator(".lp-space[data-space=money] .lp-illus")).toHaveText("Illustration: made-up figures");
+    // the research sample (a made-up company) says so in readable type; the space columns carry no sample figures (LAND-2)
+    await expect(page.locator(".lp-rmock .lp-illus")).toHaveText("Illustration: a made-up company and made-up figures");
+    await expect(page.locator(".lp-space .lp-illus")).toHaveCount(0);
     await expect(page.locator(".lp-ridea")).toContainText("A template for a test, not a suggestion");
     await expect(page.locator(".lp-ridea")).not.toContainText(/Buy NVDA/);
     // nothing on the landing page is drawn smaller than 12px
