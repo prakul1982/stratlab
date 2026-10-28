@@ -370,11 +370,13 @@ def at_live_price(s: dict, live: float | None, symbol: str | None = None, since=
     return out
 
 
-def with_dividend_yield(c: dict, divs: list[dict], today: str) -> dict:
+def with_dividend_yield(c: dict, divs: list[dict], today: str, listed: bool = False) -> dict:
     """The page's dividend yield as the dividends a share with an ex-date in the last twelve months (the corporate
     actions on the same page) over the price, saying what it includes: a special dividend is counted and named, with
     the yield without it beside (TCS, 8 Oct 2026: 3.1% shown beside "Rs111 a share in the last 12 months", the Rs46
-    special left out without a word). Without those dividends the source's figure stays, labelled as its own."""
+    special left out without a word). Without those dividends the source's figure stays, labelled as its own, unless the
+    company's dividends list was read (`listed`, India) and holds none in the year: that is a real 0%, as its public page and
+    its deep dive say (RC7-006: the page kept the source's 1.0% beside their 0.00%)."""
     price = num(((c.get("quote") or {}).get("price")))
     from datetime import date, timedelta
     from ..stock_pages import restated_by, restating_actions
@@ -383,6 +385,11 @@ def with_dividend_yield(c: dict, divs: list[dict], today: str) -> dict:
     except ValueError:
         return c
     rows = [d for d in divs or [] if d.get("kind") == "dividend" and num(d.get("amount")) and year_ago < str(d.get("ex_date")) <= today]
+    if not rows and listed and price and c.get("region", "IN") == "IN":
+        out = _set_metric(c, "Div yield", 0.0, "No dividend with an ex-date in the last 12 months")
+        if isinstance(out.get("summary"), dict):
+            out["summary"] = {**out["summary"], "div_yield": 0.0}
+        return out
     if not rows or not price:
         what = "From the last reported year's dividends" if c.get("region", "IN") == "IN" else "From the company's stated yearly dividend"
         note = what if any(i["label"] == "Div yield" for g in c.get("metrics") or [] for i in g["items"]) else None

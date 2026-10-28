@@ -272,7 +272,8 @@ def page_figures(region: str, c: dict) -> dict:
     52-week range checked against the price and taking in today's high and low (R7T-001, R7T-007)."""
     from .company import with_today_range
     # the public EPS first: the payout ratio is the dividends over the EPS TTM the page shows, not the source's (R29B-013: $8.72 vs $8.71)
-    out = with_dividend_yield(with_filed_results(region, with_public_eps(region, c)), stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat())
+    out = with_dividend_yield(with_filed_results(region, with_public_eps(region, c)), stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat(),
+                              listed=_list_read(region, c["symbol"]))
     return with_today_range(per_share_checked(out))
 
 
@@ -468,6 +469,18 @@ def per_share_checked(c: dict) -> dict:
         if out.get("next_earnings"):
             out = {**out, "next_earnings": {**out["next_earnings"], "eps_estimate": None}}
     return out
+
+
+def _list_read(region: str, symbol: str) -> bool:
+    """Whether an Indian company's corporate actions list was ever read and stored: then no dividend in it for the year is a real
+    0%, not a missing list (RC7-006)."""
+    if region != "IN":
+        return False
+    try:
+        from .. import corp_actions
+        return bool(corp_actions.hist_load("IN", symbol)["at"])
+    except Exception:
+        return False
 
 
 def stored_dividends(region: str, symbol: str) -> list[dict]:
