@@ -3,6 +3,7 @@ import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { vixChange, type VixQuote } from "../lib/vix";
 import { useApp } from "../lib/app";
+import { useMarketRefresh } from "../lib/marketLive";
 import { ago, fmtDate, istToday, money, pct, signCls } from "../lib/format";
 import { uploadedLine } from "../lib/journalTax";
 import { homeOf, startView } from "../lib/spaces";
@@ -146,6 +147,9 @@ function MarketStrip() {
   const [vix, setVix] = useState<VixBrief | null | "none">(null);
   useEffect(() => { api<Brief>("/trade/positioning?brief=true&pcr=false").then(setB).catch(() => setB("none")); }, []);
   useEffect(() => { api<VixBrief>("/trade/vix").then(setVix).catch(() => setVix("none")); }, []);
+  // India VIX is the one live figure here (the rest are the exchange's daily files): read again each minute while India trades,
+  // the tile keeping its last value when a read fails (LIVE-1)
+  useMarketRefresh(["IN"], () => { api<VixBrief>("/trade/vix").then(setVix).catch(() => undefined); }, vix !== null && vix !== "none");
   const ev = useEvents();
   const today = istToday();
   const expiry = ev?.events.find((e) => e.kind === "expiry" && e.date >= today && !e.title.startsWith("SENSEX"));
@@ -454,6 +458,8 @@ function HoldingsSummary() {
   const [h, setH] = useState<Holdings | null | "error">(null);
   const { markets } = useApp();
   useEffect(() => { api<Holdings>("/holdings").then(setH).catch(() => setH("error")); }, []);
+  // value, gain or loss and Today again each minute while the stocks' markets trade; the tax card beside it is not read again (LIVE-1)
+  useMarketRefresh(["IN", "US"], () => { api<Holdings>("/holdings").then(setH).catch(() => undefined); }, h !== null && h !== "error" && h.rows.length > 0);
   const usNote = h && h !== "error" ? usTodayNote(markets, h.us, h.usd_inr) : null;
   return (
     <Panel title="My Holdings" right={<Link to="/holdings" className="link" data-money="/holdings">Open My Holdings →</Link>}>

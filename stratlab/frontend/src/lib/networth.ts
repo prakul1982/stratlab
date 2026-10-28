@@ -48,3 +48,21 @@ export function nextResetNote(c: { benchmark: string; repo_now?: number | null; 
   if (c.benchmark !== "repo" || c.repo_now == null || c.next_expected == null || c.repo_at_reset == null || Math.abs(c.repo_now - c.repo_at_reset) < 1e-9) return "";
   return ` The repo rate is ${pct2(c.repo_now)} now (${pct2(c.repo_at_reset)} at the last reset), so if it stays there the reset takes the expected rate to ${pct2(c.next_expected)}.`;
 }
+
+/** The net worth page's price-dependent part (`/money/net-worth?live=true`: totals, allocation, rows) laid over the page read
+ * earlier. The history, the deposits' tax, the plan's limits and the way of valuing stay as that read had them, whatever the
+ * live read carries (LIVE-1); a reply without totals changes nothing. */
+export function mergeLiveNetWorth<T extends object>(cur: T, live: Partial<T> | null | undefined): T {
+  if (!live || typeof live !== "object" || !(live as { totals?: unknown }).totals) return cur;
+  const { history, history_allowed, history_count, deposit_tax, limit, count, kinds, valuation, ...fresh } = live as Record<string, unknown>;
+  void history; void history_allowed; void history_count; void deposit_tax; void limit; void count; void kinds; void valuation;
+  return { ...cur, ...fresh } as T;
+}
+
+/** The markets whose prices a net worth's rows are valued at (by market id), so the page reads again only while one of them
+ * trades: My Holdings' Indian and US stocks, gold, gold bonds and coins at a market price. A fixed deposit, a provident fund,
+ * property or a fund at its latest NAV move with no tick. */
+export function pricedMarkets(rows: readonly { kind: string; basis?: string | null }[] | null | undefined): string[] {
+  const of: Record<string, string> = { stocks_in: "IN", stocks_us: "US", gold: "MCX", sgb: "MCX", crypto: "CRYPTO" };
+  return [...new Set((rows ?? []).filter((r) => r.basis === "market price" && of[r.kind]).map((r) => of[r.kind]))];
+}

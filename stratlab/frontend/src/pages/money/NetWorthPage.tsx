@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api, type ApiError } from "../../lib/api";
 import { numberProblem, type Limits } from "../../lib/validate";
 import { useApp } from "../../lib/app";
+import { useMarketRefresh } from "../../lib/marketLive";
 import { LoanCheck } from "./LoanCheck";
 import { asOf, axisInr, dateOnly, inr, inrCompact, istToday, pctPlain, signedInrCompact } from "../../lib/format";
-import { netWorthDelta, restatedNote, sinceNote } from "../../lib/networth";
+import { mergeLiveNetWorth, netWorthDelta, pricedMarkets, restatedNote, sinceNote } from "../../lib/networth";
 import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
 import { Download, Plus, Trash } from "../../components/Icons";
@@ -307,17 +308,27 @@ export function NetWorthPage() {
   const [adding, setAdding] = useState(false);
   const [step, setStep] = useState<"pick" | "form">("pick");
   const [fieldErrs, setFieldErrs] = useState<Record<string, string> | null>(null);
+  const readSeq = useRef(0);                       // one more with every full reading, so a price update begun before it is dropped
   const load = useCallback(() => {
     setError(null);
+    readSeq.current++;
     return api<View>("/money/net-worth").then(setView).catch((e) => { setError(e instanceof Error ? e.message : "Your net worth couldn't be read."); fail(e); });
   }, [fail]);
   useEffect(() => { load(); }, [load]);
+  // the values at market prices again each minute while the market behind one of them trades (LIVE-1): only the totals and rows are
+  // read, the history, the deposits' tax and the uploads are not, and an edit's answer that lands first is never overwritten
+  useMarketRefresh(pricedMarkets(view?.assets), () => {
+    const n = readSeq.current;
+    api<Partial<View>>("/money/net-worth?live=true").then((x) => { if (n === readSeq.current) setView((cur) => (cur ? mergeLiveNetWorth(cur, x) : cur)); }).catch(() => undefined);
+  }, !!view && !busy);
 
   const send = async (path: string, method: string, b?: object, done?: string) => {
     setBusy(true);
     setFieldErrs(null);
     try {
-      setView(await api<View>(path, { method, body: b }));
+      const got = await api<View>(path, { method, body: b });
+      readSeq.current++;
+      setView(got);
       if (done) notify(done);
       return true;
     } catch (e) {

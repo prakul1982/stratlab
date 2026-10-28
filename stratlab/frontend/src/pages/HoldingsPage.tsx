@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, dataUrl, type ApiError } from "../lib/api";
 import { numberProblem, problems, type Limits } from "../lib/validate";
 import { useApp } from "../lib/app";
+import { useMarketRefresh } from "../lib/marketLive";
 import { usTodayNote } from "../lib/marketHours";
 import { ago, dateOnly, fmtDate, inr, istToday, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
@@ -101,12 +102,21 @@ export function HoldingsPage() {
     const t = window.setTimeout(() => setActionsReady(true), 3000);
     return () => window.clearTimeout(t);
   }, [view, actionsReady]);
-  const show = useCallback((v: View) => { setView(v); loadFacts(v); setActionsAt((n) => n + 1); }, [loadFacts]);
+  const readSeq = useRef(0);                       // one more with every full reading, so a price update begun before it is dropped
+  const put = useCallback((v: View) => { readSeq.current++; setView(v); }, []);
+  const show = useCallback((v: View) => { put(v); loadFacts(v); setActionsAt((n) => n + 1); }, [put, loadFacts]);
   const load = useCallback(() => {
     setError(null);
     api<View>("/holdings").then(show).catch((e) => { setError(e instanceof Error ? e.message : "Your holdings couldn't be read."); fail(e); });
   }, [show, fail]);
   useEffect(() => { load(); }, [load]);
+  // the prices, values and the day's change again each minute while the stocks' markets trade (LIVE-1). Only the view is replaced:
+  // the filings and trend facts, the dividends and corporate actions and the uploads are not read again, and an edit's answer that
+  // lands first is never overwritten by a price update that was begun before it.
+  useMarketRefresh(["IN", "US"], () => {
+    const n = readSeq.current;
+    api<View>("/holdings").then((v) => { if (n === readSeq.current) setView(v); }).catch(() => undefined);
+  }, !!view && view.rows.length > 0 && !busy);
 
   const pick = async (files: FileList | null, reset: () => void) => {
     const f = files?.[0];
@@ -165,7 +175,7 @@ export function HoldingsPage() {
     try {
       await api("/holdings", { method: "DELETE" });
       setResult(null); setFacts(null);
-      setView(await api<View>("/holdings"));
+      put(await api<View>("/holdings"));
       notify("Your holdings are deleted.");
     } catch (e) { fail(e); } finally { setBusy(false); setAsking(false); }
   };
@@ -291,7 +301,7 @@ export function HoldingsPage() {
               </p>
             )}
           </Card>
-          <HoldingsActionsPanel<View> version={actionsAt} onHoldings={setView} onLoaded={() => setActionsReady(true)} />
+          <HoldingsActionsPanel<View> version={actionsAt} onHoldings={put} onLoaded={() => setActionsReady(true)} />
           {!actionsReady && <Card><Skeleton label="Opening your sectors and positions" /></Card>}
         </>
       )}

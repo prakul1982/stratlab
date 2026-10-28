@@ -36,6 +36,21 @@ def fresh_kept_answers():
 
 
 @pytest.fixture(autouse=True)
+def fresh_shared_quotes():
+    """Stock quotes shared for a few seconds (app/quote_share.py), and the answers the pages read each minute and the server keeps
+    for a few seconds, start empty in every test: one test's fake feed must not answer for the next."""
+    def clear():
+        qs, main = sys.modules.get("app.quote_share"), sys.modules.get("app.main")
+        if qs is not None:
+            qs.forget()
+        if main is not None and hasattr(main, "_breadth_views"):
+            main._breadth_views.clear()          # the breadth route's stored days, kept a few seconds (LIVE-1)
+    clear()
+    yield
+    clear()
+
+
+@pytest.fixture(autouse=True)
 def no_monthly_blog_research(monkeypatch):
     """The newsletter job's monthly run of the blog's research generator (app/blog_research.py) reads the library, the IPO
     tracker and the index history; a newsletter test whose clock is past the third of a month writes no research posts. The

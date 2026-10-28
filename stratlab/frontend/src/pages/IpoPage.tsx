@@ -275,7 +275,7 @@ export function IpoPage() {
     ipoApi.one(id).then(setD).catch((e) => !quiet && setError(e instanceof ApiError ? e.message : "This IPO couldn't be read just now."));
   }, [id]);
   useEffect(() => { load(); }, [load]);
-  useLiveRefresh(d?.ipo.stage === "open", () => load(true), 120_000);
+  useLiveRefresh(d?.ipo.stage === "open", () => load(true));       // each minute while bidding is open (LIVE-1; was every two)
   const write = async () => {
     setBusy(true); setWriteError(null);
     try {

@@ -20,6 +20,7 @@ import "./trade.css";
  * says what a close will be. Built from the kit (components/kit). */
 
 const REFRESH_MS = 30_000;
+const PREOPEN_MS = 60_000;      // before the auction the page still reads each minute (LIVE-1), so it moves on at the open and shows the first prices at once
 const time = (iso: string | null) => (iso ? fmtTime(iso, { tz: IST, seconds: true, zone: true }) : null);
 const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
 
@@ -229,7 +230,7 @@ export function ClosingAuctionPage() {
       setV(x);
       setError(null); setStale(false);
       if (LIVE_PHASES.includes(x.phase)) timer = window.setTimeout(load, REFRESH_MS);
-      else if (x.phase === "preopen") timer = window.setTimeout(load, 5 * 60_000);          // so the page moves to "continuous trading" at the open
+      else if (x.phase === "preopen") timer = window.setTimeout(load, PREOPEN_MS);          // so the page moves to "continuous trading" at the open
     }).catch(() => {
       if (!live) return;
       // with a read already on the page, keep it, say so, and keep polling; the error card is for a page with nothing to show

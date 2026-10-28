@@ -67,6 +67,8 @@ export type BreadthAlerts = { items: BreadthAlert[]; limit: number; channels: st
 export const breadthApi = {
   get: (group: GroupId, range: RangeId, brief = false) =>
     api<BreadthView>(`/invest/breadth?group=${group}&range=${range}${brief ? "&brief=true" : ""}`),
+  /** Only the live card's points and the next count's note, for a page that has the rest (LIVE-1: read each minute while India trades). */
+  live: (group: GroupId) => api<Pick<BreadthView, "live" | "pending">>(`/invest/breadth?group=${group}&live_only=true`),
   alerts: () => api<BreadthAlerts>("/invest/breadth/alerts"),
   addAlert: (group: GroupId, level: number) => api<BreadthAlerts>("/invest/breadth/alerts", { method: "POST", body: { group, level } }),
   deleteAlert: (id: string) => api<BreadthAlerts>(`/invest/breadth/alerts/${id}`, { method: "DELETE" }),
@@ -119,4 +121,10 @@ export function cardFigures(d: Pick<BreadthView, "today" | "live"> & { pending?:
   if (!d.today) return null;
   return { live: false, adv: d.today.adv.value, dec: d.today.dec.value, pct50: d.today.pct50.value, highs: d.today.highs.value,
     lows: d.today.lows.value, when: latestDue(d.today.day, d.pending) ?? `Last close, ${shortDay(d.today.day)}` };
+}
+
+/** A breadth view with a newer live card (and next-count note) laid over it, for the same group; any other view is kept as it is. */
+export function withLive(cur: BreadthView | null | "error", got: Pick<BreadthView, "live" | "pending"> | null | undefined, group: string): BreadthView | null | "error" {
+  if (!cur || cur === "error" || !got || cur.group.id !== group) return cur;
+  return { ...cur, live: got.live ?? null, pending: got.pending ?? undefined };
 }
