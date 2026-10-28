@@ -36,10 +36,11 @@ export const CHART_TF_UNITS: CustomUnit[] = [
 /** A custom timeframe on the price chart: kept only when it is one the chart offers written another way (60 minutes is
  * 1 hour, 24 hours or 1 day is 1 day, 7 days is 1 week). Any other size has no candles behind it. */
 export function chartTfCheck(offered: string[]) {
-  const NAME: Record<string, string> = { "5m": "5 min", "15m": "15 min", "1h": "1 hour", "1d": "1 day", "1w": "1 week", "1mo": "1 month" };
+  const NAME: Record<string, string> = { "1m": "1 min", "3m": "3 min", "5m": "5 min", "10m": "10 min", "15m": "15 min", "30m": "30 min", "1h": "1 hour", "2h": "2 hours", "4h": "4 hours", "1d": "1 day", "1w": "1 week", "1mo": "1 month" };
   return (n: number, unit: string): CustomCheck => {
     const minutes = unit === "min" ? n : unit === "h" ? n * 60 : unit === "d" ? n * 1440 : unit === "w" ? n * 10080 : null;
-    const hit = unit === "mo" ? (n === 1 ? "1mo" : null) : ({ 5: "5m", 15: "15m", 60: "1h", 1440: "1d", 10080: "1w" } as Record<number, string>)[minutes ?? -1] ?? null;
+    const hit = unit === "mo" ? (n === 1 ? "1mo" : null)
+      : ({ 1: "1m", 3: "3m", 5: "5m", 10: "10m", 15: "15m", 30: "30m", 60: "1h", 120: "2h", 240: "4h", 1440: "1d", 10080: "1w" } as Record<number, string>)[minutes ?? -1] ?? null;
     if (!hit) return { error: `That size isn't stored. Pick ${offered.map((o) => NAME[o] ?? o).join(", ").replace(/, ([^,]*)$/, " or $1")}.` };
     if (!offered.includes(hit)) return { error: `${NAME[hit]} candles aren't available on this chart.` };
     return { value: hit, label: NAME[hit] };

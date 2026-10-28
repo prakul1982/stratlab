@@ -7,6 +7,7 @@ import { heldStartup } from "../lib/held";
 import { NOT_FOUND_TITLE, signedOutTitle } from "../lib/title";
 import { Opening } from "../components/LoadGuard";
 import { importWithRetry } from "../lib/lazyRetry";
+import { PublicMarkets } from "../components/watch/PublicLauncher";
 
 /* What someone without an account sees, at any address: the landing page (at a section, or with a sign-in panel), the
  * policies, a shared verdict, StratLab's own strategy library, "Sign in to see …" on an address inside the app, or "Page
@@ -36,7 +37,8 @@ export function warmVisitorPage(path: string): Promise<unknown> {
   return load().catch(() => undefined);       // only a head start: the page itself reports a failed download
 }
 
-export function VisitorApp() {
+/** `userId`: someone signed in who opened a page anyone sees (a policy, a shared verdict): their Market Watch, not the visitor's board. */
+export function VisitorApp({ userId }: { userId?: string } = {}) {
   const { pathname } = useLocation();
   const view = visitorView(pathname);
   const kind: SeoKind = view.kind === "gate" ? "gate" : view.kind === "notfound" ? "notfound" : view.kind === "verdict" ? "verdict" : "public";
@@ -63,6 +65,7 @@ export function VisitorApp() {
   const words = view.kind === "landing" && view.section === "faq" ? "" : heldStartup();
   const fallback = words ? <div style={{ display: "contents" }} data-held dangerouslySetInnerHTML={{ __html: words }} /> : wait;
   return (
+    <>
     <Suspense fallback={fallback}>
       {view.kind === "landing" ? <Login section={view.section} panel={view.panel} heading={landingHeading(pathname)} intro={landingIntro(pathname)} plansOnly={isPlansPath(pathname)} slim={slimOf(pathname) ?? undefined} />
         : view.kind === "legal" ? <LegalPage />
@@ -72,5 +75,8 @@ export function VisitorApp() {
         : view.kind === "gate" ? <SignInGate />
         : <NotFound signedIn={false} />}
     </Suspense>
+    {/* the read-only board of main markets, on every public page, outside the page's own loading (MW-1) */}
+    <PublicMarkets userId={userId} />
+    </>
   );
 }

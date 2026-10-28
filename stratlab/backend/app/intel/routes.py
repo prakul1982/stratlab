@@ -533,10 +533,12 @@ def _refresh_history(region: str, symbol: str, sources: dict) -> None:
 @router.get("/chart/{region}/{symbol}")
 def chart(region: str, symbol: str, range: str = "1y", tf: str = "1d", before: str | None = None,
           profile=Depends(current_profile)):
-    """A company's candles. `tf` is 5m, 15m, 1h or 1d; `before` (an ISO time) asks for the page of older
-    candles when the chart is scrolled back, and `more` says whether still older ones exist."""
-    if tf not in ("5m", "15m", "1h", "1d"):
-        err(400, "bad_tf", "Pick 5m, 15m, 1h or 1d candles.")
+    """A company's candles. `tf` is any size from 1m to 1mo (chart_data.TFS); `before` (an ISO time) asks for the page of
+    older candles when the chart is scrolled back, and `more` says whether still older ones exist. `live` and `delayed` say
+    how current the newest candle is (MW-1)."""
+    from .. import chart_data
+    if tf not in chart_data.TFS:
+        err(400, "bad_tf", "Pick a candle size from 1 minute to 1 month.")
     r = region_of(region)
     s = symbol_of(symbol, r)
     return ok(source_call(lambda: hub.chart(r, s, range[:5], tf, (before or "")[:40])))
@@ -910,6 +912,13 @@ def put_watchlist(req: WatchReq, profile=Depends(current_profile)):
     before = get_watchlist(profile)["items"]
     before = before if isinstance(before, list) else []
     had = {(i.get("region"), str(i.get("symbol") or "").upper()) for i in before if isinstance(i, dict)}
+    # Market Watch's limit on the first list (MW-1): a list may shrink or stay, and grows only to what the plan keeps
+    from ..plans import PLANS, bigger_plan
+    cap = PLANS[profile["_plan"]]["watchlist_symbols"]
+    if cap is not None and len(items) > max(cap, len(before)) and any((i["region"], i["symbol"].upper()) not in had for i in items):
+        nxt = bigger_plan(profile["_plan"], "watchlist_symbols")
+        err(402, "plan_limit", f"The {PLANS[profile['_plan']]['name']} plan keeps {cap} symbols in a list."
+            + (f" {nxt} {'keeps ' + str(PLANS[nxt.lower()]['watchlist_symbols']) if PLANS[nxt.lower()]['watchlist_symbols'] else 'has no limit'}." if nxt else ""))
     # a symbol added must be a listed company or fund: one typed and saved as it was ("ZZZZQQ") showed a row of dashes, was
     # counted on At a glance and offered a deep dive (DD-070). One already on the list stays; a list that can't be read to
     # tell (None) doesn't stop the save

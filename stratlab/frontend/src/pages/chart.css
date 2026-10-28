@@ -1,0 +1,3 @@
+/* The chart page's quote line (MW-1): the last price large, the day's change beside it. */
+.chart-quote { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); margin-bottom: var(--s3); font-variant-numeric: tabular-nums; }
+.chart-px { font-size: var(--t-stat); font-weight: 600; line-height: 1.1; }

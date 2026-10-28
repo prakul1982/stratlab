@@ -2,6 +2,7 @@
  * timeframes and ranges, volume, indicators (the engine's own maths), drawings saved per symbol, compare, log and %
  * scales, fullscreen and a PNG download. Loaded as its own chunk (see lazy.tsx). Facts only: no signals. */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { CHART_TYPES, PriceChartEngine, type ChartMarker, type ChartType, type Hover, type PriceLevel, type Theme } from "./engine";
 import { TOOL, TOOL_HINT, type Drawing, type DrawingKind } from "./drawings";
 import { DrawRail, DrawSheet, HistoryButtons, SelectionBar, ShortcutsButton } from "./DrawToolbar";
@@ -10,16 +11,25 @@ import type { ScaleMode } from "./scales";
 import { STAGE_MEANING } from "../../lib/stageNote";
 import { clampParam, newStudy, STAGE_NAMES, STUDIES, STUDY, studyLabel, type StudyConfig, type StudyType } from "./studies";
 import { aggregate, dropSpikes, indexAtOrBefore, merge, parseTime, toBars, type Bar, type RawCandle } from "./transforms";
+import { applyTick, closesIn, countdown, stepTf, TF_KEYS, WORKSPACE_TFS, type Tick, type VolState } from "./ticks";
+import { useApp } from "../../lib/app";
+import { watchSize } from "../../lib/resize";
+import { api } from "../../lib/api";
+import { chartsSaid, indicatorsSaid, nextPlanWith } from "../../lib/watch";
 import { ChipBar } from "../../components/kit/ChipBar";
 import { ConfirmDialog } from "../../components/kit/ConfirmDialog";
 import { CHART_TF_UNITS, chartTfCheck } from "../../lib/intervals";
 import { currencySymbol, signCls } from "../../lib/format";
 import "./priceChart.css";
 
-export type Tf = "5m" | "15m" | "1h" | "1d" | "1w" | "1mo";
-export type BaseTf = "5m" | "15m" | "1h" | "1d";
+export type Tf = "1m" | "3m" | "5m" | "10m" | "15m" | "30m" | "1h" | "2h" | "4h" | "1d" | "1w" | "1mo";
+export type BaseTf = Exclude<Tf, "1w" | "1mo">;
 export type RangeKey = "1D" | "5D" | "1M" | "6M" | "YTD" | "1Y" | "5Y" | "All";
-export interface Loaded { candles: RawCandle[]; more?: boolean }
+/** `live` and `delayed`: how current the newest candle is (the broker's and the crypto exchange's are live, the rest delayed). */
+export interface Loaded { candles: RawCandle[]; more?: boolean; live?: boolean; delayed?: boolean }
+/** A source of live prices for the chart (the workspace's): called with the chart's handler, it returns how to stop. `streaming`
+ *  says whether ticks arrive one by one or the chart is moved by a read every few seconds. */
+export interface LiveFeed { subscribe: (on: (t: Tick) => void, state: (streaming: boolean) => void) => () => void; market: string }
 export type Loader = (tf: BaseTf, opts: { range?: string; before?: string }) => Promise<Loaded>;
 
 export interface PriceChartProps {
@@ -51,6 +61,12 @@ export interface PriceChartProps {
   history?: string;
   /** Only closes are known (an uploaded file): drawn as a line, area or baseline. */
   closesOnly?: boolean;
+  /** Live prices for the newest candle (the chart workspace): the forming candle moves tick by tick. */
+  feed?: LiveFeed;
+  /** Whether the market is open now, from its hours: a chart whose candles are live says "Market closed" when it isn't. */
+  marketOpen?: boolean | null;
+  /** Keep this symbol's timeframe and range with its drawings and indicators, and open on them next time (the workspace). */
+  rememberView?: boolean;
   /** While set, a click on the candles picks that price (chart replay's stop and target) instead of drawing. */
   onPickPrice?: ((price: number) => void) | null;
   /** Chart replay: the candles shown are a replay's, so a drawing appears only once the replay reaches the candle it was drawn on. */
@@ -69,11 +85,13 @@ export interface PriceChartProps {
   openFrom?: string | null;
 }
 
-const TF_LABEL: Record<Tf, string> = { "5m": "5m", "15m": "15m", "1h": "1h", "1d": "1D", "1w": "1W", "1mo": "1M" };
+const TF_LABEL: Record<Tf, string> = { "1m": "1m", "3m": "3m", "5m": "5m", "10m": "10m", "15m": "15m", "30m": "30m", "1h": "1h", "2h": "2h", "4h": "4h", "1d": "1D", "1w": "1W", "1mo": "1M" };
 /** The timeframe chips read like the Trade pages' candle sizes: "5 min", "1 hour", "1 day". */
-const TF_CHIP: Record<Tf, string> = { "5m": "5 min", "15m": "15 min", "1h": "1 hour", "1d": "1 day", "1w": "1 week", "1mo": "1 month" };
-const TF_LONG: Record<Tf, string> = { "5m": "5-minute", "15m": "15-minute", "1h": "1-hour", "1d": "Daily", "1w": "Weekly", "1mo": "Monthly" };
-const ALL_TFS: Tf[] = ["5m", "15m", "1h", "1d", "1w", "1mo"];
+const TF_CHIP: Record<Tf, string> = { "1m": "1 min", "3m": "3 min", "5m": "5 min", "10m": "10 min", "15m": "15 min", "30m": "30 min", "1h": "1 hour", "2h": "2 hours", "4h": "4 hours", "1d": "1 day", "1w": "1 week", "1mo": "1 month" };
+const TF_LONG: Record<Tf, string> = { "1m": "1-minute", "3m": "3-minute", "5m": "5-minute", "10m": "10-minute", "15m": "15-minute", "30m": "30-minute", "1h": "1-hour", "2h": "2-hour", "4h": "4-hour", "1d": "Daily", "1w": "Weekly", "1mo": "Monthly" };
+/** What a chart offers when its page doesn't say: the sizes company pages have always had. */
+const DEFAULT_TFS: Tf[] = ["5m", "15m", "1h", "1d", "1w", "1mo"];
+const ALL_TFS: Tf[] = [...WORKSPACE_TFS];
 const RANGES: { key: RangeKey; tf: Tf; fetch: string }[] = [
   { key: "1D", tf: "5m", fetch: "1d" }, { key: "5D", tf: "15m", fetch: "5d" }, { key: "1M", tf: "1h", fetch: "1m" },
   { key: "6M", tf: "1d", fetch: "6m" }, { key: "YTD", tf: "1d", fetch: "ytd" }, { key: "1Y", tf: "1d", fetch: "1y" },
@@ -147,6 +165,8 @@ const ICON: Record<string, ReactNode> = {
   gear: I(<><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></>),
 };
 
+const RANGE_KEYS: RangeKey[] = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "All"];
+
 /** The height an indicator in its own pane adds to the chart (DD-040). */
 export const PANE_ADD = 110;
 
@@ -155,7 +175,7 @@ const BUSY_RETRY_MS = 2500;
 
 export default function PriceChart(props: PriceChartProps) {
   const { symbol, storageKey, currency, load, markers, levels, pageStudies, compareLoad, height = 420 } = props;
-  const offered = (props.timeframes ?? (load ? ALL_TFS : [props.tf ?? "1d"])).filter((t) => ALL_TFS.includes(t));
+  const offered = (props.timeframes ?? (load ? DEFAULT_TFS : [props.tf ?? "1d"])).filter((t) => ALL_TFS.includes(t));
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -172,6 +192,9 @@ export default function PriceChart(props: PriceChartProps) {
   const lay0 = saved0.current;
   // every chart opens on the page's own timeframe and range (a year of daily candles), never the one picked on an earlier
   // visit: RELIANCE opened at 1 hour, TCS at daily and AAPL at monthly (DD-041)
+  // (the chart workspace, `rememberView`, is a tool the person comes back to: it saves its timeframe and range with the drawings, and
+  // its page passes them back in as `tf` and `range`)
+  const own = !!props.rememberView && !!load;
   const [tf, setTf] = useState<Tf>(props.tf && offered.includes(props.tf) ? props.tf : offered.includes("1d") ? "1d" : offered[0]);
   const [range, setRange] = useState<RangeKey | null>(() => (load ? (props.range === undefined ? "1Y" : props.range) : null));
   const [type, setType] = useState<ChartType>(() => { const t = lay0?.type ?? lsGet<string>(LS.type, "candles"); return CHART_TYPES.some((c) => c.type === t) ? t as ChartType : "candles"; });
@@ -190,6 +213,15 @@ export default function PriceChart(props: PriceChartProps) {
   const [sheet, setSheet] = useState(false);
   const [focusText, setFocusText] = useState(0);
   const phone = useMedia("(max-width: 640px)");
+  // a chart in a narrow box (Market Watch's panel) keeps its toolbar to what fits: the timeframe in one box, not twelve chips
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    setNarrow(el.clientWidth > 0 && el.clientWidth < 560);
+    return watchSize(el, () => setNarrow(el.clientWidth > 0 && el.clientWidth < 560));
+  }, []);
+  const tight = phone || narrow;
   const [full, setFull] = useState(false);
   const [menu, setMenu] = useState<"studies" | "compare" | null>(null);
   const [edit, setEdit] = useState<string | null>(null);
@@ -199,6 +231,12 @@ export default function PriceChart(props: PriceChartProps) {
   const [status, setStatus] = useState<"loading" | "ready" | "empty" | "error">("loading");
   const [error, setError] = useState("");
 const [saveNote, setSaveNote] = useState("");
+  const { me } = useApp();
+  const [flags, setFlags] = useState<{ live?: boolean; delayed?: boolean }>({});
+  const [streaming, setStreaming] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [kept, setKept] = useState<{ charts: number; saved: boolean } | null>(null);       // charts that keep drawings, against the plan (MW-1)
+  const volRef = useRef<VolState>({ cum: null });
   const setMore = (v: boolean) => { if (rootRef.current) rootRef.current.dataset.more = String(v); };
   const [fetchingMore, setFetchingMore] = useState(false);
   const [table, setTable] = useState(false);
@@ -209,7 +247,7 @@ const [saveNote, setSaveNote] = useState("");
   const [, setTick] = useState(0);
 
   const studies = useMemo(() => [...pageList, ...mine.map((s) => ({ ...s, slot: s.slot + pageList.length }))], [pageList, mine]);
-  const intraday = tf === "5m" || tf === "15m" || tf === "1h";
+  const intraday = tf !== "1d" && tf !== "1w" && tf !== "1mo";
   const locale = currency === "INR" ? "en-IN" : "en-US";
 
   const syncData = useCallback(() => {
@@ -298,7 +336,8 @@ const [saveNote, setSaveNote] = useState("");
   const currentLayout = (): Layout | null => {
     const st = stateRef.current;
     if (!touched.current) return layoutRef.current;
-    const l: Layout = { type: st.type, volume: st.volume, hide_drawings: st.hideAll, studies: st.mine.map((x) => ({ id: x.id, type: x.type, params: x.params, slot: x.slot })) };
+    const l: Layout = { type: st.type, volume: st.volume, hide_drawings: st.hideAll, studies: st.mine.map((x) => ({ id: x.id, type: x.type, params: x.params, slot: x.slot })),
+      ...(own ? { tf: st.tf, ...(st.range ? { range: st.range } : {}) } : {}) };
     layoutRef.current = l;
     return l;
   };
@@ -317,7 +356,7 @@ const [saveNote, setSaveNote] = useState("");
     pending.current = () => { window.clearTimeout(timer.current); void send(); };
     timer.current = window.setTimeout(send, 700);
   };
-  useEffect(() => { if (touched.current) scheduleRef.current(); }, [type, volume, mine, ui.hideAll]);
+  useEffect(() => { if (touched.current) scheduleRef.current(); }, [type, volume, mine, ui.hideAll, tf, range]);
   useEffect(() => {
     const online = () => { const l = readLocal(storageKey); if (l?.dirty) scheduleRef.current(); };
     window.addEventListener("online", online);
@@ -326,8 +365,12 @@ const [saveNote, setSaveNote] = useState("");
 
   // a layout's chart type, volume, indicators and hidden drawings; a symbol with none has no indicators of its own (the
   // last symbol's stay with it, DD-041). Its timeframe and range, kept by older layouts, are not used (DD-041)
+  const viewRef = useRef({ own, offered });
+  viewRef.current = { own, offered };
   const applyLayout = useCallback((l: Layout | null) => {
     setMine(validStudies(l?.studies ?? []));
+    const v = viewRef.current;
+    if (v.own && l?.tf && v.offered.includes(l.tf as Tf)) { setTf(l.tf as Tf); setRange(RANGE_KEYS.includes(l.range as RangeKey) ? (l.range as RangeKey) : null); }
     if (!l) { engineRef.current?.setHideAll(false); return; }
     if (l.type && CHART_TYPES.some((c) => c.type === l.type)) setType(l.type as ChartType);
     if (l.volume !== undefined) setVolume(l.volume);
@@ -411,6 +454,8 @@ const [saveNote, setSaveNote] = useState("");
         baseRef.current = bars;
         moreRef.current = !!r.more; setMore(!!r.more);
         rootRef.current!.dataset.loaded = tf;
+        setFlags({ live: r.live, delayed: r.delayed });
+        volRef.current = { cum: null };
         e.setData(shownFrom(bars, tf));
         setStatus(bars.length ? "ready" : "empty");
         setTick((x) => x + 1);
@@ -460,9 +505,46 @@ const [saveNote, setSaveNote] = useState("");
     syncData();
   }, [load, props.bars, syncData, applyOpenFrom]);
 
+  // live prices (the chart workspace): each tick moves the forming candle of this timeframe, and the legend, at once
+  const feed = props.feed;
+  useEffect(() => {
+    if (!feed || !load || status !== "ready") return;
+    const base: BaseTf = tf === "1w" || tf === "1mo" ? "1d" : tf;
+    const on = (t: Tick) => {
+      const e = engineRef.current, bars = baseRef.current;
+      if (!e || !bars.length) return;
+      const got = applyTick(bars[bars.length - 1], t, base, volRef.current, feed.market);
+      if (!got) return;
+      // a new array each time: the engine holds the series it was given and appends to it itself
+      baseRef.current = got.isNew ? [...bars, got.bar] : [...bars.slice(0, -1), got.bar];
+      const shown = shownFrom(baseRef.current, tf);
+      e.update(shown[shown.length - 1]);
+      setTick((x) => x + 1);
+    };
+    const off = feed.subscribe(on, setStreaming);
+    return () => { off(); setStreaming(false); };
+  }, [feed, load, status, tf, shownFrom]);
+  // the countdown to the forming candle's close, once a second while the page shows
+  const countsDown = intraday && !!flags.live && status === "ready";
+  useEffect(() => {
+    if (!countsDown) return;
+    const id = window.setInterval(() => { if (document.visibilityState !== "hidden") setNow(Date.now()); }, 1000);
+    return () => window.clearInterval(id);
+  }, [countsDown]);
+  // how many charts keep drawings, against the plan: said before the last one is used (MW-1)
+  useEffect(() => {
+    if (!me || me.plan_info.chart_saves == null || !load) { setKept(null); return; }
+    const [region, ...rest] = storageKey.split(":");
+    let live = true;
+    api<{ charts: number; saved: boolean }>(`/me/drawings/summary?region=${encodeURIComponent(region)}&symbol=${encodeURIComponent(rest.join(":"))}`)
+      .then((r) => { if (live) setKept({ charts: r.charts, saved: r.saved }); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [me, storageKey, load, list.length > 0]);          // eslint-disable-line react-hooks/exhaustive-deps
+
   // ---------- actions ----------
-  const pickTf = (t: Tf) => { setRange(null); setTf(t); setMenu(null); };
+  const pickTf = (t: Tf) => { if (own) touched.current = true; setRange(null); setTf(t); setMenu(null); };
   const pickRange = (r: RangeKey) => {
+    if (own) touched.current = true;
     const want = props.rangesKeepTf ? tf : RANGES.find((x) => x.key === r)!.tf;
     const t = offered.includes(want) ? want : offered.includes("1d") ? "1d" : offered[0];
     setTf(t); setRange(r);
@@ -604,6 +686,13 @@ const [saveNote, setSaveNote] = useState("");
   // each indicator in a pane of its own (RSI, MACD) adds its height to the chart, so the candles keep theirs: with BB, RSI
   // and MACD on, the price pane was about 170px of a fixed 418 (DD-040)
   const ownPanes = studies.filter((s) => STUDY[s.type]?.pane === "own").length;
+  // the plan's limits on indicators and on charts that keep drawings, said before they are met (MW-1)
+  const planName = me?.plan_info.name ?? "Free";
+  const nextWith = (key: "chart_indicators" | "chart_saves") => (me ? nextPlanWith(me.plan, key) : null);
+  const studyLimit = me ? indicatorsSaid({ indicators: me.plan_info.chart_indicators ?? null, next: { indicators: nextWith("chart_indicators") } }, mine.length, planName) : null;
+  const keptSaid = kept && me && (list.length > 0 || mine.length > 0) ? chartsSaid(me.plan_info.chart_saves ?? null, kept.charts, kept.saved, nextWith("chart_saves"), planName) : null;
+  const formingIn = flags.live ? closesIn(e?.bars[e.bars.length - 1], tf, now) : null;
+  const pill = marketPill(props.marketOpen, flags, streaming, formingIn != null);
   const stageH = height + ownPanes * PANE_ADD;
 
   // VR6-018: the view buttons (zoom, reset, picture, full screen) sat alone on a second line at the right of the toolbar on a laptop;
@@ -618,29 +707,30 @@ const [saveNote, setSaveNote] = useState("");
     </span>
   );
   return (
-    <div ref={rootRef} className={`pc${full ? " pc-full" : ""}`} data-testid="price-chart" data-height={stageH} style={{ ["--pc-h" as string]: `${stageH}px` }}>
+    <div ref={rootRef} className={`pc${full ? " pc-full" : ""}${narrow ? " pc-narrow" : ""}`} data-testid="price-chart" data-height={stageH} style={{ ["--pc-h" as string]: `${stageH}px` }}>
       <div className="pc-bar" role="toolbar" aria-label="Chart tools">
         <select className="pc-sel" aria-label="Chart type" value={shownType} onChange={(ev) => { touched.current = true; setType(ev.target.value as ChartType); }}>
           {CHART_TYPES.filter((c) => !props.closesOnly || ["line", "area", "baseline"].includes(c.type)).map((c) => <option key={c.type} value={c.type}>{c.name}</option>)}
         </select>
         {/* on a phone the timeframe is one box beside the chart type, so the chart isn't four rows of buttons down (R1-080) */}
-        {tfSelect && phone && (
+        {tfSelect && tight && (
           <select className="pc-sel" aria-label="Timeframe" value={offered.includes(tf) ? tf : ""} onChange={(ev) => pickTf(ev.target.value as Tf)}>
             {!offered.includes(tf) && <option value="">{TF_CHIP[tf] ?? tf}</option>}
             {offered.map((t) => <option key={t} value={t}>{TF_CHIP[t]}</option>)}
           </select>
         )}
-        {tfSelect && !phone && (
+        {tfSelect && !tight && (
           <div className="pc-tf">
-            <ChipBar label="Timeframe" value={tf} onChange={(v) => pickTf(v as Tf)} options={offered.map((t) => ({ value: t, label: TF_CHIP[t] }))}
-              custom={{ storageKey: "stratlab.chips.pricechart", units: CHART_TF_UNITS, defaultUnit: "min", validate: chartTfCheck(offered) }} />
+            <ChipBar label="Timeframe" value={tf} onChange={(v) => pickTf(v as Tf)} options={offered.map((t) => ({ value: t, label: offered.length > 6 ? TF_LABEL[t] : TF_CHIP[t] }))}
+              custom={offered.length > 6 ? undefined : { storageKey: "stratlab.chips.pricechart", units: CHART_TF_UNITS, defaultUnit: "min", validate: chartTfCheck(offered) }} />
           </div>
         )}
         <div className="pc-wrap">
           <button type="button" className="pc-btn" aria-haspopup="menu" aria-expanded={menu === "studies"} onClick={() => setMenu(menu === "studies" ? null : "studies")}>Indicators</button>
           {menu === "studies" && (
             <div className="pc-pop" role="menu" aria-label="Add an indicator">
-              {STUDIES.map((d) => <button key={d.type} type="button" role="menuitem" className="item" title={d.detail} onClick={() => addStudy(d.type)}>{d.name}<small>{d.about}</small></button>)}
+              {studyLimit && <p className="pc-pop-note" role="status">{studyLimit} <Link to="/plans">See plans</Link></p>}
+              {STUDIES.map((d) => <button key={d.type} type="button" role="menuitem" className="item" title={d.detail} disabled={!!studyLimit} onClick={() => addStudy(d.type)}>{d.name}<small>{d.about}</small></button>)}
             </div>
           )}
         </div>
@@ -673,6 +763,12 @@ const [saveNote, setSaveNote] = useState("");
       <div className="pc-main" onKeyDown={(ev) => {
         if (editable(ev.target)) return;
         if ((ev.target as HTMLElement).tagName === "BUTTON" && !ev.ctrlKey && !ev.metaKey && !/^[A-Za-z]$/.test(ev.key) && ev.key !== "Delete") return;
+        // the number keys pick a timeframe and [ and ] step through them (the workspace's chart, which has them all)
+        if (load && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+          const hot = TF_KEYS[ev.key] as Tf | undefined;
+          if (hot && offered.includes(hot)) { ev.preventDefault(); pickTf(hot); return; }
+          if (ev.key === "[" || ev.key === "]") { ev.preventDefault(); pickTf(stepTf(offered, tf, ev.key === "]" ? 1 : -1)); return; }
+        }
         if (engineRef.current?.key(ev.nativeEvent)) { ev.preventDefault(); syncData(); }
       }}>
       {!phone && <DrawRail {...drawProps} />}
@@ -690,6 +786,12 @@ const [saveNote, setSaveNote] = useState("");
               {chg != null && <span className={`${signCls(chg, signedPct(chgPct))} pc-chg`}><span className="k" title="Close compared with the previous candle's close">{TF_LABEL[tf]} change:</span> {chg >= 0 ? "▲" : "▼"} {e ? e.priceText(Math.abs(chg), h!.bar.c) : ""} ({signedPct(chgPct)})</span>}
             </>}
           </div>
+          {(pill || formingIn != null) && (
+            <div className="pc-live">
+              {pill && <span className={`pc-pill ${pill.cls}`} title={pill.title}>{pill.cls === "live" && <i aria-hidden="true" />}{pill.text}</span>}
+              {formingIn != null && <span title={`Time left in this ${TF_CHIP[tf]} candle`}><span className="k">Closes in</span>{countdown(formingIn)}</span>}
+            </div>
+          )}
           {h && showVolume && h.bar.v > 0 && <div className="pc-hide-phone"><span><span className="k">Vol</span>{compact(h.bar.v)}</span></div>}
           {cmp && <div>{sw(th?.ink ?? "currentColor")}<span>{cmp.symbol}</span><span className={signCls(cmpPct, signedPct(cmpPct))}>{signedPct(cmpPct)}</span></div>}
           {e?.studies.map((s) => {
@@ -758,6 +860,7 @@ const [saveNote, setSaveNote] = useState("");
         </div>
       </div>
       {saveNote && <p className="pc-note" role="alert">{saveNote}</p>}
+      {keptSaid && !saveNote && <p className="pc-note" role="status">{keptSaid} <Link to="/plans">See plans</Link></p>}
       {error && status === "ready" && <p className="pc-note" role="status">{error}</p>}
       {props.note && <p className="pc-note">{props.note}</p>}
       {tool && <p className="pc-note" role="status">{TOOL[tool].name}: {phone ? TOOL_HINT[tool].replace(/Click/g, "Tap").replace("Press and drag", "Drag").replace(" Esc cancels.", "") : TOOL_HINT[tool]}{ui.step > 0 ? ` (${ui.step} placed)` : ""}</p>}
@@ -804,4 +907,14 @@ function wallText(w: number, intraday: boolean): string {
   const d = new Date(w);
   const date = `${d.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()]} ${d.getUTCFullYear()}`;
   return intraday ? `${date} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` : date;
+}
+
+
+/** The pill that says how current the prices are. A market that is shut says so (the last price is final, never "live"); a
+ * delayed source says "Delayed"; the broker's and the crypto exchange's are "Live", and say whether they arrive tick by tick. */
+function marketPill(open: boolean | null | undefined, f: { live?: boolean; delayed?: boolean }, streaming: boolean, forming: boolean): { cls: string; text: string; title: string } | null {
+  if (open === false && (f.live || f.delayed)) return { cls: "closed", text: "Market closed", title: "The market isn't trading now: this is its last price." };
+  if (f.delayed) return { cls: "delayed", text: "Delayed", title: "These prices can be up to 15 minutes behind the market, or from the last session." };
+  if (f.live) return { cls: "live", text: "Live", title: streaming ? "Prices arrive tick by tick." : forming ? "Prices are read every few seconds." : "The newest candle is the market's own." };
+  return null;
 }

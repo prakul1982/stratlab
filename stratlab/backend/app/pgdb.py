@@ -113,11 +113,23 @@ create table if not exists app.blog_posts (
   published boolean not null default true
 );
 create index if not exists blog_posts_new on app.blog_posts (published_at desc);
+create table if not exists app.watchlists (
+  id text primary key default gen_random_uuid()::text,
+  user_id text not null,
+  name text not null,
+  kind text not null default 'list',
+  position integer not null default 0,
+  items jsonb not null default '[]'::jsonb,
+  order_ids jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists watchlists_user on app.watchlists (user_id, position);
 """
 
-TABLES = ("profiles", "usage_events", "strategies", "live_sessions", "live_orders", "app_settings", "option_snapshots", "blog_posts")
+TABLES = ("profiles", "usage_events", "strategies", "live_sessions", "live_orders", "app_settings", "option_snapshots", "blog_posts", "watchlists")
 KEY = {"app_settings": "key", "blog_posts": "slug"}                       # each table's primary key (the rest: id)
-JSON_COLS = {"strategies": {"body"}, "live_sessions": {"strategy", "instrument", "state"}, "option_snapshots": {"chain"}, "blog_posts": {"body"}}
+JSON_COLS = {"strategies": {"body"}, "live_sessions": {"strategy", "instrument", "state"}, "option_snapshots": {"chain"}, "blog_posts": {"body"}, "watchlists": {"items", "order_ids"}}
 
 # The size readout (storage.report): the same shape as Supabase's stratlab_db_usage, for the app schema.
 USAGE_SQL = """

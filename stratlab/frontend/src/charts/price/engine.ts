@@ -790,6 +790,20 @@ export class PriceChartEngine {
     for (const t of tt) { const x = Math.round(this.time.x(t.i)) + 0.5; c.moveTo(x, 0); c.lineTo(x, H - AXIS_H); }
     for (const p of this.panes) for (const v of p.scale.ticks(p.kind === "price" ? 48 : 30)) { const y = Math.round(p.scale.y(v)) + 0.5; c.moveTo(0, y); c.lineTo(pw, y); }
     c.stroke();
+    // session breaks (MW-1): on an intraday chart a dotted line where one trading day ends and the next begins
+    if (this.intraday && b > a) {
+      c.save();
+      c.setLineDash([2, 4]);
+      c.strokeStyle = th.border;
+      c.beginPath();
+      for (let i = Math.max(1, a); i <= b; i++) {
+        if (this.bars[i]?.day === this.bars[i - 1]?.day) continue;
+        const x = Math.round((this.time.x(i - 1) + this.time.x(i)) / 2) + 0.5;
+        c.moveTo(x, 0); c.lineTo(x, H - AXIS_H);
+      }
+      c.stroke();
+      c.restore();
+    }
     // price pane
     const pp = this.panes[0];
     if (pp && b >= a) {
