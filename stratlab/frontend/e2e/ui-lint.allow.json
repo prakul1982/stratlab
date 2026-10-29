@@ -6,12 +6,6 @@
       "rule": "R1",
       "element": "k-plan",
       "reason": "The three plan cards are a comparison: Free lists fewer features than Basic, and at 1280 px that shows as a shorter card. They start level, each ends at its own list with its button directly under it; stretching Free would only move the blank space inside it (R13), and filling it would be filler."
-    },
-    {
-      "page": "/research/results",
-      "rule": "R1",
-      "element": "This week",
-      "reason": "The two week cards sit side by side and start level. Late in a week the days already gone fold away, so 'This week' is a single 'Nothing left this week' line beside next week's list of companies. The page, its grid and its data were not changed by LIVE-1C; the gap follows the day of the week, and filling it would be filler."
     }
   ]
 }

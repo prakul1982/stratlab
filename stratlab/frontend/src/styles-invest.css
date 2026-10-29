@@ -4,6 +4,7 @@
 /* side-by-side cards keep their own height (R5O-036): stretched to the taller one, the other was a big empty box */
 .k-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: start; }
 .k-cols > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+.k-cols.stacked { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 900px) { .k-cols { grid-template-columns: minmax(0, 1fr); } }
 .k-split2 { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--s5); align-items: start; }
 /* side by side only when the results still get a wide column next to the filters and the menu (R1-045) */
