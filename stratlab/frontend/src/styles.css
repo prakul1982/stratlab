@@ -642,12 +642,23 @@ td.num, .num { font-family: var(--sans); }
 /* AI read */
 .ai-read { border-color: var(--ink); }
 
-.fact-rows { margin: 0; display: flex; flex-direction: column; }
-.fact-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 14px; padding: 7px 0; border-top: 1px solid var(--line); }
-.fact-row:first-child { border-top: 0; }
-.fact-row dt, .fact-row dd { margin: 0; }
-.fact-row dd { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-@media (max-width: 560px) { .fact-row { grid-template-columns: minmax(0, 1fr); } }
+.ai-figs { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.ai-fig { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 2px 14px; font-size: 14px; }
+.ai-fig dt, .ai-fig dd { margin: 0; }
+.ai-table .k-table :is(th, td) { white-space: normal; vertical-align: top; max-width: none; }
+.ai-table .k-table tbody th, .ai-table .k-table thead th:first-child { width: 11rem; min-width: 0; }
+.ai-table .k-table .k-list { margin: 0; }
+/* on a phone each area is its own block: its name over its figures, so the figures have the whole width */
+@media (max-width: 560px) {
+  .ai-table .k-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .ai-table .k-table, .ai-table .k-table tbody, .ai-table .k-table tr { display: block; }
+  .ai-table .k-table tbody th, .ai-table .k-table td { display: block; width: auto; border: 0; padding: 0 12px; }
+  .ai-table .k-table tbody th { padding-top: 12px; padding-bottom: 4px; }
+  .ai-table .k-table td { padding-bottom: 12px; }
+  .ai-table .k-table tbody tr { border-bottom: 1px solid var(--line); }
+  .ai-table .k-table tbody tr:last-child { border-bottom: 0; }
+  .ai-fig { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 10px; }
+}
 
 /* themes */
 

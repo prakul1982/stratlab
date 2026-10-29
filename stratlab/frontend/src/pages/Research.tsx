@@ -339,23 +339,18 @@ function CompanyView() {
       <PageHeader eyebrow={eyebrow} title={c.name} lede={`${c.exchange || REGION_NAME[region]} · ${c.symbol}${c.industry ? ` · ${c.industry}` : ""}`}
         asOf={c.as_of} asOfLabel={c.phase === "settling" ? "Provisional prices as of" : "Prices as of"} asOfTz={marketTz(region)} actions={c.quarters?.cols.length ? <Badge>Latest results: quarter to {c.quarters.cols[c.quarters.cols.length - 1]}{resultsAge(c.quarters.cols[c.quarters.cols.length - 1])}</Badge> : c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at, { tz: marketTz(region) })}</Badge> : undefined} />
       <Card>
+        {/* UI-CO item 4: one balanced block, three equal-weight columns on a wide page (the price and its move, with the close it moves from; the market value; the
+            52-week bar and the results day), then the badges, then the actions row; one column on a phone in the same order */}
         <div className="inv-head">
-          <div className="k-stack">
-            {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
-            {c.market_cap == null && c.cap_note && <p className="k-small k-muted" data-cap-check>{c.cap_note}</p>}
-            <div className="inv-badges">
-              <SurvBadges region={region} symbol={c.symbol} />
-              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} />}
-              <FoBadges region={region} symbol={c.symbol} />
-              <IndexBadges region={region} symbol={c.symbol} />
-            </div>
-            {/* a company that no longer trades says so first, and offers nothing that needs a live share (DD-012) */}
-            {c.delisted && <p className="k-small" role="status" data-testid="delisted">{delistedLine(c.name, c.delisted, (d) => fmtDate(d))}
-              {c.delisted.into_symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(c.delisted.into_symbol)}`}>{c.delisted.into ?? c.delisted.into_symbol} →</Link></>}</p>}
-          </div>
-          <div className="k-stack inv-head-price">
+          <div className="k-stack inv-head-quote">
             <Change q={c.quote} currency={ccy} closed={c.market_open === false} preOpen={c.phase === "pre_open"} settling={c.phase === "settling"}
               quoteDay={c.quote_day} today={dayIn(new Date(), marketTz(region)) ?? undefined} />
+          </div>
+          <div className="k-stack inv-head-cap">
+            {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
+            {c.market_cap == null && c.cap_note && <p className="k-small k-muted" data-cap-check>{c.cap_note}</p>}
+          </div>
+          <div className="k-stack inv-head-price">
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} since={c.range52.since} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
             {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
@@ -365,6 +360,17 @@ function CompanyView() {
             {!nextResults && !filedNow && results?.last?.out && (results.last.out.url
               ? <a className="link k-small" href={safeHref(results.last.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.last.out.at)} ↗</a>
               : <Link className="link k-small" to={`/research/results?region=${region}`}>Results filed {resultDay(results.last.out.at)}</Link>)}
+          </div>
+          <div className="k-stack inv-head-more">
+            <div className="inv-badges">
+              <SurvBadges region={region} symbol={c.symbol} />
+              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} />}
+              <FoBadges region={region} symbol={c.symbol} />
+              <IndexBadges region={region} symbol={c.symbol} />
+            </div>
+            {/* a company that no longer trades says so first, and offers nothing that needs a live share (DD-012) */}
+            {c.delisted && <p className="k-small" role="status" data-testid="delisted">{delistedLine(c.name, c.delisted, (d) => fmtDate(d))}
+              {c.delisted.into_symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(c.delisted.into_symbol)}`}>{c.delisted.into ?? c.delisted.into_symbol} →</Link></>}</p>}
           </div>
           {/* one main action (what this person came for), Watch and an alert; the rest under More. Inside the head, under the
               market value, so the left side has no empty block while the price column runs on (DD-019) */}

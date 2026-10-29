@@ -28,8 +28,9 @@ test("VR2-017: Holdings' Edit button sits at the top right of a position card on
   assert.match(css, /td\.k-act\.k-corner \{ position: absolute; top: var\(--s2\); right: var\(--s2\); grid-column: auto; \}/);
 });
 
-test("VR2-018: the company header's second row takes the price column's extra height, so the buttons stay under the badges", () => {
-  assert.match(read("src/styles-invest.css"), /\.inv-head \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto; grid-template-rows: auto 1fr;/);
+test("VR2-018 (UI-CO item 4): the company header has no tall price column beside a short left: three columns, then a full-width row of buttons", () => {
+  assert.doesNotMatch(read("src/styles-invest.css"), /grid-template-rows: auto 1fr;/);
+  assert.match(read("src/styles-invest.css"), /\.inv-head \{ display: grid; grid-template-columns: minmax\(0, 1\.1fr\)/);
 });
 
 test("VR2-019: the IPO alert events and markets share one row of chips", () => {

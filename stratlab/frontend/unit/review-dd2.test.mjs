@@ -48,10 +48,10 @@ test("DD-006, DC-002, DP2-036: the weekend line says when the market opens, on o
   assert.match(read("src/styles.css"), /\.banner\.data-banner \{ padding: 6px 14px; font-size: 13\.5px; margin-bottom: 14px; flex-wrap: nowrap; \}/);
 });
 
-test("DD-019: the company card's buttons sit under the market value, beside the price column", () => {
+test("DD-019 (UI-CO item 4): the company card is one block: price, market value and 52-week bar in three columns, then the buttons across the width", () => {
   const css = read("src/styles-invest.css");
-  assert.match(css, /\.inv-head > \.inv-head-price \{ grid-column: 2; grid-row: 1 \/ span 2; \}/);
-  assert.match(css, /\.inv-head > \.inv-actions \{ grid-column: 1; grid-row: 2; align-self: start; \}/);
+  assert.match(css, /\.inv-head \{ display: grid; grid-template-columns: minmax\(0, 1\.1fr\) minmax\(0, 1fr\) minmax\(0, 1\.2fr\);/);
+  assert.match(css, /\.inv-head > \.inv-head-more, \.inv-head > \.inv-actions \{ grid-column: 1 \/ -1; \}/);
   assert.match(read("src/pages/Research.tsx"), /<div className="k-row inv-actions">/);
 });
 

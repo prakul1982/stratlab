@@ -185,45 +185,41 @@ const TERMS: Record<string, string> = {
  * lines beside a -24.6%, so its row was four times as tall as its neighbours, LIVE1A-062). A short one stays under its label. */
 const LONG_NOTE = 90;
 
+/** The range bar beside a figure: where it sits on a typical range for its measure. */
+function RangeBar({ b }: { b: { pos: number; weak: number; strong: number } }) {
+  return (
+    <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><title>Where this figure sits on a typical range</title>
+      <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
+      <rect className="tick" x={b.weak} y="1" width="0.8" height="8" />
+      <rect className="tick" x={b.strong} y="1" width="0.8" height="8" />
+      <rect className="mark" x={Math.max(0, b.pos - 1.2)} y="0" width="2.4" height="10" />
+    </svg>
+  );
+}
+
+/** Key numbers: each group is a small table (the group's name | Value | Basis | Range bar), the tables in two columns of one width (CSS columns balance them, in reading order on a phone). A long note is a numbered note under the tables, its mark beside the value (UI-CO item 2). */
 export function MetricsGrid({ groups, currency, industry }: { groups: MetricGroup[]; currency: string; industry?: string | null }) {
   const used = Object.entries(TERMS).filter(([k]) => groups.some((g) => g.items.some((m) => m.label === k)));
   const foot: { n: number; label: string; text: string }[] = [];
   for (const g of groups) for (const m of g.items) if (m.note && m.note.length > LONG_NOTE) foot.push({ n: foot.length + 1, label: m.label, text: m.note });
   const mark = (m: { label: string; note?: string | null }) => foot.find((f) => f.label === m.label && f.text === m.note);
+  const anyBar = groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry)));
   return (
     <>
       <div className="inv-metrics">
         {groups.map((g) => (
-          <div key={g.title} className="k-stack">
-            <span className="k-eyebrow">{g.title}</span>
-            <div className="inv-metric-rows">
-              {g.items.map((m) => {
-                const b = bandPosition(m.label, m.value, industry);
-                return (
-                  <div key={m.label} className="inv-metric">
-                    {/* a note says what a figure counts (a dividend yield with a special dividend in it) */}
-                    <span className="k-small k-muted">{m.label}{m.note && !mark(m) && <span className="k-sub-line">{m.note}</span>}{mark(m) && <sup className="cmp-foot-mark" aria-label={`see note ${mark(m)!.n}`}>{mark(m)!.n}</sup>}</span>
-                    <span className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}</span>
-                    {b ? (
-                      <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><title>Where this figure sits on a typical range</title>
-                        <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
-                        <rect className="tick" x={b.weak} y="1" width="0.8" height="8" />
-                        <rect className="tick" x={b.strong} y="1" width="0.8" height="8" />
-                        <rect className="mark" x={Math.max(0, b.pos - 1.2)} y="0" width="2.4" height="10" />
-                      </svg>
-                    ) : <span />}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+              <div key={g.title} className="inv-mt">
+                <DataTable label={`Key numbers: ${g.title}`} rows={g.items} rowKey={(m) => m.label} stack={false}
+                  columns={[
+                    { key: "m", header: g.title, rowHeader: true, cell: (m) => <span className="k-small">{m.label}</span> },
+                    { key: "v", header: "Value", numeric: true, cell: (m) => <b className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}{mark(m) && <sup className="cmp-foot-mark" aria-label={`see note ${mark(m)!.n}`}>{mark(m)!.n}</sup>}</b> },
+                    { key: "b", header: "Basis", cell: (m) => <span className="k-note">{m.note && !mark(m) ? m.note : ""}</span> },
+                    { key: "r", header: anyBar ? <span title="Where this figure sits on a typical range for that measure">Range</span> : "", cell: (m) => { const b = bandPosition(m.label, m.value, industry); return b ? <RangeBar b={b} /> : null; } },
+                  ]} />
+              </div>
         ))}
-        {/* VR7-006: the groups are three equal columns, so the second row's figures sit under the first row's; the note on the bars takes the free cell a
-            last row of one or two groups leaves (not a row of its own under a hole), and with a full last row it is a row of its own */}
-        {groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry))) && (
-          <p className={`k-note inv-metrics-note${groups.length % 3 === 0 ? " row" : ""}`} data-testid="krail-legend">The small bar beside a figure shows where it sits on a typical range for that measure; the two ticks are the range's cut-off points.</p>
-        )}
       </div>
+      {anyBar && <p className="k-note" data-testid="krail-legend">The small bar beside a figure shows where it sits on a typical range for that measure; the two ticks are the range's cut-off points.</p>}
       {foot.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">{foot.map((f) => <li key={f.n}><sup>{f.n}</sup> {f.label}: {f.text}</li>)}</ul>}
       {used.length > 0 && (
         <Disclosure summary="What these terms mean">
@@ -324,18 +320,39 @@ export function EarningsBars({ rows: raw, basis }: { rows: Company["earnings"]; 
   );
 }
 
-/** Plain-number lines (growth, price trend, debt and cash, margins and returns), each a label and its facts. No
- *  bars, grades or colours: the numbers are the whole story. */
-function FactRows({ rows }: { rows: FactRow[] }) {
+/** One area's figures, each on its own line with the label and the value in aligned columns (the same two columns in every row of the table). */
+function Figures({ items }: { items: FactRow["items"] }) {
   return (
-    <dl className="fact-rows">
-      {rows.map((r) => (
-        <div key={r.id} className="fact-row">
-          <dt className="k-small"><b>{r.label}</b></dt>
-          <dd className="k-small">{r.items.map((i) => <span key={i.label} className="fact-item"><span className="k-muted">{i.label}</span> <span>{i.text}</span>{stageMeaning(i.text) && <Info label={`About ${i.text}`}>{stageMeaning(i.text)}</Info>}</span>)}</dd>
+    <dl className="ai-figs">
+      {items.map((i) => (
+        <div key={i.label} className="ai-fig">
+          <dt className="k-muted">{i.label}</dt>
+          <dd>{i.text}{stageMeaning(i.text) && <Info label={`About ${i.text}`}>{stageMeaning(i.text)}</Info>}</dd>
         </div>
       ))}
     </dl>
+  );
+}
+
+/** What the AI read says, as one table (UI-CO item 3): the area on the left, its figures on the right: the worked-out numbers by area, the valuation
+ * line, the notable figures, where the company sits and what to watch. No bars, grades or colours: the numbers are the whole story. */
+type ReadRow = { id: string; area: string; body: ReactNode };
+function ReadTable({ r }: { r: CompanyAI }) {
+  const rows: ReadRow[] = [
+    ...(r.facts ?? []).map((f) => ({ id: f.id, area: f.label, body: <Figures items={f.items} /> })),
+    ...(r.valuation_note ? [{ id: "valuation", area: "Valuation", body: <span className="k-small">{r.valuation_note}</span> }] : []),
+    // facts only: one list of figures that stand out, not "strengths" and "risks" (round 39)
+    ...(r.bull.length > 0 || r.bear.length > 0 ? [{ id: "notable", area: "Notable figures", body: <ul className="k-list" data-testid="notable-figures">{[...r.bull, ...r.bear].map((b) => <li key={b}>{b}</li>)}</ul> }] : []),
+    ...(r.position ? [{ id: "position", area: "Where it sits", body: <span className="k-small">{r.position}</span> }] : []),
+    ...(r.watch.length > 0 ? [{ id: "watch", area: "What to watch", body: <ul className="k-list">{r.watch.map((w) => <li key={w}>{w}</li>)}</ul> }] : []),
+  ];
+  if (!rows.length) return null;
+  return (
+    <div className="ai-table">
+      <DataTable label="The AI read, by area" rows={rows} rowKey={(x) => x.id} stack={false}
+        columns={[{ key: "a", header: "The numbers", rowHeader: true, cell: (x) => <b className="k-small">{x.area}</b> },
+          { key: "f", header: "The figures", cell: (x) => x.body }]} />
+    </div>
   );
 }
 
@@ -466,25 +483,7 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
           : !r ? <Skeleton label="Reading the numbers" lines={3} /> : (
             <>
               {r.summary && <p className="inv-summary">{r.summary}</p>}
-              {((r.facts ?? []).length > 0 || r.valuation_note) && <div className="inv-two">
-                {(r.facts ?? []).length > 0 && <div className="k-stack">
-                  <span className="k-eyebrow">The numbers</span>
-                  <FactRows rows={r.facts} />
-                </div>}
-                {r.valuation_note && <div className="k-stack">
-                  <span className="k-eyebrow">Valuation</span>
-                  <p className="k-small k-muted">{r.valuation_note}</p>
-                </div>}
-              </div>}
-              {/* facts only: one list of figures that stand out, not "strengths" and "risks" (round 39) */}
-              {(r.bull.length > 0 || r.bear.length > 0) && <div className="k-stack" data-testid="notable-figures"><b className="k-sub">Notable figures</b>
-                <ul className="k-list">{[...r.bull, ...r.bear].map((b) => <li key={b}>{b}</li>)}</ul></div>}
-              {(r.position || r.watch.length > 0) && (
-                <div className="inv-two">
-                  {r.position && <div className="k-stack"><b className="k-sub">Where it sits</b><p className="k-small">{r.position}</p></div>}
-                  {r.watch.length > 0 && <div className="k-stack"><b className="k-sub">What to watch</b><ul className="k-list">{r.watch.map((w) => <li key={w}>{w}</li>)}</ul></div>}
-                </div>
-              )}
+              <ReadTable r={r} />
               {r.ideas.length > 0 && (
                 <div className="k-inset">
                   <div className="k-stack">
