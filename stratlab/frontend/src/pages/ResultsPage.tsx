@@ -169,6 +169,13 @@ export function ResultsPage() {
           {r.fo && <span className="k-note k-muted">F&amp;O</span>}
         </span>
         {r.name && <span className="k-note k-muted">{r.name}</span>}
+        <span className="k-note">{r.purpose}{r.when ? `, ${r.when}` : ""}</span>
+        {r.out && (
+          <span className="k-note">
+            Filed {resultDay(r.out.at)}{r.out.url ? <>: <a className="link" href={safeHref(r.out.url)} target="_blank" rel="noopener noreferrer">{r.out.title} ↗</a></> : `: ${r.out.title}`}
+            {r.out.numbers.length > 0 && <span className="k-muted"> · {r.out.numbers.map((x) => `${x.label} ${x.value}`).join(" · ")} (as stated)</span>}
+          </span>
+        )}
       </span>) },
     { key: "cap", header: "Market value", numeric: true, cell: (r) => (r.cap == null ? <span className="k-muted">–</span> : <span title={r.band ? `${SIZE_NAME[r.band]} company` : undefined}>{screenCap(r.cap, r.region)}</span>) },
     { key: "px", header: "Price now", numeric: true, cell: (r) => {
@@ -199,16 +206,6 @@ export function ResultsPage() {
       if (i === undefined) return <span className="k-muted">Reading…</span>;
       return i ? <span title={`At the ${i.strike.toLocaleString("en-IN")} strike, to the ${resultDay(i.expiry)} expiry`}>±{i.pct.toFixed(1)}%</span> : <span className="k-muted">Not available now</span>;
     } } as Column<ResultRow>] : []),
-    { key: "mt", header: "Meeting", wrap: true, cell: (r) => (
-      <span className="k-stack">
-        <span>{r.purpose}{r.when ? `, ${r.when}` : ""}</span>
-        {r.out && (
-          <span className="k-note">
-            Filed {resultDay(r.out.at)}{r.out.url ? <>: <a className="link" href={safeHref(r.out.url)} target="_blank" rel="noopener noreferrer">{r.out.title} ↗</a></> : `: ${r.out.title}`}
-            {r.out.numbers.length > 0 && <span className="k-muted"> · {r.out.numbers.map((x) => `${x.label} ${x.value}`).join(" · ")} (as stated)</span>}
-          </span>
-        )}
-      </span>) },
   ];
 
   return (

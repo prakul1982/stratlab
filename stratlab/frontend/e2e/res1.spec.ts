@@ -46,7 +46,7 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   const days = page.getByTestId("results-day");
   await expect(days.first().locator(".k-eyebrow")).toContainText("today · 4 companies");
   if (!phone) {
-    for (const h of ["Company", "Market value", "Price now", "Day", "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply", "Meeting"])
+    for (const h of ["Company", "Market value", "Price now", "Day", "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply"])
       await expect(today.getByRole("columnheader").filter({ hasText: h }).first()).toBeVisible();
   }
   await expect(today.getByRole("row")).toHaveCount(5);                      // the header and four companies
@@ -99,7 +99,8 @@ test("results calendar: size, sector, index, F&O and purpose narrow the table, t
   await expect(page.getByTestId("results-count")).toContainText("20 companies ·");
   await filters.getByLabel("Meeting", { exact: true }).selectOption("any");
   await filters.getByLabel("Sort by").selectOption("name");
-  await expect(page.getByTestId("results-day").first().locator("tbody th a").first()).toHaveText("HDFCBANK");      // by name: HDFC Bank Ltd first
+  // by name: the owner's own stock first (RELIANCE), then ICICI Bank, ITC and Oil and Natural Gas
+  await expect(page.getByTestId("results-day").first().locator("tbody th a")).toHaveText(["RELIANCE", "ICICIBANK", "ITC", "ONGC"]);
   await sane(page, errors);
 });
 

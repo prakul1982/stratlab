@@ -8,7 +8,7 @@ const page = read("src/pages/ResultsPage.tsx");
 
 test("RES-1: one table a day with the figures a person looks at on a results day", () => {
   assert.match(page, /<DataTable label=\{`Results on \$\{resultDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => `\$\{r\.symbol\}-\$\{r\.date\}`\} columns=\{columns\} stack phonePage=\{10\} \/>/);
-  for (const h of ["Company", "Market value", "Price now", '"Day"', "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply", "Meeting"])
+  for (const h of ["Company", "Market value", "Price now", '"Day"', "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply"])
     assert.ok(page.includes(`header: ${h.startsWith('"') ? h : `"${h}"`}`), h);
   assert.doesNotMatch(page, /className="inv-row"/);        // no chips and no two uneven columns
   assert.doesNotMatch(page, /k-cols/);
