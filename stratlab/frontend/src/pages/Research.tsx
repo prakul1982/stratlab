@@ -720,6 +720,9 @@ export function ComparePage() {
   const [sameMsg, setSameMsg] = useState<string | null>(null);        // the server found the two to be one company (DD-061)
   // "Asking…" is the pair's it was pressed for: another pair or market never shows it, and never gets its answer
   const [asking, setAsking] = useState<string | null>(null);
+  // a link that names two companies and no market ("?a=HDFCBANK&b=ICICIBANK") opens in the market that has them, not the one this browser last used
+  // (LIVE2-021): when the pair isn't found in this one, the other is tried once
+  const auto = useRef<{ tried: boolean; first: Region | null; error: string | null }>({ tried: false, first: null, error: null });
   const shownKey = pairKey(region, a, b);
   const pair = useRef(shownKey);
   pair.current = shownKey;
@@ -742,7 +745,12 @@ export function ComparePage() {
     setRes(null); setError(null);
     researchApi.compare(region, a, b).then((x) => live && setRes(x)).catch((e) => {
       if (!live) return;
-      if ((e as ApiError).code === "same_symbol") setSameMsg((e as Error).message); else setError((e as Error).message);
+      if ((e as ApiError).code === "same_symbol") { setSameMsg((e as Error).message); return; }
+      const t = auto.current;
+      if (!params.get("region") && !t.tried) { auto.current = { tried: true, first: region, error: (e as Error).message }; setRegionState(region === "IN" ? "US" : "IN"); return; }
+      // not in the other market either: the first market's message, and the market it was asked in
+      if (t.tried && t.first && t.first !== region) { setError(t.error ?? (e as Error).message); setRegionState(t.first); return; }
+      setError(t.tried && t.error ? t.error : (e as Error).message);
     });
     return () => { live = false; };
   }, [a, b, region, same]);
@@ -788,7 +796,9 @@ export function ComparePage() {
   // table, naming the company (LIVE1A-048)
   type Foot = { n: number; symbol: string; text: string };
   type Item = Company["metrics"][number]["items"][number];
-  const qualifier = (m: Item | undefined) => { const note = (m as { note?: string } | undefined)?.note; return note && QUALIFIES.test(note) ? note : null; };
+  // (UI-CO item 8: any note longer than a short basis is one, whatever its words: "₹112 a share in the last 12 months, including a ₹46 special dividend;
+  // 2.7% without it" ran across both columns)
+  const qualifier = (m: Item | undefined) => { const note = (m as { note?: string } | undefined)?.note; return note && (QUALIFIES.test(note) || note.length > 48) ? note : null; };
   // worked out before the table is drawn, so the list under it and the numbers in its cells agree
   const footsOf = (sec: { title: string; labels: string[] }): Foot[] => {
     const out: Foot[] = [];
@@ -822,23 +832,20 @@ export function ComparePage() {
       {a && b && !same && !sameMsg && !res && !error && <Card><Skeleton label={`Comparing ${a} and ${b}`} lines={4} /></Card>}
       {res && (
         <>
-          <div className="k-cols">
-            {([["a", res.a], ["b", res.b]] as const).map(([k, c]) => (
-              <Card key={k}>
-                {/* both cards the same: the name, the two figures, then the same two buttons in a row (DD-060) */}
-                <CardHead title={c.name} />
-                <StatRow>
-                  <Stat label={priceLabel(c, today, dayText).label ?? "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
-                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={priceLabel(c, today, dayText).since || undefined} />
-                  <Stat label="Market value" value={bigMoney(c.market_cap, c.currency)} note={c.symbol} />
-                </StatRow>
-                <div className="k-row">
-                  <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}>Open {c.symbol} →</Link>
-                  <StarButton region={region} symbol={c.symbol} name={c.name} />
-                </div>
-              </Card>
-            ))}
-          </div>
+          {/* the two companies as one table (UI-CO item 11, LIVE1A-050): the name (a link to its page), the price and its move, the market value and Watch: the same
+              four columns for both, so nothing is said twice and no button repeats the link */}
+          <Card>
+            <DataTable label="The two companies" rows={[res.a, res.b]} rowKey={(c) => c.symbol} stack
+              columns={[
+                { key: "n", header: "Company", rowHeader: true, wrap: true, cell: (c) => <span className="cmp-cell"><Link className="link" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}><b>{c.name}</b></Link><span className="k-note">{c.symbol}</span></span> },
+                { key: "p", header: "Price", numeric: true, cell: (c) => (
+                  <span className="cmp-cell end"><b>{c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}</b>
+                    <span className="k-note">{priceLabel(c, today, dayText).label ?? ""}{priceLabel(c, today, dayText).since ? ` ${priceLabel(c, today, dayText).since}` : ""}</span></span>) },
+                { key: "d", header: "Change", numeric: true, cell: (c) => (c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : "–") },
+                { key: "m", header: "Market value", numeric: true, cell: (c) => bigMoney(c.market_cap, c.currency) },
+                { key: "w", header: "", action: true, cell: (c) => <StarButton region={region} symbol={c.symbol} name={c.name} /> },
+              ]} />
+          </Card>
           {/* the two prices on one % scale, from the start of the range shown (DD-060) */}
           <Card id="cmp-chart"><PriceChart region={region} symbol={res.a.symbol} currency={res.a.currency} price={res.a.quote?.price} compareWith={res.b.symbol} /></Card>
           <Card>

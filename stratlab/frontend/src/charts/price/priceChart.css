@@ -198,6 +198,7 @@
 @media (max-width: 640px) {
   .pc-btn, .pc-sel, .pc-seg .pc-btn { min-height: 44px; }
   .pc-btn.icon { width: 44px; }
+  .pc-info.info-btn { width: 44px; height: 44px; }   /* the toolbar's "Drawing tools and shortcuts" (i) was 34px on a phone-wide window that is not a touch screen (LIVE2-030) */
   /* VR7-001: the range and scale buttons were 44 high but only 32 wide (eleven of them) and eight ranges of 44px do not fit a 326px card on one row.
      The ranges are two rows of four, the scale buttons one row, both across the card, so each is 44px or more each way and none is hidden */
   .pc-foot { flex-direction: column; align-items: stretch; gap: 8px; }

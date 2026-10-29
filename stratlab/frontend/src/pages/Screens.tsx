@@ -11,6 +11,7 @@ import {
 import { RegionSwitch } from "../components/Research";
 import { screenFromQuery, screenQuery, withParams } from "../lib/investUi";
 import { Trash } from "../components/Icons";
+import { Info } from "../components/ui";
 import { SurvBadges } from "../components/Surveillance";
 import { useMoreColumns } from "../components/MoreColumns";
 import {
@@ -99,6 +100,8 @@ export function ScreensPage() {
   const [rows, setRows] = useState<ScreenRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [metaTries, setMetaTries] = useState(0);              // one more with each "Try again": the filters' own list can fail alone (LIVE2-020)
+  const [metaError, setMetaError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedPage | null>(null);
   const [open, setOpen] = useState<SavedScreen | null>(null);
   const [name, setName] = useState("");
@@ -123,9 +126,9 @@ export function ScreensPage() {
   useEffect(() => {
     // another market's screen has other columns and other stocks: the old result goes, and a run still on its way for the old market is dropped
     seq.current++; setOut(null); setRows([]);
-    setMeta(null);
-    screensApi.meta(region).then(setMeta).catch((e) => setError((e as Error).message));
-  }, [region]);
+    setMeta(null); setMetaError(null);
+    screensApi.meta(region).then(setMeta).catch((e) => { setMetaError((e as Error).message); setError((e as Error).message); });
+  }, [region, metaTries]);
   useEffect(() => { screensApi.saved().then(setSaved).catch(() => undefined); }, []);
 
   const run = useCallback((offset = 0) => {
@@ -227,13 +230,14 @@ export function ScreensPage() {
         </Card>
       )}
 
-      <div className="k-split2">
+      <div className="k-split2 screens-split">
         <div className="inv-sticky">
-          <Card label="Filters">
-            <CardHead title="Filters" actions={<>
-              <button className="btn quiet sm inv-toggle" aria-expanded={showFilters} onClick={() => setShowFilters((s) => !s)}>{showFilters ? "Hide filters" : "Show filters"}{n ? ` (${n})` : ""}</button>
+          <Card label="Filters" className="screens-filters">
+            <CardHead title={n ? `Filters (${n})` : "Filters"} actions={<>
+              <button className="btn quiet sm inv-toggle" aria-expanded={showFilters} onClick={() => setShowFilters((s) => !s)}>{showFilters ? "Hide filters" : "Show filters"}</button>
               <button className="btn quiet sm" onClick={clear} disabled={!n && sort === "market_cap" && desc}>Clear</button></>} />
-            {!meta ? <div className="screens-filters-wait"><Skeleton label="Loading the filters" lines={4} /></div> : showFilters && <>
+            {!meta && metaError ? <ErrorState title="The filters couldn't be loaded" action={{ label: "Try again", onClick: () => setMetaTries((t) => t + 1) }}>{metaError}</ErrorState>
+              : !meta ? <div className="screens-filters-wait"><Skeleton label="Loading the filters" lines={4} /></div> : showFilters && <>
               <Group title={sectorName} help={help.sector}>
                 {meta.sectors.length === 0 ? <p className="k-small k-muted">No companies gathered yet.</p>
                   : <ChipSet label={sectorName} options={meta.sectors.map((s) => ({ value: s, label: s }))} on={filters.sector} onToggle={(v) => toggle("sector", v)} />}
@@ -241,19 +245,25 @@ export function ScreensPage() {
               <Group title="Company size (market value)" help={help.cap}>
                 <ChipSet label="Company size" options={meta.cap.map((c) => ({ value: c.id, label: c.label }))} on={filters.cap} onToggle={(v) => toggle("cap", v as Filters["cap"][number])} />
               </Group>
-              {meta.ranges.map((r) => (
-                <Group key={r.id} title={r.label} help={r.help}>
-                  <div className="inv-bounds">
-                    <Field label="At least" inputMode="decimal" value={draft[r.id]?.min ?? ""} placeholder="Any" aria-label={`${r.label}: at least`}
-                      aria-invalid={bad.has(`${r.id}.min`)} onChange={(e) => setBound(r.id, "min", e.target.value)} />
-                    <Field label="At most" inputMode="decimal" value={draft[r.id]?.max ?? ""} placeholder="Any" aria-label={`${r.label}: at most`}
-                      aria-invalid={bad.has(`${r.id}.max`)} onChange={(e) => setBound(r.id, "max", e.target.value)} />
-                    <span className="k-unit">{r.unit === "%" ? "%" : "times"}</span>
-                  </div>
-                  {(bad.has(`${r.id}.min`) || bad.has(`${r.id}.max`)) && <span className="k-note k-down">Enter a plain number, like 15 or -10.</span>}
-                  {bad.has(`${r.id}.order`) && <span className="k-note k-down" role="alert">"At least" is above "at most": no company can meet this.</span>}
-                </Group>
-              ))}
+              {/* UI-CO item 9: the numeric filters are one table (measure | at least | at most): full names that wrap, two boxes of one width on every row with the
+                  unit inside each box, whatever the unit */}
+              <div className="screens-ranges">
+                <DataTable label="Filters on figures: at least and at most" rows={meta.ranges} rowKey={(r) => r.id} stack={false}
+                  columns={[
+                    { key: "m", header: "Measure", rowHeader: true, cell: (r) => (
+                      <span className="k-stack">
+                        <span className="screens-fname"><span>{r.label}</span><Info label={`What is ${r.label}?`}>{r.help}</Info></span>
+                        {(bad.has(`${r.id}.min`) || bad.has(`${r.id}.max`)) && <span className="k-note k-down">Enter a plain number, like 15 or -10.</span>}
+                        {bad.has(`${r.id}.order`) && <span className="k-note k-down" role="alert">"At least" is above "at most": no company can meet this.</span>}
+                      </span>) },
+                    ...(["min", "max"] as const).map((side) => ({ key: side, header: side === "min" ? "At least" : "At most", cell: (r: (typeof meta.ranges)[number]) => (
+                      <span className="k-input-unit" style={{ "--unit-w": "30px" } as React.CSSProperties}>
+                        <input className="k-input" inputMode="decimal" value={draft[r.id]?.[side] ?? ""} placeholder="Any" aria-label={`${r.label}: ${side === "min" ? "at least" : "at most"}`}
+                          aria-invalid={bad.has(`${r.id}.${side}`) || undefined} onChange={(e) => setBound(r.id, side, e.target.value)} />
+                        <span className="u" aria-hidden="true">{r.unit === "%" ? "%" : "×"}</span>
+                      </span>) })),
+                  ]} />
+              </div>
               <Group title="Stage" help={help.stage}>
                 <ChipSet label="Stage" options={meta.stages.map((s) => ({ value: String(s.id), label: s.label }))} on={filters.stage.map(String)}
                   onToggle={(v) => toggle("stage", meta.stages.find((s) => String(s.id) === v)!.id as Filters["stage"][number])} />
@@ -297,7 +307,7 @@ export function ScreensPage() {
                 <Select label="Sort by" small value={sort} onChange={(v) => { setSort(v); setDesc(false); }} options={cols.map((c) => ({ value: c.id, label: c.short ?? c.label }))} />
                 <button className="btn quiet sm" onClick={() => setDesc((d) => !d)}>{desc ? "High to low ↓" : sort === "name" || sort === "sector" ? "A to Z ↑" : "Low to high ↑"}</button>{more.toggle}</>} />
             {!out && !error && <div className="screens-wait"><Skeleton label="Finding the companies" lines={8} /></div>}
-            {error && <ErrorState title="The companies couldn't be read" action={{ label: "Try again", onClick: () => run(0) }}>{error}</ErrorState>}
+            {error && <ErrorState title="The companies couldn't be read" action={{ label: "Try again", onClick: () => { setMetaTries((t) => t + 1); run(0); } }}>{error}</ErrorState>}
             {out && out.indexed === 0 && <EmptyState title="Still gathering company numbers">StratLab is still gathering company numbers for {REGION_NAME[region]}. Check back in a little while.</EmptyState>}
             {out && out.indexed > 0 && out.total === 0 && <EmptyState title="No company meets every condition.">Try widening one of them.</EmptyState>}
             {unvalued.length > 0 && (
@@ -311,7 +321,7 @@ export function ScreensPage() {
             {out && rows.length < out.total && <button className="btn quiet sm k-btn-end" disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString("en-IN")} left)</button>}
           </Card>
 
-          <Card className="screens-save">
+          <Card className={`screens-save${showFilters ? "" : " folded"}`}>
             <CardHead title={open ? `Screen: ${open.name}` : "Save this screen"} info="Saved screens keep your conditions. Turn on the weekly email to hear on Saturday mornings which companies newly meet them. Your plan sets how many you can keep." />
             <FormGrid label="Save this screen" onSubmit={(e) => e.preventDefault()}>
               <Field label="Name" maxLength={60} placeholder="Like: Low debt" value={name} onChange={(e) => setName(e.target.value)} />
