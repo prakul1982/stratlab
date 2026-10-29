@@ -2249,7 +2249,8 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .rot-move .k-badge { white-space: nowrap; }
 .rot-was { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .rot-name { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
-.rot-name > :first-child { min-width: 0; text-align: left; }
+.rot-name > .k-tap { flex: none; }
+.rot-name > span { min-width: 0; text-align: left; }
 .k-toolbar > .k-search { flex: 1 1 280px; }
 @media (max-width: 480px) { .k-toolbar > select.k-input { flex: 1 1 100%; } }
 .k-address { display: inline-block; max-width: 100%; padding: var(--s2) var(--s3); background: var(--paper-2); color: var(--ink); border-radius: var(--r-ctl); font: 13.5px/1.4 var(--mono); overflow-wrap: anywhere; user-select: all; }

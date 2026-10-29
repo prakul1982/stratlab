@@ -166,7 +166,7 @@ for (const group of ["nifty500", "sp500"]) {
 
 // ---------- Sector rotation: every sector a row, the counts in the filter chips, sortable, ticks tied to the chart (MOOD-1) ----------
 for (const region of ["IN", "US"] as const) {
-  test(`rotation ${region}: a table of every one with its quadrant, was-to-now and returns; filter counts add up; ticks drive the chart`, async ({ page }) => {
+  test(`rotation ${region}: a table of every one with its quadrant, was-to-now and returns; filter counts add up; ticks drive the chart`, async ({ page }, info) => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.route("**/*", (r) => { const host = new URL(r.request().url()).hostname; return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" }); });
@@ -191,11 +191,13 @@ for (const region of ["IN", "US"] as const) {
     await expect(table.locator("tbody tr")).toHaveCount(counts[k]);
     await bar.getByRole("button").first().click();
     await expect(table.locator("tbody tr")).toHaveCount(total);
-    // sorting by a column: the header says so, and the figures follow
+    // sorting by a column: the header says so, and the figures follow (a phone shows each row as a card, with no header to press)
+    if (info.project.name !== "phone") {
     await table.getByRole("button", { name: /^Momentum/ }).click();
     await expect(table.getByRole("columnheader", { name: /^Momentum/ })).toHaveAttribute("aria-sort", "descending");
     const mom = (await table.locator("tbody tr").evaluateAll((rows) => rows.map((r) => parseFloat((r.querySelectorAll("td")[2]?.textContent ?? "").replace("−", "-"))))).filter((v) => !Number.isNaN(v));
     expect(mom).toEqual([...mom].sort((a, b) => b - a));
+    }
     // the returns carry an arrow and a sign
     await expect(table.locator(".k-delta").first()).toContainText(/[▲▼]/);
     // the ticks choose what the chart draws: "Show all" draws every one
