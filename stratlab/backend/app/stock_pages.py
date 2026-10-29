@@ -1189,7 +1189,9 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "high52": prices.get("high52") or snap.get("high52"), "low52": prices.get("low52") or snap.get("low52"),
         **({"range_whole": True} if whole_range else {}),
         **({"range_since": prices["range_since"]} if prices.get("range_since") else {}),
-        "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
+        "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"),
+        **({"pe_why": snap["pe_why"]} if snap.get("pe_why") else {}),
+        **({"basis": p["basis"]} if region == "IN" and p.get("basis") in ("consolidated", "standalone") else {}), "roe": snap.get("roe"), "roce": snap.get("roce"),
         "div_yield": snap.get("div_yield"), "div_special": snap.get("div_special"), "profit_ttm": _ttm_profit(p),
         "net_margin": snap.get("net_margin"), "opm": opm, "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
         "bank": financial, "years": years, "currency_note": p.get("currency_note"),
@@ -2526,6 +2528,11 @@ def _whole(values) -> bool:
     return bool(vals) and all(v == round(v) for v in vals)
 
 
+def _true_minus(text: str) -> str:
+    """A negative number with the minus sign (−), as the price changes on the same page have it, not a hyphen (LIVE2-017)."""
+    return re.sub(r"(?<![\w.,])-(?=[₹$]?\d)", "−", text)
+
+
 def _stats(f: dict) -> list[tuple[str, str]]:
     unit = f.get("unit") or ""
     whole = f.get("region") == "IN" and _whole([f.get("opm")] + [y.get("opm") for y in f.get("years") or []])
@@ -2562,8 +2569,8 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     if not f.get("bank"):
         out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
     out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
-            ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of {'$' if f.get('currency') == 'USD' else '₹'}{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy is not None else "n/a")]
-    return [(k, v) for k, v in out if v != "–"]
+            ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of {'$' if f.get('currency') == 'USD' else '₹'}{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy else "none" if dy == 0 else "n/a")]
+    return [(k, _true_minus(v)) for k, v in out if v != "–"]
 
 
 # ---------- the top of a company's page (PUB-2) ----------
@@ -2591,7 +2598,7 @@ def _price_block(f: dict, as_of: str) -> str:
 
 def _short_amount(unit: str, text: str) -> str:
     """A reported amount with its unit as one short value: "₹29,678 cr", "$128,930M", "INR 16.19M"."""
-    sign, text = ("-", text[1:]) if text[:1] in "-−" else ("", text)
+    sign, text = ("−", text[1:]) if text[:1] in "-−" else ("", text)
     parts = unit.split()
     if unit == "₹ crore":
         return f"{sign}₹{text} cr"
@@ -2620,6 +2627,8 @@ def _tiles(f: dict) -> list[dict]:
             short = "P/E"
             # LIVE1B-076: said as what it is, reported earnings of the last four quarters, not a vague "last 12 months"
             line = "on " + (label[label.index("(") + 1:-1] + " profit" if "(" in label else "reported profit, last four quarters")
+            if f.get("basis") == "consolidated":
+                line += ", consolidated"           # LIVE2-016: the basis is on the tile, as the sites people compare with differ on it
         elif label.startswith("Profit to shareholders"):
             short, line, val = "Profit, last 12 months", "to shareholders", _short_amount(unit, val)
         elif label.startswith("Net profit incl."):
@@ -2761,6 +2770,14 @@ def _notes(f: dict) -> list[str]:
         out.append(f'<p class="note" data-pe-old>P/E isn\'t shown: the latest reported earnings on this page are for the '
                    f'year to {e(_date(pe_period(f)[1]))}, more than 15 months before this price, and a newer annual '
                    "report's figures aren't on the page yet.</p>")
+    if shown_pe(f) is None and not cap_problem(f) and not pe_stale(f):
+        loss = _num(f.get("profit_ttm"))
+        if f.get("pe_why"):
+            # LIVE2-025: two ways of working it out disagree and nothing settles which is right: not published until they agree
+            out.append(f'<p class="note" data-pe-why>P/E isn\'t shown: {e(str(f["pe_why"])[:1].lower() + str(f["pe_why"])[1:])}.</p>')
+        elif loss is not None and loss < 0:
+            # LIVE2-017: a loss-maker's missing P/E is said, not left as a tile that isn't there
+            out.append('<p class="note" data-pe-loss>P/E isn\'t shown: the company made a loss over the last 12 months, and a loss has no P/E.</p>')
     gap = pe_profit_gap(f)
     if gap:
         pe, implied, profit = gap
