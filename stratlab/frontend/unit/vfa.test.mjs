@@ -66,6 +66,12 @@ test("VR1-021, VR1-022, VR1-031: the 'more you can do' tiles keep a card's width
   assert.match(read("src/components/Explore.tsx"), /title = "More you can do"/);
 });
 
+test("owner, 29 Oct: More you can do shows every group of tools, with no button folding them away", () => {
+  const ex = read("src/components/Explore.tsx");
+  assert.match(ex, /\{goals\.map\(\(g\) => \{/);
+  assert.doesNotMatch(ex, /more tools|aria-expanded|explore\.open/);
+});
+
 test("VR1-030: two notebooks fill the row, a lone one is a card's width, the pin is an icon at the top right", () => {
   const tcss = read("src/pages/trade/trade.css");
   assert.match(tcss, /\.k-cards\.nb-cards \{[^}]*repeat\(auto-fit, minmax\(min\(100%, 320px\), 1fr\)\)/);

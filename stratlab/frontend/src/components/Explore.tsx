@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { FEATURES, GOAL_ORDER, GOALS, resolve, type Goal } from "../lib/features";
@@ -7,11 +6,9 @@ import { TileGrid } from "./TileGrid";
 import "../pages/trade/trade.css";
 import { scrollBehavior } from "../lib/motion";
 
-const OPEN_KEY = "stratlab.explore.open";
-
 /** Everything StratLab can do, grouped by the goal it serves and ordered by what the user came for, so the deeper
- * tools aren't hidden and nobody faces a wall of equal choices. Only the first group shows until "Show everything"
- * is pressed (remembered), so the page under it stays short. `hide` leaves out tools the page above already links to,
+ * tools aren't hidden and nobody faces a wall of equal choices. Every group shows, none folded behind a button (the
+ * owner, 29 Oct: a button that folded them away hid most of them). `hide` leaves out tools the page above already links to,
  * so a space's home offers each one once. `order`: a space home lists its own space's goals first. */
 export function Explore({ title = "More you can do", skip = [], hide = [], order }: { title?: string; skip?: Goal[]; hide?: string[]; order?: "trade" | "invest" }) {
   const { notebooks, level, focus, me } = useApp();
@@ -20,8 +17,6 @@ export function Explore({ title = "More you can do", skip = [], hide = [], order
   const nav = useNavigate();
   const loc = useLocation();
   const latest = notebooks?.[0] ? { id: notebooks[0].id } : null;
-  const [all, setAll] = useState(() => { try { return localStorage.getItem(OPEN_KEY) === "1"; } catch { return false; } });
-  const showAll = (on: boolean) => { setAll(on); try { localStorage.setItem(OPEN_KEY, on ? "1" : "0"); } catch { /* storage off */ } };
   // a card never points at the page it is on
   const here = loc.pathname + loc.search;
   const shown = FEATURES.filter((f) => f.home && f.goal && !hide.includes(f.id) && !(level === "new" && f.level === "advanced") && resolve(f.to, loc.pathname, latest) !== here);
@@ -35,7 +30,7 @@ export function Explore({ title = "More you can do", skip = [], hide = [], order
     <section className="k-stack k-explore" aria-labelledby="explore-h">
       {/* no "Search everything" here: the menu's search box is on every page, and a second one read as another search (DD-002) */}
       <h2 id="explore-h" className="h2">{title}</h2>
-      {goals.slice(0, all ? goals.length : 1).map((g) => {
+      {goals.map((g) => {
         const items = shown.filter((f) => f.goal === g);
         return (
           <div key={g} className="k-stack">
@@ -55,11 +50,6 @@ export function Explore({ title = "More you can do", skip = [], hide = [], order
           </div>
         );
       })}
-      {goals.length > 1 && (
-        <button className="btn quiet sm k-btn-end" aria-expanded={all} onClick={() => showAll(!all)}>
-          {all ? "Show less" : `Show ${shown.filter((f) => goals.slice(1).includes(f.goal!)).length} more tools`}
-        </button>
-      )}
     </section>
   );
 }
