@@ -24,9 +24,7 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
   label: string; options: Choice[]; value: string; onChange: (v: string) => void;
   /** Keep wrapping onto more lines on a phone, instead of one row that scrolls: for a short row whose every chip should show. */
   wrap?: boolean;
-  custom?: { storageKey: string; units: CustomUnit[]; defaultUnit?: string; max?: number; validate?: (n: number, unit: string) => CustomCheck;
-    /** A remembered choice is shown only while this holds for it (a range the chart's data no longer reaches is dropped from the row). */
-    keep?: (value: string) => boolean };
+  custom?: { storageKey: string; units: CustomUnit[]; defaultUnit?: string; max?: number; validate?: (n: number, unit: string) => CustomCheck };
 }) {
   const [mine, setMine] = useState<Choice[]>(() => (custom ? load(custom.storageKey) : []));
   const [open, setOpen] = useState(false);
@@ -52,7 +50,16 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
     edge();
   }, [value, mine.length]);
 
-  const all = [...options, ...mine.filter((m) => !options.some((o) => o.value === m.value) && (custom?.keep ? custom.keep(m.value) : true))];
+  const all = [...options, ...mine.filter((m) => !options.some((o) => o.value === m.value))];
+  const isMine = (v: string) => mine.some((m) => m.value === v) && !options.some((o) => o.value === v);
+  // a remembered custom choice can be cleared (MOOD-1: "+ Custom ... is remembered and can be cleared"); if it was the one in use, the row
+  // goes back to its last preset (the longest, "All")
+  const forget = (v: string) => {
+    const next = mine.filter((m) => m.value !== v);
+    setMine(next);
+    if (custom) save(custom.storageKey, next);
+    if (v === value && options.length) onChange(options[options.length - 1].value);
+  };
   // CK-2 (R18): a row of up to 12 chips wraps on a phone too, so none is cut at the edge behind a fade (ten markets, two of them in view); only a
   // long strip (14 candle sizes) scrolls
   const wrapRow = wrap || all.length <= 12;
@@ -88,7 +95,12 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
       {/* "+ Custom" sits beside the scrolling row, not at its faded end, so it is never cut off at the card's edge (R7O-010) */}
       <div className={`k-chiprow${wrapRow ? " wrap" : ""}`} role="group" aria-label={label}>
         <div ref={bar} className={`k-chipbar${wrapRow ? " wrap" : ""}${atEnd ? " end" : ""}`} onScroll={edge}>
-          {all.map((o) => <button key={o.value} type="button" className="k-chip" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>)}
+          {all.map((o) => (isMine(o.value)
+            ? <span key={o.value} className="k-chip-mine">
+                <button type="button" className="k-chip" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>
+                <button type="button" className="k-chip-x" aria-label={`Remove ${o.label}`} onClick={() => forget(o.value)}>×</button>
+              </span>
+            : <button key={o.value} type="button" className="k-chip" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>))}
         </div>
         {custom && <button ref={opener} type="button" className="k-chip add" aria-expanded={open} onClick={() => setOpen((x) => !x)}>+ Custom</button>}
       </div>

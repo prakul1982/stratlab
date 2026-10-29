@@ -27,7 +27,7 @@ test("O4: only the chips the data reaches, never two that show the same stretch"
   assert.ok(v(long).includes("5y") && v(long).includes("3y"));
 });
 
-test("O4: a range starts where it says, counted back from the last point, a month being a real month", async () => {
+test("O4: a range starts where it says, counted back from the last point, the lengths being lib/period.ts's", async () => {
   const { rangeFrom, rangeStart, toMs } = await import("../src/lib/range.ts");
   const days = ["2026-01-29", "2026-01-30", "2026-02-27", "2026-03-31", "2026-04-30", "2026-05-29", "2026-06-30", "2026-09-30", "2026-10-28"];
   assert.equal(days[rangeFrom(days, "1w")], "2026-10-28");                                // nothing in the week before but the last point's own
@@ -36,7 +36,7 @@ test("O4: a range starts where it says, counted back from the last point, a mont
   assert.equal(days[rangeFrom(days, "ytd")], "2026-01-29");                               // from 1 Jan
   assert.equal(days[rangeFrom(days, "6m")], "2026-04-30");                                // from 28 Apr
   assert.equal(rangeFrom(days, "all"), 0);
-  assert.equal(new Date(rangeStart("1m", toMs("2026-03-31"))).toISOString().slice(0, 10), "2026-02-28");     // 31 Mar back a month: the 28th, not a 3 Mar
+  assert.equal(new Date(rangeStart("1m", toMs("2026-03-31"))).toISOString().slice(0, 10), "2026-03-01");     // 1m is 30 days (lib/period.ts): 31 Mar back is 1 Mar
   assert.equal(new Date(rangeStart("18 months", toMs("2026-10-28"))).toISOString().slice(0, 10), "2025-04-28");
   assert.equal(new Date(rangeStart("45 days", toMs("2026-10-28"))).toISOString().slice(0, 10), "2026-09-13");
   assert.equal(rangeStart("junk", toMs("2026-10-28")), null);

@@ -1612,6 +1612,12 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chip:hover { border-color: var(--ink); }
 .k-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-chip.add { border-style: dashed; color: var(--blue-ink); }
+/* a remembered custom choice: its chip and a small × that forgets it (the pair is one rounded shape) */
+.k-chip-mine { display: inline-flex; flex: none; align-items: stretch; }
+.k-chip-mine > .k-chip { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-right: 8px; }
+.k-chip-x { flex: none; height: 32px; min-width: 28px; padding: 0 8px 0 4px; border: 1px solid var(--line-2, var(--line)); border-left-width: 0; border-radius: 0 999px 999px 0; background: var(--card); color: var(--muted); cursor: pointer; font: inherit; }
+.k-chip-x:hover { color: var(--ink); border-color: var(--ink); }
+@media (max-width: 640px) { .k-chip-x { height: 44px; min-width: 44px; } }
 @media (max-width: 640px) { .k-chip { height: 44px; } }   /* a phone-wide window: 44px, as on a touch screen below, not 32px (R86-004) */
 /* a set of on/off chips (ChipSet): on is filled with a tick, off is plain and muted, so "all on" still reads as on */
 .k-chipset .k-chip { color: var(--muted); }
