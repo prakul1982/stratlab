@@ -2505,6 +2505,10 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* VR2-009: a row that wraps (the notebook's test period) is one wrapping row of chips on a phone too: "+ Custom" sat at the far right of the first line, apart from the chips */
 .k-chiprow.wrap { flex-wrap: wrap; align-items: flex-start; padding: 2px; }
 .k-chiprow.wrap > .k-chipbar { display: contents; }
+/* a chip in a wrapping row is never wider than the row: a long label (an SEC item's name on a 390px phone) wraps inside the chip
+   instead of running past the card's edge (ui-lint R26, 29 Oct). Short chips keep their one line and their 32 / 44 px height. */
+.k-chipbar.wrap .k-chip { max-width: 100%; white-space: normal; height: auto; min-height: 32px; padding-block: 6px; line-height: 1.25; text-align: center; }
+@media (max-width: 640px) { .k-chipbar.wrap .k-chip { min-height: 44px; } }
 .k-chiprow.wrap > .k-chip.add { margin-top: 0; }
 /* every tap target on a phone is at least 32px: the ticks, the features list, short links in text */
 @media (max-width: 640px) {
