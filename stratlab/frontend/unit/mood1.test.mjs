@@ -106,7 +106,7 @@ test("MOOD-1: the rotation's four run-on sentences are a table of every one, wit
   assert.doesNotMatch(s, /and \$\{xs\.length - n\} more|rot-read|const few = /);
   assert.match(s, /<ChipBar label="Show quadrant" value=\{quad\}/);
   assert.match(s, /\.\.\.QUADRANTS\.map\(\(x\) => \(\{ value: x\.id, label: `\$\{x\.name\} \$\{counts\[x\.id\]\}` \}\)\)/);
-  assert.match(s, /Moved into Leading/);
+  assert.match(s, /Entered Leading/);
   assert.doesNotMatch(s, /<Badge[^>]*>New</);                                       // no "New" tag anywhere (owner's rule): the mark says what it is
   assert.match(s, /header: "1W"[\s\S]*"1M"[\s\S]*"3M"|\{ w1: "1W", m1: "1M", m3: "3M" \}/);
   assert.match(s, /sort=\{\{ key: sort\?\.key \?\? "", desc: sort\?\.desc \?\? false, onSort \}\}/);

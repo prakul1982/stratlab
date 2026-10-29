@@ -425,10 +425,11 @@ export function RotationPage() {
             columns={[
               { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, sortable: true, cell: (r) => (isIndex
                 ? <span className="rot-name"><label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label>
-                    <span>{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}</span>
-                    {(r.stocks ?? 0) > 0
-                      ? <button className="btn quiet sm" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>
-                      : <button className="btn quiet sm" disabled title="No list of this index's main stocks is kept here">Stocks →</button>}</span>
+                    <span>{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}
+                      {/* under the name, not beside it: a button in every row made the table wider than its card and the 3M column went off the edge */}
+                      {(r.stocks ?? 0) > 0
+                        ? <button className="link k-sub-line" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>
+                        : <span className="k-sub-line" title="No list of this index's main stocks is kept here">No stocks list</span>}</span></span>
                 : <span className="rot-name"><label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label>
                     <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link></span>) },
               { key: "q", header: "Quadrant", sortable: true, cell: (r) => <QuadrantTag q={r.quadrant} /> },
@@ -437,7 +438,7 @@ export function RotationPage() {
               { key: "y", header: "Momentum", numeric: true, sortable: true, cell: (r) => <>{r.y.toFixed(2)} <span className="k-muted" title="The way it moved in the last step" aria-label={r.heading == null ? "no move" : `heading ${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span></> },
               { key: "m", header: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`, cardLabel: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`,
                 cell: (r) => (r.moved ? (r.moved === r.quadrant ? <span className="k-small k-muted">no change</span>
-                  : <span className="rot-move"><span className="rot-was"><QuadrantTag q={r.moved} /><span aria-hidden="true">→</span><QuadrantTag q={r.quadrant} /></span>{entered(r) && <Badge tone="ok">Moved into Leading</Badge>}</span>) : "–") },
+                  : <span className="rot-move"><span className="rot-was"><QuadrantTag q={r.moved} /><span aria-hidden="true">→</span><QuadrantTag q={r.quadrant} /></span>{entered(r) && <Badge tone="ok">Entered Leading</Badge>}</span>) : "–") },
               ...(["w1", "m1", "m3"] as const).map((k) => ({ key: k, header: { w1: "1W", m1: "1M", m3: "3M" }[k], cardLabel: { w1: "1 week vs the benchmark", m1: "1 month vs the benchmark", m3: "3 months vs the benchmark" }[k],
                 numeric: true, sortable: true, cell: (r: RotationRow) => (r.ret?.[k] == null ? "–" : <Delta value={r.ret[k]!}>{pct(r.ret[k]!, 2)}</Delta>) })),
             ]} />
