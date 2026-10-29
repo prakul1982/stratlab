@@ -49,14 +49,9 @@ GLOBAL = {
 # the breadth group each market's mood counts, and the index whose usual daily move and points it is held to
 BREADTH_GROUP = {"IN": "nifty500", "US": "sp500"}
 INDEX_SYMBOL = {"IN": ("NIFTY 50", "^NSEI"), "US": ("S&P 500", "^GSPC")}
-# the indices whose point movers are listed: (the card's name, the list of its companies: a universes preset, "sp500", or SENSEX_30)
-MOVER_INDICES = {"IN": [("NIFTY 50", "nifty50"), ("SENSEX", "sensex30")], "US": [("S&P 500", "sp500")]}
-# The SENSEX's 30 companies as StratLab keeps them (the app had no list; BSE publishes its own and changes it twice a year, and the weights
-# are in its monthly factsheet, which can't be read cheaply). A list that is a name or two out still gives a close estimate, and the table is left
-# out when its points don't add up to the index's own move (index_movers' `actual_points` check), so a stale list never shows a wrong table.
-SENSEX_30 = ["ADANIPORTS", "ASIANPAINT", "AXISBANK", "BAJFINANCE", "BAJAJFINSV", "BEL", "BHARTIARTL", "HCLTECH", "HDFCBANK", "HINDUNILVR",
-             "ICICIBANK", "INFY", "ITC", "KOTAKBANK", "LT", "M&M", "MARUTI", "NTPC", "POWERGRID", "RELIANCE", "SBIN", "SUNPHARMA", "TATASTEEL",
-             "TCS", "TECHM", "TITAN", "TMPV", "TRENT", "ULTRACEMCO", "ETERNAL"]
+# the indices whose point movers are listed: (the card's name, its companies: a universes preset or "sp500"). The SENSEX is left out until
+# its 30 companies can be read from BSE itself: a list typed from memory was already out of date (TMPV left the index in Dec 2025).
+MOVER_INDICES = {"IN": [("NIFTY 50", "nifty50")], "US": [("S&P 500", "sp500")]}
 ADD_UP = 0.4                              # the estimated points of every company may differ from the index's own move by this share
 # a short name for a sector index in a sentence, and the words a text may use for it (grounding.sector_direction_ok)
 SECTOR_WORDS = {
@@ -566,8 +561,6 @@ class Mood:
                     names = universes.sp500_names()
                 except Exception:
                     names = {}
-            elif kind == "sensex30":
-                syms, names = SENSEX_30, {}
             else:
                 syms, names = next((p["symbols"] for p in universes.PRESETS[region] if p["id"] == kind), []), {}
             have.update(self._quotes(region, [s for s in syms if s not in have]))          # shared by the indices: read once

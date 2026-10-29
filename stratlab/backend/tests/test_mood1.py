@@ -111,17 +111,20 @@ def test_a_points_table_that_does_not_add_up_to_the_index_is_left_out():
     assert mood.index_movers(members[:3], 7000.0, "S&P 500", total=2000.0, actual_points=900.0) is not None
 
 
-def test_the_sensex_has_its_thirty_and_every_index_of_a_market_gets_a_table(world):
-    assert len(mood.SENSEX_30) == 30 and len(set(mood.SENSEX_30)) == 30
-    assert [n for n, _ in mood.MOVER_INDICES["IN"]] == ["NIFTY 50", "SENSEX"] and [n for n, _ in mood.MOVER_INDICES["US"]] == ["S&P 500"]
+def test_every_index_of_a_market_gets_a_table_and_no_unchecked_member_list(world):
+    # the SENSEX has no movers table until its members come from BSE itself (a remembered list was already stale)
+    assert [n for n, _ in mood.MOVER_INDICES["IN"]] == ["NIFTY 50"] and [n for n, _ in mood.MOVER_INDICES["US"]] == ["S&P 500"]
+    assert not hasattr(mood, "SENSEX_30")
     from app.intel import routes
+    from app import universes
     from unittest import mock
     with time_machine.travel(DAY, tick=False), mock.patch.object(mood, "MIN_COVER", 0.0), mock.patch.object(mood, "ADD_UP", 1e9):
         m = routes.mood_hub()
         levels, _ = routes.hub.indices_now("IN", wait=8.0)
-        caps = {s: 1000.0 + i for i, s in enumerate(mood.SENSEX_30)}
+        n50 = next(p["symbols"] for p in universes.PRESETS["IN"] if p["id"] == "nifty50")
+        caps = {s: 1000.0 + i for i, s in enumerate(n50)}
         got = m._movers("IN", caps, levels, {})
-        assert got and "SENSEX" in [b["index"] for b in got]
+        assert got and [b["index"] for b in got] == ["NIFTY 50"]
 
 
 # ---------- the institutions' flows ----------

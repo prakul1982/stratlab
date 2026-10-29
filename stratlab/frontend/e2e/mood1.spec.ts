@@ -63,7 +63,7 @@ for (const region of ["IN", "US"] as const) {
       await expect(flows.getByRole("columnheader", { name: "DII net" })).toBeVisible();
       expect(await flows.locator("tbody tr").count()).toBeLessThanOrEqual(5);
       await expect(page.getByTestId("pulse-movers").first()).toBeVisible();
-      await expect(page.getByTestId("pulse-movers")).toHaveCount(2);            // the NIFTY 50 and the SENSEX
+      await expect(page.getByTestId("pulse-movers")).toHaveCount(1);            // the NIFTY 50 (the SENSEX waits for its members from BSE)
     }
     // no page-wide sideways scroll, on a phone as on a laptop
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
