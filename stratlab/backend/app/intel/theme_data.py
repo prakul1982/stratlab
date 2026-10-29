@@ -501,7 +501,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         "region": region, "sector": checked.get("sector") or theme, "as_of": as_of, "unit": next((r["unit"] for r in members if r.get("unit")), None),
         "basis": basis_text(members, region), "layers": blocks, "chain": chain, "subs": subs, "members": len(members), "company_wide": sorted(wide & set(syms)),
         "sections": {
-            "size": size_section(members), "growth": aggregate_growth(own), "margins": margin_history(own), "valuation": val,
+            "size": size_section(members), "medians": {k: stat(r.get(k) for r in own) for k in ("ebitda", "net", "roce")}, "growth": aggregate_growth(own), "margins": margin_history(own), "valuation": val,
             "balance": balance_section(own), "price": stored_price_section(members), "market": market_med,
             "ownership": ownership_section(syms, names, src), "events": events_section(syms, names, src),
             "management": management_section(syms, names, rows, src), "leaders": leaders(members)},

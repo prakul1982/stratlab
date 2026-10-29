@@ -204,7 +204,7 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
             sym = c.get("ticker")
             v = got.get(f"{gid}|{sym}")
             if v and v["does"]:
-                kept.append({**c, "what": v["quote"], "verified": True})
+                kept.append({**c, "what": v["quote"].strip(" ,;:-–—"), "verified": True})
             elif sym in pending:
                 continue                           # not checked yet: not shown yet
             else:

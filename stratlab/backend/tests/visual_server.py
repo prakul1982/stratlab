@@ -108,6 +108,7 @@ def build():
     from tests import fx_rates
     fx_rates.seed()
     blog_posts()
+    theme_pages(mp)
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     connect_once(mp)
@@ -255,6 +256,17 @@ def live_breadth(mp, sizes):
             pts.append([t, adv, dec, n - adv - dec, round(n * (0.52 + 0.01 * i)), n, round(n * (0.47 + 0.0125 * i)), n, round(n * (0.40 + 0.005 * i)), n,
                         level[g][i]])
         db.set_setting(BL.LIVE_KEY + g, json.dumps({"day": day, "fields": list(BL.FIELDS), "points": pts}))
+
+
+def theme_pages(mp):
+    """The stored public pages of the companies in the demo theme (tests/fake_theme.py), built from the fake sources as a page view would
+    build them, so the theme page's deep dive (e2e/themes.spec.ts) has the stored figures it reads."""
+    from app import stock_pages
+    mp.setattr(main.stock_page_store, "per_minute", 10**6)       # a page is built at most a few a minute; the demo's seven are built at once
+    for sym in ("COALINDIA", "VEDL", "TATASTEEL", "JSWSTEEL", "SAIL", "NTPC", "ONGC"):
+        hit = stock_pages.find("IN", sym)
+        if hit:
+            main.stock_page_store.get("IN", hit[0], hit[1])
 
 
 def library_seeds():

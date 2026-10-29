@@ -78,14 +78,18 @@ export interface CompanyAI {
   bull: string[]; bear: string[]; segments: { label: string; share: number }[]; position: string; watch: string[];
   ideas: Idea[]; generated_at: number;
 }
-export interface Co { name: string; ticker: string }
+/** `what`: the words from the company's own description that show it does the work of the layer or sub-theme it sits in (THEME-1) */
+export interface Co { name: string; ticker: string; what?: string | null }
+export interface SectorClaim { text: string; status: "current" | "general"; source: { headline: string; at: string; outlet: string; url: string } | null }
 export interface SectorAI {
   sector: string; summary: string; market_size: string; cagr: number | null; cagr_note: string;
-  etfs: { ticker: string; name: string }[]; sub_themes: { name: string; detail: string }[]; core: string;
+  etfs: { ticker: string; name: string }[]; sub_themes: { name: string; detail: string; companies: Co[] }[]; core: string;
   clusters: { name: string; companies: Co[] }[];
   screen: { name: string; ticker: string; layer: string; one_line: string }[];
   value_chain: { layer: string; description: string; companies: Co[] }[];
-  tailwinds: string[]; risks: string[]; generated_at: number;
+  tailwinds: SectorClaim[]; risks: SectorClaim[]; generated_at: number;
+  /** the placement check: `checked` false while some companies' descriptions are still being read (they are not shown until checked) */
+  placements?: { checked: boolean; pending: number; left_out: number; placed: number } | null;
   /** the listed companies the exchange puts in the theme's industries, A to Z (DE-013); `named`: the map names it too */
   exchange?: { industries: string[]; total: number; companies: { ticker: string; name: string; industry: string; named: boolean }[] } | null;
 }

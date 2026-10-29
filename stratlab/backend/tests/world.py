@@ -58,6 +58,10 @@ class FakeAI:
             raise ai_providers.AIBusy("Every AI provider is busy.")
         if self.mode == "garbage":
             return "Sure! Here is the answer: {not json"
+        from tests import fake_theme
+        themed = fake_theme.answer(system, text)
+        if themed is not None:
+            return themed
         self.i += 1
         return json.dumps(AI_SHAPES[self.i % len(AI_SHAPES)]())
 

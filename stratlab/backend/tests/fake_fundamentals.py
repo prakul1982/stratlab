@@ -48,6 +48,13 @@ PROFILE = {
     "ORIONPOLY": (12000, None, 1.2, 1.0, 38.0, 10, 6.0, False),         # the loss-years case (LOSS_SHAPE)
 }
 ABOUT = {
+    "COALINDIA": "Coal India mines coal in open-cast and underground mines and sells it to power plants and steel makers across India.",
+    "VEDL": "Vedanta mines metal ore such as zinc, lead and silver, and refines aluminium and oil in India and abroad.",
+    "TATASTEEL": "Tata Steel makes flat steel and long steel products from iron ore and coal at its integrated plants.",
+    "JSWSTEEL": "JSW Steel makes flat steel and long steel products, mainly sheet steel for cars and appliances.",
+    "SAIL": "Steel Authority of India makes steel at its integrated plants and sells it to builders and manufacturers.",
+    "NTPC": "NTPC generates electricity at coal and gas power plants and sells the power generation to state utilities.",
+    "ONGC": "Oil and Natural Gas Corporation explores for and produces crude oil and natural gas in India and abroad.",
     "ORIONPOLY": "Orion Polymers makes plastics and resins for packaging and pipes; its profits swing with raw-material prices.",
     "TCS": "Tata Consultancy Services provides IT services, consulting and business solutions to companies around the world.",
     "INFY": "Infosys provides consulting, technology, outsourcing and digital services to companies around the world.",

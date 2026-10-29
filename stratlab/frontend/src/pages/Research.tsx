@@ -7,8 +7,8 @@ import { HELP } from "../lib/help";
 import { marketState } from "../lib/marketHours";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, SETTLING, atPrice, holderRowName, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
-  type Company, type CompareAI, type Idea, type IndexLevel, type PulseAI, type PulseData, type Quote, type Region, type SectorAI, type WatchItem,
+  REGION_NAME, SETTLING, atPrice, holderRowName, STARTER_TICKERS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
+  type Company, type CompareAI, type Idea, type IndexLevel, type PulseAI, type PulseData, type Quote, type Region, type WatchItem,
 } from "../lib/research";
 import { askAgain, PULSE_PENDING_EVERY_MS, PULSE_SLOW_MS, pulseLoad } from "../lib/pulseLoad";
 import { bseTwinMoved, delistedLine, regionOf } from "../lib/researchFormat";
@@ -41,7 +41,7 @@ import { UsFilingsCards } from "../components/UsFilings";
 import { CompanyActions } from "../components/CorpActions";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import {
-  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StatRow, StockPicker,
+  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StatRow, StockPicker,
 } from "../components/kit";
 import { resultDay, type ResultRow } from "./ResultsPage";
 import { pairKey, quotesInBatches } from "../lib/investUi";
@@ -484,123 +484,8 @@ function CompanyView() {
 }
 
 /* ================= Themes ================= */
-export function ThemesPage() {
-  const [region, setRegion] = useRegion();
-  const [params, setParams] = useSearchParams();
-  const q = params.get("q") ?? "";
-  const [text, setText] = useState(q);
-  const [r, setR] = useState<SectorAI | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const seq = useRef(0);   // a late answer for an earlier theme or market is ignored, and doesn't clear "Mapping…" for the newer one
-  const run = async (theme: string, refresh = false) => {
-    if (!theme.trim()) return;
-    const mine = ++seq.current;
-    setBusy(true); setError(null); if (!refresh) setR(null);
-    try { const out = await researchApi.sector(region, theme, refresh); if (mine === seq.current) setR(out); }
-    catch (e) { if (mine === seq.current) setError((e as Error).message); }
-    finally { if (mine === seq.current) setBusy(false); }
-  };
-  useEffect(() => {
-    setText(q);
-    if (q) run(q);
-    else { seq.current++; setR(null); setError(null); setBusy(false); }
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [q, region]);
-  const go = (t: string) => { if (!t.trim()) return; const p = new URLSearchParams(params); p.set("q", t); p.set("region", region); setParams(p); };
-  const coLink = (t: string) => (t ? `/research/${region}/${encodeURIComponent(t)}` : "");
-  return (
-    <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/themes")} title="Map a theme, find the companies in it"
-        lede="Type a sector or trend. The AI maps who's involved along the chain, from raw materials to the end customer, and lists the listed companies linked to each step." />
-      <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
-      <Card>
-        <FormGrid label="Map a theme" onSubmit={(e) => { e.preventDefault(); go(text); }}>
-          <Field label="Theme" wide value={text} onChange={(e) => setText(e.target.value)} placeholder={region === "IN" ? "India defence, railways capex…" : "AI data centers, grid electrification…"} />
-          <FormActions>
-            <button className="btn" disabled={busy}>{busy ? "Mapping…" : "Map it"}</button>
-            <span className="k-small k-muted">Or try</span>
-            {THEME_IDEAS[region].map((t) => <button key={t} type="button" className="btn quiet sm" onClick={() => go(t)}>{t}</button>)}
-          </FormActions>
-        </FormGrid>
-      </Card>
-      {error && <ErrorState title="The theme couldn't be mapped" action={{ label: "Try again", onClick: () => run(q, true) }}>{error}</ErrorState>}
-      {busy && !r && <Card><Skeleton label={`Mapping "${q}" (takes about 20 seconds the first time)`} lines={4} /></Card>}
-      {r && (
-        <>
-          <Card>
-            <CardHead title={r.sector} actions={<><span className="k-note">Written {writtenAt(r.generated_at, marketTz(region))}</span>
-              <button className="btn quiet sm" disabled={busy} onClick={() => run(q, true)}>{busy ? "Mapping…" : "Refresh"}</button></>} />
-            <p className="k-lede">{r.summary}</p>
-            {(r.market_size || r.cagr != null || r.etfs.length > 0) && (
-              <StatRow>
-                {r.market_size && <Stat label="Market size" value={r.market_size} />}
-                {r.cagr != null && <Stat label={`Growth ${r.cagr_note}`} value={`${r.cagr}% a year`} />}
-                {r.etfs.length > 0 && <Stat label="Funds to track" value={r.etfs.map((e) => e.ticker).join(" · ")} note={r.etfs.map((e) => e.name).join(" · ")} />}
-              </StatRow>
-            )}
-          </Card>
-          {r.screen.length > 0 && (
-            <Card>
-              <CardHead title="Listed companies across the chain" info="Listed companies with the most direct link to this theme, in value-chain order. Not ranked and not a list to buy: open any to see its numbers." />
-              <DataTable label="Listed companies linked to the theme" rows={r.screen} rowKey={(s) => s.ticker + s.name} sticky={r.screen.length > 12}
-                columns={[{ key: "n", header: "Company", rowHeader: true, wrap: true, cell: (s) => <><b>{s.name}</b><span className="k-sub-line">{s.one_line}</span></> },
-                  { key: "t", header: "Ticker", cell: (s) => s.ticker || "–" }, { key: "l", header: "Step in the chain", wrap: true, cell: (s) => s.layer || "–" },
-                  { key: "o", header: "", action: true, cell: (s) => (s.ticker ? <Link className="btn quiet sm" to={coLink(s.ticker)}>Open →</Link> : null) }]} />
-            </Card>
-          )}
-          {r.clusters.length > 0 && (
-            <Card>
-              <CardHead title="Who's in it" info="Groups of listed companies involved in the theme. Every company is checked against the exchange's list and named as the exchange lists it; one the list doesn't have is left out. Tap a ticker to open the company." />
-              {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
-              <div className="inv-clusters">
-                {r.clusters.map((cl) => (
-                  <div key={cl.name} className="inv-cluster">
-                    <b className="k-small">{cl.name}</b>
-                    <div className="k-row">{cl.companies.map((co) => co.ticker
-                      ? <Link key={co.name} className="inv-chip" to={coLink(co.ticker)}><b>{co.ticker}</b> {co.name}</Link>
-                      : <span key={co.name} className="inv-chip off">{co.name}</span>)}</div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-          {r.value_chain.length > 0 && (
-            <Card>
-              <CardHead title="The value chain: where the margin sits" />
-              <ol className="inv-chain">
-                {r.value_chain.map((l, i) => (
-                  <li key={l.layer}>
-                    <span className="k-row"><Badge tone="plain" dot={false}>Layer {i + 1}</Badge><b className="k-sub">{l.layer}</b></span>
-                    <p className="k-small">{l.description}</p>
-                    <div className="k-row">{l.companies.map((co) => co.ticker
-                      ? <Link key={co.name} className="inv-chip" to={coLink(co.ticker)}><b>{co.ticker}</b> {co.name}</Link>
-                      : <span key={co.name} className="inv-chip off">{co.name}</span>)}</div>
-                  </li>
-                ))}
-              </ol>
-            </Card>
-          )}
-          {r.exchange && r.exchange.companies.length > 0 && (
-            <Card>
-              <CardHead title="On the exchange's list for these industries" info="Every listed company the exchange classifies under the same industries as the map's companies, A to Z, from StratLab's list of listed companies. Ticked ones are named in the map above; the rest are in the same industry and the map doesn't name them." />
-              <p className="k-small k-muted">{r.exchange.industries.join(" · ")}: {r.exchange.total.toLocaleString("en-IN")} compan{r.exchange.total === 1 ? "y" : "ies"}{r.exchange.total > r.exchange.companies.length ? `, the first ${r.exchange.companies.length} A to Z` : ""}.</p>
-              <div className="k-row">{r.exchange.companies.map((co) => (
-                <Link key={co.ticker} className={`inv-chip${co.named ? "" : " off"}`} to={coLink(co.ticker)}>{co.named ? "✓ " : ""}<b>{co.ticker}</b> {co.name}</Link>
-              ))}</div>
-            </Card>
-          )}
-          <div className="k-cols">
-            {r.sub_themes.length > 0 && <Card><CardHead title="Sub-themes" />{r.sub_themes.map((s) => <div key={s.name} className="k-stack"><b>{s.name}</b><span className="k-small k-muted">{s.detail}</span></div>)}</Card>}
-            {r.tailwinds.length > 0 && <Card><CardHead title="Tailwinds" /><ul className="k-list">{r.tailwinds.map((t) => <li key={t}>{t}</li>)}</ul></Card>}
-            {r.risks.length > 0 && <Card><CardHead title="Risks" /><ul className="k-list">{r.risks.map((t) => <li key={t}>{t}</li>)}</ul></Card>}
-          </div>
-          <p className="k-note">Written by AI from its general knowledge, with no figures: there's no source here to check a budget, size or growth rate against. Companies are checked against the exchange's list.</p>
-        </>
-      )}
-    </div>
-  );
-}
+/** The theme deep dive lives in its own file (THEME-1). */
+export { ThemesPage } from "./ThemesPage";
 
 /* ================= Market pulse ================= */
 export function PulsePage() {
