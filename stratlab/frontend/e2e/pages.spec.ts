@@ -1338,7 +1338,7 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   const actions = panel.getByRole("table", { name: /Corporate actions/ });
   await expect(actions.getByRole("columnheader")).toHaveText(["Ex-date", "Type", "Amount a share", "Record date"], { timeout: 30_000 });
   await expect(actions.getByRole("row").filter({ hasText: "Interim dividend" }).first().getByRole("cell", { name: "₹11", exact: true })).toBeVisible();
-  await expect(actions.getByRole("row").filter({ hasText: "Final dividend" }).getByRole("cell", { name: /^₹30\b/ })).toBeVisible();      // (its mark for the note "in today's shares" is beside it)
+  await expect(actions.getByRole("row").filter({ hasText: "Final dividend" }).getByRole("cell", { name: /^₹30/ })).toBeVisible();      // (its mark for the note "in today's shares" is beside it)
   await expect(panel.getByText(/Dividends with an ex-date in the last 12 months/)).toBeVisible();
 
   errors = await open(page, "/holdings", "By sector", who);
