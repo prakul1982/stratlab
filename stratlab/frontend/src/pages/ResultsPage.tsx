@@ -127,7 +127,8 @@ export function ResultsPage() {
         </Card>
       )}
       {/* the two weeks side by side: each was a full-width card around one company row (VR1-125) */}
-      {data && !empty && <div className="k-cols">{data.weeks.map((w) => {
+      {/* a week with nothing in it is one line, so the two weeks stack: side by side it left the short card with empty space under it (UI checker R1) */}
+      {data && !empty && <div className={data.weeks.some((w) => w.rows.length === 0) ? "k-stack" : "k-cols"}>{data.weeks.map((w) => {
         const days = [...new Set(w.rows.map((r) => r.date))];
         const ahead = days.filter((d) => d >= data.today), past = days.filter((d) => d < data.today);     // the days gone by fold away
         const about = (d: string) => w.days?.find((x) => x.date === d);

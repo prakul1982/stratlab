@@ -342,10 +342,11 @@ test("LIVE1B-066, 040, 042: a bad email is said in the app's words; the email bo
   assert.match(read("src/pages/HoldingsPage.tsx"), /view\?\.zerodha_open === false \? "Connect your statement inbox once"/);
 });
 
-test("LIVE1B-077, 079: plan cards end level and the payment button names its amount", () => {
+test("LIVE1B-077, 079: plan cards keep their own height (no band inside one) and the payment button names its amount", () => {
   assert.match(read("src/pages/PlansPage.tsx"), /confirmLabel=\{`Continue to payment · \$\{chargeAmount\(switching\)\}`\}/);
-  assert.match(read("src/styles.css"), /\.k-plans \{ display: grid;[^}]*align-items: stretch; \}/);
+  assert.match(read("src/styles.css"), /\.k-plans \{ display: grid;[^}]*align-items: start; \}/);
 });
+
 
 test("LIVE1B-037: Holdings' four summary figures are two by two on a phone", () => {
   const css = read("src/styles.css");
