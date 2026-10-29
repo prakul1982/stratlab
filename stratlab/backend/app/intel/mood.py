@@ -177,6 +177,7 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
                      "change": round(now - before, 1 if unit == "%" else 0) if now is not None and before is not None else None})
     row("adv", "Stocks that rose", adv, prev("adv") if not lv else None, "count", "Stocks closing above the previous close.")
     row("dec", "Stocks that fell", dec, prev("dec") if not lv else None, "count", "Stocks closing below the previous close.")
+    row("unch", "Unchanged", unch, prev("unch") if not lv else None, "count", "Stocks closing at the previous close.")
     row("highs", "New 52-week highs", out["highs"], prev("highs"), "count", "Stocks at their highest price in a year.")
     row("lows", "New 52-week lows", out["lows"], prev("lows"), "count", "Stocks at their lowest price in a year.")
     row("pct50", "Above 50-day average", out["pct50"], prev("pct50") if not lv else None, "share", "Share of stocks priced above their 50-day average.", "%")

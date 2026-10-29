@@ -231,13 +231,14 @@ export function newsWhen(iso: string | null | undefined, now: Date = new Date())
 /** Pulse's opening line, naming only the sections the page shows (R12-011: it promised "where money is flowing" on a
  * page that showed the mood and headlines alone). `ai` is the mood read as loaded, or null before it comes. */
 export function pulseLede(ai: { hot?: unknown[]; flows?: unknown[]; themes?: unknown[] } | null | undefined, closedDay?: string | null, settling = false): string {
-  const extra = [ai?.hot?.length ? "the companies in today's headlines" : "", ai?.flows?.length ? "where money is flowing" : "",
+  const extra = [ai?.hot?.length ? "the companies in today's headlines" : "", ai?.flows?.length ? "money and markets in the headlines" : "",
     ai?.themes?.length ? "the themes in play" : ""].filter(Boolean);
   const list = extra.length > 1 ? `${extra.slice(0, -1).join(", ")} and ${extra[extra.length - 1]}` : extra[0];
   // after the close the levels are the close's: "Last close, 9 Oct", never "Live" (R13-007)
   const lead = closedDay && settling ? `${SETTLING} · ${closedDay}: index levels and headlines`
     : closedDay ? `Last close, ${closedDay}: index levels and headlines` : "Live index levels and headlines";
-  return `${lead}, with an AI read of the mood${list ? `, ${list}` : ""}.`;
+  // the page is the figures behind the mood (how many stocks took part, sectors, flows, risk), then what the headlines say (MOOD-1)
+  return `${lead}, with the figures behind today's mood${list ? ` and what the headlines say of ${list}` : ""}.`;
 }
 
 /** The session Pulse's index levels are the close of, when none of them is live (the market has closed); null while any

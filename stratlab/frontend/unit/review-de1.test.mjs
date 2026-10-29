@@ -61,9 +61,11 @@ test("DE-013: the theme page names no unlisted company and shows the exchange's 
 });
 
 test("DE-017: index cards show the level to two decimals and keep the 52-week phrase on one line; repeats say so", () => {
-  const s = read("src/pages/Research.tsx");
+  // (MOOD-1: the cards are a table now; the 52-week phrase is its own column, "Against 52-week high", so it never wraps with the level)
+  const s = read("src/pages/Research.tsx"), t = read("src/pages/PulseMood.tsx");
   assert.match(s, /minimumFractionDigits: 2, maximumFractionDigits: 2/);
-  assert.match(s, /<span className="nowrap fit">\{i\.from_high_pct > -0\.5/);       // (VR7-014: "fit" lets a phone put it on a line of its own)
+  assert.match(t, /minimumFractionDigits: 2, maximumFractionDigits: 2/);
+  assert.match(t, /header: "Against 52-week high"[\s\S]*i\.from_high_pct > -0\.5 \? "near its high"/);
   assert.match(read("src/components/Research.tsx"), /n\.similar \? `\$\{n\.similar\} similar/);
 });
 
