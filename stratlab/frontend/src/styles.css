@@ -75,6 +75,8 @@ h1.eyebrow { font-weight: 400; }
 .lp-own-h1 { font-size: clamp(40px, 6vw, 64px); }   /* an address's own heading in the hero (DI-033) */     /* a landing address's own heading (/pricing: "Plans and prices"), drawn as the eyebrow */
 .ruled { background-image: linear-gradient(var(--rule) 1px, transparent 1px); background-size: 100% 34px; }
 .nowrap { white-space: nowrap; }   /* a short phrase like "on 16 Oct" wraps as one */
+/* VR7-014: a longer one ("3.5% below its 52-week high", 170px) is a line of its own on a phone, without the dot before it: in a 150px market tile it ran into the next tile's words */
+@media (max-width: 420px) { .nowrap.fit { display: block; white-space: normal; } .fit-dot { display: none; } }
 .hyphens { -webkit-hyphens: auto; hyphens: auto; }   /* a long word too wide for its cell breaks with a hyphen */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* "Skip to content": the first Tab stop on every page; hidden like .sr-only until it has focus */
@@ -93,6 +95,8 @@ h1.eyebrow { font-weight: 400; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 /* VR1-150: a disabled main button was the main button at half strength, a muddy grey-beige that read as a grey secondary one: it is an empty outline with muted words instead */
 .btn:disabled:not(.quiet):not(.blue):not(.outline) { opacity: 1; background: transparent; border: 1px dashed var(--dash); color: var(--muted); }
+/* LIVE1B-016, 047: a button that is working (it says "Adding…") keeps its fill, dimmed: the dashed outline is for one that cannot be pressed yet */
+.btn:disabled[aria-busy="true"]:not(.quiet):not(.blue):not(.outline):not(.danger) { opacity: .6; background: var(--ink); border: 1px solid var(--ink); color: var(--on-ink); cursor: progress; }
 .btn.blue { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
 .btn.outline { background: transparent; color: var(--ink); }
 .btn.outline:hover { background: var(--card); color: var(--ink); filter: none; }
@@ -342,6 +346,9 @@ a.link { margin-inline: -2px; }
 .brand:hover { color: var(--ink); }
 .main { min-width: 0; padding: 40px clamp(24px, 4vw, 56px) 80px; }
 .page { max-width: 1320px; margin: 0 auto; }
+/* the question stands over the corner while it is up (--mw-lift is its height, lib/consentLift): the foot of the page keeps that much room, so the last
+   rows can be scrolled clear of it instead of sitting under it (LIVE1C-077: the PCR table's edge and a library card's text) */
+.shell .page { padding-bottom: var(--mw-lift, 0px); }
 .topbar { display: none; }
 /* the menu folded away on a laptop (Shell "slim"): the page takes the whole width, one button brings the menu back */
 .side-hide, .side-show { display: none; }
@@ -414,11 +421,22 @@ a.link { margin-inline: -2px; }
   .ln-panel .lab-note { max-height: max(172px, calc(60vh - 140px)); }
 }
 
+/* LIVE1A-001/052: on a desktop window the tab is an edge handle in the page's right margin (the main column is padded 44px or more there), so it
+ * never lies over a card (it covered the right side of an answer card), and the panel opens beside it, above the bottom edge. A narrower window
+ * keeps the bottom tab. */
+@media (min-width: 1100px) {
+  .ln-btn { position: fixed; right: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; min-height: 0; min-width: 40px; padding: 16px 0; gap: 8px;
+    border-radius: 12px 0 0 12px; border: 1px solid var(--line-2); border-right: 0; box-shadow: -4px 0 14px rgba(0, 0, 0, .14); }
+  .ln-btn[aria-expanded="true"] { border-color: var(--ink); }
+  .ln-panel { position: fixed; right: 52px; bottom: 16px; }
+}
+
 /* ---------- verdict ---------- */
-.verdict-head { font-family: var(--serif); font-size: clamp(44px, 6vw, 76px); line-height: .95; font-weight: 400; letter-spacing: -.035em; }
+.verdict-head { font-family: var(--serif); font-size: clamp(44px, 6vw, 76px); line-height: 1.05; font-weight: 400; letter-spacing: -.035em; }
 .verdict-head.edge { color: var(--blue); }
 .verdict-head.luck, .verdict-head.no_edge { color: var(--orange); }
 .verdict-head.mixed, .verdict-head.not_enough { color: var(--ink); }
+.verdict-head.not_enough { font-size: clamp(32px, 4.6vw, 52px); }   /* LIVE1A-006: "too few trades to judge" is a non-verdict: smaller type than a result, as the journal's is (DB-044) */
 .dots { display: flex; gap: 8px; }
 .dots span { width: 40px; height: 12px; border-radius: 6px; background: var(--line); }
 .dots span.on { background: var(--blue); }
@@ -627,19 +645,30 @@ td.num, .num { font-family: var(--sans); }
 /* AI read */
 .ai-read { border-color: var(--ink); }
 
-.fact-rows { margin: 0; display: flex; flex-direction: column; }
-.fact-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 14px; padding: 7px 0; border-top: 1px solid var(--line); }
-.fact-row:first-child { border-top: 0; }
-.fact-row dt, .fact-row dd { margin: 0; }
-.fact-row dd { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-@media (max-width: 560px) { .fact-row { grid-template-columns: minmax(0, 1fr); } }
+.ai-figs { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.ai-fig { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 2px 14px; font-size: 14px; }
+.ai-fig dt, .ai-fig dd { margin: 0; }
+.ai-table .k-table :is(th, td) { white-space: normal; vertical-align: top; max-width: none; }
+.ai-table .k-table tbody th, .ai-table .k-table thead th:first-child { width: 11rem; min-width: 0; }
+.ai-table .k-table .k-list { margin: 0; }
+/* on a phone each area is its own block: its name over its figures, so the figures have the whole width */
+@media (max-width: 560px) {
+  .ai-table .k-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .ai-table .k-table, .ai-table .k-table tbody, .ai-table .k-table tr { display: block; }
+  .ai-table .k-table tbody th, .ai-table .k-table td { display: block; width: auto; border: 0; padding: 0 12px; }
+  .ai-table .k-table tbody th { padding-top: 12px; padding-bottom: 4px; }
+  .ai-table .k-table td { padding-bottom: 12px; }
+  .ai-table .k-table tbody tr { border-bottom: 1px solid var(--line); }
+  .ai-table .k-table tbody tr:last-child { border-bottom: 0; }
+  .ai-fig { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 10px; }
+}
 
 /* themes */
 
 /* ---------- landing page ---------- */
 .lp { min-height: 100vh; background: var(--paper); }
 .lp-wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
-.lp-nav { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 24px; padding: 12px clamp(16px, 4vw, 40px);
+.lp-nav { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 24px; padding: 12px max(clamp(16px, 4vw, 40px), calc((100% - 1180px) / 2 + clamp(16px, 4vw, 40px)));   /* LIVE1B-052: on the hero's edges */
   background: var(--paper); border-bottom: 1px solid var(--line); }
 .lp-nav nav { display: flex; gap: 22px; margin-left: auto; }
 .lp-nav nav a { color: var(--ink-2); text-decoration: none; font-weight: 500; font-size: 14.5px; }
@@ -817,7 +846,7 @@ kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radi
 table.legs select, table.legs input { height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); padding: 0 8px; font: inherit; }
 table.legs td { vertical-align: middle; }
 .opt-charge-lines > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--muted); }
-.opt-charge-lines table { width: 100%; max-width: 360px; margin: 4px 0 8px; }
+.opt-charge-lines table { width: 100%; max-width: none; margin: 4px 0 8px; }   /* fills its box: it was 360px in a 460px one (LIVE1A-017) */
 .opt-charge-lines td { padding: 3px 0; }
 .opt-charge-lines td.num { text-align: right; }
 
@@ -853,7 +882,8 @@ table.legs input[type=number] { width: 72px !important; }
 
 .more-menu { position: relative; display: inline-flex; }
 .more-caret { display: inline-block; width: 6px; height: 6px; margin-left: 2px; margin-top: -3px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
-.more-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 190px; display: flex; flex-direction: column; padding: 6px;
+.more-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: max(190px, 100%); width: max-content; max-width: min(340px, calc(100vw - 32px)); display: flex; flex-direction: column; padding: 6px;   /* as wide as its longest item (LIVE1A-008: two of three wrapped) and never narrower than its button */
+ 
   background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, .18); }
 .more-pop button { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px;
   padding: 9px 10px; border-radius: 8px; cursor: pointer; text-align: left; }
@@ -863,7 +893,12 @@ table.legs input[type=number] { width: 72px !important; }
 .lp-beyond-card b { font-size: 18px; }
 .lp-beyond-card .lp-fix { margin-top: auto; }
 .pub { min-height: 100vh; background: var(--paper); }
-.pub-nav { display: flex; justify-content: space-between; align-items: center; padding: 18px clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--line); }
+/* LIVE1B-052: the header's logo and button sit on the page's own edges (the body's column), not 40px from the window's while the text starts 300px in:
+   the width is the page's (--pub-w), the same as its main's */
+.pub { --pub-w: 960px; }
+.pub:has(.pub-main.legal) { --pub-w: 800px; }
+.pub:has(.lib-cards) { --pub-w: 1144px; }
+.pub-nav { display: flex; justify-content: space-between; align-items: center; padding: 18px max(clamp(16px, 4vw, 48px), calc((100% - var(--pub-w)) / 2 + clamp(16px, 4vw, 32px))); border-bottom: 1px solid var(--line); }
 .pub:has(.lib-cards) .pub-main { max-width: 1144px; }   /* VR1-171: the signed-out library is as wide as the app pages (1080 of content), not 896 */
 .pub-main { max-width: 960px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 32px) 64px; }
 /* while a public page is still a loading placeholder, its main fills the screen, so the footer waits below it instead of
@@ -890,6 +925,19 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .consent-btns { display: flex; flex-wrap: wrap; gap: 10px; }
 /* "Allow" and "No thanks" are two answers of equal weight: one width, not 63px beside 90px (VR4-012) */
 .consent-btns .btn { min-width: 104px; justify-content: center; }
+/* VR7-007: on a visitor's wide page (no side menu) the question is one slim bar along the foot of the window, not a 400px card standing over
+   the landing page's example panel until it is answered (the Markets button still rises above it, consentLift.ts); in the app it stays the corner card */
+@media (min-width: 901px) {
+  body:not(:has(.shell)) .consent { left: 16px; right: 16px; width: auto; flex-direction: row; align-items: center; gap: 8px 20px; padding: 12px 18px; }
+  body:not(:has(.shell)) .consent-title { flex: none; }
+  body:not(:has(.shell)) .consent p { flex: 1 1 auto; }
+  body:not(:has(.shell)) .consent-btns { flex: none; flex-wrap: nowrap; }
+}
+/* LIVE1B-045: while the tour's note is up the question waits (a phone showed both at once); it is there again when the tour closes */
+body:has(.k-coach) .consent { visibility: hidden; }
+/* LIVE1B-050: while the question is up the page's foot clears it: a visitor's page and the app's phone layout end above the bar, not under it */
+body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
+@media (max-width: 900px) { .shell { padding-bottom: var(--consent-h, 0px); } }
 /* VR5: on a phone the question took 213px, over a quarter of a 360x800 screen: a size down and tighter, the two answers sharing the row */
 @media (max-width: 640px) {
   .consent { right: 12px; left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; gap: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.4; }
@@ -927,7 +975,17 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .money-panels .k-stats { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: var(--s3) var(--s4); }
 /* VR6-016: four figures on a phone are two and two, not three (labels wrapping to two lines) and one left alone below */
 @media (max-width: 640px) { .money-panels .k-stats:has(> .k-stat:nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); }
+.money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); white-space: nowrap; overflow-wrap: normal; }
+/* LIVE1C-050: a figure never breaks inside its digits ("₹77,61,2" over "98" read as two numbers). Four or more figures are two across (a column of
+   a four-across card is under 120px, narrower than "₹2,13,00,765"), three stay in one row; on a phone every card is two across with a last one alone
+   taking the line, and the figure a size down */
+.money-panels .k-stats:has(> .k-stat:nth-child(4)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 640px) {
+  .money-panels .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .money-panels .k-stats > .k-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .money-panels .k-stat-v { font-size: clamp(19px, 5.4vw, 22px); }
+}
+.space-panels.money-panels { align-items: stretch; }       /* LIVE1B-021: My Holdings and the tax card are one height side by side, not 205px and 237px */
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
 @media (max-width: 560px) {
@@ -981,13 +1039,27 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 
 .quote-row { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line); }
 .quote-row:first-of-type { border-top: 0; }
+@media (max-width: 640px) { .ca-table .k-table { font-size: 13px; } .ca-table .k-table th, .ca-table .k-table td { padding: 9px 6px; white-space: normal; min-width: 0; vertical-align: top; } .ca-table .k-badge { white-space: normal; } .ca-table .k-table :is(th, td):first-child { min-width: 0 !important; max-width: none !important; } }
+[data-testid="scan-custom"] .add-rule { align-self: flex-start; }
+.ts-words { align-items: flex-start; } .ts-words .k-input { flex: 1 1 260px; width: auto; }
+.ca-type { font-weight: 600; font-size: var(--t-label); }
+.ca-soon { color: var(--blue-ink); white-space: nowrap; }
+.ca-ex, .ca-amt { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; } .ca-amt { align-items: flex-end; }
+.dd-fit .k-table :is(th, td) { white-space: normal; min-width: 0 !important; max-width: none !important; }
+@media (max-width: 560px) { .dd-fit .k-table :is(th, td) { padding: 9px 6px; } .dd-fit .k-table { font-size: 13px; } }
+.rc-target, .rc-said, .rc-result { display: flex; flex-direction: column; gap: 4px; }
+.rc-said { align-items: flex-end; } .rc-result { align-items: flex-start; }
+.rc-quote { max-width: 70ch; }
+.dd-share { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; min-width: 90px; } .dd-share .k-meter { width: 100%; }
+@media (max-width: 640px) { .rc-said { align-items: flex-start; } }
 .promises { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .promise { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .promise-facts { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
-.checklist { columns: 2 360px; column-gap: 32px; }
-.check-group { display: flex; flex-direction: column; break-inside: avoid; margin-bottom: 18px; }
-.check-row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
-@media (max-width: 520px) { .check-row { grid-template-columns: minmax(0, 1fr) auto; } .check-row > .num { grid-column: 1; grid-row: 2; text-align: left !important; } .check-row > .badge { grid-row: 1 / span 2; grid-column: 2; } }
+.checklist { display: flex; flex-direction: column; gap: var(--s5); }
+@media (min-width: 641px) { .check-group .k-table { table-layout: fixed; } }
+.check-group .k-table :is(th, td) { white-space: normal; max-width: none; min-width: 0; overflow-wrap: anywhere; vertical-align: middle; }
+@media (min-width: 641px) { .check-group .k-table :is(th, td):nth-child(2) { width: 30%; } .check-group .k-table :is(th, td):nth-child(3) { width: 172px; } }
+.check-group .k-table thead th:first-child { color: var(--ink-2); font-weight: 600; }
 
 .inv-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 
@@ -1065,12 +1137,34 @@ label.btn.disabled { opacity: .5; }
 
 /* while the first matches load: the table's own height, so the card below doesn't jump when they arrive */
 .screens-wait { min-height: 70vh; }
+.screens-filters-wait { min-height: min(70vh, 640px); }   /* the filter card keeps its height while it loads, so the page does not jump beside the 70vh results (LIVE1A-035) */
+/* LIVE2-020: a page showing its own "Try again" for the same failure leaves the account banner's Retry out: one retry, not two */
+body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account-retry { display: none; }
 .screens-table { margin: 0 -24px; }
 @media (max-width: 640px) { .screens-table { margin: 0 -16px; } }
 .screens-table td:first-child { white-space: normal; min-width: 180px; }
-.screens-table th[scope="row"] { min-width: 240px; }   /* VR1-103: a company's name was wrapping over three lines beside a sector column with room to spare */
+.screens-table th[scope="row"] { min-width: 200px; }
+.screens-table td { white-space: normal; }
+.screens-table .k-table :is(th, td) { padding-inline: 10px; }
+.scr-sector { display: none; }
+/* beside the open filters (1361 to 1480px) the Sector column moves under the company's name, so the table needs no sideways scroll */
+@media (min-width: 1361px) and (max-width: 1480px) { .screens-table .k-table :is(th, td):nth-child(2) { display: none; } .scr-sector { display: inline; } }
+.screens-table td.k-num { white-space: nowrap; }
+   /* VR1-103: a company's name was wrapping over three lines beside a sector column with room to spare */
 /* VR1-104: on a phone, "Save this screen" sits under the filters it saves, not 20 company cards further down */
-@media (max-width: 640px) { .screens-main > .screens-save { order: -1; } }
+/* UI-CO item 9: on a phone the results come first: the filters are one folded "Filters (n)" bar; opened, "Save this screen" sits under them (VR1-104), folded it is not in the way */
+@media (max-width: 640px) { .screens-main > .screens-save { order: -1; } .screens-main > .screens-save.folded { display: none; } }
+@media (min-width: 1361px) { .k-split2.screens-split { grid-template-columns: 360px minmax(0, 1fr); } }
+.screens-ranges .k-table { table-layout: fixed; }
+.screens-ranges .k-table :is(th, td) { white-space: normal; max-width: none; min-width: 0; padding: 8px 6px; vertical-align: middle; }
+.screens-ranges .k-table :is(th, td):first-child { padding-left: 10px; }
+.screens-ranges .k-table :is(th, td):nth-child(n+2) { width: 84px; }
+.screens-ranges .k-table :is(th, td):first-child { width: auto; }
+.screens-ranges .k-input-unit { --unit-w: 30px; }
+.screens-ranges .k-input { height: 38px; padding: 0 var(--unit-w, 30px) 0 10px; font-size: 14px; }
+.screens-fname { display: inline-flex; flex-wrap: wrap; gap: 2px 4px; align-items: center; font-size: 14px; }
+.screens-filters .k-chipset { gap: 6px; }
+@media (max-width: 420px) { .screens-ranges .k-table :is(th, td):nth-child(n+2) { width: 88px; } .screens-ranges .k-input { padding-left: 8px; } }
 
 /* corporate actions: a quiet tag for each kind, and the bonus/split notice on My Holdings */
 .badge[class*="ca-"] { background: var(--chip); color: var(--ink-2); font-size: 12px; padding: 2px 8px; }
@@ -1159,6 +1253,16 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 /* The welcome question opens with what StratLab is, in the landing page's own sentence: body ink, a touch larger than the
    muted line under it, so it reads first */
 .welcome-what { margin: 0; font-size: 15.5px; line-height: 1.45; color: var(--ink); }
+/* a phone: the four choices come straight under the title, then the intro and the note, then the optional level question, so all four
+   are on screen at 360 x 640 with no scroll (RC7-002). The order is the stylesheet's; the page's own order (intro, note, choices,
+   level) is the reading order, and the only controls are the choices and then the level, in the order they are drawn. */
+@media (max-width: 520px) {
+  .welcome-choices { order: 1; }
+  .welcome-what { order: 2; }
+  .welcome-note { order: 3; }
+  .welcome-level { order: 4; }
+  .welcome { gap: var(--s3); }
+}
 @media (max-width: 760px) { .lp-spaces { grid-template-columns: minmax(0, 1fr); } }
 .space-tag { flex: none; align-self: center; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
 /* Money: net worth */
@@ -1204,6 +1308,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-url { width: 100%; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
 /* RC2B-041: the two columns end together; "start" left the add-a-date card 190px short of the reminders beside it */
 .mc-grid { align-items: stretch; }
+.mc-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s2); }      /* LIVE1B-072 */
 @media (max-width: 760px) {
   .mc-grid { grid-template-columns: minmax(0, 1fr); }
   .mc-cell { min-height: 48px; padding: 4px; align-items: center; }
@@ -1314,12 +1419,8 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 /* Screener: the unit after a range gets a fixed slot, so every filter's two boxes line up; the symbol sits under the name */
 
 .screens-table td:first-child > .tiny.muted { display: block; }
-/* Checklist rows: the value lines up on the right; a check without data says so in its badge alone, not with a dash too */
-.check-row > .num { text-align: right; }
-/* VR3-011: a figure with a sentence in it (who bought and who sold) goes under its rule across the row, not into a narrow column five lines tall */
-@media (min-width: 521px) { .check-row:has(> .num.long) > .k-stack { grid-column: 1 / 3; }
-  .check-row > .num.long { grid-column: 1 / 3; grid-row: 2; text-align: left; }
-  .check-row:has(> .num.long) > .badge { grid-column: 3; grid-row: 1 / span 2; } }
+/* Checklist values line up on the right; a figure with a sentence in it (who bought and who sold) reads left, in its own cell (VR3-011) */
+.check-group .ck-long { display: block; text-align: left; }
 /* Options: stop loss and target as two equal halves */
 
 /* ---------- ETF price against NAV: a factual gap, the same quiet look as the surveillance flags ---------- */
@@ -1524,6 +1625,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-stat-k { font-size: var(--t-note); color: var(--muted); }
 .k-stat-k .info { margin-block: -4px; }   /* VR1-149: the (i) is not taller than a line of the label, so a label with one sits on the same baseline as its neighbours */
 .k-stat-v { font-size: var(--t-stat); font-weight: 600; letter-spacing: -.02em; line-height: 1.2; overflow-wrap: anywhere; }
+.k-stat-v.one { white-space: nowrap; overflow: hidden; }       /* a one-word figure is fitted (kit/Stat fitFigure), never broken inside its digits (LIVE1B-019) */
 .k-stat-d { font-size: var(--t-note); color: var(--muted); }
 .k-delta { display: inline-flex; align-items: center; gap: var(--s1); font-weight: 600; font-size: var(--t-note); padding: 2px var(--s2); border-radius: 999px; white-space: nowrap; }
 .k-delta.up { background: var(--up-soft); color: var(--up); }
@@ -1564,6 +1666,12 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chip:hover { border-color: var(--ink); }
 .k-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-chip.add { border-style: dashed; color: var(--blue-ink); }
+/* a remembered custom choice: its chip and a small × that forgets it (the pair is one rounded shape) */
+.k-chip-mine { display: inline-flex; flex: none; align-items: stretch; }
+.k-chip-mine > .k-chip { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-right: 8px; }
+.k-chip-x { flex: none; height: 32px; min-width: 28px; padding: 0 8px 0 4px; border: 1px solid var(--line-2, var(--line)); border-left-width: 0; border-radius: 0 999px 999px 0; background: var(--card); color: var(--muted); cursor: pointer; font: inherit; }
+.k-chip-x:hover { color: var(--ink); border-color: var(--ink); }
+@media (max-width: 640px) { .k-chip-x { height: 44px; min-width: 44px; } }
 @media (max-width: 640px) { .k-chip { height: 44px; } }   /* a phone-wide window: 44px, as on a touch screen below, not 32px (R86-004) */
 /* a set of on/off chips (ChipSet): on is filled with a tick, off is plain and muted, so "all on" still reads as on */
 .k-chipset .k-chip { color: var(--muted); }
@@ -1637,6 +1745,13 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* at most four a row, on one column grid shared by every group, so the groups' tiles line up under each other instead
    of six, then one alone (R5O-037) */
 .k-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(140px, calc((100% - 30px) / 4)), 1fr)); gap: 10px; }
+/* LIVE1B-025: a group of 2, 3 or 5 tiles fills its row (2, 3 and 5 across) on a wide dialog instead of leaving the right side empty or one tile alone on a second row */
+.k-tile-groups { container-type: inline-size; }
+@container (min-width: 720px) {
+  .k-tiles[data-n="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .k-tiles[data-n="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .k-tiles[data-n="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
 .k-tile { display: flex; flex-direction: column; gap: var(--s2); align-items: flex-start; padding: 14px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--card); cursor: pointer; text-align: left; transition: border-color .15s, transform .15s; min-width: 0; }
 .k-tile:hover { border-color: var(--ink); transform: translateY(-1px); }
 .k-tile[aria-checked="true"] { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
@@ -1715,6 +1830,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   /* UI-FIX-1 (R10): a long status badge ("Social Stock Exchange raise, not an IPO") wraps inside its cell instead of running under the next */
   .k-tbl-wrap.stack .k-table td .k-badge { white-space: normal; max-width: 100%; border-radius: 14px; }
   .k-tbl-wrap.stack .k-table td.k-act, .k-tbl-wrap.stack .k-table td.k-row-note, .k-tbl-wrap.stack .k-table td.k-empty-row { grid-column: 1 / -1; }
+  .k-tbl-wrap.stack .k-table td.k-act[data-label]::before { display: none; }   /* LIVE1C-015: a stray "Run now and log" over the buttons */
   .k-tbl-wrap.stack .k-table td.k-act { text-align: right; width: auto; }   /* the whole card's width: 1% of a grid cell put the Edit and remove buttons off the card (DP2-007) */
   /* VR2-017: a card's one button (Edit) sits at its top right, beside the name, not alone in a blank bottom corner under the figures */
   .k-tbl-wrap.stack .k-table tr:has(> td.k-corner) { position: relative; }
@@ -1849,7 +1965,13 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 }
 .k-table .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-table td.k-wrap, .k-table th.k-wrap { white-space: normal; min-width: 160px; }
-@media (min-width: 900px) { .rates-page .k-table th.k-wrap[scope="row"] { min-width: 260px; } }   /* VR1-151: "Government bond, 6.20% GS 2029" over three lines beside a Tax column with room to spare */
+@media (min-width: 900px) { .rates-page .k-table th.k-wrap[scope="row"] { min-width: 260px; } }
+/* LIVE1C-062: the market and small-savings tables share their column positions (the Rate and After tax figures of one sat left of the other's) */
+@media (min-width: 900px) {
+  .rates-page .k-table { table-layout: fixed; width: 100%; }
+  .rates-page .k-table th:nth-child(1) { width: 32%; } .rates-page .k-table th:nth-child(2), .rates-page .k-table th:nth-child(3) { width: 11%; }
+  .rates-page .k-table th:nth-child(4) { width: 22%; } .rates-page .k-table th:nth-child(5) { width: 24%; }
+}   /* VR1-151: "Government bond, 6.20% GS 2029" over three lines beside a Tax column with room to spare */
 .k-table td.k-act, .k-table th.k-act { text-align: right; width: 1%; padding-left: var(--s1); }
 .k-table td.k-act .k-row { justify-content: flex-end; flex-wrap: nowrap; }
 .k-table td.k-act .k-row.k-col { flex-direction: column; align-items: flex-end; gap: var(--s1); }   /* two actions stacked, so the column stays narrow */
@@ -1877,6 +1999,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 /* a few facts spread over the card's width (the account's profile), not packed in its left half (UI-FIX-1, R2) */
 .k-dl.spread { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .k-dl.facts { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
+/* LIVE1B-028: a list of figures, each a label with its amount on the right, in two columns from a laptop up */
+.k-dl.figs { grid-template-columns: minmax(0, 1fr); gap: 0 var(--s7, 40px); margin-top: var(--s3); }
+.k-dl.figs > div { flex-direction: row; justify-content: space-between; align-items: baseline; gap: var(--s4); padding: 10px 0; border-bottom: 1px solid var(--line); }
+.k-dl.figs dd { text-align: right; white-space: nowrap; }
+@media (min-width: 900px) { .k-dl.figs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.k-fold-rows > li > .k-fold { min-height: 44px; }
 .k-dl.prose { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s4) var(--s5); }
 .k-dl.prose dt { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
 .k-dl.prose dd { font-weight: 400; color: var(--muted); line-height: 1.5; }
@@ -1935,6 +2063,9 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
  * label-over-value while its neighbours sat label-left, value-right); a value too long for a line still goes under its label */
 .k-rows > div > span { color: var(--muted); flex: 1 1 8rem; min-width: 0; }
 .k-rows > div > b { font-weight: 600; text-align: right; }
+/* VR7-012: a long value that takes its own line under its label (Account's plan and usage: "No end date. Nothing renews and there's nothing to cancel.") read from the left on a
+   phone, not as two lines ragged on the left */
+@media (max-width: 899px) { .k-rows > div.long > b { flex: 1 1 100%; text-align: left; } }
 .k-rows > div.hl > span { color: var(--ink-2); }
 
 /* ---------- navigation: breadcrumb, group pages, All features, My space ---------- */
@@ -2070,7 +2201,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-light.ok { color: var(--ink-2); }
 .k-light.warn { color: var(--orange-ink); }
 .k-light.bad { color: var(--down); }
-.k-health { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s2); }
+.k-health { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--s2); }
 .k-health-i { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--s2) var(--s3); border-radius: var(--r-ctl); background: var(--paper-2); border: 1px solid transparent; color: inherit; text-decoration: none; min-width: 0; }
 .k-health-cell { display: flex; min-width: 0; }
 .k-health-cell > .k-health-i { flex: 1 1 auto; }
@@ -2106,7 +2237,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-progress::-moz-progress-bar { background: var(--blue); border-radius: 99px; }
 
 /* plans */
-.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a 260px band in the middle */
+.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a 260px band in the middle (LIVE1C-092 tried level cards: the layout checker's R13 found that band again at 1280) */
 .k-plan.pro { border: 2px solid var(--ink); }
 @media (min-width: 601px) and (max-width: 1000px) { /* a tablet: two columns, the last plan across both, never one narrow column */
   .k-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2172,6 +2303,15 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-card-title a { color: inherit; text-decoration: none; }
 .k-card-title a:hover { text-decoration: underline; }
 .k-toolbar > select.k-input { width: auto; min-width: 170px; flex: 0 1 220px; }
+.breadth-bar > .k-chipwrap { flex: 1 1 320px; min-width: 0; }             /* the group and the range on one row, the chips taking the rest (MOOD-1) */
+.k-alert-row { margin-top: 4px; }
+/* the rotation table: "was → now" on one line with its mark under it, and a name with its "Stocks →" beside it, so a row is not three lines tall (MOOD-1) */
+.rot-move { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.rot-move > span.k-badge { white-space: nowrap; }
+.rot-was { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.rot-name { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.rot-name > .k-tap { flex: none; }
+.rot-name > span { min-width: 0; text-align: left; }
 .k-toolbar > .k-search { flex: 1 1 280px; }
 @media (max-width: 480px) { .k-toolbar > select.k-input { flex: 1 1 100%; } }
 .k-address { display: inline-block; max-width: 100%; padding: var(--s2) var(--s3); background: var(--paper-2); color: var(--ink); border-radius: var(--r-ctl); font: 13.5px/1.4 var(--mono); overflow-wrap: anywhere; user-select: all; }
@@ -2256,6 +2396,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .plan-lock { display: inline; }
 .k-badge svg.lock-ic { margin-right: 2px; }
 .page-lock { margin-bottom: var(--s4); }
+.page-lock-slot:empty { display: none; }       /* the slot under every page title: nothing in it, no space */
+.page-lock-slot > .page-lock { margin-top: var(--s3); }
 
 /* signed out on an app address, a page that doesn't exist, a page that isn't yours (pages/Gate.tsx) */
 .gate { max-width: 640px; }
@@ -2301,6 +2443,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .lp-head-skel { gap: 12px; }
 .lp-skel-h { height: calc(clamp(32px, 4vw, 50px) * 2.1); width: min(20ch, 100%); max-width: 520px; }
 .lp-skel-p { height: calc(17px * 1.6 * 2); width: min(56ch, 100%); }
+.lp-skel-p.lp-skel-p-one, .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }   /* LIVE2-031: the Plans page's one-line lede: a two-line (four on a phone) placeholder moved the cards up 27 to 81px when the prices arrived */
 .lp-period { min-height: 44px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
 .lp-currency { display: inline-flex; align-items: center; gap: 8px; }
 .lp-currency select { width: auto; min-height: 44px; }
@@ -2312,6 +2455,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
    that room so the page below doesn't jump when the prices arrive (the FAQ moved 122px on a 412px phone) */
 @media (max-width: 640px) {
   .lp-skel-p { height: calc(17px * 1.6 * 4); }
+  .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }
   .lp-skel-fine { height: calc(13.5px * 1.5 * 6); }
   .lp-skel-seg { height: 50px; }
 }
@@ -2531,6 +2675,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .h-filing > :first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h-filing > :nth-child(2) { justify-self: start; }
 @media (max-width: 640px) { .h-filing { grid-template-columns: 7.5em minmax(0, 1fr); } .h-filing > :nth-child(3) { grid-column: 1 / -1; } }
+/* VR7-015: at 360px the date left 165px for "Promoter pledge or encumbrance", which broke onto two lines in its pill: the date and the pill share a line while the pill fits
+   and the pill takes the next line whole when it does not (the date keeps its 7.5em, so the pills of the rows that share a line still start together) */
+@media (max-width: 420px) { .h-filing { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s3); } .h-filing > :first-child { min-width: 7.5em; } .h-filing > :nth-child(3) { flex: 1 1 100%; } }
 
 .watch-add .k-field, .watch-add .k-field > * { max-width: none; width: 100%; }
 
@@ -2547,6 +2694,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* RC2B-034: the "In India? Show prices in ₹" link is a tap target on a phone like every other control (it measured 20 px) */
 .link-btn.inr-pick { min-height: 40px; display: inline-flex; align-items: center; }
+/* VR7-020: on a wide screen the link sat level with the "Prices in" label above the select; it is level with the select, the control it belongs to */
+@media (min-width: 641px) { .k-form > .link-btn.inr-pick, .k-formgrid > .link-btn.inr-pick { align-self: end; } }
 @media (max-width: 640px) { .link-btn.inr-pick { min-height: 44px; } }      /* the 40px above came after the phone rule for .link-btn and won (A11Y-2) */
 
 /* VR2-010: on a phone the buttons of one segmented control are the same width (they were sized by their words: "Off | ₹ | % of premium" were a sliver, a sliver and a wide block); a longer label still makes room for itself (min-width above) */
@@ -2587,7 +2736,18 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-stats.duo.tight .k-stat-v { font-size: 22px; }          /* VR6-023: eight-digit rupee totals fit half a line a size down */
 }
 .k-nowrap { white-space: nowrap; }
-@media (max-width: 380px) { .k-nowrap { white-space: normal; } }          /* the plan table's columns are 64px there: the word breaks at its hyphens rather than push the page sideways */
+.k-nb { white-space: nowrap; }       /* a signed figure kept whole at every width (components/NoBreak) */
+/* the plan table's columns are 64px there: the word breaks at its hyphens rather than push the page sideways. VR7-013: up to 410px, not 380: at 390px the
+   whole word ("(5-market-day") made the first plan table 349px in a 322px card, its Pro column over the card's edge */
+@media (max-width: 410px) { .k-nowrap { white-space: normal; } }
+/* ...and at 360px even so the first plan table was 311px in 292px ("Unlimited" and its cell padding): a size and a padding down in the plan tables */
+@media (max-width: 380px) { .k-compare .k-table th, .k-compare .k-table td, .k-tbl-wrap.pinhead .k-table th, .k-tbl-wrap.pinhead .k-table td { font-size: 13px; padding-left: 4px; padding-right: 4px; } }
+/* VR5-011 at 390px (the first plan table sits one fold deeper in the app, LIVE1C-092, in a 308px box): the same size and padding, and a Free column wide enough that the
+   note breaks "(5-market-" / "day trial)", two lines, not one word to a line; the table still fits its box (VR7-013) */
+@media (min-width: 381px) and (max-width: 410px) {
+  .k-compare .k-table th, .k-compare .k-table td, .k-tbl-wrap.pinhead .k-table th, .k-tbl-wrap.pinhead .k-table td { font-size: 13px; padding-left: 4px; padding-right: 4px; }
+  .k-compare .k-table th:nth-child(2), .k-compare .k-table td:nth-child(2) { min-width: 74px; }
+}
 /* VR5-003: at 400px and under the Menu sits near the right edge (the button beside it reads "Sign in"): its list opens leftwards; from its left it ran 31px past the screen */
 @media (max-width: 400px) { .pub-nav .pub-menu.pub-menu-start nav { left: auto; right: 0; } }
 /* VR5-014: on a phone the picker's tiles (Net worth's "Add an entry": fourteen kinds) are rows, the picture beside the words, not a 120px
@@ -2615,3 +2775,40 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .link-btn.inr-pick, body .k-search input { min-height: 44px; }
   .nw-snaps .btn.quiet.sm { min-width: 44px; }
 }
+/* the Compare page's qualifier for a figure is a numbered note under its table, not a sentence in the cell (LIVE1A-048) */
+.cmp-cell { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; } .cmp-cell.end { align-items: flex-end; }
+.cmp-foots { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; max-width: 100%; overflow-wrap: anywhere; }
+.cmp-foot-mark { margin-left: 2px; font-size: 11px; color: var(--muted); }
+/* LIVE1A-004: the instrument search's groups (stock, futures, options) have a small heading; the rest of the options are one row away */
+.results .search-group { margin: 0; padding-block: 8px 2px; font-weight: 600; text-transform: none; }
+.results .search-more { justify-content: center; color: var(--blue-ink); font-weight: 600; }
+/* LIVE1A-018: the options builder's "More settings" are one grid of four columns, not rows of 5, 3 and 1 */
+.k-form.k-form-quad { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .k-form.k-form-quad { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .k-form.k-form-quad { grid-template-columns: minmax(0, 1fr); } }
+
+/* LIVE1B-069: two buttons that go together (the tax report's downloads) are one width each: side by side on a laptop, one under the other, full width, on a phone */
+.k-btn-pair { display: inline-flex; flex-wrap: wrap; gap: var(--s2); }
+@media (max-width: 640px) { .k-btn-pair { display: grid; grid-template-columns: 1fr; width: 100%; } .k-btn-pair .btn { width: 100%; } }
+
+/* LIVE1B-042: a password box is as long as a password, not as wide as the card it sits in */
+.k-field-short { max-width: 320px; }
+
+/* LIVE1B-036, 055, 070: what a thumb has to hit on a phone is 44px each way: every small button, the date picker's button, a breadcrumb step, a fold's
+   bar, a summary line (Help's 46 explanations were 32px, edge to edge), the public Menu, and a card's name link (a link keeps the place it had: the
+   padding is what takes the tap, the negative margin gives the room back) */
+@media (max-width: 640px) {
+  .btn.sm { min-height: 44px; }
+  .k-input.sm { height: 44px; }
+  .k-date-btn { width: 44px; height: 44px; right: 0; }
+  .k-crumb a, .k-crumb-btn, .k-crumb li > [aria-current="page"] { min-height: 44px; }
+  .k-fold, .k-disclosure > summary, .help-topic summary, .lp-faq summary, .lp-menu > summary, .pub-menu > summary { min-height: 44px; }
+  .k-tbl-wrap.stack th[scope="row"] a.link, .k-tbl-wrap.stack td a.link { padding-block: 13px; margin-block: -13px; }
+  .k-page a.link.k-small { padding-block: 13px; margin-block: -5px; }
+}
+
+/* ---- themes: the deep dive (THEME-1) ---- */
+.k-section-title { font-family: var(--serif); font-size: var(--t-card); font-weight: 600; margin: var(--s5) 0 0; }
+.k-table tr[data-kind="median"] > * { border-top: 2px solid var(--line-2); font-weight: 600; }
+.k-table tr[data-kind="range"] > * { color: var(--muted); font-size: var(--t-note); }
+.k-table tr[data-kind="median"]:hover, .k-table tr[data-kind="range"]:hover { background: transparent; }

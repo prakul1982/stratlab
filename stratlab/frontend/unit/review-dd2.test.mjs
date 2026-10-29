@@ -11,11 +11,13 @@ register("data:text/javascript," + encodeURIComponent(`export async function res
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
-test("DD-001: the mood card leads with the mood and the main story, and says where the FII/DII figures come from", () => {
-  const page = read("src/pages/Research.tsx");
-  assert.match(page, /\{ai\.mood && <p className="inv-summary" data-testid="pulse-mood"><b>\{ai\.mood\}<\/b><\/p>\}/);
+test("DD-001 (MOOD-1): the mood card leads with the headline from the tables' figures, the main story names its headlines, and the FII/DII source is said", () => {
+  // the mood is no longer a sentence the AI wrote: its headline and lines come with the tables (mood.py), the story with the headlines it counts
+  const mood = read("src/pages/PulseMood.tsx"), page = read("src/pages/Research.tsx");
+  assert.match(mood, /\{m\.headline \? <p className="inv-summary" data-testid="pulse-mood"><b>\{m\.headline\}<\/b><\/p>/);
+  assert.match(mood, /data-testid="pulse-story">The main story in today's headlines: \{story\.label\}, \{story\.n\} of \{story\.of\} \(marked above\)/);
   assert.match(page, /\{ai\.flows_source && <p className="k-note" data-testid="pulse-flows-source">\{ai\.flows_source\}<\/p>\}/);
-  assert.match(read("src/lib/research.ts"), /mood\?: string;[\s\S]*flows_source\?: string;/);
+  assert.match(read("src/lib/research.ts"), /story\?: \{ label: string; n: number; of: number; indices: number\[\]; headlines: string\[\] \} \| null;[\s\S]*flows_source\?: string;/);
 });
 
 test("DD-002: one Invest home, no second company search box; Look up a company is the search", () => {
@@ -48,10 +50,10 @@ test("DD-006, DC-002, DP2-036: the weekend line says when the market opens, on o
   assert.match(read("src/styles.css"), /\.banner\.data-banner \{ padding: 6px 14px; font-size: 13\.5px; margin-bottom: 14px; flex-wrap: nowrap; \}/);
 });
 
-test("DD-019: the company card's buttons sit under the market value, beside the price column", () => {
+test("DD-019 (UI-CO item 4): the company card is one block: price, market value and 52-week bar in three columns, then the buttons across the width", () => {
   const css = read("src/styles-invest.css");
-  assert.match(css, /\.inv-head > \.inv-head-price \{ grid-column: 2; grid-row: 1 \/ span 2; \}/);
-  assert.match(css, /\.inv-head > \.inv-actions \{ grid-column: 1; grid-row: 2; align-self: start; \}/);
+  assert.match(css, /\.inv-head \{ display: grid; grid-template-columns: minmax\(0, 1\.1fr\) minmax\(0, 1fr\) minmax\(0, 1\.2fr\);/);
+  assert.match(css, /\.inv-head > \.inv-head-more, \.inv-head > \.inv-actions \{ grid-column: 1 \/ -1; \}/);
   assert.match(read("src/pages/Research.tsx"), /<div className="k-row inv-actions">/);
 });
 

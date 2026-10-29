@@ -165,9 +165,15 @@ export function blankStrategy(name = "Untitled notebook"): Strategy {
     session: { ...NO_SESSION }, product: "auto", minScore: 0 };
 }
 
-/** Capital and brokerage that make sense in each currency. */
-export function riskForCurrency(risk: Risk, currency?: string | null): Risk {
-  if (currency === "INR" || !currency) return risk;
+/** Capital and brokerage that make sense in each currency, and for the kind of order: a delivery share or fund trade in India pays no
+ *  brokerage at the brokers the defaults follow (the ₹20 flat an order is the intraday and F&O charge), and the chart replay and the
+ *  depository charge already assume that, so a notebook on one starts at 0 where the untouched default was ₹20 an order that the replay
+ *  did not charge (LIVE1A-010, LIVE1A-054). `on` is the instrument and the candle size when known. */
+export function riskForCurrency(risk: Risk, currency?: string | null, on?: { market?: string | null; type?: string | null; tf?: string | null }): Risk {
+  if (currency === "INR" || !currency) {
+    const delivery = !!on && on.market === "IN" && (on.type === "EQ" || on.type === "ETF") && (on.tf ?? "1d") === "1d";
+    return delivery && risk.brokerage === DEFAULT_RISK.brokerage ? { ...risk, brokerage: 0 } : risk;
+  }
   const capital = risk.capital === DEFAULT_RISK.capital ? 10000 : risk.capital;
   const brokerage = risk.brokerage === DEFAULT_RISK.brokerage ? 0 : risk.brokerage;
   return { ...risk, capital, brokerage };
@@ -539,7 +545,8 @@ export function noRuleNote(idea: string, notes: string[] = []): { note: string; 
     return { system: true, note: "That one is on our side: the builder couldn't turn your sentence into rules just now, and your wording looks fine. Try again, start from a classic idea, or build the rules by hand." };
   }
   // a builder's note that only says there is no entry rule repeats the line before it (DA-009: "We couldn't find an entry rule. No entry rule was found.")
-  const extra = notes.filter((n) => !/\b(?:no|not|couldn.t|could not|can.?t|unable)\b[^.]*\b(?:entry|rules?|buy)\b/i.test(n));
+  // (the model's own "No actionable strategy provided." says it again too, LIVE1A-056)
+  const extra = notes.filter((n) => !/\b(?:no|not|couldn.t|could not|can.?t|unable)\b[^.]*\b(?:entry|rules?|buy)\b/i.test(n) && !/\bactionable\b|\bno (?:strategy|trading idea|idea|signal)\b[^.]*\b(?:provided|given|found)\b/i.test(n));
   return { system: false, note: "We couldn't find an entry rule. Say when to buy (or to short), e.g. \"Buy when the price is above the 50-day average\"." + (extra.length ? " " + extra.join(" ") : "") };
 }
 
@@ -573,5 +580,7 @@ export function copyNeeds(s: Strategy, groupSize: number, plan: { allIndicators:
     if (groupSize > plan.basicCap) needs = "Pro";
   }
   if (!parts.length) return null;
-  return `Runs on ${needs}: ${parts.join(", and ")}. A copy is yours to edit on any plan.`;
+  // (the sentence that a copy is yours to edit on any plan is said once for the list, COPY_ANY_PLAN, not on every card: LIVE1C-076)
+  return `Runs on ${needs}: ${parts.join(", and ")}.`;
 }
+export const COPY_ANY_PLAN = "A copy is yours to edit on any plan, including one a plan can't run yet.";

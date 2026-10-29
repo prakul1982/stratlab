@@ -117,8 +117,9 @@ def gather(profile, fy: int) -> dict:
     business = bool(y["business"]["segments"]) or y["intraday"]["count"] > 0
     return {"fy": fy, "y": y, "payable": a.get("payable"), "schedule": a.get("schedule"),
             "audit": tax_total.audit_applies(fy, y.get("turnover") or 0, business), "business": business,
-            "fno_lines": int(sum(b["trades"] for b in i["business"] if b["fy"] == fy)), "rows": [r for r in equity if r["fy"] == fy], "unit_rows": [r for r in unit_rows if r["fy"] == fy], "names": c["names"], "files": i["data"]["files"],
-            "fmv_src": i["fmv_src"], "div_lines": lines, "div_source": src, "div_year": dyear,
+            "fno_lines": int(sum(b["trades"] for b in i["business"] if b["fy"] == fy)), "fno_lines_all": int(sum(b["trades"] for b in i["business"])), "rows": [r for r in equity if r["fy"] == fy], "unit_rows": [r for r in unit_rows if r["fy"] == fy], "names": c["names"], "files": i["data"]["files"],
+            "fmv_src": i["fmv_src"], "div_lines": lines, "div_source": src, "div_year": dyear, "div_in_total": bool((dyear or {}).get("include")),
+            "div_left_out": round(dyear["total"], 2) if dyear and dyear.get("taxed") and src != "none" and not dyear.get("include") and dyear.get("total", 0) > 0 else 0.0,
             "us_div": money_us_routes.us_dividends(profile, fy, y), "fa": money_us_routes.fa_for(profile, fy),
             "us_count": usr["count"], "us_allowed": usr["allowed"], "us_warning": ((usr.get("years") or {}).get(fy) or {}).get("warning"),
             "tds": saved["tds"], "paid": saved["paid"],
@@ -632,7 +633,9 @@ def summary(g: dict) -> list[tuple[str, str]]:
               ("US shares: long-term gains (net)", money(y["foreign"]["lt"]["net"]))] if y.get("foreign") else []),
            ("Section 112A exemption used", money(y["exemption"]["used"])),
            ("Intraday result", money(y["intraday"]["pnl"])), ("F&O, commodity and currency result after charges", money(y["business"]["net"])),
-           ("Dividends in the year (India)", money(sum(r["amount"] for r in g["div_lines"])))]
+           # (LIVE1C-059: the total left the dividends out, as Tax tools' switch had them, and this list did not say so)
+           ("Dividends in the year (India)" + ("" if g.get("div_in_total", True) or not g["div_lines"] else ", not in the total tax estimate below"),
+            money(sum(r["amount"] for r in g["div_lines"])))]
     if g["us_div"]:
         out.append(("US dividends in rupees (Rule 115)", money(g["us_div"]["inr"])))
         out.append(("Foreign tax credit (lower of US tax and Indian tax on it)", money(g["us_div"]["ftc"]["credit"])))
@@ -651,10 +654,11 @@ def summary(g: dict) -> list[tuple[str, str]]:
         out.append(("Interest under sections 234A, 234B and 234C", money(p["interest_234a"] + p["interest_234b"] + p["interest_234c"])))
         out.append(("Payable now, with the interest" + (" and late fee" if p["fee_234f"] else ""), money(p["total"])))
         if not p.get("return_needed", True):       # RC2B-003: a year within the basic exemption needs no return, so no late fee
-            out.append(("Return needed", f"No: total income {money(p['income'])} is within the {money(p['exempt'])} basic exemption limit (section 139(1))"))
+            left = (f"; dividends of {money(g['div_left_out'])} are not counted in it (include them in Tax tools)" if g.get("div_left_out") else "")
+            out.append(("Return needed", f"No: total income {money(p['income'])} is within the {money(p['exempt'])} basic exemption limit (section 139(1)){left}"))
     if g.get("audit"):
-        out.append(("Tax audit (section 44AB)", "Applies: report by " + tax_due.day(tax_due.due(g["fy"], "audit_report")["date"])
-                    + ", return by " + tax_due.day(tax_due.due(g["fy"], "audit")["date"])))
+        out.append(("Tax audit (section 44AB)", "Applies: report " + tax_due.deadline(g["fy"], "audit_report")
+                    + ", return " + tax_due.deadline(g["fy"], "audit")))
     if g["fa"]:
         out.append((f"Schedule FA lines (calendar year {g['fy']})", str(len(g["fa"]["rows"]))))
     return out
@@ -672,12 +676,19 @@ def _india_day(at) -> str:
 
 def sources(g: dict) -> list[str]:
     out = []
+    # a file's own F&O count is said only when the files' counts add up to the tax report's (LIVE1C-053: "1 F&O line" in the file's brackets beside
+    # "1,11,202 F&O lines" on the report, a file stored when its count was of sheet rows); otherwise one line gives the report's count
+    shown_all = sum(int(f.get("fno_lines") or 0) for f in g["files"][-20:])
+    total = g.get("fno_lines_all")
+    agree = total is None or shown_all == total
     for f in g["files"][-20:]:
         # DH-007: the F&O lines a file brought are said too (it read "38 trades" beside 1,11,202 F&O lines), and "1 trade"
-        n, fno = int(f.get("trades") or 0), int(f.get("fno_lines") or 0)
+        n, fno = int(f.get("trades") or 0), int(f.get("fno_lines") or 0) if agree else 0
         what = ", ".join(x for x in (f"{n:,} trade{'' if n == 1 else 's'}" if n or not fno else "",
                                      f"{fno:,} F&O, commodity and currency line{'' if fno == 1 else 's'}" if fno else "") if x)
         out.append(f"Your file {f.get('name')} ({f.get('broker') or 'broker'}, {what}, uploaded {_day(_india_day(f.get('at')))}).")
+    if total and not agree:
+        out.append(f"F&O, commodity and currency lines added up as business income, all years: {total:,}.")
     if g["mf_count"]:
         out.append(f"Your mutual fund statement (CAS): {g['mf_count']} realised sales in all years.")
     if g["us_count"]:

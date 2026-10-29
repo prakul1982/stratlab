@@ -94,3 +94,65 @@ export function badgeOf(r: Pick<IpoRow, "stage" | "issue_status">) {
 }
 
 export const segmentWord = (r: Pick<IpoRow, "segment" | "market">) => (r.market === "US" ? "" : r.segment === "sme" ? "SME" : r.segment === "mainboard" ? "Mainboard" : "");
+
+/** The note under the title when a read had trouble. The job's raw lines name a company and a server's error code ("SEC filings for
+ *  Amaero Inc.: The SEC is having trouble (500)"), which says nothing to a reader: one plain sentence says what is affected. When only
+ *  the filings of single companies failed, the list of issues itself was read (LIVE1A-061). */
+export function problemNote(problems: string[], at: string | null): string {
+  const when = at ? ` of ${at}` : "";
+  const filingsOnly = problems.length > 0 && problems.every((p) => /^(SEC filings|final prospectuses)/i.test(p));
+  return filingsOnly
+    ? `At the list's read${when} some companies' filings couldn't be read, so a few details (the offer documents and what they say) may be missing. The list of issues itself was read. It is read again within the hour.`
+    : `At the list's read${when} a source couldn't be read, so this list may be missing a few issues. It is read again within the hour.`;
+}
+
+/* ---------- the issue page's tables (O7): the figures the offer document gives, worked out in the open ---------- */
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+/** "Mar 2026" and "March 31, 2026" are the same year end: "2026-03" (null when the label is neither). */
+export function yearKey(label: string): string | null {
+  const m = /^([A-Za-z]{3})[a-z]*\.?\s+(?:\d{1,2},\s*)?(\d{4})$/.exec(label.trim());
+  const mi = m ? MONTHS.indexOf(m[1].toLowerCase()) : -1;
+  return m && mi >= 0 ? `${m[2]}-${String(mi + 1).padStart(2, "0")}` : null;
+}
+
+/** The change on the year before, in percent; none when the year before was not positive (a change from a loss is not a percentage). */
+export function growthPct(cur: number | null | undefined, prev: number | null | undefined): number | null {
+  return cur == null || prev == null || !(prev > 0) ? null : ((cur - prev) / prev) * 100;
+}
+
+/** A figure with the grouping of its market and the places it needs ("1,570.07"); none is "–". */
+export const figure = (v: number | null | undefined, dp = 2) => (v == null ? "–" : v.toLocaleString("en-IN", { minimumFractionDigits: dp, maximumFractionDigits: dp }));
+
+/** The fresh issue in ₹ crore: the exchange's own figure, else its shares at the top of the band (null when neither is known). */
+export function freshCrore(r: Pick<IpoRow, "price" | "high"> & { fresh?: number; fresh_cr?: number }): number | null {
+  if (r.fresh_cr != null) return r.fresh_cr;
+  const top = r.price ?? r.high;
+  return r.fresh != null && top != null ? Math.round((r.fresh * top) / 1e5) / 100 : null;
+}
+
+/** The objects of the issue as a table: each with its amount in ₹ crore and its share of the fresh issue (where both are known). */
+export function objectRows(rows: { label: string; amount: number | null }[], fresh: number | null) {
+  return rows.map((x, i) => ({ n: i + 1, label: x.label, amount: x.amount, share: x.amount != null && fresh ? (x.amount / fresh) * 100 : null }));
+}
+
+/** The company's own price to earnings at the top of the band (or the issue price), from the document's latest earnings per share. */
+export function priceToEarnings(price: number | null | undefined, eps: number | null | undefined): number | null {
+  return price != null && eps != null && eps > 0 ? Math.round((price / eps) * 100) / 100 : null;
+}
+
+/** The first `n` of a list and the rest, for one fold ("Show the other 7"). */
+export const firstAndRest = <T,>(xs: T[], n: number): [T[], T[]] => [xs.slice(0, n), xs.slice(n)];
+
+/** The key indicators the offer document sets beside its peers', in its order, with the unit each is in. */
+export const KPI_LABELS: { key: string; label: string; unit: "crore" | "pct" | "times" }[] = [
+  { key: "revenue", label: "Revenue from operations", unit: "crore" }, { key: "ebitda", label: "EBITDA", unit: "crore" }, { key: "ebitda_margin", label: "EBITDA margin", unit: "pct" },
+  { key: "pat", label: "Profit after tax", unit: "crore" }, { key: "pat_margin", label: "Profit after tax margin", unit: "pct" }, { key: "roe", label: "Return on equity", unit: "pct" },
+  { key: "roce", label: "Return on capital employed", unit: "pct" }, { key: "net_debt", label: "Net debt", unit: "crore" }, { key: "net_worth", label: "Net worth", unit: "crore" },
+  { key: "debt_equity", label: "Debt to equity", unit: "times" }, { key: "order_book", label: "Order book", unit: "crore" },
+];
+export function kpiText(v: number | null | undefined, unit: "crore" | "pct" | "times"): string {
+  if (v == null) return "–";
+  return unit === "pct" ? `${figure(v, 2)}%` : unit === "times" ? `${figure(v, 2)}×` : figure(v, 2);
+}
+/** "the three months ending June 30, 2026" as "3 months to June 30, 2026"; a fiscal year as the document names it. */
+export const periodText = (label: string) => label.replace(/^the three months ending /i, "3 months to ").replace(/^the (\w+) months ending /i, "$1 months to ").replace(/^the /i, "");

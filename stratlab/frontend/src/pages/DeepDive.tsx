@@ -4,9 +4,9 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { deepDiveLimitLine } from "../lib/account";
-import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, signTone, fmtDate } from "../lib/format";
+import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { millionsOf, scaleFor, usdAmount } from "../lib/research";
+import { marginText, millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { Badge, Card, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow } from "../components/kit";
@@ -23,12 +23,13 @@ type Source = { title: string; at: string; url: string; kind: string } | null;
 type Target = { metric: string; low: number | null; high: number | null; period: string | null; what: string; quote: string; said_at: string;
   source: { title: string; at: string; url: string }; actual: number | null; unit: string; result: "met" | "missed" | "pending" | "unchecked";
   revised?: { low: number | null; high: number | null; at: string; quote: string } | null;
-  settled_by?: { actual: number; met: boolean; quote: string; source: { title: string; at: string; url: string } } };
+  settled_by?: { actual: number; met: boolean; quote: string; source: { title: string; at: string; url: string } };
+  /** one short line on why the numbers can't settle it (UI-CO item 7), and whether it is a plan with no figure at all */ why?: string | null; qualitative?: boolean; segment?: string };
 export type CheckState = "pass" | "watch" | "fail" | "na";
 type Checklist = { checks: { group: string; label: string; state: CheckState; value: string; rule: string }[];
   counts: Record<CheckState, number>; scored: number; industry?: { group: string; label: string; path: string[]; note: string } };
 type Measure = { name: string; value: string; period: string | null; change: string | null; quote: string; source: Source };
-type Card = { rows: Target[]; met: number; missed: number; pending: number; unchecked: number; score: number | null;
+type Card = { rows: Target[]; met: number; missed: number; pending: number; unchecked: number; no_figure?: number; score: number | null;
   read: { kind: string; at: string; title: string }[]; problems: string[]; at: string; years?: number };
 export interface DeepView {
   symbol: string; region?: "IN" | "US"; ai?: boolean; source_url?: string | null; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
@@ -57,10 +58,13 @@ const day = (s: string) => fmtDate(s);
 const KIND: Record<string, string> = { transcript: "Call transcript", presentation: "Investor presentation", annual_report: "Annual report",
   quarterly_report: "Quarterly report", earnings_release: "Earnings release" };
 
-function Growth({ label, v, why, nm }: { label: string; v: number | null; why?: string; nm?: { from: number; year: string } | null }) {
+/** One growth cell of the table: the rate (green or red), or n/m or a dash with its reason as a numbered note under the table (UI-CO: the figures as a table). */
+type GrowthNote = { n: number; text: string };
+function growthCell(label: string, v: number | null, why: string | undefined, nm: { from: number; year: string } | null | undefined, notes: GrowthNote[]) {
   // a rate off a tiny base is not meaningful, said with the base it starts from (DD-018)
-  if (nm) return <Stat label={label} value="n/m" note={`From a base of ${nm.from.toLocaleString("en-IN")} in ${nm.year}`} />;
-  return <Stat label={label} value={v == null ? "–" : pct(v)} tone={signTone(v)} note={v == null ? why : undefined} />;
+  const text = nm ? `From a base of ${nm.from.toLocaleString("en-IN")} in ${nm.year}` : v == null ? why : undefined;
+  const mark = text ? (notes.find((x) => x.text === `${label}: ${text}`) ?? (notes.push({ n: notes.length + 1, text: `${label}: ${text}` }), notes[notes.length - 1])) : null;
+  return <>{nm ? "n/m" : v == null ? "–" : <Signed value={v}>{pct(v)}</Signed>}{mark && <sup className="cmp-foot-mark" aria-label={`see note ${mark.n}`}>{mark.n}</sup>}</>;
 }
 
 /** Why a growth rate is blank: a loss (or zero) at the start of the period or along the way makes a yearly rate meaningless. */
@@ -70,14 +74,15 @@ function lossNote(values: (number | null | undefined)[], years: number): string 
   return span.some((x) => x <= 0) ? "A loss year in the period, so no yearly rate" : undefined;
 }
 
-const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", margin: "Operating margin", capex: "Capex", revenue: "Revenue", profit: "Profit", other: "" };
+const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", ebitda_growth: "EBITDA growth", margin: "Operating margin", net_margin: "Net margin",
+  gross_margin: "Gross margin", roe: "Return on equity", roce: "Return on capital employed", capex: "Capex", revenue: "Revenue", profit: "Profit", ebitda: "EBITDA", other: "" };
 const RESULT: Record<string, [string, string]> = { met: ["Met", "pass"], missed: ["Missed", "fail"], pending: ["Not due yet", "next"], unchecked: ["Can't check", "skip"] };
 /** A target in its own unit: rupees crore, millions, a percentage, or a plain number, never a crore amount with a "%"
  * (DD-050: "INR 40,000–50,000 crore" read "Target 40000–50000%"). */
 const target = (lo: number | null, hi: number | null, unit: string, cur = "$") =>
   lo == null ? "–" : unit === "crore" ? (hi != null ? `${inrAmount(lo)} – ${inrAmount(hi)}` : inrAmount(lo))
     : unit === "million" ? (hi != null ? `${usdAmount(lo, cur)} – ${usdAmount(hi, cur)}` : usdAmount(lo, cur))
-    : `${lo.toLocaleString("en-IN")}${hi != null ? `–${hi.toLocaleString("en-IN")}` : ""}${unit === "%" ? "%" : ""}`;
+    : `${lo.toLocaleString("en-IN")}${hi != null ? `–${hi.toLocaleString("en-IN")}` : ""}${unit === "%" ? "%" : unit === "x" ? "×" : ""}`;
 const actualText = (v: number, unit: string, cur = "$") =>
   unit === "crore" ? inrAmount(v) : unit === "million" ? usdAmount(v, cur) : unit === "%" ? `${v.toFixed(1)}%` : v.toLocaleString("en-IN");
 
@@ -95,28 +100,33 @@ function ReportCard({ c, cur = "$" }: { c: Card; cur?: string }) {
       </StatRow>
       <p className="k-small">{checked
         ? <>Of the {checked} targets from past calls that can be settled, by the reported numbers or by what the company itself said later, <b>{c.met} {c.met === 1 ? "was" : "were"} met</b> and {c.missed} missed ({c.score}% met).</>
-        : unsettledNote(c)}</p>
+        : unsettledNote(c)}{(c.no_figure ?? 0) > 0 && <> {c.no_figure} more {c.no_figure === 1 ? "is a plan" : "are plans"} with no figure to check.</>}</p>
       {c.rows.length > 0 ? (
-        <div className="promises">{c.rows.map((r, i) => {
-          const [label, tone] = RESULT[r.result];
-          return (
-            <div key={i} className="promise">
-              <div className="k-spread">
+        <DataTable label="Management targets and how they turned out" stack rows={c.rows} rowKey={(r, i) => `${r.metric}-${r.period}-${r.said_at}-${i}`}
+          columns={[
+            { key: "t", header: "Target", rowHeader: true, wrap: true, cell: (r) => (
+              <span className="rc-target">
                 <span className="k-small">{METRIC[r.metric] ? <b>{METRIC[r.metric]}: </b> : null}{r.what}</span>
-                <span className={`badge ${tone}`}>{label}</span>
-              </div>
-              <div className="promise-facts k-note">
-                {r.period && <span><span className="muted">For</span> {r.period}</span>}
-                {r.low != null && <span><span className="muted">Target</span> <b className="mono">{target(r.low, r.high, r.unit, cur)}</b></span>}
-                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{actualText(r.actual, r.unit, cur)}</b></span>}
-                <a className="link" href={safeHref(r.source.url)} target="_blank" rel="noopener noreferrer" title={r.source.title}>Said {day(r.source.at)} ↗</a>
-              </div>
-              {r.quote && <span className="k-note">"{r.quote}"</span>}
-              {r.settled_by && <span className="tiny">
-                <span className="muted">Result from the company's own words:</span> "{r.settled_by.quote}" <a className="link" href={safeHref(r.settled_by.source.url)} target="_blank" rel="noopener noreferrer">{r.settled_by.source.title}, {day(r.settled_by.source.at)} ↗</a></span>}
-              {r.revised && <span className="k-note">Later changed to {target(r.revised.low, r.revised.high, r.unit, cur)} ({day(r.revised.at)}).</span>}
-            </div>);
-        })}</div>
+                {r.quote && <span className="k-note rc-quote">"{r.quote}"</span>}
+                {r.settled_by && <span className="k-note rc-quote"><span className="k-muted">Result from the company's own words:</span> "{r.settled_by.quote}" <a className="link" href={safeHref(r.settled_by.source.url)} target="_blank" rel="noopener noreferrer">{r.settled_by.source.title}, {day(r.settled_by.source.at)} ↗</a></span>}
+                {r.revised && <span className="k-note">Later changed to {target(r.revised.low, r.revised.high, r.unit, cur)} ({day(r.revised.at)}).</span>}
+              </span>) },
+            { key: "p", header: "For", cell: (r) => r.period ?? "–" },
+            { key: "s", header: "Said", numeric: true, cell: (r) => (
+              <span className="rc-said">
+                <b className="mono">{r.low != null ? target(r.low, r.high, r.unit, cur) : "No figure"}</b>
+                <a className="link k-note" href={safeHref(r.source.url)} target="_blank" rel="noopener noreferrer" title={r.source.title}>{day(r.source.at)} ↗</a>
+              </span>) },
+            { key: "r", header: "Result", lead: true, cell: (r) => {
+              const [label, tone] = r.result === "unchecked" && r.qualitative ? ["No figure", "skip"] : RESULT[r.result];
+              return (
+                <span className="rc-result">
+                  <span className={`badge ${tone}`}>{label}</span>
+                  {r.actual != null && <span className="k-note">Actual <b className="mono">{actualText(r.actual, r.unit, cur)}</b></span>}
+                  {r.result === "unchecked" && r.why && <span className="k-note" data-testid="rc-why">{r.why}</span>}
+                </span>);
+            } },
+          ]} />
       ) : <p className="k-small k-muted">No specific targets were found in these {c.read.length > 0 && c.read.every((d) => d.kind === "earnings_release") ? "earnings releases" : "calls"}.</p>}
       <p className="k-note">Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), a revenue or profit amount (at least the target, less 2%) and estimated capex (within 10%). A target the numbers can't settle (a bank's loan-to-deposit ratio, a retail mix) is settled from what the company said after the period ended, quoted word for word and checked against the document. A target repeated on later calls counts once, from the first time it was said.</p>
     </>
@@ -132,17 +142,28 @@ function ChecklistPanel({ c }: { c: Checklist }) {
       <p className="k-small" data-testid="check-counts">{checkCountsLine(c.counts)}</p>
       {c.industry && c.industry.group !== "general" && (
         <p className="k-note"><b>Rules for: {c.industry.label}{c.industry.path.length ? ` (${c.industry.path.join(" › ")})` : ""}.</b> {c.industry.note}</p>)}
+      {/* UI-CO item 5: a table for each group (Check with its rule under it | Value | Result), one under the other at one width: no two-column
+          masonry of uneven heights */}
       <div className="checklist">{groups.map((g) => (
         <div key={g} className="check-group">
-          <span className="k-eyebrow">{g}</span>
-          {c.checks.filter((x) => x.group === g).map((x) => (
-            <div key={x.label} className="check-row">
-              <div className="k-stack"><span className="k-small">{x.label}</span><span className="k-note">{x.rule}</span></div>
-              <span className={`small num${x.value.length > 32 ? " long" : ""}`}>{x.state === "na" && /^[-–—]?$/.test(x.value.trim()) ? "" : x.value}</span>
-              <span className={`badge ${CHECK[x.state][1]}`}>{CHECK[x.state][0]}</span>
-            </div>))}
+          <DataTable label={`Investor checklist: ${g}`} rows={c.checks.filter((x) => x.group === g)} rowKey={(x) => x.label} stack
+            columns={[
+              { key: "c", header: g, rowHeader: true, cell: (x) => <span className="k-stack"><span className="k-small">{x.label}</span><span className="k-note">{x.rule}</span></span> },
+              { key: "v", header: "Value", numeric: true, cell: (x) => (x.state === "na" && /^[-–—]?$/.test(x.value.trim()) ? "" : <span className={x.value.length > 32 ? "ck-long" : undefined}>{x.value}</span>) },
+              { key: "r", header: "Result", cell: (x) => <span className={`badge ${CHECK[x.state][1]}`}>{CHECK[x.state][0]}</span> },
+            ]} />
         </div>))}</div>
     </Panel>
+  );
+}
+
+/** Documents as a table: Document (its title under its kind) | Date | link (UI-CO item 6: the list of documents read was one long run-on line). */
+function DocTable({ docs, label, empty }: { docs: { kind: string; at: string; title: string; url: string }[]; label: string; empty?: string }) {
+  return (
+    <div className="dd-fit"><DataTable label={label} rows={docs} rowKey={(d, i) => `${d.url}-${d.at}-${i}`} stack={false} empty={empty}
+      columns={[{ key: "d", header: "Document", rowHeader: true, cell: (d) => <span className="k-stack"><span className="k-small">{KIND[d.kind] ?? d.kind}</span>{d.title && d.title.trim().toLowerCase() !== (KIND[d.kind] ?? "").toLowerCase() && <span className="k-note">{d.title}</span>}</span> },
+        { key: "t", header: "Date", numeric: true, cell: (d) => day(d.at) },
+        { key: "l", header: "Link", numeric: true, cell: (d) => (d.url ? <a className="link" href={safeHref(d.url)} target="_blank" rel="noopener noreferrer" title={d.title}>Open ↗</a> : "") }]} /></div>
   );
 }
 
@@ -251,12 +272,23 @@ export function DeepDivePage() {
       {v && n && (
         <>
           <Panel title="Growth and margins" info="Compound annual growth from the reported annual sales and net profit. EBITDA margin is operating profit before depreciation, interest and tax, as a share of sales.">
-            <StatRow>
-              <Growth label="Sales growth a year, last 3 years" v={n.growth.sales_cagr_3y} nm={n.growth_nm?.sales_cagr_3y} /><Growth label="Sales growth a year, last 5 years" v={n.growth.sales_cagr_5y} nm={n.growth_nm?.sales_cagr_5y} />
-              <Growth label="Profit growth a year, last 3 years" v={n.growth.profit_cagr_3y} why={lossNote(years.map((y) => y.profit), 3)} nm={n.growth_nm?.profit_cagr_3y} />
-              <Growth label="Profit growth a year, last 5 years" v={n.growth.profit_cagr_5y} why={lossNote(years.map((y) => y.profit), 5)} nm={n.growth_nm?.profit_cagr_5y} />
-              {n.growth.eps_cagr_5y != null && <Growth label="Earnings per share growth a year, last 5 years" v={n.growth.eps_cagr_5y} />}
-            </StatRow>
+            {(() => {
+              // a table: Sales, Net profit and earnings per share by the 3 and 5 years' rate a year; a reason a rate is blank is a numbered note under it
+              const notes: GrowthNote[] = [];
+              const rows = [
+                { k: "sales", name: us ? "Revenue" : "Sales", y3: growthCell("Sales, last 3 years", n.growth.sales_cagr_3y, undefined, n.growth_nm?.sales_cagr_3y, notes), y5: growthCell("Sales, last 5 years", n.growth.sales_cagr_5y, undefined, n.growth_nm?.sales_cagr_5y, notes) },
+                { k: "profit", name: "Net profit", y3: growthCell("Net profit, last 3 years", n.growth.profit_cagr_3y, lossNote(years.map((y) => y.profit), 3), n.growth_nm?.profit_cagr_3y, notes), y5: growthCell("Net profit, last 5 years", n.growth.profit_cagr_5y, lossNote(years.map((y) => y.profit), 5), n.growth_nm?.profit_cagr_5y, notes) },
+                ...(n.growth.eps_cagr_5y != null ? [{ k: "eps", name: "Earnings per share", y3: growthCell("Earnings per share, last 3 years", n.growth.eps_cagr_3y ?? null, undefined, null, notes), y5: growthCell("Earnings per share, last 5 years", n.growth.eps_cagr_5y ?? null, undefined, null, notes) }] : []),
+              ];
+              return (
+                <>
+                  <div className="dd-fit"><DataTable label="Growth a year" rows={rows} rowKey={(r) => r.k} stack={false}
+                    columns={[{ key: "n", header: "Growth a year", rowHeader: true, cell: (r) => r.name },
+                      { key: "3", header: "Last 3 years", numeric: true, cell: (r) => r.y3 }, { key: "5", header: "Last 5 years", numeric: true, cell: (r) => r.y5 }]} /></div>
+                  {notes.length > 0 && <ul className="k-note cmp-foots" data-testid="growth-notes">{notes.map((x) => <li key={x.n}><sup>{x.n}</sup> {x.text}</li>)}</ul>}
+                </>
+              );
+            })()}
             {(n.notes ?? []).map((t) => <p key={t} className="k-small k-muted inv-text">{t}</p>)}
             <div className="k-cols">
               <TrendBars points={years.map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.sales as number) / salesS.k }))} label={us ? "Revenue" : "Sales"} unit={salesS.unit} />
@@ -268,18 +300,19 @@ export function DeepDivePage() {
                 columns={[{ key: "q", header: <>Quarter <span className="k-note">({qS.unit})</span></>, rowHeader: true, cell: (q) => q.quarter },
                   { key: "s", header: "Sales", numeric: true, cell: (q) => qS.fmt(q.sales) },
                   { key: "y", header: "vs a year ago", numeric: true, cell: (q) => (q.sales_yoy == null ? "–" : <Signed value={q.sales_yoy}>{pct(q.sales_yoy)}</Signed>) },
-                  ...(n.bank && n.quarters.slice(-8).every((q) => q.opm == null) ? [] : [{ key: "o", header: n.bank ? "Financing margin" : "EBITDA margin", numeric: true, cell: (q: (typeof n.quarters)[number]) => pc(q.opm) }]),
+                  ...(n.bank && n.quarters.slice(-8).every((q) => q.opm == null) ? [] : [{ key: "o", header: n.bank ? "Financing margin" : "EBITDA margin", numeric: true, cell: (q: (typeof n.quarters)[number]) => marginText(q.opm) }]),
                   { key: "p", header: "Net profit", numeric: true, cell: (q) => qS.fmt(q.profit) }]} />
             )}
           </Panel>
 
           {v.valuation && (
             <Panel title="How it's valued" info={v.valuation.why}>
-              <StatRow>
-                <Stat label={v.valuation.name} value={v.valuation.value == null ? "–" : `${v.valuation.value.toFixed(1)}×`} />
-                {v.valuation.short !== "P/E" && <Stat label="Price to earnings" value={v.valuation.pe == null ? "–" : `${v.valuation.pe.toFixed(1)}×`} />}
-                {v.snapshot?.div_yield != null && <Stat label="Dividend yield" value={`${v.snapshot.div_yield.toFixed(2)}%`} />}
-              </StatRow>
+              <div className="dd-fit"><DataTable label="How it's valued" rows={[
+                { k: "v", name: v.valuation.name, v: v.valuation.value == null ? "–" : `${v.valuation.value.toFixed(1)}×` },
+                ...(v.valuation.short !== "P/E" ? [{ k: "pe", name: "Price to earnings", v: v.valuation.pe == null ? "–" : `${v.valuation.pe.toFixed(1)}×` }] : []),
+                ...(v.snapshot?.div_yield != null ? [{ k: "dy", name: "Dividend yield", v: `${v.snapshot.div_yield.toFixed(2)}%` }] : []),
+              ]} rowKey={(r) => r.k} stack={false}
+                columns={[{ key: "n", header: "Measure", rowHeader: true, cell: (r) => r.name }, { key: "v", header: "Value", numeric: true, cell: (r) => <b>{r.v}</b> }]} /></div>
               <p className="k-note">{v.valuation.why} A number to compare with similar companies, not a verdict on the price.</p>
             </Panel>
           )}
@@ -317,7 +350,7 @@ export function DeepDivePage() {
             <div className="k-spread">
               <div className="k-stack">
                 <h2 className="k-card-title">From the company's own documents</h2>
-                <span className="k-small k-muted">{v.reads ? `Read ${day(v.reads.at)}: ${v.reads.read.map((d) => `${KIND[d.kind] ?? "Filing"}, ${day(d.at)}`).join(" · ") || "the company profile"}` : us ? `${v.documents.filter((d) => d.kind === "annual_report").length} annual report${v.documents.filter((d) => d.kind === "annual_report").length === 1 ? "" : "s"} and ${v.documents.filter((d) => d.kind === "earnings_release").length} earnings releases filed in the last two years.`
+                <span className="k-small k-muted">{v.reads ? `Read ${day(v.reads.at)}, from the documents below.` : us ? `${v.documents.filter((d) => d.kind === "annual_report").length} annual report${v.documents.filter((d) => d.kind === "annual_report").length === 1 ? "" : "s"} and ${v.documents.filter((d) => d.kind === "earnings_release").length} earnings releases filed in the last two years.`
                   : `${v.documents.length} presentations and call transcripts found in the last two years.`}</span>
               </div>
               <div className="k-row dd-ask">
@@ -326,6 +359,8 @@ export function DeepDivePage() {
                 {reading ? "Reading… about a minute" : v.reads ? (v.reads_stale ? "Read the newest documents" : "Read again") : us ? "Read the annual report and releases" : "Read the latest presentation and calls"}</button>
               </div>
             </div>
+            {v.reads && <DocTable label="The documents the read used" docs={v.reads.read.map((d) => ({ kind: d.kind, at: d.at, title: d.title, url: v.documents.find((x) => x.at === d.at && x.kind === d.kind)?.url ?? "" }))}
+              empty="Only the company profile was read: no document was found." />}
             {v.doc_note && <p className="k-note">Filings: {v.doc_note}</p>}
             {reading && <Skeleton label={us ? "Reading the annual report (10-K) and earnings releases" : "Reading the latest investor presentation and earnings calls"} lines={3} />}
             {!v.reads && !reading && <p className="k-small k-muted">The business model, {v.industry_measures?.label ? `the ${v.industry_measures.label.toLowerCase()} measures (${v.industry_measures.measures.slice(0, 3).join(", ")}…), ` : ""}capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
@@ -336,21 +371,26 @@ export function DeepDivePage() {
             <Panel title="Business model">
               <p>{b.summary}</p>
               {b.segments.length > 0 && (
-                <div className="k-stack">
-                  {b.segments.map((s) => (
-                    <div key={s.name} className="seg-row">
-                      <div className="spread small"><b>{s.name}</b><span className="muted">{s.share_pct != null ? `${s.share_pct.toFixed(0)}% of revenue` : ""}</span></div>
-                      {s.share_pct != null && <Meter pct={s.share_pct} />}
-                      {s.what && <span className="k-note">{s.what}</span>}
-                    </div>))}
-                </div>
+                <div className="dd-fit"><DataTable label="What the business earns from" rows={b.segments} rowKey={(x) => x.name} stack={false}
+                  columns={[{ key: "n", header: "Business", rowHeader: true, cell: (x) => <b className="k-small">{x.name}</b> },
+                    { key: "s", header: "Share of revenue", numeric: true, cell: (x) => (x.share_pct != null ? <span className="dd-share"><span>{x.share_pct.toFixed(0)}%</span><Meter pct={x.share_pct} /></span> : "") },
+                    { key: "w", header: "What it is", cell: (x) => <span className="k-small">{x.what}</span> }]} /></div>
               )}
-              <div className="rs-grid">
-                {b.customers && <div className="k-stack"><b className="k-small">Customers</b><span className="k-small">{b.customers}</span></div>}
-                {b.drivers.length > 0 && <div className="k-stack"><b className="k-small">What drives revenue</b><ul className="bullets small">{b.drivers.map((x) => <li key={x}>{x}</li>)}</ul></div>}
-                {b.strengths.length > 0 && <div className="k-stack"><b className="k-small">Strengths it points to</b><ul className="bullets small">{b.strengths.map((x) => <li key={x} className="pos-dot">{x}</li>)}</ul></div>}
-                {b.risks.length > 0 && <div className="k-stack"><b className="k-small">Risks it names</b><ul className="bullets small">{b.risks.map((x) => <li key={x} className="neg-dot">{x}</li>)}</ul></div>}
-              </div>
+              {/* the rest of the read as one table too: the area on the left, its points on the right (the same grid as the company page's AI read) */}
+              {(() => {
+                const rows = [
+                  ...(b.customers ? [{ k: "c", area: "Customers", body: <span className="k-small">{b.customers}</span> }] : []),
+                  ...(b.drivers.length ? [{ k: "d", area: "What drives revenue", body: <ul className="bullets small">{b.drivers.map((x) => <li key={x}>{x}</li>)}</ul> }] : []),
+                  ...(b.strengths.length ? [{ k: "s", area: "Strengths it points to", body: <ul className="bullets small">{b.strengths.map((x) => <li key={x} className="pos-dot">{x}</li>)}</ul> }] : []),
+                  ...(b.risks.length ? [{ k: "r", area: "Risks it names", body: <ul className="bullets small">{b.risks.map((x) => <li key={x} className="neg-dot">{x}</li>)}</ul> }] : []),
+                ];
+                return rows.length ? (
+                  <div className="ai-table">
+                    <DataTable label="The business, in the company's words" rows={rows} rowKey={(r) => r.k} stack={false}
+                      columns={[{ key: "a", header: "The business", rowHeader: true, cell: (r) => <b className="k-small">{r.area}</b> }, { key: "b", header: "What the documents say", cell: (r) => r.body }]} />
+                  </div>
+                ) : null;
+              })()}
               <div className="k-row">{b.sources.map((s, i) => <SourceLink key={i} s={s} />)}</div>
             </Panel>
           )}
@@ -359,16 +399,12 @@ export function DeepDivePage() {
             <Panel title={`${b.industry ?? v.industry_measures?.label ?? "Operating"} measures, from the company`}
               info="The numbers this industry is judged on (for a hospital, revenue per occupied bed and occupancy), as the company states them in its presentation. They aren't in the financial tables.">
               {b.measures?.length ? (
-                <div className="promises">{b.measures.map((m, i) => (
-                  <div key={i} className="promise">
-                    <div className="k-spread"><span className="k-small"><b>{m.name}</b></span><b className="num">{m.value}</b></div>
-                    <div className="promise-facts k-note">
-                      {m.period && <span><span className="muted">Period</span> {m.period}</span>}
-                      {m.change && <span><span className="muted">Change</span> {m.change}</span>}
-                      <SourceLink s={m.source} />
-                    </div>
-                    {m.quote && <span className="k-note">"{m.quote}"</span>}
-                  </div>))}</div>
+                <DataTable label="Operating measures, from the company" rows={b.measures} rowKey={(m, i) => `${m.name}-${i}`} stack
+                  columns={[{ key: "n", header: "Measure", rowHeader: true, wrap: true, cell: (m) => <span className="rc-target"><b className="k-small">{m.name}</b>{m.quote && <span className="k-note rc-quote">"{m.quote}"</span>}</span> },
+                    { key: "v", header: "Value", numeric: true, cell: (m) => <b className="num">{m.value}</b> },
+                    { key: "p", header: "Period", cell: (m) => m.period ?? "–" },
+                    { key: "c", header: "Change", cell: (m) => m.change ?? "–" },
+                    { key: "s", header: "Source", cell: (m) => <SourceLink s={m.source} /> }]} />
               ) : <p className="k-small k-muted">The presentation read didn't state these: {v.industry_measures?.measures.join(", ")}.</p>}
             </Panel>
           ) : null}
@@ -376,27 +412,18 @@ export function DeepDivePage() {
           {p && (p.capex.length > 0 || p.outlook.length > 0) && (
             <Panel title="Capex and growth plans, in management's words">
               {p.capex.length > 0 && (
-                <div className="promises">{p.capex.map((c, i) => (
-                  <div key={i} className="promise">
-                    <div className="k-spread">
-                      <span className="k-small"><b>{c.what}</b></span>
-                      <span className={`badge ${c.status === "done" ? "pass" : c.status === "under way" ? "next" : "skip"}`}>{c.status}</span>
-                    </div>
-                    <div className="promise-facts k-note">
-                      {c.amount && <span><span className="muted">Amount</span> <b>{c.amount}</b></span>}
-                      {c.size && <span><span className="muted">Size</span> <b>{c.size}</b></span>}
-                      {c.timeline && <span><span className="muted">When</span> {c.timeline}</span>}
-                      <SourceLink s={c.source} />
-                    </div>
-                    {c.quote && <span className="k-note">"{c.quote}"</span>}
-                  </div>))}</div>
+                <DataTable label="Capex plans, in management's words" rows={p.capex} rowKey={(c, i) => `${c.what}-${i}`} stack
+                  columns={[{ key: "w", header: "Plan", rowHeader: true, wrap: true, cell: (c) => <span className="rc-target"><b className="k-small">{c.what}</b>{c.quote && <span className="k-note rc-quote">"{c.quote}"</span>}</span> },
+                    { key: "a", header: "Amount", numeric: true, cell: (c) => <span className="rc-said">{c.amount ? <b>{c.amount}</b> : "–"}{c.size && <span className="k-note">{c.size}</span>}</span> },
+                    { key: "t", header: "When", cell: (c) => c.timeline ?? "–" },
+                    { key: "s", header: "Status", cell: (c) => <span className={`badge ${c.status === "done" ? "pass" : c.status === "under way" ? "next" : "skip"}`}>{c.status}</span> },
+                    { key: "r", header: "Source", cell: (c) => <SourceLink s={c.source} /> }]} />
               )}
               {p.outlook.length > 0 && (
-                <div className="k-stack">
-                  <b className="k-small">Outlook</b>
-                  {p.outlook.map((o, i) => (
-                    <div key={i} className="quote-row"><span className="k-small">{o.statement} <span className="k-note">({saidOn(o.source?.at, day)})</span></span>{o.quote && <span className="k-note">"{o.quote}"</span>}<SourceLink s={o.source} /></div>))}
-                </div>
+                <DataTable label="Outlook, in management's words" rows={p.outlook} rowKey={(o, i) => `${o.statement}-${i}`} stack
+                  columns={[{ key: "o", header: "Outlook", rowHeader: true, wrap: true, cell: (o) => <span className="rc-target"><span className="k-small">{o.statement}</span>{o.quote && <span className="k-note rc-quote">"{o.quote}"</span>}</span> },
+                    { key: "d", header: "When", cell: (o) => saidOn(o.source?.at, day) },
+                    { key: "s", header: "Source", cell: (o) => <SourceLink s={o.source} /> }]} />
               )}
             </Panel>
           )}
@@ -426,10 +453,7 @@ export function DeepDivePage() {
 
           {v.documents.length > 0 && (
             <Panel title="Documents">
-              <div className="filings">{v.documents.map((d) => (
-                <div key={d.url} className="filing"><span className="k-note">{day(d.at)}</span>
-                  <div className="k-stack"><span className="k-small">{d.title}</span><span className="k-note">{KIND[d.kind] ?? d.kind}</span></div>
-                  <a className="link tiny" href={safeHref(d.url)} target="_blank" rel="noopener noreferrer">Open ↗</a></div>))}</div>
+              <DocTable label="Documents" docs={v.documents} />
             </Panel>
           )}
           <p className="k-note inv-text">Numbers are the company's reported figures{n.capex_reported ? "" : "; capex and free cash flow are estimated from them"}.{us ? " Ratios that need a price (market value, P/E, dividend yield) use the latest share price and the share count on the company's latest report." : ""}

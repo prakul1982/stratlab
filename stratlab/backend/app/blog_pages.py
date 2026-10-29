@@ -33,6 +33,9 @@ admin_router = APIRouter(tags=["admin"])
 # feed is read by programs that poll it, so it stays at ten minutes.
 CACHE = sp.CACHE_CONTROL
 FEED_CACHE = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
+# LIVE1B-082: the lists of posts change every trading day (a new brief), so the site's cache keeps them minutes, not the day a post's page is kept: a
+# brief in the sitemap and the feed was missing from /blog and /blog/briefs for as long as the old list was held
+LIST_CACHE = "public, max-age=60, s-maxage=600, stale-while-revalidate=600"
 FACTS = "Facts, not advice. Data and method for research and education; not investment advice or a recommendation about any security."
 KIND_NAME = {"brief": "Market brief", "research": "Research"}
 TITLES = {None: ("StratLab blog: daily market briefs and research from market data",
@@ -86,6 +89,17 @@ article details.how{margin:22px 0 8px}article details.how ul{margin:4px 0 8px}
 .btbl.wide.w4 tr{grid-template-columns:repeat(4,minmax(0,1fr))}
 /* VR6-019: in a card, a figure sits at the foot of its cell, so a label that wraps to three lines does not leave the figure beside it higher than the others */
 .btbl.wide td{display:flex;flex-direction:column;justify-content:flex-end}.kpis li:last-child:nth-child(odd){grid-column:1/-1}}
+/* VR7-002: a market's section is a fold. A window over 640px draws it open, as the plain heading and table it was (a browser without ::details-content
+   draws it closed and a tap opens it); a phone shows the ten markets as ten lines, one opens at a time, and every figure stays in the page */
+@media (min-width:641px){details.mk::details-content{content-visibility:visible}details.mk>summary{display:block;pointer-events:none;cursor:default;list-style:none}details.mk>summary::-webkit-details-marker{display:none}details.mk>summary .n{display:none}}
+@media (max-width:640px){details.mk{margin:10px 0;background:var(--card);border:1px solid var(--line);border-radius:12px}
+details.mk>summary{display:flex;align-items:center;gap:10px;min-height:56px;padding:6px 14px;cursor:pointer;list-style:none}details.mk>summary::-webkit-details-marker{display:none}
+details.mk>summary h2{margin:0;font-size:18px;flex:1}details.mk>summary .n{font-size:13px;color:var(--muted)}
+details.mk>summary::before{content:"";flex:none;width:9px;height:9px;margin-left:2px;border-right:2px solid var(--blue);border-bottom:2px solid var(--blue);transform:rotate(-45deg);transition:transform .15s}details.mk[open]>summary::before{transform:rotate(45deg)}
+details.mk>summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:12px}
+/* VR7-005: a rule set's name in a card and the crumb links ("Blog", "Research") were 17px tall to tap: 45px by padding with a negative margin, so no line moves */
+.btbl.wide th[scope=row] a{display:inline-block;padding:14px 0;margin:-14px 0}article>p>a:only-child{display:inline-block;padding:14px 0;margin:-14px 0}.blog-eyebrow a{display:inline-block;padding:14px 4px;margin:-14px -4px}
+details.mk>p{margin:0;padding:0 14px 6px}details.mk .btbl{margin:0;border:0;border-top:1px solid var(--line);border-radius:0 0 12px 12px}}
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.tabs a{display:inline-flex;align-items:center;min-height:44px;padding:4px 16px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink-2);background:var(--card)}
 .tabs a[aria-current=page]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
 ul.posts{list-style:none;padding:0;margin:0}ul.posts li{margin:12px 0}
@@ -206,7 +220,7 @@ def list_page(kind: str | None, page: int) -> HTMLResponse:
             + _tabs(kind) + (f'<ul class="posts">{cards}</ul>' if cards else '<p class="muted">No posts yet. The first market brief is written after the next close.</p>')
             + pager)
     head = sp._head(title, desc, canonical, f"{_feed_link()}{rel}{ld}<style>{STYLE}</style>")
-    return _html(sp._page(head, None, body))
+    return _html(sp._page(head, None, body), headers={"Cache-Control": LIST_CACHE})
 
 
 # ---------- one post ----------
@@ -347,6 +361,23 @@ def admin_blog_research(_=Depends(admin.admin_profile)):
         return ok({"started": False, "running": True})
     threading.Thread(target=blog_research.generate, daemon=True, name="blog-research").start()
     return ok({"started": True, "running": True})
+
+
+class ThemeDraft(BaseModel):
+    q: str
+    region: str = "IN"
+
+
+@admin_router.post("/admin/blog/theme")
+def admin_blog_theme(req: ThemeDraft, profile=Depends(admin.admin_profile)):
+    """Draft a research post from a theme's deep dive when its data shows something notable (a layer's margin far from the others', or a big
+    move over three years). The post is stored hidden: the owner reads it in the list above and publishes it by hand. Nothing is published here."""
+    from .intel import routes as R, theme_routes
+    r, theme, m, _ = R.sector_map(profile, req.region, req.q, False)
+    m = theme_routes.checked(r, theme, m)
+    from .intel import theme_data
+    dive = theme_data.build(r, theme, m, theme_routes.sources(r, theme))
+    return ok(blog_research.draft_theme_post(dive, theme, r))
 
 
 @admin_router.post("/admin/blog/briefs")

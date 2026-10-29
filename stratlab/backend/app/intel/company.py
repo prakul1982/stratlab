@@ -220,6 +220,11 @@ def _of(item: dict, period: str | None, more: str | None = None) -> dict:
     return {**item, "period": period, "note": item.get("note") or (f"{period}. {more}" if more else period)}
 
 
+def _pe_item(item: dict, why: str | None) -> dict:
+    """A P/E the figures don't settle (screener.checked_pe) shows no number and says why in a line, as the public page does (LIVE2-025)."""
+    return {**item, "note": f"Not shown: {why[:1].lower() + why[1:]}."} if why and item.get("value") is None else item
+
+
 def _nm(item: dict, nm: dict | None, unit_word: str = "₹") -> dict:
     """A growth rate off a tiny base as "n/m", with the base it starts from (DD-018), else the item as it is."""
     if not nm:
@@ -370,11 +375,13 @@ def at_live_price(s: dict, live: float | None, symbol: str | None = None, since=
     return out
 
 
-def with_dividend_yield(c: dict, divs: list[dict], today: str) -> dict:
+def with_dividend_yield(c: dict, divs: list[dict], today: str, listed: bool = False) -> dict:
     """The page's dividend yield as the dividends a share with an ex-date in the last twelve months (the corporate
     actions on the same page) over the price, saying what it includes: a special dividend is counted and named, with
     the yield without it beside (TCS, 8 Oct 2026: 3.1% shown beside "Rs111 a share in the last 12 months", the Rs46
-    special left out without a word). Without those dividends the source's figure stays, labelled as its own."""
+    special left out without a word). Without those dividends the source's figure stays, labelled as its own, unless the
+    company's dividends list was read (`listed`, India) and holds none in the year: that is a real 0%, as its public page and
+    its deep dive say (RC7-006: the page kept the source's 1.0% beside their 0.00%)."""
     price = num(((c.get("quote") or {}).get("price")))
     from datetime import date, timedelta
     from ..stock_pages import restated_by, restating_actions
@@ -383,6 +390,11 @@ def with_dividend_yield(c: dict, divs: list[dict], today: str) -> dict:
     except ValueError:
         return c
     rows = [d for d in divs or [] if d.get("kind") == "dividend" and num(d.get("amount")) and year_ago < str(d.get("ex_date")) <= today]
+    if not rows and listed and price and c.get("region", "IN") == "IN":
+        out = _set_metric(c, "Div yield", 0.0, "No dividend with an ex-date in the last 12 months")
+        if isinstance(out.get("summary"), dict):
+            out["summary"] = {**out["summary"], "div_yield": 0.0}
+        return out
     if not rows or not price:
         what = "From the last reported year's dividends" if c.get("region", "IN") == "IN" else "From the company's stated yearly dividend"
         note = what if any(i["label"] == "Div yield" for g in c.get("metrics") or [] for i in g["items"]) else None
@@ -710,12 +722,8 @@ def against_issue(q: dict, issue) -> dict:
 def balance_before(scr: dict | None, day: str) -> bool:
     """Whether the latest balance sheet column ("Mar 2026") ends before `day`: its share capital then predates a listing
     on that day, and the shares issued in the IPO aren't in it (DD-011)."""
-    cols = ((scr or {}).get("balance") or {}).get("cols") or []
-    try:
-        d = datetime.strptime(str(cols[-1]).strip(), "%b %Y").date()
-    except (IndexError, ValueError):
-        return False
-    return d.isoformat()[:7] < day[:7]
+    from .screener import balance_ends_before
+    return balance_ends_before(scr, day)
 
 
 def reported_quarters(rows: list[dict], today: str, n: int = 4) -> list[dict]:
@@ -919,7 +927,51 @@ class Research:
     # ---------- charts ----------
     def chart(self, region: str, symbol: str, rng: str = "1y", tf: str = "1d", before: str = "") -> dict:
         """Candles for the price chart: a range of daily ones, a recent window of intraday ones, or (with
-        `before`) the page of older candles before a time. `more` says whether older candles exist."""
+        `before`) the page of older candles before a time. `more` says whether older candles exist. `live` and `delayed`
+        say how current the newest candle is: the broker's are live; the other source's are delayed (MW-1)."""
+        got = self._chart(region, symbol, rng, tf, before)
+        kite_on = region == "IN" and got.get("source") == "Kite"
+        return {**got, "live": kite_on, "delayed": not kite_on}
+
+    def _chart(self, region: str, symbol: str, rng: str, tf: str, before: str) -> dict:
+        """The candles of one timeframe: the broker's for an Indian stock or index while its login is on, else the other
+        source's. 3m, 10m, 30m, 2h, 4h, 1W and 1M are built from smaller candles on the exchange's session clock; 1m comes
+        in blocks the broker's reads share (KiteService.history_range)."""
+        from .. import bar_agg, chart_feed
+        from ..chart_data import parse_before
+        from ..us_ticker import canon
+        base = bar_agg.base_of(tf)
+        if tf == "1m" or base == "1m":
+            return self._chart_minutes(region, canon(region, symbol), tf, parse_before(before))
+        if base != tf:
+            got = self._chart_native(region, symbol, rng, base, before)
+            return {**got, "tf": tf, "candles": chart_feed.build(got["candles"], region, tf, None, bool(got.get("more")))}
+        return self._chart_native(region, symbol, rng, tf, before)
+
+    def _chart_minutes(self, region: str, symbol: str, tf: str, until) -> dict:
+        """1-minute (and 3-minute) candles of a company or index: the broker's blocks for an Indian one while its login is
+        on, else a week of them from the other source (delayed)."""
+        from .. import chart_feed
+        inst = None
+        if region == "IN" and self._kite():
+            inst = self._kite_index(symbol) if symbol in KITE_INDEX else self.kite.equity(symbol) or self.kite.by_symbol(symbol)
+        kind = "kite" if inst else "delayed"
+        start, end, more = chart_feed.minute_window(tf, kind, until)
+        if inst:
+            try:
+                raw = self.kite.history_range(inst["token"], "1m", start, end)
+                return {"currency": "INR", "source": "Kite", "tf": tf, "more": more,
+                        "candles": chart_feed.build(raw, region, tf, until, more)}
+            except Exception:
+                kind = "delayed"
+                start, end, more = chart_feed.minute_window(tf, kind, until)
+        ysym = _yahoo_in(symbol) if region == "IN" and not symbol.startswith("^") else symbol
+        c = self.yahoo._chart(ysym, "1m", chart_feed.MINUTE_REACH["delayed"], "1m", 60)
+        raw = chart_feed.between(c["candles"], start, end)
+        return {"currency": c["meta"].get("currency") or ("INR" if region == "IN" else "USD"), "source": "Yahoo Finance",
+                "tf": tf, "more": more, "candles": chart_feed.build(raw, region, tf, until, more)}
+
+    def _chart_native(self, region: str, symbol: str, rng: str, tf: str, before: str) -> dict:
         from ..chart_data import older, parse_before, window
         from ..us_ticker import canon
         symbol = canon(region, symbol)                   # BRK.B's candles are BRK-B's (R13-001)
@@ -1360,7 +1412,7 @@ class Research:
                 listed_on = None                     # an older share that didn't trade early in the year, not a new one
         elif listing and listing.get("first_trade"):
             listed_on = listing["first_trade"] if listing_day([{"t": listing["first_trade"]}]) else None
-        s = scr_summary(scr) if scr else {}
+        s = scr_summary(scr, listed_on) if scr else {}
         if listed_on and scr and balance_before(scr, listed_on):
             # the balance sheet's share count is from before the IPO: the source's own market value, on the shares in issue
             # now, stands (DD-011: TONBO ₹6,236 cr on the pre-IPO count against ₹6,495 cr)
@@ -1480,7 +1532,7 @@ class Research:
             "quote": quote, "range52": {"low": lo52, "high": hi52, **({"since": listed_on} if listed_on else {})},
             "margins": None,
             "metrics": _groups(
-                ("Valuation", [_of(_item("P/E", s.get("pe")), pe_of, lifted), _of(_item("P/B", s.get("pb")), f"Book value as of {s['book_as_of']}" if s.get("book_as_of") else None),
+                ("Valuation", [_pe_item(_of(_item("P/E", s.get("pe")), pe_of, lifted), s.get("pe_why")), _of(_item("P/B", s.get("pb")), f"Book value as of {s['book_as_of']}" if s.get("book_as_of") else None),
                                _item("Div yield", s.get("div_yield"), "%"), _of(_item("Book value", s.get("book_value"), "money"), f"as of {s['book_as_of']}" if s.get("book_as_of") else None),
                                _item("Face value", s.get("face_value"), "money")]),
                 # a bank's or lender's "operating profit" is after interest paid, so an EBITDA margin (ICICIBANK -20.0%)

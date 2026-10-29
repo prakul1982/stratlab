@@ -34,6 +34,7 @@ MAX_BLOCKS = 80
 MAX_ROWS = 150
 
 MINUS = "−"
+BRIEF_GEN = 2                           # the version of the words and tables a brief post is written with (O5: tables); bump it and the stored posts are written again from their issues
 MAIN_INDEX = {"IN": "NIFTY 50", "US": "S&P 500"}
 # the rotation chart and the closing-price pages the posts point to (the app's own addresses)
 ROTATION_PATH = {"IN": "/research/rotation?region=IN", "US": "/research/rotation?region=US"}
@@ -159,7 +160,7 @@ def _row(post: dict) -> dict:
         raise ValueError("a post needs a title and a summary")
     at = str(post.get("published_at") or now_iso())
     return {"slug": slug, "kind": post["kind"], "market": post.get("market") if post.get("market") in MARKET_NAME else None,
-            "title": title, "summary": summary, "body": {"v": 1, "blocks": clean_blocks(post.get("blocks") or [])},
+            "title": title, "summary": summary, "body": {"v": 1, "blocks": clean_blocks(post.get("blocks") or []), **({"gen": int(post["gen"])} if post.get("gen") else {})},
             "published_at": at, "updated_at": str(post.get("updated_at") or at), "indexable": bool(post.get("indexable", True)),
             "published": bool(post.get("published", True)), "day": post.get("day")}
 
@@ -244,6 +245,13 @@ def clean_blocks(blocks: list) -> list[dict]:
                     for r in (b.get("rows") or [])[:MAX_ROWS] if isinstance(r, dict) and clean_text(r.get("label"), 40)]
             if len(series) >= 2 and rows:
                 out.append({"t": "bars", "caption": clean_text(b.get("caption"), 200), "series": series, "rows": rows})
+        elif t == "fold":
+            # VR7-002: a section that a phone folds (the strategy post's ten market tables were 10,000px of cards on a phone): a heading, one
+            # small note beside it ("10 tests") and the blocks inside; a desktop shows it open, as the plain heading and blocks it was
+            title = clean_text(b.get("title"), 80)
+            inner = [x for x in clean_blocks(b.get("blocks") or []) if x["t"] != "fold"]
+            if title and inner:
+                out.append({"t": "fold", "title": title, "note": clean_text(b.get("note"), 40), "blocks": inner})
         elif t == "details":
             title = clean_text(b.get("title"), 120)
             items = [x for x in (_inline(i) for i in (b.get("items") or [])[:MAX_ROWS]) if x]
@@ -313,6 +321,9 @@ def blocks_html(blocks: list) -> str:
                 rows += f'<li><span class="k">{_esc(r["label"])}</span><span class="track" role="img" aria-label="{_esc(r["label"])}: {_esc(said)}">{segs}</span><span class="n">{nums}</span></li>'
             cap = f'<figcaption>{_esc(b["caption"])}</figcaption>' if b.get("caption") else ""
             out.append(f'<figure class="hbars">{cap}<p class="key">{legend}</p><ul>{rows}</ul></figure>')
+        elif t == "fold":
+            note = f'<span class="n">{_esc(b["note"])}</span>' if b.get("note") else ""
+            out.append(f'<details class="mk"><summary><h2>{_esc(b["title"])}</h2>{note}</summary>{blocks_html(b["blocks"])}</details>')
         elif t == "details":
             out.append(f'<details class="how card" {"data-words" if b.get("words") else "data-method"}><summary>{_esc(b["title"])}</summary><ul class="small">'
                        + "".join(f"<li>{inline_html(i)}</li>" for i in b["items"]) + "</ul></details>")
@@ -329,6 +340,8 @@ def plain_text(blocks: list) -> str:
         return str(v)
     parts = []
     for b in blocks:
+        if b.get("t") == "fold":
+            parts += [str(b.get("title") or ""), str(b.get("note") or ""), plain_text(b.get("blocks") or [])]
         for k in ("text", "caption"):
             if b.get(k):
                 parts.append(flat(b[k]))
@@ -457,43 +470,99 @@ def brief_post(issue: dict, now: datetime | None = None) -> dict | None:
             summary = f"{long_day(day)}: " + ", ".join(bits) + ". Facts, not advice."
         else:
             summary = f"The {name} market brief for {long_day(day)}."
-        # VR6-005: one line of words, then each index as a tile (its close big, its change under it): the paragraph of sentences said every
-        # figure once, then the table said it again
+        # O5: every section that lists figures is a table, the app's, the email's and the PDF's own (newsletter/tables.py), written from
+        # the issue's stored sections
         blocks.append({"t": "p", "text": f"The {name} market on {long_day(day)}, from the day's closing figures."})
-        if indices:
-            blocks += [{"t": "h2", "text": "Index closes"},
-                       {"t": "stats", "items": [{"v": level(i["price"], region), "l": i["name"],
-                                                 "s": f"{pct(i['change_pct'])} on the day" if isinstance(i.get("change_pct"), (int, float)) else ""}
-                                                for i in indices[:6]]}]
-        rot = _section(issue, "Sector rotation")
-        if rot and rot.get("items"):
+        tabs = _brief_tables(issue)
+        idx = next((t for t in tabs if t["title"] == "Indices"), None)
+        if idx:
+            blocks += [{"t": "h2", "text": "Index closes"}, _table_block(idx, region)]
+        rot = next((t for t in tabs if t["title"] == "Sector rotation"), None)
+        if rot:
             blocks += [{"t": "h2", "text": "Sector rotation"},
                        {"t": "p", "text": "The rotation chart places each sector in one of four quadrants (leading, weakening, lagging, improving) "
                                           "from its strength against the market and the direction it is moving, on weekly candles. These sectors "
                                           "moved to another quadrant since the session before."},
-                       {"t": "ul", "items": [str(it.get("text") or "") for it in rot["items"]]},
+                       _table_block(rot, region),
                        {"t": "p", "text": [{"a": "Open the rotation chart", "href": ROTATION_PATH[region]}, "."]}]
-        both, only = _section(issue, "Newly matched Stage 2"), _section(issue, "Newly in Stage 2")
-        if (both and both.get("items")) or (only and only.get("items")):
+        both, only = (next((t for t in tabs if t["title"].startswith(p)), None) for p in ("Newly matched Stage 2", "Newly in Stage 2"))
+        if both or only:
             group = re.search(r"\(([^)]+)\)\s*$", str((both or only).get("title") or ""))
             blocks += [{"t": "h2", "text": "Stocks newly matching a price rule"},
                        {"t": "p", "text": "A stock is in Stage 2 when its price is above a rising 150-day average. The Supertrend (10, 3) is a "
                                           "trend line built from the average true range. This is a screen of price history"
                                           + (f" over {group.group(1)}" if group else "")
                                           + ", not a view on any company."}]
-            if both and both.get("items"):
-                blocks += [{"t": "h3", "text": "Stage 2 with the price above its Supertrend, newly on the day"}, {"t": "ul", "items": _stocks(region, both)}]
-            if only and only.get("items"):
-                blocks += [{"t": "h3", "text": "Newly in Stage 2, Supertrend not up"}, {"t": "ul", "items": _stocks(region, only)}]
+            if both:
+                blocks += [{"t": "h3", "text": "Stage 2 with the price above its Supertrend, newly on the day"}, _table_block(both, region)]
+            if only:
+                blocks += [{"t": "h3", "text": "Newly in Stage 2, Supertrend not up"}, _table_block(only, region)]
         shut = _section(issue, "Market holiday")
         if shut and shut.get("items"):
             blocks += [{"t": "h2", "text": "Market holiday ahead"}, {"t": "p", "text": str(shut["items"][0].get("text") or "")}]
+    # (LIVE2-009: only what this brief has is described: the US brief is the index closes alone, with no rotation and no stock list)
+    has = [t["title"] for t in (_brief_tables(issue) if open_day else [])]
+    parts = ["A change on the day is measured from the previous session's close."]
+    if "Sector rotation" in has:
+        parts.append("Sector rotation uses weekly candles.")
+    if any(t.startswith(("Newly matched Stage 2", "Newly in Stage 2")) for t in has):
+        parts.append("A stock is listed when it newly meets the stated price rule.")
     blocks += [{"t": "details", "title": "How this brief is made", "items": [f"It is built by StratLab's own jobs after the {name} close, from the exchange's daily closing figures. "
-                                  "A change on the day is measured from the previous session's close. Sector rotation uses weekly candles; "
-                                  "a stock is listed when it newly meets the stated price rule. Nothing here comes from any user's account, "
-                                  "and nothing in it is a view on what prices will do."]}]
+                                  + " ".join(parts) + " Nothing here comes from any user's account, and nothing in it is a view on what prices will do."]}]
     return {"slug": brief_slug(region, iso), "kind": "brief", "market": region, "title": title, "summary": summary, "blocks": blocks,
-            "day": iso, "published_at": now_iso(now), "indexable": bool(open_day and lead)}
+            "day": iso, "published_at": now_iso(now), "indexable": bool(open_day and lead), "gen": BRIEF_GEN}
+
+
+def _brief_tables(issue: dict) -> list[dict]:
+    """The issue's sections as tables; an issue with index figures but no Indices section gets that table from the figures."""
+    from .newsletter import tables, write
+    sections = [s for s in issue.get("sections") or [] if isinstance(s, dict)]
+    if issue.get("indices") and not any(s.get("title") == "Indices" for s in sections):
+        sections = write.market_sections({"region": issue.get("region"), "weekly": False, "indices": issue["indices"]})[:1] + sections
+    return [t for t in tables.of({**issue, "sections": sections}) if t["kind"] == "table"]
+
+
+def _table_block(t: dict, region: str) -> dict:
+    """A brief table as a post's table block: a stock links to its company page on this site (when it has one), a change keeps its
+    arrow and sign, and no link leaves the site."""
+    from .newsletter import tables
+
+    def cell(c):
+        if not isinstance(c, dict):
+            return str(c or "")
+        text = tables.plain({**c, "href": None}) if not c.get("href") else str(c.get("t") or "")
+        href = c.get("href")
+        m = re.search(r"/research/(IN|US)/([^/?#]+)$", str(href or ""))
+        path = company_path(m.group(1), m.group(2)) if m else None
+        return [{"a": text, "href": path}] if path and text else text
+    return {"t": "table", "head": list(t["head"]), "rows": [[cell(c) for c in r] for r in t["rows"]], "align": t["align"]}
+
+
+def refresh_briefs(issues: list[dict]) -> dict:
+    """Brief posts written before BRIEF_GEN (or with no version), written again from their stored issues: the words and tables follow
+    the current rules (LIVE2-029: a fix to how a brief is written reached only the days after it, since a day's post was stored once).
+    A post keeps its first date and whether an admin hid it. {"updated", "added", "same"}."""
+    out = {"updated": 0, "added": 0, "same": 0}
+    for issue in issues:
+        try:
+            at = datetime.fromisoformat(str(issue.get("at"))) if issue.get("at") else None
+        except ValueError:
+            at = None
+        post = brief_post(issue, at)
+        if not post:
+            continue
+        old = get(post["slug"])
+        if not old:
+            out["added" if add_once(post) else "same"] += 1
+            continue
+        if int((old.get("body") or {}).get("gen") or 0) >= BRIEF_GEN:
+            out["same"] += 1
+            continue
+        row = _row(post)
+        _t().update({"title": row["title"], "summary": row["summary"], "body": row["body"], "indexable": row["indexable"],
+                     "updated_at": now_iso()}).eq("slug", row["slug"]).execute()
+        out["updated"] += 1
+    return out
 
 
 def backfill(issues: list[dict]) -> dict:

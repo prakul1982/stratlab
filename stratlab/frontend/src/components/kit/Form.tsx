@@ -4,16 +4,20 @@ import { useNoOrphan } from "../../lib/noOrphan";
 
 /** A form as a grid: columns of at least 190px that wrap to the width, every box on one baseline. Fields go in, then
  * one FormActions row with the main button. */
-export function FormGrid({ onSubmit, children, label, pair, trio, inline }: { onSubmit?: (e: FormEvent<HTMLFormElement>) => void; children: ReactNode; label?: string;
+export function FormGrid({ onSubmit, children, label, pair, trio, inline, quad, noValidate }: { onSubmit?: (e: FormEvent<HTMLFormElement>) => void; children: ReactNode; label?: string;
+  /** The page checks its boxes itself and says what is wrong under each, in the app's own words, instead of the browser's bubble (LIVE1B-066). */
+  noValidate?: boolean;
   /** Two boxes that belong side by side (two companies to compare): each takes half the row, not a narrow column. */
   pair?: boolean;
   /** A form of a few switches and boxes (the tax report's inputs): at most three equal columns, two on a tablet, one on a
    * phone, so switches and boxes line up in rows instead of spreading over five or six narrow columns (MO-3a). */
   trio?: boolean;
   /** One box and its button in one row (a level and "Add alert"), the button level with the box: not a box in a corner of a wide card (VR1-112). */
-  inline?: boolean }) {
+  inline?: boolean;
+  /** A settings form of many small boxes: four equal columns (two on a tablet, one on a phone), every row full but the last (LIVE1A-018: rows of 5, 3 and 1). */
+  quad?: boolean }) {
   const ref = useNoOrphan<HTMLFormElement>();      // five boxes in four columns would leave one alone on a second line (UI-FIX-1, R9)
-  return <form className={`k-form${pair ? " k-form-pair" : ""}${trio ? " k-form-trio" : ""}${inline ? " k-form-inline" : ""}`} ref={ref} onSubmit={onSubmit} aria-label={label}>{children}</form>;
+  return <form className={`k-form${pair ? " k-form-pair" : ""}${trio ? " k-form-trio" : ""}${inline ? " k-form-inline" : ""}${quad ? " k-form-quad" : ""}`} ref={ref} onSubmit={onSubmit} aria-label={label} noValidate={noValidate}>{children}</form>;
 }
 
 /** What a Field hands its own control so a screen reader says what is wrong with it, as it does for a plain box. */
@@ -90,12 +94,21 @@ export function FieldGroup({ label, info, infoLabel, wide, quietLabel, children 
 /** A dropdown for a short fixed list that is not worth tiles (a financial year, how often): the kit's input look with
  * a chevron. Put it in a Field (`{(id) => <Select id={id} .../>}`) so its label points at it. `small` for a table cell. */
 export function Select({ id, value, onChange, options, label, disabled, small }: {
-  id?: string; value: string | number; onChange: (v: string) => void; options: { value: string | number; label: string; disabled?: boolean }[];
+  id?: string; value: string | number; onChange: (v: string) => void;
+  /** `group` puts neighbouring options under one heading (a long list is read in parts: LIVE1A-041, 21 alert kinds in one flat list). */
+  options: { value: string | number; label: string; disabled?: boolean; group?: string }[];
   label?: string; disabled?: boolean; small?: boolean;
 }) {
+  const opt = (o: (typeof options)[number]) => <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>;
+  // runs of options with the same group sit in one optgroup; options with none stay loose
+  const runs: { group?: string; items: typeof options }[] = [];
+  for (const o of options) {
+    const last = runs[runs.length - 1];
+    if (last && last.group === o.group) last.items.push(o); else runs.push({ group: o.group, items: [o] });
+  }
   return (
     <select id={id} className={`k-input${small ? " sm" : ""}`} value={value} aria-label={label} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
-      {options.map((o) => <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>)}
+      {runs.map((r, i) => (r.group ? <optgroup key={`${r.group}${i}`} label={r.group}>{r.items.map(opt)}</optgroup> : r.items.map(opt)))}
     </select>
   );
 }

@@ -104,7 +104,7 @@ test("DI-006: the layout is kept on the account", () => {
 test("DI-007: the holdings tile says the prices are missing when the buy prices are there", () => {
   const src = read("src/pages/SpaceHomes.tsx");
   assert.match(src, /if \(t\.priced === 0 && noCost < t\.count\) return "Needs today's prices, not in yet";/);
-  assert.match(src, /missing=\{gainMissing\(h\.totals\)\}/);
+  assert.match(src, /<span className="k-muted">\{gainMissing\(h\.totals\)\}<\/span>/);          // in the totals table the gain's cell says why it is missing (RES-1)
 });
 
 test("DI-009: a results day reads the same whichever calendar it came from, and the rest are counted", () => {
@@ -120,7 +120,7 @@ test("DI-010, DI-011, DI-012: the markets' period and colours in words, India's 
   assert.match(mine, /" in India" : ""/);
   assert.match(mine, /whole\.length >= 3 \? <Spark/);
   assert.match(mine, /<label className="k-check"><input type="checkbox"/);
-  assert.ok(mine.indexOf("<CustomisePanel") < mine.indexOf("<PromoCountdown /><FirstSteps />"), "Customise opens above the first steps");
+  assert.ok(mine.indexOf("<CustomisePanel") < mine.indexOf("<PromoCountdown /><FirstSteps compact />"), "Customise opens above the first steps");
   assert.match(read("src/styles.css"), /\.mine-slot \.k-state \{ border: 0;/);
 });
 
@@ -181,7 +181,7 @@ test("DI-021, DI-023: the phone's top button and the tour follow the space; on a
   const tour = read("src/components/Tour.tsx");
   assert.match(tour, /`\.topbar \[aria-label='\$\{main\}'\]`/);
   assert.match(tour, /\{ title: "Four spaces", at: \[".sidebar .space-switch"\], menu: true,/);
-  assert.match(tour, /Dark mode is in Settings → Experience\./);
+  assert.match(tour, /Dark mode is in Settings, under Experience\./);          // LIVE1B-045: and "Take the tour" is in the account menu
   assert.doesNotMatch(tour, /your name at the bottom opens your plan, settings and dark mode/);
 });
 

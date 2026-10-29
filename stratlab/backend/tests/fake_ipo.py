@@ -165,6 +165,14 @@ def seed(today: date | None = None):
         open_row,
         {**base, "id": "in-mksons", "name": "M. K. Sons Fine Jewels Limited", "symbol": "MKSONS", "nkey": "mksons", "open": d(3), "close": d(5), "low": 153.0, "high": 162.0,
          "lot": 91, "size_shares": 17000000, "fresh": 13600000, "ofs": 3400000, "docs": rhp("MKSONS"), "detail_at": f"{today}T05:00:00+00:00"},
+        # a closed issue whose offer document is a full red herring prospectus (the second saved real document): every table of the issue page
+        {**base, "id": "in-sfctech", "name": "SFC Environmental Technologies Limited", "symbol": "SFCTECH", "nkey": "sfcenvironmental", "open": d(-5), "close": d(-2), "low": 281.0, "high": 296.0,
+         "lot": 50, "face_value": 10.0, "fresh_cr": 400.0, "ofs_cr": 268.0, "size_shares": 22600000, "isin": "INE0SFC01017", "industry": "Waste Management", "issue_type": "Book Building",
+         "docs": rhp("SFCTECH"), "sub": {"rows": [{"label": "Total", "sr": "total", "offered": 22600000, "bid": 94000000, "times": 4.16}], "times": 4.16, "as_of": f"{d(-2)} 19:00"},
+         "detail_at": f"{today}T05:00:00+00:00"},
+        # an issue the exchange's bid table counts without the anchor portion: the whole issue is fresh shares at the top of the band
+        {**base, "id": "in-blspoly", "name": "BLS Polymers Limited", "symbol": "BLSPOLY", "nkey": "blspolymers", "open": d(7), "close": d(9), "low": 142.0, "high": 150.0, "lot": 100,
+         "fresh": 17000000, "size_shares": 11900000, "issue_text": "The issue includes a reservation for anchor investors of 5,100,000 equity shares"},
         {**base, "id": "in-bse-4907", "name": "Wiscon Industries Limited", "symbol": None, "series": None, "segment": "sme", "exchanges": ["BSE"], "nkey": "wiscon", "open": d(4), "close": d(6),
          "low": 194.0, "high": 204.0, "size_shares": 5392200, "bse_code": "4907"},
         {**base, "id": "in-bse-4902", "name": "Core4 Engineers Limited", "symbol": None, "series": None, "segment": "sme", "exchanges": ["BSE"], "nkey": "core4", "open": d(-6), "close": d(-3),
@@ -202,20 +210,22 @@ def seed(today: date | None = None):
     ipo.save("IN", rows_in, {"problems": []}, as_of=f"{today}T05:00:00+00:00")
     ipo.save("US", rows_us, {"problems": []}, as_of=f"{today}T05:00:00+00:00")
     # the facts and a summary of two real documents: the Indian one is Bonfiglioli's red herring prospectus, the US one Iambic's
-    pages = pages_of("bonfig_rhp")
-    for row in (open_row,):
+    def keep(row, doc_pages, items):
         doc = ipo.doc_to_read(row)
-        db.set_setting(D.FACTS_KEY + ipo.doc_key(doc), json.dumps({
-            "kind": "RHP", "url": doc["url"], "pages_read": len(pages), "promoters": D.promoters(pages), "selling": D.selling_holders(pages), "objects": D.objects(pages),
-            "financials": D.financials(pages), "reader": D.READER, "read_at": f"{today}T05:00:00+00:00", "excerpt": D.india_excerpt(pages)}, ensure_ascii=False))
-        q = "OUR PROMOTERS: SONIA BONFIGLIOLI, LUCIANO BONFIGLIOLI, LUISA LUSARDI, BON-FI S.R.L., AND BONFIGLIOLI S.P.A."
-        db.set_setting(D.SUM_KEY + ipo.doc_key(doc), json.dumps({
-            "reader": D.SUMMARY_READER, "at": f"{today}T05:00:00+00:00", "doc": doc["url"], "problem": None,
-            "items": {"business": {"text": "The company's promoters are Italian and Indian family members and group companies; the offer is entirely a sale by one promoter.",
-                                   "quote": "Up to 43,239,042 Equity Shares of face value of ₹ 10 each aggregating to ₹ [●] million"},
-                      "financials": [], "objects": [{"text": "The objects of the offer are to carry out the offer for sale of up to 43,239,042 equity shares by the promoter selling shareholder, and to list the shares.",
-                                                     "quote": "The objects of the Offer are to (i) to carry out the Offer for Sale of up to 43,239,042 Equity Shares"}],
-                      "risks": [], "promoters": [{"text": "The promoters are Sonia Bonfiglioli, Luciano Bonfiglioli, Luisa Lusardi, Bon-Fi S.r.l. and Bonfiglioli S.p.A.", "quote": q}]}}, ensure_ascii=False))
+        facts = {"kind": "RHP", "url": doc["url"], "pages_read": len(doc_pages), "promoters": D.promoters(doc_pages), "selling": D.selling_holders(doc_pages), "objects": D.objects(doc_pages),
+                 "financials": D.financials(doc_pages), "utilisation": D.utilisation(doc_pages), "risks": D.risk_headings(doc_pages), "kpis": D.kpis(doc_pages),
+                 "holding": D.shareholding(doc_pages), "peers": D.peer_table(doc_pages), "eps": D.eps_rows(doc_pages)}
+        db.set_setting(D.FACTS_KEY + ipo.doc_key(doc), json.dumps({**{k: v for k, v in facts.items() if v not in (None, [], {})}, "reader": D.READER, "read_at": f"{today}T05:00:00+00:00",
+                                                                      "excerpt": D.india_excerpt(doc_pages)}, ensure_ascii=False))
+        db.set_setting(D.SUM_KEY + ipo.doc_key(doc), json.dumps({"reader": D.SUMMARY_READER, "at": f"{today}T05:00:00+00:00", "doc": doc["url"], "problem": None, "items": items}, ensure_ascii=False))
+
+    q = "OUR PROMOTERS: SONIA BONFIGLIOLI, LUCIANO BONFIGLIOLI, LUISA LUSARDI, BON-FI S.R.L., AND BONFIGLIOLI S.P.A."
+    keep(open_row, pages_of("bonfig_rhp"), {
+        "business": {"text": "The company's promoters are Italian and Indian family members and group companies; the offer is entirely a sale by one promoter.",
+                     "quote": "Up to 43,239,042 Equity Shares of face value of ₹ 10 each aggregating to ₹ [●] million"},
+        "segments": [{"text": "The promoters are Sonia Bonfiglioli, Luciano Bonfiglioli, Luisa Lusardi, Bon-Fi S.r.l. and Bonfiglioli S.p.A.", "quote": q}]})
+    sfc = next(r for r in rows_in if r["id"] == "in-sfctech")
+    keep(sfc, pages_of("sfc_rhp"), {"business": None, "segments": []})
     iam = rows_us[1]
     doc = ipo.doc_to_read(iam)
     text = D.html_text(gzip.open(DIR / "iambic_424b4_head.htm.gz").read())

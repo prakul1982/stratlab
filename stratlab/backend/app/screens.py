@@ -188,11 +188,15 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
            "sales_cagr_3y": _num(g.get("sales_cagr_3y")), "net_margin": margin(f.get("net_margin")),
            "opm": None if f.get("bank") else margin(f.get("opm")), "debt_equity": None if f.get("bank") else year(f.get("debt_equity")),
            "roe": year(f.get("roe")), "roce": year(f.get("roce")), "div_yield": None if stale_adr else stock_pages.shown_yield(f), "pe": None if stale_adr else stock_pages.shown_pe(f),
+           "pb": None if stale_adr or old else _num(f.get("pb")),
            "stage": int(f["stage"]) if _num(f.get("stage")) in STAGES else None,
            "red_flags": _red_count(f) if region == "IN" else None,
            # a foreign company's page (a 20-F filer, depositary shares): a US company's peers aren't foreign filers (R10V-007)
            "foreign": bool(f["foreign"]) if region == "US" and f.get("foreign") is not None else None,
            "price_at": str(f.get("price_at") or "")[:10] or None, "built_at": f.get("built_at")}
+    q = f.get("q") if isinstance(f.get("q"), dict) else None       # the latest quarter against its year-ago quarter, for the results calendar
+    if q:
+        out["q_sales"], out["q_profit"], out["q_of"] = _num(q.get("sales")), _num(q.get("profit")), str(q.get("of") or "")[:40] or None
     return out
 
 

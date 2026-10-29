@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import type { Instrument, Market } from "../lib/types";
+import { arrange } from "../lib/instrumentGroups";
 import { useSurveillance } from "../lib/surveillance";
 import { Search } from "./Icons";
 import { SurvBadges } from "./Surveillance";
@@ -52,9 +53,13 @@ const PLACEHOLDER: Record<string, string> = {
  * down move, Enter picks, Esc closes. `kinds` keeps only some instrument types (a SIP takes stocks and ETFs, "EQ" and
  * "ETF"; Indian ETFs trade as "EQ"), in the suggestions and the quick picks alike, and `placeholder` says what fits.
  * The quick picks are the person's own holdings first, then the market's popular ones. */
-export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, placeholder, label }: {
+export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, placeholder, label, accept, noNote }: {
   market: Market; onPick: (i: Instrument) => void; autoFocus?: boolean; compact?: boolean;
   kinds?: string[]; placeholder?: string; label?: string;
+  /** A rule beyond `kinds` for what can be picked (Market Watch: no contracts, only the indices it can chart). */
+  accept?: (i: Instrument) => boolean;
+  /** Leave out the line explaining the surveillance tags (Market Watch's narrow panel: a paragraph of small print under every result, MWR1-018). */
+  noNote?: boolean;
 }) {
   const { fail, me } = useApp();
   // Indian futures and options are Pro's: on Free and Basic the search finds no contracts, so it says so instead of
@@ -66,16 +71,20 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
   const [results, setResults] = useState<Instrument[] | null>(null);
   const [on, setOn] = useState(-1);
   const [open, setOpen] = useState(false);
+  const [allOpts, setAllOpts] = useState(false);
   const timer = useRef<number>(undefined);
   const asked = useRef(0);
   // a contract isn't listed where it is locked: the owner's "View as Free" asks the server as the owner, and the list showed
   // NIFTY26NOVFUT beside "contracts are on the Pro plan" (R87-002)
-  const fits = (i: Instrument) => (!kinds || kinds.includes(i.type ?? "")) && !(fnoLocked && (i.fno || ["FUT", "CE", "PE"].includes(i.type ?? "")));
+  const fits = (i: Instrument) => (!kinds || kinds.includes(i.type ?? "")) && !(fnoLocked && (i.fno || ["FUT", "CE", "PE"].includes(i.type ?? ""))) && (!accept || accept(i));
   const defaults = useDefaults().filter((d) => d.market === market.id && fits(d));
   const held = useHeld(market.id === "IN").filter((s) => !defaults.some((d) => d.symbol === s)).slice(0, 4);
   const surv = useSurveillance(market.id === "IN");
 
   useEffect(() => { setQ(""); setResults(null); }, [market.id]);
+  useEffect(() => { setAllOpts(false); }, [q]);
+  const arranged = results ? arrange(results, allOpts) : null;
+  const list = arranged?.rows ?? [];
   useEffect(() => {
     window.clearTimeout(timer.current);
     if (q.trim().length < 2) { setResults(null); setOn(-1); return; }
@@ -98,7 +107,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
     } catch (e) { fail(e); }
   };
   const key = (e: KeyboardEvent<HTMLInputElement>) => {
-    const rows = results ?? [];
+    const rows = list;
     if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setOn((a) => (rows.length ? (a + 1) % rows.length : -1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setOn((a) => (rows.length ? (a <= 0 ? rows.length - 1 : a - 1) : -1)); }
     else if (e.key === "Enter") { if (open && rows[on]) { e.preventDefault(); pick(rows[on]); } else if (rows.length) e.preventDefault(); }
@@ -123,14 +132,20 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
             {/* "NIFTY futures" found nothing on Pro, with no word of how contracts are named (R87-002) */}
             {!fnoLocked && !kinds && market.id === "IN" && results!.length === 0 && /\b(fut|futures?|options?|calls?|puts?|ce|pe)\b/i.test(q) &&
               <p className="k-small k-muted k-pad" role="presentation" data-testid="fno-hint">Contracts are found by their symbol: NIFTY26NOVFUT for a future, NIFTY26NOV22600CE for an option.</p>}
-            {results!.map((r, i) => (
-              <button key={r.id} id={`${fid}-o${i}`} type="button" role="option" aria-selected={i === on} className={i === on ? "on" : undefined}
+            {list.map((r, i) => (
+              <Fragment key={r.id}>
+              {arranged!.heads.has(r.id) && <p className="k-note k-pad search-group" role="presentation">{arranged!.heads.get(r.id)}</p>}
+              <button id={`${fid}-o${i}`} type="button" role="option" aria-selected={i === on} className={i === on ? "on" : undefined}
                 onMouseDown={(e) => e.preventDefault()} onMouseMove={() => setOn(i)} onClick={() => pick(r)}>
                 <span><b>{r.symbol}</b> <span className="small muted">{r.name !== r.symbol ? r.name : ""}</span>
                   {market.id === "IN" && <> <SurvBadges region="IN" symbol={r.symbol} plain /></>}</span>
                 <span className="small muted">{instKind(r)}</span>
               </button>
+              </Fragment>
             ))}
+            {arranged && arranged.hidden > 0 && (
+              <button type="button" className="search-more" role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()} onClick={() => setAllOpts(true)}>Show {arranged.hidden} more option{arranged.hidden === 1 ? "" : "s"}</button>
+            )}
           </div>
         )}
       </div>
@@ -152,7 +167,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
           )}
         </div>
       )}
-      {surv && [...(results ?? []), ...defaults].some((i) => surv.flags[i.symbol]) && <p className="k-note">Small tags such as LT-ASM 2, T2T or F&amp;O ban are the exchange's
+      {!noNote && surv && [...(results ?? []), ...defaults].some((i) => surv.flags[i.symbol]) && <p className="k-note">Small tags such as LT-ASM 2, T2T or F&amp;O ban are the exchange's
         surveillance lists today; a stock's company page explains each.</p>}
     </div>
   );

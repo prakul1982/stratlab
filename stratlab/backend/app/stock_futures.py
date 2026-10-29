@@ -26,6 +26,7 @@ PREFIX = "fnostk:"
 FO_BHAV = X.ARCHIVE + "/content/fo/BhavCopy_NSE_FO_0_0_0_{ymd}_F_0000.csv.zip"
 COMBINE_OI = X.ARCHIVE + "/archives/nsccl/mwpl/combineoi_{dmy}.zip"
 KEEP = 260                   # trading days kept: about a year
+ROWS_KEEP = 40               # of them, the newest keep every stock's whole row (the table reads the latest day and the one before; the series are the rest)
 BAN_AT, FREE_AT, WATCH_AT = 95.0, 80.0, 80.0
 ROLL_WINDOW = 5              # trading days before the near expiry when the share in later expiries is the rollover
 RANGES = {"1m": 31, "3m": 92, "6m": 183, "1y": 366}
@@ -188,8 +189,8 @@ class Desk(X.Desk):
     name = "fno"
     what = "daily F&O file and combined open interest file"
     ready_at = "19:30"
-    backfill_days = 130
-    store = X.DayStore(PREFIX, KEEP, point)
+    backfill_days = KEEP            # the whole year the store keeps (it walked 130 days: six months of chart, a year of room, O3)
+    store = X.DayStore(PREFIX, KEEP, point, rows_keep=ROWS_KEEP)
 
     def read(self, files: X.Files, day: date):
         text = files.text(FO_BHAV.format(ymd=day.strftime("%Y%m%d")))

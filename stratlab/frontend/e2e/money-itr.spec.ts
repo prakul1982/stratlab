@@ -134,6 +134,7 @@ test("ITR-ready export: the schedules on the page, and the workbook, CSV files a
     const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name }).click()]);
     expect(dl.suggestedFilename()).toMatch(file);
   }
+  await page.getByText("Where the figures come from, and the assumptions").click();            // folded (LIVE1B-028)
   await expect(page.getByRole("list", { name: "Sources" })).toContainText("Your file trades.csv");
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
@@ -141,7 +142,7 @@ test("ITR-ready export: the schedules on the page, and the workbook, CSV files a
 
 test("ITR-ready export and US stocks tax: in the Money menu", async ({ page }, info) => {
   const n = info.project.name === "phone" ? 290 : 287;
-  const errors = await open(page, "/money/tax-tools", "Dividends, advance tax", n);
+  const errors = await open(page, "/money/tax-tools", "Tax tools", n);
   if (info.project.name === "phone") await page.getByRole("button", { name: "Open menu" }).click();
   await page.getByRole("link", { name: "ITR-ready export" }).click();
   await expect(page).toHaveURL(/\/money\/itr$/);

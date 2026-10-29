@@ -47,10 +47,11 @@ test("R4-006: the menu locks only a page that is locked whole; a part-paid page 
 
 test("R4-007: the year follows one rule, and 'as in tax tools' lands on the same year and number", async ({ page }) => {
   const errors = await open(page, "/holdings");
-  const stat = page.getByText("FY 2026-27 (estimated)").first();
-  await expect(stat).toBeVisible({ timeout: 30_000 });
-  const figure = await page.locator(".k-stat", { has: stat }).locator(".k-stat-v").first().innerText();
-  await page.locator(".k-stat", { has: stat }).getByRole("link", { name: "as in tax tools" }).click();
+  // (a row of the dividends table, UI-CO: the year, its amount, and the link in the note beside it)
+  const row = page.getByRole("table", { name: "Dividends in total" }).getByRole("row").filter({ hasText: "FY 2026-27 (estimated)" });
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  const figure = await row.getByRole("cell").first().innerText();
+  await row.getByRole("link", { name: "as in tax tools" }).click();
   await expect(page).toHaveURL(/\/money\/tax-tools\?fy=2026/);
   await expect(page.getByRole("heading", { name: "Dividends, FY 2026-27" })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("main")).toContainText(figure);
@@ -184,10 +185,10 @@ test("R4-021: the symbol box is full width, and a rule shows once the person has
   const qty = await card.getByLabel("Quantity").boundingBox();
   expect(symbol!.width, "the symbol box is twice the quantity's (RC2B-044)").toBeGreaterThanOrEqual(qty!.width * 2 - 1);
   await expect(card.getByPlaceholder("Name or symbol, e.g. Reliance")).toBeVisible();
-  await expect(card.getByText("More than 0"), "a rule on a clean form").toHaveCount(0);
+  await expect(card.getByText("Whole shares, 1 or more"), "a rule on a clean form").toHaveCount(0);
   await card.getByLabel("Quantity").fill("3");
   await card.getByLabel("Quantity").blur();
-  await expect(card.getByText("More than 0")).toBeVisible();
+  await expect(card.getByText("Whole shares, 1 or more")).toBeVisible();
   expect(errors).toEqual([]);
 });
 

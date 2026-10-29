@@ -45,7 +45,8 @@ export function PlansPage() {
    * visitor's currency only as "about $7 at today's rate" beside it (DK-001); a currency with its own plan shows its fixed price. */
   const priceOf = (p: PlanId, per: string) => {
     const none = { charged: null as string | null, inr: false, about: null as string | null, aside: null as string | null };
-    if (p === "free" && row) return { ...none, shown: money(row, 0, currency) };
+    // Free is in the money the other cards are charged in: "₹0 always" beside "₹699 / month, about ¥1,158", not "¥0" beside rupees (LIVE2-013)
+    if (p === "free" && row) return { ...none, shown: currency !== "INR" && chargedInRupees(row, currency, per === "year" ? row.yearly_charged_in : row.charged_in) ? "₹0" : money(row, 0, currency) };
     if (p === "free" || !row || currency === "INR") return { ...none, shown: `₹${rupees(p, per).toLocaleString("en-IN")}`, inr: p !== "free" };
     const field = (per === "year" ? `${p}_year` : p) as "basic" | "pro" | "basic_year" | "pro_year";
     const local = (row as unknown as Record<string, number>)[field];
@@ -105,6 +106,12 @@ export function PlansPage() {
     const rs = rupeeCharge(rupees(p, period), gst);
     // charged in rupees from another currency's card: the dialog says what that is there today ("₹699 (about $7.23 today)")
     return `${rs}${chargeAboutNote(!!shown.charged, shown.shown, shown.about)}${shown.charged || currency === "INR" ? "" : ` (shown as ${shown.shown})`}, every ${period}`;
+  };
+
+  /** The amount charged, alone, for the dialog's button (LIVE1B-079: "Continue to payment" did not say what it would charge). */
+  const chargeAmount = (p: "basic" | "pro") => {
+    const own = row && currency !== "INR" && (period === "year" ? row.yearly_charged_in : row.charged_in) === currency;
+    return own ? money(row, (row as unknown as Record<string, number>)[period === "year" ? `${p}_year` : p], currency) : rupeeCharge(rupees(p, period), gst);
   };
 
   const ownCurrency = row && currency !== "INR" && (period === "year" ? row.yearly_charged_in : row.charged_in) === currency ? currency : undefined;
@@ -190,7 +197,7 @@ export function PlansPage() {
       </div>
       {anyRupees && billing && <Notice>{rupeesNote(currency, priceOf("basic", period).about && priceOf("pro", period).about
         ? { basic: priceOf("basic", period).about as string, pro: priceOf("pro", period).about as string } : null)}</Notice>}
-      <PlanCompare plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
+      <PlanCompare folded plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}
@@ -204,7 +211,7 @@ export function PlansPage() {
       <LegalLinks blog />
       {switching && (
         <ConfirmDialog title={paid !== "free" && me ? `Switch to ${planName(switching)}?` : `Subscribe to ${planName(switching)}?`}
-          confirmLabel="Continue to payment" danger={false}
+          confirmLabel={`Continue to payment · ${chargeAmount(switching)}`} danger={false}
           onClose={() => setSwitching(null)} onConfirm={() => { const p = switching; setSwitching(null); void subscribe(p); }}>
           <span data-testid="plan-confirm">
             {planName(switching)} plan, billed {period === "year" ? "yearly" : "monthly"}: {chargeWords(switching)}. It renews automatically

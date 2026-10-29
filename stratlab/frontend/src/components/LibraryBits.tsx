@@ -132,7 +132,9 @@ export function LibraryCard({ e, details = true, actions }: { e: LibEntry; detai
       <div className="lib-figs" role="list" aria-label="Totals over the whole test">
         {figs.map(([k, n, tone]) => <Stat key={k} item label={k} value={n == null ? "–" : pct(n)} tone={tone} />)}
       </div>
-      <p className="k-small lib-vs" data-testid="lib-hold">{hold ? <b>{hold}</b> : null}</p>
+      <p className="k-small lib-vs" data-testid="lib-hold">{hold ? <b>{hold}</b> : null}
+        {/* the dates the figures are for, on the card's face: they were only behind "Rules and details" (LIVE1A-027) */}
+        {e.range && <span className="k-note lib-dates" data-testid="lib-dates">{testedRange(e.range)}</span>}</p>
       <div className="k-row lib-status">
         <VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />
         {sh.ran ? (sh.unseen != null && <span className="k-note">{unseenLabel(e)} <Signed value={sh.unseen} fmt={(v) => pct(v)} /></span>)

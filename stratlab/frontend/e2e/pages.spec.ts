@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { NAV } from "../src/lib/nav";
 
 // Signed in as the site owner (the fake database's admin-token), with the tour already seen.
@@ -88,7 +88,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Invest home"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "Briefs"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Tax tools"], ["/news", "Briefs"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
   ["/admin", "Needs your attention"], ["/admin/data", "Background jobs"], ["/admin/system", "Check every feature"], ["/admin/users", "Paper trading now"],
   ["/admin/money", "Prices outside India"], ["/admin/quality", "Rates and rules"], ["/admin/emails", "Confirm your email"],
@@ -99,6 +99,15 @@ for (const [path, ready] of PAGES) {
     await sane(page, await open(page, path, ready));
     if (info.project.name === "phone") await touchable(page);
   });
+}
+
+/** Open "The same working in words" under the tax estimate's table, unless it is already open. The workings are folded until asked for
+ *  (LIVE1B-010), so "How we got here" is opened first. */
+async function openWorking(total: Locator) {
+  const outer = total.locator("details", { has: total.page().locator("summary", { hasText: "How we got here" }) }).first();
+  if (!(await outer.evaluate((d) => (d as HTMLDetailsElement).open))) await outer.locator("summary", { hasText: "How we got here" }).first().click();
+  const fold = total.locator("details", { has: total.page().locator("summary", { hasText: "The same working in words" }) }).last();
+  if (!(await fold.evaluate((d) => (d as HTMLDetailsElement).open))) await fold.locator("summary", { hasText: "The same working in words" }).click();
 }
 
 test("results calendar: every company's dates, and the company page links to it", async ({ page }, info) => {
@@ -220,6 +229,7 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   }
   for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
   expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
+  await page.getByTestId("plans-compare-fold").locator("summary").first().click();          // the comparison is one fold under the cards (LIVE1C-092)
   const table = page.locator("#compare");        // one table for each group (how much, what each plan adds, on every plan), each with the plan names on top
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
   await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
@@ -261,16 +271,15 @@ test("first steps on Home tick themselves from real data, and hide for good", as
   expect((await request.put(`${API}/research/watchlist`, { headers: auth, data: { items: [{ region: "IN", symbol: "TCS" }] } })).ok()).toBeTruthy();
   const errors = await open(page, "/", "Your first steps", sessionAs(token, id, email));
   const list = page.locator(".first-steps");
-  await expect(list.locator("li")).toHaveCount(5);
-  await expect(list.locator('[data-step="watchlist"]')).toHaveClass(/done/);
-  await expect(list.locator('[data-step="backtest"] a')).toHaveAttribute("href", "/new");
+  // My space shows the checklist as one line with the next step (LIVE1B-086): the watchlist step is done, so one of five
+  await expect(list).toContainText(/Your first steps · 1 of 5 done · next:/);
+  await expect(list.getByRole("link")).toHaveCount(1);
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
 
   expect((await request.get(`${API}/research/deep/RELIANCE?region=IN`, { headers: auth })).ok()).toBeTruthy();
   await page.reload();
-  await expect(list.locator('[data-step="deepdive"]')).toHaveClass(/done/, { timeout: 30_000 });
-  await expect(page.getByText(/\d of 5 done/)).toBeVisible();
+  await expect(list).toContainText(/2 of 5 done/, { timeout: 30_000 });
 
   await list.getByRole("button", { name: "Hide this" }).click();
   await expect(page.getByText("Your first steps")).toHaveCount(0);
@@ -334,7 +343,7 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await expect(table.getByRole("columnheader", { name: "Trend", exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Recent filings")).toBeVisible();
   expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
-  await page.getByRole("radio", { name: "Add to them" }).click();
+  await page.getByRole("radio", { name: "Add to my holdings" }).click();
   await page.locator("input[type=file]").setInputFiles(HOLDINGS_FILES + "groww_holdings_statement.xlsx");
   await expect(page.getByText("Read as a Groww file")).toBeVisible({ timeout: 30_000 });   // matching a first file reads the stock lists
   const missed = page.getByRole("table", { name: "Lines that couldn't be matched" });
@@ -456,9 +465,11 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   const sales = page.getByRole("table", { name: "Realised sales" });
   await expect(sales.getByText("RELIANCE").first()).toBeVisible();
   await expect(sales.getByText("grandfathered")).toBeVisible();                                   // WIPRO, from the tax P&L
-  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(0);
-  await page.getByTestId("cols-tax-sales").click();
-  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toBeVisible();
+  // a laptop shows every column of the sales at once (LIVE1B-012: the purchase date was folded away at 1440px); a phone leads with what the tax works out from
+  const wideScreen = (page.viewportSize()?.width ?? 0) >= 1280;
+  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(wideScreen ? 1 : 0);
+  await page.getByTestId("cols-tax-sales").click();                                                // the button flips it either way
+  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(wideScreen ? 0 : 1);
   await expect(page.getByRole("table", { name: "Open lots below cost" }).getByText("TCS")).toBeVisible();
   await expect(page.getByText("Shares held on 31 Jan 2018")).toBeVisible();
   await page.getByRole("button", { name: "What is tax-loss harvesting?" }).click();
@@ -512,10 +523,12 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   // the total, at the top of the year, with where it comes from
   const total = page.getByRole("region", { name: "Total tax estimate" });
   await expect(total.getByRole("heading", { name: "Total tax estimate, FY 2024-25" })).toBeVisible();
-  const chips = total.getByRole("list", { name: "Where the tax comes from" });
-  await expect(chips.getByRole("listitem")).toHaveCount(4);
-  for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("listitem").filter({ hasText: c })).toHaveCount(1);
+  await expect(total.getByRole("table", { name: "Total tax breakdown" }), "the workings are folded until asked for (LIVE1B-010)").toBeHidden();
+  const chips = total.getByRole("table", { name: "Where the tax comes from" });          // a table (RES-1): a row for each source
+  await expect(chips.getByRole("row")).toHaveCount(5);                                      // the header and four sources
+  for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("row").filter({ hasText: c })).toHaveCount(1);
   await expect(total.getByText(/no other income entered yet/)).toBeVisible();
+  await total.getByText("How we got here").click();
   await expect(total.getByRole("table", { name: "Total tax breakdown" }).getByText("Estimated total tax")).toBeVisible();
   // F&O by segment, and the return and audit facts
   const segs = page.getByRole("table", { name: "F&O by segment" });
@@ -535,6 +548,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await expect(page.getByText("Saved. The estimate is updated.")).toBeVisible();
   await expect(total.getByText(/^Old regime/)).toBeVisible();
   await expect(total.getByText(/With the same figures, the new regime works out to/)).toBeVisible();
+  await openWorking(total);          // the steps in words are one fold under the table (LIVE1C-056)
   await expect(total.getByText(/Deductions you entered \(80C and the like\): ₹1,50,000/)).toBeVisible();
   const amount = await page.locator('span[aria-label="Total tax estimate"]').innerText();      // the summary at the top: the total is not printed twice (VR1-144)
   expect(Number(amount.replace(/[^\d]/g, ""))).toBeGreaterThan(100000);
@@ -557,6 +571,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   if (info.project.name === "phone") await touchable(page);
   await total.getByRole("button", { name: "Save and update" }).click();
   await expect(total.getByText(/resident, aged 60 to 79/)).toBeVisible();
+  await openWorking(total);          // the steps in words are one fold under the table (LIVE1C-056)
   await expect(total.getByText(/the old regime's basic exemption is ₹3,00,000/)).toBeVisible();
   const senior = Number((await page.locator('span[aria-label="Total tax estimate"]').innerText()).replace(/[^\d]/g, ""));
   expect(senior).toBeLessThan(Number(amount.replace(/[^\d]/g, "")));
@@ -597,9 +612,16 @@ async function answerLevel(page: Page) {
   await expect(ask).toHaveCount(0);
 }
 
+/** Each project signs in as its own user, so two projects running together never set the same alert on the same stock. */
+function ownUser(info: { project: { name: string } }, desktop: number, phone: number) {
+  const n = info.project.name === "phone" ? phone : desktop;
+  return sessionAs(`load-${n}`, `u-load-${n}`, `load${n}@example.com`);
+}
+
 test("alerts: set one on a company page, then edit and delete it on the Alerts page", async ({ page }, info) => {
   const tag = `e2e ${info.project.name} ${Date.now()}`;             // both projects share the fake database
-  let errors = await open(page, "/research/IN/RELIANCE", "Reliance");
+  const me = ownUser(info, 253, 256);
+  let errors = await open(page, "/research/IN/RELIANCE", "Reliance", me);
   await answerLevel(page);
   await page.getByRole("button", { name: "Set alert" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Alert on RELIANCE" });
@@ -611,7 +633,7 @@ test("alerts: set one on a company page, then edit and delete it on the Alerts p
   await expect(page.getByText(/already above ₹1/).first()).toBeVisible();   // the price is far above: it waits for a cross
   await sane(page, errors);
 
-  errors = await open(page, "/alerts", "Your stock alerts");
+  errors = await open(page, "/alerts", "Your stock alerts", me);
   await answerLevel(page);
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Price crosses above ₹1");
@@ -660,7 +682,8 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
 
 test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, info) => {
   const tag = `e2e-watch ${info.project.name} ${Date.now()}`;
-  const errors = await open(page, "/research/watchlist?region=IN", "Companies you're watching");
+  const me = ownUser(info, 259, 266);
+  const errors = await open(page, "/research/watchlist?region=IN", "Companies you're watching", me);
   await answerLevel(page);
   // a watchlist of one, without changing the shared one other tests read
   await page.route("**/research/watchlist", (r) => r.request().method() === "GET"
@@ -676,7 +699,7 @@ test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, in
   await dialog.getByRole("button", { name: "Set alert" }).click();
   await expect(page.getByText("Alert set on RELIANCE.")).toBeVisible();
   await sane(page, errors);
-  await open(page, "/alerts", "Your stock alerts");
+  await open(page, "/alerts", "Your stock alerts", me);
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Makes a new 52-week high");
   await row.getByRole("button", { name: /Delete/ }).click();
@@ -684,11 +707,11 @@ test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, in
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
 });
 
-test("the tools grid shows one group until asked, and the menu reaches Account without scrolling", async ({ page }, info) => {
+test("the tools grid shows every group at once, and the menu reaches Account without scrolling", async ({ page }, info) => {
   const errors = await open(page, "/new", "What trading idea do you want to test?");
   await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 4000 }).catch(() => undefined);   // the experience question
-  await expect(page.getByRole("button", { name: "Paper trade options" })).toHaveCount(0);
-  await page.getByRole("button", { name: /Show \d+ more tools/ }).click();
+  // every group of tools shows at once: no "Show N more tools" button folds them away
+  await expect(page.getByRole("button", { name: /Show \d+ more tools/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Paper trade options" })).toBeVisible();
   if (info.project.name === "desktop") await expect(page.getByRole("button", { name: /account menu$/ })).toBeInViewport();
   await sane(page, errors);
@@ -1205,7 +1228,7 @@ test("alerts: one on bulk or block deals, India only", async ({ page }, info) =>
   await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
-  await page.getByLabel("Market").selectOption("US");
+  await page.getByLabel("Market", { exact: true }).selectOption("US");
   await expect(page.getByLabel("Alert me when").locator("option", { hasText: "bulk or block deal" })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -1296,7 +1319,7 @@ test("alerts: one on a stock entering or leaving a surveillance list, India only
   await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
-  await page.getByLabel("Market").selectOption("US");
+  await page.getByLabel("Market", { exact: true }).selectOption("US");
   await expect(page.getByLabel("Alert me when").locator("option", { hasText: "surveillance list" })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -1315,14 +1338,16 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   const past = page.locator("details.earlier", { hasText: "Last two weeks" });
   if (await past.count()) await expect(past).not.toHaveAttribute("open", "");
   await seeUnfolded(page, page.getByRole("link", { name: "TCS" }).first());
-  await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();
-  await expect(page.getByText(/Interim dividend ₹11 a share/).first()).toBeVisible();
+  // each action is a row of a table (RES-1): the kind, its figure in its own column, and what the figure does not say under the kind
+  await expect(page.getByRole("row", { name: /TCS.*Bonus 1:1/ }).first()).toContainText("1 new share for every 1 held");
+  await expect(page.getByRole("row", { name: /TCS.*Interim dividend/ }).first()).toContainText("₹11");
   await expect(page.getByText("Annual General Meeting")).toHaveCount(0);           // a meeting isn't an action
+  if (info.project.name === "phone") await page.getByRole("button", { name: /^Filters/ }).click();       // the filters sit behind a button on a phone
   await page.getByRole("combobox", { name: "Kind of action" }).selectOption("bonus");
   await expect(page.getByText(/Dividend - Rs|₹5.50 a share/)).toHaveCount(0);
-  await seeUnfolded(page, page.getByText("Bonus 1:1 (1 new share for every 1 held)"));
+  await seeUnfolded(page, page.getByText("1 new share for every 1 held").first());
   await page.getByRole("radio", { name: "My stocks" }).click();
-  await seeUnfolded(page, page.getByText("Bonus 1:1 (1 new share for every 1 held)"));      // TCS is in the holdings
+  await seeUnfolded(page, page.getByText("1 new share for every 1 held").first());      // TCS is in the holdings
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
   expect(await page.locator("main").innerText()).not.toMatch(/yahoo|finnhub|kite|screener/i);
@@ -1331,8 +1356,11 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   const panel = page.locator("#corporate-actions");
   // the fake exchange's dates are relative to India's day, so a run that crosses midnight IST reads the list again and
   // carries the dividend under two ex-dates (CI at 00:10 IST, 24 Oct): one is enough, as in the calendar above
-  await expect(panel.getByText(/Interim dividend ₹11 a share/).first()).toBeVisible({ timeout: 30_000 });
-  await expect(panel.getByText(/Final dividend ₹30 a share/)).toBeVisible();
+  // (a table: Ex-date | Type | Amount a share | Record date, one row for each)
+  const actions = panel.getByRole("table", { name: /Corporate actions/ });
+  await expect(actions.getByRole("columnheader")).toHaveText(["Ex-date", "Type", "Amount a share", "Record date"], { timeout: 30_000 });
+  await expect(actions.getByRole("row").filter({ hasText: "Interim dividend" }).first().getByRole("cell", { name: "₹11", exact: true })).toBeVisible();
+  await expect(actions.getByRole("row").filter({ hasText: "Final dividend" }).getByRole("cell", { name: /^₹30/ })).toBeVisible();      // (its mark for the note "in today's shares" is beside it)
   await expect(panel.getByText(/Dividends with an ex-date in the last 12 months/)).toBeVisible();
 
   errors = await open(page, "/holdings", "By sector", who);
@@ -1433,6 +1461,7 @@ test("admin: the whole-market audit tells facts and companies not checked yet ap
   await india.getByRole("button", { name: "Not checked yet", exact: true }).click();
   await expect(india.getByText("Tiny Co Ltd")).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
+  await india.locator("summary", { hasText: "Manage this check" }).click();                  // the check's buttons are behind one fold (LIVE1C-020)
   await india.getByRole("button", { name: "Re-check the 2 not checked yet" }).click();
   await expect.poll(() => sent).toEqual([{ region: "IN", retry: true }]);
   await expect(india.getByText("Re-checking companies not checked yet:")).toBeVisible();
@@ -1486,7 +1515,8 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   await expect(india.getByTestId("audit-age")).toHaveText(" · open 3 days");
   await india.getByRole("button", { name: "Re-check Acme Ltd" }).click();
   await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", recheck: "ACME" });
-  // the monthly check can be switched off
+  // the monthly check can be switched off (its buttons are behind one fold, LIVE1C-020)
+  await india.locator("summary", { hasText: "Manage this check" }).click();
   await india.getByRole("checkbox", { name: "Full re-check on the 1st of each month" }).click();
   await expect(india.getByText("Only new listings, until you reset")).toBeVisible();
   // reset asks first, in the page (never the browser's own box): Cancel does nothing, confirming clears and starts from 0
@@ -1593,7 +1623,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   expect((await request.put(`${API}/tax/inputs`, { headers: auth, data: { fy, regime: "new", other: 2000000, salary: 2000000, deductions: 0 } })).ok()).toBeTruthy();
 
-  const errors = await open(page, "/money/tax-tools", "Dividends, advance tax and the long-term exemption", sessionAs(token, id, email));
+  const errors = await open(page, "/money/tax-tools", "Tax tools", sessionAs(token, id, email));
   await settle(page);
   await expect(page.getByText(/not tax advice/).first()).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
@@ -1655,8 +1685,9 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   // the tax report links here, and its estimate for the year now counts the dividends
   await page.goto("/tax-report");
   await settle(page);
-  await expect(page.getByRole("region", { name: "Tax tools" }).getByRole("link", { name: "Open tax tools" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("link", { name: "Tax tools" })).toBeVisible();      // a line in the total's card, no card of its own (LIVE1B-011)
   await page.getByLabel("Financial year").selectOption(String(fy));
+  await openWorking(page.getByRole("region", { name: "Total tax estimate" }));          // LIVE1C-056
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByText(/Dividends of ₹15,000 are income from other sources/)).toBeVisible();
   expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
 });
@@ -1664,8 +1695,10 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
 test("market breadth: today's numbers, small charts, sectors, groups and ranges; facts only, no provider names", async ({ page }, info) => {
   const errors = await open(page, "/invest/breadth", "Rose / fell");
   const today = page.getByTestId("breadth-today");
-  await expect(today.getByText("Above 50-day average")).toBeVisible();
-  await expect(today.getByText(/vs \d+ \w+/).first()).toBeVisible();                     // the change against the day before
+  // MOOD-1: the figures are one table: a measure, its day, the day before, the change (with ▲/▼ and a sign)
+  await expect(today.getByRole("rowheader", { name: /Above 50-day average/ })).toBeVisible();
+  for (const head of [/^\d+ \w+$/, "Change"]) await expect(today.getByRole("columnheader", { name: head }).first()).toBeVisible();
+  await expect(today.locator(".k-delta").first()).toContainText(/[▲▼]/);
   const charts = page.getByTestId("breadth-charts");
   await expect(charts.getByRole("heading", { name: "Advance/decline line" })).toBeVisible();
   for (const name of ["Above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
@@ -1685,14 +1718,16 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   // a hover shows the day's numbers on the bars
   await charts.locator("svg[aria-label^='New 52-week highs']").hover();
   await expect(page.locator(".chart-tip")).toContainText("new highs");
-  // an alert on the share above the 50-day average: added, listed, deleted
-  const box = page.getByRole("region", { name: "Breadth alerts" });
+  // an alert on the share above the 50-day average, from the bell on its row: added (the row then says the level), listed, deleted
   const level = info.project.name === "phone" ? "45" : "55";            // the two projects share one account
+  await today.getByTestId("breadth-alert-open").click();
+  const box = page.getByRole("dialog", { name: "Alert on the share above the 50-day average" });
   await box.getByLabel(/crosses$/).fill(level);
   await box.getByRole("button", { name: "Add alert" }).click();
-  await expect(box.getByText(`NIFTY 500 crosses ${level}%`)).toBeVisible();
+  await expect(box.getByRole("cell", { name: `${level}%`, exact: true })).toBeVisible();
   await box.getByRole("button", { name: `Delete the alert at ${level}% on NIFTY 500` }).click();
-  await expect(box.getByText(`NIFTY 500 crosses ${level}%`)).toHaveCount(0);
+  await expect(box.getByRole("cell", { name: `${level}%`, exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
 
@@ -1747,8 +1782,9 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   const split = await main.getByTestId("split-fii").innerText();
   const [lo, sh] = (split.match(/[\d.]+(?=%)/g) ?? []).map(Number);
   expect(lo + sh).toBeCloseTo(100, 1);
-  await expect(main.getByTestId("sides-fig")).toContainText(/long share\s*[\d.]+%\s*[\d.]+% short/);        // VR1-070: the long share as the figure, the short side in its note
-  await expect(main.getByTestId("sides-fig")).toContainText(/[+−][\d.]+ pts from the previous trading day/);
+  const sidesRow = main.getByTestId("part-figs").locator("tbody tr").filter({ has: page.getByTestId("sides-fig") });
+  await expect(sidesRow).toContainText(/long share\s*[\d.]+%\s*[\d.]+% short/);        // VR1-070: the long share as the figure, the short side in its note
+  await expect(sidesRow).toContainText(/[+−][\d.]+ pts from the previous trading day/);
   // a figure is three rows shared with its neighbours (label, number, note): nothing in one draws over the next
   const overlaps = await main.locator(".k-stat").evaluateAll((figs) => figs.flatMap((f) => {
     const rows = Array.from(f.children).map((c) => c.getBoundingClientRect()).filter((b) => b.height > 0);
@@ -1769,7 +1805,7 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await main.getByRole("radio", { name: "Volume", exact: true }).click();
   await expect(main.getByRole("columnheader", { name: "Futures bought", exact: true })).toBeVisible();
   await expect(main.getByRole("columnheader", { name: "Futures bought / sold" })).toBeVisible();
-  await expect(main.getByText("FII/FPI net")).toBeVisible();
+  await expect(main.locator("#pos-cash").getByRole("row", { name: /^FII\/FPI/ })).toBeVisible();          // the cash market is a table: who, net, bought, sold
   const pcr = main.getByTestId("pcr-table");
   for (const n of ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]) await expect(pcr.locator(`tr[data-pcr="${n}"]`)).toBeVisible({ timeout: 30_000 });
   await expect(pcr.locator('tr[data-pcr="NIFTY"]').getByTestId("pcr-expiry")).toHaveText(/\d/);     // the expiry, under the index's name

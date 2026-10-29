@@ -77,7 +77,7 @@ def analyse(bars: list[dict]) -> dict | None:
         "stage_capped": stage_now is not None and (since >= last or pd.isna(stg.iloc[last - since - 1])),      # began at or before the first candle read: the true length is longer
         "st_up": st_up, "st_days": flip + 1, "st_level": None if pd.isna(st.iloc[-1]) else float(st.iloc[-1]),
         "signal": "fresh" if in_s2 and flip + 1 <= FRESH else "st_s2" if in_s2 else "stage2" if stage_now == 2 else None,
-        "st_since": str(bars[last - flip]["t"])[:10], "t": bars[-1]["t"], "recent": [float(x) for x in c.iloc[-5:]],
+        "st_since": str(bars[last - flip]["t"])[:10], "stage_since": str(bars[last - since]["t"])[:10] if stage_now else None, "t": bars[-1]["t"], "recent": [float(x) for x in c.iloc[-5:]],
         "day_low": float(df["l"].iloc[-1]), "day_high": float(df["h"].iloc[-1]),    # the last session's range
     }
 
@@ -267,13 +267,15 @@ def run(registry, market: str, members: list[dict], budget: float | None = None,
             "counts": {k: sum(1 for r in rows if r["signal"] == k) for k in ("fresh", "st_s2", "stage2")}}
 
 
-def run_preset(registry, market: str, members: list[dict], preset: str, session: str | None = None, live: bool = False) -> dict:
+def run_preset(registry, market: str, members: list[dict], preset: str, session: str | None = None, live: bool = False,
+               custom: tuple[list, int] | None = None) -> dict:
     """One scan preset (scan_presets) over a small group, read live from the daily candles: {"rows" (the stocks that
     match, most recent match first), "checked", "as_of", "missing", "problems"}. Facts only. `live`: the market is trading now, so the
     newest candle is today's, still forming. A volume rule compares a whole day's volume with an average, so it is judged on the last
     whole session then, and says so ("basis"); the others read the forming candle's last price (RC2A-022: "Volume surge" showed 0 matches
     at 09:43 because 20 minutes of volume was held to twice a whole day's average)."""
-    if preset not in scan_presets.BY_ID:
+    # `custom`: a person's own rules (scan_presets.custom_conds) and the candles a match may be back; the group, the limits and the pacing are the presets'
+    if preset not in scan_presets.BY_ID and not (custom and preset == scan_presets.CUSTOM):
         raise KeyError(preset)
     whole_day = live and preset in scan_presets.WHOLE_DAY
     through = None
@@ -286,7 +288,7 @@ def run_preset(registry, market: str, members: list[dict], preset: str, session:
 
     def one(iid):
         try:
-            res = scan_presets.evaluate(_bars(registry, iid), through=through, only=[preset], live=not whole_day)
+            res = scan_presets.evaluate(_bars(registry, iid), through=through, only=[preset], live=not whole_day, custom=custom)
             inst = (prov.instrument(iid.split(":", 1)[1]) if prov else None) or {}
             return iid, res, inst, None
         except Exception as e:     # one member's data problem mustn't sink the rest
@@ -304,7 +306,7 @@ def run_preset(registry, market: str, members: list[dict], preset: str, session:
             continue
         checked += 1
         days.append(res["as_of"])
-        m = scan_presets.lagged(res["matches"].get(preset), res["as_of"], newest, preset)
+        m = scan_presets.lagged(res["matches"].get(preset), res["as_of"], newest, preset, custom[1] if custom else None)
         if m:
             hits.append((iid, inst))
             rows.append({"symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": None, "currency": inst.get("currency"),

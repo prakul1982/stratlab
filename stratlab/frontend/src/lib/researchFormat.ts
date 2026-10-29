@@ -1,7 +1,7 @@
 /* Formatting for the research pages that needs no browser: the unit a group of amounts reads in, trend values,
  * metric figures, and the market read's focus parameter. Re-exported by research.ts. */
-import { CRORE, inrCompact, minus, currencySymbol } from "./format";
-import type { MetricItem } from "./research";
+import { CRORE, bigMoney, inrCompact, minus, currencySymbol } from "./format";
+import type { MetricGroup, MetricItem } from "./research";
 
 /** What a price read between a market's close and its settle point is called (the company header, the scans, Pulse). */
 export const SETTLING = "Latest, closing prints still settling";
@@ -117,20 +117,31 @@ export function screenNum(v: number | null, dp = 1, unit = ""): string {
   return `${+s === 0 ? (0).toFixed(dp) : minus(s)}${unit}`;
 }
 
-/** A screen's market value: Indian figures (they arrive in crore) as whole crore with Indian grouping ("₹7,35,120 cr");
- * US ones (millions of dollars) in billions from $1 billion ("$85.8 bn"), in millions below ("$950 mn", "$12 mn"), so
- * a micro cap never reads "$0.0 bn". */
+/** A screen's market value, written as the company's page and its public page write it (RC7-004; RC6-015): "₹18.95 lakh cr",
+ * "₹92,248 cr", "$2.76T", "$85.8B", "$950M" (one rule, `bigMoney`). India's figures arrive in crore, the US's in millions of
+ * dollars; the column sorts on the number itself, so the text is only for reading. One too small for a million reads in dollars. */
 export function screenCap(v: number | null, region: "IN" | "US" | string): string {
   if (v == null) return "–";
-  if (region === "IN") return `₹${Math.round(v).toLocaleString("en-IN")} cr`;
-  if (v >= 1000) return `$${(v / 1e3).toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} bn`;
-  if (v < 0.05) return "<$0.1 mn";
-  return `$${v.toLocaleString("en-US", { maximumFractionDigits: v >= 10 ? 0 : 1 })} mn`;
+  return bigMoney(region === "IN" ? v * CRORE : v * 1e6, region === "IN" ? "INR" : "USD");
 }
+
+/** An EBITDA margin: a whole percent when the source gives it whole ("17%", as the public page writes it), else one decimal
+ * ("17.5%"), so the figure reads the same on the company page, its public page, the screens and the deep dive (RC7-005). */
+export const marginText = (v: number | null | undefined): string =>
+  v == null || !Number.isFinite(v) ? "–" : Number.isInteger(v) ? minus(`${v}%`) : minus(`${v.toFixed(1)}%`);
+
+/** The valuation multiples written to one decimal wherever they appear ("22.8", as the watchlist, the screens, the deep dive and the
+ * public page write a P/E; the key numbers had "22.80"). */
+const ONE_DECIMAL = /^(Fwd P\/E|P\/E|P\/S|EV\/EBITDA)$/;
 
 export function metricText(m: MetricItem, currency: string): string {
   if (m.value == null) return m.text ?? "–";          // "n/m": a rate off a tiny base is no figure (DD-018)
   const v = m.value;
+  // the same fact is written the same everywhere (RC7-005): a dividend yield to two decimals, as the screens and the public page write it
+  // (the key numbers had "0.7%" beside "0.71%"), an EBITDA margin whole when it is whole, a multiple to one decimal
+  if (m.unit === "%" && m.label === "Div yield") return minus(`${v.toFixed(2)}%`);
+  if (m.unit === "%" && m.label === "EBITDA margin") return marginText(v);
+  if (m.unit === "x" && ONE_DECIMAL.test(m.label)) return minus(v.toFixed(1));
   // a percentage that isn't zero never reads as "0.0%": a tiny one keeps two decimals (a 0.01% net margin)
   // a figure the source gives in whole numbers (its growth rates: "-12%") is shown whole, never as a precise "-12.0%"
   const dp = m.dp ?? (v !== 0 && Math.abs(v) < 0.05 ? 2 : 1);
@@ -220,13 +231,14 @@ export function newsWhen(iso: string | null | undefined, now: Date = new Date())
 /** Pulse's opening line, naming only the sections the page shows (R12-011: it promised "where money is flowing" on a
  * page that showed the mood and headlines alone). `ai` is the mood read as loaded, or null before it comes. */
 export function pulseLede(ai: { hot?: unknown[]; flows?: unknown[]; themes?: unknown[] } | null | undefined, closedDay?: string | null, settling = false): string {
-  const extra = [ai?.hot?.length ? "the companies in today's headlines" : "", ai?.flows?.length ? "where money is flowing" : "",
+  const extra = [ai?.hot?.length ? "the companies in today's headlines" : "", ai?.flows?.length ? "money and markets in the headlines" : "",
     ai?.themes?.length ? "the themes in play" : ""].filter(Boolean);
   const list = extra.length > 1 ? `${extra.slice(0, -1).join(", ")} and ${extra[extra.length - 1]}` : extra[0];
   // after the close the levels are the close's: "Last close, 9 Oct", never "Live" (R13-007)
   const lead = closedDay && settling ? `${SETTLING} · ${closedDay}: index levels and headlines`
     : closedDay ? `Last close, ${closedDay}: index levels and headlines` : "Live index levels and headlines";
-  return `${lead}, with an AI read of the mood${list ? `, ${list}` : ""}.`;
+  // the page is the figures behind the mood (how many stocks took part, sectors, flows, risk), then what the headlines say (MOOD-1)
+  return `${lead}, with the figures behind today's mood${list ? ` and what the headlines say of ${list}` : ""}.`;
 }
 
 /** The session Pulse's index levels are the close of, when none of them is live (the market has closed); null while any
@@ -273,4 +285,29 @@ const LINK_BY_KIND: Record<string, string> = { quote: "Quote page", profile: "Pr
 /** The label of an outside link on a company page, from the kind of page it opens; an exchange's own page keeps its label. */
 export function linkLabel(l: { label: string; kind?: string }): string {
   return (l.kind && LINK_BY_KIND[l.kind]) || l.label;
+}
+
+
+/** A company's figures that rest on the price, moved to a newer price (the page reads the price again each minute while the market
+ * trades): the market value and the multiples of price move with it, the dividend yield against it, and the year's range takes in
+ * the new price. Without this the price moved and the market value, P/E and range beside it stayed at the first read (RC7-007). Pure:
+ * the figures that don't follow the price (EV/EBITDA, margins, growth) are left as they were. */
+export function atPrice<T extends { market_cap: number | null; metrics: MetricGroup[]; range52: { low: number | null; high: number | null; since?: string | null } }>(
+  c: T, was: number | null | undefined, now: number | null | undefined,
+): T {
+  if (!was || !now || !(was > 0) || !(now > 0) || was === now) return c;
+  const k = now / was;
+  const by = (i: MetricItem): MetricItem => {
+    if (i.value == null) return i;
+    if (i.unit === "x" && /^(Fwd P\/E|P\/E|P\/S|P\/B)$/.test(i.label)) return { ...i, value: i.value * k };
+    if (i.unit === "%" && i.label === "Div yield") return { ...i, value: i.value / k };
+    return i;
+  };
+  const r = c.range52;
+  return {
+    ...c,
+    market_cap: c.market_cap == null ? null : c.market_cap * k,
+    metrics: c.metrics.map((g) => ({ ...g, items: g.items.map(by) })),
+    range52: { ...r, low: r.low != null ? Math.min(r.low, now) : r.low, high: r.high != null ? Math.max(r.high, now) : r.high },
+  };
 }

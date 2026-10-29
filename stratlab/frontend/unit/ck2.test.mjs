@@ -91,14 +91,13 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   assert.deepEqual(allow.map((x) => `${x.page} ${x.rule} ${x.element}`), ["/plans R1 k-plan"]);
   // the company page: the peers' tiles in equal rows, the news under them
   assert.match(read("src/pages/Research.tsx"), /<div className="k-stack">\s*\{c\.peers\.length > 0 && <Card><CardHead title="Similar companies"/);
-  assert.match(read("src/pages/Research.tsx"), /className=\{`co-peers co-peers-\$\{c\.peers\.length === 4 \? 2 : Math\.min\(3, c\.peers\.length\)\}`\}/);
-  assert.match(read("src/styles-invest.css"), /\.co-peers-3 \.inv-tiles \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/);
+  assert.match(read("src/pages/Research.tsx"), /<QuoteTable region=\{region\} symbols=\{c\.peers\} label="Similar companies" \/>/);      // (UI-CO: the peers are a table, not tiles)
 });
 
-test("CK-2 (R16): the tax report's share-gains label is one short line, its qualifier is the note", () => {
+test("CK-2 (R16), LIVE1B-009: the tax at the special rates is no headline figure beside the year's total; its qualifier is said under the table", () => {
   const t = read("src/pages/TaxReportPage.tsx");
-  assert.match(t, /<Stat label=\{<>Tax on share gains <Info/);
-  assert.match(t, /note=\{`before basic exemption, rebate and surcharge; \$\{inr\(y\.tax_with_cess\)\} with 4% cess`\}/);
+  assert.doesNotMatch(t, /<Stat label=\{<>Tax on share gains/);
+  assert.match(t, /Tax at these rates: \{inr\(y\.tax\)\} \(\{inr\(y\.tax_with_cess\)\} with 4% cess\), before the unused basic exemption, the 87A rebate and surcharge/);
 });
 
 test("CK-2 (R18): a table that would be cut on a phone is cards, a short chip row wraps", () => {

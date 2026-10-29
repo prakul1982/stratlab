@@ -11,7 +11,7 @@ import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
 import { Download, Plus, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, TilePicker, type Choice, type Column, type TileGroup } from "../../components/kit";
+import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, FactTable, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, TilePicker, useRange, type Column, type TileGroup } from "../../components/kit";
 
 /* /money/net-worth: what you own minus what you owe: stocks from My Holdings, plus the deposits, provident funds, gold,
  * property and loans added here, each with how it is worked out and its date. Built from the kit (components/kit). */
@@ -292,8 +292,6 @@ function PrepayBox({ loan, onClose }: { loan: Row; onClose: () => void }) {
   );
 }
 
-const RANGE_DAYS: [string, string, number][] = [["3m", "3M", 93], ["1y", "1Y", 366], ["3y", "3Y", 1096]];
-
 export function NetWorthPage() {
   const { fail, notify, me } = useApp();
   const [view, setView] = useState<View | null>(null);
@@ -304,7 +302,6 @@ export function NetWorthPage() {
   const [prepay, setPrepay] = useState<Row | null>(null);
   const [addStart, setAddStart] = useState(() => fresh("cash"));
   const [ask, setAsk] = useState<Ask | null>(null);
-  const [pick, setPick] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [step, setStep] = useState<"pick" | "form">("pick");
   const [fieldErrs, setFieldErrs] = useState<Record<string, string> | null>(null);
@@ -391,17 +388,12 @@ export function NetWorthPage() {
   const hist = useMemo(() => view?.history ?? [], [view?.history]);
   const full = view?.limit != null && view.count >= view.limit;
 
-  // the history's range: only the spans the snapshots cover, always "All"
-  const span = hist.length > 1 ? (Date.parse(hist[hist.length - 1].d) - Date.parse(hist[0].d)) / 86_400_000 : 0;
-  const rangeChoices: Choice[] = useMemo(() => {
-    const fit = RANGE_DAYS.filter(([, , d]) => span > d).map(([value, label]) => ({ value, label }));
-    return fit.length ? [...fit, { value: "all", label: "All" }] : [];
-  }, [span]);
-  const range = rangeChoices.some((c) => c.value === pick) ? pick! : "all";
-  const keepDays = RANGE_DAYS.find(([v]) => v === range)?.[2];
+  // the history's range: the app's one range control, only the stretches the snapshots cover (O4)
+  const days = useMemo(() => hist.map((h) => h.d), [hist]);
+  const rng = useRange("networth", days);
   // every snapshot is drawn; a partial one (something wasn't counted) is marked, so a dip it shows isn't read as a fall
   const whole = hist;
-  const shown = whole.filter((h) => keepDays == null || (Date.parse(whole[whole.length - 1].d) - Date.parse(h.d)) / 86_400_000 <= keepDays);
+  const shown = whole.slice(rng.from);
   const marked = shown.flatMap((h, i) => (h.partial?.length ? [{ i, kind: "dot" as const, color: "var(--orange)" }] : []));
   const last = hist[hist.length - 1], move = t ? netWorthDelta(t.net, t.partial, hist, undefined, view?.valuation) : null;
 
@@ -455,19 +447,13 @@ export function NetWorthPage() {
     <details className={cls} data-testid="nw-snapshots" open={empty || undefined}>
       {/* VR1-142: a plain "History: 3 snapshots", not "The history's snapshots (3): remove one"; each row's date and figure, its notes smaller under it, an icon to remove */}
       <summary className="k-small">History: {hist.length} snapshot{hist.length === 1 ? "" : "s"}</summary>
-      <ul className="k-stack k-tight">
-        {[...hist].reverse().map((h) => {
-          const why = [h.why === "change" ? "taken when an entry changed" : h.why === "month" ? "monthly" : "", h.added ? `${signedInrCompact(h.added)} from entries added or changed` : "", h.partial?.length ? `partial (not counted: ${h.partial.join("; ")})` : ""].filter(Boolean).join(" · ");
-          return (
-            <li key={h.d} className="k-row">
-              <span className="k-small"><b>{dateOnly(h.d)}</b> · {inr(h.net)}{why && <span className="k-note k-sub-line">{why}</span>}</span>
-              <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`} title="Remove this snapshot">
-                <Trash size={14} />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <DataTable label="The history's snapshots" rows={[...hist].reverse()} rowKey={(h) => h.d} columns={[
+        { key: "d", header: "Date", rowHeader: true, cell: (h) => <b>{dateOnly(h.d)}</b> },
+        { key: "n", header: "Net worth", numeric: true, cell: (h) => inr(h.net) },
+        { key: "w", header: "How it was taken", wrap: true, cell: (h) => <span className="k-note">{[h.why === "change" ? "taken when an entry changed" : h.why === "month" ? "monthly" : "", h.added ? `${signedInrCompact(h.added)} from entries added or changed` : "", h.partial?.length ? `partial (not counted: ${h.partial.join("; ")})` : ""].filter(Boolean).join(" · ")}</span> },
+        { key: "x", header: "", action: true, cell: (h) => (
+          <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`} title="Remove this snapshot"><Trash size={14} /></button>) },
+      ]} />
     </details>
   );
   // "Prices as of" only over market prices: with none on the page the server dates it today, and "Prices as of 19 Oct" stood
@@ -488,11 +474,11 @@ export function NetWorthPage() {
         <>
           <Card label="Totals">
             <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined} />
-            <StatRow>
-              <Stat label="Net worth" value={inr(t.net)} delta={move ? <Delta value={move.change}>{signedInrCompact(move.change)}</Delta> : undefined} note={move ? sinceNote(move, day, inrCompact) : restatedNote(hist, view?.valuation, day) ?? undefined} />
-              <Stat label="Assets" value={inr(t.assets)} />
-              <Stat label="Loans" value={inr(t.liabilities)} />
-            </StatRow>
+            {/* with no loans the assets are the net worth: the same figure said again is left out (LIVE1C-056: ₹20,33,027 five times) */}
+            <FactTable label="Where you stand" itemHead="" figureHead="Now" noteHead="Change" rows={[
+              { id: "net", k: "Net worth", v: <b>{inr(t.net)}</b>, n: <>{move && <Delta value={move.change}>{signedInrCompact(move.change)}</Delta>} {move ? sinceNote(move, day, inrCompact) : restatedNote(hist, view?.valuation, day) ?? undefined}</> },
+              ...(t.liabilities > 0 ? [{ id: "assets", k: "Assets", v: inr(t.assets) }, { id: "loans", k: "Loans", v: inr(t.liabilities) }] : []),
+            ]} />
             {/* a source that couldn't be read or valued: named; snapshots of such a total are marked partial */}
             {/* DG-016: something with no price yet is a routine note; a source that couldn't be read is the warning */}
             {t.partial && t.partial.length > 0 && <Notice tone={t.partial_lasting ? "info" : "warn"} role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. {t.partial_lasting ? "The history goes on meanwhile, with each snapshot marked partial." : "Only the monthly snapshot is kept meanwhile, marked partial."}</Notice>}
@@ -502,7 +488,7 @@ export function NetWorthPage() {
             {/* the history has a card once there is a chart to draw; until then, one line here says when it starts */}
             {!view.history_allowed
               ? <PlanNote>The net worth history is on the Basic plan{view.history_count ? ` (${view.history_count} snapshot${view.history_count === 1 ? "" : "s"} recorded so far)` : ""}.</PlanNote>
-              : hist.length < 3 && !empty && <p className="k-note">History: a snapshot is taken on the 1st of each month and whenever you change an entry; the chart starts at the third{hist.length > 0 ? ` (${hist.length === 1 ? `the first is from ${day(hist[0].d)}` : `${hist.length} so far, the latest from ${day(hist[hist.length - 1].d)}`})` : ""}.</p>}
+              : hist.length < 3 && !empty && <p className="k-note">A snapshot is taken on the 1st of each month and whenever you change an entry; the chart starts at the third{hist.length > 0 ? ` (${hist.length === 1 ? `the first is from ${day(hist[0].d)}` : `${hist.length} so far, the latest from ${day(hist[hist.length - 1].d)}`})` : ""}.</p>}
             {/* VR6-012: with no chart yet the snapshots list sits in this card under that line, not in a card of its own with one line in it (DP2-006's "empty-looking card" was still 97px of it) */}
             {view.history_allowed && hist.length > 0 && whole.length < 3 && snapsList("nw-snaps")}
           </Card>
@@ -533,7 +519,8 @@ export function NetWorthPage() {
             </Notice>
           )}
 
-          {view.allocation.length > 0 && (
+          {/* a single class is a bar at 100% that says nothing the table does not (LIVE1C-056) */}
+          {view.allocation.length > 1 && (
             <Card>
               <CardHead title="By asset class" />
               <BarList label="Assets by class" footnote="Share of total assets, before loans."
@@ -542,12 +529,12 @@ export function NetWorthPage() {
           )}
 
           {view.history_allowed && whole.length >= 3 && (
-            <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rangeChoices} range={range} onRange={setPick}
+            <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rng.options} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "networth", times: days }}
               footer={<><p className="k-note">Last snapshot {day(last.d)}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>{snapsList("nw-snaps")}</>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
                 columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dateOnly(h.d) }, { key: "net", header: "Net worth", numeric: true, cell: (h) => <>{inr(h.net)}{h.partial?.length ? <span className="k-sub-line">partial</span> : null}</> },
                   { key: "a", header: "Assets", numeric: true, cell: (h) => inr(h.assets) }, { key: "l", header: "Loans", numeric: true, cell: (h) => inr(h.liabilities) }] }}>
-              <XYChart series={[{ values: shown.map((h) => h.net), color: "var(--series-1)", label: "Net worth", area: { color: "var(--series-1)", base: Math.min(0, ...shown.map((h) => h.net)) } }]}
+              <XYChart series={[{ values: shown.map((h) => h.net), color: "var(--series-1)", label: "Net worth", area: { color: "var(--series-1)", base: 0 } }]}
                 times={shown.map((h) => h.d)} points={marked} format={(v) => inr(v)} axisFormat={(v) => axisInr(v)} ariaLabel="Net worth over time" height={220} testId="networth-chart" ranges={false} table={false} />
             </ChartFrame>
           )}
@@ -596,7 +583,8 @@ export function NetWorthPage() {
       {adding && view && (
         <Modal title={step === "form" ? `Add: ${FORM[kind].title}` : "Add to your net worth"} onClose={() => { setAdding(false); setStep("pick"); }} wide>
           <div className="k-stack">
-            {view.limit != null && <span className="k-note">{view.count} of {view.limit} entries on your plan · <Link className="link" to="/plans">more with Basic</Link></span>}
+            {/* LIVE1B-073: at the limit the note below says it (and the page behind it says the count): not three times in one dialog */}
+            {view.limit != null && !full && <span className="k-note">{view.count} of {view.limit} entries on your plan · <Link className="link" to="/plans">more with Basic</Link></span>}
             {/* the one lock wording (DP2-022): the plan and its count, then what Basic gives; the note adds the price */}
             {full ? <PlanNote plan="basic">Your {me?.plan_info.name ?? "Free"} plan keeps {view.limit} entries. Delete one to add another. Basic has no limit on entries, and adds the monthly history chart.</PlanNote>
               : step === "pick" ? <TilePicker label="What is it?" groups={TILES} value={kind} onChange={(k) => { setKind(k as Kind); setAddStart(fresh(k as Kind)); setStep("form"); setFieldErrs(null); }} />

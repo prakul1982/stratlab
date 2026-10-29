@@ -32,7 +32,7 @@ test("RC1-004: a symbol the prices never heard of is told apart from prices that
 test("RC1-006: the corporate actions page says why nothing is coming up", () => {
   const page = read("src/pages/CorpActionsPage.tsx");
   assert.match(page, /ahead_note\?: string \| null/);
-  assert.match(page, /data-testid="ahead-note">\{data\.ahead_note \?\? "Nothing announced with an ex-date ahead\."\}/);
+  assert.match(page, /data-testid="ahead-note">\{n \? "Nothing ahead meets the filters\." : data\.ahead_note \?\? "Nothing announced with an ex-date ahead\."\}/);
   assert.doesNotMatch(page, /\(data\.ahead_known \|\| data\.ahead\.length > 0\) && \(/);
   assert.doesNotMatch(read("src/components/CorpActions.tsx"), /aren't available for US companies yet/);
 });

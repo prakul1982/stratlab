@@ -111,7 +111,7 @@ def exchange_list(out: dict, rows: list[dict], cap: int = 40) -> dict:
     companies are marked `named`. None when no industry qualifies."""
     ind = {r.get("symbol"): r.get("industry") for r in rows or [] if r.get("symbol") and r.get("industry")}
     mapped = {x.get("ticker") for x in out.get("screen") or []}
-    for group in (out.get("clusters") or []) + (out.get("value_chain") or []):
+    for group in (out.get("clusters") or []) + (out.get("value_chain") or []) + (out.get("sub_themes") or []):
         mapped |= {c.get("ticker") for c in group.get("companies") or []}
     mapped.discard("")
     mapped.discard(None)
@@ -177,6 +177,7 @@ def listed_only(out: dict) -> dict:
     out = dict(out)
     out["clusters"] = [c for c in ({**c, "companies": only(c.get("companies"))} for c in out.get("clusters") or []) if c["companies"]]
     out["value_chain"] = [{**v, "companies": only(v.get("companies"))} for v in out.get("value_chain") or []]
+    out["sub_themes"] = [{**x, "companies": only(x.get("companies"))} for x in out.get("sub_themes") or [] if isinstance(x, dict)]
     return out
 
 
@@ -219,6 +220,8 @@ def ground_sector(out: dict, region: str, lookup) -> dict:
     out["screen"] = screen
     out["clusters"] = [{**c, "companies": fix_all(c.get("companies") or [])} for c in out.get("clusters") or []]
     out["value_chain"] = [{**v, "companies": fix_all(v.get("companies") or [])} for v in out.get("value_chain") or []]
+    # each sub-theme's companies are looked up the same way (THEME-1); theme_check then keeps only those whose own words show the work
+    out["sub_themes"] = [{**x, "companies": fix_all(x.get("companies") or [])} for x in out.get("sub_themes") or [] if isinstance(x, dict)]
     funds = []
     for e in out.get("etfs") or []:
         got = res.resolve(e.get("name"), e.get("ticker"))
@@ -230,8 +233,8 @@ def ground_sector(out: dict, region: str, lookup) -> dict:
     out["sub_themes"] = [{**x, "detail": tidy_text(x.get("detail"))} for x in out.get("sub_themes") or []]
     out["value_chain"] = [{**x, "description": tidy_text(x.get("description"))} for x in out.get("value_chain") or []]
     out["screen"] = [{**x, "one_line": tidy_text(x.get("one_line"))} for x in out.get("screen") or []]
-    out["tailwinds"] = [tidy_text(x) for x in out.get("tailwinds") or []]
-    out["risks"] = [tidy_text(x) for x in out.get("risks") or []]
+    out["tailwinds"] = [({**x, "text": tidy_text(x.get("text"))} if isinstance(x, dict) else tidy_text(x)) for x in out.get("tailwinds") or []]
+    out["risks"] = [({**x, "text": tidy_text(x.get("text"))} if isinstance(x, dict) else tidy_text(x)) for x in out.get("risks") or []]
     out["checked"] = True
     return out
 
@@ -574,41 +577,13 @@ def card_levels(text, indices: list[dict]):
 _COUNT_NAMES = {2: "both", 3: "all three", 4: "all four"}
 
 
-def mood_line(indices: list[dict], sectors: dict | None = None) -> str:
-    """The mood in plain words, worked out from the day's index moves (and StratLab's sector count when there is one), so
-    it is a fact of the numbers and never the AI's impression (DD-001: a read that recited the levels and gave no mood).
-    Mixed when the indices moved different ways; else flat under 0.25% on average, mildly positive or negative under 1%,
-    positive or negative under 2%, sharply so beyond."""
-    moves = [(str(i["name"]), float(i["change_pct"])) for i in indices
-             if i.get("name") and isinstance(i.get("change_pct"), (int, float))][:4]
-    if not moves:
-        return ""
-    ups, downs = [n for n, c in moves if c > 0], [n for n, c in moves if c < 0]
-    avg = sum(c for _, c in moves) / len(moves)
-    sec = sectors if sectors and isinstance(sectors.get("of"), int) and sectors["of"] > 0 else None
-
-    def names(xs):
-        return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1]
-    if ups and downs:
-        out = f"Mixed: the {names(ups)} up and the {names(downs)} down on the day"
-        if sec:
-            out += f", with {sec.get('up', 0)} of {sec['of']} sector indices up and {sec.get('down', 0)} down"
-        return out + "."
-    a = abs(avg)
-    up = avg > 0 or (avg == 0 and not downs)
-    word = ("flat" if a < 0.25 else "mildly positive" if a < 1 and up else "mildly negative" if a < 1
-            else "positive" if a < 2 and up else "negative" if a < 2 else "sharply positive" if up else "sharply negative")
-    way = "up" if up else "down"
-    if a == 0:
-        return f"Flat: {_COUNT_NAMES.get(len(moves), 'the')} indices unchanged on the day." if len(moves) > 1 else "Flat on the day."
-    lo, hi = sorted(abs(c) for _, c in moves)[0], sorted(abs(c) for _, c in moves)[-1]
-    who = f"{_COUNT_NAMES[len(moves)]} indices" if len(moves) in _COUNT_NAMES else f"the {moves[0][0]}"
-    size = f"{lo:.2f}%" if f"{lo:.2f}" == f"{hi:.2f}" else f"{lo:.2f}% to {hi:.2f}%"
-    out = f"{word[:1].upper() + word[1:]}: {who} {way} on the day, by {size}"
-    if sec:
-        n = sec.get("up" if up else "down", 0)
-        out += f", with {n} of {sec['of']} sector indices {way}"
-    return out + "."
+def mood_line(indices: list[dict], sectors: dict | None = None, compare: dict | None = None) -> str:
+    """The mood in plain words, worked out from the day's index moves (and StratLab's sector count and how big a day it is
+    against the index's usual one, when there are those), so it is a fact of the numbers and never the AI's impression
+    (DD-001: a read that recited the levels and gave no mood). The index levels and moves are not said again: the cards
+    above carry them (MOOD-1). The wording is mood.headline_of's, the one the Market pulse tables are checked against."""
+    from . import mood
+    return mood.headline_of(indices, sectors, compare)
 
 
 # the subjects a day's headlines are often about, for naming the main story when the AI gives none that holds (DD-001)
@@ -635,24 +610,36 @@ def headline_count(phrase: str, titles: list[str]) -> int:
     return sum(1 for t in titles if all(re.search(r"\b" + re.escape(w), str(t or "").lower()) for w in stems))
 
 
-def main_story(driver: str, titles: list[str]) -> str:
-    """The day's main story as the headlines tell it, with how many of them carry it: the AI's `driver` (every word of it
-    in a headline) or the subject of _STORIES, whichever more headlines carry, at least two; "" when no subject is in two (DD-001: the read gave no cause while every headline on the page was about crude oil)."""
-    titles = [str(t or "") for t in titles if t]
-    best, n = "", 0
+def story_of(driver: str, titles: list[str]) -> dict | None:
+    """The day's main story as the headlines tell it: {"label", "n", "of", "indices"} where `indices` are the positions in
+    `titles` of the headlines that carry it. The AI's `driver` (every word of it in a headline) or the subject of _STORIES,
+    whichever more headlines carry, at least two; None when no subject is in two. The page marks exactly these headlines,
+    so "3 of 8" can be counted by eye (MOOD-1: "crude oil prices (3 of 8)" beside headlines none of which were about it)."""
+    titles = [str(t or "") for t in titles]
+    best, n, hits = "", 0, []
     d = " ".join(str(driver or "").split()).strip(" .")
     if d and len(d) <= 60 and not ADVICE.search(d) and not _PREVIEW.search(d) and not re.search(r"\d", d):
+        stems = _phrase_stems(d)
+        if stems:
+            hits = [i for i, t in enumerate(titles) if all(re.search(r"\b" + re.escape(w), t.lower()) for w in stems)]
         best = d if d[:2].isupper() else d[:1].lower() + d[1:]           # "crude oil", but "RBI policy" as written
-        n = headline_count(d, titles)
+        n = len(hits)
     if n < 2:
-        best, n = "", 0
+        best, n, hits = "", 0, []
     for name, rx in _STORIES:            # a subject more headlines carry is the main story, the AI's naming ties
-        k = sum(1 for t in titles if re.search(rx, t, re.I))
-        if k > n:
-            best, n = name, k
+        got = [i for i, t in enumerate(titles) if re.search(rx, t, re.I)]
+        if len(got) > n:
+            best, n, hits = name, len(got), got
     if n < 2:
-        return ""
-    return f"The main story in today's headlines: {best} ({n} of {len(titles)})."
+        return None
+    return {"label": best, "n": n, "of": len(titles), "indices": hits}
+
+
+def main_story(driver: str, titles: list[str]) -> str:
+    """The sentence for story_of: "" when there is no story."""
+    titles = [str(t or "") for t in titles if t]
+    st = story_of(driver, titles)
+    return f"The main story in today's headlines: {st['label']} ({st['n']} of {st['of']})." if st else ""
 
 
 def flows_source(cash: dict | None) -> str:
@@ -785,7 +772,8 @@ def flow_facts(cash: dict | None) -> dict | None:
 _CAUSE_AFTER = re.compile(r"\b(?:because of|because|due to|driven by|thanks to|on the back of|fuel(?:l)?ed by|boosted by|lifted by|"
                           r"helped by|supported by|weighed (?:down )?by|dragged (?:down )?by|pressured by|spurred by|amid)\b(.+)$", re.I)
 _CAUSE_BEFORE = re.compile(r"^(.+?)\b(?:helped|helps|lifted|lifts|boosted|boosts|drove|drives|driven|fuel(?:l)?ed|spurred|propelled|pushed|"
-                           r"weighed on|dragged|pressured|sent)\b(?!\s+by\b)", re.I)
+                           r"weighed on|dragged|pressured|sent|prompt(?:ed|ing|s)|trigger(?:ed|ing|s)|spark(?:ed|ing|s)|caus(?:ed|ing|es)|"
+                           r"led to|leading to|resulting in|resulted in)\b(?!\s+by\b)", re.I)
 _PREVIEW = re.compile(r"\b(on tap|ahead|set for|await\w*|expected|could|may|might|preview|what to (watch|expect)|week ahead|look(s|ing)? ahead|due)\b", re.I)
 _PLAIN = {"strong", "weak", "solid", "robust", "the", "a", "an", "and", "of", "in", "on", "for", "with", "its", "their", "most",
           "some", "many", "several", "investors", "market", "markets", "stocks", "shares", "index", "indices", "sector", "sectors",
@@ -821,6 +809,68 @@ def cause_backed(s: str, headlines: list[str]) -> bool:
     return False
 
 
+# MOOD-1: a line about a sector agrees with that sector's own move in StratLab's sector table ("Bank and financial sector drag:
+# banks and financial stocks dragged the market" stood beside NIFTY BANK +0.54% and 15 of 16 sector indices up)
+_DOWNISH = re.compile(r"\b(fell|falls?|falling|drag\w*|weigh\w*|slid\w*|slump\w*|drop\w*|declin\w*|lower|loss\w*|lost|weak\w*|pressur\w*|sank|"
+                      r"tumbl\w*|retreat\w*|red|dip\w*|sell-?off|negative)\b", re.I)
+_UPISH = re.compile(r"\b(rose|rises?|risen|rising|gain\w*|lift\w*|rall\w*|higher|advanc\w*|climb\w*|jump\w*|surg\w*|boost\w*|strong\w*|green|firm\w*|positive)\b", re.I)
+_MOST = re.compile(r"\b(most|majority|many|bulk)\b[^.;]{0,20}\b(sector\w*|sectoral)", re.I)
+
+
+def sector_direction_ok(s: str, sectors: dict | None) -> bool:
+    """A clause that names a sector (bank, IT, pharma, real estate…) and says which way it went agrees with that sector
+    index's day in the sector table: never "dragged" a sector that rose, never "gained" one that fell. A clause with both
+    directions, or none, can't be checked and stands. "Most sectors" is held to the table's counts too."""
+    from .mood import SECTOR_WORDS, sgn
+    rows = (sectors or {}).get("rows") or []
+    if not rows:
+        return True
+    for clause in _CLAUSE.split(s or ""):
+        up, down = bool(_UPISH.search(clause)), bool(_DOWNISH.search(clause))
+        if up == down:
+            continue
+        if _MOST.search(clause) and sectors.get("of"):
+            half = sectors["of"] / 2
+            if (up and sectors.get("up", 0) < half) or (down and sectors.get("down", 0) < half):
+                return False
+        for r in rows:
+            rx = SECTOR_WORDS.get(r.get("name"))
+            if rx and re.search(rx, clause, re.I):
+                d = sgn(r.get("change_pct"))
+                if (down and d > 0) or (up and d < 0):
+                    return False
+    return True
+
+
+_STOP = set("that this with from have been were which while their about after over into than also more most such only amid said says will would could "
+            "should being other these those there where when what they them then some many much very just like year years week today market markets "
+            "stocks shares share stock investors company companies index indices sector sectors percent crore billion million trillion higher lower "
+            "rose fell gains losses".split())
+
+
+def _stems(text: str, ignore: str = "") -> set[str]:
+    skip = {w[:max(4, len(w) - 2)] for w in re.findall(r"[a-z][a-z'&-]{3,}", ignore.lower())}
+    return {st for st in (w[:max(4, len(w) - 2)] for w in re.findall(r"[a-z][a-z'&-]{3,}", str(text or "").lower())
+                          if w not in _PLAIN and w not in _STOP) if st not in skip}
+
+
+def grounded_in(text: str, sources: list[str], share: float = 0.75, ignore: str = "") -> bool:
+    """Whether the words that carry a line (not filler, not the company's own name) are in the headlines it must come from:
+    at least `share` of them, matched by stem. A line whose words are mostly not in any headline is the AI's own and
+    is dropped (MOOD-1: "Reliance bought shares, prompting a lift in the indices" from a headline about something else)."""
+    stems = _stems(text, ignore)
+    if not stems:
+        return True
+    src = " ".join(str(x or "") for x in sources).lower()
+    return sum(1 for w in stems if re.search(r"\b" + re.escape(w), src)) / len(stems) >= share
+
+
+def plain_title(t: str) -> str:
+    """A headline as a one-liner: without the " - Source" a news feed adds, at most 160 characters."""
+    t = re.sub(r"\s+[-\u2013|]\s+[^-\u2013|]{2,40}$", "", " ".join(str(t or "").split()))
+    return t if len(t) <= 160 else t[:157].rsplit(" ", 1)[0] + "…"
+
+
 def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors: dict | None = None, cash: dict | None = None) -> dict:
     """The market read with only what the index numbers and the headlines support: a sentence with a number not in
     them, a 52-week claim the levels contradict, a move the wrong way, a central bank, flow or sector no headline
@@ -829,30 +879,48 @@ def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors:
     facts = market_facts(indices)
     support = " ".join(str(h.get("headline") or "") for h in headlines).lower()
     flows = flow_facts(cash) if cash and "status" in cash else cash
-    pool = fact_numbers({"i": facts, "h": [h.get("headline") for h in headlines], "c": flows})
+    pool = fact_numbers({"i": facts, "h": [h.get("headline") for h in headlines], "c": flows, "s": (sectors or {}).get("rows")})
     nets = {w: {"net": flows.get(f"{w}_net_crore")} for w in ("fii", "dii")} if flows else None
     if flows:                       # the day's figures name the institutions: FIIs, DIIs and their flows are backed
         support += " fii dii foreign investors foreign funds inflow outflow"
 
     titles = [str(h.get("headline") or "") for h in headlines]
+    # what a line may also stand on besides a headline: the figures themselves (an index moved, so many sector indices rose, the
+    # institutions' net), in the words that describe them
+    figure_words = " ".join(str(i.get("name") or "") + " closed rose fell gained lost up down range high low" for i in indices)
+    figure_words += " sector sectors sectoral rose fell up down green red" if sectors else ""
+    figure_words += " foreign domestic institutions institutional bought sold net netted buyers sellers inflow outflow" if flows else ""
+    backed_by = titles + [figure_words]
 
     def claim(s):
         return (range_claims_ok(s, facts) and magnitude_ok(s, facts) and index_moves_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support) and sector_claims_ok(s, sectors)
-                and flow_claim_ok(s, nets) and cause_backed(s, titles))
+                and sector_direction_ok(s, sectors) and flow_claim_ok(s, nets) and cause_backed(s, titles))
     res = dict(out)
-    tone = keep_sentences(out.get("tone"), pool, claim)
-    # a read with no figure at all ("the broad market closed higher, anchored by gains…") says nothing a reader can check:
-    # the levels and the day's moves go first, from the numbers themselves (R48-008)
-    if tone and not re.search(r"\d", tone):
-        tone = f"{template_tone(indices)} {tone}".strip()
-    res["tone"] = tone or template_tone(indices)
+    # the read says why the market moved, as the headlines report it; it does not say the levels again (the cards carry
+    # them) and is never made up from the numbers when nothing survives the checks (MOOD-1)
+    # a sentence with figures in it stands on the figures (every one is checked against the facts); one without stands on the words
+    # of a headline, or it is the AI's own
+    stands = lambda s: bool(re.search(r"\d", s)) or grounded_in(s, backed_by, 0.6)          # noqa: E731
+    res["tone"] = keep_sentences(out.get("tone"), pool, lambda s: claim(s) and stands(s))
     named = lambda x: bool(x) and str(x).lower() in support          # noqa: E731
-    res["hot"] = [{**h, "why": keep_sentences(h.get("why"), pool, claim)} for h in out.get("hot") or []
-                  if named(h.get("name")) or named(h.get("ticker"))]
-    res["hot"] = [h for h in res["hot"] if h["why"]]
-    res["flows"] = [{**f, "detail": keep_sentences(f.get("detail"), pool, claim)} for f in out.get("flows") or []]
-    res["flows"] = [f for f in res["flows"] if f["detail"] and _topics_backed(f.get("title") or "", support) and flow_claim_ok(f.get("title") or "", nets)]
-    res["themes"] = [{**t, "detail": keep_sentences(t.get("detail"), pool, claim)} for t in out.get("themes") or []]
+    hot = []
+    for h in out.get("hot") or []:
+        if not (named(h.get("name")) or named(h.get("ticker"))):
+            continue
+        mine = [t for t in titles if any(x and re.search(r"\b" + re.escape(str(x).lower()) + r"\b", t.lower()) for x in (h.get("name"), h.get("ticker")))]
+        why = keep_sentences(h.get("why"), pool, claim)
+        # one line per company: the AI's own words only while they stand on the headlines that name it, else the headline itself
+        if not mine:
+            continue
+        if not why or not grounded_in(why, mine, 0.8, ignore=f"{h.get('name') or ''} {h.get('ticker') or ''}"):
+            why = plain_title(mine[0])
+        hot.append({**h, "why": why})
+    res["hot"] = hot
+    both = lambda s: claim(s) and stands(s)          # noqa: E731
+    res["flows"] = [{**f, "detail": keep_sentences(f.get("detail"), pool, both)} for f in out.get("flows") or []]
+    res["flows"] = [f for f in res["flows"] if f["detail"] and _topics_backed(f.get("title") or "", support) and flow_claim_ok(f.get("title") or "", nets)
+                    and sector_direction_ok(f.get("title") or "", sectors)]
+    res["themes"] = [{**t, "detail": keep_sentences(t.get("detail"), pool, both)} for t in out.get("themes") or []]
     res["themes"] = [t for t in res["themes"] if t["detail"] and (not t.get("example") or named(t.get("example")))]
     res["checked"] = True
     return res

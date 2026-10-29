@@ -107,6 +107,11 @@ def operations():
 @pytest.fixture
 def w(monkeypatch):
     built = world.build(monkeypatch)
+    # the market is shut for the whole run, whatever the clock says: a hostile case that happens to keep a real instrument in /watch/stream's `ids`
+    # opens a LIVE stream, which the server closes only after MAX_AGE (20 minutes), so this test took 20 minutes (or timed out) whenever India's
+    # market was open and the random draws landed on such a case (THEME-1: more routes shifted the draws). The live stream has its own tests.
+    import app.intel.company as company
+    monkeypatch.setattr(company, "market_open", lambda *a, **k: False)
     yield built
     built["close"]()
 

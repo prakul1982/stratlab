@@ -90,7 +90,7 @@ export function TaxToolsPage() {
     // each tab says its own lock in the same place, at its top (DP2-012: the page's note showed on two tabs and an inline one on
     // the third); the dividend detail is Basic, the amounts and lots Pro, so one page note can't say both
     <div className="k-page" data-plan-notes="own">
-      <PageHeader eyebrow="Money · Tax" title="Dividends, advance tax and the long-term exemption"
+      <PageHeader eyebrow="Money · Tax" title="Tax tools"
         lede={<>Built on your <Link className="link" to="/tax-report">tax report</Link> and <Link className="link" to="/holdings">holdings</Link>: the dividends you received, the advance tax due by each date, and how much of this year's long-term exemption is used.</>}
         info="The dividends you received and the TDS on them, the advance tax due by each date, and how much of this year's long-term gains exemption is used. Only you can see these figures." infoLabel="What these tools cover" />
       <Notice label="Estimate only"><b>Estimate only.</b> {DISCLAIMER}</Notice>

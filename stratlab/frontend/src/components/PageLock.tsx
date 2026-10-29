@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { CFG } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -6,6 +7,7 @@ import { featureName, gateFor, gatePlan } from "../lib/gates";
 import { unlockHint, EARLY_ACCESS_EMAIL } from "../lib/offer";
 import { PLAN_NAME } from "../lib/plans";
 import { lockWords } from "../lib/lockText";
+import { useLockSlot } from "../lib/lockSlot";
 import { usePlanPrice } from "../lib/currency";
 import { Notice } from "./kit";
 import { PlanActions } from "./PlanInterest";
@@ -22,6 +24,7 @@ export function PageLock() {
   const unlocks = locked && gate ? gatePlan(gate) : null;
   const price = usePlanPrice(unlocks === "basic" || unlocks === "pro" ? unlocks : null);
   const [own, setOwn] = useState(false);
+  const slot = useLockSlot();           // the page's title draws it: the note goes under the title, on every page (RC7-003)
   useEffect(() => {
     setOwn(false);
     if (!locked) return;
@@ -39,11 +42,13 @@ export function PageLock() {
   const yours = PLAN_NAME[(me.plan ?? "free") as "free" | "basic" | "pro"] ?? "Free";
   const what = featureName(gate.feature);
   const hint = unlockHint(me.offer, CFG.CONTACT_EMAIL || EARLY_ACCESS_EMAIL, price);
-  return (
+  const note = (
     <Notice className="page-lock plan-note" label={`${plan} feature`} actions={<PlanActions source="lock" />}>
       <b><Lock />{gate.whole ? `This page is on the ${plan} plan.` : `Part of this page is on the ${plan} plan.`}</b>{" "}
       {lockWords(what, plan, yours, gate.whole)}{" "}
       {hint}
     </Notice>
   );
+  // under the page's title when it has one; at the top for a page with no title component
+  return slot && slot.isConnected ? createPortal(note, slot) : note;
 }

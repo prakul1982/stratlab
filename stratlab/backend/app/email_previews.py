@@ -56,7 +56,7 @@ def _issue(facts: dict) -> dict:
     issue = {"id": job.issue_id(facts["kind"], facts.get("region") or "sample", facts["day"], facts["weekly"]), "kind": facts["kind"],
              "region": facts.get("region"), "day": facts["day"], "weekly": facts["weekly"], "subject": write.subject(facts),
              "sections": write.sections(facts), "summary": write.template(facts), "ai": False, "title": write.headline(facts),
-             "label": write.type_label(facts), "indices": facts.get("indices") or [],
+             "label": write.type_label(facts), "indices": facts.get("indices") or [], "sample": True,
              # the weekly digest is gathered on Saturday morning; a daily issue right now
              "at": (datetime.combine(date.fromisoformat(facts["day"]), datetime.min.time(), IST).replace(hour=8) if facts["weekly"]
                     else datetime.now(IST)).isoformat(timespec="minutes")}
@@ -173,17 +173,19 @@ def _alerts_email(subject: str, text: str, path: str, label: str, why: str, date
 
 def _stock_alert() -> tuple[str, str, str]:
     from . import stock_alerts
-    subject, body = stock_alerts.message(["RELIANCE rose above ₹2,900 (now ₹2,912.40)", "HDFCBANK fell more than 3% today (now −3.4%)",
+    subject, body = stock_alerts.message(["RELIANCE rose above ₹1,150 (now ₹1,158.40)", "HDFCBANK fell more than 3% today (now −3.4%)",
                                           "TCS closed above its 50-day average"])
     return _alerts_email(subject, stock_alerts.bulleted(body), "/alerts", "Price and stock alerts", "You get this because you set these alerts on StratLab.")
 
 
 def _events() -> tuple[str, str, str]:
     from . import market_events as M
+    # NIFTY's weekly expiry is a Tuesday (the sample's second event), so the day is the next Tuesday (LIVE1C-033: "NIFTY weekly expiry" on a Friday);
+    # an RBI decision falls on a weekday too (R93-009: "Sun 25 Oct")
     day = _today() + timedelta(days=1)
-    while day.weekday() >= 5:            # an RBI decision and an expiry fall on a weekday (R93-009: "Sun 25 Oct")
+    while day.weekday() != 1:
         day += timedelta(days=1)
-    text = M.reminder_text([{"title": "RBI policy decision", "time": "10:00"}, {"title": "NIFTY weekly expiry"}], 1, day)
+    text = M.reminder_text([{"title": "RBI policy decision", "time": "10:00"}, {"title": "NIFTY weekly expiry"}], (day - _today()).days, day)
     return _alerts_email(f"StratLab: RBI policy decision and 1 more, {M._short(day)}", text, "/trade/events", "Market events",
                          "You get this because you turned on market event reminders on StratLab.")
 
@@ -235,6 +237,14 @@ def _admin() -> tuple[str, str, str]:
     return _alerts_email("StratLab: 2 checks failing", text, "/admin", "Admin alert", "You get this because you are a StratLab admin.")
 
 
+def _broker_login() -> tuple[str, str, str]:
+    """The alert every admin gets when the automatic Zerodha login gives up, as kite_auto sends it through alerts.tell_admins."""
+    from . import alerts, kite_auto
+    text = kite_auto.login_needed_text("The broker asked for a CAPTCHA.")
+    # (the page the alert's link lands on; the link itself adds ?kite=login, which opens the broker's sign-in at once)
+    return _alerts_email(text.split(". ")[0][:120], text, "/admin/data", "Admin alert", alerts.ADMIN_WHY)
+
+
 def _daily_report() -> tuple[str, str, str]:
     """The paper trading report after a market's close, as live.py sends it: its own unsubscribe (R69-004: not listed)."""
     from . import alerts, daily_report as R
@@ -244,8 +254,8 @@ def _daily_report() -> tuple[str, str, str]:
             {"name": "BANKNIFTY breakout", "currency": "INR", "closed": 0, "wins": 0, "pnl": 0.0, "open": 0, "unrealised": 0.0,
              "equity": 488_150.0, "capital": 500_000.0}]
     subject = f"StratLab daily report: India, {kit.fmt_date(day, year=False, weekday=True)}"
-    html, plain = kit.message(subject, R.text("India", day, rows), "/paper", "Alert", "You get this because you turned on notifications in StratLab.",
-                              date=kit.today_label(), unsubscribe=alerts.OWN_UNSUBSCRIBE["daily_report"])
+    html, plain = kit.message(subject, R.text("India", day, rows), "/paper", "Daily report", "You get this because you turned on notifications in StratLab.",
+                              date=kit.fmt_date(day, year=False, weekday=True), unsubscribe=alerts.OWN_UNSUBSCRIBE["daily_report"])
     html, plain = kit.preview_links(html, plain)
     return kit.subject_line(subject), html, plain
 
@@ -254,10 +264,13 @@ def _weekly_admin() -> tuple[str, str, str]:
     """The owner's Monday summary (R69-004: not listed)."""
     from . import alerts, weekly
     now = datetime.now(ZoneInfo("UTC"))
-    facts = {"stats": {"new": 1, "users": 10, "paying": {}, "given": {"pro": 6}, "experiments": 42, "ai": 7},
-             "checks": [{"at": now.isoformat(), "fail": False}] * 6 + [{"at": now.isoformat(), "fail": True, "failed": ["Prices"],
+    # round, plainly made-up figures and a check time on the hour: nothing that reads as the site's real counts or a real failure just now
+    # (LIVE1C-035: "10 in all", "Pro 6" and a failure stamped with the current minute)
+    at = (now - timedelta(days=2)).replace(hour=3, minute=0, second=0, microsecond=0)
+    facts = {"stats": {"new": 5, "users": 100, "paying": {}, "given": {"pro": 10}, "experiments": 50, "ai": 20},
+             "checks": [{"at": at.isoformat(), "fail": False}] * 6 + [{"at": at.isoformat(), "fail": True, "failed": ["Prices"],
                                                                          "failed_detail": [{"name": "Prices", "detail": "The last update was 3 hours old."}]}],
-             "audits": {"IN": {"enabled": True, "checked": 48, "issues": []}, "US": {"enabled": True, "checked": 19, "issues": []}},
+             "audits": {"IN": {"enabled": True, "checked": 50, "issues": []}, "US": {"enabled": True, "checked": 20, "issues": []}},
              "errors": 1, "admin_url": kit.site("/admin")}
     subject, text = weekly.summary(now, facts)
     # dated the Monday it goes out, not today (DJ-038: "Weekly summary (admins, Monday)" headed "Sun 25 Oct")
@@ -317,6 +330,7 @@ def registry() -> dict:
         "money_calendar": ("Money calendar reminder", "Reminders", _money_calendar, True, False),
         "daily_report": ("Paper trading report (after each close)", "Alerts", _daily_report, True, False),
         "admin_alert": ("Admin alert", "Admin", _admin, True, False),
+        "broker_login": ("Broker login needs you (admins)", "Admin", _broker_login, True, False),
         "weekly_admin": ("Weekly summary (admins, Monday)", "Admin", _weekly_admin, True, False),
         "confirm": ("Confirm your email", "Account", _confirm, False, True),
         "test": ("Test email", "Admin", test_email, False, True),

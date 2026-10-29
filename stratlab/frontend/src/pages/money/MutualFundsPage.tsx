@@ -8,8 +8,8 @@ import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { LIMITS } from "../../lib/plans";
 import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column, UploadProblem, useUploadProblem } from "../../components/kit";
-import { CostCell, CostDetail, CostHow, CostNotes, CostStats, costsShown, useFundCosts } from "./FundCosts";
-import { BehaviourDetail, BehaviourHow, BehaviourNotes, BehaviourStats, GapCell, behaviourShown, hasGap, useFundBehaviour } from "./FundBehaviour";
+import { CostCell, CostDetail, CostHow, CostNotes, CostStats, costStatsShown, costsShown, useFundCosts } from "./FundCosts";
+import { BehaviourDetail, BehaviourHow, BehaviourNotes, BehaviourStats, GapCell, behaviourShown, behaviourStatsShown, hasGap, useFundBehaviour } from "./FundBehaviour";
 import { Earlier } from "../../components/Earlier";
 import { movedYearNote, openFy } from "../../lib/fy";
 import { importLine } from "../../lib/mfImport";
@@ -88,6 +88,8 @@ export function MutualFundsPage() {
 
   const { problem, clear: clearProblem, refused } = useUploadProblem();     // a wrong password or a file that isn't a statement stays beside the upload (RC6-010)
   const isPdf = !!picked && (/\.pdf$/i.test(picked.name) || picked.type === "application/pdf");
+  // LIVE1B-049: a password that did not open the PDF is said under the password box, which is marked wrong; any other refusal stays under the form
+  const passwordProblem = isPdf && problem && /password/i.test(problem) ? problem : null;
   const send = async () => {
     if (!picked) { notify("Pick your CAS PDF or a CSV first."); return; }
     if (picked.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A CAS is usually much smaller.`); return; }
@@ -99,6 +101,7 @@ export function MutualFundsPage() {
       setResult(r);
       show(r.view);
       setPicked(null);
+      setMode("add");           // "Start again with this file" was remembered for the next file (LIVE1B-018)
       resetFile.current();
     } catch (e) { if (!refused(e)) fail(e); } finally {
       setPassword("");          // used once to open the file, then forgotten
@@ -210,15 +213,15 @@ export function MutualFundsPage() {
           {picked && <span className="k-small k-any">{picked.name}</span>}
         </div>
         <FormGrid onSubmit={(e) => { e.preventDefault(); void send(); }}>
-          {isPdf && <Field label="PDF password" type="password" value={password} autoComplete="off" spellCheck={false} placeholder="As set when you asked for it, often your PAN"
-            onChange={(e) => setPassword(e.target.value)} aria-label="PDF password" />}
+          {isPdf && <Field label="PDF password" type="password" value={password} autoComplete="off" spellCheck={false} placeholder="As set when you asked for it, often your PAN" error={passwordProblem}
+            onChange={(e) => { setPassword(e.target.value); if (passwordProblem) clearProblem(); }} aria-label="PDF password" />}
           <FormActions>
             <button type="submit" className="btn" disabled={busy || !picked}>{busy ? "Reading…" : "Read my funds"}</button>
             {/* a greyed-out button says what it is waiting for (R1-057) */}
-            {!picked && <span className="k-note">Pick your statement first. A PDF asks for its password here once picked.</span>}
+            {!picked && !result && <span className="k-note">Pick your statement first. A PDF asks for its password here once picked.</span>}
           </FormActions>
         </FormGrid>
-        <UploadProblem problem={problem} />
+        <UploadProblem problem={passwordProblem ? null : problem} />
         {result && (
           <div className="k-stack" role="status">
             <p className="k-small">
@@ -246,9 +249,13 @@ export function MutualFundsPage() {
         <EmptyState title="No funds yet">Upload your CAS above to see your schemes, their value and your gains.</EmptyState>
       )}
 
+      {view && held.length === 0 && schemes.length > 0 && (
+        // LIVE1B-015: nothing held: the answer is said first, in place of four zero tiles and a table with only its headers
+        <EmptyState title="Every scheme in your files has been fully redeemed">You hold no units now. Your past redemptions and their gains are below.</EmptyState>
+      )}
       {view && t && schemes.length > 0 && (
         <>
-          <Card className="mf-stats">
+          {held.length > 0 && <Card className="mf-stats">
             <CardHead title="Where your funds stand" info={navWhen ? `Valued at the NAV of ${navWhen}.` : "No NAV is available yet."} />
             <StatRow>
               <Stat label="Current value" value={inr(t.value)} note={`${t.held} scheme${t.held === 1 ? "" : "s"} held`} />
@@ -263,12 +270,12 @@ export function MutualFundsPage() {
               rows={view.allocation.map((a) => ({ key: a.broad, name: a.broad, note: `${a.schemes} scheme${a.schemes === 1 ? "" : "s"}${a.subs.length > 0 ? ` · ${a.subs.map((s) => s.sub).join(", ")}` : ""}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
             {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
             {view.limit != null && <p className="k-note">{schemes.length} of {view.limit} free schemes used. Basic keeps every scheme, with capital gains by year.</p>}
-          </Card>
+          </Card>}
 
           {held.length > 0 && (costsShown(costs) || behaviourShown(habits)) && (
             <Card label="Costs and how you invested" className="mf-stats">
               <CardHead title="What your funds cost, and how you invested" info="Each fund's total expense ratio (TER) as published and what it comes to in rupees a year, then your return against each fund's own, your SIPs and your redemptions. Each scheme's own figures are under it in the list below." />
-              {(costs.c?.state === "ok" && costs.c.total || habits.b?.full && habits.b.total) && <StatRow><CostStats q={costs} /><BehaviourStats q={habits} /></StatRow>}
+              {(costStatsShown(costs) || behaviourStatsShown(habits)) && <StatRow><CostStats q={costs} /><BehaviourStats q={habits} /></StatRow>}
               <CostNotes q={costs} />
               <BehaviourNotes q={habits} />
               <Disclosure summary="How this is worked out"><CostHow q={costs} /><BehaviourHow q={habits} /></Disclosure>
@@ -278,7 +285,7 @@ export function MutualFundsPage() {
           <Card label="Your schemes">
             <CardHead title="Your schemes" info={'Gain is the current value less the cost of the units held. "Taxed as" is read from the category; change it, under the scheme, where your fund\'s documents say otherwise. Open a scheme for its units, NAV, cost, taxes, SIP record and sales.'} />
             {/* each scheme is one row, said once; fully redeemed schemes apart, so the list is what you hold (DG-026) */}
-            <FoldTable label="Schemes" columns={schemeCols} rows={held} rowKey={(s) => s.key} detail={detail} openWhen={open} />
+            {held.length > 0 && <FoldTable label="Schemes" columns={schemeCols} rows={held} rowKey={(s) => s.key} detail={detail} openWhen={open} />}
             <Earlier label="Schemes you no longer hold" count={schemes.length - held.length} className="in-card">
               <FoldTable label="Schemes you no longer hold" columns={schemeCols} rows={schemes.filter((s) => s.units <= 0)} rowKey={(s) => s.key} detail={detail} openWhen={open} />
             </Earlier>
@@ -323,12 +330,11 @@ export function MutualFundsPage() {
 
           <section className="k-stack">
             <ul className="k-list muted" aria-label="Assumptions">{view.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
-            <p className="k-note">Your transactions are stored with your account only, used for this page, the tax report and your net worth, and never shared. As of {dateOnly(view.as_of)}.</p>
+            <p className="k-note">Your transactions are stored with your account only, used for this page, the tax report and your net worth, and never shared. Worked out on {dateOnly(view.as_of)}.</p>
             <button type="button" className="btn danger k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete my mutual fund data</button>
           </section>
         </>
       )}
-      {view && held.length === 0 && schemes.length > 0 && <p className="k-note">Every scheme in your files has been fully redeemed.</p>}
       {asking && <ConfirmDialog title="Delete my mutual fund data?" confirmLabel="Delete my mutual fund data" busy={busy} onConfirm={() => void remove()} onClose={() => setAsking(false)}>Every scheme and transaction is removed from StratLab. Your folios aren't touched.</ConfirmDialog>}
     </div>
   );

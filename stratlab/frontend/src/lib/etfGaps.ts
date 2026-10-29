@@ -58,4 +58,4 @@ export const etfGapApi = {
   detail: (symbol: string) => api<EtfGapDetail>(`/invest/etf-gaps/${encodeURIComponent(symbol)}`),
 };
 
-export { dayCount, gapAtLastTrade, gapAtPrice, gapPct, gapShort, gapWords } from "./etfGapMath";
+export { dayCount, gapAtLastTrade, gapAtPrice, gapPct, gapShort, gapSummary, gapWords } from "./etfGapMath";

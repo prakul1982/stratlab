@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../../lib/http";
 import { Upload } from "../Icons";
 
@@ -10,13 +10,28 @@ export function UploadButton({ label, busyLabel = "Reading…", busy, accept, mu
 }) {
   const box = useRef<HTMLInputElement>(null);
   const reset = () => { if (box.current) box.current.value = ""; };
+  // LIVE1B-001: a first read of the day took 13 s with "Reading…" and nothing else, which looked hung; after a few seconds the
+  // button says it is still working
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    setSlow(false);
+    if (!busy) return;
+    const t = window.setTimeout(() => setSlow(true), SLOW_READ_MS);
+    return () => window.clearTimeout(t);
+  }, [busy]);
   return (
-    <label className={`btn${quiet ? " quiet" : ""}${busy ? " disabled" : ""} k-upload`}>
-      <Upload size={18} />{busy ? busyLabel : label}
-      <input ref={box} type="file" accept={accept} multiple={multiple} hidden disabled={busy} aria-label={ariaLabel} onChange={(e) => onFiles(e.target.files, reset)} />
-    </label>
+    <>
+      <label className={`btn${quiet ? " quiet" : ""}${busy ? " disabled" : ""} k-upload`}>
+        <Upload size={18} />{busy ? busyLabel : label}
+        <input ref={box} type="file" accept={accept} multiple={multiple} hidden disabled={busy} aria-label={ariaLabel} onChange={(e) => onFiles(e.target.files, reset)} />
+      </label>
+      {busy && slow && <span className="k-note" role="status" data-testid="upload-slow">Still reading. The first file after a quiet spell can take a few seconds.</span>}
+    </>
   );
 }
+
+/** How long a file read may take before the page says it is still at it. */
+export const SLOW_READ_MS = 4000;
 
 /** A refused file's explanation, kept on the page beside its upload until the next try (RC6-010: a long reason such as "We couldn't
  * find the holdings in that file. It needs a column for the stock..." was a toast, gone in seconds, over the form's fields).
@@ -28,7 +43,9 @@ export function useUploadProblem() {
     if (e instanceof ApiError && (e.status === 400 || e.status === 422) && e.message) { setProblem(e.message); return true; }
     return false;
   };
-  return { problem, clear: () => setProblem(null), refused };
+  /** A refusal of the page's own (a file over the size limit), kept the same way as the server's (LIVE1B-002). */
+  const reject = (message: string) => setProblem(message);
+  return { problem, clear: () => setProblem(null), refused, reject };
 }
 
 /** The kept explanation of a refused file, under the upload it belongs to. */

@@ -195,6 +195,23 @@ const TGT_UNITS: [NonNullable<Risk["tgtType"]>, string, string][] = [
   ["pct", "% target", "percent of the entry price"], ["points", "point target", "price points"], ["r", "R target", "a multiple of the stop distance: 2R is twice the risk"],
 ];
 
+/** The notebook's rule sentences on their own, for a page that has only conditions to write (the Trend scan's "Build your own"): each rule is the same
+ * editable sentence ("Price is above SMA 20") with its (x), and "+ Add a rule" adds a common one. Daily candles only; every rule must hold. */
+export function ConditionList({ conds, onChange, max }: { conds: Cond[]; onChange: (c: Cond[]) => void; max: number }) {
+  const { allIndicators } = useApp();
+  return (
+    <div className="k-stack" data-testid="condition-list">
+      {conds.map((c, i) => (
+        <CondSentence key={i} c={c} lead={<span className="k-muted">{i + 1}.</span>} allIndicators={allIndicators} tf="1d"
+          onChange={(nc) => onChange(conds.map((x, k) => (k === i ? nc : x)))} onDelete={() => onChange(conds.filter((_, k) => k !== i))} />
+      ))}
+      {conds.length < max
+        ? <button type="button" className="add-rule" onClick={() => onChange([...conds, { l: mkRef("price"), op: "gt", r: mkRef("sma") }])}>+ Add a rule</button>
+        : <p className="k-note">{max} rules is the most a scan holds. Remove one to add another.</p>}
+    </div>
+  );
+}
+
 export function RulesCard({ s, currency, onChange, onRebuilt, defaultStop }: {
   s: Strategy; currency: string; onChange: (s: Strategy) => void;
   /** The stop loss is the notebook's default: the idea never set one and no question about it was answered (DA-008). */

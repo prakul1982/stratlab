@@ -54,7 +54,7 @@ test("AAPL's page: no unsourced segment split, an insider net that matches its r
 test("TCS's key numbers: no scraped strengths and concerns, and a figure's note shows (R5O-011)", () => {
   const research = read("src/pages/Research.tsx");
   assert.doesNotMatch(research, /Strengths and concerns|c\.pros|c\.cons/);
-  assert.match(read("src/components/Research.tsx"), /\{m\.label\}\{m\.note && <span className="k-sub-line">\{m\.note\}<\/span>\}/);
+  assert.match(read("src/components/Research.tsx"), /m\.note && !mark\(m\) \? m\.note : ""/);       // (UI-CO item 2: the note is the Basis column's, a long one a numbered note)
 });
 
 test("the screener starts with the largest companies (R5O-012)", () => {
@@ -82,8 +82,8 @@ test("whole-number growth rates stay whole, and the compare page names each sect
 test("the Money card's tax is the tax report's total, with the audit fact (R5O-022)", () => {
   const card = read("src/pages/SpaceHomes.tsx");
   assert.match(card, /year\?\.total\?\.available \? year\.total\.total/);
-  assert.match(card, /<Fig label="Total tax estimate"/);           // the card heading carries the year
-  assert.match(card, /\{year\?\.audit && <p className="small">\{year\.audit\}<\/p>\}/);
+  assert.match(card, /label: "Total tax estimate"/);           // the card heading carries the year; the figures are a table (RES-1)
+  assert.match(card, /\{year\?\.audit && <Disclosure summary="Tax audit \(section 44AB\)" testId="tax-audit"><p className="small">\{year\.audit\}<\/p><\/Disclosure>\}/);   // (behind a fold, LIVE1C-051)
   assert.doesNotMatch(card, /Capital gains tax, \$\{year/);
 });
 
@@ -353,7 +353,7 @@ test("round 39: the company page states figures and the checklist reads against 
   assert.doesNotMatch(home, /\} pass<\/b>|Failed checks/);
   const research = read("src/components/Research.tsx");
   assert.doesNotMatch(research, />Strengths<|>Risks</);
-  assert.match(research, /<b className="k-sub">Notable figures<\/b>/);
+  assert.match(research, /area: "Notable figures"/);       // (UI-CO item 3: a row of the AI read table)
   assert.match(research, /\[\.\.\.r\.bull, \.\.\.r\.bear\]/);
   // the Screens page's claim stays true
   assert.match(read("src/pages/Screens.tsx"), /Nothing here scores companies/);

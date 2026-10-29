@@ -151,8 +151,8 @@ def view(profile, data: dict | None = None, segment: str = "all", market: str = 
     data = sync_tax_charges(uid, data or J.load(uid))
     got = J.trades(uid, data, today())
     every = got["trades"]
-    show = data["settings"].get("show", "all")
     practice = sum(1 for t in every if t["src"] == "practice")
+    show = data["settings"].get("show") or ("real" if len(every) > practice else "all")
     allt = every if show == "all" or not practice else [t for t in every if (t["src"] == "practice") == (show == "practice")]
     # each market (India, US stocks, crypto) is worked out apart, in its own currency; India is the default unless the
     # journal holds only another market. Within India a segment can be picked (equity delivery, intraday, futures, ...).
@@ -356,7 +356,7 @@ def settings(req: SettingsReq, profile=Depends(current_profile)):
     j = J.load(profile["id"])
     got = req.model_dump()
     if got["show"] is None:
-        got["show"] = j["settings"].get("show", "all")
+        got["show"] = j["settings"].get("show")
     j["settings"] = J.clean_settings(got)
     return _m().ok(view(profile, J.save(profile["id"], j)))
 

@@ -288,13 +288,11 @@ def quote_ai(monkeypatch, calls=None):
             calls.append(text)
         if "Cover" in text and "Collaboration revenue" in text:                 # the US prospectus
             q = "Our approach to drug discovery, which integrates AI with automated experimentation, is novel and unproven"
-            return json.dumps({"business": {"text": "An AI-enabled drug discovery company.", "quote": q}, "financials": [], "objects": [], "promoters": [],
-                               "risks": [{"text": "The company has a limited operating history and has made large losses.",
-                                          "quote": "We have a limited operating history and have incurred significant losses and negative cash flows"}]})
+            return json.dumps({"business": {"text": "An AI-enabled drug discovery company.", "quote": q},
+                               "segments": [{"text": "Collaboration revenue was $9,426 thousand.", "quote": "Collaboration revenue $ 9,426 $ 1,194"}]})
         return json.dumps({"business": {"text": "Makes gearboxes and drives.", "quote": "OUR PROMOTERS: SONIA BONFIGLIOLI, LUCIANO BONFIGLIOLI, LUISA LUSARDI, BON-FI S.R.L., AND BONFIGLIOLI S.P.A."},
-                           "promoters": [{"text": "The promoters are Sonia Bonfiglioli, Luciano Bonfiglioli, Luisa Lusardi, Bon-Fi S.r.l. and Bonfiglioli S.p.A.",
-                                          "quote": "OUR PROMOTERS: SONIA BONFIGLIOLI, LUCIANO BONFIGLIOLI, LUISA LUSARDI, BON-FI S.R.L., AND BONFIGLIOLI S.P.A."}],
-                           "financials": [], "objects": [], "risks": []})
+                           "segments": [{"text": "The promoters are Sonia Bonfiglioli, Luciano Bonfiglioli, Luisa Lusardi, Bon-Fi S.r.l. and Bonfiglioli S.p.A.",
+                                         "quote": "OUR PROMOTERS: SONIA BONFIGLIOLI, LUCIANO BONFIGLIOLI, LUISA LUSARDI, BON-FI S.R.L., AND BONFIGLIOLI S.P.A."}]})
     monkeypatch.setattr(D, "complete", fake)
 
 
@@ -316,7 +314,7 @@ def test_the_job_reads_documents_nearest_their_dates_first_then_summarises(docs,
     assert f["promoters"][0] == "Sonia Bonfiglioli" and f["financials"]["page"] == 72 and f["objects"]["page"] == 111 and f["pages_read"] == 150 and "excerpt" in f
     assert len(calls) == 2                                                                       # at most two summaries a pass, written from the documents' own passages
     made = [json.loads(v) for _, v in db.all_settings_with_prefix(D.SUM_KEY)]
-    assert len(made) == 2 and all(m["items"]["promoters"][0]["text"].startswith("The promoters are") for m in made)
+    assert len(made) == 2 and all(m["items"]["segments"][0]["text"].startswith("The promoters are") and m["items"]["business"]["text"] == "Makes gearboxes and drives." and set(m["items"]) == {"business", "segments"} for m in made)
     job.read_docs(NOW + timedelta(minutes=5), limit=3)
     assert len(calls) == 4 and len(list(db.all_settings_with_prefix(D.SUM_KEY))) == 4         # the next pass writes the next two, none twice
 
@@ -447,7 +445,7 @@ def test_an_issue_page_shows_its_facts_to_everyone_and_the_summary_to_basic(docs
     r = c.post("/invest/ipos/in-bonfig/summary", headers=headers("basic-token"))
     assert r.status_code == 200
     s = r.json()["summary"]
-    assert s["state"] == "ready" and s["items"]["promoters"][0]["text"].startswith("The promoters are") and s["items"]["promoters"][0]["quote"].startswith("OUR PROMOTERS")
+    assert s["state"] == "ready" and s["items"]["segments"][0]["text"].startswith("The promoters are") and s["items"]["segments"][0]["quote"].startswith("OUR PROMOTERS")
     assert c.get("/invest/ipos/in-bonfig", headers=headers("free-token")).json()["summary"]["state"] == "locked"      # still locked for Free
     n = len(docs["fetched"])
     c.post("/invest/ipos/in-bonfig/summary", headers=headers("pro-token"))
@@ -465,7 +463,7 @@ def test_a_us_issue_page_and_its_summary(docs, monkeypatch):
     d = c.get("/invest/ipos/us-1273626-119431", headers=headers("basic-token")).json()
     assert d["ipo"]["company_link"] == "/research/US/IAM" and d["ipo"]["price"] == 16.0 and d["ipo"]["industry"].startswith("Biological")
     assert d["facts"]["us"]["company_shares"] == 9375000 and d["facts"]["us"]["proceeds"].startswith("We estimate")
-    assert d["summary"]["items"]["risks"][0]["text"].startswith("The company has a limited operating history")
+    assert d["summary"]["items"]["segments"][0]["text"].startswith("Collaboration revenue was")
     assert d["perf"]["listing_price"] == 19.5 and d["perf"]["change_pct"] == 15.0
     assert [x["label"] for x in d["documents"]][0] == "Final prospectus (424B4)" and d["documents"][0]["url"].endswith("-index.htm")
 

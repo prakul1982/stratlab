@@ -6,7 +6,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { asOf, fmtDate, marketTz, pct, price } from "../lib/format";
 import { useLiveRefresh } from "../lib/liveRefresh";
 import { ipoApi, type AlertPrefs, type EventKind, type IpoList, type IpoRow, type Market, type Stage } from "../lib/ipo";
-import { TAB_LINE, badgeOf, bandText, clockText, expectedText, minText, segmentWord, sharesText, sizeText, spanText, tabsFor, timesText } from "../lib/ipoText";
+import { TAB_LINE, badgeOf, bandText, clockText, expectedText, minText, partsText, problemNote, segmentWord, sharesText, sizeText, spanText, tabsFor, timesText } from "../lib/ipoText";
 import { Badge, Card, CardHead, CheckField, ChipSet, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Signed, Skeleton, type Column } from "../components/kit";
 import "./ipo.css";
 
@@ -56,14 +56,23 @@ function perfCell(r: IpoRow, which: "listing" | "now") {
   return <>{price(px, r.currency, 2)}<span className="k-sub-line">{day}<Signed value={v} fmt={(x) => pct(x, 1)} /> on the issue price</span></>;
 }
 
+/** "2026-10-28 19:00" (the exchange's stamp, India time) as "28 Oct, 19:00". */
+function bidsAt(stamp: string): string {
+  const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/.exec(stamp);
+  return m ? `${fmtDate(m[1], { year: false })}, ${m[2]}` : stamp;
+}
+
 function columns(m: Market, tab: Stage): Column<IpoRow>[] {
   const name: Column<IpoRow> = { key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Company r={r} /> };
   const band: Column<IpoRow> = { key: "band", header: "Price band", numeric: true, cell: (r) => bandText(r) };
   const lot: Column<IpoRow> = { key: "lot", header: "Lot and minimum", numeric: true, info: "The lot is the fewest shares one bid can be for. The minimum is the lot at the top of the price band.",
     cell: (r) => (r.lot ? <>{sharesText(r.lot)} shares<span className="k-sub-line">{minText(r)}</span></> : "–") };
-  const size: Column<IpoRow> = { key: "size", header: "Issue size", numeric: true, cell: (r) => sizeText(r) };
-  const times: Column<IpoRow> = { key: "times", header: tab === "open" ? "Bids so far" : "Bids received", numeric: true, info: "How many times the shares on offer the bids came to, over both exchanges.",
-    cell: (r) => (r.sub_times != null ? <>{timesText(r.sub_times)}</> : <span className="k-muted">–</span>) };
+  // the size says whether it is all new shares or new shares plus a sale by existing holders, when the exchange gives the two parts (LIVE1A-030)
+  const size: Column<IpoRow> = { key: "size", header: "Issue size", numeric: true,
+    info: "The whole issue: the new shares the company issues plus any shares existing holders put up for sale (an offer for sale). The two parts are under the total when the exchange gives both.",
+    cell: (r) => <>{sizeText(r)}{r.size != null && r.size_parts?.fresh_cr != null && r.size_parts?.ofs_cr != null && <span className="k-sub-line" data-testid="ipo-size-parts">{partsText(r.size_parts)}</span>}</> };
+  const times: Column<IpoRow> = { key: "times", header: tab === "open" ? "Bids so far" : "Bids received", numeric: true, info: "How many times the shares on offer the bids came to, counting the bids placed on both exchanges (NSE and BSE), as the exchange's issue page totals them. NSE's own count alone is lower. The time of the reading is under each figure.",
+    cell: (r) => (r.sub_times != null ? <>{timesText(r.sub_times)}{tab === "open" && r.sub_as_of && <span className="k-sub-line" data-testid="ipo-sub-at">as of {bidsAt(r.sub_as_of)}</span>}</> : <span className="k-muted">–</span>) };
   if (m === "US") {
     if (tab === "upcoming") {
       return [name, { key: "d", header: "Expected to price", cell: (r) => (r.expected ? fmtDate(r.expected) : r.filed ? `Filed ${fmtDate(r.filed)}` : "–") }, band,
@@ -155,7 +164,14 @@ export function IposPage() {
     return (["open", "upcoming", "closed", "listed"] as Stage[]).find((s) => tabs.some((t) => t.value === s) && d.counts[s] > 0) ?? "upcoming";
   }, [d, asked, tabs]);
   const now: Stage = tab && tabs.some((t) => t.value === tab) ? tab : first;
-  const rows = d?.tabs[now] ?? [];
+  const all = d?.tabs[now] ?? [];
+  // a listed issue whose prices could not be read (small-board names mostly) is a row of dashes: those wait in a fold of their own,
+  // so the list is the issues with figures (LIVE1A-031)
+  const unpriced = now === "listed" ? all.filter((r) => r.perf?.latest == null && r.perf?.listing_price == null) : [];
+  const rows = unpriced.length && unpriced.length < all.length ? all.filter((r) => !unpriced.includes(r)) : all;
+  const unpricedShown = unpriced.length > 0 && rows !== all ? unpriced : [];
+  // one stamp on the page (LIVE2-023): the bids' reading on the Open tab (they move through the day), the list's reading elsewhere
+  const liveBids = !!d && now === "open" && d.counts.open > 0 && !!d.bids_read;
   const pick = (m: Market) => { const p = new URLSearchParams(params); p.set("m", m); p.delete("t"); setTab(null); setParams(p, { replace: true }); };
   const save = async (n: Partial<AlertPrefs>) => {
     if (!d) return;
@@ -170,20 +186,19 @@ export function IposPage() {
     <div className="k-page ipo-page">
       <PageHeader eyebrow={eyebrowOf("/invest/ipos")} title="IPOs"
         lede="India's and the US's public offerings in their stages, from the exchanges' and regulators' own pages. Facts, not advice."
-        asOf={d?.as_of} asOfTz={marketTz(market)} asOfLabel="Read" info={<>When bidding opens and closes, the price band, the lot and the minimum, the bids received by category while an issue is open, and how a new listing has traded against its issue price.{d ? <> {d.note}</> : null}</>} infoLabel="Where this comes from" />
+        asOf={liveBids ? d?.bids_read : d?.as_of} asOfTz={marketTz(market)} asOfLabel={liveBids ? "Bids read" : "Read"} info={<>When bidding opens and closes, the price band, the lot and the minimum, the bids received by category while an issue is open, and how a new listing has traded against its issue price.{d ? <> {d.note}</> : null}</>} infoLabel="Where this comes from" />
       <div className="k-toolbar">
         <Seg label="Market" value={market} onChange={(v) => pick(v as Market)} options={[{ value: "IN", label: "India" }, { value: "US", label: "US" }]} />
       </div>
       {error ? <ErrorState title="The IPO lists couldn't be read" action={{ label: "Try again", onClick: () => load() }}>{error}</ErrorState>
         : !d ? <Card><Skeleton label="Reading the IPO lists" lines={5} /></Card> : (
         <>
-          {d.problems.length > 0 && <p className="k-callout k-small" role="status" data-testid="ipo-problems">At the list's read{d.problems_at ? ` of ${asOf(d.problems_at, { tz: marketTz(market), year: false })}` : ""} a source couldn't be read, so this list may be missing a few issues. It is read again within the hour. {d.problems[0]}</p>}
+          {d.problems.length > 0 && <p className="k-callout k-small" role="status" data-testid="ipo-problems">{problemNote(d.problems, d.problems_at ? asOf(d.problems_at, { tz: marketTz(market), year: false }) : null)}</p>}
           <Card label="IPOs" testId="ipo-list">
             <div className="k-row">
               <Seg label="Stage" value={now} onChange={(v) => { setTab(v as Stage); const p = new URLSearchParams(params); p.set("t", v); setParams(p, { replace: true }); }}
                 options={tabs.map((t) => ({ value: t.value, label: `${t.label} ${d.counts[t.value] ?? 0}`, short: t.label === "Recently listed" ? `Listed ${d.counts[t.value] ?? 0}` : undefined }))} />
               {now === "open" && d.counts.open > 0 && <Badge tone="live">Live</Badge>}
-              {now === "open" && d.counts.open > 0 && d.bids_read && <span className="k-small k-muted" data-testid="ipo-bids-read">Bids read {asOf(d.bids_read, { tz: marketTz(market), year: false })}</span>}
             </div>
             <p className="k-small k-muted" data-testid="ipo-tab-line">{TAB_LINE[market][now]}</p>
             {rows.length === 0 ? (
@@ -193,6 +208,15 @@ export function IposPage() {
             ) : (
               <DataTable stack label={`${tabs.find((t) => t.value === now)?.label} IPOs, ${market === "IN" ? "India" : "US"}`} rows={rows} rowKey={(r) => r.id}
                 rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })} columns={columns(market, now)} phonePage={25} />
+            )}
+            {unpricedShown.length > 0 && (
+              <Disclosure summary={`Listed, no prices read yet (${unpricedShown.length})`} testId="ipo-unpriced">
+                <DataTable stack label="Listed issues without prices" rows={unpricedShown} rowKey={(r) => r.id} rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })}
+                  columns={[{ key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Company r={r} /> },
+                    { key: "d", header: market === "US" ? "First trading day" : "Listed", cell: (r) => fmtDate(market === "US" ? r.priced : r.listing) },
+                    { key: "p", header: market === "US" ? "Offer price" : "Issue price", numeric: true, cell: (r) => bandText(r) }]} />
+                <p className="k-note">The exchange's price tables have no trading figures for these yet, so they are not set against the issue price.</p>
+              </Disclosure>
             )}
             {market === "US" && <p className="k-note" data-testid="ipo-us-note">A US offering has no public bidding window, so there is no Open tab: the price is set the evening before trading starts.</p>}
           </Card>

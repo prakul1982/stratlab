@@ -134,7 +134,13 @@ def _prefs(uid: str) -> int:
 
 
 def _watchlist(uid: str) -> int:
-    return _setting_keys(WATCHLIST)(uid)
+    """The Research watchlist and every Market Watch list (the extra lists, and the first list's other markets: MWR1-012, they
+    were left behind when a person erased their data or closed the account)."""
+    from . import watch_store
+    n = _setting_keys(WATCHLIST)(uid)
+    n += len(watch_store._rows(uid)) + (1 if watch_store._extras_row(uid) else 0)
+    watch_store.forget(uid)
+    return n
 
 
 def _assistant(uid: str) -> int:
@@ -302,6 +308,13 @@ def _x_drawings(uid: str) -> dict:
     return out
 
 
+def _x_market_watch(uid: str) -> dict:
+    """Market Watch's lists as the person sees them: each list's name and its instruments in order."""
+    from . import watch_store
+    return {"lists": [{"name": l["name"], "first_list": l["default"], "items": [{"market": i["market"], "symbol": i["symbol"], "name": i["name"]} for i in l["items"]]}
+                      for l in watch_store.all_lists(uid)]}
+
+
 def _x_alerts(uid: str) -> dict:
     return _settings_of(*_keys(ALERT_KEYS))(uid)
 
@@ -380,6 +393,7 @@ EXPORT: list[tuple[str, str, Callable[[str], object]]] = [
     ("preferences", "Preferences", _x_prefs),
     ("connected_accounts", "Connected accounts (no tokens or passwords)", _x_connect),
     ("watchlist", "Watchlist", _settings_of(WATCHLIST)),
+    ("market_watch", "Market Watch lists", _x_market_watch),
     ("sessions", "Paper and live sessions and their orders", _x_sessions),
     ("ai_assistant", "AI assistant key names and their log (no keys)", _x_assistant),
     ("referrals", "Invite link and invites", _x_referrals),

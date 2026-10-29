@@ -64,7 +64,7 @@ test("signal forward test: the URL, a session, a test signal and a webhook signa
   const hookUrl = await box.inputValue();
   await expect(page.getByText("Copy it now: it isn't shown again.")).toBeVisible();
 
-  await page.getByLabel("Market").first().selectOption("CRYPTO");
+  await page.getByLabel("Market", { exact: true }).first().selectOption("CRYPTO");      // (exact: the header has a "Markets" button since MW-1)
   await page.getByRole("button", { name: "BTC/USD" }).first().click();
   await page.getByLabel("Paper capital").fill("100000");
   await page.getByRole("button", { name: "Start session" }).click();

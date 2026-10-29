@@ -111,8 +111,8 @@ test("R13-007: after the close every price says 'Last close, 9 Oct', and the ale
   assert.equal(alertPriceHint(null, "$336.64", null), "Now $336.64");
 
   const { pulseLede, pulseClosedDay } = await import("../src/lib/researchFormat.ts");
-  assert.equal(pulseLede(null, "9 Oct"), "Last close, 9 Oct: index levels and headlines, with an AI read of the mood.");
-  assert.equal(pulseLede(null), "Live index levels and headlines, with an AI read of the mood.");
+  assert.equal(pulseLede(null, "9 Oct"), "Last close, 9 Oct: index levels and headlines, with the figures behind today's mood.");
+  assert.equal(pulseLede(null), "Live index levels and headlines, with the figures behind today's mood.");
   assert.equal(pulseClosedDay([{ live: false, day: "2026-10-09" }, { live: false, day: "2026-10-09" }]), "2026-10-09");
   assert.equal(pulseClosedDay([{ live: true, day: "2026-10-09" }, { live: false, day: "2026-10-09" }]), null);
   assert.equal(pulseClosedDay([]), null);

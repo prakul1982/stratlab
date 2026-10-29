@@ -134,6 +134,8 @@ export interface PlanInfo {
   fno: boolean;
   price_year?: number; group_size?: number; holdings?: number; stock_alerts?: number; screens?: number;
   deepdives_per_month?: number | null; decks_per_month?: number | null; features?: Record<string, boolean>;
+  /** Market Watch (MW-1): lists, symbols in a list, charts that keep drawings, indicators on a chart. null: no limit. */
+  watchlists?: number | null; watchlist_symbols?: number | null; chart_saves?: number | null; chart_indicators?: number | null;
 }
 /** Experience: only changes defaults (what starts open, which tools are suggested), never what's allowed. */
 export type Level = "new" | "some" | "pro";
@@ -172,6 +174,8 @@ export interface Me {
   onboarding?: { welcome: string | null; tour: "done" | "skipped" | null };
   /** The account already has holdings, notebooks, a paper session or a watchlist: the welcome question is not asked of it. */
   established?: boolean;
+  /** My Holdings has at least one stock: the Money space's main button then says "Update holdings" (LIVE1C-055). */
+  has_holdings?: boolean;
 }
 
 /** plans.offer_state() on the server: payments on or not, the launch offer, and Free's limits as they apply today. */

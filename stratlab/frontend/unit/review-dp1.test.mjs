@@ -58,8 +58,8 @@ test("DP1-004: the simple converter's rules are shown for a yes, with the classi
 test("DP1-008: a library card says what a copy needs on the plan, before the copy", () => {
   const st = { ...R.blankStrategy(), entry: [{ l: { t: "price" }, op: "gt", r: { t: "supertrend", p: 10, m: 3 } }] };
   const free = { allIndicators: false, groupCap: 10, basicCap: 25, proCap: 50 };
-  assert.equal(R.copyNeeds(st, 20, free), "Runs on Basic: it uses Supertrend, and its group of 20 is over your plan's 10. A copy is yours to edit on any plan.");
-  assert.equal(R.copyNeeds(R.blankStrategy(), 30, free), "Runs on Pro: its group of 30 is over your plan's 10. A copy is yours to edit on any plan.");
+  assert.equal(R.copyNeeds(st, 20, free), "Runs on Basic: it uses Supertrend, and its group of 20 is over your plan's 10.");
+  assert.equal(R.copyNeeds(R.blankStrategy(), 30, free), "Runs on Pro: its group of 30 is over your plan's 10.");
   assert.equal(R.copyNeeds(st, 20, { ...free, allIndicators: true, groupCap: 25 }), null);
   assert.match(read("src/pages/LibraryPage.tsx"), /\{needs\(e\) && <span className="k-note" data-testid="lib-needs">\{needs\(e\)\}<\/span>\}/);
 });
@@ -92,7 +92,7 @@ test("DP1-013, DP1-015: the start dialog says Free's trial and its last day in I
   assert.equal(P.trialStartLine({ started: true, active: false, ends_at: "2026-10-29T18:30:00+00:00" }), "Your Free paper trading trial has ended, so a new session needs Basic or Pro.");
   assert.match(P.STOP_IS_FINAL, /can't be restarted or paused/);
   const nb = read("src/pages/NotebookPage.tsx");
-  assert.match(nb, /me\?\.plan === "free" && trialStartLine\(me\.trial\) \? <span className="k-note" data-testid="paper-trial">/);
+  assert.match(nb, /me\?\.plan === "free" && trialStartLine\(me\.trial\) \? <span data-testid="paper-trial">/);
   assert.match(read("src/pages/PaperPage.tsx"), /`Free trial until the end of \$\{trialLastDay\(me\.trial\.ends_at\)\} \(India time\)`/);
 });
 

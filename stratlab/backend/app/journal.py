@@ -64,7 +64,9 @@ EMOTIONS = ["Calm", "Confident", "Focused", "Anxious", "Fearful", "Greedy", "Imp
             "Revenge"]
 MISTAKES = ["Entered early", "Entered late", "Chased the price", "No stop", "Moved my stop", "Exited early",
             "Held too long", "Position too big", "Ignored my plan", "Overtraded", "Averaged down", "Traded the news"]
-DEFAULTS = {"capital": None, "brokerage_delivery": 0.0, "brokerage_other": 20.0, "show": "all"}
+# "show": None until the person picks Real, Practice or Both: then a journal holding real trades shows those (a practice trade from the chart replay
+# was counted in the stats, the win rate and the verdict of a person who had imported their real ones, LIVE1A-059)
+DEFAULTS = {"capital": None, "brokerage_delivery": 0.0, "brokerage_other": 20.0, "show": None}
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 HOLDS = [("m15", "Under 15 minutes"), ("h1", "15 minutes to 1 hour"), ("day", "Over an hour, same day"),
          ("sameday", "Same day (no times in the file)"), ("d5", "1 to 5 days"), ("d30", "6 to 30 days"),
@@ -441,7 +443,7 @@ def clean_settings(s) -> dict:
     cap = _num(s.get("capital"), 1, 1e11)
     return {"capital": cap, "brokerage_delivery": _num(s.get("brokerage_delivery"), 0, 1000) or 0.0,
             "brokerage_other": DEFAULTS["brokerage_other"] if _num(s.get("brokerage_other"), 0, 1000) is None else float(s["brokerage_other"]),
-            "show": s.get("show") if s.get("show") in SHOWS else "all"}
+            "show": s.get("show") if s.get("show") in SHOWS else None}
 
 
 def load(uid: str) -> dict:

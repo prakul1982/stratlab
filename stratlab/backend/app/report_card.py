@@ -27,17 +27,24 @@ def calls_for(years: int) -> int:
 GUIDANCE = """You pull out the targets an Indian listed company's management gave on its earnings calls: what they said a
 number WOULD be for a future year or quarter. Examples: "revenue growth of 15-18% in FY26", "EBITDA margin of about 20%
 next year", "capex of Rs 1,500 crore in FY25".
-Return {"guidance": [{"metric": "revenue_growth | profit_growth | margin | capex | other",
+Return {"guidance": [{"metric": "revenue_growth | profit_growth | ebitda_growth | margin | net_margin | gross_margin | roe | capex | other",
   "low": number or null, "high": number or null, "unit": "% | crore",
   "period": "FY26 or Q2 FY26 (Indian financial year ending in March)", "what": "the target in one short line",
+  "scope": "company | segment", "segment": "the business or segment it is about, or null",
   "quote": "short exact quote", "source": "S1"}]}
-- Only what MANAGEMENT (the CEO, CFO, MD or other company executives) said. Never an analyst's question, an analyst's
-  estimate, or the moderator. If an analyst suggests a number and management only agrees vaguely, leave it out.
-- Only forward-looking targets for a period that had NOT ended when it was said. Not past results.
+- Only what MANAGEMENT (the CEO, CFO, MD or other company executives) said. Never an analyst's question or request
+  ("can you add ... sir"), an analyst's estimate, or the moderator. If an analyst suggests a number and management only
+  agrees vaguely, leave it out.
+- Only forward-looking targets for a period that had NOT ended when it was said. Not past results: "our CAGR has been 20%
+  for the last 20 years" or "we grew 18% last year" is history, not a target, so leave it out.
+- Percentages are written as said: 20% is 20 (never 0.2), "30 to 50%" is low 30, high 50.
+- A target about one business, brand or segment only ("30-50% growth in the enterprise business") has scope "segment" and
+  the segment's name; one about the whole company has scope "company".
 - The call date is given. Turn "this year", "current year", "this fiscal" into that Indian financial year (April to March)
   and "next year" into the one after. Example: a call on 2025-08-10 is in FY26, so "next year" is FY27. If the period
   can't be pinned down, use null.
-- "margin" is an EBITDA or operating margin in %. Growth is year-on-year in %. Capex is in Rs crore.
+- "margin" is an EBITDA or operating margin in %; a PAT, net profit or net margin is "net_margin"; a gross margin is
+  "gross_margin"; return on equity is "roe"; EBITDA growth is "ebitda_growth". Growth is year-on-year in %. Capex is in Rs crore.
 - A single figure goes in "low" with "high" null; "about 20%" is low 20. A range fills both.
 - Qualitative promises (a launch, a plant start, debt reduction) use metric "other" with low and high null.
 - "quote" must be copied word for word from the excerpt, 6 to 25 words. Don't paraphrase it.
@@ -47,8 +54,9 @@ Return {"guidance": [{"metric": "revenue_growth | profit_growth | margin | capex
 GUIDANCE_WORDS = [r"guidance", r"we expect", r"we are targeting", r"target", r"going forward", r"next year", r"this year",
                   r"FY ?'?\d\d", r"outlook", r"margin", r"growth of", r"capex", r"crore", r"double[- ]digit", r"aspir"]
 
-METRICS = {"revenue_growth": "Revenue growth", "profit_growth": "Profit growth", "margin": "Operating margin",
-           "capex": "Capex", "revenue": "Revenue", "profit": "Profit", "other": "Other promise"}
+METRICS = {"revenue_growth": "Revenue growth", "profit_growth": "Profit growth", "ebitda_growth": "EBITDA growth", "margin": "Operating margin",
+           "net_margin": "Net margin", "gross_margin": "Gross margin", "roe": "Return on equity", "roce": "Return on capital employed",
+           "capex": "Capex", "revenue": "Revenue", "profit": "Profit", "ebitda": "EBITDA", "other": "Other promise"}
 AMOUNT_TOLERANCE = 0.02        # a revenue or profit amount target is met at its low end less 2% (a rounded figure said on a call)
 
 
@@ -56,6 +64,7 @@ AMOUNT_TOLERANCE = 0.02        # a revenue or profit amount target is met at its
 _CRORE = re.compile(r"\b(?:crore|cr)\b|₹|\brs\.?\s|\binr\b", re.I)
 _MILLION = re.compile(r"\$|\b(?:million|billion|usd)\b", re.I)
 _PCT = re.compile(r"%|\bper ?cent\b|\bbasis points\b|\bbps\b", re.I)
+_MULTIPLE = re.compile(r"\b\d+(?:\.\d+)?\s?(?:x|times)\b", re.I)      # "3x or 4x of our overall growth": a multiple, not a percentage
 
 
 def unit_of(g: dict) -> str:
@@ -69,28 +78,61 @@ def unit_of(g: dict) -> str:
         given = "crore"
     elif given in ("million", "$ million", "usd million"):
         given = "million"
+    elif given in ("x", "times", "multiple"):
+        given = "x"
     else:
         given = ""
     def said_in(text: str) -> str:
-        return "%" if _PCT.search(text) else "crore" if _CRORE.search(text) else "million" if _MILLION.search(text) else ""
+        return "%" if _PCT.search(text) else "crore" if _CRORE.search(text) else "million" if _MILLION.search(text) else "x" if _MULTIPLE.search(text) else ""
     # the target's own line first ("20% margin"), its quote only when the line gives no unit
     said = said_in(str(g.get("what") or "")) or said_in(str(g.get("quote") or ""))
-    if given == "%" and said in ("crore", "million"):
-        return said                                  # the AI's "%" for an amount the target itself gives in money
+    if given == "%" and said in ("crore", "million", "x"):
+        return said                                  # the AI's "%" for an amount the target itself gives in money (or a multiple)
     return given or said
 
 
-_REVENUE_WORDS = re.compile(r"\b(revenue|sales|top ?line|turnover|income from operations)\b", re.I)
-_PROFIT_WORDS = re.compile(r"\b(net profit|profit after tax|pat|net income|earnings)\b", re.I)
+_REVENUE_WORDS = re.compile(r"\b(revenue|revenues|sales|top ?line|turnover|income from operations)\b", re.I)
+_PROFIT_WORDS = re.compile(r"\b(net profit|profit after tax|pat|net income|earnings|bottom ?line)\b", re.I)
+_EBITDA_WORDS = re.compile(r"\b(ebitda|operating profit)\b", re.I)
+_GROWTH_WORDS = re.compile(r"\b(growth|grow|growing|grew|cagr|increase)\b", re.I)
+_NET_WORDS = re.compile(r"\b(pat|net profit|net margin|profit after tax|net income|bottom ?line)\b", re.I)
+_GROSS_WORDS = re.compile(r"\bgross (?:profit )?margins?\b", re.I)
+_ROE_WORDS = re.compile(r"\b(roe|return on equity|return on net ?worth)\b", re.I)
+_ROCE_WORDS = re.compile(r"\b(roce|roic|return on capital( employed)?|return on invested capital)\b", re.I)
 
 
 def as_amount(metric: str, unit: str, what: str) -> str:
-    """A growth or margin target given as an amount of money is an amount target: revenue or profit when it says so (the
+    """A growth or margin target given as an amount of money is an amount target: EBITDA, revenue or profit when it says so (the
     reported numbers check it), else "other"."""
-    if metric in TOLERANCE and unit in ("crore", "million"):
-        return "revenue" if _REVENUE_WORDS.search(what) else "profit" if _PROFIT_WORDS.search(what) else "other"
-    if metric == "other" and unit in ("crore", "million"):
-        return "revenue" if _REVENUE_WORDS.search(what) and not _PROFIT_WORDS.search(what) else "profit" if _PROFIT_WORDS.search(what) and not _REVENUE_WORDS.search(what) else "other"
+    if metric in TOLERANCE and unit in ("crore", "million") or metric == "other" and unit in ("crore", "million"):
+        if _EBITDA_WORDS.search(what) and not _REVENUE_WORDS.search(what):
+            return "ebitda"
+        rev, prof = _REVENUE_WORDS.search(what), _PROFIT_WORDS.search(what)
+        if metric == "other":
+            return "revenue" if rev and not prof else "profit" if prof and not rev else "other"
+        return "revenue" if rev else "profit" if prof else "other"
+    return metric
+
+
+def kind_of(metric: str, unit: str, text: str) -> str:
+    """The measure a target is about, from its own words as well as the AI's label: a "PAT margin" is a net margin, never the
+    operating margin it was filed under; "growth in the topline" is revenue growth, not profit growth (the report card showed both)."""
+    if unit == "x":
+        return "other"                                    # a multiple of another figure ("3x our overall growth"): nothing to set it against
+    margins, growth = ("margin", "net_margin", "gross_margin"), ("revenue_growth", "profit_growth", "ebitda_growth")
+    loose = metric == "other" and unit == "%"             # a percentage the AI left unlabelled: the words decide
+    if metric in ("other", "roe", "roce") and unit == "%":
+        if _ROCE_WORDS.search(text):
+            return "roce"
+        if _ROE_WORDS.search(text):
+            return "roe"
+    if (metric in margins or loose or metric in growth and not _GROWTH_WORDS.search(text)) and re.search(r"\bmargins?\b", text, re.I):
+        net = _NET_WORDS.search(text) and (metric == "net_margin" or not _EBITDA_WORDS.search(text))
+        return "gross_margin" if _GROSS_WORDS.search(text) else "net_margin" if net else "margin"
+    if metric in growth or loose and _GROWTH_WORDS.search(text):
+        fam = [k for k, rx in (("revenue_growth", _REVENUE_WORDS), ("ebitda_growth", _EBITDA_WORDS), ("profit_growth", _PROFIT_WORDS)) if rx.search(text)]
+        if len(fam) == 1:
+            return fam[0]                                 # one measure named: that one
     return metric
 
 
@@ -109,7 +151,95 @@ def ours(quote: str, name: str = "") -> bool:
         return True
     words = [w for w in re.findall(r"[A-Za-z]{4,}", name or "") if w.lower() not in ("limited", "india", "company", "corporation")]
     return bool(_OURS.search(quote or "")) or any(w.lower() in (quote or "").lower() for w in words[:2])
-TOLERANCE = {"revenue_growth": 1.0, "profit_growth": 2.0, "margin": 0.5}      # percentage points; capex uses 10%
+TOLERANCE = {"revenue_growth": 1.0, "profit_growth": 2.0, "ebitda_growth": 2.0, "margin": 0.5, "net_margin": 0.2, "roe": 1.0}      # percentage points; capex uses 10%
+
+
+# ---------- what a target is, said again from its own words (the same pass for a new read and for a card stored earlier) ----------
+_NUM = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def numbers_in(text: str) -> list[float]:
+    out = []
+    for m in _NUM.findall(text or ""):
+        try:
+            out.append(float(m.replace(",", "")))
+        except ValueError:
+            pass
+    return out
+
+
+def rescale(low: float | None, high: float | None, text: str) -> tuple[float | None, float | None]:
+    """A percentage as management said it: "CAGR of 20%" is 20, not the fraction 0.2 a model sometimes returns (the card printed
+    "Target 0.2%" and "0.3-0.5%" for "30% to 50% growth"). A figure that isn't in the words but is a power of ten away from one that
+    is, is rescaled; with no digits in the words at all ("twenty percent") a fraction is read as a percentage."""
+    if low is None:
+        return low, high
+    nums = numbers_in(text)
+    near = lambda x: any(abs(x - n) <= max(0.051, n * 1e-6) for n in nums)           # noqa: E731
+    if near(low) and (high is None or near(high)):
+        return low, high
+    if not nums:
+        return (low * 100, None if high is None else high * 100) if 0 < abs(low) <= 1 and (high is None or 0 < abs(high) <= 1) else (low, high)
+    for f in (100, 10, 1000, 10000):
+        if near(low * f) and (high is None or near(high * f)):
+            return round(low * f, 4), None if high is None else round(high * f, 4)
+    return low, high
+
+
+_HISTORY = re.compile(r"\b(?:has|have|had) (?:been|grown|delivered|achieved|clocked|reported)\b|\b(?:for|over|in|during) (?:the )?(?:last|past|previous) \w+ (?:years?|quarters?|decades?)\b|"
+                      r"\bwe (?:grew|delivered|achieved|clocked|reported|did)\b|\bsince (?:19|20)\d\d\b|\bso far\b", re.I)
+_AHEAD = re.compile(r"\b(?:will|would|shall|should|expect\w*|target\w*|guid\w*|aim\w*|aspir\w*|plan\w*|going forward|next|coming|confident|strive|envision\w*|"
+                    r"intend\w*|endeavou?r\w*|looking (?:to|at)|hope|project\w*|anticipat\w*|ahead)\b|\bwe(?:'ll| are going to)\b", re.I)
+_ASKED = re.compile(r"\?\s*$|\b(?:sir|ma'?am|madam)\b", re.I)
+
+
+def is_target(g: dict) -> bool:
+    """Whether a pulled-out line is a target management gave: not a question or a request from an analyst ("are we expecting 10% to
+    15% growth in the topline?", "add the brand-wise revenue, sir"), and not a statement about the past ("our CAGR has been 20% for
+    last 20 years") with nothing in it that looks ahead."""
+    quote = str(g.get("quote") or "")
+    if _ASKED.search(quote) and not _OURS.search(quote.replace("?", " ")) or quote.strip().endswith("?"):
+        return False
+    if _HISTORY.search(quote) and not _AHEAD.search(quote):
+        return False
+    return True
+
+
+_GENERIC = {"our", "the", "this", "that", "overall", "entire", "whole", "total", "your", "its", "their", "my", "a", "any", "each", "every",
+            "company", "consolidated", "standalone", "same", "core", "main", "other", "new", "existing", "current", "whole", "combined", "of", "in", "and"}
+_SEGMENT = re.compile(r"\b([A-Za-z][\w\-&]*(?: [A-Za-z][\w\-&]*)?) (?:business|segment|division|vertical|brand|category)\b", re.I)
+
+
+def segment_of(g: dict) -> str | None:
+    """The business a target is about when it isn't the whole company ("30-50% growth in enterprise business"): the reported numbers are
+    the company's, so they can't settle it."""
+    given = str(g.get("segment") or "").strip()
+    if str(g.get("scope") or "").lower() == "segment" and given:
+        return given[:60]
+    if str(g.get("scope") or "").lower() == "company":
+        return None
+    for m in _SEGMENT.finditer(f"{g.get('what') or ''}. {g.get('quote') or ''}"):
+        words = [w for w in m.group(1).split() if w.lower() not in _GENERIC]
+        if words:
+            return " ".join(words)[:60]
+    return None
+
+
+def fix(g: dict) -> dict | None:
+    """One pulled-out target as management said it: its measure and unit read again from its own words, a percentage written as a
+    percentage, nothing kept that isn't a target of the company's. Applied to a new read and to a card stored before (no second reading
+    of the call needed), so it must give the same answer when applied twice. None: not a target."""
+    if not is_target(g):
+        return None
+    text = f"{g.get('what') or ''} {g.get('quote') or ''}"
+    unit = unit_of(g)
+    metric = kind_of(str(g.get("metric") or "other"), unit, text)
+    metric = as_amount(metric, unit, str(g.get("what") or ""))
+    low, high = g.get("low"), g.get("high")
+    if unit in ("%", "") and metric in (*TOLERANCE, "gross_margin", "roce", "other") and low is not None:
+        low, high = rescale(low, high, text)
+    seg = segment_of(g)
+    return {**g, "metric": metric, "low": low, "high": high, "unit": unit, **({"segment": seg} if seg else {})}
 
 
 # ---------- periods ----------
@@ -205,13 +335,14 @@ def clean(d: dict, labels: dict, texts: dict | None = None, fye: int = 3, voice:
             low, high = high, low
         if metric != "other" and low is None:
             metric = "other"
-        unit = unit_of(g)
-        metric = as_amount(metric, unit, what)
         if per and period_end(per, fye) <= said:
             continue                                    # said after the period ended: a result, not a promise
-        out.append({"metric": metric, "low": low, "high": high, "unit": unit, "period": period_label(per) if per else None,
+        row = fix({**g, "metric": metric, "low": low, "high": high, "what": what, "quote": str(g.get("quote") or "")})
+        if row is None:
+            continue                                    # an analyst's question or a statement about the past: not a target
+        out.append({"metric": row["metric"], "low": row["low"], "high": row["high"], "unit": row["unit"], "period": period_label(per) if per else None,
                     "what": what[:200], "quote": str(g.get("quote") or "")[:300], "said_at": src["at"],
-                    "source": {"title": src["title"], "at": src["at"], "url": src["url"]}})
+                    "source": {"title": src["title"], "at": src["at"], "url": src["url"]}, **({"segment": row["segment"]} if row.get("segment") else {})})
     return out
 
 
@@ -348,69 +479,98 @@ def settle(out: dict, pairs: list[tuple[dict, str]], ai, name: str, fye: int, to
 
 
 # ---------- checking against the numbers ----------
+def _ratio(a, b):
+    return a / b * 100 if a is not None and b else None
+
+
 def _actual(metric: str, per: dict, nums: dict) -> float | None:
     label = _table_label(per, nums.get("fye") or 3)
     if per["kind"] == "FY":
         rows = nums.get("years") or []
         idx = next((i for i, r in enumerate(rows) if r["year"] == label), None)
-        if idx is None:
-            return None
-        r = rows[idx]
-        if metric == "margin":
-            return r.get("opm")
-        if metric == "capex":
-            return r.get("capex")
-        if metric in ("revenue", "profit"):            # an amount, as reported for the year (DD-050)
-            return r.get("sales" if metric == "revenue" else "profit")
-        key = "sales" if metric == "revenue_growth" else "profit"
-        prev = rows[idx - 1].get(key) if idx > 0 else None
-        return (r[key] / prev - 1) * 100 if r.get(key) is not None and prev and prev > 0 else None
-    rows = nums.get("quarters") or []
-    idx = next((i for i, r in enumerate(rows) if r["quarter"] == label), None)
-    if idx is None or metric == "capex":
+    else:
+        rows = nums.get("quarters") or []
+        idx = next((i for i, r in enumerate(rows) if r["quarter"] == label), None)
+    if idx is None:
         return None
     r = rows[idx]
+    back = 1 if per["kind"] == "FY" else 4                                  # the year before; a quarter against the same quarter a year before
+    prev = rows[idx - back] if idx >= back else None
+
+    def ebitda(x):
+        return x["sales"] * x["opm"] / 100 if x and x.get("sales") is not None and x.get("opm") is not None else None
     if metric == "margin":
         return r.get("opm")
+    if metric == "net_margin":
+        return _ratio(r.get("profit"), r.get("sales"))
+    if metric == "roe":
+        return r.get("roe") if per["kind"] == "FY" else None
+    if metric == "capex":
+        return r.get("capex") if per["kind"] == "FY" else None             # an amount, as reported for the year (DD-050)
     if metric in ("revenue", "profit"):
         return r.get("sales" if metric == "revenue" else "profit")
+    if metric == "ebitda":
+        return ebitda(r)
+    if metric == "ebitda_growth":
+        e0, e1 = ebitda(prev), ebitda(r)
+        return (e1 / e0 - 1) * 100 if e0 and e0 > 0 and e1 is not None else None
     key = "sales" if metric == "revenue_growth" else "profit"
-    prev = rows[idx - 4].get(key) if idx >= 4 else None
-    return (r[key] / prev - 1) * 100 if r.get(key) is not None and prev and prev > 0 else None
+    p0 = prev.get(key) if prev else None
+    return (r[key] / p0 - 1) * 100 if r.get(key) is not None and p0 and p0 > 0 else None
+
+
+# why a target the reported numbers can't settle is left unsettled, in one short line
+WHY = {"qualitative": "A plan with no figure to check.",
+       "multiple": "A multiple of another figure: nothing in the reported numbers to set it against.",
+       "no_period": "No year or quarter was named, so there is no reported figure to set it against.",
+       "gross_margin": "Gross margin isn't in the reported tables.",
+       "roce": "Return on capital employed by year isn't in the reported tables.",
+       "bank": "A lender's margin and capex aren't in its reported tables."}
 
 
 def check(g: dict, nums: dict, today: date | None = None) -> dict:
-    """One promise against the numbers: met, missed, pending (not reported yet) or unchecked (not a number we have)."""
+    """One promise against the numbers: met, missed, pending (not reported yet) or unchecked (not a number we have, with the reason)."""
     today = today or ist_date()
+    g = fix(g) or g                  # the same reading of its words as a new read gets (a card stored before it was made)
     per = parse_period(g.get("period"))
     us = (nums.get("unit") or "").endswith("million")      # US filings, in dollars or a foreign filer's own currency
     money = "million" if us else "crore"
-    # the target's own unit (DD-050), for a card stored before units were kept worked out from its words; an amount
-    # target as revenue or profit when it says so, so the reported numbers settle it
-    unit = unit_of(g)
-    g = {**g, "metric": as_amount(g["metric"], unit, g.get("what") or "")}
-    unit = money if g["metric"] in ("capex", "revenue", "profit") else "%" if g["metric"] in TOLERANCE else unit
+    unit = g.get("unit") or ""
+    unit = money if g["metric"] in ("capex", "revenue", "profit", "ebitda") else "%" if g["metric"] in (*TOLERANCE, "gross_margin", "roce") else unit
     res = {**g, "actual": None, "result": "unchecked", "unit": unit}
     dc = g.get("doc_check")
 
-    def from_documents(r):            # the company's own later statement of the result, quote checked
-        return {**r, "actual": dc["actual"], "result": "met" if dc["met"] else "missed", "settled_by": dc} if dc else r
-    if g["metric"] == "other" or not per:
-        return from_documents(res)
+    def undone(why: str, **extra):    # unsettled by the numbers; the company's own later statement of the result settles it, quote checked
+        r = {**res, "why": why, **extra}
+        return {**r, "actual": dc["actual"], "result": "met" if dc["met"] else "missed", "settled_by": dc, "why": None} if dc else r
+    if g.get("low") is None:
+        return undone(WHY["qualitative"], qualitative=True)
+    if g.get("segment"):
+        return undone(f"A target for one business ({g['segment']}); the reported numbers are for the whole company.")
+    if g["metric"] == "other":
+        return undone(WHY["multiple"] if g.get("unit") == "x" else WHY["no_period"] if not per else "Not one of the measures in the reported numbers.")
+    if g["metric"] in ("gross_margin", "roce"):
+        return undone(WHY[g["metric"]])
+    if not per:
+        return undone(WHY["no_period"])
     if nums.get("bank") and g["metric"] in ("margin", "capex"):
-        return from_documents(res)      # a lender's margin (NIM) and capex aren't in the reported tables
+        return undone(WHY["bank"])
     a = _actual(g["metric"], per, nums)
     if a is None and dc:
-        return from_documents(res)
+        return undone("")
     if a is None:
         # quarterly results come out within ~45 days of the quarter, annual ones within ~60
-        res["result"] = "pending" if (today - period_end(per, nums.get("fye") or 3)).days < 75 else "unchecked"
+        if (today - period_end(per, nums.get("fye") or 3)).days < 75:
+            res["result"] = "pending"
+            return res
+        res["why"] = (f"Return on equity for {period_label(per)} isn't in these reported numbers." if g["metric"] == "roe"
+                      else f"The reported numbers don't have {period_label(per)}.")
         return res
     res["actual"] = round(a, 1)
     # met: at the target or the range's low end, less the tolerance (beating it is met too)
     if g["metric"] == "capex":
         ok = g["low"] * 0.9 <= a <= (g.get("high") or g["low"]) * 1.1      # a spend target is a band: overspending misses it
-    elif g["metric"] in ("revenue", "profit"):
+    elif g["metric"] in ("revenue", "profit", "ebitda"):
         ok = a >= g["low"] * (1 - AMOUNT_TOLERANCE)                         # at least the target (its low end), less rounding
     else:
         ok = a >= g["low"] - TOLERANCE[g["metric"]]
@@ -437,13 +597,16 @@ def _dedupe(items: list[dict]) -> list[dict]:
 def view(stored_card: dict | None, nums: dict, today: date | None = None) -> dict | None:
     if not stored_card:
         return None
-    # a card read before the voice check keeps no remark about the economy as the company's target (DD-050)
-    rows = [check(g, nums, today) for g in _dedupe([g for g in stored_card.get("guidance") or [] if ours(str(g.get("quote") or ""))])]
+    # a card read before the voice check keeps no remark about the economy as the company's target (DD-050); one read before targets were
+    # read twice keeps no analyst's question or statement of the past (fix), and shows a percentage as management said it
+    kept = [x for x in (fix(g) for g in stored_card.get("guidance") or [] if ours(str(g.get("quote") or ""))) if x]
+    rows = [check(g, nums, today) for g in _dedupe(kept)]
     met = sum(r["result"] == "met" for r in rows)
     missed = sum(r["result"] == "missed" for r in rows)
     checked = met + missed
+    plain = sum(r["result"] == "unchecked" and bool(r.get("qualitative")) for r in rows)
     return {"rows": rows, "met": met, "missed": missed, "pending": sum(r["result"] == "pending" for r in rows),
-            "unchecked": sum(r["result"] == "unchecked" for r in rows),
+            "unchecked": sum(r["result"] == "unchecked" for r in rows) - plain, "no_figure": plain,
             "score": round(met / checked * 100) if checked else None, "read": stored_card.get("read") or [],
             "problems": customer_problems(stored_card.get("problems")), "at": stored_card.get("at"), "years": stored_card.get("years") or 2}
 
@@ -471,11 +634,12 @@ def store(symbol: str, card: dict) -> dict:
 GUIDANCE_US = """You pull out the targets a US listed company's management gave in its earnings press releases: what they
 said a number WOULD be for a future quarter or fiscal year. Examples: "revenue growth in the low double digits for
 fiscal 2026", "operating margin of 30% to 31% in the fourth quarter", "capital expenditures of about $14 billion".
-Return {"guidance": [{"metric": "revenue_growth | profit_growth | margin | capex | other",
+Return {"guidance": [{"metric": "revenue_growth | profit_growth | margin | net_margin | gross_margin | capex | other",
   "low": number or null, "high": number or null, "unit": "% | million",
   "period": "FY2026 or Q3 FY2026 (the company's own fiscal year)", "what": "the target in one short line",
   "quote": "short exact quote", "source": "S1"}]}
 - Only forward-looking targets for a period that had NOT ended when the release was published. Not past results.
+- Percentages are written as said: 20% is 20 (never 0.2). A net or GAAP margin is "net_margin", a gross margin "gross_margin".
 - The company's fiscal year end and the release date are given. Turn "the fourth quarter", "next quarter", "the full
   year" and "fiscal 2026" into Qn FYyyyy or FYyyyy in the COMPANY'S fiscal year (named by the calendar year it ends in).
 - "margin" is an operating or gross margin in %. Growth is year-on-year in %. Capex is in $ million ($1.2 billion is 1200).

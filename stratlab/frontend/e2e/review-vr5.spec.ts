@@ -65,6 +65,8 @@ test("VR5-003: at 360px the signed-out library's header has the logo whole besid
 test("VR5-007: a research post's six-column tables are cards on a phone, and none runs past the screen", async ({ page }) => {
   await open(page, "/blog/classic-strategies-ten-markets-after-costs", null, 360);
   // (VR6-008: the post's first card table is now "The four checks"; the rule sets' tables are the ones with a Trades column)
+  // (VR7-002: on a phone each market's tables are folded: the first market is opened, as e2e/blog.spec.ts opens it)
+  await page.locator("details.mk").first().evaluate((e) => { (e as HTMLDetailsElement).open = true; });
   const table = page.locator('.btbl.wide:has(td[data-l="Trades"])').first();
   await expect(table).toBeVisible({ timeout: 30_000 });
   const clipped = await page.locator(".btbl").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).length);
@@ -84,6 +86,8 @@ test("VR5-004: a long chip or badge wraps at 360px instead of pushing the page s
 
 test("VR5-011: the Free column's trial note in the plan table stays two lines at 390px", async ({ page }) => {
   await open(page, "/plans", ADMIN, 390);
+  // (LIVE1C-092: in the app the side-by-side tables are one fold, closed: open it)
+  await page.getByText("Compare every limit and feature side by side").click();
   const row = page.getByRole("row", { name: /Paper trading sessions at a time/ });
   await expect(row).toContainText("1 (5-market-day trial)", { timeout: 30_000 });
   const h = await row.locator(".k-sub-line").first().evaluate((e) => e.getBoundingClientRect().height);

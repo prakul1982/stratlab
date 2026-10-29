@@ -163,8 +163,8 @@ function InboxCard({ c, set, load }: P) {
         <div className="k-label-row"><span className="k-lbl">Upload a statement</span></div>
         <p className="k-small k-muted">If an email didn't arrive, upload the PDF here. It is read the same way.</p>
         <FormGrid label="Upload a statement">
-          <Field label="Password" optional type="password" autoComplete="off" value={upPw} maxLength={64} onChange={(e) => setUpPw(e.target.value)}
-            info="Needed when no statement password is saved above. It is used once to open the file." />
+          <div className="k-field-short"><Field label="Password" optional type="password" autoComplete="off" value={upPw} maxLength={64} onChange={(e) => setUpPw(e.target.value)}
+            info="Needed when no statement password is saved above. It is used once to open the file." /></div>
           {/* on its own line under the box: squeezed into the grid's next 190px column its label ran over two lines (VR3-008) */}
           {!i.has_password && i.ready && <div className="k-field wide"><CheckField label="Save this password for next time" checked={remember} onChange={setRemember} /></div>}
           <FormActions><UploadButton label="Upload a statement" accept="application/pdf,.pdf" ariaLabel="Statement PDF" busy={busy} onFiles={(f, r) => void upload(f, r)} /></FormActions>
@@ -206,7 +206,8 @@ function ZerodhaCard({ c, set }: P) {
     try { set(await api<Conn>("/connect/kite", { method: "DELETE" })); setAsking(false); notify("Zerodha is disconnected and its stored login is deleted."); } catch (e) { fail(e); } finally { setBusy(false); }
   };
   return (
-    <Card id="zerodha" label="Zerodha">
+    // LIVE1B-042: while Zerodha login isn't open the card is one short row, not a card with a pill and one sentence
+    <Card id="zerodha" label="Zerodha" compact={!k.available}>
       <CardHead title="Zerodha" info="Log in to Zerodha once a day and your holdings and today's buys are read into My Holdings. Zerodha ends every login at about 06:00 IST, so tomorrow you tap once more. StratLab never sees your Zerodha password."
         actions={<Badge tone={k.connected && k.live ? "ok" : k.connected ? "warn" : "plain"}>{!k.available ? "Not open yet" : k.connected ? (k.live ? "Connected" : "Log in again") : "Not connected"}</Badge>} />
       {!k.available && <p className="k-small k-muted">Zerodha login isn't open yet. Upload your Zerodha holdings file in My Holdings meanwhile.</p>}
@@ -333,7 +334,8 @@ function DocUpload({ kind, saved, set }: { kind: keyof typeof DOCS; saved: Recor
       </div>
       {!read && <>
         <p className="k-small k-muted">{d.help}</p>
-        {kind !== "ais" && <Field label="File password" optional type="password" autoComplete="off" value={pw} maxLength={64} onChange={(e) => setPw(e.target.value)} />}
+        {/* LIVE1B-042: a password is a short box, not one as wide as the card */}
+        {kind !== "ais" && <div className="k-field-short"><Field label="File password" optional type="password" autoComplete="off" value={pw} maxLength={64} onChange={(e) => setPw(e.target.value)} /></div>}
         <UploadProblem problem={problem} />
       </>}
       {read && (

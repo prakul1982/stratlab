@@ -89,3 +89,20 @@ def seed_history(today: date, n: int = 30):
             rows[s] = [round(nav * (1 + g), 2), nav]
         db.set_setting(etf_nav.DAY_KEY + d.isoformat(), json.dumps(rows))
     etf_nav.forget()
+
+
+def seed_long(today: date, weekdays: int = 1000, skip: int = 30):
+    """The long series (O1) behind the `skip` newest days seed_history keeps as rows: `weekdays` older trading days of close and NAV,
+    each ETF's gap drifting slowly around its recent level (SILVERBEES from about -1% three years ago)."""
+    from app import etf_nav
+    older = weekdays_before(today, weekdays + skip)[:weekdays]
+    for s, _, _, p, _, nav in ETFS:
+        if nav is None:
+            continue
+        rows = {}
+        for k, d in enumerate(older):
+            n = nav * (0.7 + 0.3 * k / max(1, len(older) - 1))
+            g = (-0.01 + 0.012 * k / max(1, len(older) - 1)) if s == "SILVERBEES" else {"GOLDBEES": -0.006, "NIFTYBEES": 0.001}.get(s, 0.0)
+            rows[d.isoformat()] = (round(n * (1 + g), 2), round(n, 4))
+        etf_nav.save_series(s, rows, backfilled=True)
+    etf_nav.forget()

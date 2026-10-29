@@ -257,7 +257,7 @@ def test_the_mood_never_says_all_sectors_rose_when_one_fell(monkeypatch):
     sectors = {"up": 15, "down": 1, "unchanged": 0, "of": 16, "rows": []}
     out = A.pulse("IN", "", idx, [], (None, None), closed=True, sectors=sectors)
     assert "all sectoral" not in out["tone"] and "22,520," in out["tone"]          # the level as the card writes it (DE-017)
-    assert '"sectors": {"up": 15, "down": 1, "unchanged": 0, "of": 16}' in seen["facts"]
+    assert '"sectors": {"up": 15, "down": 1, "unchanged": 0, "of": 16, "rows": []}' in seen["facts"]
     assert "sectors\" counts" in seen["system"]
     # with no count of StratLab's own, no count is kept; with one that bears it out, it is
     assert "all sectoral" not in A.pulse("IN", "", idx, [], (None, None), closed=True)["tone"]
@@ -340,7 +340,7 @@ def test_every_brief_opens_with_the_facts_line_and_the_ai_words_go_under_it(monk
     html, text = write.render(issue)
     assert text.index("NIFTY 50 +1.30%; SENSEX +1.23% today.") < text.index(ai)
     assert ">NIFTY 50 +1.30%; SENSEX +1.23% today. 1 sector moved to another quadrant on the rotation chart.</div>" in html
-    assert "14.6% below its 52-week high" in html and "below its high" not in html
+    assert "14.6% below" in html and "From 52-week high" in html and "below its high" not in html           # a column of the Indices table (O5)
     # a day whose AI words didn't pass has the same first line and nothing under it
     monkeypatch.setattr(write, "ai_summary", lambda f: None)
     write._cache.clear()

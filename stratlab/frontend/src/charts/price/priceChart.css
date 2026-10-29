@@ -20,6 +20,7 @@
 }
 
 .pc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.pc-endtools { display: inline-flex; align-items: center; gap: 6px; }
 .pc-bar .pc-end { display: flex; align-items: center; gap: 6px; margin-left: auto; }   /* the view buttons wrap as one group, kept to the right */
 /* "+ Custom" opens its box over the chart, not in the toolbar's flow, so the toolbar and chart don't jump down (DD-045) */
 .pc-bar .k-chipwrap { position: relative; }
@@ -44,6 +45,10 @@
 
 .pc-main { display: flex; gap: 6px; align-items: flex-start; min-width: 0; }
 .pc-main .pc-stage { flex: 1 1 auto; min-width: 0; }
+/* VR7-008: a short chart (the Market Watch panel's 260px) had a drawing rail of nine tools 100px taller than itself, hanging below the chart: the chart is at
+   least as tall as its rail (the rail sets the row's height, the chart takes it) */
+.pc-main:has(> .pc-rail) { align-items: stretch; }
+.pc-main:has(> .pc-rail) > .pc-stage { height: auto; min-height: var(--pc-h, 420px); }
 .pc-stage { position: relative; height: var(--pc-h, 420px); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
   background: var(--card); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .pc-stage:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
@@ -193,4 +198,29 @@
 @media (max-width: 640px) {
   .pc-btn, .pc-sel, .pc-seg .pc-btn { min-height: 44px; }
   .pc-btn.icon { width: 44px; }
+  .pc-info.info-btn { width: 44px; height: 44px; }   /* the toolbar's "Drawing tools and shortcuts" (i) was 34px on a phone-wide window that is not a touch screen (LIVE2-030) */
+  /* VR7-001: the range and scale buttons were 44 high but only 32 wide (eleven of them) and eight ranges of 44px do not fit a 326px card on one row.
+     The ranges are two rows of four, the scale buttons one row, both across the card, so each is 44px or more each way and none is hidden */
+  .pc-foot { flex-direction: column; align-items: stretch; gap: 8px; }
+  /* (wraps when the chart's card is narrower than five 44px scale buttons and two 44px icons, 320px: at 360px on a company page the icons were over the card's edge, R26) */
+  .pc-foot-r { flex-wrap: wrap; justify-content: stretch; gap: 6px; }
+  .pc-foot-r .pc-end { order: 2; margin-left: auto; }
+  .pc-foot .pc-seg { display: flex; width: 100%; }
+  .pc-foot .pc-seg .pc-btn { flex: 1 1 0; min-width: 44px; justify-content: center; padding: 0 4px; }
+  .pc-foot .pc-seg[aria-label="Range"] { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .pc-foot .pc-seg[aria-label="Range"] .pc-btn:nth-child(n+5) { border-top: 1px solid var(--line); }
+  .pc-foot .pc-seg[aria-label="Range"] .pc-btn:nth-child(4n+1) { border-left: 0; }
+  .pc-foot-r .pc-seg { flex: 1 0 auto; width: auto; }
 }
+
+/* How current the prices are, and the countdown to the forming candle's close (MW-1). Words, never colour alone. */
+.pc-legend .pc-live { gap: 2px 10px; }
+.pc-pill { display: inline-flex; align-items: center; gap: 5px; min-height: 20px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--card) 85%, transparent); color: var(--ink-2); font-size: 11.5px; font-weight: 600; pointer-events: auto; cursor: help; }
+.pc-pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pc-pill.live { color: var(--up); border-color: color-mix(in srgb, var(--up) 45%, var(--line)); }
+.pc-pill.delayed { color: var(--orange-ink); border-color: color-mix(in srgb, var(--orange) 50%, var(--line)); }
+.pc-pill.closed { color: var(--muted); }
+.pc-pop-note { margin: 0; padding: 6px 8px 8px; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); max-width: 260px; white-space: normal; }
+.pc-pop-note a { white-space: nowrap; }
+.pc-narrow .pc-hide-phone { display: none; }

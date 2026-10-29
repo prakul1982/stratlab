@@ -7,13 +7,13 @@ import { HELP } from "../lib/help";
 import { marketState } from "../lib/marketHours";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, SETTLING, holderRowName, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
-  type Company, type CompareAI, type Idea, type IndexLevel, type PulseAI, type PulseData, type Quote, type Region, type SectorAI, type WatchItem,
+  REGION_NAME, SETTLING, atPrice, holderRowName, STARTER_TICKERS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
+  type Company, type CompareAI, type Idea, type IndexLevel, type PulseAI, type PulseData, type Quote, type Region, type WatchItem,
 } from "../lib/research";
 import { askAgain, PULSE_PENDING_EVERY_MS, PULSE_SLOW_MS, pulseLoad } from "../lib/pulseLoad";
 import { bseTwinMoved, delistedLine, regionOf } from "../lib/researchFormat";
 import {
-  AIRead, aiLimited, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
+  AIRead, aiLimited, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteTable, Rail52, RegionSwitch,
   Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
 import { preloadPriceChart } from "../charts/price/lazy";
@@ -34,6 +34,7 @@ import { NamedHoldersPanel } from "../components/NamedHolders";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
+import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
 import { FilingsPanel } from "../components/Filings";
@@ -41,7 +42,7 @@ import { UsFilingsCards } from "../components/UsFilings";
 import { CompanyActions } from "../components/CorpActions";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import {
-  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StatRow, StockPicker,
+  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StockPicker,
 } from "../components/kit";
 import { resultDay, type ResultRow } from "./ResultsPage";
 import { pairKey, quotesInBatches } from "../lib/investUi";
@@ -77,18 +78,8 @@ export function indexLevel(name: string, price: number): string {
 export function IndexStrip({ indices, missing }: { indices: IndexLevel[] | null; missing?: string[] }) {
   if (!indices) return <Skeleton label="Loading the market" lines={2} />;
   if (!indices.length) return <EmptyState title="Index levels are unavailable right now">They come back on their own; this page checks again when you open it.</EmptyState>;
-  return (
-    <>
-    <StatRow label="Index levels">
-      {indices.map((i) => (
-        <Stat key={i.name} item label={i.name} value={indexLevel(i.name, i.price)}
-          delta={i.change_pct != null ? <Delta value={i.change_pct} tone={i.stale ? "neutral" : "auto"}>{pct(i.change_pct, 2)}</Delta> : undefined}
-          note={<span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{indexWhen(i, (d) => fmtDate(d, { year: false }))}{i.from_high_pct != null && <> · <span className="nowrap">{i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its 52-week high`}</span></>}</span>} />
-      ))}
-    </StatRow>
-    {!!missing?.length && <p className="k-small k-muted" data-testid="index-missing">{missing.join(", ")} couldn't load.</p>}
-    </>
-  );
+  // a table, not tiles each with its own small line (MOOD-1, the owner's "wherever you can, just make a table")
+  return <IndexTable indices={indices} missing={missing} dayText={(d) => fmtDate(d, { year: false })} whenOf={(i) => indexWhen(i, (d) => fmtDate(d, { year: false }))} />;
 }
 
 /** A box that finds a company by name or symbol and opens its page. */
@@ -268,7 +259,8 @@ function CompanyView() {
     if (!s0) return;
     researchApi.quotes(region, [s0]).then((q) => {
       const x = q[s0];
-      if (x?.price != null) setC((cur) => (cur && cur.symbol === s0 ? { ...cur, quote: { ...cur.quote, ...x }, as_of: x.at ?? cur.as_of } : cur));
+      // the market value, the P/E and the year's range move with the price (RC7-007), not only the price beside them
+      if (x?.price != null) setC((cur) => (cur && cur.symbol === s0 ? { ...atPrice(cur, cur.quote?.price, x.price), quote: { ...cur.quote, ...x }, as_of: x.at ?? cur.as_of } : cur));
     }).catch(() => undefined);
   });
   useEffect(() => {
@@ -338,23 +330,18 @@ function CompanyView() {
       <PageHeader eyebrow={eyebrow} title={c.name} lede={`${c.exchange || REGION_NAME[region]} · ${c.symbol}${c.industry ? ` · ${c.industry}` : ""}`}
         asOf={c.as_of} asOfLabel={c.phase === "settling" ? "Provisional prices as of" : "Prices as of"} asOfTz={marketTz(region)} actions={c.quarters?.cols.length ? <Badge>Latest results: quarter to {c.quarters.cols[c.quarters.cols.length - 1]}{resultsAge(c.quarters.cols[c.quarters.cols.length - 1])}</Badge> : c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at, { tz: marketTz(region) })}</Badge> : undefined} />
       <Card>
+        {/* UI-CO item 4: one balanced block, three equal-weight columns on a wide page (the price and its move, with the close it moves from; the market value; the
+            52-week bar and the results day), then the badges, then the actions row; one column on a phone in the same order */}
         <div className="inv-head">
-          <div className="k-stack">
-            {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
-            {c.market_cap == null && c.cap_note && <p className="k-small k-muted" data-cap-check>{c.cap_note}</p>}
-            <div className="inv-badges">
-              <SurvBadges region={region} symbol={c.symbol} />
-              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} />}
-              <FoBadges region={region} symbol={c.symbol} />
-              <IndexBadges region={region} symbol={c.symbol} />
-            </div>
-            {/* a company that no longer trades says so first, and offers nothing that needs a live share (DD-012) */}
-            {c.delisted && <p className="k-small" role="status" data-testid="delisted">{delistedLine(c.name, c.delisted, (d) => fmtDate(d))}
-              {c.delisted.into_symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(c.delisted.into_symbol)}`}>{c.delisted.into ?? c.delisted.into_symbol} →</Link></>}</p>}
-          </div>
-          <div className="k-stack inv-head-price">
+          <div className="k-stack inv-head-quote">
             <Change q={c.quote} currency={ccy} closed={c.market_open === false} preOpen={c.phase === "pre_open"} settling={c.phase === "settling"}
               quoteDay={c.quote_day} today={dayIn(new Date(), marketTz(region)) ?? undefined} />
+          </div>
+          <div className="k-stack inv-head-cap">
+            {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
+            {c.market_cap == null && c.cap_note && <p className="k-small k-muted" data-cap-check>{c.cap_note}</p>}
+          </div>
+          <div className="k-stack inv-head-price">
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} since={c.range52.since} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
             {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
@@ -364,6 +351,17 @@ function CompanyView() {
             {!nextResults && !filedNow && results?.last?.out && (results.last.out.url
               ? <a className="link k-small" href={safeHref(results.last.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.last.out.at)} ↗</a>
               : <Link className="link k-small" to={`/research/results?region=${region}`}>Results filed {resultDay(results.last.out.at)}</Link>)}
+          </div>
+          <div className="k-stack inv-head-more">
+            <div className="inv-badges">
+              <SurvBadges region={region} symbol={c.symbol} />
+              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} />}
+              <FoBadges region={region} symbol={c.symbol} />
+              <IndexBadges region={region} symbol={c.symbol} />
+            </div>
+            {/* a company that no longer trades says so first, and offers nothing that needs a live share (DD-012) */}
+            {c.delisted && <p className="k-small" role="status" data-testid="delisted">{delistedLine(c.name, c.delisted, (d) => fmtDate(d))}
+              {c.delisted.into_symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(c.delisted.into_symbol)}`}>{c.delisted.into ?? c.delisted.into_symbol} →</Link></>}</p>}
           </div>
           {/* one main action (what this person came for), Watch and an alert; the rest under More. Inside the head, under the
               market value, so the left side has no empty block while the price column runs on (DD-019) */}
@@ -392,23 +390,6 @@ function CompanyView() {
       {!c.delisted && <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>}
       {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} quiet />}
 
-      {/* (the facts under "What they do": not the market cap, which has its own place, nor where it is listed, which the heading says) */}
-      <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
-        {(wiki || c.about.profile) && (
-          <Card>
-            <CardHead title="What they do" info="From an encyclopedia entry and the company's own profile: facts, not AI." />
-            {/* the one-line description ("Indian multinational conglomerate") and then the entry's first sentence, which says it again; and "Listed: NSE ·
-                RELIANCE" under a page headed "NSE · RELIANCE" (VR4-013): each is said once */}
-            {wiki?.description && !(wiki.extract && wiki.extract.toLowerCase().includes(wiki.description.toLowerCase())) && <p className="k-sub">{wiki.description}</p>}
-            <p className="k-small">{wiki?.extract || c.about.profile}</p>
-            {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
-            {shownFacts.length > 0 && <dl className="k-dl pairs">{shownFacts.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
-            {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
-          </Card>
-        )}
-        {c.margins && c.margins.gross != null && <Card><CardHead title="Where a sale goes" info={HELP.researchMargins} /><MarginCascade {...c.margins} /></Card>}
-      </div>
-
       {c.metrics.length > 0 && (
         <Card id="co-numbers">
           <CardHead title="Key numbers" info={HELP.researchMetrics} actions={<Link className="btn quiet sm" to={deepTo}>10 years in the deep dive →</Link>} />
@@ -427,8 +408,29 @@ function CompanyView() {
             <TrendBars points={trend.prof.points} label={trend.t.profit_label} unit={trend.prof.unit}
               baseSales={trend.rev.points.find((p) => p.y === trend.prof.points[0]?.y)?.v ?? null} />
           </div>
+          {/* bars written "10.56L" are lakh crore under a title that says crore: said once under both charts (LIVE1A-063) */}
+          {[trend.rev, trend.prof].some((x) => /cr/i.test(x.unit) && !/lakh/i.test(x.unit) && x.points.some((p) => trendValue(p.v, x.unit).length > 7)) && <p className="k-note" data-testid="trend-lakh">A figure written with L is in lakh crore (1 lakh crore is 1,00,000 crore).</p>}
         </ChartFrame>
       )}
+
+      {/* the description comes after the figures: it sat between the chart and the key numbers (LIVE1A-062; owner pattern 14: the visual, the figures, then the words) */}
+      {/* (the facts under "What they do": not the market cap, which has its own place, nor where it is listed, which the heading says) */}
+      <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
+        {(wiki || c.about.profile) && (
+          <Card>
+            <CardHead title="What they do" info="From an encyclopedia entry and the company's own profile: facts, not AI." />
+            {/* the one-line description ("Indian multinational conglomerate") and then the entry's first sentence, which says it again; and "Listed: NSE ·
+                RELIANCE" under a page headed "NSE · RELIANCE" (VR4-013): each is said once */}
+            {wiki?.description && !(wiki.extract && wiki.extract.toLowerCase().includes(wiki.description.toLowerCase())) && <p className="k-sub">{wiki.description}</p>}
+            <p className="k-small">{wiki?.extract || c.about.profile}</p>
+            {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
+            {shownFacts.length > 0 && <DataTable label="Facts about the company" rows={shownFacts} rowKey={(f) => f.label} stack={false}
+              columns={[{ key: "f", header: "Fact", rowHeader: true, cell: (f) => f.label }, { key: "v", header: "Value", cell: (f) => f.value }]} />}
+            {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
+          </Card>
+        )}
+        {c.margins && c.margins.gross != null && <Card><CardHead title="Where a sale goes" info={HELP.researchMargins} /><MarginCascade {...c.margins} /></Card>}
+      </div>
 
       <div className="k-cols">
         {c.earnings.length > 1 && <Card><CardHead title="Results versus expectations" info={HELP.researchEarnings} /><EarningsBars rows={c.earnings} basis={c.earnings_basis} /></Card>}
@@ -469,7 +471,7 @@ function CompanyView() {
 
       {/* CK-2 (R1): one card under the other: the news list is shorter than the peers' tiles, so side by side it left 120px of blank beside it */}
       <div className="k-stack">
-        {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><div className={`co-peers co-peers-${c.peers.length === 4 ? 2 : Math.min(3, c.peers.length)}`}><QuoteGrid region={region} symbols={c.peers} /></div></Card>}
+        {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><QuoteTable region={region} symbols={c.peers} label="Similar companies" /></Card>}
         <Card id="co-news"><CardHead title="Latest news" />{c.lazy?.length ? <Skeleton label="Loading the latest news" lines={2} />
           : c.news_failed && !c.news.length ? <p className="k-small k-muted" data-testid="news-failed">The news couldn't be loaded just now. It is read again when you open the page.</p>
           : <NewsList items={c.news} />}</Card>
@@ -480,129 +482,15 @@ function CompanyView() {
 }
 
 /* ================= Themes ================= */
-export function ThemesPage() {
-  const [region, setRegion] = useRegion();
-  const [params, setParams] = useSearchParams();
-  const q = params.get("q") ?? "";
-  const [text, setText] = useState(q);
-  const [r, setR] = useState<SectorAI | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const seq = useRef(0);   // a late answer for an earlier theme or market is ignored, and doesn't clear "Mapping…" for the newer one
-  const run = async (theme: string, refresh = false) => {
-    if (!theme.trim()) return;
-    const mine = ++seq.current;
-    setBusy(true); setError(null); if (!refresh) setR(null);
-    try { const out = await researchApi.sector(region, theme, refresh); if (mine === seq.current) setR(out); }
-    catch (e) { if (mine === seq.current) setError((e as Error).message); }
-    finally { if (mine === seq.current) setBusy(false); }
-  };
-  useEffect(() => {
-    setText(q);
-    if (q) run(q);
-    else { seq.current++; setR(null); setError(null); setBusy(false); }
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [q, region]);
-  const go = (t: string) => { if (!t.trim()) return; const p = new URLSearchParams(params); p.set("q", t); p.set("region", region); setParams(p); };
-  const coLink = (t: string) => (t ? `/research/${region}/${encodeURIComponent(t)}` : "");
-  return (
-    <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/themes")} title="Map a theme, find the companies in it"
-        lede="Type a sector or trend. The AI maps who's involved along the chain, from raw materials to the end customer, and lists the listed companies linked to each step." />
-      <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
-      <Card>
-        <FormGrid label="Map a theme" onSubmit={(e) => { e.preventDefault(); go(text); }}>
-          <Field label="Theme" wide value={text} onChange={(e) => setText(e.target.value)} placeholder={region === "IN" ? "India defence, railways capex…" : "AI data centers, grid electrification…"} />
-          <FormActions>
-            <button className="btn" disabled={busy}>{busy ? "Mapping…" : "Map it"}</button>
-            <span className="k-small k-muted">Or try</span>
-            {THEME_IDEAS[region].map((t) => <button key={t} type="button" className="btn quiet sm" onClick={() => go(t)}>{t}</button>)}
-          </FormActions>
-        </FormGrid>
-      </Card>
-      {error && <ErrorState title="The theme couldn't be mapped" action={{ label: "Try again", onClick: () => run(q, true) }}>{error}</ErrorState>}
-      {busy && !r && <Card><Skeleton label={`Mapping "${q}" (takes about 20 seconds the first time)`} lines={4} /></Card>}
-      {r && (
-        <>
-          <Card>
-            <CardHead title={r.sector} actions={<><span className="k-note">Written {writtenAt(r.generated_at, marketTz(region))}</span>
-              <button className="btn quiet sm" disabled={busy} onClick={() => run(q, true)}>{busy ? "Mapping…" : "Refresh"}</button></>} />
-            <p className="k-lede">{r.summary}</p>
-            {(r.market_size || r.cagr != null || r.etfs.length > 0) && (
-              <StatRow>
-                {r.market_size && <Stat label="Market size" value={r.market_size} />}
-                {r.cagr != null && <Stat label={`Growth ${r.cagr_note}`} value={`${r.cagr}% a year`} />}
-                {r.etfs.length > 0 && <Stat label="Funds to track" value={r.etfs.map((e) => e.ticker).join(" · ")} note={r.etfs.map((e) => e.name).join(" · ")} />}
-              </StatRow>
-            )}
-          </Card>
-          {r.screen.length > 0 && (
-            <Card>
-              <CardHead title="Listed companies across the chain" info="Listed companies with the most direct link to this theme, in value-chain order. Not ranked and not a list to buy: open any to see its numbers." />
-              <DataTable label="Listed companies linked to the theme" rows={r.screen} rowKey={(s) => s.ticker + s.name} sticky={r.screen.length > 12}
-                columns={[{ key: "n", header: "Company", rowHeader: true, wrap: true, cell: (s) => <><b>{s.name}</b><span className="k-sub-line">{s.one_line}</span></> },
-                  { key: "t", header: "Ticker", cell: (s) => s.ticker || "–" }, { key: "l", header: "Step in the chain", wrap: true, cell: (s) => s.layer || "–" },
-                  { key: "o", header: "", action: true, cell: (s) => (s.ticker ? <Link className="btn quiet sm" to={coLink(s.ticker)}>Open →</Link> : null) }]} />
-            </Card>
-          )}
-          {r.clusters.length > 0 && (
-            <Card>
-              <CardHead title="Who's in it" info="Groups of listed companies involved in the theme. Every company is checked against the exchange's list and named as the exchange lists it; one the list doesn't have is left out. Tap a ticker to open the company." />
-              {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
-              <div className="inv-clusters">
-                {r.clusters.map((cl) => (
-                  <div key={cl.name} className="inv-cluster">
-                    <b className="k-small">{cl.name}</b>
-                    <div className="k-row">{cl.companies.map((co) => co.ticker
-                      ? <Link key={co.name} className="inv-chip" to={coLink(co.ticker)}><b>{co.ticker}</b> {co.name}</Link>
-                      : <span key={co.name} className="inv-chip off">{co.name}</span>)}</div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-          {r.value_chain.length > 0 && (
-            <Card>
-              <CardHead title="The value chain: where the margin sits" />
-              <ol className="inv-chain">
-                {r.value_chain.map((l, i) => (
-                  <li key={l.layer}>
-                    <span className="k-row"><Badge tone="plain" dot={false}>Layer {i + 1}</Badge><b className="k-sub">{l.layer}</b></span>
-                    <p className="k-small">{l.description}</p>
-                    <div className="k-row">{l.companies.map((co) => co.ticker
-                      ? <Link key={co.name} className="inv-chip" to={coLink(co.ticker)}><b>{co.ticker}</b> {co.name}</Link>
-                      : <span key={co.name} className="inv-chip off">{co.name}</span>)}</div>
-                  </li>
-                ))}
-              </ol>
-            </Card>
-          )}
-          {r.exchange && r.exchange.companies.length > 0 && (
-            <Card>
-              <CardHead title="On the exchange's list for these industries" info="Every listed company the exchange classifies under the same industries as the map's companies, A to Z, from StratLab's list of listed companies. Ticked ones are named in the map above; the rest are in the same industry and the map doesn't name them." />
-              <p className="k-small k-muted">{r.exchange.industries.join(" · ")}: {r.exchange.total.toLocaleString("en-IN")} compan{r.exchange.total === 1 ? "y" : "ies"}{r.exchange.total > r.exchange.companies.length ? `, the first ${r.exchange.companies.length} A to Z` : ""}.</p>
-              <div className="k-row">{r.exchange.companies.map((co) => (
-                <Link key={co.ticker} className={`inv-chip${co.named ? "" : " off"}`} to={coLink(co.ticker)}>{co.named ? "✓ " : ""}<b>{co.ticker}</b> {co.name}</Link>
-              ))}</div>
-            </Card>
-          )}
-          <div className="k-cols">
-            {r.sub_themes.length > 0 && <Card><CardHead title="Sub-themes" />{r.sub_themes.map((s) => <div key={s.name} className="k-stack"><b>{s.name}</b><span className="k-small k-muted">{s.detail}</span></div>)}</Card>}
-            {r.tailwinds.length > 0 && <Card><CardHead title="Tailwinds" /><ul className="k-list">{r.tailwinds.map((t) => <li key={t}>{t}</li>)}</ul></Card>}
-            {r.risks.length > 0 && <Card><CardHead title="Risks" /><ul className="k-list">{r.risks.map((t) => <li key={t}>{t}</li>)}</ul></Card>}
-          </div>
-          <p className="k-note">Written by AI from its general knowledge, with no figures: there's no source here to check a budget, size or growth rate against. Companies are checked against the exchange's list.</p>
-        </>
-      )}
-    </div>
-  );
-}
+/** The theme deep dive lives in its own file (THEME-1). */
+export { ThemesPage } from "./ThemesPage";
 
 /* ================= Market pulse ================= */
 export function PulsePage() {
   const [region, setRegion] = useRegion();
   const levels = usePulse(region);
   const data = levels.data;
+  const { mood, error: moodErr, retry: moodRetry } = usePulseMood(region);
   const [ai, setAi] = useState<PulseAI | null>(null);
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -619,12 +507,7 @@ export function PulsePage() {
     loadAI();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region]);
-  // the mood is written from a fresh read of the levels, which the cards above may not have had yet: they are read again at once, so the
-  // sentence and the cards quote one set of figures (RC2A-024: cards 22,664 at +0.28%, the mood a minute later 22,684 at +0.37%)
-  const cardsAt = data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? null;
-  const reloadCards = levels.reload;
-  useEffect(() => { if (ai?.levels_at && cardsAt && ai.levels_at > cardsAt) reloadCards(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [ai?.levels_at]);
-  const moodOlder = !!(ai?.levels_at && cardsAt && Date.parse(cardsAt) - Date.parse(ai.levels_at) > 120_000);
+  const aiNothing = !!ai && !ai.tone && !ai.hot.length && !ai.flows.length && !ai.themes.length;
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={pulseClosedDay(data?.indices) ? "How the market felt at the last close" : "How the market feels today"}
@@ -632,64 +515,37 @@ export function PulsePage() {
         asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><PulseLevels p={levels} /></Card>
+      {/* the mood and every table under it come from one read of the figures (mood.py): a line and its table cannot disagree (MOOD-1) */}
+      {mood ? <MoodCard m={mood} region={region} /> : moodErr
+        ? <Card><ErrorState title="The market's figures couldn't be read" action={{ label: "Try again", onClick: moodRetry }}>{moodErr}</ErrorState></Card> : <MoodSkeleton />}
+      {mood?.breadth && <BreadthTable b={mood.breadth} />}
+      {mood?.sectors && <SectorsTable s={mood.sectors} />}
+      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} />)}
+      {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
+        left={mood.flows ? <FlowsTable f={mood.flows} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
+      {mood?.global && <GlobalTable g={mood.global} region={region} />}
+      {mood?.calendar && <CalendarTable c={mood.calendar} />}
       <Card>
-        <CardHead title="The mood" info={HELP.researchPulse}
-          actions={ai?.tone && !aiErr ? <><span className="k-note">Written {writtenAt(ai.generated_at, marketTz(region))}{ai.levels_at ? `, levels of ${asOf(ai.levels_at, { tz: marketTz(region) })}` : ""}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
-        {/* "Written" only beside a read that exists; no read is one calm line and one button, like a company's AI read */}
-        {aiErr || (ai && !ai.tone) ? (
+        <CardHead title="What the headlines say" info={HELP.researchPulse}
+          actions={ai && !aiErr ? <><span className="k-note">Written {writtenAt(ai.generated_at, marketTz(region))}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
+        {aiErr ? (
           <div className="k-row ai-read-off" role="status">
-            <span className="k-small k-muted">No AI read of the mood right now{aiReason(aiErr)} The index levels and headlines don't depend on it.</span>
+            <span className="k-small k-muted">No AI read of the headlines right now{aiReason(aiErr)} The tables above don't depend on it.</span>
             {!aiLimited(aiErr) && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Asking…" : "Ask again"}</button>}
           </div>
-        ) : !ai ? <Skeleton label="Reading the tape" lines={2} /> : (
-          <>
-            {/* the mood and the main story first, worked out from the moves and headlines; then the read (DD-001) */}
-            {ai.mood && <p className="inv-summary" data-testid="pulse-mood"><b>{ai.mood}</b></p>}
-            <p className="inv-summary">{ai.tone}</p>
-            {moodOlder && ai.levels_at && <p className="k-note" data-testid="pulse-mood-older">The sentences above quote the levels of {asOf(ai.levels_at, { tz: marketTz(region) })}; the cards are newer.</p>}
-            {ai.flows_source && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
-          </>
-        )}
+        ) : !ai ? <Skeleton label="Reading the headlines" lines={2} />
+          : aiNothing ? <p className="k-small k-muted" data-testid="pulse-ai-none">Nothing in today's headlines held up against the figures above, so there is no AI summary.</p>
+          : (
+            <>
+              {ai.tone && <p className="inv-summary" data-testid="pulse-tone">{ai.tone}</p>}
+              {ai.flows_source && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
+            </>
+          )}
       </Card>
-      {ai && (ai.hot.length > 0 || ai.flows.length > 0) && (
-        <div className="k-cols">
-          {ai.hot.length > 0 && <Card>
-            <CardHead title="In today's headlines" />
-            <div className="inv-rows">
-              {ai.hot.map((h) => (
-                <div key={h.ticker + h.name} className="inv-row">
-                  <span><b>{h.name}</b> {h.ticker && <Link className="link k-small" to={`/research/${region}/${encodeURIComponent(h.ticker)}`}>{h.ticker} →</Link>}</span>
-                  <span className="k-small k-muted">{h.why}</span>
-                </div>
-              ))}
-            </div>
-          </Card>}
-          {ai.flows.length > 0 && <Card>
-            <CardHead title={ai.flows.some((f) => f.direction) ? "Where money is flowing" : "Money and markets in the headlines"} />
-            <div className="inv-rows">
-              {ai.flows.map((f) => (
-                <div key={f.title} className="inv-row">
-                  <span className="k-row"><b>{f.title}</b>{f.direction && <Badge tone="plain" dot={false}>{f.direction.toLowerCase()}</Badge>}</span>
-                  <span className="k-small k-muted">{f.detail}</span>
-                </div>
-              ))}
-            </div>
-          </Card>}
-        </div>
-      )}
-      {ai && ai.themes.length > 0 && (
-        <Card>
-          <CardHead title="Themes in play" />
-          <div className="inv-themes">
-            {ai.themes.map((t) => (
-              <Link key={t.theme} className="inv-theme" to={`/research/themes?region=${region}&q=${encodeURIComponent(t.theme)}`}>
-                <b>{t.theme}</b><span className="k-small k-muted">{t.detail}</span>{t.example && <span className="k-note">e.g. {t.example}</span>}
-              </Link>
-            ))}
-          </div>
-        </Card>
-      )}
-      {data && <Card><CardHead title="Headlines" /><NewsList items={data.headlines} limit={14} /></Card>}
+      {ai && ai.hot.length > 0 && <HotTable ai={ai} region={region} />}
+      {ai && ai.flows.length > 0 && <TopicsTable ai={ai} />}
+      {ai && ai.themes.length > 0 && <ThemesTable ai={ai} region={region} />}
+      {data && <Card><CardHead title="Headlines" /><HeadlinesTable items={data.headlines} ai={ai} /></Card>}
     </div>
   );
 }
@@ -710,6 +566,9 @@ export function ComparePage() {
   const [sameMsg, setSameMsg] = useState<string | null>(null);        // the server found the two to be one company (DD-061)
   // "Asking…" is the pair's it was pressed for: another pair or market never shows it, and never gets its answer
   const [asking, setAsking] = useState<string | null>(null);
+  // a link that names two companies and no market ("?a=HDFCBANK&b=ICICIBANK") opens in the market that has them, not the one this browser last used
+  // (LIVE2-021): when the pair isn't found in this one, the other is tried once
+  const auto = useRef<{ tried: boolean; first: Region | null; error: string | null }>({ tried: false, first: null, error: null });
   const shownKey = pairKey(region, a, b);
   const pair = useRef(shownKey);
   pair.current = shownKey;
@@ -732,7 +591,12 @@ export function ComparePage() {
     setRes(null); setError(null);
     researchApi.compare(region, a, b).then((x) => live && setRes(x)).catch((e) => {
       if (!live) return;
-      if ((e as ApiError).code === "same_symbol") setSameMsg((e as Error).message); else setError((e as Error).message);
+      if ((e as ApiError).code === "same_symbol") { setSameMsg((e as Error).message); return; }
+      const t = auto.current;
+      if (!params.get("region") && !t.tried) { auto.current = { tried: true, first: region, error: (e as Error).message }; setRegionState(region === "IN" ? "US" : "IN"); return; }
+      // not in the other market either: the first market's message, and the market it was asked in
+      if (t.tried && t.first && t.first !== region) { setError(t.error ?? (e as Error).message); setRegionState(t.first); return; }
+      setError(t.tried && t.error ? t.error : (e as Error).message);
     });
     return () => { live = false; };
   }, [a, b, region, same]);
@@ -742,7 +606,7 @@ export function ComparePage() {
     const [sa, sb] = [res!.a.symbol, res!.b.symbol];
     researchApi.quotes(region, [sa, sb]).then((q) => {
       if (pair.current !== key) return;
-      const lay = (c: Company, x: Quote | null | undefined) => (x?.price != null ? { ...c, quote: { ...c.quote, ...x }, as_of: x.at ?? c.as_of } : c);
+      const lay = (c: Company, x: Quote | null | undefined) => (x?.price != null ? { ...atPrice(c, c.quote?.price, x.price), quote: { ...c.quote, ...x }, as_of: x.at ?? c.as_of } : c);
       setRes((cur) => (cur && cur.a.symbol === sa && cur.b.symbol === sb ? { ...cur, a: lay(cur.a, q[sa]), b: lay(cur.b, q[sb]) } : cur));
     }).catch(() => undefined);
   });
@@ -773,11 +637,29 @@ export function ComparePage() {
   // and a qualifier the company's page gives a figure stays with it: TCS's 4.4% yield says it counts a ₹46 special dividend and is 2.6% without
   // it (RC2A-028)
   const QUALIFIES = /special|like-for-like|against a quarter|other income|n\/m|not meaningful/i;
-  const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => {
+  // that qualifier is a long sentence ("Includes Mar 2024: HDFC Ltd merged into it: ..."): it ran out of its table cell over the other
+  // company's figures and was said six times in two tables. The cell carries a small number and the sentence is said once, under the
+  // table, naming the company (LIVE1A-048)
+  type Foot = { n: number; symbol: string; text: string };
+  type Item = Company["metrics"][number]["items"][number];
+  // (UI-CO item 8: any note longer than a short basis is one, whatever its words: "₹112 a share in the last 12 months, including a ₹46 special dividend;
+  // 2.7% without it" ran across both columns)
+  const qualifier = (m: Item | undefined) => { const note = (m as { note?: string } | undefined)?.note; return note && (QUALIFIES.test(note) || note.length > 48) ? note : null; };
+  // worked out before the table is drawn, so the list under it and the numbers in its cells agree
+  const footsOf = (sec: { title: string; labels: string[] }): Foot[] => {
+    const out: Foot[] = [];
+    for (const l of sec.labels) for (const c of [res!.a, res!.b]) {
+      const q = qualifier((c === res!.a ? ra : rb)[key(sec.title, l)]);
+      if (q && !out.some((f) => f.symbol === c.symbol && f.text === q)) out.push({ n: out.length + 1, symbol: c.symbol, text: q });
+    }
+    return out;
+  };
+  const show = (m: Item | undefined, c: Company, foots: Foot[]) => {
     if (!m) return "–";
-    const note = (m as { note?: string }).note;
-    return <>{metricText(m, c.currency)}{(m as { period?: string }).period && <span className="k-sub-line">{(m as { period?: string }).period}</span>}
-      {note && QUALIFIES.test(note) && <span className="k-sub-line" data-testid="cmp-note">{note}</span>}</>;
+    const q = qualifier(m);
+    const foot = q ? foots.find((f) => f.symbol === c.symbol && f.text === q) : undefined;
+    return <>{metricText(m, c.currency)}{foot && <sup className="cmp-foot-mark" aria-label={`see note ${foot.n}`}>{foot.n}</sup>}
+      {(m as { period?: string }).period && <span className="k-sub-line">{(m as { period?: string }).period}</span>}</>;
   };
   return (
     <div className="k-page">
@@ -796,6 +678,53 @@ export function ComparePage() {
       {a && b && !same && !sameMsg && !res && !error && <Card><Skeleton label={`Comparing ${a} and ${b}`} lines={4} /></Card>}
       {res && (
         <>
+          {/* the two companies as one table (UI-CO item 11, LIVE1A-050): the name (a link to its page), the price and its move, the market value and Watch: the same
+              four columns for both, so nothing is said twice and no button repeats the link */}
+          <Card>
+            <DataTable label="The two companies" rows={[res.a, res.b]} rowKey={(c) => c.symbol} stack
+              columns={[
+                { key: "n", header: "Company", rowHeader: true, wrap: true, cell: (c) => <span className="cmp-cell"><Link className="link" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}><b>{c.name}</b></Link><span className="k-note">{c.symbol}</span></span> },
+                { key: "p", header: "Price", numeric: true, cell: (c) => (
+                  <span className="cmp-cell end"><b>{c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}</b>
+                    <span className="k-note">{priceLabel(c, today, dayText).label ?? ""}{priceLabel(c, today, dayText).since ? ` ${priceLabel(c, today, dayText).since}` : ""}</span></span>) },
+                { key: "d", header: "Change", numeric: true, cell: (c) => (c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : "–") },
+                { key: "m", header: "Market value", numeric: true, cell: (c) => bigMoney(c.market_cap, c.currency) },
+                { key: "w", header: "", action: true, cell: (c) => <StarButton region={region} symbol={c.symbol} name={c.name} /> },
+              ]} />
+          </Card>
+          {/* the two prices on one % scale, from the start of the range shown (DD-060) */}
+          <Card id="cmp-chart"><PriceChart region={region} symbol={res.a.symbol} currency={res.a.currency} price={res.a.quote?.price} compareWith={res.b.symbol} /></Card>
+          <Card>
+            <CardHead title="The numbers side by side" />
+            {/* every section's columns line up: the same widths in each table, so TCS and INFY never shift (DD-060) */}
+            <div className="k-stack cmp-sections">
+            {sections.map((sec) => {
+              const foots = footsOf(sec);
+              return (
+              <div key={sec.title} className="k-stack">
+                <span className="k-eyebrow">{sec.title}</span>
+                <DataTable stack label={`${sec.title} for both companies`} rows={sec.labels} rowKey={(l) => l}
+                  columns={[{ key: "m", header: "Measure", rowHeader: true, cell: (l) => l },
+                    { key: "a", header: res.a.symbol, numeric: true, cell: (l) => show(ra[key(sec.title, l)], res.a, foots) },
+                    { key: "b", header: res.b.symbol, numeric: true, cell: (l) => show(rb[key(sec.title, l)], res.b, foots) }]} />
+                {foots.length > 0 && <ul className="k-note cmp-foots" data-testid="cmp-note">{foots.map((f) => <li key={f.n}><sup>{f.n}</sup> {f.symbol}: {f.text}</li>)}</ul>}
+              </div>
+              );
+            })}
+            {owners.length > 0 && (
+              <div className="k-stack" data-testid="cmp-owners">
+                <span className="k-eyebrow">Who owns it</span>
+                <DataTable stack label="Who owns each company" rows={owners} rowKey={(l) => l}
+                  columns={[{ key: "m", header: "Holder", rowHeader: true, cell: (l) => holderRowName(l) },
+                    { key: "a", header: res.a.symbol, numeric: true, cell: (l) => held(res.a, l) },
+                    { key: "b", header: res.b.symbol, numeric: true, cell: (l) => held(res.b, l) }]} />
+                <span className="k-note">From each company's latest shareholding pattern: {[res.a, res.b].map((c) => `${c.symbol} as of ${c.shareholding?.as_of ?? "–"}`).join(", ")}.</span>
+              </div>
+            )}
+            </div>
+          </Card>
+          {/* the AI's read comes after the figures it reads: a five-line paragraph above the two companies and the chart pushed them
+              down the page (LIVE1A-049) */}
           <Card>
             <CardHead title="AI comparison" />
             {res.ai && !res.ai.error && res.ai.verdict ? (
@@ -810,50 +739,6 @@ export function ComparePage() {
                 {!aiLimited(res.ai?.error ?? null) && <button type="button" className="btn quiet sm" disabled={asking === shownKey} onClick={askAgain}>{asking === shownKey ? "Asking…" : "Ask again"}</button>}
               </div>
             )}
-          </Card>
-          <div className="k-cols">
-            {([["a", res.a], ["b", res.b]] as const).map(([k, c]) => (
-              <Card key={k}>
-                {/* both cards the same: the name, the two figures, then the same two buttons in a row (DD-060) */}
-                <CardHead title={c.name} />
-                <StatRow>
-                  <Stat label={priceLabel(c, today, dayText).label ?? "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
-                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={priceLabel(c, today, dayText).since || undefined} />
-                  <Stat label="Market value" value={bigMoney(c.market_cap, c.currency)} note={c.symbol} />
-                </StatRow>
-                <div className="k-row">
-                  <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}>Open {c.symbol} →</Link>
-                  <StarButton region={region} symbol={c.symbol} name={c.name} />
-                </div>
-              </Card>
-            ))}
-          </div>
-          {/* the two prices on one % scale, from the start of the range shown (DD-060) */}
-          <Card id="cmp-chart"><PriceChart region={region} symbol={res.a.symbol} currency={res.a.currency} price={res.a.quote?.price} compareWith={res.b.symbol} /></Card>
-          <Card>
-            <CardHead title="The numbers side by side" />
-            {/* every section's columns line up: the same widths in each table, so TCS and INFY never shift (DD-060) */}
-            <div className="k-stack cmp-sections">
-            {sections.map((sec) => (
-              <div key={sec.title} className="k-stack">
-                <span className="k-eyebrow">{sec.title}</span>
-                <DataTable stack label={`${sec.title} for both companies`} rows={sec.labels} rowKey={(l) => l}
-                  columns={[{ key: "m", header: "Measure", rowHeader: true, cell: (l) => l },
-                    { key: "a", header: res.a.symbol, numeric: true, cell: (l) => show(ra[key(sec.title, l)], res.a) },
-                    { key: "b", header: res.b.symbol, numeric: true, cell: (l) => show(rb[key(sec.title, l)], res.b) }]} />
-              </div>
-            ))}
-            {owners.length > 0 && (
-              <div className="k-stack" data-testid="cmp-owners">
-                <span className="k-eyebrow">Who owns it</span>
-                <DataTable stack label="Who owns each company" rows={owners} rowKey={(l) => l}
-                  columns={[{ key: "m", header: "Holder", rowHeader: true, cell: (l) => holderRowName(l) },
-                    { key: "a", header: res.a.symbol, numeric: true, cell: (l) => held(res.a, l) },
-                    { key: "b", header: res.b.symbol, numeric: true, cell: (l) => held(res.b, l) }]} />
-                <span className="k-note">From each company's latest shareholding pattern: {[res.a, res.b].map((c) => `${c.symbol} as of ${c.shareholding?.as_of ?? "–"}`).join(", ")}.</span>
-              </div>
-            )}
-            </div>
           </Card>
         </>
       )}
@@ -906,7 +791,7 @@ export function WatchlistPage() {
   const factText = (sym: string) => {
     const f = facts?.[sym];
     if (!f) return null;
-    const parts = [f.pe != null ? `P/E ${f.pe.toFixed(1)}` : null,
+    const parts = [f.pe != null ? `P/E ${f.pe.toFixed(2)}` : null,
       f.from_high != null ? (f.from_high > -0.5 ? "near its 52-week high" : `${Math.abs(f.from_high).toFixed(1)}% below its 52-week high`) : null].filter(Boolean);
     return parts.length ? parts.join(" · ") : null;
   };

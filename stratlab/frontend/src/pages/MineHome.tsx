@@ -1,3 +1,4 @@
+import { NoBreak } from "../components/NoBreak";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
@@ -76,12 +77,15 @@ export function MineHome() {
 
   const change = (next: Layout) => { setRaw(next); void savePrefs({ mine: next }, true); };
   const cardFor = (id: CardId) => ({
-    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={coming} more={upAll ? upAll.length - (coming?.length ?? 0) : 0} />, watch: <WatchCard />,
+    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={comingShown} more={upAll ? upAll.length - (comingShown?.length ?? 0) : 0} />, watch: <WatchCard />,
   })[id];
   // each card's width from its place in the chosen order, so the grid keeps that order with no gaps (DI-005)
   // VR6-010: an empty watchlist is one short message: it takes its own row (Coming up widens to fill the one before), instead of standing
   // beside six dated rows with 230px of nothing under it. Until the list is read the two keep sharing the row.
   const { items: watchItems } = useWatchlist();
+  // beside a watchlist of one to three stocks, "Coming up" is a few rows shorter than its six, so the pair ends near level instead of one at half
+  // the other's height with a block of nothing under it (LIVE1C-091); the rest are one tap away in the calendar ("+N more")
+  const comingShown = coming && watchItems && watchItems.length > 0 && watchItems.length <= 3 ? coming.slice(0, Math.max(3, watchItems.length + 2)) : coming;
   const spans = slotSpans(shown, watchItems !== null && watchItems.length === 0 ? ["watch"] : []);
 
   return (
@@ -94,7 +98,8 @@ export function MineHome() {
         setCustomise(false);
         requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('[aria-controls="mine-customise"]')?.focus());
       }} />}
-      <PromoCountdown /><FirstSteps />
+      {/* one line with the next step, so the first screen holds the person's own numbers (LIVE1B-086: a 375px checklist came first); the whole list is on each space's home */}
+      <PromoCountdown /><FirstSteps compact />
       {shown.length === 0 ? (
         <EmptyState title="Every card is hidden" action={{ label: "Show the cards", onClick: () => { change(DEFAULT_LAYOUT); } }}>Use Customise to choose what My space shows.</EmptyState>
       ) : (
@@ -221,7 +226,7 @@ function PnlCard() {
       <Stat label={`${fresh ? "Today" : "Last session"} · ${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={day == null ? "–" : signedInrCompact(day)} tone={day == null || day === 0 ? undefined : day > 0 ? "up" : "down"}
         note={day == null ? "The day's change needs prices, which are not in yet." : h.totals.day_pct != null ? <>Holdings <Signed value={day}>{pct(h.totals.day_pct, 2)}</Signed></> : undefined} />
       {/* the US part of the day named, live or at its close, as Holdings and Money say it (R7O-012) */}
-      {(() => { const note = usTodayNote(markets, h.us, h.usd_inr); return note && <p className="k-note" data-testid="mine-us-today">{note}</p>; })()}
+      {(() => { const note = usTodayNote(markets, h.us, h.usd_inr); return note && <p className="k-note" data-testid="mine-us-today"><NoBreak text={note} /></p>; })()}
       {/* a stock with a price but no buy price is in the day's change, not in the value and gain or loss (R3D) */}
       {h.totals.no_cost && <p className="k-note" data-testid="mine-no-cost">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}), except Today, which includes {h.totals.no_cost.count === 1 ? "its" : "their"} change.</p>}
       {/* a note line like the other two cards' "As of": the pill under it made this card 40px taller than its neighbours (VR1-001) */}
@@ -319,10 +324,11 @@ function ComingCard({ rows, more = 0 }: { rows: Up[] | null; more?: number }) {
               const d = dayNum(u.date);
               return (
                 <li key={u.key} className="mine-tl-i">
-                  <span className="dt"><b>{d.d}</b>{d.m}</span>
-                  <span className="body">{u.to ? <Link to={u.to}><b>{u.title}</b></Link> : <b>{u.title}</b>}{u.detail && <span className="k-stat-d" title={u.detail}>{firstSentence(u.detail)}</span>}</span>
+                  {/* the day and its weekday are read together, ahead of the title (LIVE1C-091: "Fri 3 Nov NIFTY weekly expiry" with the chip's "Tue" read after it) */}
+                  <span className="dt" aria-hidden="true"><b>{d.d}</b>{d.m}</span>
+                  <span className="body"><span className="sr-only">{d.w} {d.d} {d.m}: </span>{u.to ? <Link to={u.to}><b>{u.title}</b></Link> : <b>{u.title}</b>}{u.detail && <span className="k-stat-d" title={u.detail}>{firstSentence(u.detail)}</span>}</span>
                   {/* every row gives its weekday; a tax date keeps its colour (and says so to a screen reader) (R48-011) */}
-                  <Badge tone={u.tone === "warn" ? "warn" : "plain"} dot={false}>{d.w}{u.tone === "warn" && <span className="sr-only"> · {u.tag} date</span>}</Badge>
+                  <Badge tone={u.tone === "warn" ? "warn" : "plain"} dot={false}><span aria-hidden="true">{d.w}</span>{u.tone === "warn" && <span className="sr-only"> · {u.tag} date</span>}</Badge>
                 </li>
               );
             })}

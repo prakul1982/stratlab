@@ -46,7 +46,7 @@ US_ITEMS = {
     "1.03": ("8k_1_03", "Bankruptcy or receivership (Item 1.03)", "red"),
     "3.01": ("8k_3_01", "Delisting or listing-rule notice (Item 3.01)", "red"),
     "4.01": ("8k_4_01", "Change of auditor (Item 4.01)", "red"),
-    "4.02": ("8k_4_02", "Earlier financial statements not to be relied on (Item 4.02)", "red"),
+    "4.02": ("8k_4_02", "Past statements not reliable (Item 4.02)", "red"),        # SEC: non-reliance on previously issued financial statements
     "5.02": ("8k_5_02", "Director or officer change (Item 5.02)", "amber"),
 }
 US_WORDS = {

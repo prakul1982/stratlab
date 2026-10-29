@@ -3,10 +3,11 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from "@
 // Drawing tools on the shared price chart: a trend line and a long position are drawn, saved to the account for the
 // symbol, still there after a reload, then edited (colour, style, lock, undo, handle drag, hide all) and deleted.
 // Desktop uses the left rail and the mouse; the phone uses the bottom sheet and taps. Each project signs in as its
-// own user so the two runs never share drawings.
+// own user so the two runs never share drawings; and neither is a user another spec resets while this one runs (e2e/mw1-watch and mwr1 clear the
+// drawings of admin and pro in each test's setup, which wiped a drawing mid-test when the two files shared a worker pair).
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
-const USERS: Record<string, [string, string, string]> = { desktop: ["admin-token", "u-admin", "owner@example.com"], phone: ["pro-token", "u-pro", "pro@example.com"] };
-let auth = { Authorization: "Bearer admin-token" };
+const USERS: Record<string, [string, string, string]> = { desktop: ["load-224", "u-load-224", "load224@example.com"], phone: ["load-227", "u-load-227", "load227@example.com"] };      // Pro accounts in the fake world
+let auth = { Authorization: `Bearer ${USERS.desktop[0]}` };
 let session = sessionOf(USERS.desktop);
 function sessionOf([token, id, email]: [string, string, string]) {
   return { access_token: token, token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,

@@ -28,7 +28,7 @@ def test_the_page_runs_price_chart_figures_then_sections_then_about_then_the_fol
     for url in ("/stocks/in/RELIANCE", "/stocks/us/AAPL"):
         t = w["client"].get(url).text
         marks = ["<b data-price>", "<h2>Share price</h2>", "<h2>Key figures</h2>", "<h2>Price trend</h2>", "<h2>Revenue and profit</h2>", "data-faq",
-                 "Go further with", "data-about", "<h2>Browse companies</h2>", "data-how"]
+                 "Go further with", "<h2>Browse companies</h2>", "data-how"]
         at = [t.index(m) for m in marks if m in t]
         assert len(at) >= 8 and at == sorted(at), (url, [m for m in marks if m in t])
         assert t.count("<h1>") == 1 and t.count("<details class=\"card how\" data-how>") == 1
@@ -36,7 +36,7 @@ def test_the_page_runs_price_chart_figures_then_sections_then_about_then_the_fol
         how = t[t.index("data-how"):]
         assert "P/E: the last close divided by earnings per share" in how and "<summary>How these figures are worked out</summary>" in how
     reliance = w["client"].get("/stocks/in/RELIANCE").text
-    assert reliance.index("data-pe-basis") > reliance.index("data-about")          # the P/E against the profit shown: with the explanations, not under the figures
+    assert reliance.index("data-pe-basis") > reliance.index("Go further with")          # the P/E against the profit shown: with the explanations, not under the figures
 
 
 def test_the_header_is_the_name_one_quiet_line_the_price_and_one_short_advice_line(w):
@@ -62,7 +62,7 @@ def test_key_figures_are_tiles_with_a_short_label_a_value_and_a_unit_line():
     t = _page()
     tiles = re.findall(r'<div class="stat[^"]*" title="([^"]*)"><span>([^<]*)</span><b>([^<]*)</b><small>([^<]*)</small></div>', t)
     got = {label: (value, unescape(line)) for _, label, value, line in tiles}
-    assert got["Market cap"] == ("₹7.70 lakh crore", "last close × shares") and got["P/E"] == ("14.3", "on last 12 months' profit")
+    assert got["Market cap"] == ("₹7.70 lakh crore", "last close × shares") and got["P/E"] == ("14.3", "on reported profit, last four quarters")
     assert got["Return on equity"][1] == "year to Mar 2026" and got["EBITDA margin"][0] == "28%" and got["Debt to equity"][0] == "0.10"
     assert got["Dividend yield"] == ("1.10%", "last 12 months") and got["Net margin"][0] == "19.4%"
     assert all(len(label) <= stock_pages.TILE_LABEL_MAX for _, label, _, _ in tiles)            # a label is short: one line, two on a phone, never three
@@ -118,9 +118,8 @@ def test_the_css_gives_each_row_one_baseline_and_two_to_a_row_on_a_phone():
     assert ".stat small{display:block;font-size:12.5px" in css and ".rb-now{fill:var(--ink-2);font-size:13px" in css      # nothing under 12 px
 
 
-def test_about_is_a_list_of_short_sentences_and_the_us_page_has_the_same_top(w):
+def test_there_is_no_about_section_saying_the_figures_again_and_the_us_page_has_the_same_top(w):
     t = w["client"].get("/stocks/us/AAPL").text
-    items = re.findall(r"<li>(.*?)</li>", re.search(r'<ul class="plain" data-about>(.*?)</ul>', t, re.S).group(1), re.S)
-    assert len(items) >= 4 and all(len(x) < 330 for x in items) and items[0].startswith("Apple Inc. is in the")
-    assert "<h2>About Apple Inc.</h2>" in t
+    assert "data-about" not in t and "<h2>About Apple Inc.</h2>" not in t                       # (LIVE2-018) the figures are in the tiles, the table and the questions
     assert re.search(r'<b data-price>\$[\d,.]+</b>', t) and "<h2>Key figures</h2>" in t and "$" in re.search(r'class="range-ends".*?</p>', t, re.S).group(0)
+    assert "Its last close was" not in t and "Its market value is" not in t

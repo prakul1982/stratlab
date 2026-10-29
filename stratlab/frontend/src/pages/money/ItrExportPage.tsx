@@ -5,7 +5,7 @@ import { useApp } from "../../lib/app";
 import { Download, Lock } from "../../components/Icons";
 import { lockWords } from "../../lib/lockText";
 import { track } from "../../lib/analytics";
-import { Card, CardHead, DataTable, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
 import { movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { minus } from "../../lib/format";
@@ -31,6 +31,8 @@ const FORMATS: [Format, string, string][] = [
   ["xlsx", "Excel workbook", "Every schedule on its own sheet"], ["zip", "CSV files (ZIP)", "One file per schedule, with the 112A upload layout"],
   ["pdf", "PDF pack for your CA", "Summary, schedules, workings, assumptions and sources"],
 ];
+/** The summary lines that are the year's answers, shown as big figures; the rest of the figures are a list under them. */
+const HEADLINE = /^(Total tax estimate|Payable now)/;
 /** A summary line that is a figure (₹1,000, −₹1,000, 12): the others are words (the year, the return that fits, the audit). */
 const isFigure = (value: string) => /^[−+-]?[₹$\d]/.test(value) && value.length < 18;
 const fyLabel = (y: number) => `FY ${y}-${String(y + 1).slice(2)}`;
@@ -103,6 +105,7 @@ export function ItrExportPage() {
   };
 
   const words = (v?.summary ?? []).filter((s) => !isFigure(s.value) && s.label !== "Financial year");
+  const figs = (v?.summary ?? []).filter((s) => isFigure(s.value));
   return (
     <div className="k-page">
       <PageHeader eyebrow="Money · Tax" title="Your year, laid out for the return"
@@ -146,7 +149,12 @@ export function ItrExportPage() {
                 {words.map((s) => <div key={s.label}><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
               </dl>
             )}
-            <StatRow>{v.summary.filter((s) => isFigure(s.value)).map((s) => <Stat key={s.label} label={s.label} value={s.value} />)}</StatRow>
+            {/* LIVE1B-028: the year's two answers are tiles; the other figures are a list of label and amount rows (eighteen tiles with labels of
+                one to three lines left their amounts at different heights and the last row short) */}
+            <StatRow>{figs.filter((s) => HEADLINE.test(s.label)).map((s) => <Stat key={s.label} label={s.label} value={s.value} />)}</StatRow>
+            <dl className="k-dl figs" aria-label="The year's figures">
+              {figs.filter((s) => !HEADLINE.test(s.label)).map((s) => <div key={s.label}><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
+            </dl>
           </Card>
 
           <section className="k-page" aria-label="Schedules">
@@ -157,22 +165,30 @@ export function ItrExportPage() {
                   {" "}Upload trades on the <Link className="link" to="/tax-report">tax report</Link> to fill them.</p>
               </Card>
             )}
-            {v.tables.filter((t) => t.count).map((t) => (
-              <Card key={t.key}>
-                <button type="button" className="k-fold" aria-expanded={open === t.key} onClick={() => setOpen(open === t.key ? null : t.key)}>
-                  <span className="k-card-title">{t.title}</span>
-                  <span className="k-note">{t.count ? `${t.count} line${t.count === 1 ? "" : "s"}` : "nothing this year"}</span>
-                </button>
-                {open === t.key && !v.locked && t.columns && (
-                  <>
-                    {t.rows && t.rows.length > 0 ? <Schedule t={t} />
-                      : <EmptyState title={`Nothing to report in ${v.label}`}>Nothing in this schedule from your files for the year. Upload trades on the <Link className="link" to="/tax-report">tax report</Link> to fill it.</EmptyState>}
-                    {!!t.notes?.length && <ul className="k-list muted">{t.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
-                  </>
-                )}
-                {open === t.key && v.locked && <p className="k-small k-muted">The full table is on the {v.plan} plan.</p>}
+            {/* LIVE1B-028: the schedules with lines are one card of rows, not nine bars of their own */}
+            {v.tables.some((t) => t.count) && (
+              <Card label="Schedules with lines">
+                <CardHead title="Schedules" />
+                <ul className="k-fold-rows" aria-label="Schedules with lines">
+                  {v.tables.filter((t) => t.count).map((t) => (
+                    <li key={t.key}>
+                      <button type="button" className="k-fold" aria-expanded={open === t.key} onClick={() => setOpen(open === t.key ? null : t.key)}>
+                        <span className="k-card-title">{t.title}</span>
+                        <span className="k-note">{t.count ? `${t.count} line${t.count === 1 ? "" : "s"}` : "nothing this year"}</span>
+                      </button>
+                      {open === t.key && !v.locked && t.columns && (
+                        <>
+                          {t.rows && t.rows.length > 0 ? <Schedule t={t} />
+                            : <EmptyState title={`Nothing to report in ${v.label}`}>Nothing in this schedule from your files for the year. Upload trades on the <Link className="link" to="/tax-report">tax report</Link> to fill it.</EmptyState>}
+                          {!!t.notes?.length && <ul className="k-list muted">{t.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
+                        </>
+                      )}
+                      {open === t.key && v.locked && <p className="k-small k-muted">The full table is on the {v.plan} plan.</p>}
+                    </li>
+                  ))}
+                </ul>
               </Card>
-            ))}
+            )}
           </section>
 
           {!!v.not_covered?.length && (
@@ -182,12 +198,14 @@ export function ItrExportPage() {
             </Card>
           )}
 
-          <Card>
-            <CardHead title="Where the figures come from" />
-            <ul className="k-list" aria-label="Sources">{v.sources.map((s, i) => <li key={i}>{s}</li>)}</ul>
-            <h3 className="k-sub">Assumptions</h3>
-            <ul className="k-list muted">{v.assumptions.map((s, i) => <li key={i}>{s}</li>)}</ul>
-            <p className="k-note">StratLab doesn't file returns: filing on someone's behalf needs registration as an e-return intermediary with the Income Tax Department. Upload or type these figures into the return yourself, or hand the pack to your CA.</p>
+          {/* LIVE1B-028: the sources and the assumptions are one fold, not twenty small lines under the figures */}
+          <Card label="Where the figures come from" compact>
+            <Disclosure summary="Where the figures come from, and the assumptions">
+              <ul className="k-list" aria-label="Sources">{v.sources.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <h3 className="k-sub">Assumptions</h3>
+              <ul className="k-list muted">{v.assumptions.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <p className="k-note">StratLab doesn't file returns: filing on someone's behalf needs registration as an e-return intermediary with the Income Tax Department. Upload or type these figures into the return yourself, or hand the pack to your CA.</p>
+            </Disclosure>
           </Card>
         </div>
       )}

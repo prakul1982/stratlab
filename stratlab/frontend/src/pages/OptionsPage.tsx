@@ -193,10 +193,10 @@ function Charges({ c }: { c: OptCharges }) {
       <StatRow label="Charges">
         <Stat label="Charges to open and close" value={inr(c.total, 2)} />
         {sameAsPremium
-          ? <Stat label="Share of the premium (also the most it can make)" value={share(c.pct_of_premium)} />
+          ? <Stat label="Charges as % of premium" value={share(c.pct_of_premium)} note="the premium is also the most it can make" />
           : <>
-            <Stat label="Share of the premium" value={share(c.pct_of_premium)} />
-            <Stat label="Share of the most it can make" value={c.max_profit == null ? "No ceiling" : share(c.pct_of_max_profit)} />
+            <Stat label="Charges as % of premium" value={share(c.pct_of_premium)} />
+            <Stat label="Charges as % of the most it can make" value={c.max_profit == null ? "No ceiling" : share(c.pct_of_max_profit)} />
           </>}
         {c.credit
           ? <Stat label="Premium kept after charges" value={optMoney(c.premium_after)} />
@@ -258,13 +258,19 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
       <Card label="Summary">
         <CardHead title="Summary" info="Worked out at expiry from the fills shown, with the legs held to the end. Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes." />
         <StatRow label="Priced structure">
-          <Stat label={f.credit >= 0 ? "Premium collected" : "Premium paid"} value={optMoney(Math.abs(f.credit))} />
+          <Stat label={f.credit >= 0 ? "Premium collected" : "Premium paid"} value={optMoney(Math.abs(f.credit))} note={f.credit >= 0 ? "taken in when opened" : "paid when opened"} />
           <Stat testId="opt-max-profit" label="Most it can make" value={best == null ? "Unlimited" : optMoney(best)} tone={best == null ? undefined : "up"}
             note={c && c.max_profit_after != null ? `${optMoney(c.max_profit_after)} after charges` : undefined} />
           <Stat testId="opt-max-loss" label="Most it can lose" value={worst == null ? "Unlimited" : optMoney(worst)} tone={worst == null ? undefined : "down"}
             note={c && c.max_loss_after != null ? `${optMoney(c.max_loss_after)} after charges` : undefined} />
-          <Stat testId="opt-be-stat" label="Breakevens" value={before.length ? points(before, p.tick) : "None"}
-            note={c ? (c.breakevens_after.length ? `${points(c.breakevens_after, p.tick)} after charges` : "none after charges") : undefined} />
+          {/* two breakevens are two tiles ("Lower" and "Upper"): "22,343 and 23,057" in one tile wrapped to two lines and pushed its note below its neighbours' (LIVE1A-015) */}
+          {before.length === 2
+            ? before.map((x, i) => (
+              <Stat key={i} testId={i === 0 ? "opt-be-stat" : "opt-be-stat-upper"} label={i === 0 ? "Lower breakeven" : "Upper breakeven"} value={levelText(x, p.tick)}
+                note={c ? (c.breakevens_after.length === 2 ? `${levelText(c.breakevens_after[i], p.tick)} after charges` : c.breakevens_after.length ? `${points(c.breakevens_after, p.tick)} after charges` : "none after charges") : undefined} />
+            ))
+            : <Stat testId="opt-be-stat" label={before.length === 1 ? "Breakeven" : "Breakevens"} value={before.length ? points(before, p.tick) : "None"}
+              note={c ? (c.breakevens_after.length ? `${points(c.breakevens_after, p.tick)} after charges` : "none after charges") : undefined} />}
           <Stat testId="opt-margin" label="Margin needed" value={p.margin != null ? inr(p.margin) : "Not available"}
             note={p.margin != null ? "the broker's figure for these legs, asked when priced" : p.recorded ? "the broker's figure needs the live feed" : "the broker didn't give one; price it again"} />
         </StatRow>
@@ -280,16 +286,19 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
             format={(v) => inr(v)} axisFormat={axisInrFor(Math.max(0, ...curves.flatMap((x) => x.values.map((v) => Math.abs(v ?? 0)))))} xFormat={(x) => levelText(x, p.tick)}
             curves={curves} markers={markers} />
         )}
-        <p className="k-note" data-testid="opt-breakevens">
-          At expiry, if held to the end{c ? "; the dashed line is after charges" : ", before costs"}.{" "}
-          {before.length > 0 && <>Breaks even at {points(before, p.tick)}{c ? " before charges" : ""}. </>}
-          {c && (c.breakevens_after.length > 0 ? <>After charges: {points(c.breakevens_after, p.tick)}. </> : <>After charges it doesn't break even at any price. </>)}
-          {bestOut != null && <>The most it can make is reached at {bestOut}, outside the chart. </>}
-          {worstOut != null && <>The most it can lose is reached at {worstOut}, outside the chart. </>}
-          Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes.
-          {p.model && rows.length > 0 && " The today line is the pricing model's value of the position now, at each option's current IV; it is an estimate, not a quote."}
-        </p>
         {c && <Charges c={c} />}
+        {/* what the chart and the figures rest on, once, after them (LIVE1A-016) */}
+        <Disclosure className="opt-explain" summary="How these figures are worked out">
+          <p className="k-note" data-testid="opt-breakevens">
+            At expiry, if held to the end{c ? "; the dashed line is after charges" : ", before costs"}.{" "}
+            {before.length > 0 && <>Breaks even at {points(before, p.tick)}{c ? " before charges" : ""}. </>}
+            {c && (c.breakevens_after.length > 0 ? <>After charges: {points(c.breakevens_after, p.tick)}. </> : <>After charges it doesn't break even at any price. </>)}
+            {bestOut != null && <>The most it can make is reached at {bestOut}, outside the chart. </>}
+            {worstOut != null && <>The most it can lose is reached at {worstOut}, outside the chart. </>}
+            Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes.
+            {p.model && rows.length > 0 && " The today line is the pricing model's value of the position now, at each option's current IV; it is an estimate, not a quote."}
+          </p>
+        </Disclosure>
         {whatif && p.model && rows.length > 0 && (
           <Disclosure className="opt-charge-lines" testId="roll-fold" summary="Roll a leg: preview" onToggle={setRollOpen}>
             {rollOpen && <RollPreview legs={rows.map(({ label, held }) => ({ label, held }))} exchange={s.exchange} underlying={s.underlying}
@@ -366,7 +375,8 @@ function Chain({ s, offline }: { s: OptionStrategy; offline: boolean }) {
 /** The structures as tiles, in the groups people look for them in. */
 const TILE_GROUPS: { title: string; ids: string[] }[] = [
   { title: "Sell premium", ids: ["short_straddle", "short_strangle", "iron_fly", "iron_condor"] },
-  { title: "Buy a move, or a spread", ids: ["long_straddle", "bull_call_spread", "bear_put_spread", "buy_call", "buy_put", "sell_call", "sell_put"] },
+  // eight tiles, two full rows of four: seven left empty cells and "Custom legs" stood alone in a group of its own (LIVE1A-019)
+  { title: "Buy a move, a spread, or your own", ids: ["long_straddle", "bull_call_spread", "bear_put_spread", "buy_call", "buy_put", "sell_call", "sell_put", "custom"] },
 ];
 
 export function OptionsPage() {
@@ -550,8 +560,10 @@ export function OptionsPage() {
   const tgtWord = r.tgtType === "none" ? "" : ` and taking profit at ${r.tgtType === "amount" ? inr(r.tgt) : `${r.tgt}% of the premium`}`;
   const words = `${s.name}: ${legsText}, on ${expiryNames[s.expiry] ?? `the ${s.expiry} expiry`}. ${s.signal ? `Enters whenever "${s.signal.name}" signals a trade, from ${t.entry} to ${t.lastEntry} ${ZONE}` : `Enters at ${t.entry} ${ZONE}, no later than ${t.lastEntry} ${ZONE}`}, and exits by ${t.squareoff} ${ZONE}${stopWord}${tgtWord}.`;
   const tileGroups: TileGroup[] = [
-    ...TILE_GROUPS.map((g) => ({ title: g.title, tiles: g.ids.map((id) => { const x = STRUCTURES.find((y) => y.id === id)!; return { value: id, title: x.name, sub: x.hint }; }) })),
-    { title: "Your own", tiles: [{ value: "custom", title: "Custom legs", sub: "Choose each leg yourself" }] },
+    ...TILE_GROUPS.map((g) => ({ title: g.title, tiles: g.ids.map((id) => {
+      if (id === "custom") return { value: id, title: "Custom legs", sub: "Choose each leg yourself" };
+      const x = STRUCTURES.find((y) => y.id === id)!; return { value: id, title: x.name, sub: x.hint };
+    }) })),
   ];
 
   return (
@@ -628,7 +640,8 @@ export function OptionsPage() {
             <Seg label="When to enter" value={ruleMode ? "rules" : "time"}
               options={[{ value: "time", label: "At a set time" }, { value: "rules", label: `When a notebook's rules say so${signalOk ? "" : " (Pro)"}`, disabled: !signalOk && !ruleMode }]}
               onChange={(v) => { setRuleMode(v === "rules"); if (v === "time") patch({ signal: null }); }} />
-            {!signalOk && !ruleMode && <span className="k-note">Entering on a notebook's rules is on the Pro plan. <Link className="link" to="/plans">Plans</Link></span>}
+            {/* the option itself says "(Pro)": the line beside it only points to the plans, so the lock is said once (LIVE1A-019) */}
+            {!signalOk && !ruleMode && <Link className="link k-small" to="/plans">See the plans</Link>}
           </p>
           {ruleMode ? (
             <>
@@ -687,7 +700,7 @@ export function OptionsPage() {
         </div>
         <More id="options" what="entries a day, daily loss cap, trailing, re-centring, sizing, costs"
           on={[t.maxEntries > 1, t.cooldown > 0, r.dailyLoss > 0, hasShort && r.legStopPct > 0, r.trailAfter > 0, hasShort && rc.enabled, z.mode === "margin", c.brokerage > 0 && c.brokerage !== 20].filter(Boolean).length}>
-          <FormGrid label="More settings">
+          <FormGrid label="More settings" quad>
             <NumField label="Entries a day" value={t.maxEntries} min={1} max={20} whole onChange={(v) => setTiming({ maxEntries: Math.round(v) })} />
             <NumField label="Wait after a trade" value={t.cooldown} max={600} whole unit="minutes" onChange={(v) => setTiming({ cooldown: Math.round(v) })} />
             <NumField label="Daily loss cap" value={r.dailyLoss} step={1000} unit="₹" onChange={(v) => setRisk({ dailyLoss: v })} />
@@ -700,8 +713,8 @@ export function OptionsPage() {
             <NumField label="Paper capital" value={z.capital} min={1000} step={50000} unit="₹" onChange={(v) => setZ({ capital: v })} />
             <NumField label="Brokerage per order" value={c.brokerage} max={1000} unit="₹" onChange={(v) => setC({ brokerage: v })} />
             <NumField label="Extra slippage" value={c.slippageTicks} max={100} whole unit="ticks" onChange={(v) => setC({ slippageTicks: Math.round(v) })} />
-            {/* left empty, the exchange's own limit, shown in the box (DB-008: it read 0); the whole row, not an orphan (DB-010) */}
-            <NumField label="Freeze limit" value={c.freeze} max={100000} whole wide unit={s.underlying} info={HELP.optFreeze}
+            {/* left empty, the exchange's own limit, shown in the box (DB-008: it read 0); one box in the grid like the rest (LIVE1A-018) */}
+            <NumField label="Freeze limit" value={c.freeze} max={100000} whole unit={s.underlying} info={HELP.optFreeze}
               placeholder={und?.freeze ? `${und.freeze.toLocaleString("en-IN")}, the exchange's` : "the exchange's"} onChange={(v) => setC({ freeze: Math.round(v) })} />
             {hasShort && (
               <div className="k-field wide"><CheckField label={<>Re-centre when the market moves<Info>{HELP.optRecenter}</Info></>} checked={rc.enabled} onChange={(on) => setRc({ enabled: on })} /></div>

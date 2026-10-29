@@ -39,7 +39,8 @@ def test_prices_match():
 def test_limits_and_features_match():
     limits = _block("LIMITS")
     keys = ("backtests_per_month", "ai_builds_per_month", "live_limit", "group_size", "deepdives_per_month", "decks_per_month",
-            "stock_alerts", "screens", "holdings", "networth_items", "mf_schemes", "journal_trades")
+            "stock_alerts", "screens", "holdings", "networth_items", "mf_schemes", "journal_trades",
+            "watchlists", "watchlist_symbols", "chart_saves", "chart_indicators")
     for plan, p in PLANS.items():
         text = _plan(limits, plan)
         for k in keys:

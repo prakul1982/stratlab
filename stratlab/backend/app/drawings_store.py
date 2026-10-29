@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from . import chart_data, db
+from . import bar_agg, chart_data, db
 
 KEY = "drawings:"            # drawings:{uid}:{REGION}:{SYMBOL}
 INDEX = "drawings_idx:"      # drawings_idx:{uid}  -> {"REGION:SYMBOL": saved-at}
@@ -30,7 +30,7 @@ POINTS = {"trend": 2, "ray": 2, "hline": 1, "hray": 1, "vline": 1, "rect": 2, "c
           "measure": 2, "prange": 2, "drange": 2, "text": 1, "arrow": 2}
 COLORS = ("ink", "blue", "orange", "green", "magenta", "grey")
 STUDIES = ("sma", "ema", "rsi", "vwap", "supertrend", "stage", "bb", "macd", "hl52")
-TFS = ("5m", "15m", "1h", "1d", "1w", "1mo")
+TFS = bar_agg.TFS            # every size the chart offers, 1m to 1M (a chart workspace keeps the one it was last on)
 CHART_TYPES = ("candles", "hollow", "heikin", "bars", "line", "area", "baseline")
 
 
@@ -114,6 +114,20 @@ def _row(uid: str, region: str, symbol: str) -> str:
     return f"{KEY}{uid}:{region}:{symbol}"
 
 
+LAYOUT_ONLY = "~"            # an index value ending in this is a chart that keeps only its timeframe, view or chart type: no drawings, no indicators
+
+
+def holds_work(idx: dict, name: str) -> bool:
+    """Whether the chart `name` keeps drawings or indicators, the only charts the plan's limit counts (a chart saved by an older
+    build has no marker and counts, as it did then). MWR1-005: every chart whose timeframe was changed used up one of a Free
+    person's three, with nothing drawn on it."""
+    return name in idx and not str(idx[name]).endswith(LAYOUT_ONLY)
+
+
+def kept_charts(idx: dict) -> int:
+    return sum(1 for k in idx if holds_work(idx, k))
+
+
 def _index(uid: str) -> dict:
     try:
         v = json.loads(db.get_setting(INDEX + uid) or "{}")
@@ -156,7 +170,7 @@ def save(uid: str, region: str, symbol: str, payload: Payload) -> dict:
     body["at"] = now
     db.set_setting(_row(uid, region, symbol), json.dumps(body, separators=(",", ":")))
     idx.pop(name, None)
-    idx[name] = now
+    idx[name] = now if body["drawings"] or (layout or {}).get("studies") else now + LAYOUT_ONLY
     for old in sorted(idx, key=lambda k: str(idx[k]))[:max(0, len(idx) - MAX_SYMBOLS)]:      # the oldest drop off
         idx.pop(old)
         r, _, s = old.partition(":")

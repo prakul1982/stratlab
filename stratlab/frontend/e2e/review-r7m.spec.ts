@@ -187,10 +187,16 @@ test("Admin: the email previews say the briefs are real, and Data and jobs has a
   await expect(page.getByText("The market briefs are the newest real issues; the rest use made-up details.")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("with made-up details. Nothing here is sent.")).toHaveCount(0);
   errors = errors.concat(await open(page, "/admin/data"));
+  // on a phone the jobs table shows a page of rows at a time: open the rest
+  const more = page.getByRole("button", { name: /^Show \d+ more$/ });
+  await expect(page.getByRole("table", { name: "Background jobs" })).toBeVisible({ timeout: 30_000 });
+  for (let i = 0; i < 10 && (await more.count()); i++) await more.first().click();
   const row = page.locator("main").getByText("Newsletters", { exact: true }).first();
   await expect(row).toBeVisible({ timeout: 30_000 });
-  // R13-003 changed this on purpose: the US brief goes once the closing prints have settled, at 16:50 New York time
-  await expect(page.locator("main")).toContainText("India 4:15 PM IST and US 4:50 PM New York time");
+  // R13-003 changed this on purpose: the US brief goes once the closing prints have settled, at 16:50 New York time.
+  // LIVE1C-014: the row shows the next time; the schedule sentence is behind its (i)
+  await page.getByRole("button", { name: "Schedule of Newsletters" }).click();
+  await expect(page.getByRole("note").filter({ hasText: "India 4:15 PM IST and US 4:50 PM New York time" })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -241,6 +247,7 @@ test("Trade journal: it says why its numbers differ from the tax report, and no 
   const errors = await open(page, "/trade/journal", load(n));
   await expect(page.getByRole("heading", { level: 1, name: "Trade journal" })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("main")).not.toContainText("Your broker's trades, equity, F&O, commodity and currency,");
+  await page.getByRole("button", { name: "Where the trades come from" }).click();                   // the coverage is under the title's "i" (LIVE1B-033: one sentence under the title)
   await expect(page.locator("main")).toContainText("F&O, commodity and currency from a tradebook or the tax P&L's trade-by-trade files");
   await page.getByLabel("Tradebook or tax P&L files").setInputFiles(ZIP);
   await expect(page.getByText("16 trade lines added")).toBeVisible({ timeout: 30_000 });

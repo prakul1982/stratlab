@@ -56,27 +56,13 @@ def test_a_big_companys_axis_is_unchanged():
     assert not re.search(r'by-tick"[^>]*>[^<]*\.\d', chart)                         # whole numbers, no decimals
 
 
-# ---------- RC4-002: the paragraph's figures are the table's ----------
-def test_a_small_companys_paragraph_gives_the_figures_its_table_gives():
+# ---------- RC4-002: a small company's figures are the table's own (the About paragraph that repeated them is gone, LIVE2-018) ----------
+def test_a_small_companys_figures_are_shown_at_the_precision_its_table_uses():
     f = small()
-    text = stock_pages.about_text(f, "IN", "ACME", "Acme Ltd")
-    assert "revenue of ₹0.19 crore and a net loss of ₹0.03 crore" in text
-    assert "<₹1" not in text and "₹1 crore" not in text
-    assert "It made a net loss" not in text and "net profit over the last 12 months was ₹0.31 crore" in text
     table = stock_pages._table(f)
     assert ">0.19<" in table and ">-0.03<" in table
-    us = stock_pages.about_text(facts(region="US", currency="USD", unit="$ million", years=[{"year": "Dec 2025", "sales": 12.3456, "profit": 0.39, "debt": 1.0}]),
-                                "US", "ACME", "Acme Inc")
-    assert "revenue of $12.35M and net profit of $0.39M" in us
+    assert not hasattr(stock_pages, "about_text")
 
-
-def test_a_larger_companys_paragraph_is_in_the_words_it_was():
-    f = facts(years=[{"year": "Mar 2025", "sales": 1200.0, "profit": 35.5, "debt": 1.0}, {"year": "Mar 2026", "sales": 1300.0, "profit": -35.5, "debt": 1.0}])
-    text = stock_pages.about_text(f, "IN", "ACME", "Acme Ltd")
-    assert "revenue of ₹1,300 crore and a net loss of ₹36 crore" in text            # the table's own rounding, as before
-    # a company whose latest year is small but whose table has a large year keeps the table's whole numbers
-    mixed = facts(years=[{"year": "Mar 2025", "sales": 450.0, "profit": 20.0, "debt": 1.0}, {"year": "Mar 2026", "sales": 40.0, "profit": 4.0, "debt": 1.0}])
-    assert "revenue of ₹40 crore and net profit of ₹4 crore" in stock_pages.about_text(mixed, "IN", "ACME", "Acme Ltd")
 
 
 # ---------- RC4-011: the 1-year range always holds the last close ----------

@@ -139,8 +139,8 @@ test("R92-002/003/005: the notebook says what its plan won't run before Run; a p
   assert.match(read("src/pages/OptionsSession.tsx"), /!\(feed === closed && \/\^Waiting for \(live prices\|the option chain\)\/\.test\(snap\.note\)\)/);
 });
 
-test("R93-004: a weekly brief's headline shows the day it ran", () => {
-  assert.match(read("src/pages/NewsPage.tsx"), /\{it\.day && <span className="k-note" data-testid="news-item-day">\{it\.day\}: <\/span>\}<ItemText/);
+test("R93-004: a weekly brief's headline shows the day it ran (the Time column of the Headlines table since O5; see tests/test_fix2.py)", () => {
+  assert.match(read("src/components/BriefTables.tsx"), /key: `c\$\{k\}`, header: h/);          // the server's header row is the table's own
 });
 
 test("R95: phone tap targets, a dated first axis tick, charts measured again after first paint", async () => {
@@ -272,10 +272,10 @@ test("DOC-2: the landing page names the newer tools, its lists keep full grid ro
     assert.match(login, new RegExp(`\\["${t}",`), t);
   assert.match(login, /"Trade · Invest · Money"/);                              // ("Ten markets" is in the intro's sentence only: VR5-owner-2)
   assert.doesNotMatch(login, /Yahoo|Screener|Finnhub|Kite|Zerodha Kite/);        // no data vendor named on the page
-  // docs/UI_CHECKER.md names every rule the checker has, R1 to R25
+  // docs/UI_CHECKER.md names every rule the checker has, R1 to R26 (VR7 added R26)
   const rules = read("e2e/ui-lint.spec.ts").match(/^  R\d+: /gm) ?? [];
   const doc = readFileSync(new URL("../../../docs/UI_CHECKER.md", import.meta.url), "utf8");
-  assert.equal(rules.length, 25);
+  assert.equal(rules.length, 26);
   for (let i = 1; i <= rules.length; i++) assert.match(doc, new RegExp(`\\| R${i} \\|`), `R${i}`);
 });
 
@@ -303,7 +303,9 @@ test("PUB-1: the server-drawn public pages carry the app's own fonts, header hei
     const app = css.match(new RegExp(`${token}: (#[0-9A-Fa-f]{6})`))?.[1], srv = style.match(new RegExp(`${token}:(#[0-9A-Fa-f]{6})`))?.[1];
     assert.equal(srv?.toLowerCase(), app?.toLowerCase(), token);
   }
-  assert.match(style, /\.nav\{display:flex;align-items:center;padding:18px clamp\(16px,4vw,48px\);border-bottom:1px solid var\(--line\)\}/);   // the app's public header: full width, 18px
+  // the app's public header: full width, 18px, its logo and button on the page's own 960px column's edges (LIVE1B-052), the same on both
+  assert.match(style, /\.nav\{display:flex;align-items:center;padding:18px max\(clamp\(16px,4vw,48px\),calc\(\(100% - 960px\)\/2 \+ clamp\(16px,4vw,32px\)\)\);border-bottom:1px solid var\(--line\)\}/);
   assert.match(style, /\.brand svg\{height:40px/);                                                                // the logo at the app's size
-  assert.match(css, /\.pub-nav \{[^}]*padding: 18px clamp\(16px, 4vw, 48px\)/);
+  assert.match(css, /\.pub-nav \{[^}]*padding: 18px max\(clamp\(16px, 4vw, 48px\), calc\(\(100% - var\(--pub-w\)\) \/ 2 \+ clamp\(16px, 4vw, 32px\)\)\)/);
+  assert.match(css, /\.pub \{ --pub-w: 960px; \}/);
 });

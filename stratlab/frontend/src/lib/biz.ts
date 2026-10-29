@@ -44,3 +44,16 @@ export function bizChange(c: number | null | undefined, unit: string | null) {
   return (unit ?? "").includes("%") ? `${s}${Math.abs(c).toFixed(2)} pts` : `${s}${Math.abs(c).toFixed(1)}%`;
 }
 
+
+/** A filing's subject as a line: all-capitals subjects ("RELIANCE'S JIO STUDIOS BETS ON...") in sentence case, and an unmatched quote mark left at the
+ *  end ("...The Hundred.\"") dropped (LIVE1A-064). Mixed-case subjects are only trimmed. */
+export function tidyTitle(title: string): string {
+  let t: string = title.replace(/\s+/g, " ").trim();
+  const last = t.charAt(t.length - 1);
+  if (last === '"' && (t.match(/"/g) ?? []).length % 2 === 1) t = t.slice(0, -1).trimEnd();
+  const letters = t.replace(/[^A-Za-z]/g, "");
+  if (letters.length > 12 && letters.replace(/[^A-Z]/g, "").length / letters.length > 0.7) {
+    t = t.toLowerCase().replace(/(^|[.!?]\s+)([a-z])/g, (_m: string, a: string, b: string) => a + b.toUpperCase());
+  }
+  return t;
+}

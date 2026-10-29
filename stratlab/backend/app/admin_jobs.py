@@ -30,10 +30,23 @@ def _iso(unix) -> str | None:
 _ERROR_CLASS = re.compile(r"\s*\((?:[A-Za-z_]+\.)*[A-Z][A-Za-z]*(?:Error|Exception|Timeout)\)")
 
 
+# a Python message nobody can act on ("'str' object has no attribute 'items'", "KeyError: 819", "list index out of range")
+_PYTHON_TEXT = re.compile(r"object has no attribute|object is not (?:subscriptable|iterable|callable)|unsupported operand|\bNoneType\b|Traceback|"
+                          r"\b(?:Key|Index|Attribute|Type|Value)Error\b|index out of range|not enough values to unpack")
+
+
 def plain_error(text: str | None) -> str | None:
     """A job's problem in words for the table: "Couldn't reach www.rbi.org.in." without the "(ConnectError)" the
-    reader adds. The log keeps the full text."""
-    return _ERROR_CLASS.sub("", text).strip() if text else text
+    reader adds. A program's own error text is said as a page layout the reader didn't expect, the log keeping the text
+    (LIVE1C-001). The log keeps the full text."""
+    if not text:
+        return text
+    plain = _ERROR_CLASS.sub("", text).strip()
+    if _PYTHON_TEXT.search(plain):
+        head = plain.split(":", 1)[0].strip() if ":" in plain and len(plain.split(":", 1)[0]) < 40 else ""
+        head = head if head and not _PYTHON_TEXT.search(head) else ""
+        return (f"{head}: the reader hit" if head else "The reader hit") + " an unexpected page layout (the log has the details)."
+    return plain
 
 
 HOLIDAYS_ENOUGH = 30          # days of holidays on file that keep a failed read of the exchange's list a Check (R13-012)
@@ -56,6 +69,46 @@ def missing_words(problem: str, effects: dict[str, str] | None, next_run: str | 
     return f" {effect}.{fault}{f'; it is tried again at {next_run}' if next_run else ''}."
 
 
+_CLOCK = re.compile(r"(\d{1,2}):(\d{2})(?:\s*(AM|PM))?\s*(IST|New York(?: time)?|ET)?", re.I)
+
+
+def next_run_label(schedule: str | None, now: datetime | None = None) -> str | None:
+    """The next time a job's schedule sentence names, as "Thu 29 Oct, 7:15 AM IST" (LIVE1C-014: "Next run" was a seven-line
+    sentence). The clocks in it are read with their zone ("US 8:30 AM" and "New York time" are New York; the rest India), a
+    clause about something that happens "every" so often is left out, and nothing is said when no clock is named, so the page
+    keeps the sentence. Days off (weekends, holidays) are not known here: the label says when the clock next strikes."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    text = re.sub(r"\bevery\b[^;]*", "", schedule or "", flags=re.I)
+    if re.search(r"\b(?:off|never)\b", text, re.I) and not _CLOCK.search(text):
+        return None
+    ist, ny = ZoneInfo("Asia/Kolkata"), ZoneInfo("America/New_York")
+    now = now or datetime.now(timezone.utc)
+    best = None
+    for m in _CLOCK.finditer(text):
+        h, mi, ap = int(m.group(1)), int(m.group(2)), (m.group(3) or "").upper()
+        if ap == "PM" and h < 12:
+            h += 12
+        elif ap == "AM" and h == 12:
+            h = 0
+        if h > 23 or mi > 59:
+            continue
+        # the zone named after the time, else the market word before it ("US 8:30 AM"), else India's
+        zone_word = (m.group(4) or "").lower()
+        before = text[max(0, m.start() - 24):m.start()]
+        tz = ny if zone_word.startswith(("new york", "et")) else ist if zone_word == "ist" else ny if re.search(r"\bUS\b[^,;]*$", before) else ist
+        local = now.astimezone(tz)
+        t = local.replace(hour=h, minute=mi, second=0, microsecond=0)
+        if t <= local:
+            t += timedelta(days=1)
+        if best is None or t < best:
+            best = t
+    if best is None:
+        return None
+    t = best.astimezone(ist)
+    return f"{t:%a} {t.day} {t:%b}, {clock(t.strftime('%H:%M'))} IST"
+
+
 def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | None = None, log: list[str] | None = None,
          run: list[dict] | None = None, running: bool = False, note: str | None = None, parts: int | None = None,
          effects: dict[str, str] | None = None, next_run: str | None = None, check: str | None = None) -> dict:
@@ -75,7 +128,7 @@ def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | N
     if not error and check and last_run:
         state, error = "warn", check
     # a provider's own error text can carry an account identifier: Admin shows it hidden (R29B-022)
-    return {"id": id, "name": name, "schedule": schedule, "last_run": last_run, "error": redact_ids(error), "state": state,
+    return {"id": id, "name": name, "schedule": schedule, "next": next_run_label(schedule), "last_run": last_run, "error": redact_ids(error), "state": state,
             "running": bool(running), "log": [redact_ids(str(x)[:240]) for x in (log or []) if x][:8], "run": run or [], "note": note}
 
 

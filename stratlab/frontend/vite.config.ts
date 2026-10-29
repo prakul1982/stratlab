@@ -31,7 +31,9 @@ export default defineConfig({
             { name: "boot", test: /src[\\/]lib[\\/](entry|config|http|returnTo)\.ts$/ },
             // (the public pages use them too: none of them may import the account code below)
             // the consent banner and its settings too (ADS-1): every page draws it, so it rides in this file rather than adding its own
-            { name: "common", test: /src[\\/](lib[\\/](brand|format|marketHours|rotating|lazyRetry|ads|adsConfig|track|plans)|components[\\/](Icons|Logo|ui|Tracking))\.tsx?$/ },
+            { name: "common", test: /src[\\/](lib[\\/](brand|format|marketHours|rotating|lazyRetry|ads|adsConfig|track)|components[\\/](Icons|Logo|ui|Tracking))\.tsx?$/ },
+            // the plans' prices and feature lists (14 kB) are the landing page's and the app's, not a policy page's: apart from this file they stay out of its download (R5V-020)
+            { name: "plans", test: /src[\\/]lib[\\/]plans\.ts$/ },
             // the signed-in app's own start-up: server calls with a login, and the account state. A visitor never downloads it
             // the two kit pieces that read the account (a plan note, the company picker): apart from the rest of the kit, which the public pages use
             // the two the landing page uses (the billing switch and the sign-in panel), on their own so the landing page stays small
@@ -39,8 +41,10 @@ export default defineConfig({
             // the kit pieces the public pages draw (the library, a shared verdict, the policies, the sign-in gate), on their
             // own: in the rest of the kit's file they brought the sign-in library and the account code with them, some
             // forty files and 100 kB a visitor's /library waited for (R8V-013); the market chips and the card's details fold are here too (MO-5)
-            { name: "kit-public", includeDependenciesRecursively: false, test: /src[\\/]components[\\/]kit[\\/](Badge|Card|ChipBar|DataTable|Disclosure|Stat|States|Form|PageHeader|LinkCard|Signed)\.tsx$/ },
+            { name: "kit-public", includeDependenciesRecursively: false, test: /src[\\/]components[\\/]kit[\\/](Badge|Card|ChipBar|DataTable|Disclosure|Stat|States|Form|PageHeader|LinkCard|Signed|Spark)\.tsx$/ },
             { name: "kit", includeDependenciesRecursively: false, test: /src[\\/](components[\\/]kit[\\/](?!index|Notice|StockPicker|Seg|Dialog)[^\\/]+\.tsx?|lib[\\/]dateInput\.ts)$/ },
+            // Market Watch's launcher: the signed-in app has it in its first download, a visitor only when they press the button
+            { name: "markets", includeDependenciesRecursively: false, test: /src[\\/](components[\\/]watch[\\/]Launcher\.tsx|lib[\\/]watchLayout\.ts)$/ },
             { name: "kit-account", includeDependenciesRecursively: false, test: /src[\\/]components[\\/]kit[\\/](Notice|StockPicker)\.tsx$/ },
             { name: "account", includeDependenciesRecursively: false, test: /src[\\/](lib[\\/](api|app)|components[\\/]CompanySearch)\.tsx?$/ },
           ],

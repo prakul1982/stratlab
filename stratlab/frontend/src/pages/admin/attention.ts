@@ -157,7 +157,9 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
       : undone && closed ? `OK: ${shut}`
       : undone ? `Logged in${sv.auto_login.at ? ` ${ago(sv.auto_login.at)}` : ""}, but Zerodha has cancelled that login since.${next}`
       // the next run is said every time, as every other job's is (R60-010)
-      : `${`${sv.auto_login.message}${sv.auto_login.at ? ` (${ago(sv.auto_login.at)})` : ""}`.replace(/\.$/, "")}${next ? `.${next}` : ""}`,
+      // the sentence's full stop comes after the time, never before it ("Logged in to Kite. (14 h ago)."), and the hour it went through is
+      // said with what started it, so 14 hours ago against an 08:00 schedule is explained (LIVE1C-016)
+      : `${sv.auto_login.message.replace(/\.$/, "")}${sv.auto_login.at ? ` ${ago(sv.auto_login.at)} (${quoteAt(sv.auto_login.at, IST)}${sv.auto_login.how ? `, ${sv.auto_login.how}` : ""})` : ""}${next ? `.${next}` : ""}`,
     fix: !sv.auto_login_configured ? "Off. Log in by hand each morning, or set the automatic login variables (setup guide, step 2)." : undefined });
   out.push(aiTile(sv.ai));
   if (sv.admin_alerts) {
@@ -165,14 +167,17 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
     const quota = quotaLine(a.quota);
     out.push({ key: "mail", label: "Alert emails", state: !a.email_ready ? "bad" : quota?.low ? "warn" : "ok", to: "/admin/system",
       detail: a.email_ready ? `${a.via ? `Sent through ${a.via}` : "Ready"}${quota ? ` · ${quota.text}` : ""}` : "Not set up: no email service on the server",
-      fix: a.email_ready ? `Emailed to ${a.to.join(", ")}${a.via ? ` through ${a.via}` : ""}${quota ? ` (${quota.text})` : ""}, plus your phone or Telegram if set in Account.`
+      fix: a.email_ready ? `Emailed to ${a.to.join(", ")}${a.via ? ` through ${a.via}` : ""}${quota ? `; ${quota.text}` : ""}, plus your phone or Telegram if set in Account.`
         : "No email service is set up on the server. Add one in Railway: RESEND_API_KEY (a free account at resend.com made with this address), "
           + "or BREVO_API_KEY, or SMTP_HOST, SMTP_USER and SMTP_PASSWORD. Until then alerts reach only your phone or Telegram." });
   }
   out.push({ key: "co", label: "US company data", state: sv.research?.finnhub ? "ok" : "warn", to: "/admin/system",
     detail: sv.research?.finnhub ? "Key is set" : "No key",
     fix: sv.research?.finnhub ? undefined : "No key. Add the company-data key in Railway for US company pages (setup guide, step 6). India needs no key." });
-  out.push({ key: "pay", label: "Payments", state: sv.billing_enabled ? "ok" : "warn", detail: sv.billing_enabled ? "Connected" : "Not set up", to: "/admin/money" });
+  // live keys and no payment event ever received: a first real payment would not upgrade the plan by itself, so Check, not OK (LIVE1C-008)
+  const noHook = sv.billing_enabled && sv.billing_hook?.mode === "live" && !sv.billing_hook.last_at;
+  out.push({ key: "pay", label: "Payments", state: sv.billing_enabled ? (noHook ? "warn" : "ok") : "warn",
+    detail: sv.billing_enabled ? (noHook ? "Connected, but Razorpay has never sent a payment event: send a test event before the first payment" : "Connected") : "Not set up", to: "/admin/money" });
   if (sv.calendar?.days_left != null) {
     // the holidays on file and the exchange's live list are two facts: with the daily read failing the light says both, so
     // it never reads "OK" beside "The exchange feed isn't answering" in Needs your attention (R12-010)
@@ -197,6 +202,12 @@ export function service(ov: Overview | null, key: string): Service | undefined {
   return services(ov).find((s) => s.key === key);
 }
 
+/** A provider's error that clears by itself: a server fault (5xx), a timeout, a busy or rate-limited answer. A rejected key or a
+ * missing model is not one. */
+export const passingFault = (text: string | null | undefined): boolean =>
+  /\b(?:server error|5\d\d|timed out|time ?out|overloaded|busy|high demand|rate.?limit|try again|unavailable|temporar\w*)/i.test(String(text ?? ""))
+  && !/\b(?:40[0-9]|invalid|rejected|unauthori[sz]ed|forbidden|key)\b/i.test(String(text ?? ""));
+
 /** What needs a look, worst first. Each item says where it is fixed, in the same words as the service's own light. */
 export function attention(ov: Overview | null, reported: Reported | null, jobs: JobRow[] | null): Attention[] {
   if (!ov) return [];
@@ -214,12 +225,10 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   // a provider out of its free quota or paused resets on its own: one line for them all, nothing to do (DJ-002: four such
   // lines buried the items the owner must act on); a failing one keeps its own line, with its own reason
   const waits = aiDown.filter((a) => a.result === "quota" || a.result === "paused" || (a.result === undefined && a.quota_used));
-  const act = aiDown.filter((a) => !waits.includes(a));
-  if (waits.length && waits.length < aiKeys.length) {
-    const working = aiKeys.filter((a) => (a.result ? a.result === "working" : aiUp(a))).length;
-    out.push({ text: `AI: ${plural(waits.length, "provider")} paused for now (free quota used up, or resting), ${working} working; ${waits.length === 1 ? "it resets" : "they reset"} on ${waits.length === 1 ? "its" : "their"} own, nothing to do.`,
-      full: waits.map((a) => `${a.label}: ${a.state_text || a.last_error || "paused"}`).join(" · "), to: "/admin/system", label: "System", bad: false });
-  }
+  // a provider that is out of quota, resting, or failed on a passing fault of its own (a 5xx, a timeout, a busy server) resets by itself:
+  // the AI light on Services says so and System lists each; Needs your attention holds only what the owner must do (LIVE1C-003:
+  // "paused … nothing to do" and "Gemini: server error 503" beside an invoice that did need a look)
+  const act = aiDown.filter((a) => !waits.includes(a) && !passingFault(a.state_text || a.last_error));
   for (const a of act) {
     const why = oneLine(a.state_text || a.last_error || "not answering");
     out.push({ text: `AI, ${a.label}: ${why.text}`, ...(why.full ? { full: `AI, ${a.label}: ${why.full}` } : {}), to: "/admin/system", label: "System", bad: false });
@@ -263,6 +272,7 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   if (mmText.length) out.push({ text: `The whole-market audit has companies whose numbers disagree with their source: ${mmText.join(", ")}.`, to: "/admin/quality", label: "Quality", bad: false });
   const invoice = invoiceWarning(sv.invoice_seller);
   if (invoice) out.push({ text: invoice, to: "/admin/money", label: "Money", bad: sv.billing_enabled });
+  if (sv.billing_enabled && s.pay.state === "warn") out.push({ text: `Payments: ${s.pay.detail}.`, to: "/admin/money", label: "Money", bad: false });
   if (!sv.billing_enabled) out.push({ text: "Payments aren't connected, so paid plans show \"Coming soon\".", to: "/admin/money", label: "Money", bad: false });
   return out.sort((x, y) => Number(y.bad) - Number(x.bad));
 }

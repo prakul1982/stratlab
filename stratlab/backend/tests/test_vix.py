@@ -54,7 +54,7 @@ def test_parse_real_history():
 
 def test_parse_real_quote():
     q = V.parse_quote(FV.fixture("allIndices.json"))
-    assert q["value"] == 15.03 and q["prev_close"] == 14.46 and q["change"] == 0.57 and q["change_pct"] == 3.94
+    assert q["value"] == 15.03 and q["prev_close"] == 14.46 and q["change"] == 0.57 and q["change_pct"] == 3.99   # the exchange's own percentage (LIVE1A-023: from the rounded levels it was 3.94)
     assert q["as_of"] == "2026-10-05T12:04+05:30" and q["year_high"] == 28.91 and q["source"] == "exchange"
     assert V.parse_quote({"data": [{"index": "NIFTY 50", "last": 22448.6}]}) is None and V.parse_quote([]) is None
 

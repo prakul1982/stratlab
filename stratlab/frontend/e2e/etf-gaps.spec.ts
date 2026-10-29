@@ -98,7 +98,10 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   await expect(page).toHaveURL(/etf=SILVERBEES/);
   const panel = page.locator("#etf-gap");
   await expect(panel.getByRole("heading", { name: "Price against NAV" })).toBeVisible();
-  await expect(panel.getByText("SILVERBEES trades 6.9% above its last NAV.")).toBeVisible();
+  // the gap is the headline (O1): one row of figures, the gap first
+  const stats = panel.getByRole("table", { name: "SILVERBEES price against NAV" }).getByRole("row");
+  await expect(stats.nth(1)).toContainText("Gap to NAV");
+  await expect(stats.nth(1)).toContainText("6.9% above");
   await expect(panel.getByText("Indicative NAV", { exact: true })).toHaveCount(0);        // no figure: the note only says none is shown (DF-007)
   // the NAV is dated the latest trading day (the demo's list is stamped with the last close): a weekday, never a future day
   const navDay = (await panel.getByText(/NAV of \d{1,2} \w{3}/).innerText()).match(/NAV of (\d{1,2}) (\w{3})/)!;
@@ -106,7 +109,42 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   expect([0, 6], "the NAV's day is a weekday").not.toContain(navDate.getUTCDay());
   expect(navDate.getTime(), "the NAV's day is not in the future").toBeLessThanOrEqual(Date.now() + 14 * 3600_000);
   await expect(panel.getByRole("img", { name: /SILVERBEES's gap to NAV at each close/ })).toBeVisible();
-  await expect(panel.getByText(/Over 30 trading days/)).toBeVisible();
+  await expect(panel.getByTestId("etf-gap-line")).toContainText(/\d+ trading days/);
+  // the explanation is folded: one plain line stays, the rest opens from "How this is worked out" (O1)
+  await expect(panel.getByText(/The NAV is set once a day/)).toBeHidden();
+  await panel.getByText("How this is worked out").click();
+  await expect(panel.getByText(/The NAV is set once a day/)).toBeVisible();
+  await panel.getByText("How this is worked out").click();
+
+  // the app's one range control (O4): years of days behind the chart, only the chips the data reaches, and the chart follows the choice
+  const range = panel.getByRole("group", { name: "Range" });
+  await expect(range.getByRole("button", { name: "3Y", exact: true })).toBeVisible();
+  await expect(range.getByRole("button", { name: "5Y", exact: true })).toHaveCount(0);            // about four years of days: no 5Y look-alike of All
+  const chart = panel.getByRole("img", { name: /SILVERBEES's gap to NAV at each close/ });
+  const firstDay = async () => ((await chart.getAttribute("aria-label")) ?? "").match(/close, (.+?) to /)![1];
+  const all = await firstDay();
+  await range.getByRole("button", { name: "1Y", exact: true }).click();
+  await expect(range.getByRole("button", { name: "1Y", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(firstDay).not.toBe(all);
+  const year = await firstDay();
+  await range.getByRole("button", { name: "3M", exact: true }).click();
+  await expect.poll(firstDay).not.toBe(year);
+  // "+ Custom": 18 months, and a stretch longer than the data is refused in words
+  await range.getByRole("button", { name: "+ Custom" }).click();
+  await panel.getByLabel("How many").fill("18");
+  await panel.getByRole("button", { name: "Use this" }).click();
+  await expect(range.getByRole("button", { name: "18 months", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await range.getByRole("button", { name: "+ Custom" }).click();
+  await panel.getByLabel("How many").fill("10");
+  await panel.getByLabel("Unit").selectOption("years");
+  await panel.getByRole("button", { name: "Use this" }).click();
+  await expect(panel.getByRole("alert")).toContainText("Pick All");
+  await range.getByRole("button", { name: "All", exact: true }).click();
+  await expect.poll(firstDay).toBe(all);
+  // the table follows the range too
+  await panel.getByRole("button", { name: "Table" }).click();
+  await expect(panel.getByRole("table", { name: "SILVERBEES's gap to NAV by day" })).toBeVisible();
+  await panel.getByRole("button", { name: "Table" }).click();
   await expect(panel.getByRole("button", { name: "Alert on the gap" })).toBeVisible();          // a Basic user
   await panel.getByRole("button", { name: "Alert on the gap" }).click();
   const dialog = page.getByRole("dialog");
@@ -136,5 +174,5 @@ test("my holdings: an ETF shows its gap to NAV, and it opens the ETF's view", as
   if (phone) await touchable(page);
   await badge.click();
   await expect(page).toHaveURL(/\/invest\/etf-gaps\?etf=NIFTYBEES/);
-  await expect(page.locator("#etf-gap").getByText("NIFTYBEES trades 0.26% above its last NAV.")).toBeVisible();
+  await expect(page.locator("#etf-gap").getByRole("table").first().getByRole("row").nth(1)).toContainText("0.26% above");
 });

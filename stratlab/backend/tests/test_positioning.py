@@ -275,7 +275,7 @@ def test_backfill_walks_back_politely_and_finishes(w, monkeypatch):
     from app.data.calendar import is_trading_day
     want = [d for d in (today - timedelta(days=n) for n in range(1, 31)) if is_trading_day("IN", d)]
     assert len(P.history("part")) == len(want)
-    assert r.backfill(today)["done"]                           # finished for good: nothing more is read
+    assert r.backfill(today, days=30)["done"]                  # finished for good (for that depth): nothing more is read
 
 
 def test_backfill_stops_on_an_outage_and_resumes(w, monkeypatch):

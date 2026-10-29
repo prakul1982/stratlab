@@ -29,7 +29,10 @@ COMPANY_AI = {"summary": "Makes the chips that train AI models.", "scores": {"mo
                         {"title": "", "text": "  "}, "not a dict"]}
 SECTOR_AI = {"sector": "AI data centers", "summary": "Power is the bottleneck.", "clusters": [{"name": "Chips", "companies": [{"name": "Nvidia", "ticker": "nvda"}]}],
              "screen": [{"name": "Vertiv", "ticker": "VRT", "composite": 70}, {"name": "Nvidia", "ticker": "NVDA", "composite": 90}],
+             "value_chain": [{"layer": "Chips", "description": "Makes the chips.", "companies": [{"name": "Nvidia", "ticker": "NVDA"}, {"name": "Vertiv", "ticker": "VRT"}]}],
              "tailwinds": ["Capex"], "risks": ["Rates"], "etfs": [{"ticker": "SMH", "name": "Semis"}]}
+# each company's own description, as theme_routes would read it, and the AI's answers to the placement and claim checks
+DESCRIPTIONS = {"NVDA": "Nvidia designs the chips that train AI models in data centers.", "VRT": "Vertiv makes the chips cooling and power systems for data centers."}
 PULSE_AI = {"tone": "Calm.", "hot": [{"name": "Reliance", "ticker": "RELIANCE", "why": "Jio"}],
             "flows": [{"title": "Selling at the close", "detail": "Selling", "direction": "outflow"}, {"title": "x", "detail": "y", "direction": "weird"}],
             "themes": [{"theme": "Capex", "detail": "Rails", "example": "RVNL"}]}
@@ -71,12 +74,22 @@ def api(monkeypatch):
         calls.append(system)
         if "mapping a sector" in system:
             return json.dumps(SECTOR_AI)
+        if "where listed companies belong" in system:
+            body = json.loads(text.split("CHECKS:\n", 1)[1])
+            return json.dumps({"checks": [{"id": f"{g}|{c['symbol']}", "does": True, "quote": " ".join(c["description"].split()[:6])}
+                                          for c in body["companies"] for g in c["check_groups"]]})
+        if "still current" in system:
+            return json.dumps({"claims": []})
         if "market read" in system:
             return json.dumps(PULSE_AI)
         if "comparing two" in system:
             return json.dumps(COMPARE_AI)
         return json.dumps(COMPANY_AI)
     monkeypatch.setattr(A, "complete", fake_complete)
+    from app.intel import theme_check, theme_routes
+    monkeypatch.setattr(theme_routes, "evidence_reader", lambda region, names: lambda syms: ({s: {"about": DESCRIPTIONS[s], "industry": ""} for s in syms if s in DESCRIPTIONS}, set()))
+    monkeypatch.setattr(theme_routes, "_headlines", lambda region: lambda q: [])
+    theme_routes.VERDICTS.clear()
     monkeypatch.setattr(db, "count_usage", lambda u, kind, since: sum(1 for k in usage if k == kind))
     monkeypatch.setattr(db, "add_usage", lambda u, kind: usage.append(kind))
     monkeypatch.setattr(db, "get_setting", lambda k: settings_store.get(k))

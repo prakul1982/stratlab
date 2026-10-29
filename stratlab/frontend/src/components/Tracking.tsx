@@ -52,11 +52,13 @@ function ConsentCard({ adsOnly }: { adsOnly: boolean }) {
   useEffect(() => {
     const el = card.current, root = document.documentElement;
     if (!el) return;
-    const keep = () => root.style.setProperty("scroll-padding-bottom", `${el.offsetHeight + 24}px`);
+    // --consent-h: the page's own foot is padded by the card's height while it is up, so the end of a page is never under it (LIVE1B-050: the
+    // refund policy's last lines and the landing page's example were cut off by it)
+    const keep = () => { root.style.setProperty("scroll-padding-bottom", `${el.offsetHeight + 24}px`); root.style.setProperty("--consent-h", `${el.offsetHeight + 16}px`); };
     keep();
     const ro = typeof ResizeObserver === "function" ? new ResizeObserver(keep) : null;
     ro?.observe(el);
-    return () => { ro?.disconnect(); root.style.removeProperty("scroll-padding-bottom"); };
+    return () => { ro?.disconnect(); root.style.removeProperty("scroll-padding-bottom"); root.style.removeProperty("--consent-h"); };
   }, []);
   const { title, text: words } = consentWords(CONFIG, adsOnly);
   return (

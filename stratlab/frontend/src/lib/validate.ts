@@ -36,6 +36,31 @@ export function numberProblem(text: string, lim: Limits = {}): string | null {
   return null;
 }
 
+/** What is wrong with a quantity typed for a stock: the number's own limits, and for a stock listed in India that shares come in
+ * whole units (LIVE1B-046: TCS 2.5 was saved); US brokers sell fractions. `kept`: a quantity the row already has, which stays
+ * allowed untouched (a bonus can leave a fraction). */
+export function qtyProblem(text: string, market: "IN" | "US", lim: Limits, kept?: number): string | null {
+  const p = numberProblem(text, lim);
+  if (p) return p;
+  const n = Number(text.trim().replace(/,/g, ""));
+  if (market !== "US" && !Number.isInteger(n) && n !== kept) return "Whole shares only: Indian shares trade in whole units.";
+  return null;
+}
+
+/** Each box of the add-a-trade form that can't be sent, with why (the date is checked by its own picker's limit). */
+export function tradeProblems(f: { d: string; sym: string; qty: string; price: string; fees: string }): Partial<Record<"d" | "sym" | "qty" | "price" | "fees", string>> {
+  const out: Partial<Record<"d" | "sym" | "qty" | "price" | "fees", string>> = {};
+  if (!f.d) out.d = "Pick the date.";
+  if (!f.sym.trim()) out.sym = "Type the ticker, like AAPL.";
+  const q = numberProblem(f.qty, { min: 0, above: true });
+  if (q) out.qty = q === "Fill this in." ? "Enter the number of shares." : q.startsWith("Enter more than") ? "Enter more than 0 shares." : q;
+  const p = numberProblem(f.price, { min: 0, max: 1e7, unit: "$" });
+  if (p) out.price = p === "Fill this in." ? "Enter the price in dollars." : p;
+  const fee = numberProblem(f.fees, { min: 0, optional: true, unit: "$" });
+  if (fee) out.fees = fee;
+  return out;
+}
+
 /** The problems of a whole form: field key → message, only for the fields with one. */
 export function problems<K extends string>(checks: Record<K, string | null>): Partial<Record<K, string>> {
   const out: Partial<Record<K, string>> = {};

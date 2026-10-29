@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, pct, price, qty, TF_NAME, tzOf, when, fmtDate, fmtDateTime } from "../lib/format";
+import { money, pct, price, qtyShort, TF_NAME, tzOf, when, fmtDate, fmtDateTime } from "../lib/format";
 import { viewedFreeKeepsSessions } from "../lib/account";
 import { sessionPath, upDown } from "../lib/tradeUi";
 import type { LiveRow, LiveSnapshot } from "../lib/types";
@@ -146,7 +146,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
     ["Equity", money(a.equity, cur, 2), null, HELP.equityLive],
     ["Return", pct((a.equity / a.capital - 1) * 100, 2), a.equity - a.capital, null],
     ["Cash", money(a.cash, cur, 2), null, HELP.cash],
-    ["Open position", a.qty ? `${qty(a.qty, undefined, snap.instrument.market)} at ${price(a.entry ?? 0, cur)}` : "None", null, null],
+    ["Open position", a.qty ? `${qtyShort(a.qty, snap.instrument.market)} at ${price(a.entry ?? 0, cur)}` : "None", null, null],
     ["Unrealised P&L", money(a.unrealised, cur, 2), a.unrealised, `${HELP.unrealised} It already counts the costs of the entry.`],
     ["Realised P&L", money(a.realised, cur, 2), a.realised, HELP.realised],
     ["Closed trades", a.trades ? `${a.trades} (${a.wins} won)` : "0", null, null],
@@ -200,16 +200,17 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
       <div className="nb-grid">
         <div className="k-page">
           <Card label="Live chart" className="sess-chart">
-            <CardHead level={3} title={running ? "Live chart" : "Chart"} actions={priceHead ? <span className="k-small" data-testid="sess-price">{priceHead}</span> : undefined} />
+            <CardHead level={3} title={running ? "Live chart" : "Chart"} info={<span data-testid="sess-fills">{fillsLine(s.risk, market?.costs, money(s.risk.brokerage, cur, 2))}</span>} infoLabel="How orders fill and what they pay" actions={priceHead ? <span className="k-small" data-testid="sess-price">{priceHead}</span> : undefined} />
             {snap.bars.length ? <LiveChart snap={snap} cur={cur} note={chartNote} /> : <p className="k-small k-muted">The chart fills in as candles close.</p>}
-            <p className="k-note" data-testid="sess-fills">{fillsLine(s.risk, market?.costs, money(s.risk.brokerage, cur, 2))}</p>
           </Card>
           <ChartFrame title="Paper equity" info={HELP.equityLive}>
-            {curve.length > 1 ? (
+            {curve.length > 1 && span > 0 ? (
               <LineChart ariaLabel="Paper account value" labels={curve.map((p) => when(p.t, tz, intraday))} times={curve.map((p) => p.t)} tz={tz} height={160}
                 format={(x) => money(x, cur, 2)} axisFormat={axis} baseline={a.capital} lines={[{ label: "Equity", values: curve.map((p) => p.eq), color: "var(--series-1)", width: 2 }]} />
-            ) : <ChartEmpty height={72}>Your equity curve starts after the first closed candle.</ChartEmpty>}{/* VR1-092: a 160px box for one line */}
-            {curve.length > 1 && <p className="k-note">From the starting {money(a.capital, cur, 0)} (the grey line), after each closed candle.</p>}
+            ) : <ChartEmpty height={72}>{curve.length > 1
+              ? `No trades yet: the account is still at the starting ${money(a.capital, cur, 0)}. The line appears once an order fills and the value moves.`   // (LIVE2-014: a flat line on a $0 to $1 axis looked broken)
+              : "Your equity curve starts after the first closed candle."}</ChartEmpty>}{/* VR1-092: a 160px box for one line */}
+            {curve.length > 1 && span > 0 && <p className="k-note">From the starting {money(a.capital, cur, 0)} (the grey line), after each closed candle.</p>}
           </ChartFrame>
         </div>
         <div className="k-page">
@@ -338,11 +339,11 @@ export function PaperPage() {
             </Earlier>
           </Card>
         )}
+      {!sid && rows && rows.length > 0 && <p className="k-small k-muted">Pick a session above to see its chart, account and orders.</p>}
       {!sid && rows && rows.some((r) => r.status === "running") && (
         <RiskOverview onOpen={(id, kind) => nav(sessionPath({ id, kind }))} />
       )}
       {sid && <SessionView sid={sid} onStopped={load} onDeleted={() => { nav("/paper"); load(); }} />}
-      {!sid && rows && rows.length > 0 && <p className="k-small k-muted">Pick a session above to see its chart, account and orders.</p>}
       {clearing && (
         <ConfirmDialog title={`Delete ${stopped.length} stopped session${stopped.length === 1 ? "" : "s"}?`} confirmLabel="Delete stopped sessions" onConfirm={clearStopped} onClose={() => setClearing(false)}>
           Their orders go with them. Running ones stay. This can't be undone.

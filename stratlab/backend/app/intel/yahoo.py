@@ -14,6 +14,34 @@ from .net import BROWSER_UA, NotFound, Source, SourceError
 INTERVAL = {"1d": ("1d", 3650 * 3), "1h": ("60m", 729), "15m": ("15m", 59), "5m": ("5m", 59)}
 
 
+STEP = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600}      # an intraday candle's length, seconds
+
+
+def _fold_live(candles: list[dict], step: int) -> list[dict]:
+    """While a session trades, the source ends each intraday answer with one more row stamped at the moment it was read (15:12:53)
+    instead of a candle's start: the market's latest price, beside the candle it belongs to. Drawn as it came it is a one-price
+    candle next to the real one, and the live candle then grows on a grid shifted by those seconds all session (MWR1-019). The
+    row goes into the candle that holds it (its close, high and low), or is that candle when the answer has none yet (a
+    1-minute chart has no row for the minute in progress)."""
+    out: list[dict] = []
+    for b in candles:
+        t = datetime.fromisoformat(b["t"])
+        if t.second == 0 and t.microsecond == 0:
+            out.append(b)
+            continue
+        if out:
+            s = datetime.fromisoformat(out[-1]["t"])
+            start = s + timedelta(seconds=((t - s).total_seconds() // step) * step)
+        else:
+            start = t.replace(second=0, microsecond=0)
+        if out and start == datetime.fromisoformat(out[-1]["t"]):
+            last = out[-1]
+            last["c"], last["h"], last["l"] = b["c"], max(last["h"], b["h"]), min(last["l"], b["l"])
+        else:
+            out.append({**b, "t": start.isoformat()})
+    return out
+
+
 def _from_quote(meta: dict, tz, day: datetime, ohl: tuple, prev_close: float | None) -> tuple:
     """For London and Frankfurt, Yahoo often sends the latest session's daily candle with a blank close, while the
     same answer's quote has that session's last price and day range. Rebuild that one candle from the quote; any
@@ -191,6 +219,8 @@ class Yahoo(Source):
                 v = meta.get("regularMarketVolume")
             candles.append({"t": t.isoformat(), "o": float(o), "h": float(h), "l": float(l), "c": float(c),
                             "v": float(v or 0)})
+        if tf in STEP:
+            candles = _fold_live(candles, STEP[tf])
         # Yahoo sometimes repeats the live bar; keep the last copy of each time
         dedup = {}
         for b in candles:

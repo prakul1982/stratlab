@@ -284,6 +284,9 @@ def find(region: str, symbol: str) -> tuple[str, dict] | None:
     if twin in cos:
         return twin, cos[twin]
     if region == "US":
+        from .us_ticker import canon_us
+        if canon_us(s) in cos:          # NYSE:JPM and NASDAQ:AAPL are JPM's and AAPL's pages
+            return canon_us(s), cos[canon_us(s)]
         for alt in (re.sub(r"[./]", "-", s), s.replace("-", ".")):
             if alt in cos:
                 return alt, cos[alt]
@@ -816,6 +819,15 @@ def with_week52_report(f: dict | None, report: dict | None, symbol: str | None =
     if not row:
         return f
     hi, lo = _num(row[0]), _num(row[2])
+    # LIVE1B-074: the exchange's report lags a session, so its 52-week window starts a day earlier than the page's own year: a high or low it
+    # set on a day before the page's year (SBIN's ₹906.00 of 27 Oct 2025 on a page of 28 Oct 2026) is not this page's
+    try:
+        start = (date.fromisoformat(str(f.get("price_at") or "")[:10]) - timedelta(days=RANGE_DAYS)).isoformat()
+    except ValueError:
+        start = None
+    if start:
+        hi = hi if str(row[1] or "")[:10] > start else None
+        lo = lo if str(row[3] or "")[:10] > start else None
     cur_hi, cur_lo = _num(f.get("high52")), _num(f.get("low52"))
     out = dict(f)
     if hi is not None and cur_hi is not None and cur_hi < hi <= cur_hi * RANGE_SLACK:
@@ -932,7 +944,12 @@ def india_snap_checked(snap: dict, p: dict) -> dict:
     years = [{"year": c, "sales": s} for c, s in zip(pl.get("cols") or [], sales) if str(c).strip().upper() != "TTM"][-5:]
     why = cap_problem({"region": "IN", "market_cap": snap.get("market_cap_cr"), "price": snap.get("price"),
                        "unit": p.get("unit") or "₹ crore", "market_cap_unit": "₹ crore", "years": years})
-    return {**snap, "market_cap_cr": None, "pe": None, "cap_problem": why} if why else snap
+    if why:
+        return {**snap, "market_cap_cr": None, "pe": None, "cap_problem": why}
+    # the P/E left out where it is far off the profit, as the public page leaves it out (shown_pe, LIVE1C-019); the audit says so
+    if snap.get("pe") and pe_off_profit({"region": "IN", "pe": snap["pe"], "market_cap": snap.get("market_cap_cr"), "profit_ttm": _ttm_profit(p)}):
+        return {**snap, "pe": None, "pe_off_profit": snap["pe"]}
+    return snap
 
 
 def foreign_filer(f: dict | None) -> bool:
@@ -1069,11 +1086,26 @@ def pe_label(f: dict | None) -> str:
     return "P/E"
 
 
+def pe_off_profit(f: dict | None, pe: float | None = None) -> bool:
+    """Whether an Indian company's stated P/E and its market value over the last 12 months' net profit are more than PE_GAP
+    times apart, either way. A minority holders' share or a one-off explains a gap of a few tenths (pe_profit_gap says it
+    on the page), not a P/E of 48 beside 627, so the P/E is left out rather than shown beside a profit it cannot match
+    (LIVE1C-019: five companies with the page's P/E 1.3 to 13 times off market cap over profit)."""
+    f = f or {}
+    if f.get("region") != "IN":
+        return False
+    pe = pe if pe is not None else _num(f.get("pe"))
+    cap, profit = _num(f.get("market_cap")), _num(f.get("profit_ttm"))
+    if not pe or pe <= 0 or not cap or cap <= 0 or not profit or profit <= 0:
+        return False
+    return not 1 / PE_GAP <= pe / (cap / profit) <= PE_GAP
+
+
 def shown_pe(f: dict | None):
-    """The P/E to show: None for a loss, a P/E above PE_MAX, a market value that fails a check, or earnings from a year
-    that ended more than about 15 months before the price (pe_stale)."""
+    """The P/E to show: None for a loss, a P/E above PE_MAX, a market value that fails a check, earnings from a year
+    that ended more than about 15 months before the price (pe_stale), or an Indian P/E far off the profit (pe_off_profit)."""
     pe = _num((f or {}).get("pe"))
-    if pe is None or pe <= 0 or pe > PE_MAX or cap_problem(f) or pe_stale(f):
+    if pe is None or pe <= 0 or pe > PE_MAX or cap_problem(f) or pe_stale(f) or pe_off_profit(f, pe):
         return None
     return pe
 
@@ -1141,13 +1173,41 @@ def _ttm_profit(p: dict):
     return _num(row[len(cols) - 1])
 
 
+def _theme_figures(p: dict, snap: dict, financial: bool) -> dict:
+    """book_value, pb, interest_cover (None for a lender or a company with no interest cost), cash (₹ crore, India), latest_yoy."""
+    from .intel import key_facts
+    cash = None
+    for label, vals in ((p.get("balance") or {}).get("rows") or {}).items():
+        if str(label).lower().startswith("cash equivalents"):
+            cash = next((v for v in reversed(vals) if isinstance(v, (int, float))), None)
+            break
+    cover = None if financial else key_facts.interest_cover_value(p.get("pl"))
+    return {"book_value": snap.get("book_value"), "pb": snap.get("pb"), "interest_cover": cover if cover else None,
+            "cash": None if financial else cash, "latest_yoy": snap.get("latest_yoy")}
+
+
+def quarter_yoy(snap: dict) -> dict | None:
+    """The latest reported quarter's revenue and profit against the same quarter a year before, as the results calendar's table
+    shows them: {"sales": %, "profit": %, "of": "Sep 2026 vs Sep 2025"}. None unless the source gave a quarter (a year's figures
+    are not a quarter's, so a company with no quarterly table has none)."""
+    ly = snap.get("latest_yoy") if isinstance(snap, dict) else None
+    if not isinstance(ly, dict) or ly.get("basis") != "quarter":
+        return None
+    out = {"of": str(ly.get("of") or "")[:40] or None}
+    for k in ("sales", "profit"):
+        v = _num(ly.get(k))
+        out[k] = round(v, 1) if v is not None else None
+    return out if out["sales"] is not None or out["profit"] is not None else None
+
+
 def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict | None, prices: dict | None,
           filings: list[dict], exchange: str, red_flags: int | None = None, checks: dict | None = None) -> dict:
     """What a page shows, from what the deep dive already works out. Plain numbers and words; nothing from AI.
     `red_flags` is how many red-flag filings (India) the last three months held, for the stock screens. `checks` carries
     what the market value is checked against (see cap_problem): "sales_usd" (a year's revenue, $ million),
     "cap_unverified" (depositary shares whose ratio couldn't be read) and "not_company" (what the symbol is instead)."""
-    years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt")} for y in (nums.get("years") or [])[-5:]]
+    # (cash from operations too, for a theme's cash-against-profit line: THEME-1; a page stored before has none, and the line says how many it counts)
+    years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt", "cfo")} for y in (nums.get("years") or [])[-5:]]
     prices = dict(prices or {})
     checks = checks or {}
     if _num(prices.get("price")) is None and _num(snap.get("price")) is not None:
@@ -1180,11 +1240,17 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "high52": prices.get("high52") or snap.get("high52"), "low52": prices.get("low52") or snap.get("low52"),
         **({"range_whole": True} if whole_range else {}),
         **({"range_since": prices["range_since"]} if prices.get("range_since") else {}),
-        "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
+        "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"),
+        **({"pe_why": snap["pe_why"]} if snap.get("pe_why") else {}),
+        **({"basis": p["basis"]} if region == "IN" and p.get("basis") in ("consolidated", "standalone") else {}), "roe": snap.get("roe"), "roce": snap.get("roce"),
         "div_yield": snap.get("div_yield"), "div_special": snap.get("div_special"), "profit_ttm": _ttm_profit(p),
         "net_margin": snap.get("net_margin"), "opm": opm, "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
-        "bank": financial, "years": years, "currency_note": p.get("currency_note"),
+        "bank": financial, "years": years, "currency_note": p.get("currency_note"), "basis": nums.get("basis"),
+        # for a theme's deep dive (THEME-1), from the figures the company page shows: book value and P/B (the page's Valuation), interest cover (its Debt
+        # and cash), cash on hand (the balance sheet's breakdown, for enterprise value) and the latest quarter against the year-ago quarter
+        **_theme_figures(p, snap, financial),
         "growth": {k: (nums.get("growth") or {}).get(k) for k in ("sales_cagr_3y", "profit_cagr_3y", "sales_cagr_5y", "profit_cagr_5y")},
+        "q": quarter_yoy(snap),
         "stage": (trend or {}).get("stage"), "stage_days": (trend or {}).get("stage_days"),
         "st_up": (trend or {}).get("st_up"), "st_days": (trend or {}).get("st_days"),
         "filings": listed_filings(filings)[:6],
@@ -2020,7 +2086,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);-webkit
 a{color:var(--blue)}a:hover{color:var(--blue-ink)}:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 main:focus,[data-ads]:focus{outline:none}
 .skip{position:absolute;left:-9999px;padding:12px 16px}.skip:focus{left:16px;top:8px;z-index:2;background:var(--card);border-radius:10px}
-.nav{display:flex;align-items:center;padding:18px clamp(16px,4vw,48px);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;padding:18px max(clamp(16px,4vw,48px),calc((100% - 960px)/2 + clamp(16px,4vw,32px)));border-bottom:1px solid var(--line)}
 .brand{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);min-height:44px;font-size:16.8px}
 .brand svg{height:40px;width:auto}.word{font-family:"Montserrat",var(--sans);font-weight:300;letter-spacing:-.035em}.word b{font-weight:800;letter-spacing:-.045em}
 .nav nav{display:flex;gap:22px;margin-left:auto;margin-right:16px}.nav nav a{display:inline-flex;align-items:center;min-height:36px;color:var(--ink-2);text-decoration:none;font-weight:500;font-size:14.5px}
@@ -2085,9 +2151,17 @@ ul.dir li{display:flex;align-items:center;justify-content:space-between;gap:12px
 ul.dir li:hover{border-color:var(--line-2)}ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px;line-height:1.3;color:var(--ink);text-decoration:none}
 ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.links{margin:12px 0 6px}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
-.links a:hover{border-color:var(--line-2);color:var(--ink)}nav.links[data-az] a{min-width:44px;justify-content:center;padding:4px 10px}
+.links a:hover{border-color:var(--line-2);color:var(--ink)}nav.links[data-az] a{min-width:44px;min-height:44px;justify-content:center;padding:4px 10px}
 /* VR6-022: A to Z in two rows of thirteen on a wide screen, not nineteen and an orphan row of seven (44 px taps, A11Y-2) */
-@media (min-width:641px){nav.links[data-az]{display:grid;grid-template-columns:repeat(13,44px)}}
+@media (min-width:641px){nav.links[data-az]{display:grid;grid-template-columns:repeat(var(--azd,13),44px)}nav.links[data-az] a{white-space:nowrap;padding:4px 6px}}
+/* LIVE2-019: with the "0–9" pill the 27 boxes are two rows of 14 and 13 (data-cd), not 13, 13 and one alone; its label stays on one line */
+nav.links[data-cd="14"]{--azd:14}nav.links[data-cd="15"]{--azd:15}nav.links[data-cd="16"]{--azd:16}
+/* VR7-003: on a phone the same letters fill the row (a 44 px box each, the row as wide as the screen) in as many columns as leave the last row nearly
+   full (data-c7 for a screen 375px and wider, data-c6 for a narrower one), not a last row of one or two letters */
+nav.links[data-c7="1"]{--az7:1}nav.links[data-c7="2"]{--az7:2}nav.links[data-c7="3"]{--az7:3}nav.links[data-c7="4"]{--az7:4}nav.links[data-c7="5"]{--az7:5}nav.links[data-c7="6"]{--az7:6}nav.links[data-c7="7"]{--az7:7}
+nav.links[data-c6="1"]{--az6:1}nav.links[data-c6="2"]{--az6:2}nav.links[data-c6="3"]{--az6:3}nav.links[data-c6="4"]{--az6:4}nav.links[data-c6="5"]{--az6:5}nav.links[data-c6="6"]{--az6:6}
+@media (max-width:640px){nav.links[data-az]{display:grid;grid-template-columns:repeat(var(--az7,7),minmax(0,1fr))}nav.links[data-az] a{min-width:0;padding:4px 0}}
+@media (max-width:374px){nav.links[data-az]{grid-template-columns:repeat(var(--az6,6),minmax(0,1fr))}}
 .links a[aria-current=page]{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
 [data-crumbs]{margin:0 0 6px}[data-crumbs] a{color:var(--muted)}h1+.muted{font-size:16px;max-width:64ch;margin:0 0 14px}
 form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:16px 0}form.find select,form.find button{flex:none}form.find input,form.find select{min-height:44px;border:1px solid var(--line-2);border-radius:10px;padding:0 12px;background:var(--card);color:var(--ink);font:inherit}
@@ -2117,7 +2191,7 @@ footer.site p{max-width:72ch;margin:0 0 8px}footer.site nav{display:flex;flex-wr
 .tip{position:absolute;z-index:3;pointer-events:none;display:flex;flex-direction:column;gap:2px;min-width:128px;background:var(--card);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:14px;box-shadow:0 8px 24px rgba(29,27,23,.14)}
 .tip[hidden]{display:none}.tip span{color:var(--muted);font-size:12.5px;white-space:nowrap}.tip b{font-weight:600}
 .chart [data-summary]{margin:10px 0 0;max-width:72ch}.chart .how{margin-top:4px}.tbl2{overflow-x:auto}.tbl2 td:last-child,.tbl2 th:last-child{text-align:right}
-@media (max-width:640px){.plot{height:210px}.seg button{min-height:44px;min-width:52px}.chg b{font-size:20px}.chart-top{min-height:0}}
+@media (max-width:640px){.plot{height:210px}.seg button{min-height:44px;min-width:52px}.chg b{font-size:20px}.chart-top{min-height:112px}[data-empty] .chart-top{min-height:0}}   /* LIVE2-031: the change line and the range buttons take two rows once the prices arrive: their place is kept from the first paint (130px shift) */
 .by{margin:0 0 6px}.by-key{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px;color:var(--ink-2);margin-bottom:26px}
 .by-key .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px}.sw.rev,.by-bar.rev{background:var(--blue)}.sw.pro,.by-bar.pro{background:var(--orange)}
 .by-plot{position:relative;height:180px;margin:0 0 30px 56px}.by-line{position:absolute;left:0;right:0;height:0;border-top:1px solid var(--line)}
@@ -2147,7 +2221,17 @@ LOGO = ('<svg viewBox="254 174 156 382" aria-hidden="true" focusable="false"><de
         'V405L306,399V453Q306,457 302,457H261Q257,457 257,453Z"/></svg>')
 
 
+DESC_MAX = 158          # what a search result shows of a description; longer is cut mid-sentence by the engine (LIVE2-010)
+
+
+def clamp_desc(desc: str, n: int = DESC_MAX) -> str:
+    """A description of at most `n` characters, cut at a word, with an ellipsis when it was cut."""
+    text = " ".join(str(desc or "").split())
+    return text if len(text) <= n else text[:n - 1].rsplit(" ", 1)[0].rstrip(" ,.;:") + "…"
+
+
 def _head(title: str, desc: str, canonical: str, extra: str = "", robots: str = "index,follow", og_type: str = "website") -> str:
+    desc = clamp_desc(desc)
     # a page kept out of search results names no canonical address: it would point a search engine at a page it was told
     # not to list (R10V-005: the 404 for a company that doesn't exist said its canonical address was /stocks)
     site = settings.PUBLIC_SITE_URL
@@ -2264,6 +2348,32 @@ def proper_name(name: str | None) -> str | None:
     return re.sub(r"\bAmazon Com\b", "Amazon.com", " ".join(word(w) for w in name.split(" ")))
 
 
+_IN_SMALL = {"of", "and", "the", "for", "in", "to", "on", "at", "by"}
+# four- and five-letter names that are letters, not words, though they have a vowel in them
+_IN_ACRONYMS = {"ONGC", "BHEL", "SAIL", "GAIL", "NHPC", "NMDC", "NTPC", "IRFC", "RVNL", "SJVN", "IFCI", "IDBI", "HUDCO", "ICICI", "IRCON", "HAL", "ITC", "LIC", "UCO", "IOC", "BPCL", "HPCL",
+                "CESC", "MRPL", "KPIT", "NBCC", "RITES", "TVS", "BSE", "NSE", "MCX", "CDSL", "NSDL", "IIFL", "L&T", "ABB", "SKF", "UPL", "DLF", "GMR", "JSW", "NLC", "NALCO", "MOIL", "RBL"}
+
+
+def tidy_in_name(name: str | None) -> str | None:
+    """An Indian company's name as one style: a name the exchange's list gives in capitals ("TATA CONSUMER PRODUCTS LIMITED") in title case, and the
+    small joining words in lower case ("National Stock Exchange of India Ltd", not "Of"). Letters that are not words (HDFC, ONGC, TVS) stay as they are."""
+    if not name:
+        return name
+    caps = name == name.upper() and bool(re.search(r"[A-Z]{3}", name))
+    out = []
+    for i, w in enumerate(name.split(" ")):
+        core = re.sub(r"[^A-Za-z&]", "", w)
+        low = core.lower()
+        if i and low in _IN_SMALL and (caps or core[:1].isupper()):
+            out.append(w.replace(core, low))
+        elif caps and core:
+            keep = core in _IN_ACRONYMS or (len(core) <= 5 and not re.search(r"[AEIOUY]", core)) or re.search(r"[A-Za-z]&[A-Za-z]", w)
+            out.append(w if keep else "-".join(x[:1] + x[1:].lower() for x in w.split("-")))
+        else:
+            out.append(w)
+    return " ".join(out)
+
+
 # ---------- a company's own words: one short paragraph and the questions its page can answer (SEO-1) ----------
 # Every company page had the same sentences round different numbers, which Google calls thin. These are sentences built from the
 # page's own figures (nothing new is fetched or made up), worded as facts: no buy, sell, hold or target (SEBI's research analyst
@@ -2298,65 +2408,6 @@ def listed_on(f: dict, region: str, symbol: str) -> str:
         return "in the US"
     ex = str(f.get("exchange") or "NSE")
     return "on NSE and BSE" if ex == "NSE" and symbol in set(nse_twins().values()) else f"on {ex}"
-
-
-def about_text(f: dict, region: str, symbol: str, name: str) -> str:
-    """The sentences of about_parts as one paragraph (the text the checks of SEO-1 read)."""
-    return " ".join(about_parts(f, region, symbol, name))
-
-
-def about_parts(f: dict, region: str, symbol: str, name: str) -> list[str]:
-    """The company's own sentences, one to an item, from the company's own figures: its sector, where it is listed, its year's range and last close, the
-    latest reported year's revenue and profit, the last 12 months' profit and its market value. Each sentence is left out when
-    its figures are n/a on the page (the same checks the page's figures pass)."""
-    out = []
-    ind = shown_industry(f.get("industry"), plain=region == "US")
-    where = ""
-    if region == "IN" and ind:
-        where = f"is in the {ind[0]} sector" + (f", in the {ind[-1]} industry," if len(ind) > 1 and ind[-1] != ind[0] else ",")
-    elif ind:
-        where = f"is in the {ind[-1]} industry,"
-    out.append(f"{name} {where} listed {listed_on(f, region, symbol)}.".replace(" ,", ",") if where else f"{name} is listed {listed_on(f, region, symbol)}.")
-    price = _num(f.get("price"))
-    if price is not None:
-        word = "last price" if behind(f) or not is_close(f) else "last close"
-        when = f" on {_date(f['price_at'])}" if _date(f.get("price_at")) else ""
-        bit = f"Its {word} was {_money(f, price)}{when}"
-        if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None:
-            span = (f"since its listing on {_date(f['range_since'])}" if f.get("range_since") and _date(f.get("range_since"))
-                    else "over the last 12 months")
-            bit += f"; {span} its share price traded between {_money(f, f['low52'])} and {_money(f, f['high52'])} (intraday)"
-        out.append(bit + ".")
-    ys = [y for y in f.get("years") or [] if y.get("year")]
-    if ys:
-        y = ys[-1]
-        # the precision the page's own table uses for these years (see _table), so a small company's figure reads as there
-        dy = small_digits(*[x.get(k) for x in f.get("years") or [] for k in (("sales", "profit") if f.get("bank") else ("sales", "profit", "debt"))])
-        sales, profit = report_amount(f, y.get("sales"), dy), _num(y.get("profit"))
-        bits = []
-        if sales and _num(y.get("sales")) is not None and _num(y["sales"]) > 0:
-            bits.append(f"revenue of {sales}")
-        if profit is not None:
-            bits.append(f"a net loss of {report_amount(f, -profit, dy)}" if profit < 0 else f"net profit of {report_amount(f, profit, dy)}")
-        if bits:
-            g = f.get("growth") or {}
-            grow = [w for w in (growth_words("revenue", g.get("sales_cagr_3y")), growth_words("net profit", g.get("profit_cagr_3y"))) if w]
-            out.append(f"In its latest reported year ({y['year']}) it reported " + " and ".join(bits)
-                       + (f"; over three years, compounded, its {', and its '.join(grow)}" if grow else "") + ".")
-    ttm, owners = _num(f.get("profit_ttm")), owners_profit(f)
-    dt = small_digits(ttm, owners)              # as the key figures show them (_stats)
-    if owners is not None or ttm is not None:
-        # the page's own two lines for an Indian company whose table profit includes minority holders (_stats): the shareholders'
-        if owners is not None:
-            text = f"profit to its shareholders over the last 12 months was {report_amount(f, owners, dt)}"
-        else:
-            text = (f"it made a net loss of {report_amount(f, -ttm, dt)} over the last 12 months" if ttm < 0
-                    else f"its net profit over the last 12 months was {report_amount(f, ttm, dt)}")
-        out.append(text[0].upper() + text[1:] + " (the four latest reported quarters).")
-    if cap_text(f) != "–":
-        pe = shown_pe(f)
-        out.append(f"Its market value is {cap_text(f)}" + (f", with a P/E of {_fmt(pe)}" if pe is not None else "") + ".")
-    return out
 
 
 def faq_extras(region: str, symbol: str) -> dict:
@@ -2445,6 +2496,8 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     name = (f or {}).get("name") or name or symbol
     if region == "US":                    # filings' capitals; Indian names are kept as listed ("ITC Ltd", not "Itc Ltd")
         name = proper_name(name)
+    else:
+        name = tidy_in_name(name)           # (LIVE2-017) "Of" and "TATA CONSUMER PRODUCTS LIMITED" in one style
     market = "US" if region == "US" else "IN"
     app = f"{site}/research/{market}/{quote(symbol, safe='')}"
     deep = app + "/deep"
@@ -2486,10 +2539,8 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
             + "</li>" for x in unique_filings(shown)) + "</ul></div>")
     parts.append(faq_html(questions, name))
     parts.append(_cta(symbol, test, deep))
-    about = about_parts(f, region, symbol, name) if has_content(f) else []
-    if about:
-        # SEO-1: this company's own sentences, from the figures above, one to a line (PUB-2: not one dense paragraph)
-        parts.append(f'<h2>About {e(name)}</h2><div class="card"><ul class="plain" data-about>' + "".join(f"<li>{e(x)}</li>" for x in about) + "</ul></div>")
+    # LIVE2-018: no "About" section. It said again, in sentences, the last close, the year's range, the revenue and profit, the market value and the
+    # P/E that the tiles, the table and the questions already give (a company's market value and P/E were on the page three times)
     for sec in peer_sections(region, symbol, f.get("industry") or [], shown_cap(f)):
         parts.append(f'<h2>{e(sec["title"])}</h2><p class="small muted" data-peers>{e(sec["caption"])}</p>' + _links(region, sec["rows"]))
     parts.append(browse_block(region, symbol))        # SEO-1: the companies before and after it A to Z, its letter's list and its indexes
@@ -2509,6 +2560,11 @@ def _whole(values) -> bool:
     """Whether a source gives these percentages in whole numbers (the Indian results do): then no ".0" is shown."""
     vals = [v for v in (_num(x) for x in values) if v is not None]
     return bool(vals) and all(v == round(v) for v in vals)
+
+
+def _true_minus(text: str) -> str:
+    """A negative number with the minus sign (−), as the price changes on the same page have it, not a hyphen (LIVE2-017)."""
+    return re.sub(r"(?<![\w.,])-(?=[₹$]?\d)", "−", text)
 
 
 def _stats(f: dict) -> list[tuple[str, str]]:
@@ -2547,8 +2603,8 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     if not f.get("bank"):
         out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
     out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
-            ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of {'$' if f.get('currency') == 'USD' else '₹'}{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy is not None else "n/a")]
-    return [(k, v) for k, v in out if v != "–"]
+            ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of {'$' if f.get('currency') == 'USD' else '₹'}{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy else "none" if dy == 0 else "n/a")]
+    return [(k, _true_minus(v)) for k, v in out if v != "–"]
 
 
 # ---------- the top of a company's page (PUB-2) ----------
@@ -2576,7 +2632,7 @@ def _price_block(f: dict, as_of: str) -> str:
 
 def _short_amount(unit: str, text: str) -> str:
     """A reported amount with its unit as one short value: "₹29,678 cr", "$128,930M", "INR 16.19M"."""
-    sign, text = ("-", text[1:]) if text[:1] in "-−" else ("", text)
+    sign, text = ("−", text[1:]) if text[:1] in "-−" else ("", text)
     parts = unit.split()
     if unit == "₹ crore":
         return f"{sign}₹{text} cr"
@@ -2603,7 +2659,10 @@ def _tiles(f: dict) -> list[dict]:
             short, line = "Market cap", "last close × shares"
         elif label.startswith("P/E"):
             short = "P/E"
-            line = "on " + (label[label.index("(") + 1:-1] + " profit" if "(" in label else "last 12 months' profit")
+            # LIVE1B-076: said as what it is, reported earnings of the last four quarters, not a vague "last 12 months"
+            line = "on " + (label[label.index("(") + 1:-1] + " profit" if "(" in label else "reported profit, last four quarters")
+            if f.get("basis") == "consolidated":
+                line += ", consolidated"           # LIVE2-016: the basis is on the tile, as the sites people compare with differ on it
         elif label.startswith("Profit to shareholders"):
             short, line, val = "Profit, last 12 months", "to shareholders", _short_amount(unit, val)
         elif label.startswith("Net profit incl."):
@@ -2745,6 +2804,14 @@ def _notes(f: dict) -> list[str]:
         out.append(f'<p class="note" data-pe-old>P/E isn\'t shown: the latest reported earnings on this page are for the '
                    f'year to {e(_date(pe_period(f)[1]))}, more than 15 months before this price, and a newer annual '
                    "report's figures aren't on the page yet.</p>")
+    if shown_pe(f) is None and not cap_problem(f) and not pe_stale(f):
+        loss = _num(f.get("profit_ttm"))
+        if f.get("pe_why"):
+            # LIVE2-025: two ways of working it out disagree and nothing settles which is right: not published until they agree
+            out.append(f'<p class="note" data-pe-why>P/E isn\'t shown: {e(str(f["pe_why"])[:1].lower() + str(f["pe_why"])[1:])}.</p>')
+        elif loss is not None and loss < 0:
+            # LIVE2-017: a loss-maker's missing P/E is said, not left as a tile that isn't there
+            out.append('<p class="note" data-pe-loss>P/E isn\'t shown: the company made a loss over the last 12 months, and a loss has no P/E.</p>')
     gap = pe_profit_gap(f)
     if gap:
         pe, implied, profit = gap
@@ -3064,17 +3131,35 @@ def with_ref(page: str, code: str) -> str:
     return re.sub(rf'(<a [^>]*?href=")({site}/(?!stocks(?:/|"))[^"#]*)"', add, page)
 
 
+def other_market(region: str | None, symbol: str) -> str | None:
+    """A line saying the symbol is a company in the other market, with the link to its page ("AAPL is listed in the US: Apple Inc. (AAPL)"),
+    or None (LIVE2-001: /stocks/in/AAPL and /stocks/us/TCS left the visitor to retype)."""
+    if region not in ("IN", "US") or not symbol:
+        return None
+    other = "US" if region == "IN" else "IN"
+    try:
+        hit = find(other, symbol)
+    except Exception:
+        return None
+    if not hit:
+        return None
+    sym, co = hit
+    name = proper_name(co.get("name")) if other == "US" else co.get("name")
+    where = "the US" if other == "US" else "India"
+    return (f'<p><b>{e(symbol.upper()[:40])}</b> is listed in {where}: <a href="{e(path(other, sym))}">{e(name or sym)} ({e(sym)})</a></p>')
+
+
 def not_found(region: str | None, symbol: str) -> str:
     """No company page for this symbol: say what it is when it's plainly a fund or an index (and where it can be
-    charted and tested), and offer the company search."""
+    charted and tested), say where it is a company when it is one in the other market, and offer the company search."""
     s = (symbol or "")[:40]
     kind = not_a_company(region, s)
     if kind:
         return _not_company_page(region, s, kind)
     site = settings.PUBLIC_SITE_URL
     title = "Company not found · StratLab"
-    body = (f"<h1>No company page for {e(s)}</h1>"
-            '<p class="muted">Check the symbol, or find the company by its name.</p>' + _find_form(region))
+    body = (f"<h1>No company page for {e(s)}</h1>" + (other_market(region, s) or "")
+            + '<p class="muted">Check the symbol, or find the company by its name.</p>' + _find_form(region, s))
     return _page(_head(title, "No listed company has that symbol.", site + "/stocks", robots="noindex,follow"), None, body)
 
 
@@ -3130,6 +3215,9 @@ def index_page(region: str | None, q: str = "") -> str:
     if region and not q:
         crumbs, ld = _crumbs([("Companies", "/stocks"), ("India" if region == "IN" else "US", f"/stocks/{region.lower()}")])
         body.insert(0, crumbs)
+    elif not q:
+        # /stocks itself had no structured data (LIVE1A-066): its place in the site, as the market pages have theirs
+        ld = _crumbs([("Companies", "/stocks")])[1]
     if q:
         for r in regions:
             got = search(r, q, SEARCH_SHOWN + 1)
@@ -3140,12 +3228,15 @@ def index_page(region: str | None, q: str = "") -> str:
             body.append(f"<h2>{label}: {count} for “{e(q)}”</h2>"
                         + (_links(r.lower(), got) if got else '<p class="muted">None. Try part of the name, or the symbol.</p>')
                         + ('<p class="small muted">More companies match. Type more of the name or the symbol to narrow it down.</p>' if more else ""))
+        if region and not re.search(r"\s", q):
+            body.insert(2, other_market(region, q) or "")        # one market asked for, the symbol is a company in the other (LIVE2-001)
     else:
         for r in regions:
             big, ranked = largest(r)
             if big:
-                where = "India" if r == "IN" else "US"
-                head = (f"{where}: the largest companies" if ranked else f"{where}: some of the companies")
+                # (not `where`: this loop used to overwrite the page's own `where`, so /stocks' description read "listed in US", LIVE1A-065)
+                place = "India" if r == "IN" else "US"
+                head = (f"{place}: the largest companies" if ranked else f"{place}: some of the companies")
                 cap = ('<p class="small muted">By market value, among companies whose value passed StratLab\'s checks against '
                        "their reported figures. Funds and notes are left out.</p>" if ranked else "")
                 body.append(f"<h2>{head}</h2>{cap}{_links(r.lower(), big)}")
@@ -3197,7 +3288,7 @@ def label_of(region: str, symbol: str, co: dict | None = None) -> str:
     with no name."""
     co = co if co is not None else companies(region).get(symbol) or {}
     name = co.get("name")
-    return str((proper_name(name) if region == "US" else name) or symbol)
+    return str((proper_name(name) if region == "US" else tidy_in_name(name)) or symbol)
 
 
 def directory(region: str) -> dict:
@@ -3307,6 +3398,17 @@ def index_links(region: str) -> str:
             + "".join(f'<a href="{index_path(region, slug)}">{e(name)}</a>' for slug, (name, _s, _d) in idx.items()) + "</nav>")
 
 
+def _az_cols(n: int, widest: int) -> int:
+    """How many columns of 44px letter boxes (at most `widest`) leave the last row of `n` letters nearest to full: 26 letters are 7, 7, 7 and 5 in
+    seven columns, not 6, 6, 6, 6 and 2 in six (VR7-003). The wider is taken when two fill the same."""
+    return max(range(max(2, widest - 2), widest + 1), key=lambda c: ((n % c or c) / c, c)) if n > widest else max(n, 1)
+
+
+def _az_style(n: int) -> str:
+    """The columns as two attributes (the page's body carries no inline style): data-c7 for a screen 375px and wider, data-c6 for a narrower one."""
+    return f' data-c7="{_az_cols(n, 7)}" data-c6="{_az_cols(n, 6)}" data-cd="{max(13, -(-n // 2))}"'
+
+
 def az_nav(region: str) -> str:
     """The market's A-Z letters (those with companies) and its index lists, as links: on /stocks, the exchange pages and the
     letter pages."""
@@ -3314,7 +3416,8 @@ def az_nav(region: str) -> str:
     d = directory(region)
     where = "India" if region == "IN" else "US"
     letters = "".join(f'<a href="{letter_path(region, L)}">{"0–9" if L == OTHER else L}</a>' for L in [*LETTERS, OTHER] if d["count"].get(L))
-    out = f'<h2>Browse {where} companies A to Z</h2><nav class="links" aria-label="{where} companies by first letter" data-az>{letters}</nav>' if letters else ""
+    n = sum(1 for L in [*LETTERS, OTHER] if d["count"].get(L))
+    out = f'<h2>Browse {where} companies A to Z</h2><nav class="links" aria-label="{where} companies by first letter" data-az{_az_style(n)}>{letters}</nav>' if letters else ""
     return out + index_links(region)
 
 
@@ -3353,7 +3456,7 @@ def letter_page(region: str, letter: str, page: int = 1) -> str | None:
     body = (f"{crumbs}<h1>{where} companies {e(what)}</h1>"
             f'<p class="muted">{n:,} companies listed in {place} {e(what)}{e(of)}, A to Z by name. Each links to its price, '
             "reported results and recent filings. Facts, not advice.</p>"
-            f'<nav class="links" aria-label="Letters" data-az>' + "".join(
+            f'<nav class="links" aria-label="Letters" data-az{_az_style(sum(1 for L in [*LETTERS, OTHER] if d["count"].get(L)))}>' + "".join(
                 f'<a href="{letter_path(region, L)}"' + (' aria-current="page"' if L == letter else "") + f'>{"0–9" if L == OTHER else L}</a>'
                 for L in [*LETTERS, OTHER] if d["count"].get(L)) + "</nav>"
             + _dir_list(region, syms)

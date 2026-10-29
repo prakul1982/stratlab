@@ -22,7 +22,7 @@ test("VR1-062: the experiment's verdict block drops the sentence that restates b
   assert.deepEqual(heroSummary("Only 3 trades in this period. That's too few to tell a real edge from a lucky streak, whatever the return says.", ""), ["Only 3 trades in this period.", "That's too few to tell a real edge from a lucky streak, whatever the return says."]);
   assert.deepEqual(heroSummary(null), []);
   const page = read("src/pages/ExperimentPage.tsx");
-  assert.match(page, /heroSummary\(v\.summary, head\.checks\)/);
+  assert.match(page, /heroSummary\(v\.summary, head\.swapped \? head\.main : head\.checks\)/);
 });
 
 test("VR1-002: the gold line's second half (the world price and the duty) goes behind the Markets card's (i); the one-line fact stays", async () => {
@@ -51,7 +51,7 @@ test("VR1-003, VR1-004, VR1-005: My space's heading says only the market state, 
 test("VR1-010, VR1-011, VR1-012, VR1-013, VR1-014: Invest home's panels, tiles, card heads and the lead card's link", () => {
   const homes = read("src/pages/SpaceHomes.tsx");
   const inv = homes.slice(homes.indexOf("export function InvestHome"), homes.indexOf("/** The next few market events"));
-  assert.match(inv, /<WatchPanel region=\{region\} \/>\s*\{nothingWatched \? <><NextEvents region=\{region\} \/><ResultsToday region=\{region\} \/><\/> : \(\s*<div className="space-col">\s*<NextEvents region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>\s*<\/div>\s*\)\}/);   // (VR6-011: stacked when nothing is watched)
+  assert.match(inv, /<WatchPanel region=\{region\} \/>\s*\{fewWatched \? <><NextEvents region=\{region\} \/><ResultsToday region=\{region\} \/><\/> : \(\s*<div className="space-col">\s*<NextEvents region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>\s*<\/div>\s*\)\}/);   // (VR6-011: stacked when nothing is watched)
   assert.match(inv, /<\/div>\s*<RedFlags region=\{region\} \/>/);
   assert.doesNotMatch(inv, /space-panels even/);
   assert.doesNotMatch(css, /\.space-panels \.inv-tiles \{ align-items: start; \}/);   // VR2-002: the tiles of a row are as tall as each other
@@ -64,6 +64,12 @@ test("VR1-021, VR1-022, VR1-031: the 'more you can do' tiles keep a card's width
   assert.match(css, /\.k-explore \.explore-grid \{ grid-template-columns: repeat\(auto-fit, minmax\(230px, 1fr\)\);/);
   assert.match(css, /\.k-explore \.explore-card \.small \{ display: block; -webkit-line-clamp: unset;/);
   assert.match(read("src/components/Explore.tsx"), /title = "More you can do"/);
+});
+
+test("owner, 29 Oct: More you can do shows every group of tools, with no button folding them away", () => {
+  const ex = read("src/components/Explore.tsx");
+  assert.match(ex, /\{goals\.map\(\(g\) => \{/);
+  assert.doesNotMatch(ex, /more tools|aria-expanded|explore\.open/);
 });
 
 test("VR1-030: two notebooks fill the row, a lone one is a card's width, the pin is an icon at the top right", () => {
@@ -121,12 +127,12 @@ test("VR1-060, VR1-061, VR1-063, VR1-064, VR1-065: the experiment page's layout"
   assert.match(tcss, /\.k-verdict-hero > \.k-card \{ flex: none; width: 290px;/);
   assert.match(tcss, /\.k-verdict-hero \.k-card-titlerow > \.verdict-head \{ display: inline;/);
   const cmp = read("src/pages/CompareExperiments.tsx");
-  assert.match(cmp, /<div className="k-two k-two-start cmp-top">\s*\{pickers\}\s*<Card label="What changed">/);
+  assert.match(cmp, /<Card label="Pick two runs">\s*\{selects\}\s*<div className="k-stack k-tight" data-testid="what-changed">/);   // LIVE1A-009: one card
 });
 
 test("VR1-070, VR1-071, VR1-072, VR1-073: Positioning", async () => {
   const page = read("src/pages/PositioningPage.tsx");
-  assert.match(page, /<span className="k-stat-v">\{long == null \|\| short == null \? "–" : pct\(long\)\}<\/span>/);       // a number among numbers
+  assert.match(page, /<span data-testid="sides-fig">\{long == null \|\| short == null \? "–" : pct\(long\)\}<\/span>/);       // a number among numbers
   assert.match(page, /futures, \$\{words\[0\]\} share/);
   assert.match(page, /<span data-testid="part-source">/);                                      // the source and the "as of" line in one paragraph
   assert.match(page, /<span data-testid="part-status">/);
@@ -154,7 +160,7 @@ test("VR1-090, VR1-091, VR1-092, VR1-093, VR1-094, VR1-095: Paper, Options, Jour
   assert.match(risk, /\{rows\.length > 1 && <DataTable stack label=\{`Running sessions in/);
   const paper = read("src/pages/PaperPage.tsx");
   assert.match(paper, /<Badge tone="plain" dot=\{false\}>\{sub\}<\/Badge>\}<Info label="About paper trading">\{HELP\.paper\}<\/Info>/);
-  assert.match(paper, /<ChartEmpty height=\{72\}>Your equity curve starts/);
+  assert.match(paper, /"Your equity curve starts after the first closed candle\."/);
   const o = read("src/pages/trade/options.css");
   assert.match(o, /\.legs-box > summary > span:first-of-type \{ flex: 1;/);
   assert.match(o, /\.k-struct \.k-row > select\.k-input \{ width: auto; min-width: 260px;/);
@@ -162,5 +168,5 @@ test("VR1-090, VR1-091, VR1-092, VR1-093, VR1-094, VR1-095: Paper, Options, Jour
   assert.match(j, /\{!\(!has && taxTrades > 0 && j\.show !== "practice"\) && <button type="button" className="btn outline"/);
   assert.match(read("src/pages/trade/journal.css"), /\[data-testid="j-how"\] \.k-disclosure-body \{ padding-left: 0; max-width: 72ch; \}/);
   const sig = read("src/pages/trade/SignalsPage.tsx");
-  assert.match(sig, /<FormActions>\s*<CheckField label="Allow short positions"/);
+  assert.match(sig, /<div className="k-field wide"><CheckField label="Allow short positions" checked=\{short\} onChange=\{setShort\} \/><\/div>\s*<FormActions>/);       // (LIVE1A-025: the option is a box of the form, the button has its own row)
 });

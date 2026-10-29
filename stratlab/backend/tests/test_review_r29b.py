@@ -103,7 +103,7 @@ def test_payout_line_uses_the_eps_ttm_the_page_shows(monkeypatch):
     from app.intel import routes
     seen = []
     monkeypatch.setattr(routes, "with_public_eps", lambda region, c: seen.append("eps") or {**c, "eps_done": True})
-    monkeypatch.setattr(routes, "with_dividend_yield", lambda c, d, today: seen.append("div") or c)
+    monkeypatch.setattr(routes, "with_dividend_yield", lambda c, d, today, listed=False: seen.append("div") or c)
     monkeypatch.setattr(routes, "stored_dividends", lambda r, s: [])
     monkeypatch.setattr(routes, "per_share_checked", lambda c: c)
     import app.intel.company as company

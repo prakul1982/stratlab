@@ -9,7 +9,8 @@ from bisect import bisect_left
 import threading
 import re
 import time
-from datetime import datetime, timedelta
+from array import array
+from datetime import date, datetime, time as dtime, timedelta
 from zoneinfo import ZoneInfo
 
 from kiteconnect import KiteConnect, KiteTicker
@@ -20,7 +21,8 @@ from . import db, last_session, name_search
 
 IST = ZoneInfo("Asia/Kolkata")
 # our timeframe -> (kite interval, max days per request, candles per trading day)
-INTERVALS = {"1d": ("day", 1900, 1), "1h": ("60minute", 380, 7), "15m": ("15minute", 190, 25), "5m": ("5minute", 95, 75)}
+INTERVALS = {"1d": ("day", 1900, 1), "1h": ("60minute", 380, 7), "15m": ("15minute", 190, 25), "5m": ("5minute", 95, 75),
+             "1m": ("minute", 60, 375)}          # 1m: the chart's own (MW-1); a minute request reaches back 60 days at most
 DEFAULT_SYMBOLS = [("NSE", "NIFTY 50"), ("NSE", "NIFTY BANK")]
 
 
@@ -672,6 +674,68 @@ class KiteService:
         return self._official_days(token, tf, dedup)
 
     BEHIND_RETRY = 60.0       # seconds a copy of candles that lacks the market's latest completed session is reused
+
+    # ---------- one-minute candles, read in blocks (MW-1) ----------
+    BLOCK_DAYS = 5                       # calendar days in one cached block of minute candles: one request to the broker
+    BLOCK_LIVE = 15.0                    # seconds a block that holds today is reused: the forming candle comes from the ticks
+    BLOCK_KEEP = 12 * 3600               # a block of past days is final: kept this long
+    BLOCK_BYTES = 16 * 1024 * 1024       # all blocks together (memory is Railway's bill), shared by every viewer of an instrument; the least recently used go first
+    BLOCK_FIELDS = 6                     # a block is kept as flat numbers (time, open, high, low, close, volume): 48 bytes a candle, not a dict of ~800 (MWR1-009: 16 MB held ten blocks, so ten charts made every scroll a request)
+
+    def _blocks(self):
+        b = self.__dict__.get("_block_cache")
+        if b is None:
+            from .intel.net import TTLCache          # least recently used, with a time to live, bounded by bytes
+            b = self.__dict__["_block_cache"] = TTLCache(max_items=400, max_bytes=self.BLOCK_BYTES)
+        return b
+
+    def _unpack(self, flat) -> list[dict]:
+        """The candles of a cached block (flat numbers) as the chart's rows."""
+        n = self.BLOCK_FIELDS
+        return [{"t": datetime.fromtimestamp(flat[i], IST).isoformat(), "o": flat[i + 1], "h": flat[i + 2], "l": flat[i + 3], "c": flat[i + 4], "v": flat[i + 5]}
+                for i in range(0, len(flat), n)]
+
+    def history_range(self, token: int, tf: str, start: datetime, end: datetime) -> list[dict]:
+        """Candles of a token from `start` up to `end` (aware times), read in blocks of BLOCK_DAYS calendar days that every
+        viewer of the instrument shares: scrolling a minute chart back asks for one more block, never for the years in
+        between, and two people on the same chart cost one request. Each block is one request, paced with the rest of the
+        feed's reads (_throttle, about three a second). A block holding today is read again after BLOCK_LIVE seconds."""
+        self._require()
+        interval, chunk, _ = INTERVALS[tf]
+        if self.BLOCK_DAYS > chunk:
+            raise ValueError("a block is longer than one request can read")
+        cache, now = self._blocks(), datetime.now(IST)
+        day0 = start.astimezone(IST).date().toordinal()
+        day1 = end.astimezone(IST).date().toordinal()
+        out: list[dict] = []
+        first = day0 - day0 % self.BLOCK_DAYS
+        for lo in range(first, day1 + 1, self.BLOCK_DAYS):
+            hi = lo + self.BLOCK_DAYS
+            live = hi > now.date().toordinal()
+            key = (int(token), tf, lo)
+            bars = cache.get(key)
+            if bars is None:
+                frm = datetime.combine(date.fromordinal(lo), dtime(0, 0))
+                to = datetime.combine(date.fromordinal(hi - 1), dtime(23, 59, 59))
+                self._throttle()
+                rows = self.kite.historical_data(token, frm, min(to, now.replace(tzinfo=None)), interval, continuous=False)
+                flat = array("d")
+                for r in rows:
+                    d = r["date"] if r["date"].tzinfo else r["date"].replace(tzinfo=IST)
+                    flat.extend((d.timestamp(), float(r["open"]), float(r["high"]), float(r["low"]), float(r["close"]), float(r.get("volume") or 0)))
+                cache.set(key, flat, self.BLOCK_LIVE if live else self.BLOCK_KEEP, size=len(flat) * flat.itemsize + 64)
+                bars = self._unpack(flat)
+            else:
+                bars = self._unpack(bars)
+            out.extend(bars)
+        lo_t, hi_t = start.astimezone(IST).isoformat(), end.astimezone(IST).isoformat()
+        seen: set[str] = set()
+        got = []
+        for b in out:
+            if lo_t <= b["t"] < hi_t and b["t"] not in seen:
+                seen.add(b["t"])
+                got.append(b)
+        return got
 
     def _market_of(self, token) -> str | None:
         """"IN" for a token that trades on the stock exchanges (a stock, an ETF, an index: NSE or BSE), else None. The

@@ -1,6 +1,8 @@
 import { clampNote } from "../../lib/phoneFit";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { dayTicks, distinctTicks, honestTicks, isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, spansDays, tickOnPoint, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
+import { dayTicks, distinctTicks, honestTicks, isIntraday, niceDomain, niceTicks, plainTick, spansDays, tickOnPoint, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
+import { offeredRanges, rangeStart, saveRange, startRange } from "../../lib/range";
+import { RangeChips } from "../kit/RangeChips";
 import { signCls, tzLabel } from "../../lib/format";
 import { linePath, linear, lowerBound, nearest, plotHeight, textWidth, useSync, useTween, useWidth } from "./core";
 import { ChartEmpty, ChartTip, LegendToggles, TipRow } from "./parts";
@@ -66,7 +68,9 @@ export interface XYChartProps {
   splitNotes?: [string, string];
   ariaLabel: string;
   sync?: string;                    // charts with the same name share crosshair and window
-  ranges?: boolean;                 // range buttons (default: with times spanning over ~6 weeks)
+  ranges?: boolean;                 // range chips, the app's one standard control (default: with times spanning over ~10 days)
+  rangeStart?: string;              // the range it opens on when none is remembered (default "all"): "1y" for a chart that always showed the past year
+  rangeKey?: string;                // the name the chosen range is remembered under on this device (default: testId, else the aria label)
   zoom?: boolean;                   // default: on from 8 points
   compare?: boolean;                // offer "Index to 100"
   legend?: boolean;                 // default: with two or more series
@@ -199,7 +203,17 @@ export function XYChart(p: XYChartProps) {
   const yFmt = indexed && canIndex ? plainTick : p.axisFormat ?? format;
   // a tick whose label reads the same as an earlier one ("1, 1, 1, 0" on a small count, "5%, 5%, 0%") is left out
   const [yTicks, yLabels] = useMemo(() => {
-    const all = honestTicks(ymin, ymax, H < 200 ? 4 : 5, yFmt).filter((t) => t >= ymin && t <= ymax);
+    const want = H < 200 ? 4 : 5;
+    let all = honestTicks(ymin, ymax, want, yFmt).filter((t) => t >= ymin && t <= ymax);
+    // LIVE1B-062: a line that sinks below zero by less than a tick step ran under the lowest label (₹0) into an unnamed band: a finer step
+    // is tried until a tick sits at or below the lowest point (the domain's floor is the data's minimum less 6% air)
+    const floor = ymin + (ymax - ymin) * 0.06 / 1.12;
+    if (ymin < 0 && all.length && all[0] > floor) {
+      for (let c = want + 1; c <= want + 6; c++) {
+        const alt = honestTicks(ymin, ymax, c, yFmt).filter((t) => t >= ymin && t <= ymax);
+        if (alt.length && alt[0] <= floor && alt.length <= 9) { all = alt; break; }
+      }
+    }
     return distinctTicks(all, yFmt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ymin, ymax, H, yFmt]);
@@ -413,19 +427,28 @@ export function XYChart(p: XYChartProps) {
     e.preventDefault();
   };
 
-  // ---- ranges ----
-  const presets = useMemo(() => {
+  // ---- ranges: the one standard control (O4), only the chips the data reaches, the choice remembered for this chart ----
+  const chartKey = p.rangeKey ?? p.testId ?? p.ariaLabel;
+  const options = useMemo(() => {
     if (!T || n < 2 || p.ranges === false) return [];
-    const spanDays = (T[n - 1] - T[0]) / DAY;
-    if (p.ranges !== true && spanDays < 45) return [];
-    return RANGE_PRESETS.filter((r) => r.days == null || r.days < spanDays * 0.95);
+    if (p.ranges !== true && (T[n - 1] - T[0]) / DAY < 10) return [];
+    return offeredRanges(T);
   }, [T, n, p.ranges]);
-  const pickRange = (id: string, days: number | null) => {
+  const pickRange = (id: string) => {
     if (!T) return;
-    if (days == null) { setView(null); return; }
-    const from = lowerBound(T, T[n - 1] - days * DAY);
+    const start = id === "all" ? null : rangeStart(id, T[n - 1]);
+    const from = start == null ? 0 : lowerBound(T, start);
+    if (from <= 0) { setView(null); return; }
     setView([X[Math.min(n - 1, from)], ext[1]], { range: id });
   };
+  const restored = useRef(false);
+  useEffect(() => {          // the range chosen last time on this chart, once the data has chips to hold it
+    if (restored.current || !T || !options.length) return;
+    restored.current = true;
+    const saved = startRange(chartKey, T, options, p.rangeStart);
+    if (saved !== "all") pickRange(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options]);
 
   // the lines' paths, worked out when the window, the scale or the data change, not on every pointer move
   const paths = useMemo(() => series.map((s, k) => (hidden.has(key(s)) || s.kind === "bar" ? "" : linePath(X, vals[k], i0, i1, sx, sy))),
@@ -482,7 +505,7 @@ export function XYChart(p: XYChartProps) {
   const heading = (i: number) => T ? tipTime(T[i], intraday, p.tz) : p.labels?.[i] ?? (p.xFormat ? p.xFormat(X[i]) : p.axisLabels?.[i] ?? String(i + 1));
   // a chart that zooms says so whether or not it has a legend or a Table switch (DE-022: the A/D line and the index had no
   // "Drag to zoom" while the others did)
-  const toolbar = legendOn || presets.length > 0 || view || canIndex && p.compare || p.table !== false || zoomable;
+  const toolbar = legendOn || options.length > 0 || view || canIndex && p.compare || p.table !== false || zoomable;
 
   return (
     <div ref={wrap} className="ch" data-testid={p.testId}>
@@ -497,11 +520,8 @@ export function XYChart(p: XYChartProps) {
               return next;
             })} /> : <span />}
           <div className="ch-tools">
-            {presets.length > 0 && (
-              <div className="ch-seg" role="group" aria-label="Chart range">
-                {presets.map((r) => <button key={r.id} type="button" aria-pressed={range === r.id} onClick={() => pickRange(r.id, r.days)}>{r.label}</button>)}
-              </div>
-            )}
+            {options.length > 0 && T && <RangeChips chart={chartKey} times={T} options={options} value={range}
+              onChange={(v) => { restored.current = true; pickRange(v); saveRange(chartKey, v); }} label="Chart range" />}
             {canIndex && p.compare && <button type="button" className="ch-btn" aria-pressed={indexed} onClick={() => { setInstant(false); setIndexed((v) => !v); }}
               title="Both series start at 100 at the left edge of the window, so their moves compare directly">Index to 100</button>}
             {view && <button type="button" className="ch-btn" onClick={() => setView(null)}>Reset zoom</button>}

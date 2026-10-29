@@ -78,14 +78,18 @@ export interface CompanyAI {
   bull: string[]; bear: string[]; segments: { label: string; share: number }[]; position: string; watch: string[];
   ideas: Idea[]; generated_at: number;
 }
-export interface Co { name: string; ticker: string }
+/** `what`: the words from the company's own description that show it does the work of the layer or sub-theme it sits in (THEME-1) */
+export interface Co { name: string; ticker: string; what?: string | null }
+export interface SectorClaim { text: string; status: "current" | "general"; source: { headline: string; at: string; outlet: string; url: string } | null }
 export interface SectorAI {
   sector: string; summary: string; market_size: string; cagr: number | null; cagr_note: string;
-  etfs: { ticker: string; name: string }[]; sub_themes: { name: string; detail: string }[]; core: string;
+  etfs: { ticker: string; name: string }[]; sub_themes: { name: string; detail: string; companies: Co[] }[]; core: string;
   clusters: { name: string; companies: Co[] }[];
   screen: { name: string; ticker: string; layer: string; one_line: string }[];
   value_chain: { layer: string; description: string; companies: Co[] }[];
-  tailwinds: string[]; risks: string[]; generated_at: number;
+  tailwinds: SectorClaim[]; risks: SectorClaim[]; generated_at: number;
+  /** the placement check: `checked` false while some companies' descriptions are still being read (they are not shown until checked) */
+  placements?: { checked: boolean; pending: number; left_out: number; placed: number } | null;
   /** the listed companies the exchange puts in the theme's industries, A to Z (DE-013); `named`: the map names it too */
   exchange?: { industries: string[]; total: number; companies: { ticker: string; name: string; industry: string; named: boolean }[] } | null;
 }
@@ -173,10 +177,32 @@ export interface PulseAI {
   tone: string; hot: { name: string; ticker: string; why: string }[];
   flows: { title: string; detail: string; direction: "INFLOW" | "OUTFLOW" | "ROTATION" | "" }[];
   themes: { theme: string; detail: string; example: string }[]; generated_at: number; levels_at?: string | null;
-  /** The mood worked out from the day's moves, and the headlines' main story (DD-001); absent on an older read. */
-  mood?: string;
+  /** The main story as one sentence, and the headlines it counts (the positions of the carrying ones in `headlines`), so "3 of 8"
+   *  can be counted on the page (MOOD-1). The mood itself is the tables' (`PulseMood`), not a sentence of this read. */
+  story_line?: string;
+  story?: { label: string; n: number; of: number; indices: number[]; headlines: string[] } | null;
   /** Where the FII/DII figures the read quotes come from, when it quotes them (DD-001). */
   flows_source?: string;
+}
+/** The Market pulse's tables (intel/mood.py): each part is null when its figures can't be read, and the page leaves it out. */
+export interface MoodMover { symbol: string; name?: string; change_pct: number; points?: number }
+export interface MoodBreadthRow { key: string; label: string; now: number | null; before: number | null; change: number | null; kind: "count" | "share"; means: string; unit: string }
+export interface MoodSectorRow { name: string; label: string; change_pct: number; w1: number | null; m1: number | null; movers: MoodMover[] }
+export interface MoodQuoteRow { label: string; symbol: string; tag: string; price: number; change_pct: number | null; day: string | null; same_day: boolean | null }
+export interface PulseMood {
+  pending?: boolean; region: Region; is_open: boolean; today: string; levels_at: string | null; read_at?: string | null;
+  headline: string; lines: string[];
+  compare: { index: string; avg_abs: number; days: number; ratio: number; words: string } | null;
+  breadth: { group: string; live: boolean; day: string | null; close_day: string | null; prev_day: string | null; adv: number | null; dec: number | null; unch: number | null;
+    stocks: number | null; highs: number | null; lows: number | null; ratio: number | null; rows: MoodBreadthRow[] } | null;
+  sectors: { rows: MoodSectorRow[]; up: number; down: number; unchanged: number; of: number; leader: string; laggard: string } | null;
+  /** One table for each index of the market (NIFTY 50 and SENSEX; the S&P 500); `est_total` and `actual` (India) say what the companies add up to and what the index moved. */
+  movers: { index: string; adding: MoodMover[]; taking: MoodMover[]; of: number; note: string; est_total?: number | null; actual?: number | null }[] | null;
+  flows: { as_of: string; rows: { day: string; fii: number; dii: number }[]; fii_total: number; dii_total: number; note: string } | null;
+  risk: { rows: MoodQuoteRow[] } | null;
+  global: { rows: MoodQuoteRow[] } | null;
+  calendar: { results: { symbol: string; name: string; date: string; purpose?: string | null }[]; ipos: { name: string; close: string | null; low: number | null; high: number | null }[];
+    events: { date: string; time: string | null; title: string; kind: string }[] } | null;
 }
 export interface CompareAI {
   verdict: string; differences: string[];
@@ -218,6 +244,8 @@ export const researchApi = {
     if ("unavailable" in got) throw new Error(got.message);
     return got;
   },
+  /** The mood as tables and a headline with a few lines (MOOD-1); `pending` until the server's first read is back. */
+  pulseMood: (r: Region) => api<PulseMood>(`/research/pulse/mood?region=${r}`),
   sector: (r: Region, q: string, refresh = false) => api<SectorAI>(`/research/sector?region=${r}&q=${encodeURIComponent(q)}${refresh ? "&refresh=true" : ""}`),
   compare: (r: Region, a: string, b: string, refresh = false) => api<{ a: Company; b: Company; ai: CompareAI }>(`/research/compare?region=${r}&a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}${refresh ? "&refresh=true" : ""}`),
 };
@@ -258,6 +286,23 @@ function loadWatch(): Promise<WatchItem[]> {
   return watchLoad;
 }
 
+/* Market Watch's first list is this list (MWR1-007). Each side keeps its own copy for the life of the page, and a change that
+ * is saved from a stale copy replaces the other side's: a stock added in the panel was lost when another was starred on a
+ * company page, and the reverse. So a save here is announced, and Market Watch hands its copy over when it changes. */
+const watchHear = new Set<() => void>();
+/** `fn` is called after a change of the watchlist is saved from the Research pages; returns how to stop listening. */
+export function onWatchlistSaved(fn: () => void): () => void {
+  watchHear.add(fn);
+  return () => { watchHear.delete(fn); };
+}
+/** The stocks and ETFs of the first Market Watch list as this list's copy, when it differs from it. */
+export function adoptWatchlist(items: WatchItem[]): void {
+  const key = (xs: WatchItem[]) => xs.map((i) => `${i.region}:${i.symbol}`).join(",");
+  if (watchCache && key(watchCache) === key(items)) return;
+  watchCache = items;
+  watchSubs.forEach((f) => f(items));
+}
+
 /** What an add / remove / save says when the saved list could not be read first. */
 export const WATCH_UNREAD = "Your watchlist couldn't be read, so nothing was changed. Try again.";
 
@@ -295,7 +340,7 @@ export function useWatchlist() {
     if (list === cur) return;                     // nothing to change: no save
     const prev = watchCache;
     watchCache = list; watchSubs.forEach((f) => f(list));
-    try { await api("/research/watchlist", { method: "PUT", body: { items: list } }); }
+    try { await api("/research/watchlist", { method: "PUT", body: { items: list } }); watchHear.forEach((f) => f()); }
     catch (e) { watchCache = prev; watchSubs.forEach((f) => f(prev ?? [])); throw e; }
   }, []);
   const has = (r: Region, s: string) => !!items?.some((i) => i.region === r && i.symbol === s);
@@ -314,7 +359,7 @@ export function useWatchlist() {
 /* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. Units for groups of amounts,
  * trend values and metric figures: researchFormat.ts (no browser needed, so the unit tests read them). */
 export { bigMoney } from "./format";
-export { focusParam, holderRowName, linkLabel, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, newsWhen, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, screenCap, screenNum, staleQuarter, trendShort, trendValue, usdAmount, type Scale } from "./researchFormat";
+export { atPrice, focusParam, holderRowName, linkLabel, marginText, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, newsWhen, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, screenCap, screenNum, staleQuarter, trendShort, trendValue, usdAmount, type Scale } from "./researchFormat";
 
 /* ---------- where a number sits in a typical range (from Hindsight) ----------
  * [floor, weak edge, strong edge, ceiling, higher-is-better]. Loose large-cap defaults,

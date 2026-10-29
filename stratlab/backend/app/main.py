@@ -1,5 +1,6 @@
 """StratLab API."""
 import base64
+import hashlib
 from contextlib import contextmanager
 import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
@@ -45,7 +46,7 @@ from . import journal_routes
 from . import user_data
 from .connect import routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
-from . import drawings_routes
+from . import drawings_routes, watch_routes
 from . import maindb, market_store, memguard, storage, usage_slots
 from . import official_close
 from . import ads
@@ -115,7 +116,7 @@ from . import mtf, slb, stock_desks, stock_futures     # the per-stock market de
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq, DeleteMyDataReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
-from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, TelegramCodeReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, CustomScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, TelegramCodeReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq, ViewAsReq)
 from .plans import holdings_limit
 from . import money_networth
@@ -262,6 +263,8 @@ invite_job = invite_rewards.Job()
 positioning_runner = positioning.Runner(lambda: filings_feed)
 positioning_job = positioning.Job(positioning_runner)
 etf_nav.setup(lambda: filings_feed)              # ETF prices against their NAV: the exchange's ETF list
+# ...and each ETF's five years of daily closes for the one-off long history (ttl 0: read once, never kept in the price cache)
+etf_nav.setup_history(lambda sym: research_hub.yahoo.chart(f"{sym}.NS", "1d", 1830, ttl=0)["candles"])
 
 
 def _exchange_files():
@@ -456,6 +459,8 @@ from . import admin_jobs as _admin_jobs  # noqa: E402
 app.include_router(_admin_jobs.router)           # /admin/jobs: every background job, for Admin -> Data and jobs
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(drawings_routes.router)    # /me/drawings/{region}/{symbol}: drawings and layout saved per user
+app.include_router(watch_routes.router)       # /watch: Market Watch lists, prices and the live stream (MW-1)
+app.include_router(watch_routes.public_router)  # /public/markets/watch: the visitor's fixed board
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps
@@ -981,6 +986,8 @@ def me(profile=Depends(current_profile)):
         "offer": offer_state(promo=not seen),
         "onboarding": onboarding_of(profile["id"]),
         "established": established_of(profile["id"]),
+        # whether My Holdings has any stock, so the Money space's main button says "Update holdings", not "Add your holdings" (LIVE1C-055)
+        "has_holdings": has_holdings(profile["id"]),
         "is_admin": admin.is_admin(profile),
     })
 
@@ -1142,6 +1149,13 @@ def onboarding_of(uid: str) -> dict:
     o = o if isinstance(o, dict) else {}
     return {"welcome": o.get("welcome") if isinstance(o.get("welcome"), str) else None,
             "tour": o.get("tour") if o.get("tour") in ("done", "skipped") else None}
+
+
+def has_holdings(uid: str) -> bool:
+    try:
+        return bool(holdings.load(uid)["items"])
+    except Exception:
+        return False
 
 
 def established_of(uid: str) -> bool:
@@ -2077,6 +2091,29 @@ def scan_sets(region: str = "IN", profile=Depends(current_profile)):
             "rotation_sets": [{"id": k, "name": v["name"]} for k, v in rotation.index_sets(region).items()]}
 
 
+@app.get("/research/scan/custom")
+def scan_custom_list(profile=Depends(current_profile)):
+    need(profile, "scans", "Trend scans")
+    return {"items": scan_presets.saved(profile["id"]), "limit": scan_presets.CUSTOM_SAVED, "rules_max": scan_presets.CUSTOM_RULES, "within_max": scan_presets.CUSTOM_WITHIN}
+
+
+@app.put("/research/scan/custom")
+def scan_custom_save(req: CustomScanReq, profile=Depends(current_profile)):
+    """Keep a person's own scan on the account to run again later (up to 10; the rules are checked first)."""
+    need(profile, "scans", "Trend scans")
+    try:
+        items = scan_presets.save_custom(profile["id"], req.name, req.region, req.rules, req.within, req.id)
+    except scan_presets.RuleError as e:
+        err(400, "bad_rules", str(e))
+    return {"items": items, "limit": scan_presets.CUSTOM_SAVED}
+
+
+@app.delete("/research/scan/custom/{sid}")
+def scan_custom_delete(sid: str, profile=Depends(current_profile)):
+    need(profile, "scans", "Trend scans")
+    return {"items": scan_presets.remove_custom(profile["id"], sid), "limit": scan_presets.CUSTOM_SAVED}
+
+
 def _scan_names(region: str, symbols: list[str]) -> dict[str, dict]:
     """{symbol: {"name", "currency"}} for the rows of a stored scan: the S&P 500's list for the US, the instrument list for India."""
     out = {}
@@ -2170,9 +2207,19 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
     (52-week high breakout, golden cross, ...), each stock's match stated as a fact with its date. Never advice."""
     heavy_read_throttle(profile)
     need(profile, "scans", "Trend scans")
-    if req.scan != "st_s2" and req.scan not in scan_presets.BY_ID:
+    custom = None
+    if req.scan == scan_presets.CUSTOM:
+        # "Build your own": a person's rules, checked before any chart is read, over the same groups and at the same pace as a preset; the
+        # 500-stock groups are read once a day for the ready-made scans, so their stored answers can't hold someone's own rules
+        try:
+            custom = (scan_presets.custom_conds(req.rules), scan_presets.custom_within(req.within))
+        except scan_presets.RuleError as e:
+            err(400, "bad_rules", str(e))
+    elif req.scan != "st_s2" and req.scan not in scan_presets.BY_ID:
         err(404, "not_found", "That scan isn't available.")
     big = next((b for b in universes.BIG[req.region] if b["id"] == req.set), None)
+    if big and custom:
+        err(400, "custom_group", f"Your own rules run on your watchlist or a ready-made group of up to {scan.MAX} stocks. {big['name']} is read once a day for the ready-made scans only.")
     if big:
         preset = scan_presets.BY_ID[req.scan]
         out = _stored_scan(profile, req.region, big["id"], req.scan, big["name"])
@@ -2192,15 +2239,16 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
         registry, offline = scan.LastCloseIndia(research_hub.yahoo), True
     # an answer from before the close settled isn't kept past it (R13-005)
     live = not offline and research_routes.market_open(req.region)          # trading now: the newest candle is today's, still forming
-    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members), scan.settled_at(req.region), offline, live)
+    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members), scan.settled_at(req.region), offline, live,
+           json.dumps([c.model_dump(mode="json") for c in custom[0]], sort_keys=True) + f"/{custom[1]}" if custom else "")
     out = _results.get(key)
     if out is None:                       # the same group gives everyone the same answer until prices move
         if req.scan == "st_s2":
             out = {"kind": "st_s2", **scan.run(registry, req.region, members, session=scan.session_day(req.region))}
         else:
-            got = scan.run_preset(registry, req.region, members, req.scan, session=scan.session_day(req.region), live=live)
-            out = {"kind": "preset", "scan": req.scan, "scan_name": scan_presets.BY_ID[req.scan]["name"], "matches": len(got["rows"]),
-                   "stored": False, **got}
+            got = scan.run_preset(registry, req.region, members, req.scan, session=scan.session_day(req.region), live=live, custom=custom)
+            out = {"kind": "preset", "scan": req.scan, "scan_name": "Your own rules" if custom else scan_presets.BY_ID[req.scan]["name"], "matches": len(got["rows"]),
+                   "stored": False, **got, **({"rules": [scan_presets.cond_words(c) for c in custom[0]], "within": custom[1]} if custom else {})}
         if offline and not out.get("rows") and (out.get("problems") or out.get("missing")) and not out.get("checked", len(out.get("rows") or [])):
             raise KiteNotReady("Market data for this market is offline right now.")      # the price history didn't answer either
         _results.set(key, out, 300)
@@ -2530,12 +2578,38 @@ def results_ready(region: str):
 
 
 @app.get("/research/results")
-def results_page(region: str = "IN", scope: str = "mine", q: str = "", day: str = "", profile=Depends(current_profile)):
+def results_page(region: str = "IN", scope: str = "mine", q: str = "", day: str = "", size: str = "", sector: str = "", index: str = "",
+                 fo: bool = False, purpose: str = "", on: str = "", sort: str = "cap", desc: bool | None = None, profile=Depends(current_profile)):
     """Results dates this week and next: the user's stocks (watchlist, notebooks, paper sessions) or every company,
-    day by day; `day` opens one day of "All companies" in full (DE-026)."""
+    day by day, narrowed by company size (`size`: large, mid, small, micro, comma-separated), `sector`, `index`, `fo` (stocks with
+    futures and options), `purpose` (results, or more than results) and `on` (today, tomorrow or a date), and sorted (`sort`).
+    `day` opens one day of "All companies" in full (DE-026)."""
     r = research_routes.region_of(region)
     results_ready(r)
-    return research_routes.ok(results_calendar.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], day=day[:10] or None))
+    return research_routes.ok(results_calendar.view(
+        r, profile["id"], "all" if scope == "all" else "mine", q[:30], day=day[:10] or None, size=[x for x in size.split(",") if x][:4],
+        sector=sector[:80], index=index[:20], fo=fo, purpose=purpose[:10], on=on[:10], sort=sort[:10], desc=desc))
+
+
+def _symbols_arg(symbols: str, region: str, most: int) -> list[str]:
+    return [research_routes.symbol_of(x) for x in dict.fromkeys(x for x in symbols.split(",") if x.strip())][:most]
+
+
+@app.get("/research/results/moves")
+def results_moves(region: str = "IN", symbols: str = Query("", max_length=400), profile=Depends(current_profile)):
+    """What each company's price did over its earlier results days (the close after the results day against the close before it),
+    from its daily prices, kept once worked out. Up to 12 companies; the prices of 6 are read in one call, the rest on the next."""
+    r = research_routes.region_of(region)
+    throttle(profile, "results_moves", 30, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
+    return research_routes.ok({"moves": results_calendar.moves_for(r, _symbols_arg(symbols, r, 12))})
+
+
+@app.get("/research/results/implied")
+def results_implied(symbols: str = Query("", max_length=200), day: str = "", profile=Depends(current_profile)):
+    """For stocks with futures and options (India): the move their options price in to the first expiry on or after the results
+    day, from the at-the-money straddle. Up to 8 stocks; none without the broker's option prices."""
+    throttle(profile, "results_implied", 20, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
+    return research_routes.ok({"implied": results_calendar.implied_for(_symbols_arg(symbols, "IN", 8), day[:10] or None)})
 
 
 @app.get("/research/results/{region}/{symbol}")
@@ -2574,11 +2648,16 @@ def corp_ready(region: str):
 
 
 @app.get("/research/corp-actions")
-def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind: str = "", profile=Depends(current_profile)):
-    """Dividends, bonus issues, splits, buybacks and rights issues by ex-date: the user's stocks or every company."""
+def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind: str = "", size: str = "", sector: str = "", index: str = "",
+                      fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None, profile=Depends(current_profile)):
+    """Dividends, bonus issues, splits, buybacks and rights issues by ex-date: the user's stocks or every company, narrowed by the kind
+    of action, company size (`size`: large, mid, small, micro, comma-separated), `sector`, `index`, `fo` (stocks with futures and options)
+    and `on` (today, tomorrow or an ex-date), and sorted within each day (`sort`: date, cap, yield, name)."""
     r = research_routes.region_of(region)
     corp_ready(r)
-    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20]))
+    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20],
+                                                size=[x for x in size.split(",") if x][:4], sector=sector[:80], index=index[:20], fo=fo, on=on[:10],
+                                                sort=sort[:10], desc=desc))
 
 
 @app.get("/research/corp-actions/{region}/{symbol}/unadjusted")
@@ -2827,6 +2906,17 @@ def candle_day(t) -> str | None:
     return s[:10] if len(s) <= 10 or s[11:19] in ("00:00:00", "") else s
 
 
+def pre_issue_cap(snap: dict, p: dict, listed_on: str | None) -> dict:
+    """A share that listed after its latest balance sheet: the source's own market value, on the shares in issue now, not the
+    balance sheet's older share count (which lacks the shares issued in the IPO). The company page does this (DD-011); the
+    deep dive and the public page counted the old shares, 4% low (LIVE1C-019: Paras Healthcare 7,410 against 7,719 cr)."""
+    if not listed_on:
+        return snap
+    from .intel.company import balance_before, num as _num
+    cap = _num((p.get("ratios") or {}).get("Market Cap"))
+    return {**snap, "market_cap_cr": cap} if cap and balance_before(p, listed_on) else snap
+
+
 def deep_view(sym: str, base: dict) -> dict:
     p = base["p"]
     us = p.get("region") == "US"
@@ -2836,8 +2926,16 @@ def deep_view(sym: str, base: dict) -> dict:
         reads = {**reads, "problems": deepdive.customer_problems(reads["problems"])}
     nums = deepdive.numbers(p)
     card_view = report_card.view(card, nums)
-    snap = screener_summary(p)
+    listed_on = None
+    if not us:
+        try:
+            listed_on = (stock_page_store.peek("IN", sym) or {}).get("range_since")      # the public page's own listing day (LIVE2-025)
+        except Exception:
+            listed_on = None
+    snap = screener_summary(p, listed_on)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
+        # a share listed in the last weeks (its candles are too few to scan): the source's value on the shares in issue now, not the old balance sheet's
+        snap = pre_issue_cap(snap, p, (datetime.now(IST).date() - timedelta(days=60)).isoformat() if base.get("trend_why") == "new" else None)
         snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
         # the public page's market value check: a failed value is blank here too, with the P/E, the deck's tile, the
         # valuation and the P/E worked out from it (R10C-001)
@@ -2854,7 +2952,7 @@ def deep_view(sym: str, base: dict) -> dict:
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
-            "snapshot": {**{k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
+            "snapshot": {**{k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pe_why", "pb", "roce", "roe", "debt_equity", "div_yield")},
                          "cap_note": stock_pages.CAP_UNAVAILABLE if snap.get("cap_problem") else None},
             "industry_measures": industry.measures(p, sym),
             "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
@@ -3252,10 +3350,13 @@ _PRICED_LOCK = threading.Lock()
 PRICED_FOR = 20.0                                   # seconds one reading of a person's prices is shared by every page
 
 
-def _prices_at(quotes: list[dict]) -> str:
-    """When some prices are from: the latest trade among the quotes (the exchange's own stamp), else the moment they were read."""
+def _prices_at(quotes: list[dict], india: bool = False) -> str:
+    """When some prices are from: the latest trade among the quotes (the exchange's own stamp), else the moment they were read.
+    `india`: Indian stocks, whose last trades after the bell (the closing session, up to 15:59) are the 15:30 close's price, so
+    the stamp stops at the close (LIVE1B-008: "Prices as of 15:59 IST" for an India-only list)."""
     now = datetime.now(timezone.utc)
-    return (holdings.latest_trade(quotes, now) or now).isoformat(timespec="minutes")
+    t = holdings.latest_trade(quotes, now) or now
+    return (holdings.at_close(t) if india else t).isoformat(timespec="minutes")
 
 
 CLOSE_LOOKBACK = 10                # days searched back for the exchange's stored closes
@@ -3330,9 +3431,12 @@ def _read_prices(ind: list[dict], us: list[str]) -> dict:
         us_quotes.update({k: v for k, v in (_quiet(research_hub.quotes, "US", us[n:n + 24]) or {}).items() if v})
     rate, rate_at = usd_inr_read() if us else (None, None)
     by = {k: sum(q.get("from") == k for q in closed.values()) for k in ("close", "file")}
+    in_q, us_q = [q for q in quotes.values() if q], [q for q in us_quotes.values() if q]
     return {"quotes": quotes, "live": live, "us_quotes": us_quotes, "rate": rate, "rate_at": rate_at,
             "closes": {"day": max((q["change_day"] for q in closed.values()), default=None), **by} if closed else None,
-            "prices_at": _prices_at([q for q in [*quotes.values(), *us_quotes.values()] if q]) if live or us_quotes or closed else None}
+            # one stamp for each market: the India close and the US close are different moments (LIVE1B-008)
+            "prices_at": (_prices_at(in_q, True) if in_q else _prices_at(us_q)) if live or us_quotes or closed else None,
+            "us_prices_at": _prices_at(us_q) if in_q and us_q else None}
 
 
 def _etf_named(items: list[dict]) -> list[dict]:
@@ -3347,6 +3451,25 @@ def _etf_named(items: list[dict]) -> list[dict]:
             nm = (etfs.get(i["symbol"]) or {}).get("name")
             if nm and nm != i["symbol"]:
                 i = {**i, "name": nm}
+        out.append(i)
+    return out
+
+
+def _full_names(items: list[dict]) -> list[dict]:
+    """A stock saved under the instrument list's name, which the exchange cuts at 21 letters ("ZEE ENTERTAINMENT ENT"), named in full as the
+    exchange's list of companies has it, in the same capitals (LIVE1C-058). Only a name that is the start of the full one is replaced."""
+    out = []
+    for i in items:
+        nm = str(i.get("name") or "")
+        if nm and nm != i.get("symbol") and holdings.market_of(i) == "IN" and not str(i.get("kind") or "").startswith("etf") and len(nm) >= 18:
+            try:
+                full = kite.company_name(i["symbol"])
+            except Exception:
+                full = None
+            if full:
+                full = re.sub(r"\s+(limited|ltd\.?)$", "", full, flags=re.I).upper()
+                if len(full) > len(nm) and full.startswith(nm.upper()):
+                    i = {**i, "name": full}
         out.append(i)
     return out
 
@@ -3370,8 +3493,8 @@ def holdings_view(profile) -> dict:
                     _PRICED.pop(k, None)
             _PRICED[key] = (time.monotonic(), got)
     live, us_quotes = got["live"], got["us_quotes"]
-    return {**holdings.view(_etf_named(h["items"]), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
-            "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "closes": got.get("closes"),
+    return {**holdings.view(_full_names(_etf_named(h["items"])), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
+            "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "us_prices_at": got.get("us_prices_at"), "closes": got.get("closes"),
             "us_prices": bool(us_quotes) if us else None, "usd_inr_at": got.get("rate_at") if us and got["rate"] else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
 
@@ -3391,7 +3514,8 @@ def zerodha_read(profile) -> dict | None:
 @app.get("/holdings")
 def my_holdings(profile=Depends(current_profile)):
     """The user's holdings at today's prices: value, gain or loss, the day's change and the mix by sector."""
-    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile)})
+    # `zerodha_open`: whether Zerodha login is open for this account, so the page doesn't offer a connection that isn't there (LIVE1B-042)
+    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile), "zerodha_open": bool(_quiet(connect_kite.allowed, profile))})
 
 
 @app.get("/holdings/facts")
@@ -3431,9 +3555,14 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
     found, missed = holdings.match_all(parsed["rows"], holdings_matcher(), _quiet(last_session.latest_day, "IN"))
     missed = sorted(parsed["problems"] + missed, key=lambda m: m.get("line") or 0)
     limit = holdings_limit(profile["_plan"])
+    digest = hashlib.sha256(data).hexdigest()[:24]
     out = {}
 
     def merged(before):                   # runs again on the newer holdings if another save lands first
+        if req.mode == "add" and holdings.file_seen(profile["id"], digest):
+            # LIVE1B-065: the same file again would double every quantity; nothing is added, and the page says so
+            out.update(duplicate=True, n=0, saved=False, over=[])
+            return None
         n_read = len(found) if req.mode == "replace" else None
         rows = found
         if req.mode == "add":
@@ -3457,9 +3586,10 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         return with_sectors(rows, known), "Zerodha Kite file" if parsed["broker"] == "Zerodha Kite" else parsed["broker"]
     holdings.update(profile["id"], merged)
     if out["saved"]:
+        holdings.file_remember(profile["id"], digest, req.mode == "replace")
         invite_rewards.safe_touch(profile, "holdings")
     over = out["over"]
-    return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "unmatched": missed[:200],
+    return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "duplicate": bool(out.get("duplicate")), "unmatched": missed[:200],
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
 
@@ -3480,6 +3610,21 @@ def _typed_qty(old: dict, new: dict, out: dict) -> dict:
     return holdings.drop_stale_accts([new])[0]
 
 
+def _check_sizes(found: list[dict], before: list[dict]) -> None:
+    """Stop a position too large to be real (LIVE1B-003): each stock that is new, or whose quantity just changed, at its average
+    price, or else at its latest close. A stock with neither is left alone (nothing to compare)."""
+    held = {(holdings.market_of(i), i["symbol"]): float(i["qty"]) for i in before}
+    for i in found:
+        was = held.get((holdings.market_of(i), i["symbol"]))
+        if was is not None and abs(was - float(i["qty"])) < 1e-9:
+            continue
+        us = holdings.market_of(i) == "US"
+        px = i.get("avg") or (None if us else ((_quiet(close_quotes, [i]) or {}).get(i["symbol"]) or {}).get("price"))
+        bad = holdings.size_problem(float(i["qty"]), px, "USD" if us else "INR")
+        if bad:
+            err(422, "bad_change", f"{i['symbol']}: {bad}", {"qty": bad})
+
+
 @app.put("/holdings")
 def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     """Change the holdings by hand: add a stock, change a quantity or average price, remove one. `changes` are applied
@@ -3491,6 +3636,9 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     for c in req.changes or []:
         if c.op == "add" and c.qty is None:
             err(422, "bad_change", f"Enter the quantity of {c.symbol.strip().upper()} to add.")
+        bad = holdings.whole_problem(c.qty, c.market) if c.op != "remove" and c.qty is not None else None
+        if bad:                           # LIVE1B-046: Indian shares are whole units
+            err(422, "bad_change", bad, {"qty": bad})
     limit = holdings_limit(profile["_plan"])
     out = {}
 
@@ -3550,6 +3698,7 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             us_found, us_missed = holdings.match_us(us_rows, _us_find)
             found, out["missed"] = found + us_found, out["missed"] + us_missed
         found = holdings.merge(kept + found)
+        _check_sizes(found, before["items"])
         # over the limit after a downgrade: no stock is added, but the ones held can still change or come off
         if len(found) > limit and any((holdings.market_of(i), i["symbol"]) not in saved for i in found):
             over()
@@ -3886,8 +4035,9 @@ def tax_view(profile) -> dict:
     i = tax_inputs(profile)
     mf = tax_mf(profile)
     usr = money_us_routes.for_tax(profile)
+    div_in, div_out = money_routes.dividends_split(profile)
     rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"],
-                          extra=mf["rows"] + usr["rows"], dividends=money_routes.dividends_for_tax(profile), more_years=set(usr["years"]))
+                          extra=mf["rows"] + usr["rows"], dividends=div_in, more_years=set(usr["years"]))
     rep["names"].update(mf["names"])
     rep["names"].update(usr["names"])
     # RC2B-005: the 31 Jan 2018 price is asked for shares only. A fund's sale carries its own grandfathered NAV (the Money
@@ -3895,12 +4045,13 @@ def tax_view(profile) -> dict:
     rep["pre_2018"] = [k for k in rep["pre_2018"] if k in set(i["pre"])]
     for y in rep["years"]:
         y["mutual_funds"] = mf["years"].get(y["fy"])
+        y["dividends_left_out"] = round(div_out.get(y["fy"], 0.0), 2)       # LIVE1B-029: dividends the total doesn't count, said beside it
         y["us"] = {**usr["years"][y["fy"]], "allowed": usr["allowed"], "plan": usr.get("plan")} if y["fy"] in usr["years"] else None
     return {**rep, "corp_left": i["corp_left"], "us_trades": usr["count"], "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
                           "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
             "last_trade": max([t["d"] for t in i["trades"] if isinstance(t.get("d"), str)] + [b["last"] for b in i["business"]], default=None),
             "business_lines": int(sum(b["trades"] for b in i["business"])),
-            "prices": i["live"], "prices_at": _prices_at([q for q in i["quotes"].values() if q]) if i["live"] else None,
+            "prices": i["live"], "prices_at": _prices_at([q for q in i["quotes"].values() if q], True) if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},
             "max_trades": tax_lots.MAX_TRADES,
             # DH-003: the year being filed as one "payable now" figure, with the interest (Pro: it needs Tax tools' payments)
@@ -3966,8 +4117,9 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     files = [] if mode == "replace" else before["files"]
     business, b_added, b_replaced, b_same, b_overlaps = tax_lots.merge_business([] if mode == "replace" else before["business"],
                                                                                parsed.get("business") or [])
-    lines = sum(f["lines"] for f in parsed.get("files", []) if f["section"] in holdings_file.SEGMENT_NAMES.values()) or \
-        sum(b["trades"] for b in parsed.get("business") or [])
+    # the file's F&O lines as the tax report counts them (the trades its segments hold), not the rows of its sheet (LIVE1C-053)
+    lines = sum(b["trades"] for b in parsed.get("business") or []) or \
+        sum(f["lines"] for f in parsed.get("files", []) if f["section"] in holdings_file.SEGMENT_NAMES.values())
     if added or b_added or b_replaced:
         files = files + [{"name": (filename or "file")[:80], "broker": parsed["broker"], "kind": parsed["kind"], "trades": added,
                           "fno_lines": lines if (b_added or b_replaced) else 0, "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}]
@@ -4340,6 +4492,10 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         else:
             p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
             try:
+                p = research_hub.screener.with_cash(p)       # cash on hand, for a theme's enterprise value (left as it is when the breakdown is busy)
+            except Exception:
+                pass
+            try:
                 found = filings_feed.announcements(sym)
                 # with the exchange's summary and the document itself, so the page names what each filing is and links it (DK-018)
                 items = [{"at": i["at"], "title": f"{i['label']}: {i['subject']}" if i.get("subject") else i["label"],
@@ -4362,12 +4518,15 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         if e.busy:
             raise
         return None                       # no company page at the source
-    trend = prices = None
+    trend = prices = listed_on = None
     try:
         # closed sessions only, read after the close settled: the page's price is the last close, with its date, never
         # a session still trading or a cached read from before the close (R6V-002)
         bars = stock_pages.closed_bars(stock_page_bars(region, co), region)
         if bars:
+            if region == "IN":
+                from .intel.company import listing_day
+                listed_on = listing_day(bars)             # a share listed within the year: its first day of trading
             trend, prices = scan.analyse(bars), stock_pages.price_facts(bars)
     except Exception:                     # no prices: the page goes without the price facts
         pass
@@ -4405,8 +4564,10 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             if pe and pe > 0:
                 checks["eps"] = round(close / pe, 4)
     nums = deepdive.numbers(p)
-    snap = screener_summary(p)
+    # a share listed within the year: its balance sheet predates the issue, so the source's share count stands (LIVE2-025)
+    snap = screener_summary(p, (prices or {}).get("range_since") if region == "IN" else None)
     if region == "IN":
+        snap = pre_issue_cap(snap, p, listed_on)
         if not close:
             # no daily candles: the exchange's own close of the market's last session, dated (R7V-004), before the
             # fundamentals source's undated price
@@ -5106,6 +5267,19 @@ def breadth_load(region: str, symbol: str, days: int) -> list[dict]:
     return markets.provider(region).history({"token": symbol}, "1d", days)
 
 
+def results_options(symbol: str, day: str | None) -> dict | None:
+    """The first expiry of a stock's options on or after a results day, and the move its at-the-money straddle prices in."""
+    if not kite.ready():
+        return None
+    expiries = [e for e in options_data.expiries("NSE", symbol) if not day or e >= day]
+    if not expiries:
+        return None
+    return results_calendar.straddle_move(options_data.chain("NSE", symbol, expiries[0], around=1))
+
+
+results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d), options=results_options)
+
+
 def breadth_index(region: str, symbol: str, days: int) -> list[dict]:
     if region == "IN":
         hit = kite.by_symbol(symbol)
@@ -5238,6 +5412,13 @@ def admin_redflags_run(region: str = "IN", _=Depends(admin.leader_admin)):
             redflags._set_state(region, last_error=str(e)[:200], failed_at=redflags._now())
     threading.Thread(target=work, daemon=True, name="redflags-now").start()
     return {"started": True, "region": region, "state": redflags.state(region)}
+
+
+@app.get("/admin/business-updates/coverage")
+def admin_biz_coverage(_=Depends(admin.admin_profile)):
+    """The business updates audit: per category and company, whether it was looked through, how many filings were read, how many months
+    back the figure goes and how old the newest one is (from what is stored; nothing is read)."""
+    return biz_updates.coverage()
 
 
 @app.get("/admin/business-updates/reliability")
@@ -6049,7 +6230,7 @@ def server_status() -> dict:
             "auto_login_configured": auto_login_configured(),
             # when the next automatic login runs, so a cancelled login says when it comes back (R46-001)
             "auto_login_next": next_auto_login(),
-            "billing_enabled": billing.enabled(), "ai": ai_health(),
+            "billing_enabled": billing.enabled(), "billing_hook": billing.hook_status(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(RECENT_ERRORS)], "server_started_at": SERVER_STARTED_AT,
             "calendar": calendar_status(), "invoice_seller": invoices.readiness(), "build": build_info.info(),
@@ -6289,10 +6470,14 @@ def admin_delete_user_data(user_id: str, who=Depends(admin.admin_profile)):
 
 
 @app.get("/admin/sessions")
-def admin_sessions(_=Depends(admin.admin_profile)):
+def admin_sessions(test: bool = False, _=Depends(admin.admin_profile)):
+    """The paper sessions running now. The test accounts' are left out unless `test`, as every other count in Admin leaves them out
+    (LIVE1C-011: the list showed the reviewers' sessions with 'Show test accounts' off)."""
     emails = {}
     out = []
+    owners: dict[str, str | None] = {}                        # session id -> its user's id, for the test filter below
     for s in list(manager.sessions.values()):
+        owners[s.id] = s.user_id
         try:
             if s.user_id not in emails:
                 emails[s.user_id] = (db.get_profile(s.user_id) or {}).get("email")
@@ -6315,10 +6500,14 @@ def admin_sessions(_=Depends(admin.admin_profile)):
             except Exception as e:
                 print("admin sessions:", r.get("id"), e)
             market = inst.get("market")
+            owners[r["id"]] = r.get("user_id")
             out.append({"id": r["id"], "name": r.get("name"), "email": emails.get(r.get("user_id")), "symbol": inst.get("symbol"),
                         "market": market, "kind": manager.row_kind(r), "started_at": r.get("started_at"),
                         "capital": ((r.get("strategy") or {}).get("risk") or {}).get("capital"), "equity": None, "trades": None,
                         "currency": inst.get("currency") or ("INR" if market == "IN" else "USD")})
+    if not test:
+        tests = admin.recorded_tests()
+        out = [o for o in out if owners.get(o["id"]) not in tests and not admin.is_test_email(o.get("email"))]
     return out
 
 
@@ -6336,6 +6525,19 @@ def admin_billing_activity(_=Depends(admin.admin_profile)):
     """Subscriptions, refunds and failed payments straight from Razorpay, with the mode, the last webhook's time and the
     currencies with plans of their own (DJ-016, DJ-017), and the invoices' revenue by month. Read only."""
     out = billing.activity()
+    # who each subscription is for (LIVE1C-007): the address of a real user, "Test account" for one of the owner's test aliases
+    ids = sorted({x["user_id"] for x in out.get("subscriptions") or [] if x.get("user_id")})
+    who: dict[str, str] = {}
+    if ids:
+        try:
+            tests = admin.recorded_tests()
+            for r in db.sb().table("profiles").select("id,email").in_("id", ids).limit(200).execute().data or []:
+                who[r["id"]] = "Test account" if r["id"] in tests or admin.is_test_email(r.get("email")) else (r.get("email") or "")
+        except Exception as e:
+            print("admin subscriptions' users not read:", str(e)[:160])
+    for x in out.get("subscriptions") or []:
+        x["user"] = who.get(x.get("user_id") or "") or None
+        x.pop("user_id", None)
     months: dict[str, dict[str, float]] = {}
     now = datetime.now(timezone.utc)
     for y in sorted({invoices.fy(now), invoices.fy(now - timedelta(days=365))}):
@@ -7253,12 +7455,15 @@ def news_view(issue: dict) -> dict:
     issue = news.write.regional_links(issue)          # rotation links open the brief's own market (R28-006)
     out = {k: issue.get(k) for k in NEWS_FIELDS if k != "ai_summary" or issue.get(k)}
     if out.get("ai_summary"):          # index levels as the tiles print them: two decimals (R28-009)
-        out["ai_summary"] = news.write.house_numbers(out["ai_summary"], issue.get("indices"))
+        out["ai_summary"] = news.write.house_numbers(news.write.close_date_words(out["ai_summary"], issue), issue.get("indices"))
     # the email as it is sent: written from the stored issue the page shows (R7T-009)
     out["html"] = (news.email_of(issue)[0] if issue.get("subject") else out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     # the session the numbers are the close of, holidays known: the page said "the close of 2 Oct", a holiday (DI-026)
     if (day := news.write.close_day(issue)):
         out["close_day"] = day
+    # every section that lists figures as a table (O5): drawn by the Briefs page, the email and the PDF alike, from the stored issue
+    from .newsletter import tables as news_tables
+    out["tables"] = news_tables.of(issue)
     return out
 
 
@@ -7308,6 +7513,21 @@ def news_issue(iid: str, profile=Depends(current_profile)):
     if not issue:
         err(404, "not_found", "That issue wasn't found.")
     return news_view(issue)
+
+
+@app.get("/news/{iid}/pdf")
+def news_issue_pdf(iid: str, profile=Depends(current_profile)):
+    """One issue as a PDF (O6): the same tables as the page and the email, made when asked and not kept. Whoever can read the issue can
+    download it: a market issue is for everyone, a My Stocks issue only for its reader."""
+    throttle(profile, "news_pdf", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
+    parts = news.parse_id(iid)
+    issue = news.load(iid) if parts and (parts[0] == "market" or parts[1] == profile["id"]) else None
+    if not issue:
+        err(404, "not_found", "That issue wasn't found.")
+    from .newsletter import pdf as news_pdf
+    issue = news.write.regional_links(issue)
+    return Response(news_pdf.build(issue), media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{news_pdf.filename(issue)}"', "Cache-Control": "private, no-store"})
 
 
 def newsletters_view(profile: dict) -> dict:

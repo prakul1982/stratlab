@@ -17,6 +17,10 @@ PLANS = {
         "networth_items": 5,          # typed-in entries in Net worth (assets, loans and policies)
         "mf_schemes": 5,              # mutual fund schemes kept (Money: mutual funds)
         "journal_trades": 50,         # closed trades the trade journal keeps and counts (Trade: journal)
+        "watchlists": 1,              # Market Watch lists (the Research watchlist is the first): None is no limit
+        "watchlist_symbols": 20,      # symbols in one Market Watch list
+        "chart_saves": 3,             # charts whose drawings and indicators are kept on the account
+        "chart_indicators": 3,        # indicators on one chart
         "features": set(),
     },
     "basic": {
@@ -35,6 +39,10 @@ PLANS = {
         "networth_items": None,
         "mf_schemes": None,       # unlimited
         "journal_trades": None,
+        "watchlists": 10,
+        "watchlist_symbols": 100,
+        "chart_saves": None,
+        "chart_indicators": 10,
         "features": {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings",
                      "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal",
                      "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter",
@@ -60,6 +68,10 @@ PLANS = {
         "networth_items": None,
         "mf_schemes": None,
         "journal_trades": None,
+        "watchlists": None,
+        "watchlist_symbols": None,
+        "chart_saves": None,
+        "chart_indicators": None,
         "features": {"indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report",
                      "export", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
                      "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "cas_history",
@@ -202,6 +214,12 @@ def mf_limit(plan: str) -> int | None:
     return PLANS[plan]["mf_schemes"]
 
 
+def watch_limit(plan: str, key: str) -> int | None:
+    """Market Watch's limits on a plan (None: no limit): "watchlists", "watchlist_symbols", "chart_saves" (charts whose
+    drawings are kept on the account) and "chart_indicators" (on one chart)."""
+    return PLANS[plan][key]
+
+
 def journal_limit(plan: str) -> int | None:
     """How many closed trades the trade journal keeps and counts (None: no limit)."""
     return PLANS[plan]["journal_trades"]
@@ -277,7 +295,12 @@ def set_promo(days: int | None) -> datetime | None:
     """Start the offer now for `days` days, or end it (None)."""
     from . import db
     if days:
-        until = datetime.now(timezone.utc) + timedelta(days=days)
+        # ends at the end of an Indian day (midnight IST) on or after the `days`, not at the minute it was started: an offer begun at 1:56 am
+        # "ended at 1:56 am", which confused (LIVE1C-037); it lasts at least the days asked
+        t = (datetime.now(timezone.utc) + timedelta(days=days)).astimezone(IST)
+        if (t.hour, t.minute, t.second, t.microsecond) != (0, 0, 0, 0):
+            t = (t + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        until = t.astimezone(timezone.utc)
         db.set_setting(PROMO_KEY, until.isoformat())
     else:
         until = None

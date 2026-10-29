@@ -41,6 +41,12 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
            "Accept-Language": "en-IN,en;q=0.9", "X-Kite-Version": "3", "Origin": BASE, "Referer": f"{BASE}/"}
 
 
+def login_needed_text(reason: str) -> str:
+    """The admin alert when the automatic login gave up (also what Admin's email previews show, LIVE1C-038)."""
+    return (f"StratLab: today's broker login needs you. {reason} Tap to log in "
+            "(about 10 seconds); Indian live data comes back as soon as you do.")
+
+
 def is_captcha(message: str) -> bool:
     return "captcha" in (message or "").lower()
 
@@ -205,12 +211,13 @@ class AutoLogin:
                 if isinstance(e, AutoLoginError) and not e.retry:
                     self._gave_up = True
                 raise
-            self._record(True, "Logged in to Kite.")
+            self._record(True, "Logged in to Kite.", "by the daily run" if only_if_due else "started from Admin")
         self.on_login()
         return True
 
-    def _record(self, ok: bool, message: str):
-        self.last = {"at": datetime.now(IST).isoformat(), "ok": ok, "message": message}
+    def _record(self, ok: bool, message: str, how: str | None = None):
+        """`how`: what started a login that worked, so Admin says why it happened when it did (LIVE1C-016)."""
+        self.last = {"at": datetime.now(IST).isoformat(), "ok": ok, "message": message, **({"how": how} if how else {})}
         print("Kite auto-login:", message)
         try:  # kept in the database so a restart (the one after a manual login, say) doesn't lose it
             from . import db
@@ -296,8 +303,7 @@ class AutoLogin:
                 except Exception as e:
                     if self._gave_up or self._attempts >= MAX_ATTEMPTS:
                         # to every admin's phone and email: the link opens Zerodha's own login page in one tap
-                        self._alert(f"StratLab: today's Zerodha login needs you. {e} Tap to log in to Zerodha "
-                                    f"(about 10 seconds); Indian live data comes back as soon as you do.", url=LOGIN_LINK)
+                        self._alert(login_needed_text(str(e)), url=LOGIN_LINK)
                     time.sleep(RETRY_MINUTES * 60)
                     continue
             time.sleep(30)

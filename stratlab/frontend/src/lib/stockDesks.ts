@@ -26,7 +26,9 @@ export type LendSummary = { days: number; traded_days: number; shares: number; l
   ann_high: number | null; ann_avg: number | null; last: { day: string; series: string; expiry: string; fee: number | null; ann: number | null } | null };
 export type LendTrade = { day: string; price: number | null; series: string; expiry: string; fee: number | null; ann: number | null; shares: number; trades: number };
 export type LendRow = { symbol: string; eligible: boolean | null; eligible_as_of: string | null; as_of: string | null; summaries: LendSummary[];
-  trades?: LendTrade[]; held?: boolean; watched?: boolean };
+  trades?: LendTrade[]; held?: boolean; watched?: boolean;
+  /** each day with trades, for as long as it is stored: the share-weighted fee a year (% of the price), shares lent, fee paid */
+  history?: { day: string; ann: number | null; shares: number; fee_paid: number }[] };
 /** The whole segment on its newest day: each stock with lending trades (DF-022). */
 export type LendMarketRow = { symbol: string; shares: number; fee_paid: number; trades: number; series: number; price: number | null; ann: number | null };
 export type LendTable = { rows: LendRow[]; status: DeskStatus; note: string; source: string; facts: { title: string; text: string }[];
@@ -52,7 +54,7 @@ export const desksApi = {
   lending: () => api<LendTable>("/invest/stock-lending"),
   lend: (s: string) => api<LendRow & { status: DeskStatus; note: string }>(`/invest/stock-lending/${encodeURIComponent(s)}`),
   mtf: () => api<MtfPage>("/invest/margin-funding"),
-  mtfOne: (s: string, range = "1y") => api<MtfOne>(`/invest/margin-funding/${encodeURIComponent(s)}?range=${range}`),
+  mtfOne: (s: string, range = "all") => api<MtfOne>(`/invest/margin-funding/${encodeURIComponent(s)}?range=${range}`),
   cost: (b: CostIn) => api<CostOut>("/invest/margin-funding/cost", { method: "POST", body: b }),
 };
 

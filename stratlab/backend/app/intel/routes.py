@@ -20,7 +20,9 @@ from ..kite_service import IST
 from ..plans import has_indicators
 from . import ai as A
 from . import grounding, key_facts
+from . import mood as mood_mod
 from .company import INDICES, Research, with_dividend_yield
+from ..kite_service import ist_date
 from .net import NotFound, SourceError
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -31,6 +33,17 @@ _ai = (None, None)     # (gemini, anthropic) callables, set by setup()
 def setup(research: Research, gemini, anthropic):
     global hub, _ai
     hub, _ai = research, (gemini, anthropic)
+
+
+_mood: mood_mod.Mood | None = None
+
+
+def mood_hub() -> mood_mod.Mood:
+    """The Market pulse's tables and mood for the hub in use (one per process; see mood.py for what it keeps and costs)."""
+    global _mood
+    if _mood is None or _mood.hub is not hub:
+        _mood = mood_mod.Mood(hub)
+    return _mood
 
 
 def ok(data) -> JSONResponse:
@@ -272,7 +285,8 @@ def page_figures(region: str, c: dict) -> dict:
     52-week range checked against the price and taking in today's high and low (R7T-001, R7T-007)."""
     from .company import with_today_range
     # the public EPS first: the payout ratio is the dividends over the EPS TTM the page shows, not the source's (R29B-013: $8.72 vs $8.71)
-    out = with_dividend_yield(with_filed_results(region, with_public_eps(region, c)), stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat())
+    out = with_dividend_yield(with_filed_results(region, with_public_eps(region, c)), stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat(),
+                              listed=_list_read(region, c["symbol"]))
     return with_today_range(per_share_checked(out))
 
 
@@ -470,6 +484,18 @@ def per_share_checked(c: dict) -> dict:
     return out
 
 
+def _list_read(region: str, symbol: str) -> bool:
+    """Whether an Indian company's corporate actions list was ever read and stored: then no dividend in it for the year is a real
+    0%, not a missing list (RC7-006)."""
+    if region != "IN":
+        return False
+    try:
+        from .. import corp_actions
+        return bool(corp_actions.hist_load("IN", symbol)["at"])
+    except Exception:
+        return False
+
+
 def stored_dividends(region: str, symbol: str) -> list[dict]:
     """A company's corporate actions as its page's Corporate actions card lists them (India: stored, no new read; the
     US: the card's own read, kept for a day), or none."""
@@ -517,13 +543,23 @@ def _refresh_history(region: str, symbol: str, sources: dict) -> None:
     _hist_pool.submit(run)
 
 
+MINUTE_READS = 45          # reads of 1-minute and 3-minute candles per person per minute (a scroll back is one a second or so)
+
+
 @router.get("/chart/{region}/{symbol}")
 def chart(region: str, symbol: str, range: str = "1y", tf: str = "1d", before: str | None = None,
           profile=Depends(current_profile)):
-    """A company's candles. `tf` is 5m, 15m, 1h or 1d; `before` (an ISO time) asks for the page of older
-    candles when the chart is scrolled back, and `more` says whether still older ones exist."""
-    if tf not in ("5m", "15m", "1h", "1d"):
-        err(400, "bad_tf", "Pick 5m, 15m, 1h or 1d candles.")
+    """A company's candles. `tf` is any size from 1m to 1mo (chart_data.TFS); `before` (an ISO time) asks for the page of
+    older candles when the chart is scrolled back, and `more` says whether still older ones exist. `live` and `delayed` say
+    how current the newest candle is (MW-1)."""
+    from .. import chart_data
+    if tf not in chart_data.TFS:
+        err(400, "bad_tf", "Pick a candle size from 1 minute to 1 month.")
+    if tf in ("1m", "3m"):
+        # a page of minute candles can be a request to the broker, whose feed every page of the app shares at about three a second:
+        # one person scrolling back as fast as the network allows (or a script) must not queue everyone else behind them (MWR1-020)
+        from .. import main
+        main.throttle(profile, "chart_minutes", MINUTE_READS, 60, "That's a lot of minute-chart reads in a minute. Wait a moment and try again.")
     r = region_of(region)
     s = symbol_of(symbol, r)
     return ok(source_call(lambda: hub.chart(r, s, range[:5], tf, (before or "")[:40])))
@@ -552,11 +588,26 @@ def pulse(region: str = "IN", focus: str = "", profile=Depends(current_profile))
         hub.headlines_now(r, wait=0)             # the headlines' read starts now, beside the levels', not after them
     indices, at = source_call(lambda: _levels_now(r, 6.0))
     news = _news_now(r, 1.0) if not focus.strip() else _focused_news(r, focus[:60])
+    if not focus.strip():
+        # today's headlines only, the same list the main story is counted over, so "3 of 8" can be counted on the page (MOOD-1)
+        news = grounding.session_headlines(news, ist_date())[:14]
     if indices is None:
         return ok({"indices": [], "headlines": news, "missing": [], "pending": True})
     got = {i["name"] for i in indices}
     return ok({"indices": indices, "headlines": news, "missing": [n for n, _ in INDICES.get(r, []) if n not in got],
                "read_at": datetime.fromtimestamp(at, timezone.utc).isoformat(timespec="seconds") if at else None})
+
+
+@router.get("/pulse/mood")
+def pulse_mood(region: str = "IN", profile=Depends(current_profile)):
+    """The market's mood as tables and a headline with a few lines, every figure from one place and one rounding (MOOD-1):
+    breadth, sectors, the stocks that moved the index, flows, volatility and currencies, other markets, today's calendar.
+    From memory, read again behind the page (see mood.py); `pending` until the first read of a process is back."""
+    r = region_of(region)
+    got, at = source_call(lambda: mood_hub().get(r, 20.0))
+    if got is None:
+        return ok({"pending": True})
+    return ok({**got, "read_at": datetime.fromtimestamp(at, timezone.utc).isoformat(timespec="seconds") if at else None})
 
 
 def _levels_now(r: str, wait: float):
@@ -714,10 +765,8 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
 
     def build():
         news = _news_now(r, 8.0)
-        try:
-            sectors = hub.sector_moves(r)
-        except Exception:
-            sectors = None
+        # the sector table's own count and rows (mood.py), the one the page shows: the read is held to it (MOOD-1)
+        sectors = mood_hub().sector_moves(r)
         early = before_close_at(r, indices)
         read = A.pulse(r, f, indices, news, _ai, closed=not market_open(r) and not early and not settling, sectors=sectors, cash=cash,
                        before_close=early, settling=bool(settling) and not early)
@@ -728,7 +777,7 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five
         # minutes old gives that read
         # "mood": reads kept from before the mood line and main story were added are written again (DD-001)
-        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day, "mood"),
+        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day, "mood2"),
                           3600 if is_open else settle_ttl or CLOSED_MOOD_TTL, refresh, build, counted=False,
                           min_age=300 if is_open else settle_ttl or CLOSED_MOOD_TTL))
     except HTTPException as e:
@@ -779,8 +828,8 @@ def mood_key(indices: list[dict], is_open: bool) -> tuple:
     return (is_open, any(i.get("settling") for i in indices), any(i.get("pre_close") for i in indices), tuple((i.get("name"), i.get("day"), math.floor((i.get("change_pct") or 0.0) * 2) / 2) for i in indices))
 
 
-@router.get("/sector")
-def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
+def sector_map(profile, region: str, q: str, refresh: bool = False):
+    """(market, theme, the grounded map, the screener's index rows): the map every theme page and dive starts from."""
     r, theme = region_of(region), " ".join(q.split())[:80]
     if len(theme) < 2:
         err(400, "bad_theme", "Type a sector or theme, like \"India defence\" or \"AI data centers\".")
@@ -793,7 +842,15 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
                   lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r)))
     # no unsourced market size or growth rate, even on a map kept from before (R7O-012); no figure in the text and no
     # company that isn't listed, and the exchange's own list of the theme's industries beside the map (DE-013)
-    got = grounding.listed_only(A.theme_served(got))
+    return r, theme, grounding.listed_only(A.theme_served(got)), rows
+
+
+@router.get("/sector")
+def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
+    r, theme, got, rows = sector_map(profile, region, q, refresh)
+    # THEME-1: a company stays in a layer or sub-theme only when its own description shows it does that work, and a tailwind or
+    # risk is shown beside the dated headline that supports it (theme_routes.checked)
+    got = theme_routes.checked(r, theme, got)
     return ok({**got, "market_size": "", "cagr": None, "cagr_note": "", "exchange": grounding.exchange_list(got, rows) or None})
 
 
@@ -897,6 +954,13 @@ def put_watchlist(req: WatchReq, profile=Depends(current_profile)):
     before = get_watchlist(profile)["items"]
     before = before if isinstance(before, list) else []
     had = {(i.get("region"), str(i.get("symbol") or "").upper()) for i in before if isinstance(i, dict)}
+    # Market Watch's limit on the first list (MW-1): a list may shrink or stay, and grows only to what the plan keeps
+    from ..plans import PLANS, bigger_plan
+    cap = PLANS[profile["_plan"]]["watchlist_symbols"]
+    if cap is not None and len(items) > max(cap, len(before)) and any((i["region"], i["symbol"].upper()) not in had for i in items):
+        nxt = bigger_plan(profile["_plan"], "watchlist_symbols")
+        err(402, "plan_limit", f"The {PLANS[profile['_plan']]['name']} plan keeps {cap} symbols in a list."
+            + (f" {nxt} {'keeps ' + str(PLANS[nxt.lower()]['watchlist_symbols']) if PLANS[nxt.lower()]['watchlist_symbols'] else 'has no limit'}." if nxt else ""))
     # a symbol added must be a listed company or fund: one typed and saved as it was ("ZZZZQQ") showed a row of dashes, was
     # counted on At a glance and offered a deep dive (DD-070). One already on the list stays; a list that can't be read to
     # tell (None) doesn't stop the save
@@ -909,3 +973,7 @@ def put_watchlist(req: WatchReq, profile=Depends(current_profile)):
         from .. import invite_rewards
         invite_rewards.safe_touch(profile, "watchlist")
     return {"items": items}
+
+
+from . import theme_routes  # noqa: E402  (the theme deep dive's routes; they use the helpers above)
+router.include_router(theme_routes.router)

@@ -133,11 +133,13 @@ function NewSession({ onStarted }: { onStarted: (id: string) => void }) {
         <FormGrid label="Session settings" onSubmit={(e) => { e.preventDefault(); void start(); }}>
           <Field label="Name" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="My breakout alert" />
           <Field label="Paper capital" inputMode="decimal" value={capital} onChange={(e) => setCapital(e.target.value)} placeholder={cap.placeholder} unit={cap.unit} />
-          {/* the option beside the button it belongs to, not a row of its own: the two columns of the page then end level (VR1-095) */}
+          {/* the option is a box of the form and the button has a row of its own with its caption under it: all three in one row made the primary action look like one more control (LIVE1A-025) */}
+          <div className="k-field wide"><CheckField label="Allow short positions" checked={short} onChange={setShort} /></div>
           <FormActions>
-            <CheckField label="Allow short positions" checked={short} onChange={setShort} />
-            <button type="submit" className="btn" disabled={!inst || busy}>{busy ? "Starting…" : "Start session"}</button>
-            {!inst && !busy && <span className="k-note">Pick an instrument first.</span>}
+            <span className="k-stack k-tight">
+              <button type="submit" className="btn" disabled={!inst || busy}>{busy ? "Starting…" : "Start session"}</button>
+              {!inst && !busy && <span className="k-note">Pick an instrument first.</span>}
+            </span>
           </FormActions>
         </FormGrid>
         <p className="k-note">Each session counts toward your plan's paper sessions. For F&amp;O and Indian commodity or currency futures, a signal's qty counts lots.</p>

@@ -12,6 +12,7 @@ type Step = { title: string; body: string; phone?: string; at: string[]; menu?: 
 export function tourSteps(main = "New notebook"): Step[] {
   const what = main === "New notebook" ? "New notebook: describe a trading idea in plain words, and StratLab turns it into rules and tests them on past prices."
     : main === "Add your holdings" ? "Add your holdings: bring in your broker's holdings file, or type your shares in, to see their value, gains and tax."
+    : main === "Update holdings" ? "Update holdings: bring in a newer file from your broker, or change your shares, to keep their value, gains and tax right."
     : `${main}: any Indian or US company's price, numbers, filings and news.`;
   return [
     { title: "Four spaces", at: [".sidebar .space-switch"], menu: true,
@@ -21,9 +22,10 @@ export function tourSteps(main = "New notebook"): Step[] {
       phone: "Type a company, a page or an idea, like \"test RSI below 30 on NIFTY\". The magnifier at the top opens it from any page." },
     { title: "Start here", at: [".sidebar .side-new", `.topbar [aria-label='${main}']`],
       body: `This space's main button. ${what}` },
-    // the chip shows the part of the email before the @, and the theme is in Settings, not in this menu (DI-023)
+    // the button is named Account (with the plan beside it), the theme is in Settings, not in this menu (DI-023), and "Take the tour" is in this
+    // menu (LIVE1B-045: "the button with your email's first part", and "Take the tour there" with no tour button in Settings)
     { title: "Your account", at: [".sidebar .acct-btn"], menu: true,
-      body: "The button with your email's first part opens your plan, Settings and Help. Dark mode is in Settings → Experience. Take the tour there shows this again." },
+      body: "The Account button opens your plan, Settings and Help. Dark mode is in Settings, under Experience. “Take the tour” in that menu shows this again." },
   ];
 }
 

@@ -63,7 +63,7 @@ test("the market read never fails a request, and sends no empty focus (R3-010)",
   const failed: string[] = [], asked: string[] = [];
   page.on("response", (r) => { if (r.url().includes("/research/pulse")) { asked.push(r.url()); if (r.status() >= 400) failed.push(`${r.status()} ${r.url()}`); } });
   const errors = await open(page, "/research/pulse", "index levels");
-  await expect(page.getByText(/No AI read of the mood right now|Written /).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/No AI read of the headlines right now|Written |Nothing in today's headlines held up/).first()).toBeVisible({ timeout: 30_000 });
   expect(failed).toEqual([]);
   expect(asked.some((u) => /focus=(&|$)/.test(u))).toBeFalsy();
   expect(errors).toEqual([]);

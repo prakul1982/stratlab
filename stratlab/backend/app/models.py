@@ -296,7 +296,18 @@ class ReportReq(BaseModel):
 class ScanReq(BaseModel):
     region: Literal["IN", "US"] = "IN"
     set: str = Field("watchlist", max_length=40)          # a preset group id, or "watchlist"
-    scan: str = Field("st_s2", max_length=24)             # a scan_presets id (st_s2 is the Stage 2 + Supertrend scan)
+    scan: str = Field("st_s2", max_length=24)             # a scan_presets id (st_s2 is the Stage 2 + Supertrend scan; "custom" is the person's own rules)
+    rules: Optional[list[dict]] = Field(None, max_length=12)   # scan "custom": the conditions (the strategy builder's own, checked by scan_presets.custom_conds)
+    within: int = Field(1, ge=1, le=100)                  # scan "custom": a match may be on any of the last this many candles (capped by scan_presets.CUSTOM_WITHIN)
+
+
+class CustomScanReq(BaseModel):
+    """A scan of the person's own rules, kept on the account (scan_presets.save_custom checks the rules)."""
+    name: str = Field(..., min_length=1, max_length=60)
+    region: Literal["IN", "US"] = "IN"
+    rules: list[dict] = Field(..., max_length=12)
+    within: int = Field(1, ge=1, le=100)
+    id: Optional[str] = Field(None, max_length=24)
 
 
 class ScanAlertReq(BaseModel):

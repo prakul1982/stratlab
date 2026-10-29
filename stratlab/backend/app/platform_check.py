@@ -114,7 +114,22 @@ def check_market(registry, market: str, today: date | None = None, now: datetime
         return _result(f"Prices: {market}", "Prices", "warn",
                        f"{inst['symbol']}: the latest daily candle is {_day(last)}, but the {_day(done)} session closed{at} and its candle should be "
                        f"here by now (last close {bars[-1]['c']:,.2f}).{_why_stale(prov, inst)}")
-    return _result(f"Prices: {market}", "Prices", "pass", f"{inst['symbol']}: {len(bars)} daily candles, latest {_day(last)}, close {bars[-1]['c']:,.2f}.")
+    # a session still running (or a market that never shuts) has a latest price, not a close; a currency pair needs its pips; and a futures
+    # contract is called one (LIVE1C-021: "CMDTY close 4,058.10" at a price that moved, "FX close 1.11", "CDS USDINR close 96.21" against 95.19 spot)
+    live = last > done and not explicit
+    kind = FUTURES.get(market)
+    return _result(f"Prices: {market}", "Prices", "pass",
+                   f"{inst['symbol']}{f' ({kind})' if kind else ''}: {len(bars)} daily candles, latest {_day(last)}, "
+                   f"{'price so far, the session is still running,' if live else 'close'} {_px(bars[-1]['c'])}.")
+
+
+# markets whose instruments are futures contracts, so their price is not the spot rate or the cash price
+FUTURES = {"CDS": "currency futures contract, not the spot rate", "CMDTY": "futures contract", "MCX": "futures contract"}
+
+
+def _px(v: float) -> str:
+    """A price with the decimals it needs: four under 10 (a currency pair's pips: 1.1084, not 1.11), else two."""
+    return f"{v:,.4f}" if abs(v) < 10 else f"{v:,.2f}"
 
 
 def _why_stale(prov, inst) -> str:

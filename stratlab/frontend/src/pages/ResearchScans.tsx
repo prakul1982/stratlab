@@ -13,6 +13,10 @@ import { rotationFromQuery, rotationQuery, withParams } from "../lib/investUi";
 import { homeRegion } from "../lib/homeMarket";
 import { scanningText } from "../lib/scanText";
 import { Info } from "../components/ui";
+import { ConditionList } from "../components/Rules";
+import { buildIdea } from "../components/IdeaComposer";
+import { mkRef } from "../lib/rules";
+import type { Cond } from "../lib/types";
 import { STAGES_EXPLAINED } from "../lib/stageNote";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
@@ -34,6 +38,12 @@ interface ScanOut { kind: "st_s2"; name: string; market: Region; rows: ScanRow[]
   /** read from the last close while the market's live data is offline (DE-001) */
   last_close?: boolean }
 interface PresetRow { symbol: string; name: string | null; currency: string | null; price: number; chg: number | null; as_of: string; days_ago: number; day: string; detail: string }
+/** Build your own (UI-CO item 14): the rules a person writes, over the same groups as a preset; at most 5 rules, a match within the last 10 candles. */
+const CUSTOM_ID = "custom";
+const CUSTOM_SCAN: ScanInfo = { id: CUSTOM_ID, name: "Build your own", text: "", rules: [], within: 1 };
+const CUSTOM_RULES = 5, CUSTOM_WITHIN = 10;
+interface SavedCustom { id: string; name: string; region: Region; rules: Cond[]; within: number }
+const firstRule = (): Cond[] => [{ l: mkRef("price"), op: "gt", r: mkRef("sma") }];
 interface PresetOut {
   kind: "preset"; scan: string; scan_name: string; name: string; market: Region; rows: PresetRow[]; matches: number; checked: number; asked?: number; as_of: string | null;
   updated_at?: string | null; stored: boolean; missing: string[]; problems: string[];
@@ -41,6 +51,8 @@ interface PresetOut {
   live?: boolean;
   /** a volume rule judged on the last whole session, not the one still going (RC2A-022) */
   basis?: "whole_session";
+  /** a person's own rules: each in words, and how many candles back a match may be */
+  rules?: string[]; within?: number;
 }
 interface ScanInfo { id: string; name: string; text: string; rules: string[]; within: number }
 interface SetInfo { id: string; name: string; count: number; stored?: boolean; as_of?: string | null }
@@ -98,8 +110,22 @@ export function ScanPage() {
   const [scanOffline, setScanOffline] = useState(false);
   const [only, setOnly] = useState(false);
   const pro = !!me?.plan_info?.features?.scans;
-  const scans = sets?.scans?.length ? sets.scans : [FIRST_SCAN];
+  const scans = [...(sets?.scans?.length ? sets.scans : [FIRST_SCAN]), CUSTOM_SCAN];
   const scan = scans.find((s) => s.id === scanId) ?? scans[0];
+  const custom = scan.id === CUSTOM_ID;
+  // the person's own rules: what is being built, the saved ones, and what the server or the box says is wrong with them
+  const [conds, setConds] = useState<Cond[]>(firstRule);
+  const [within, setWithin] = useState(1);
+  const [words, setWords] = useState("");
+  const [wordsBusy, setWordsBusy] = useState(false);
+  const [rulesNote, setRulesNote] = useState<string | null>(null);
+  const [mine, setMine] = useState<SavedCustom[]>([]);
+  const [mineName, setMineName] = useState("");
+  const [mineId, setMineId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!custom || !pro) return;
+    api<{ items: SavedCustom[] }>("/research/scan/custom").then((r) => setMine(r.items)).catch(() => undefined);
+  }, [custom, pro]);
   const seq = useRef(0);   // a scan that finishes after the market, set or scan was changed is dropped, and doesn't clear a newer one's "Running"
   /** Forgets the shown result and any scan still running. */
   const drop = () => { seq.current++; setOut(null); setBusy(false); };
@@ -116,21 +142,60 @@ export function ScanPage() {
 
   const pickScan = (v: string) => {
     const p = new URLSearchParams(params); p.set("scan", v); setParams(p, { replace: true });
+    // the 500-stock groups hold the ready-made scans' answers only: one's own rules start on a group they can run over
+    if (v === CUSTOM_ID && sets?.sets.find((x) => x.id === setId)?.stored) setSetId(sets.sets.find((x) => !x.stored && x.count > 0)?.id ?? "watchlist");
     drop();
   };
   const runScan = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    // a person's own rules are checked here first (the server checks them again): said under the rules' box, never as a failed scan
+    if (custom) {
+      if (!conds.length) { setRulesNote("Add at least one rule."); return; }
+      if (conds.some((c) => c.l.t === "num" && c.r.t === "num")) { setRulesNote("A rule that compares two plain numbers says nothing: put a price or an indicator on one side."); return; }
+      setRulesNote(null);
+    }
     const n = ++seq.current;
     setBusy(true);
     setScanErr(null);
     try {
-      const r = await api<ScanOut | PresetOut>("/research/scan", { method: "POST", body: { region, set: setId, scan: scan.id } });
+      const r = await api<ScanOut | PresetOut>("/research/scan", { method: "POST", body: { region, set: setId, scan: scan.id, ...(custom ? { rules: conds, within } : {}) } });
       if (n === seq.current) setOut(r);
     } catch (err) {
       if (n === seq.current) {
-        if (err instanceof Error && err.message) { setOut(null); setScanErr(err.message); setScanOffline((err as Error & { code?: string }).code === "data_offline"); } else fail(err);
+        if (custom && err instanceof Error && ["bad_rules", "custom_group"].includes((err as Error & { code?: string }).code ?? "")) { setOut(null); setRulesNote(err.message); }
+        else if (err instanceof Error && err.message) { setOut(null); setScanErr(err.message); setScanOffline((err as Error & { code?: string }).code === "data_offline"); } else fail(err);
       }
     } finally { if (n === seq.current) setBusy(false); }
+  };
+  /** "Describe it in words": the notebook's own builder reads the words into rules (it is one of the account's AI builds); what it can't read is said under the box. */
+  const buildWords = async () => {
+    if (!words.trim()) { setRulesNote("Write the rule in a sentence first, like: the price crosses above its 50-day average."); return; }
+    setWordsBusy(true); setRulesNote(null);
+    try {
+      const out = await buildIdea(words.trim(), undefined, { allIndicators: me ? undefined : undefined });
+      if (!out.built) { setRulesNote(out.note || "Those words made no rules."); return; }
+      const got = out.built.strategy.entry.slice(0, CUSTOM_RULES);
+      if (!got.length) { setRulesNote("Those words made no entry rules. Say when the stock should match."); return; }
+      setConds(got); setMineId(null);
+      setRulesNote(out.built.strategy.entry.length > CUSTOM_RULES ? `Only the first ${CUSTOM_RULES} rules are kept.` : null);
+    } catch (e) { setRulesNote((e as Error).message); } finally { setWordsBusy(false); }
+  };
+  const saveMine = async () => {
+    if (!mineName.trim()) { setRulesNote("Give the scan a name to keep it."); return; }
+    try {
+      const r = await api<{ items: SavedCustom[] }>("/research/scan/custom", { method: "PUT", body: { name: mineName.trim(), region, rules: conds, within, id: mineId ?? undefined } });
+      setMine(r.items); setRulesNote(null); notify(`Kept “${mineName.trim()}”.`);
+      if (!mineId) setMineId(r.items[r.items.length - 1]?.id ?? null);
+    } catch (e) { if (e instanceof Error && e.message) setRulesNote(e.message); else fail(e); }
+  };
+  const dropMine = async (id: string) => {
+    try { const r = await api<{ items: SavedCustom[] }>(`/research/scan/custom/${id}`, { method: "DELETE" }); setMine(r.items); if (mineId === id) { setMineId(null); setMineName(""); } } catch (e) { fail(e); }
+  };
+  const loadMine = (id: string) => {
+    const x = mine.find((m) => m.id === id);
+    if (!x) { setMineId(null); return; }
+    setConds(x.rules); setWithin(x.within); setMineName(x.name); setMineId(x.id); setRulesNote(null); drop();
+    if (x.region !== region) setRegion(x.region);
   };
   const toggleAlerts = async () => {
     if (!sets) return;
@@ -167,7 +232,7 @@ export function ScanPage() {
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/scan")} title="Trend scan"
         lede="Which stocks match a chart rule right now. Each match is a fact about the chart on a date, not advice."
-        asOf={preset?.as_of} asOfTz={marketTz(region)} info="The rules: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend." infoLabel="Which rules" />
+        asOf={preset?.as_of} asOfTz={marketTz(region)} info="The rules: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend. Or build your own from up to five rules." infoLabel="Which rules" />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       {!pro && me && <PlanNote>The trend scans and the Stage 2 + Supertrend alert are on the Basic plan.</PlanNote>}
       {setsFailed ? <Card><ErrorState title="The groups to scan couldn't be loaded" action={{ label: "Try again", onClick: () => setSetsTry((n) => n + 1) }}>They couldn't be read just now.</ErrorState></Card> : <Card>
@@ -176,6 +241,38 @@ export function ScanPage() {
           <FieldGroup label="Scan" wide info={<>Each scan is a short list of chart rules, all of which must hold. Pick one to read its rules below.</>}>
             <ChipBar label="Scan rule sets" wrap value={scan.id} onChange={pickScan} options={scans.map((s) => ({ value: s.id, label: s.name }))} />
           </FieldGroup>
+          {custom && (
+            <div className="k-field wide" data-testid="scan-custom">
+              <p className="k-small">Write your own chart rules. Every rule must hold, and a stock matches when they all held on any of the last few candles. Click a word in a rule to change it.</p>
+              <ConditionList conds={conds} onChange={(c) => { setConds(c); setMineId(null); }} max={CUSTOM_RULES} />
+              <Field label="Counts as a match when the rules held on">
+                {(id) => <Select id={id} label="Counts as a match when the rules held on" value={within} onChange={(v) => setWithin(Number(v))}
+                  options={Array.from({ length: CUSTOM_WITHIN }, (_, i) => ({ value: i + 1, label: i === 0 ? "the latest candle" : `any of the last ${i + 1} candles` }))} />}
+              </Field>
+              <Field label="Or describe it in words" hint="Read into rules by the same builder as a notebook's. It counts as one of your AI builds, and you can edit the rules after.">
+                {(id, tie) => (
+                  <div className="k-row ts-words">
+                    <input id={id} {...tie} className="k-input" value={words} maxLength={300} placeholder="Like: volume above twice its 20-day average and the price above yesterday's"
+                      onChange={(e) => setWords(e.target.value)} />
+                    <button type="button" className="btn quiet sm" disabled={wordsBusy} onClick={() => void buildWords()}>{wordsBusy ? "Reading…" : "Make rules"}</button>
+                  </div>)}
+              </Field>
+              {rulesNote && <p className="k-field-msg bad" role="alert" data-testid="custom-error">{rulesNote}</p>}
+              <div className="k-row">
+                <Field label="Keep this scan as" hint={`You can keep up to 10. Pick one below to run it again.`}>
+                  {(id) => <input id={id} className="k-input" value={mineName} maxLength={60} placeholder="Like: Volume breakout" onChange={(e) => setMineName(e.target.value)} />}
+                </Field>
+                <button type="button" className="btn quiet sm" disabled={!pro} onClick={() => void saveMine()}>{mineId ? "Update" : "Keep it"}</button>
+              </div>
+              {mine.length > 0 && (
+                <DataTable label="Your scans" rows={mine} rowKey={(m) => m.id} stack={false}
+                  columns={[{ key: "n", header: "Your scans", rowHeader: true, cell: (m) => <button type="button" className="link link-btn" aria-pressed={mineId === m.id} onClick={() => loadMine(m.id)}>{m.name}</button> },
+                    { key: "r", header: "Rules", cell: (m) => `${m.rules.length} rule${m.rules.length === 1 ? "" : "s"}, ${m.within === 1 ? "latest candle" : `last ${m.within} candles`}` },
+                    { key: "m", header: "Market", cell: (m) => (m.region === "US" ? "US" : "India") },
+                    { key: "x", header: "", action: true, cell: (m) => <button type="button" className="btn quiet sm" aria-label={`Delete ${m.name}`} onClick={() => void dropMine(m.id)}>Delete</button> }]} />
+              )}
+            </div>
+          )}
           {scan.text && (
             <div className="k-field wide" data-testid="scan-rule">
               <p className="k-small">{scan.text}</p>
@@ -184,7 +281,7 @@ export function ScanPage() {
           )}
           <Field label="Group to scan" wide>
             {(id) => <Select id={id} value={setId} onChange={chooseSet}
-              options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count}${!s.stored && s.as_of ? `, list of ${s.as_of}` : ""})`, disabled: (s.id === "watchlist" || !!s.stored) && !s.count }))} />}
+              options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: custom && s.stored ? `${s.name} (ready-made scans only)` : s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count}${!s.stored && s.as_of ? `, list of ${s.as_of}` : ""})`, disabled: ((s.id === "watchlist" || !!s.stored) && !s.count) || (custom && !!s.stored) }))} />}
           </Field>
           <FormActions>
             <button className="btn" disabled={busy || !pro || !cur?.count}>{busy ? scanningText(cur?.count) : "Scan"}</button>
@@ -212,17 +309,17 @@ export function ScanPage() {
             <Stat label="Stocks checked" value={preset.asked && preset.asked > preset.checked ? `${preset.checked} of ${preset.asked}` : String(preset.checked)}
               note={`${preset.stored ? "read after the close" : "read just now"}${preset.asked && preset.asked > preset.checked ? ` · ${preset.asked - preset.checked} skipped, named below` : ""}`} />
           </StatRow>
+          {preset.rules && <p className="k-note" data-testid="custom-rules-said">Rules: {preset.rules.join("; ")}. {preset.within === 1 ? "A match is a stock where they held on the latest candle." : `A match is a stock where they held on any of the last ${preset.within} candles.`}</p>}
           {preset.basis === "whole_session" && <p className="k-note" data-testid="scan-whole-session">The session is still going. A volume rule holds a whole day's volume against an average, so it is judged on the last whole session; today's volume so far is not compared.</p>}
           {preset.live && !preset.basis && <p className="k-note" data-testid="scan-live-note">The session is still going: each price is the last price so far, not a close.</p>}
           <DataTable stack phonePage={25} label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>
-                  {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}
-                  <Link className="link k-small" to={`${link(r.symbol)}/deep`}>Deep dive →</Link></>) },
+                  {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}</>) },   // (no "Deep dive →" under every row: the name is the link, LIVE1A-032)
               { key: "p", header: "Price", numeric: true, cell: (r) => (
                 <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
-              { key: "m", header: `Matches ${scan.name.toLowerCase()}`, wrap: true, lead: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago, preset.basis ? "whole" : preset.live ? "live" : undefined)}</span></> },
+              { key: "m", header: preset.scan === CUSTOM_ID ? "Matches your rules" : `Matches ${scan.name.toLowerCase()}`, wrap: true, lead: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago, preset.basis ? "whole" : preset.live ? "live" : undefined)}</span></> },
               { key: "d", header: "The numbers", wrap: true, cell: (r) => r.detail || "–" },
             ]} />
           {preset.matches > preset.rows.length && <p className="k-note">Showing the first {preset.rows.length} of {preset.matches.toLocaleString("en-IN")} matches, the most recent first.</p>}
@@ -258,8 +355,7 @@ export function ScanPage() {
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>
-                  {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}
-                  <Link className="link k-small" to={`${link(r.symbol)}/deep`}>Deep dive →</Link></>) },
+                  {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}</>) },   // (no "Deep dive →" under every row: the name is the link, LIVE1A-032)
               { key: "p", header: "Price", numeric: true, cell: (r) => (
                 <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
               { key: "st", header: "Stage", info: STAGES_EXPLAINED, cell: (r) => <>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <span className="k-sub-line">{stageDaysText(r.stage_days, r.stage_capped)}</span> : null}</> },
@@ -286,6 +382,9 @@ interface RotationOut {
   kept?: boolean;
 }
 
+/** The four quadrants, said once behind the table's (i) (they were four run-on sentences above the chart). */
+export const QUADRANT_INFO = "Leading: stronger than the benchmark and still gaining. Improving: weaker, but picking up. Weakening: stronger, but losing pace. Lagging: weaker and still slipping. Most move clockwise through the four.";
+
 /** What the Strength and Momentum numbers are in (DE-019: "100 = its usual level" read as a percentage). */
 export const ROTATION_UNITS = "Not a percentage. 100 is the ratio's own average of the last 14 candles; each point above or below is one usual swing (a standard deviation) of that ratio. 102.79 is about 2.8 swings above its average.";
 
@@ -307,6 +406,8 @@ export function RotationPage() {
   const [askTail, setAskTail] = useState(start.tail);
   const [picked, setPicked] = useState<Set<string> | null>(null);   // null = the default set (main sectors)
   const [focus, setFocus] = useState<string | null>(null);          // the slider settles before it asks the server
+  const [quad, setQuad] = useState<Quadrant | "all">("all");          // the table's filter, with each quadrant's count (MOOD-1)
+  const [sort, setSort] = useState<{ key: string; desc: boolean } | null>(null);
   const [out, setOut] = useState<RotationOut | null>(null);
   const [busy, setBusy] = useState(false);
   const [tries, setTries] = useState(0);
@@ -336,7 +437,7 @@ export function RotationPage() {
     return () => { live = false; window.clearTimeout(late); };
   }, [region, setId, interval, askTail, tries]);
 
-  useEffect(() => { setPicked(null); setFocus(null); }, [region, setId]);
+  useEffect(() => { setPicked(null); setFocus(null); setQuad("all"); }, [region, setId]);
   useEffect(() => {
     const next = withParams(params, rotationQuery({ set: setId, from: backTo, interval, tail: askTail }));
     if (next !== params) setParams(next, { replace: true });
@@ -348,21 +449,34 @@ export function RotationPage() {
   const drilled = setId.startsWith("sector:");
   const openStocks = (r: RotationRow) => { setBackTo(setId); setSetId(`sector:${r.symbol}`); };
   const all = out?.rows ?? [];
-  const isOn = (r: RotationRow) => (picked ? picked.has(r.id) : r.core !== false);
+  // the chart opens on the main sectors, and when they are more than six, the five furthest from the centre: twelve trails criss-crossed into a
+  // tangle nobody could follow (LIVE1A-034). The table ticks more.
+  const mainRows = all.filter((r) => r.core !== false);
+  const far = (r: RotationRow) => Math.hypot(r.x - 100, r.y - 100);
+  const defaultIds = new Set((mainRows.length > 6 ? [...mainRows].sort((a, b) => far(b) - far(a)).slice(0, 5) : mainRows).map((r) => r.id));
+  const isOn = (r: RotationRow) => (picked ? picked.has(r.id) : defaultIds.has(r.id));
   const rows = all.filter(isOn);
   const toggle = (r: RotationRow) => {
     const next = new Set(all.filter(isOn).map((x) => x.id));
     if (next.has(r.id)) { next.delete(r.id); if (focus === r.id) setFocus(null); } else next.add(r.id);
     setPicked(next);
   };
-  // the summary reads the chart: the same ones as are drawn, so its counts add up to "n of N on the chart"
-  const names = (q: Quadrant) => all.filter((r) => r.quadrant === q).map((r) => r.name);
-  const entered = all.filter((r) => r.quadrant === "leading" && r.moved && r.moved !== "leading").map((r) => r.name);
+  // the table's own counts, which add up to every one in the set (no "and 7 more": every one is a row)
+  const counts = Object.fromEntries(QUADRANTS.map((q) => [q.id, all.filter((r) => r.quadrant === q.id).length])) as Record<Quadrant, number>;
+  const entered = (r: RotationRow) => r.quadrant === "leading" && !!r.moved && r.moved !== "leading";
   const unit = interval === "weekly" ? "week" : "day";
   // just after the US close the last candle is today's provisional close, as the company pages and tiles say (R89-002)
   const provisional = region === "US" && !!out?.as_of && out.as_of.slice(0, 10) === dayIn(now, marketTz("US"))
     && usSettling(markets.find((m) => m.id === "US"), new Date(now));
-  const few = (xs: string[], n = 5) => !xs.length ? "none" : xs.length <= n + 1 ? xs.join(", ") : `${xs.slice(0, n).join(", ")} and ${xs.length - n} more`;
+  const listed = all.filter((r) => quad === "all" || r.quadrant === quad);
+  const qOrder = (r: RotationRow) => QUADRANTS.findIndex((x) => x.id === r.quadrant);
+  const by: Record<string, (r: RotationRow) => number | string | null> = { n: (r) => r.name.toLowerCase(), q: qOrder, x: (r) => r.x, y: (r) => r.y, w1: (r) => r.ret?.w1 ?? null, m1: (r) => r.ret?.m1 ?? null, m3: (r) => r.ret?.m3 ?? null };
+  const rowsShown = !sort ? listed : [...listed].sort((a, b) => {
+    const f = by[sort.key], x = f(a), y = f(b);
+    if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;          // no value goes last, either way
+    return (x < y ? -1 : x > y ? 1 : 0) * (sort.desc ? -1 : 1);
+  });
+  const onSort = (key: string) => setSort((cur) => (cur?.key === key ? (cur.desc ? null : { key, desc: true }) : { key, desc: key !== "n" && key !== "q" }));
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of}
@@ -395,49 +509,53 @@ export function RotationPage() {
       {failed && <ErrorState title="The rotation couldn't be worked out" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{failed}</ErrorState>}
       {busy && !out && !failed && <Card><Skeleton label="Comparing each one with the market" lines={4} />
         {slow && <p className="k-small k-muted" role="status" data-testid="rotation-slow">Still working: the first look after the close reads the day's closes for every member. It can take up to a minute, and the answer is kept for the next visit.</p>}</Card>}
+      {/* the table first (MOOD-1: four run-on sentences with "and 7 more" became a table of every one), the chart below it with the same ticks */}
+      {out && all.length > 0 && (
+        <Card testId="rot-table">
+          <CardHead title={isIndex ? "Every index" : "Every stock"} info={QUADRANT_INFO} infoLabel="About the four quadrants" actions={<>
+            <button className="btn quiet sm" onClick={() => setPicked(new Set(all.map((r) => r.id)))}>Show all {all.length} on the chart</button>
+            {picked !== null && <button className="btn quiet sm" onClick={() => setPicked(null)}>{mainRows.length > 6 ? "The 5 furthest out" : "Main sectors only"}</button>}
+            <button className="btn quiet sm" onClick={() => setPicked(new Set())}>Clear the chart</button></>} />
+          <ChipBar label="Show quadrant" value={quad} onChange={(v) => setQuad(v as Quadrant | "all")}
+            options={[{ value: "all", label: `All ${all.length}` }, ...QUADRANTS.map((x) => ({ value: x.id, label: `${x.name} ${counts[x.id]}` }))]} />
+          <DataTable stack label="Where each one stands" rows={rowsShown} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
+            sort={{ key: sort?.key ?? "", desc: sort?.desc ?? false, onSort }} empty="None in this quadrant."
+            columns={[
+              { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, sortable: true, cell: (r) => (isIndex
+                ? <span className="rot-name"><label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label>
+                    <span>{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}
+                      {/* under the name, not beside it: a button in every row made the table wider than its card and the 3M column went off the edge */}
+                      {(r.stocks ?? 0) > 0
+                        ? <button className="link k-sub-line" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>
+                        : <span className="k-sub-line" title="No list of this index's main stocks is kept here">No stocks list</span>}</span></span>
+                : <span className="rot-name"><label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label>
+                    <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link></span>) },
+              { key: "q", header: "Quadrant", sortable: true, cell: (r) => <QuadrantTag q={r.quadrant} /> },
+              { key: "x", header: "Strength", numeric: true, sortable: true, info: ROTATION_UNITS, cell: (r) => r.x.toFixed(2) },
+              // its heading (the way the dot moved in the last step) is the arrow beside the momentum: a column of its own made the table wider than the page
+              { key: "y", header: "Momentum", numeric: true, sortable: true, cell: (r) => <>{r.y.toFixed(2)} <span className="k-muted" title="The way it moved in the last step" aria-label={r.heading == null ? "no move" : `heading ${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span></> },
+              { key: "m", header: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`, cardLabel: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`,
+                cell: (r) => (r.moved ? (r.moved === r.quadrant ? <span className="k-small k-muted">no change</span>
+                  : <span className="rot-move"><span className="rot-was"><QuadrantTag q={r.moved} /><span aria-hidden="true">→</span><QuadrantTag q={r.quadrant} /></span>{entered(r) && <Badge tone="ok">Entered Leading</Badge>}</span>) : "–") },
+              ...(["w1", "m1", "m3"] as const).map((k) => ({ key: k, header: { w1: "1W", m1: "1M", m3: "3M" }[k], cardLabel: { w1: "1 week vs the benchmark", m1: "1 month vs the benchmark", m3: "3 months vs the benchmark" }[k],
+                numeric: true, sortable: true, cell: (r: RotationRow) => (r.ret?.[k] == null ? "–" : <Delta value={r.ret[k]!}>{pct(r.ret[k]!, 2)}</Delta>) })),
+            ]} />
+          <p className="k-note">1W, 1M and 3M: how much more (or less) each returned than {out.benchmark} over the last 5, 21 and 63 sessions, in percentage points. Heading, the arrow beside Momentum, is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. {counts.leading + counts.improving + counts.weakening + counts.lagging === all.length ? `All ${all.length} are listed.` : ""}</p>
+          {out.skipped.length > 0 && <p className="k-note">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
+        </Card>
+      )}
       {out && (
         <ChartFrame title={`${out.name} vs ${out.benchmark}`}
           // the four-box key under the title names the same four tags with their counts: the legend is only for a chart with no key (VR3-018)
           actions={rows.length > 0 ? undefined : <div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
-          footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row below, to follow one.</p> : undefined}>
+          footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row above, to follow one. The ticks in the table choose what is drawn.</p> : undefined}>
           <div className="k-stack">
             <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${step === 1 ? `from ${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago` : `${unit} ${step - 1} of ${out.tail}`}` : ""}{out.kept ? " · kept from the last close; it updates when the market reopens" : ""}</span>
-            {rows.length > 0 && (
-              <div className="rot-read">
-                {([["leading", `stronger than ${drilled && out.parent ? out.parent.name : "the market"} and still gaining`], ["improving", "weaker, but picking up"],
-                   ["weakening", "stronger, but losing pace"], ["lagging", "weaker and still slipping"]] as [Quadrant, string][]).map(([q, says]) => (
-                  <div key={q}><QuadrantTag q={q} /><span className="k-muted k-small">{says}</span><span className="k-small" data-testid={`rot-${q}`}>{names(q).length ? `${names(q).length} of ${all.length} · ${few(names(q))}` : `none of ${all.length}`}</span></div>
-                ))}
-                {entered.length > 0 && <p className="k-small">Moved into Leading over the last {out.tail === 1 ? unit : `${out.tail} ${unit}s`}: <b>{few(entered)}</b></p>}
-              </div>
-            )}
-            {rows.length === 0 ? <EmptyState title={all.length ? "Nothing is ticked" : "Not enough price history to draw this yet"}>{all.length ? "Tick a few in the table below to draw them." : "It fills in as more closes are stored."}</EmptyState>
+            {rows.length === 0 ? <EmptyState title={all.length ? "Nothing is ticked" : "Not enough price history to draw this yet"}>{all.length ? "Tick a few in the table above to draw them." : "It fills in as more closes are stored."}</EmptyState>
               : <RotationChart rows={rows} benchmark={out.benchmark} step={step} focus={focus} onFocus={setFocus} />}
+            {picked === null && mainRows.length > 6 && rows.length > 0 && <p className="k-note" data-testid="rot-default-note">Drawn: the {rows.length} furthest from the centre of {mainRows.length} main {isIndex ? "indices" : "stocks"}. Tick more in the table above.</p>}
           </div>
         </ChartFrame>
-      )}
-      {out && all.length > 0 && (
-        <Card>
-          <CardHead title={isIndex ? "The indices" : "The stocks"} actions={<>
-            <button className="btn quiet sm" onClick={() => setPicked(new Set(all.map((r) => r.id)))}>Show all {all.length}</button>
-            {all.some((r) => r.core === false) && <button className="btn quiet sm" onClick={() => setPicked(null)}>Main sectors only</button>}
-            <button className="btn quiet sm" onClick={() => setPicked(new Set())}>Clear</button></>} />
-          <DataTable stack label="Where each one stands" rows={all} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
-            columns={[
-              { key: "on", header: <span className="sr-only">Show on chart</span>, cell: (r) => <label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label> },
-              { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, cell: (r) => (isIndex
-                ? <span className="k-row">{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}
-                    {(r.stocks ?? 0) > 0 && <button className="btn quiet sm" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>}</span>
-                : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link>) },
-              { key: "q", header: "Now", cell: (r) => <QuadrantTag q={r.quadrant} /> },
-              { key: "x", header: "Strength", numeric: true, info: ROTATION_UNITS, cell: (r) => r.x.toFixed(2) },
-              { key: "y", header: "Momentum", numeric: true, cell: (r) => r.y.toFixed(2) },
-              { key: "h", header: "Heading", cell: (r) => <span aria-label={r.heading == null ? "no move" : `${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span> },
-              { key: "m", header: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago`, cell: (r) => (r.moved ? (r.moved === r.quadrant ? <span className="k-small k-muted">same</span> : <QuadrantTag q={r.moved} />) : "–") },
-            ]} />
-          <p className="k-note">Heading is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. The trail on the chart shows the {out.tail} {unit}{out.tail === 1 ? "" : "s"} before it. The counts above are for all {all.length}, not only the ones ticked.</p>
-          {out.skipped.length > 0 && <p className="k-note">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
-        </Card>
       )}
       <p className="k-note inv-text">
         {drilled && out?.parent ? `Here each stock is measured against the ${out.parent.name} index itself, so Leading means it's beating its own sector. These are the sector's largest stocks, not its full official list. ` : ""}
@@ -516,6 +634,8 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
               <Card key={r.symbol}>
                 <CardHead title={<Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}>{r.symbol}</Link>}
                   actions={<>{r.stale && <Badge tone="plain">Last read, not refreshed</Badge>}{r.stored && <Badge tone="plain">From the evening's read{r.as_of ? ` (${asOf(r.as_of)})` : ""}</Badge>}<Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link></>} />
+                {/* a row kept from the last good read says so before its counts: "0 red flags" under a company that was not read just now was a false all-clear (LIVE1A-039) */}
+                {r.stale && <span className="k-small k-muted" data-testid="filings-not-refreshed">Not checked just now: the exchange's list didn't answer. What follows is from the last read, and may be missing newer filings.</span>}
                 <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} rowsHaveFundRaise={!!r.summary.fund_raise_last && r.flags.some((i) => i.at.slice(0, 10) === r.summary.fund_raise_last!.slice(0, 10))} />
                 {r.flags.length > 0 ? <div className="inv-rows">{r.flags.map((i) => <FilingRow key={i.id} i={i} />)}</div>
                   /* the summary above already says "0 red flags, 0 to look closer at": only a company whose list came back empty

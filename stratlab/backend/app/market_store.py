@@ -17,7 +17,7 @@ from .config import settings
 # app_settings keys that hold market-wide data: big, shared by every user, and rebuilt by the server's own jobs
 MARKET_PREFIXES = (
     "audit:", "deep:", "breadth:hist:", "breadth:sectors:", "breadth:members:", "corpact:cal:", "corpact:hist:",
-    "deals:", "results:cal:", "surv:", "screens:index:", "screens:known:", "fmv2018:", "fxhist:", "mfnav:", "isin:",
+    "deals:", "results:cal:", "results:past:", "results:mv:", "surv:", "screens:index:", "screens:known:", "fmv2018:", "fxhist:", "mfnav:", "isin:",
     "scanres:", "redflags:", "pos:", "holidays-auto:", "mfter:", "closeauc:", "vix:", "mktevents:cal:", "shp:", "bizupd:", "fnostk:", "slb:", "mtf:", "rates:", "ipo:rows:", "ipo:state", "ipo:sum:", "ipo:facts:", "ipo:ran:", "ipo:try:", "ipo:ai:",
     "stocks:",          # the stored company pages, their lists and the marks on them: the largest group by far
 )

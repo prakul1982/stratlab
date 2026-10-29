@@ -6,6 +6,8 @@ export type Quadrant = "leading" | "weakening" | "lagging" | "improving";
 export interface RotationRow {
   id: string; symbol: string; name: string; points: { t: string; x: number; y: number }[];
   x: number; y: number; quadrant: Quadrant; heading: number | null; moved: Quadrant | null; core?: boolean; stocks?: number;
+  /** How much more (or less) it returned than the benchmark over 5, 21 and 63 sessions, in percentage points (a read kept before this has none). */
+  ret?: { w1: number | null; m1: number | null; m3: number | null };
 }
 
 export const QUADRANTS: { id: Quadrant; name: string; says: string }[] = [

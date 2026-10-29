@@ -191,6 +191,39 @@ class CoinbaseProvider:
             self._cache.pop(next(iter(self._cache)))
         return bars
 
+    MINUTE_CHUNK = 300 * 60              # seconds one request covers (the exchange sends at most 300 candles)
+    MINUTE_CHUNKS = 48                   # chunks kept, all pairs together (about 7 MB): memory is the server's bill
+
+    def minute_history(self, inst: dict, start, end) -> list[dict]:
+        """1-minute candles from `start` to `end` (aware times). The exchange sends 300 a request, so a day is five requests,
+        paced like every other read here. Requests are on a fixed grid of 300 minutes, so everyone charting a pair asks for the
+        same chunks: a finished one is kept for twenty minutes, the one holding the present for 20 seconds. At most
+        MINUTE_CHUNKS are kept (MW-1; MWR1-009: each read began at its own minute, so none was ever shared and 400 piled up)."""
+        cache = self.__dict__.setdefault("_minutes", {})
+        rows: dict[int, dict] = {}
+        now = time.time()
+        lo, stop = start.timestamp(), min(end.timestamp(), now)
+        k = int(lo // self.MINUTE_CHUNK)
+        while k * self.MINUTE_CHUNK < stop:
+            t0 = k * self.MINUTE_CHUNK
+            to = min(t0 + self.MINUTE_CHUNK, now)
+            key = (inst["token"], k)
+            hit = cache.get(key)
+            if hit and time.time() - hit[0] < (1200 if t0 + self.MINUTE_CHUNK < time.time() - 60 else 20):
+                got = hit[1]
+            else:
+                got = [_bar(c) for c in _candles(self._get(f"/products/{inst['token']}/candles", granularity=60, start=_iso(t0), end=_iso(to)))]
+                cache.pop(key, None)
+                cache[key] = (time.time(), got)
+                while len(cache) > self.MINUTE_CHUNKS:
+                    cache.pop(next(iter(cache)))
+            for b in got:
+                ts = int(datetime.fromisoformat(b["t"]).timestamp())
+                if lo <= ts < stop:
+                    rows[ts] = b
+            k += 1
+        return [rows[t] for t in sorted(rows)]
+
     def closed_candles(self, inst: dict, tf: str, since: str | None) -> list[dict]:
         """Candles that have fully closed after `since`, for live paper trading."""
         g = GRANULARITY[tf]

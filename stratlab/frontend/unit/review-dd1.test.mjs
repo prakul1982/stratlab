@@ -49,7 +49,7 @@ test("DD-012: a merged company's page says what became of it and offers nothing 
 
 test("DD-013: a dividend declared before a bonus shows its amount in today's shares", () => {
   const c = read("src/components/CorpActions.tsx");
-  assert.match(c, /a\.now_note && <span className="k-sub-line" data-testid="div-now">/);
+  assert.match(c, /<ul className="k-note cmp-foots" data-testid="div-now">/);       // (UI-CO item 1: a numbered note under the table, the mark beside the amount)
   assert.match(c, /dividends_12m\.adjusted \? " in today's shares" : ""/);
 });
 
@@ -61,7 +61,7 @@ test("DD-018: a growth rate off a tiny base is n/m, on the page and in its bars"
   assert.equal(metricText({ label: "3Y CAGR", value: null, unit: "%±", text: "n/m" }, "INR"), "n/m");
   assert.equal(metricText({ label: "3Y CAGR", value: 55, unit: "%±" }, "INR"), "+55.0%");
   assert.match(read("src/components/Research.tsx"), /n\/m: from a small base/);
-  assert.match(read("src/pages/DeepDive.tsx"), /nm=\{n\.growth_nm\?\.profit_cagr_3y\}/);
+  assert.match(read("src/pages/DeepDive.tsx"), /n\.growth_nm\?\.profit_cagr_3y, notes\)/);      // (UI-CO: the growth figures are a table; n/m is a cell with its note)
 });
 
 test("DD-030, DD-031: results bars name the fiscal quarter and say what the EPS counts", () => {
@@ -81,7 +81,7 @@ test("DD-050: a report card target keeps its unit, and its cells agree when noth
   const d = read("src/pages/DeepDive.tsx");
   assert.match(d, /value=\{checked \? `\$\{c\.met\} of \$\{checked\}` : "None settled"\}/);
   assert.match(d, /label="Missed" value=\{checked \? String\(c\.missed\) : "–"\}/);
-  assert.match(d, /\$\{unit === "%" \? "%" : ""\}/);
+  assert.match(d, /\$\{unit === "%" \? "%" : unit === "x" \? "×" : ""\}/);
   assert.match(d, /"earnings releases" : "calls"/);
 });
 

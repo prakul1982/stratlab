@@ -217,13 +217,24 @@ def sizes(row: dict) -> dict:
         return {"amount": None, "basis": None, "parts": parts}
     if fresh_cr or ofs_cr:
         stated = round((fresh_cr or 0) + (ofs_cr or 0), 2)
+        if fresh_cr and ofs_cr:
+            # both parts in rupees: the total, and the two parts it is made of, so "Issue size" says what is new shares and what is a sale
+            # by existing holders (LIVE1A-030: SFC Environmental's ₹668 cr against the exchange's share count times the band)
+            return {"amount": stated, "basis": "stated", "parts": {"fresh_cr": fresh_cr, "ofs_cr": ofs_cr, "fresh": None, "ofs": None}}
     elif row.get("total_cr"):
         stated = row["total_cr"]
     if stated:
         return {"amount": stated, "basis": "stated"}
-    shares = row.get("size_shares") or ((row.get("fresh") or 0) + (row.get("ofs") or 0)) or None
+    # LIVE2-022: the whole issue (fresh issue and offer for sale) when both are given in shares: the exchange's own "issue size" is the shares
+    # in its bid table, which leave out the anchor portion (BLS Polymers: ₹179 cr against 1,70,00,000 fresh shares at ₹150, ₹255 cr)
+    whole = (row.get("fresh") or 0) + (row.get("ofs") or 0)
+    shares = whole or row.get("size_shares") or None
     if shares and top:
-        return {"amount": round(shares * top / 1e7, 2), "basis": "shares at the top of the price band"}
+        out = {"amount": round(shares * top / 1e7, 2), "basis": "shares at the top of the price band" if not row.get("price") else "shares at the issue price"}
+        bid = row.get("size_shares")
+        if whole and bid and bid < whole:
+            out["in_bids"] = round(bid * top / 1e7, 2)            # what the exchange's bid table covers: the rest is the anchor portion
+        return out
     return {"amount": None, "basis": None}
 
 
@@ -233,8 +244,22 @@ def public(row: dict, now: datetime | None = None) -> dict:
     out = {k: v for k, v in row.items() if k not in ("seen", "docs_checked", "detail_at", "_keys")}
     out["stage"] = stage_of(row, now)
     out.update(timeline(row, now))
+    # SEBI's timetable: the money is unblocked or refunded and the shares credited two working days after bidding closes (T+2), between the
+    # allotment and the listing; the exchanges publish no day for it, so it is given only while it is ahead, marked as the timetable's
+    if row["market"] == "IN" and row.get("close") and not row.get("issue_status") and not row.get("social"):
+        try:
+            when = next_working(date.fromisoformat(row["close"]), 2)
+            if when >= (now or _now()).astimezone(IST).date():
+                out["credit"], out["credit_expected"] = when.isoformat(), True
+        except ValueError:
+            pass
     sz = sizes(row)
     out["size"], out["size_basis"] = sz["amount"], sz["basis"]
+    if sz.get("in_bids"):
+        out["size_in_bids"] = sz["in_bids"]
+    anchor = re.search(r"anchor[^0-9]{0,30}([\d,]{5,})\s+equity shares", str(row.get("issue_text") or ""), re.I)
+    if anchor:
+        out["anchor_shares"] = int(anchor.group(1).replace(",", ""))
     if sz.get("parts"):
         out["size_parts"] = {k: v for k, v in sz["parts"].items() if v}
     if row["market"] == "IN" and row.get("lot") and (row.get("high") or row.get("price")):
@@ -558,6 +583,9 @@ def doc_to_read(row: dict) -> dict | None:
 
 
 # ---------- reading the sources ----------
+MINOR_PREFIX = "SEC filings for "        # one company's filing page: a read that fails here leaves the feed a Check, not a Problem (LIVE1C-002)
+
+
 def _try(problems: list[str], what: str, fn, default=None):
     try:
         return fn()
@@ -713,7 +741,7 @@ def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookup
         if not (r.get("expected") or r.get("priced") or r.get("filed", "") >= (today - timedelta(days=45)).isoformat()):
             continue
         n += 1
-        got = _try(problems, f"SEC filings for {r['name'][:30]}", lambda r=r: edgar.docs_for(r["name"], today))
+        got = _try(problems, f"{MINOR_PREFIX}{r['name'][:30]}", lambda r=r: edgar.docs_for(r["name"], today))
         r["docs_checked"] = today.isoformat()
         if got and got.get("docs"):
             r["docs"] = [{"kind": d["form"], "form": d["form"], "label": d["form"], "url": d["url"], "link": d.get("link"), "date": d["date"], "source": "sec"}
@@ -797,6 +825,15 @@ def _settle(row: dict, bars: list[dict], first: dict | None, now: datetime) -> t
     """The daily candles of an Indian issue with the closes the exchange calls official (RC2A-002: the list's "latest close" for ZETWERK was
     the 15:25 five-minute price, ₹140.70, the day's official close being ₹138.25). The latest day's close and the listing day's are the
     exchange's own when it is out and on the candle's basis; a session still going on is not a close at all and is left out."""
+    if row["market"] == "US" and bars:
+        # a US session still going on is not a close either: the 12:00 ET read put a midday price under "Close 28 Oct" (AMRO $6.07, the
+        # close $5.86; LIVE1A-060). The last close is the one the session before it ended on.
+        ny = now.astimezone(NY)
+        if bars[-1]["t"][:10] == ny.date().isoformat() and (ny.hour, ny.minute) < US_CLOSE_SETTLED:
+            bars = bars[:-1]
+            if first and first["t"][:10] == ny.date().isoformat():
+                first = None
+        return bars, first
     if row["market"] != "IN" or not bars:
         return bars, first
     today = now.astimezone(IST).date().isoformat()
@@ -857,6 +894,8 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
             "listed": first["t"][:10], "basis": "prices"}
 
 
+US_CLOSE_SETTLED = (16, 15)            # New York time: after the 16:00 close and the closing print, a US daily candle is the day's close (LIVE1A-060)
+SLOT_UNTIL = {"us-close": "05:30"}     # IST: a slot that may only run in the small hours (LIVE1A-060)
 PERF_DAYS = 75                         # issues listed within this many days have their trading since listing read again at every read
 PERF_RETRY_DAYS = 7                    # an older listed issue with no figures yet is tried again after this long
 
@@ -931,7 +970,11 @@ def _read_doc(row: dict, d: dict, url: str, sebi=None) -> dict:
                 raise SourceError("SEBI", "SEBI's filing page has no offer document attached.")
         pages = D.pdf_pages(D.pdf_from(D.download(pdf_url)))
         facts = {"kind": d.get("kind"), "url": url, "pdf": pdf_url, "pages_read": len(pages), "promoters": D.promoters(pages),
-                 "selling": D.selling_holders(pages), "objects": D.objects(pages), "financials": D.financials(pages)}
+                 "selling": D.selling_holders(pages), "objects": D.objects(pages), "financials": D.financials(pages),
+                 # the tables read by fixed rules (O7): the proceeds' use, the risks the document puts first, its key indicators beside its
+                 # listed peers', the holders before the offer, the peers' ratios and the earnings per share
+                 "utilisation": D.utilisation(pages), "risks": D.risk_headings(pages), "kpis": D.kpis(pages), "holding": D.shareholding(pages),
+                 "peers": D.peer_table(pages), "eps": D.eps_rows(pages)}
         excerpt = D.india_excerpt(pages)
     out = {**{k: v for k, v in facts.items() if v not in (None, [], {})}, "reader": D.READER, "read_at": _now().isoformat(timespec="seconds"), "excerpt": excerpt[:34000]}
     db.set_setting(D.FACTS_KEY + doc_key(d), json.dumps(out, separators=(",", ":"), ensure_ascii=False))
@@ -1105,11 +1148,11 @@ def run_marker(name: str) -> str | None:
 
 class Job:
     """Reads the sources on a schedule: India's before the open and in the evening, the US calendar morning and evening (IST);
-    every quarter hour through the bidding hours it reads the bids of the issues open; the exchange's final figures after
+    the US closes again at 03:30 IST (after the New York close, so the listed issues' latest close is the day's); every quarter hour through the bidding hours it reads the bids of the issues open; the exchange's final figures after
     19:20; then the offer documents and their summaries, a few each pass. IPO alerts go out at 08:00 IST (India's dates)
     and 19:00 IST (the US dates, the New York morning). One leader container runs it; a run marker per slot and day means a
     restart never sends twice."""
-    SLOTS = (("in-am", "07:40"), ("in-alert", "08:00"), ("us-am", "08:30"), ("us-alert", "19:00"), ("in-final", FINAL_AT), ("in-pm", "20:10"), ("us-pm", "21:30"))
+    SLOTS = (("in-am", "07:40"), ("in-alert", "08:00"), ("us-am", "08:30"), ("us-alert", "19:00"), ("in-final", FINAL_AT), ("in-pm", "20:10"), ("us-pm", "21:30"), ("us-close", "03:30"))
 
     def __init__(self, sleep=time.sleep):
         self.sleep = sleep
@@ -1134,6 +1177,8 @@ class Job:
     def due(self, name: str, at: str, now: datetime) -> str | None:
         local = now.astimezone(IST)
         day = local.date().isoformat()
+        if name in SLOT_UNTIL and local.strftime("%H:%M") > SLOT_UNTIL[name]:
+            return None                       # the after-the-close read is for the small hours: later, the 08:30 and 21:30 reads have the same day's data
         if local.strftime("%H:%M") >= at and run_marker(name) != day and (local.strftime("%H:%M") < "23:30"):
             return day
         return None
@@ -1157,7 +1202,7 @@ class Job:
                 elif name in ("in-final",):
                     self.read_open(now, final=True)
                 else:
-                    self.read(name[:2].upper(), now, perf=name.endswith("-pm"))
+                    self.read(name[:2].upper(), now, perf=name.endswith(("-pm", "-close")))
                 ran.append(name)
             if self.live_due(now):
                 self.read_open(now)
@@ -1242,11 +1287,18 @@ class Job:
         lines = [(f"{'India' if m == 'IN' else 'US'}", x) for m in ("IN", "US") for x in (st.get(m) or {}).get("missing", [])[:6]]
         gaps = [f"Missing ({where}): {x}" for where, x in lines if not awaits(x)]
         waits = [f"To check ({where}): {x}" for where, x in lines if awaits(x)]
+        # one company's filing page the SEC answered with a 500 is a Check with its own words, not a red feed (LIVE1C-002): a Problem is
+        # the feed itself failing, and the same feed reads India's issues and bids besides
+        minor = [p for p in problems if p.startswith(MINOR_PREFIX)]
+        major = [p for p in problems if not p.startswith(MINOR_PREFIX)]
+        notes = ([f"{len(waits)} filing{'s' if len(waits) != 1 else ''} with the regulators {'has' if len(waits) == 1 else 'have'} no exchange "
+                  "listing yet; looked for again each day."] if waits else []) \
+            + ([f"{len(minor)} company filing page{'s' if len(minor) != 1 else ''} the SEC didn't answer just now ({minor[0][len(MINOR_PREFIX):].split(':')[0]}"
+                f"{' and more' if len(minor) > 1 else ''}); read again at the next run."] if minor else [])
         self.status.update(last_run=now.isoformat(timespec="seconds"), read=market, problems=(gaps + waits + problems[:5])[:10],
                            last_error=(f"{len(gaps)} issue{'s' if len(gaps) != 1 else ''} on the exchanges' lists {'is' if len(gaps) == 1 else 'are'} missing from ours."
-                                       if gaps else problems[0][:200] if problems else None),
-                           check=(f"{len(waits)} filing{'s' if len(waits) != 1 else ''} with the regulators {'has' if len(waits) == 1 else 'have'} no exchange "
-                                  "listing yet; looked for again each day." if waits else None))
+                                       if gaps else major[0][:200] if major else None),
+                           check=" ".join(notes) or None)
         return {"rows": len(rows), "problems": problems, "missing": missing}
 
     def read_open(self, now: datetime, final: bool = False) -> int:
@@ -1453,7 +1505,7 @@ def facts_view(row: dict) -> dict:
         return {"state": "none"}
     if not f:
         return {"state": "pending", "kind": d.get("kind")}
-    out = {k: f[k] for k in ("promoters", "selling", "objects", "financials", "us", "pages_read") if k in f}
+    out = {k: f[k] for k in ("promoters", "selling", "objects", "financials", "us", "pages_read", "utilisation", "risks", "kpis", "holding", "peers", "eps") if k in f}
     if out.get("objects"):
         out["objects"] = D.objects_view(out["objects"])
     return {"state": "ready", "kind": f.get("kind"), "read_at": f.get("read_at"), **out}
@@ -1519,7 +1571,7 @@ def ipo_detail(rid: str, profile=Depends(current_profile)):
     keys = ("id", "market", "segment", "name", "symbol", "stage", "isin", "industry", "exchanges", "exchange", "open", "close", "close_time", "hours", "allotment", "allotment_expected",
             "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status",
             "fresh", "ofs", "fresh_cr", "ofs_cr", "size_shares", "issue_type", "issue_text", "lead_managers", "registrar", "expected", "priced", "filed",
-            "shares", "amount", "currency", "industry")
+            "shares", "amount", "currency", "industry", "credit", "credit_expected", "size_in_bids", "anchor_shares")
     ipo = {k: pub.get(k) for k in keys if pub.get(k) is not None}
     if row["market"] == "IN" and row.get("symbol"):
         ipo["company_link"] = f"/research/IN/{row['symbol']}"

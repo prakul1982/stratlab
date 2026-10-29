@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { CONFIG } from "../lib/adsConfig";
-import { adMode, CHOICE_KEY, googleMessageShown, houseCard, onChoice, readChoice, type AdSlotName, type Choice } from "../lib/ads";
+import { adMode, CHOICE_KEY, googleMessageShown, onChoice, readChoice, type AdSlotName, type Choice } from "../lib/ads";
+import { houseCard } from "../lib/houseAds";
 import { signedInHere } from "../lib/signin";
 import { doNotTrack } from "../lib/analytics";
 

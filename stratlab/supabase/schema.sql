@@ -136,6 +136,22 @@ create table if not exists public.blog_posts (
 );
 create index if not exists blog_posts_new on public.blog_posts (published_at desc);
 
+-- Market Watch lists (MW-1, backend/app/watch_store.py): one row a list, per user. `kind` 'default' is the extra row of the first
+-- list (the Research watchlist keeps its stocks in app_settings; this row holds what that can't: indices, crypto, forex and the
+-- list's order). Written by the server only; a user may read their own rows.
+create table if not exists public.watchlists (
+  id text primary key default gen_random_uuid()::text,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  kind text not null default 'list' check (kind in ('list','default')),
+  position integer not null default 0,
+  items jsonb not null default '[]'::jsonb,   -- [{id, market, symbol, name, kind}], cleaned and capped before they are stored
+  order_ids jsonb,                            -- the default list's own order, ids of every item
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists watchlists_user on public.watchlists (user_id, position);
+
 -- Row level security: the browser only ever talks to the FastAPI backend,
 -- which uses the service-role key. Users may read their own rows; nothing else.
 alter table public.profiles      enable row level security;
@@ -146,6 +162,7 @@ alter table public.live_orders   enable row level security;
 alter table public.app_settings  enable row level security;
 alter table public.option_snapshots enable row level security;
 alter table public.blog_posts    enable row level security;
+alter table public.watchlists    enable row level security;
 
 drop policy if exists "own profile" on public.profiles;
 create policy "own profile" on public.profiles for select using (auth.uid() = id);
@@ -155,3 +172,5 @@ drop policy if exists "own sessions" on public.live_sessions;
 create policy "own sessions" on public.live_sessions for select using (auth.uid() = user_id);
 drop policy if exists "own orders" on public.live_orders;
 create policy "own orders" on public.live_orders for select using (auth.uid() = user_id);
+drop policy if exists "own watchlists" on public.watchlists;
+create policy "own watchlists" on public.watchlists for select using (auth.uid() = user_id);

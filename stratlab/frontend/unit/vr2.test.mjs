@@ -14,7 +14,7 @@ test("VR2-001, VR2-002: the tool tiles and the watchlist tiles of one row are as
 
 test("VR2-003: Money home's holdings card does not carry the date in its day label; the tax link is short (the page's own name)", () => {
   const home = read("src/pages/SpaceHomes.tsx");
-  assert.match(home, /label=\{h\.totals\.session && h\.totals\.session < istToday\(\) \? "Last session" : "Today"\}/);
+  assert.match(home, /label: h\.totals\.session && h\.totals\.session < istToday\(\) \? "Last session" : "Today"/);
   assert.match(home, />Tax report →<\/Link>/);
 });
 
@@ -30,13 +30,13 @@ test("VR2-004, VR2-005: the watchlist says its day once; an Open button stays at
 test("VR2-006, VR2-007: market events are two to a row; Key numbers' last row fills its width", () => {
   assert.match(read("src/pages/trade/events.css"), /\.ev-weekgrid > \.ev-week \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\);/);
   const inv = read("src/styles-invest.css");
-  assert.match(inv, /\.inv-metrics > :last-child:nth-child\(3n\+1\) \{ grid-column: span 6; \}/);
-  assert.match(inv, /\.inv-metrics > :nth-last-child\(2\):nth-child\(3n\+1\), \.inv-metrics > :last-child:nth-child\(3n\+2\) \{ grid-column: span 3; \}/);
+  // (UI-CO item 2: each group is a table; two columns of them balanced by CSS columns, so no last row is left half empty)
+  assert.match(inv, /\.inv-metrics \{ columns: 2; column-gap: var\(--s6\); \}/);
 });
 
 test("VR2-008: a long usage value on Account takes the whole row", () => {
   // (VR6-014: usageSpans also widens a row that would stand alone beside an empty cell)
-  assert.match(read("src/pages/AccountPage.tsx"), /usageSpans\(usage\.map\(\(\[, v\]\) => v\.length > 44\)\)\.map\(\(wide, i\) => <div key=\{usage\[i\]\[0\]\} className=\{wide \? "wide" : undefined\}>/);
+  assert.match(read("src/pages/AccountPage.tsx"), /usageSpans\(usage\.map\(\(\[, v\]\) => v\.length > 44\)\)\.map\(\(wide, i\) => <div key=\{usage\[i\]\[0\]\} className=\{\[wide \? "wide" : "", usage\[i\]\[1\]\.length > 44 \? "long" : ""\]/);     // (VR7-012 adds "long": a phone reads it from the left)
   assert.match(css, /\.k-rows\.two > div\.wide \{ grid-column: 1 \/ -1; \}/);
 });
 

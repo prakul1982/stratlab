@@ -81,8 +81,8 @@ test("R24-005: the two NIFTY ATM IV figures are named apart, each with its strik
   assert.equal(VIX_IV_LABEL, "NIFTY ATM IV, StratLab model");
   // R52-014: the note also says the nearest expiry's IV and VIX's 30 days differ by design
   assert.match(vixIvNote(22750, "Live chain, 09:40 IST", strike), /^At the 22,750 strike · Live chain, 09:40 IST\. The IV of the nearest expiry's options\. India VIX measures the next 30 days/);
-  assert.match(read("src/pages/PositioningPage.tsx"), /value=\{c\.atm_iv == null \? "–" : `\$\{c\.atm_iv\.toFixed\(2\)\}%`\}/);
-  assert.match(read("src/components/VixPanel.tsx"), /label=\{VIX_IV_LABEL\}/);
+  assert.match(read("src/pages/PositioningPage.tsx"), /v: c\.atm_iv == null \? "–" : `\$\{c\.atm_iv\.toFixed\(2\)\}%`/);
+  assert.match(read("src/components/VixPanel.tsx"), /k: VIX_IV_LABEL/);
 });
 
 test("R24-006: an index change shows the server's figure rounded, never cut", async () => {

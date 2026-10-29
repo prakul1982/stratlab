@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { fmtDate, money } from "../lib/format";
-import { Card, CardHead, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Select, Skeleton } from "./kit";
+import { Card, CardHead, Disclosure, ErrorState, Field, FormActions, FormGrid, Select, Skeleton } from "./kit";
 
 type Inv = { number: string; date: string; total: number; currency: string; supply: string };
 type Billing = { name?: string; address?: string; state?: string; gstin?: string; country?: string };
@@ -45,7 +45,7 @@ export function InvoicesCard() {
       <CardHead title="Invoices" />
       {!rows ? (error ? <ErrorState title="Your invoices couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>
         : <Skeleton label="Loading your invoices" lines={2} />) : rows.length === 0
-        ? <EmptyState title="No payments yet">An invoice appears here for every payment.</EmptyState> : (
+        ? <p className="k-small k-muted"><b>No payments yet.</b> An invoice appears here for every payment.</p> : (
         <div>{rows.map((r) => (
           <div key={r.number} className="k-line-row">
             <span className="k-line-text"><b className="k-mono">{r.number}</b><span className="k-sub-line">{fmtDate(r.date)} · {r.supply}</span></span>

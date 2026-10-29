@@ -18,14 +18,16 @@ test("RC2A-004: a closing time is shown only when the exchange's page gave one",
   const list = read("src/pages/IposPage.tsx"), page = read("src/pages/IpoPage.tsx"), text = read("src/lib/ipoText.ts");
   assert.doesNotMatch(list + page + text, /5 PM IST/);
   assert.match(list, /r\.close_time && <span className="k-sub-line">\{clockText\(r\.close_time\)\} IST/);
-  assert.match(page, /r\.close_time && <span className="k-note" data-testid="ipo-close-time">/);
+  assert.match(page, /n: r\.close_time \? <span data-testid="ipo-close-time">\{clockText\(r\.close_time\)\} IST<\/span> : undefined/);
 });
 
-test("RC2A-003: the key and value of the issue grid are one item, so a wrapping grid cannot pair a label with the next value", () => {
-  const page = read("src/pages/IpoPage.tsx"), css = read("src/pages/ipo.css");
-  assert.doesNotMatch(page, /<><dt>/);
-  assert.equal((page.match(/<div(?: className="wide")?><dt>/g) ?? []).length >= 15, true);
-  assert.match(css, /\.ipo-facts > div\.wide \{ grid-column: 1 \/ -1; \}/);
+test("RC2A-003 (O7): the issue's terms and dates are rows of a table, so a label can never sit over another row's value", () => {
+  const page = read("src/pages/IpoPage.tsx");
+  assert.doesNotMatch(page, /<dt>|<dl|className="ipo-facts"/);                                   // no grid of label and value pairs
+  assert.match(page, /const LineTable = FactTable;/);
+  assert.equal((page.match(/\{ id: "/g) ?? []).length >= 20, true);
+  assert.match(page, /<LineTable label="The terms of the issue"/);
+  assert.match(page, /<LineTable label="The dates of the issue"/);
 });
 
 test("RC2A-002: the latest close is dated on the list", () => {
@@ -34,8 +36,9 @@ test("RC2A-002: the latest close is dated on the list", () => {
 
 test("RC2A-006: the list says when the bids were read, and the banner names its own read", () => {
   const list = read("src/pages/IposPage.tsx");
-  assert.match(list, /data-testid="ipo-bids-read">Bids read /);
-  assert.match(list, /At the list's read\{d\.problems_at/);
+  assert.match(list, /asOfLabel=\{liveBids \? "Bids read" : "Read"\}/);                 // (LIVE2-023: one stamp: the bids' on the Open tab, the list's elsewhere)
+  assert.doesNotMatch(list, /data-testid="ipo-bids-read"/);
+  assert.match(list, /problemNote\(d\.problems, d\.problems_at/);       // (LIVE1A-061: the sentence is ipoText's problemNote)
 });
 
 test("RC2A-011: alerts switched on with nowhere to send them say so, with the link", () => {
@@ -66,10 +69,11 @@ test("RC2A-021, 022: a scan says which price its rows hold", () => {
   assert.match(scans, /list of \$\{s\.as_of\}/);
 });
 
-test("RC2A-024: the pulse reads its cards again when the mood was written on newer levels", () => {
-  const r = read("src/pages/Research.tsx");
-  assert.match(r, /ai\.levels_at > cardsAt\) reloadCards\(\)/);
-  assert.match(r, /data-testid="pulse-mood-older"/);
+test("RC2A-024 (MOOD-1): the mood never quotes a level, so the cards and the sentences cannot be of two moments; the tables are read again each minute", () => {
+  // the lines are built from the tables' figures with no index level in them (test_mood1.py), so there is no newer-levels note to show
+  const r = read("src/pages/Research.tsx"), m = read("src/pages/PulseMood.tsx");
+  assert.doesNotMatch(r, /pulse-mood-older|reloadCards/);
+  assert.match(m, /useLiveRefresh\(!!mood\?\.is_open, \(\) => \{ researchApi\.pulseMood\(region\)/);
 });
 
 test("RC2A-027: a US company's page has holders above 5% and its flagged filings", () => {
@@ -80,7 +84,9 @@ test("RC2A-027: a US company's page has holders above 5% and its flagged filings
 });
 
 test("RC2A-028: a qualifier the company page gives a figure stays with it in the comparison", () => {
-  assert.match(read("src/pages/Research.tsx"), /QUALIFIES\.test\(note\) && <span className="k-sub-line" data-testid="cmp-note">/);
+  // LIVE1A-048: the sentence is a numbered note under its table (it ran out of its cell), not a line in each cell
+  assert.match(read("src/pages/Research.tsx"), /const qualifier = .*QUALIFIES\.test\(note\)/);
+  assert.match(read("src/pages/Research.tsx"), /className="k-note cmp-foots" data-testid="cmp-note"/);
 });
 
 test("RC2A-031: the start dialog says when the session will enter", async () => {

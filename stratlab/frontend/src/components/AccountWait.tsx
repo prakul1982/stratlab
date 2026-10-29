@@ -26,7 +26,7 @@ export function AccountRetry() {
   const { refreshMe } = useApp();
   const [busy, setBusy] = useState(false);
   return (
-    <button type="button" className="btn sm quiet" disabled={busy}
+    <button type="button" className="btn sm quiet account-retry" disabled={busy}
       onClick={() => { setBusy(true); void refreshMe().finally(() => setBusy(false)); }}>
       {busy ? "Trying again…" : "Retry"}
     </button>

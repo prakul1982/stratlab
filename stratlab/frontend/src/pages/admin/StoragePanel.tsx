@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, safeHref } from "../../lib/format";
-import { Card, CardHead, ConfirmDialog, Disclosure, ErrorState, Meter, Notice, Skeleton } from "../../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, ErrorState, Meter, Notice, Skeleton } from "../../components/kit";
 
 type Sized = { name: string; bytes: number };
 type Group = { prefix: string; bytes: number; rows: number };
@@ -87,9 +87,17 @@ export function StoragePanel() {
               </Disclosure>
             </div>
           )}
+          {/* each list says whose database it is from, and the Railway total is split into its two parts, so the lists add up to the meter (LIVE1C-017:
+              115 MB beside lists of 10 MB, the other lists being Supabase's) */}
+          {s.main === "railway" && s.total != null && s.market.total != null && (
+            <p className="k-small k-muted" data-testid="storage-split">
+              Railway Postgres {mb(s.market.total)} = users' data {mb(s.total)} + market data and the rest {mb(Math.max(0, s.market.total - s.total))}.
+            </p>
+          )}
           <div className="adm-sizes">
-            <Sizes title="Biggest tables" rows={(s.tables ?? []).slice(0, 6).map((t) => [t.name.replace(/^public\./, ""), t.bytes])} />
-            <Sizes title="Biggest stored data" rows={(s.settings ?? []).slice(0, 6).map((g) => [`${g.prefix} (${g.rows.toLocaleString("en-IN")})`, g.bytes])} />
+            <Sizes title={s.main === "railway" ? "Biggest tables: users' data (Railway)" : "Biggest tables (Supabase)"} rows={(s.tables ?? []).slice(0, 6).map((t) => [t.name.replace(/^public\./, ""), t.bytes])} />
+            <Sizes title={s.main === "railway" ? "Biggest stored data: users' data (Railway)" : "Biggest stored data (Supabase)"} rows={(s.settings ?? []).slice(0, 6).map((g) => [`${g.prefix} (${g.rows.toLocaleString("en-IN")})`, g.bytes])} />
+            {s.main === "railway" && <Sizes title="Biggest tables: market data (Railway)" rows={(s.market.tables ?? []).slice(0, 6).map((t) => [t.name, t.bytes])} />}
           </div>
         </div>
       )}
@@ -99,7 +107,7 @@ export function StoragePanel() {
           {s.market.enabled ? (
             <>
               <p className={`k-small ${s.market.error ? "k-down" : ""}`}>
-                {s.market.error ? `Can't reach it: ${s.market.error}` : <>Connected{s.market.total != null && <> · {mb(s.market.total)} used</>}. New market data is saved there.</>}
+                {s.market.error ? `Can't reach it: ${s.market.error}` : <>Connected: it is the Railway Postgres above{s.main === "railway" ? ", which holds users' data too" : ""}. New market data is saved there.</>}
               </p>
               <p className={`k-small ${s.move.error ? "k-down" : "k-muted"}`}>
                 {s.move.running ? <>Moving… started {ago(s.move.started_at ?? "")}</>
@@ -176,7 +184,10 @@ function Sizes({ title, rows }: { title: string; rows: [string, number][] }) {
   return (
     <div>
       <div className="k-note k-muted">{title}</div>
-      <div className="k-rows">{rows.map(([name, bytes]) => <div key={name}><span>{name}</span><b>{mb(bytes)}</b></div>)}</div>
+      <DataTable label={title} rows={rows} rowKey={([name]) => name} columns={[
+        { key: "n", header: "Name", rowHeader: true, wrap: true, cell: ([name]) => name },
+        { key: "s", header: "Size", numeric: true, cell: ([, bytes]) => mb(bytes) },
+      ]} />
     </div>
   );
 }

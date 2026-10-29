@@ -24,10 +24,9 @@ test("VR3-001, VR3-009: two or three cards of a group page or a file list share 
 test("VR3-002: 'Yours' and 'record date the same day' are not printed on every row of a list that is all the person's own", () => {
   const ca = read("src/components/CorpActions.tsx");
   assert.doesNotMatch(ca, /record date the same day/);
-  assert.match(ca, /showMine = true/);
-  assert.match(ca, /\{showMine && a\.mine && <Badge tone="plain" dot=\{false\}>Yours<\/Badge>\}/);
   const page = read("src/pages/CorpActionsPage.tsx");
-  assert.match(page, /showMine=\{scope === "all"\}/);
+  assert.match(page, /const showMine = scope === "all";/);          // the table's company cell (RES-1) says "Yours" only on the all-companies list
+  assert.match(page, /\{showMine && r\.mine && <span className="k-note k-muted">Yours<\/span>\}/);
   assert.match(page, /the record date \(on each row when it's another day\)/);
 });
 
@@ -69,9 +68,9 @@ test("VR3-010: Deep dive's look-back box is as wide as its words and its button 
   assert.match(css, /\.dd-ask > select\.k-input \{ width: auto; flex: none; min-width: 150px; \}/);
 });
 
-test("VR3-011: a checklist value with a sentence in it goes under its rule across the row", () => {
-  assert.match(read("src/pages/DeepDive.tsx"), /className=\{`small num\$\{x\.value\.length > 32 \? " long" : ""\}`\}/);
-  assert.match(css, /\.check-row > \.num\.long \{ grid-column: 1 \/ 3; grid-row: 2; text-align: left; \}/);
+test("VR3-011 (UI-CO item 5): a checklist value with a sentence in it reads left in its own cell; figures stay right-aligned", () => {
+  assert.match(read("src/pages/DeepDive.tsx"), /className=\{x\.value\.length > 32 \? "ck-long" : undefined\}/);
+  assert.match(css, /\.check-group \.ck-long \{ display: block; text-align: left; \}/);
 });
 
 test("VR3-012: the Plans page says 'Basic and Pro aren't on sale yet' once (its heading line); the box only offers to tell", () => {
@@ -97,8 +96,9 @@ test("VR3-016: the plan tables do not repeat their heading as the first column's
 });
 
 test("VR3-017, VR3-019: the two run pickers have the width of their names; the US holder company box's hint fits it", () => {
-  assert.match(read("src/pages/CompareExperiments.tsx"), /<div className="k-two k-two-start cmp-top">/);
-  assert.match(css, /\.k-two\.cmp-top \{ grid-template-columns: minmax\(0, 2fr\) minmax\(0, 1fr\); \}/);
+  // LIVE1A-009: the two selects fill one card's width (a pair of columns), with what changed under them
+  assert.match(read("src/pages/CompareExperiments.tsx"), /<FormGrid label="Pick two runs" pair>/);
+  assert.match(css, /\.k-form\.k-form-pair \{ grid-template-columns: repeat\(auto-fit, minmax\(min\(260px, 100%\), 1fr\)\); \}/);
   assert.match(read("src/pages/HoldersPage.tsx"), /placeholder="Like AAPL or Apple"/);
 });
 

@@ -54,16 +54,18 @@ test("DE-010/DE-011/DE-012: an impossible range is said, the filtered column sho
 });
 
 test("DE-013: the theme page names no unlisted company and shows the exchange's list for the industries", () => {
-  const s = read("src/pages/Research.tsx");
+  const s = read("src/pages/ThemesPage.tsx");          // (the page moved out of Research.tsx: THEME-1)
   assert.doesNotMatch(s, /\(not listed\)/);
   assert.match(s, /On the exchange's list for these industries/);
-  assert.match(s, /with no figures: there's no source here to check a budget, size or growth rate against/);
+  assert.match(s, /written by AI from general knowledge, with no figures/);       // the AI's text carries no figure; every figure on the page is from reported numbers
 });
 
 test("DE-017: index cards show the level to two decimals and keep the 52-week phrase on one line; repeats say so", () => {
-  const s = read("src/pages/Research.tsx");
+  // (MOOD-1: the cards are a table now; the 52-week phrase is its own column, "Against 52-week high", so it never wraps with the level)
+  const s = read("src/pages/Research.tsx"), t = read("src/pages/PulseMood.tsx");
   assert.match(s, /minimumFractionDigits: 2, maximumFractionDigits: 2/);
-  assert.match(s, /<span className="nowrap">\{i\.from_high_pct > -0\.5/);
+  assert.match(t, /minimumFractionDigits: 2, maximumFractionDigits: 2/);
+  assert.match(t, /header: "Against 52-week high"[\s\S]*i\.from_high_pct > -0\.5 \? "near its high"/);
   assert.match(read("src/components/Research.tsx"), /n\.similar \? `\$\{n\.similar\} similar/);
 });
 
@@ -71,7 +73,7 @@ test("DE-018/DE-019/DE-020/DE-021: rotation's weeks, its units, its heading and 
   const s = read("src/pages/ResearchScans.tsx");
   assert.match(s, /useAnimate\(out \? Math\.max\(1, \.\.\.out\.rows\.map\(\(r\) => r\.points\.length\)\) : tail\)/);
   assert.match(s, /not 2\.79% stronger/);
-  assert.match(s, /Heading is the way its dot moved in the last \{unit\}/);
+  assert.match(s, /Heading, the arrow beside Momentum, is the way its dot moved in the last \{unit\}/);
   const r = read("src/components/Rotation.tsx");
   assert.doesNotMatch(r, /if \(phone && h\.id !== first\) continue;/);
   assert.match(r, /const name = phone && h\.id !== first \? shortName\(h\.name\) : h\.name;/);
@@ -90,11 +92,11 @@ test("DE-022: one Table switch per breadth chart, a zoom hint on every zoomable 
 
 test("DE-023/DE-024: the headline card's notes, the sector table's small sectors and the alert level's reason", () => {
   const s = read("src/pages/BreadthPage.tsx");
-  assert.match(s, /20\\u2011day/);
-  assert.match(s, /: the same \$\{count\(x\.prev\)\}/);
+  // MOOD-1: the figures are one table (measure, the day, the day before, the change and the 20-day average): no "the same 359 / 141" note, and the alert's reason lives in its dialog
+  assert.match(s, /header: "20-day average"/);
   assert.match(s, /An earlier day's count was revised/);
   assert.match(s, /data-testid="breadth-small-sectors"/);
-  assert.match(s, /data-testid="breadth-alert-why"/);
+  assert.match(read("src/components/BreadthAlert.tsx"), /data-testid="breadth-alert-why"/);
   assert.match(s, /read its direction, not its level against another group's/);
 });
 
@@ -109,7 +111,9 @@ test("DE-028/DE-029/DE-031: dividends ahead in the US, a distribution's parts, t
   const p = read("src/pages/CorpActionsPage.tsx");
   assert.doesNotMatch(p, /Only ex-dates that have already happened are available for the US/);
   assert.doesNotMatch(p, /in India it's also the record date/);
-  assert.match(p, /<ActionLine key=\{r\.id\} a=\{r\} showEx=\{false\} showMine=\{showMine\} \/>/);
+  // the ex-date is said once, in its day's heading, and each day is a table (RES-1): no Ex-date column repeats it
+  assert.match(p, /<span className="k-eyebrow">Ex-date \{exDay\(d\)\}/);
+  assert.doesNotMatch(p, /header: "Ex-date"/);
   assert.match(p, /placeholder=\{region === "IN" \? "Like TCS or Infosys" : "Like AAPL or Apple"\}/);
   assert.match(read("src/components/CorpActions.tsx"), /dividend: "Dividends and distributions"/);
 });

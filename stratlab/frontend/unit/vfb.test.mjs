@@ -18,7 +18,9 @@ test("VR1-147: the US tax tables are phone cards, with a sale's gain right under
   const p = read("src/pages/money/UsTaxPage.tsx");
   for (const l of ["US trades", "US sales in rupees", "US dividends and credit", "Open US lots", "Schedule FA"]) assert.match(p, new RegExp(`<DataTable stack (phonePage=\\{10\\} )?label="${l}"`));
   assert.match(p, /key: "gain", header: "Gain \(₹\)", numeric: true, up: true/);
-  assert.match(p, /cardLabel: "Rate used at purchase"/);
+  // the dollars and the rate used sit under each rupee figure, so the row fits (LIVE1B-027)
+  assert.match(p, /\{usd\(r\.cost_usd\)\} at \{rateText\(r\.rate_buy\)\}/);
+  assert.match(p, /\{usd\(r\.sale_usd\)\} at \{rateText\(r\.rate_sell\)\}/);
   assert.match(read("src/components/kit/DataTable.tsx"), /c\.up && "k-first"/);
   assert.match(css, /\.k-tbl-wrap\.stack\.has-up \.k-table td\.k-first \{ order: -1; \}/);
 });
@@ -50,7 +52,7 @@ test("VR1-101, VR1-103, VR1-104: the scan page says things once; the screener's 
   assert.doesNotMatch(s, /: "A match says the rule held on the date shown/);
   assert.match(read("src/pages/Screens.tsx"), /className="k-stack screens-main"/);
   assert.match(css, /\.screens-main > \.screens-save \{ order: -1; \}/);
-  assert.match(css, /\.screens-table th\[scope="row"\] \{ min-width: 240px; \}/);
+  assert.match(css, /\.screens-table th\[scope="row"\] \{ min-width: 200px; \}/);
   assert.match(invest, /\.inv-bounds \{[^}]*minmax\(0, 1fr\) auto;/);
 });
 
@@ -59,17 +61,18 @@ test("VR1-102: the space's main button keeps its place on the page it points to"
   assert.match(css, /\.side-new-gap \{ display: block; height: 34px; \}/);
 });
 
-test("VR1-105: a company's past corporate actions sit two across under a short 'Coming up'", () => {
+test("VR1-105 (UI-CO item 1): a company's corporate actions are one table: what is ahead (or a line saying nothing is), then the past three years", () => {
   const c = read("src/components/CorpActions.tsx");
-  assert.match(c, /inv-rows\$\{wide \? " inv-rows-cols" : ""\}/);
-  assert.match(c, /const wide = past\.length >= 3 && data\.ahead\.length <= 1;/);
-  assert.match(invest, /\.inv-rows\.inv-rows-cols \{ display: grid;/);
+  assert.match(c, /const rows: ActionRow\[\] = \[/);
+  assert.match(c, /head: "Coming up"/);
+  assert.match(c, /\.\.\.\(past\.length \? past\.map/);
 });
 
 test("VR1-110, VR1-112, VR1-113: a chart's Table button stays beside a long title; the alert and the rotation controls are one row", () => {
   assert.match(read("src/components/kit/ChartFrame.tsx"), /className=\{rangeBar \|\| actions \? undefined : "k-chart-plain"\}/);
   assert.match(css, /\.k-chart-plain > \.k-card-head \{ flex-wrap: nowrap;/);
-  assert.match(read("src/pages/BreadthPage.tsx"), /<FormGrid label="New breadth alert" onSubmit=\{add\} inline>/);
+  assert.match(read("src/components/BreadthAlert.tsx"), /<FormGrid label="New breadth alert" onSubmit=\{add\} inline>/);       // MOOD-1: in the row's dialog
+  assert.match(read("src/pages/BreadthPage.tsx"), /<div className="k-toolbar breadth-bar" role="group" aria-label="What to show">/);
   assert.match(read("src/pages/ResearchScans.tsx"), /<FormGrid label="What to show" inline>/);
   assert.match(read("src/components/kit/Form.tsx"), /k-form-inline/);
   assert.match(css, /\.k-form\.k-form-inline \{ display: flex; flex-wrap: wrap; align-items: flex-end;/);
@@ -100,9 +103,8 @@ test("VR1-121, VR1-122, VR1-123, VR1-124, VR1-125: IPO badge, fold width, the is
   assert.match(p, /className="ipo-terms"/);
   assert.doesNotMatch(p, /Offer for sale \(shares existing holders offer\)/);
   assert.match(p, /r\.hours\.replace\(\/\\\.\+\$\/, ""\)/);
-  assert.match(read("src/pages/ipo.css"), /\.ipo-terms \.k-stats, \.ipo-terms \.ipo-facts, \.ipo-terms \.ipo-dates \{ grid-template-columns: repeat\(auto-fill/);
-  // the two weeks side by side (VR1-125) when both have days to come; a week with nothing left sits above the other (ui-lint R1)
-  assert.match(read("src/pages/ResultsPage.tsx"), /<div className=\{data\.weeks\.every\(\(w\) => w\.rows\.some\(\(r\) => r\.date >= data\.today\)\) \? "k-cols" : "k-stack"\}>\{data\.weeks\.map/);
+  assert.match(read("src/pages/ipo.css"), /\.ipo-terms \.k-tbl-wrap \{ margin-bottom: var\(--s3\); \}/);          // (O7: the terms and the dates are two tables in one card)
+  assert.match(read("src/pages/ResultsPage.tsx"), /data\.weeks\.map\(\(w\) => \{[\s\S]*<DataTable label=\{`Results on \$\{resultDay\(d\)\}`\}/);       // one table a day (RES-1), where two columns of chips stood side by side (VR1-125)
 });
 
 test("VR1-130: the alerts summary is one sentence row with the settings link in it", () => {
@@ -170,5 +172,5 @@ test("VR1-171, VR1-173, VR1-180, VR1-181: the library's width, count line, level
   assert.match(p, /<ChipBar label="Market" options=\{markets\} value=\{market\} onChange=\{setMarket\} wrap \/>/);
   assert.match(read("src/pages/LibraryPage.tsx"), /<ChipBar label="Market" options=\{choices\} value=\{market\} onChange=\{setMarket\} wrap \/>/);
   assert.match(read("src/pages/trade/trade.css"), /\.lib-card \.lib-head > \.k-card-head \{ margin-top: auto; \}/);
-  assert.match(read("src/pages/admin/admin.css"), /\.adm-plan \{ align-items: flex-start; gap: 2px; min-height: 48px; \}/);
+  assert.match(read("src/pages/admin/admin.css"), /\.adm-plan \{ align-items: flex-start; justify-content: center; gap: 2px; min-height: 48px; \}/);
 });

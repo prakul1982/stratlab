@@ -193,8 +193,11 @@ def test_the_page_adds_up_every_kind_with_its_as_of_date(w):
     loans = {r["entry"]["loan_type"]: r for r in v["liabilities"]}
     assert loans["home"]["facts"]["emi"] == pytest.approx(43391.16, abs=0.01) and loans["credit_card"]["value"] == 12000
     t = v["totals"]
-    assert t["assets"] == pytest.approx(sum(r["value"] or 0 for r in v["assets"]), abs=0.05)
-    assert t["net"] == pytest.approx(t["assets"] - t["liabilities"], abs=0.05)
+    # LIVE1B-023: the total is the sum of the rows as shown, each in whole rupees (a total of ₹21,64,837 over rows adding to ₹21,64,838), so it
+    # is within half a rupee a row of the paise sum
+    assert t["assets"] == sum(nw._whole(r["value"]) for r in v["assets"])
+    assert abs(t["assets"] - sum(r["value"] or 0 for r in v["assets"])) <= 0.5 * len(v["assets"])
+    assert t["net"] == t["assets"] - t["liabilities"]
     assert [a["label"] for a in v["allocation"]][:2] == ["Indian stocks", "EPF"]
     assert sum(a["pct"] for a in v["allocation"]) == pytest.approx(100, abs=0.2)
     pol = v["insurance"]["policies"][0]

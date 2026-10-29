@@ -22,7 +22,7 @@ CATALOGUE = [
 OTHER_PAYERS = {"MSFT", "JPM", "KO", "XOM", "PG", "JNJ", "HD", "CVX", "PEP", "ABBV", "MRK", "WMT", "NVDA", "COST", "V", "MA"}
 TZ = {".L": ("Europe/London", "GBp"), ".DE": ("Europe/Berlin", "EUR"), ".T": ("Asia/Tokyo", "JPY"),
       "=X": ("Europe/London", "USD"), ".NS": ("Asia/Kolkata", "INR")}
-STEP = {"1d": 86400, "60m": 3600, "15m": 900, "5m": 300}
+STEP = {"1d": 86400, "60m": 3600, "15m": 900, "5m": 300, "1m": 60}
 
 
 def base_price(sym: str) -> float:

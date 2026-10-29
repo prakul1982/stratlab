@@ -44,6 +44,7 @@ LIVE_TTL = 60                          # the index list is read at most once a m
 GRAPH_TTL = 120
 CLOSE_AT = "15:50"                     # India time: the day's row is read after this
 YEAR_DAYS = 365                        # the percentile's window, in calendar days
+CHART_DAYS = 1827                      # the panel's history chart: five years of closes, on the app's range chips (O3)
 MIN_DAYS = 60                          # stored days needed before the percentile means anything
 RANGES = {"1y": 366, "3y": 1096, "5y": 1827, "all": 9000}
 HIST_PATH, HIST_PAGE = "/api/historicalOR/vixhistory", "https://www.nseindia.com/reports-indices-historical-vix"
@@ -132,8 +133,11 @@ def parse_quote(data) -> dict | None:
     opened = _num(row.get("open"))
     if opened is not None and prev is not None and opened == prev:
         opened = None          # the list carries yesterday's close where no open was read: not shown as the day's open (R28-011)
-    return {"value": v, "prev_close": prev, "change": round(v - prev, 2) if prev else None,
-            "change_pct": round((v / prev - 1) * 100, 2) if prev else None, "open": opened,
+    # the exchange's own change and percentage when its list gives them: it works them out from unrounded levels, so 16.36 against 16.40 shown
+    # is -0.28% there and was -0.24% from the two rounded figures (LIVE1A-023)
+    own_pct, own_chg = _num(row.get("percentChange")), _num(row.get("variation"))
+    return {"value": v, "prev_close": prev, "change": round(own_chg, 2) if own_chg is not None else round(v - prev, 2) if prev else None,
+            "change_pct": round(own_pct, 2) if own_pct is not None else round((v / prev - 1) * 100, 2) if prev else None, "open": opened,
             "high": _num(row.get("high")), "low": _num(row.get("low")), "year_high": _num(row.get("yearHigh")),
             "year_low": _num(row.get("yearLow")), "as_of": as_of, "source": "exchange"}
 
@@ -352,14 +356,15 @@ def panel(options_data=None, now: datetime | None = None, feed=None) -> dict:
     today = now.date()
     q = quote_now(feed) or feed_quote(options_data, today)
     since = (today - timedelta(days=YEAR_DAYS)).isoformat()
-    hist = daily(since, today)
+    chart = daily((today - timedelta(days=CHART_DAYS)).isoformat(), today)
+    hist = [x for x in chart if x[0] >= since]          # the percentile and the value are of the last year, whatever the chart draws
     # with no quote, the value is the newest stored close, sent with its day; that day is then the value, not its past
     value_day = None if q else (hist[-1][0] if hist else None)
     value = q["value"] if q else (hist[-1][1][3] if hist else None)
     past = [v[3] for d, v in hist if d < (value_day or today.isoformat())]
     every = daily(today=today)
     line = intraday(feed)
-    return {"quote": within_line(q, line), "value": value, "value_day": value_day, "intraday": line, "history": [{"day": d, "close": v[3]} for d, v in hist],
+    return {"quote": within_line(q, line), "value": value, "value_day": value_day, "intraday": line, "history": [{"day": d, "close": v[3]} for d, v in chart],
             "percentile": percentile(value, past),
             "stored": {"days": len(every), "first": every[0][0] if every else None, "last": every[-1][0] if every else None},
             "nifty_iv": nifty_iv(options_data, now) if options_data is not None else {"today": None, "series": []},

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Card, CardHead, LinkCard, PageHeader } from "../components/kit";
 import { openTour } from "../components/Onboarding";
 import { useDocTitle } from "../lib/title";
-import { HELP_TOPICS } from "../lib/helpTopics";
+import { HELP_GROUPS, HELP_TOPICS } from "../lib/helpTopics";
 
 /* The pages for someone who is signed in and asked for something they can't have, and Help. (The pages for a visitor, "Sign
  * in to see …" and "Page not found", are in Gate.tsx, which doesn't need the app's account code.) */
@@ -30,7 +30,8 @@ export function HelpPage() {
   const t = q.trim().toLowerCase();
   const topics = HELP_TOPICS.filter((h) => !t || `${h.title} ${h.words} ${h.text}`.toLowerCase().includes(t));
   return (
-    <div className="k-page gate">
+    // the page's own width, like every other page (LIVE1B-043: a 640px column pinned to the left with 40% of the screen empty)
+    <div className="k-page">
       <PageHeader title="Help" lede="Find your way around StratLab, read how each check and figure is worked out, or reach a person." />
       <div className="gate-links">
         <LinkCard to="/contact" title="Contact us">Questions reach a person.</LinkCard>
@@ -51,12 +52,18 @@ export function HelpPage() {
           <input className="k-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Narrow the list: a word like “drawdown” or “stop”" aria-label="Narrow the explanations" />
         </div>
         {topics.length ? (
+          // grouped when nothing is typed, one list of what matches when something is
           <div className="help-topics">
-            {topics.map((h) => (
-              <details key={h.key} className="help-topic">
-                <summary>{h.title}</summary>
-                <p className="k-small">{h.text}</p>
-              </details>
+            {(t ? [["", topics] as const] : HELP_GROUPS.map(([g]) => [g, topics.filter((h) => h.group === g)] as const)).map(([g, list]) => list.length > 0 && (
+              <section key={g || "found"} className="help-group" aria-label={g || undefined}>
+                {g && <h3 className="k-sub">{g}</h3>}
+                {list.map((h) => (
+                  <details key={h.key} className="help-topic">
+                    <summary>{h.title}</summary>
+                    <p className="k-small">{h.text}</p>
+                  </details>
+                ))}
+              </section>
             ))}
           </div>
         ) : <p className="k-small k-muted">Nothing matches that. Try a shorter word, or ask in search (Ctrl K).</p>}

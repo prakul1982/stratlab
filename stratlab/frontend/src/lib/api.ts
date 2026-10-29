@@ -25,7 +25,7 @@ export const supabase = {
 
 
 /** `file` sends a file as the request body itself (no JSON, no base64), for uploads too big to wrap. */
-type Opts = { method?: string; body?: unknown; raw?: boolean; file?: Blob };
+type Opts = { method?: string; body?: unknown; raw?: boolean; file?: Blob; /** Stops the request (a live stream the page has left). */ signal?: AbortSignal };
 
 let onUnauthorized: () => void = () => {};
 let onOffline: () => void = () => {};
@@ -34,7 +34,7 @@ export function setApiHandlers(h: { unauthorized: () => void; offline: () => voi
   onOffline = h.offline;
 }
 
-export async function api<T = any>(path: string, { method = "GET", body, raw = false, file }: Opts = {}): Promise<T> {
+export async function api<T = any>(path: string, { method = "GET", body, raw = false, file, signal }: Opts = {}): Promise<T> {
   if (!CFG.API_BASE) {
     const e = new ApiError(NO_BACKEND_MESSAGE);
     console.warn("StratLab: API_BASE is missing from config.js, so no request can be sent.");
@@ -55,6 +55,7 @@ export async function api<T = any>(path: string, { method = "GET", body, raw = f
       method,
       headers: { "Content-Type": file ? "application/octet-stream" : "application/json", ...(token ? { Authorization: `Bearer ${token}`, ...viewAsHeaders() } : {}) },
       body: file ?? (body === undefined ? undefined : JSON.stringify(body)),
+      signal,
     });
   } catch {
     const e = new ApiError("Can't reach the StratLab server. Check your connection and try again.");
@@ -78,6 +79,7 @@ export async function api<T = any>(path: string, { method = "GET", body, raw = f
     e.code = d?.code;
     if (d?.plan === "basic" || d?.plan === "pro") e.plan = d.plan;
     if (Array.isArray(d)) e.fields = serverProblems(d);
+    else if (d && typeof d.fields === "object" && d.fields) e.fields = d.fields;      // a check of the server's own, per field (LIVE1B-003)
     if (r.status === 401) onUnauthorized();
     if (d?.code === "data_offline") onOffline();
     throw e;

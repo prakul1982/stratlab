@@ -74,11 +74,11 @@ def test_the_weekly_brief_is_its_own_issue_not_a_copy_of_the_daily(built):
     assert weekly["subject"].startswith("Market Brief India, week to ") and "week to" not in daily["subject"]
 
     def lead(t):
-        return re.search(r"^NIFTY 50: (\S+)", t, re.M).group(1)
+        return re.search(r"^- NIFTY 50\s+(\S+)", t, re.M).group(1)          # the Indices table's row (O5)
     assert lead(daily["text"]) != lead(weekly["text"])
     assert "on the day" not in weekly["text"] and "below its high" not in weekly["text"]
-    bank = next(ln for ln in weekly["text"].splitlines() if ln.startswith("- NIFTY BANK"))
-    assert bank.endswith("over the week")
+    assert "Week %" in weekly["text"] and "Day %" not in weekly["text"] and "Day %" in daily["text"]      # the column says which move it is
+    assert any(ln.startswith("- NIFTY BANK") for ln in weekly["text"].splitlines())
     assert re.search(r"Week to Fri \d{1,2} [A-Z][a-z]{2}", weekly["text"])        # sent on Saturday, to Friday's close (R55-007)
 
 
@@ -90,7 +90,8 @@ def test_the_us_brief_has_us_news(built):
 
 def test_links_in_rows_look_like_links(built):
     html = built["market_in"]["html"]
-    for title in ("Auto moved from Improving", "TCS matches the Stage 2 rule", "RBI keeps the repo rate unchanged"):
+    # in the tables: the rotation chart's link, a stock's own link and a headline's source link (O5)
+    for title in ("Open the rotation chart", "TCS", "Source"):
         a = re.search(r'<a href="[^"]+" class="([^"]+)" style="color:([^;]+);[^"]*">' + re.escape(title), html)
         assert a and a.group(1) == "c-blue" and a.group(2) == kit.L["blue"], title
 

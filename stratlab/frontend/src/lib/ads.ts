@@ -7,8 +7,6 @@
  * VITE_ADS_ENABLED) and, over them, from /config.js (the same names without VITE_), which turns ads off again without a rebuild.
  * The server-rendered pages have their own copy of the same settings (backend/app/ads.py); public/ads.js shares this file's
  * answer key. Two slots exist: "public" for signed-out visitors on public pages, and "ai" for Free accounts under an AI answer. */
-import { LIMITS } from "./plans";
-
 export type Choice = "yes" | "no" | null;
 export type AdSlotName = "public" | "ai";
 export type AdMode = "ad" | "house" | "none";
@@ -52,13 +50,14 @@ export function adsConfig(env: Record<string, unknown> = {}, runtime: Record<str
 export const adsLive = (cfg: AdsConfig, slot: AdSlotName): boolean => !!(cfg.on && cfg.client && cfg.slots[slot]);
 
 /** The pages that hold someone's own money, account or payment, or that are the way in: never an ad, whatever else says so. */
-const NEVER = /^\/(money|holdings|tax-report|net-?worth|account|settings|admin|login|signup|upgrade|plans|pricing|checkout|invite|import|alerts|assistant|app|paper|options|n|notebooks|mine)(\/|$)/;
+const NEVER = /^\/(money|holdings|tax-report|net-?worth|account|settings|admin|login|signup|upgrade|plans|pricing|checkout|invite|import|alerts|assistant|app|paper|options|n|notebooks|mine|trade\/journal)(\/|$)/;
 export const adsAllowedOn = (path: string): boolean => !NEVER.test(path.split(/[?#]/)[0]);
 
 /** The pages where no tracker (Meta Pixel, Clarity) loads or sends anything, and where the question isn't asked: money, tax, holdings,
  * net worth, account and settings, admin, and the way in and the payment. A tracker already loaded stops here (Clarity is stopped,
  * the pixel sends no event). The ad slots have their own, longer list (NEVER). */
-const TRACK_NEVER = /^\/(money|holdings|tax-report|net-?worth|account|settings|admin|checkout|upgrade|plans|login|signup)(\/|$)/;
+// LIVE1B-032: the trade journal holds a person's own real trades, so it is private like the money pages (it was asked, and Clarity ran, there)
+const TRACK_NEVER = /^\/(money|holdings|tax-report|net-?worth|account|settings|admin|checkout|upgrade|plans|login|signup|trade\/journal)(\/|$)/;
 export const trackAllowedOn = (path: string): boolean => !TRACK_NEVER.test(path.split(/[?#]/)[0]);
 
 /** Something needs the visitor's yes: an ad can draw, or a pixel or Clarity is set. With none of these nothing is ever asked. */
@@ -186,25 +185,4 @@ export function adMode(c: AdContext): AdMode {
   if (c.dnt || !adsLive(c.cfg, c.slot)) return own;
   if (c.choice === "yes" || (c.cmp && c.choice !== "no")) return "ad";
   return own;
-}
-
-export interface HouseCard { id: "plans" | "luck" | "brief"; title: string; text: string; to: string; cta: string }
-/** The cards that hold a Free account's slot while ads are off: StratLab's own pages, in plain facts. */
-export const HOUSE: HouseCard[] = [
-  { id: "plans", title: "Basic has more AI builds and deep dives",
-    text: `Free includes ${LIMITS.free.ai_builds_per_month} AI strategy builds and ${LIMITS.free.deepdives_per_month} company deep dives a month. Basic includes ${LIMITS.basic.ai_builds_per_month} and ${LIMITS.basic.deepdives_per_month}, and has no ads.`,
-    to: "/plans", cta: "See the plans" },
-  { id: "luck", title: "Test your idea with the four luck checks",
-    text: "Describe a rule in plain words. StratLab runs it on years of real prices and asks whether it held up on prices it never saw.",
-    to: "/new", cta: "Test an idea" },
-  { id: "brief", title: "Read today's market brief",
-    text: "A short brief after each market close, for India, the US and the companies you follow.",
-    to: "/news", cta: "Open the briefs" },
-];
-
-/** One card for a page, the same every time for the same `seed` (a company's symbol), so the card does not change as the page redraws. */
-export function houseCard(seed: string): HouseCard {
-  let h = 0;
-  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return HOUSE[h % HOUSE.length];
 }

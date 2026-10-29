@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Reac
 import { useDialogFocus } from "./kit/Dialog";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Bell, Book, Calendar, Chevron, Close, Compass, Gear, Layers, Library, Lens, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
+import { Bell, Book, Calendar, Chevron, Close, Compass, Gear, Layers, Library, Lens, Markets, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
 import { Logo } from "./Logo";
 import { VERDICT_FACT } from "./ui";
 import { AccountMenu, MarketsNow } from "./SideMenus";
@@ -14,6 +14,7 @@ import { usePersisted } from "../lib/persist";
 import { usePins } from "../lib/pins";
 import { PageBreadcrumb } from "./PageBreadcrumb";
 import { Onboarding, openTour } from "./Onboarding";
+import { MarketsLauncher, openMarkets } from "./watch/Launcher";
 import { gateFor, gatePlan } from "../lib/gates";
 import { PLAN_NAME } from "../lib/plans";
 import { watchSize } from "../lib/resize";
@@ -200,7 +201,7 @@ export function Shell({ children }: { children: ReactNode }) {
   };
   const homeLabel = space === "mine" ? MINE_NAME : `${SPACES[space].label} home`;
   // the space's main action, in the menu and on a phone's top bar alike (DI-021: the phone's "+" was always New notebook)
-  const main = mainAction(space, focus);
+  const main = mainAction(space, focus, !!me?.has_holdings);
   const sidebar = (
     <aside ref={aside} id="side-menu" className={`sidebar${open ? " open" : ""}`} aria-label={open ? "Menu" : "Navigation"}
       {...(open ? { role: "dialog", "aria-modal": true } : {})}>
@@ -259,6 +260,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
         <span className="row tight">
           <button className="icon-btn" aria-label="Search or ask anything" onClick={() => setSearch(true)}><Search /></button>
+          <button className="icon-btn" aria-label="Markets" onClick={() => openMarkets({ open: "toggle" })}><Markets /></button>
           <button className="icon-btn" aria-label={main.label} title={main.label} onClick={() => nav(main.to)}>{main.to === "/new" ? <Plus /> : main.icon}</button>
         </span>
       </header>
@@ -269,15 +271,18 @@ export function Shell({ children }: { children: ReactNode }) {
         {search && <SearchPalette onClose={() => setSearch(false)} />}
       </Suspense>
       <Onboarding main={main.label} />
+      {/* Market Watch: drawn once here, so it stays open and keeps its place from page to page (MW-1) */}
+      <MarketsLauncher mode="app" userId={me?.id} />
     </div>
   );
 }
 
 
 /** Each space's main button: what the space is for, in one action. My space's follows what the person came for. */
-export function mainAction(space: SpaceView, focus: string | null | undefined): { to: string; icon: ReactNode; label: string } {
+export function mainAction(space: SpaceView, focus: string | null | undefined, hasHoldings = false): { to: string; icon: ReactNode; label: string } {
   return space === "invest" || (space === "mine" && focus === "invest") ? { to: "/research", icon: <Lens size={16} />, label: "Look up a company" }
-    : space === "money" || (space === "mine" && focus === "money") ? { to: "/holdings", icon: <Book size={16} />, label: "Add your holdings" }
+    // the next real step: add them when there are none, update them when there are (LIVE1C-055: "Add your holdings" beside three holdings)
+    : space === "money" || (space === "mine" && focus === "money") ? { to: "/holdings", icon: <Book size={16} />, label: hasHoldings ? "Update holdings" : "Add your holdings" }
     : { to: "/new", icon: <Plus size={16} />, label: "New notebook" };
 }
 

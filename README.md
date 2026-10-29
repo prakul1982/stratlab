@@ -89,7 +89,8 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 </picture>
 
 **Invest: research**
-- Company pages for every Indian (NSE, and BSE-only) and US company, with a price chart (candles, Heikin-Ashi, bars, line; 5 minutes to daily; indicators; drawings kept on your account; compare on a % scale), plus public facts pages at `/stocks/in/SYMBOL` and `/stocks/us/SYMBOL` for search engines.
+- Market Watch on every page: named lists of any instrument the app covers (stocks, indices, crypto, forex, commodities), prices every 5 seconds and tick by tick where the broker's feed carries them, and a chart workspace with every timeframe from 1 minute to 1 month, drawings, indicators and the timeframe kept on your account per symbol (`/chart/<market>/<symbol>` as a page).
+- Company pages for every Indian (NSE, and BSE-only) and US company, with a price chart (candles, Heikin-Ashi, bars, line; 1 minute to 1 month; indicators; drawings kept on your account; compare on a % scale), plus public facts pages at `/stocks/in/SYMBOL` and `/stocks/us/SYMBOL` for search engines.
 - Deep dive: ten years of numbers, the business and its plans read from the company's own presentations, calls or 10-K, industry measures, valuation on the yardstick its industry uses, a management report card, an investor checklist, and the whole thing as PowerPoint or PDF slides.
 - IPOs (`/invest/ipos`): India's main-board and SME issues from NSE's and BSE's issue pages and SEBI's DRHP and RHP lists, and US IPOs from the IPO calendar and SEC filings, in tabs (upcoming, open, closed, listed, filed), with withdrawn issues kept apart. Each issue's page has its dates, price band, lot, size, bids by category while it is open, its documents and its trading since listing. A daily check compares the lists with the exchanges' and the regulator's own. The offer document's summary (each statement checked against a quote) and IPO alerts are on Basic.
 - Business updates and named holders: monthly sales of automakers and quarterly figures of lenders read into numbers, and every holder named above 1% in a company's shareholding, searchable across companies and followed on Basic.
@@ -243,7 +244,7 @@ stratlab/
 ├── frontend/src/     pages/ (trade/, money/ and the rest), components/ (chart/: the shared chart system), charts/price/
 │                     (the price chart), lib/ (API client, plans, spaces, Greeks, formatting, analytics)
 ├── frontend/e2e/     Playwright: every page on desktop and phone, every route at several sizes, the landing page, and the
-│                     UI checker (ui-lint.spec.ts: layout rules R1 to R25 on every page)
+│                     UI checker (ui-lint.spec.ts: layout rules R1 to R26 on every page)
 ├── frontend/scripts/ docs-shots: retakes the README's screenshots from the fake world
 └── supabase/         schema.sql
 docs/                 FEATURES.md, ADMIN.md, ROADMAP.md, AI_ASSISTANT.md, UI_CHECKER.md, images/, screenshots/

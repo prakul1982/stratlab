@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, dataUrl, type ApiError } from "../lib/api";
-import { numberProblem, problems, type Limits } from "../lib/validate";
+import { numberProblem, problems, qtyProblem, type Limits } from "../lib/validate";
 import { useApp } from "../lib/app";
 import { useMarketRefresh } from "../lib/marketLive";
 import { usTodayNote } from "../lib/marketHours";
-import { ago, dateOnly, fmtDate, inr, istToday, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
+import { aFile, ago, asOf as asOfText, dateOnly, fmtDate, inr, istToday, marketTz, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
+import { NoBreak } from "../components/NoBreak";
 import { Trash } from "../components/Icons";
 import { track } from "../lib/analytics";
 import { HoldingsActionsPanel } from "../components/HoldingsActions";
@@ -36,10 +37,12 @@ type View = {
   totals: { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced: number;
     pnl_partial?: { priced: number; lines: number } | null;
     no_cost?: { count: number; symbols: string[]; value: number } | null; session?: string | null; other_session?: string[] };
-  source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; closes?: Closes; limit: number; facts_max: number;
+  source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; us_prices_at?: string | null; closes?: Closes; limit: number; facts_max: number;
   us?: UsTotals | null; usd_inr?: number | null; usd_inr_at?: string | null; us_prices?: boolean | null;
   /** the connected Zerodha account's last read (R7M-009); absent when it isn't connected */
   zerodha?: ZerodhaRead | null;
+  /** whether Zerodha login is open for this account (LIVE1B-042: "Connect Zerodha" was offered where it isn't there) */
+  zerodha_open?: boolean;
 };
 type Facts = {
   stage: number | null; st_up: boolean | null; signal: string | null; red: number | null; amber: number | null; flags: string[];
@@ -47,7 +50,7 @@ type Facts = {
 };
 type FactsReply = { rows: Record<string, Facts>; filings: boolean; filings_plan: string; checked: number; count: number };
 type Unmatched = { line: number | null; text: string; reason: string };
-type ImportReply = { broker: string; imported: number; saved: boolean; unmatched: Unmatched[]; unmatched_count: number; over_limit: string[]; limit: number; holdings: View };
+type ImportReply = { broker: string; imported: number; saved: boolean; duplicate?: boolean; unmatched: Unmatched[]; unmatched_count: number; over_limit: string[]; limit: number; holdings: View };
 
 const MAX_MB = 2;
 const BROKERS = "Zerodha (Console or Kite), Groww, Upstox, Angel One, ICICI Direct and HDFC Securities";
@@ -77,7 +80,8 @@ export function HoldingsPage() {
   const more = useMoreColumns("holdings", 4);     // sector, trend, filings and results: one click away, so the table fits a laptop
   const [mode, setMode] = useState<"replace" | "add">("replace");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<ImportReply | null>(null);
+  const [reading, setReading] = useState(false);        // a file is being read: only then does the upload button say "Reading…" (LIVE1B-047)
+  const [result, setResult] = useState<(ImportReply & { replaced: boolean; usKept: number }) | null>(null);
   const [edit, setEdit] = useState<Row | null>(null);
   const editAt = useRef(0);                        // the edited row's place, so focus lands on its neighbour if it's removed
   const [asking, setAsking] = useState(false);
@@ -118,40 +122,59 @@ export function HoldingsPage() {
     api<View>("/holdings").then((v) => { if (n === readSeq.current) setView(v); }).catch(() => undefined);
   }, !!view && view.rows.length > 0 && !busy);
 
-  const { problem, clear: clearProblem, refused } = useUploadProblem();     // a refused file's reason stays beside the upload (RC6-010)
+  // a connected Zerodha is read again from here, not only from Settings; a login that has ended goes to Zerodha's own sign-in (LIVE1C-057)
+  const refreshZerodha = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ count: number }>("/connect/kite/refresh", { method: "POST" });
+      notify(`Read ${r.count} holding${r.count === 1 ? "" : "s"} from Zerodha.`);
+      load();
+    } catch (e) {
+      if ((e as { code?: string }).code === "login_needed") {
+        try { const r = await api<{ url: string }>("/connect/kite/login"); window.location.href = r.url; return; } catch (e2) { fail(e2); }
+      } else fail(e);
+    } finally { setBusy(false); }
+  };
+
+  const { problem, clear: clearProblem, refused, reject } = useUploadProblem();     // a refused file's reason stays beside the upload (RC6-010)
   const pick = async (files: FileList | null, reset: () => void) => {
     const f = files?.[0];
     if (!f) return;
-    if (f.size > MAX_MB * 1024 * 1024) { notify(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); reset(); return; }
-    setBusy(true); clearProblem();
+    // LIVE1B-002: the last file's answer goes the moment another is picked, so a refusal never sits under an old "saved" line
+    setResult(null); clearProblem();
+    if (f.size > MAX_MB * 1024 * 1024) { reject(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); reset(); return; }
+    setBusy(true); setReading(true);
     try {
       const data = await dataUrl(f);
       const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode } });
       track("holdings imported", { rows: r.imported, method: mode });
-      setResult(r);
+      setResult({ ...r, replaced: mode === "replace", usKept: r.holdings.us?.count ?? 0 });
       show(r.holdings);
     } catch (e) { if (!refused(e)) fail(e); } finally {
-      setBusy(false);
+      setBusy(false); setReading(false);
       reset();
     }
   };
 
   /** Send only what changed: the server applies it to the holdings as saved now, so a sync that landed while the page was
    * open stays. A symbol no listed company has comes back to `onMissing` (said under the box) or as a toast. */
-  const save = async (changes: Change[], done?: string, onMissing?: (msg: string) => void) => {
+  const save = async (changes: Change[], done?: string, onMissing?: (msg: string) => void, onFields?: (f: { qty?: string; avg?: string }) => void) => {
     setBusy(true);
     try {
       const r = await api<{ unmatched: Unmatched[]; notes?: string[]; holdings: View }>("/holdings", { method: "PUT", body: { changes } });
       show(r.holdings);
       if (r.notes?.length) done = [done, ...r.notes].filter(Boolean).join(" ");
-      const missing = r.unmatched.length
+      // a line stopped for its size (LIVE1B-003) is said under the quantity box; a symbol no company has, under the symbol box
+      const sized = r.unmatched.find((u) => u.reason.endsWith("Check the quantity."));
+      const missing = sized ? null : r.unmatched.length
         ? `${r.unmatched.map((u) => u.text).join(", ")}: ${r.unmatched[0].reason.startsWith("No US") ? "no US-listed company has that ticker" : "no listed company on NSE or BSE has that symbol"}. Pick one from the suggestions.` : null;
-      if (missing) (onMissing ?? notify)(missing);
+      if (sized) { if (onFields) onFields({ qty: sized.reason }); else if (onMissing) setAddErr((x) => ({ ...x, qty: sized.reason })); else notify(sized.reason); }
+      else if (missing) (onMissing ?? notify)(missing);
       else if (done) notify(done);
       return !r.unmatched.length;
     } catch (e) {
       const f = (e as ApiError).fields;
-      if (f && onMissing && (f.qty || f.avg)) setAddErr((x) => ({ ...x, ...(f.qty ? { qty: f.qty } : {}), ...(f.avg ? { avg: f.avg } : {}) }));
+      if (f && (f.qty || f.avg) && (onFields || onMissing)) (onFields ?? ((x) => setAddErr((y) => ({ ...y, ...x }))))({ ...(f.qty ? { qty: f.qty } : {}), ...(f.avg ? { avg: f.avg } : {}) });
       else fail(e);
       return false;
     } finally { setBusy(false); }
@@ -160,7 +183,7 @@ export function HoldingsPage() {
   const addOne = async () => {
     const errs = problems({
       symbol: add.symbol.trim() ? null : "Type a name or symbol, then pick the company.",
-      qty: numberProblem(add.qty, QTY), avg: numberProblem(add.avg, { ...AVG, unit: add.market === "US" ? "$" : "₹" }),
+      qty: qtyProblem(add.qty, add.market, QTY), avg: numberProblem(add.avg, { ...AVG, unit: add.market === "US" ? "$" : "₹" }),
     });
     setAddErr(errs);
     if (Object.keys(errs).length) return;
@@ -222,28 +245,35 @@ export function HoldingsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · What you own" title="Your stocks, at the latest prices" asOf={view?.prices_at} asOfLabel="Prices as of"
+      <PageHeader eyebrow="Money · What you own" title="My Holdings" asOf={view?.prices_at} asOfTz={rows.length > 0 && rows.every(isUS) ? marketTz("US") : undefined}
+        asOfLabel={view?.us_prices_at ? "India prices as of" : "Prices as of"}
+        actions={view?.us_prices_at ? <Badge>US prices as of {asOfText(view.us_prices_at, { tz: marketTz("US") })}</Badge> : undefined}
         lede="Your broker's holdings file, valued at the latest prices (the last close when the market is shut): each stock's value, gain or loss, and your sector mix."
         info="Facts, not advice. Only you can see your holdings." infoLabel="About your holdings" />
 
       <Card>
         <CardHead title="Import from your broker" info={<>Download your holdings as Excel or CSV from {BROKERS} (usually Portfolio › Holdings › Download), then upload it here. Any other CSV works too with columns for Symbol (or ISIN), Quantity and Average price.</>}
-          actions={rows.length > 0 ? <Seg label="What the file does" options={[{ value: "replace", label: "Replace my holdings" }, { value: "add", label: "Add to them" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} /> : undefined} />
+          actions={rows.length > 0 ? <Seg label="What the file does" options={[{ value: "add", label: "Add to my holdings" }, { value: "replace", label: "Start again with this file" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} /> : undefined} />
         <div className="k-row">
-          <UploadButton label="Upload holdings file" busy={busy} accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Holdings file" onFiles={pick} />
+          <UploadButton label="Upload holdings file" busy={reading} accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Holdings file" onFiles={pick} />
           <span className="k-note">Excel or CSV, up to {MAX_MB} MB.</span>
         </div>
         <UploadProblem problem={problem} />
         {view?.zerodha && rows.length === 0 && zerodhaEmpty(view.zerodha)
           ? null      // the empty state below already says Zerodha is connected and returned nothing (R35: said twice)
           : view?.zerodha
-          ? <p className="k-note">Zerodha is connected. <Link to="/settings#accounts">Refresh it or connect your statement inbox in Settings</Link>, so this stays up to date without uploads.</p>
-          : <p className="k-note">Prefer not to upload each time? <Link to="/settings#accounts">Connect Zerodha or your statement inbox once</Link> and this stays up to date by itself.</p>}
+          ? <div className="k-row" data-testid="zerodha-refresh">
+              <span className="k-note">Zerodha is connected{view.zerodha.read_at ? `, last read ${ago(view.zerodha.read_at)}` : ""}. Zerodha ends its login each morning, so one tap a day keeps this current; <Link to="/settings#accounts">a statement inbox in Settings</Link> does it without a tap.</span>
+              <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void refreshZerodha()}>{busy ? "Reading…" : "Read from Zerodha now"}</button>
+            </div>
+          : <p className="k-note">Prefer not to upload each time? <Link to="/settings#accounts">{view?.zerodha_open === false ? "Connect your statement inbox once" : "Connect Zerodha or your statement inbox once"}</Link> and this stays up to date by itself.</p>}
         {result && (
           <div className="k-stack" role="status">
             <p className="k-small">
-              <b>{result.broker === "CSV" ? "Read as a CSV file" : `Read as a ${result.broker} file`}:</b>{" "}
-              {result.saved ? `${result.imported} stock${result.imported === 1 ? "" : "s"} saved.` : "nothing matched, so your saved holdings are unchanged."}
+              <b>Read as {aFile(result.broker)}:</b>{" "}
+              {result.duplicate ? "you added this same file before, so your holdings are unchanged. To read it again, choose Start again with this file."
+                : result.saved ? `${result.imported} stock${result.imported === 1 ? "" : "s"} saved.${result.replaced && result.usKept > 0 ? ` Your ${result.usKept} US stock${result.usKept === 1 ? " is" : "s are"} kept: a file replaces your Indian holdings only.` : ""}`
+                : "nothing matched, so your saved holdings are unchanged."}
               {result.unmatched_count > 0 && ` ${result.unmatched_count} line${result.unmatched_count === 1 ? "" : "s"} couldn't be matched (below).`}
             </p>
             {result.over_limit.length > 0 && (
@@ -289,7 +319,7 @@ export function HoldingsPage() {
                 Add {t.no_cost.count === 1 ? "its buy price" : "their buy prices"} with Edit to count {t.no_cost.count === 1 ? "it" : "them"}.
               </p>
             )}
-            {view.us && usTodayNote(markets, view.us, view.usd_inr) && <p className="k-note" data-testid="us-today">{usTodayNote(markets, view.us, view.usd_inr)}</p>}
+            {view.us && usTodayNote(markets, view.us, view.usd_inr, new Date(), false) && <p className="k-note" data-testid="us-today"><NoBreak text={usTodayNote(markets, view.us, view.usd_inr, new Date(), false)!} /></p>}
             {t.session && (t.other_session?.length ?? 0) > 0 && (
               <p className="k-note">Today is the {fmtDate(t.session, { year: false })} session. {t.other_session!.join(", ")} {t.other_session!.length === 1 ? "has" : "have"} not traded in it yet, so {t.other_session!.length === 1 ? "its" : "their"} last change is left out of Today.</p>
             )}
@@ -343,11 +373,11 @@ export function HoldingsPage() {
                 onPick={(s, region) => { setPicked(s); setAdd((x) => ({ ...x, symbol: s, market: region })); setAddErr((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>
             {/* each number is checked as it's typed, with its limit named (lib/validate) */}
-            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} error={addErr.qty} rule="More than 0"
-              onChange={(e) => { setAdd({ ...add, qty: e.target.value }); setAddErr((x) => ({ ...x, qty: e.target.value.trim() ? numberProblem(e.target.value, QTY) ?? undefined : undefined })); }} />
+            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} error={addErr.qty} rule={add.market === "US" ? "More than 0; fractions are fine" : "Whole shares, 1 or more"}
+              onChange={(e) => { setAdd({ ...add, qty: e.target.value }); setAddErr((x) => ({ ...x, qty: e.target.value.trim() ? qtyProblem(e.target.value, add.market, QTY) ?? undefined : undefined })); }} />
             <Field label="Average price" optional unit={add.market === "US" ? "$" : "₹"} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} value={add.avg} error={addErr.avg}
               onChange={(e) => { const v = e.target.value.replace(/,/g, ""); setAdd({ ...add, avg: v }); setAddErr((x) => ({ ...x, avg: numberProblem(v, { ...AVG, unit: add.market === "US" ? "$" : "₹" }) ?? undefined })); }} />
-            <FormActions><button type="submit" className="btn" disabled={busy}>Add</button></FormActions>
+            <FormActions><button type="submit" className="btn" disabled={busy} aria-busy={busy || undefined}>{busy ? "Adding…" : "Add"}</button></FormActions>
           </FormGrid></div>
           {add.market === "US" && <p className="k-note">US stocks are valued in dollars, and added to your totals in rupees at the day's exchange rate. Sales of them are worked out from the trades on the <Link className="link" to="/money/us-tax">US stocks tax page</Link>, not from this list.</p>}
         </Card>
@@ -393,7 +423,11 @@ export function HoldingsPage() {
 
       {edit && (
         <EditHolding row={edit} busy={busy} onClose={() => setEdit(null)} fallback={() => afterRemove(editAt.current)}
-          onSave={async (q, a) => { if (await save([editChange(edit, q, a)], `${edit.symbol} updated.`)) setEdit(null); }}
+          onSave={async (q, a) => {
+            const bad: { f?: { qty?: string; avg?: string } } = {};      // a limit the server holds, said under the box in the dialog (LIVE1B-003)
+            if (await save([editChange(edit, q, a)], `${edit.symbol} updated.`, undefined, (f) => { bad.f = f; })) setEdit(null);
+            return bad.f;
+          }}
           onRemove={async () => { if (await save([{ op: "remove", symbol: edit.symbol, market: edit.market ?? "IN" }], `${edit.symbol} removed.`)) setEdit(null); }} />
       )}
       {asking && <ConfirmDialog title="Delete my holdings?" confirmLabel="Delete my holdings" busy={busy} onConfirm={() => void remove()} onClose={() => setAsking(false)}>Every saved position is removed from StratLab. Your broker account isn't touched.</ConfirmDialog>}
@@ -412,23 +446,36 @@ function afterRemove(at: number): HTMLElement | null {
 }
 
 function EditHolding({ row, busy, onClose, onSave, onRemove, fallback }: {
-  row: Row; busy: boolean; onClose: () => void; onSave: (qty: number, avg: number | null) => void; onRemove: () => void; fallback: () => HTMLElement | null;
+  row: Row; busy: boolean; onClose: () => void; onSave: (qty: number, avg: number | null) => Promise<{ qty?: string; avg?: string } | void>; onRemove: () => void; fallback: () => HTMLElement | null;
 }) {
   const [q, setQ] = useState(String(row.qty));
   const [a, setA] = useState(row.avg == null ? "" : String(row.avg));
+  const [srv, setSrv] = useState<{ qty?: string; avg?: string }>({});
+  // LIVE1B-048: a position and its average price are gone with one click beside Save, so Remove asks first
+  const [asking, setAsking] = useState(false);
   const qn = Number(q.replace(/,/g, "")), an = a.trim() ? Number(a) : null;
-  const qErr = numberProblem(q, QTY), aErr = numberProblem(a, { ...AVG, unit: row.market === "US" ? "$" : "₹" });
+  const qErr = qtyProblem(q, row.market ?? "IN", QTY, row.qty) ?? srv.qty, aErr = numberProblem(a, { ...AVG, unit: row.market === "US" ? "$" : "₹" }) ?? srv.avg;
   const ok = !qErr && !aErr;
   return (
     <Modal title={`Edit ${row.symbol}`} onClose={onClose} fallback={fallback}>
-      <FormGrid onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(qn, an); }}>
-        <Field label="Quantity" inputMode="decimal" value={q} error={qErr} onChange={(e) => setQ(e.target.value)} />
-        <Field label="Average price" optional unit={row.market === "US" ? "$" : "₹"} inputMode="decimal" value={a} error={aErr} onChange={(e) => setA(e.target.value.replace(/,/g, ""))} />
+      <FormGrid onSubmit={(e) => { e.preventDefault(); if (ok && !busy) void onSave(qn, an).then((bad) => setSrv(bad ?? {})); }}>
+        <Field label="Quantity" inputMode="decimal" value={q} error={qErr} onChange={(e) => { setQ(e.target.value); setSrv((x) => ({ ...x, qty: undefined })); }} />
+        <Field label="Average price" optional unit={row.market === "US" ? "$" : "₹"} inputMode="decimal" value={a} error={aErr} onChange={(e) => { setA(e.target.value.replace(/,/g, "")); setSrv((x) => ({ ...x, avg: undefined })); }} />
         {row.via && <p className="k-note" data-testid="synced-note">{syncedNote(row.via)}</p>}
-        <FormActions>
-          <button type="submit" className="btn" disabled={busy || !ok}>Save</button>
-          <button type="button" className="btn danger" disabled={busy} onClick={onRemove}><Trash size={16} />Remove from holdings</button>
-        </FormActions>
+        {asking ? (
+          <div className="k-stack" role="group" aria-label={`Remove ${row.symbol}`}>
+            <p className="k-small">Remove {row.symbol} from your holdings? Its quantity and average price are deleted from StratLab. Your broker account isn't touched.</p>
+            <FormActions>
+              <button type="button" className="btn danger" disabled={busy} onClick={onRemove}><Trash size={16} />Yes, remove {row.symbol}</button>
+              <button type="button" className="btn quiet" disabled={busy} onClick={() => setAsking(false)}>Keep it</button>
+            </FormActions>
+          </div>
+        ) : (
+          <FormActions>
+            <button type="submit" className="btn" disabled={busy || !ok} aria-busy={busy || undefined}>Save</button>
+            <button type="button" className="btn danger sm" disabled={busy} onClick={() => setAsking(true)}><Trash size={16} />Remove from holdings</button>
+          </FormActions>
+        )}
       </FormGrid>
     </Modal>
   );

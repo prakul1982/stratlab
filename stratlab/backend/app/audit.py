@@ -228,6 +228,13 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
         slack = PE_TOLERANCE + (0.005 if abs(ttm) < 10 else 0.5) / abs(ttm)
         if off is not None and off > slack and abs(ours - snap["pe"]) > PE_ROUNDING and not explained:
             out.append(_issue("mismatch", "Valuation", f"P/E {pe_text(snap['pe'])} on the company page, {pe_text(ours)} from market cap ÷ trailing profit"))
+    if snap.get("pe_why"):
+        # LIVE2-025: the page holds the figure back itself, so there is nothing wrong on show; a fact, not a mismatch
+        out.append(_issue("fact", "Valuation", f"P/E not shown: {snap['pe_why']}"))
+    if snap.get("pe_off_profit") and snap.get("market_cap_cr") and ttm and ttm > 0:
+        # not a wrong figure on a page: the page leaves a P/E out that its profit can't match (stock_pages.pe_off_profit, LIVE1C-019)
+        out.append(_issue("fact", "Valuation", f"P/E left out: the source's {pe_text(snap['pe_off_profit'])} is far from {pe_text(snap['market_cap_cr'] / ttm)} "
+                                               "(market cap ÷ trailing profit), more than the minority holders' share or a one-off explains"))
     if snap.get("pe") is not None and 0 < float(snap["pe"]) < SUSPECT_PE:
         if p.get("region") == "US":        # filed in dollars against a dollar price: no units to slip, so a profit above the market value is a one-off gain
             out.append(_issue("fact", "Valuation", f"P/E {pe_text(snap['pe'])} is under 1: the last twelve months' profit is more than the "

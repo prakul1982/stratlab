@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Modal } from "../../components/ui";
+import { Info, Modal } from "../../components/ui";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, istToday, plainDates } from "../../lib/format";
-import { Card, CardHead, DataTable, Light, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, FigureTable, Light, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type JobRow } from "./AdminContext";
 import { plainError, services } from "./attention";
 import { BlogPanel } from "./BlogPanel";
@@ -27,11 +27,12 @@ function JobLog({ job, mine, onClose }: { job: JobRow; mine: Outcome[]; onClose:
   return (
     <Modal title={`${job.name}: log`} onClose={onClose}>
       <div className="k-stack">
-        <div className="k-rows">
-          <div><span>Last run</span><b>{job.last_run ? `${ago(job.last_run)} (${dateOnly(job.last_run)})` : "Not yet"}</b></div>
-          <div><span>Next run</span><b>{job.schedule || "–"}</b></div>
-          <div><span>Status</span><b><Light state={job.state} /></b></div>
-        </div>
+        <FigureTable label={`${job.name}: when it runs`} header="Job" valueHeader="Value" noteHeader={null} rows={[
+          { key: "last", label: "Last run", value: job.last_run ? `${ago(job.last_run)} (${dateOnly(job.last_run)})` : "Not yet" },
+          { key: "next", label: "Next run", value: job.next ?? (job.schedule || "–") },
+          ...(job.next && job.schedule ? [{ key: "sched", label: "Schedule", value: <span className="adm-break">{job.schedule}</span> }] : []),
+          { key: "status", label: "Status", value: <Light state={job.state} /> },
+        ]} />
         {job.error && <p className={`k-small ${job.state === "bad" ? "k-down" : ""}`} role="alert" title={plainError(job.error).full}>{job.state === "bad" ? "Last problem" : "To check"}: {plainError(job.error).text}</p>}
         {job.note && <p className="k-small k-muted">{job.note}</p>}
         <h3 className="adm-sub">What it reported</h3>
@@ -88,6 +89,7 @@ export function DataSection() {
     if (!fromAlert || !sv) return;
     setParams((p) => { p.delete("kite"); return p; }, { replace: true });
     if (loggedInToday) { notify("Already logged in to the broker today: nothing to do."); return; }
+    notify("Opening the broker's own sign-in page…");                  // LIVE1C-016: a blank wait, then Zerodha, with no word on why
     void run("kite", async () => {
       const { url } = await api<{ url: string }>("/admin/kite/login-url", { method: "POST" });
       window.location.assign(url);
@@ -99,8 +101,12 @@ export function DataSection() {
   });
 
   const cols: Column<JobRow>[] = [
-    { key: "job", header: "Job", rowHeader: true, wrap: true, cell: (j) => <span className="k-stack"><b>{j.name}</b><span className="k-note k-muted">Next run: {j.schedule || "–"}</span>{j.error && <span className={`k-note ${j.state === "bad" ? "k-down" : "k-muted"}`} title={plainError(j.error).full}>{plainError(j.error).text}</span>}</span> },
-    { key: "state", header: "Status", cell: (j) => <Light state={j.state} word={j.running ? "Running" : undefined} /> },
+    // the actual next time first, the schedule sentence behind an (i): seven lines of clock times were not a "next run" (LIVE1C-014)
+    { key: "job", header: "Job", rowHeader: true, wrap: true, cell: (j) => (
+      <span className="k-stack"><b>{j.name}</b>
+        <span className="k-note k-muted">{j.next ? <>Next run: {j.next}{j.schedule && <Info label={`Schedule of ${j.name}`}>{j.schedule}</Info>}</> : <>Next run: {j.schedule || "–"}</>}</span>
+        {j.error && <span className={`k-note ${j.state === "bad" ? "k-down" : "k-muted"}`} title={plainError(j.error).full}>{plainError(j.error).text}</span>}</span>) },
+    { key: "state", header: "Status", cardLabel: "", cell: (j) => <Light state={j.state} word={j.running ? "Running" : undefined} /> },
     { key: "last", header: "Last run", cell: (j) => (j.last_run ? ago(j.last_run) : <span className="k-muted">Not yet</span>) },
     { key: "do", header: <span className="sr-only">Run now and log</span>, action: true, cell: (j) => (
       <span className="k-row">
@@ -118,7 +124,7 @@ export function DataSection() {
     <>
       <Card label="Background jobs">
         <CardHead title="Background jobs" info="Each job runs on its own clock; Next run says when. Run now starts it at once where the job has a manual trigger (a job without a button runs on its clock only). A job that reads from the exchange can take a minute or two." />
-        {!jobs ? <Skeleton label="Loading the jobs" /> : <DataTable label="Background jobs" rows={jobs} rowKey={(j) => j.id} columns={cols} stack />}
+        {!jobs ? <Skeleton label="Loading the jobs" /> : <DataTable label="Background jobs" rows={jobs} rowKey={(j) => j.id} columns={cols} stack phonePage={8} />}
       </Card>
 
       <Card label="India broker data">
@@ -129,7 +135,7 @@ export function DataSection() {
               {broker.map((s) => <StatusRow key={s.key} state={s.state} label={s.label} detail={s.fix ?? s.detail} />)}
             </StatusList>
             <div className="k-row">
-              <button type="button" className="btn sm" disabled={kite === "kite"} onClick={kiteLogin}>Log in to the broker</button>
+              <button type="button" className="btn outline sm" disabled={kite === "kite"} onClick={kiteLogin}>Log in to the broker</button>
               {sv.auto_login_configured && <button type="button" className="btn quiet sm" disabled={kite === "auto"} onClick={autoLogin}>{kite === "auto" ? "Logging in…" : "Run the automatic login now"}</button>}
             </div>
           </>

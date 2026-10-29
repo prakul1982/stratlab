@@ -61,17 +61,14 @@ test("VR6-007: a post's three and four column tables fit a 360px phone, the four
   expect(new Set(tops).size, `the four figures of a check ${tops}`).toBe(1);
 });
 
-test("VR6-005: a brief opens with one line and a tile for each index, not a paragraph and a table saying the same figures", async ({ page, baseURL }) => {
+test("VR6-005 (O5): a brief opens with one line and one table of the indices, not a paragraph and tiles saying the same figures", async ({ page, baseURL }) => {
   await open(page, `${baseURL}/blog/briefs`, null, 390);
   await page.locator("ul.posts a.post", { hasText: "India market brief" }).first().click();
   await expect(page.getByRole("heading", { level: 2, name: "Index closes" })).toBeVisible({ timeout: 30_000 });
-  const tiles = page.locator("article ul.kpis li");
-  expect(await tiles.count()).toBeGreaterThanOrEqual(2);
-  await expect(tiles.first()).toContainText("on the day");
-  await expect(page.locator("article .btbl")).toHaveCount(0);
-  // two to a row, the odd last one takes the whole row
-  const tops = await tiles.evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.width)]; }));
-  if (tops.length % 2 === 1) expect(tops[tops.length - 1][1], "the last tile's width").toBeGreaterThan(390 * 0.8);
+  await expect(page.locator("article ul.kpis li")).toHaveCount(0);
+  const idx = page.locator("article .btbl").first();
+  await expect(idx).toContainText("NIFTY 50");
+  expect(await idx.locator("tbody tr").count()).toBeGreaterThanOrEqual(2);
   await noSideways(page);
 });
 
@@ -104,13 +101,17 @@ test("VR6-024: a phone shows twelve strategy cards and Show 12 more; a desktop s
   expect(await page.locator(".lib-card").count()).toBe(total);
 });
 
-test("VR6-010 and VR6-011: with nothing on the watchlist, My space and the Invest home give it a row to itself, with no card left short beside a long one", async ({ page, request }) => {
+test("VR6-010 and VR6-011: with nothing on the watchlist, My space and the Invest home give it a row to itself, with no card left short beside a long one", async ({ page, request }, info) => {
   const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
-  const head = { Authorization: "Bearer admin-token" };
+  // each project empties its OWN Pro account's watchlist (load-131 / load-134): the desktop and phone runs of this test overlap,
+  // and on one shared account one run's restore refilled the list while the other was measuring (CI, 29 Oct)
+  const n = info.project.name === "phone" ? 134 : 131;
+  const head = { Authorization: `Bearer load-${n}` };
+  await request.put(`${API}/me/prefs`, { headers: head, data: { level: "some", focus: "both" } });        // past the welcome question
   const before = await (await request.get(`${API}/research/watchlist`, { headers: head })).json();
   try {
     await request.put(`${API}/research/watchlist`, { headers: head, data: { items: [] } });
-    await open(page, "/mine", ADMIN, 1440);
+    await open(page, "/mine", session(`load-${n}`, `u-load-${n}`, `load${n}@example.com`), 1440);
     await expect(page.getByTestId("mine-watch")).toContainText(/Your watchlist is empty/, { timeout: 30_000 });
     const w = await page.evaluate(() => ["coming", "watch"].map((id) => Math.round(document.querySelector(`[data-card="${id}"]`)!.getBoundingClientRect().width)));
     expect(Math.abs(w[0] - w[1]), `widths ${w}`).toBeLessThan(2);                         // both the page's width: neither stands beside the other

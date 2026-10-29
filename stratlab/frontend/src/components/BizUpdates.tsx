@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
-import { bizChange, bizValue, periodName } from "../lib/biz";
+import { bizChange, bizValue, periodName, tidyTitle } from "../lib/biz";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
 import { DataTable, EmptyState, Notice, Skeleton } from "./kit";
@@ -116,11 +116,11 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
         <ul className="k-list plain biz-filings k-small" aria-label="Business update filings">
           {files.map((f) => (
             <li key={f.id} className="k-spread">
-              <span><span className="k-note biz-day">{day(f.at)}</span> {f.title}</span>
+              <span><span className="k-note biz-day">{day(f.at)}</span> {tidyTitle(f.title)}</span>
               <a className="link" href={safeHref(f.url)} target="_blank" rel="noopener noreferrer">{f.exchange ?? "Exchange"} filing ↗</a>
             </li>))}
         </ul>
-      ) : <EmptyState title="No update filings yet">They are listed here as the company files them.</EmptyState>}
+      ) : <EmptyState title="No business update filed">They are listed here as the company files them.</EmptyState>}
       {v.filings.length > files.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {v.filings.length}</button>}
       {v.problems.length > 0 && <p className="k-note">{v.problems.slice(0, 3).join(" · ")}</p>}
       <p className="k-note">{v.note}</p>

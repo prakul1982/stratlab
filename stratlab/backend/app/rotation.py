@@ -16,7 +16,7 @@ from .scan import _pool
 WINDOW = 14          # candles in the normalising window, both axes
 SMOOTH = 3           # EMA of the RS line before normalising, to cut day-to-day jitter
 MAX_TAIL = 12
-VERSION = 2          # the answer's shape: 2 = tail + 1 points, "moved" from `tail` steps back (DE-018); a kept copy of another is redone
+VERSION = 3          # the answer's shape: 2 = tail + 1 points, "moved" from `tail` steps back (DE-018); 3 = each row's 1W/1M/3M return against the benchmark (MOOD-1); a kept copy of another is redone
 
 SECTORS = {
     "IN": {"benchmark": "NIFTY 500", "name": "NSE sector indices", "members": [
@@ -89,6 +89,25 @@ def path(member: pd.Series, bench: pd.Series, tail: int) -> list[dict]:
     mom = _z(100 * ratio / ratio.shift(1), WINDOW)
     pts = pd.concat([ratio, mom], axis=1).dropna().tail(tail)
     return [{"t": t.date().isoformat(), "x": round(float(x), 3), "y": round(float(y), 3)} for t, (x, y) in pts.iterrows()]
+
+
+RETURN_SESSIONS = (("w1", 5), ("m1", 21), ("m3", 63))       # the sessions a week, a month and three months are, for the table's returns
+
+
+def relative_returns(member: pd.Series, bench: pd.Series) -> dict:
+    """How much more (or less) a member returned than the benchmark over the last 5, 21 and 63 sessions, in percentage points:
+    {"w1", "m1", "m3"}, each None when the two don't share that many sessions. Sessions are those both have, so a day one of them
+    skipped is not counted against it (MOOD-1: the rotation table's "1W / 1M / 3M vs NIFTY 500")."""
+    both = pd.concat([member, bench], axis=1, join="inner").dropna()
+    out = {}
+    for key, n in RETURN_SESSIONS:
+        if len(both) <= n:
+            out[key] = None
+            continue
+        m = both.iloc[-1, 0] / both.iloc[-1 - n, 0] - 1
+        b = both.iloc[-1, 1] / both.iloc[-1 - n, 1] - 1
+        out[key] = round(float((m - b) * 100), 2)
+    return out
 
 
 def heading(pts: list[dict]) -> float | None:
@@ -179,7 +198,9 @@ def compute(registry, market: str, members: list[tuple[str, str]], interval: str
     load = completed_sessions(market, load)
     bid, bsym = bench or benchmark_id(registry, market)
     try:
-        bench_s = closes(load(bid, days), interval)
+        bench_bars = load(bid, days)
+        bench_s = closes(bench_bars, interval)
+        bench_d = closes(bench_bars, "daily")
     except LookupError:
         raise
     except Exception as e:      # without the benchmark there's no chart: say so instead of failing
@@ -192,13 +213,14 @@ def compute(registry, market: str, members: list[tuple[str, str]], interval: str
         try:
             # a trail of `tail` weeks is tail + 1 points: "4 weeks ago" is the point four steps back, not three (DE-018:
             # the column read the 1 Oct point, three weeks before the 23 Oct close, and missed IT and Bank turning Leading)
-            pts = path(closes(load(iid, days), interval), bench_s, tail + 1)
-            return item, pts, None
+            bars = load(iid, days)
+            pts = path(closes(bars, interval), bench_s, tail + 1)
+            return item, pts, None, relative_returns(closes(bars, "daily"), bench_d)
         except Exception as e:     # one member's data problem mustn't sink the chart
-            return item, [], str(e)[:80] or e.__class__.__name__
+            return item, [], str(e)[:80] or e.__class__.__name__, {}
 
     rows, skipped = [], []
-    for (iid, sym), pts, problem in _pool.map(one, members):
+    for (iid, sym), pts, problem, ret in _pool.map(one, members):
         if not pts:
             skipped.append(sym if not problem else f"{sym}: {problem}")
             continue
@@ -208,7 +230,7 @@ def compute(registry, market: str, members: list[tuple[str, str]], interval: str
             inst = None
         x, y = pts[-1]["x"], pts[-1]["y"]
         first = pts[0]
-        rows.append({"id": iid, "symbol": sym, "name": _label(market, sym, inst), "points": pts, "x": x, "y": y,
+        rows.append({"id": iid, "symbol": sym, "name": _label(market, sym, inst), "points": pts, "x": x, "y": y, "ret": ret,
                      "quadrant": quadrant(x, y), "heading": heading(pts), "core": market != "IN" or sym in CORE_IN,
                      "stocks": len(sector_members.members(market, sym)),
                      "moved": quadrant(first["x"], first["y"]) if len(pts) == tail + 1 else None})

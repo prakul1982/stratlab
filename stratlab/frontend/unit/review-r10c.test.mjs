@@ -24,15 +24,16 @@ test("a deep dive amount puts the sign first", () => {
   assert.equal(usdAmount(null), "–");
 });
 
-test("a US micro cap reads in millions, never $0.0 bn", () => {
-  assert.equal(screenCap(12, "US"), "$12 mn");
-  assert.equal(screenCap(950.4, "US"), "$950 mn");
-  assert.equal(screenCap(4.25, "US"), "$4.3 mn");
-  assert.equal(screenCap(85800, "US"), "$85.8 bn");
-  assert.equal(screenCap(1000, "US"), "$1.0 bn");
-  assert.equal(screenCap(735120, "IN"), "₹7,35,120 cr");
+test("a US micro cap reads in millions, never $0.0 bn (written as the company's page writes a market value, RC7-004)", () => {
+  assert.equal(screenCap(12, "US"), "$12M");
+  assert.equal(screenCap(950.4, "US"), "$950M");
+  assert.equal(screenCap(0.04, "US"), "$40,000");           // below a million: dollars, never "$0.0B"
+  assert.equal(screenCap(85800, "US"), "$85.8B");
+  assert.equal(screenCap(1000, "US"), "$1.0B");
+  assert.equal(screenCap(735120, "IN"), "₹7.35 lakh cr");    // the page's own "₹7.35 lakh cr", not 7,35,120 whole crore
   assert.equal(screenCap(null, "US"), "–");
 });
+
 
 test("a screen figure that rounds to zero is never -0.0", () => {
   assert.equal(screenNum(-0.04, 1, "%"), "0.0%");

@@ -21,13 +21,13 @@ export interface Overview {
     kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number; india_sessions?: number; options_sessions?: number;
     /** how many people's options sessions those are (Admin counts every user's) */
     options_users?: number;
-    auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
+    auto_login: { at: string | null; ok: boolean | null; message: string; how?: string }; auto_login_configured: boolean;
     /** the next automatic data login (India time), when it is set up */
     auto_login_next?: string | null;
     recent_errors?: ServerError[];
     /** when this server started (India time, like each error's "at"), so errors kept from before it are told apart */
     server_started_at?: string | null;
-    billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
+    billing_enabled: boolean; billing_hook?: { mode: string; last_at: string | null }; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
     calendar?: CalendarStatus; invoice_seller?: InvoiceSeller;
     rules_watch?: { failing: { name: string; fails: number; error: string | null }[]; pending: string[] };
     audit_mismatches?: Partial<Record<"IN" | "US", number>>;
@@ -57,7 +57,7 @@ export interface Overview {
 export type BrevoQuota = { sent_today: number | null; left_today: number | null; plan: string | null; limit_kind: string | null; error: string | null; dashboard: string };
 
 export type JobRow = {
-  id: string; name: string; schedule: string; last_run: string | null; error: string | null; state: "ok" | "warn" | "bad"; running: boolean;
+  id: string; name: string; schedule: string; /** the next time the schedule names, "Thu 29 Oct, 7:15 AM IST"; null when it is "every so often" */ next?: string | null; last_run: string | null; error: string | null; state: "ok" | "warn" | "bad"; running: boolean;
   log: string[]; run: { label: string; path: string }[]; note: string | null;
 };
 export type ReportedRow = {

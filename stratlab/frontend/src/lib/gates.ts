@@ -38,6 +38,12 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/options": { feature: "options", whole: false },
 };
 
+/** The paid part of a page that is free in the main, in a few words for its card's tag: "Pro for advance tax" (LIVE1B-022: "Pro for
+ * part" did not say which part). */
+export const PART_WORDS: Record<string, string> = {
+  tax_tools: "advance tax", us_tax: "rupee workings", itr_export: "the downloads", networth: "history", mf_gains: "gains by year", journal: "the checks",
+};
+
 /** An IPO's own page holds the summary of its offer document (Basic); the rest of the page is for everyone. */
 export const IPO_PAGE_GATE: Gate = { feature: "ipo_summary", whole: false };
 

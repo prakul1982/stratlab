@@ -692,7 +692,7 @@ def badge_of(e: dict, today: date) -> dict | None:
     if k == "lot":
         # a revision circular's new lot starts with a series, not on the circular's day (RC2A-035: "Lot 225→250 from 28 Oct" on TCS, whose
         # contracts keep 225 until the Jan 2027 series): the badge says the series
-        start = f"the {series_name(e['series'])} series" if e.get("circ") and e.get("series") else short_day
+        start = series_name(e["series"]) if e.get("circ") and e.get("series") else short_day      # (LIVE2-015: "from the Jan 2027 series" was clipped on a tile; the (i) says it in full)
         return {"kind": k, "short": f"Lot {e.get('was'):,}→{e.get('now'):,} from {start}", "text": text_of(e), "date": when}
     return None
 

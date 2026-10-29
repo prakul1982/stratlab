@@ -41,6 +41,8 @@ export function titleFor(path: string): string {
     const name = knownName(company[1], sym);
     return withBrand(`${name ? `${name} (${sym})` : sym}${company[3] ? " deep dive" : ""}`);
   }
+  const chart = p.match(/^\/chart\/([^/]+)\/([^/]+)$/);
+  if (chart) { let sym = chart[2]; try { sym = decodeURIComponent(sym); } catch { /* as written */ } return withBrand(`${sym.toUpperCase()} chart`); }
   const g = locateGroup(p);
   if (g) return withBrand(`${g.group.label} · ${NAV[g.space].label}`);
   const at = locate(p);

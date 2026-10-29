@@ -9,7 +9,7 @@ import { attachGestures } from "./interaction";
 import { stepDecimals, TimeScale, timeLabel, timeTicks, ValueScale, type ScaleMode } from "./scales";
 import { compute, type StudyConfig, type StudyLine, type StudyOutput } from "./studies";
 import { labelClear, lineSpans, type Box } from "./lastPrice";
-import { heikinAshi, indexAtOrBefore, lastTag, readoutAt, type Bar } from "./transforms";
+import { heikinAshi, indexAtOrBefore, lastTag, readoutAt, windowAround, type Bar } from "./transforms";
 
 export type ChartType = "candles" | "hollow" | "heikin" | "bars" | "line" | "area" | "baseline";
 export const CHART_TYPES: { type: ChartType; name: string }[] = [
@@ -371,6 +371,28 @@ export class PriceChartEngine {
     if (!n) return;
     const i = Math.max(0, indexAtOrBefore(this.bars, from) + (this.bars[0].t < from ? 1 : 0));
     this.time.fit(Math.min(i, n - 1), n - 1, Math.max(1, Math.round((n - i) * 0.03)));
+    this.auto = true;
+    this.viewSet = true;
+    this.clampView();
+    this.invalidate();
+    this.emitView();
+  }
+
+  /** What is on screen, by time, for a timeframe change to keep: the time of the bar in the middle of the plot, how many bars are
+   * in view, and whether the newest bar is (about) at the right edge, where a view just follows the live candle (MWR1-004). */
+  viewSpan(): { center: number; count: number; live: boolean } | null {
+    const n = this.bars.length;
+    if (!n || !this.viewSet) return null;
+    const mid = Math.round(this.time.index(this.plotW() / 2));
+    return { center: this.bars[Math.max(0, Math.min(n - 1, mid))].t, count: Math.max(2, Math.round(this.plotW() / this.time.spacing)), live: this.time.right >= n - 1 - 2 };
+  }
+
+  /** Show `count` bars with the bar at (or just before) time `center` in the middle: the view a timeframe change keeps. */
+  showAround(center: number, count: number): void {
+    const n = this.bars.length;
+    if (!n) return;
+    const [from, to] = windowAround(n, indexAtOrBefore(this.bars, center), count);
+    this.time.fit(from, to, 0);
     this.auto = true;
     this.viewSet = true;
     this.clampView();
@@ -790,6 +812,20 @@ export class PriceChartEngine {
     for (const t of tt) { const x = Math.round(this.time.x(t.i)) + 0.5; c.moveTo(x, 0); c.lineTo(x, H - AXIS_H); }
     for (const p of this.panes) for (const v of p.scale.ticks(p.kind === "price" ? 48 : 30)) { const y = Math.round(p.scale.y(v)) + 0.5; c.moveTo(0, y); c.lineTo(pw, y); }
     c.stroke();
+    // session breaks (MW-1): on an intraday chart a dotted line where one trading day ends and the next begins
+    if (this.intraday && b > a) {
+      c.save();
+      c.setLineDash([2, 4]);
+      c.strokeStyle = th.border;
+      c.beginPath();
+      for (let i = Math.max(1, a); i <= b; i++) {
+        if (this.bars[i]?.day === this.bars[i - 1]?.day) continue;
+        const x = Math.round((this.time.x(i - 1) + this.time.x(i)) / 2) + 0.5;
+        c.moveTo(x, 0); c.lineTo(x, H - AXIS_H);
+      }
+      c.stroke();
+      c.restore();
+    }
     // price pane
     const pp = this.panes[0];
     if (pp && b >= a) {

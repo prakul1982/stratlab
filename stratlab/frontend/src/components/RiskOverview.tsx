@@ -61,7 +61,7 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
                   // the low held to the close: one figure, not "-3,94,147 ... the day closed at -3,94,147" (R77-007)
                   ? `${money(c.deepest_fall.pnl, c.currency)} on ${day(c.deepest_fall.date)}${c.deepest_fall.at ? `, reached at ${c.deepest_fall.at} IST` : ""} and held to the close`
                   : c.deepest_fall.intraday
-                  ? `${money(c.deepest_fall.pnl, c.currency)} at the lowest point on ${day(c.deepest_fall.date)}${c.deepest_fall.at ? ` (${c.deepest_fall.at} IST)` : ""}, during the day${c.deepest_fall.day_close != null ? `; the day closed at ${money(c.deepest_fall.day_close, c.currency)}` : ""}`
+                  ? `${money(c.deepest_fall.pnl, c.currency)} at the lowest point on ${day(c.deepest_fall.date)}${c.deepest_fall.at ? ` (${c.deepest_fall.at} IST)` : ""}, during the day${c.deepest_fall.day_close != null ? `; the day closed at ${money(c.deepest_fall.day_close, c.currency)}` : ""}. The chart draws each day's close, so this low is not on it`
                   : `${money(c.deepest_fall.pnl, c.currency)} from the high point to the low on ${day(c.deepest_fall.date)}`) : "from the high point"} />
             </StatRow>
             {c.curve.length > 1 && (

@@ -1,6 +1,7 @@
 """The newsletters: facts from the fake world, the advice-word filter and template fallback, the email, the
 once-a-day schedule, privacy of My Stocks issues, the API and plan gates."""
 import json
+import re
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -148,7 +149,7 @@ def test_render_gives_html_and_text_with_the_footer():
     assert html.startswith("<!doctype html>") and "&lt;a little&gt;" in html and "<img" not in html and "<link" not in html
     for out in (html, text):
         assert write.FOOTER in out and "{unsubscribe_url}" in out and "/news?tab=IN&issue=market.IN.2026-10-01" in out.replace("&amp;", "&")
-        assert "TCS matches the Stage 2 rule" in out and "/research/IN/TCS" in out
+        assert "Stage 2 (advancing)" in out and "TCS" in out and "/research/IN/TCS" in out          # the scan's stocks are a table (O5)
         assert "Brokerage says buy" not in out             # a headline giving advice is left out
     assert issue["subject"].startswith("Market Brief India, Thu 1 Oct")
 
@@ -260,7 +261,7 @@ def test_my_stocks_issues_are_private(w):
     assert c.get("/news/my_stocks.u-pro.2026-10-01", headers=headers("free-token")).status_code == 404
     assert c.get("/news", params={"kind": "my_stocks"}, headers=headers("free-token")).json() == {"issues": []}
     mine = c.get("/news/my_stocks.u-pro.2026-10-01", headers=headers("pro-token")).json()
-    assert set(mine) == {"id", "kind", "region", "day", "weekly", "subject", "summary", "sections", "html", "at"}
+    assert set(mine) == {"id", "kind", "region", "day", "weekly", "subject", "summary", "sections", "tables", "html", "at"}
     assert "{unsubscribe_url}" not in mine["html"]
     listed = c.get("/news", params={"kind": "my_stocks"}, headers=headers("pro-token")).json()["issues"]
     assert listed == [{"id": "my_stocks.u-pro.2026-10-01", "kind": "my_stocks", "region": None, "day": "2026-10-01", "weekly": False,
@@ -749,7 +750,7 @@ def test_r23_006_my_stocks_prices_have_their_currency_sign():
                     {"symbol": "AAPL", "region": "US", "price": 341.27, "change_pct": -0.5}]}
     html, text = write.render({"id": "my_stocks.u.2026-10-15", "kind": "my_stocks", "subject": "My Stocks", "summary": "x",
                                "sections": write.sections(f)})
-    assert "TATAMOTORS  ₹925.40 ▲ 3.40%" in text and "AAPL  $341.27 ▼ 0.50%" in text
+    assert re.search(r"TATAMOTORS.*  ₹925.40  ▲ \+3.40%", text) and re.search(r"AAPL.*  \$341.27  ▼ −0.50%", text)      # a row of the stocks table (O5)
     assert "₹925.40" in html and "$341.27" in html
 
 
@@ -765,7 +766,7 @@ def test_r23_007_the_india_summary_numbers_match_the_tiles():
     assert "NIFTY 50 at 22,622.70 (−0.44%)" in text and "SENSEX at 72,781.89 (−0.34%)" in text
     assert "NIFTY BANK at 55,316.00 (−0.30%)" in text and "below 22,650." in text and "October 14" in text
     assert "22,622.7 " not in text and "(-0" not in text
-    assert "22,622.70 ▼ 0.44%" in text                                        # the tile it now agrees with
+    assert "22,622.70  ▼ −0.44%" in text                                      # the Indices table's row it now agrees with (O5)
 
 
 def test_a_failed_ai_summary_is_retried_after_a_few_minutes_not_a_day(monkeypatch):
@@ -914,10 +915,12 @@ def test_one_click_header_only_goes_with_a_tokenised_unsubscribe_link(monkeypatc
 def test_a_stage_in_the_email_says_what_it_means():
     """Round 39: "Now Stage 1 (basing)" alone told a reader nothing."""
     lines = write.stock_lines({"symbol": "ABC", "region": "IN", "stage": 3, "stage_before": 2, "stage_changed": True}, "2026-10-01")
-    now = next(x["text"] for x in lines if x["text"].startswith("Now Stage"))
-    assert now.startswith("Now Stage 3 (topping) (the 150-day average has stopped rising") and now.endswith("was Stage 2 (advancing)")
+    # (LIVE1C-032: what it means first, the name once, no bracket inside brackets)
+    now = next(x["text"] for x in lines if "now Stage" in x["text"])
+    assert now.startswith("The 150-day average has stopped rising") and now.endswith(": now Stage 3 (topping), was Stage 2 (advancing)")
+    assert ") (" not in now
     still = write.stock_lines({"symbol": "ABC", "region": "IN", "stage": 1}, "2026-10-01")
-    assert any(x["text"].startswith("Still Stage 1 (basing) (the 150-day average has stopped falling") for x in still)
+    assert any(x["text"].startswith("The 150-day average has stopped falling") and x["text"].endswith(": still Stage 1 (basing)") for x in still)
 
 
 def test_a_weekly_issue_sent_on_saturday_is_the_week_to_fridays_close(w, monkeypatch):

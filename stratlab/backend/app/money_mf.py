@@ -176,6 +176,7 @@ def broad_of(category: str, kind: str) -> tuple[str, str]:
     c = category or ""
     m = re.match(r"\s*(.+?)\s*-\s*(.+)$", c)
     head, sub = (m.group(1), m.group(2)) if m else (c, "")
+    sub = re.sub(r"(\S)-\s+(?=\S)", r"\1 ", sub)      # AMFI writes "ELSS- Tax Saver Fund": the stray hyphen is dropped (LIVE1B-064)
     h = head.lower()
     if h.startswith("equity"):
         return "Equity", sub

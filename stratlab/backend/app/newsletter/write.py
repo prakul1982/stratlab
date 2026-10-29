@@ -108,6 +108,12 @@ def _item(text: str, url: str | None = None, lines: list | None = None, **extra)
     return {"text": text, "url": url, "lines": lines or [], **{k: v for k, v in extra.items() if v is not None}}
 
 
+def _scan_cols(r: dict) -> dict:
+    """What the brief's table shows for a stock the scan named (O5): its close and day's change, stage, Supertrend and the day it newly matched."""
+    keys = ("price", "change_pct", "stage", "stage_days", "st_up", "st_since", "matched_on")
+    return {k: r[k] for k in keys if r.get(k) is not None}
+
+
 def market_sections(f: dict) -> list[dict]:
     region, span = f["region"], "over the week" if f["weekly"] else "on the day"
     out = []
@@ -123,11 +129,11 @@ def market_sections(f: dict) -> list[dict]:
     # the whole rule and Stage 2 alone are two lists, so the lead's count is the first list's (R13-003)
     if scan.get("st_s2"):
         out.append({"title": f"Newly matched Stage 2 + Supertrend {'in the last 5 days' if f['weekly'] else 'today'} ({scan['group']})", "items": [
-            _item(f"{r['symbol']} matches the Stage 2 rule with the price above its Supertrend (ST S2)", stock_url(region, r["symbol"]))
+            _item(f"{r['symbol']} matches the Stage 2 rule with the price above its Supertrend (ST S2)", stock_url(region, r["symbol"]), **_scan_cols(r))
             for r in scan["st_s2"]]})
     if scan.get("stage2"):
         out.append({"title": f"Newly in Stage 2, Supertrend not up ({scan['group']})", "items": [
-            _item(f"{r['symbol']} moved into Stage 2 (matches the Stage 2 rule; its Supertrend isn't up)", stock_url(region, r["symbol"]))
+            _item(f"{r['symbol']} moved into Stage 2 (matches the Stage 2 rule; its Supertrend isn't up)", stock_url(region, r["symbol"]), **_scan_cols(r))
             for r in scan["stage2"]]})
     # a week with a holiday says which session is missing, rather than skipping it in silence (DI-027)
     gaps = [h for h in f.get("holidays") or [] if h.get("day")] if f["weekly"] else []
@@ -146,7 +152,7 @@ def market_sections(f: dict) -> list[dict]:
         # a week's headlines each say their day: two that say "today" with different Sensex falls read as a contradiction (R93-004)
         # (kept beside the title, so the stored title stays the source's own for the checks that re-read it)
         from .content import _local_day
-        out.append({"title": "Headlines", "items": [_item(h["headline"], h.get("url"), source=h.get("source"),
+        out.append({"title": "Headlines", "items": [_item(h["headline"], h.get("url"), source=h.get("source"), at=h.get("at"),
                     day=_day(d) if f["weekly"] and (d := _local_day(h.get("at"), region)) else None) for h in heads]})
     return out
 
@@ -175,13 +181,15 @@ def stock_lines(r: dict, since: str, day: str | None = None) -> list[dict]:
     lines = []
     if r.get("change_pct") is not None:
         lines.append({"text": f"Price {_price(r['price'], r.get('region'))}, {_pct(r['change_pct'])} {_move_span(r, since, day)}", "url": None})
+    # what the stage means first, then its name: "The price is above a rising 150-day average: now Stage 2 (advancing), was Stage 1 (basing)",
+    # not "Now Stage 2 (advancing) (the price is above …), was …" with a bracket inside a sentence of brackets (LIVE1C-032)
     if r.get("stage_changed"):
-        lines.append({"text": f"Now {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}"
-                              + (f" ({STAGE_WHY[r['stage']]})" if r['stage'] in STAGE_WHY else "")
-                              + f", was {STAGE_NAME.get(r['stage_before'], 'Stage ' + str(r['stage_before']))}", "url": None})
+        now = STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))
+        was = STAGE_NAME.get(r['stage_before'], 'Stage ' + str(r['stage_before']))
+        lines.append({"text": (f"{STAGE_WHY[r['stage']][0].upper()}{STAGE_WHY[r['stage']][1:]}: now {now}, was {was}" if r['stage'] in STAGE_WHY else f"Now {now}, was {was}"), "url": None})
     elif r.get("stage"):
-        lines.append({"text": f"Still {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}"
-                              + (f" ({STAGE_WHY[r['stage']]})" if r['stage'] in STAGE_WHY else ""), "url": None})
+        now = STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))
+        lines.append({"text": (f"{STAGE_WHY[r['stage']][0].upper()}{STAGE_WHY[r['stage']][1:]}: still {now}" if r['stage'] in STAGE_WHY else f"Still {now}"), "url": None})
     if r.get("st_s2"):
         lines.append({"text": "Matches the Stage 2 rule with the price above its Supertrend (ST S2)", "url": None})
     for i in r.get("filings") or []:
@@ -383,7 +391,7 @@ def ai_summary(f: dict) -> str | None:
         text = str(extract_json(raw).get("summary") or "").strip()
     except (AIError, ValueError, AttributeError, TypeError):
         return None
-    text = day_first(no_scan_moves(not_the_indices(two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f)), f), scan_names(f)))
+    text = close_date_words(day_first(no_scan_moves(not_the_indices(two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f)), f), scan_names(f))), f)
     return text if text and grounded(text, f) and not robotic(text) else None
 
 
@@ -630,6 +638,19 @@ def day_first(text: str | None) -> str | None:
     return _US_DATE.sub(lambda m: f"{int(m.group(2))} {m.group(1)[:3]}" + (f" {m.group(4)}" if m.group(4) else ""), text)
 
 
+def close_date_words(text: str | None, f: dict) -> str | None:
+    """A weekly brief's own Saturday or Sunday written as the week's end ("over the week ending 24 Oct") as the last close's day, the
+    Friday its header and its figures say ("Week to Fri 23 Oct"): one date in one brief (LIVE1C-031)."""
+    if not text or not f.get("weekly") or not f.get("day"):
+        return text
+    try:
+        sent = date.fromisoformat(str(f["day"])[:10])
+        end = date.fromisoformat(_week_end(f["day"], f.get("region") or "IN"))
+    except ValueError:
+        return text
+    return text if end == sent else re.sub(rf"\b0?{sent.day} {sent:%b}\b", f"{end.day} {end:%b}", text)
+
+
 def render(issue: dict) -> tuple[str, str]:
     """(html, text) for one issue, in the shared email design. The footer carries the {unsubscribe_url} placeholder
     for the sender."""
@@ -643,39 +664,46 @@ def render(issue: dict) -> tuple[str, str]:
     title = issue.get("title") or issue["subject"]
     blocks: list[kit.Block] = []
     indices = issue.get("indices") or []
-    tiles = _tiles(indices, weekly)
-    if tiles:
-        blocks.append(kit.tiles(tiles))
-        if indices[3:]:
-            blocks.append(kit.card("Other indices", [kit.Row(i["name"], value=kit.num(i["price"]), change=i.get("change_pct"),
-                                                             tone=_tone(i["name"]), since="over the week" if weekly else None)
-                                                     for i in indices[3:]]))
     if issue.get("ai_summary"):
         # every brief opens with the same facts line; the AI's words, when they passed the checks, come under it (R8B-007),
         # with the index numbers printed as the tiles print them (R23-007)
-        blocks.insert(0, kit.para(house_numbers(issue["ai_summary"], indices)))
+        blocks.insert(0, kit.para(house_numbers(close_date_words(issue["ai_summary"], issue), indices)))
     n = 0
     frozen = issue.get("links") if isinstance(issue.get("links"), list) else None
-    for sec in issue.get("sections") or []:
-        if tiles and sec["title"] == "Indices":
-            continue                                         # already shown as tiles
-        rows = []
-        for it in sec["items"]:
-            if sec["title"] == "Headlines" and kind == "market" and issue.get("id"):
-                # a sent issue numbers its links by the list frozen at the send, so the page and the email agree (R23-004)
+    from . import tables
+    # every section that lists figures is a table (O5); the headlines' links are numbered by the list frozen at the send, so the page
+    # and the email agree (R23-004)
+    secs = []
+    base = issue.get("sections") or []
+    if indices and not any(sec.get("title") == "Indices" for sec in base):
+        # an issue kept with its index figures but no Indices section: the table is made from the figures
+        base = market_sections({"region": region or "IN", "weekly": weekly, "indices": indices})[:1] + list(base)
+    for sec in base:
+        if sec["title"] == "Headlines" and kind == "market" and issue.get("id"):
+            items = []
+            for it in sec["items"]:
                 k = frozen.index(it.get("url")) if frozen is not None and it.get("url") in frozen else n
-                # the story's own address where an aggregator's redirect carries it; a redirect that doesn't is no link at
-                # all, as it opens a blank page (R30-006): the headline stays plain text
+                # the story's own address where an aggregator's redirect carries it; a redirect that doesn't is no link at all, as it
+                # opens a blank page (R30-006): the headline stays plain text
                 own = _headline_link(it.get("url"))
-                # an aggregator's address that names no story opens the brief on the site, where its "Source" link
-                # works, so every headline in the email can be opened (R49-003: India's were all plain text)
+                # an aggregator's address that names no story opens the brief on the site, where its "Source" link works, so every
+                # headline in the email can be opened (R49-003: India's were all plain text)
                 it = {**it, "url": own or (view if it.get("url") else None)}
                 if own and kit.safe_url(it.get("url")) and not kit.plain_url(it.get("url")):      # a long address: the short one in both parts
                     it = {**it, "url": kit.site(link_path(issue["id"], k))}
                 n += 1
-            rows.append(_row(it))
-        blocks.append(kit.card(sec["title"], rows))
-    when = close_stamp({**issue, "kind": kind}) or as_of(issue.get("at"), region)
+                items.append(it)
+            sec = {**sec, "items": items}
+        secs.append(sec)
+    listed = [sec for sec in secs if isinstance(sec, dict) and sec.get("items")]
+    for t, sec in zip(tables.of({**issue, "sections": secs}), listed):
+        if t["kind"] == "table":
+            blocks.append(kit.grid(t["title"], t["head"], t["rows"], t["align"], t.get("note"),
+                                   (t["link"]["a"], t["link"]["href"]) if t.get("link") else None))
+        else:
+            blocks.append(kit.card(sec["title"], [_row(it) for it in sec["items"]]))        # prose: a holiday, "no change"
+    # made-up figures (an Admin preview) carry no "as of" time: the moment they were built beside invented numbers read as a real reading (LIVE1C-032)
+    when = None if issue.get("sample") else close_stamp({**issue, "kind": kind}) or as_of(issue.get("at"), region)
     if when:
         blocks.append(kit.note(f"Prices and numbers as of {when}"))
     # the link says what the page it opens asks about, in the words of the line above it (R67-009: "India briefs" in the

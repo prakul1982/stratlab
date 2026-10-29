@@ -116,6 +116,7 @@ const StockLendingPage = page(() => import("./pages/StockLendingPage"), "StockLe
 const MarginFundingPage = page(() => import("./pages/MarginFundingPage"), "MarginFundingPage");
 const IposPage = page(() => import("./pages/IposPage"), "IposPage");
 const IpoPage = page(() => import("./pages/IpoPage"), "IpoPage");
+const ChartPage = page(() => import("./pages/ChartPage"), "ChartPage");
 const DevKit = page(() => import("./pages/DevKit"), "DevKit");   // /dev/kit: the design kit on one page (dev builds and admins only)
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
@@ -214,7 +215,7 @@ function Routed() {
   // the page's own title from the first frame, while the sign-in is read and the page's code downloads (R8O-009: the tab
   // had no useful title for 2 s on /research/rotation and /admin/system); a visitor's pages set their own
   useLayoutEffect(() => { if (!everyone && (!ready || session)) document.title = titleFor(loc.pathname); }, [everyone, ready, session, loc.pathname]);
-  if (everyone) return <VisitorApp />;
+  if (everyone) return <VisitorApp userId={session?.user.id} />;
   if (!ready) return <main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main>;
   // a saved sign-in the sign-in service didn't answer for is not "signed out": say it couldn't load, offer Reload (R20-002)
   if (!session && sessionUnconfirmed(ready, session)) return <main><LoadFailed what="your account" /></main>;
@@ -312,6 +313,7 @@ function Routed() {
         <Route path="/invest/ipos" element={<IposPage />} />
         <Route path="/invest/ipos/:id" element={<IpoPage />} />
         <Route path="/dev/kit" element={import.meta.env.DEV ? <DevKit /> : <AdminOnly what="The design kit"><DevKit /></AdminOnly>} />
+        <Route path="/chart/:market/:symbol" element={<ChartPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/corporate-actions" element={<CorpActionsPage />} />

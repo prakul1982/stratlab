@@ -66,6 +66,8 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
 
   useEffect(() => {
     if (off) { setLocked(true); return; }
+    // not before the plan is known: a Free account's first read went out ahead of it and was refused, a 402 in the console (LIVE1A-043)
+    if (!me) return;
     let live = true;
     setBusy(true); setError(null); setReadFailed(false); setGroup(null); setHold(null);
     api<SearchAnswer>(`/invest/holders${q ? `?q=${encodeURIComponent(q)}` : ""}`)
@@ -79,7 +81,7 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
       .finally(() => live && setBusy(false));
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, off, tries]);
+  }, [q, off, tries, !!me]);
 
   useEffect(() => {
     if (!picked.length) { setHold(null); return; }
@@ -172,13 +174,11 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
             ans.groups.length === 0 ? <Card><EmptyState title="No holder found">No holder above 1% by that name in the filings read so far.</EmptyState></Card> : (
               <Card label="Names found">
                 <CardHead title="Names found" />
-                <div className="inv-rows">
-                  {ans.groups.map((g) => (
-                    <div key={g.label} className="inv-row">
-                      <span><button className={`link-btn${group?.label === g.label ? " on" : ""}`} onClick={() => choose(g)}>{g.label}</button>
-                        <span className="k-note"> {companies(g.companies)}{g.names.length > 1 ? ` · ${g.names.length} spellings` : ""}</span></span>
-                    </div>))}
-                </div>
+                <DataTable stack label="Holders found" rows={ans.groups} rowKey={(g) => g.label} rowAttrs={(g) => ({ "data-holder-group": g.label })} columns={[
+                  { key: "h", header: "Holder", rowHeader: true, wrap: true, cell: (g) => <button className={`link-btn${group?.label === g.label ? " on" : ""}`} onClick={() => choose(g)}>{g.label}</button> },
+                  { key: "n", header: "Companies", numeric: true, cell: (g) => g.companies.toLocaleString("en-IN") },
+                  { key: "s", header: "Spellings", numeric: true, cell: (g) => g.names.length.toLocaleString("en-IN") },
+                ]} />
               </Card>
             )
           )}

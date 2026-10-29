@@ -74,7 +74,14 @@ def build():
     mp.setattr(market_events, "refresh", lambda web=None, today=None, now=None, only=None: (
         fake_market_events.seed(today), {"problems": [], "read": [n for n, _ in market_events.READERS]})[1])
     screen_index()
+    # the demo world holds a score of companies, not the fifty and five hundred of the real indices: the Market pulse's "what moved
+    # the index" table is shown on what is there (the real thresholds are pinned in tests/test_mood1.py)
+    from app.intel import mood
+    mp.setattr(mood, "MIN_COVER", 0.2)
+    mp.setattr(mood, "US_MIN_COVER", 0.0)
+    mp.setattr(mood, "ADD_UP", 1e9)           # ...and the points of a score of companies can't add up to an index's own move
     sizes = breadth(mp)
+    results_calendar(mp)
     positioning_history()
     stock_desks_history(mp)
     # the public NAV files, from the test fixtures, for the mutual funds page
@@ -101,6 +108,7 @@ def build():
     closing_auction(mp)
     vix_history(mp)
     holders_and_updates(mp)
+    deep_reads()
     live_breadth(mp, sizes)
     library_seeds()
     all_company_filings(mp)
@@ -108,6 +116,7 @@ def build():
     from tests import fx_rates
     fx_rates.seed()
     blog_posts()
+    theme_pages(mp)
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     connect_once(mp)
@@ -220,6 +229,61 @@ def holders_and_updates(mp):
                                                                   {"symbol": "MARUTI", "region": "IN"}, {"symbol": "AAPL", "region": "US"}]}))
 
 
+def deep_reads():
+    """RELIANCE's deep dive with its document read and management report card already made (the model's replies, made up), so the
+    page's Business model, measures, plans and report-card tables are drawn full: a mix of targets met, missed, not due and
+    ones the numbers can't settle (a segment, no year named, a plan), in the shapes the model returns them (UI-CO item 7)."""
+    from app import deepdive, report_card as rc
+    calls = {f"S{i}": {"title": "Earnings call transcript", "at": at, "url": f"https://nsearchives.nseindia.com/call{i}.pdf", "kind": "transcript"}
+             for i, at in enumerate(("2024-05-30T18:10", "2025-02-17T18:10", "2025-08-12T18:10", "2025-11-14T18:10", "2026-05-20T18:10"), 1)}
+
+    def g(src, metric, low, high, period, what, quote, unit="%", **more):
+        return {"metric": metric, "low": low, "high": high, "unit": unit, "period": period, "what": what, "quote": quote, "source": src, **more}
+    items = [
+        g("S1", "revenue_growth", 10, 20, "FY25", "Double-digit revenue growth", "we continue to grow by double digit, and expect 10% to 20% growth"),
+        g("S1", "margin", 17, None, "FY25", "EBITDA margin of about 17%", "we expect EBITDA margin of about 17% for the year"),
+        g("S2", "margin", 5, None, "FY26", "Gross margins", "normally we give an outlook of around 5% margins", scope="company"),
+        g("S3", "revenue_growth", 8, 10, "FY26", "Revenue growth of 8 to 10%", "we expect revenue growth of 8% to 10% in FY26"),
+        g("S3", "profit_growth", 0.1, None, "FY27", "Profit growth of 10%", "we will target 10% profit growth next year"),
+        g("S4", "revenue_growth", 0.2, None, "FY27", "CAGR of 20%", "our CAGR has been 20% for last 20 years"),
+        g("S4", "margin", 1.5, None, None, "PAT margin of 1.5%", "1.5% is a safer PAT margin which can be considered for the long run"),
+        g("S4", "revenue_growth", 0.3, 0.5, None, "30-50% growth in the retail business", "we expect 30% to 50% growth on a year-on-year basis in our retail business", segment="retail"),
+        g("S4", "other", 15, None, "FY26", "ROE target", "we have always envisioned reaching a 15% ROE", metric_note="x"),
+        g("S5", "margin", 17, 18, "FY27", "EBITDA margin of 17-18%", "we plan on improving our margin to 17% or 18% in FY27"),
+        g("S5", "other", None, None, "FY27", "Start the new energy plant", "we will start the first phase of the new energy plant"),
+        g("S5", "other", 3, 4, None, "Digital business growth", "growth in digital would be at least 3x or 4x of our overall growth", unit=""),
+        g("S5", "profit_growth", 12, None, "FY27", "Profit growth of 12%", "are we expecting 12% growth in profit next year?"),
+    ]
+    for it in items:
+        it.pop("metric_note", None)
+    out = rc.clean({"guidance": items}, calls)
+    rc.store("RELIANCE", {"guidance": out, "problems": [], "years": 2,
+                          "read": [{"kind": c["kind"], "at": c["at"], "title": c["title"]} for c in calls.values()]})
+    src = {"title": "Investor presentation", "at": "2026-08-30T18:10", "url": "https://nsearchives.nseindia.com/p.pdf", "kind": "presentation"}
+    deepdive.store("RELIANCE", {
+        "problems": [], "read": [{"kind": "presentation", "at": "2026-08-30T18:10", "title": "Investor Presentation"},
+                                 {"kind": "transcript", "at": "2026-09-03T18:10", "title": "Earnings call"},
+                                 {"kind": "transcript", "at": "2026-05-20T18:10", "title": "Earnings call"},
+                                 {"kind": "presentation", "at": "2026-05-12T18:10", "title": "Investor Presentation"},
+                                 {"kind": "transcript", "at": "2026-02-09T18:10", "title": "Earnings call"},
+                                 {"kind": "presentation", "at": "2026-02-02T18:10", "title": "Investor Presentation"},
+                                 {"kind": "transcript", "at": "2025-11-14T18:10", "title": "Earnings call"},
+                                 {"kind": "presentation", "at": "2025-11-08T18:10", "title": "Investor Presentation"}],
+        "business": {"summary": "Reliance runs three large businesses: turning oil into fuels and chemicals, a national retail chain, and a mobile and broadband network, with a growing new-energy arm.",
+                     "customers": "Households, small shops and large companies across India, and refiners and traders abroad.",
+                     "drivers": ["Refining margins and the volume of crude processed", "Store openings and sales per store in retail", "Subscribers and revenue per user in the network"],
+                     "strengths": ["Three businesses that earn in different cycles", "The largest retail network in the country"],
+                     "risks": ["Fuel margins swing with global prices", "Heavy spending on new energy before it earns"],
+                     "segments": [{"name": "Oil to chemicals", "share_pct": 52, "what": "Refining and petrochemicals"}, {"name": "Retail", "share_pct": 26, "what": "Stores, groceries and online"},
+                                  {"name": "Digital services", "share_pct": 17, "what": "Mobile and broadband"}, {"name": "New energy", "share_pct": None, "what": "Solar, batteries and hydrogen"}],
+                     "measures": [{"name": "Average revenue per user", "value": "₹206", "period": "Q1 FY27", "change": "+8% on a year ago", "quote": "ARPU was Rs 206 for the quarter", "source": src},
+                                  {"name": "Stores open", "value": "19,800", "period": "Q1 FY27", "change": None, "quote": "we operate 19,800 stores", "source": src}],
+                     "industry": "Conglomerate", "sources": [src]},
+        "plans": {"capex": [{"what": "New energy gigafactories", "amount": "₹75,000 crore", "size": None, "timeline": "by FY28", "status": "under way",
+                             "quote": "we will invest Rs 75,000 crore across the gigafactories by FY28", "source": src}],
+                  "outlook": [{"statement": "Retail store additions to continue at the same pace", "quote": "we will keep adding stores at the same pace", "source": src}], "sources": [src]}})
+
+
 def live_breadth(mp, sizes):
     """The market is open for the whole run, with today's points stored for two groups (a third has none, so the page shows
     what it says when live prices aren't there). The job stays off, so the stored points stay as they are."""
@@ -257,6 +321,17 @@ def live_breadth(mp, sizes):
         db.set_setting(BL.LIVE_KEY + g, json.dumps({"day": day, "fields": list(BL.FIELDS), "points": pts}))
 
 
+def theme_pages(mp):
+    """The stored public pages of the companies in the demo theme (tests/fake_theme.py), built from the fake sources as a page view would
+    build them, so the theme page's deep dive (e2e/themes.spec.ts) has the stored figures it reads."""
+    from app import stock_pages
+    mp.setattr(main.stock_page_store, "per_minute", 10**6)       # a page is built at most a few a minute; the demo's seven are built at once
+    for sym in ("COALINDIA", "VEDL", "TATASTEEL", "JSWSTEEL", "SAIL", "NTPC", "ONGC"):
+        hit = stock_pages.find("IN", sym)
+        if hit:
+            main.stock_page_store.get("IN", hit[0], hit[1])
+
+
 def library_seeds():
     """StratLab's own strategies in the library, run on small stand-ins for the standard groups (the fake market's prices)."""
     from app import library_seed, universes
@@ -284,6 +359,8 @@ def blog_posts():
                 issue = job.build_market(region, day, False, store=False)
                 if issue:
                     blog.save_brief(issue)
+                    if got == 0:
+                        job.save(issue)              # the newest one is also an issue the Briefs page lists and can make a PDF of (e2e/fix2.spec.ts)
                 got += 1
             day -= timedelta(days=1)
     print("blog:", blog_research.generate(builders=blog_research.source_posts()))
@@ -358,6 +435,7 @@ def etf_gaps(mp):
     mp.setattr(etf_nav, "navs", lambda: data)
     etf_nav.refresh(main.filings_feed)
     fake_etf.seed_history(date.today())
+    fake_etf.seed_long(date.today())               # three years more behind the 30 days, for the range chips (O1)
     mp.setattr(main.etf_job, "start", lambda: None)          # the stored list stays as it is for the whole run
 
 
@@ -440,6 +518,9 @@ def screen_index():
                          roce=round(rng.uniform(0, 40), 1), div_yield=round(rng.uniform(0, 4), 2), net_margin=round(rng.uniform(-5, 30), 1),
                          opm=round(rng.uniform(5, 40), 1), debt_equity=round(rng.uniform(0, 2), 2), bank=False,
                          growth={"sales_cagr_3y": round(rng.uniform(-10, 30), 1)})
+            if region == "IN" and page:
+                from app import stock_pages
+                f["q"] = stock_pages.quarter_yoy(s)         # the latest quarter against a year before, for the results calendar
             r = screens.row(region, sym, f)
             if region == "IN":          # a promoter or insider bought on the open market: 10 days ago for every fourth
                 r["insider_buy_at"] = (date.today() - timedelta(days=10 if i % 4 == 1 else 200)).isoformat() if i % 2 else None
@@ -449,6 +530,80 @@ def screen_index():
         if region == "IN":          # the stored purchase dates reach back 120 days: the 30 and 90 day windows are covered, 180 and 365 not (RC3M-009)
             index["insider_from"] = (date.today() - timedelta(days=120)).isoformat()
         db.set_setting(screens.INDEX_KEY + region, json.dumps(index))
+
+
+def results_calendar(mp):
+    """The results calendar with a day's table to read: the twenty companies of the screens' index spread over this week and next
+    (four today), each with earlier results days and a made-up price history that jumps on them, and made-up option prices for
+    the F&O stocks, so the table's price, move and implied-move columns have something to show."""
+    import random
+    import zlib
+    from datetime import date, datetime, timedelta
+    from app import results as R
+    from tests import fake_prices as P
+    today = R.local_today("IN")
+    first = R.week_of(today)[0]
+    last = first + timedelta(days=13)
+    # today's four: one of the owner's own stocks (RELIANCE) and three he doesn't hold, so Invest home's "Results today" stays one line long
+    syms = ["RELIANCE", "ICICIBANK", "ONGC", "ITC", "TCS", "INFY", "HDFCBANK", "HINDUNILVR", "TATASTEEL", "JSWSTEEL",
+            "WIPRO", "HCLTECH", "NTPC", "COALINDIA", "SBIN", "AXISBANK", "NESTLEIND", "DABUR", "VEDL", "SAIL"]
+    offsets = [0, 0, 0, 0, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 10, 11, 12, 12]
+    meetings = []
+    for k, (sym, off) in enumerate(zip(syms, offsets)):
+        d = min(P.on_trading_day(today + timedelta(days=off), "IN"), last)
+        days = [(d, "Financial Results/Dividend" if zlib.crc32(sym.encode()) % 4 == 0 else "Financial Results")]
+        days += [(P.on_trading_day(today - timedelta(days=75 * n + 10 + k % 5), "IN", back=True), "Financial Results") for n in (1, 2, 3)]      # earlier quarters
+        meetings += [{"bm_symbol": sym, "sm_name": P.name_of(sym) or sym, "bm_date": x.strftime("%d-%b-%Y"), "bm_purpose": p,
+                      "bm_desc": f"To consider: {p.lower()}", "attachment": "https://nsearchives.nseindia.com/bm.pdf"} for x, p in days]
+    original = main.filings_feed.board_meetings
+
+    def board_meetings(frm, to):
+        # the exchange's list as the world has it, and these twenty companies' meetings (this fortnight's and three earlier quarters')
+        extra = [m for m in meetings if frm.date() <= datetime.strptime(m["bm_date"], "%d-%b-%Y").date() <= to.date()]
+        return [m for m in original(frm, to) if m["bm_symbol"] not in syms] + extra
+
+    mp.setattr(main.filings_feed, "board_meetings", board_meetings)
+    main.results_job.refresh("IN")
+    R.backfill("IN", main.results_job.sources(), today)               # the weekly read of the earlier results days
+    main.results_job.refresh("US")
+
+    def history(region, symbol, days):
+        rng = random.Random(zlib.crc32(symbol.encode()))
+        past = R.load_past(region)["rows"].get(symbol, [])
+        px, out = 100.0, []
+        for i in range(days, -1, -1):
+            d = today - timedelta(days=i)
+            if d.weekday() > 4:
+                continue
+            px *= 1 + rng.uniform(-0.01, 0.01)
+            if d.isoformat() in {(date.fromisoformat(x) + timedelta(days=1)).isoformat() for x in past}:
+                px *= 1 + rng.choice([-1, 1]) * rng.uniform(0.02, 0.06)           # a move the day after a results day
+            out.append({"t": f"{d.isoformat()}T00:00:00+05:30", "c": round(px, 2)})
+        return out
+
+    def options(symbol, day):
+        k = zlib.crc32(symbol.encode())
+        expiry = (date.fromisoformat(day) if day else today) + timedelta(days=21 + k % 7)
+        return {"pct": round(1.5 + (k % 40) / 10, 1), "strike": 100 * (1 + k % 30), "expiry": expiry.isoformat(), "straddle": round(50 + k % 90, 2)}
+
+    R.setup(history=history, options=options)
+    # the corporate actions calendar: the world's own rows and a dozen more, so a day's table has several rows and each kind of action
+    from app import corp_actions as C
+    original_actions = main.filings_feed.corporate_actions
+    each = [("ICICIBANK", "Interim Dividend - Rs 11 Per Share", 0), ("ONGC", "Interim Dividend - Rs 5 Per Share", 0), ("SBIN", "Dividend - Rs 15.9 Per Share", 1),
+            ("HINDUNILVR", "Final Dividend - Rs 24 Per Share", 1), ("COALINDIA", "Interim Dividend - Rs 15.5 Per Share", 1), ("WIPRO", "Bonus 1:1", 2),
+            ("NTPC", "Interim Dividend - Rs 3.35 Per Share", 2), ("VEDL", "Face Value Split (Sub-Division) - From Rs 10/- Per Share To Re 1/- Per Share", 3),
+            ("SAIL", "Rights 1:5 @ Premium Rs 100/-", 4), ("JSWSTEEL", "Dividend - Rs 3.5 Per Share", 4), ("DABUR", "Interim Dividend - Rs 5 Per Share", -2),
+            ("HCLTECH", "Special Dividend - Rs 18 Per Share", 6)]
+
+    def actions(frm, to):
+        day = lambda d: P.on_trading_day(today + timedelta(days=d), "IN", back=d <= 0).strftime("%d-%b-%Y")        # noqa: E731
+        more = [{"symbol": s, "series": "EQ", "comp": P.name_of(s) or s, "subject": sub, "exDate": day(d), "recDate": day(d), "faceVal": "1",
+                 "bcStartDate": "-", "bcEndDate": "-", "isin": "-"} for s, sub, d in each]
+        return list(original_actions(frm, to)) + more
+
+    mp.setattr(main.filings_feed, "corporate_actions", actions)
+    main.corp_job.refresh("IN")
 
 
 if __name__ == "__main__":

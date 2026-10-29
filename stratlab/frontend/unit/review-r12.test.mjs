@@ -52,12 +52,12 @@ test("R12-010: the Exchange holidays light and Needs your attention say the same
 
 test("R12-011: Pulse's opening line names only the sections the page shows", async () => {
   const { pulseLede } = await import("../src/lib/researchFormat.ts");
-  assert.equal(pulseLede(null), "Live index levels and headlines, with an AI read of the mood.");
-  assert.equal(pulseLede({ hot: [], flows: [], themes: [] }), "Live index levels and headlines, with an AI read of the mood.");
+  assert.equal(pulseLede(null), "Live index levels and headlines, with the figures behind today's mood.");
+  assert.equal(pulseLede({ hot: [], flows: [], themes: [] }), "Live index levels and headlines, with the figures behind today's mood.");
   assert.equal(pulseLede({ hot: [1], flows: [], themes: [1] }),
-    "Live index levels and headlines, with an AI read of the mood, the companies in today's headlines and the themes in play.");
+    "Live index levels and headlines, with the figures behind today's mood and what the headlines say of the companies in today's headlines and the themes in play.");
   assert.equal(pulseLede({ hot: [1], flows: [1], themes: [1] }),
-    "Live index levels and headlines, with an AI read of the mood, the companies in today's headlines, where money is flowing and the themes in play.");
+    "Live index levels and headlines, with the figures behind today's mood and what the headlines say of the companies in today's headlines, money and markets in the headlines and the themes in play.");
   const page = read("src/pages/Research.tsx");
   // R13-007 changed this on purpose: the lede also takes the day of the close once no index is live ("Last close, 9 Oct")
   assert.match(page, /lede=\{pulseLede\(ai, /);

@@ -7,7 +7,7 @@ import { signIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
-import { DIFF_TITLE, DIFFERENT, HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_LINE, INTRO_SPACES, INTRO_TITLE } from "../content/intro";
+import { HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_LINE, INTRO_SPACES, INTRO_TITLE } from "../content/intro";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
@@ -336,12 +336,6 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             </ol>
             <p className="small muted">{HOW_MONEY}</p>
           </div>
-          <div className="stack g14">
-            <h3 className="serif lp-h3">{DIFF_TITLE}</h3>
-            <div className="lp-tools lp-tools-3">
-              {DIFFERENT.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
-            </div>
-          </div>
         </div>
       </section>}
 
@@ -524,7 +518,9 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
   /** Whether this card is really charged in rupees though the visitor's currency is another: then the rupee price is its main
    * price and the visitor's currency an "about" beside it (DK-001). A currency with its own plan keeps its fixed price. */
   const inRupees = (p: PlanId, year = false) => p !== "free" && chargedInRupees(local, currency, year ? local?.yearly_charged_in : local?.charged_in);
-  const price = (p: PlanId, year = false) => (inRupees(p, year) ? rupees(p, year) : local ? money(local, amount(p, year), currency) : rupees(p, year));
+  // Free is in the money the paid cards are charged in ("₹0 always" beside "₹699 / month, about ¥1,158"), LIVE2-013
+  const price = (p: PlanId, year = false) => (p === "free" ? (inRupees("basic", year) ? rupees(p, year) : local ? money(local, 0, currency) : rupees(p, year))
+    : inRupees(p, year) ? rupees(p, year) : local ? money(local, amount(p, year), currency) : rupees(p, year));
   const intro = pricingIntro(offer, LIMITS.pro, "landing");
   const [period, setPeriod] = useState<"month" | "year">("month");
   // the fine print's yearly prices are the ones a card shows (rupees where it is charged in rupees, so it never lists two amounts)
@@ -548,7 +544,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
           <div className="lp-head">
             <h1 className="serif lp-h2">{top.heading}</h1>
             {top.error && <p className="banner" role="alert">{top.error}</p>}
-            {loading ? <span className="lp-skel lp-skel-p" /> : <p className="lp-p">{line}</p>}
+            {loading ? <span className="lp-skel lp-skel-p lp-skel-p-one" /> : <p className="lp-p">{line}</p>}
           </div>
         ) : loading ? (
           <div className="lp-head lp-head-skel"><span className="eyebrow">Plans</span><span className="lp-skel lp-skel-h" /><span className="lp-skel lp-skel-p" /></div>

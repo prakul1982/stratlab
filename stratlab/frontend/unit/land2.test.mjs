@@ -4,19 +4,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { DIFFERENT, HOW_MONEY, HOW_STEPS, INTRO_LINE, INTRO_SPACES } from "../src/content/intro.ts";
+import { HOW_MONEY, HOW_STEPS, INTRO_LINE, INTRO_SPACES } from "../src/content/intro.ts";
 import { PAGES } from "../src/content/seo.ts";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const home = PAGES.find((p) => p.path === "/");
-const words = JSON.stringify([INTRO_LINE, INTRO_SPACES, HOW_STEPS, HOW_MONEY, DIFFERENT, home.summary]);
+const words = JSON.stringify([INTRO_LINE, INTRO_SPACES, HOW_STEPS, HOW_MONEY, home.summary]);
 
 test("LAND-2: the intro says what StratLab is in one sentence, and the home page's own HTML opens with the same sentence", () => {
   assert.equal(INTRO_LINE.match(/\.\s/g), null, "one sentence");
-  for (const part of ["testing trading ideas", "understanding your own money", "ten markets", "real prices", "real costs", "paper trading only", "never real orders", "facts, not tips"])
+  for (const part of ["testing trading ideas", "understanding your own money", "ten markets", "paper trading only", "never real orders", "facts, not tips"])
     assert.ok(INTRO_LINE.includes(part), part);
   assert.equal(home.summary[0], `What StratLab is: ${INTRO_LINE}`);
-  assert.equal(home.updated, "2026-10-28", "the page's words changed on this day (and backend/app/site_pages.py says so)");
+  assert.equal(home.updated, "2026-10-29", "the page's words changed on this day (and backend/app/site_pages.py says so)");
 });
 
 test("LAND-2: three columns, Trade then Invest then Money, each with a one-line summary and three real things", () => {
@@ -37,16 +37,17 @@ test("LAND-2: three columns, Trade then Invest then Money, each with a one-line 
     assert.ok(summary.includes(t), `${t} is in the home page's HTML`);
 });
 
-test("LAND-2: three steps (idea, test, paper trade; Money: files, then value, gains and tax), and what makes it different", () => {
+test("LAND-2: three steps (idea, test, paper trade; Money: files, then value, gains and tax)", () => {
   assert.deepEqual(HOW_STEPS.map(([t]) => t), ["Describe an idea", "Test it on real prices", "Trade it on paper"]);
   assert.match(HOW_STEPS[0][1], /plain words/);
-  assert.match(HOW_STEPS[1][1], /four checks/);
+  assert.match(HOW_STEPS[1][1], /luck/);
   assert.match(HOW_MONEY, /upload your files.*value, gains and tax/);
   // VR5-owner-2: "facts, not tips", "ten markets" and "paper trading only / never real orders" are in the intro's one sentence, not again in this list
-  assert.deepEqual(DIFFERENT.map(([t]) => t), ["Real costs, per market", "Four checks for luck", "Your data stays yours"]);
+  // LIVE2-011: the "what makes it different" trio is gone: its three phrases were said again by the Trade and Money sections below
   const summary = home.summary.join(" ").toLowerCase();
-  for (const t of ["how it works", "what makes it different", "real costs for each market", "four checks for luck", "your data stays yours"])
-    assert.ok(summary.includes(t), `${t} is in the home page's HTML`);
+  assert.ok(summary.includes("how it works"));
+  assert.doesNotMatch(summary, /what makes it different/);
+  assert.doesNotMatch(read("src/pages/Login.tsx"), /DIFF_TITLE|DIFFERENT/);
 });
 
 test("LAND-2: no advice wording, no data-vendor names and no made-up amounts in the intro or its server-rendered copy", () => {
@@ -65,7 +66,6 @@ test("LAND-2: the page draws the intro right under the hero, in heading order, w
   assert.match(login, /<h2 id="intro-h" className="serif lp-h2">\{INTRO_TITLE\}<\/h2>/);
   assert.match(login, /\{INTRO_SPACES\.map\(\(sp\) => \(/);
   assert.match(login, /<h3 className="serif lp-h3">\{HOW_TITLE\}<\/h3>/);
-  assert.match(login, /<h3 className="serif lp-h3">\{DIFF_TITLE\}<\/h3>/);
   // what the intro replaced: the three picture cards, and Trade's own four steps (the same steps, less plainly)
   assert.doesNotMatch(login, /Three spaces, one place|function SpaceArt|Check the rules|Paper trade it/);
   const css = read("src/styles.css");
@@ -81,7 +81,7 @@ test("VR5-owner-2: the landing page says 'ten markets', 'paper trading only / ne
   assert.match(login, /"Trade · Invest · Money"\}<\/span>/);
   assert.doesNotMatch(login, /Ten markets|Facts and tests, never tips|Paper trading only, no real orders|No real orders, ever/);
   // nothing else drawn from the intro's data says them again: the sentence is the only place
-  const rest = JSON.stringify([INTRO_SPACES, HOW_STEPS, HOW_MONEY, DIFFERENT]).toLowerCase();
+  const rest = JSON.stringify([INTRO_SPACES, HOW_STEPS, HOW_MONEY]).toLowerCase();
   for (const claim of ["ten markets", "facts, not tips", "never real orders", "no real orders", "paper trading only", "never buy, sell or hold"])
     assert.ok(!rest.includes(claim), `${claim} is said again`);
   // and the page's own HTML says each once, in the same opening sentence

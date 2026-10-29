@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { pct } from "../lib/format";
-import { copyNeeds } from "../lib/rules";
+import { COPY_ANY_PLAN, copyNeeds } from "../lib/rules";
 import { LIMITS } from "../lib/plans";
 import { TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksOf, headTone, LibraryCard, libMeta, marketChoices, shownStats, strategyName, trails, VERDICTS, type LibEntry, checksBeyond, CHECKS_NOT_HOLD } from "../components/LibraryBits";
 import { Search } from "../components/Icons";
@@ -146,7 +146,7 @@ export function LibraryPage() {
             <span className="k-small k-muted">{total} strateg{total === 1 ? "y" : "ies"}</span>
             {/* said once for the list, not on every card (DA-037), and why a copy's figures can differ from its card (DA-038) */}
             <p className="k-note" data-testid="lib-list-notes">
-              {rows.some(trails) && <>{CHECKS_NOT_HOLD} </>}{LIBRARY_DATES}
+              {rows.some(trails) && <>{CHECKS_NOT_HOLD} </>}{LIBRARY_DATES}{rows.some((e) => needs(e)) && <> {COPY_ANY_PLAN}</>}
             </p>
             {layout === "table" && !phone ? (
               <Card label="Strategies">

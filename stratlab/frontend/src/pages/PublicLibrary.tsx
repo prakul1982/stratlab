@@ -57,6 +57,9 @@ const GoogleCopy = ({ label = "Continue with Google to copy and re-test", small 
     {...(small ? { "aria-label": label } : {})}>{small ? <><span className="pub-long">{label}</span><span className="pub-short" aria-hidden="true">Sign in</span></> : label}</button>
 );
 
+/** VR7-004: how many cards a phone shows before "Show more" (the same twelve as the signed-in library). Every card is in the page: the rest are hidden by CSS on a phone only. */
+const PHONE_CARDS = 12;
+
 /** /library, signed out: StratLab's own strategies with their verdicts. */
 export function PublicLibrary() {
   const [rows, setRows] = useState<LibEntry[] | null>(null);
@@ -66,6 +69,10 @@ export function PublicLibrary() {
   const [q, setQ] = useState("");
   const [verdict, setVerdict] = useState("");
   const [market, setMarket] = useState("");
+  // VR7-004: the 43 cards were 18,000px on a phone. All of them stay in the page (a search engine's phone browser reads it, and the search box finds them);
+  // on a phone the first twelve show, and "Show 12 more" shows the next (a desktop shows every card)
+  const [cardPages, setCardPages] = useState(1);
+  useEffect(() => { setCardPages(1); }, [q, verdict, market]);
   useEffect(() => {
     let live = true;
     setFailed(false);
@@ -103,14 +110,20 @@ export function PublicLibrary() {
               {shown.length !== rows.length && <span className="k-small k-muted">{shown.length} of {rows.length} strategies shown</span>}
             </div>
             <div className="k-cards lib-cards">
-              {shown.map((e) => (
-                <Card key={e.id} label={`${strategyName(e)}, ${libMeta(e)}`} className="lib-card lib-lean">
+              {shown.map((e, i) => (
+                <Card key={e.id} label={`${strategyName(e)}, ${libMeta(e)}`} className={`lib-card lib-lean${i >= PHONE_CARDS * cardPages ? " lib-extra" : ""}`}>
                   {/* the same face as the signed-in library's; the rules and the checks one by one are on the strategy's own page */}
                   <LibraryCard e={e} details={false} actions={
                     <Link className="btn sm" to={`/library/${encodeURIComponent(e.id)}`} aria-label={`Open the verdict and rules of ${strategyName(e)}, ${libMeta(e)}`}>Open the verdict and rules</Link>} />
                 </Card>
               ))}
             </div>
+            {shown.length > PHONE_CARDS * cardPages && (
+              <div className="k-row lib-more" data-testid="lib-show-more">
+                <span className="k-note">Showing {PHONE_CARDS * cardPages} of {shown.length}.</span>
+                <button type="button" className="btn quiet sm" onClick={() => setCardPages((n) => n + 1)}>Show {Math.min(PHONE_CARDS, shown.length - PHONE_CARDS * cardPages)} more</button>
+              </div>
+            )}
           </>
         )}
       <p className="k-note">{NOTE}</p>

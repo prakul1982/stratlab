@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { HELP } from "../lib/help";
 import type { Cadence, NewsletterPrefs } from "../lib/news";
 import { track } from "../lib/analytics";
-import { Badge, Card, CardHead, ErrorState, Notice, PlanNote, Seg, Skeleton } from "./kit";
+import { Badge, Card, CardHead, ErrorState, PlanNote, Seg, Skeleton } from "./kit";
 
 type Key = "market_in" | "market_us" | "my_stocks";
 const ROWS: [Key, string][] = [["market_in", "Market brief: India"], ["market_us", "Market brief: US"], ["my_stocks", "My stocks"]];
@@ -89,12 +89,12 @@ export function NewslettersCard() {
         <p className="k-note">A daily brief goes out after each market's close: India about 4:15 PM IST, the US about 4:50 PM New York time once the closing prices have settled, on trading days. If you turn one on after that, the first one comes after the next close. The weekly digest comes on Saturday morning.</p>
         {prefs.email ? (
           <div className="k-row">
-            <span className="k-small">Sent to <b>{prefs.email}</b></span>
+            {/* LIVE1B-041: one sentence, not "Sent to ..." and then a boxed banner saying the same */}
+            <span className="k-small">Sent to <b>{prefs.email}</b>{!prefs.confirmed && ". Newsletters start once you've confirmed it."}</span>
             {prefs.confirmed ? <Badge tone="ok">Confirmed</Badge>
               : <button type="button" className="btn outline sm" disabled={busy === "confirm"} onClick={() => void confirmEmail()}>{busy === "confirm" ? "Sending…" : "Confirm this email"}</button>}
           </div>
         ) : <p className="k-small k-muted">There's no email on your account yet, so issues only show on the News page.</p>}
-        {prefs.email && !prefs.confirmed && <Notice>Newsletters start once you've confirmed the email.</Notice>}
       </>}
     </Card>
   );
