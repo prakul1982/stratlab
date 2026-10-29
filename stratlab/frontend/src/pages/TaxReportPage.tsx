@@ -9,7 +9,7 @@ import { track } from "../lib/analytics";
 import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
 import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
 import { useAskedFy } from "../lib/useFy";
 import { gainLabel, usSharesNote } from "../lib/usGains";
@@ -358,13 +358,13 @@ export function TaxReportPage() {
 
           <Card id="tax-gains">
             <CardHead title={`Gains in ${y.label}`} />
-            <StatRow>
-              <Stat label={gainLabel("st", !!y.foreign)} value={inr(y.stcg.net)} tone={signTone(y.stcg.net)} note={`${inr(y.stcg.gains)} gains · ${inr(y.stcg.losses)} losses`} />
-              <Stat label={gainLabel("lt", !!y.foreign)} value={inr(y.ltcg.net)} tone={signTone(y.ltcg.net)} note={`${inr(y.ltcg.gains)} gains · ${inr(y.ltcg.losses)} losses`} />
-              <Stat label="Long-term exemption used" value={inr(y.exemption.used)} note={`of ${inr(y.exemption.limit)}${y.exemption.limit ? ` · ${inr(y.exemption.left)} left` : ""}`} />
-              <Stat label={<>Tax on share gains <Info label="How the tax is estimated">Short-term gains on listed shares are taxed at 15% for sales before 23 July 2024 and 20% from that day; long-term gains (held more than 12 months) at 10% and 12.5%, above the yearly exemption. Gains times rates, before any unused basic exemption, the 87A rebate, surcharge and the 4% cess; the total tax estimate below applies them.</Info></>}
-                value={inr(y.tax)} note={`before basic exemption, rebate and surcharge; ${inr(y.tax_with_cess)} with 4% cess`} />   {/* CK-2 (R16): the qualifier moved from the label (3 lines beside one-line labels) to the note */}
-            </StatRow>
+            <FigureTable label={`Gains in ${y.label}`} header="Gains" valueHeader="Net" noteHeader="Detail" rows={[
+              { key: "st", label: gainLabel("st", !!y.foreign), value: inr(y.stcg.net), tone: signTone(y.stcg.net), note: `${inr(y.stcg.gains)} gains · ${inr(y.stcg.losses)} losses` },
+              { key: "lt", label: gainLabel("lt", !!y.foreign), value: inr(y.ltcg.net), tone: signTone(y.ltcg.net), note: `${inr(y.ltcg.gains)} gains · ${inr(y.ltcg.losses)} losses` },
+              { key: "ex", label: "Long-term exemption used", value: inr(y.exemption.used), note: `of ${inr(y.exemption.limit)}${y.exemption.limit ? ` · ${inr(y.exemption.left)} left` : ""}` },
+              { key: "tax", label: <>Tax on share gains <Info label="How the tax is estimated">Short-term gains on listed shares are taxed at 15% for sales before 23 July 2024 and 20% from that day; long-term gains (held more than 12 months) at 10% and 12.5%, above the yearly exemption. Gains times rates, before any unused basic exemption, the 87A rebate, surcharge and the 4% cess; the total tax estimate below applies them.</Info></>,
+                value: inr(y.tax), note: `before basic exemption, rebate and surcharge; ${inr(y.tax_with_cess)} with 4% cess` },   // CK-2 (R16): the qualifier is in the note, not the label
+            ]} />
             {y.exemption.limit > 0 && y.exemption.used > 0 && <Meter pct={Math.max(0, Math.min(100, (y.exemption.used / y.exemption.limit) * 100))} />}
             {y.foreign && <p className="k-small k-muted" data-testid="tax-us-apart">{usSharesNote(y.foreign.st.net, y.foreign.lt.net, inr)} Their tax is added in the year's total tax estimate; the US card below has each sale.</p>}
           </Card>
@@ -528,9 +528,8 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
             {/* VR1-144: no second copy of the total's figure here: the summary at the top of the page and the table below carry it */}
             <span className="k-note">{REGIME[t.regime]} · {y.inputs.resident ? "resident" : "non-resident"}, aged {AGE_TEXT[y.inputs.age ?? "below60"]}{t.rebate > 0 ? ` · 87A rebate ${inr(t.rebate)}` : ""}{t.surcharge > 0 ? ` · surcharge ${inr(t.surcharge)}` : ""} · cess {inr(t.cess)}{!y.inputs.saved ? " · no other income entered yet" : ""}</span>
           </div>
-          <StatRow label="Where the tax comes from">
-            {chips.map(([label, v, info]) => <Stat key={label} item label={<>{label} <Info label={`About ${label}`}>{info}</Info></>} value={inr(v)} />)}
-          </StatRow>
+          <FigureTable label="Where the tax comes from" header="Income" valueHeader="Amount" noteHeader={null}
+            rows={chips.map(([label, v, info]) => ({ key: label, label: <>{label} <Info label={`About ${label}`}>{info}</Info></>, value: inr(v) }))} />
           {y.other_regime && <p className="k-note">With the same figures, the {REGIME[y.other_regime.regime].toLowerCase()} works out to {inr(y.other_regime.total)}{y.other_regime.regime === "old" ? " (with the deductions entered, if any)" : ""}.</p>}
           {(t.notes ?? []).filter((n) => !/not yet confirmed/.test(n)).map((n) => <p key={n} className="k-small" role="note"><b>Note:</b> {n}</p>)}
           {(t.carry_forward.speculative > 0 || t.carry_forward.business > 0) && (

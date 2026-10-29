@@ -335,7 +335,7 @@ def test_reads_by_an_older_reader_are_read_again(w, monkeypatch):
 
 def test_sector_lists_only_what_is_filed():
     assert "cement" not in B.SECTORS and "telecom" not in B.SECTORS               # nothing was ever filed to read (DF-013)
-    assert {s for s, _ in B.SECTORS["airlines"]["symbols"]} == {"ADANIPORTS", "GMRAIRPORT"}
+    assert {s for s, _ in B.SECTORS["airlines"]["symbols"]} == {"ADANIPORTS", "GMRAIRPORT", "JSWINFRA"}      # JSW Infrastructure files a monthly cargo update too (RES-1 follow-up); the list is still only companies that file one
     assert "sales" not in B.SECTORS["power"]["label"].lower()
 
 

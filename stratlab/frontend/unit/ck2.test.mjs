@@ -97,8 +97,8 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
 
 test("CK-2 (R16): the tax report's share-gains label is one short line, its qualifier is the note", () => {
   const t = read("src/pages/TaxReportPage.tsx");
-  assert.match(t, /<Stat label=\{<>Tax on share gains <Info/);
-  assert.match(t, /note=\{`before basic exemption, rebate and surcharge; \$\{inr\(y\.tax_with_cess\)\} with 4% cess`\}/);
+  assert.match(t, /label: <>Tax on share gains <Info/);          // a row of the gains table (RES-1)
+  assert.match(t, /note: `before basic exemption, rebate and surcharge; \$\{inr\(y\.tax_with_cess\)\} with 4% cess`/);
 });
 
 test("CK-2 (R18): a table that would be cut on a phone is cards, a short chip row wraps", () => {

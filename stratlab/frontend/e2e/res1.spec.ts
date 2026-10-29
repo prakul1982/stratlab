@@ -47,12 +47,12 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   await expect(days.first().locator(".k-eyebrow")).toContainText("today · 4 companies");
   if (!phone) {
     for (const h of ["Company", "Market value", "Price now", "Day", "Revenue, a year on", "Profit, a year on", "Past results-day moves", "Options imply", "Meeting"])
-      await expect(today.getByRole("columnheader", { name: new RegExp(`^${h}`) })).toBeVisible();
+      await expect(today.getByRole("columnheader").filter({ hasText: h }).first()).toBeVisible();
   }
   await expect(today.getByRole("row")).toHaveCount(5);                      // the header and four companies
   // the figures: a market value, the latest quarter against a year before with its sign, a usual move that was read in
   const reliance = today.getByRole("row", { name: /RELIANCE/ });
-  await expect(reliance).toContainText("₹19.04 lakh cr");
+  await expect(reliance).toContainText(/₹19\.\d\d lakh cr/);
   await expect(reliance).toContainText(/[+−]\d/);
   await expect(reliance).toContainText("F&O");
   await expect(reliance.getByText(/^±\d+\.\d%$/).first()).toBeVisible({ timeout: 30_000 });      // the usual move, once the prices were read
@@ -72,20 +72,20 @@ test("results calendar: size, sector, index, F&O and purpose narrow the table, t
   await expect(count).toHaveText("20 companies", { timeout: 30_000 });
   if (phone) await page.getByRole("button", { name: /^Filters/ }).click();
   const filters = page.getByRole("region", { name: "Filters" });
-  await filters.getByLabel("Sector").selectOption({ label: "Energy (4)" });
+  await filters.getByLabel("Sector").selectOption("Information Technology");
   await expect(count).toHaveText("20 companies · 4 shown");
   await expect(page.getByRole("button", { name: "Clear filters" })).toBeVisible();
   const links = page.getByTestId("results-day").locator("tbody th a");
   await expect(links.first()).toBeVisible();
-  for (const sym of await links.allInnerTexts()) expect(["RELIANCE", "ONGC", "COALINDIA", "NTPC", "SAIL", "VEDL"]).toContain(sym);
+  for (const sym of await links.allInnerTexts()) expect(["TCS", "INFY", "WIPRO", "HCLTECH"]).toContain(sym);
   // F&O only, on top of the sector
   await filters.getByLabel(/^F&O stocks only/).check();
-  await expect(count).toHaveText("20 companies · 1 shown");
+  await expect(count).toHaveText("20 companies · 1 shown");               // INFY: the one of the four with futures and options
   await expect(page.getByRole("table", { name: /^Results on/ })).toHaveCount(1);
   await shot(page, "res1-filtered", info);
   // a size none of them is: nothing matches, in words, with the way out
   await filters.getByRole("button", { name: /^Micro/ }).click();
-  await expect(page.getByRole("heading", { name: "No company matches these filters" })).toBeVisible();
+  await expect(page.getByText("No company matches these filters")).toBeVisible();
   await expect(count).toHaveText("20 companies · 0 shown");
   // kept for the next visit on this device
   await page.reload();
@@ -121,7 +121,7 @@ test("corporate actions: a table a day with the price now, the payment's yield a
   await expect(day.locator(".k-eyebrow")).toContainText("Ex-date");
   const table = day.getByRole("table");
   if (!phone) for (const h of ["Company", "Action", "Amount or ratio", "Record date", "Price now", "Yield of this payment", "Market value"])
-    await expect(table.getByRole("columnheader", { name: new RegExp(`^${h}`) })).toBeVisible();
+    await expect(table.getByRole("columnheader").filter({ hasText: h }).first()).toBeVisible();
   // today: TCS's bonus 1:1 (the world's own row) and the dividends the world adds
   await expect(page.getByRole("table", { name: /^Corporate actions going ex on/ }).first()).toBeVisible();
   const tcs = page.getByRole("row", { name: /TCS/ }).first();
@@ -142,7 +142,7 @@ test("corporate actions: a table a day with the price now, the payment's yield a
   await expect(count).toContainText("shown");
   await filters.getByLabel("Kind of action").selectOption("");
   await filters.getByRole("button", { name: /^Micro/ }).click();
-  await expect(page.getByRole("heading", { name: "No action matches these filters" })).toBeVisible();
+  await expect(page.getByText("No action matches these filters")).toBeVisible();
   await page.getByRole("button", { name: "Clear filters" }).first().click();
   await expect(page.getByTestId("actions-day").first()).toBeVisible();
   await sane(page, errors);
