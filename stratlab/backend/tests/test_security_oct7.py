@@ -69,6 +69,8 @@ def test_the_pdf_child_has_none_of_the_servers_secrets(monkeypatch):
 def test_strangers_cannot_use_up_the_webhooks_allowance(w, brevo, monkeypatch):
     c = w["client"]
     monkeypatch.setattr(inbound, "MAX_POSTS_PER_MINUTE", 5)
+    monkeypatch.setattr(inbound, "_clock", lambda: 1_800_000_000.0)    # one minute throughout, and a fresh count for it
+    monkeypatch.setattr(inbound, "_posts", {})
     for _ in range(12):
         assert post(c, {"items": []}, k="wrong-secret").status_code == 401
     assert post(c, {"items": []}).status_code == 200               # the real mail service still gets through
