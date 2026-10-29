@@ -101,6 +101,7 @@ def build():
     closing_auction(mp)
     vix_history(mp)
     holders_and_updates(mp)
+    deep_reads()
     live_breadth(mp, sizes)
     library_seeds()
     all_company_filings(mp)
@@ -218,6 +219,61 @@ def holders_and_updates(mp):
         holdings.save(uid, [{"symbol": "MARUTI", "qty": 10, "avg": 11000.0}, {"symbol": "TCS", "qty": 5, "avg": 3500.0}], "manual")
         db.set_setting(f"watchlist:{uid}", json.dumps({"items": [{"symbol": "TVSMOTOR", "region": "IN"}, {"symbol": "JSWSTEEL", "region": "IN"},
                                                                   {"symbol": "MARUTI", "region": "IN"}, {"symbol": "AAPL", "region": "US"}]}))
+
+
+def deep_reads():
+    """RELIANCE's deep dive with its document read and management report card already made (the model's replies, made up), so the
+    page's Business model, measures, plans and report-card tables are drawn full: a mix of targets met, missed, not due and
+    ones the numbers can't settle (a segment, no year named, a plan), in the shapes the model returns them (UI-CO item 7)."""
+    from app import deepdive, report_card as rc
+    calls = {f"S{i}": {"title": "Earnings call transcript", "at": at, "url": f"https://nsearchives.nseindia.com/call{i}.pdf", "kind": "transcript"}
+             for i, at in enumerate(("2024-05-30T18:10", "2025-02-17T18:10", "2025-08-12T18:10", "2025-11-14T18:10", "2026-05-20T18:10"), 1)}
+
+    def g(src, metric, low, high, period, what, quote, unit="%", **more):
+        return {"metric": metric, "low": low, "high": high, "unit": unit, "period": period, "what": what, "quote": quote, "source": src, **more}
+    items = [
+        g("S1", "revenue_growth", 10, 20, "FY25", "Double-digit revenue growth", "we continue to grow by double digit, and expect 10% to 20% growth"),
+        g("S1", "margin", 17, None, "FY25", "EBITDA margin of about 17%", "we expect EBITDA margin of about 17% for the year"),
+        g("S2", "margin", 5, None, "FY26", "Gross margins", "normally we give an outlook of around 5% margins", scope="company"),
+        g("S3", "revenue_growth", 8, 10, "FY26", "Revenue growth of 8 to 10%", "we expect revenue growth of 8% to 10% in FY26"),
+        g("S3", "profit_growth", 0.1, None, "FY27", "Profit growth of 10%", "we will target 10% profit growth next year"),
+        g("S4", "revenue_growth", 0.2, None, "FY27", "CAGR of 20%", "our CAGR has been 20% for last 20 years"),
+        g("S4", "margin", 1.5, None, None, "PAT margin of 1.5%", "1.5% is a safer PAT margin which can be considered for the long run"),
+        g("S4", "revenue_growth", 0.3, 0.5, None, "30-50% growth in the retail business", "we expect 30% to 50% growth on a year-on-year basis in our retail business", segment="retail"),
+        g("S4", "other", 15, None, "FY26", "ROE target", "we have always envisioned reaching a 15% ROE", metric_note="x"),
+        g("S5", "margin", 17, 18, "FY27", "EBITDA margin of 17-18%", "we plan on improving our margin to 17% or 18% in FY27"),
+        g("S5", "other", None, None, "FY27", "Start the new energy plant", "we will start the first phase of the new energy plant"),
+        g("S5", "other", 3, 4, None, "Digital business growth", "growth in digital would be at least 3x or 4x of our overall growth", unit=""),
+        g("S5", "profit_growth", 12, None, "FY27", "Profit growth of 12%", "are we expecting 12% growth in profit next year?"),
+    ]
+    for it in items:
+        it.pop("metric_note", None)
+    out = rc.clean({"guidance": items}, calls)
+    rc.store("RELIANCE", {"guidance": out, "problems": [], "years": 2,
+                          "read": [{"kind": c["kind"], "at": c["at"], "title": c["title"]} for c in calls.values()]})
+    src = {"title": "Investor presentation", "at": "2026-08-30T18:10", "url": "https://nsearchives.nseindia.com/p.pdf", "kind": "presentation"}
+    deepdive.store("RELIANCE", {
+        "problems": [], "read": [{"kind": "presentation", "at": "2026-08-30T18:10", "title": "Investor Presentation"},
+                                 {"kind": "transcript", "at": "2026-09-03T18:10", "title": "Earnings call"},
+                                 {"kind": "transcript", "at": "2026-05-20T18:10", "title": "Earnings call"},
+                                 {"kind": "presentation", "at": "2026-05-12T18:10", "title": "Investor Presentation"},
+                                 {"kind": "transcript", "at": "2026-02-09T18:10", "title": "Earnings call"},
+                                 {"kind": "presentation", "at": "2026-02-02T18:10", "title": "Investor Presentation"},
+                                 {"kind": "transcript", "at": "2025-11-14T18:10", "title": "Earnings call"},
+                                 {"kind": "presentation", "at": "2025-11-08T18:10", "title": "Investor Presentation"}],
+        "business": {"summary": "Reliance runs three large businesses: turning oil into fuels and chemicals, a national retail chain, and a mobile and broadband network, with a growing new-energy arm.",
+                     "customers": "Households, small shops and large companies across India, and refiners and traders abroad.",
+                     "drivers": ["Refining margins and the volume of crude processed", "Store openings and sales per store in retail", "Subscribers and revenue per user in the network"],
+                     "strengths": ["Three businesses that earn in different cycles", "The largest retail network in the country"],
+                     "risks": ["Fuel margins swing with global prices", "Heavy spending on new energy before it earns"],
+                     "segments": [{"name": "Oil to chemicals", "share_pct": 52, "what": "Refining and petrochemicals"}, {"name": "Retail", "share_pct": 26, "what": "Stores, groceries and online"},
+                                  {"name": "Digital services", "share_pct": 17, "what": "Mobile and broadband"}, {"name": "New energy", "share_pct": None, "what": "Solar, batteries and hydrogen"}],
+                     "measures": [{"name": "Average revenue per user", "value": "₹206", "period": "Q1 FY27", "change": "+8% on a year ago", "quote": "ARPU was Rs 206 for the quarter", "source": src},
+                                  {"name": "Stores open", "value": "19,800", "period": "Q1 FY27", "change": None, "quote": "we operate 19,800 stores", "source": src}],
+                     "industry": "Conglomerate", "sources": [src]},
+        "plans": {"capex": [{"what": "New energy gigafactories", "amount": "₹75,000 crore", "size": None, "timeline": "by FY28", "status": "under way",
+                             "quote": "we will invest Rs 75,000 crore across the gigafactories by FY28", "source": src}],
+                  "outlook": [{"statement": "Retail store additions to continue at the same pace", "quote": "we will keep adding stores at the same pace", "source": src}], "sources": [src]}})
 
 
 def live_breadth(mp, sizes):

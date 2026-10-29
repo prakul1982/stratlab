@@ -1016,6 +1016,10 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 
 .quote-row { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line); }
 .quote-row:first-of-type { border-top: 0; }
+.rc-target, .rc-said, .rc-result { display: flex; flex-direction: column; gap: 4px; }
+.rc-said { align-items: flex-end; } .rc-result { align-items: flex-start; }
+.rc-quote { max-width: 70ch; }
+@media (max-width: 640px) { .rc-said { align-items: flex-start; } }
 .promises { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .promise { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .promise-facts { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }

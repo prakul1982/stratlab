@@ -23,12 +23,13 @@ type Source = { title: string; at: string; url: string; kind: string } | null;
 type Target = { metric: string; low: number | null; high: number | null; period: string | null; what: string; quote: string; said_at: string;
   source: { title: string; at: string; url: string }; actual: number | null; unit: string; result: "met" | "missed" | "pending" | "unchecked";
   revised?: { low: number | null; high: number | null; at: string; quote: string } | null;
-  settled_by?: { actual: number; met: boolean; quote: string; source: { title: string; at: string; url: string } } };
+  settled_by?: { actual: number; met: boolean; quote: string; source: { title: string; at: string; url: string } };
+  /** one short line on why the numbers can't settle it (UI-CO item 7), and whether it is a plan with no figure at all */ why?: string | null; qualitative?: boolean; segment?: string };
 export type CheckState = "pass" | "watch" | "fail" | "na";
 type Checklist = { checks: { group: string; label: string; state: CheckState; value: string; rule: string }[];
   counts: Record<CheckState, number>; scored: number; industry?: { group: string; label: string; path: string[]; note: string } };
 type Measure = { name: string; value: string; period: string | null; change: string | null; quote: string; source: Source };
-type Card = { rows: Target[]; met: number; missed: number; pending: number; unchecked: number; score: number | null;
+type Card = { rows: Target[]; met: number; missed: number; pending: number; unchecked: number; no_figure?: number; score: number | null;
   read: { kind: string; at: string; title: string }[]; problems: string[]; at: string; years?: number };
 export interface DeepView {
   symbol: string; region?: "IN" | "US"; ai?: boolean; source_url?: string | null; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
@@ -70,14 +71,15 @@ function lossNote(values: (number | null | undefined)[], years: number): string 
   return span.some((x) => x <= 0) ? "A loss year in the period, so no yearly rate" : undefined;
 }
 
-const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", margin: "Operating margin", capex: "Capex", revenue: "Revenue", profit: "Profit", other: "" };
+const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", ebitda_growth: "EBITDA growth", margin: "Operating margin", net_margin: "Net margin",
+  gross_margin: "Gross margin", roe: "Return on equity", roce: "Return on capital employed", capex: "Capex", revenue: "Revenue", profit: "Profit", ebitda: "EBITDA", other: "" };
 const RESULT: Record<string, [string, string]> = { met: ["Met", "pass"], missed: ["Missed", "fail"], pending: ["Not due yet", "next"], unchecked: ["Can't check", "skip"] };
 /** A target in its own unit: rupees crore, millions, a percentage, or a plain number, never a crore amount with a "%"
  * (DD-050: "INR 40,000–50,000 crore" read "Target 40000–50000%"). */
 const target = (lo: number | null, hi: number | null, unit: string, cur = "$") =>
   lo == null ? "–" : unit === "crore" ? (hi != null ? `${inrAmount(lo)} – ${inrAmount(hi)}` : inrAmount(lo))
     : unit === "million" ? (hi != null ? `${usdAmount(lo, cur)} – ${usdAmount(hi, cur)}` : usdAmount(lo, cur))
-    : `${lo.toLocaleString("en-IN")}${hi != null ? `–${hi.toLocaleString("en-IN")}` : ""}${unit === "%" ? "%" : ""}`;
+    : `${lo.toLocaleString("en-IN")}${hi != null ? `–${hi.toLocaleString("en-IN")}` : ""}${unit === "%" ? "%" : unit === "x" ? "×" : ""}`;
 const actualText = (v: number, unit: string, cur = "$") =>
   unit === "crore" ? inrAmount(v) : unit === "million" ? usdAmount(v, cur) : unit === "%" ? `${v.toFixed(1)}%` : v.toLocaleString("en-IN");
 
@@ -95,28 +97,33 @@ function ReportCard({ c, cur = "$" }: { c: Card; cur?: string }) {
       </StatRow>
       <p className="k-small">{checked
         ? <>Of the {checked} targets from past calls that can be settled, by the reported numbers or by what the company itself said later, <b>{c.met} {c.met === 1 ? "was" : "were"} met</b> and {c.missed} missed ({c.score}% met).</>
-        : unsettledNote(c)}</p>
+        : unsettledNote(c)}{(c.no_figure ?? 0) > 0 && <> {c.no_figure} more {c.no_figure === 1 ? "is a plan" : "are plans"} with no figure to check.</>}</p>
       {c.rows.length > 0 ? (
-        <div className="promises">{c.rows.map((r, i) => {
-          const [label, tone] = RESULT[r.result];
-          return (
-            <div key={i} className="promise">
-              <div className="k-spread">
+        <DataTable label="Management targets and how they turned out" stack rows={c.rows} rowKey={(r, i) => `${r.metric}-${r.period}-${r.said_at}-${i}`}
+          columns={[
+            { key: "t", header: "Target", rowHeader: true, wrap: true, cell: (r) => (
+              <span className="rc-target">
                 <span className="k-small">{METRIC[r.metric] ? <b>{METRIC[r.metric]}: </b> : null}{r.what}</span>
-                <span className={`badge ${tone}`}>{label}</span>
-              </div>
-              <div className="promise-facts k-note">
-                {r.period && <span><span className="muted">For</span> {r.period}</span>}
-                {r.low != null && <span><span className="muted">Target</span> <b className="mono">{target(r.low, r.high, r.unit, cur)}</b></span>}
-                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{actualText(r.actual, r.unit, cur)}</b></span>}
-                <a className="link" href={safeHref(r.source.url)} target="_blank" rel="noopener noreferrer" title={r.source.title}>Said {day(r.source.at)} ↗</a>
-              </div>
-              {r.quote && <span className="k-note">"{r.quote}"</span>}
-              {r.settled_by && <span className="tiny">
-                <span className="muted">Result from the company's own words:</span> "{r.settled_by.quote}" <a className="link" href={safeHref(r.settled_by.source.url)} target="_blank" rel="noopener noreferrer">{r.settled_by.source.title}, {day(r.settled_by.source.at)} ↗</a></span>}
-              {r.revised && <span className="k-note">Later changed to {target(r.revised.low, r.revised.high, r.unit, cur)} ({day(r.revised.at)}).</span>}
-            </div>);
-        })}</div>
+                {r.quote && <span className="k-note rc-quote">"{r.quote}"</span>}
+                {r.settled_by && <span className="k-note rc-quote"><span className="k-muted">Result from the company's own words:</span> "{r.settled_by.quote}" <a className="link" href={safeHref(r.settled_by.source.url)} target="_blank" rel="noopener noreferrer">{r.settled_by.source.title}, {day(r.settled_by.source.at)} ↗</a></span>}
+                {r.revised && <span className="k-note">Later changed to {target(r.revised.low, r.revised.high, r.unit, cur)} ({day(r.revised.at)}).</span>}
+              </span>) },
+            { key: "p", header: "For", cell: (r) => r.period ?? "–" },
+            { key: "s", header: "Said", numeric: true, cell: (r) => (
+              <span className="rc-said">
+                <b className="mono">{r.low != null ? target(r.low, r.high, r.unit, cur) : "No figure"}</b>
+                <a className="link k-note" href={safeHref(r.source.url)} target="_blank" rel="noopener noreferrer" title={r.source.title}>{day(r.source.at)} ↗</a>
+              </span>) },
+            { key: "r", header: "Result", lead: true, cell: (r) => {
+              const [label, tone] = r.result === "unchecked" && r.qualitative ? ["No figure", "skip"] : RESULT[r.result];
+              return (
+                <span className="rc-result">
+                  <span className={`badge ${tone}`}>{label}</span>
+                  {r.actual != null && <span className="k-note">Actual <b className="mono">{actualText(r.actual, r.unit, cur)}</b></span>}
+                  {r.result === "unchecked" && r.why && <span className="k-note" data-testid="rc-why">{r.why}</span>}
+                </span>);
+            } },
+          ]} />
       ) : <p className="k-small k-muted">No specific targets were found in these {c.read.length > 0 && c.read.every((d) => d.kind === "earnings_release") ? "earnings releases" : "calls"}.</p>}
       <p className="k-note">Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), a revenue or profit amount (at least the target, less 2%) and estimated capex (within 10%). A target the numbers can't settle (a bank's loan-to-deposit ratio, a retail mix) is settled from what the company said after the period ended, quoted word for word and checked against the document. A target repeated on later calls counts once, from the first time it was said.</p>
     </>
