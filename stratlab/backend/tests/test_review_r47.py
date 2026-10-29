@@ -53,13 +53,14 @@ def test_a_subsidiary_ceasing_is_not_an_officer_resigning():
     assert classify("Cessation", "Cessation of Mr. A Kumar as Independent Director")[0] == "kmp_resign"
 
 
-def test_a_mood_with_no_figure_gets_the_levels_first():
+def test_a_mood_with_no_figure_and_no_headline_behind_it_is_dropped():
     from app.intel import grounding
     idx = [{"name": "NIFTY 50", "price": 25709.85, "change_pct": 0.62, "low52": 21743.65, "high52": 26277.35, "day": "2026-10-16"},
            {"name": "SENSEX", "price": 83952.19, "change_pct": 0.58, "day": "2026-10-16"}]
     read = {"tone": "The broad market closed higher, with both indices nearer the lower end of their yearly ranges.",
             "hot": [], "flows": [], "themes": []}
+    # MOOD-1: no template of the levels in its place (the cards above say them); a read with figures stands on them
     tone = grounding.ground_pulse(read, idx, [{"headline": "Sensex, Nifty close higher"}])["tone"]
-    assert tone.startswith("NIFTY 50 at 25,709.85, +0.62% on the day") and "SENSEX at 83,952.19" in tone
+    assert tone == "" or "25,709" not in tone
     read["tone"] = "NIFTY 50 rose 0.62% to 25,709.85."
     assert grounding.ground_pulse(read, idx, [])["tone"] == "NIFTY 50 rose 0.62% to 25,709.85."

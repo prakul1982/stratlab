@@ -397,7 +397,8 @@ Never say the market is at record highs unless an index's from_high_pct is above
 52-week range only with from_low_pct and from_high_pct (above its low when from_low_pct is positive). Quote only numbers
 from the FACTS. Mention a central bank, economic data, money flows or a sector only when a headline given names it.
 Say how many sectors rose or fell, or that all of them did, only as the FACTS' "sectors" counts give it (and never without
-them), whatever a headline says.
+them), whatever a headline says. Say which way a sector went only as the FACTS' "sectors" rows give it, whatever a headline says:
+never that a sector dragged or fell when its row is positive, nor that it rose when its row is negative.
 Never work out who is buying or selling from how the market or a sector moved: a rise does not mean money flowed in, and
 a "reversal" or "stabilization" of flows, or "institutional interest", is not something prices show. Say what foreign
 institutions (FIIs) or domestic institutions (DIIs) bought or sold only from the FACTS' "institutional_flows" (the day's
@@ -407,11 +408,12 @@ Return ONLY this JSON:
 Give a reason for a move only when a headline reports that reason as having happened; never infer one (earnings,
 data, rates) from a headline that previews it or from the moves themselves.
 {{"driver": "the subject most of today's headlines are about, in 2-4 plain words as the headlines put it (like \"crude oil\" or \"bank results\"), or \"\"",
- "tone": "3-4 sentences on how the market moved today: what the headlines report as the reason for the move (only when one does), then every index in the FACTS with its level and its change in percent",
+ "tone": "1-2 sentences: what the headlines report as the reason for today's move, only when one does, else an empty string. Do not give any index level or index percentage: the page shows them",
  "hot": [{{"name": "", "ticker": "", "why": "2 sentences: what the headlines report about it"}}],
  "flows": [{{"title": "", "detail": "2 sentences, as the headlines report it", "direction": "INFLOW" | "OUTFLOW" | "ROTATION" | ""}}],
  "themes": [{{"theme": "", "detail": "2 sentences", "example": "ticker"}}]}}
-"hot" are 4 companies named in today's headlines, with what the news says (not why to buy them). 4 flows, 4 themes.
+"hot" are 4 companies named in today's headlines, with what the news says in the headline's own words (not why to buy them, and never
+that a company's news moved the market unless a headline says so). 4 flows, 4 themes.
 A "flow" is a headline's market fact about money, prices or a sector (a price move, a fund or ETF flow, a sector's move);
 leave out a story with no such fact (politics, a company's product news, an interview). "direction" only when the FACTS'
 "institutional_flows" give it, else "".
@@ -423,12 +425,12 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
              **({"session": f"The market has closed, but these levels are as of {before_close}, before the close. Say \"at\" the level as of that time; never say it closed at it."} if before_close else {}),
              **({"session": "The market has just closed and these levels are its latest prints, still settling into the official close. Say where each index stood; never say it closed, ended or finished at a level."} if settling else {}),
              # StratLab's own count of the sector indices that rose and fell, the only one the read may give (R8B-004)
-             **({"sectors": {k: sectors[k] for k in ("up", "down", "unchanged", "of")}} if sectors else {}),
+             **({"sectors": {**{k: sectors[k] for k in ("up", "down", "unchanged", "of")}, "rows": sectors.get("rows") or []}} if sectors else {}),
              # the FII and DII figures StratLab's Positioning page shows for the day, in ₹ crore (R10O-004)
              **({"institutional_flows": cash_facts} if cash_facts else {}),
              "headlines": [f"[{(h.get('at') or '')[:10]}] {h['headline']}" for h in headlines[:14]]}
     r = _ask(system, facts, ai, 2500)
-    if not isinstance(r, dict) or not str(r.get("tone") or "").strip():     # never cache a read with nothing in it
+    if not isinstance(r, dict) or not any(r.get(k) for k in ("tone", "hot", "flows", "themes")):     # never cache a read with nothing in it
         raise AIError("The AI didn't send a read of the market this time.")
 
     def rows(x, keys, n=4):
@@ -438,7 +440,7 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
         # inflow or outflow only for a flow in the day's institutional figures, never for a story a headline tells (R16B-003)
         d = f["direction"].upper()
         f["direction"] = d if d in ("INFLOW", "OUTFLOW", "ROTATION") and cash_facts and grounding.flow_text(f["title"] + " " + f["detail"]) else ""
-    read = {"tone": str(r.get("tone") or "")[:900], "hot": rows(r.get("hot"), ("name", "ticker", "why")),
+    read = {"tone": str(r.get("tone") or "")[:500], "hot": rows(r.get("hot"), ("name", "ticker", "why")),
             "flows": flows, "themes": rows(r.get("themes"), ("theme", "detail", "example"))}
     # every claim checked in code against the index numbers and the headlines; what doesn't hold is dropped (R5O-018)
     out = grounding.ground_pulse(read, indices, headlines, sectors, cash_facts)
@@ -448,13 +450,14 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     # numbers the page's way (R7O-001), index levels as the cards show them (DE-017), and a day as the app writes it
     # (R70-010: "as of 2026‑10‑16")
     tidy = lambda t: grounding.app_dates(grounding.card_levels(grounding.tidy_numbers(t, region), indices))          # noqa: E731
-    # the mood from the moves and the day's main story from the headlines, both worked out in code, so the read says how
-    # the market felt and what it was about, not only the levels (DD-001); where the FII/DII figures come from whenever
-    # the read quotes them
+    # the day's main story from the headlines, worked out in code (DD-001); the mood itself is the Market pulse tables' and
+    # headline (mood.py), not a sentence of this read (MOOD-1). Where the FII/DII figures come from whenever the read quotes them
     titles = [str(h.get("headline") or "") for h in headlines[:14]]
-    mood = " ".join(x for x in (grounding.mood_line(indices, sectors), grounding.main_story(str(r.get("driver") or ""), titles)) if x)
+    story = grounding.story_of(str(r.get("driver") or ""), titles)
     quoted = grounding.flow_text(" ".join([str(out.get("tone") or "")] + [f.get("title", "") + " " + f.get("detail", "") for f in out.get("flows") or []]))
-    return {**out, "tone": tidy(out.get("tone")), "mood": mood,
+    return {**out, "tone": tidy(out.get("tone")), "story_line": grounding.main_story(str(r.get("driver") or ""), titles),
+            # the headlines the count is of, with the ones that carry the story marked, so "3 of 8" is checkable on the page (MOOD-1)
+            "story": {**story, "headlines": titles} if story else None,
             "flows_source": grounding.flows_source(cash_facts) if cash_facts and quoted else "",
             **{k: [{**x, f: tidy(x.get(f))} for x in out.get(k) or []] for k, f in (("hot", "why"), ("flows", "detail"), ("themes", "detail"))}}
 

@@ -57,11 +57,11 @@ def test_index_levels_in_the_read_are_the_cards_whole_points():
 # ---------- DD-001: the mood and the day's story, from the numbers and the headlines ----------
 def test_the_mood_is_worked_out_from_the_moves():
     assert grounding.mood_line(IN, {"up": 3, "down": 9, "unchanged": 0, "of": 12}) == \
-        "Mildly negative: all three indices down on the day, by 0.32% to 0.45%, with 9 of 12 sector indices down."
+        "Mildly negative: all three indices down on the day, with 9 of 12 sector indices down."          # the cards carry the moves (MOOD-1)
     mixed = [{**US[0], "change_pct": 0.3}, US[1]]
     assert grounding.mood_line(mixed) == "Mixed: the S&P 500 up and the NASDAQ down on the day."
     assert grounding.mood_line([{**i, "change_pct": 2.4} for i in IN]).startswith("Sharply positive: all three indices up")
-    assert grounding.mood_line([{**i, "change_pct": 0.1} for i in IN]).startswith("Flat: all three indices up on the day, by 0.10%")
+    assert grounding.mood_line([{**i, "change_pct": 0.1} for i in IN]).startswith("Flat: all three indices up on the day")
     assert grounding.mood_line([]) == ""
 
 
@@ -81,8 +81,11 @@ def test_the_read_says_the_mood_and_where_the_flows_come_from(monkeypatch):
     monkeypatch.setattr(A, "complete", fake)
     cash = {"status": "ok", "as_of": "2026-10-23", "fii": {"buy": 9000.0, "sell": 8112.0, "net": 888.0}, "dii": {"buy": 1.0, "sell": 1.0, "net": 3235.0}}
     out = A.pulse("IN", "", IN, [{"headline": h} for h in CRUDE], (None, None), closed=True, cash=cash)
-    assert out["mood"] == ("Mildly negative: all three indices down on the day, by 0.32% to 0.45%. "
-                           "The main story in today's headlines: crude oil prices (3 of 4).")
+    # the mood is the tables' headline now (mood.py); the read carries the story, and only the headlines' reasons (MOOD-1)
+    assert "mood" not in out
+    assert out["story_line"] == "The main story in today's headlines: crude oil prices (3 of 4)."
+    assert out["story"]["label"] == "crude oil prices" and out["story"]["n"] == 3 and out["story"]["of"] == 4
+    assert [out["story"]["headlines"][i] for i in out["story"]["indices"]] == [h for h in CRUDE if "rude" in h or "Brent" in h or "oil" in h.lower()][:3] or len(out["story"]["indices"]) == 3
     assert out["tone"].startswith("The NIFTY 50 closed at 22,600, down")
     assert out["flows_source"] == ("FII and DII figures are the exchange's provisional cash-market numbers for 23 Oct, in ₹ crore; "
                                    "the final ones can differ a little.")

@@ -760,10 +760,11 @@ def test_a_52_week_claim_must_match_the_levels():
     assert range_claims_ok("The NIFTY 50 broke below its 52-week low.", below)
 
 
-def test_when_nothing_survives_the_read_is_the_numbers_alone():
+def test_when_nothing_survives_the_read_is_empty_not_the_levels_again():
+    # MOOD-1: the cards carry the levels; a read that did not hold up says nothing rather than reciting them in another rounding
     from app.intel.grounding import ground_pulse
     out = ground_pulse({"tone": "Stocks rallied to record highs on hopes of a Fed cut."}, NIFTY_8_OCT, HEADLINES)
-    assert out["tone"].startswith("NIFTY 50 at 22,231.80, −1.64% on the day, 0.2% above its 52-week low and 15.8% below its high.")
+    assert out["tone"] == ""
 
 
 def test_the_pulse_gives_the_ai_the_52_week_position_and_checks_its_reply(monkeypatch):

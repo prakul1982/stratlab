@@ -20,7 +20,9 @@ from ..kite_service import IST
 from ..plans import has_indicators
 from . import ai as A
 from . import grounding, key_facts
+from . import mood as mood_mod
 from .company import INDICES, Research, with_dividend_yield
+from ..kite_service import ist_date
 from .net import NotFound, SourceError
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -31,6 +33,17 @@ _ai = (None, None)     # (gemini, anthropic) callables, set by setup()
 def setup(research: Research, gemini, anthropic):
     global hub, _ai
     hub, _ai = research, (gemini, anthropic)
+
+
+_mood: mood_mod.Mood | None = None
+
+
+def mood_hub() -> mood_mod.Mood:
+    """The Market pulse's tables and mood for the hub in use (one per process; see mood.py for what it keeps and costs)."""
+    global _mood
+    if _mood is None or _mood.hub is not hub:
+        _mood = mood_mod.Mood(hub)
+    return _mood
 
 
 def ok(data) -> JSONResponse:
@@ -575,11 +588,26 @@ def pulse(region: str = "IN", focus: str = "", profile=Depends(current_profile))
         hub.headlines_now(r, wait=0)             # the headlines' read starts now, beside the levels', not after them
     indices, at = source_call(lambda: _levels_now(r, 6.0))
     news = _news_now(r, 1.0) if not focus.strip() else _focused_news(r, focus[:60])
+    if not focus.strip():
+        # today's headlines only, the same list the main story is counted over, so "3 of 8" can be counted on the page (MOOD-1)
+        news = grounding.session_headlines(news, ist_date())[:14]
     if indices is None:
         return ok({"indices": [], "headlines": news, "missing": [], "pending": True})
     got = {i["name"] for i in indices}
     return ok({"indices": indices, "headlines": news, "missing": [n for n, _ in INDICES.get(r, []) if n not in got],
                "read_at": datetime.fromtimestamp(at, timezone.utc).isoformat(timespec="seconds") if at else None})
+
+
+@router.get("/pulse/mood")
+def pulse_mood(region: str = "IN", profile=Depends(current_profile)):
+    """The market's mood as tables and a headline with a few lines, every figure from one place and one rounding (MOOD-1):
+    breadth, sectors, the stocks that moved the index, flows, volatility and currencies, other markets, today's calendar.
+    From memory, read again behind the page (see mood.py); `pending` until the first read of a process is back."""
+    r = region_of(region)
+    got, at = source_call(lambda: mood_hub().get(r, 20.0))
+    if got is None:
+        return ok({"pending": True})
+    return ok({**got, "read_at": datetime.fromtimestamp(at, timezone.utc).isoformat(timespec="seconds") if at else None})
 
 
 def _levels_now(r: str, wait: float):
@@ -737,10 +765,8 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
 
     def build():
         news = _news_now(r, 8.0)
-        try:
-            sectors = hub.sector_moves(r)
-        except Exception:
-            sectors = None
+        # the sector table's own count and rows (mood.py), the one the page shows: the read is held to it (MOOD-1)
+        sectors = mood_hub().sector_moves(r)
         early = before_close_at(r, indices)
         read = A.pulse(r, f, indices, news, _ai, closed=not market_open(r) and not early and not settling, sectors=sectors, cash=cash,
                        before_close=early, settling=bool(settling) and not early)
@@ -751,7 +777,7 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five
         # minutes old gives that read
         # "mood": reads kept from before the mood line and main story were added are written again (DD-001)
-        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day, "mood"),
+        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day, "mood2"),
                           3600 if is_open else settle_ttl or CLOSED_MOOD_TTL, refresh, build, counted=False,
                           min_age=300 if is_open else settle_ttl or CLOSED_MOOD_TTL))
     except HTTPException as e:
