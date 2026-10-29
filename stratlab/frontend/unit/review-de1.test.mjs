@@ -73,7 +73,7 @@ test("DE-018/DE-019/DE-020/DE-021: rotation's weeks, its units, its heading and 
   const s = read("src/pages/ResearchScans.tsx");
   assert.match(s, /useAnimate\(out \? Math\.max\(1, \.\.\.out\.rows\.map\(\(r\) => r\.points\.length\)\) : tail\)/);
   assert.match(s, /not 2\.79% stronger/);
-  assert.match(s, /Heading is the way its dot moved in the last \{unit\}/);
+  assert.match(s, /Heading, the arrow beside Momentum, is the way its dot moved in the last \{unit\}/);
   const r = read("src/components/Rotation.tsx");
   assert.doesNotMatch(r, /if \(phone && h\.id !== first\) continue;/);
   assert.match(r, /const name = phone && h\.id !== first \? shortName\(h\.name\) : h\.name;/);

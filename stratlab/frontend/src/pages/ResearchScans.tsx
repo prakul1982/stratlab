@@ -423,24 +423,25 @@ export function RotationPage() {
           <DataTable stack label="Where each one stands" rows={rowsShown} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
             sort={{ key: sort?.key ?? "", desc: sort?.desc ?? false, onSort }} empty="None in this quadrant."
             columns={[
-              { key: "on", header: <span className="sr-only">Show on chart</span>, cell: (r) => <label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label> },
               { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, sortable: true, cell: (r) => (isIndex
-                ? <span className="k-row">{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}
+                ? <span className="rot-name"><label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label>
+                    <span>{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}</span>
                     {(r.stocks ?? 0) > 0
                       ? <button className="btn quiet sm" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>
                       : <button className="btn quiet sm" disabled title="No list of this index's main stocks is kept here">Stocks →</button>}</span>
-                : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link>) },
+                : <span className="rot-name"><label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label>
+                    <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link></span>) },
               { key: "q", header: "Quadrant", sortable: true, cell: (r) => <QuadrantTag q={r.quadrant} /> },
               { key: "x", header: "Strength", numeric: true, sortable: true, info: ROTATION_UNITS, cell: (r) => r.x.toFixed(2) },
-              { key: "y", header: "Momentum", numeric: true, sortable: true, cell: (r) => r.y.toFixed(2) },
-              { key: "h", header: "Heading", cell: (r) => <span aria-label={r.heading == null ? "no move" : `${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span> },
-              { key: "m", header: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`, cardLabel: `Quadrant ${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`,
+              // its heading (the way the dot moved in the last step) is the arrow beside the momentum: a column of its own made the table wider than the page
+              { key: "y", header: "Momentum", numeric: true, sortable: true, cell: (r) => <>{r.y.toFixed(2)} <span className="k-muted" title="The way it moved in the last step" aria-label={r.heading == null ? "no move" : `heading ${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span></> },
+              { key: "m", header: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`, cardLabel: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`,
                 cell: (r) => (r.moved ? (r.moved === r.quadrant ? <span className="k-small k-muted">no change</span>
-                  : <span className="k-row"><QuadrantTag q={r.moved} /><span aria-hidden="true">→</span><QuadrantTag q={r.quadrant} />{entered(r) && <Badge tone="ok">Moved into Leading</Badge>}</span>) : "–") },
+                  : <span className="rot-move"><span className="rot-was"><QuadrantTag q={r.moved} /><span aria-hidden="true">→</span><QuadrantTag q={r.quadrant} /></span>{entered(r) && <Badge tone="ok">Moved into Leading</Badge>}</span>) : "–") },
               ...(["w1", "m1", "m3"] as const).map((k) => ({ key: k, header: { w1: "1W", m1: "1M", m3: "3M" }[k], cardLabel: { w1: "1 week vs the benchmark", m1: "1 month vs the benchmark", m3: "3 months vs the benchmark" }[k],
                 numeric: true, sortable: true, cell: (r: RotationRow) => (r.ret?.[k] == null ? "–" : <Delta value={r.ret[k]!}>{pct(r.ret[k]!, 2)}</Delta>) })),
             ]} />
-          <p className="k-note">1W, 1M and 3M: how much more (or less) each returned than {out.benchmark} over the last 5, 21 and 63 sessions, in percentage points. Heading is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. {counts.leading + counts.improving + counts.weakening + counts.lagging === all.length ? `All ${all.length} are listed.` : ""}</p>
+          <p className="k-note">1W, 1M and 3M: how much more (or less) each returned than {out.benchmark} over the last 5, 21 and 63 sessions, in percentage points. Heading, the arrow beside Momentum, is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. {counts.leading + counts.improving + counts.weakening + counts.lagging === all.length ? `All ${all.length} are listed.` : ""}</p>
           {out.skipped.length > 0 && <p className="k-note">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
         </Card>
       )}

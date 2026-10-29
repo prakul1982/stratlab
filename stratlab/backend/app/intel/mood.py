@@ -138,14 +138,14 @@ def size_words(ratio: float | None) -> str:
     if ratio is None:
         return ""
     if ratio < 0.4:
-        return "a very quiet day"
+        return "a very small move for a day"
     if ratio < 0.8:
-        return "a quieter day than usual"
+        return "a smaller move than usual"
     if ratio <= 1.25:
-        return "an ordinary day"
+        return "a move of the usual size"
     if ratio <= 2.0:
-        return "a bigger day than usual"
-    return "a very large day"
+        return "a bigger move than usual"
+    return "a very large move"
 
 
 def compare_today(name: str, change_pct, typ: dict | None) -> dict | None:

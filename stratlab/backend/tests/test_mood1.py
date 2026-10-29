@@ -41,8 +41,8 @@ def test_a_day_is_held_to_the_usual_move_by_a_number():
     assert typ["days"] == 11 and typ["avg_abs"] == pytest.approx(1.42, abs=0.01)           # the mean of eleven absolute moves
     assert mood.typical_move([100, 101, 102]) is None                      # too few sessions to call anything usual
     c = mood.compare_today("NIFTY 50", 0.39, {"avg_abs": 0.62, "days": 20})
-    assert c["ratio"] == 0.6 and c["words"] == "a quieter day than usual"
-    assert mood.compare_today("NIFTY 50", -2.5, {"avg_abs": 0.62, "days": 20})["words"] == "a very large day"
+    assert c["ratio"] == 0.6 and c["words"] == "a smaller move than usual"
+    assert mood.compare_today("NIFTY 50", -2.5, {"avg_abs": 0.62, "days": 20})["words"] == "a very large move"
     assert mood.compare_today("NIFTY 50", None, {"avg_abs": 0.62, "days": 20}) is None
 
 
@@ -153,7 +153,7 @@ def full_payload():
 
 def test_the_headline_and_lines_are_the_tables_figures_and_not_the_cards():
     p = full_payload()
-    assert p["headline"] == "Mildly positive: all three indices up on the day, a quieter day than usual, with 7 of 8 sector indices up."
+    assert p["headline"] == "Mildly positive: all three indices up on the day, a smaller move than usual, with 7 of 8 sector indices up."
     assert 3 <= len(p["lines"]) <= 5
     text = " ".join([p["headline"], *p["lines"]])
     # the cards' levels are not said again, in any rounding
