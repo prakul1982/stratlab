@@ -519,9 +519,9 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   // the total, at the top of the year, with where it comes from
   const total = page.getByRole("region", { name: "Total tax estimate" });
   await expect(total.getByRole("heading", { name: "Total tax estimate, FY 2024-25" })).toBeVisible();
-  const chips = total.getByRole("list", { name: "Where the tax comes from" });
-  await expect(chips.getByRole("listitem")).toHaveCount(4);
-  for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("listitem").filter({ hasText: c })).toHaveCount(1);
+  const chips = total.getByRole("table", { name: "Where the tax comes from" });          // a table (RES-1): a row for each source
+  await expect(chips.getByRole("row")).toHaveCount(5);                                      // the header and four sources
+  for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("row").filter({ hasText: c })).toHaveCount(1);
   await expect(total.getByText(/no other income entered yet/)).toBeVisible();
   await expect(total.getByRole("table", { name: "Total tax breakdown" }).getByText("Estimated total tax")).toBeVisible();
   // F&O by segment, and the return and audit facts
@@ -1336,11 +1336,12 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   await expect(page.getByRole("row", { name: /TCS.*Bonus 1:1/ }).first()).toContainText("1 new share for every 1 held");
   await expect(page.getByRole("row", { name: /TCS.*Interim dividend/ }).first()).toContainText("₹11");
   await expect(page.getByText("Annual General Meeting")).toHaveCount(0);           // a meeting isn't an action
+  if (info.project.name === "phone") await page.getByRole("button", { name: /^Filters/ }).click();       // the filters sit behind a button on a phone
   await page.getByRole("combobox", { name: "Kind of action" }).selectOption("bonus");
   await expect(page.getByText(/Dividend - Rs|₹5.50 a share/)).toHaveCount(0);
-  await seeUnfolded(page, page.getByText("1 new share for every 1 held"));
+  await seeUnfolded(page, page.getByText("1 new share for every 1 held").first());
   await page.getByRole("radio", { name: "My stocks" }).click();
-  await seeUnfolded(page, page.getByText("1 new share for every 1 held"));      // TCS is in the holdings
+  await seeUnfolded(page, page.getByText("1 new share for every 1 held").first());      // TCS is in the holdings
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
   expect(await page.locator("main").innerText()).not.toMatch(/yahoo|finnhub|kite|screener/i);

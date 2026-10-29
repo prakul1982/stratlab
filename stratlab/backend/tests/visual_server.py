@@ -467,7 +467,8 @@ def results_calendar(mp):
     today = R.local_today("IN")
     first = R.week_of(today)[0]
     last = first + timedelta(days=13)
-    syms = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "ONGC", "ITC", "HINDUNILVR", "TATASTEEL", "JSWSTEEL",
+    # today's four: one of the owner's own stocks (RELIANCE) and three he doesn't hold, so Invest home's "Results today" stays one line long
+    syms = ["RELIANCE", "ICICIBANK", "ONGC", "ITC", "TCS", "INFY", "HDFCBANK", "HINDUNILVR", "TATASTEEL", "JSWSTEEL",
             "WIPRO", "HCLTECH", "NTPC", "COALINDIA", "SBIN", "AXISBANK", "NESTLEIND", "DABUR", "VEDL", "SAIL"]
     offsets = [0, 0, 0, 0, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 10, 11, 12, 12]
     meetings = []
