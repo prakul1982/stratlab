@@ -241,6 +241,7 @@ test("Trade journal: it says why its numbers differ from the tax report, and no 
   const errors = await open(page, "/trade/journal", load(n));
   await expect(page.getByRole("heading", { level: 1, name: "Trade journal" })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("main")).not.toContainText("Your broker's trades, equity, F&O, commodity and currency,");
+  await page.getByRole("button", { name: "Where the trades come from" }).click();                   // the coverage is under the title's "i" (LIVE1B-033: one sentence under the title)
   await expect(page.locator("main")).toContainText("F&O, commodity and currency from a tradebook or the tax P&L's trade-by-trade files");
   await page.getByLabel("Tradebook or tax P&L files").setInputFiles(ZIP);
   await expect(page.getByText("16 trade lines added")).toBeVisible({ timeout: 30_000 });

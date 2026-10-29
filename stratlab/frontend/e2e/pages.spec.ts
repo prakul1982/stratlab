@@ -261,16 +261,15 @@ test("first steps on Home tick themselves from real data, and hide for good", as
   expect((await request.put(`${API}/research/watchlist`, { headers: auth, data: { items: [{ region: "IN", symbol: "TCS" }] } })).ok()).toBeTruthy();
   const errors = await open(page, "/", "Your first steps", sessionAs(token, id, email));
   const list = page.locator(".first-steps");
-  await expect(list.locator("li")).toHaveCount(5);
-  await expect(list.locator('[data-step="watchlist"]')).toHaveClass(/done/);
-  await expect(list.locator('[data-step="backtest"] a')).toHaveAttribute("href", "/new");
+  // My space shows the checklist as one line with the next step (LIVE1B-086): the watchlist step is done, so one of five
+  await expect(list).toContainText(/Your first steps · 1 of 5 done · next:/);
+  await expect(list.getByRole("link")).toHaveCount(1);
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
 
   expect((await request.get(`${API}/research/deep/RELIANCE?region=IN`, { headers: auth })).ok()).toBeTruthy();
   await page.reload();
-  await expect(list.locator('[data-step="deepdive"]')).toHaveClass(/done/, { timeout: 30_000 });
-  await expect(page.getByText(/\d of 5 done/)).toBeVisible();
+  await expect(list).toContainText(/2 of 5 done/, { timeout: 30_000 });
 
   await list.getByRole("button", { name: "Hide this" }).click();
   await expect(page.getByText("Your first steps")).toHaveCount(0);
@@ -1209,7 +1208,7 @@ test("alerts: one on bulk or block deals, India only", async ({ page }, info) =>
   await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
-  await page.getByLabel("Market").selectOption("US");
+  await page.getByLabel("Market", { exact: true }).selectOption("US");
   await expect(page.getByLabel("Alert me when").locator("option", { hasText: "bulk or block deal" })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -1300,7 +1299,7 @@ test("alerts: one on a stock entering or leaving a surveillance list, India only
   await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
-  await page.getByLabel("Market").selectOption("US");
+  await page.getByLabel("Market", { exact: true }).selectOption("US");
   await expect(page.getByLabel("Alert me when").locator("option", { hasText: "surveillance list" })).toHaveCount(0);
   await sane(page, errors);
 });

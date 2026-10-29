@@ -1558,7 +1558,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-stat-k { font-size: var(--t-note); color: var(--muted); }
 .k-stat-k .info { margin-block: -4px; }   /* VR1-149: the (i) is not taller than a line of the label, so a label with one sits on the same baseline as its neighbours */
 .k-stat-v { font-size: var(--t-stat); font-weight: 600; letter-spacing: -.02em; line-height: 1.2; overflow-wrap: anywhere; }
-.k-stat-v.one { white-space: nowrap; overflow: hidden; }       /* a one-word figure is fitted (lib/fitFigure), never broken inside its digits (LIVE1B-019) */
+.k-stat-v.one { white-space: nowrap; overflow: hidden; }       /* a one-word figure is fitted (kit/Stat fitFigure), never broken inside its digits (LIVE1B-019) */
 .k-stat-d { font-size: var(--t-note); color: var(--muted); }
 .k-delta { display: inline-flex; align-items: center; gap: var(--s1); font-weight: 600; font-size: var(--t-note); padding: 2px var(--s2); border-radius: 999px; white-space: nowrap; }
 .k-delta.up { background: var(--up-soft); color: var(--up); }
@@ -2499,7 +2499,6 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-fold-cell:has(.k-none) { display: none; }   /* a figure it has none of takes no line on a phone */
   .k-fold-body .k-dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mf-stats .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); }   /* seven figures one under another were 600 px: two across */
-  #h-summary .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); }   /* LIVE1B-037: four figures one under another were a 520px card: two by two */
   .k-fold-body { padding-inline: var(--s2); }
 }
 

@@ -347,9 +347,8 @@ test("LIVE1B-077, 079: plan cards keep their own height (no band inside one) and
   assert.match(read("src/styles.css"), /\.k-plans \{ display: grid;[^}]*align-items: start; \}/);
 });
 
-
-test("LIVE1B-037: Holdings' four summary figures are two by two on a phone", () => {
+test("LIVE1B-037: Holdings' four summary figures go two across on a phone when each fits its half (the stat row's own rule), now that a one-word figure shrinks to fit", () => {
   const css = read("src/styles.css");
-  assert.match(css, /@media \(max-width: 640px\) \{[\s\S]*?#h-summary \.k-stats \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
-  assert.match(read("src/pages/HoldingsPage.tsx"), /<Card id="h-summary">/);
+  assert.match(css, /\.k-stats\.duo \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(read("src/components/kit/Stat.tsx"), /const one = text != null && isOneWord\(short \?\? text\);/);
 });
