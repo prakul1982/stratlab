@@ -31,7 +31,7 @@ FACTS_KEY = "ipo:facts:"              # ipo:facts:<document id> = the facts read
 HOSTS = ("nsearchives.nseindia.com", "archives.nseindia.com", "www.sebi.gov.in", "www.sec.gov")
 MAX_BYTES = 40 * 1024 * 1024          # a red herring prospectus with its annexures runs to 15 MB, a US prospectus to 60 MB of pictures
 HTML_HEAD = 3_600_000                 # the first part of a US prospectus holds everything read here (the summary, the risks, the proceeds)
-MAX_PAGES = 190                       # pages of an Indian offer document read (the summary tables, the objects and the business are in them)
+MAX_PAGES = 230                       # pages of an Indian offer document read (the summary tables, the objects and the business are in them)
 READER = 2                            # how the documents are read: raise it to read them again (2: the proceeds table, the first risk factors, the KPIs, the shareholding and the peer ratios, O7)
 SUMMARY_READER = 2                    # (2: the business and its segments only: the rest is read by rules into tables)
 
@@ -261,6 +261,15 @@ def objects_view(obj: dict | None) -> dict | None:
 
 
 MONTH_END = re.compile(r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s*(\d{4})")
+# "31 March 2026" / "30 June, 2026" (day first), which several documents write instead
+MONTH_END_DM = re.compile(r"(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December),?\s*(\d{4})")
+
+
+def _year_ends(head: str) -> list[tuple[str, int, int]]:
+    """The dates a table's header names, in the order it names them, as (month, day, year): "March 31, 2026" and "31 March 2026" both."""
+    found = [(m.start(), m.group(1), int(m.group(2)), int(m.group(3))) for m in MONTH_END.finditer(head)]
+    found += [(m.start(), m.group(2), int(m.group(1)), int(m.group(3))) for m in MONTH_END_DM.finditer(head)]
+    return [(mn, d, y) for _, mn, d, y in sorted(found)]
 TO_CRORE = {"million": 0.1, "mn": 0.1, "lakh": 0.01, "lakhs": 0.01, "crore": 1.0, "crores": 1.0}
 UNIT = re.compile(r"(?:₹|Rs\.?|INR)\s*(?:in\s*)?(million|mn|lakhs?|crores?)|\bin\s+(?:₹|Rs\.?\s*)?(million|mn|lakhs?|crores?)\b|\b(million|lakhs?|crores?)\b", re.I)
 NUM = re.compile(r"(?<![\w.])\(?-?\d[\d,]*(?:\.\d+)?\)?(?![\w.])|(?<![\w-])-(?![\w-])")      # a figure, or a dash for nil
@@ -317,7 +326,7 @@ def financials(pages: list[str]) -> dict | None:
     {"page", "unit", "years": ["Mar 2026", ...], "rows": [{key, label, values}]}. The tables lead with part-year columns
     and end with the three full years, so the last three figures on each line are the years; the years are named from the
     header's own dates and must be three year-ends a year apart. Anything the rules can't read this way gives None."""
-    start = next((i for i, p in enumerate(pages) if re.search(r"^\s*SUMMARY (?:OF )?(?:THE )?FINANCIAL INFORMATION\s*$", p, re.M)
+    start = next((i for i, p in enumerate(pages) if re.search(r"^\s*SUMMARY (?:OF )?(?:THE )?(?:RESTATED )?(?:CONSOLIDATED )?FINANCIAL (?:INFORMATION|STATEMENTS)\s*$", p, re.M)
                   and not re.search(r"\.{4,}", p[:300])), None)
     if start is None:
         return None
@@ -329,8 +338,18 @@ def financials(pages: list[str]) -> dict | None:
         head = _flat(pg[: m.start()])[-1500:]
         um = UNIT.search(head)
         unit = next((g for g in um.groups() if g), None).lower() if um else None
-        dates = [(mm.group(1), int(mm.group(2)), int(mm.group(3))) for mm in MONTH_END.finditer(head)]
-        years = dates[-3:]
+        years = _year_ends(head)[-3:]
+        if len(years) < 3 or len({(a, b) for a, b, _ in years}) != 1:
+            # one date and two bare years after it ("ended March 31, 2026 2025 2024")
+            ds = list(re.finditer(MONTH_END.pattern + r"\s+(20\d\d)\s+(20\d\d)\b", head))
+            if ds and int(ds[-1].group(3)) - 1 == int(ds[-1].group(4)) and int(ds[-1].group(4)) - 1 == int(ds[-1].group(5)):
+                g = ds[-1]
+                years = [(g.group(1), int(g.group(2)), int(g.group(k))) for k in (3, 4, 5)]
+        if len(years) < 3 or len({(a, b) for a, b, _ in years}) != 1:
+            # "Fiscal" over three bare years (2026 2025 2024): the Indian financial year, which ends in March
+            ys3 = [int(x) for x in re.findall(r"(?<![\d,])(20\d\d)(?![\d,])", head)]
+            tri = [t for t in zip(ys3, ys3[1:], ys3[2:]) if t[0] - 1 == t[1] and t[1] - 1 == t[2]]
+            years = [("March", 31, y) for y in tri[-1]] if tri and "fiscal" in head.lower() else []
         if unit not in TO_CRORE or len(years) < 3 or len({(a, b) for a, b, _ in years}) != 1:
             continue
         ys = [c for _, _, c in years]
@@ -340,6 +359,8 @@ def financials(pages: list[str]) -> dict | None:
         rows = []
         for key, want, skip in FIN_LABELS:
             for label, vals in found:
+                if len(label) > 130:                      # the first row carries the table's heading in front of it ("... PROFIT AND LOSS ... for the year ended ... Revenue")
+                    label = label[-100:]
                 if want.search(label) and not (skip and skip.search(label)) and all(v is not None for v in vals[-3:]):
                     rows.append({"key": key, "label": FIN_NAME[key], "values": [round(v * TO_CRORE[unit], 2) for v in vals[-3:]]})
                     break
@@ -367,38 +388,48 @@ def utilisation(pages: list[str]) -> dict | None:
     ₹ million): {"page", "unit", "rows": [{"label", "amount"}]} in ₹ crore, an amount still to be fixed ("[●]", general corporate purposes)
     being None. The table's own total line is left out."""
     for i, pg in enumerate(pages):
-        m = re.search(r"Utili[sz]ation of (?:the )?Net Proceeds\s*\n", pg)
-        if not m or re.search(r"\.{4,}", pg[:400]):
+        if re.search(r"\.{4,}", pg[:400]):
             continue
-        body = pg[m.end():] + "\n" + (pages[i + 1] if i + 1 < len(pages) else "")
-        um = re.search(r"\(\s*(?:in\s*)?(?:₹|Rs\.?|INR)\s*(?:in\s*)?(million|mn|lakhs?|crores?)", body, re.I)
-        if not um or "Particulars" not in body[um.end(): um.end() + 120]:
-            continue
-        unit = {"mn": "million"}.get(um.group(1).lower(), um.group(1).lower())
-        if unit not in TO_CRORE:
-            continue
-        end = re.search(r"\n\s*\(\d\)\s|\nProposed Schedule|\nFor further details", body[um.end():])
-        tbl = body[um.end(): um.end() + (end.start() if end else 1500)]
-        lines = [ln.strip() for ln in tbl.split("\n") if ln.strip()]
-        rows, buf = [], ""
-        for ln in lines:
-            ln = ln.lstrip(") ").strip()
-            if not ln:
-                continue
-            if re.match(r"Particulars", ln, re.I) or re.match(r"^(?:<<\d+>>|\d{1,4}|\))$", ln):
-                continue
-            m2 = re.search(r"((?:Up to\s+)?[\d,]+(?:\.\d+)?|\[●\])\s*$", ln)
-            if m2 and (buf or re.search(r"[A-Za-z]", ln[: m2.start()])):
-                label = _flat(f"{buf} {ln[: m2.start()]}").strip(" ,;")
-                label = re.sub(r"\s*\(\d\)$", "", label)
-                if label and not re.match(r"(?:Total|Net Proceeds|Gross proceeds|\(Less\))", label, re.I):
-                    rows.append({"label": label, "amount": _crore(_amount(re.sub(r"(?i)up to\s+", "", m2.group(1))), unit)})
-                buf = ""
-            else:
-                buf = _flat(f"{buf} {ln}")
-        if len(rows) >= 2:
-            return {"page": i + 1, "unit": "₹ crore", "rows": rows[:12]}
+        for m in re.finditer(r"(?:Utili[sz]ation of (?:the )?Net Proceeds|Requirement of [Ff]unds):?[ \t]*\n", pg):
+            got = _utilisation_at(pg[m.end():] + "\n" + (pages[i + 1] if i + 1 < len(pages) else ""))
+            if got:
+                return {"page": i + 1, **got}
     return None
+
+
+def _utilisation_at(body: str) -> dict | None:
+    """The proceeds table that follows a heading: its unit line, then a row for each object, ending at the net proceeds line."""
+    um = re.search(r"\(\s*(?:in\s*)?(?:₹|Rs\.?|INR)\s*(?:in\s*)?(million|mn|lakhs?|crores?)", body, re.I)
+    if not um or "Particulars" not in body[um.end(): um.end() + 120]:
+        return None
+    unit = {"mn": "million"}.get(um.group(1).lower(), um.group(1).lower())
+    if unit not in TO_CRORE:
+        return None
+    end = re.search(r"\n\s*\(\d\)\s|\nProposed Schedule|\nFor further details", body[um.end():])
+    tbl = body[um.end(): um.end() + (end.start() if end else 1500)]
+    rows, buf = [], ""
+    for ln in [x.strip() for x in tbl.split("\n") if x.strip()]:
+        ln = ln.lstrip(") ").strip()
+        if not ln or ln[0] in "*#":
+            continue
+        if re.match(r"Particulars", ln, re.I) or re.match(r"^(?:<<\d+>>|\d{1,4}|\))$", ln):
+            continue
+        m2 = re.search(r"((?:Up to\s+)?[\d,]+(?:\.\d+)?|\[●\])\s*$", ln)
+        if m2 and (buf or re.search(r"[A-Za-z]", ln[: m2.start()])):
+            label = _flat(f"{buf} {ln[: m2.start()]}").strip(" ,;")
+            label = re.sub(r"^(?:S|Sr)\.?\s*No\.?\s+", "", label)
+            label = re.sub(r"\s*\(\d\)$", "", label)
+            label = re.sub(r"^(?:S\.?\s*No\.?\s*)?(?:Particulars\s+)?(?:Estimated\s+Amount\s+)?(?:Sr\.?\s*No\.?\s*)?\d{1,2}\.\s+", "", label)      # the row's own number
+            label = re.sub(r"\s*(?:[*#]+|\(\d\))+$", "", label).strip(" ,;")
+            if re.match(r"(?:Total|Net Proceeds|Gross proceeds|\(Less\))", label, re.I):
+                if rows:
+                    break
+            elif label:
+                rows.append({"label": label, "amount": _crore(_amount(re.sub(r"(?i)up to\s+", "", m2.group(1))), unit)})
+            buf = ""
+        else:
+            buf = _flat(f"{buf} {ln}")
+    return {"unit": "₹ crore", "rows": rows[:12]} if len(rows) >= 2 else None
 
 
 RISK_HEAD = re.compile(r"(?ms)^[ \t]*(\d{1,3})\.\s+([A-Z][^\n]*(?:\n(?![ \t]*\n)[^\n]+){0,6}?\.)[ \t]*\n[ \t]*\n")
@@ -545,44 +576,71 @@ def shareholding(pages: list[str]) -> dict | None:
     return None
 
 
+PEER_COLS = (("revenue", r"Revenue"), ("face", r"Face\s*Value"), ("price", r"(?:Closing\s*)?price"), ("eps", r"EPS|Earnings\s*per"),
+             ("nav", r"NAV|Net\s*Asset"), ("pe", r"P\s*/\s*E"), ("ronw", r"Ro\s?N\s?W|Return\s*on\s*Net"))
+PEER_TOK = r"\(?-?[\d,]+(?:\.\d+)?\)?x?|N\.?\s?A\.?|\[[●•]\]|-(?=\s|$)"
+
+
 def peer_table(pages: list[str]) -> dict | None:
-    """The comparison of accounting ratios with listed industry peers: {"page", "company": {...}, "peers": [{"name", "price", "revenue",
-    "eps", "nav", "pe", "ronw"}]} with the document's own figures (revenue in ₹ crore, a peer's P/E as the document computed it at the
-    closing price of the date it names, "price_on"). The company's own row has no P/E before the price is set."""
+    """The comparison of accounting ratios with listed industry peers: {"page", "price_on", "company": {...}, "peers": [{"name", "price", "revenue",
+    "eps", "nav", "pe", "ronw"}]} with the document's own figures (revenue in ₹ crore, a peer's P/E as the document computed it at the closing price
+    of the date it names). The columns are found from the table's own header (the documents order them differently), the company's row is the
+    first and the peers' follow; the company's P/E is empty before the price is set. None when the header or the rows are not what this expects."""
     for i, pg in enumerate(pages):
-        if not re.search(r"Comparison of accounting ratios with listed industry peers", pg, re.I) or re.search(r"\.{4,}", pg[:300]):
+        m = re.search(r"Comparison (?:of accounting ratios )?with (?:the )?listed (?:industry )?peers?|Industry Peer Group P/E ratio|identified as relevant comparable", pg, re.I)
+        if not m or re.search(r"\.{4,}", pg[:300]) or not re.search(r"(?i)face\s*value", pg[m.end():]):
             continue
-        m = re.search(r"Closing\s*price on\s*([A-Za-z]+\s+\d{1,2},?\s*\d{4})", pg, re.I)
-        on = _flat(m.group(1)) if m else None
-        um = re.search(r"in\s*₹\s*(million|crore|lakh)", pg, re.I)
-        unit = um.group(1).lower() if um else "million"
-        body = pg[pg.index("Listed Peers") if "Listed Peers" in pg else 0:]
-        head = pg[:pg.index("Listed Peers")] if "Listed Peers" in pg else ""
-        company_line = None
-        hm = re.search(r"((?:[A-Z][A-Za-z.&,’' ()-]+\n){1,4})\s*[\d.]+\s+(?:N\.?A\.?)\s+([\d,]+\.\d+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+([\d.]+)\s+(?:N\.?A\.?|[\d.]+x?)\s+([\d.]+)", head)
-        peers, buf = [], ""
-        lines = [ln.strip() for ln in re.split(r"\n", body) if ln.strip()]
-        for ln in lines:
-            if re.match(r"(Listed Peers|Notes?:|\(i\))", ln):
-                if ln.startswith(("Notes", "(i)")):
+        text = pg[m.end():]
+        hdr_end = re.search(r"\n[^\n]*?\s[\d,]+\.\d+\s", text)
+        header = text[: hdr_end.start()] if hdr_end else text[:900]
+        pos = {}
+        for key, rx in PEER_COLS:
+            hm = re.search(rx, header, re.I)
+            if hm:
+                pos[key] = hm.start()
+        cols = [k for k, _ in sorted(pos.items(), key=lambda kv: kv[1])]
+        if "revenue" not in cols or "eps" not in cols or len(cols) < 4:
+            continue
+        two_eps = bool(re.search(r"Basic", header, re.I) and re.search(r"Diluted", header, re.I))
+        layout = [c for k in cols for c in ((("eps", "eps2") if two_eps else ("eps",)) if k == "eps" else (k,))]
+        n = len(layout)
+        um = re.search(r"in\s*₹\s*(million|crore|lakh)|₹\s*(million|crore|lakh)", header, re.I)
+        unit = (um.group(1) or um.group(2)).lower() if um else "million"
+        dm = re.search(r"(?:price|closing)[^\n]{0,40}?(?:on|of)\s+([A-Z][a-z]+\s+\d{1,2},?\s*\d{4})", header, re.I | re.S)
+        on = _flat(dm.group(1)) if dm else None
+        body = text[hdr_end.start():] if hdr_end else ""
+        rows, buf = [], ""
+        for ln in [x.strip() for x in body.split("\n") if x.strip()]:
+            if re.match(r"(Notes?\b|\(\d\)|\*+\s*(?:To be|The above)|Source)", ln, re.I):
+                if rows:
                     break
                 continue
-            nm = re.search(r"([\d.]+)\s+([\d,]+\.\d+|N\.?A\.?)\s+([\d,]+(?:\.\d+)?)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+([\d,.]+)\s+([\d,.]+x|N\.?A\.?)\s+(-?[\d.]+)\s*$", ln)
-            if nm:
-                name = _flat(f"{buf} {ln[: nm.start()]}").strip()
-                name = re.sub(r"\s*\([“\"'‘].*?[”\"'’]\)\s*", " ", name).strip()
+            toks = list(re.finditer(PEER_TOK, ln))
+            tail = []
+            for t in reversed(toks):
+                if ln[t.end():].strip(" *#^") == "" or (tail and ln[t.end(): tail[-1].start()].strip(" *#^") == ""):
+                    tail.append(t)
+                else:
+                    break
+            tail.reverse()
+            if len(tail) >= n:
+                use = tail[-n:]
+                name = _flat(f"{buf} {ln[: use[0].start()]}").strip(" *#^")
                 buf = ""
-                if name:
-                    f = lambda t: _amount(t.replace(",", "").rstrip("x"))      # noqa: E731
-                    peers.append({"name": name, "price": f(nm.group(2)), "revenue": _crore(f(nm.group(3)), unit), "eps": f(nm.group(5)),
-                                  "nav": f(nm.group(6)), "pe": f(nm.group(7)), "ronw": f(nm.group(8))})
+                name = re.sub(r"\s*\([“\"'‘].*?[”\"'’]\)\s*", " ", name).strip()
+                name = re.sub(r"\s+(?:Standalone|Consolidated)(?:\s*/\s*(?:Standalone|Consolidated))?$", "", name).strip()      # the column that says on which basis
+                if not name or re.match(r"(?i)listed peers", name):
+                    continue
+                vals = dict(zip(layout, [_amount(t.group().replace(",", "").rstrip("x*")) if not re.match(r"N\.?\s?A", t.group()) else None for t in use]))
+                rows.append({"name": name, "price": vals.get("price"), "revenue": _crore(vals.get("revenue"), unit), "eps": vals.get("eps"), "nav": vals.get("nav"),
+                             "pe": vals.get("pe"), "ronw": vals.get("ronw")})
+            elif re.match(r"(?i)listed peers", ln):
+                buf = ""
             else:
-                buf = _flat(f"{buf} {ln}")[-160:] if not re.match(r"^\(.*\)$", ln) else buf
-        co = None
-        if hm:
-            co = {"revenue": _crore(_amount(hm.group(2).replace(",", "")), unit), "eps": _amount(hm.group(4)), "nav": _amount(hm.group(5)), "ronw": _amount(hm.group(6))}
-        if peers:
-            return {"page": i + 1, "price_on": on, "company": co, "peers": peers[:8]}
+                buf = _flat(f"{buf} {ln}")[-160:]
+        if len(rows) >= 2:
+            co = {k: v for k, v in rows[0].items() if k in ("revenue", "eps", "nav", "ronw")}
+            return {"page": i + 1, "price_on": on, "company": co, "peers": rows[1:9]}
     return None
 
 

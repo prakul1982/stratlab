@@ -502,7 +502,7 @@ def test_the_peer_ratios_and_the_earnings_per_share_are_read_from_their_tables()
     from app import ipo_docs as D
     p = D.peer_table(_sfc())
     assert p["price_on"] == "October 16, 2026" and p["company"]["eps"] == 16.52 and p["company"]["revenue"] == 803.63
-    assert [x["name"] for x in p["peers"]] == ["Thermax Limited", "Praj Industries Limited", "Ion Exchange Limited"]
+    assert [x["name"] for x in p["peers"]] == ["Thermax Limited", "Praj Industries Limited", "Ion Exchange (India) Limited"]
     assert p["peers"][0]["pe"] == 52.01 and p["peers"][1]["pe"] == 220.77
     e = D.eps_rows(_sfc())
     assert [r["period"] for r in e["rows"][:3]] == ["March 31, 2026", "March 31, 2025", "March 31, 2024"] and e["rows"][0]["basic"] == 16.52
@@ -607,3 +607,52 @@ def test_indian_company_names_are_one_style():
     assert t("HDFC BANK LIMITED") == "HDFC Bank Limited" and t("ONGC LIMITED") == "ONGC Limited" and t("LARSEN & TOUBRO LIMITED") == "Larsen & Toubro Limited"
     assert t("Tata Communications Limited") == "Tata Communications Limited" and t("ITC Ltd") == "ITC Ltd" and t(None) is None
     assert t("Bank of Baroda") == "Bank of Baroda" and t("OF INDIA FUND") == "Of India Fund"                 # the first word keeps its capital
+
+
+# ---- O7: the same tables from the other documents' layouts (live red herring prospectuses read on 29 Oct, the key pages kept) ------------------
+def _variant(name: str) -> list[str]:
+    import gzip
+    import json as _json
+    from tests import fake_ipo as F
+    got = _json.load(gzip.open(F.DIR / "rhp_variants_pages.json.gz", "rt", encoding="utf8"))[name]
+    out = [""] * got["count"]
+    for i, t in got["pages"].items():
+        out[int(i)] = t
+    return out
+
+
+def test_the_summary_financials_are_read_whatever_the_header_and_the_unit_say():
+    from app import ipo_docs as D
+    cases = {"BLSPOLY": ("lakhs, 4 columns", [349.43, 328.44, 296.36], [27.01, 21.14, 7.52]),
+             "BCSSL": ("million, a restated heading", [1266.82, 1055.71, 755.26], [30.54, 28.67, 21.14]),
+             "JPL": ("million, bare fiscal years", [146885.3, 128218.4, 109558.1], [30052.7, 26120.3, 21434.0]),
+             "PARASHLTH": ("day-first dates, losses", [1605.95, 1294.06, 1129.04], [43.83, -57.98, -15.33]),
+             "TONBO": ("one date and two bare years", [362.65, 469.08, 428.19], [50.88, 72.76, 68.54])}
+    for name, (_, revenue, profit) in cases.items():
+        f = D.financials(_variant(name))
+        by = {r["key"]: r["values"] for r in f["rows"]}
+        assert f["years"] == ["Mar 2026", "Mar 2025", "Mar 2024"], name
+        assert by["revenue"] == revenue and by["profit"] == profit, (name, by)             # the profit is the profit line, not the revenue the heading ran into
+
+
+def test_the_objects_table_is_found_under_either_heading_and_ends_at_the_net_proceeds():
+    from app import ipo_docs as D
+    u = D.utilisation(_variant("PARASHLTH"))
+    assert [r["amount"] for r in u["rows"]] == [320.9, 54.1, None]
+    assert u["rows"][0]["label"].startswith("Prepayment or scheduled re-payment") and u["rows"][1]["label"].startswith("Investment in our wholly owned Subsidiary")
+    assert u["rows"][2]["label"] == "General corporate purposes"
+    b = D.utilisation(_variant("BCSSL"))
+    assert [r["amount"] for r in b["rows"]] == [125.0, 15.77, None] and b["rows"][-1]["label"] == "General corporate purposes"       # no "Sr. No." or note mark left on a label
+    assert [r["amount"] for r in D.utilisation(_variant("BLSPOLY"))["rows"]] == [77.56, 89.5, None]
+
+
+def test_the_peer_table_columns_are_found_from_its_own_header():
+    from app import ipo_docs as D
+    t = D.peer_table(_variant("BCSSL"))
+    assert t["price_on"] == "October 21, 2026" and t["company"] == {"revenue": 1266.82, "eps": 7.64, "nav": 30.41, "ronw": 25.12}
+    assert [(x["name"], x["price"], x["pe"], x["ronw"]) for x in t["peers"]][0] == ("BMW Industries Limited", 51.17, 14.98, 10.15)
+    t = D.peer_table(_variant("TONBO"))                          # another order of columns, a basis column, "NA" where the document has none
+    assert t["company"]["eps"] == 9.19 and t["company"]["ronw"] == 9.75 and t["company"]["nav"] == 96.57
+    assert t["peers"][0]["name"] == "Paras Defence and Space Technologies Limited" and t["peers"][0]["pe"] == 117.74 and t["peers"][0]["ronw"] is None
+    assert t["peers"][1]["ronw"] == 17.0 and t["peers"][1]["revenue"] == 924.77
+    assert D.peer_table(_variant("JPL")) is None                 # a document with no such table gives nothing, not a guess
