@@ -49,9 +49,9 @@ test("O5, O6: a brief's sections are tables, and the PDF button downloads the br
   if (!phone) {
     await expect(indices.locator("thead th")).toHaveText(["Index", "Close", "Day %", "From 52-week high"]);
     const first = indices.locator("tbody tr").first();
-    await expect(first.locator("td").nth(1)).toHaveText(/^[\d,]+\.\d\d$/);
-    await expect(first.locator("td").nth(2)).toHaveText(/^[▲▼] [+−]\d+\.\d\d%$|^– 0\.00%$/);            // an arrow and a sign
-    const right = await indices.locator("tbody tr").first().locator("td").nth(1).evaluate((el) => getComputedStyle(el).textAlign);
+    await expect(first.locator("td").nth(0)).toHaveText(/^[\d,]+\.\d\d$/);
+    await expect(first.locator("td").nth(1)).toHaveText(/^[▲▼] [+−]\d+\.\d\d%$|^– 0\.00%$/);            // an arrow and a sign
+    const right = await indices.locator("tbody tr").first().locator("td").nth(0).evaluate((el) => getComputedStyle(el).textAlign);
     expect(right, "figures sit on the right").toBe("right");
   }
   await expect(pane.locator("ul.news-items li")).toHaveCount(0);                                   // no bullet-list section in a market brief

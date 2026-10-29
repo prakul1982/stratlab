@@ -242,8 +242,6 @@ test("An IPO's page is a table for every block: a full red herring prospectus re
   const terms = page.getByTestId("ipo-terms");
   await expect(terms).toContainText("Fresh issue");
   await expect(terms).toContainText("₹668 cr");                                                   // 400 + 268 crore
-  await expect(page.getByTestId("ipo-dates")).toContainText("Money unblocked or refunded, shares credited");
-  await expect(page.getByTestId("ipo-dates")).toContainText("Rule");
   // the objects with their amounts and share of the fresh issue
   const objects = page.getByTestId("ipo-objects");
   await expect(objects.getByRole("row", { name: /Prepayment of all or a portion.*42\.23.*10\.6%/ })).toBeVisible();
@@ -272,9 +270,43 @@ test("An IPO's page is a table for every block: a full red herring prospectus re
   if (phone) await touchable(page);
   await page.screenshot({ path: `${SHOTS}/ipo-detail-sfc-${info.project.name}.png`, fullPage: true });
 
+  // an issue that has not opened has the whole timetable as a table, with SEBI's rule beside each day it gives (the refund and credit day too)
+  await page.goto("/invest/ipos/in-mksons");
+  const dates = page.getByTestId("ipo-dates");
+  await expect(dates.getByRole("row", { name: /Money unblocked or refunded, shares credited.*\(expected\).*two working days after bidding closes/ })).toBeVisible();
+  await expect(dates.getByRole("row", { name: /Listing.*\(expected\).*three working days/ })).toBeVisible();
+  await expect(dates.getByRole("columnheader", { name: "Rule" })).toBeVisible();
+
   // an issue whose exchange bid table leaves out the anchor portion says so beside the whole issue
   await page.goto("/invest/ipos/in-blspoly");
   await expect(page.getByTestId("ipo-terms")).toContainText("₹255 cr");
   await expect(page.getByTestId("ipo-terms")).toContainText("bid table covers ₹178.5 cr");
   await expect(page.getByTestId("ipo-terms")).toContainText("51,00,000 shares");
+});
+
+// one of every kind of issue the lists hold (O7): main board open, upcoming, closed, listed, an SME issue, one the exchange withdrew or postponed,
+// a Social Stock Exchange raise, a draft filing with no dates, and the US kinds: each opens with its terms as a table and nothing broken
+const KINDS: [string, string][] = [
+  ["in-bonfig", "Bonfiglioli Transmissions Limited"], ["in-mksons", "M. K. Sons Fine Jewels Limited"], ["in-sfctech", "SFC Environmental Technologies Limited"],
+  ["in-blspoly", "BLS Polymers Limited"], ["in-bse-4907", "Wiscon Industries Limited"], ["in-bse-4902", "Core4 Engineers Limited"],
+  ["in-zetwerk", "Zetwerk Manufacturing Businesses Limited"], ["in-tonbo", "Tonbo Imaging Limited"], ["in-zenith", "Zenith Foods Limited"],
+  ["in-orbit", "Orbit Textiles Limited"], ["in-momsbelief", "Rays of Belief Limited"], ["in-f-105347", "Hunger Pangs Limited"],
+  ["us-1100000-1", "Northfield Biologics, Inc."], ["us-1273626-119431", "Iambic Therapeutics, Inc."], ["us-1403574-119467", "City Therapeutics, Inc."],
+  ["us-1407089-119692", "Nodthera Inc."],
+];
+test("every kind of issue opens as tables with nothing broken, on a desktop and a phone", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, `/invest/ipos/${KINDS[0][0]}`, KINDS[0][1], sessionFor(basic(phone)));
+  for (const [id, name] of KINDS) {
+    await page.goto(`/invest/ipos/${id}`);
+    await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("ipo-terms").locator("table").first(), `${id}: the terms are a table`).toBeVisible();
+    await expect(page.locator("main dl, main ul.k-stats, main .k-stat"), `${id}: no tiles or lists of facts`).toHaveCount(0);
+    const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: document.documentElement.clientWidth }));
+    expect(scroll, `${id}: scrolls sideways`).toBeLessThanOrEqual(width + 1);
+    const text = await page.locator("main").innerText();
+    for (const bad of [/\bNaN\b/, /\bundefined\b/, /\[object Object\]/, /\bInfinity\b/]) expect(text, `${id}: "${bad}"`).not.toMatch(bad);
+    if (!phone) await page.screenshot({ path: `${SHOTS}/kind-${id}.png`, fullPage: true });
+  }
+  expect(errors).toEqual([]);
 });

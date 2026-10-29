@@ -1561,7 +1561,7 @@ def ipo_detail(rid: str, profile=Depends(current_profile)):
     keys = ("id", "market", "segment", "name", "symbol", "stage", "isin", "industry", "exchanges", "exchange", "open", "close", "close_time", "hours", "allotment", "allotment_expected",
             "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status",
             "fresh", "ofs", "fresh_cr", "ofs_cr", "size_shares", "issue_type", "issue_text", "lead_managers", "registrar", "expected", "priced", "filed",
-            "shares", "amount", "currency", "industry")
+            "shares", "amount", "currency", "industry", "credit", "credit_expected", "size_in_bids", "anchor_shares")
     ipo = {k: pub.get(k) for k in keys if pub.get(k) is not None}
     if row["market"] == "IN" and row.get("symbol"):
         ipo["company_link"] = f"/research/IN/{row['symbol']}"

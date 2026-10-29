@@ -133,7 +133,7 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   await range.getByRole("button", { name: "+ Custom" }).click();
   await panel.getByLabel("How many").fill("18");
   await panel.getByRole("button", { name: "Use this" }).click();
-  await expect(range.getByRole("button", { name: "18 months" })).toHaveAttribute("aria-pressed", "true");
+  await expect(range.getByRole("button", { name: "18 months", exact: true })).toHaveAttribute("aria-pressed", "true");
   await range.getByRole("button", { name: "+ Custom" }).click();
   await panel.getByLabel("How many").fill("10");
   await panel.getByLabel("Unit").selectOption("years");
@@ -174,5 +174,5 @@ test("my holdings: an ETF shows its gap to NAV, and it opens the ETF's view", as
   if (phone) await touchable(page);
   await badge.click();
   await expect(page).toHaveURL(/\/invest\/etf-gaps\?etf=NIFTYBEES/);
-  await expect(page.locator("#etf-gap").getByRole("listitem").first()).toContainText("0.26% above");
+  await expect(page.locator("#etf-gap").getByRole("table").first().getByRole("row").nth(1)).toContainText("0.26% above");
 });

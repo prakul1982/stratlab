@@ -656,3 +656,18 @@ def test_the_peer_table_columns_are_found_from_its_own_header():
     assert t["peers"][0]["name"] == "Paras Defence and Space Technologies Limited" and t["peers"][0]["pe"] == 117.74 and t["peers"][0]["ronw"] is None
     assert t["peers"][1]["ronw"] == 17.0 and t["peers"][1]["revenue"] == 924.77
     assert D.peer_table(_variant("JPL")) is None                 # a document with no such table gives nothing, not a guess
+
+
+def test_the_issue_page_carries_the_refund_day_and_the_bid_table_note(monkeypatch):
+    from tests import world, fake_ipo
+    from tests.fake_db import headers
+    w = world.build(monkeypatch)
+    try:
+        fake_ipo.seed()
+        c = w["client"]
+        d = c.get("/invest/ipos/in-mksons", headers=headers("free-token")).json()["ipo"]
+        assert d["credit_expected"] and d["credit"] > d["allotment"] and d["credit"] < d["listing"]
+        b = c.get("/invest/ipos/in-blspoly", headers=headers("free-token")).json()["ipo"]
+        assert b["size"] == 255.0 and b["size_in_bids"] == 178.5 and b["anchor_shares"] == 5_100_000
+    finally:
+        w["close"]()
