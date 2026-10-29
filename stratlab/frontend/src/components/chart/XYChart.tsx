@@ -69,6 +69,7 @@ export interface XYChartProps {
   ariaLabel: string;
   sync?: string;                    // charts with the same name share crosshair and window
   ranges?: boolean;                 // range chips, the app's one standard control (default: with times spanning over ~10 days)
+  rangeStart?: string;              // the range it opens on when none is remembered (default "all"): "1y" for a chart that always showed the past year
   rangeKey?: string;                // the name the chosen range is remembered under on this device (default: testId, else the aria label)
   zoom?: boolean;                   // default: on from 8 points
   compare?: boolean;                // offer "Index to 100"
@@ -444,7 +445,7 @@ export function XYChart(p: XYChartProps) {
   useEffect(() => {          // the range chosen last time on this chart, once the data has chips to hold it
     if (restored.current || !T || !options.length) return;
     restored.current = true;
-    const saved = startRange(chartKey, T, options);
+    const saved = startRange(chartKey, T, options, p.rangeStart);
     if (saved !== "all") pickRange(saved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options]);

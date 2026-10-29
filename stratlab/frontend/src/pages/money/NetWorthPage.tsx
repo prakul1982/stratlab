@@ -11,7 +11,7 @@ import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
 import { Download, Plus, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, TilePicker, type Choice, type Column, type TileGroup } from "../../components/kit";
+import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, TilePicker, useRange, type Column, type TileGroup } from "../../components/kit";
 
 /* /money/net-worth: what you own minus what you owe: stocks from My Holdings, plus the deposits, provident funds, gold,
  * property and loans added here, each with how it is worked out and its date. Built from the kit (components/kit). */
@@ -292,8 +292,6 @@ function PrepayBox({ loan, onClose }: { loan: Row; onClose: () => void }) {
   );
 }
 
-const RANGE_DAYS: [string, string, number][] = [["3m", "3M", 93], ["1y", "1Y", 366], ["3y", "3Y", 1096]];
-
 export function NetWorthPage() {
   const { fail, notify, me } = useApp();
   const [view, setView] = useState<View | null>(null);
@@ -304,7 +302,6 @@ export function NetWorthPage() {
   const [prepay, setPrepay] = useState<Row | null>(null);
   const [addStart, setAddStart] = useState(() => fresh("cash"));
   const [ask, setAsk] = useState<Ask | null>(null);
-  const [pick, setPick] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [step, setStep] = useState<"pick" | "form">("pick");
   const [fieldErrs, setFieldErrs] = useState<Record<string, string> | null>(null);
@@ -391,17 +388,12 @@ export function NetWorthPage() {
   const hist = useMemo(() => view?.history ?? [], [view?.history]);
   const full = view?.limit != null && view.count >= view.limit;
 
-  // the history's range: only the spans the snapshots cover, always "All"
-  const span = hist.length > 1 ? (Date.parse(hist[hist.length - 1].d) - Date.parse(hist[0].d)) / 86_400_000 : 0;
-  const rangeChoices: Choice[] = useMemo(() => {
-    const fit = RANGE_DAYS.filter(([, , d]) => span > d).map(([value, label]) => ({ value, label }));
-    return fit.length ? [...fit, { value: "all", label: "All" }] : [];
-  }, [span]);
-  const range = rangeChoices.some((c) => c.value === pick) ? pick! : "all";
-  const keepDays = RANGE_DAYS.find(([v]) => v === range)?.[2];
+  // the history's range: the app's one range control, only the stretches the snapshots cover (O4)
+  const days = useMemo(() => hist.map((h) => h.d), [hist]);
+  const rng = useRange("networth", days);
   // every snapshot is drawn; a partial one (something wasn't counted) is marked, so a dip it shows isn't read as a fall
   const whole = hist;
-  const shown = whole.filter((h) => keepDays == null || (Date.parse(whole[whole.length - 1].d) - Date.parse(h.d)) / 86_400_000 <= keepDays);
+  const shown = whole.slice(rng.from);
   const marked = shown.flatMap((h, i) => (h.partial?.length ? [{ i, kind: "dot" as const, color: "var(--orange)" }] : []));
   const last = hist[hist.length - 1], move = t ? netWorthDelta(t.net, t.partial, hist, undefined, view?.valuation) : null;
 
@@ -542,7 +534,7 @@ export function NetWorthPage() {
           )}
 
           {view.history_allowed && whole.length >= 3 && (
-            <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rangeChoices} range={range} onRange={setPick}
+            <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rng.options} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "networth", times: days }}
               footer={<><p className="k-note">Last snapshot {day(last.d)}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>{snapsList("nw-snaps")}</>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
                 columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dateOnly(h.d) }, { key: "net", header: "Net worth", numeric: true, cell: (h) => <>{inr(h.net)}{h.partial?.length ? <span className="k-sub-line">partial</span> : null}</> },

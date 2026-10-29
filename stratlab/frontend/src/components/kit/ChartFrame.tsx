@@ -1,9 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Card, CardHead } from "./Card";
 import { ChipBar } from "./ChipBar";
 import { RangeChips } from "./RangeChips";
 import { DataTable, type Column } from "./DataTable";
+import { Pager } from "./Pager";
 import { Seg, type Choice } from "./Seg";
+
+const TABLE_PAGE = 100;
 
 /** A chart in its card: the title and (i) on the left, and in the same row the range switch (a Seg for up to four
  * ranges, a ChipBar for more) and a "Table" switch that swaps the chart for the same numbers as a table. Put a StatRow
@@ -17,6 +20,11 @@ export function ChartFrame<R>({ title, info, infoLabel, id, label, ranges, range
   stats?: ReactNode; footer?: ReactNode; children: ReactNode;
 }) {
   const [asTable, setAsTable] = useState(false);
+  // a table of years of days comes a hundred rows at a time, newest first as given (never "and 900 more")
+  const [page, setPage] = useState(1);
+  const total = table?.rows.length ?? 0;
+  const pages = Math.max(1, Math.ceil(total / TABLE_PAGE));
+  useEffect(() => { setPage(1); }, [total]);
   const rangeBar = ranges && ranges.length > 1 && range != null && onRange
     ? (rangeFor ? <RangeChips chart={rangeFor.chart} times={rangeFor.times} options={ranges} value={range} onChange={onRange} />
       : ranges.length <= 4 ? <Seg label="Range" options={ranges} value={range} onChange={onRange} /> : <ChipBar label="Range" options={ranges} value={range} onChange={onRange} />) : null;
@@ -28,7 +36,10 @@ export function ChartFrame<R>({ title, info, infoLabel, id, label, ranges, range
         {actions}
       </>} />
       {stats}
-      <div className="k-chart-body">{asTable && table ? <DataTable {...table} /> : children}</div>
+      <div className="k-chart-body">{asTable && table
+        ? <><DataTable {...table} rows={table.rows.slice((Math.min(page, pages) - 1) * TABLE_PAGE, Math.min(page, pages) * TABLE_PAGE)} />
+          <Pager page={Math.min(page, pages)} pages={pages} total={total} noun="rows" onPage={setPage} /></>
+        : children}</div>
       {footer}
     </Card>
   );

@@ -358,6 +358,7 @@ def etf_gaps(mp):
     mp.setattr(etf_nav, "navs", lambda: data)
     etf_nav.refresh(main.filings_feed)
     fake_etf.seed_history(date.today())
+    fake_etf.seed_long(date.today())               # three years more behind the 30 days, for the range chips (O1)
     mp.setattr(main.etf_job, "start", lambda: None)          # the stored list stays as it is for the whole run
 
 

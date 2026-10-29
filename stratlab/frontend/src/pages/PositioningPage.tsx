@@ -1,19 +1,18 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMarketRefresh } from "../lib/marketLive";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
-import { useApp } from "../lib/app";
 import {
-  atmIvLabel, chainUnit, chainWithTime, contracts, contractsShort, crore, dayName, historyBasis, istTime, ivWait, NEAR_STRIKES, oiBasis, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
-  chainCounts, pcrNote, pcrStrikes, rangeFrom, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
+  atmIvLabel, chainUnit, chainWithTime, contracts, contractsShort, crore, dayName, historyBasis, istTime, ivWait, NEAR_STRIKES, oiBasis, PARTICIPANTS, pct, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
+  chainCounts, pcrNote, pcrStrikes, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
-import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
+import { cutPoints } from "../lib/range";
 import { istToday, signTone } from "../lib/format";
 import { Legend, LineChart } from "../components/Charts";
 import { StrikeChart } from "../components/StrikeChart";
 import { useMoreColumns } from "../components/MoreColumns";
 import { VixPanel } from "../components/VixPanel";
-import { Card, CardHead, ChipBar, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, PageHeader, Seg, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import { Card, CardHead, ChipBar, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, PageHeader, RangeChips, Seg, Select, Signed, Skeleton, Stat, StatRow, useRange, type Column } from "../components/kit";
 import { PosTabs } from "./trade/StockFuturesPage";
 import "./trade/trade.css";
 import "./trade/positioning.css";
@@ -357,25 +356,16 @@ function IvFig({ c, full, plan }: { c: ChainFacts; full: boolean; plan: string }
 const MEASURES: [string, string][] = [["fut_idx_net", "Index futures, net"], ["opt_idx_call_net", "Index calls, net"], ["opt_idx_put_net", "Index puts, net"],
   ["fut_stk_net", "Stock futures, net"], ["opt_stk_call_net", "Stock calls, net"], ["opt_stk_put_net", "Stock puts, net"]];
 const SHARES: [string, string][] = [["fut_idx_long_pct", "Index futures"], ["fut_stk_long_pct", "Stock futures"]];
-const API_RANGES = ["3m", "6m", "1y", "all"];
-
-/** The stored history for a range. The server knows 3 months, 6 months, a year and all: a custom range reads all of it and
- * keeps the days inside the range here. */
-function useHistory<T extends { day: string }>(kind: string, range: string, name = "NIFTY") {
+/** The stored history, all of it (the exchange's participant files go back years): the range is cut here, by the app's one range
+ * control, so a choice answers at once and every chart in the card follows it. */
+function useHistory<T extends { day: string }>(kind: string, name = "NIFTY") {
   const [d, setD] = useState<{ points: T[]; recorded?: Span } | null | "error">(null);
-  const custom = spanDays(range);
-  const key = API_RANGES.includes(range) ? range : "all";
   useEffect(() => {
     let live = true;
-    api<{ points: T[]; recorded?: Span }>(`/trade/positioning/history?kind=${kind}&range=${key}&name=${name}`)
-      .then((r) => {
-        if (!live) return;
-        if (custom == null) { setD(r); return; }
-        const from = rangeFrom(custom);
-        setD({ ...r, points: r.points.filter((p) => p.day.slice(0, 10) >= from) });
-      }).catch(() => live && setD("error"));
+    api<{ points: T[]; recorded?: Span }>(`/trade/positioning/history?kind=${kind}&range=all&name=${name}`)
+      .then((r) => { if (live) setD(r); }).catch(() => live && setD("error"));
     return () => { live = false; };
-  }, [kind, key, custom, name]);
+  }, [kind, name]);
   return d;
 }
 
@@ -390,30 +380,29 @@ function ChartBox({ title, children, empty, emptyText }: { title: string; childr
 }
 
 function History({ names, coverage }: { names: string[]; coverage?: Coverage }) {
-  const { me } = useApp();
-  const [range, setRange] = useState("6m");
   const [who, setWho] = useState<PRow["id"]>("fii");
   const [measure, setMeasure] = useState("fut_idx_net");
   const [share, setShare] = useState("fut_idx_long_pct");
   const [name, setName] = useState(names[0] ?? "NIFTY");
-  const partsH = useHistory<PartPoint>("participants", range);
-  const cashH = useHistory<CashPoint>("cash", range);
-  const chainH = useHistory<ChainPoint>("chain", range, name);
-  const parts = partsH && partsH !== "error" ? partsH.points : partsH;
-  const cash = cashH && cashH !== "error" ? cashH.points : cashH;
-  const chain = chainH && chainH !== "error" ? chainH.points : chainH;
+  const partsH = useHistory<PartPoint>("participants");
+  const cashH = useHistory<CashPoint>("cash");
+  const chainH = useHistory<ChainPoint>("chain", name);
+  const partsAll = partsH && partsH !== "error" ? partsH.points : null;
+  const times = useMemo(() => (partsAll ?? []).map((p) => p.day.slice(0, 10)), [partsAll]);
+  const rng = useRange("positioning", times, "6m");           // the app's one range control; the six months it always opened on, when nothing else is remembered
+  const parts = partsH && partsH !== "error" ? cutPoints(partsH.points, rng.value) : partsH;
+  const cash = cashH && cashH !== "error" ? cutPoints(cashH.points, rng.value) : cashH;
+  const chain = chainH && chainH !== "error" ? cutPoints(chainH.points, rng.value) : chainH;
   const label = (p: { day: string }[]) => p.map((x) => dayName(x.day));
   const days = (p: { day: string }[]) => p.map((x) => x.day.slice(0, 10));
   const mlabel = MEASURES.find(([k]) => k === measure)?.[1] ?? "";
   const slabel = SHARES.find(([k]) => k === share)?.[1] ?? "";
   const whoName = PARTICIPANTS.find(([k]) => k === who)?.[1] ?? "";
-  const stored = coverage?.participants.days ?? 3650;
   return (
     <Card id="pos-history" label="History">
       <CardHead title="History" infoLabel="About the history"
         info="The days covered: the exchange's participant files from its archives and each evening since, the cash numbers from the day StratLab started reading them, and the option-chain facts from StratLab's own recordings (the nearest expiry with at least a day to go, over the 15 strikes either side of the money). A custom range can be any whole number of days, weeks, months or years up to the days stored."
-        actions={<ChipBar label="Time range" value={range} onChange={setRange} options={RANGES.map(([value, label]) => ({ value, label }))}
-          custom={{ storageKey: `stratlab.chips.positioning.${me?.id ?? "anon"}`, units: SPAN_UNITS, defaultUnit: "months", validate: spanCheck(Math.max(30, stored + 30), 5) }} />} />
+        actions={<RangeChips chart="positioning" times={times} options={rng.options} value={rng.value} onChange={rng.pick} label="Time range" />} />
       {coverage && (
         <Source testId="history-source">
           Participant files: {spanLine(coverage.participants)}. Cash numbers: {spanLine(coverage.cash)}. Option chains: StratLab's own recordings, one summary a day.

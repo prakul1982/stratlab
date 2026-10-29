@@ -26,7 +26,7 @@ PREFIX = "slb:"
 SLB_BHAV = X.ARCHIVE + "/archives/slbs/bhavcopy/SLBM_BC_{dmy}.DAT"
 ELIGIBLE = X.ARCHIVE + "/archives/slbs/seclist/SLB_ELG_SEC_{dmy}.csv"
 ELIGIBLE_KEY = PREFIX + "eligible"        # {"as_of", "symbols": [...]}
-KEEP = 130                                # trading days kept: about six months
+KEEP = 260                                # trading days kept: about a year (O3; it was six months)
 WINDOWS = (30, 90)
 MAX_SYMBOLS = 120                         # stocks one request can ask about
 SYMBOL = re.compile(r"^[A-Z0-9&\-]{1,20}$")
@@ -134,7 +134,7 @@ class Desk(X.Desk):
     name = "slb"
     what = "daily securities lending file"
     ready_at = "19:00"
-    backfill_days = 95
+    backfill_days = 260
     store = X.DayStore(PREFIX, KEEP, point, shards=8)
 
     def read(self, files: X.Files, day: date):
@@ -191,6 +191,22 @@ def for_symbol(symbol: str, with_days: bool = True) -> dict:
         out["trades"] = [{"day": p[0], "price": p[1], "series": ln[0], "expiry": ln[1], "fee": ln[2], "ann": ln[3],
                           "shares": ln[4], "trades": ln[5]}
                          for p in reversed(ser) if p[0] > since for ln in (p[2] or [])]
+        out["history"] = daily_fees(ser)
+    return out
+
+
+def daily_fees(series: list[list]) -> list[dict]:
+    """A stock's lending day by day for as long as it is stored, oldest first: the share-weighted annualised fee of the day's trades,
+    the shares lent and the fee paid in all, only for days with trades (a day with none has no fee to draw)."""
+    out = []
+    for p in series:
+        lines = p[2] or []
+        qty = sum(ln[4] or 0 for ln in lines)
+        if not qty:
+            continue
+        w = [(ln[3], ln[4] or 0) for ln in lines if ln[3] is not None]
+        out.append({"day": p[0], "ann": round(sum(a * q for a, q in w) / sum(q for _, q in w), 2) if w and sum(q for _, q in w) else None,
+                    "shares": qty, "fee_paid": round(sum((ln[2] or 0) * (ln[4] or 0) for ln in lines), 2)})
     return out
 
 

@@ -75,12 +75,12 @@ export function VixPanel() {
                 )}
               </div>
               <div className="k-stack pos-chart">
-                <h3 className="k-sub">Past year: India VIX and NIFTY ATM IV (%)</h3>
+                <h3 className="k-sub">India VIX and NIFTY ATM IV (%)</h3>
                 {!year || year.days.length < 2 ? <ChartEmpty height={200}>The history is being read; it shows here once stored.</ChartEmpty> : (
                   <LineChart lines={[{ values: year.vix, color: "var(--series-1)", width: 2, label: "India VIX" },
                     ...(year.iv.some((x) => x != null) ? [{ values: year.iv, color: "var(--series-2)", width: 1.6, label: "NIFTY ATM IV" }] : [])]}
-                    labels={year.days.map(short)} times={year.days} legend ranges={false} format={(x) => x.toFixed(2)} height={200}
-                    testId="vix-year" ariaLabel="India VIX's daily close and NIFTY's at-the-money IV over the past year" />
+                    labels={year.days.map(short)} times={year.days} legend format={(x) => x.toFixed(2)} height={200}
+                    rangeStart="1y" testId="vix-year" ariaLabel="India VIX's daily close and NIFTY's at-the-money IV by day" />
                 )}
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { eyebrowOf } from "../lib/eyebrow";
@@ -6,7 +6,8 @@ import { inr } from "../lib/format";
 import { dayText, desksApi, plainPct, sharesShort, statusText, type DeskStatus, type LendMarketRow, type LendRow, type LendTable } from "../lib/stockDesks";
 import { Earlier } from "../components/Earlier";
 import { Info } from "../components/ui";
-import { Card, CardHead, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Skeleton, Stat, StatRow, StockPicker, type Column } from "../components/kit";
+import { LineChart } from "../components/Charts";
+import { Card, CardHead, ChartFrame, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Skeleton, Stat, StatRow, StockPicker, useRange, type Column } from "../components/kit";
 
 /* /invest/stock-lending: what lending fees traded on the exchange's SLB segment for the stocks you hold and watch,
  * over the last 30 and 90 days, and any stock looked up day by day. Past traded fees with dates, never "you can earn";
@@ -37,6 +38,10 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
     desksApi.lend(symbol).then((x) => live && setD(x)).catch((e) => live && setError(e instanceof ApiError ? e.message : "That stock couldn't be read."));
     return () => { live = false; };
   }, [symbol]);
+  const hist = useMemo(() => (d?.history ?? []).filter((h) => h.ann != null), [d]);
+  const times = useMemo(() => hist.map((h) => h.day), [hist]);
+  const rng = useRange("slb-fee", times);
+  const shown = hist.slice(rng.from);
   const cut = d?.as_of ? new Date(new Date(d.as_of).getTime() - 30 * 864e5).toISOString().slice(0, 10) : "";
   const recent = (d?.trades ?? []).filter((t) => t.day > cut), older = (d?.trades ?? []).filter((t) => t.day <= cut);
   const table = (rows: Trade[], label: string) => <DataTable label={label} rows={rows} rowKey={(t) => `${t.day}-${t.series}-${t.expiry}-${t.fee}`} sticky={rows.length > 14} columns={tradeColumns} />;
@@ -50,6 +55,16 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
           <StatRow>
             {d.summaries.map((s) => <Stat key={s.days} label={`Last ${s.days} days, a year`} value={range(s.ann_low, s.ann_high)} note={`${sharesShort(s.shares)} shares lent`} />)}
           </StatRow>
+          {hist.length >= 3 && (
+            <ChartFrame title="The fee a year, by day" info="Each day with lending trades: the fee per share the day's trades paid, as a percent of that day's closing price, scaled to a year. Days with no trades are not drawn."
+              ranges={rng.options} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "slb-fee", times }}
+              table={{ label: `${symbol}'s lending fee by day`, rows: [...shown].reverse(), rowKey: (h) => h.day,
+                columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dayText(h.day) }, { key: "a", header: "A year, of the price", numeric: true, cell: (h) => plainPct(h.ann, 2) },
+                  { key: "s", header: "Shares lent", numeric: true, cell: (h) => sharesShort(h.shares) }, { key: "f", header: "Fee paid", numeric: true, cell: (h) => inr(h.fee_paid, 2) }] }}>
+              <LineChart lines={[{ values: shown.map((h) => h.ann), color: "var(--pos-call)", width: 2, label: "Fee a year" }]} labels={shown.map((h) => dayText(h.day))} times={shown.map((h) => h.day)}
+                ranges={false} table={false} format={(v) => plainPct(v, 2)} axisFormat={(v) => `${v.toFixed(1)}%`} height={180} ariaLabel={`${symbol}'s lending fee a year, by day`} />
+            </ChartFrame>
+          )}
           {!d.trades?.length ? <EmptyState title={`No lending traded in ${symbol} in the last 90 days.`}>Nothing to list for this stock yet.</EmptyState> : (
             <>
               {recent.length ? table(recent, `${symbol} lending in the last 30 days`) : <p className="k-small k-muted">No lending in the last 30 days.</p>}

@@ -95,9 +95,15 @@ export function saveRange(chart: string, id: string) {
   try { localStorage.setItem(KEY + chart, id); } catch { /* storage off: the choice still works for this visit */ }
 }
 /** The range to open on: the saved one when this chart still offers it (a custom one only when it cuts something), else "All". */
-export function startRange(chart: string, times: (string | number)[], options: RangeOption[]): string {
+export function startRange(chart: string, times: (string | number)[], options: RangeOption[], initial = "all"): string {
   const saved = savedRange(chart);
-  if (!saved || saved === "all") return "all";
+  if (!saved) return options.some((o) => o.value === initial) ? initial : "all";
+  if (saved === "all") return "all";
   if (options.some((o) => o.value === saved)) return saved;
   return CUSTOM.test(saved) && rangeFrom(times, saved) > 0 ? saved : "all";
+}
+
+/** The points (each with a `day`, ISO date or date-time) inside a range, counted back from that series' own last day. */
+export function cutPoints<T extends { day: string }>(points: T[], id: string): T[] {
+  return points.slice(rangeFrom(points.map((p) => p.day.slice(0, 10)), id));
 }

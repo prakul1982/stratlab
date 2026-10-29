@@ -277,3 +277,22 @@ def test_the_back_fill_is_small_enough_to_keep(ew, monkeypatch):
     size = len(db.get_setting(E.SERIES_KEY + "TESTETF"))
     assert size < 16_000, size              # 360 ETFs x this = under 6 MB
     assert len(E.series_rows("TESTETF")) == len(days) and E.series_rows("TESTETF")[0] == (days[0].isoformat(), *rows[days[0].isoformat()])
+
+
+# ---- O3: the participant history goes back five years --------------------------------------------------------------
+from app import positioning as P  # noqa: E402
+
+
+def test_a_walk_that_finished_at_a_year_goes_on_to_the_new_depth(w):
+    r = P.Runner(lambda: main.filings_feed, sleep=lambda s: None, pace=0)
+    today = date(2026, 10, 5)
+    for _ in range(10):
+        bf = r.backfill(today, step=5, days=30)
+    assert bf["done"] and bf["target"] == 30
+    n = len(P.history("part"))
+    bf = r.backfill(today, step=5, days=60)                    # the target was raised: the walk reopens from its oldest day
+    assert not bf["done"] and bf["target"] == 60 and len(P.history("part")) > n
+    for _ in range(10):
+        bf = r.backfill(today, step=5, days=60)
+    assert bf["done"] and min(d for d, _ in P.history("part")) <= (today - timedelta(days=58)).isoformat()
+    assert P.BACKFILL_DAYS >= 1800
