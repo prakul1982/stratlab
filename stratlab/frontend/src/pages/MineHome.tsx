@@ -1,3 +1,4 @@
+import { NoBreak } from "../components/NoBreak";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
@@ -94,7 +95,8 @@ export function MineHome() {
         setCustomise(false);
         requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('[aria-controls="mine-customise"]')?.focus());
       }} />}
-      <PromoCountdown /><FirstSteps />
+      {/* one line with the next step, so the first screen holds the person's own numbers (LIVE1B-086: a 375px checklist came first); the whole list is on each space's home */}
+      <PromoCountdown /><FirstSteps compact />
       {shown.length === 0 ? (
         <EmptyState title="Every card is hidden" action={{ label: "Show the cards", onClick: () => { change(DEFAULT_LAYOUT); } }}>Use Customise to choose what My space shows.</EmptyState>
       ) : (
@@ -221,7 +223,7 @@ function PnlCard() {
       <Stat label={`${fresh ? "Today" : "Last session"} · ${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={day == null ? "–" : signedInrCompact(day)} tone={day == null || day === 0 ? undefined : day > 0 ? "up" : "down"}
         note={day == null ? "The day's change needs prices, which are not in yet." : h.totals.day_pct != null ? <>Holdings <Signed value={day}>{pct(h.totals.day_pct, 2)}</Signed></> : undefined} />
       {/* the US part of the day named, live or at its close, as Holdings and Money say it (R7O-012) */}
-      {(() => { const note = usTodayNote(markets, h.us, h.usd_inr); return note && <p className="k-note" data-testid="mine-us-today">{note}</p>; })()}
+      {(() => { const note = usTodayNote(markets, h.us, h.usd_inr); return note && <p className="k-note" data-testid="mine-us-today"><NoBreak text={note} /></p>; })()}
       {/* a stock with a price but no buy price is in the day's change, not in the value and gain or loss (R3D) */}
       {h.totals.no_cost && <p className="k-note" data-testid="mine-no-cost">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}), except Today, which includes {h.totals.no_cost.count === 1 ? "its" : "their"} change.</p>}
       {/* a note line like the other two cards' "As of": the pill under it made this card 40px taller than its neighbours (VR1-001) */}

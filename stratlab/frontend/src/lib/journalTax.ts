@@ -2,8 +2,9 @@
  * charges" beside "19 sale lines, −₹59" and ₹2.13 crore of F&O the journal does not show). Facts about how each is counted. */
 
 /** The journal's promise about what it covers, under the page title. */
-export const JOURNAL_LEDE = "Your broker's trades as round trips after charges, checked like a backtest: equity from a tradebook or your tax report, "
-  + "F&O, commodity and currency from a tradebook or the tax P&L's trade-by-trade files, and US stocks and crypto you add by hand. Only you can see them.";
+export const JOURNAL_LEDE = "Your broker's trades as round trips after charges, checked like a backtest.";
+/** Where the trades come from, behind the (i) next to that line (LIVE1B-033: all of it was a four-line paragraph under the title). */
+export const JOURNAL_COVERS = "Equity from a tradebook or your tax report, F&O, commodity and currency from a tradebook or the tax P&L's trade-by-trade files, and US stocks and crypto you add by hand. Only you can see them.";
 
 /** The paragraphs of "Why these numbers differ from your tax report". `fno`: the tax report holds F&O, commodity or currency
  * totals that the journal's stats do not count. */

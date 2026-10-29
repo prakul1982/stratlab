@@ -2,7 +2,16 @@ import { HELP } from "./help";
 
 /** The (i) explanations people ask about by name, with the words they use, so a question in search ("what is a
  * walk-forward test?", "how is the drawdown worked out?") finds the explanation already written for it. */
-export interface HelpTopic { key: keyof typeof HELP; title: string; words: string; text: string }
+export interface HelpTopic { key: keyof typeof HELP; title: string; words: string; text: string; group: string }
+
+/** Which group each explanation sits in on Help, in the order the groups read (LIVE1B-043: one flat list of 47). */
+export const HELP_GROUPS: [string, string[]][] = [
+  ["Testing an idea", ["walkforward", "unseen", "nearby", "shuffle", "sample", "verdict", "strength", "basket", "buyHold", "totalReturn", "avgTrade", "winRate", "profitFactor", "worstFall", "sharpe", "equity", "period", "capital", "candles", "csv", "experimentsQuota"]],
+  ["Rules, costs and risk", ["keep", "stop", "target", "trail", "stopUnits", "risk", "short", "crosses", "maxBars", "session"]],
+  ["Notebooks and paper trading", ["notebook", "paper", "group"]],
+  ["Options", ["optVix", "optStrikeRule", "optFreeze", "optBacktest"]],
+  ["Company figures", ["pe", "research52", "researchMargins", "researchHolding", "researchEarnings"]],
+];
 
 const TOPICS: [keyof typeof HELP, string, string][] = [
   ["walkforward", "Walk-forward test", "walk forward walkforward out of sample retune re-tune optimise optimize"],
@@ -50,7 +59,8 @@ const TOPICS: [keyof typeof HELP, string, string][] = [
   ["researchEarnings", "Earnings against estimates", "earnings eps estimates beat miss"],
 ];
 
-export const HELP_TOPICS: HelpTopic[] = TOPICS.map(([key, title, words]) => ({ key, title, words, text: HELP[key] }));
+const GROUP_OF = new Map(HELP_GROUPS.flatMap(([g, keys]) => keys.map((k) => [k, g] as const)));
+export const HELP_TOPICS: HelpTopic[] = TOPICS.map(([key, title, words]) => ({ key, title, words, text: HELP[key], group: GROUP_OF.get(key) ?? "More" }));
 
 const STOP = new Set(["what", "whats", "is", "are", "a", "an", "the", "how", "does", "do", "did", "i", "my", "me", "to", "of",
   "in", "on", "for", "and", "or", "it", "its", "why", "which", "when", "where", "can", "should", "you", "your", "was", "be",

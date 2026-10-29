@@ -52,13 +52,14 @@ export function adsConfig(env: Record<string, unknown> = {}, runtime: Record<str
 export const adsLive = (cfg: AdsConfig, slot: AdSlotName): boolean => !!(cfg.on && cfg.client && cfg.slots[slot]);
 
 /** The pages that hold someone's own money, account or payment, or that are the way in: never an ad, whatever else says so. */
-const NEVER = /^\/(money|holdings|tax-report|net-?worth|account|settings|admin|login|signup|upgrade|plans|pricing|checkout|invite|import|alerts|assistant|app|paper|options|n|notebooks|mine)(\/|$)/;
+const NEVER = /^\/(money|holdings|tax-report|net-?worth|account|settings|admin|login|signup|upgrade|plans|pricing|checkout|invite|import|alerts|assistant|app|paper|options|n|notebooks|mine|trade\/journal)(\/|$)/;
 export const adsAllowedOn = (path: string): boolean => !NEVER.test(path.split(/[?#]/)[0]);
 
 /** The pages where no tracker (Meta Pixel, Clarity) loads or sends anything, and where the question isn't asked: money, tax, holdings,
  * net worth, account and settings, admin, and the way in and the payment. A tracker already loaded stops here (Clarity is stopped,
  * the pixel sends no event). The ad slots have their own, longer list (NEVER). */
-const TRACK_NEVER = /^\/(money|holdings|tax-report|net-?worth|account|settings|admin|checkout|upgrade|plans|login|signup)(\/|$)/;
+// LIVE1B-032: the trade journal holds a person's own real trades, so it is private like the money pages (it was asked, and Clarity ran, there)
+const TRACK_NEVER = /^\/(money|holdings|tax-report|net-?worth|account|settings|admin|checkout|upgrade|plans|login|signup|trade\/journal)(\/|$)/;
 export const trackAllowedOn = (path: string): boolean => !TRACK_NEVER.test(path.split(/[?#]/)[0]);
 
 /** Something needs the visitor's yes: an ad can draw, or a pixel or Clarity is set. With none of these nothing is ever asked. */

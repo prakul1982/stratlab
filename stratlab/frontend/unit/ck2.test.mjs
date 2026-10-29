@@ -95,10 +95,10 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   assert.match(read("src/styles-invest.css"), /\.co-peers-3 \.inv-tiles \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/);
 });
 
-test("CK-2 (R16): the tax report's share-gains label is one short line, its qualifier is the note", () => {
+test("CK-2 (R16), LIVE1B-009: the tax at the special rates is no headline figure beside the year's total; its qualifier is said under the table", () => {
   const t = read("src/pages/TaxReportPage.tsx");
-  assert.match(t, /<Stat label=\{<>Tax on share gains <Info/);
-  assert.match(t, /note=\{`before basic exemption, rebate and surcharge; \$\{inr\(y\.tax_with_cess\)\} with 4% cess`\}/);
+  assert.doesNotMatch(t, /<Stat label=\{<>Tax on share gains/);
+  assert.match(t, /Tax at these rates: \{inr\(y\.tax\)\} \(\{inr\(y\.tax_with_cess\)\} with 4% cess\), before the unused basic exemption, the 87A rebate and surcharge/);
 });
 
 test("CK-2 (R18): a table that would be cut on a phone is cards, a short chip row wraps", () => {

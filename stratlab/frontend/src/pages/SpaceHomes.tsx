@@ -1,3 +1,4 @@
+import { NoBreak } from "../components/NoBreak";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
@@ -495,13 +496,13 @@ function HoldingsSummary() {
               {/* "Today" only of today's session: the session the change belongs to is named when it is an earlier day (R41A) */}
               {/* VR2-003: the label does not carry the date here: "Last session (Mon 26 Oct)" wrapped to three lines and staggered the three labels; "Prices as of" below says the day */}
               {h.totals.day != null && <Fig label={h.totals.session && h.totals.session < istToday() ? "Last session" : "Today"} tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
-              {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")}
+              {h.us && h.us.count > 0 && <Fig label="US stocks" value={money(h.us.value, "USD")}
                 note={h.us.in_total && h.usd_inr ? `at ₹${h.usd_inr.toFixed(2)} a dollar` : undefined} />}
             </div>
             {/* the same lines as My Holdings: one with a price but no buy price is named, not half counted (R5O-004) */}
             {h.totals.no_cost && <p className="small muted">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}), except Today, which includes {h.totals.no_cost.count === 1 ? "its" : "their"} change.</p>}
             {(() => { const n = priceNote(h.prices ?? true, h.closes, h.rows, (d) => fmtDate(d, { weekday: true, year: false })); return n && <p className="small muted" data-testid="holdings-prices">{n}{h.totals.pnl_partial ? " The gain or loss is of the lines with a price." : ""}</p>; })()}
-            {usNote && <p className="small muted" data-testid="us-today">{usNote}</p>}
+            {usNote && <p className="small muted" data-testid="us-today"><NoBreak text={usNote} /></p>}
             {(h.totals.other_session?.length ?? 0) > 0 && <p className="small muted">Today leaves out {h.totals.other_session!.join(", ")}: {h.totals.other_session!.length === 1 ? "its" : "their"} last change is from an earlier session.</p>}
             <AsOf parts={[["Prices", h.prices_at], ["Holdings", h.updated_at]]} />
           </div>

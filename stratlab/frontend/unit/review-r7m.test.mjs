@@ -122,18 +122,19 @@ test("Zerodha connected with nothing: Holdings says so with the time, and the ca
 });
 
 test("Trade journal: why its numbers differ from the tax report, and no promise it does not keep (R7M-013)", async () => {
-  const { JOURNAL_LEDE, journalVsTax } = await import("../src/lib/journalTax.ts");
+  const { JOURNAL_LEDE, JOURNAL_COVERS, journalVsTax } = await import("../src/lib/journalTax.ts");
   const withFno = journalVsTax(true).join(" ");
   assert.match(withFno, /one round trip per position closed/);
   assert.match(withFno, /every sale line on its own/);
   assert.match(withFno, /one total for each financial year/);
   assert.match(withFno, /Upload the tax P&L's trade-by-trade files to count them here/);
   assert.doesNotMatch(journalVsTax(false).join(" "), /card below the trades/);
-  assert.match(JOURNAL_LEDE, /equity from a tradebook or your tax report, F&O, commodity and currency from a tradebook or the tax P&L's trade-by-trade files/);
-  assert.doesNotMatch(JOURNAL_LEDE, /Your broker's trades, equity, F&O, commodity and currency,/);
+  // LIVE1B-033: the line under the title is one sentence; what the journal covers is behind its (i), in the same words
+  assert.match(JOURNAL_COVERS, /Equity from a tradebook or your tax report, F&O, commodity and currency from a tradebook or the tax P&L's trade-by-trade files/);
+  assert.doesNotMatch(JOURNAL_LEDE + JOURNAL_COVERS, /Your broker's trades, equity, F&O, commodity and currency,/);
   const page = read("src/pages/trade/JournalPage.tsx");
   assert.match(page, /summary="Why these numbers differ from your tax report"/);
-  assert.match(page, /lede=\{JOURNAL_LEDE\}/);
+  assert.match(page, /lede=\{JOURNAL_LEDE\} info=\{JOURNAL_COVERS\}/);
 });
 
 test("Net worth: a leftover snapshot is said and can be removed with nothing entered (R7M-012)", () => {

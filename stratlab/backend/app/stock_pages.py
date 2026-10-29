@@ -816,6 +816,15 @@ def with_week52_report(f: dict | None, report: dict | None, symbol: str | None =
     if not row:
         return f
     hi, lo = _num(row[0]), _num(row[2])
+    # LIVE1B-074: the exchange's report lags a session, so its 52-week window starts a day earlier than the page's own year: a high or low it
+    # set on a day before the page's year (SBIN's ₹906.00 of 27 Oct 2025 on a page of 28 Oct 2026) is not this page's
+    try:
+        start = (date.fromisoformat(str(f.get("price_at") or "")[:10]) - timedelta(days=RANGE_DAYS)).isoformat()
+    except ValueError:
+        start = None
+    if start:
+        hi = hi if str(row[1] or "")[:10] > start else None
+        lo = lo if str(row[3] or "")[:10] > start else None
     cur_hi, cur_lo = _num(f.get("high52")), _num(f.get("low52"))
     out = dict(f)
     if hi is not None and cur_hi is not None and cur_hi < hi <= cur_hi * RANGE_SLACK:
@@ -2020,7 +2029,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);-webkit
 a{color:var(--blue)}a:hover{color:var(--blue-ink)}:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 main:focus,[data-ads]:focus{outline:none}
 .skip{position:absolute;left:-9999px;padding:12px 16px}.skip:focus{left:16px;top:8px;z-index:2;background:var(--card);border-radius:10px}
-.nav{display:flex;align-items:center;padding:18px clamp(16px,4vw,48px);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;padding:18px max(clamp(16px,4vw,48px),calc((100% - 960px)/2 + clamp(16px,4vw,32px)));border-bottom:1px solid var(--line)}
 .brand{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);min-height:44px;font-size:16.8px}
 .brand svg{height:40px;width:auto}.word{font-family:"Montserrat",var(--sans);font-weight:300;letter-spacing:-.035em}.word b{font-weight:800;letter-spacing:-.045em}
 .nav nav{display:flex;gap:22px;margin-left:auto;margin-right:16px}.nav nav a{display:inline-flex;align-items:center;min-height:36px;color:var(--ink-2);text-decoration:none;font-weight:500;font-size:14.5px}
@@ -2609,7 +2618,8 @@ def _tiles(f: dict) -> list[dict]:
             short, line = "Market cap", "last close × shares"
         elif label.startswith("P/E"):
             short = "P/E"
-            line = "on " + (label[label.index("(") + 1:-1] + " profit" if "(" in label else "last 12 months' profit")
+            # LIVE1B-076: said as what it is, reported earnings of the last four quarters, not a vague "last 12 months"
+            line = "on " + (label[label.index("(") + 1:-1] + " profit" if "(" in label else "reported profit, last four quarters")
         elif label.startswith("Profit to shareholders"):
             short, line, val = "Profit, last 12 months", "to shareholders", _short_amount(unit, val)
         elif label.startswith("Net profit incl."):

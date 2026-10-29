@@ -183,12 +183,13 @@ export function chainStamp(o: { market?: Market | null; times?: (string | null |
  *  AAPL moving live, so it changed by the minute under one word): the US part named, live or at its close, in dollars
  *  and at the rupee rate used. null when there's no US part in Today. */
 export function usTodayNote(markets: Market[], us: { day: number | null; in_total?: boolean } | null | undefined, usdInr: number | null | undefined,
-  now = new Date()): string | null {
+  now = new Date(), withRate = true): string | null {
   if (!us || us.day == null || !us.in_total) return null;
   const m = markets.find((x) => x.id === "US");
   const live = !!m && marketState(m, now).open;
   const usd = `${us.day < 0 ? "−" : "+"}$${Math.abs(us.day).toFixed(2)}`;
-  const inr = usdInr ? ` (₹${Math.round(Math.abs(us.day) * usdInr).toLocaleString("en-IN")} at ₹${usdInr.toFixed(2)} a dollar)` : "";
+  // `withRate: false` where the rate is said on the line next to it (LIVE1B-007: "₹95.21 a dollar" twice under Holdings' totals)
+  const inr = usdInr ? ` (₹${Math.round(Math.abs(us.day) * usdInr).toLocaleString("en-IN")}${withRate ? ` at ₹${usdInr.toFixed(2)} a dollar` : ""})` : "";
   // DG-005: "Today includes US stocks, US, at their last close" read as a typo
   return `Today includes your US stocks ${live ? "live, moving until the US close" : "at their last close"}: ${usd}${inr}.`;
 }

@@ -303,7 +303,9 @@ test("PUB-1: the server-drawn public pages carry the app's own fonts, header hei
     const app = css.match(new RegExp(`${token}: (#[0-9A-Fa-f]{6})`))?.[1], srv = style.match(new RegExp(`${token}:(#[0-9A-Fa-f]{6})`))?.[1];
     assert.equal(srv?.toLowerCase(), app?.toLowerCase(), token);
   }
-  assert.match(style, /\.nav\{display:flex;align-items:center;padding:18px clamp\(16px,4vw,48px\);border-bottom:1px solid var\(--line\)\}/);   // the app's public header: full width, 18px
+  // the app's public header: full width, 18px, its logo and button on the page's own 960px column's edges (LIVE1B-052), the same on both
+  assert.match(style, /\.nav\{display:flex;align-items:center;padding:18px max\(clamp\(16px,4vw,48px\),calc\(\(100% - 960px\)\/2 \+ clamp\(16px,4vw,32px\)\)\);border-bottom:1px solid var\(--line\)\}/);
   assert.match(style, /\.brand svg\{height:40px/);                                                                // the logo at the app's size
-  assert.match(css, /\.pub-nav \{[^}]*padding: 18px clamp\(16px, 4vw, 48px\)/);
+  assert.match(css, /\.pub-nav \{[^}]*padding: 18px max\(clamp\(16px, 4vw, 48px\), calc\(\(100% - var\(--pub-w\)\) \/ 2 \+ clamp\(16px, 4vw, 32px\)\)\)/);
+  assert.match(css, /\.pub \{ --pub-w: 960px; \}/);
 });

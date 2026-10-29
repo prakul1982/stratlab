@@ -67,7 +67,7 @@ export function LoanCheck({ version }: { version: string }) {
               </StatRow>
             )}
             {c.gap && !c.gap.matches && (
-              <p className="k-small" role="status">Your entered rate is {Math.abs(c.gap.pts).toFixed(2)} {Math.abs(c.gap.pts) === 1 ? "point" : "points"} {c.gap.pts > 0 ? "above" : "below"} repo + spread{c.gap.after ? ` after the ${dateOnly(c.gap.after)} reset` : ""}.</p>
+              <p className="k-small">Your entered rate is {Math.abs(c.gap.pts).toFixed(2)} {Math.abs(c.gap.pts) === 1 ? "point" : "points"} {c.gap.pts > 0 ? "above" : "below"} repo + spread{c.gap.after ? ` after the ${dateOnly(c.gap.after)} reset` : ""}.</p>
             )}
             {c.benchmark !== "repo" && <p className="k-small k-muted">The lender sets this benchmark itself, so it isn't checked here; the change from the sanctioned {pct(c.rate)} to your statement's {pct(c.current_rate)} is worked out below.</p>}
             {c.changes.length > 0 ? (() => {

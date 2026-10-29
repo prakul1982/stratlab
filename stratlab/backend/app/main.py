@@ -1,5 +1,6 @@
 """StratLab API."""
 import base64
+import hashlib
 from contextlib import contextmanager
 import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
@@ -3254,10 +3255,13 @@ _PRICED_LOCK = threading.Lock()
 PRICED_FOR = 20.0                                   # seconds one reading of a person's prices is shared by every page
 
 
-def _prices_at(quotes: list[dict]) -> str:
-    """When some prices are from: the latest trade among the quotes (the exchange's own stamp), else the moment they were read."""
+def _prices_at(quotes: list[dict], india: bool = False) -> str:
+    """When some prices are from: the latest trade among the quotes (the exchange's own stamp), else the moment they were read.
+    `india`: Indian stocks, whose last trades after the bell (the closing session, up to 15:59) are the 15:30 close's price, so
+    the stamp stops at the close (LIVE1B-008: "Prices as of 15:59 IST" for an India-only list)."""
     now = datetime.now(timezone.utc)
-    return (holdings.latest_trade(quotes, now) or now).isoformat(timespec="minutes")
+    t = holdings.latest_trade(quotes, now) or now
+    return (holdings.at_close(t) if india else t).isoformat(timespec="minutes")
 
 
 CLOSE_LOOKBACK = 10                # days searched back for the exchange's stored closes
@@ -3332,9 +3336,12 @@ def _read_prices(ind: list[dict], us: list[str]) -> dict:
         us_quotes.update({k: v for k, v in (_quiet(research_hub.quotes, "US", us[n:n + 24]) or {}).items() if v})
     rate, rate_at = usd_inr_read() if us else (None, None)
     by = {k: sum(q.get("from") == k for q in closed.values()) for k in ("close", "file")}
+    in_q, us_q = [q for q in quotes.values() if q], [q for q in us_quotes.values() if q]
     return {"quotes": quotes, "live": live, "us_quotes": us_quotes, "rate": rate, "rate_at": rate_at,
             "closes": {"day": max((q["change_day"] for q in closed.values()), default=None), **by} if closed else None,
-            "prices_at": _prices_at([q for q in [*quotes.values(), *us_quotes.values()] if q]) if live or us_quotes or closed else None}
+            # one stamp for each market: the India close and the US close are different moments (LIVE1B-008)
+            "prices_at": (_prices_at(in_q, True) if in_q else _prices_at(us_q)) if live or us_quotes or closed else None,
+            "us_prices_at": _prices_at(us_q) if in_q and us_q else None}
 
 
 def _etf_named(items: list[dict]) -> list[dict]:
@@ -3373,7 +3380,7 @@ def holdings_view(profile) -> dict:
             _PRICED[key] = (time.monotonic(), got)
     live, us_quotes = got["live"], got["us_quotes"]
     return {**holdings.view(_etf_named(h["items"]), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
-            "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "closes": got.get("closes"),
+            "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "us_prices_at": got.get("us_prices_at"), "closes": got.get("closes"),
             "us_prices": bool(us_quotes) if us else None, "usd_inr_at": got.get("rate_at") if us and got["rate"] else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
 
@@ -3393,7 +3400,8 @@ def zerodha_read(profile) -> dict | None:
 @app.get("/holdings")
 def my_holdings(profile=Depends(current_profile)):
     """The user's holdings at today's prices: value, gain or loss, the day's change and the mix by sector."""
-    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile)})
+    # `zerodha_open`: whether Zerodha login is open for this account, so the page doesn't offer a connection that isn't there (LIVE1B-042)
+    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile), "zerodha_open": bool(_quiet(connect_kite.allowed, profile))})
 
 
 @app.get("/holdings/facts")
@@ -3433,9 +3441,14 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
     found, missed = holdings.match_all(parsed["rows"], holdings_matcher(), _quiet(last_session.latest_day, "IN"))
     missed = sorted(parsed["problems"] + missed, key=lambda m: m.get("line") or 0)
     limit = holdings_limit(profile["_plan"])
+    digest = hashlib.sha256(data).hexdigest()[:24]
     out = {}
 
     def merged(before):                   # runs again on the newer holdings if another save lands first
+        if req.mode == "add" and holdings.file_seen(profile["id"], digest):
+            # LIVE1B-065: the same file again would double every quantity; nothing is added, and the page says so
+            out.update(duplicate=True, n=0, saved=False, over=[])
+            return None
         n_read = len(found) if req.mode == "replace" else None
         rows = found
         if req.mode == "add":
@@ -3459,9 +3472,10 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         return with_sectors(rows, known), "Zerodha Kite file" if parsed["broker"] == "Zerodha Kite" else parsed["broker"]
     holdings.update(profile["id"], merged)
     if out["saved"]:
+        holdings.file_remember(profile["id"], digest, req.mode == "replace")
         invite_rewards.safe_touch(profile, "holdings")
     over = out["over"]
-    return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "unmatched": missed[:200],
+    return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "duplicate": bool(out.get("duplicate")), "unmatched": missed[:200],
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
 
@@ -3482,6 +3496,21 @@ def _typed_qty(old: dict, new: dict, out: dict) -> dict:
     return holdings.drop_stale_accts([new])[0]
 
 
+def _check_sizes(found: list[dict], before: list[dict]) -> None:
+    """Stop a position too large to be real (LIVE1B-003): each stock that is new, or whose quantity just changed, at its average
+    price, or else at its latest close. A stock with neither is left alone (nothing to compare)."""
+    held = {(holdings.market_of(i), i["symbol"]): float(i["qty"]) for i in before}
+    for i in found:
+        was = held.get((holdings.market_of(i), i["symbol"]))
+        if was is not None and abs(was - float(i["qty"])) < 1e-9:
+            continue
+        us = holdings.market_of(i) == "US"
+        px = i.get("avg") or (None if us else ((_quiet(close_quotes, [i]) or {}).get(i["symbol"]) or {}).get("price"))
+        bad = holdings.size_problem(float(i["qty"]), px, "USD" if us else "INR")
+        if bad:
+            err(422, "bad_change", f"{i['symbol']}: {bad}", {"qty": bad})
+
+
 @app.put("/holdings")
 def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     """Change the holdings by hand: add a stock, change a quantity or average price, remove one. `changes` are applied
@@ -3493,6 +3522,9 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     for c in req.changes or []:
         if c.op == "add" and c.qty is None:
             err(422, "bad_change", f"Enter the quantity of {c.symbol.strip().upper()} to add.")
+        bad = holdings.whole_problem(c.qty, c.market) if c.op != "remove" and c.qty is not None else None
+        if bad:                           # LIVE1B-046: Indian shares are whole units
+            err(422, "bad_change", bad, {"qty": bad})
     limit = holdings_limit(profile["_plan"])
     out = {}
 
@@ -3552,6 +3584,7 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             us_found, us_missed = holdings.match_us(us_rows, _us_find)
             found, out["missed"] = found + us_found, out["missed"] + us_missed
         found = holdings.merge(kept + found)
+        _check_sizes(found, before["items"])
         # over the limit after a downgrade: no stock is added, but the ones held can still change or come off
         if len(found) > limit and any((holdings.market_of(i), i["symbol"]) not in saved for i in found):
             over()
@@ -3888,8 +3921,9 @@ def tax_view(profile) -> dict:
     i = tax_inputs(profile)
     mf = tax_mf(profile)
     usr = money_us_routes.for_tax(profile)
+    div_in, div_out = money_routes.dividends_split(profile)
     rep = tax_lots.report(i["trades"], i["acts"], i["fmv"], i["quotes"], i["items"], i["today"], i["business"], i["income"],
-                          extra=mf["rows"] + usr["rows"], dividends=money_routes.dividends_for_tax(profile), more_years=set(usr["years"]))
+                          extra=mf["rows"] + usr["rows"], dividends=div_in, more_years=set(usr["years"]))
     rep["names"].update(mf["names"])
     rep["names"].update(usr["names"])
     # RC2B-005: the 31 Jan 2018 price is asked for shares only. A fund's sale carries its own grandfathered NAV (the Money
@@ -3897,12 +3931,13 @@ def tax_view(profile) -> dict:
     rep["pre_2018"] = [k for k in rep["pre_2018"] if k in set(i["pre"])]
     for y in rep["years"]:
         y["mutual_funds"] = mf["years"].get(y["fy"])
+        y["dividends_left_out"] = round(div_out.get(y["fy"], 0.0), 2)       # LIVE1B-029: dividends the total doesn't count, said beside it
         y["us"] = {**usr["years"][y["fy"]], "allowed": usr["allowed"], "plan": usr.get("plan")} if y["fy"] in usr["years"] else None
     return {**rep, "corp_left": i["corp_left"], "us_trades": usr["count"], "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
                           "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
             "last_trade": max([t["d"] for t in i["trades"] if isinstance(t.get("d"), str)] + [b["last"] for b in i["business"]], default=None),
             "business_lines": int(sum(b["trades"] for b in i["business"])),
-            "prices": i["live"], "prices_at": _prices_at([q for q in i["quotes"].values() if q]) if i["live"] else None,
+            "prices": i["live"], "prices_at": _prices_at([q for q in i["quotes"].values() if q], True) if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},
             "max_trades": tax_lots.MAX_TRADES,
             # DH-003: the year being filed as one "payable now" figure, with the interest (Pro: it needs Tax tools' payments)

@@ -9,15 +9,17 @@ from fastapi.responses import JSONResponse
 from .branding import public_text
 
 
-def err(status: int, code: str, message: str) -> NoReturn:
-    """Stop the request with `status` and a {code, message} body. A 402 (a plan's feature or limit) is worded through
-    plans.upgrade_note, so every upgrade prompt is honest while paid plans can't be bought yet."""
+def err(status: int, code: str, message: str, fields: dict[str, str] | None = None) -> NoReturn:
+    """Stop the request with `status` and a {code, message} body (`fields`: field -> what is wrong with it, for the page to say
+    under that box, LIVE1B-003). A 402 (a plan's feature or limit) is worded through plans.upgrade_note, so every upgrade
+    prompt is honest while paid plans can't be bought yet."""
     if status == 402:
         from .plans import named_plan, payments_live, upgrade_note
         # `plan`: the plan the words send the reader to, so the page adds its price in their currency (DP2-022, DP1-018)
         raise HTTPException(status, {"code": code, "message": public_text(upgrade_note(message)), "payments": payments_live(),
                                      "plan": named_plan(message)})
-    raise HTTPException(status, {"code": code, "message": public_text(message)})
+    raise HTTPException(status, {"code": code, "message": public_text(message),
+                                 **({"fields": {k: public_text(v) for k, v in fields.items()}} if fields else {})})
 
 
 def safe(obj: Any) -> Any:

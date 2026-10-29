@@ -120,7 +120,7 @@ test("DI-010, DI-011, DI-012: the markets' period and colours in words, India's 
   assert.match(mine, /" in India" : ""/);
   assert.match(mine, /whole\.length >= 3 \? <Spark/);
   assert.match(mine, /<label className="k-check"><input type="checkbox"/);
-  assert.ok(mine.indexOf("<CustomisePanel") < mine.indexOf("<PromoCountdown /><FirstSteps />"), "Customise opens above the first steps");
+  assert.ok(mine.indexOf("<CustomisePanel") < mine.indexOf("<PromoCountdown /><FirstSteps compact />"), "Customise opens above the first steps");
   assert.match(read("src/styles.css"), /\.mine-slot \.k-state \{ border: 0;/);
 });
 
@@ -181,7 +181,7 @@ test("DI-021, DI-023: the phone's top button and the tour follow the space; on a
   const tour = read("src/components/Tour.tsx");
   assert.match(tour, /`\.topbar \[aria-label='\$\{main\}'\]`/);
   assert.match(tour, /\{ title: "Four spaces", at: \[".sidebar .space-switch"\], menu: true,/);
-  assert.match(tour, /Dark mode is in Settings → Experience\./);
+  assert.match(tour, /Dark mode is in Settings, under Experience\./);          // LIVE1B-045: and "Take the tour" is in the account menu
   assert.doesNotMatch(tour, /your name at the bottom opens your plan, settings and dark mode/);
 });
 

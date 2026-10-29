@@ -1,6 +1,29 @@
-import { Children, createContext, useContext, useLayoutEffect, type ReactNode } from "react";
-import { changeDir, minusNode } from "../../lib/format";
+import { Children, createContext, useContext, useLayoutEffect, useRef, type ReactNode } from "react";
+import { changeDir, isOneWord, longRupees, minusNode } from "../../lib/format";
 import { useNoOrphan } from "../../lib/noOrphan";
+
+/* A big figure never breaks inside its digits (LIVE1B-019: "₹6,85,30,\n01,63,68\n0" in a 125px tile). A figure that is one word
+ * is kept on one line and its type shrinks, down to 62% of its size, until it fits its box (a rupee amount of ₹100 crore or more
+ * is written in crore first: lib/format longRupees). */
+/** The smallest the type may shrink to, as a share of its natural size. */
+const FIT_MIN = 0.62;
+
+/** Shrink `el`'s type until its text fits its box on one line. Returns true when it had to shrink by more than 15%, which a row
+ * of figures reads as "this one does not fit here". Safe to call again (it starts from the natural size each time). */
+function fitFigure(el: HTMLElement): boolean {
+  el.style.fontSize = "";
+  const box = el.clientWidth;
+  if (!box) return false;
+  const natural = parseFloat(getComputedStyle(el).fontSize);
+  if (!Number.isFinite(natural) || el.scrollWidth <= box + 0.5) return false;
+  let size = natural;
+  const floor = natural * FIT_MIN;
+  for (let guard = 0; el.scrollWidth > box + 0.5 && size > floor && guard < 40; guard++) {
+    size = Math.max(floor, size - 1);
+    el.style.fontSize = `${size}px`;
+  }
+  return size < natural * 0.85;
+}
 
 /** Inside a labelled StatRow (a list for screen readers), each Stat is one of its items. */
 const InList = createContext(false);
@@ -32,10 +55,24 @@ export function Delta({ value, children, tone = "auto" }: { value: number | null
  * (`item` is the old way to say so). */
 export function Stat({ label, value, note, delta, tone, item, testId }: { label: ReactNode; value: ReactNode; note?: ReactNode; delta?: ReactNode; tone?: "up" | "down"; item?: boolean; testId?: string }) {
   const listed = useContext(InList) || item;
+  const text = typeof value === "string" ? minusNode(value) : typeof value === "number" ? minusNode(String(value)) : null;
+  const short = text ? longRupees(text) : null;             // ₹100 crore and more in crore, the whole figure kept (LIVE1B-019)
+  const one = text != null && isOneWord(short ?? text);     // a one-word figure is fitted to its box, never broken in its digits
+  const v = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = v.current;
+    if (!el || !one) return;
+    fitFigure(el);
+    const ro = new ResizeObserver(() => { fitFigure(el); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [one, text]);
   return (
     <div className="k-stat" role={listed ? "listitem" : undefined} data-testid={testId}>
       <span className="k-stat-k">{label}</span>
-      <span className={`k-stat-v${tone ? ` k-${tone}` : ""}`}>{minusNode(value)}</span>
+      <span ref={v} className={`k-stat-v${tone ? ` k-${tone}` : ""}${one ? " one" : ""}`} title={short ? text ?? undefined : undefined}>
+        {short ? <><span aria-hidden="true">{short}</span><span className="sr-only">{text}</span></> : minusNode(value)}
+      </span>
       {(delta || note) && <span className="k-stat-d">{delta}{delta && note ? " " : ""}{note}</span>}
     </div>
   );
@@ -55,7 +92,8 @@ function useDuo(ref: { current: HTMLDivElement | null }) {
       const cols = getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length;
       if (cols !== 1) return;
       el.classList.add("duo");
-      const wrapping = () => Array.from(el.querySelectorAll<HTMLElement>(".k-stat-v")).some((v) => v.getBoundingClientRect().height > parseFloat(getComputedStyle(v).lineHeight) * 1.5);
+      // a one-word figure does not wrap, it shrinks: one that had to shrink a good deal counts as not fitting here
+      const wrapping = () => Array.from(el.querySelectorAll<HTMLElement>(".k-stat-v")).some((v) => (v.classList.contains("one") ? fitFigure(v) : v.getBoundingClientRect().height > parseFloat(getComputedStyle(v).lineHeight) * 1.5));
       // VR6-023: "₹1,06,50,136" did not fit half a line at 28px and kept the three totals one under another: a size down (22px) is tried first
       let wraps = wrapping();
       if (wraps) { el.classList.add("tight"); wraps = wrapping(); }
@@ -66,7 +104,10 @@ function useDuo(ref: { current: HTMLDivElement | null }) {
         rows.set(top, [...(rows.get(top) ?? []), Math.round(k.getBoundingClientRect().height)]);
       });
       const uneven = Array.from(rows.values()).some((hs) => Math.max(...hs) - Math.min(...hs) > 3);
-      if (wraps || uneven) el.classList.remove("duo", "tight");
+      if (wraps || uneven) {
+        el.classList.remove("duo", "tight");
+        el.querySelectorAll<HTMLElement>(".k-stat-v.one").forEach((v) => { fitFigure(v); });      // back to the one-per-row size
+      }
     };
     const ro = new ResizeObserver(() => { const w = el.clientWidth; if (w !== width) { width = w; fix(); } });
     const mo = new MutationObserver(fix);

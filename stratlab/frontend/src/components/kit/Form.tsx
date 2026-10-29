@@ -4,7 +4,9 @@ import { useNoOrphan } from "../../lib/noOrphan";
 
 /** A form as a grid: columns of at least 190px that wrap to the width, every box on one baseline. Fields go in, then
  * one FormActions row with the main button. */
-export function FormGrid({ onSubmit, children, label, pair, trio, inline, quad }: { onSubmit?: (e: FormEvent<HTMLFormElement>) => void; children: ReactNode; label?: string;
+export function FormGrid({ onSubmit, children, label, pair, trio, inline, quad, noValidate }: { onSubmit?: (e: FormEvent<HTMLFormElement>) => void; children: ReactNode; label?: string;
+  /** The page checks its boxes itself and says what is wrong under each, in the app's own words, instead of the browser's bubble (LIVE1B-066). */
+  noValidate?: boolean;
   /** Two boxes that belong side by side (two companies to compare): each takes half the row, not a narrow column. */
   pair?: boolean;
   /** A form of a few switches and boxes (the tax report's inputs): at most three equal columns, two on a tablet, one on a
@@ -15,7 +17,7 @@ export function FormGrid({ onSubmit, children, label, pair, trio, inline, quad }
   /** A settings form of many small boxes: four equal columns (two on a tablet, one on a phone), every row full but the last (LIVE1A-018: rows of 5, 3 and 1). */
   quad?: boolean }) {
   const ref = useNoOrphan<HTMLFormElement>();      // five boxes in four columns would leave one alone on a second line (UI-FIX-1, R9)
-  return <form className={`k-form${pair ? " k-form-pair" : ""}${trio ? " k-form-trio" : ""}${inline ? " k-form-inline" : ""}${quad ? " k-form-quad" : ""}`} ref={ref} onSubmit={onSubmit} aria-label={label}>{children}</form>;
+  return <form className={`k-form${pair ? " k-form-pair" : ""}${trio ? " k-form-trio" : ""}${inline ? " k-form-inline" : ""}${quad ? " k-form-quad" : ""}`} ref={ref} onSubmit={onSubmit} aria-label={label} noValidate={noValidate}>{children}</form>;
 }
 
 /** What a Field hands its own control so a screen reader says what is wrong with it, as it does for a plain box. */

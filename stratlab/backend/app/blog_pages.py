@@ -33,6 +33,9 @@ admin_router = APIRouter(tags=["admin"])
 # feed is read by programs that poll it, so it stays at ten minutes.
 CACHE = sp.CACHE_CONTROL
 FEED_CACHE = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
+# LIVE1B-082: the lists of posts change every trading day (a new brief), so the site's cache keeps them minutes, not the day a post's page is kept: a
+# brief in the sitemap and the feed was missing from /blog and /blog/briefs for as long as the old list was held
+LIST_CACHE = "public, max-age=60, s-maxage=600, stale-while-revalidate=600"
 FACTS = "Facts, not advice. Data and method for research and education; not investment advice or a recommendation about any security."
 KIND_NAME = {"brief": "Market brief", "research": "Research"}
 TITLES = {None: ("StratLab blog: daily market briefs and research from market data",
@@ -217,7 +220,7 @@ def list_page(kind: str | None, page: int) -> HTMLResponse:
             + _tabs(kind) + (f'<ul class="posts">{cards}</ul>' if cards else '<p class="muted">No posts yet. The first market brief is written after the next close.</p>')
             + pager)
     head = sp._head(title, desc, canonical, f"{_feed_link()}{rel}{ld}<style>{STYLE}</style>")
-    return _html(sp._page(head, None, body))
+    return _html(sp._page(head, None, body), headers={"Cache-Control": LIST_CACHE})
 
 
 # ---------- one post ----------

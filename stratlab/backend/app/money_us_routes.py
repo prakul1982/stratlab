@@ -310,6 +310,11 @@ def add_trade(req: TradeReq, profile=Depends(current_profile)):
     M.throttle(profile, "tax_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
     if req.d > today():
         M.err(400, "future_date", "That date is still to come.")
+    if M.known_instrument("US", req.sym) is False:
+        # LIVE1B-060: "ZZZZ" was kept (and "APPL" for AAPL), a permanent row in Schedule FA and the ITR export; a ticker no US list or
+        # price knows is said under its box (a file from the broker is read as it is, with delisted names)
+        msg = f"No US-listed company has the ticker {req.sym}. Check the spelling."
+        M.err(422, "unknown_ticker", msg, {"sym": msg})
     row = {"d": req.d.isoformat(), "side": req.side, "sym": req.sym, "qty": round(req.qty, 6), "price": round(req.price, 6),
            "fees": round(req.fees, 4), "src": "manual", "id": uuid.uuid4().hex[:12]}
     data = us.load(profile["id"])

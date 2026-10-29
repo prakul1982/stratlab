@@ -199,7 +199,17 @@ export function XYChart(p: XYChartProps) {
   const yFmt = indexed && canIndex ? plainTick : p.axisFormat ?? format;
   // a tick whose label reads the same as an earlier one ("1, 1, 1, 0" on a small count, "5%, 5%, 0%") is left out
   const [yTicks, yLabels] = useMemo(() => {
-    const all = honestTicks(ymin, ymax, H < 200 ? 4 : 5, yFmt).filter((t) => t >= ymin && t <= ymax);
+    const want = H < 200 ? 4 : 5;
+    let all = honestTicks(ymin, ymax, want, yFmt).filter((t) => t >= ymin && t <= ymax);
+    // LIVE1B-062: a line that sinks below zero by less than a tick step ran under the lowest label (₹0) into an unnamed band: a finer step
+    // is tried until a tick sits at or below the lowest point (the domain's floor is the data's minimum less 6% air)
+    const floor = ymin + (ymax - ymin) * 0.06 / 1.12;
+    if (ymin < 0 && all.length && all[0] > floor) {
+      for (let c = want + 1; c <= want + 6; c++) {
+        const alt = honestTicks(ymin, ymax, c, yFmt).filter((t) => t >= ymin && t <= ymax);
+        if (alt.length && alt[0] <= floor && alt.length <= 9) { all = alt; break; }
+      }
+    }
     return distinctTicks(all, yFmt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ymin, ymax, H, yFmt]);

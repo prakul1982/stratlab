@@ -114,6 +114,13 @@ def _r(v, dp=2):
     return None if v is None or not math.isfinite(v) else round(v, dp)
 
 
+def _whole(v) -> int:
+    """A value in whole rupees, a half rounded away from zero as the page's own figures are."""
+    if v is None or not math.isfinite(v):
+        return 0
+    return int(math.floor(abs(v) + 0.5)) * (-1 if v < 0 else 1)
+
+
 # ---------- deposits ----------
 def fd_value(principal: float, rate: float, start: date, at: date, compounding: str = "quarterly",
              maturity: date | None = None) -> float:
@@ -564,6 +571,24 @@ def record(uid: str, totals: dict, why: str, day: date | None = None, added: flo
     return rows
 
 
+def _refresh_today(uid: str, hist: list[dict], totals: dict, day: date | None) -> list[dict]:
+    """The snapshot dated today (an entry changed today, or it is the month's first) follows the page's own total (LIVE1B-063: the
+    history said -Rs 5,38,857 for a day the headline said -Rs 7,03,118, because My Holdings had moved since the entry changed). Only
+    a snapshot of the same completeness, only when its figures differ, and written the way it was first (a "change" is dated today, a
+    "month" by the last close)."""
+    d_now = (day or today()).isoformat()
+    for h in hist:
+        if bool(h.get("partial")) != bool(totals.get("partial")) or (h.get("m") or 1) != VALUATION:
+            continue
+        # only the same day's own figures: a snapshot of an earlier day is that day's fact, and a weekend visit leaves Friday's month alone
+        if h["d"] != today().isoformat() or h["d"] != d_now or h.get("why") not in ("change", "month"):
+            continue
+        if abs(h["net"] - totals["net"]) < 0.5 and abs(h["assets"] - totals["assets"]) < 0.5 and abs(h["liabilities"] - totals["liabilities"]) < 0.5:
+            return hist
+        return record(uid, totals, h["why"], _date(h["d"]))
+    return hist
+
+
 def drop_snapshot(uid: str, day: str) -> list[dict] | None:
     """Remove one day's snapshot from the history (R7O-013: a test's holdings left a snapshot the owner could only
     clear by deleting everything). None when there was none that day; else the history left."""
@@ -860,11 +885,13 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
                        + (f"; {mf['at_cost']} {'fund' if mf['at_cost'] == 1 else 'funds'} without a NAV at cost" if mf.get("at_cost") else ""),
                        "facts": {}, "linked": mf.get("link")})
     rows = linked + assets
-    total_assets = sum(r["value"] or 0 for r in rows)
-    total_loans = sum(r["value"] or 0 for r in loans)
+    # LIVE1B-023: a total is the sum of the rows as they are shown, each in whole rupees ("₹21,64,837" above rows that add to
+    # ₹21,64,838); the paise are in the rows' own values
+    total_assets = sum(_whole(r["value"]) for r in rows)
+    total_loans = sum(_whole(r["value"]) for r in loans)
     by: dict[str, float] = {}
     for r in rows:
-        by[r["class"]] = by.get(r["class"], 0) + (r["value"] or 0)
+        by[r["class"]] = by.get(r["class"], 0) + _whole(r["value"])
     classes = [(c, label) for c, label in CLASSES if by.get(c)]
     pcts = pct_split([by[c] for c, _ in classes]) if total_assets else [None] * len(classes)
     allocation = [{"class": c, "label": label, "value": _r(by[c]), "pct": p} for (c, label), p in zip(classes, pcts)]
@@ -1167,6 +1194,8 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
               and (not v["totals"].get("partial") or not any(h["d"].startswith(this_month) for h in hist))
               and db.get_setting(SKIP + uid) != this_month):
             hist = record(uid, v["totals"], "month", day)   # the 1st-of-the-month run missed this user: taken on the first visit
+        elif has_any:
+            hist = _refresh_today(uid, hist, v["totals"], day)
         plan = profile["_plan"]
         allowed = has_history(plan)
         limit = item_limit(plan)

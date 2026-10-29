@@ -23,7 +23,7 @@ export function TilePicker({ label, groups, value, onChange }: { label: string; 
       {groups.map((g) => (
         <div key={g.title} className="k-tile-group" role="group" aria-label={g.title}>
           <span className="k-eyebrow">{g.title}</span>
-          <div className="k-tiles">
+          <div className="k-tiles" data-n={g.tiles.length}>
             {g.tiles.map((t) => (
               <button key={t.value} type="button" role="radio" className="k-tile" aria-checked={t.value === value} data-v={t.value}
                 tabIndex={t.value === stop ? 0 : -1} onClick={() => onChange(t.value)}>

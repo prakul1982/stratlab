@@ -184,10 +184,10 @@ test("R4-021: the symbol box is full width, and a rule shows once the person has
   const qty = await card.getByLabel("Quantity").boundingBox();
   expect(symbol!.width, "the symbol box is twice the quantity's (RC2B-044)").toBeGreaterThanOrEqual(qty!.width * 2 - 1);
   await expect(card.getByPlaceholder("Name or symbol, e.g. Reliance")).toBeVisible();
-  await expect(card.getByText("More than 0"), "a rule on a clean form").toHaveCount(0);
+  await expect(card.getByText("Whole shares, 1 or more"), "a rule on a clean form").toHaveCount(0);
   await card.getByLabel("Quantity").fill("3");
   await card.getByLabel("Quantity").blur();
-  await expect(card.getByText("More than 0")).toBeVisible();
+  await expect(card.getByText("Whole shares, 1 or more")).toBeVisible();
   expect(errors).toEqual([]);
 });
 

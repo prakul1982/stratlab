@@ -130,6 +130,25 @@ def update(uid: str, fn) -> dict | None:
 
 def delete(uid: str):
     db.delete_setting(_key(uid))
+    db.delete_setting(FILES + uid)
+
+
+# The files read into the holdings, by a fingerprint of their bytes (the last few): reading the same file again with "Add to
+# them" would double every quantity, so it is recognised and left out (LIVE1B-065), as the tax report skips trades it has.
+FILES = "holdings:files:"
+FILES_KEPT = 8
+
+
+def file_seen(uid: str, digest: str) -> bool:
+    got = db.json_value(db.get_setting(FILES + uid), [])
+    return isinstance(got, list) and digest in got
+
+
+def file_remember(uid: str, digest: str, replaced: bool) -> None:
+    """A file now in the holdings: the only one after "Replace my holdings", one more after "Add to them"."""
+    got = db.json_value(db.get_setting(FILES + uid), [])
+    kept = [] if replaced or not isinstance(got, list) else [d for d in got if d != digest]
+    db.set_setting(FILES + uid, json.dumps((kept + [digest])[-FILES_KEPT:]))
 
 
 def market_of(i: dict) -> str:
@@ -166,12 +185,17 @@ class Matcher:
     def __init__(self, equity, by_name, isin, listed: dict[str, str], online: bool):
         self.equity, self.by_name, self.isin, self.listed, self.online = equity, by_name, isin, listed, online
 
+    def _named(self, hit: dict) -> str:
+        """The company's name as the exchange's list writes it ("State Bank of India"), not the broker feed's capitals
+        ("STATE BANK OF INDIA"): the same stock read from a file and from a sync is one spelling (LIVE1B-006)."""
+        return self.listed.get(hit["symbol"]) or hit.get("name") or hit["symbol"]
+
     def _inst(self, sym: str) -> dict | None:
         if not sym:
             return None
         if self.online:
             hit = self.equity(sym)
-            return {"symbol": hit["symbol"], "exchange": hit["exchange"], "name": hit.get("name") or hit["symbol"]} if hit else None
+            return {"symbol": hit["symbol"], "exchange": hit["exchange"], "name": self._named(hit)} if hit else None
         return {"symbol": sym, "exchange": "NSE", "name": self.listed[sym]} if sym in self.listed else None
 
     def _unit(self, row: dict) -> dict | None:
@@ -194,7 +218,7 @@ class Matcher:
         if row.get("name") and self.online:
             got = self.by_name(row["name"])
             if got:
-                return {"symbol": got["symbol"], "exchange": got["exchange"], "name": got.get("name") or got["symbol"]}, None
+                return {"symbol": got["symbol"], "exchange": got["exchange"], "name": self._named(got)}, None
         # a "Stock name" or "Scrip" column that holds the exchange's symbol (TCS, RELIANCE-EQ, INFY EQ) is the symbol (RC6-003: a file
         # with only TCS in its name column was refused as "no listed company")
         hit = self._inst(clean_symbol(row.get("name") or ""))
@@ -330,6 +354,29 @@ def cap(items: list[dict], before: list[dict], limit: int) -> tuple[list[dict], 
     return old + new[:room], [i["symbol"] for i in new[room:]]
 
 
+# The most one position may be worth when it is saved (LIVE1B-003: 1,000,000,000 shares of a Rs 685 stock was kept, and
+# every figure and weight on the page became Rs 685 crore): Rs 100 crore, or its size in dollars. Far above any personal
+# portfolio, so only a slip of zeros is stopped.
+MAX_POSITION = {"INR": 1_000_000_000.0, "USD": 12_000_000.0}
+
+
+def size_problem(qty: float, price: float | None, currency: str = "INR") -> str | None:
+    """Why a position of `qty` shares at `price` can't be saved (too large to be a real holding), or None. With no price
+    to go by there is nothing to compare."""
+    if not price or price <= 0 or qty * price <= MAX_POSITION.get(currency, MAX_POSITION["INR"]):
+        return None
+    value = qty * price
+    worth = f"₹{value / 1e7:,.0f} crore" if currency == "INR" else f"${value / 1e6:,.0f} million"
+    return f"{qty:,.0f} shares at {'₹' if currency == 'INR' else '$'}{price:,.2f} is {worth} in one stock. Check the quantity."
+
+
+def whole_problem(qty: float, market: str = "IN") -> str | None:
+    """Shares listed in India trade in whole units; US brokers sell fractions (LIVE1B-046: TCS 2.5 was saved)."""
+    if market != "US" and abs(qty - round(qty)) > 1e-9:
+        return "Whole shares only: Indian shares trade in whole units."
+    return None
+
+
 def match_all(rows: list[dict], matcher: Matcher, close_day: str | None = None) -> tuple[list[dict], list[dict]]:
     """(holdings, unmatched lines) for a file's rows. `close_day`: the session a close in the file is of (the latest
     completed one when it was uploaded: a "previous closing price" read on a Saturday is Friday's)."""
@@ -339,6 +386,11 @@ def match_all(rows: list[dict], matcher: Matcher, close_day: str | None = None) 
         if not hit:
             missed.append({"line": r.get("line"), "text": r.get("text") or r.get("symbol") or r.get("name") or "",
                            "symbol": r.get("symbol"), "isin": r.get("isin"), "reason": why})
+            continue
+        too_big = size_problem(float(r["qty"]), float(r["avg"]) if r.get("avg") else float(r["close"]) if r.get("close") else None)
+        if too_big:
+            missed.append({"line": r.get("line"), "text": r.get("text") or r.get("symbol") or r.get("name") or "",
+                           "symbol": r.get("symbol"), "isin": r.get("isin"), "reason": too_big})
             continue
         kind = instrument_kinds.classify(hit["symbol"], r.get("isin"), r.get("name") or hit.get("name"))
         # the file's own close is kept with the day it is of, for while live prices are off (DG-002)
@@ -387,6 +439,15 @@ def latest_trade(quotes: list[dict], now: datetime) -> datetime | None:
         if best is None or t > best:
             best = t
     return best
+
+
+def at_close(t: datetime) -> datetime:
+    """An Indian stock's trade time, held to the 15:30 close once it is later that day (the closing session trades at the
+    close's price until 15:59)."""
+    from zoneinfo import ZoneInfo
+    ist = t.astimezone(ZoneInfo("Asia/Kolkata"))
+    close = ist.replace(hour=15, minute=30, second=0, microsecond=0)
+    return close if ist > close else t
 
 
 def _r(v, dp=2):

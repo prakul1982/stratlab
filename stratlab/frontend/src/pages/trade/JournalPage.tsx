@@ -9,7 +9,7 @@ import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
 import { journalEmpty } from "../../lib/journalEmpty";
-import { JOURNAL_LEDE, journalSavedNote, journalVsTax } from "../../lib/journalTax";
+import { JOURNAL_COVERS, JOURNAL_LEDE, journalSavedNote, journalVsTax } from "../../lib/journalTax";
 import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column, UploadProblem, useUploadProblem } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
@@ -170,7 +170,7 @@ export function JournalPage() {
 
   // the date of the newest trade in the list, not today's date: "Data up to 15 Oct" over trades that end 4 Oct (R20-012)
   const header = <PageHeader eyebrow="Trade · My trades" title="Trade journal" asOf={j?.trades.map((t) => t.exit_t.slice(0, 10)).sort().pop()} asOfLabel="Trades up to"
-    lede={JOURNAL_LEDE} />;
+    lede={JOURNAL_LEDE} info={JOURNAL_COVERS} infoLabel="Where the trades come from" />;
   if (error && !j) return <div className="k-page j-page">{header}<ErrorState title="Your journal couldn't be opened" action={{ label: "Try again", onClick: () => { setError(null); load(); } }}>{error}</ErrorState></div>;
   if (!j) return <div className="k-page j-page">{header}<Card><Skeleton label="Opening your journal" /></Card></div>;
   const s = j.summary;
@@ -189,16 +189,14 @@ export function JournalPage() {
         <Card label="Bring in your trades">
           <CardHead title="Bring in your trades"
             actions={<>
+              {/* LIVE1B-056: the choice is the same two-button control as on Holdings, the tax report and Mutual funds (it was a select as wide as the card) */}
+              {anyTrades && <Seg label="What the file does" options={[{ value: "add", label: "Add to my trades" }, { value: "replace", label: "Replace imported trades" }]} value={mode} onChange={(v) => setMode(v as "add" | "replace")} />}
               <button type="button" className="btn quiet sm" onClick={() => setSetup(true)}>Capital and brokerage</button>
               <button type="button" className="btn quiet sm" onClick={() => setAdding(true)}><Plus size={16} />Add a trade by hand</button>
             </>} />
           <p className="k-small k-muted">Upload your broker's tradebook or tax P&amp;L file, or any CSV with the columns Date, Symbol, Type (B or S), Quantity and Price. Add US stocks and crypto by hand.</p>
           <div className="k-row">
             <UploadButton label="Upload files" busy={busy} multiple accept=".csv,.txt,.tsv,.xlsx,.xls,.zip" ariaLabel="Tradebook or tax P&L files" onFiles={pick} />
-            {anyTrades && (
-              <Select label="Add to or replace the imported trades" value={mode} onChange={(v) => setMode(v as "add" | "replace")}
-                options={[{ value: "add", label: "Add to my trades" }, { value: "replace", label: "Replace imported trades" }]} />
-            )}
             {/* with trades waiting in the tax report and none here, the card below offers them as its one button: a second one here said the same (VR1-094) */}
             {!(!has && taxTrades > 0 && j.show !== "practice") && <button type="button" className="btn outline" disabled={busy} onClick={fromTax}>Use my tax report's trades</button>}
           </div>
@@ -337,7 +335,8 @@ function Curve({ s }: { s: Summary }) {
   const pts = [...first, ...s.equity];
   return (
     <XYChart series={[{ values: pts.map((p) => p.v), color: "var(--series-1)", label: "P&L after charges", area: { base: 0, pos: "var(--series-1)", neg: "var(--series-2)" } }]}
-      times={pts.map((p) => p.t)} format={(v) => m(v)} signedTip axisFormat={compact} testId="journal-curve"
+      // placed by date, so the days on the axis are evenly spaced however the trades bunch (LIVE1B-058: "16 Sep · 21 Oct · 5 Nov · 20 Nov ...")
+      times={pts.map((p) => p.t)} x={pts.map((p) => Date.parse(p.t))} format={(v) => m(v)} signedTip axisFormat={compact} testId="journal-curve"
       refs={[{ v: 0, strong: true }]} ariaLabel={`Running P&L after charges over ${s.n} trades, ending at ${m(s.net)}`} />
   );
 }
@@ -434,8 +433,8 @@ function CheckCard({ c }: { c: Check }) {
         {c.id === "sample" && d && <div className="j-big">{d.trades}</div>}
         {c.id === "luck" && d && <Halves a={d.earlier} b={d.later} an={d.earlier_n} bn={d.later_n} />}
         {c.id === "shuffle" && d && d.unit === "pct" && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
-        {c.id === "shuffle" && d && d.unit === "rupees" && <p className="k-mono k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · 95% of reshuffles above <span className="nowrap">{m(-d.p95)}</span> · worst <span className="nowrap">{m(-d.worst)}</span></p>}
-        {c.id === "costs" && d && <p className="k-mono k-small">Gross <span className="nowrap"><Signed value={d.gross}>{signed(d.gross)}</Signed></span> · charges <span className="nowrap">{m(d.charges)}</span> · doubled <span className="nowrap"><Signed value={d.doubled}>{signed(d.doubled)}</Signed></span></p>}
+        {c.id === "shuffle" && d && d.unit === "rupees" && <p className="k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · 95% of reshuffles above <span className="nowrap">{m(-d.p95)}</span> · worst <span className="nowrap">{m(-d.worst)}</span></p>}
+        {c.id === "costs" && d && <p className="k-small">Gross <span className="nowrap"><Signed value={d.gross}>{signed(d.gross)}</Signed></span> · charges <span className="nowrap">{m(d.charges)}</span> · doubled <span className="nowrap"><Signed value={d.doubled}>{signed(d.doubled)}</Signed></span></p>}
         <p className="k-small k-muted">{c.detail}</p>
         {c.id === "shuffle" && d?.unit === "rupees" && <span className="k-note">Enter your trading capital (Capital and brokerage) to see this as a %.</span>}
       </Card>

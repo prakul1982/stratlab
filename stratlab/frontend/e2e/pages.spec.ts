@@ -88,7 +88,7 @@ async function barsAroundZero(page: Page) {
 const PAGES: [string, string][] = [
   ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Invest home"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
-  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "Briefs"], ["/plans", "Plans"],
+  ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Tax tools"], ["/news", "Briefs"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
   ["/admin", "Needs your attention"], ["/admin/data", "Background jobs"], ["/admin/system", "Check every feature"], ["/admin/users", "Paper trading now"],
   ["/admin/money", "Prices outside India"], ["/admin/quality", "Rates and rules"], ["/admin/emails", "Confirm your email"],
@@ -261,16 +261,15 @@ test("first steps on Home tick themselves from real data, and hide for good", as
   expect((await request.put(`${API}/research/watchlist`, { headers: auth, data: { items: [{ region: "IN", symbol: "TCS" }] } })).ok()).toBeTruthy();
   const errors = await open(page, "/", "Your first steps", sessionAs(token, id, email));
   const list = page.locator(".first-steps");
-  await expect(list.locator("li")).toHaveCount(5);
-  await expect(list.locator('[data-step="watchlist"]')).toHaveClass(/done/);
-  await expect(list.locator('[data-step="backtest"] a')).toHaveAttribute("href", "/new");
+  // My space shows the checklist as one line with the next step (LIVE1B-086): the watchlist step is done, so one of five
+  await expect(list).toContainText(/Your first steps · 1 of 5 done · next:/);
+  await expect(list.getByRole("link")).toHaveCount(1);
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
 
   expect((await request.get(`${API}/research/deep/RELIANCE?region=IN`, { headers: auth })).ok()).toBeTruthy();
   await page.reload();
-  await expect(list.locator('[data-step="deepdive"]')).toHaveClass(/done/, { timeout: 30_000 });
-  await expect(page.getByText(/\d of 5 done/)).toBeVisible();
+  await expect(list).toContainText(/2 of 5 done/, { timeout: 30_000 });
 
   await list.getByRole("button", { name: "Hide this" }).click();
   await expect(page.getByText("Your first steps")).toHaveCount(0);
@@ -334,7 +333,7 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await expect(table.getByRole("columnheader", { name: "Trend", exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Recent filings")).toBeVisible();
   expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
-  await page.getByRole("radio", { name: "Add to them" }).click();
+  await page.getByRole("radio", { name: "Add to my holdings" }).click();
   await page.locator("input[type=file]").setInputFiles(HOLDINGS_FILES + "groww_holdings_statement.xlsx");
   await expect(page.getByText("Read as a Groww file")).toBeVisible({ timeout: 30_000 });   // matching a first file reads the stock lists
   const missed = page.getByRole("table", { name: "Lines that couldn't be matched" });
@@ -456,9 +455,11 @@ test("tax report: tradebooks from several brokers, one year's gains, lots below 
   const sales = page.getByRole("table", { name: "Realised sales" });
   await expect(sales.getByText("RELIANCE").first()).toBeVisible();
   await expect(sales.getByText("grandfathered")).toBeVisible();                                   // WIPRO, from the tax P&L
-  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(0);
-  await page.getByTestId("cols-tax-sales").click();
-  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toBeVisible();
+  // a laptop shows every column of the sales at once (LIVE1B-012: the purchase date was folded away at 1440px); a phone leads with what the tax works out from
+  const wideScreen = (page.viewportSize()?.width ?? 0) >= 1280;
+  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(wideScreen ? 1 : 0);
+  await page.getByTestId("cols-tax-sales").click();                                                // the button flips it either way
+  await expect(sales.getByRole("columnheader", { name: "Bought", exact: true })).toHaveCount(wideScreen ? 0 : 1);
   await expect(page.getByRole("table", { name: "Open lots below cost" }).getByText("TCS")).toBeVisible();
   await expect(page.getByText("Shares held on 31 Jan 2018")).toBeVisible();
   await page.getByRole("button", { name: "What is tax-loss harvesting?" }).click();
@@ -512,6 +513,8 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   // the total, at the top of the year, with where it comes from
   const total = page.getByRole("region", { name: "Total tax estimate" });
   await expect(total.getByRole("heading", { name: "Total tax estimate, FY 2024-25" })).toBeVisible();
+  await expect(total.getByRole("table", { name: "Total tax breakdown" }), "the workings are folded until asked for (LIVE1B-010)").toBeHidden();
+  await total.getByText("How we got here").click();
   const chips = total.getByRole("list", { name: "Where the tax comes from" });
   await expect(chips.getByRole("listitem")).toHaveCount(4);
   for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("listitem").filter({ hasText: c })).toHaveCount(1);
@@ -1205,7 +1208,7 @@ test("alerts: one on bulk or block deals, India only", async ({ page }, info) =>
   await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
-  await page.getByLabel("Market").selectOption("US");
+  await page.getByLabel("Market", { exact: true }).selectOption("US");
   await expect(page.getByLabel("Alert me when").locator("option", { hasText: "bulk or block deal" })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -1296,7 +1299,7 @@ test("alerts: one on a stock entering or leaving a surveillance list, India only
   await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
-  await page.getByLabel("Market").selectOption("US");
+  await page.getByLabel("Market", { exact: true }).selectOption("US");
   await expect(page.getByLabel("Alert me when").locator("option", { hasText: "surveillance list" })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -1593,7 +1596,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   expect((await request.put(`${API}/tax/inputs`, { headers: auth, data: { fy, regime: "new", other: 2000000, salary: 2000000, deductions: 0 } })).ok()).toBeTruthy();
 
-  const errors = await open(page, "/money/tax-tools", "Dividends, advance tax and the long-term exemption", sessionAs(token, id, email));
+  const errors = await open(page, "/money/tax-tools", "Tax tools", sessionAs(token, id, email));
   await settle(page);
   await expect(page.getByText(/not tax advice/).first()).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
@@ -1655,8 +1658,9 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   // the tax report links here, and its estimate for the year now counts the dividends
   await page.goto("/tax-report");
   await settle(page);
-  await expect(page.getByRole("region", { name: "Tax tools" }).getByRole("link", { name: "Open tax tools" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("link", { name: "Tax tools" })).toBeVisible();      // a line in the total's card, no card of its own (LIVE1B-011)
   await page.getByLabel("Financial year").selectOption(String(fy));
+  await page.getByRole("region", { name: "Total tax estimate" }).getByText("How we got here").click();        // the workings are folded (LIVE1B-010)
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByText(/Dividends of ₹15,000 are income from other sources/)).toBeVisible();
   expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
 });

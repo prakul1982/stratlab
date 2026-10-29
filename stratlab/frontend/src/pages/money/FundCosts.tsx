@@ -52,9 +52,12 @@ export const costsShown = (q: CostsQuery) => q.failed || (!!q.c && (q.c.state !=
 /** One scheme's cost, by its key (none when the disclosure has no TER for it). */
 export const costOf = (q: CostsQuery, key: string): Cost | undefined => q.c?.schemes.find((s) => s.key === key);
 
+/** Whether the yearly cost totals have anything to say: a total over no fund ("₹0 on ₹0 in 0 funds", an average of "–") is left out (LIVE1B-017). */
+export const costStatsShown = (q: CostsQuery) => q.c?.state === "ok" && !!q.c.total && q.c.total.funds > 0;
+
 /** The yearly totals over every fund, as stats for the page's one row of them (none until the costs are read). */
 export function CostStats({ q }: { q: CostsQuery }) {
-  const t = q.c?.state === "ok" ? q.c.total : null;
+  const t = costStatsShown(q) && q.c?.state === "ok" ? q.c.total : null;
   if (!t) return null;
   return (
     <>

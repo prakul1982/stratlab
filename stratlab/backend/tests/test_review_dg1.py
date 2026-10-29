@@ -177,7 +177,7 @@ def test_zero_entries_are_refused_and_added_money_is_marked_in_the_snapshot(w):
     v = c.post("/money/net-worth/items", headers=PRO, json={"kind": "fd", "principal": 100000, "rate": 7, "start": "2026-10-01", "maturity": "2027-10-01"}).json()
     today_snap = [h for h in nw.history("u-pro") if h["d"] == nw.today().isoformat()][0]
     fd = next(r for r in v["assets"] if r["kind"] == "fd")["value"]
-    assert today_snap["added"] == round(125000 + fd, 2)                           # both entries of the day, not a gain
+    assert today_snap["added"] == nw._whole(125000) + nw._whole(fd)               # both entries of the day, not a gain (whole rupees, as the page's rows add up: LIVE1B-023)
     ppf = c.post("/money/net-worth/items", headers=PRO, json={"kind": "ppf", "balance": 800000, "as_of": "2026-04-01", "paid_since": 150000}).json()
     row = next(r for r in ppf["assets"] if r["kind"] == "ppf")
     assert "₹1,50,000 deposited since" in row["rule"] and row["value"] > 950000

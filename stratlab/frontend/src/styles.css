@@ -95,6 +95,8 @@ h1.eyebrow { font-weight: 400; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 /* VR1-150: a disabled main button was the main button at half strength, a muddy grey-beige that read as a grey secondary one: it is an empty outline with muted words instead */
 .btn:disabled:not(.quiet):not(.blue):not(.outline) { opacity: 1; background: transparent; border: 1px dashed var(--dash); color: var(--muted); }
+/* LIVE1B-016, 047: a button that is working (it says "Adding…") keeps its fill, dimmed: the dashed outline is for one that cannot be pressed yet */
+.btn:disabled[aria-busy="true"]:not(.quiet):not(.blue):not(.outline):not(.danger) { opacity: .6; background: var(--ink); border: 1px solid var(--ink); color: var(--on-ink); cursor: progress; }
 .btn.blue { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
 .btn.outline { background: transparent; color: var(--ink); }
 .btn.outline:hover { background: var(--card); color: var(--ink); filter: none; }
@@ -652,7 +654,7 @@ td.num, .num { font-family: var(--sans); }
 /* ---------- landing page ---------- */
 .lp { min-height: 100vh; background: var(--paper); }
 .lp-wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
-.lp-nav { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 24px; padding: 12px clamp(16px, 4vw, 40px);
+.lp-nav { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 24px; padding: 12px max(clamp(16px, 4vw, 40px), calc((100% - 1180px) / 2 + clamp(16px, 4vw, 40px)));   /* LIVE1B-052: on the hero's edges */
   background: var(--paper); border-bottom: 1px solid var(--line); }
 .lp-nav nav { display: flex; gap: 22px; margin-left: auto; }
 .lp-nav nav a { color: var(--ink-2); text-decoration: none; font-weight: 500; font-size: 14.5px; }
@@ -877,7 +879,12 @@ table.legs input[type=number] { width: 72px !important; }
 .lp-beyond-card b { font-size: 18px; }
 .lp-beyond-card .lp-fix { margin-top: auto; }
 .pub { min-height: 100vh; background: var(--paper); }
-.pub-nav { display: flex; justify-content: space-between; align-items: center; padding: 18px clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--line); }
+/* LIVE1B-052: the header's logo and button sit on the page's own edges (the body's column), not 40px from the window's while the text starts 300px in:
+   the width is the page's (--pub-w), the same as its main's */
+.pub { --pub-w: 960px; }
+.pub:has(.pub-main.legal) { --pub-w: 800px; }
+.pub:has(.lib-cards) { --pub-w: 1144px; }
+.pub-nav { display: flex; justify-content: space-between; align-items: center; padding: 18px max(clamp(16px, 4vw, 48px), calc((100% - var(--pub-w)) / 2 + clamp(16px, 4vw, 32px))); border-bottom: 1px solid var(--line); }
 .pub:has(.lib-cards) .pub-main { max-width: 1144px; }   /* VR1-171: the signed-out library is as wide as the app pages (1080 of content), not 896 */
 .pub-main { max-width: 960px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 32px) 64px; }
 /* while a public page is still a loading placeholder, its main fills the screen, so the footer waits below it instead of
@@ -912,6 +919,11 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
   body:not(:has(.shell)) .consent p { flex: 1 1 auto; }
   body:not(:has(.shell)) .consent-btns { flex: none; flex-wrap: nowrap; }
 }
+/* LIVE1B-045: while the tour's note is up the question waits (a phone showed both at once); it is there again when the tour closes */
+body:has(.k-coach) .consent { visibility: hidden; }
+/* LIVE1B-050: while the question is up the page's foot clears it: a visitor's page and the app's phone layout end above the bar, not under it */
+body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
+@media (max-width: 900px) { .shell { padding-bottom: var(--consent-h, 0px); } }
 /* VR5: on a phone the question took 213px, over a quarter of a 360x800 screen: a size down and tighter, the two answers sharing the row */
 @media (max-width: 640px) {
   .consent { right: 12px; left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; gap: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.4; }
@@ -950,6 +962,7 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 /* VR6-016: four figures on a phone are two and two, not three (labels wrapping to two lines) and one left alone below */
 @media (max-width: 640px) { .money-panels .k-stats:has(> .k-stat:nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); }
+.space-panels.money-panels { align-items: stretch; }       /* LIVE1B-021: My Holdings and the tax card are one height side by side, not 205px and 237px */
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
 @media (max-width: 560px) {
@@ -1237,6 +1250,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-url { width: 100%; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
 /* RC2B-041: the two columns end together; "start" left the add-a-date card 190px short of the reminders beside it */
 .mc-grid { align-items: stretch; }
+.mc-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s2); }      /* LIVE1B-072 */
 @media (max-width: 760px) {
   .mc-grid { grid-template-columns: minmax(0, 1fr); }
   .mc-cell { min-height: 48px; padding: 4px; align-items: center; }
@@ -1557,6 +1571,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-stat-k { font-size: var(--t-note); color: var(--muted); }
 .k-stat-k .info { margin-block: -4px; }   /* VR1-149: the (i) is not taller than a line of the label, so a label with one sits on the same baseline as its neighbours */
 .k-stat-v { font-size: var(--t-stat); font-weight: 600; letter-spacing: -.02em; line-height: 1.2; overflow-wrap: anywhere; }
+.k-stat-v.one { white-space: nowrap; overflow: hidden; }       /* a one-word figure is fitted (kit/Stat fitFigure), never broken inside its digits (LIVE1B-019) */
 .k-stat-d { font-size: var(--t-note); color: var(--muted); }
 .k-delta { display: inline-flex; align-items: center; gap: var(--s1); font-weight: 600; font-size: var(--t-note); padding: 2px var(--s2); border-radius: 999px; white-space: nowrap; }
 .k-delta.up { background: var(--up-soft); color: var(--up); }
@@ -1670,6 +1685,13 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* at most four a row, on one column grid shared by every group, so the groups' tiles line up under each other instead
    of six, then one alone (R5O-037) */
 .k-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(140px, calc((100% - 30px) / 4)), 1fr)); gap: 10px; }
+/* LIVE1B-025: a group of 2, 3 or 5 tiles fills its row (2, 3 and 5 across) on a wide dialog instead of leaving the right side empty or one tile alone on a second row */
+.k-tile-groups { container-type: inline-size; }
+@container (min-width: 720px) {
+  .k-tiles[data-n="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .k-tiles[data-n="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .k-tiles[data-n="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
 .k-tile { display: flex; flex-direction: column; gap: var(--s2); align-items: flex-start; padding: 14px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--card); cursor: pointer; text-align: left; transition: border-color .15s, transform .15s; min-width: 0; }
 .k-tile:hover { border-color: var(--ink); transform: translateY(-1px); }
 .k-tile[aria-checked="true"] { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
@@ -1910,6 +1932,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 /* a few facts spread over the card's width (the account's profile), not packed in its left half (UI-FIX-1, R2) */
 .k-dl.spread { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .k-dl.facts { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
+/* LIVE1B-028: a list of figures, each a label with its amount on the right, in two columns from a laptop up */
+.k-dl.figs { grid-template-columns: minmax(0, 1fr); gap: 0 var(--s7, 40px); margin-top: var(--s3); }
+.k-dl.figs > div { flex-direction: row; justify-content: space-between; align-items: baseline; gap: var(--s4); padding: 10px 0; border-bottom: 1px solid var(--line); }
+.k-dl.figs dd { text-align: right; white-space: nowrap; }
+@media (min-width: 900px) { .k-dl.figs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.k-fold-rows > li > .k-fold { min-height: 44px; }
 .k-dl.prose { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s4) var(--s5); }
 .k-dl.prose dt { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
 .k-dl.prose dd { font-weight: 400; color: var(--muted); line-height: 1.5; }
@@ -2142,7 +2170,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-progress::-moz-progress-bar { background: var(--blue); border-radius: 99px; }
 
 /* plans */
-.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a 260px band in the middle */
+.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a band in the middle (LIVE1B-077 shortened the lists instead) */
 .k-plan.pro { border: 2px solid var(--ink); }
 @media (min-width: 601px) and (max-width: 1000px) { /* a tablet: two columns, the last plan across both, never one narrow column */
   .k-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2630,6 +2658,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-stats.duo.tight .k-stat-v { font-size: 22px; }          /* VR6-023: eight-digit rupee totals fit half a line a size down */
 }
 .k-nowrap { white-space: nowrap; }
+.k-nb { white-space: nowrap; }       /* a signed figure kept whole at every width (components/NoBreak) */
 /* the plan table's columns are 64px there: the word breaks at its hyphens rather than push the page sideways. VR7-013: up to 410px, not 380: at 390px the
    whole word ("(5-market-day") made the first plan table 349px in a 322px card, its Pro column over the card's edge */
 @media (max-width: 410px) { .k-nowrap { white-space: normal; } }
@@ -2672,3 +2701,23 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .k-form.k-form-quad { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 900px) { .k-form.k-form-quad { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .k-form.k-form-quad { grid-template-columns: minmax(0, 1fr); } }
+
+/* LIVE1B-069: two buttons that go together (the tax report's downloads) are one width each: side by side on a laptop, one under the other, full width, on a phone */
+.k-btn-pair { display: inline-flex; flex-wrap: wrap; gap: var(--s2); }
+@media (max-width: 640px) { .k-btn-pair { display: grid; grid-template-columns: 1fr; width: 100%; } .k-btn-pair .btn { width: 100%; } }
+
+/* LIVE1B-042: a password box is as long as a password, not as wide as the card it sits in */
+.k-field-short { max-width: 320px; }
+
+/* LIVE1B-036, 055, 070: what a thumb has to hit on a phone is 44px each way: every small button, the date picker's button, a breadcrumb step, a fold's
+   bar, a summary line (Help's 46 explanations were 32px, edge to edge), the public Menu, and a card's name link (a link keeps the place it had: the
+   padding is what takes the tap, the negative margin gives the room back) */
+@media (max-width: 640px) {
+  .btn.sm { min-height: 44px; }
+  .k-input.sm { height: 44px; }
+  .k-date-btn { width: 44px; height: 44px; right: 0; }
+  .k-crumb a, .k-crumb-btn, .k-crumb li > [aria-current="page"] { min-height: 44px; }
+  .k-fold, .k-disclosure > summary, .help-topic summary, .lp-faq summary, .lp-menu > summary, .pub-menu > summary { min-height: 44px; }
+  .k-tbl-wrap.stack th[scope="row"] a.link, .k-tbl-wrap.stack td a.link { padding-block: 13px; margin-block: -13px; }
+  .k-page a.link.k-small { padding-block: 13px; margin-block: -5px; }
+}

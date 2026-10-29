@@ -57,21 +57,32 @@ export const behaviourShown = (q: BehaviourQuery) => q.failed || (!!q.b && !!q.b
 /** One scheme's row of the comparison, by its key. */
 export const behaviourOf = (q: BehaviourQuery, key: string): Row | undefined => q.b?.schemes.find((s) => s.key === key);
 
+/** Which of the totals have anything to say (LIVE1B-017: a row of "–", "0" and "0 running · 0 stopped" is a row of nothing): a gap
+ * when some fund could be compared, SIPs when there is one, redemptions after a fall when one came or the history is still being
+ * read, the holding period when money was redeemed, the long-held share when it is known. */
+export function behaviourParts(b: Behaviour | null) {
+  if (!b || !b.total || !b.schemes.length || !b.full) return null;
+  const t = b.total;
+  return { gap: t.compared > 0, sips: (t.sips ?? 0) > 0, falls: b.pending > 0 || (t.falls ?? 0) > 0, held: t.avg_days_held != null, long: t.long_share != null };
+}
+export const behaviourStatsShown = (q: BehaviourQuery) => { const p = behaviourParts(q.b); return !!p && Object.values(p).some(Boolean); };
+
 /** The totals over every fund, as stats for the page's one row of them (the gap in rupees, SIPs, redemptions after a fall, how long money was held). */
 export function BehaviourStats({ q }: { q: BehaviourQuery }) {
   const { b } = q;
-  if (!b || !b.total || !b.schemes.length || !b.full) return null;
+  const parts = behaviourParts(b);
+  if (!b || !b.total || !parts) return null;
   const t = b.total;
   return (
     <>
-      <Stat label={<>Gap in rupees, all funds <Info label="How the gap in rupees is worked out">Your value today and what you took out, less what the same purchases and redemptions would come to at each fund's own yearly NAV return. Positive: timing added to the fund's return. Negative: it took away. Your XIRR counts when your money went in and came out; the fund's NAV return is what a rupee kept in it all along earned over the same dates. The gap is what timing did: what happened, not what to do next.</Info></>}
-        value={rupees(t.gap_rupees)} note={`${t.compared} of ${t.schemes} fund${t.schemes === 1 ? "" : "s"} compared`} />
-      <Stat label="SIPs" value={t.sips ?? 0} note={`${t.sips_running ?? 0} running · ${t.sips_stopped ?? 0} stopped · ${t.months_missed ?? 0} month${t.months_missed === 1 ? "" : "s"} missed`} />
-      <Stat label={`Redemptions after a ${b.fall_pct}% fall`} value={b.pending > 0 ? "–" : t.falls ?? 0}
-        note={b.pending > 0 ? `Reading the NAV history of ${b.pending} fund${b.pending === 1 ? "" : "s"} to find each high` : (t.falls ?? 0) > 0 ? `${inr(t.falls_received)} received · ${inr(t.falls_worth_today)} today` : `None came ${b.fall_pct}% or more below the fund's high`} />
+      {parts.gap && <Stat label={<>Gap in rupees, all funds <Info label="How the gap in rupees is worked out">Your value today and what you took out, less what the same purchases and redemptions would come to at each fund's own yearly NAV return. Positive: timing added to the fund's return. Negative: it took away. Your XIRR counts when your money went in and came out; the fund's NAV return is what a rupee kept in it all along earned over the same dates. The gap is what timing did: what happened, not what to do next.</Info></>}
+        value={rupees(t.gap_rupees)} note={`${t.compared} of ${t.schemes} fund${t.schemes === 1 ? "" : "s"} compared`} />}
+      {parts.sips && <Stat label="SIPs" value={t.sips ?? 0} note={`${t.sips_running ?? 0} running · ${t.sips_stopped ?? 0} stopped · ${t.months_missed ?? 0} month${t.months_missed === 1 ? "" : "s"} missed`} />}
+      {parts.falls && <Stat label={`Redemptions after a ${b.fall_pct}% fall`} value={b.pending > 0 ? "–" : t.falls ?? 0}
+        note={b.pending > 0 ? `Reading the NAV history of ${b.pending} fund${b.pending === 1 ? "" : "s"} to find each high` : `${inr(t.falls_received)} received · ${inr(t.falls_worth_today)} today`} />}
       {/* DG-025: by the money redeemed, not by units of different schemes */}
-      <Stat label="Money redeemed was held, on average" value={span(t.avg_days_held)} note={t.held_under_year_pct != null ? `${t.held_under_year_pct.toFixed(0)}% of it for a year or less` : undefined} />
-      <Stat label={`Today's value held over ${b.long_years} years`} value={t.long_share == null ? "–" : `${t.long_share.toFixed(0)}%`} note={t.long_value != null ? inr(t.long_value) : undefined} />
+      {parts.held && <Stat label="Money redeemed was held, on average" value={span(t.avg_days_held)} note={t.held_under_year_pct != null ? `${t.held_under_year_pct.toFixed(0)}% of it for a year or less` : undefined} />}
+      {parts.long && <Stat label={`Today's value held over ${b.long_years} years`} value={`${t.long_share!.toFixed(0)}%`} note={t.long_value != null ? inr(t.long_value) : undefined} />}
     </>
   );
 }
