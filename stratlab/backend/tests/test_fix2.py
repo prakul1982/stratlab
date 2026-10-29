@@ -76,7 +76,8 @@ def test_negative_figures_use_the_true_minus_and_a_nonpayer_says_none():
     f = {"region": "US", "currency": "USD", "unit": "$ million", "market_cap_unit": "$ million", "price": 500.0, "market_cap": 1_000_000.0,
          "div_yield": 0.0, "price_at": "2026-10-28", "years": [], "profit_ttm": 100.0, "pe": 20.0}
     assert dict(stock_pages._stats(f))["Dividend yield"] == "none"
-    tiles = {t["label"]: t for t in stock_pages._tiles({**f, "region": "IN", "basis": "consolidated"})}
+    # (an Indian P/E far from its market value over profit is left out, LIVE1C-019: the made-up figures agree, 2,000 over 100 is a P/E of 20)
+    tiles = {t["label"]: t for t in stock_pages._tiles({**f, "region": "IN", "basis": "consolidated", "market_cap": 2000.0})}
     assert tiles["P/E"]["line"].endswith("consolidated")
 
 
