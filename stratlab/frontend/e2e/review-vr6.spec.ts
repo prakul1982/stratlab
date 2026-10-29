@@ -101,13 +101,17 @@ test("VR6-024: a phone shows twelve strategy cards and Show 12 more; a desktop s
   expect(await page.locator(".lib-card").count()).toBe(total);
 });
 
-test("VR6-010 and VR6-011: with nothing on the watchlist, My space and the Invest home give it a row to itself, with no card left short beside a long one", async ({ page, request }) => {
+test("VR6-010 and VR6-011: with nothing on the watchlist, My space and the Invest home give it a row to itself, with no card left short beside a long one", async ({ page, request }, info) => {
   const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
-  const head = { Authorization: "Bearer admin-token" };
+  // each project empties its OWN Pro account's watchlist (load-131 / load-134): the desktop and phone runs of this test overlap,
+  // and on one shared account one run's restore refilled the list while the other was measuring (CI, 29 Oct)
+  const n = info.project.name === "phone" ? 134 : 131;
+  const head = { Authorization: `Bearer load-${n}` };
+  await request.put(`${API}/me/prefs`, { headers: head, data: { level: "some", focus: "both" } });        // past the welcome question
   const before = await (await request.get(`${API}/research/watchlist`, { headers: head })).json();
   try {
     await request.put(`${API}/research/watchlist`, { headers: head, data: { items: [] } });
-    await open(page, "/mine", ADMIN, 1440);
+    await open(page, "/mine", session(`load-${n}`, `u-load-${n}`, `load${n}@example.com`), 1440);
     await expect(page.getByTestId("mine-watch")).toContainText(/Your watchlist is empty/, { timeout: 30_000 });
     const w = await page.evaluate(() => ["coming", "watch"].map((id) => Math.round(document.querySelector(`[data-card="${id}"]`)!.getBoundingClientRect().width)));
     expect(Math.abs(w[0] - w[1]), `widths ${w}`).toBeLessThan(2);                         // both the page's width: neither stands beside the other
