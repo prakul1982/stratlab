@@ -10,7 +10,7 @@ import { RegionSwitch } from "../components/Research";
 import { CalendarFilters, NO_CAL, SIZE_NAME, calCount, keepFilters, keptFilters, type CalFilters, type Facets } from "../components/CalendarFilters";
 import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
-import { Badge, Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Signed, Skeleton, StockPicker, type Column } from "../components/kit";
+import { Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, type Column } from "../components/kit";
 
 /* /research/results: the dates companies have called their board meetings to consider results (or, in the US, set for
  * their quarterly results), week by week, for your stocks or every company, narrowed by company size, sector, index, F&O and the
@@ -57,9 +57,9 @@ export function resultDay(iso: string) {
 
 export const filterCount = (f: Filters) => calCount(f, "cap") + (f.purpose ? 1 : 0);
 
-/** A change as ▲ 4.0% or ▼ 5.0%, in the kit's colours: the arrow and the sign both say the direction. */
+/** A change as ▲4.0% or ▼5.0%, in the kit's colours: the arrow and the sign both say the direction. */
 function Move({ v }: { v: number }) {
-  return <Signed value={v}>{`${v > 0 ? "▲" : v < 0 ? "▼" : ""} ${Math.abs(v).toFixed(1)}%`.trim()}</Signed>;
+  return <Signed value={v}>{`${v > 0 ? "▲" : v < 0 ? "▼" : ""}${Math.abs(v).toFixed(1)}%`}</Signed>;
 }
 
 function Growth({ v, of }: { v: number | null | undefined; of?: string | null }) {
@@ -163,10 +163,10 @@ export function ResultsPage() {
   const columns: Column<ResultRow>[] = [
     { key: "co", header: "Company", rowHeader: true, wrap: true, cell: (r) => (
       <span className="k-stack">
-        <span className="k-row">
+        <span className="res-sym">
           <Link className="link" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>
-          {scope === "all" && r.mine && <Badge tone="plain" dot={false}>Yours</Badge>}
-          {r.fo && <Badge tone="plain" dot={false}>F&amp;O</Badge>}
+          {scope === "all" && r.mine && <span className="k-note k-muted">Yours</span>}
+          {r.fo && <span className="k-note k-muted">F&amp;O</span>}
         </span>
         {r.name && <span className="k-note k-muted">{r.name}</span>}
       </span>) },
@@ -180,16 +180,16 @@ export function ResultsPage() {
       const x = quotes[r.symbol];
       return x?.change_pct == null ? <span className="k-muted">–</span> : <Signed value={x.change_pct}>{pct(x.change_pct, 2)}</Signed>;
     } },
-    { key: "rev", header: "Revenue, a year on", numeric: true, info: "The latest reported quarter's revenue against the same quarter a year before, from the company's results as the app keeps them. Hover a figure for the quarters compared.", cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} /> },
-    { key: "pat", header: "Profit, a year on", numeric: true, info: "The latest reported quarter's net profit against the same quarter a year before. A quarter that came after a loss has no growth figure.", cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} /> },
-    { key: "mv", header: "Past results-day moves", wrap: true, info: "The change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows are the latest four.", cell: (r) => {
+    { key: "rev", header: "Revenue YoY", numeric: true, info: "The latest reported quarter's revenue against the same quarter a year before (YoY), from the company's results as the app keeps them. Hover a figure for the quarters compared.", cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} /> },
+    { key: "pat", header: "Profit YoY", numeric: true, info: "The latest reported quarter's net profit against the same quarter a year before. A quarter that came after a loss has no growth figure.", cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} /> },
+    { key: "mv", header: "Past results-day moves", wrap: true, info: "The change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first.", cell: (r) => {
       const a = moves[r.symbol], m = a?.moves ?? r.moves;
       const since = a?.since;
       if (!m) return <span className="k-muted">{reading && a === undefined ? "Reading…" : "None kept yet"}</span>;
       return (
         <span className="k-stack">
           <b>±{m.avg.toFixed(1)}%</b>
-          <span className="k-note k-muted">last {m.last.length}: {m.last.map((v, i) => <span key={i}><Move v={v} />{i < m.last.length - 1 ? " " : ""}</span>)}</span>
+          <span className="k-note res-moves">{m.last.map((v, i) => <Move key={i} v={v} />)}</span>
           {since && <span className="k-note k-muted">since results {resultDay(since.date)}: <Move v={since.pct} /></span>}
         </span>);
     } },
@@ -239,8 +239,8 @@ export function ResultsPage() {
             )}
           </>}>
           <Field label="Meeting">
-            {() => <Seg label="Purpose of the meeting" value={filters.purpose || "any"} onChange={(v) => set({ purpose: v === "any" ? "" : v })}
-              options={[{ value: "any", label: "All" }, { value: "results", label: "Results only" }, { value: "more", label: "With other business" }]} />}
+            {(id) => <Select id={id} value={filters.purpose || "any"} onChange={(v) => set({ purpose: v === "any" ? "" : v })}
+              options={[{ value: "any", label: "All meetings" }, { value: "results", label: "Results only" }, { value: "more", label: "With other business" }]} />}
           </Field>
         </CalendarFilters>
       )}

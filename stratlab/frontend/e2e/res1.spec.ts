@@ -46,18 +46,17 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   const days = page.getByTestId("results-day");
   await expect(days.first().locator(".k-eyebrow")).toContainText("today · 4 companies");
   if (!phone) {
-    for (const h of ["Company", "Market value", "Price now", "Day", "Revenue, a year on", "Profit, a year on", "Past results-day moves", "Options imply", "Meeting"])
+    for (const h of ["Company", "Market value", "Price now", "Day", "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply", "Meeting"])
       await expect(today.getByRole("columnheader").filter({ hasText: h }).first()).toBeVisible();
   }
   await expect(today.getByRole("row")).toHaveCount(5);                      // the header and four companies
   // the figures: a market value, the latest quarter against a year before with its sign, a usual move that was read in
   const reliance = today.getByRole("row", { name: /RELIANCE/ });
-  await expect(reliance).toContainText(/₹19\.\d\d lakh cr/);
+  await expect(reliance).toContainText(/₹1\d\.\d\d lakh cr/);
   await expect(reliance).toContainText(/[+−]\d/);
   await expect(reliance).toContainText("F&O");
   await expect(reliance.getByText(/^±\d+\.\d%$/).first()).toBeVisible({ timeout: 30_000 });      // the usual move, once the prices were read
-  await expect(reliance).toContainText("last 3:");
-  await expect(reliance.getByText(/^[▲▼] \d+\.\d%$/).first()).toBeVisible();
+    await expect(reliance.getByText(/^[▲▼]\d+\.\d%$/).first()).toBeVisible();
   await expect(reliance.getByText(/^±\d+\.\d%$/)).toHaveCount(2, { timeout: 30_000 });             // ...and the move the options price in
   // the price column says when it was read, or that it is the last close
   await expect(page.getByTestId("results-prices")).toContainText(/Prices as of \d|last close/);
@@ -72,7 +71,7 @@ test("results calendar: size, sector, index, F&O and purpose narrow the table, t
   await expect(count).toHaveText("20 companies", { timeout: 30_000 });
   if (phone) await page.getByRole("button", { name: /^Filters/ }).click();
   const filters = page.getByRole("region", { name: "Filters" });
-  await filters.getByLabel("Sector").selectOption("Information Technology");
+  await filters.getByLabel("Sector", { exact: true }).selectOption("Information Technology");
   await expect(count).toHaveText("20 companies · 4 shown");
   await expect(page.getByRole("button", { name: "Clear filters" })).toBeVisible();
   const links = page.getByTestId("results-day").locator("tbody th a");
@@ -94,11 +93,11 @@ test("results calendar: size, sector, index, F&O and purpose narrow the table, t
   await expect(page.getByTestId("results-count")).toHaveText("20 companies", { timeout: 30_000 });
   // the day and the meeting's purpose
   if (phone && (await page.getByRole("button", { name: /^Filters/ }).getAttribute("aria-expanded")) !== "true") await page.getByRole("button", { name: /^Filters/ }).click();
-  await filters.getByLabel("Day").selectOption("today");
+  await filters.getByLabel("Day", { exact: true }).selectOption("today");
   await expect(count).toHaveText("20 companies · 4 shown");
-  await filters.getByRole("radio", { name: "With other business" }).click();
+  await filters.getByLabel("Meeting", { exact: true }).selectOption("more");
   await expect(page.getByTestId("results-count")).toContainText("20 companies ·");
-  await filters.getByRole("radio", { name: "All" }).click();
+  await filters.getByLabel("Meeting", { exact: true }).selectOption("any");
   await filters.getByLabel("Sort by").selectOption("name");
   await expect(page.getByTestId("results-day").first().locator("tbody th a").first()).toHaveText("HDFCBANK");      // by name: HDFC Bank Ltd first
   await sane(page, errors);

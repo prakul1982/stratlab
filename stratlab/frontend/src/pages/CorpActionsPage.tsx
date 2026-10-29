@@ -11,7 +11,7 @@ import { ActionCell, ActionFigure, KIND_NAME, exDay, recordCell, type ActionKind
 import { CalendarFilters, NO_CAL, SIZE_NAME, calCount, keepFilters, keptFilters, type CalFilters, type Facets } from "../components/CalendarFilters";
 import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
-import { Badge, Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Skeleton, StockPicker, type Column } from "../components/kit";
+import { Card, CardHead, CheckField, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Skeleton, StockPicker, type Column } from "../components/kit";
 
 /** A row of the calendar with what the app keeps about its company (the same facts the results calendar's table has). */
 export interface ActionRow extends CorpAction {
@@ -88,10 +88,10 @@ export function CorpActionsPage() {
   const columns: Column<ActionRow>[] = [
     { key: "co", header: "Company", rowHeader: true, wrap: true, cell: (r) => (
       <span className="k-stack">
-        <span className="k-row">
+        <span className="res-sym">
           <Link className="link" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>
-          {showMine && r.mine && <Badge tone="plain" dot={false}>Yours</Badge>}
-          {r.fo && <Badge tone="plain" dot={false}>F&amp;O</Badge>}
+          {showMine && r.mine && <span className="k-note k-muted">Yours</span>}
+          {r.fo && <span className="k-note k-muted">F&amp;O</span>}
         </span>
         {r.name && <span className="k-note k-muted">{r.name}</span>}
       </span>) },
@@ -120,7 +120,7 @@ export function CorpActionsPage() {
       </div>
     );
   };
-  const groups = (rows: ActionRow[]) => <div className="inv-days">{[...new Set(rows.map((r) => r.ex_date))].map((d) => day(rows, d))}</div>;
+  const groups = (rows: ActionRow[]) => <div className="k-stack">{[...new Set(rows.map((r) => r.ex_date))].map((d) => day(rows, d))}</div>;
 
   return (
     <div className="k-page">
