@@ -123,7 +123,8 @@ test("RC7-009: a sign-in the server turns down in the middle of a visit says 'Yo
   let ended = false;
   await page.route(`${API}/**`, (r) => (ended ? r.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Not authenticated" }) }) : r.fallback()));
   ended = true;
-  await page.evaluate(() => { const a = document.querySelector('a[href="/research/results"]') as HTMLAnchorElement; a.click(); });
+  // IA-1: the menu's Calendar entry opens All dates (/calendar), Results being one of its tabs, so that is the in-app link followed here
+  await page.evaluate(() => { const a = document.querySelector('a[href="/calendar"]') as HTMLAnchorElement; a.click(); });
   await expect(page.getByRole("heading", { name: "You were signed out" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Your sign-in ended")).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
