@@ -454,8 +454,20 @@ class Screener(Source):
 
     def with_cash(self, p: dict) -> dict:
         """`p` with a "Cash Equivalents" row in its balance sheet, from the site's breakdown of Other Assets (the
-        page itself folds cash into that line). Unchanged when the breakdown can't be read."""
-        return self._with_line(p, "balance", "Cash Equivalents", "Other Assets", "balance-sheet", r"cash")
+        page itself folds cash into that line). Unchanged when the breakdown can't be read.
+
+        The breakdown is read once for each read of the company's fundamentals (THEME-1): the answer, or its absence, is kept against the page's
+        own read time (`fetched_at`) for as long as the page is kept, so a second page build, or any other caller, from the same read of the
+        fundamentals asks the site nothing, and a busy or empty answer isn't asked again until the fundamentals themselves are read again."""
+        key = ("cash-read", p.get("company_id"), p.get("basis"), p.get("fetched_at"))
+        if p.get("company_id") and p.get("fetched_at"):
+            hit = self.cache.get(key)
+            if hit is not None:
+                return {**p, "balance": hit["balance"]} if hit.get("balance") else p
+        out = self._with_line(p, "balance", "Cash Equivalents", "Other Assets", "balance-sheet", r"cash")
+        if p.get("company_id") and p.get("fetched_at"):
+            self.cache.set(key, {"balance": out.get("balance") if out is not p else None}, 6 * 3600)
+        return out
 
     def with_capex(self, p: dict) -> dict:
         """`p` with a "Capex" row in its cash flow statement: the fixed assets it bought each year, from the site's

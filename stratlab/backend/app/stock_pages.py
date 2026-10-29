@@ -1150,13 +1150,27 @@ def _ttm_profit(p: dict):
     return _num(row[len(cols) - 1])
 
 
+def _theme_figures(p: dict, snap: dict, financial: bool) -> dict:
+    """book_value, pb, interest_cover (None for a lender or a company with no interest cost), cash (₹ crore, India), latest_yoy."""
+    from .intel import key_facts
+    cash = None
+    for label, vals in ((p.get("balance") or {}).get("rows") or {}).items():
+        if str(label).lower().startswith("cash equivalents"):
+            cash = next((v for v in reversed(vals) if isinstance(v, (int, float))), None)
+            break
+    cover = None if financial else key_facts.interest_cover_value(p.get("pl"))
+    return {"book_value": snap.get("book_value"), "pb": snap.get("pb"), "interest_cover": cover if cover else None,
+            "cash": None if financial else cash, "latest_yoy": snap.get("latest_yoy")}
+
+
 def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict | None, prices: dict | None,
           filings: list[dict], exchange: str, red_flags: int | None = None, checks: dict | None = None) -> dict:
     """What a page shows, from what the deep dive already works out. Plain numbers and words; nothing from AI.
     `red_flags` is how many red-flag filings (India) the last three months held, for the stock screens. `checks` carries
     what the market value is checked against (see cap_problem): "sales_usd" (a year's revenue, $ million),
     "cap_unverified" (depositary shares whose ratio couldn't be read) and "not_company" (what the symbol is instead)."""
-    years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt")} for y in (nums.get("years") or [])[-5:]]
+    # (cash from operations too, for a theme's cash-against-profit line: THEME-1; a page stored before has none, and the line says how many it counts)
+    years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt", "cfo")} for y in (nums.get("years") or [])[-5:]]
     prices = dict(prices or {})
     checks = checks or {}
     if _num(prices.get("price")) is None and _num(snap.get("price")) is not None:
@@ -1192,7 +1206,10 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
         "div_yield": snap.get("div_yield"), "div_special": snap.get("div_special"), "profit_ttm": _ttm_profit(p),
         "net_margin": snap.get("net_margin"), "opm": opm, "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
-        "bank": financial, "years": years, "currency_note": p.get("currency_note"),
+        "bank": financial, "years": years, "currency_note": p.get("currency_note"), "basis": nums.get("basis"),
+        # for a theme's deep dive (THEME-1), from the figures the company page shows: book value and P/B (the page's Valuation), interest cover (its Debt
+        # and cash), cash on hand (the balance sheet's breakdown, for enterprise value) and the latest quarter against the year-ago quarter
+        **_theme_figures(p, snap, financial),
         "growth": {k: (nums.get("growth") or {}).get(k) for k in ("sales_cagr_3y", "profit_cagr_3y", "sales_cagr_5y", "profit_cagr_5y")},
         "stage": (trend or {}).get("stage"), "stage_days": (trend or {}).get("stage_days"),
         "st_up": (trend or {}).get("st_up"), "st_days": (trend or {}).get("st_days"),

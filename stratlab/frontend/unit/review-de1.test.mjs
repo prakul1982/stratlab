@@ -54,10 +54,10 @@ test("DE-010/DE-011/DE-012: an impossible range is said, the filtered column sho
 });
 
 test("DE-013: the theme page names no unlisted company and shows the exchange's list for the industries", () => {
-  const s = read("src/pages/Research.tsx");
+  const s = read("src/pages/ThemesPage.tsx");          // (the page moved out of Research.tsx: THEME-1)
   assert.doesNotMatch(s, /\(not listed\)/);
   assert.match(s, /On the exchange's list for these industries/);
-  assert.match(s, /with no figures: there's no source here to check a budget, size or growth rate against/);
+  assert.match(s, /written by AI from general knowledge, with no figures/);       // the AI's text carries no figure; every figure on the page is from reported numbers
 });
 
 test("DE-017: index cards show the level to two decimals and keep the 52-week phrase on one line; repeats say so", () => {

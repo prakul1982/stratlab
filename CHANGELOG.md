@@ -4,6 +4,17 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 29 October 2026: Themes, a deep dive with margins by layer (THEME-1)
+
+The Themes page was a map: AI paragraphs and company chips. It is now a deep dive of tables, worked out from the figures the app already holds (the AI writes none of them).
+
+- **Margins by layer:** every layer of the value chain has a table of its companies' latest full-year revenue, EBITDA margin, net margin and ROCE, with the layer's median and range as rows, and one table for the whole chain with a bar comparison of where the margin sits. The basis is said once. A group that runs other businesses (RELIANCE, M&M and the like), or a company that does the work of several layers, is marked company-wide and left out of the median.
+- **Each company only where it belongs:** a company stays in a layer or sub-theme only when its own description says it does that work; the AI must give words from the description, which must be in it word for word and speak of the layer, and the page shows them as "In its own words". A company with no description to check is left out. Sub-themes list their companies in a table, and say so plainly when none is shown.
+- **Tailwinds and risks:** each is put beside dated headlines. One shown as ended or replaced is dropped, one a recent headline confirms carries it, and the rest are marked general background.
+- **The theme in numbers:** size and shape, growth (together and the middle company), margins over time, valuation (P/E, P/B, EV/EBITDA against all listed companies), the latest quarter against a year earlier, debt, interest cover and cash against profit, price returns, breadth and relative strength against the index, ownership, results dates and filings, dividends, red-flag filings, management report cards, new IPO issues that belong in the theme, the latest dated headlines and exchange filings, operating figures from business updates, and a sortable table of every company. Only the theme's own P/E history builds forward from the first visit.
+- **A draft blog post** can be made from a theme when one layer's margin is far from the others' or moved a lot over three years: an admin button stores it hidden for the owner to read and publish by hand. No new scheduled job.
+- **Behind it:** stored company pages now keep cash from operations, book value, P/B, interest cover, cash and the latest quarter's change; the new caches are bounded (dives 3 MB, prices 3 MB, company descriptions 1.5 MB, headlines 1 MB).
+
 ### 28 October 2026: Market Watch and the chart workspace, reviewed as a trader would use them (MWR-1)
 
 Every built timeframe was checked against the session's own minutes (India and the US, a holiday, weekly and monthly), then the panel and the charts were used end to end in the test world, on a phone, in both themes, with the accessibility checker. What it found and fixed:

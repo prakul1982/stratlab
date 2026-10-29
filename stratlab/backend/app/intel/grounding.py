@@ -111,7 +111,7 @@ def exchange_list(out: dict, rows: list[dict], cap: int = 40) -> dict:
     companies are marked `named`. None when no industry qualifies."""
     ind = {r.get("symbol"): r.get("industry") for r in rows or [] if r.get("symbol") and r.get("industry")}
     mapped = {x.get("ticker") for x in out.get("screen") or []}
-    for group in (out.get("clusters") or []) + (out.get("value_chain") or []):
+    for group in (out.get("clusters") or []) + (out.get("value_chain") or []) + (out.get("sub_themes") or []):
         mapped |= {c.get("ticker") for c in group.get("companies") or []}
     mapped.discard("")
     mapped.discard(None)
@@ -177,6 +177,7 @@ def listed_only(out: dict) -> dict:
     out = dict(out)
     out["clusters"] = [c for c in ({**c, "companies": only(c.get("companies"))} for c in out.get("clusters") or []) if c["companies"]]
     out["value_chain"] = [{**v, "companies": only(v.get("companies"))} for v in out.get("value_chain") or []]
+    out["sub_themes"] = [{**x, "companies": only(x.get("companies"))} for x in out.get("sub_themes") or [] if isinstance(x, dict)]
     return out
 
 
@@ -219,6 +220,8 @@ def ground_sector(out: dict, region: str, lookup) -> dict:
     out["screen"] = screen
     out["clusters"] = [{**c, "companies": fix_all(c.get("companies") or [])} for c in out.get("clusters") or []]
     out["value_chain"] = [{**v, "companies": fix_all(v.get("companies") or [])} for v in out.get("value_chain") or []]
+    # each sub-theme's companies are looked up the same way (THEME-1); theme_check then keeps only those whose own words show the work
+    out["sub_themes"] = [{**x, "companies": fix_all(x.get("companies") or [])} for x in out.get("sub_themes") or [] if isinstance(x, dict)]
     funds = []
     for e in out.get("etfs") or []:
         got = res.resolve(e.get("name"), e.get("ticker"))
@@ -230,8 +233,8 @@ def ground_sector(out: dict, region: str, lookup) -> dict:
     out["sub_themes"] = [{**x, "detail": tidy_text(x.get("detail"))} for x in out.get("sub_themes") or []]
     out["value_chain"] = [{**x, "description": tidy_text(x.get("description"))} for x in out.get("value_chain") or []]
     out["screen"] = [{**x, "one_line": tidy_text(x.get("one_line"))} for x in out.get("screen") or []]
-    out["tailwinds"] = [tidy_text(x) for x in out.get("tailwinds") or []]
-    out["risks"] = [tidy_text(x) for x in out.get("risks") or []]
+    out["tailwinds"] = [({**x, "text": tidy_text(x.get("text"))} if isinstance(x, dict) else tidy_text(x)) for x in out.get("tailwinds") or []]
+    out["risks"] = [({**x, "text": tidy_text(x.get("text"))} if isinstance(x, dict) else tidy_text(x)) for x in out.get("risks") or []]
     out["checked"] = True
     return out
 

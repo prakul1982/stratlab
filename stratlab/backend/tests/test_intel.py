@@ -372,7 +372,7 @@ def test_a_theme_read_is_filtered_and_marks_unsourced_figures(monkeypatch):
     # a figure with no source behind it isn't stated at all, not even marked as an estimate (DE-013)
     assert out["summary"] == "Defence orders grew."
     assert out["sub_themes"][0]["detail"] == "" and out["core"] == "" and out["screen"][0]["one_line"] == ""
-    assert out["value_chain"][0]["description"] == "" and out["tailwinds"] == ["Exports are rising."] and out["risks"] == ["Delays."]
+    assert out["value_chain"][0]["description"] == "" and [t["text"] for t in out["tailwinds"]] == ["Exports are rising."] and [t["text"] for t in out["risks"]] == ["Delays."]
 
 
 def test_deep_dive_text_drops_the_same_advice():

@@ -828,8 +828,8 @@ def mood_key(indices: list[dict], is_open: bool) -> tuple:
     return (is_open, any(i.get("settling") for i in indices), any(i.get("pre_close") for i in indices), tuple((i.get("name"), i.get("day"), math.floor((i.get("change_pct") or 0.0) * 2) / 2) for i in indices))
 
 
-@router.get("/sector")
-def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
+def sector_map(profile, region: str, q: str, refresh: bool = False):
+    """(market, theme, the grounded map, the screener's index rows): the map every theme page and dive starts from."""
     r, theme = region_of(region), " ".join(q.split())[:80]
     if len(theme) < 2:
         err(400, "bad_theme", "Type a sector or theme, like \"India defence\" or \"AI data centers\".")
@@ -842,7 +842,15 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
                   lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r)))
     # no unsourced market size or growth rate, even on a map kept from before (R7O-012); no figure in the text and no
     # company that isn't listed, and the exchange's own list of the theme's industries beside the map (DE-013)
-    got = grounding.listed_only(A.theme_served(got))
+    return r, theme, grounding.listed_only(A.theme_served(got)), rows
+
+
+@router.get("/sector")
+def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
+    r, theme, got, rows = sector_map(profile, region, q, refresh)
+    # THEME-1: a company stays in a layer or sub-theme only when its own description shows it does that work, and a tailwind or
+    # risk is shown beside the dated headline that supports it (theme_routes.checked)
+    got = theme_routes.checked(r, theme, got)
     return ok({**got, "market_size": "", "cagr": None, "cagr_note": "", "exchange": grounding.exchange_list(got, rows) or None})
 
 
@@ -965,3 +973,7 @@ def put_watchlist(req: WatchReq, profile=Depends(current_profile)):
         from .. import invite_rewards
         invite_rewards.safe_touch(profile, "watchlist")
     return {"items": items}
+
+
+from . import theme_routes  # noqa: E402  (the theme deep dive's routes; they use the helpers above)
+router.include_router(theme_routes.router)

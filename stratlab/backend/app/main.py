@@ -4377,6 +4377,10 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         else:
             p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
             try:
+                p = research_hub.screener.with_cash(p)       # cash on hand, for a theme's enterprise value (left as it is when the breakdown is busy)
+            except Exception:
+                pass
+            try:
                 found = filings_feed.announcements(sym)
                 # with the exchange's summary and the document itself, so the page names what each filing is and links it (DK-018)
                 items = [{"at": i["at"], "title": f"{i['label']}: {i['subject']}" if i.get("subject") else i["label"],
