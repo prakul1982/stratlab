@@ -297,8 +297,8 @@ def ipo_facts():
 def test_the_ipo_post_counts_only_issues_with_data_and_says_how_many_lack_it(w):
     post = blog_research.ipo_listing_day(ipo_facts(), datetime(2026, 11, 3, tzinfo=timezone.utc))
     text = blog.plain_text(post["blocks"])
-    assert post["slug"] == "ipo-listing-day-india-2026-so-far" and post["title"] == "IPO listing day in India, 2026 so far"
-    assert "5 issues listed between 10 Sep 2026 and 3 Oct 2026; 4 have a listing-day close in the tracker and are counted below" in text and "1 lacks it and is left out of every figure" in text
+    assert post["slug"] == "ipo-listing-day-india-2026-so-far" and post["title"].startswith("IPO listing day in India since ")
+    assert "5 issues listed between 10 Sep 2026 and 3 Oct 2026; 4 have a listing-day close in the tracker and are counted below" in text and "1 lacks it (the exchange's price tables have no trading figures for it) and is left out of every figure" in text
     assert "On listing day 2 closed above the issue price, 1 below it and 1 at it." in text         # +8.0, +5.0 | -6.5 | 0.0
     assert "median 2.5%" not in text and "closed +2.5% from its issue price; the lowest was −6.5% and the highest +8.0%" in text      # median of 8.0, -6.5, 5.0, 0.0
     assert "median +2.5%" in text                                                                 # opening: 10.0, -4.0, 5.0, 0.0 -> (0+5)/2
@@ -521,3 +521,23 @@ def test_a_post_carries_the_ad_slot_only_while_ads_are_on(w, monkeypatch):
     html = c.get("/blog/india-market-brief-2026-10-01").text
     assert html.count('class="ad"') == 1 and '/ads.js' in html
     assert 'class="ad"' not in c.get("/blog").text                  # the lists stay plain
+
+
+def test_live2_posts_fold_their_limits_say_what_they_hold_and_explain_the_sip_fall_row(w):
+    """LIVE2-003/007/008/009: Limits is a fold, the one-row segment table is gone, the title names its window, the brief describes only its own parts."""
+    for post in (blog_research.classic_strategies(library_rows()), blog_research.ipo_listing_day(ipo_facts()), blog_research.sip_vs_lump(index_series())):
+        assert not any(b["t"] == "h2" and b["text"] == "Limits" for b in post["blocks"])
+        assert any(b["t"] == "details" and b["title"] == "Limits" and b["items"] for b in post["blocks"])
+    ipo = blog_research.ipo_listing_day(ipo_facts())
+    assert ipo["title"].startswith("IPO listing day in India since ") and "so far" not in ipo["title"]
+    heads = [b["text"] for b in ipo["blocks"] if b["t"] == "h2"]
+    segments = {f["segment"] for f in ipo_facts() if f.get("close_pct") is not None}
+    assert ("By segment" in heads) == (len(segments) > 1)
+    sip = blog_research.sip_vs_lump(index_series())
+    row = next(r for r in next(b for b in sip["blocks"] if b["t"] == "table" and b["head"][0] == "")["rows"] if r[0].startswith("Deepest fall"))
+    assert "the same for both" in row[0]
+    full = blog.brief_post(issue_for("US"))
+    assert "Sector rotation uses weekly candles" in next(b for b in full["blocks"] if b["t"] == "details")["items"][0]       # a brief that has them says so
+    us = blog.brief_post(issue_for("US", sections=[]))                      # the US brief the live site had: the index closes alone
+    how = next(b for b in us["blocks"] if b["t"] == "details" and b["title"] == "How this brief is made")["items"][0]
+    assert "Sector rotation" not in how and "newly meets" not in how and "previous session's close" in how

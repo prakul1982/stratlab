@@ -474,6 +474,16 @@ def kpis(pages: list[str]) -> dict | None:
                     cur["peers"][key] = [conv(v) for v in vals[1:]]
                     break
         periods = [p for p in periods if p["values"]]
+        # the document splits one period's indicators over two tables (the first gives revenue to profit, the second returns to order book):
+        # a period that comes twice is one, with all of its rows
+        merged: dict[str, dict] = {}
+        for p in periods:
+            at = merged.setdefault(p["label"], p)
+            if at is not p:
+                for k, v in p["values"].items():
+                    at["values"].setdefault(k, v)
+                    at["peers"].setdefault(k, p["peers"].get(k, []))
+        periods = list(merged.values())
         if len(periods) >= 2:
             names = periods[0].get("_peers") or []
             for p in periods:

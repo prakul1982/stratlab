@@ -244,6 +244,15 @@ def public(row: dict, now: datetime | None = None) -> dict:
     out = {k: v for k, v in row.items() if k not in ("seen", "docs_checked", "detail_at", "_keys")}
     out["stage"] = stage_of(row, now)
     out.update(timeline(row, now))
+    # SEBI's timetable: the money is unblocked or refunded and the shares credited two working days after bidding closes (T+2), between the
+    # allotment and the listing; the exchanges publish no day for it, so it is given only while it is ahead, marked as the timetable's
+    if row["market"] == "IN" and row.get("close") and not row.get("issue_status") and not row.get("social"):
+        try:
+            when = next_working(date.fromisoformat(row["close"]), 2)
+            if when >= (now or _now()).astimezone(IST).date():
+                out["credit"], out["credit_expected"] = when.isoformat(), True
+        except ValueError:
+            pass
     sz = sizes(row)
     out["size"], out["size_basis"] = sz["amount"], sz["basis"]
     if sz.get("in_bids"):

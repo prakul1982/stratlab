@@ -500,10 +500,15 @@ def brief_post(issue: dict, now: datetime | None = None) -> dict | None:
         shut = _section(issue, "Market holiday")
         if shut and shut.get("items"):
             blocks += [{"t": "h2", "text": "Market holiday ahead"}, {"t": "p", "text": str(shut["items"][0].get("text") or "")}]
+    # (LIVE2-009: only what this brief has is described: the US brief is the index closes alone, with no rotation and no stock list)
+    has = [t["title"] for t in (_brief_tables(issue) if open_day else [])]
+    parts = ["A change on the day is measured from the previous session's close."]
+    if "Sector rotation" in has:
+        parts.append("Sector rotation uses weekly candles.")
+    if any(t.startswith(("Newly matched Stage 2", "Newly in Stage 2")) for t in has):
+        parts.append("A stock is listed when it newly meets the stated price rule.")
     blocks += [{"t": "details", "title": "How this brief is made", "items": [f"It is built by StratLab's own jobs after the {name} close, from the exchange's daily closing figures. "
-                                  "A change on the day is measured from the previous session's close. Sector rotation uses weekly candles; "
-                                  "a stock is listed when it newly meets the stated price rule. Nothing here comes from any user's account, "
-                                  "and nothing in it is a view on what prices will do."]}]
+                                  + " ".join(parts) + " Nothing here comes from any user's account, and nothing in it is a view on what prices will do."]}]
     return {"slug": brief_slug(region, iso), "kind": "brief", "market": region, "title": title, "summary": summary, "blocks": blocks,
             "day": iso, "published_at": now_iso(now), "indexable": bool(open_day and lead), "gen": BRIEF_GEN}
 

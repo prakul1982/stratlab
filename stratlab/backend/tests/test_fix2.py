@@ -479,6 +479,10 @@ def test_the_key_indicators_sit_beside_the_listed_peers_per_period():
     assert first["label"].startswith("the three months ending June 30, 2026")
     assert first["values"]["revenue"] == 133.94 and first["values"]["order_book"] == 1570.07
     assert first["peers"]["revenue"] == [2302.73, 715.82, 700.46] and first["peers"]["roe"] == [None, None, None]
+    labels = [x["label"] for x in k["periods"]]
+    assert len(labels) == len(set(labels)) and labels[2:] == ["Fiscal 2026", "Fiscal 2025", "Fiscal 2024"]      # a period the document gives in two tables is one
+    f26 = k["periods"][2]
+    assert f26["values"]["revenue"] == 803.63 and f26["values"]["roe"] == 21.55 and f26["peers"]["roe"] == [13.7, 1.77, 11.2]
     assert D.kpis([""] * 5) is None
 
 
@@ -521,3 +525,15 @@ def test_a_read_document_gives_every_table_to_the_page(monkeypatch):
     monkeypatch.setattr(I, "facts_of", lambda d: stored)
     got = I.facts_view({"market": "IN", "id": "x"})
     assert got["state"] == "ready" and all(got[k] == {"page": 1} for k in keys) and "excerpt" not in got
+
+
+def test_the_refund_and_credit_day_is_the_timetables_t_plus_2_while_it_is_ahead():
+    from datetime import datetime
+    from app import ipo as I
+    now = datetime.fromisoformat("2026-10-28T12:00:00+05:30")
+    row = {"market": "IN", "id": "x", "name": "X", "stage": "open", "open": "2026-10-26", "close": "2026-10-28"}
+    pub = I.public(row, now)
+    assert pub["allotment"] == "2026-10-29" and pub["credit"] == "2026-10-30" and pub["credit_expected"] and pub["listing"] == "2026-11-02"
+    old = I.public({**row, "close": "2026-10-20", "open": "2026-10-16"}, now)
+    assert "credit" not in old                                       # a day that has passed is not given from the timetable: it may have moved
+    assert "credit" not in I.public({"market": "US", "id": "u", "name": "U", "stage": "upcoming"}, now)

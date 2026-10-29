@@ -10,6 +10,7 @@ and once a month from the newsletter job's clock (no job of its own), and each p
 Every post says where its data comes from (by kind, never by vendor), the period, the method and the limits, and keeps to
 facts: no advice wording, no ranking of what to pick, no promise."""
 import json
+import re
 import threading
 from datetime import date, datetime, timedelta, timezone
 from statistics import median
@@ -65,7 +66,7 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
     for e in rows:
         v = (e.get("verdict") or {}).get("verdict")
         kinds[v] = kinds.get(v, 0) + 1
-    names = {s: spec["name"] for s, spec in library_seed.STRATEGIES.items()}
+    names = {s: re.sub(r"^ST S2: ", "", spec["name"]) for s, spec in library_seed.STRATEGIES.items()}      # (LIVE2-006: the scan's shorthand is not a name in a table)
     n_strats = len({e["seed"].get("slug") for e in rows})
     checks: dict[str, dict[str, int]] = {}
     for e in rows:
@@ -126,7 +127,7 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
                           p1(st["ret"]) if library.ran(e) and isinstance(st.get("ret"), (int, float)) else "no trades",
                           p1(st["buy_hold"]) if isinstance(st.get("buy_hold"), (int, float)) else "–",
                           (f"{blog.MINUS if h['gap'] <= -0.05 else '+' if h['gap'] >= 0.05 else ''}{abs(h['gap']):.1f} pts") if h else "–",
-                          str(st["trades"]) if isinstance(st.get("trades"), int) else "–",
+                          f"{st['trades']:,}" if isinstance(st.get("trades"), int) else "–",
                           library.label(e)])
             spans.append(f"{short((e.get('range') or {}).get('from'))} to {short((e.get('range') or {}).get('to'))}")
         # one period said once: every row repeated the same "11 Mar 2025 to 28 Oct 2026", which also pushed the table off a phone's
@@ -159,8 +160,7 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
             "nudged up and down; not run on a group of instruments), bad-luck drawdown (the order of the trades reshuffled 1,000 times) and enough "
             "trades (under 15 is too few to tell skill from luck, 30 or more is a fair sample).",
             "The rule sets, with their exact rules, are in the strategy library: " + ", ".join(names[s] for s in sorted({e["seed"]["slug"] for e in rows} & set(names))) + "."]},
-        {"t": "h2", "text": "Limits"},
-        {"t": "ul", "items": [
+        {"t": "details", "title": "Limits", "items": [
             "These are results on past prices. They say nothing about what a rule set will do next, and a check passed in the past is not a promise.",
             "The groups are each list's members on the day the test ran, so earlier years leave out companies that were dropped from a list before "
             "then, which can flatter older results.",
@@ -261,13 +261,14 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
     words = [
             f"{len(facts)} {'issue' if len(facts) == 1 else 'issues'} listed between {short(first)} and {short(last)}; {len(have)} "
             f"{'has' if len(have) == 1 else 'have'} a listing-day close in the tracker and {'is' if len(have) == 1 else 'are'} counted below. "
-            f"{lack} {'lacks' if lack == 1 else 'lack'} it and {'is' if lack == 1 else 'are'} left out of every figure.",
+            f"{lack} {'lacks' if lack == 1 else 'lack'} it (the exchange's price tables have no trading figures for {'it' if lack == 1 else 'them'}) and {'is' if lack == 1 else 'are'} left out of every figure, "
+            f"so the medians describe the {len(have)} counted, not all {len(facts)}.",
             f"On listing day {len(up)} closed above the issue price, {len(down)} below it and {flat} at it.",
             f"The middle issue (median) closed {p1(median(closes))} from its issue price; the lowest was {p1(min(closes))} and the highest {p1(max(closes))}.",
             (f"Opening price against the issue price: median {p1(median(opens))} across the {len(opens)} issues with an opening price." if opens
              else "No issue has an opening price in the tracker."),
     ]
-    if seg:
+    if len(seg) > 1:                                        # one row would only repeat the sentence above it (LIVE2-008)
         blocks += [{"t": "h2", "text": "By segment"},
                    {"t": "table", "caption": "Listing-day close against the issue price, by segment",
                     "head": ["Segment", "Issues counted", "Closed above issue price", "Closed below", "Median change"], "rows": seg,
@@ -291,17 +292,16 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
                    "session's opening price. The final subscription is the total times subscribed.",
                    "Counted: issues the tracker shows as listed in " + str(year) + " that have a first-day close. An issue without one is counted in the number "
                    "listed and nowhere else."]},
-               {"t": "h2", "text": "Limits"},
-               {"t": "ul", "items": [
+               {"t": "details", "title": "Limits", "items": [
                    "The tracker keeps an issue for a limited time after its listing, so this post covers the issues it holds, not every issue of the year. "
                    f"The first listing it holds is {short(first)}.",
                    "One day is a short window: what an issue did on later days is not in these figures.",
-                   "Main board and SME issues differ in size and trading rules; the segment table keeps them apart" + (
+                   "Main board and SME issues differ in size and trading rules" + ("; the segment table keeps them apart" if len(seg) > 1 else "; this post's issues are all in one segment") + (
                        ", and an issue whose segment the tracker did not record has a line of its own." if any(f["segment"] is None for f in have) else "."),
                    "Only official numbers are used: no grey market premium, which is not an official figure.",
                    "This is a record of what happened, not a view on any issue and not a pointer to the next one."]},
                {"t": "p", "text": [{"a": "See the IPO tracker", "href": "/invest/ipos"}, " for open and upcoming issues, or ", {"a": "read about any listed company", "href": "/stocks"}, "."]}]
-    return {"slug": f"ipo-listing-day-india-{year}-so-far", "kind": "research", "market": "IN", "title": f"IPO listing day in India, {year} so far",
+    return {"slug": f"ipo-listing-day-india-{year}-so-far", "kind": "research", "market": "IN", "title": f"IPO listing day in India since {short(first)}",
             "summary": f"{len(have)} Indian IPOs that listed between {short(first)} and {short(last)}: first-day close and open against the issue price, by segment and "
                        f"subscription." + (f" {lack} {'issue lacks' if lack == 1 else 'issues lack'} price data and {'is' if lack == 1 else 'are'} not counted." if lack else ""),
             "blocks": blocks, "published_at": blog.now_iso(now)}
@@ -362,7 +362,7 @@ def sip_vs_lump(closes: dict[str, float], now: datetime | None = None, amount: i
              ["Value at the end", inr(head["value"]), inr(lump["value"])],
              ["Gain", inr(head["gain"]), inr(lump["gain"])],
              ["Annual return (XIRR)", x(head["xirr"]), x(lump["xirr"])],
-             ["Deepest fall of the units' price", p1(head["deepest_fall_pct"]), p1(lump["deepest_fall_pct"])],
+             ["Deepest fall of the index's price (the same for both)", p1(head["deepest_fall_pct"]), p1(lump["deepest_fall_pct"])],
              ["Charges paid", inr(head["charges"]), inr(lump["charges"])]]
     spread = [[f"{r['years']} years", str(r["windows"]), str(r["sip_ahead"]), str(r["lump_ahead"]), x(r["sip_median"]), x(r["lump_median"]),
                x(r["sip_low"]), x(r["lump_low"])] for r in rows]
@@ -401,8 +401,7 @@ def sip_vs_lump(closes: dict[str, float], now: datetime | None = None, amount: i
             "prices. What differs is how much money was in the pot when the fall came, which the SIP's instalments built up over the years.",
             "Charges are a share of each purchase (no flat fee, brokerage set to zero), so the same total put in costs the same whether it goes in at once or in "
             "instalments."]},
-        {"t": "h2", "text": "Limits"},
-        {"t": "ul", "items": [
+        {"t": "details", "title": "Limits", "items": [
             "The index can't be bought as such: this models units that follow it exactly, with no fund expense ratio and no tracking difference.",
             f"The history is {years} years at most and one market; a different period or market can give another answer. The windows overlap, so the counts above are "
             "not a probability of anything.",
