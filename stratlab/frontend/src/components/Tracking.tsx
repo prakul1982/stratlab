@@ -4,6 +4,7 @@ import { askNow, CHOICE_KEY, clearChoice, consentWords, declineTrackers, onChoic
 import { doNotTrack } from "../lib/analytics";
 import { flushSignup, loadPixel, onSignup, pixelPageView, startClarity, stopClarity } from "../lib/track";
 import { CONFIG } from "../lib/adsConfig";
+import { useGuideOpen } from "../lib/onboarding";
 
 /* The one question for Google ads, the Meta Pixel and Microsoft Clarity (ADS-1), and the loader for the last two. Mounted once, in
  * the public half and in the app. Nothing is asked, and nothing loads, unless an ad slot is set up or a pixel or Clarity ID is
@@ -34,7 +35,11 @@ export function Tracking() {
   }, [want.pixel, want.clarity, pathname]);
   // a sign-up that completes after the page has loaded
   useEffect(() => onSignup(() => { if (want.pixel) flushSignup(); }), [want.pixel]);
+  // the welcome question and the tour come first: on a phone the two cards stood over each other and this one hid the
+  // welcome choices (CI, 28 Oct), so the question waits until the guide is answered or closed
+  const guiding = useGuideOpen();
   if (!askNow({ cfg: CONFIG, choice, path: pathname, adsOnly, declined, dnt: doNotTrack() })) return null;
+  if (guiding) return null;
   return <ConsentCard adsOnly={adsOnly} />;
 }
 
