@@ -311,3 +311,17 @@ def test_the_rotation_rows_carry_their_returns(world, region):
         rows = [r for r in got["rows"] if r.get("ret")]
         assert rows and all(set(r["ret"]) == {"w1", "m1", "m3"} for r in rows)
         assert any(r["ret"]["m3"] is not None for r in rows)
+
+
+def test_the_daily_closes_of_a_past_day_are_forgotten_so_the_cache_does_not_grow():
+    from app.intel.snapshot import Snapshot
+
+    class Hub:
+        def chart(self, region, sym, rng, tf):
+            return {"candles": [{"t": f"2026-10-{d:02d}", "c": 100.0 + d} for d in range(1, 14)]}
+    m = mood.Mood(Hub())
+    for day in ("2026-10-13", "2026-10-14", "2026-10-15"):
+        got = m._closes_for("IN", ["NIFTY 50"], day, "index")
+        assert got["NIFTY 50"][-1] == 100.0 + min(int(day[-2:]) - 1, 13)           # the session still trading is left out
+        assert [k for k in m.closes.keys() if k[:2] == ("IN", "index")] == [("IN", "index", day)]
+    assert isinstance(m.closes, Snapshot) and len(m.closes.keys()) == 1

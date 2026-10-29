@@ -152,8 +152,8 @@ export function CalendarTable({ c }: { c: NonNullable<PulseMood["calendar"]> }) 
   ];
   const cols: Column<Row>[] = [
     { key: "w", header: "When", rowHeader: true, cell: (r) => r.when },
-    { key: "k", header: "What", cell: (r) => r.kind },
-    { key: "d", header: "Who", wrap: true, cell: (r) => r.what },
+    { key: "k", header: "Type", cell: (r) => r.kind },
+    { key: "d", header: "Details", wrap: true, cell: (r) => r.what },
   ];
   return (
     <Card testId="pulse-calendar">

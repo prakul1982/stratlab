@@ -449,6 +449,11 @@ class Mood:
                     out[n] = []
             return out
         got, _ = self.closes.get((region, tag, today), read, 45.0)
+        # the key carries the day, so a new session reads again; the days gone by are forgotten, or four copies a day would pile up for as long
+        # as the process lives
+        for k in self.closes.keys():
+            if k[:2] == (region, tag) and k[2] != today:
+                self.closes.drop(k)
         return got or {}
 
     def sector_names(self, region: str) -> list[str]:
