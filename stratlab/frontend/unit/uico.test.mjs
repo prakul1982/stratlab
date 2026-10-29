@@ -152,3 +152,10 @@ test("tables everywhere on the company page: where a sale goes, who owns it, wha
   assert.match(r, /<QuoteTable region=\{region\} symbols=\{c\.peers\}/);
   assert.doesNotMatch(r, /className="k-dl pairs"/);
 });
+
+test("Screener results fit beside the filters (the sector wraps); the account banner's Retry steps aside for a page's own Try again", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.screens-table td \{ white-space: normal; \}/);
+  assert.match(css, /body:has\(main \.k-state\.error button, main \.k-state\.error a\.btn\) \.banner \.account-retry \{ display: none; \}/);
+  assert.match(read("src/components/AccountWait.tsx"), /className="btn sm quiet account-retry"/);
+});

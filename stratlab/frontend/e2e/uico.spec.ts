@@ -147,6 +147,11 @@ test("screener: the numeric filters are one table with equal boxes, and the resu
     await page.getByRole("button", { name: /Show filters/ }).click();
     await expect(save).toBeVisible();
   }
+  if (!phone) {
+    // the results fit beside the filters: no sideways scroll in their table at 1440
+    const fits = await page.locator(".screens-table .k-tbl-wrap").evaluate((e) => e.scrollWidth <= e.clientWidth + 1);
+    expect(fits, "the results table scrolls sideways").toBe(true);
+  }
   const ranges = page.getByRole("table", { name: "Filters on figures: at least and at most" });
   await expect(ranges.getByRole("columnheader")).toHaveText(["Measure", "At least", "At most"]);
   // the names are whole (they wrap, never end in "…"), and every box is the same width whether its unit is % or ×
