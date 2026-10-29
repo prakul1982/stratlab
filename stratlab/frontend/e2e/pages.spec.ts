@@ -1583,7 +1583,7 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   const costs = flexi.getByRole("region", { name: "What it costs" });
   await expect(costs.getByText("₹352")).toBeVisible();                       // the 1.28-point plan gap on ₹27,500
   await costs.getByText("Parts of the TER").first().click();
-  await expect(costs.getByText("Brokerage and transaction costs: 0.08%")).toBeVisible();
+  await expect(costs.getByRole("row", { name: /^Brokerage and transaction costs 0\.08%/ })).toBeVisible();          // TABLE-SWEEP: a row of the parts' table
   const short = schemes.getByRole("listitem").filter({ hasText: "Sample Short Duration Fund - Direct Plan - Growth" });
   await short.locator("summary").click();
   await expect(short.getByText(/Category changed on 16 Mar 2026 \(2026 recategorisation\)/)).toBeVisible();
@@ -1645,7 +1645,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
 
   // advance tax: the four dates, the amounts after TDS and a payment, and reminders
   await page.getByRole("radio", { name: "Advance tax" }).click();
-  await expect(page.getByRole("list", { name: "Due dates" }).getByRole("listitem")).toHaveCount(4);
+  await expect(page.getByRole("table", { name: "Due dates" }).locator("tbody tr")).toHaveCount(4);          // TABLE-SWEEP: the four dates are a table
   await expect(page.getByLabel("Tax for the year", { exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "TDS for the year" }).fill("50000");
   await page.getByRole("button", { name: "Add a payment" }).click();
@@ -1777,7 +1777,10 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   const [lo, sh] = (split.match(/[\d.]+(?=%)/g) ?? []).map(Number);
   expect(lo + sh).toBeCloseTo(100, 1);
   const sidesRow = main.getByTestId("part-figs").locator("tbody tr").filter({ has: page.getByTestId("sides-fig") });
-  await expect(sidesRow).toContainText(/long share\s*[\d.]+%\s*[\d.]+% short/);        // VR1-070: the long share as the figure, the short side in its note
+  // VR1-070: the long share as the figure, the short side in its note (beside it on a desktop, under the name on a phone: TABLE-SWEEP)
+  await expect(sidesRow.getByTestId("sides-fig")).toHaveText(/^[\d.]+%$/);
+  await expect(sidesRow).toContainText(/long share/);
+  await expect(sidesRow).toContainText(/[\d.]+% short/);
   await expect(sidesRow).toContainText(/[+−][\d.]+ pts from the previous trading day/);
   // a figure is three rows shared with its neighbours (label, number, note): nothing in one draws over the next
   const overlaps = await main.locator(".k-stat").evaluateAll((figs) => figs.flatMap((f) => {

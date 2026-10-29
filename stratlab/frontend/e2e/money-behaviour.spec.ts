@@ -71,18 +71,25 @@ test("fund behaviour: your return against the fund's, the SIP record and a redem
   const flexi = page.getByRole("list", { name: "Schemes" }).getByRole("listitem").filter({ hasText: "Example Flexi Cap Fund - Direct Plan - Growth" });
   await expect(flexi).toHaveCount(1);
   await flexi.locator("summary").click();
-  const how = flexi.getByRole("region", { name: "How you invested" });
-  await expect(how.getByText(/Compared over 10 Jan 2018 to today · NAV 10 to 25/)).toBeVisible();
+  const how = flexi.getByRole("region", { name: /^How you invested/ });
+  // TABLE-SWEEP (owner, 29 Oct): the scheme's story is a table of facts (it was sentences)
+  const facts = how.getByRole("table", { name: /^How you invested in Example Flexi Cap Fund/ });
+  const span = facts.getByRole("row", { name: /^Compared over/ });
+  await expect(span).toContainText("10 Jan 2018 to today");
+  await expect(span).toContainText("NAV 10 to 25");          // beside the dates on a desktop, under the words on a phone
 
   // the SIP record: one instalment in Feb 2019, long since stopped
-  await expect(how.getByText(/Feb 2019 to Feb 2019: 1 month paid, 0 missed/)).toBeVisible();
-  await expect(how.getByText(/no instalment after Feb 2019/)).toBeVisible();
+  const sip = facts.getByRole("row", { name: /^SIP record/ });
+  await expect(sip).toContainText("1 month paid, 0 missed");
+  await expect(sip).toContainText("Feb 2019 to Feb 2019");
+  await expect(sip).toContainText("no instalment after Feb 2019");
 
-  // sold at 20 with the high at 24: a 16.7% fall; the 300 units are ₹7,500 today against ₹6,000 received
-  const falls = how.getByRole("list", { name: "Redemptions after a fall" });
-  await expect(falls.getByText(/16.7% below the high of 24 \(3 Jun 2024\)/)).toBeVisible();
-  await expect(falls.getByText(/Received ₹6,000/)).toBeVisible();
-  await expect(falls.getByText(/those units today ₹7,500/)).toBeVisible();
+  // sold at 20 with the high at 24: a 16.7% fall; the 300 units are ₹7,500 today against ₹6,000 received (a row of its own table now)
+  const fall = how.getByRole("table", { name: /^Redemptions after a fall, Example Flexi Cap Fund/ }).getByRole("row", { name: /15 Aug 2024/ });
+  await expect(fall).toContainText("16.7%");
+  await expect(fall).toContainText("high 24 on 3 Jun 2024");
+  await expect(fall).toContainText("₹6,000");
+  await expect(fall).toContainText("₹7,500");
   await card.getByText("How this is worked out").click();
   await expect(card.getByText(/hindsight arithmetic/).first()).toBeVisible();
 

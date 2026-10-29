@@ -5,7 +5,7 @@ import { useApp } from "../../lib/app";
 import { Download, Lock } from "../../components/Icons";
 import { lockWords } from "../../lib/lockText";
 import { track } from "../../lib/analytics";
-import { Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
+import { Card, CardHead, type Column, DataTable, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormGrid, Notes, Notice, PageHeader, PlanNote, Select, Skeleton } from "../../components/kit";
 import { movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { minus } from "../../lib/format";
@@ -149,25 +149,17 @@ export function ItrExportPage() {
                 {words.map((s) => <div key={s.label}><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
               </dl>
             )}
-            {/* LIVE1B-028: the year's two answers are tiles; the other figures are a list of label and amount rows (eighteen tiles with labels of
-                one to three lines left their amounts at different heights and the last row short) */}
-            <StatRow>{figs.filter((s) => HEADLINE.test(s.label)).map((s) => <Stat key={s.label} label={s.label} value={s.value} />)}</StatRow>
-            <dl className="k-dl figs" aria-label="The year's figures">
-              {figs.filter((s) => !HEADLINE.test(s.label)).map((s) => <div key={s.label}><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
-            </dl>
+            {/* TABLE-SWEEP: the year's figures are one table, its two answers (the tax and what is payable now) first; they were two tiles over two
+                columns of label and amount rows (LIVE1B-028 had eighteen tiles before that) */}
+            <FigureTable label="The year's figures" header={`Figure, ${v.label}`} valueHeader="Amount" noteHeader={null}
+              rows={[...figs.filter((s) => HEADLINE.test(s.label)), ...figs.filter((s) => !HEADLINE.test(s.label))].map((s) => ({ key: s.label, label: HEADLINE.test(s.label) ? <b>{s.label}</b> : s.label, value: HEADLINE.test(s.label) ? <b>{s.value}</b> : s.value }))} />
           </Card>
 
           <section className="k-page" aria-label="Schedules">
-            {/* the schedules with nothing this year share one line, instead of a card each (R1-058) */}
-            {v.tables.some((t) => !t.count) && (
-              <Card compact label="Empty schedules">
-                <p className="k-small k-muted" data-testid="itr-empty"><b className="k-ink">Nothing this year in:</b> {v.tables.filter((t) => !t.count).map((t) => t.title).join(" · ")}.
-                  {" "}Upload trades on the <Link className="link" to="/tax-report">tax report</Link> to fill them.</p>
-              </Card>
-            )}
-            {/* LIVE1B-028: the schedules with lines are one card of rows, not nine bars of their own */}
-            {v.tables.some((t) => t.count) && (
-              <Card label="Schedules with lines">
+            {/* LIVE1B-028: the schedules are one card of rows, not nine bars of their own; TABLE-SWEEP: the ones with nothing this year are
+                rows of the same list (they were a dot-separated line in a card of their own, R1-058) */}
+            {v.tables.length > 0 && (
+              <Card label="Schedules">
                 <CardHead title="Schedules" />
                 <ul className="k-fold-rows" aria-label="Schedules with lines">
                   {v.tables.filter((t) => t.count).map((t) => (
@@ -180,13 +172,21 @@ export function ItrExportPage() {
                         <>
                           {t.rows && t.rows.length > 0 ? <Schedule t={t} />
                             : <EmptyState title={`Nothing to report in ${v.label}`}>Nothing in this schedule from your files for the year. Upload trades on the <Link className="link" to="/tax-report">tax report</Link> to fill it.</EmptyState>}
-                          {!!t.notes?.length && <ul className="k-list muted">{t.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
+                          {!!t.notes?.length && <Notes label={`About ${t.title ?? "this schedule"}`} items={t.notes} />}
                         </>
                       )}
                       {open === t.key && v.locked && <p className="k-small k-muted">The full table is on the {v.plan} plan.</p>}
                     </li>
                   ))}
                 </ul>
+                {v.tables.some((t) => !t.count) && (
+                  <ul className="k-fold-rows" aria-label="Schedules with nothing this year" data-testid="itr-empty">
+                    {v.tables.filter((t) => !t.count).map((t) => (
+                      <li key={t.key}><div className="k-fold k-fold-static"><span className="k-card-title">{t.title}</span><span className="k-note">nothing this year</span></div></li>
+                    ))}
+                  </ul>
+                )}
+                {v.tables.some((t) => !t.count) && <p className="k-note">Upload trades on the <Link className="link" to="/tax-report">tax report</Link> to fill the schedules with nothing this year.</p>}
               </Card>
             )}
           </section>
@@ -194,16 +194,16 @@ export function ItrExportPage() {
           {!!v.not_covered?.length && (
             <Card label="Not covered here">
               <CardHead title="Not covered here" info="Parts of the return these files can't fill: they need figures StratLab doesn't have, or the portal works them out." />
-              <ul className="k-list" aria-label="Not covered here" data-testid="itr-not-covered">{v.not_covered.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <Notes label="Not covered here" testId="itr-not-covered" items={v.not_covered} />
             </Card>
           )}
 
           {/* LIVE1B-028: the sources and the assumptions are one fold, not twenty small lines under the figures */}
           <Card label="Where the figures come from" compact>
             <Disclosure summary="Where the figures come from, and the assumptions">
-              <ul className="k-list" aria-label="Sources">{v.sources.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <Notes label="Sources" items={v.sources} />
               <h3 className="k-sub">Assumptions</h3>
-              <ul className="k-list muted">{v.assumptions.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <Notes label="Assumptions" items={v.assumptions} />
               <p className="k-note">StratLab doesn't file returns: filing on someone's behalf needs registration as an e-return intermediary with the Income Tax Department. Upload or type these figures into the return yourself, or hand the pack to your CA.</p>
             </Disclosure>
           </Card>

@@ -21,13 +21,13 @@ const noSideways = async (page: Page) => {
   expect(scroll, "the page scrolls sideways").toBeLessThanOrEqual(width + 1);
 };
 
-test("VR5-006: Holdings' four totals go two across on a phone, and the breadth card's three go 2 + 1, not one under another", async ({ page }) => {
+test("VR5-006: Holdings' four totals are one table on a phone, and the breadth card's three go 2 + 1, not one under another", async ({ page }) => {
   await open(page, "/holdings", ADMIN, 390);
-  const stats = page.locator("#h-summary .k-stats");
-  await expect(stats).toBeVisible({ timeout: 30_000 });
-  await expect(stats).toHaveClass(/\bduo\b/);
-  const tops = await stats.locator(".k-stat").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-  expect([...new Set(tops)].length, `tops ${tops}`).toBe(2);
+  // TABLE-SWEEP (owner, 29 Oct): the four totals are rows of one table now (they were four tiles, two across on a phone)
+  const totals = page.locator("#h-summary").getByRole("table", { name: "Where your stocks stand" });
+  await expect(totals).toBeVisible({ timeout: 30_000 });
+  await expect(totals.locator("tbody tr")).toHaveCount(4);
+  await noSideways(page);
   await page.goto("/invest");
   const card = page.getByTestId("breadth-card");
   await expect(card).toBeVisible({ timeout: 30_000 });

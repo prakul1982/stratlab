@@ -25,9 +25,10 @@ const inv = await import("../src/lib/invite.ts");
 test("DP2-003: a locked lot count is '–' with the lock, never 0", () => {
   const p = read("src/pages/money/TaxToolsPage.tsx");
   assert.match(p, /open_lt: \{ lots: number; gains: number; losses: number; with_gain: number \} \| null; soon_counts: Record<string, number> \| null;/);
-  assert.match(p, /const lockedStat = \(label: string\) => <Stat label=\{label\} value=\{<span aria-label=\{`\$\{label\}: on the Pro plan`\}><Lock \/>–<\/span>\} note="on the Pro plan" \/>;/);
-  assert.match(p, /\{v\.open_lt \? <Stat label="Open long-term lots"[\s\S]*?: lockedStat\("Open long-term lots"\)\}/);
-  assert.match(p, /\{v\.soon_counts \? <Stat label="Turning long-term soon"[\s\S]*?: lockedStat\("Turning long-term soon"\)\}/);
+  // TABLE-SWEEP: the figures are rows of one table; a locked one is still '–' with the lock
+  assert.match(p, /const lockedFig = \(key: string, label: string\) => \(\{ key, label, value: <span aria-label=\{`\$\{label\}: on the Pro plan`\}><Lock \/>–<\/span>, note: "On the Pro plan" \}\);/);
+  assert.match(p, /v\.open_lt \? \{ key: "open", label: "Open long-term lots"[\s\S]*?: lockedFig\("open", "Open long-term lots"\)/);
+  assert.match(p, /v\.soon_counts \? \{ key: "soon", label: "Turning long-term soon"[\s\S]*?: lockedFig\("soon", "Turning long-term soon"\)/);
 });
 
 test("DP2-004, DP2-012, DP2-013: Tax tools words each tab's lock at its top; reminders locked on Free; past dates marked", () => {
@@ -38,8 +39,9 @@ test("DP2-004, DP2-012, DP2-013: Tax tools words each tab's lock at its top; rem
   for (const note of ["Dividends by company, with the TDS expected", "the amount still due by each date", "Each open lot's long-term gain"]) assert.equal(p.split(note).length - 1, 1, note);
   assert.match(p, /\{v\.remind_locked\s*\? <p className="k-small k-muted" data-testid="advance-remind-locked">/);
   assert.match(p, /<FieldGroup label="Reminders" infoLabel="About advance tax reminders"/);
-  assert.match(p, /\{d\.date < today \? <span className="k-note"> · passed<\/span> : d\.n === nextDue \? <span className="k-note"> · next<\/span> : null\}/);
-  assert.match(p, /<h3 className="k-sub">Assumptions<\/h3>\s*<ul className="k-list">\{v\.assumptions/);
+  // TABLE-SWEEP: the due dates are a table, each marked in its When column; the assumptions numbered notes
+  assert.match(p, /\{ key: "s", header: "When", cell: \(d\) => \(d\.date < today \? <span className="k-muted">Passed<\/span> : d\.n === nextDue \? <b>Next<\/b> : "Ahead"\) \}/);
+  assert.match(p, /<h3 className="k-sub">Assumptions<\/h3>\s*<Notes label="Assumptions" items=\{v\.assumptions\} \/>/);
 });
 
 test("DP2-022, DP1-018: one limit wording, with the month's reset and what the next plan gives", () => {

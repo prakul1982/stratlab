@@ -104,7 +104,8 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   await expect(page.getByRole("table", { name: "Insurance policies" }).getByText(/due in (19|20|21) days/)).toBeVisible();
   await expect(page.getByText("Premiums a year:")).toBeVisible();
 
-  await expect(page.getByRole("list", { name: "Assets by class" }).getByText("FDs and RDs")).toBeVisible();
+  // TABLE-SWEEP (owner, 29 Oct): the mix is a table of each class, its value and share (it was a list of bars)
+  await expect(page.getByRole("table", { name: "Assets by class" }).getByRole("row", { name: /^FDs and RDs/ })).toBeVisible();
   await expect(page.getByText(/Prices as of/)).toHaveCount(0);      // nothing here is market-priced: no prices date to give (R60-008)
   if (info.project.name === "phone") await touchable(page);
 

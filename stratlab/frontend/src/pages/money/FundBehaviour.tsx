@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { asOf as asOfText, dateOnly, inr, monthLong, pctPlain, signed, signedInrCompact } from "../../lib/format";
 import { Info } from "../../components/ui";
-import { EmptyState, PlanNote, Signed, Stat } from "../../components/kit";
+import { DataTable, EmptyState, FactTable, Notes, PlanNote, Signed, type Column, type Fact, type Figure } from "../../components/kit";
 
 // Your SIP and fund behaviour: your XIRR beside each fund's own NAV return over the same dates, the gap in points and
 // rupees, the SIP record, redemptions after a fall from the high, and holding periods. What happened, never advice. The page says
@@ -67,24 +67,23 @@ export function behaviourParts(b: Behaviour | null) {
 }
 export const behaviourStatsShown = (q: BehaviourQuery) => { const p = behaviourParts(q.b); return !!p && Object.values(p).some(Boolean); };
 
-/** The totals over every fund, as stats for the page's one row of them (the gap in rupees, SIPs, redemptions after a fall, how long money was held). */
-export function BehaviourStats({ q }: { q: BehaviourQuery }) {
+/** The totals over every fund, as rows of the page's one table of totals (TABLE-SWEEP): the gap in rupees, SIPs, redemptions after a
+ * fall, how long money was held. */
+export function behaviourFigures(q: BehaviourQuery): Figure[] {
   const { b } = q;
   const parts = behaviourParts(b);
-  if (!b || !b.total || !parts) return null;
+  if (!b || !b.total || !parts) return [];
   const t = b.total;
-  return (
-    <>
-      {parts.gap && <Stat label={<>Gap in rupees, all funds <Info label="How the gap in rupees is worked out">Your value today and what you took out, less what the same purchases and redemptions would come to at each fund's own yearly NAV return. Positive: timing added to the fund's return. Negative: it took away. Your XIRR counts when your money went in and came out; the fund's NAV return is what a rupee kept in it all along earned over the same dates. The gap is what timing did: what happened, not what to do next.</Info></>}
-        value={rupees(t.gap_rupees)} note={`${t.compared} of ${t.schemes} fund${t.schemes === 1 ? "" : "s"} compared`} />}
-      {parts.sips && <Stat label="SIPs" value={t.sips ?? 0} note={`${t.sips_running ?? 0} running · ${t.sips_stopped ?? 0} stopped · ${t.months_missed ?? 0} month${t.months_missed === 1 ? "" : "s"} missed`} />}
-      {parts.falls && <Stat label={`Redemptions after a ${b.fall_pct}% fall`} value={b.pending > 0 ? "–" : t.falls ?? 0}
-        note={b.pending > 0 ? `Reading the NAV history of ${b.pending} fund${b.pending === 1 ? "" : "s"} to find each high` : `${inr(t.falls_received)} received · ${inr(t.falls_worth_today)} today`} />}
-      {/* DG-025: by the money redeemed, not by units of different schemes */}
-      {parts.held && <Stat label="Money redeemed was held, on average" value={span(t.avg_days_held)} note={t.held_under_year_pct != null ? `${t.held_under_year_pct.toFixed(0)}% of it for a year or less` : undefined} />}
-      {parts.long && <Stat label={`Today's value held over ${b.long_years} years`} value={`${t.long_share!.toFixed(0)}%`} note={t.long_value != null ? inr(t.long_value) : undefined} />}
-    </>
-  );
+  const out: Figure[] = [];
+  if (parts.gap) out.push({ key: "gap", label: <>Gap in rupees, all funds <Info label="How the gap in rupees is worked out">Your value today and what you took out, less what the same purchases and redemptions would come to at each fund's own yearly NAV return. Positive: timing added to the fund's return. Negative: it took away. Your XIRR counts when your money went in and came out; the fund's NAV return is what a rupee kept in it all along earned over the same dates. The gap is what timing did: what happened, not what to do next.</Info></>,
+    value: rupees(t.gap_rupees), note: `${t.compared} of ${t.schemes} fund${t.schemes === 1 ? "" : "s"} compared` });
+  if (parts.sips) out.push({ key: "sips", label: "SIPs", value: t.sips ?? 0, note: `${t.sips_running ?? 0} running · ${t.sips_stopped ?? 0} stopped · ${t.months_missed ?? 0} month${t.months_missed === 1 ? "" : "s"} missed` });
+  if (parts.falls) out.push({ key: "falls", label: `Redemptions after a ${b.fall_pct}% fall`, value: b.pending > 0 ? "–" : t.falls ?? 0,
+    note: b.pending > 0 ? `Reading the NAV history of ${b.pending} fund${b.pending === 1 ? "" : "s"} to find each high` : `${inr(t.falls_received)} received · ${inr(t.falls_worth_today)} today` });
+  // DG-025: by the money redeemed, not by units of different schemes
+  if (parts.held) out.push({ key: "held", label: "Money redeemed was held, on average", value: span(t.avg_days_held), note: t.held_under_year_pct != null ? `${t.held_under_year_pct.toFixed(0)}% of it for a year or less` : undefined });
+  if (parts.long) out.push({ key: "long", label: `Today's value held over ${b.long_years} years`, value: `${t.long_share!.toFixed(0)}%`, note: t.long_value != null ? inr(t.long_value) : undefined });
+  return out;
 }
 
 /** What the habits need said under their stats: why there are none, what the plan keeps back, how far the SIPs are counted. */
@@ -106,10 +105,10 @@ export function BehaviourHow({ q }: { q: BehaviourQuery }) {
   if (!b || !b.total || !b.schemes.length) return null;
   return (
     <>
-      <ul className="k-list muted">
-        {b.full && b.schemes.some((s) => (s.falls ?? []).length > 0) && <li>"Those units today" is hindsight arithmetic: the same units at today's NAV, known only afterwards.</li>}
-        {b.assumptions.map((a, i) => <li key={i}>{a}</li>)}
-      </ul>
+      <Notes label="How this is worked out" items={[
+        b.full && b.schemes.some((s) => (s.falls ?? []).length > 0) && "\"Those units today\" is hindsight arithmetic: the same units at today's NAV, known only afterwards.",
+        ...b.assumptions,
+      ]} />
       <p className="k-note">{asOfText(b.as_of) ? `Worked out ${asOfText(b.as_of)}. ` : ""}{b.disclaimer}</p>
     </>
   );
@@ -134,36 +133,37 @@ export function BehaviourDetail({ q, id, name }: { q: BehaviourQuery; id: string
   if (!b || !s) return null;
   const r = s.sip;
   const falls = s.falls ?? [];
+  const facts: Fact[] = [
+    { id: "span", k: "Compared over", v: s.from ? `${dateOnly(s.from)} to ${s.held ? "today" : dateOnly(s.to)}` : "No dated purchase in the statement",
+      n: s.start_nav != null && s.end_nav != null ? `NAV ${s.start_nav} to ${s.end_nav}` : undefined },
+    ...(b.full ? [{ id: "gap", k: "Gap in ₹", v: rupees(s.gap_rupees) }] : []),
+    ...(b.full && r ? [{ id: "sip", k: "SIP record", v: `${r.months_paid} month${r.months_paid === 1 ? "" : "s"} paid, ${r.months_missed} missed`,
+      n: <>{month(r.first)} to {month(r.last)} · longest unbroken run {r.longest_run} month{r.longest_run === 1 ? "" : "s"} ({month(r.longest_from)} to {month(r.longest_to)})
+        {r.stopped ? ` · no instalment after ${month(r.stopped_after!)}` : ` · running for ${r.current_run} month${r.current_run === 1 ? "" : "s"}`}</> }] : []),
+    ...(b.full && r && r.missed.length > 0 ? [{ id: "missed", k: "Missed", v: <>{r.missed.map(month).join(", ")}{r.months_missed > r.missed.length ? " and earlier" : ""}</> }] : []),
+  ];
+  const fallCols: Column<Fall>[] = [
+    { key: "d", header: "Date", rowHeader: true, cell: (f) => <span className="nowrap">{dateOnly(f.date)}</span> },
+    { key: "t", header: "What", cell: (f) => (f.type === "switch_out" ? "Switch out" : "Redemption") },
+    { key: "u", header: "Units", numeric: true, cell: (f) => f.units },
+    { key: "n", header: "NAV", numeric: true, cell: (f) => f.nav },
+    { key: "h", header: "Below the high", numeric: true, cell: (f) => <>{f.fall_pct}%<span className="k-sub-line">high {f.high} on {dateOnly(f.high_date)}{s.high_source === "statement" ? ", from your statement" : ""}</span></> },
+    { key: "r", header: "Received", numeric: true, cell: (f) => inr(f.received) },
+    { key: "w", header: "Those units today", numeric: true, cell: (f) => <>{inr(f.worth_today)}<span className="k-sub-line">{rupees(f.difference)}</span></> },
+  ];
+  // TABLE-SWEEP (owner, 29 Oct): the scheme's story as a table of facts, and each redemption after a fall as a row (they were sentences)
   return (
     <section aria-label={name ? `How you invested, ${name}` : "How you invested"}>
       <h3>How you invested</h3>
-      <p className="k-small">
-        <b>Compared over</b> {s.from ? `${dateOnly(s.from)} to ${s.held ? "today" : dateOnly(s.to)}` : "No dated purchase in the statement"}
-        {s.start_nav != null && s.end_nav != null ? ` · NAV ${s.start_nav} to ${s.end_nav}` : ""}
-        {b.full && <> · <b>Gap in ₹</b> {rupees(s.gap_rupees)}</>}
-      </p>
-      {s.idcw && <p className="k-note">IDCW option: the NAV return leaves out payouts; your XIRR counts them.</p>}
-      {s.short_span && <p className="k-note">Under a year: both rates annualised from a short span.</p>}
-      {b.full && r && (
-        <>
-          <p className="k-small">
-            <b>SIP record.</b> {month(r.first)} to {month(r.last)}: {r.months_paid} month{r.months_paid === 1 ? "" : "s"} paid, {r.months_missed} missed · longest unbroken run {r.longest_run} month{r.longest_run === 1 ? "" : "s"} ({month(r.longest_from)} to {month(r.longest_to)})
-            {r.stopped ? ` · no instalment after ${month(r.stopped_after!)}` : ` · running for ${r.current_run} month${r.current_run === 1 ? "" : "s"}`}
-          </p>
-          {r.missed.length > 0 && <p className="k-note">Missed: {r.missed.map(month).join(", ")}{r.months_missed > r.missed.length ? " and earlier" : ""}</p>}
-        </>
-      )}
+      <FactTable label={name ? `How you invested in ${name}` : "How you invested in it"} itemHead="Fact" figureHead="Figure" noteHead="Detail" rows={facts} />
+      <Notes label="About these figures" items={[
+        s.idcw && "IDCW option: the NAV return leaves out payouts; your XIRR counts them.",
+        s.short_span && "Under a year: both rates annualised from a short span.",
+      ]} />
       {b.full && falls.length > 0 && b.pending === 0 && (
         <>
-          <p className="k-small"><b>Redemptions after a fall of {b.fall_pct}% or more</b></p>
-          <ul className="k-list plain" aria-label="Redemptions after a fall">
-            {falls.map((f) => (
-              <li key={`${f.date}${f.type}${f.units}`} className="k-small">
-                {dateOnly(f.date)}: {f.type === "switch_out" ? "switch out" : "redemption"} of {f.units} units at NAV {f.nav}, {f.fall_pct}% below the high of {f.high} ({dateOnly(f.high_date)}{s.high_source === "statement" ? ", from your statement" : ""}).
-                {" "}Received {inr(f.received)}; those units today {inr(f.worth_today)} ({rupees(f.difference)}).
-              </li>
-            ))}
-          </ul>
+          <h3>Redemptions after a fall of {b.fall_pct}% or more</h3>
+          <DataTable label={name ? `Redemptions after a fall, ${name}` : "Redemptions after a fall, this scheme"} columns={fallCols} rows={falls} rowKey={(f) => `${f.date}${f.type}${f.units}`} />
         </>
       )}
     </section>

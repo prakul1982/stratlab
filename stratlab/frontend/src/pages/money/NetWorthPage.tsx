@@ -5,13 +5,13 @@ import { numberProblem, type Limits } from "../../lib/validate";
 import { useApp } from "../../lib/app";
 import { useMarketRefresh } from "../../lib/marketLive";
 import { LoanCheck } from "./LoanCheck";
-import { asOf, axisInr, dateOnly, inr, inrCompact, istToday, pctPlain, signedInrCompact } from "../../lib/format";
+import { asOf, axisInr, dateOnly, inr, inrCompact, istToday, signedInrCompact } from "../../lib/format";
 import { mergeLiveNetWorth, netWorthDelta, pricedMarkets, restatedNote, sinceNote } from "../../lib/networth";
 import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
 import { Download, Plus, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, FactTable, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, TilePicker, useRange, type Column, type TileGroup } from "../../components/kit";
+import { Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, FactTable, Field, FormActions, FormGrid, Notice, Notes, PageHeader, PlanNote, Select, ShareTable, Skeleton, TilePicker, useRange, type Column, type TileGroup } from "../../components/kit";
 
 /* /money/net-worth: what you own minus what you owe: stocks from My Holdings, plus the deposits, provident funds, gold,
  * property and loans added here, each with how it is worked out and its date. Built from the kit (components/kit). */
@@ -419,9 +419,9 @@ export function NetWorthPage() {
     { key: "loan", header: "Loan", rowHeader: true, cell: (r) => <><b>{r.name}</b><span className="k-sub-line">{loanRate(r)}{r.basis === "as entered" ? " · as entered" : ""}</span></> },
     { key: "owed", header: "Owed today", numeric: true, cell: (r) => inr(r.value) },
     { key: "emi", header: "EMI", numeric: true, cell: (r) => (r.facts.emi != null ? inr(r.facts.emi) : "–") },
-    { key: "left", header: "EMIs left", numeric: true, cell: (r) => r.facts.left ?? "–" },
     { key: "int", header: "Interest this FY", numeric: true, cell: (r) => (r.facts.interest_fy != null ? inr(r.facts.interest_fy) : "–") },
-    { key: "ends", header: "Ends", numeric: true, cell: (r) => (r.facts.ends ? day(r.facts.ends) : "–") },
+    // TABLE-SWEEP: the EMIs left under the end date, one column, so the row's three buttons stay on the card at 1280
+    { key: "ends", header: "Ends", numeric: true, cell: (r) => <>{r.facts.ends ? day(r.facts.ends) : "–"}{r.facts.left != null && <span className="k-sub-line">{r.facts.left} EMI{r.facts.left === 1 ? "" : "s"} left</span>}</> },
     { key: "act", header: "", action: true, cell: (r) => (
       <span className="k-row">
         {r.facts.left ? <button type="button" className="btn quiet sm" onClick={() => setPrepay(r)} aria-label={`Prepay ${r.name}`}>Prepay</button> : null}
@@ -433,7 +433,8 @@ export function NetWorthPage() {
     { key: "policy", header: "Policy", rowHeader: true, cell: (p) => <><b>{p.name}</b><span className="k-sub-line">{p.label} · {p.insurer}</span></> },
     { key: "sum", header: "Sum assured", numeric: true, cell: (p) => inr(p.sum_assured) },
     { key: "prem", header: "Premium", numeric: true, cell: (p) => <>{inr(p.premium)}<span className="k-sub-line">{p.frequency === "single" ? "once" : p.frequency}</span></> },
-    { key: "due", header: "Next due", numeric: true, cell: (p) => (p.next_due ? <>{day(p.next_due)}<span className="k-sub-line">{p.due_in === 0 ? "due today" : `due in ${p.due_in} day${p.due_in === 1 ? "" : "s"}`}</span></> : "–") },
+    // TABLE-SWEEP: the Next due column only when a policy has a due date (a column of dashes said nothing)
+    ...(view?.insurance.policies.some((p) => p.next_due) ? [{ key: "due", header: "Next due", numeric: true, cell: (p: Policy) => (p.next_due ? <>{day(p.next_due)}<span className="k-sub-line">{p.due_in === 0 ? "due today" : `due in ${p.due_in} day${p.due_in === 1 ? "" : "s"}`}</span></> : "–") } as Column<Policy>] : []),
     { key: "nom", header: "Nominee", cell: (p) => p.nominee || <span className="k-muted">Not entered</span> },
     { key: "act", header: "", action: true, cell: (p) => (
       <span className="k-row">
@@ -475,14 +476,15 @@ export function NetWorthPage() {
           <Card label="Totals">
             <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined} />
             {/* with no loans the assets are the net worth: the same figure said again is left out (LIVE1C-056: ₹20,33,027 five times) */}
-            <FactTable label="Where you stand" itemHead="" figureHead="Now" noteHead="Change" rows={[
-              { id: "net", k: "Net worth", v: <b>{inr(t.net)}</b>, n: <>{move && <Delta value={move.change}>{signedInrCompact(move.change)}</Delta>} {move ? sinceNote(move, day, inrCompact) : restatedNote(hist, view?.valuation, day) ?? undefined}</> },
+            {/* TABLE-SWEEP: a named first column and right-aligned figures; the Change column only when there is a change or a restated note to show */}
+            <FactTable label="Where you stand" itemHead="Total" figureHead="Now" noteHead="Change" numeric rows={[
+              { id: "net", k: "Net worth", v: <b>{inr(t.net)}</b>, n: move ? <><Delta value={move.change}>{signedInrCompact(move.change)}</Delta> {sinceNote(move, day, inrCompact)}</> : restatedNote(hist, view?.valuation, day) ?? undefined },
               ...(t.liabilities > 0 ? [{ id: "assets", k: "Assets", v: inr(t.assets) }, { id: "loans", k: "Loans", v: inr(t.liabilities) }] : []),
             ]} />
             {/* a source that couldn't be read or valued: named; snapshots of such a total are marked partial */}
             {/* DG-016: something with no price yet is a routine note; a source that couldn't be read is the warning */}
             {t.partial && t.partial.length > 0 && <Notice tone={t.partial_lasting ? "info" : "warn"} role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. {t.partial_lasting ? "The history goes on meanwhile, with each snapshot marked partial." : "Only the monthly snapshot is kept meanwhile, marked partial."}</Notice>}
-            {t.notes && t.notes.length > 0 && <p className="k-note" data-testid="nw-notes">{t.notes.join("; ")}.</p>}
+            {t.notes && t.notes.length > 0 && <Notes testId="nw-notes" items={t.notes} />}
             {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
             {view.limit != null && <p className="k-note">{view.count} of {view.limit} free entries used. Basic keeps as many as you like, with the monthly history.</p>}
             {/* the history has a card once there is a chart to draw; until then, one line here says when it starts */}
@@ -523,8 +525,10 @@ export function NetWorthPage() {
           {view.allocation.length > 1 && (
             <Card>
               <CardHead title="By asset class" />
-              <BarList label="Assets by class" footnote="Share of total assets, before loans."
-                rows={view.allocation.map((a) => ({ key: a.class, name: a.label, value: <>{inr(a.value)} <span className="k-muted">· {a.pct == null ? "–" : pctPlain(a.pct, 1)}</span></>, pct: a.pct, title: `${a.label}: ${inr(a.value)} (${a.pct ?? 0}% of assets)` }))} />
+              {/* TABLE-SWEEP: a table of the classes, their amount and their share, with the total under them (it was a list of bars) */}
+              <ShareTable label="Assets by class" head="Asset class" footnote="Share of total assets, before loans."
+                rows={view.allocation.map((a) => ({ key: a.class, name: a.label, value: inr(a.value), pct: a.pct }))}
+                total={{ name: "All assets", value: inr(view.totals.assets), pct: 100 }} />
             </Card>
           )}
 
@@ -566,11 +570,13 @@ export function NetWorthPage() {
 
 
           <section className="k-stack">
-            <p className="k-note">
-              Rates used unless you enter your own: EPF {view.rates.epf_note}; PPF {view.rates.ppf_note}; sovereign gold bonds {view.rates.sgb}% a year on the issue price.
-              Deposits use the bank's usual method (whole periods compounded, simple interest on the days after). Values are before tax. Property and anything marked "as entered" is your own figure.
-              Your entries are stored with your account only and never shared.
-            </p>
+            {/* TABLE-SWEEP: the qualifiers as numbered notes, not one long paragraph */}
+            <Notes label="How the values are worked out" items={[
+              <>Rates used unless you enter your own: EPF {view.rates.epf_note}; PPF {view.rates.ppf_note}; sovereign gold bonds {view.rates.sgb}% a year on the issue price.</>,
+              "Deposits use the bank's usual method: whole periods compounded, simple interest on the days after.",
+              "Values are before tax. Property and anything marked \"as entered\" is your own figure.",
+              "Your entries are stored with your account only and never shared.",
+            ]} />
             <div className="k-row">
               {!empty && <button type="button" className="btn quiet" onClick={download}><Download size={16} />Download CSV</button>}
               {!empty && <button type="button" className="btn danger" onClick={removeAll}><Trash size={16} />Delete my net worth data</button>}

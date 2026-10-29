@@ -1051,6 +1051,19 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 .rc-said { align-items: flex-end; } .rc-result { align-items: flex-start; }
 .rc-quote { max-width: 70ch; }
 .dd-share { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; min-width: 90px; } .dd-share .k-meter { width: 100%; }
+/* TABLE-SWEEP: a fund's tax kind, its own field under the table of what is held */
+.mf-kind { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin-top: var(--s3); }
+.mf-kind .k-input { width: auto; min-width: 12rem; }
+/* TABLE-SWEEP: a share table on a phone stays a table of three columns: the name wraps, the amount and the share keep to their figures */
+@media (max-width: 640px) {
+  .k-share .k-table th, .k-share .k-table td { padding-left: var(--s2); padding-right: var(--s2); }
+  .k-share .k-tbl-wrap:not(.stack):not(.pinhead) .k-table :is(thead th, tbody th, tbody td:not(.k-empty-row), tfoot th):first-child { min-width: 0; max-width: none; }
+  .k-share .k-table th.k-wrap { min-width: 0; }
+  .k-share .dd-share { min-width: 56px; }
+  /* and a fact table's two columns share the width: neither keeps the wrap's 160px floor */
+  .k-facts .k-table :is(td, th).k-wrap { min-width: 0; }
+  .k-facts .k-tbl-wrap:not(.stack):not(.pinhead) .k-table :is(thead th, tbody th, tbody td:not(.k-empty-row), tfoot th):first-child { min-width: min(7rem, 35vw); }
+}
 @media (max-width: 640px) { .rc-said { align-items: flex-start; } }
 .promises { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .promise { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -1827,6 +1840,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-tbl-wrap.stack .k-table td, .k-tbl-wrap.stack .k-table th[scope="row"] { display: block; padding: 0; border: 0; white-space: normal; text-align: left; min-width: 0; background: none; }
   .k-tbl-wrap.stack .k-table th[scope="row"] { grid-column: 1 / -1; color: var(--ink); font-size: var(--t-body); }
   .k-tbl-wrap.stack .k-table td[data-label]::before { content: attr(data-label) / ""; display: block; color: var(--muted); font-size: var(--t-note); font-weight: 400; }
+  .k-tbl-wrap.stack .k-table td[data-blank] { display: none; }   /* TABLE-SWEEP: no "What it counts" label over an empty cell on a phone card */
   /* UI-FIX-1 (R10): a long status badge ("Social Stock Exchange raise, not an IPO") wraps inside its cell instead of running under the next */
   .k-tbl-wrap.stack .k-table td .k-badge { white-space: normal; max-width: 100%; border-radius: 14px; }
   .k-tbl-wrap.stack .k-table td.k-act, .k-tbl-wrap.stack .k-table td.k-row-note, .k-tbl-wrap.stack .k-table td.k-empty-row { grid-column: 1 / -1; }
@@ -1928,10 +1942,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-range:disabled { opacity: .6; cursor: not-allowed; }
 .k-range-value { font-size: var(--t-label); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.k-bars { display: flex; flex-direction: column; gap: var(--s3); }
-.k-bar { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.k-bar-top { display: flex; justify-content: space-between; gap: var(--s3); font-size: var(--t-label); }
-.k-bar-v { font-weight: 600; white-space: nowrap; }
+/* TABLE-SWEEP: a card's long qualifiers as numbered notes (kit Notes) */
+.k-notes { margin: 0; padding-left: var(--s5); display: flex; flex-direction: column; gap: var(--s1); font-size: var(--t-note); line-height: 1.5; color: var(--muted); }
+.k-notes li { padding-left: 2px; }
+.k-notes li::marker { font-variant-numeric: tabular-nums; color: var(--muted); }
 .k-meter { height: 6px; border-radius: 99px; background: var(--chip); overflow: hidden; }
 .k-meter i { display: block; height: 100%; background: var(--blue); border-radius: 99px; }
 .k-disclosure > summary { cursor: pointer; font-size: var(--t-label); font-weight: 500; color: var(--ink-2); min-height: 32px; display: flex; align-items: center; gap: var(--s2); list-style: none; }
@@ -1999,11 +2013,6 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 /* a few facts spread over the card's width (the account's profile), not packed in its left half (UI-FIX-1, R2) */
 .k-dl.spread { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .k-dl.facts { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
-/* LIVE1B-028: a list of figures, each a label with its amount on the right, in two columns from a laptop up */
-.k-dl.figs { grid-template-columns: minmax(0, 1fr); gap: 0 var(--s7, 40px); margin-top: var(--s3); }
-.k-dl.figs > div { flex-direction: row; justify-content: space-between; align-items: baseline; gap: var(--s4); padding: 10px 0; border-bottom: 1px solid var(--line); }
-.k-dl.figs dd { text-align: right; white-space: nowrap; }
-@media (min-width: 900px) { .k-dl.figs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .k-fold-rows > li > .k-fold { min-height: 44px; }
 .k-dl.prose { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s4) var(--s5); }
 .k-dl.prose dt { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
@@ -2014,6 +2023,9 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-downloads .btn small { display: block; font-weight: 400; opacity: .75; font-size: var(--t-note); }
 .k-fold { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; display: flex; justify-content: space-between; align-items: center; gap: var(--s3); text-align: left; flex-wrap: wrap; }
 .k-fold .k-card-title { font-size: var(--t-card); }
+/* TABLE-SWEEP: an ITR schedule with nothing this year, a row of the same list that opens nothing */
+.k-fold.k-fold-static { cursor: default; }
+.k-fold.k-fold-static .k-card-title { color: var(--muted); }
 
 /* account, settings, assistant, app, invite */
 .k-linkcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s3); }

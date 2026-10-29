@@ -44,7 +44,8 @@ test("MO-3c: the downloads share the width equally and the facts in words leave 
   assert.match(src, /\(v\?\.summary \?\? \[\]\)\.filter\(\(s\) => !isFigure\(s\.value\) && s\.label !== "Financial year"\)/);
   // LIVE1B-028: the figures are the two answers as tiles and the rest as a list, all taken from the lines that are figures
   assert.match(src, /const figs = \(v\?\.summary \?\? \[\]\)\.filter\(\(s\) => isFigure\(s\.value\)\);/);
-  assert.match(src, /<StatRow>\{figs\.filter\(\(s\) => HEADLINE\.test\(s\.label\)\)/);
+  // TABLE-SWEEP: the two answers lead the one table of the year's figures
+  assert.match(src, /rows=\{\[\.\.\.figs\.filter\(\(s\) => HEADLINE\.test\(s\.label\)\), \.\.\.figs\.filter\(\(s\) => !HEADLINE\.test\(s\.label\)\)\]/);
   assert.doesNotMatch(src, /k-stat-text/);
   // the same test as the page: money is a figure, the year, the return and the audit are words
   const isFigure = (value) => /^[−+-]?[₹$\d]/.test(value) && value.length < 18;

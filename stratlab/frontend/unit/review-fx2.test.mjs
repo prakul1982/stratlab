@@ -62,7 +62,7 @@ test("RC2B-003, RC2B-004: no late fee for a year with no return; one headline fi
 test("RC2B-006, RC2B-007, RC2B-035: the SIP result says a live price and a demerger", () => {
   const src = read("src/pages/money/SipTestPage.tsx");
   assert.match(src, /res\?\.last_live \? "Last price" : "Last close"/);
-  assert.match(src, /data-testid="sip-note"/);
+  assert.match(src, /testId="sip-note"/);          // TABLE-SWEEP: the notes are numbered (kit Notes)
   assert.match(src, /last_live\?: boolean; notes\?: string\[\]/);
 });
 

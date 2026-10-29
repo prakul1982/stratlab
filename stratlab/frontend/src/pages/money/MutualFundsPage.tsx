@@ -7,9 +7,9 @@ import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { LIMITS } from "../../lib/plans";
-import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column, UploadProblem, useUploadProblem } from "../../components/kit";
-import { CostCell, CostDetail, CostHow, CostNotes, CostStats, costStatsShown, costsShown, useFundCosts } from "./FundCosts";
-import { BehaviourDetail, BehaviourHow, BehaviourNotes, BehaviourStats, GapCell, behaviourShown, behaviourStatsShown, hasGap, useFundBehaviour } from "./FundBehaviour";
+import { Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, ShareTable, Signed, Skeleton, UploadButton, type Column, UploadProblem, useUploadProblem, Notes } from "../../components/kit";
+import { CostCell, CostDetail, CostHow, CostNotes, costFigures, costStatsShown, costsShown, useFundCosts } from "./FundCosts";
+import { BehaviourDetail, BehaviourHow, BehaviourNotes, behaviourFigures, GapCell, behaviourShown, behaviourStatsShown, hasGap, useFundBehaviour } from "./FundBehaviour";
 import { Earlier } from "../../components/Earlier";
 import { movedYearNote, openFy } from "../../lib/fy";
 import { importLine } from "../../lib/mfImport";
@@ -44,6 +44,12 @@ type View = {
   updated_at: string | null; txns: number; charge_lines?: number; kinds: Record<Kind, string>; nav_date: string | null; assumptions: string[]; disclaimer: string; as_of: string;
 };
 type Problem = { line?: number; text: string; reason: string };
+/** Each line of an imported file that was left out: its line number, what it said and why (TABLE-SWEEP: all of them, as a table). */
+const problemCols: Column<Problem & { i: number }>[] = [
+  { key: "l", header: "Line", rowHeader: true, numeric: true, cell: (p) => p.line ?? "–" },
+  { key: "t", header: "What it said", wrap: true, cell: (p) => p.text || "–" },
+  { key: "r", header: "Why it was left out", wrap: true, cell: (p) => p.reason },
+];
 type ImportReply = { kind: "cas" | "csv"; added: number; duplicates: number; over_limit: string[]; schemes: number; kept?: number; charges?: number; problems: Problem[]; limit: number | null; upgrade: string | null; view: View };
 
 const MAX_MB = 5;
@@ -228,12 +234,11 @@ export function MutualFundsPage() {
               <b>{result.kind === "cas" ? "Read your statement" : "Read as a CSV file"}:</b> {importLine(result)}
             </p>
             {result.over_limit.length > 0 && (
-              <p className="k-small">Your plan keeps {result.limit} schemes, so {result.over_limit.length} {result.over_limit.length === 1 ? "was" : "were"} left out: {result.over_limit.slice(0, 8).join(", ")}{result.over_limit.length > 8 ? "…" : ""}. {result.upgrade} <PlanInline /></p>
+              <p className="k-small">Your plan keeps {result.limit} schemes, so {result.over_limit.length} {result.over_limit.length === 1 ? "was" : "were"} left out: {result.over_limit.join(", ")}. {result.upgrade} <PlanInline /></p>
             )}
             {result.problems.length > 0 && (
-              <ul className="k-list muted" aria-label="Lines left out">
-                {result.problems.slice(0, 20).map((p, i) => <li key={i}>{p.line ? `Line ${p.line}: ` : ""}{p.text ? `${p.text} · ` : ""}{p.reason}</li>)}
-              </ul>
+              // TABLE-SWEEP: every line left out, as a table (it was the first 20 as a list)
+              <DataTable label="Lines left out" phonePage={10} columns={problemCols} rows={result.problems.map((p, i) => ({ ...p, i }))} rowKey={(p) => String(p.i)} />
             )}
           </div>
         )}
@@ -257,17 +262,19 @@ export function MutualFundsPage() {
         <>
           {held.length > 0 && <Card className="mf-stats">
             <CardHead title="Where your funds stand" info={navWhen ? `Valued at the NAV of ${navWhen}.` : "No NAV is available yet."} />
-            <StatRow>
-              <Stat label="Current value" value={inr(t.value)} note={`${t.held} scheme${t.held === 1 ? "" : "s"} held`} />
-              <Stat label={<>Invested <Info label="What invested means">The cost of the units you still hold, matched first in, first out, including stamp duty. Units sold or switched out are not in it.</Info></>}
-                value={inr(t.invested)} note={t.unknown_cost > 0 ? `${t.unknown_cost} scheme${t.unknown_cost === 1 ? "" : "s"} without a known cost left out` : undefined} />
-              <Stat label="Unrealised gain" value={inr(t.gain)} tone={signTone(t.gain)} note={t.no_nav ? `${t.no_nav} scheme${t.no_nav === 1 ? "" : "s"} without a NAV left out` : undefined} delta={t.invested > 0 ? <Delta value={t.gain}>{pct((t.gain / t.invested) * 100)}</Delta> : undefined} />
-              <Stat label={<>XIRR, all schemes <Info label="What XIRR is">The yearly rate of return that accounts for when each rupee went in and came out: every purchase, redemption and dividend paid out, with today's value as the last amount.</Info></>}
-                value={xirrText(t.xirr)} tone={signTone(t.xirr)} />
-            </StatRow>
+            {/* TABLE-SWEEP: the totals as one table (the figure, its amount, what it counts), not four tiles with lines under them */}
+            <FigureTable label="Where your funds stand" header="Total" valueHeader="Amount" rows={[
+              { key: "value", label: "Current value", value: inr(t.value), note: `${t.held} scheme${t.held === 1 ? "" : "s"} held` },
+              { key: "invested", label: <>Invested <Info label="What invested means">The cost of the units you still hold, matched first in, first out, including stamp duty. Units sold or switched out are not in it.</Info></>,
+                value: inr(t.invested), note: t.unknown_cost > 0 ? `${t.unknown_cost} scheme${t.unknown_cost === 1 ? "" : "s"} without a known cost left out` : undefined },
+              { key: "gain", label: "Unrealised gain", value: inr(t.gain), tone: signTone(t.gain),
+                note: <>{t.invested > 0 && <Delta value={t.gain}>{pct((t.gain / t.invested) * 100)}</Delta>}{t.no_nav ? `${t.invested > 0 ? " · " : ""}${t.no_nav} scheme${t.no_nav === 1 ? "" : "s"} without a NAV left out` : ""}</> },
+              { key: "xirr", label: <>XIRR, all schemes <Info label="What XIRR is">The yearly rate of return that accounts for when each rupee went in and came out: every purchase, redemption and dividend paid out, with today's value as the last amount.</Info></>,
+                value: xirrText(t.xirr), tone: signTone(t.xirr) },
+            ]} />
             {/* the mix said once, in the card of the totals (it was a card of its own) */}
-            <BarList label="Funds by category" footnote="Share of the current value, by each scheme's official category."
-              rows={view.allocation.map((a) => ({ key: a.broad, name: a.broad, note: `${a.schemes} scheme${a.schemes === 1 ? "" : "s"}${a.subs.length > 0 ? ` · ${a.subs.map((s) => s.sub).join(", ")}` : ""}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
+            <ShareTable label="Funds by category" head="Category" countHead="Schemes" detailHead="Official categories" footnote="Share of the current value, by each scheme's official category."
+              rows={view.allocation.map((a) => ({ key: a.broad, name: a.broad, count: a.schemes, detail: a.subs.map((s) => s.sub).join(", "), value: inr(a.value), pct: a.pct }))} />
             {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
             {view.limit != null && <p className="k-note">{schemes.length} of {view.limit} free schemes used. Basic keeps every scheme, with capital gains by year.</p>}
           </Card>}
@@ -275,7 +282,8 @@ export function MutualFundsPage() {
           {held.length > 0 && (costsShown(costs) || behaviourShown(habits)) && (
             <Card label="Costs and how you invested" className="mf-stats">
               <CardHead title="What your funds cost, and how you invested" info="Each fund's total expense ratio (TER) as published and what it comes to in rupees a year, then your return against each fund's own, your SIPs and your redemptions. Each scheme's own figures are under it in the list below." />
-              {(costStatsShown(costs) || behaviourStatsShown(habits)) && <StatRow><CostStats q={costs} /><BehaviourStats q={habits} /></StatRow>}
+              {/* TABLE-SWEEP: the totals over every fund as one table; they were seven tiles in two uneven rows */}
+              {(costStatsShown(costs) || behaviourStatsShown(habits)) && <FigureTable label="What your funds cost, and how you invested" header="Total" valueHeader="Figure" rows={[...costFigures(costs), ...behaviourFigures(habits)]} />}
               <CostNotes q={costs} />
               <BehaviourNotes q={habits} />
               <Disclosure summary="How this is worked out"><CostHow q={costs} /><BehaviourHow q={habits} /></Disclosure>
@@ -290,7 +298,7 @@ export function MutualFundsPage() {
               <FoldTable label="Schemes you no longer hold" columns={schemeCols} rows={schemes.filter((s) => s.units <= 0)} rowKey={(s) => s.key} detail={detail} openWhen={open} />
             </Earlier>
             <Disclosure summary="What each tax kind means">
-              <ul className="k-list muted">{(Object.keys(view.kinds) as Kind[]).map((k) => <li key={k}>{view.kinds[k]}</li>)}</ul>
+              <Notes label="What each tax kind means" items={(Object.keys(view.kinds) as Kind[]).map((k) => view.kinds[k])} />
             </Disclosure>
           </Card>
 
@@ -306,14 +314,14 @@ export function MutualFundsPage() {
               {view.gains.years.length === 0 && <EmptyState title="No gains realised yet">No redemptions or switches out yet, so no gains have been realised.</EmptyState>}
               {y && (
                 <>
-                  <StatRow>
-                    <Stat label="Short-term (net)" value={inr(y.stcg.net)} tone={signTone(y.stcg.net)} />
-                    <Stat label="Long-term (net)" value={inr(y.ltcg.net)} tone={signTone(y.ltcg.net)} />
-                    <Stat label="Tax at special rates" value={inr(y.tax)} note="before cess; slab-rate gains are taxed with your income" />
-                    <Stat label="Dividends paid out" value={inr(y.dividends)} note="income at your slab rate" />
-                  </StatRow>
+                  <FigureTable label={`Capital gains, ${y.label}`} header={y.label} valueHeader="Amount" noteHeader="How it is taxed" rows={[
+                    { key: "st", label: "Short-term (net)", value: inr(y.stcg.net), tone: signTone(y.stcg.net) },
+                    { key: "lt", label: "Long-term (net)", value: inr(y.ltcg.net), tone: signTone(y.ltcg.net) },
+                    { key: "tax", label: "Tax at special rates", value: inr(y.tax), note: "Before cess; slab-rate gains are taxed with your income" },
+                    { key: "div", label: "Dividends paid out", value: inr(y.dividends), note: "Income at your slab rate" },
+                  ]} />
                   {y.buckets.length > 0 && <DataTable label="Gains by rate" columns={bucketCols} rows={y.buckets} rowKey={(b) => b.key} />}
-                  {y.steps.length > 0 && <ul className="k-list">{y.steps.map((s, i) => <li key={i}>{s}</li>)}</ul>}
+                  {y.steps.length > 0 && <Notes label={`How the gains of ${y.label} are worked out`} items={y.steps} />}
                   <p className="k-note">The long-term exemption here counts your funds alone. The <Link className="link" to="/tax-report">tax report</Link> adds these gains to your shares', shares the exemption and set-off between them, and includes them in the year's total tax estimate.</p>
                   {/* the split by scheme is under each scheme in the list, with all its years (it was a table of every scheme again) */}
                   {y.count > 0 && <p className="k-note" data-testid="mf-sales-pointer">{y.count} redemption{y.count === 1 ? "" : "s"} matched to purchases in {y.label}. Each is listed under its scheme in Your schemes.</p>}
@@ -323,13 +331,13 @@ export function MutualFundsPage() {
                 <p className="k-small k-down">{view.gains.gf_missing.length} scheme{view.gains.gf_missing.length === 1 ? " needs" : "s need"} the NAV of 31 Jan 2018{gfFor ? ` for sales in ${gfFor}` : ""}; enter it under {view.gains.gf_missing.length === 1 ? "the scheme" : "each scheme"} in Your schemes.</p>
               )}
               <Disclosure summary="How gains are worked out">
-                <ul className="k-list muted">{view.gains.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
+                <Notes label="About these gains" items={view.gains.notes} />
               </Disclosure>
             </Card>
           )}
 
           <section className="k-stack">
-            <ul className="k-list muted" aria-label="Assumptions">{view.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+            <Notes label="Assumptions" items={view.assumptions} />
             <p className="k-note">Your transactions are stored with your account only, used for this page, the tax report and your net worth, and never shared. Worked out on {dateOnly(view.as_of)}.</p>
             <button type="button" className="btn danger k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete my mutual fund data</button>
           </section>
@@ -379,16 +387,18 @@ function SchemeHolding({ s, setKind }: { s: Scheme; setKind: (key: string, kind:
   return (
     <section aria-label={`Holding, ${s.name}`}>
       <h3>What you hold</h3>
-      <dl className="k-dl">
-        <div><dt>Folio</dt><dd>{s.folio}</dd></div>
-        <div><dt>Units</dt><dd>{qtyText(s.units)}</dd></div>
-        <div><dt>NAV</dt><dd>{price(s.nav, "INR")}<span className="k-sub-line">{s.nav_date ? dateOnly(s.nav_date) : "–"}{s.nav_source === "statement" ? " · statement" : ""}</span></dd></div>
-        <div><dt>Invested</dt><dd>{inr(s.invested)}</dd></div>
-        <div><dt>Taxed as</dt><dd>
-          <Select label={`How ${s.name} is taxed`} value={s.kind} onChange={(k) => setKind(s.key, k === s.kind_auto ? null : k as Kind)} options={(Object.keys(KIND_SHORT) as Kind[]).map((k) => ({ value: k, label: KIND_SHORT[k] }))} />
-          <span className="k-sub-line" data-testid="mf-kind-basis">{kindBasis(s)}</span>
-        </dd></div>
-      </dl>
+      {/* TABLE-SWEEP (owner, 29 Oct): the holding's figures as a table, the tax kind as its own field under it (they were five tiles) */}
+      <FigureTable label={`What you hold in ${s.name}`} header="Holding" valueHeader="Figure" noteHeader="As of" rows={[
+        { key: "folio", label: "Folio", value: s.folio },
+        { key: "units", label: "Units", value: qtyText(s.units) },
+        { key: "nav", label: "NAV", value: price(s.nav, "INR"), note: <>{s.nav_date ? dateOnly(s.nav_date) : "–"}{s.nav_source === "statement" ? " · statement" : ""}</> },
+        { key: "invested", label: "Invested", value: inr(s.invested) },
+      ]} />
+      <div className="mf-kind">
+        <b className="k-small">Taxed as</b>
+        <Select label={`How ${s.name} is taxed`} value={s.kind} onChange={(k) => setKind(s.key, k === s.kind_auto ? null : k as Kind)} options={(Object.keys(KIND_SHORT) as Kind[]).map((k) => ({ value: k, label: KIND_SHORT[k] }))} />
+        <span className="k-note" data-testid="mf-kind-basis">{kindBasis(s)}</span>
+      </div>
       {s.elss && <p className="k-note">ELSS lock-in: {qtyText(s.elss.locked_units)} units locked; the next free on {dateOnly(s.elss.next_free)}, all by {dateOnly(s.elss.all_free)}.</p>}
       {s.cost_unknown && <p className="k-note k-down">Some units have no purchase in the statement, so their cost isn't known. A statement from your first investment fixes this.</p>}
       {/* DG-021: units redeemed with no purchase before them, and the sale value that isn't in the capital gains */}
@@ -399,9 +409,8 @@ function SchemeHolding({ s, setKind }: { s: Scheme; setKind: (key: string, kind:
   );
 }
 
-/** The redemptions of one scheme matched to its purchases, every year in one list (30 first). */
+/** The redemptions of one scheme matched to its purchases, every year in one table. */
 function SchemeSales({ sales, name }: { sales: SaleIn[]; name: string }) {
-  const [all, setAll] = useState(false);
   if (!sales.length) return null;
   const cols: Column<SaleIn & { i: number }>[] = [
     { key: "fy", header: "Year", rowHeader: true, cell: (r) => <>{r.fy}{r.gf === "applied" && <span className="k-note"> grandfathered</span>}{r.gf === "missing" && <span className="k-note k-down"> 31 Jan 2018 NAV missing</span>}</> },
@@ -417,8 +426,8 @@ function SchemeSales({ sales, name }: { sales: SaleIn[]; name: string }) {
   return (
     <section aria-label={`Sales, ${name}`}>
       <h3>Redemptions matched to purchases</h3>
-      <DataTable label={`Redemptions matched to purchases, ${name}`} stack columns={cols} rows={(all ? sales : sales.slice(0, 30)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
-      {sales.length > 30 && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {sales.length}</button>}
+      {/* TABLE-SWEEP: every redemption, none held back behind a "Show all" (a phone shows them ten cards at a time) */}
+      <DataTable label={`Redemptions matched to purchases, ${name}`} stack phonePage={10} columns={cols} rows={sales.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
     </section>
   );
 }
