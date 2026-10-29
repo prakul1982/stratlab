@@ -363,6 +363,23 @@ def admin_blog_research(_=Depends(admin.admin_profile)):
     return ok({"started": True, "running": True})
 
 
+class ThemeDraft(BaseModel):
+    q: str
+    region: str = "IN"
+
+
+@admin_router.post("/admin/blog/theme")
+def admin_blog_theme(req: ThemeDraft, profile=Depends(admin.admin_profile)):
+    """Draft a research post from a theme's deep dive when its data shows something notable (a layer's margin far from the others', or a big
+    move over three years). The post is stored hidden: the owner reads it in the list above and publishes it by hand. Nothing is published here."""
+    from .intel import routes as R, theme_routes
+    r, theme, m, _ = R.sector_map(profile, req.region, req.q, False)
+    m = theme_routes.checked(r, theme, m)
+    from .intel import theme_data
+    dive = theme_data.build(r, theme, m, theme_routes.sources(r, theme))
+    return ok(blog_research.draft_theme_post(dive, theme, r))
+
+
 @admin_router.post("/admin/blog/briefs")
 def admin_blog_briefs(_=Depends(admin.admin_profile)):
     """Add posts for the daily Market Briefs already stored (the newest 60 of each market) that have none yet."""

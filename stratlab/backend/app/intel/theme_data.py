@@ -509,3 +509,34 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     }
     out["notable"] = notable_items(blocks, chain, histories)
     return out
+
+
+# ---------- operating figures from business updates ----------
+def business_rows(symbols: list[str], names: dict, read) -> list[dict]:
+    """The operating figure each company files between results (monthly sales, traffic, output, capacity, deposits...), as `read(symbol)` gives
+    it: {metric, unit, span, period, value, prev, year_ago, change_prev, change_year, filed, url, page, exchange, points}. A company with no
+    read figure isn't listed. All through one function, so a wider source slots in without changing the page."""
+    out = []
+    for sym in symbols:
+        try:
+            r = read(sym)
+        except Exception as e:
+            print("theme data: business update not read:", sym, type(e).__name__, str(e)[:100])
+            continue
+        if r and r.get("value") is not None and r.get("period"):
+            out.append({**r, "symbol": sym, "name": names.get(sym) or sym})
+    return out
+
+
+def business_section(blocks: list[dict], subs: list[dict], names: dict, read) -> dict:
+    """Operating figures by layer and sub-theme, plus how many of the theme's companies have one."""
+    every = {}
+    for b in blocks:
+        b["business"] = business_rows([c["symbol"] for c in b["companies"]], names, read)
+        every.update({r["symbol"]: r for r in b["business"]})
+    for s in subs:
+        s["business"] = business_rows([c["symbol"] for c in s["companies"]], names, read)
+        every.update({r["symbol"]: r for r in s["business"]})
+    total = len({c["symbol"] for b in blocks for c in b["companies"]} | {c["symbol"] for s in subs for c in s["companies"]})
+    return {"layers": [{"layer": b["layer"], "rows": b["business"]} for b in blocks], "subs": [{"name": s["name"], "rows": s["business"]} for s in subs],
+            "companies": len(every), "of": total}

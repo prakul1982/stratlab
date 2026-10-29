@@ -201,6 +201,43 @@ def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depend
     return R.ok(hit)
 
 
+# ---------- business updates ----------
+def business_reader():
+    """symbol -> the company's headline operating figure from the business updates already read and stored (biz_updates), or None."""
+    from .. import biz_updates
+
+    def read(sym):
+        reads = biz_updates.stored(sym)
+        if not reads:
+            return None
+        h = biz_updates.headline(biz_updates.series(reads))
+        if not h:
+            return None
+        src = h["latest"]["source"]
+        return {"metric": h["metric"], "unit": h["unit"], "span": h["span"], "step": h["step"], "period": h["latest"]["period"], "value": h["latest"]["value"],
+                "prev": h["prev"]["value"] if h.get("prev") else None, "year_ago": h["year_ago"]["value"] if h.get("year_ago") else None,
+                "change_prev": h["change_prev"], "change_year": h["change_year"], "filed": src["at"][:10], "url": src["url"], "page": src.get("page"),
+                "exchange": src.get("exchange"), "points": [{"period": p["period"], "value": p["value"]} for p in h["points"]]}
+    return read
+
+
+@router.get("/theme-dive/business")
+def theme_dive_business(q: str, region: str = "IN", profile=Depends(current_profile)):
+    """The theme's operating figures from business updates, by layer and sub-theme. Basic and up, as the Business updates page is."""
+    from .. import biz_updates
+    R = _routes()
+    if region.upper() != "IN":
+        return R.ok({"allowed": True, "layers": [], "subs": [], "companies": 0, "of": 0})
+    if not biz_updates._allowed(profile):
+        return R.ok({"allowed": False, "layers": [], "subs": [], "companies": 0, "of": 0})
+    r, theme, m, _ = R.sector_map(profile, region, q, False)
+    m = checked(r, theme, m)
+    names = _map_names(m)
+    blocks = [{"layer": v.get("layer") or "", "companies": [{"symbol": c["ticker"]} for c in v.get("companies") or []]} for v in m.get("value_chain") or []]
+    subs = [{"name": v.get("name") or "", "companies": [{"symbol": c["ticker"]} for c in v.get("companies") or []]} for v in m.get("sub_themes") or []]
+    return R.ok({"allowed": True, **theme_data.business_section(blocks, subs, names, business_reader())})
+
+
 # ---------- prices ----------
 def bars_loader(region: str):
     """symbol -> daily candles of three years and a bit, from the same source the company pages read; raises when the sources are busy."""

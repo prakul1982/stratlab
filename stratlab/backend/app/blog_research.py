@@ -507,3 +507,63 @@ def run_monthly(now: datetime | None = None) -> dict | None:
         return None
     db.set_setting(MONTH_KEY, month)
     return generate(now)
+
+
+# ---------- (d) a theme's margin by layer (THEME-1) ----------
+def theme_post(dive: dict, theme: str, region: str, now: datetime | None = None) -> dict | None:
+    """A DRAFT research post from a theme's deep dive (intel/theme_data.build) when the data shows something worth saying: one layer's
+    EBITDA margin far from the others', or a layer whose margin moved a lot over three years. None when it shows nothing notable. The post is
+    never published here: it is stored hidden, for the owner to read in Admin and publish by hand. Every figure is the dive's; the words only
+    say what the table says."""
+    from .intel import theme_data
+    notable = dive.get("notable") or []
+    rows = [r for r in (dive.get("chain") or {}).get("rows") or [] if r.get("ebitda") is not None]
+    if not notable or len(rows) < 2:
+        return None
+    now = now or datetime.now(timezone.utc)
+    day = blog.now_iso(now)[:10]
+    unit = dive.get("unit") or ("₹ crore" if region == "IN" else "$ million")
+    title = f"{dive.get('sector') or theme}: where the margin sits along the chain"
+    lines = []
+    for n in notable:
+        if n["kind"] == "gap":
+            lines.append(f"The median EBITDA margin is {theme_data.pts(n['high_value'])} in {n['high']} and {theme_data.pts(n['low_value'])} in {n['low']}, "
+                         f"a gap of {n['gap']:.1f} points.")
+        elif n["kind"] == "move":
+            lines.append(f"{n['layer']}: the EBITDA margin of its {n['n']} companies together went from {theme_data.pts(n['from'])} in {n['from_year']} to "
+                         f"{theme_data.pts(n['to'])} in {n['to_year']}, a move of {abs(n['move']):.1f} points {'up' if n['move'] > 0 else 'down'}.")
+    table = [[r["layer"], str(r["n"]), p1_plain(r["revenue"], unit), pts_or_dash(r["ebitda"]), pts_or_dash(r["net"]), pts_or_dash(r["roce"])] for r in dive["chain"]["rows"]]
+    blocks = [
+        {"t": "p", "text": f"{dive.get('members')} listed companies placed in {len(dive['layers'])} layers of the {dive.get('sector') or theme} value chain, each one only where its "
+                           "own description shows it does that layer's work. The table gives each layer's median margins from the companies' latest full-year figures."},
+        {"t": "h2", "text": "What the figures show"},
+        {"t": "ul", "items": lines},
+        {"t": "h2", "text": "The whole chain in one table"},
+        {"t": "table", "caption": f"Median figures by layer (revenue in {unit}, combined)", "head": ["Layer", "Companies", "Revenue", "EBITDA margin", "Net margin", "ROCE"],
+         "rows": table, "align": "lrrrrr"},
+        {"t": "details", "title": "How these figures were worked out", "items": [
+            dive.get("basis") or "", "A company that runs other businesses too is marked, and its company-wide figures are left out of its layer's median.",
+            "Medians are of the companies with a figure; a layer's count says how many. Facts and arithmetic only: nothing here says what to do with a share."]},
+    ]
+    from .intel import theme_data as td
+    return {"slug": f"theme-{td.slug(theme)}-margins-{region.lower()}", "kind": "research", "market": region if region in ("IN", "US") else None, "title": title,
+            "summary": (lines[0] if lines else title)[:380], "blocks": blocks, "published_at": blog.now_iso(now), "indexable": True, "published": False, "day": day}
+
+
+def p1_plain(v, unit: str) -> str:
+    return "–" if v is None else f"{v:,.0f}"
+
+
+def pts_or_dash(v) -> str:
+    return "–" if v is None else p1(v)
+
+
+def draft_theme_post(dive: dict, theme: str, region: str, now: datetime | None = None) -> dict:
+    """Store the theme's draft post (hidden) when its data is notable: {"result": "new" | "updated" | "same" | "nothing notable" | "left out", "slug"}."""
+    post = theme_post(dive, theme, region, now)
+    if not post:
+        return {"result": "nothing notable", "slug": None}
+    bad = advice_words(post)
+    if bad:
+        return {"result": "left out", "slug": None, "problem": f"it has the word {bad!r}"}
+    return {"result": blog.upsert_research(post, now), "slug": post["slug"]}
