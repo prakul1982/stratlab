@@ -300,3 +300,47 @@ def check_claims(out: dict, search, ask, today: date | None = None) -> dict:
                 shown.append(item)
         out[key] = shown
     return out
+
+
+# ---------- new listings in the theme (the IPO tracker's issues, matched the way companies are placed) ----------
+MAX_LISTINGS = 24
+
+
+def match_listings(items: list[dict], out: dict, ask, theme: str, cache=None) -> list[dict]:
+    """The IPO tracker's issues ({id, name, text}: the issuer's name, industry and what its offer says) that belong in the theme: each is put
+    to the same question as a company, whether its own words show it does the work of a layer or sub-theme, and is kept only with words that are
+    in its text and speak of that group. A first cut by shared distinctive words keeps the AI to a few issues. Returns [{id, groups: [names], what}]."""
+    groups = groups_of(out)
+    by_id = {g["id"]: g for g in groups}
+    theme_stems = stems(f"{theme} {out.get('sector') or ''}") | set().union(*[stems(f"{g['name']} {g['text']}") for g in groups]) if groups else set()
+    cands = [i for i in items if i.get("text") and stems(i["text"]) & theme_stems][:MAX_LISTINGS]
+    cache = cache if cache is not None else {}
+    got: dict[str, dict] = {}
+    todo = []
+    for i in cands:
+        need = []
+        for gid in by_id:
+            key = ("ipo", theme, gid, by_id[gid]["name"], i["id"], norm(i["text"])[:200])
+            if key in cache:
+                got[f"{gid}|{i['id']}"] = cache[key]
+            else:
+                need.append(gid)
+        if need:
+            todo.append({"symbol": i["id"], "name": i["name"], "about": clean_description(i["text"]), "industry": "", "groups": need})
+    for k in range(0, len(todo), BATCH):
+        batch = todo[k:k + BATCH]
+        res = verdicts(batch, by_id, ask, theme)             # an AI that can't answer raises: the caller tries again later
+        for c in batch:
+            for gid in c["groups"]:
+                v = res.get(f"{gid}|{c['symbol']}") or {"does": False, "quote": ""}
+                g = by_id[gid]
+                ok = bool(v["does"]) and quote_in(v["quote"], c["about"]) and supports(v["quote"], f"{g['name']} {g['text']}")
+                answer = {"does": ok, "quote": v["quote"] if ok else ""}
+                cache[("ipo", theme, gid, g["name"], c["symbol"], norm(c["about"])[:200])] = answer
+                got[f"{gid}|{c['symbol']}"] = answer
+    result = []
+    for i in cands:
+        hits = [(by_id[g]["name"], got[f"{g}|{i['id']}"]["quote"]) for g in by_id if got.get(f"{g}|{i['id']}", {}).get("does")]
+        if hits:
+            result.append({"id": i["id"], "groups": [h[0] for h in hits], "what": hits[0][1].strip(" ,;:-–—")})
+    return result

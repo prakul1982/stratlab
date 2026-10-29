@@ -109,8 +109,8 @@ def test_a_reader_that_fails_leaves_its_section_empty_not_the_dive():
 
 
 def test_ownership_events_and_management_from_the_stored_data():
-    shp = {"q": {"2026-06": {"rows": [["Promoter A", "individual", "promoter", 100, 40.0], ["Fund", "mutual fund", "public", 50, 5.0]]},
-                 "2026-09": {"rows": [["Promoter A", "individual", "promoter", 100, 42.0], ["Fund", "mutual fund", "public", 50, 4.0]]}}}
+    shp = {"q": {"2026-06": {"rows": [["Promoter A", "individual", "promoter", 100, 40.0], ["Fund", "Mutual fund", "public", 50, 5.0]]},
+                 "2026-09": {"rows": [["Promoter A", "individual", "promoter", 100, 42.0], ["Fund", "Mutual fund", "public", 50, 4.0]]}}}
     out = D.build("IN", "Test theme", CHECKED, src(
         shareholding=lambda s: shp if s == "MINEA" else None, insider_buys=lambda: {"MINEB": "2026-09-20", "CELLA": "2026-01-01"},
         results=lambda a, b, syms: [{"symbol": "CELLA", "date": "2026-10-12", "purpose": "Financial Results"},
@@ -120,6 +120,7 @@ def test_ownership_events_and_management_from_the_stored_data():
         card=lambda s, r: {"met": 2, "missed": 1} if s == "MINEA" else None))
     own = out["sections"]["ownership"]
     assert own["holdings"][0]["promoter"] == 42.0 and own["holdings"][0]["promoter_change"] == 2.0 and own["promoter_up"] == 1
+    assert own["holdings"][0]["institutions"] == 4.0 and own["holdings"][0]["institutions_change"] == -1.0
     assert [b["symbol"] for b in own["insider_buys"]] == ["MINEB"] and own["pledges"][0]["symbol"] == "CELLB"
     ev = out["sections"]["events"]
     assert [d["symbol"] for d in ev["results_due"]] == ["CELLA"] and ev["results_filed"][0]["symbol"] == "MINEA" and ev["actions"][0]["label"] == "Dividend"
@@ -372,3 +373,58 @@ def test_the_sector_route_serves_the_checked_map_and_the_dive_routes_answer(api,
     n = api.get("/research/theme-dive/news?q=AI%20data%20centers&region=US").json()
     assert isinstance(n["items"], list)
     assert api.get("/research/theme-dive?q=asdkjh%20qwe%20zzz&region=US").status_code == 400
+
+
+# ---------- book value, P/B, interest cover, EV/EBITDA, the latest quarter, new listings ----------
+def test_pb_interest_cover_and_ev_to_ebitda_come_from_the_stored_figures_and_are_na_where_one_is_missing():
+    f = {**FACTS["MINEA"], "pb": 2.63, "book_value": 307.0, "interest_cover": 4.3, "debt": 500.0, "cash": 300.0,
+         "latest_yoy": {"sales": 12.5, "profit": -3.0, "basis": "quarter", "of": "Jun 2026 vs Jun 2025"}}
+    r = D.company_row("IN", "MINEA", f)
+    # EV = 40000 + 500 - 300 = 40200; EBITDA = 1500 x 50% = 750
+    assert (r["pb"], r["interest_cover"], r["ev_ebitda"]) == (2.6, 4.3, 53.6)
+    assert r["quarter"] == {"of": "Jun 2026 vs Jun 2025", "sales": 12.5, "profit": -3.0}
+    no_cash = D.company_row("IN", "MINEA", {**f, "cash": None})
+    assert no_cash["ev_ebitda"] is None and no_cash["pb"] == 2.6
+    year_basis = D.company_row("IN", "MINEA", {**f, "latest_yoy": {"sales": 5.0, "profit": 5.0, "basis": "year", "of": "x"}})
+    assert year_basis["quarter"] is None                                       # a year's change is not the quarter's
+    bank = D.company_row("IN", "MINEA", {**f, "bank": True})
+    assert bank["ev_ebitda"] is None and bank["interest_cover"] is None
+
+
+def test_the_sections_carry_p_b_ev_ebitda_interest_cover_and_the_quarter():
+    full = {**FACTS["MINEA"], "pb": 2.0, "interest_cover": 6.0, "debt": 500.0, "cash": 300.0, "latest_yoy": {"sales": 10.0, "profit": -5.0, "basis": "quarter", "of": "Jun 2026 vs Jun 2025"}}
+    other = {**FACTS["MINEB"], "pb": 3.0, "interest_cover": 1.5, "latest_yoy": {"sales": -2.0, "profit": 4.0, "basis": "quarter", "of": "Jun 2026 vs Jun 2025"}}
+    facts_ = {**FACTS, "MINEA": full, "MINEB": other}
+    out = D.build("IN", "Test theme", CHECKED, D.Sources(TODAY, facts=facts_.get, index_rows=lambda: [{"pe": 20.0, "pb": 4.0}, {"pe": 30.0, "pb": 6.0}]))
+    v = out["sections"]["valuation"]
+    assert v["pb"]["n"] == 2 and v["pb"]["median"] == 2.5 and v["market_pb"]["median"] == 5.0
+    assert v["ev_ebitda"]["n"] == 1 and v["ev_missing"] == 4                    # only Mine A has debt, cash and EBITDA
+    b = out["sections"]["balance"]
+    assert b["interest_cover"]["median"] == 3.75 and b["cover_under_2"] == 1
+    q = out["sections"]["quarter"]
+    assert q["sales_up"] == 1 and q["sales_down"] == 1 and q["profit_up"] == 1 and q["profit_down"] == 1 and len(q["companies"]) == 2
+
+
+def test_the_page_facts_keep_what_the_theme_needs():
+    from app import stock_pages
+    p = {"balance": {"cols": ["Mar 2025", "Mar 2026"], "rows": {"Cash Equivalents": [100.0, 250.0]}},
+         "pl": {"cols": ["Mar 2026"], "rows": {"Interest": [100.0], "Profit before tax": [300.0]}}}
+    snap = {"book_value": 307.0, "pb": 2.63, "latest_yoy": {"basis": "quarter", "sales": 1.0}}
+    got = stock_pages._theme_figures(p, snap, False)
+    assert got == {"book_value": 307.0, "pb": 2.63, "interest_cover": 4.0, "cash": 250.0, "latest_yoy": snap["latest_yoy"]}
+    bank = stock_pages._theme_figures(p, snap, True)
+    assert bank["interest_cover"] is None and bank["cash"] is None
+
+
+def test_a_new_issue_is_in_the_theme_only_on_words_from_its_own_offer():
+    items = [{"id": "ipo-1", "name": "Cell Maker Ltd", "text": "Cell Maker Ltd. Batteries. The company manufactures lithium ion battery cells for electric vehicles."},
+             {"id": "ipo-2", "name": "Bank X", "text": "Bank X Ltd. Banking. A small finance bank lending to micro businesses."},
+             {"id": "ipo-3", "name": "Cell Fake", "text": "Cell Fake Ltd. Packaging. The company prints labels for food packaging."}]
+
+    def ask(system, text):
+        body = json.loads(text.split("CHECKS:\n", 1)[1])
+        quote = {"ipo-1": "manufactures lithium ion battery cells for electric vehicles", "ipo-3": "manufactures lithium ion battery cells"}
+        return {"checks": [{"id": f"{g}|{c['symbol']}", "does": c["symbol"] in quote, "quote": quote.get(c["symbol"], "")} for c in body["companies"] for g in c["check_groups"]]}
+    got = C.match_listings(items, MAP, ask, "India EV battery", {})
+    assert [g["id"] for g in got] == ["ipo-1"]                                 # ipo-3's words aren't in its text; ipo-2 shares nothing with the theme
+    assert "Cell manufacturing" in got[0]["groups"] and got[0]["what"].startswith("manufactures lithium ion")

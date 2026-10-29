@@ -4,9 +4,9 @@ import { useApp } from "../lib/app";
 import { writtenAt, marketTz } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/research";
-import { themeApi, type Business, type Dive, type NewsRow, type Prices } from "../lib/theme";
+import { themeApi, type Business, type Dive, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { RegionSwitch } from "../components/Research";
-import { ChainCard, ClaimsCard, LayerCard, NewsCard, NumbersCards, SubThemesCard } from "../components/ThemeDive";
+import { ChainCard, ClaimsCard, LayerCard, ListingsCard, NewsCard, NumbersCards, SubThemesCard } from "../components/ThemeDive";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton } from "../components/kit";
 
 /* ================= Themes: a theme deep dive =================
@@ -32,12 +32,13 @@ export function ThemesPage() {
   const [news, setNews] = useState<NewsRow[] | null>(null);
   const [newsBusy, setNewsBusy] = useState(false);
   const [biz, setBiz] = useState<Business | null>(null);
+  const [ipos, setIpos] = useState<{ items: Listing[]; checked: boolean } | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const seq = useRef(0);   // a late answer for an earlier theme or market is ignored, and doesn't clear "Mapping…" for the newer one
   const run = async (theme: string, o: { refresh?: boolean; keep?: boolean } = {}) => {
     if (!theme.trim()) return;
     const mine = ++seq.current;
-    setBusy(true); setError(null); if (!o.refresh && !o.keep) { setR(null); setDive(null); setPrices(null); setNews(null); setBiz(null); }
+    setBusy(true); setError(null); if (!o.refresh && !o.keep) { setR(null); setDive(null); setPrices(null); setNews(null); setBiz(null); setIpos(null); }
     try { const out = await researchApi.sector(region, theme, !!o.refresh); if (mine === seq.current) setR(out); }
     catch (e) { if (mine === seq.current) setError((e as Error).message); }
     finally { if (mine === seq.current) setBusy(false); }
@@ -58,6 +59,7 @@ export function ThemesPage() {
     themeApi.dive(region, q).then((d) => live && setDive(d)).catch((e) => live && setDiveError((e as Error).message));
     setNewsBusy(true); themeApi.news(region, q).then((n) => live && setNews(n.items)).catch(() => live && setNews(null)).finally(() => live && setNewsBusy(false));
     themeApi.business(region, q).then((b) => live && setBiz(b)).catch(() => live && setBiz(null));
+    themeApi.listings(region, q).then((l) => live && setIpos(l)).catch(() => live && setIpos({ items: [], checked: false }));
     return () => { live = false; };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [key]);
@@ -147,6 +149,7 @@ export function ThemesPage() {
               <h2 className="k-section-title" id="theme-numbers">The theme in numbers</h2>
               <p className="k-note">Reported figures from each company's stored page{dive.as_of ? `, prices to ${dive.as_of}` : ""}; the sections below say what each is on.</p>
               <NumbersCards dive={dive} prices={prices} pricesBusy={pricesBusy} />
+              <ListingsCard items={ipos && ipos.checked ? ipos.items : null} checked={ipos?.checked ?? true} region={dive.region} />
             </>
           )}
           {r.exchange && r.exchange.companies.length > 0 && (

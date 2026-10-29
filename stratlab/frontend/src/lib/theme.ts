@@ -10,6 +10,7 @@ export interface DiveRow {
   symbol: string; name: string; year: string | null; unit: string | null; bank: boolean; revenue: number | null; profit: number | null;
   ebitda: number | null; net: number | null; roce: number | null; cap: number | null; pe: number | null; debt_equity: number | null;
   sales_1y: number | null; sales_3y: number | null; profit_1y: number | null; stage: number | null; from_high: number | null;
+  pb: number | null; interest_cover: number | null; ev_ebitda: number | null; quarter: { of: string; sales: number | null; profit: number | null } | null;
   what?: string | null; company_wide?: boolean; years?: YearRow[];
 }
 export interface BizRow {
@@ -37,8 +38,9 @@ export interface Dive {
     medians: Record<"ebitda" | "net" | "roce", Stat | null>;
     growth: { aggregate: Record<string, { value: number; n: number; year: string }>; median: Record<string, Stat> };
     margins: History | null;
-    valuation: { pe: Stat | null; market_pe: Stat | null; market_n: number; history: { d: string; pe: number; n: number }[] };
-    balance: { debt_equity: Stat | null; above_1: number; with_debt_equity: number; cfo_to_profit: Stat | null; cfo_n: number };
+    valuation: { pe: Stat | null; market_pe: Stat | null; market_n: number; pb: Stat | null; market_pb: Stat | null; ev_ebitda: Stat | null; ev_missing: number; history: { d: string; pe: number; n: number }[] };
+    quarter: { companies: { symbol: string; name: string; of: string; sales: number | null; profit: number | null }[]; sales_up: number; sales_down: number; profit_up: number; profit_down: number; sales: Stat | null; profit: Stat | null };
+    balance: { debt_equity: Stat | null; above_1: number; with_debt_equity: number; cfo_to_profit: Stat | null; cfo_n: number; interest_cover: Stat | null; cover_under_2: number };
     price: Record<"stage2" | "supertrend_up" | "near_high" | "near_low", { n: number; count: number; share: number | null }>;
     market: Record<string, Stat | null>;
     ownership: { holdings: Holding[]; promoter_up: number; promoter_down: number; promoter_median: Stat | null; insider_buys: { symbol: string; name: string; at: string }[]; pledges: Flag[]; red_flags: Flag[] };
@@ -57,6 +59,7 @@ export interface Prices {
   returns: Record<string, { theme: number | null; bench: number | null }> | null;
 }
 export interface NewsRow { at: string; headline: string; company: string | null; symbol: string | null; source: string; url: string; kind: "news" | "filing" }
+export interface Listing { id: string; name: string; symbol: string | null; stage: string; industry: string | null; open: string | null; close: string | null; listing: string | null; groups: string[]; what: string }
 export interface Business { allowed: boolean; layers: { layer: string; rows: BizRow[] }[]; subs: { name: string; rows: BizRow[] }[]; companies: number; of: number }
 
 const q = (r: Region, theme: string) => `region=${r}&q=${encodeURIComponent(theme)}`;
@@ -64,6 +67,7 @@ export const themeApi = {
   dive: (r: Region, theme: string, refresh = false) => api<Dive>(`/research/theme-dive?${q(r, theme)}${refresh ? "&refresh=true" : ""}`),
   prices: (r: Region, theme: string) => api<Prices>(`/research/theme-dive/prices?${q(r, theme)}`),
   news: (r: Region, theme: string) => api<{ items: NewsRow[]; as_of: string }>(`/research/theme-dive/news?${q(r, theme)}`),
+  listings: (r: Region, theme: string) => api<{ items: Listing[]; checked: boolean }>(`/research/theme-dive/listings?${q(r, theme)}`),
   business: (r: Region, theme: string) => api<Business>(`/research/theme-dive/business?${q(r, theme)}`),
   draft: (r: Region, theme: string) => api<{ result: string; slug: string | null; problem?: string }>("/admin/blog/theme", { method: "POST", body: { q: theme, region: r } }),
 };

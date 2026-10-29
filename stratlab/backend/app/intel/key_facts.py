@@ -136,8 +136,8 @@ def price_trend(bars: list[dict], page_1y: float | None = None, page_1y_dp: int 
 
 
 # ---------- debt and cash ----------
-def _interest_cover(pl: dict | None) -> str | None:
-    """Profit before interest and tax over interest, for the last full year."""
+def interest_cover_value(pl: dict | None) -> float | None:
+    """Profit before interest and tax over interest, for the last full year, as a number; None without both lines, 0.0 for no interest cost."""
     cols = _years(pl)
     full = [i for i, col in enumerate(cols) if str(col).upper() != "TTM"]
     if not full:
@@ -149,8 +149,16 @@ def _interest_cover(pl: dict | None) -> str | None:
     if it is None or pb is None:
         return None
     if it <= 0:
-        return "no interest cost"
-    return f"{(pb + it) / it:.1f}x"
+        return 0.0
+    return (pb + it) / it
+
+
+def _interest_cover(pl: dict | None) -> str | None:
+    """The same, as the page writes it: "4.3x", or "no interest cost"."""
+    v = interest_cover_value(pl)
+    if v is None:
+        return None
+    return "no interest cost" if v == 0.0 else f"{v:.1f}x"
 
 
 def _cash_vs_profit(nums: dict | None) -> str | None:

@@ -96,14 +96,21 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     profit = num(last.get("profit")) if last else None
     net = (profit / sales * 100) if sales and sales > 0 and profit is not None else None
     ebitda = num(last.get("opm")) if last and not lender else None
-    cfo, prev = (num(last.get("cfo")) if last else None), (years[-2] if len(years) > 1 else None)
+    cfo = num(last.get("cfo")) if last else None
+    cap, debt, cash = base.get("market_cap"), num(f.get("debt")), num(f.get("cash"))
+    ebitda_amt = sales * ebitda / 100 if sales and ebitda is not None and sales > 0 else None
+    # enterprise value over EBITDA: market value plus debt less cash, over the year's EBITDA; n/a where any of the four is missing, or EBITDA isn't positive
+    ev = (cap + debt - cash) / ebitda_amt if None not in (cap, debt, cash) and ebitda_amt and ebitda_amt > 0 and not wild and not lender else None
+    yoy = f.get("latest_yoy") if isinstance(f.get("latest_yoy"), dict) and f["latest_yoy"].get("basis") == "quarter" else None
     return {
         "symbol": symbol, "name": base["name"], "year": last["year"] if last else None, "unit": f.get("unit"), "bank": lender,
         "revenue": sales if sales and sales > 0 else None, "profit": profit,
         "ebitda": None if wild or ebitda is None or abs(ebitda) > stock_pages.EXTREME else r1(ebitda),
         "net": None if wild or net is None or abs(net) > stock_pages.EXTREME else r1(net),
         "roce": None if lender or old else r1(num(f.get("roce"))),
-        "cap": base.get("market_cap"), "pe": base.get("pe"),
+        "cap": cap, "pe": base.get("pe"), "pb": None if old else r1(num(f.get("pb"))),
+        "interest_cover": None if lender or old else r1(num(f.get("interest_cover"))), "ev_ebitda": r1(ev),
+        "quarter": {"of": yoy.get("of"), "sales": r1(num(yoy.get("sales"))), "profit": r1(num(yoy.get("profit")))} if yoy else None,
         "debt_equity": None if lender else base.get("debt_equity"),
         "cfo_to_profit": round(cfo / profit, 2) if cfo is not None and profit and profit > 0 else None,
         "sales_1y": r1(growth_between(years, "sales", 1)) if not old else None,
@@ -269,7 +276,11 @@ def margin_history(rows: list[dict]) -> dict | None:
 def valuation_section(rows: list[dict], market: list[dict]) -> dict:
     pe = stat(r["pe"] for r in rows if r.get("pe"))
     mkt = stat(m.get("pe") for m in market if m.get("pe") and 0 < m["pe"] <= stock_pages.PE_MAX)
-    return {"pe": pe, "market_pe": mkt, "market_n": mkt["n"] if mkt else 0}
+    pb = stat(r["pb"] for r in rows if r.get("pb") is not None and r["pb"] > 0)
+    mpb = stat(m.get("pb") for m in market if m.get("pb") and m["pb"] > 0)
+    ev = stat(r["ev_ebitda"] for r in rows)
+    return {"pe": pe, "market_pe": mkt, "market_n": mkt["n"] if mkt else 0, "pb": pb, "market_pb": mpb, "ev_ebitda": ev,
+            "ev_missing": sum(1 for r in rows if r.get("ev_ebitda") is None and not r.get("bank"))}
 
 
 def balance_section(rows: list[dict]) -> dict:
@@ -277,7 +288,18 @@ def balance_section(rows: list[dict]) -> dict:
     own = [r for r in rows if r.get("debt_equity") is not None]
     cfo = [r["cfo_to_profit"] for r in rows if r.get("cfo_to_profit") is not None]
     return {"debt_equity": de, "above_1": sum(1 for r in own if r["debt_equity"] > 1), "with_debt_equity": len(own),
-            "cfo_to_profit": stat(cfo), "cfo_n": len(cfo)}
+            "cfo_to_profit": stat(cfo), "cfo_n": len(cfo), "interest_cover": stat(r.get("interest_cover") for r in rows),
+            "cover_under_2": sum(1 for r in rows if r.get("interest_cover") is not None and r["interest_cover"] < 2)}
+
+
+def quarter_section(rows: list[dict]) -> dict:
+    """The latest reported quarter of each company against the same quarter a year before (revenue and net profit change), as the company page's
+    "Latest YoY" gives it, with how many are up and down. Facts only: it compares a company with its own year-ago quarter, not with anyone's estimate."""
+    have = [r for r in rows if r.get("quarter") and (r["quarter"]["sales"] is not None or r["quarter"]["profit"] is not None)]
+    return {"companies": [{"symbol": r["symbol"], "name": r["name"], "of": r["quarter"]["of"], "sales": r["quarter"]["sales"], "profit": r["quarter"]["profit"]} for r in have],
+            "sales_up": sum(1 for r in have if (r["quarter"]["sales"] or 0) > 0), "sales_down": sum(1 for r in have if (r["quarter"]["sales"] or 0) < 0),
+            "profit_up": sum(1 for r in have if (r["quarter"]["profit"] or 0) > 0), "profit_down": sum(1 for r in have if (r["quarter"]["profit"] or 0) < 0),
+            "sales": stat(r["quarter"]["sales"] for r in have), "profit": stat(r["quarter"]["profit"] for r in have)}
 
 
 def stored_price_section(rows: list[dict]) -> dict:
@@ -298,7 +320,7 @@ def stored_price_section(rows: list[dict]) -> dict:
 def leaders(rows: list[dict]) -> list[dict]:
     """The table of every company in the theme with the figures to sort it by."""
     return [{k: r.get(k) for k in ("symbol", "name", "cap", "revenue", "year", "ebitda", "net", "roce", "sales_1y", "sales_3y", "profit_1y", "profit_3y",
-                                    "pe", "debt_equity", "stage", "from_high")} for r in rows]
+                                    "pe", "pb", "ev_ebitda", "debt_equity", "stage", "from_high")} for r in rows]
 
 
 # ---------- stored events, holdings and cards ----------
@@ -349,7 +371,8 @@ def ownership_section(symbols: list[str], names: dict, src) -> dict:
             "promoter_median": stat(r["promoter"] for r in rows), "insider_buys": bought, "pledges": pledges, "red_flags": flagged_rows(flagged, names)}
 
 
-INSTITUTION_KINDS = {"mutual fund", "insurance company", "foreign portfolio investor", "fpi", "alternative investment fund", "financial institution", "bank", "insurer"}
+INSTITUTION_KINDS = {"mutual fund", "insurance company", "provident or pension fund", "alternative investment fund", "foreign portfolio investor",
+                     "foreign direct investor", "bank", "bank or financial institution", "other institution", "foreign institution", "sovereign wealth fund"}
 PLEDGE_CATEGORIES = {"pledge"}
 
 
@@ -501,7 +524,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         "region": region, "sector": checked.get("sector") or theme, "as_of": as_of, "unit": next((r["unit"] for r in members if r.get("unit")), None),
         "basis": basis_text(members, region), "layers": blocks, "chain": chain, "subs": subs, "members": len(members), "company_wide": sorted(wide & set(syms)),
         "sections": {
-            "size": size_section(members), "medians": {k: stat(r.get(k) for r in own) for k in ("ebitda", "net", "roce")}, "growth": aggregate_growth(own), "margins": margin_history(own), "valuation": val,
+            "size": size_section(members), "medians": {k: stat(r.get(k) for r in own) for k in ("ebitda", "net", "roce")}, "growth": aggregate_growth(own), "margins": margin_history(own), "valuation": val, "quarter": quarter_section(members),
             "balance": balance_section(own), "price": stored_price_section(members), "market": market_med,
             "ownership": ownership_section(syms, names, src), "events": events_section(syms, names, src),
             "management": management_section(syms, names, rows, src), "leaders": leaders(members)},

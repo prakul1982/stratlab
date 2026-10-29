@@ -8,7 +8,7 @@ import { fmtDate, pct, safeHref } from "../lib/format";
 import type { Region } from "../lib/research";
 import {
   amount, layerLines, pc, points, span, times,
-  type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type NewsRow, type Prices, type Stat,
+  type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
 
 /* The theme deep dive's cards (THEME-1). Every block that shows figures is a table with a header row and aligned columns; every figure is from
@@ -242,26 +242,41 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
       </Card>
 
       <Card id="numbers-valuation" label="Valuation">
-        <CardHead title="Valuation" info="P/E is the price over the last four reported quarters' earnings per share. Companies with a loss have none." />
-        <DataTable label="Valuation: the theme's P/E against all listed companies" columns={[
+        <CardHead title="Valuation" info="P/E is the price over the last four reported quarters' earnings per share. P/B is the price over book value per share. EV/EBITDA is market value plus debt less cash, over the latest year's EBITDA. Each is left out for a company where a figure it needs is missing, and for a loss." />
+        <DataTable label="Valuation: the theme against all listed companies" columns={[
           { key: "m", header: "Measure", rowHeader: true, cell: (x: KV) => x.measure }, { key: "a", header: "Theme median", numeric: true, cell: (x) => x.a }, { key: "b", header: "Range", numeric: true, cell: (x) => x.b },
           { key: "c", header: "Companies", numeric: true, cell: (x) => x.c }, { key: "d", header: "All listed, median", numeric: true, cell: (x) => x.d },
-        ]} rowKey={(x) => x.key} rows={[{ key: "pe", measure: "P/E", a: med(val.pe, (v) => times(v)), b: span(val.pe, (v) => times(v)), c: val.pe?.n ?? dash, d: med(val.market_pe, (v) => times(v)) }]} />
+        ]} rowKey={(x) => x.key} rows={[
+          { key: "pe", measure: "P/E", a: med(val.pe, (v) => times(v)), b: span(val.pe, (v) => times(v)), c: val.pe?.n ?? dash, d: med(val.market_pe, (v) => times(v)) },
+          { key: "pb", measure: "P/B", a: med(val.pb, (v) => times(v)), b: span(val.pb, (v) => times(v)), c: val.pb?.n ?? dash, d: med(val.market_pb, (v) => times(v)) },
+          { key: "ev", measure: "EV/EBITDA", a: med(val.ev_ebitda, (v) => times(v)), b: span(val.ev_ebitda, (v) => times(v)), c: val.ev_ebitda?.n ?? dash, d: dash },
+        ]} />
         {medianPe != null && marketPe != null && <p className="k-small">The theme's median P/E is {times(medianPe)} against {times(marketPe)} for all {val.market_n.toLocaleString("en-IN")} listed companies with one.</p>}
+        {val.ev_missing > 0 && <p className="k-note">EV/EBITDA is n/a for {val.ev_missing} compan{val.ev_missing === 1 ? "y" : "ies"} where debt, cash or EBITDA isn't stored. The all-listed comparison is not worked out for it.</p>}
         {val.history.length >= 2
           ? <DataTable label="The theme's median P/E over time" columns={[
             { key: "d", header: "Week of", rowHeader: true, cell: (h: (typeof val.history)[number]) => fmtDate(h.d) }, { key: "p", header: "Median P/E", numeric: true, cell: (h) => times(h.pe) }, { key: "n", header: "Companies", numeric: true, cell: (h) => h.n },
           ]} rows={val.history.slice(-26).reverse()} rowKey={(h) => h.d} />
-          : <p className="k-note">The theme's own P/E history starts with this page: it keeps the median once a week from now. P/B and EV/EBITDA aren't held for companies yet, so they are not shown.</p>}
+          : <p className="k-note">The theme's own P/E history builds forward from this page: it keeps the median once a week from now.</p>}
+      </Card>
+
+      <Card id="numbers-quarter" label="The latest quarter">
+        <CardHead title="The latest quarter against a year earlier" info="Each company's latest reported quarter against the same quarter a year before, as its company page gives it. It compares a company with its own past, not with anyone's estimate." />
+        <DataTable label="Latest reported quarter against the same quarter a year before" columns={[
+          { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x: (typeof s.quarter.companies)[number]) => <Name r={r} sym={x.symbol} name={x.name} /> },
+          { key: "q", header: "Quarter", cell: (x) => x.of }, { key: "s", header: "Revenue", numeric: true, cell: (x) => chg(x.sales) }, { key: "p", header: "Net profit", numeric: true, cell: (x) => chg(x.profit) },
+        ]} rows={s.quarter.companies} rowKey={(x) => x.symbol} empty="No company in the theme has a latest quarter stored against a year before."
+          foot={s.quarter.companies.length ? { c: `${s.quarter.sales_up} up, ${s.quarter.sales_down} down on revenue; ${s.quarter.profit_up} up, ${s.quarter.profit_down} down on profit`, q: "Median", s: chg(s.quarter.sales?.median), p: chg(s.quarter.profit?.median) } : undefined} />
       </Card>
 
       <Card id="numbers-balance" label="Balance sheet and cash">
         <CardHead title="Balance sheet and cash" info="Debt to equity is borrowings over shareholders' equity (not for lenders). Cash from operations over profit is the latest year's." />
         <KVTable t={kv("Balance sheet and cash of the theme's companies", ["Median", "Range", "Companies"], [
           { key: "de", measure: "Debt to equity", a: med(bal.debt_equity, (v) => times(v, 2)), b: span(bal.debt_equity, (v) => times(v, 2)), c: bal.with_debt_equity },
+          { key: "ic", measure: "Interest cover (profit before interest and tax over interest)", a: med(bal.interest_cover, (v) => times(v)), b: span(bal.interest_cover, (v) => times(v)), c: bal.interest_cover?.n ?? dash },
           { key: "cfo", measure: "Cash from operations as a multiple of net profit", a: med(bal.cfo_to_profit, (v) => times(v, 2)), b: span(bal.cfo_to_profit, (v) => times(v, 2)), c: bal.cfo_n || dash },
         ])} />
-        <p className="k-note">{bal.with_debt_equity > 0 ? `${bal.above_1} of ${bal.with_debt_equity} companies have borrowings above their equity. ` : ""}Interest cover isn't held for companies yet, so it is not shown.</p>
+        <p className="k-note">{bal.with_debt_equity > 0 ? `${bal.above_1} of ${bal.with_debt_equity} companies have borrowings above their equity. ` : ""}{bal.interest_cover ? `${bal.cover_under_2} of ${bal.interest_cover.n} cover their interest less than twice. ` : ""}A company with no interest cost has no interest cover.</p>
       </Card>
 
       <PriceCards dive={dive} prices={prices} busy={pricesBusy} />
@@ -317,6 +332,24 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
 
       <LeadersCard dive={dive} prices={prices} />
     </>
+  );
+}
+
+/** New issues in the IPO tracker that belong in the theme, each with the words from its own offer that show the work. */
+export function ListingsCard({ items, checked, region }: { items: Listing[] | null; checked: boolean; region: Region }) {
+  const cols: Column<Listing>[] = [
+    { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => <><Link className="link" to={`/invest/ipos/${encodeURIComponent(x.id)}`}><b>{x.name}</b></Link>{x.symbol && <span className="k-sub-line">{x.symbol}</span>}</> },
+    { key: "s", header: "Stage", cell: (x) => ({ upcoming: "Coming", open: "Open for bids", closed: "Awaiting listing", listed: "Listed" } as Record<string, string>)[x.stage] ?? x.stage },
+    { key: "d", header: "Date", cell: (x) => (x.stage === "listed" || x.stage === "closed" ? (x.listing ? fmtDate(x.listing) : x.close ? fmtDate(x.close) : "–") : x.open ? fmtDate(x.open) : "–") },
+    { key: "g", header: "In the theme as", wrap: true, cell: (x) => x.groups.join(", ") },
+    { key: "w", header: "In its own words", wrap: true, cell: (x) => <>“{x.what}”</> },
+  ];
+  return (
+    <Card id="numbers-listings" label="New listings">
+      <CardHead title="New listings in the theme" info={`Issues in StratLab's IPO list that are open, coming, awaiting listing or listed in the last year, kept only where the issuer's own offer says it does the work of a layer or sub-theme (${region === "IN" ? "India" : "US"}).`} />
+      {items == null ? <p className="k-note">{checked ? "Loading the issues…" : "The issues couldn't be checked just now."}</p>
+        : <DataTable label="New issues that belong in the theme" columns={cols} rows={items} rowKey={(x) => x.id} empty="No open, coming or recently listed issue in the IPO list shows it does this theme's work." />}
+    </Card>
   );
 }
 
@@ -385,6 +418,8 @@ function LeadersCard({ dive, prices }: { dive: Dive; prices: Prices | null }) {
     { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (x) => pc(x.net) },
     { key: "roce", header: "ROCE", numeric: true, sortable: true, cell: (x) => pc(x.roce) },
     { key: "pe", header: "P/E", numeric: true, sortable: true, cell: (x) => times(x.pe) },
+    { key: "pb", header: "P/B", numeric: true, sortable: true, cell: (x) => times(x.pb) },
+    { key: "ev_ebitda", header: "EV/EBITDA", numeric: true, sortable: true, cell: (x) => times(x.ev_ebitda) },
     { key: "r1y", header: "Price, 1 year", numeric: true, sortable: true, cell: (x) => chg(x.r1y) },
   ];
   return (

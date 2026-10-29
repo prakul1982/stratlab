@@ -238,6 +238,59 @@ def theme_dive_business(q: str, region: str = "IN", profile=Depends(current_prof
     return R.ok({"allowed": True, **theme_data.business_section(blocks, subs, names, business_reader())})
 
 
+# ---------- new listings ----------
+IPO_CACHE = TTLCache(max_items=24, max_bytes=512 * 1024)
+IPO_DAYS = 365                  # issues that listed this recently, and every issue still to come or open
+
+
+def ipo_items(region: str, today: date) -> list[dict]:
+    """The IPO tracker's issues that are open, coming, awaiting listing or listed in the last year, as {id, name, text, row}."""
+    from .. import ipo
+    out = []
+    for row in ipo.load(region)["rows"]:
+        pub = ipo.public(row)
+        if pub.get("stage") in (None, "withdrawn", "social", "filed") or row.get("social"):
+            continue
+        if pub["stage"] == "listed":
+            listed = str(pub.get("listing") or "")[:10]
+            if not listed or listed < (today - timedelta(days=IPO_DAYS)).isoformat():
+                continue
+        text = " ".join(x for x in (pub.get("name"), pub.get("industry"), str(pub.get("issue_text") or "")[:500]) if x)
+        out.append({"id": pub["id"], "name": pub.get("name") or "", "text": text, "pub": pub})
+    return out
+
+
+@router.get("/theme-dive/listings")
+def theme_dive_listings(q: str, region: str = "IN", profile=Depends(current_profile)):
+    """New issues in the IPO tracker that belong in the theme, each kept only with words from its own offer that show the work."""
+    R = _routes()
+    r, theme, m, _ = R.sector_map(profile, region, q, False)
+    m = checked(r, theme, m)
+    key = (r, theme.lower(), int(float(m.get("generated_at") or 0)))
+    hit = IPO_CACHE.get(key)
+    if hit is None:
+        today = datetime.now(timezone.utc).date()
+        try:
+            items = ipo_items(r, today)
+        except Exception as e:
+            print("theme listings: tracker not read:", type(e).__name__, str(e)[:100])
+            return R.ok({"items": [], "checked": False})
+        try:
+            with _ai_gate:
+                hits = theme_check.match_listings(items, m, _ask, theme, VERDICTS)
+        except AIError:
+            return R.ok({"items": [], "checked": False})
+        by = {i["id"]: i["pub"] for i in items}
+        rows = []
+        for h in hits:
+            p = by[h["id"]]
+            rows.append({"id": h["id"], "name": p.get("name"), "symbol": p.get("symbol"), "stage": p.get("stage"), "industry": p.get("industry"),
+                         "open": p.get("open"), "close": p.get("close"), "listing": p.get("listing"), "groups": h["groups"], "what": h["what"]})
+        hit = {"items": rows, "checked": True}
+        IPO_CACHE.set(key, hit, 6 * 3600)
+    return R.ok(hit)
+
+
 # ---------- prices ----------
 def bars_loader(region: str):
     """symbol -> daily candles of three years and a bit, from the same source the company pages read; raises when the sources are busy."""

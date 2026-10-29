@@ -6,7 +6,7 @@ import { expect, test, type Page } from "@playwright/test";
 const ADVICE = /\b(buy|sell|accumulate|avoid|cheap|expensive|undervalued|overvalued|target price)\b/i;
 const PROVIDERS = /kite|zerodha|yahoo|screener\.in|finnhub|trendlyne|nseindia/i;
 const SHOTS = process.env.E2E_SHOTS;
-const URL = "/research/themes?region=IN&q=" + encodeURIComponent("India steel and mining");
+const THEME_URL = "/research/themes?region=IN&q=" + encodeURIComponent("India steel and mining");
 
 function sessionFor(n: number) {
   return { access_token: `load-${n}`, token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r",
@@ -22,10 +22,10 @@ async function open(page: Page, n: number, scheme: "light" | "dark" = "light") {
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, sessionFor(n));
-  await page.goto(URL);
+  await page.goto(THEME_URL);
   const welcome = page.getByRole("dialog", { name: "What brings you here?" });
   const answered = await welcome.waitFor({ timeout: 4000 }).then(async () => { await welcome.getByRole("button", { name: /^All of it/ }).click(); return true; }).catch(() => false);
-  if (answered) await page.goto(URL);
+  if (answered) await page.goto(THEME_URL);
   await expect(page.getByRole("heading", { name: "The whole chain in one table" })).toBeVisible({ timeout: 90_000 });
   return errors;
 }
@@ -54,10 +54,13 @@ test("the theme page is a deep dive made of tables, with each company only where
   await expect(claims).toContainText("General background");
   await expect(claims).not.toContainText("old steel scheme");
   // the theme in numbers: sections that are tables
-  for (const id of ["numbers-size", "numbers-growth", "numbers-valuation", "numbers-balance", "numbers-price", "numbers-ownership", "numbers-events", "numbers-management", "numbers-leaders"]) {
+  for (const id of ["numbers-size", "numbers-growth", "numbers-valuation", "numbers-quarter", "numbers-balance", "numbers-price", "numbers-ownership", "numbers-events", "numbers-management", "numbers-leaders"]) {
     await expect(page.locator(`#${id}`)).toBeVisible();
     expect(await page.locator(`#${id} table`).count(), `${id} has a table`).toBeGreaterThan(0);
   }
+  const val = page.locator("#numbers-valuation");
+  for (const m of ["P/E", "P/B", "EV/EBITDA"]) await expect(val.getByRole("rowheader", { name: m, exact: true })).toBeVisible();
+  await expect(page.locator("#numbers-listings")).toBeVisible();
   const leaders = page.locator("#numbers-leaders table");
   await leaders.getByRole("button", { name: /Market value/ }).click();
   await expect(leaders.locator("th[aria-sort]").filter({ hasText: "Market value" })).toHaveAttribute("aria-sort", /ascending|descending/);
