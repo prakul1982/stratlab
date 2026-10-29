@@ -52,7 +52,7 @@ export const desksApi = {
   lending: () => api<LendTable>("/invest/stock-lending"),
   lend: (s: string) => api<LendRow & { status: DeskStatus; note: string }>(`/invest/stock-lending/${encodeURIComponent(s)}`),
   mtf: () => api<MtfPage>("/invest/margin-funding"),
-  mtfOne: (s: string, range = "1y") => api<MtfOne>(`/invest/margin-funding/${encodeURIComponent(s)}?range=${range}`),
+  mtfOne: (s: string, range = "all") => api<MtfOne>(`/invest/margin-funding/${encodeURIComponent(s)}?range=${range}`),
   cost: (b: CostIn) => api<CostOut>("/invest/margin-funding/cost", { method: "POST", body: b }),
 };
 

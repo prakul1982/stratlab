@@ -13,14 +13,16 @@ fall before the broker's margin requirement is breached.
 
 Dated facts and arithmetic. Nothing here calls a stock risky or a position overleveraged."""
 import re
-from datetime import date, timedelta
+import zlib
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from . import corp_actions, exchange_days as X
+from . import corp_actions, db, exchange_days as X
 from .auth import current_profile
 from .intel.net import num
+from .packed import pack, unpack
 from .plans import FEATURE_PLAN, PLANS, allows
 from .responses import err, ok
 
@@ -31,7 +33,16 @@ SHARES_KEY = PREFIX + "shares"            # {"as_of", "shares": {symbol: shares 
 SHARES_EVERY = 7                          # days between reads of the security file
 KEEP = 260                                # trading days kept: about a year
 MAX_SYMBOLS = 120
-RANGES = {"3m": 92, "6m": 183, "1y": 366}
+RANGES = {"3m": 92, "6m": 183, "1y": 366, "3y": 1096, "5y": 1830, "all": None}
+# O2 (29 Oct): the history beyond the daily window. The exchange's archive has the margin trading disclosure back to 1 Dec 2021, so
+# the market's totals (one row a day) and each stock's weekly point are read from it once, on the desks' job, and kept
+LONG_KEY = PREFIX + "long"                # {"days": {day: [start, fresh, liquidated, end]}} in ₹ lakh, every trading day from DEEP_FROM
+WEEK_PREFIX = PREFIX + "w:"              # w:<n> = packed {symbol: [[day ordinal, shares funded, amount ₹ lakh], ...]}: each week's last trading day
+WEEK_SHARDS = 24
+DEEP_FROM = "2021-12-01"                 # the first file the archive has
+DEEP_STEP = 25                           # days one run of the job reads
+DEEP_MISSES = 3                          # tries for an old day the archive answers "not there" before it's passed by
+DEEP_STATE = PREFIX + "deep"
 SYMBOL = re.compile(r"^[A-Z0-9&\-]{1,20}$")
 SOURCE = "the exchange's daily margin trading disclosure, its cash market closes and its security file (shares issued)"
 NOTE = ("From the exchange's margin trading disclosure: what brokers together had funded under the margin trading "
@@ -58,9 +69,22 @@ def _day(text: str) -> str | None:
         return None
 
 
+def _cells(line: str) -> list[str]:
+    import csv
+    try:
+        return [c.strip() for c in next(csv.reader([line]))]
+    except (StopIteration, csv.Error):
+        return [c.strip() for c in line.split(",")]
+
+
 def disclosure(text: str) -> tuple[str | None, dict, dict[str, list]]:
     """The margin trading disclosure: (its day, the market's totals {"start", "fresh", "liquidated", "end"} in ₹ lakh,
-    {symbol: [shares funded, amount funded in ₹ lakh]})."""
+    {symbol: [shares funded, amount funded in ₹ lakh]}).
+
+    Two layouts come from the exchange. The usual file has one table of totals and one of stocks. A file revised for late
+    member submissions ("Data Revised for reporting date …") holds two side by side, the first as first reported (all zero
+    in 18 Aug 2026's) and the second "as on current date", with the late submissions in: the second is the day's figures
+    (LIVE2: the back-fill stopped on that day for good, "no stock lines", and the chart's history began on 19 Aug)."""
     lines = [ln for ln in str(text or "").splitlines() if ln.strip()]
     if not lines or "<html" in lines[0].lower():
         raise ValueError("not the margin trading disclosure")
@@ -68,23 +92,31 @@ def disclosure(text: str) -> tuple[str | None, dict, dict[str, list]]:
     totals: dict[str, float | None] = {}
     names = (("beginning", "start"), ("fresh", "fresh"), ("liquidated", "liquidated"), ("end of the day", "end"))
     rows: dict[str, list] = {}
-    table = False
+    heads: list[int] = []
     for ln in lines:
-        parts = [p.strip() for p in ln.split(",")]
-        low = ln.lower()
-        if not table and len(parts) >= 3 and parts[0].isdigit():
-            for word, key in names:
-                if word in parts[1].lower():
-                    totals[key] = num(parts[2])
+        c = _cells(ln)
+        low = [x.lower() for x in c]
+        if not heads and any(x == "symbol" for x in low):
+            heads = [i for i, x in enumerate(low) if x == "symbol"]
             continue
-        if low.startswith("symbol,"):
-            table = True
+        if not heads:
+            # a totals line: the "Particulars" label with its figure after it; in the revised layout the right-hand set wins
+            for i, x in enumerate(low):
+                for word, key in names:
+                    if word in x and i > 0 and c[i - 1].isdigit():
+                        v = num(c[i + 1]) if i + 1 < len(c) else None
+                        if v is not None:
+                            totals[key] = v
             continue
-        if table and len(parts) >= 4:
-            sym = parts[0].upper()
-            qty, amt = num(parts[-2]), num(parts[-1])
-            if SYMBOL.match(sym) and qty is not None and amt is not None:
-                rows[sym] = [int(qty), round(amt, 2)]
+        # a stock line: the last group of columns with a symbol in it (the revised file's second), else the first
+        for h in reversed(heads):
+            g = c[h:h + 4]
+            if len(g) >= 4 and g[0]:
+                sym = g[0].upper()
+                qty, amt = num(g[2]), num(g[3])
+                if SYMBOL.match(sym) and qty is not None and amt is not None:
+                    rows[sym] = [int(qty), round(amt, 2)]
+                    break
     if not rows:
         raise ValueError("no stock lines")
     return day, totals, rows
@@ -104,6 +136,63 @@ def shares_rows(text: str) -> dict[str, int]:
 
 def shares() -> dict:
     return X._load(SHARES_KEY, {})
+
+
+# ---------- the long history (O2) ----------
+def long_days() -> dict:
+    """Every trading day's market totals from DEEP_FROM: {day: [start, fresh, liquidated, end]} in ₹ lakh."""
+    return (X._load(LONG_KEY, {}).get("days")) or {}
+
+
+def week_end(d: date) -> bool:
+    """Whether `d` is its week's last trading day (the next trading day falls in another week)."""
+    n = d
+    for _ in range(10):
+        n += timedelta(days=1)
+        if X.trading(n):
+            return n.isocalendar()[:2] != d.isocalendar()[:2]
+    return True
+
+
+def _week_shard(symbol: str) -> str:
+    return f"{WEEK_PREFIX}{zlib.crc32(symbol.encode()) % WEEK_SHARDS}"
+
+
+def weekly_series(symbol: str) -> list[list]:
+    """One stock's weekly points, oldest first: [[day, shares funded, amount ₹ lakh], ...]."""
+    key = _week_shard(symbol.upper())
+    shard = X._cache.get(("w", key))
+    if shard is None:
+        shard = unpack(db.get_setting(key))
+        X._cache.set(("w", key), shard, 300)
+    return [[date.fromordinal(o).isoformat(), q, a] for o, q, a in shard.get(symbol.upper()) or []]
+
+
+def record_long(items: list[tuple[str, dict, dict | None]]):
+    """Keep days read from the archive: each day's market totals, and (on a week's last trading day, with its stock lines) every
+    stock's point. `items`: [(day, totals, rows or None)], rows as disclosure() gives them."""
+    if not items:
+        return
+    with X._lock:
+        cur = db.json_value(db.get_setting(LONG_KEY), {})
+        days = dict(cur.get("days") or {})
+        by_shard: dict[str, dict[str, list]] = {}
+        for day, totals, rows in items:
+            if all(totals.get(k) is not None for k in ("start", "fresh", "liquidated", "end")):
+                days[day] = [totals["start"], totals["fresh"], totals["liquidated"], totals["end"]]
+            if rows and week_end(date.fromisoformat(day)):
+                o = date.fromisoformat(day).toordinal()
+                for sym, (q, a) in rows.items():
+                    by_shard.setdefault(_week_shard(sym), {}).setdefault(sym, []).append([o, int(q), a])
+        for key, add_ in sorted(by_shard.items()):
+            have = unpack(db.get_setting(key))
+            for sym, pts in add_.items():
+                old = {p[0]: p for p in have.get(sym) or []}
+                old.update({p[0]: p for p in pts})
+                have[sym] = [old[o] for o in sorted(old)]
+            db.set_setting(key, pack(have))
+            X._cache.set(("w", key), have, 300)
+        X._save(LONG_KEY, {"days": {d: days[d] for d in sorted(days)}})
 
 
 # ---------- the desk ----------
@@ -131,6 +220,55 @@ class Desk(X.Desk):
         rows = {s: [q, a, (cash.get(s) or {}).get("close")] for s, (q, a) in lines.items()}
         self._shares(files, day)
         return rows, {"totals": totals, "stocks": len(rows)}
+
+    def deep(self, files: X.Files, today: date, now: datetime | None = None, step: int = DEEP_STEP) -> dict:
+        """Read up to `step` days the long history lacks, newest first, back to DEEP_FROM: the archive's margin file alone (not the cash
+        closes), keeping the day's totals and, on a week's last day, every stock's point. A day the archive says isn't there is asked
+        DEEP_MISSES times and passed by; six in a row is the archive turning us away, and the run stops until the next one. A file this
+        reader can't make sense of twice is passed by the same way."""
+        now = now or X.ist_now()
+        st = X._load(DEEP_STATE, {}, 60)
+        tries = dict(st.get("tries") or {})
+        exp = X.expected(now, self.ready_at, self.lag)
+        if not exp:
+            return st
+        have = long_days()
+        recent = (exp - timedelta(days=10)).isoformat()
+        batch: list[tuple[str, dict, dict | None]] = []
+        d, misses, err_ = exp, 0, None
+        while d.isoformat() >= DEEP_FROM and len(batch) + misses < step:
+            key = d.isoformat()
+            if X.trading(d) and key not in have and (key >= recent or tries.get(key, 0) < DEEP_MISSES):
+                try:
+                    text = files.text(MTF_FILE.format(dmy=d.strftime("%d%m%y")))
+                    got = disclosure(text) if text is not None else None
+                except X.SourceError as e:
+                    err_ = str(e)[:200]
+                    break
+                except (ValueError, KeyError, TypeError):
+                    got = False
+                if got:
+                    if got[0] and got[0] != key:
+                        got = None
+                    else:
+                        batch.append((key, got[1], got[2]))
+                        misses = 0
+                if not got:
+                    if key < recent:
+                        tries[key] = tries.get(key, 0) + 1
+                    misses += 1
+                    if misses >= X.MISS_RUN:
+                        err_ = f"The archive had none of {X.MISS_RUN} trading days in a row from {X.day_words(key)}; trying again later."
+                        break
+            d -= timedelta(days=1)
+        if not (batch or err_ or tries != (st.get("tries") or {})):
+            return st                          # nothing to read, nothing new to say: no write
+        record_long(batch)
+        left = d.isoformat() >= DEEP_FROM
+        st = {"tries": {k: v for k, v in tries.items() if v}, "read": st.get("read", 0) + len(batch), "next": d.isoformat(),
+              "done": not left and not err_, "error": err_, "at": now.isoformat(timespec="minutes")}
+        X._save(DEEP_STATE, st)
+        return st
 
     def _shares(self, files: X.Files, day: date):
         cur = shares()
@@ -209,7 +347,7 @@ def _chg(now: list, then: list | None, splits: list[str] = ()) -> dict | None:
             "pct": round(100 * (now[2] / then[2] - 1), 2) if then[2] else None}
 
 
-def for_symbol(symbol: str, full: bool = False, rng: str = "1y") -> dict:
+def for_symbol(symbol: str, full: bool = False, rng: str = "all") -> dict:
     sym = symbol.upper()
     got = DESK.store.latest()
     out = {"symbol": sym, "as_of": got[0] if got else None, "funded": False}
@@ -232,9 +370,12 @@ def for_symbol(symbol: str, full: bool = False, rng: str = "1y") -> dict:
     prev = [p for p in ser if p[0] < day]
     out["day"] = _chg(now, prev[-1], sp) if prev else None
     if full:
-        since = (date.fromisoformat(day) - timedelta(days=RANGES[rng])).isoformat()
+        # the daily points, and before the first of them the week's last day's point from the long history (O2)
+        first = ser[0][0] if ser else None
+        pts = [w for w in weekly_series(sym) if not first or w[0] < first] + ser
+        since = None if RANGES[rng] is None else (date.fromisoformat(day) - timedelta(days=RANGES[rng])).isoformat()
         out["history"] = [{"day": p[0], "shares": p[1], "crore": round(p[2] / 100, 2), "close": p[3] if len(p) > 3 else None,
-                           "pct_shares": None if any(p[0] < d for d in sp) else pct_shares(p[1], issued)} for p in ser if p[0] >= since]
+                           "pct_shares": None if any(p[0] < d for d in sp) else pct_shares(p[1], issued)} for p in pts if since is None or p[0] >= since]
     return out
 
 
@@ -256,12 +397,15 @@ def market(full: bool = False) -> dict:
         if tt.get("end") and t.get("end"):
             out["d30"] = {"from": then, "crore": cr(t["end"] - tt["end"]), "pct": round(100 * (t["end"] / tt["end"] - 1), 2)}
     if full:
-        pts = []
-        for d in days[-260:]:
+        # every trading day from DEEP_FROM (the long history), and any day only the daily store has yet
+        pts = dict(long_days())
+        for d in days[-KEEP:]:
+            if d in pts:
+                continue
             tt = ((DESK.store.get(d) or {}).get("meta") or {}).get("totals") or {}
             if tt.get("end"):
-                pts.append({"day": d, "end": cr(tt["end"]), "fresh": cr(tt.get("fresh")), "liquidated": cr(tt.get("liquidated"))})
-        out["history"] = pts
+                pts[d] = [tt.get("start"), tt.get("fresh"), tt.get("liquidated"), tt["end"]]
+        out["history"] = [{"day": d, "end": cr(v[3]), "fresh": cr(v[1]), "liquidated": cr(v[2])} for d, v in sorted(pts.items())]
     return out
 
 
@@ -349,7 +493,7 @@ def margin_cost(req: CostReq, profile=Depends(current_profile)):
 
 
 @router.get("/{symbol}")
-def margin_funding_one(symbol: str, range: str = Query("1y"), profile=Depends(current_profile)):
+def margin_funding_one(symbol: str, range: str = Query("all"), profile=Depends(current_profile)):
     """One stock's margin-funded amount now, and on Basic each stored day's."""
     sym = str(symbol or "").upper()
     if not SYMBOL.match(sym):

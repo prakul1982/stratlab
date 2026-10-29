@@ -263,6 +263,8 @@ invite_job = invite_rewards.Job()
 positioning_runner = positioning.Runner(lambda: filings_feed)
 positioning_job = positioning.Job(positioning_runner)
 etf_nav.setup(lambda: filings_feed)              # ETF prices against their NAV: the exchange's ETF list
+# ...and each ETF's five years of daily closes for the one-off long history (ttl 0: read once, never kept in the price cache)
+etf_nav.setup_history(lambda sym: research_hub.yahoo.chart(f"{sym}.NS", "1d", 1830, ttl=0)["candles"])
 
 
 def _exchange_files():

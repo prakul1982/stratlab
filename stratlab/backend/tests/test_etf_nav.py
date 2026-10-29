@@ -140,8 +140,8 @@ def test_history_keeps_thirty_days(w, monkeypatch):
     E.refresh(Feed())
     E.record_close(DAY, E.load_live(), FE.navs(DAY))
     days = [k for k, _ in db.all_settings_with_prefix(E.DAY_KEY)]
-    assert len(days) == E.KEEP_DAYS and max(days).endswith(DAY.isoformat())
-    h = E.history("SILVERBEES")
+    assert len(days) == 35 and max(days).endswith(DAY.isoformat())              # under ROLL_AT rows: nothing is rolled over yet (O1)
+    h = E.history("SILVERBEES")                                                   # the list's column is still of the last 30
     assert len(h) == 30 and h[-1]["day"] == DAY.isoformat()
     s = E.summary(h)
     assert s["days"] == 30 and s["low"] < s["avg"] < s["high"] and s["to"] == DAY.isoformat()

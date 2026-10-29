@@ -6,6 +6,7 @@ export { Signed } from "./Signed";
 export { Badge } from "./Badge";
 export { Seg, type Choice } from "./Seg";
 export { ChipBar, type CustomUnit, type CustomCheck } from "./ChipBar";
+export { RangeChips, useRange } from "./RangeChips";
 export { FormGrid, Field, FieldGroup, FormActions, Select } from "./Form";
 export { DateInput, DateField } from "./DateInput";
 export { TimeInput } from "./TimeInput";

@@ -24,7 +24,9 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
   label: string; options: Choice[]; value: string; onChange: (v: string) => void;
   /** Keep wrapping onto more lines on a phone, instead of one row that scrolls: for a short row whose every chip should show. */
   wrap?: boolean;
-  custom?: { storageKey: string; units: CustomUnit[]; defaultUnit?: string; max?: number; validate?: (n: number, unit: string) => CustomCheck };
+  custom?: { storageKey: string; units: CustomUnit[]; defaultUnit?: string; max?: number; validate?: (n: number, unit: string) => CustomCheck;
+    /** A remembered choice is shown only while this holds for it (a range the chart's data no longer reaches is dropped from the row). */
+    keep?: (value: string) => boolean };
 }) {
   const [mine, setMine] = useState<Choice[]>(() => (custom ? load(custom.storageKey) : []));
   const [open, setOpen] = useState(false);
@@ -50,7 +52,7 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
     edge();
   }, [value, mine.length]);
 
-  const all = [...options, ...mine.filter((m) => !options.some((o) => o.value === m.value))];
+  const all = [...options, ...mine.filter((m) => !options.some((o) => o.value === m.value) && (custom?.keep ? custom.keep(m.value) : true))];
   // CK-2 (R18): a row of up to 12 chips wraps on a phone too, so none is cut at the edge behind a fade (ten markets, two of them in view); only a
   // long strip (14 candle sizes) scrolls
   const wrapRow = wrap || all.length <= 12;

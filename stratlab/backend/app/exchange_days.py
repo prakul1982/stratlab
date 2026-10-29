@@ -37,6 +37,7 @@ RETRY_DAYS = 10               # after that, asked once a day this many more time
 GAP_DAYS = 45                 # how far back a run looks for days missing since the newest stored one
 BACKFILL_STEP = 6             # past days one archive walk reads, so a run never hammers the exchange
 MISS_RUN = 6                  # trading days in a row the archive hasn't got: it's turning us away, not missing them
+SHAPE = "wasn't in the expected shape"
 RETRY_MINUTES = 20
 PACE = 1.5                    # seconds between two archive files
 QUIET = ("09:00", "15:45")    # the archive walk rests while the market is open
@@ -549,6 +550,14 @@ class Runner:
             desk.store.set_state(fired=key)
         return n
 
+    def deep(self, desk: Desk, today: date, now: datetime | None = None) -> dict:
+        """A desk's long history, a few archive files at a time (see the desk's own `deep`)."""
+        self.running = True
+        try:
+            return desk.deep(self._files(), today, now)
+        finally:
+            self.running = False
+
     def backfill(self, desk: Desk, today: date, step: int = BACKFILL_STEP, days: int | None = None) -> dict:
         """Read up to `step` more past days, walking back from the oldest one tried; done when it reaches the desk's
         depth. Five days in a row the archive hasn't got is the archive turning us away: the next run tries them again
@@ -573,6 +582,16 @@ class Runner:
                     r, got = self._read(desk, files, d)
                     if got:
                         batch.append(got)
+                    if r not in ("ok", "missing") and SHAPE in r:
+                        # a day whose file this reader can't make sense of, twice: passed by, said in the state, and the walk goes on
+                        # (LIVE2: MTF's walk stopped for good at a revised file on 18 Aug and the chart's history began the day after)
+                        bad = dict(bf.get("bad") or {})
+                        bad[d.isoformat()] = bad.get(d.isoformat(), 0) + 1
+                        bf["bad"] = bad
+                        if bad[d.isoformat()] < 2:
+                            bf["error"] = r
+                            break
+                        r = "missing"
                     if r not in ("ok", "missing"):
                         bf["error"] = r
                         break
@@ -635,6 +654,10 @@ class Job(news_job.Job):
                 if not (QUIET[0] <= hhmm <= QUIET[1]) and not (desk.store.state().get("backfill") or {}).get("done"):
                     with memguard.heavy("stock-desks", force_release=True):
                         self.status["desks"].setdefault(name, {})["backfill"] = self.runner.backfill(desk, local.date())
+                elif not (QUIET[0] <= hhmm <= QUIET[1]) and hasattr(desk, "deep"):
+                    # the long history (O2), once the daily window's walk is done: a few files a run, then each new day
+                    with memguard.heavy("stock-desks", force_release=True):
+                        self.status["desks"].setdefault(name, {})["deep"] = self.runner.deep(desk, local.date(), now)
             except Exception as e:
                 self.status["last_error"] = f"{name}: {str(e)[:180]}"
         self.status["last_run"] = now.isoformat()
