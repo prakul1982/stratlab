@@ -304,49 +304,50 @@ export function MoneyCalendarPage() {
           </Earlier>
         </Card>
 
-        <Card label="Reminders">
-          <CardHead title="Reminders" info="Sent through the email and phone notifications set up in Account. Reminders list the dates, not your amounts." />
-          {!view.reminders_allowed ? (
-            <PlanNote>A reminder by email or phone a few days before each date is on the {view.reminders_plan} plan.</PlanNote>
-          ) : rem && (
-            <FormGrid label="Reminders" onSubmit={(e) => { e.preventDefault(); void saveReminders(); }}>
-              <div className="k-field wide"><CheckField label="Remind me before my dates" checked={rem.on} onChange={(on) => setRem({ ...rem, on })} /></div>
-              {/* DH-042: with reminders off, the choices below are off too, not ticked and live */}
-              <Field label="How early">{(id) => <Select id={id} disabled={!rem.on} value={rem.days} onChange={(v) => setRem({ ...rem, days: Number(v) })} options={view.remind_days.map((d) => ({ value: d, label: d === 1 ? "The day before" : `${d} days before` }))} />}</Field>
-              <Field label="By">{(id) => <Select id={id} disabled={!rem.on} value={rem.channel} onChange={(v) => setRem({ ...rem, channel: v as Reminders["channel"] })}
-                options={[{ value: "both", label: "Email and phone" }, { value: "email", label: "Email" }, { value: "push", label: "Phone notification" }]} />}</Field>
-              <div className="k-field wide" role="group" aria-label="Remind me about">
-                <div className="k-label-row"><span className="k-lbl">Remind me about</span></div>
+        <div className="k-page">
+          <Card label="Calendar feed">
+            <CardHead title="In your calendar app" info="The link works without signing in, so treat it like a password. Make a new one if it's been shared, or turn it off. Calendar apps check it every few hours." />
+            <p className="k-small k-muted">A private link with these dates for the past month and the next year. In Google Calendar: Other calendars, then From URL. On an iPhone or Mac: add a calendar subscription.</p>
+            <CheckField label="Include my amounts (left out unless ticked)" checked={amounts} onChange={setFeedAmounts} />
+            {view.feed ? (
+              <>
+                <input className="k-input mc-url" readOnly value={url} aria-label="Your calendar link" onFocus={(e) => e.target.select()} />
                 <div className="k-row">
-                  {view.cats.filter((c) => c.id !== "market").map((c) => (
-                    <CheckField key={c.id} label={c.label} checked={rem.on && rem.cats.includes(c.id)} disabled={!rem.on}
-                      onChange={(on) => setRem({ ...rem, cats: on ? [...rem.cats, c.id] : rem.cats.filter((x) => x !== c.id) })} />
-                  ))}
+                  <button type="button" className="btn" onClick={() => copy(url)}><Copy size={16} />Copy link</button>
+                  <a className="btn quiet" href={url.replace(/^https?:\/\//, "webcal://")}>Open in calendar app</a>
+                  <button type="button" className="btn quiet" disabled={busy} onClick={newFeed}>New link</button>
+                  <button type="button" className="btn quiet" onClick={stopFeed}>Turn off</button>
                 </div>
-              </div>
-              <FormActions><button type="submit" className="btn" disabled={busy}>Save reminders</button></FormActions>
-            </FormGrid>
-          )}
-        </Card>
-      </div>
+              </>
+            ) : <button type="button" className="btn k-btn-end" disabled={busy} onClick={() => makeFeed(false)}>Make a private link</button>}
+          </Card>
 
-      {/* LIVE1C-060: the form and the reminders are about the same height side by side; the link, one wide input and its buttons, has the row under them */}
-      <Card label="Calendar feed">
-        <CardHead title="In your calendar app" info="The link works without signing in, so treat it like a password. Make a new one if it's been shared, or turn it off. Calendar apps check it every few hours." />
-        <p className="k-small k-muted">A private link with these dates for the past month and the next year. In Google Calendar: Other calendars, then From URL. On an iPhone or Mac: add a calendar subscription.</p>
-        <CheckField label="Include my amounts (left out unless ticked)" checked={amounts} onChange={setFeedAmounts} />
-        {view.feed ? (
-          <>
-            <input className="k-input mc-url" readOnly value={url} aria-label="Your calendar link" onFocus={(e) => e.target.select()} />
-            <div className="k-row">
-              <button type="button" className="btn" onClick={() => copy(url)}><Copy size={16} />Copy link</button>
-              <a className="btn quiet" href={url.replace(/^https?:\/\//, "webcal://")}>Open in calendar app</a>
-              <button type="button" className="btn quiet" disabled={busy} onClick={newFeed}>New link</button>
-              <button type="button" className="btn quiet" onClick={stopFeed}>Turn off</button>
-            </div>
-          </>
-        ) : <button type="button" className="btn k-btn-end" disabled={busy} onClick={() => makeFeed(false)}>Make a private link</button>}
-      </Card>
+          <Card label="Reminders">
+            <CardHead title="Reminders" info="Sent through the email and phone notifications set up in Account. Reminders list the dates, not your amounts." />
+            {!view.reminders_allowed ? (
+              <PlanNote>A reminder by email or phone a few days before each date is on the {view.reminders_plan} plan.</PlanNote>
+            ) : rem && (
+              <FormGrid label="Reminders" onSubmit={(e) => { e.preventDefault(); void saveReminders(); }}>
+                <div className="k-field wide"><CheckField label="Remind me before my dates" checked={rem.on} onChange={(on) => setRem({ ...rem, on })} /></div>
+                {/* DH-042: with reminders off, the choices below are off too, not ticked and live */}
+                <Field label="How early">{(id) => <Select id={id} disabled={!rem.on} value={rem.days} onChange={(v) => setRem({ ...rem, days: Number(v) })} options={view.remind_days.map((d) => ({ value: d, label: d === 1 ? "The day before" : `${d} days before` }))} />}</Field>
+                <Field label="By">{(id) => <Select id={id} disabled={!rem.on} value={rem.channel} onChange={(v) => setRem({ ...rem, channel: v as Reminders["channel"] })}
+                  options={[{ value: "both", label: "Email and phone" }, { value: "email", label: "Email" }, { value: "push", label: "Phone notification" }]} />}</Field>
+                <div className="k-field wide" role="group" aria-label="Remind me about">
+                  <div className="k-label-row"><span className="k-lbl">Remind me about</span></div>
+                  <div className="k-row">
+                    {view.cats.filter((c) => c.id !== "market").map((c) => (
+                      <CheckField key={c.id} label={c.label} checked={rem.on && rem.cats.includes(c.id)} disabled={!rem.on}
+                        onChange={(on) => setRem({ ...rem, cats: on ? [...rem.cats, c.id] : rem.cats.filter((x) => x !== c.id) })} />
+                    ))}
+                  </div>
+                </div>
+                <FormActions><button type="submit" className="btn" disabled={busy}>Save reminders</button></FormActions>
+              </FormGrid>
+            )}
+          </Card>
+        </div>
+      </div>
 
       <section className="k-stack">
         {view.notes.length > 0 && <ul className="k-list muted">{view.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}

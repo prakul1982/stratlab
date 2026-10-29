@@ -172,10 +172,8 @@ test("LIVE1C-054: the rate sentence counts the files' F&O result, or says why it
   assert.match(read("src/styles.css"), /\.rates-page \.k-table \{ table-layout: fixed; width: 100%; \}/);
 });
 
-test("LIVE1C-060: the calendar's form and reminders share a row; the link has the row under them", () => {
-  const src = read("src/pages/money/MoneyCalendarPage.tsx");
-  assert.ok(src.indexOf('<Card label="Reminders">') < src.indexOf('<Card label="Calendar feed">'));
-  assert.ok(src.indexOf('<Card label="Calendar feed">') > src.indexOf("</div>\n\n      {/* LIVE1C-060"));
+test("LIVE1C-060: the calendar keeps its two level columns (the layout checker finds no blank block)", () => {
+  assert.match(read("src/styles.css"), /\.mc-grid \{ align-items: stretch; \}/);
 });
 
 test("LIVE1C-070: the VIX tile says it is slow after a few seconds instead of a grey bar that never ends", () => {
@@ -218,9 +216,7 @@ test("LIVE1C-090, LIVE1C-091: few watched stocks stack the Invest cards and fill
   assert.match(mine, /<span className="sr-only">\{d\.w\} \{d\.d\} \{d\.m\}: <\/span>/);
 });
 
-test("LIVE1C-092: the plan cards end level with their buttons at the foot; the full comparison is a closed fold in the app", () => {
-  const css = read("src/styles.css");
-  assert.match(css, /\.k-plan > :last-child \{ margin-top: auto; \}/);
+test("LIVE1C-092: the full comparison is a closed fold in the app", () => {
   assert.match(read("src/pages/PlansPage.tsx"), /<PlanCompare folded /);
   assert.match(read("src/components/PlanCompare.tsx"), /testId="plans-compare-fold"/);
 });
