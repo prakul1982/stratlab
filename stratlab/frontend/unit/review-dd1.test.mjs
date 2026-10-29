@@ -81,7 +81,7 @@ test("DD-050: a report card target keeps its unit, and its cells agree when noth
   const d = read("src/pages/DeepDive.tsx");
   assert.match(d, /value=\{checked \? `\$\{c\.met\} of \$\{checked\}` : "None settled"\}/);
   assert.match(d, /label="Missed" value=\{checked \? String\(c\.missed\) : "–"\}/);
-  assert.match(d, /\$\{unit === "%" \? "%" : ""\}/);
+  assert.match(d, /\$\{unit === "%" \? "%" : unit === "x" \? "×" : ""\}/);
   assert.match(d, /"earnings releases" : "calls"/);
 });
 
