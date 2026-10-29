@@ -62,7 +62,8 @@ test("the theme page is a deep dive made of tables, with each company only where
   for (const m of ["P/E", "P/B", "EV/EBITDA"]) await expect(val.getByRole("rowheader", { name: m, exact: true })).toBeVisible();
   await expect(page.locator("#numbers-listings")).toBeVisible();
   const leaders = page.locator("#numbers-leaders table");
-  await leaders.getByRole("button", { name: /Market value/ }).click();
+  if (phone) await page.locator("#numbers-leaders").getByLabel("Sort by").selectOption({ label: "Market value" });          // a phone's cards have no header row: the Sort by box does it
+  else await leaders.getByRole("button", { name: /Market value/ }).click();
   await expect(leaders.locator("th[aria-sort]").filter({ hasText: "Market value" })).toHaveAttribute("aria-sort", /ascending|descending/);
   // no stat tiles: figures are in tables
   expect(await page.locator(".k-stat").count()).toBe(0);

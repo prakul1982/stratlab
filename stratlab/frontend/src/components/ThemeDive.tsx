@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Badge, BarList, Card, CardHead, DataTable, Spark, Signed, type Column } from "./kit";
+import { Badge, BarList, Card, CardHead, DataTable, Select, Spark, Signed, usePhone, type Column } from "./kit";
 import { LineChart } from "./Charts";
 import { bizChange, bizValue, periodName } from "../lib/biz";
 import { filedOn } from "./BizUpdates";
@@ -422,9 +422,12 @@ function LeadersCard({ dive, prices }: { dive: Dive; prices: Prices | null }) {
     { key: "ev_ebitda", header: "EV/EBITDA", numeric: true, sortable: true, cell: (x) => times(x.ev_ebitda) },
     { key: "r1y", header: "Price, 1 year", numeric: true, sortable: true, cell: (x) => chg(x.r1y) },
   ];
+  const phone = usePhone();
   return (
     <Card id="numbers-leaders" label="Leaders and laggards">
-      <CardHead title="Every company, sortable" info="Click a column to sort. Sorted by the figure you pick, not ranked: nothing here says which to own." />
+      <CardHead title="Every company, sortable" info="Click a column to sort. Sorted by the figure you pick, not ranked: nothing here says which to own."
+        actions={phone ? <><Select label="Sort by" small value={sort.key} onChange={(v) => setSort({ key: v, desc: v !== "name" })} options={cols.filter((c) => c.sortable).map((c) => ({ value: c.key, label: typeof c.header === "string" ? c.header : c.key }))} />
+          <button type="button" className="btn quiet sm" onClick={() => setSort((x) => ({ ...x, desc: !x.desc }))}>{sort.desc ? "High to low" : "Low to high"}</button></> : undefined} />
       <DataTable label="Every company in the theme with its figures" columns={cols} rows={sorted} rowKey={(x) => x.symbol} sort={{ ...sort, onSort }} />
     </Card>
   );

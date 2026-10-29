@@ -101,7 +101,7 @@ export async function seedWorld(request: APIRequestContext): Promise<World> {
   const app: string[] = ["/", "/trade", "/invest", "/money", "/mine", "/features", ...groups, ...navPaths,
     "/new", "/trade/positioning/stocks", "/research/scan?scan=high52", "/research/filings?view=all", "/research/filings?region=US&view=all",
     "/invest/holders?region=US", "/research/corporate-actions?scope=all", "/research/corporate-actions?region=US&scope=all",
-    "/research/IN/RELIANCE", "/research/IN/TCS", "/research/US/AAPL", "/research/IN/RELIANCE/deep", "/research/US/AAPL/deep",
+    "/research/themes?region=IN&q=India%20steel%20and%20mining", "/research/IN/RELIANCE", "/research/IN/TCS", "/research/US/AAPL", "/research/IN/RELIANCE/deep", "/research/US/AAPL/deep",
     "/invest/ipos/in-bonfig", "/invest/ipos/us-1273626-119431",
     "/plans", "/account", "/settings", "/settings#experience", "/settings#accounts", "/settings#check", "/assistant", "/invite",
     "/admin", "/admin/users", "/admin/money", "/admin/data", "/admin/quality", "/admin/system", "/admin/emails"];
