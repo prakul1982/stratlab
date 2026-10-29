@@ -284,6 +284,9 @@ def find(region: str, symbol: str) -> tuple[str, dict] | None:
     if twin in cos:
         return twin, cos[twin]
     if region == "US":
+        from .us_ticker import canon_us
+        if canon_us(s) in cos:          # NYSE:JPM and NASDAQ:AAPL are JPM's and AAPL's pages
+            return canon_us(s), cos[canon_us(s)]
         for alt in (re.sub(r"[./]", "-", s), s.replace("-", ".")):
             if alt in cos:
                 return alt, cos[alt]
@@ -2164,7 +2167,17 @@ LOGO = ('<svg viewBox="254 174 156 382" aria-hidden="true" focusable="false"><de
         'V405L306,399V453Q306,457 302,457H261Q257,457 257,453Z"/></svg>')
 
 
+DESC_MAX = 158          # what a search result shows of a description; longer is cut mid-sentence by the engine (LIVE2-010)
+
+
+def clamp_desc(desc: str, n: int = DESC_MAX) -> str:
+    """A description of at most `n` characters, cut at a word, with an ellipsis when it was cut."""
+    text = " ".join(str(desc or "").split())
+    return text if len(text) <= n else text[:n - 1].rsplit(" ", 1)[0].rstrip(" ,.;:") + "…"
+
+
 def _head(title: str, desc: str, canonical: str, extra: str = "", robots: str = "index,follow", og_type: str = "website") -> str:
+    desc = clamp_desc(desc)
     # a page kept out of search results names no canonical address: it would point a search engine at a page it was told
     # not to list (R10V-005: the 404 for a company that doesn't exist said its canonical address was /stocks)
     site = settings.PUBLIC_SITE_URL
@@ -3097,17 +3110,35 @@ def with_ref(page: str, code: str) -> str:
     return re.sub(rf'(<a [^>]*?href=")({site}/(?!stocks(?:/|"))[^"#]*)"', add, page)
 
 
+def other_market(region: str | None, symbol: str) -> str | None:
+    """A line saying the symbol is a company in the other market, with the link to its page ("AAPL is listed in the US: Apple Inc. (AAPL)"),
+    or None (LIVE2-001: /stocks/in/AAPL and /stocks/us/TCS left the visitor to retype)."""
+    if region not in ("IN", "US") or not symbol:
+        return None
+    other = "US" if region == "IN" else "IN"
+    try:
+        hit = find(other, symbol)
+    except Exception:
+        return None
+    if not hit:
+        return None
+    sym, co = hit
+    name = proper_name(co.get("name")) if other == "US" else co.get("name")
+    where = "the US" if other == "US" else "India"
+    return (f'<p><b>{e(symbol.upper()[:40])}</b> is listed in {where}: <a href="{e(path(other, sym))}">{e(name or sym)} ({e(sym)})</a></p>')
+
+
 def not_found(region: str | None, symbol: str) -> str:
     """No company page for this symbol: say what it is when it's plainly a fund or an index (and where it can be
-    charted and tested), and offer the company search."""
+    charted and tested), say where it is a company when it is one in the other market, and offer the company search."""
     s = (symbol or "")[:40]
     kind = not_a_company(region, s)
     if kind:
         return _not_company_page(region, s, kind)
     site = settings.PUBLIC_SITE_URL
     title = "Company not found · StratLab"
-    body = (f"<h1>No company page for {e(s)}</h1>"
-            '<p class="muted">Check the symbol, or find the company by its name.</p>' + _find_form(region))
+    body = (f"<h1>No company page for {e(s)}</h1>" + (other_market(region, s) or "")
+            + '<p class="muted">Check the symbol, or find the company by its name.</p>' + _find_form(region, s))
     return _page(_head(title, "No listed company has that symbol.", site + "/stocks", robots="noindex,follow"), None, body)
 
 
@@ -3176,6 +3207,8 @@ def index_page(region: str | None, q: str = "") -> str:
             body.append(f"<h2>{label}: {count} for “{e(q)}”</h2>"
                         + (_links(r.lower(), got) if got else '<p class="muted">None. Try part of the name, or the symbol.</p>')
                         + ('<p class="small muted">More companies match. Type more of the name or the symbol to narrow it down.</p>' if more else ""))
+        if region and not re.search(r"\s", q):
+            body.insert(2, other_market(region, q) or "")        # one market asked for, the symbol is a company in the other (LIVE2-001)
     else:
         for r in regions:
             big, ranked = largest(r)

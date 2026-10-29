@@ -170,6 +170,8 @@ export function IposPage() {
   const unpriced = now === "listed" ? all.filter((r) => r.perf?.latest == null && r.perf?.listing_price == null) : [];
   const rows = unpriced.length && unpriced.length < all.length ? all.filter((r) => !unpriced.includes(r)) : all;
   const unpricedShown = unpriced.length > 0 && rows !== all ? unpriced : [];
+  // one stamp on the page (LIVE2-023): the bids' reading on the Open tab (they move through the day), the list's reading elsewhere
+  const liveBids = !!d && now === "open" && d.counts.open > 0 && !!d.bids_read;
   const pick = (m: Market) => { const p = new URLSearchParams(params); p.set("m", m); p.delete("t"); setTab(null); setParams(p, { replace: true }); };
   const save = async (n: Partial<AlertPrefs>) => {
     if (!d) return;
@@ -184,7 +186,7 @@ export function IposPage() {
     <div className="k-page ipo-page">
       <PageHeader eyebrow={eyebrowOf("/invest/ipos")} title="IPOs"
         lede="India's and the US's public offerings in their stages, from the exchanges' and regulators' own pages. Facts, not advice."
-        asOf={d?.as_of} asOfTz={marketTz(market)} asOfLabel="Read" info={<>When bidding opens and closes, the price band, the lot and the minimum, the bids received by category while an issue is open, and how a new listing has traded against its issue price.{d ? <> {d.note}</> : null}</>} infoLabel="Where this comes from" />
+        asOf={liveBids ? d?.bids_read : d?.as_of} asOfTz={marketTz(market)} asOfLabel={liveBids ? "Bids read" : "Read"} info={<>When bidding opens and closes, the price band, the lot and the minimum, the bids received by category while an issue is open, and how a new listing has traded against its issue price.{d ? <> {d.note}</> : null}</>} infoLabel="Where this comes from" />
       <div className="k-toolbar">
         <Seg label="Market" value={market} onChange={(v) => pick(v as Market)} options={[{ value: "IN", label: "India" }, { value: "US", label: "US" }]} />
       </div>
@@ -197,7 +199,6 @@ export function IposPage() {
               <Seg label="Stage" value={now} onChange={(v) => { setTab(v as Stage); const p = new URLSearchParams(params); p.set("t", v); setParams(p, { replace: true }); }}
                 options={tabs.map((t) => ({ value: t.value, label: `${t.label} ${d.counts[t.value] ?? 0}`, short: t.label === "Recently listed" ? `Listed ${d.counts[t.value] ?? 0}` : undefined }))} />
               {now === "open" && d.counts.open > 0 && <Badge tone="live">Live</Badge>}
-              {now === "open" && d.counts.open > 0 && d.bids_read && <span className="k-small k-muted" data-testid="ipo-bids-read">Bids read {asOf(d.bids_read, { tz: marketTz(market), year: false })}</span>}
             </div>
             <p className="k-small k-muted" data-testid="ipo-tab-line">{TAB_LINE[market][now]}</p>
             {rows.length === 0 ? (

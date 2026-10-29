@@ -94,3 +94,44 @@ test("O1: the ETF gap's summary line is of the days shown, and the long explanat
   assert.match(src, /<Disclosure summary="How this is worked out">/);
   assert.doesNotMatch(src, /footer=\{<p className="k-note">\{d\.note\}/);
 });
+
+test("O7: the issue page's figures are worked out in the open (year ends, change, the objects' share, price to earnings)", async () => {
+  const t = await import("../src/lib/ipoText.ts");
+  assert.equal(t.yearKey("Mar 2026"), "2026-03");
+  assert.equal(t.yearKey("March 31, 2026"), "2026-03");
+  assert.equal(t.yearKey("Three months ended June 30, 2026"), null);
+  assert.equal(Math.round(t.growthPct(803.63, 697.86) * 100) / 100, 15.16);
+  assert.equal(t.growthPct(10, -5), null);                                             // a change from a loss is not a percentage
+  assert.equal(t.growthPct(null, 5), null);
+  assert.equal(t.freshCrore({ fresh_cr: 400 }), 400);
+  assert.equal(t.freshCrore({ fresh: 17_000_000, high: 150 }), 255);
+  assert.equal(t.freshCrore({ fresh: 17_000_000, price: 140, high: 150 }), 238);        // the issue price once there is one
+  assert.equal(t.freshCrore({}), null);
+  const rows = t.objectRows([{ label: "Repay borrowings", amount: 42.23 }, { label: "Working capital", amount: 74.92 }, { label: "General corporate purposes", amount: null }], 200);
+  assert.deepEqual(rows.map((r) => r.n), [1, 2, 3]);
+  assert.equal(Math.round(rows[0].share * 100) / 100, 21.12);
+  assert.equal(rows[2].share, null);
+  assert.equal(t.objectRows([{ label: "x", amount: 5 }], null)[0].share, null);          // no fresh issue size: no share
+  assert.equal(t.priceToEarnings(150, 16.52), 9.08);
+  assert.equal(t.priceToEarnings(150, -2), null);                                      // no price to earnings on a loss
+  assert.equal(t.priceToEarnings(null, 5), null);
+  const [head, rest] = t.firstAndRest([1, 2, 3, 4, 5, 6, 7], 5);
+  assert.deepEqual([head.length, rest.length], [5, 2]);
+  assert.equal(t.kpiText(21.55, "pct"), "21.55%");
+  assert.equal(t.kpiText(0.05, "times"), "0.05×");
+  assert.equal(t.kpiText(1570.07, "crore"), "1,570.07");
+  assert.equal(t.kpiText(null, "crore"), "–");
+  assert.equal(t.periodText("the three months ending June 30, 2026"), "3 months to June 30, 2026");
+  assert.equal(t.periodText("Fiscal 2026"), "Fiscal 2026");
+});
+
+test("O7: every block of the issue page is a table, the risks have one fold, and the summary has one fold for the document's words", () => {
+  const page = read("src/pages/IpoPage.tsx");
+  assert.doesNotMatch(page, /<ul|<ol|<dl|<dt/);                                         // no lists of facts
+  for (const id of ["ipo-terms", "ipo-bids", "ipo-listing", "ipo-objects", "ipo-promoters", "ipo-holding", "ipo-financials", "ipo-kpis", "ipo-peer-kpis", "ipo-peers", "ipo-risks", "ipo-summary", "ipo-docs"])
+    assert.match(page, new RegExp(`testId="${id}"`), id);
+  assert.equal((page.match(/<Disclosure summary="Show the document's words"/g) ?? []).length, 1);
+  assert.equal((page.match(/<Disclosure summary=\{`Show the other/g) ?? []).length, 1);
+  assert.match(page, /firstAndRest\(risks, 5\)/);
+  assert.doesNotMatch(page, /Statements|ipo-sum-promoters|ipo-sum-risks/);              // the AI no longer writes the risks, the promoters or the objects
+});

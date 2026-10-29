@@ -102,7 +102,7 @@ test("VR1-121, VR1-122, VR1-123, VR1-124, VR1-125: IPO badge, fold width, the is
   assert.match(p, /className="ipo-terms"/);
   assert.doesNotMatch(p, /Offer for sale \(shares existing holders offer\)/);
   assert.match(p, /r\.hours\.replace\(\/\\\.\+\$\/, ""\)/);
-  assert.match(read("src/pages/ipo.css"), /\.ipo-terms \.k-stats, \.ipo-terms \.ipo-facts, \.ipo-terms \.ipo-dates \{ grid-template-columns: repeat\(auto-fill/);
+  assert.match(read("src/pages/ipo.css"), /\.ipo-terms \.k-tbl-wrap \{ margin-bottom: var\(--s3\); \}/);          // (O7: the terms and the dates are two tables in one card)
   // the two weeks side by side (VR1-125) when both have days to come; a week with nothing left sits above the other (ui-lint R1)
   assert.match(read("src/pages/ResultsPage.tsx"), /<div className=\{data\.weeks\.every\(\(w\) => w\.rows\.some\(\(r\) => r\.date >= data\.today\)\) \? "k-cols" : "k-stack"\}>\{data\.weeks\.map/);
 });

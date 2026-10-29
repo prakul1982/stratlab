@@ -1,78 +1,100 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { eyebrowOf } from "../lib/eyebrow";
 import { asOf, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
 import { useLiveRefresh } from "../lib/liveRefresh";
-import { ipoApi, type DocLink, type Facts, type IpoDetail, type Statement, type Summary } from "../lib/ipo";
-import { badgeOf, bandText, clockText, croreText, expectedText, minText, partsText, sharesText, sizeText, spanText, timesText } from "../lib/ipoText";
-import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import { ipoApi, type DocLink, type Facts, type IpoDetail, type Summary } from "../lib/ipo";
+import {
+  KPI_LABELS, badgeOf, bandText, clockText, croreText, expectedText, figure, firstAndRest, freshCrore, growthPct, kpiText, minText, objectRows, partsText, periodText,
+  priceToEarnings, sharesText, sizeText, spanText, timesText, yearKey,
+} from "../lib/ipoText";
+import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Signed, Skeleton, type Column } from "../components/kit";
 import { LockedPreview } from "../components/LockedPreview";
-import { Info } from "../components/ui";
 import "./ipo.css";
 
-/* /invest/ipos/:id: one issue. Its dates, price band, lot and minimum, size (fresh issue and offer for sale), the bids by category
- * (refreshed while it is open), how it has traded since listing against the issue price, the facts read from its offer document
- * (promoters, selling shareholders, the objects, the last three years' revenue and profit), and the document's links: free for
- * everyone. The summary of the offer document (each statement with the words of the document it rests on) is on Basic. Facts
- * only, in the document's and the exchanges' own figures. */
+/* /invest/ipos/:id: one issue, a table for every block (O7). The issue's terms and dates, the bids by category (refreshed while it
+ * is open), how it has traded since listing against the issue price, and what the offer document says, read by fixed rules and each
+ * with its page: the money's use with amounts, the risks the document puts first, the last years' revenue and profit with their
+ * change, its key indicators beside its listed peers', who holds the shares before the offer, and the price to earnings against the
+ * peers' at the top of the band. All free for everyone. The AI summary (Basic) is the business and how its revenue splits, each
+ * statement with the document's words behind one fold. Facts only, in the document's and the exchanges' own figures. */
 
-function Dates({ d }: { d: IpoDetail }) {
-  const r = d.ipo;
-  if (r.market === "US") {
-    return (
-      <ul className="ipo-dates" data-testid="ipo-dates">
-        {r.expected && <li><span className="k-note">Expected to price</span><b>{fmtDate(r.expected)}</b></li>}
-        {r.priced && <li><span className="k-note">{r.stage === "listed" ? "First trading day" : "Priced; trading starts next session"}</span><b>{fmtDate(r.priced)}</b></li>}
-        {r.filed && <li><span className="k-note">Filed with the SEC</span><b>{fmtDate(r.filed)}</b></li>}
-      </ul>
-    );
-  }
-  return (
-    <>
-      <ul className="ipo-dates" data-testid="ipo-dates">
-        <li><span className="k-note">Bidding opens</span><b>{fmtDate(r.open)}</b></li>
-        <li><span className="k-note">Bidding closes</span><b>{fmtDate(r.close)}</b>{r.close_time && <span className="k-note" data-testid="ipo-close-time">{clockText(r.close_time)} IST</span>}</li>
-        <li><span className="k-note">Allotment</span><b>{expectedText(r.allotment, r.allotment_expected)}</b></li>
-        <li><span className="k-note">Listing</span><b>{expectedText(r.listing, r.listing_expected)}</b></li>
-      </ul>
-      {r.hours && <p className="k-note" data-testid="ipo-hours">Bidding hours as the exchange states them: {r.hours.replace(/\.+$/, "")}.</p>}
-      {(r.allotment_expected || r.listing_expected) && (
-        <p className="k-note">"Expected" is the day SEBI's timetable gives: allotment the working day after bidding closes, listing three working days after. The exchange publishes the actual day.</p>
-      )}
-    </>
-  );
+type Line = { id: string; k: ReactNode; v: ReactNode; n?: ReactNode };
+
+/** A block of "item, figure, note" rows: the issue's terms, its dates, a US offering's facts. */
+function LineTable({ label, rows, noteHead = "Note" }: { label: string; rows: Line[]; noteHead?: string }) {
+  const notes = rows.some((r) => r.n);
+  const cols: Column<Line>[] = [
+    { key: "k", header: "Item", rowHeader: true, wrap: true, cell: (r) => r.k },
+    { key: "v", header: "Figure", wrap: true, cell: (r) => r.v },
+    ...(notes ? [{ key: "n", header: noteHead, wrap: true, cell: (r: Line) => (r.n ? <span className="k-note">{r.n}</span> : "") } as Column<Line>] : []),
+  ];
+  return <DataTable label={label} rows={rows} rowKey={(r) => r.id} columns={cols} />;
 }
 
 function Terms({ d }: { d: IpoDetail }) {
   const r = d.ipo;
   const us = r.market === "US";
+  const rows: (Line | null)[] = [
+    { id: "band", k: us ? "Price" : r.stage === "listed" && r.price != null ? "Issue price" : "Price band", v: bandText(r), n: us && r.stage === "upcoming" ? "The range is not final." : undefined },
+    !us ? { id: "lot", k: "Lot", v: r.lot ? `${sharesText(r.lot)} shares` : "–", n: r.lot ? `Minimum bid ${minText(r)}` : undefined } : null,
+    {
+      id: "size", k: "Issue size", v: sizeText(r),
+      n: [r.size != null && r.size_parts ? `${partsText(r.size_parts)}, ${r.size_basis}` : r.size_basis && r.size_basis !== "stated" ? r.size_basis : null,
+        r.size_in_bids != null ? `The exchange's bid table covers ${croreText(r.size_in_bids)}; the rest is the anchor portion${r.anchor_shares ? ` (${sharesText(r.anchor_shares)} shares)` : ""}.` : null,
+      ].filter(Boolean).join(". ") || undefined,
+    },
+    us && r.shares != null ? { id: "shares", k: "Shares offered", v: sharesText(r.shares, "US") } : null,
+    !us && (r.fresh != null || r.fresh_cr != null) ? { id: "fresh", k: "Fresh issue", v: r.fresh != null ? `${sharesText(r.fresh)} shares` : croreText(r.fresh_cr), n: "New shares the company issues." } : null,
+    !us && (r.ofs != null || r.ofs_cr != null) ? { id: "ofs", k: "Offer for sale", v: r.ofs != null ? `${sharesText(r.ofs)} shares` : croreText(r.ofs_cr), n: "Shares existing holders offer, as against new shares the company issues." } : null,
+    !us && r.face_value != null ? { id: "face", k: "Face value", v: price(r.face_value, "INR", 2) } : null,
+    !us && r.retail_max != null ? { id: "retail", k: "Most a retail bid can be", v: price(r.retail_max, "INR", 0) } : null,
+    r.issue_type ? { id: "type", k: "Issue type", v: r.issue_type } : null,
+    r.exchanges && r.exchanges.length > 0 ? { id: "lists", k: "Lists on", v: `${r.exchanges.join(" and ")}${r.segment === "sme" ? " (SME platform)" : ""}` } : null,
+    us && r.exchange ? { id: "xch", k: "Lists on", v: r.exchange } : null,
+    r.industry ? { id: "ind", k: "Industry", v: r.industry } : null,
+    r.isin ? { id: "isin", k: "ISIN", v: r.isin } : null,
+    r.lead_managers && r.lead_managers.length > 0 ? { id: "lm", k: "Lead managers", v: r.lead_managers.join(", ") } : null,
+    r.registrar ? { id: "reg", k: "Registrar", v: r.registrar } : null,
+  ];
   return (
     <Card label="The issue" testId="ipo-terms" className="ipo-terms">
       <CardHead level={2} title="The issue" />
-      <StatRow label="Terms of the issue">
-        <Stat label={us ? "Price" : "Price band"} value={bandText(r)} note={us && r.stage === "upcoming" ? "range not final" : undefined} />
-        {!us && <Stat label="Lot" value={r.lot ? `${sharesText(r.lot)} shares` : "–"} note={r.lot ? `minimum ${minText(r)}` : undefined} />}
-        <Stat label="Issue size" value={sizeText(r)} note={r.size != null && r.size_parts ? `${partsText(r.size_parts)}, ${r.size_basis}` : r.size_basis && r.size_basis !== "stated" ? r.size_basis : undefined} />
-        {us && r.shares != null && <Stat label="Shares offered" value={sharesText(r.shares, "US")} />}
-      </StatRow>
-      <dl className="ipo-facts">
-        {!us && (r.fresh != null || r.fresh_cr != null) && <div><dt>Fresh issue</dt><dd>{r.fresh != null ? `${sharesText(r.fresh)} shares` : croreText(r.fresh_cr)}</dd></div>}
-        {!us && (r.ofs != null || r.ofs_cr != null) && <div><dt>Offer for sale<Info label="About the offer for sale">The shares existing holders offer, as against new shares the company issues.</Info></dt><dd>{r.ofs != null ? `${sharesText(r.ofs)} shares` : croreText(r.ofs_cr)}</dd></div>}
-        {!us && r.face_value != null && <div><dt>Face value</dt><dd>{price(r.face_value, "INR", 2)}</dd></div>}
-        {!us && r.retail_max != null && <div><dt>Most a retail bid can be</dt><dd>{price(r.retail_max, "INR", 0)}</dd></div>}
-        {r.issue_type && <div><dt>Issue type</dt><dd>{r.issue_type}</dd></div>}
-        {r.exchanges && r.exchanges.length > 0 && <div><dt>Lists on</dt><dd>{r.exchanges.join(" and ")}{r.segment === "sme" ? " (SME platform)" : ""}</dd></div>}
-        {us && r.exchange && <div><dt>Lists on</dt><dd>{r.exchange}</dd></div>}
-        {r.industry && <div><dt>Industry</dt><dd>{r.industry}</dd></div>}
-        {r.isin && <div><dt>ISIN</dt><dd>{r.isin}</dd></div>}
-        {r.lead_managers && r.lead_managers.length > 0 && <div className="wide"><dt>Lead managers</dt><dd>{r.lead_managers.join(", ")}</dd></div>}
-        {r.registrar && <div><dt>Registrar</dt><dd>{r.registrar}</dd></div>}
-      </dl>
+      <LineTable label="The terms of the issue" rows={rows.filter((x): x is Line => !!x)} />
       <h3 className="k-sub">Dates</h3>
       <Dates d={d} />
     </Card>
+  );
+}
+
+function Dates({ d }: { d: IpoDetail }) {
+  const r = d.ipo;
+  const tt = "SEBI's timetable";
+  let rows: Line[];
+  if (r.market === "US") {
+    const us: (Line | null)[] = [
+      r.filed ? { id: "filed", k: "Filed with the SEC", v: fmtDate(r.filed) } : null,
+      r.expected ? { id: "exp", k: "Expected to price", v: fmtDate(r.expected) } : null,
+      r.priced ? { id: "priced", k: r.stage === "listed" ? "First trading day" : "Priced", v: fmtDate(r.priced), n: r.stage === "listed" ? undefined : "Trading starts next session." } : null,
+    ];
+    rows = us.filter((x): x is Line => !!x);
+  } else {
+    const inr: (Line | null)[] = [
+      { id: "open", k: "Bidding opens", v: fmtDate(r.open) },
+      { id: "close", k: "Bidding closes", v: <span data-testid="ipo-close-time-row">{fmtDate(r.close)}</span>, n: r.close_time ? <span data-testid="ipo-close-time">{clockText(r.close_time)} IST</span> : undefined },
+      { id: "allot", k: "Allotment", v: expectedText(r.allotment, r.allotment_expected), n: r.allotment_expected ? `${tt}: the working day after bidding closes. The exchange publishes the actual day.` : undefined },
+      r.credit ? { id: "credit", k: "Money unblocked or refunded, shares credited", v: `${fmtDate(r.credit)} (expected)`, n: `${tt}: two working days after bidding closes.` } : null,
+      { id: "list", k: "Listing", v: expectedText(r.listing, r.listing_expected), n: r.listing_expected ? `${tt}: three working days after bidding closes. The exchange publishes the actual day.` : undefined },
+    ];
+    rows = inr.filter((x): x is Line => !!x);
+  }
+  return (
+    <>
+      <div data-testid="ipo-dates"><LineTable label="The dates of the issue" rows={rows} noteHead="Rule" /></div>
+      {r.hours && <p className="k-note" data-testid="ipo-hours">Bidding hours as the exchange states them: {r.hours.replace(/\.+$/, "")}.</p>}
+    </>
   );
 }
 
@@ -88,18 +110,20 @@ function Bids({ d }: { d: IpoDetail }) {
       </Card>
     ) : null;
   }
+  const rows = s.rows.some((r) => r.sr === "total") ? s.rows : [...s.rows, { label: "Whole issue", sr: "total", offered: null, bid: null, times: s.times }];
   const cols: Column<(typeof s.rows)[number]>[] = [
     { key: "c", header: "Category", rowHeader: true, wrap: true, cell: (r) => (r.sr === "total" ? <b>{r.label}</b> : r.label) },
     { key: "o", header: "Shares on offer", numeric: true, cell: (r) => sharesText(r.offered) },
     { key: "b", header: "Shares bid for", numeric: true, cell: (r) => sharesText(r.bid) },
     { key: "t", header: "Times", numeric: true, info: "Shares bid for divided by shares on offer in the category.", cell: (r) => (r.times != null ? timesText(r.times).replace(" times", "×") : "–") },
   ];
+  const at = s.as_of ? asOf(s.as_of.replace(" ", "T") + ":00+05:30", { tz: marketTz("IN") }) : null;
   return (
     <Card label="Bids received" testId="ipo-bids">
       <CardHead level={2} title="Bids received" info="By category, over both exchanges, as the exchange publishes them. While the issue is open the figures move through the day; the final ones are published after the close."
         infoLabel="About the bids" actions={d.subscription?.live ? <Badge tone="live">Live</Badge> : undefined} />
-      <StatRow label="Bids received in total"><Stat label="Whole issue" value={timesText(s.times)} note={s.as_of ? `as of ${asOf(s.as_of.replace(" ", "T") + ":00+05:30", { tz: marketTz("IN") })}` : undefined} /></StatRow>
-      <DataTable stack label="Bids received by category" rows={s.rows} rowKey={(r) => r.sr} columns={cols} />
+      <DataTable stack label="Bids received by category" rows={rows} rowKey={(r) => r.sr} columns={cols} />
+      <p className="k-note" data-testid="ipo-bids-asof">Whole issue {timesText(s.times)}{at ? `, as of ${at}` : ""}.</p>
       {d.ipo.segment === "sme" && <p className="k-note">An SME issue's exchange page gives the bids per category without the shares reserved for each, so only the whole issue has a count of times.</p>}
     </Card>
   );
@@ -110,92 +134,249 @@ function Listing({ d }: { d: IpoDetail }) {
   const r = d.ipo;
   if (r.stage !== "listed" || !p) return null;
   const chg = (v: number | null | undefined) => (v == null ? "–" : <Signed value={v} fmt={(x) => pct(x, 1)} />);
+  type Row = { id: string; k: string; v: number | null | undefined; c: number | null | undefined };
+  const rows: Row[] = [
+    { id: "issue", k: "Issue price", v: p.issue_price, c: undefined },
+    ...(p.listing_price != null ? [{ id: "list", k: "Listing price", v: p.listing_price, c: p.listing_change_pct }] : []),
+    { id: "day", k: "First day's close", v: p.day_close, c: p.day_change_pct },
+    { id: "now", k: p.latest_date ? `Close on ${fmtDate(p.latest_date, { year: false })}` : "Latest", v: p.latest, c: p.change_pct },
+  ];
   return (
-    <Card label="Since listing" testId="ipo-listing">
-      <CardHead level={2} title="Since listing" info={p.basis === "exchange"
+    <Card label="After listing" testId="ipo-listing">
+      <CardHead level={2} title="After listing" info={p.basis === "exchange"
         ? "From the exchange's own table of how its listed issues have traded: the first day's close and the latest price against the issue price."
         : "The listing price is the first session's opening price; the latest is the latest daily close. Each against the issue price."} infoLabel="About these prices" />
-      <StatRow label="Trading against the issue price">
-        <Stat label="Issue price" value={price(p.issue_price, r.currency, 2)} />
-        {p.listing_price != null && <Stat label="Listing price" value={price(p.listing_price, r.currency, 2)} note={chg(p.listing_change_pct)} />}
-        <Stat label="First day's close" value={price(p.day_close, r.currency, 2)} note={chg(p.day_change_pct)} />
-        <Stat label={p.latest_date ? `Close on ${fmtDate(p.latest_date, { year: false })}` : "Latest"} value={price(p.latest, r.currency, 2)} note={chg(p.change_pct)} />
-      </StatRow>
+      <DataTable label="Trading against the issue price" rows={rows} rowKey={(x) => x.id} columns={[
+        { key: "k", header: "Item", rowHeader: true, cell: (x) => x.k },
+        { key: "v", header: "Price", numeric: true, cell: (x) => price(x.v, r.currency, 2) },
+        { key: "c", header: "Against the issue price", numeric: true, cell: (x) => (x.id === "issue" ? "–" : chg(x.c)) },
+      ]} />
       <p className="k-small">{r.company_link ? <Link className="link" to={r.company_link}>Open {r.name}'s company page</Link> : null}
         {r.company_link ? ": its day one, charts, results and filings." : null}</p>
     </Card>
   );
 }
 
+const pageOf = (page?: number) => (page ? `Page ${page} of the PDF.` : "");
+
+/** What the money is for: each object with its amount in ₹ crore and its share of the fresh issue, as the document gives them. */
+function Objects({ f, d }: { f: Facts; d: IpoDetail }) {
+  const u = f.utilisation;
+  if (!u && !f.objects) return null;
+  const fresh = freshCrore(d.ipo);
+  const rows = u ? objectRows(u.rows, fresh) : [];
+  return (
+    <Card label="What the money is for" testId="ipo-objects">
+      <CardHead level={2} title="What the money is for" info="The objects of the fresh issue as the offer document lists them, with the amount it gives each. A share is the amount over the fresh issue's size." infoLabel="About the objects" />
+      {u ? (
+        <>
+          <DataTable stack label="Objects of the issue" rows={rows} rowKey={(x) => String(x.n)} columns={[
+            { key: "n", header: "#", numeric: true, cell: (x) => x.n },
+            { key: "l", header: "Object", rowHeader: true, wrap: true, cell: (x) => x.label },
+            { key: "a", header: "Amount (₹ crore)", numeric: true, cell: (x) => (x.amount == null ? <span className="k-muted">Not given</span> : figure(x.amount)) },
+            { key: "s", header: "Share of the fresh issue", numeric: true, cell: (x) => (x.share == null ? "–" : `${figure(x.share, 1)}%`) },
+          ]} foot={rows.some((x) => x.amount != null) ? { n: "", l: "Amounts given", a: figure(rows.reduce((t, x) => t + (x.amount ?? 0), 0)), s: fresh ? `${figure((rows.reduce((t, x) => t + (x.amount ?? 0), 0) / fresh) * 100, 1)}%` : "–" } : undefined} />
+          <p className="k-note">{fresh ? `Fresh issue ${croreText(fresh)}. ` : ""}An object with no amount is one the document gives none for at this stage (usually general corporate purposes, which it sizes after the price is set). {pageOf(u.page)}</p>
+        </>
+      ) : f.objects && (
+        <div data-testid="ipo-objects-text">
+          <p className="k-small">{f.objects.text}</p>
+          {f.objects.table && (
+            <DataTable label="Objects of the issue" rows={f.objects.table.rows} rowKey={(_x, i) => String(i)} columns={[
+              { key: "l", header: "Object", rowHeader: true, wrap: true, cell: (x) => x.label },
+              { key: "a", header: f.objects?.table?.unit ? `Amount (${f.objects.table.unit})` : "Amount", numeric: true, cell: (x) => x.figures ?? "–" },
+            ]} />
+          )}
+          <p className="k-note">The document's words. {pageOf(f.objects.page)}</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Promoters and the selling shareholders: one table, with who offers shares in this issue. */
+function Owners({ f }: { f: Facts }) {
+  const promoters = f.promoters ?? [];
+  const selling = f.selling ?? [];
+  const sells = new Set(selling.map((s) => s.name.toLowerCase()));
+  type Row = { id: string; name: string; role: string; sells: boolean };
+  const rows: Row[] = [
+    ...promoters.map((n, i) => ({ id: `p${i}`, name: n, role: "Promoter", sells: sells.has(n.toLowerCase()) })),
+    ...selling.filter((s) => !promoters.some((n) => n.toLowerCase() === s.name.toLowerCase())).map((s, i) => ({ id: `s${i}`, name: s.name, role: s.kind, sells: true })),
+  ];
+  if (!rows.length) return null;
+  return (
+    <Card label="Promoters and selling shareholders" testId="ipo-promoters">
+      <CardHead level={2} title="Promoters and selling shareholders" info="The promoters are read from the offer document's cover; the selling shareholders from its table of the offer for sale. A holder who sells puts existing shares up in this issue." infoLabel="About these names" />
+      <DataTable stack label="Promoters and selling shareholders" rows={rows} rowKey={(x) => x.id} columns={[
+        { key: "n", header: "Name", rowHeader: true, wrap: true, cell: (x) => x.name },
+        { key: "r", header: "Role", cell: (x) => x.role },
+        { key: "s", header: "Sells shares in this issue", cell: (x) => (x.sells ? "Yes" : selling.length ? "No" : "–") },
+      ]} />
+      {selling.length === 0 && <p className="k-note" data-testid="ipo-selling">No shareholder sells in this issue: it is a fresh issue only, as far as the document's table shows.</p>}
+    </Card>
+  );
+}
+
+function Holding({ f }: { f: Facts }) {
+  const h = f.holding;
+  if (!h?.rows.length) return null;
+  const post = h.rows.some((x) => x.post_pct != null);
+  return (
+    <Card label="Who holds the shares before the offer" testId="ipo-holding">
+      <CardHead level={2} title="Who holds the shares before the offer" info="The document's table of the shareholding of the promoters, the promoter group and other holders before the issue." infoLabel="About this table" />
+      <DataTable stack label="Shareholding before the offer" rows={h.rows} rowKey={(_x, i) => `${i}`} columns={[
+        { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (x) => (x.total ? <b>{x.name}</b> : <>{x.name}<span className="k-sub-line">{x.group}</span></>) },
+        { key: "s", header: "Shares", numeric: true, cell: (x) => sharesText(x.shares) },
+        { key: "p", header: "Share of the company", numeric: true, cell: (x) => (x.pct == null ? "–" : `${figure(x.pct)}%`) },
+        ...(post ? [{ key: "q", header: "After the offer", numeric: true, cell: (x: (typeof h.rows)[number]) => (x.post_pct == null ? "–" : `${figure(x.post_pct)}%`) } as Column<(typeof h.rows)[number]>] : []),
+      ]} />
+      <p className="k-note">As at the date the document gives. {pageOf(h.page)}</p>
+    </Card>
+  );
+}
+
+function Financials({ f, kind }: { f: Facts; kind: string }) {
+  const fin = f.financials;
+  if (!fin) return null;
+  const eps = new Map((f.eps?.rows ?? []).map((x) => [yearKey(x.period), x.basic] as const));
+  const epsRow = fin.years.some((y) => eps.get(yearKey(y)) != null) ? { key: "eps", label: "Earnings per share, basic (₹)", values: fin.years.map((y) => eps.get(yearKey(y)) ?? null) } : null;
+  const rows = [...fin.rows, ...(epsRow ? [epsRow] : [])];
+  return (
+    <Card label="Revenue and profit" testId="ipo-financials">
+      <CardHead level={2} title="Revenue and profit" info={`From the restated summary financial information of the ${kind}. The change is the latest year against the one before; none is given where the year before was a loss.`} infoLabel="About these figures" />
+      <DataTable stack label="Revenue and profit from the offer document" rows={rows} rowKey={(x) => x.key} columns={[
+        { key: "l", header: fin.unit, rowHeader: true, wrap: true, cell: (x) => x.label },
+        ...fin.years.map((y, i): Column<(typeof rows)[number]> => ({ key: y, header: y, numeric: true, cell: (x) => (x.values[i] == null ? "–" : x.key === "profit" ? <Signed value={x.values[i]} fmt={croreText} /> : x.key === "eps" ? <Signed value={x.values[i]} fmt={(v) => figure(v)} /> : croreText(x.values[i])) })),
+        { key: "g", header: "Latest year's change", numeric: true, cell: (x) => { const g = growthPct(x.values[0], x.values[1]); return g == null ? "–" : <Signed value={g} fmt={(v) => pct(v, 1)} />; } },
+      ]} />
+      <p className="k-note">Year ends as the document gives them. {pageOf(fin.page)}</p>
+    </Card>
+  );
+}
+
+function Indicators({ f }: { f: Facts }) {
+  const k = f.kpis;
+  if (!k) return null;
+  const rows = KPI_LABELS.filter((l) => k.periods.some((p) => p.values[l.key] != null));
+  const fiscal = k.periods.find((p) => /^fiscal|^(fy|financial year)/i.test(p.label) && KPI_LABELS.some((l) => p.peers[l.key]?.some((v) => v != null)));
+  const peerRows = fiscal ? KPI_LABELS.filter((l) => fiscal.values[l.key] != null && fiscal.peers[l.key]?.some((v) => v != null)) : [];
+  return (
+    <>
+      <Card label="Key indicators" testId="ipo-kpis">
+        <CardHead level={2} title="Key indicators" info="The document's table of the key performance indicators, as it gives them for each period. Amounts in ₹ crore; margins and returns in percent." infoLabel="About the indicators" />
+        <DataTable grid label="Key indicators by period" rows={rows} rowKey={(x) => x.key} columns={[
+          { key: "l", header: "Indicator", rowHeader: true, wrap: true, cell: (x) => x.label },
+          ...k.periods.map((p, i): Column<(typeof rows)[number]> => ({ key: `p${i}`, header: periodText(p.label), numeric: true, cell: (x) => kpiText(p.values[x.key], x.unit) })),
+        ]} />
+        <p className="k-note">{pageOf(k.page)}</p>
+      </Card>
+      {fiscal && peerRows.length > 0 && (
+        <Card label="Key indicators beside listed peers" testId="ipo-peer-kpis">
+          <CardHead level={2} title={`Beside its listed peers, ${periodText(fiscal.label)}`} info="The same indicators for the listed companies the document names as its peers, for the same period. A blank is one the document does not give." infoLabel="About the peers" />
+          <DataTable stack label="Key indicators beside listed peers" rows={peerRows} rowKey={(x) => x.key} columns={[
+            { key: "l", header: "Indicator", rowHeader: true, wrap: true, cell: (x) => x.label },
+            { key: "c", header: "This company", numeric: true, cell: (x) => kpiText(fiscal.values[x.key], x.unit) },
+            ...k.peers.map((n, i): Column<(typeof peerRows)[number]> => ({ key: `n${i}`, header: n, numeric: true, cell: (x) => kpiText(fiscal.peers[x.key]?.[i], x.unit) })),
+          ]} />
+        </Card>
+      )}
+    </>
+  );
+}
+
+function Valuation({ f, d }: { f: Facts; d: IpoDetail }) {
+  const t = f.peers;
+  if (!t?.peers.length) return null;
+  const r = d.ipo;
+  const top = r.price ?? r.high ?? null;
+  const eps = t.company.eps ?? f.eps?.rows[0]?.basic ?? null;
+  const pe = priceToEarnings(top, eps);
+  type Row = { name: string; price: number | null; revenue: number | null | undefined; eps: number | null | undefined; nav: number | null | undefined; pe: number | null; ronw: number | null | undefined; own?: boolean };
+  const rows: Row[] = [
+    { name: r.name, price: top, revenue: t.company.revenue, eps, nav: t.company.nav, pe, ronw: t.company.ronw, own: true },
+    ...t.peers.map((p) => ({ ...p })),
+  ];
+  return (
+    <Card label="Price against listed peers" testId="ipo-peers">
+      <CardHead level={2} title="Price against listed peers" info="The document's table of the listed companies it compares this one with. The peers' prices are as at the date the document gives. This company's row is the top of its price band over its earnings per share for the last year the document gives." infoLabel="About this comparison" />
+      <DataTable stack label="Price to earnings against listed peers" rows={rows} rowKey={(x) => x.name} columns={[
+        { key: "n", header: "Company", rowHeader: true, wrap: true, cell: (x) => (x.own ? <><b>{x.name}</b><span className="k-sub-line">at the {r.price != null ? "issue price" : "top of the price band"}</span></> : x.name) },
+        { key: "p", header: "Price (₹)", numeric: true, cell: (x) => figure(x.price) },
+        { key: "r", header: "Revenue (₹ crore)", numeric: true, cell: (x) => figure(x.revenue) },
+        { key: "e", header: "Earnings per share (₹)", numeric: true, cell: (x) => figure(x.eps) },
+        { key: "v", header: "Book value per share (₹)", numeric: true, cell: (x) => figure(x.nav) },
+        { key: "pe", header: "Price to earnings", numeric: true, cell: (x) => (x.pe == null ? "–" : `${figure(x.pe, 1)}×`) },
+        { key: "ro", header: "Return on net worth", numeric: true, cell: (x) => (x.ronw == null ? "–" : `${figure(x.ronw)}%`) },
+      ]} />
+      <p className="k-note">{t.price_on ? `Peers' prices as on ${t.price_on}. ` : ""}{pageOf(t.page)}</p>
+    </Card>
+  );
+}
+
+/** The risks the offer document puts first, each with its page: the first few, then one fold for the rest. */
+function Risks({ f }: { f: Facts }) {
+  const risks = f.risks ?? [];
+  if (!risks.length) return null;
+  const [head, rest] = firstAndRest(risks, 5);
+  const table = (rows: typeof risks, label: string) => (
+    <DataTable stack label={label} rows={rows} rowKey={(x) => String(x.n)} columns={[
+      { key: "n", header: "#", numeric: true, cell: (x) => x.n },
+      { key: "t", header: "Risk, as the document words it", rowHeader: true, wrap: true, cell: (x) => x.text },
+      { key: "p", header: "Page", numeric: true, cell: (x) => x.page },
+    ]} />
+  );
+  return (
+    <Card label="Risks the document puts first" testId="ipo-risks">
+      <CardHead level={2} title="Risks the document puts first" info="The headings of the first risk factors in the offer document that are about this company, in its order and its words, with the page of the PDF each is on. The document lists many more." infoLabel="About these risks" />
+      {table(head, "Risks the document puts first")}
+      {rest.length > 0 && <Disclosure summary={`Show the other ${rest.length} risks`} testId="ipo-risks-more">{table(rest, "More risks the document puts first")}</Disclosure>}
+    </Card>
+  );
+}
+
+function UsFacts({ f }: { f: Facts }) {
+  const u = f.us;
+  const rows = ([
+    u?.company_shares != null ? { id: "cs", k: "Shares offered by the company", v: sharesText(u.company_shares, "US") } : null,
+    u?.selling_shares != null ? { id: "ss", k: "Shares offered by selling stockholders", v: sharesText(u.selling_shares, "US") } : null,
+    u?.price != null ? { id: "pr", k: "Offer price", v: price(u.price, "USD", 2) } : null,
+    u?.range ? { id: "rg", k: "Price range on the cover", v: `${price(u.range[0], "USD", 2)} to ${price(u.range[1], "USD", 2)}` } : null,
+    u?.listing ? { id: "li", k: "Listing", v: `${u.listing}${u.symbol ? `, symbol ${u.symbol}` : ""}` } : null,
+    u?.proceeds ? { id: "up", k: "Use of proceeds", v: <span data-testid="ipo-proceeds">{u.proceeds}</span>, n: "The document's words." } : null,
+  ] as (Line | null)[]).filter((x): x is Line => !!x);
+  return rows.length ? <LineTable label="From the prospectus" rows={rows} /> : null;
+}
+
 function FromTheDocument({ f, d }: { f: Facts; d: IpoDetail }) {
   const r = d.ipo;
   const kind = f.kind ?? "offer document";
-  const there = (page?: number) => (page ? ` Page ${page} of the PDF.` : "");
   if (f.state === "none") {
     return <Card compact label="From the offer document" testId="ipo-facts"><p className="k-small k-muted">No offer document has been found for this issue yet. {r.market === "IN" ? "The draft and red herring prospectuses filed with SEBI are listed under Documents once they are." : "The registration statement and prospectus filed with the SEC are listed under Documents once they are."}</p></Card>;
   }
   if (f.state === "pending") {
     return <Card compact label="From the offer document" testId="ipo-facts"><p className="k-small k-muted">The {kind} is read automatically a few at a time. What it says about the promoters, the objects and the figures shows here once it has been. Open it under Documents meanwhile.</p></Card>;
   }
-  const fin = f.financials;
-  // what the summary below already says, with the words it rests on, is not said twice (RC2A-007)
-  const said = d.summary.state === "ready" ? d.summary.items : undefined;
-  const hide = { promoters: !!said?.promoters?.length, objects: !!said?.objects?.length };
+  if (r.market === "US") {
+    return (
+      <Card label="From the prospectus" testId="ipo-facts">
+        <CardHead level={2} title="From the prospectus" info={`Read by fixed rules from the places the ${kind} always puts these. A fact the rules can't find is left out, not guessed. Open the document for everything else.`} infoLabel="About these facts" />
+        <UsFacts f={f} />
+      </Card>
+    );
+  }
+  const any = f.promoters?.length || f.selling?.length || f.objects || f.utilisation || f.financials || f.kpis || f.holding || f.peers || f.risks?.length;
   return (
-    <Card label="From the offer document" testId="ipo-facts">
-      <CardHead level={2} title="From the offer document" info={`Read by fixed rules from the places the ${kind} always puts these, each with the page it is on. A fact the rules can't find is left out, not guessed. Open the document for everything else.`} infoLabel="About these facts" />
-      {r.market === "IN" ? (
-        <dl className="ipo-facts">
-          {f.promoters && f.promoters.length > 0 && !hide.promoters && <div className="wide"><dt>Promoters</dt><dd data-testid="ipo-promoters">{f.promoters.join(", ")}</dd></div>}
-          {f.selling && f.selling.length > 0 && <div className="wide"><dt>Selling shareholders (offer for sale)</dt><dd data-testid="ipo-selling">{f.selling.map((s) => `${s.name} (${s.kind.toLowerCase()})`).join(", ")}</dd></div>}
-          {f.objects && !hide.objects && (
-            <div className="wide"><dt>What the money is for</dt>
-              <dd data-testid="ipo-objects">{f.objects.text}
-                {f.objects.table && (
-                  <ol className="ipo-money" data-testid="ipo-money-table">
-                    {f.objects.table.rows.map((x, i) => <li key={i}>{x.label}{x.figures ? <span className="k-note"> {x.figures}{f.objects?.table?.unit ? ` (${f.objects.table.unit})` : ""}</span> : null}</li>)}
-                  </ol>
-                )}
-                <span className="k-note"> The document's words.{there(f.objects.page)}</span></dd>
-            </div>
-          )}
-        </dl>
-      ) : (
-        <dl className="ipo-facts">
-          {f.us?.company_shares != null && <div><dt>Shares offered by the company</dt><dd>{sharesText(f.us.company_shares, "US")}</dd></div>}
-          {f.us?.selling_shares != null && <div><dt>Shares offered by selling stockholders</dt><dd>{sharesText(f.us.selling_shares, "US")}</dd></div>}
-          {f.us?.price != null && <div><dt>Offer price</dt><dd>{price(f.us.price, "USD", 2)}</dd></div>}
-          {f.us?.range && <div><dt>Price range on the cover</dt><dd>{price(f.us.range[0], "USD", 2)} to {price(f.us.range[1], "USD", 2)}</dd></div>}
-          {f.us?.listing && <div><dt>Listing</dt><dd>{f.us.listing}{f.us.symbol ? `, symbol ${f.us.symbol}` : ""}</dd></div>}
-          {f.us?.proceeds && <div className="wide"><dt>Use of proceeds</dt><dd data-testid="ipo-proceeds">{f.us.proceeds}<span className="k-note"> The document's words.</span></dd></div>}
-        </dl>
-      )}
-      {r.market === "IN" && !f.promoters?.length && !f.objects && !fin && <p className="k-small k-muted">The rules couldn't read the cover or the summary tables of this document. Open it under Documents.</p>}
-      {fin && (
-        <>
-          <h3 className="k-sub">Revenue and profit, last three years</h3>
-          <DataTable stack label="Revenue and profit from the offer document" rows={fin.rows} rowKey={(x) => x.key} columns={[
-            { key: "l", header: `${fin.unit}`, rowHeader: true, cell: (x) => x.label },
-            ...fin.years.map((y, i): Column<(typeof fin.rows)[number]> => ({ key: y, header: y, numeric: true, cell: (x) => (x.values[i] == null ? "–" : x.key === "profit" ? <Signed value={x.values[i]} fmt={croreText} /> : croreText(x.values[i])) })),
-          ]} />
-          <p className="k-note">From the restated summary financial information of the {kind}.{there(fin.page)} Year ends as the document gives them.</p>
-        </>
-      )}
-    </Card>
-  );
-}
-
-function Statements({ title, rows, id }: { title: string; rows: Statement[]; id: string }) {
-  if (!rows.length) return null;
-  return (
-    <div data-testid={`ipo-sum-${id}`}>
-      <h3 className="k-sub">{title}</h3>
-      {rows.map((s, i) => (
-        <div key={i} className="ipo-statement">
-          <p className="k-small">{s.text}</p>
-          <Disclosure summary="The document's words"><blockquote className="ipo-quote">“{s.quote}”</blockquote></Disclosure>
-        </div>
-      ))}
+    <div className="ipo-doc" data-testid="ipo-facts">
+      {!any && <Card compact label="From the offer document"><p className="k-small k-muted">The rules couldn't read the cover or the summary tables of this document. Open it under Documents.</p></Card>}
+      <Objects f={f} d={d} />
+      <Owners f={f} />
+      <Holding f={f} />
+      <Financials f={f} kind={kind} />
+      <Indicators f={f} />
+      <Valuation f={f} d={d} />
+      <Risks f={f} />
+      {any && <p className="k-note">Read by fixed rules from the places the {kind} puts these, each with the page of the PDF it is on. A fact the rules can't find is left out, not guessed. Open the document for everything else.</p>}
     </div>
   );
 }
@@ -206,30 +387,37 @@ function SummaryCard({ d, sum, onWrite, busy, error }: { d: IpoDetail; sum: Summ
     return (
       <Card label="Summary of the offer document" testId="ipo-summary">
         <CardHead level={2} title="Summary of the offer document" />
-        <PlanNote plan="basic">The summary of the offer document is on the {sum.plan} plan. The facts above and the document itself stay free.</PlanNote>
+        <PlanNote plan="basic">The summary of the offer document is on the {sum.plan} plan. The tables above and the document itself stay free.</PlanNote>
         <LockedPreview title="the summary" actions={false} points={[
           "What the company does and where its money comes from.",
-          "Its revenue and profit for the periods the document gives, as written there.",
-          "What the money raised is for, and who gets the money from shares existing holders offer.",
-          "The risk factors the document puts first, one sentence each.",
-          "Who the promoters are. Every statement comes with the words of the document it rests on.",
+          "How its revenue splits by business segment, product or place, as the document gives it.",
+          "Every statement comes with the words of the document it rests on.",
         ]} />
       </Card>
     );
   }
   const items = sum.items;
+  const quotes = items ? [items.business && { id: "b", what: "The business", quote: items.business.quote }, ...(items.segments ?? []).map((s, i) => ({ id: `s${i}`, what: `Segment ${i + 1}`, quote: s.quote }))].filter(Boolean) as { id: string; what: string; quote: string }[] : [];
   return (
     <Card label="Summary of the offer document" testId="ipo-summary">
-      <CardHead level={2} title="Summary of the offer document" info={`Written once from the passages of the ${kind} and kept for everyone. A statement stays only when the words it quotes are really in the document and every figure in it is in those words. It is not advice: open the document for the whole.`} infoLabel="About this summary" />
+      <CardHead level={2} title="Business and segments" info={`Written once from the passages of the ${kind} and kept for everyone. A statement stays only when the words it quotes are really in the document and every figure in it is in those words. It is not advice: open the document for the whole.`} infoLabel="About this summary" />
       {sum.state === "ready" && items ? (
         <>
-          {items.business && <div data-testid="ipo-sum-business"><h3 className="k-sub">The business</h3>
-            <div className="ipo-statement"><p className="k-small">{items.business.text}</p><Disclosure summary="The document's words"><blockquote className="ipo-quote">“{items.business.quote}”</blockquote></Disclosure></div></div>}
-          <Statements id="financials" title="Figures" rows={items.financials} />
-          <Statements id="objects" title="What the money is for" rows={items.objects} />
-          <Statements id="risks" title="Risk factors the document puts first" rows={items.risks} />
-          <Statements id="promoters" title="Promoters" rows={items.promoters} />
-          <p className="k-note">Written {sum.at ? asOf(sum.at) : ""} from the {kind}. Facts the document states, not a view on the issue.</p>
+          {items.business && <p className="k-small" data-testid="ipo-sum-business">{items.business.text}</p>}
+          {items.segments.length > 0 && (
+            <div data-testid="ipo-sum-segments">
+              <DataTable stack label="How the revenue splits" rows={items.segments} rowKey={(x) => x.text} columns={[{ key: "t", header: "How the revenue splits, as the document gives it", rowHeader: true, wrap: true, cell: (x) => x.text }]} />
+            </div>
+          )}
+          {quotes.length > 0 && (
+            <Disclosure summary="Show the document's words" testId="ipo-sum-words">
+              <DataTable stack label="The document's words behind each statement" rows={quotes} rowKey={(x) => x.id} columns={[
+                { key: "w", header: "Statement", rowHeader: true, cell: (x) => x.what },
+                { key: "q", header: "The document's words", wrap: true, cell: (x) => <q className="ipo-quote">{x.quote}</q> },
+              ]} />
+            </Disclosure>
+          )}
+          <p className="k-note">Written {sum.at ? asOf(sum.at) : ""} from the {kind}. Facts the document states, not a view on the issue. Figures are in the document's own units (₹ million or ₹ crore, as it writes them).</p>
         </>
       ) : sum.state === "none" ? (
         <p className="k-small k-muted">No offer document has been found for this issue yet, so there is nothing to summarise.</p>
@@ -241,7 +429,7 @@ function SummaryCard({ d, sum, onWrite, busy, error }: { d: IpoDetail; sum: Summ
         </EmptyState>
       )}
       {error && <p className="k-small k-down" role="alert">{error}</p>}
-      {d.ipo.market === "IN" && sum.state === "ready" && <p className="k-note">Figures are the document's own units (₹ million or ₹ crore, as it writes them).</p>}
+      {d.ipo.market === "IN" && sum.state === "pending" && <p className="k-note">The tables above are already read; this adds the business and its segments in words.</p>}
     </Card>
   );
 }
@@ -251,12 +439,11 @@ function Documents({ docs, d }: { docs: DocLink[]; d: IpoDetail }) {
     <Card label="Documents" testId="ipo-docs">
       <CardHead level={2} title="Documents" info={d.ipo.market === "IN" ? "The draft and red herring prospectuses filed with SEBI, and the exchange's copy of the red herring prospectus (a ZIP)." : "The registration statement, its amendments and the final prospectus filed with the SEC."} infoLabel="About these documents" />
       {docs.length ? (
-        <ul className="k-list plain ipo-docs">
-          {docs.map((x) => (
-            <li key={x.url}><a className="link" href={safeHref(x.url)} target="_blank" rel="noopener noreferrer">{x.label} ↗</a>
-              <span className="k-note"> {[x.source, x.date ? fmtDate(x.date) : null].filter(Boolean).join(" · ")}</span></li>
-          ))}
-        </ul>
+        <DataTable stack label="Offer documents" rows={docs} rowKey={(x) => x.url} columns={[
+          { key: "d", header: "Document", rowHeader: true, wrap: true, cell: (x) => <a className="link" href={safeHref(x.url)} target="_blank" rel="noopener noreferrer">{x.label} ↗</a> },
+          { key: "s", header: "From", cell: (x) => x.source },
+          { key: "t", header: "Dated", cell: (x) => (x.date ? fmtDate(x.date) : "–") },
+        ]} />
       ) : <p className="k-small k-muted">No offer document found yet.</p>}
       <p className="k-note">{d.note}</p>
     </Card>
@@ -294,11 +481,11 @@ export function IpoPage() {
 
   const r = d?.ipo;
   const badge = r ? badgeOf(r) : null;
+  const lede = r ? [r.market === "IN" ? `${r.segment === "sme" ? "SME" : "Main board"} issue` : "US offering", r.symbol,
+    r.open && r.close ? `bidding ${spanText(r.open, r.close)}` : r.priced ? `${r.stage === "listed" ? "trading from" : "priced for"} ${fmtDate(r.priced)}` : r.expected ? `expected to price ${fmtDate(r.expected)}` : null].filter(Boolean).join(" · ") : undefined;
   return (
     <div className="k-page ipo-page">
-      <PageHeader eyebrow={eyebrowOf("/invest/ipos")} title={r?.name ?? "IPO"}
-        lede={r ? <>{r.market === "IN" ? `${r.segment === "sme" ? "SME" : "Main board"} issue` : "US offering"}{r.symbol ? ` · ${r.symbol}` : ""}{r.open && r.close ? ` · bidding ${spanText(r.open, r.close)}` : r.priced ? ` · ${r.stage === "listed" ? "trading from" : "priced for"} ${fmtDate(r.priced)}` : r.expected ? ` · expected to price ${fmtDate(r.expected)}` : ""}</> : undefined}
-        actions={badge ? <Badge tone={badge.tone}>{badge.word}</Badge> : undefined} />
+      <PageHeader eyebrow={eyebrowOf("/invest/ipos")} title={r?.name ?? "IPO"} lede={lede} actions={badge ? <Badge tone={badge.tone}>{badge.word}</Badge> : undefined} />
       <p className="k-small"><Link className="link" to={`/invest/ipos?m=${r?.market ?? "IN"}`}>← All IPOs</Link></p>
       {error ? (gone ? <ErrorState title="That IPO isn't on the list">The address may be old, or the issue was taken off the list. Every issue the exchanges list is on the IPOs page.</ErrorState>
         : <ErrorState title="This IPO couldn't be read" action={{ label: "Try again", onClick: () => load() }}>{error}</ErrorState>)

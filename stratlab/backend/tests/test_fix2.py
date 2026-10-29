@@ -537,3 +537,35 @@ def test_the_refund_and_credit_day_is_the_timetables_t_plus_2_while_it_is_ahead(
     old = I.public({**row, "close": "2026-10-20", "open": "2026-10-16"}, now)
     assert "credit" not in old                                       # a day that has passed is not given from the timetable: it may have moved
     assert "credit" not in I.public({"market": "US", "id": "u", "name": "U", "stage": "upcoming"}, now)
+
+
+# ---- LIVE2-001: a company under the wrong market is offered under the right one; NYSE:/NASDAQ: prefixes work --------------------------------
+def test_a_symbol_under_the_wrong_market_names_the_right_one_and_exchange_prefixes_resolve(monkeypatch):
+    from tests import world
+    w = world.build(monkeypatch)
+    try:
+        c = w["client"]
+        r = c.get("/stocks/in/AAPL")
+        assert r.status_code == 404 and "is listed in the US" in r.text and 'href="/stocks/us/AAPL"' in r.text and 'value="AAPL"' in r.text
+        r = c.get("/stocks/us/RELIANCE")
+        assert r.status_code == 404 and "is listed in India" in r.text and 'href="/stocks/in/RELIANCE"' in r.text
+        assert "is listed in" not in c.get("/stocks/in/ZZZZNOPE").text                                # no company anywhere: nothing offered
+        for u in ("/stocks/us/NASDAQ:AAPL", "/stocks/us/NYSE%3AAAPL", "/stocks/us/nasdaq:aapl"):
+            r = c.get(u, follow_redirects=False)
+            assert r.status_code == 301 and r.headers["location"] == "/stocks/us/AAPL", (u, r.status_code)
+        s = c.get("/stocks?q=AAPL&m=in")
+        assert "is listed in the US" in s.text and "/stocks/us/AAPL" in s.text
+        from app import name_search
+        assert name_search._listing_affix.sub("", "NYSE:JPM") == "JPM" and name_search._listing_affix.sub("", "NSE:TCS") == "TCS"
+    finally:
+        w["close"]()
+
+
+def test_a_description_is_cut_at_a_word_to_what_a_search_result_shows():
+    from app import stock_pages as sp
+    long = "Tata Consultancy Services share price, results, margins, debt and filings from reported data. " * 3
+    cut = sp.clamp_desc(long)
+    assert len(cut) <= sp.DESC_MAX and cut.endswith("…") and " …" not in cut
+    assert sp.clamp_desc("Short one.") == "Short one."
+    page = sp._head("T", long, "https://x.test/")
+    assert f'content="{cut}"' in page and long.strip() not in page
