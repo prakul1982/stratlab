@@ -245,13 +245,13 @@ export function ScanPage() {
             <div className="k-field wide" data-testid="scan-custom">
               <p className="k-small">Write your own chart rules. Every rule must hold, and a stock matches when they all held on any of the last few candles. Click a word in a rule to change it.</p>
               <ConditionList conds={conds} onChange={(c) => { setConds(c); setMineId(null); }} max={CUSTOM_RULES} />
-              <div className="screens-ranges"><div className="k-row">
-                <Select small label="Counts as a match when the rules held on" value={within} onChange={(v) => setWithin(Number(v))}
-                  options={Array.from({ length: CUSTOM_WITHIN }, (_, i) => ({ value: i + 1, label: i === 0 ? "the latest candle" : `any of the last ${i + 1} candles` }))} />
-              </div></div>
+              <Field label="Counts as a match when the rules held on">
+                {(id) => <Select id={id} label="Counts as a match when the rules held on" value={within} onChange={(v) => setWithin(Number(v))}
+                  options={Array.from({ length: CUSTOM_WITHIN }, (_, i) => ({ value: i + 1, label: i === 0 ? "the latest candle" : `any of the last ${i + 1} candles` }))} />}
+              </Field>
               <Field label="Or describe it in words" hint="Read into rules by the same builder as a notebook's. It counts as one of your AI builds, and you can edit the rules after.">
                 {(id, tie) => (
-                  <div className="k-row">
+                  <div className="k-row ts-words">
                     <input id={id} {...tie} className="k-input" value={words} maxLength={300} placeholder="Like: volume above twice its 20-day average and the price above yesterday's"
                       onChange={(e) => setWords(e.target.value)} />
                     <button type="button" className="btn quiet sm" disabled={wordsBusy} onClick={() => void buildWords()}>{wordsBusy ? "Reading…" : "Make rules"}</button>

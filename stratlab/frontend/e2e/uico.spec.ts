@@ -10,12 +10,12 @@ const session = (token: string, id: string, email: string) => ({ access_token: t
 const ADMIN = session("admin-token", "u-admin", "owner@example.com");
 const LOAD = (n: number) => session(`load-${n}`, `u-load-${n}`, `load${n}@example.com`);
 
-async function open(page: Page, path: string, ready: string, s = ADMIN, extra?: () => void) {
+async function open(page: Page, path: string, ready: string, s = ADMIN, extra?: () => Promise<void> | void) {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.route("**/*", (r) => { const h = new URL(r.request().url()).hostname; return h === "127.0.0.1" || h === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" }); });
   await page.addInitScript((x) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(x)); localStorage.setItem("stratlab.tour.v1", "1"); }, s);
-  extra?.();
+  await extra?.();
   await page.goto(path);
   const welcome = page.getByRole("dialog", { name: "What brings you here?" });
   const answered = await welcome.waitFor({ timeout: 3000 }).then(async () => { await welcome.getByRole("button", { name: /^All of it/ }).click(); return true; }).catch(() => false);
@@ -53,7 +53,8 @@ test("company page: corporate actions, key numbers and the AI read are tables wi
   expect(widths.length).toBeGreaterThanOrEqual(4);
   expect(new Set(widths).size, `Key numbers' tables: ${widths}`).toBe(1);
   expect(await overflowing(page, ".inv-metrics"), "a note running out of its cell").toBe(0);
-  // the AI read's numbers: one table, area on the left and its figures on the right
+  // the AI read's numbers: one table, area on the left and its figures on the right (RELIANCE's read in the fake world has them)
+  await page.goto("/research/IN/RELIANCE");
   const read = page.getByRole("table", { name: "The AI read, by area" });
   await expect(read).toBeVisible({ timeout: 30_000 });
   expect(await read.locator("tbody tr").count()).toBeGreaterThanOrEqual(2);
@@ -123,9 +124,9 @@ test("deep dive: growth, the checklist, the documents read and the business mode
 });
 
 test("compare: the two companies are one table, a long note is a numbered note under the table, and a link with no market opens where the companies are", async ({ page }) => {
-  const errors = await open(page, "/research/compare?a=TCS&b=INFY", "The numbers side by side", ADMIN, () => {
+  const errors = await open(page, "/research/compare?a=HDFCBANK&b=ICICIBANK", "The numbers side by side", ADMIN, async () => {
     // the browser last used the US market: the link names two Indian tickers and no market (LIVE2-021)
-    void page.addInitScript(() => localStorage.setItem("stratlab.research.region", "US"));
+    await page.addInitScript(() => localStorage.setItem("stratlab.research.region", "US"));
   });
   const two = page.getByRole("table", { name: "The two companies" });
   await expect(two.getByRole("columnheader")).toHaveText(["Company", "Price", "Change", "Market value", "Actions"]);

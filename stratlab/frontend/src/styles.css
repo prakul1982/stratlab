@@ -1028,6 +1028,8 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 .quote-row { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line); }
 .quote-row:first-of-type { border-top: 0; }
 @media (max-width: 640px) { .ca-table .k-table { font-size: 13px; } .ca-table .k-table th, .ca-table .k-table td { padding: 9px 6px; white-space: normal; min-width: 0; vertical-align: top; } .ca-table .k-badge { white-space: normal; } .ca-table .k-table :is(th, td):first-child { min-width: 0 !important; max-width: none !important; } }
+[data-testid="scan-custom"] .add-rule { align-self: flex-start; }
+.ts-words { align-items: flex-start; } .ts-words .k-input { flex: 1 1 260px; width: auto; }
 .ca-soon { color: var(--blue-ink); white-space: nowrap; }
 .ca-ex, .ca-amt { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; } .ca-amt { align-items: flex-end; }
 .dd-fit .k-table :is(th, td) { white-space: normal; min-width: 0; max-width: none; }
@@ -1132,11 +1134,11 @@ label.btn.disabled { opacity: .5; }
 /* VR1-104: on a phone, "Save this screen" sits under the filters it saves, not 20 company cards further down */
 /* UI-CO item 9: on a phone the results come first: the filters are one folded "Filters (n)" bar; opened, "Save this screen" sits under them (VR1-104), folded it is not in the way */
 @media (max-width: 640px) { .screens-main > .screens-save { order: -1; } .screens-main > .screens-save.folded { display: none; } }
-@media (min-width: 1361px) { .k-split2.screens-split { grid-template-columns: 420px minmax(0, 1fr); } }
+@media (min-width: 1361px) { .k-split2.screens-split { grid-template-columns: 360px minmax(0, 1fr); } }
 .screens-ranges .k-table { table-layout: fixed; }
 .screens-ranges .k-table :is(th, td) { white-space: normal; max-width: none; min-width: 0; padding: 8px 6px; vertical-align: middle; }
 .screens-ranges .k-table :is(th, td):first-child { padding-left: 10px; }
-.screens-ranges .k-table :is(th, td):nth-child(n+2) { width: 94px; }
+.screens-ranges .k-table :is(th, td):nth-child(n+2) { width: 84px; }
 .screens-ranges .k-table :is(th, td):first-child { width: auto; }
 .screens-ranges .k-input-unit { --unit-w: 30px; }
 .screens-ranges .k-input { height: 38px; padding: 0 var(--unit-w, 30px) 0 10px; font-size: 14px; }
