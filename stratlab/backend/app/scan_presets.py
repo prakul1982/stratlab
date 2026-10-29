@@ -19,8 +19,10 @@ from zoneinfo import ZoneInfo
 import numpy as np
 
 from . import db
-from .engine.core import Ctx, eval_cond
-from .engine.indicators import compute
+from pydantic import ValidationError
+
+from .engine.core import OP_NAME, Ctx, eval_cond
+from .engine.indicators import compute, ref_name
 from .models import Cond, Ref
 
 KEY = "scanres:"                   # scanres:<group> = {"as_of", "at", "checked", "counts", "rows"}
@@ -76,6 +78,117 @@ for _p in PRESETS:
     _p["conds"] = [Cond.model_validate(r) for r in _p["rules"]]
 BY_ID = {p["id"]: p for p in PRESETS}
 DEFAULT = "high52"
+
+
+# ---------- a person's own rules (UI-CO item 14: "Build your own") ----------
+CUSTOM = "custom"                  # the scan id of a person's own rules
+CUSTOM_RULES = 5                   # conditions a custom scan holds (every one must hold, as in a preset)
+CUSTOM_WITHIN = 10                 # the furthest back a match may be: the last this many candles
+CUSTOM_SAVED = 10                  # custom scans a person keeps on the account
+
+
+class RuleError(ValueError):
+    """A custom scan's rules that can't be run, in words the page puts under the rules' box."""
+
+
+def custom_conds(raw) -> list[Cond]:
+    """A person's rules as the same conditions the strategy builder and the presets use, checked before any chart is read: how many there
+    are, that each is a valid condition (the builder's own model), daily candles only, and that the engine can work each one out
+    (tried on made-up candles, so an indicator it can't compute is said here, not as an empty scan)."""
+    if not isinstance(raw, list) or not raw:
+        raise RuleError("Add at least one rule.")
+    if len(raw) > CUSTOM_RULES:
+        raise RuleError(f"A scan holds up to {CUSTOM_RULES} rules; this has {len(raw)}.")
+    conds: list[Cond] = []
+    for i, r in enumerate(raw, 1):
+        try:
+            c = Cond.model_validate(r)
+        except ValidationError as e:
+            first = e.errors()[0]
+            raise RuleError(f"Rule {i}: {str(first.get('msg', 'not a valid rule')).removeprefix('Value error, ')}") from None
+        if c.l.t == "num" and c.r.t == "num":
+            raise RuleError(f"Rule {i} compares two plain numbers; put a price or an indicator on one side.")
+        if c.l.tf or c.r.tf:
+            raise RuleError(f"Rule {i} uses another timeframe; a scan reads daily candles.")
+        conds.append(c)
+    base = 100.0
+    bars = [{"t": f"2024-{1 + (i // 28) % 12:02d}-{1 + i % 28:02d}", "o": base + i * 0.1, "h": base + i * 0.1 + 1.5, "l": base + i * 0.1 - 1.5,
+             "c": base + i * 0.1 + (0.4 if i % 2 else -0.3), "v": 1000 + 10 * i} for i in range(MIN_BARS + 40)]
+    try:
+        ctx = Ctx(bars, False)
+        for i, c in enumerate(conds, 1):
+            try:
+                eval_cond(ctx, c, len(bars) - 1)
+            except Exception:
+                raise RuleError(f"Rule {i} ({cond_words(c)}) can't be worked out on daily candles. Pick another indicator.") from None
+    except RuleError:
+        raise
+    except Exception:
+        raise RuleError("These rules couldn't be checked. Try simpler ones.") from None
+    return conds
+
+
+def cond_words(c) -> str:
+    return f"{ref_name(c.l)} {OP_NAME[c.op]} {ref_name(c.r)}"
+
+
+def custom_within(n) -> int:
+    try:
+        return max(1, min(CUSTOM_WITHIN, int(n)))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _custom_detail(ctx: Ctx, conds: list, i: int, live: bool) -> str:
+    """The numbers behind a match of a person's own rules: each condition with the two values it compared on that candle."""
+    px = ctx.val(Ref(t="price"), i)
+    newest = i == len(ctx.df) - 1
+    at = "Last price" if live and newest else "Closed at"
+    parts = []
+    for c in conds:
+        left, right = ctx.val(c.l, i), ctx.val(c.r, i)
+        if left is None or right is None:
+            continue
+        parts.append(f"{ref_name(c.l)} {_f(left)} {OP_NAME[c.op]} {ref_name(c.r)}" + ("" if c.r.t == "num" else f" {_f(right)}"))
+    return f"{at} {_f(px)}: " + "; ".join(parts) if parts else ""
+
+
+def _saved_key(uid: str) -> str:
+    return f"scancustom:{uid}"
+
+
+def saved(uid: str) -> list[dict]:
+    """The custom scans an account keeps: [{id, name, region, rules, within}], oldest first."""
+    try:
+        got = json.loads(db.get_setting(_saved_key(uid)) or "[]")
+    except (ValueError, TypeError):
+        return []
+    return [x for x in got if isinstance(x, dict) and x.get("id")] if isinstance(got, list) else []
+
+
+def save_custom(uid: str, name: str, region: str, rules: list, within: int, sid: str | None = None) -> list[dict]:
+    """Keep a custom scan on the account (its rules checked first); with `sid` it replaces that one. Raises RuleError."""
+    name = str(name or "").strip()[:60]
+    if not name:
+        raise RuleError("Give the scan a name first.")
+    custom_conds(rules)
+    items = saved(uid)
+    item = {"id": sid or f"c{int(datetime.now().timestamp() * 1000):x}", "name": name, "region": "US" if region == "US" else "IN",
+            "rules": [Cond.model_validate(r).model_dump(mode="json", exclude_none=True) for r in rules], "within": custom_within(within)}
+    if sid and any(x["id"] == sid for x in items):
+        items = [item if x["id"] == sid else x for x in items]
+    elif len(items) >= CUSTOM_SAVED:
+        raise RuleError(f"You keep up to {CUSTOM_SAVED} scans of your own. Delete one to save another.")
+    else:
+        items.append(item)
+    db.set_setting(_saved_key(uid), json.dumps(items, separators=(",", ":")))
+    return items
+
+
+def remove_custom(uid: str, sid: str) -> list[dict]:
+    items = [x for x in saved(uid) if x["id"] != sid]
+    db.set_setting(_saved_key(uid), json.dumps(items, separators=(",", ":")))
+    return items
 
 
 def listing() -> list[dict]:
@@ -159,7 +272,7 @@ def _trend_days(ctx: Ctx, i: int) -> dict:
     return {"st_days": up + 1, "stage_days": since + 1, "stage_capped": bool(capped)}
 
 
-def evaluate(bars: list[dict], through: str | None = None, only: list[str] | None = None, live: bool = False) -> dict | None:
+def evaluate(bars: list[dict], through: str | None = None, only: list[str] | None = None, live: bool = False, custom: tuple[list, int] | None = None) -> dict | None:
     """Every preset's answer for one stock's daily candles (up to the day `through`, "YYYY-MM-DD"):
     {"as_of", "price", "chg", "matches": {id: {"days_ago", "day", "detail"}}}. None when there are too few candles.
     A preset matches when all its conditions held on one of its last `within` candles; the latest such candle counts."""
@@ -177,7 +290,9 @@ def evaluate(bars: list[dict], through: str | None = None, only: list[str] | Non
     if not (math.isfinite(close) and close > 0):
         return None
     out = {"as_of": str(rows[-1]["t"])[:10], "price": close, "chg": (close / prev - 1) * 100 if prev > 0 else None, "matches": {}}
-    for p in PRESETS:
+    # a person's own rules (custom: the conditions and how many candles back a match may be) are one more "preset", worked out the same way
+    todo = [{"id": CUSTOM, "within": custom[1], "conds": custom[0]}] if custom else PRESETS
+    for p in todo:
         if only is not None and p["id"] not in only:
             continue
         try:
@@ -187,7 +302,8 @@ def evaluate(bars: list[dict], through: str | None = None, only: list[str] | Non
                 if squeeze is not None and not squeeze[i]:
                     continue
                 if all(eval_cond(ctx, c, i) for c in p["conds"]):
-                    out["matches"][p["id"]] = {"days_ago": back, "day": str(rows[i]["t"])[:10], "detail": _detail(p["id"], ctx, i, live),
+                    detail = _custom_detail(ctx, p["conds"], i, live) if custom else _detail(p["id"], ctx, i, live)
+                    out["matches"][p["id"]] = {"days_ago": back, "day": str(rows[i]["t"])[:10], "detail": detail,
                                                **(_trend_days(ctx, i) if p["id"] == "st_s2" else {})}
                     break
         except Exception as e:      # one preset's data problem leaves the others' answers standing
@@ -221,14 +337,14 @@ def lag_sessions(last: str, newest: str | None) -> int:
         return 0
 
 
-def lagged(m: dict | None, last: str, newest: str | None, pid: str) -> dict | None:
+def lagged(m: dict | None, last: str, newest: str | None, pid: str, within: int | None = None) -> dict | None:
     """A match counted from the group's newest session, not the stock's own last candle: a stock that stopped trading a
     few sessions ago matched that long ago, and one past the preset's window doesn't match now."""
     lag = lag_sessions(last, newest)
     if not m or not lag:
         return m
     days_ago = m["days_ago"] + lag
-    return {**m, "days_ago": days_ago} if days_ago < BY_ID[pid]["within"] else None
+    return {**m, "days_ago": days_ago} if days_ago < (within if within is not None else BY_ID[pid]["within"]) else None
 
 
 def build(per_stock: dict[str, dict], now: datetime | None = None) -> dict:

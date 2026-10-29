@@ -116,7 +116,7 @@ from . import mtf, slb, stock_desks, stock_futures     # the per-stock market de
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq, DeleteMyDataReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
-from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, TelegramCodeReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, CustomScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, TelegramCodeReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq, ViewAsReq)
 from .plans import holdings_limit
 from . import money_networth
@@ -2080,6 +2080,29 @@ def scan_sets(region: str = "IN", profile=Depends(current_profile)):
             "rotation_sets": [{"id": k, "name": v["name"]} for k, v in rotation.index_sets(region).items()]}
 
 
+@app.get("/research/scan/custom")
+def scan_custom_list(profile=Depends(current_profile)):
+    need(profile, "scans", "Trend scans")
+    return {"items": scan_presets.saved(profile["id"]), "limit": scan_presets.CUSTOM_SAVED, "rules_max": scan_presets.CUSTOM_RULES, "within_max": scan_presets.CUSTOM_WITHIN}
+
+
+@app.put("/research/scan/custom")
+def scan_custom_save(req: CustomScanReq, profile=Depends(current_profile)):
+    """Keep a person's own scan on the account to run again later (up to 10; the rules are checked first)."""
+    need(profile, "scans", "Trend scans")
+    try:
+        items = scan_presets.save_custom(profile["id"], req.name, req.region, req.rules, req.within, req.id)
+    except scan_presets.RuleError as e:
+        err(400, "bad_rules", str(e))
+    return {"items": items, "limit": scan_presets.CUSTOM_SAVED}
+
+
+@app.delete("/research/scan/custom/{sid}")
+def scan_custom_delete(sid: str, profile=Depends(current_profile)):
+    need(profile, "scans", "Trend scans")
+    return {"items": scan_presets.remove_custom(profile["id"], sid), "limit": scan_presets.CUSTOM_SAVED}
+
+
 def _scan_names(region: str, symbols: list[str]) -> dict[str, dict]:
     """{symbol: {"name", "currency"}} for the rows of a stored scan: the S&P 500's list for the US, the instrument list for India."""
     out = {}
@@ -2173,9 +2196,19 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
     (52-week high breakout, golden cross, ...), each stock's match stated as a fact with its date. Never advice."""
     heavy_read_throttle(profile)
     need(profile, "scans", "Trend scans")
-    if req.scan != "st_s2" and req.scan not in scan_presets.BY_ID:
+    custom = None
+    if req.scan == scan_presets.CUSTOM:
+        # "Build your own": a person's rules, checked before any chart is read, over the same groups and at the same pace as a preset; the
+        # 500-stock groups are read once a day for the ready-made scans, so their stored answers can't hold someone's own rules
+        try:
+            custom = (scan_presets.custom_conds(req.rules), scan_presets.custom_within(req.within))
+        except scan_presets.RuleError as e:
+            err(400, "bad_rules", str(e))
+    elif req.scan != "st_s2" and req.scan not in scan_presets.BY_ID:
         err(404, "not_found", "That scan isn't available.")
     big = next((b for b in universes.BIG[req.region] if b["id"] == req.set), None)
+    if big and custom:
+        err(400, "custom_group", f"Your own rules run on your watchlist or a ready-made group of up to {scan.MAX} stocks. {big['name']} is read once a day for the ready-made scans only.")
     if big:
         preset = scan_presets.BY_ID[req.scan]
         out = _stored_scan(profile, req.region, big["id"], req.scan, big["name"])
@@ -2195,15 +2228,16 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
         registry, offline = scan.LastCloseIndia(research_hub.yahoo), True
     # an answer from before the close settled isn't kept past it (R13-005)
     live = not offline and research_routes.market_open(req.region)          # trading now: the newest candle is today's, still forming
-    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members), scan.settled_at(req.region), offline, live)
+    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members), scan.settled_at(req.region), offline, live,
+           json.dumps([c.model_dump(mode="json") for c in custom[0]], sort_keys=True) + f"/{custom[1]}" if custom else "")
     out = _results.get(key)
     if out is None:                       # the same group gives everyone the same answer until prices move
         if req.scan == "st_s2":
             out = {"kind": "st_s2", **scan.run(registry, req.region, members, session=scan.session_day(req.region))}
         else:
-            got = scan.run_preset(registry, req.region, members, req.scan, session=scan.session_day(req.region), live=live)
-            out = {"kind": "preset", "scan": req.scan, "scan_name": scan_presets.BY_ID[req.scan]["name"], "matches": len(got["rows"]),
-                   "stored": False, **got}
+            got = scan.run_preset(registry, req.region, members, req.scan, session=scan.session_day(req.region), live=live, custom=custom)
+            out = {"kind": "preset", "scan": req.scan, "scan_name": "Your own rules" if custom else scan_presets.BY_ID[req.scan]["name"], "matches": len(got["rows"]),
+                   "stored": False, **got, **({"rules": [scan_presets.cond_words(c) for c in custom[0]], "within": custom[1]} if custom else {})}
         if offline and not out.get("rows") and (out.get("problems") or out.get("missing")) and not out.get("checked", len(out.get("rows") or [])):
             raise KiteNotReady("Market data for this market is offline right now.")      # the price history didn't answer either
         _results.set(key, out, 300)

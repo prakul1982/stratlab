@@ -13,7 +13,7 @@ import {
 import { askAgain, PULSE_PENDING_EVERY_MS, PULSE_SLOW_MS, pulseLoad } from "../lib/pulseLoad";
 import { bseTwinMoved, delistedLine, regionOf } from "../lib/researchFormat";
 import {
-  AIRead, aiLimited, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
+  AIRead, aiLimited, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteTable, Rail52, RegionSwitch,
   Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
 import { preloadPriceChart } from "../charts/price/lazy";
@@ -330,23 +330,18 @@ function CompanyView() {
       <PageHeader eyebrow={eyebrow} title={c.name} lede={`${c.exchange || REGION_NAME[region]} · ${c.symbol}${c.industry ? ` · ${c.industry}` : ""}`}
         asOf={c.as_of} asOfLabel={c.phase === "settling" ? "Provisional prices as of" : "Prices as of"} asOfTz={marketTz(region)} actions={c.quarters?.cols.length ? <Badge>Latest results: quarter to {c.quarters.cols[c.quarters.cols.length - 1]}{resultsAge(c.quarters.cols[c.quarters.cols.length - 1])}</Badge> : c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at, { tz: marketTz(region) })}</Badge> : undefined} />
       <Card>
+        {/* UI-CO item 4: one balanced block, three equal-weight columns on a wide page (the price and its move, with the close it moves from; the market value; the
+            52-week bar and the results day), then the badges, then the actions row; one column on a phone in the same order */}
         <div className="inv-head">
-          <div className="k-stack">
-            {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
-            {c.market_cap == null && c.cap_note && <p className="k-small k-muted" data-cap-check>{c.cap_note}</p>}
-            <div className="inv-badges">
-              <SurvBadges region={region} symbol={c.symbol} />
-              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} />}
-              <FoBadges region={region} symbol={c.symbol} />
-              <IndexBadges region={region} symbol={c.symbol} />
-            </div>
-            {/* a company that no longer trades says so first, and offers nothing that needs a live share (DD-012) */}
-            {c.delisted && <p className="k-small" role="status" data-testid="delisted">{delistedLine(c.name, c.delisted, (d) => fmtDate(d))}
-              {c.delisted.into_symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(c.delisted.into_symbol)}`}>{c.delisted.into ?? c.delisted.into_symbol} →</Link></>}</p>}
-          </div>
-          <div className="k-stack inv-head-price">
+          <div className="k-stack inv-head-quote">
             <Change q={c.quote} currency={ccy} closed={c.market_open === false} preOpen={c.phase === "pre_open"} settling={c.phase === "settling"}
               quoteDay={c.quote_day} today={dayIn(new Date(), marketTz(region)) ?? undefined} />
+          </div>
+          <div className="k-stack inv-head-cap">
+            {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
+            {c.market_cap == null && c.cap_note && <p className="k-small k-muted" data-cap-check>{c.cap_note}</p>}
+          </div>
+          <div className="k-stack inv-head-price">
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} since={c.range52.since} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
             {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
@@ -356,6 +351,17 @@ function CompanyView() {
             {!nextResults && !filedNow && results?.last?.out && (results.last.out.url
               ? <a className="link k-small" href={safeHref(results.last.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.last.out.at)} ↗</a>
               : <Link className="link k-small" to={`/research/results?region=${region}`}>Results filed {resultDay(results.last.out.at)}</Link>)}
+          </div>
+          <div className="k-stack inv-head-more">
+            <div className="inv-badges">
+              <SurvBadges region={region} symbol={c.symbol} />
+              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} />}
+              <FoBadges region={region} symbol={c.symbol} />
+              <IndexBadges region={region} symbol={c.symbol} />
+            </div>
+            {/* a company that no longer trades says so first, and offers nothing that needs a live share (DD-012) */}
+            {c.delisted && <p className="k-small" role="status" data-testid="delisted">{delistedLine(c.name, c.delisted, (d) => fmtDate(d))}
+              {c.delisted.into_symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(c.delisted.into_symbol)}`}>{c.delisted.into ?? c.delisted.into_symbol} →</Link></>}</p>}
           </div>
           {/* one main action (what this person came for), Watch and an alert; the rest under More. Inside the head, under the
               market value, so the left side has no empty block while the price column runs on (DD-019) */}
@@ -418,7 +424,8 @@ function CompanyView() {
             {wiki?.description && !(wiki.extract && wiki.extract.toLowerCase().includes(wiki.description.toLowerCase())) && <p className="k-sub">{wiki.description}</p>}
             <p className="k-small">{wiki?.extract || c.about.profile}</p>
             {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
-            {shownFacts.length > 0 && <dl className="k-dl pairs">{shownFacts.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
+            {shownFacts.length > 0 && <DataTable label="Facts about the company" rows={shownFacts} rowKey={(f) => f.label} stack={false}
+              columns={[{ key: "f", header: "Fact", rowHeader: true, cell: (f) => f.label }, { key: "v", header: "Value", cell: (f) => f.value }]} />}
             {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
           </Card>
         )}
@@ -464,7 +471,7 @@ function CompanyView() {
 
       {/* CK-2 (R1): one card under the other: the news list is shorter than the peers' tiles, so side by side it left 120px of blank beside it */}
       <div className="k-stack">
-        {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><div className={`co-peers co-peers-${c.peers.length === 4 ? 2 : Math.min(3, c.peers.length)}`}><QuoteGrid region={region} symbols={c.peers} /></div></Card>}
+        {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><QuoteTable region={region} symbols={c.peers} label="Similar companies" /></Card>}
         <Card id="co-news"><CardHead title="Latest news" />{c.lazy?.length ? <Skeleton label="Loading the latest news" lines={2} />
           : c.news_failed && !c.news.length ? <p className="k-small k-muted" data-testid="news-failed">The news couldn't be loaded just now. It is read again when you open the page.</p>
           : <NewsList items={c.news} />}</Card>
@@ -559,6 +566,9 @@ export function ComparePage() {
   const [sameMsg, setSameMsg] = useState<string | null>(null);        // the server found the two to be one company (DD-061)
   // "Asking…" is the pair's it was pressed for: another pair or market never shows it, and never gets its answer
   const [asking, setAsking] = useState<string | null>(null);
+  // a link that names two companies and no market ("?a=HDFCBANK&b=ICICIBANK") opens in the market that has them, not the one this browser last used
+  // (LIVE2-021): when the pair isn't found in this one, the other is tried once
+  const auto = useRef<{ tried: boolean; first: Region | null; error: string | null }>({ tried: false, first: null, error: null });
   const shownKey = pairKey(region, a, b);
   const pair = useRef(shownKey);
   pair.current = shownKey;
@@ -581,7 +591,12 @@ export function ComparePage() {
     setRes(null); setError(null);
     researchApi.compare(region, a, b).then((x) => live && setRes(x)).catch((e) => {
       if (!live) return;
-      if ((e as ApiError).code === "same_symbol") setSameMsg((e as Error).message); else setError((e as Error).message);
+      if ((e as ApiError).code === "same_symbol") { setSameMsg((e as Error).message); return; }
+      const t = auto.current;
+      if (!params.get("region") && !t.tried) { auto.current = { tried: true, first: region, error: (e as Error).message }; setRegionState(region === "IN" ? "US" : "IN"); return; }
+      // not in the other market either: the first market's message, and the market it was asked in
+      if (t.tried && t.first && t.first !== region) { setError(t.error ?? (e as Error).message); setRegionState(t.first); return; }
+      setError(t.tried && t.error ? t.error : (e as Error).message);
     });
     return () => { live = false; };
   }, [a, b, region, same]);
@@ -627,7 +642,9 @@ export function ComparePage() {
   // table, naming the company (LIVE1A-048)
   type Foot = { n: number; symbol: string; text: string };
   type Item = Company["metrics"][number]["items"][number];
-  const qualifier = (m: Item | undefined) => { const note = (m as { note?: string } | undefined)?.note; return note && QUALIFIES.test(note) ? note : null; };
+  // (UI-CO item 8: any note longer than a short basis is one, whatever its words: "₹112 a share in the last 12 months, including a ₹46 special dividend;
+  // 2.7% without it" ran across both columns)
+  const qualifier = (m: Item | undefined) => { const note = (m as { note?: string } | undefined)?.note; return note && (QUALIFIES.test(note) || note.length > 48) ? note : null; };
   // worked out before the table is drawn, so the list under it and the numbers in its cells agree
   const footsOf = (sec: { title: string; labels: string[] }): Foot[] => {
     const out: Foot[] = [];
@@ -661,23 +678,20 @@ export function ComparePage() {
       {a && b && !same && !sameMsg && !res && !error && <Card><Skeleton label={`Comparing ${a} and ${b}`} lines={4} /></Card>}
       {res && (
         <>
-          <div className="k-cols">
-            {([["a", res.a], ["b", res.b]] as const).map(([k, c]) => (
-              <Card key={k}>
-                {/* both cards the same: the name, the two figures, then the same two buttons in a row (DD-060) */}
-                <CardHead title={c.name} />
-                <StatRow>
-                  <Stat label={priceLabel(c, today, dayText).label ?? "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
-                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={priceLabel(c, today, dayText).since || undefined} />
-                  <Stat label="Market value" value={bigMoney(c.market_cap, c.currency)} note={c.symbol} />
-                </StatRow>
-                <div className="k-row">
-                  <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}>Open {c.symbol} →</Link>
-                  <StarButton region={region} symbol={c.symbol} name={c.name} />
-                </div>
-              </Card>
-            ))}
-          </div>
+          {/* the two companies as one table (UI-CO item 11, LIVE1A-050): the name (a link to its page), the price and its move, the market value and Watch: the same
+              four columns for both, so nothing is said twice and no button repeats the link */}
+          <Card>
+            <DataTable label="The two companies" rows={[res.a, res.b]} rowKey={(c) => c.symbol} stack
+              columns={[
+                { key: "n", header: "Company", rowHeader: true, wrap: true, cell: (c) => <span className="cmp-cell"><Link className="link" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}><b>{c.name}</b></Link><span className="k-note">{c.symbol}</span></span> },
+                { key: "p", header: "Price", numeric: true, cell: (c) => (
+                  <span className="cmp-cell end"><b>{c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}</b>
+                    <span className="k-note">{priceLabel(c, today, dayText).label ?? ""}{priceLabel(c, today, dayText).since ? ` ${priceLabel(c, today, dayText).since}` : ""}</span></span>) },
+                { key: "d", header: "Change", numeric: true, cell: (c) => (c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : "–") },
+                { key: "m", header: "Market value", numeric: true, cell: (c) => bigMoney(c.market_cap, c.currency) },
+                { key: "w", header: "", action: true, cell: (c) => <StarButton region={region} symbol={c.symbol} name={c.name} /> },
+              ]} />
+          </Card>
           {/* the two prices on one % scale, from the start of the range shown (DD-060) */}
           <Card id="cmp-chart"><PriceChart region={region} symbol={res.a.symbol} currency={res.a.currency} price={res.a.quote?.price} compareWith={res.b.symbol} /></Card>
           <Card>

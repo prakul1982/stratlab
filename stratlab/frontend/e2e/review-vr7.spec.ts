@@ -77,14 +77,16 @@ test("VR7-004: the signed-out library keeps every card in the page and shows twe
   await expect(page.getByTestId("lib-show-more")).toBeHidden();
 });
 
-test("VR7-006: Key numbers' groups sit in three equal columns on a wide page", async ({ page }) => {
+test("VR7-006 (UI-CO item 2): Key numbers' groups are tables of one width, in two columns on a wide page", async ({ page }) => {
   await open(page, "/research/IN/RELIANCE", ADMIN, 1440);
-  const cols = page.locator(".inv-metrics > .k-stack");
+  const cols = page.locator(".inv-metrics > .inv-mt");
   await expect(cols.first()).toBeVisible({ timeout: 30_000 });
   const boxes = await cols.evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width)]; }));
   expect(boxes.length).toBeGreaterThanOrEqual(4);
   expect(new Set(boxes.map((b) => b[1])).size, `widths ${JSON.stringify(boxes)}`).toBe(1);        // one width: the second row's groups sit under the first row's
-  expect(new Set(boxes.map((b) => b[0])).size).toBeLessThanOrEqual(3);
+  expect(new Set(boxes.map((b) => b[0])).size).toBe(2);
+  // each is a table with its header row and one row for every figure
+  await expect(page.getByRole("table", { name: "Key numbers: Valuation" }).getByRole("columnheader")).toHaveText(["Valuation", "Value", "Basis", "Range"]);
 });
 
 test("VR7-008, VR7-019: the Markets button fits the margin on a laptop, and a chart in the panel is as tall as its tool rail", async ({ page, request }) => {

@@ -1334,8 +1334,11 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   const panel = page.locator("#corporate-actions");
   // the fake exchange's dates are relative to India's day, so a run that crosses midnight IST reads the list again and
   // carries the dividend under two ex-dates (CI at 00:10 IST, 24 Oct): one is enough, as in the calendar above
-  await expect(panel.getByText(/Interim dividend ₹11 a share/).first()).toBeVisible({ timeout: 30_000 });
-  await expect(panel.getByText(/Final dividend ₹30 a share/)).toBeVisible();
+  // (a table: Ex-date | Type | Amount a share | Record date, one row for each)
+  const actions = panel.getByRole("table", { name: /Corporate actions/ });
+  await expect(actions.getByRole("columnheader")).toHaveText(["Ex-date", "Type", "Amount a share", "Record date"], { timeout: 30_000 });
+  await expect(actions.getByRole("row").filter({ hasText: "Interim dividend" }).first().getByRole("cell", { name: "₹11", exact: true })).toBeVisible();
+  await expect(actions.getByRole("row").filter({ hasText: "Final dividend" }).getByRole("cell", { name: /^₹30/ })).toBeVisible();      // (its mark for the note "in today's shares" is beside it)
   await expect(panel.getByText(/Dividends with an ex-date in the last 12 months/)).toBeVisible();
 
   errors = await open(page, "/holdings", "By sector", who);

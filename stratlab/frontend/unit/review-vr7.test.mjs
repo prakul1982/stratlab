@@ -25,13 +25,14 @@ test("VR7-004: the signed-out library keeps every card in the page and a phone s
   assert.match(css, /\.k-row\.lib-more \{ display: none; \}/);                        // a desktop has no such button
 });
 
-test("VR7-006: Key numbers are three equal columns, so a second row's figures sit under the first row's; the note on the bars fills the free cell", () => {
+test("VR7-006 (UI-CO item 2): Key numbers are tables of one width in two balanced columns (one on a phone); a long note is a numbered note under them", () => {
   const inv = read("src/styles-invest.css");
-  assert.match(inv, /@media \(min-width: 1200px\) \{\n  \.inv-metrics \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}\n\}/);
-  assert.doesNotMatch(inv, /\.inv-metrics > :last-child:nth-child\(3n\+1\) \{ grid-column: span 6; \}/);       // no widened last row
+  assert.match(inv, /\.inv-metrics \{ columns: 2; column-gap: var\(--s6\); \}/);
+  assert.match(inv, /@media \(max-width: 900px\) \{ \.inv-metrics \{ columns: 1; \} \}/);
   const src = read("src/components/Research.tsx");
-  assert.match(src, /className=\{`k-note inv-metrics-note\$\{groups\.length % 3 === 0 \? " row" : ""\}`\} data-testid="krail-legend"/);
-  assert.match(src, /<\/p>\n\s*\)\}\n\s*<\/div>\n\s*\{foot\.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">.*<\/ul>\}\n\s*\{used\.length > 0/);       // (LIVE1A-062: a long note is a footnote under the grid)       // the note is the grid's last cell; the terms stay under the grid
+  assert.match(src, /<div key=\{g\.title\} className="inv-mt">/);
+  assert.match(src, /data-testid="krail-legend"/);
+  assert.match(src, /<\/div>\n\s*\{anyBar && <p[^\n]*krail-legend[^\n]*<\/p>\}\n\s*\{foot\.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">.*<\/ul>\}\n\s*\{used\.length > 0/);
 });
 
 test("VR7-007: on a visitor's wide page the cookie question is a slim bar along the foot of the window, in the app it stays the corner card", () => {

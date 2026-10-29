@@ -56,7 +56,8 @@ def test_checked_against_the_numbers():
     assert by[("profit_growth", "FY25")]["result"] == "missed"
     assert by[("revenue_growth", "FY27")]["result"] == "pending"
     assert sum(r["metric"] == "revenue_growth" and r["period"] == "FY25" for r in card["rows"]) == 1
-    assert (card["met"], card["missed"], card["pending"], card["unchecked"], card["score"]) == (2, 2, 1, 2, 50)
+    assert (card["met"], card["missed"], card["pending"], card["unchecked"], card["score"]) == (2, 2, 1, 0, 50)
+    assert card["no_figure"] == 2 and all(r["why"] for r in card["rows"] if r["result"] == "unchecked")      # two plans with no figure, each says so
 
 
 def test_quarterly_targets_use_the_quarter_a_year_earlier():
@@ -182,3 +183,92 @@ def test_targets_are_settled_from_what_the_company_said_later(monkeypatch):
     assert row["result"] == "met" and row["actual"] == 88 and row["settled_by"]["quote"].startswith("the loan")
     assert rc.check(g[2], {"years": [], "quarters": []}, date(2026, 10, 3))["result"] == "missed"
     assert rc.calls_for(1) == 4 and rc.calls_for(2) == 6 and rc.calls_for(5) == 12
+
+
+# ---- UI-CO item 7: the owner's report card for a company whose targets showed "0.2%" for a 20% CAGR, a PAT margin filed as the operating
+# margin, a statement about the past counted as a target, and half the card "couldn't check" ----
+LABELS = {"S1": {"title": "Q2 FY26 call", "at": "2025-11-14T10:00", "url": "u1", "kind": "transcript"}}
+NUMS = {"fye": 3, "unit": "₹ crore", "quarters": [],
+        "years": [{"year": "Mar 2024", "sales": 1000.0, "profit": 20.0, "opm": 2.5, "roe": 10.0}, {"year": "Mar 2025", "sales": 1241.0, "profit": 30.0, "opm": 2.9, "roe": 14.0},
+                  {"year": "Mar 2026", "sales": 1400.0, "profit": 35.0, "opm": 2.7, "roe": 16.0}]}
+
+
+def item(metric, low, period, what, quote, high=None, **more):
+    return {"metric": metric, "low": low, "high": high, "period": period, "what": what, "quote": quote, "source": "S1", **more}
+
+
+def one(**kw):
+    out = rc.clean({"guidance": [item(**kw)]}, LABELS)
+    assert len(out) == 1, out
+    return out[0]
+
+
+def test_a_percentage_is_shown_as_management_said_it():
+    a = one(metric="revenue_growth", low=0.2, period="FY28", what="CAGR of 20%", quote="we will keep a CAGR of 20% for the next few years")
+    assert (a["low"], a["high"]) == (20.0, None) and a["unit"] == "%"
+    b = one(metric="revenue_growth", low=0.3, high=0.5, period="FY28", what="30-50% growth in the business", quote="in the excess of 30% to 50% growth on a Y-O-Y basis we expect")
+    assert (b["low"], b["high"]) == (30.0, 50.0)
+    assert one(metric="margin", low=0.5, period="FY28", what="0.5% margin gain", quote="we expect a 0.5% gain in margin")["low"] == 0.5     # really 0.5: left alone
+    assert one(metric="margin", low=20, period="FY28", what="20% margin", quote="we expect twenty percent")["low"] == 20.0
+    assert one(metric="revenue_growth", low=0.2, period="FY28", what="20 percent", quote="we expect twenty percent growth")["low"] == 20.0   # no digits said: a fraction is a percentage
+    # a card stored with the fraction is shown right, and once
+    stored = {"guidance": [{**a, "low": 0.2, "high": None}, {**b, "low": 0.3, "high": 0.5, "period": "FY29"}], "read": [], "at": "x"}
+    got = sorted((r["low"], r["high"] or 0) for r in rc.view(stored, NUMS, date(2026, 10, 1))["rows"])
+    assert got == [(20.0, 0), (30.0, 50.0)]
+
+
+def test_a_pat_margin_is_a_net_margin_and_is_checked_as_one():
+    t = one(metric="margin", low=1.5, period="FY26", what="PAT margin of 1.5%", quote="1.5% is a safer PAT margin which we can consider")
+    assert t["metric"] == "net_margin" and rc.METRICS[t["metric"]] == "Net margin"
+    t2 = one(metric="margin", low=3.0, period="FY26", what="PAT margin of 3%", quote="we expect a PAT margin of 3% this year")
+    row = rc.check(t2, NUMS, date(2026, 10, 1))
+    assert row["actual"] == 2.5 and row["result"] == "missed"                    # 35 / 1400, not the 2.7% operating margin
+    assert rc.check(one(metric="margin", low=2.7, period="FY26", what="EBITDA margin", quote="we expect EBITDA margin of 2.7% in FY26"), NUMS, date(2026, 10, 1))["result"] == "met"
+    g = one(metric="margin", low=5, period="FY26", what="gross margins", quote="we normally expect gross margins of around 5% from us")
+    assert g["metric"] == "gross_margin"
+    r = rc.check(g, NUMS, date(2026, 10, 1))
+    assert r["result"] == "unchecked" and "Gross margin" in r["why"] and r["actual"] is None         # never set against the EBITDA margin
+
+
+def test_a_statement_about_the_past_or_an_analysts_question_is_not_a_target():
+    texts = {"S1": ""}
+    past = {"guidance": [item("revenue_growth", 20, "FY27", "CAGR of 20%", "our CAGR has been 20% for last 20 years"),
+                         item("revenue_growth", 15, "FY27", "15% growth in the topline", "are we expecting similar at least 10% to 15% growth in the topline?"),
+                         item("other", None, "FY27", "add brand-wise revenue", "add the brand-wise revenue contribution for each quarter sir like what you have did"),
+                         item("revenue_growth", 20, "FY27", "20% growth", "we have grown 20% and we expect to keep that going next year")]}
+    out = rc.clean(past, LABELS)
+    assert [x["what"] for x in out] == ["20% growth"]
+    stored = {"guidance": [{**x, "source": {}} for x in rc.clean({"guidance": [past["guidance"][3]]}, LABELS)] +
+              [{"metric": "revenue_growth", "low": 0.2, "high": None, "period": "FY27", "what": "CAGR of 20%", "quote": "our CAGR has been 20% for last 20 years",
+                "said_at": "2025-11-14", "source": {}, "unit": "%"}], "read": [], "at": "x"}
+    assert len(rc.view(stored, NUMS, date(2026, 10, 1))["rows"]) == 1          # a card stored before shows no history either
+
+
+def test_topline_is_revenue_growth_not_profit_growth():
+    t = one(metric="profit_growth", low=10, high=15, period="FY27", what="10% to 15% growth in the topline", quote="we expect at least 10% to 15% growth in the topline")
+    assert t["metric"] == "revenue_growth"
+    p = one(metric="revenue_growth", low=20, period="FY27", what="PAT growth of 20%", quote="we are confident of PAT growth of 20%")
+    assert p["metric"] == "profit_growth"
+    e = one(metric="other", low=12, period="FY26", what="EBITDA growth of 12%", quote="we expect EBITDA growth of 12% this year", unit="%")
+    assert e["metric"] == "ebitda_growth"
+    assert rc.check(e, NUMS, date(2026, 10, 1))["actual"] == 5.0                 # 1400 x 2.7% = 37.8 against 1241 x 2.9% = 36.0
+
+
+def test_what_cannot_be_checked_says_why_and_what_can_is_settled():
+    today = date(2026, 10, 1)
+    rows = {
+        "roe": one(metric="other", low=15, period="FY26", unit="%", what="ROE target", quote="we envision that +15% ROE we will reach"),
+        "no period": one(metric="net_margin", low=1.5, period=None, what="PAT margin of 1.5%", quote="1.5% is a safer PAT margin for the long run we will see"),
+        "segment": one(metric="revenue_growth", low=30, high=50, period="FY27", what="30-50% growth in enterprise business", quote="we expect 30% to 50% growth in our enterprise business"),
+        "multiple": one(metric="revenue_growth", low=3, high=4, period="FY27", what="semiconductor business growth at least 3x or 4x", quote="we expect growth at least 3x or 4x of overall growth"),
+        "plan": one(metric="other", low=None, period="FY27", what="start a plant", quote="we will start the new plant"),
+    }
+    res = {k: rc.check(v, NUMS, today) for k, v in rows.items()}
+    assert res["roe"]["result"] == "met" and res["roe"]["actual"] == 16.0                       # the equity is in the reported tables: settled
+    assert res["no period"]["result"] == "unchecked" and "No year" in res["no period"]["why"]
+    assert res["segment"]["result"] == "unchecked" and "enterprise" in res["segment"]["why"] and "whole company" in res["segment"]["why"]
+    assert res["multiple"]["result"] == "unchecked" and rows["multiple"]["unit"] == "x"
+    assert res["plan"]["result"] == "unchecked" and res["plan"]["qualitative"] and res["plan"]["why"]
+    card = rc.view({"guidance": list(rows.values()), "read": [], "at": "x"}, NUMS, today)
+    assert card["unchecked"] == 3 and card["no_figure"] == 1 and card["met"] == 1                # the plan with no figure is not "couldn't check"
+    assert all(r.get("why") for r in card["rows"] if r["result"] == "unchecked")

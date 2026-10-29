@@ -15,7 +15,7 @@ import { surpriseShown } from "../lib/surprise";
 import { tinyBase } from "../lib/researchFormat";
 import { Star } from "./Icons";
 import { Info } from "./ui";
-import { BarList, Card, CardHead, DataTable, Delta, Disclosure, Notice, Seg, Signed, Skeleton } from "./kit";
+import { Card, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signed, Skeleton } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { FoBadges } from "./FoBadges";
 import { AiAd } from "./AiAd";
@@ -153,12 +153,16 @@ export function MarginCascade({ gross, operating, net }: { gross: number | null;
   if (gross == null || operating == null || net == null || gross <= 0) return null;
   const steps = [{ k: "Revenue", v: 100, lost: "" }, { k: "Gross profit", v: gross, lost: "cost of goods" },
     { k: "Operating profit", v: operating, lost: "running costs, R&D" }, { k: "Net profit", v: net, lost: "tax, interest, other" }];
+  const rows = steps.map((s, i) => ({ ...s, drop: i ? steps[i - 1].v - s.v : 0 }));
+  // a table (UI-CO: tables wherever there are figures): the step, what is left of every 100 in sales (with its bar), and what was lost to get there
   return (
-    <BarList label="Where a sale goes" footnote="Of every 100 in sales, what is left at each step."
-      rows={steps.map((s, i) => {
-        const lost = i ? steps[i - 1].v - s.v : 0;
-        return { key: s.k, name: s.k, note: lost > 0 ? `−${lost.toFixed(1)} to ${s.lost}` : undefined, value: `${s.v.toFixed(1)}%`, pct: Math.max(0, Math.min(100, s.v)) };
-      })} />
+    <div className="k-stack">
+      <div className="dd-fit"><DataTable label="Where a sale goes" rows={rows} rowKey={(r) => r.k} stack={false}
+        columns={[{ key: "s", header: "Step", rowHeader: true, cell: (r) => r.k },
+          { key: "v", header: "Left of 100 in sales", numeric: true, cell: (r) => <span className="dd-share"><span>{r.v.toFixed(1)}%</span><Meter pct={Math.max(0, Math.min(100, r.v))} /></span> },
+          { key: "l", header: "Lost on the way", numeric: true, cell: (r) => (r.drop > 0 ? `−${r.drop.toFixed(1)} to ${r.lost}` : "–") }]} /></div>
+      <p className="k-note">Of every 100 in sales, what is left at each step.</p>
+    </div>
   );
 }
 
@@ -185,45 +189,41 @@ const TERMS: Record<string, string> = {
  * lines beside a -24.6%, so its row was four times as tall as its neighbours, LIVE1A-062). A short one stays under its label. */
 const LONG_NOTE = 90;
 
+/** The range bar beside a figure: where it sits on a typical range for its measure. */
+function RangeBar({ b }: { b: { pos: number; weak: number; strong: number } }) {
+  return (
+    <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><title>Where this figure sits on a typical range</title>
+      <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
+      <rect className="tick" x={b.weak} y="1" width="0.8" height="8" />
+      <rect className="tick" x={b.strong} y="1" width="0.8" height="8" />
+      <rect className="mark" x={Math.max(0, b.pos - 1.2)} y="0" width="2.4" height="10" />
+    </svg>
+  );
+}
+
+/** Key numbers: each group is a small table (the group's name | Value | Basis | Range bar), the tables in two columns of one width (CSS columns balance them, in reading order on a phone). A long note is a numbered note under the tables, its mark beside the value (UI-CO item 2). */
 export function MetricsGrid({ groups, currency, industry }: { groups: MetricGroup[]; currency: string; industry?: string | null }) {
   const used = Object.entries(TERMS).filter(([k]) => groups.some((g) => g.items.some((m) => m.label === k)));
   const foot: { n: number; label: string; text: string }[] = [];
   for (const g of groups) for (const m of g.items) if (m.note && m.note.length > LONG_NOTE) foot.push({ n: foot.length + 1, label: m.label, text: m.note });
   const mark = (m: { label: string; note?: string | null }) => foot.find((f) => f.label === m.label && f.text === m.note);
+  const anyBar = groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry)));
   return (
     <>
       <div className="inv-metrics">
         {groups.map((g) => (
-          <div key={g.title} className="k-stack">
-            <span className="k-eyebrow">{g.title}</span>
-            <div className="inv-metric-rows">
-              {g.items.map((m) => {
-                const b = bandPosition(m.label, m.value, industry);
-                return (
-                  <div key={m.label} className="inv-metric">
-                    {/* a note says what a figure counts (a dividend yield with a special dividend in it) */}
-                    <span className="k-small k-muted">{m.label}{m.note && !mark(m) && <span className="k-sub-line">{m.note}</span>}{mark(m) && <sup className="cmp-foot-mark" aria-label={`see note ${mark(m)!.n}`}>{mark(m)!.n}</sup>}</span>
-                    <span className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}</span>
-                    {b ? (
-                      <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><title>Where this figure sits on a typical range</title>
-                        <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
-                        <rect className="tick" x={b.weak} y="1" width="0.8" height="8" />
-                        <rect className="tick" x={b.strong} y="1" width="0.8" height="8" />
-                        <rect className="mark" x={Math.max(0, b.pos - 1.2)} y="0" width="2.4" height="10" />
-                      </svg>
-                    ) : <span />}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+              <div key={g.title} className="inv-mt">
+                <DataTable label={`Key numbers: ${g.title}`} rows={g.items} rowKey={(m) => m.label} stack={false}
+                  columns={[
+                    { key: "m", header: g.title, rowHeader: true, cell: (m) => <span className="k-small">{m.label}</span> },
+                    { key: "v", header: "Value", numeric: true, cell: (m) => <b className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}{mark(m) && <sup className="cmp-foot-mark" aria-label={`see note ${mark(m)!.n}`}>{mark(m)!.n}</sup>}</b> },
+                    { key: "b", header: "Basis", cell: (m) => <span className="k-note">{m.note && !mark(m) ? m.note : ""}</span> },
+                    { key: "r", header: anyBar ? <span title="Where this figure sits on a typical range for that measure">Range</span> : "", cell: (m) => { const b = bandPosition(m.label, m.value, industry); return b ? <RangeBar b={b} /> : null; } },
+                  ]} />
+              </div>
         ))}
-        {/* VR7-006: the groups are three equal columns, so the second row's figures sit under the first row's; the note on the bars takes the free cell a
-            last row of one or two groups leaves (not a row of its own under a hole), and with a full last row it is a row of its own */}
-        {groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry))) && (
-          <p className={`k-note inv-metrics-note${groups.length % 3 === 0 ? " row" : ""}`} data-testid="krail-legend">The small bar beside a figure shows where it sits on a typical range for that measure; the two ticks are the range's cut-off points.</p>
-        )}
       </div>
+      {anyBar && <p className="k-note" data-testid="krail-legend">The small bar beside a figure shows where it sits on a typical range for that measure; the two ticks are the range's cut-off points.</p>}
       {foot.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">{foot.map((f) => <li key={f.n}><sup>{f.n}</sup> {f.label}: {f.text}</li>)}</ul>}
       {used.length > 0 && (
         <Disclosure summary="What these terms mean">
@@ -324,18 +324,39 @@ export function EarningsBars({ rows: raw, basis }: { rows: Company["earnings"]; 
   );
 }
 
-/** Plain-number lines (growth, price trend, debt and cash, margins and returns), each a label and its facts. No
- *  bars, grades or colours: the numbers are the whole story. */
-function FactRows({ rows }: { rows: FactRow[] }) {
+/** One area's figures, each on its own line with the label and the value in aligned columns (the same two columns in every row of the table). */
+function Figures({ items }: { items: FactRow["items"] }) {
   return (
-    <dl className="fact-rows">
-      {rows.map((r) => (
-        <div key={r.id} className="fact-row">
-          <dt className="k-small"><b>{r.label}</b></dt>
-          <dd className="k-small">{r.items.map((i) => <span key={i.label} className="fact-item"><span className="k-muted">{i.label}</span> <span>{i.text}</span>{stageMeaning(i.text) && <Info label={`About ${i.text}`}>{stageMeaning(i.text)}</Info>}</span>)}</dd>
+    <dl className="ai-figs">
+      {items.map((i) => (
+        <div key={i.label} className="ai-fig">
+          <dt className="k-muted">{i.label}</dt>
+          <dd>{i.text}{stageMeaning(i.text) && <Info label={`About ${i.text}`}>{stageMeaning(i.text)}</Info>}</dd>
         </div>
       ))}
     </dl>
+  );
+}
+
+/** What the AI read says, as one table (UI-CO item 3): the area on the left, its figures on the right: the worked-out numbers by area, the valuation
+ * line, the notable figures, where the company sits and what to watch. No bars, grades or colours: the numbers are the whole story. */
+type ReadRow = { id: string; area: string; body: ReactNode };
+function ReadTable({ r }: { r: CompanyAI }) {
+  const rows: ReadRow[] = [
+    ...(r.facts ?? []).map((f) => ({ id: f.id, area: f.label, body: <Figures items={f.items} /> })),
+    ...(r.valuation_note ? [{ id: "valuation", area: "Valuation", body: <span className="k-small">{r.valuation_note}</span> }] : []),
+    // facts only: one list of figures that stand out, not "strengths" and "risks" (round 39)
+    ...(r.bull.length > 0 || r.bear.length > 0 ? [{ id: "notable", area: "Notable figures", body: <ul className="k-list" data-testid="notable-figures">{[...r.bull, ...r.bear].map((b) => <li key={b}>{b}</li>)}</ul> }] : []),
+    ...(r.position ? [{ id: "position", area: "Where it sits", body: <span className="k-small">{r.position}</span> }] : []),
+    ...(r.watch.length > 0 ? [{ id: "watch", area: "What to watch", body: <ul className="k-list">{r.watch.map((w) => <li key={w}>{w}</li>)}</ul> }] : []),
+  ];
+  if (!rows.length) return null;
+  return (
+    <div className="ai-table">
+      <DataTable label="The AI read, by area" rows={rows} rowKey={(x) => x.id} stack={false}
+        columns={[{ key: "a", header: "The numbers", rowHeader: true, cell: (x) => <b className="k-small">{x.area}</b> },
+          { key: "f", header: "The figures", cell: (x) => x.body }]} />
+    </div>
   );
 }
 
@@ -397,6 +418,27 @@ export function QuoteGrid({ region, symbols, names, empty }: { region: Region; s
   );
 }
 
+/** Companies as a table (UI-CO): the name with its symbol, the price and the day's change; each name opens the company. */
+export function QuoteTable({ region, symbols, label }: { region: Region; symbols: string[]; label: string }) {
+  const [q, setQ] = useState<Record<string, Quote | null> | null>(null);
+  const key = symbols.join(",");
+  useEffect(() => {
+    let live = true;
+    setQ(null);
+    if (!symbols.length) return;
+    researchApi.quotes(region, symbols).then((r) => live && setQ(r)).catch(() => live && setQ({}));
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region, key]);
+  const ccy = region === "IN" ? "INR" : "USD";
+  return (
+    <div className="dd-fit"><DataTable label={label} rows={symbols} rowKey={(s) => s} stack={false}
+      columns={[{ key: "c", header: "Company", rowHeader: true, cell: (s) => <Link className="link" to={`/research/${region}/${encodeURIComponent(s)}`}><b>{s}</b></Link> },
+        { key: "p", header: "Price", numeric: true, cell: (s) => (q == null ? <span className="skel" /> : q[s]?.price != null ? price(q[s]!.price!, ccy) : "–") },
+        { key: "d", header: "Change", numeric: true, cell: (s) => (q?.[s]?.change_pct != null ? <Delta value={q[s]!.change_pct}>{pct(q[s]!.change_pct!, 2)}</Delta> : "–") }]} /></div>
+  );
+}
+
 /** " (16 months old)" when a newer quarter's shareholding should have been filed by now (within 21 days of its end). */
 function holdersAge(asOf: string): string {
   const n = staleQuarter(asOf, 21);
@@ -404,12 +446,15 @@ function holdersAge(asOf: string): string {
 }
 
 export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> }) {
+  // a table: who, their share (with its bar) and the change over the last year, in percentage points
   return (
-    <BarList label="Who owns it" footnote={`As of ${s.as_of}${holdersAge(s.as_of)}. The change is over the last year, in percentage points.${s.note ? ` ${s.note}` : ""}`}
-      rows={s.rows.map((r) => ({
-        key: r.label, name: holderRowName(r.label), pct: Math.min(100, r.value),
-        value: <>{r.value.toFixed(1)}%{r.change != null && Math.abs(r.change) >= 0.05 && <span className="k-note"> <Signed value={r.change}>{r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)} pts</Signed></span>}</>,
-      }))} />
+    <div className="k-stack">
+      <div className="dd-fit"><DataTable label="Who owns it" rows={s.rows} rowKey={(r) => r.label} stack={false}
+        columns={[{ key: "h", header: "Holder", rowHeader: true, cell: (r) => holderRowName(r.label) },
+          { key: "v", header: "Share", numeric: true, cell: (r) => <span className="dd-share"><span>{r.value.toFixed(1)}%</span><Meter pct={Math.min(100, r.value)} /></span> },
+          { key: "c", header: "Change in a year", numeric: true, cell: (r) => (r.change != null && Math.abs(r.change) >= 0.05 ? <Signed value={r.change}>{r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)} pts</Signed> : "–") }]} /></div>
+      <p className="k-note">{`As of ${s.as_of}${holdersAge(s.as_of)}. The change is over the last year, in percentage points.${s.note ? ` ${s.note}` : ""}`}</p>
+    </div>
   );
 }
 
@@ -466,25 +511,7 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
           : !r ? <Skeleton label="Reading the numbers" lines={3} /> : (
             <>
               {r.summary && <p className="inv-summary">{r.summary}</p>}
-              {((r.facts ?? []).length > 0 || r.valuation_note) && <div className="inv-two">
-                {(r.facts ?? []).length > 0 && <div className="k-stack">
-                  <span className="k-eyebrow">The numbers</span>
-                  <FactRows rows={r.facts} />
-                </div>}
-                {r.valuation_note && <div className="k-stack">
-                  <span className="k-eyebrow">Valuation</span>
-                  <p className="k-small k-muted">{r.valuation_note}</p>
-                </div>}
-              </div>}
-              {/* facts only: one list of figures that stand out, not "strengths" and "risks" (round 39) */}
-              {(r.bull.length > 0 || r.bear.length > 0) && <div className="k-stack" data-testid="notable-figures"><b className="k-sub">Notable figures</b>
-                <ul className="k-list">{[...r.bull, ...r.bear].map((b) => <li key={b}>{b}</li>)}</ul></div>}
-              {(r.position || r.watch.length > 0) && (
-                <div className="inv-two">
-                  {r.position && <div className="k-stack"><b className="k-sub">Where it sits</b><p className="k-small">{r.position}</p></div>}
-                  {r.watch.length > 0 && <div className="k-stack"><b className="k-sub">What to watch</b><ul className="k-list">{r.watch.map((w) => <li key={w}>{w}</li>)}</ul></div>}
-                </div>
-              )}
+              <ReadTable r={r} />
               {r.ideas.length > 0 && (
                 <div className="k-inset">
                   <div className="k-stack">

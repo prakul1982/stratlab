@@ -63,7 +63,7 @@ test("the My space greeting follows the hour: Hello in the small hours, never Go
 test("the whole promoter group is not labelled like the largest named holder", () => {
   assert.equal(holderRowName("Promoters"), "Promoter group total");
   assert.equal(holderRowName("FIIs"), "FIIs");
-  assert.match(read("src/components/Research.tsx"), /name: holderRowName\(r\.label\)/);
+  assert.match(read("src/components/Research.tsx"), /cell: \(r\) => holderRowName\(r\.label\)/);
 });
 
 test("the breadth big-move counts say what they count", () => {

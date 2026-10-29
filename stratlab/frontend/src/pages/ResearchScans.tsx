@@ -13,6 +13,10 @@ import { rotationFromQuery, rotationQuery, withParams } from "../lib/investUi";
 import { homeRegion } from "../lib/homeMarket";
 import { scanningText } from "../lib/scanText";
 import { Info } from "../components/ui";
+import { ConditionList } from "../components/Rules";
+import { buildIdea } from "../components/IdeaComposer";
+import { mkRef } from "../lib/rules";
+import type { Cond } from "../lib/types";
 import { STAGES_EXPLAINED } from "../lib/stageNote";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
@@ -34,6 +38,12 @@ interface ScanOut { kind: "st_s2"; name: string; market: Region; rows: ScanRow[]
   /** read from the last close while the market's live data is offline (DE-001) */
   last_close?: boolean }
 interface PresetRow { symbol: string; name: string | null; currency: string | null; price: number; chg: number | null; as_of: string; days_ago: number; day: string; detail: string }
+/** Build your own (UI-CO item 14): the rules a person writes, over the same groups as a preset; at most 5 rules, a match within the last 10 candles. */
+const CUSTOM_ID = "custom";
+const CUSTOM_SCAN: ScanInfo = { id: CUSTOM_ID, name: "Build your own", text: "", rules: [], within: 1 };
+const CUSTOM_RULES = 5, CUSTOM_WITHIN = 10;
+interface SavedCustom { id: string; name: string; region: Region; rules: Cond[]; within: number }
+const firstRule = (): Cond[] => [{ l: mkRef("price"), op: "gt", r: mkRef("sma") }];
 interface PresetOut {
   kind: "preset"; scan: string; scan_name: string; name: string; market: Region; rows: PresetRow[]; matches: number; checked: number; asked?: number; as_of: string | null;
   updated_at?: string | null; stored: boolean; missing: string[]; problems: string[];
@@ -41,6 +51,8 @@ interface PresetOut {
   live?: boolean;
   /** a volume rule judged on the last whole session, not the one still going (RC2A-022) */
   basis?: "whole_session";
+  /** a person's own rules: each in words, and how many candles back a match may be */
+  rules?: string[]; within?: number;
 }
 interface ScanInfo { id: string; name: string; text: string; rules: string[]; within: number }
 interface SetInfo { id: string; name: string; count: number; stored?: boolean; as_of?: string | null }
@@ -98,8 +110,22 @@ export function ScanPage() {
   const [scanOffline, setScanOffline] = useState(false);
   const [only, setOnly] = useState(false);
   const pro = !!me?.plan_info?.features?.scans;
-  const scans = sets?.scans?.length ? sets.scans : [FIRST_SCAN];
+  const scans = [...(sets?.scans?.length ? sets.scans : [FIRST_SCAN]), CUSTOM_SCAN];
   const scan = scans.find((s) => s.id === scanId) ?? scans[0];
+  const custom = scan.id === CUSTOM_ID;
+  // the person's own rules: what is being built, the saved ones, and what the server or the box says is wrong with them
+  const [conds, setConds] = useState<Cond[]>(firstRule);
+  const [within, setWithin] = useState(1);
+  const [words, setWords] = useState("");
+  const [wordsBusy, setWordsBusy] = useState(false);
+  const [rulesNote, setRulesNote] = useState<string | null>(null);
+  const [mine, setMine] = useState<SavedCustom[]>([]);
+  const [mineName, setMineName] = useState("");
+  const [mineId, setMineId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!custom || !pro) return;
+    api<{ items: SavedCustom[] }>("/research/scan/custom").then((r) => setMine(r.items)).catch(() => undefined);
+  }, [custom, pro]);
   const seq = useRef(0);   // a scan that finishes after the market, set or scan was changed is dropped, and doesn't clear a newer one's "Running"
   /** Forgets the shown result and any scan still running. */
   const drop = () => { seq.current++; setOut(null); setBusy(false); };
@@ -116,21 +142,60 @@ export function ScanPage() {
 
   const pickScan = (v: string) => {
     const p = new URLSearchParams(params); p.set("scan", v); setParams(p, { replace: true });
+    // the 500-stock groups hold the ready-made scans' answers only: one's own rules start on a group they can run over
+    if (v === CUSTOM_ID && sets?.sets.find((x) => x.id === setId)?.stored) setSetId(sets.sets.find((x) => !x.stored && x.count > 0)?.id ?? "watchlist");
     drop();
   };
   const runScan = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    // a person's own rules are checked here first (the server checks them again): said under the rules' box, never as a failed scan
+    if (custom) {
+      if (!conds.length) { setRulesNote("Add at least one rule."); return; }
+      if (conds.some((c) => c.l.t === "num" && c.r.t === "num")) { setRulesNote("A rule that compares two plain numbers says nothing: put a price or an indicator on one side."); return; }
+      setRulesNote(null);
+    }
     const n = ++seq.current;
     setBusy(true);
     setScanErr(null);
     try {
-      const r = await api<ScanOut | PresetOut>("/research/scan", { method: "POST", body: { region, set: setId, scan: scan.id } });
+      const r = await api<ScanOut | PresetOut>("/research/scan", { method: "POST", body: { region, set: setId, scan: scan.id, ...(custom ? { rules: conds, within } : {}) } });
       if (n === seq.current) setOut(r);
     } catch (err) {
       if (n === seq.current) {
-        if (err instanceof Error && err.message) { setOut(null); setScanErr(err.message); setScanOffline((err as Error & { code?: string }).code === "data_offline"); } else fail(err);
+        if (custom && err instanceof Error && ["bad_rules", "custom_group"].includes((err as Error & { code?: string }).code ?? "")) { setOut(null); setRulesNote(err.message); }
+        else if (err instanceof Error && err.message) { setOut(null); setScanErr(err.message); setScanOffline((err as Error & { code?: string }).code === "data_offline"); } else fail(err);
       }
     } finally { if (n === seq.current) setBusy(false); }
+  };
+  /** "Describe it in words": the notebook's own builder reads the words into rules (it is one of the account's AI builds); what it can't read is said under the box. */
+  const buildWords = async () => {
+    if (!words.trim()) { setRulesNote("Write the rule in a sentence first, like: the price crosses above its 50-day average."); return; }
+    setWordsBusy(true); setRulesNote(null);
+    try {
+      const out = await buildIdea(words.trim(), undefined, { allIndicators: me ? undefined : undefined });
+      if (!out.built) { setRulesNote(out.note || "Those words made no rules."); return; }
+      const got = out.built.strategy.entry.slice(0, CUSTOM_RULES);
+      if (!got.length) { setRulesNote("Those words made no entry rules. Say when the stock should match."); return; }
+      setConds(got); setMineId(null);
+      setRulesNote(out.built.strategy.entry.length > CUSTOM_RULES ? `Only the first ${CUSTOM_RULES} rules are kept.` : null);
+    } catch (e) { setRulesNote((e as Error).message); } finally { setWordsBusy(false); }
+  };
+  const saveMine = async () => {
+    if (!mineName.trim()) { setRulesNote("Give the scan a name to keep it."); return; }
+    try {
+      const r = await api<{ items: SavedCustom[] }>("/research/scan/custom", { method: "PUT", body: { name: mineName.trim(), region, rules: conds, within, id: mineId ?? undefined } });
+      setMine(r.items); setRulesNote(null); notify(`Kept “${mineName.trim()}”.`);
+      if (!mineId) setMineId(r.items[r.items.length - 1]?.id ?? null);
+    } catch (e) { if (e instanceof Error && e.message) setRulesNote(e.message); else fail(e); }
+  };
+  const dropMine = async (id: string) => {
+    try { const r = await api<{ items: SavedCustom[] }>(`/research/scan/custom/${id}`, { method: "DELETE" }); setMine(r.items); if (mineId === id) { setMineId(null); setMineName(""); } } catch (e) { fail(e); }
+  };
+  const loadMine = (id: string) => {
+    const x = mine.find((m) => m.id === id);
+    if (!x) { setMineId(null); return; }
+    setConds(x.rules); setWithin(x.within); setMineName(x.name); setMineId(x.id); setRulesNote(null); drop();
+    if (x.region !== region) setRegion(x.region);
   };
   const toggleAlerts = async () => {
     if (!sets) return;
@@ -167,7 +232,7 @@ export function ScanPage() {
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/scan")} title="Trend scan"
         lede="Which stocks match a chart rule right now. Each match is a fact about the chart on a date, not advice."
-        asOf={preset?.as_of} asOfTz={marketTz(region)} info="The rules: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend." infoLabel="Which rules" />
+        asOf={preset?.as_of} asOfTz={marketTz(region)} info="The rules: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend. Or build your own from up to five rules." infoLabel="Which rules" />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       {!pro && me && <PlanNote>The trend scans and the Stage 2 + Supertrend alert are on the Basic plan.</PlanNote>}
       {setsFailed ? <Card><ErrorState title="The groups to scan couldn't be loaded" action={{ label: "Try again", onClick: () => setSetsTry((n) => n + 1) }}>They couldn't be read just now.</ErrorState></Card> : <Card>
@@ -176,6 +241,38 @@ export function ScanPage() {
           <FieldGroup label="Scan" wide info={<>Each scan is a short list of chart rules, all of which must hold. Pick one to read its rules below.</>}>
             <ChipBar label="Scan rule sets" wrap value={scan.id} onChange={pickScan} options={scans.map((s) => ({ value: s.id, label: s.name }))} />
           </FieldGroup>
+          {custom && (
+            <div className="k-field wide" data-testid="scan-custom">
+              <p className="k-small">Write your own chart rules. Every rule must hold, and a stock matches when they all held on any of the last few candles. Click a word in a rule to change it.</p>
+              <ConditionList conds={conds} onChange={(c) => { setConds(c); setMineId(null); }} max={CUSTOM_RULES} />
+              <Field label="Counts as a match when the rules held on">
+                {(id) => <Select id={id} label="Counts as a match when the rules held on" value={within} onChange={(v) => setWithin(Number(v))}
+                  options={Array.from({ length: CUSTOM_WITHIN }, (_, i) => ({ value: i + 1, label: i === 0 ? "the latest candle" : `any of the last ${i + 1} candles` }))} />}
+              </Field>
+              <Field label="Or describe it in words" hint="Read into rules by the same builder as a notebook's. It counts as one of your AI builds, and you can edit the rules after.">
+                {(id, tie) => (
+                  <div className="k-row ts-words">
+                    <input id={id} {...tie} className="k-input" value={words} maxLength={300} placeholder="Like: volume above twice its 20-day average and the price above yesterday's"
+                      onChange={(e) => setWords(e.target.value)} />
+                    <button type="button" className="btn quiet sm" disabled={wordsBusy} onClick={() => void buildWords()}>{wordsBusy ? "Reading…" : "Make rules"}</button>
+                  </div>)}
+              </Field>
+              {rulesNote && <p className="k-field-msg bad" role="alert" data-testid="custom-error">{rulesNote}</p>}
+              <div className="k-row">
+                <Field label="Keep this scan as" hint={`You can keep up to 10. Pick one below to run it again.`}>
+                  {(id) => <input id={id} className="k-input" value={mineName} maxLength={60} placeholder="Like: Volume breakout" onChange={(e) => setMineName(e.target.value)} />}
+                </Field>
+                <button type="button" className="btn quiet sm" disabled={!pro} onClick={() => void saveMine()}>{mineId ? "Update" : "Keep it"}</button>
+              </div>
+              {mine.length > 0 && (
+                <DataTable label="Your scans" rows={mine} rowKey={(m) => m.id} stack={false}
+                  columns={[{ key: "n", header: "Your scans", rowHeader: true, cell: (m) => <button type="button" className="link link-btn" aria-pressed={mineId === m.id} onClick={() => loadMine(m.id)}>{m.name}</button> },
+                    { key: "r", header: "Rules", cell: (m) => `${m.rules.length} rule${m.rules.length === 1 ? "" : "s"}, ${m.within === 1 ? "latest candle" : `last ${m.within} candles`}` },
+                    { key: "m", header: "Market", cell: (m) => (m.region === "US" ? "US" : "India") },
+                    { key: "x", header: "", action: true, cell: (m) => <button type="button" className="btn quiet sm" aria-label={`Delete ${m.name}`} onClick={() => void dropMine(m.id)}>Delete</button> }]} />
+              )}
+            </div>
+          )}
           {scan.text && (
             <div className="k-field wide" data-testid="scan-rule">
               <p className="k-small">{scan.text}</p>
@@ -184,7 +281,7 @@ export function ScanPage() {
           )}
           <Field label="Group to scan" wide>
             {(id) => <Select id={id} value={setId} onChange={chooseSet}
-              options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count}${!s.stored && s.as_of ? `, list of ${s.as_of}` : ""})`, disabled: (s.id === "watchlist" || !!s.stored) && !s.count }))} />}
+              options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: custom && s.stored ? `${s.name} (ready-made scans only)` : s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count}${!s.stored && s.as_of ? `, list of ${s.as_of}` : ""})`, disabled: ((s.id === "watchlist" || !!s.stored) && !s.count) || (custom && !!s.stored) }))} />}
           </Field>
           <FormActions>
             <button className="btn" disabled={busy || !pro || !cur?.count}>{busy ? scanningText(cur?.count) : "Scan"}</button>
@@ -212,6 +309,7 @@ export function ScanPage() {
             <Stat label="Stocks checked" value={preset.asked && preset.asked > preset.checked ? `${preset.checked} of ${preset.asked}` : String(preset.checked)}
               note={`${preset.stored ? "read after the close" : "read just now"}${preset.asked && preset.asked > preset.checked ? ` · ${preset.asked - preset.checked} skipped, named below` : ""}`} />
           </StatRow>
+          {preset.rules && <p className="k-note" data-testid="custom-rules-said">Rules: {preset.rules.join("; ")}. {preset.within === 1 ? "A match is a stock where they held on the latest candle." : `A match is a stock where they held on any of the last ${preset.within} candles.`}</p>}
           {preset.basis === "whole_session" && <p className="k-note" data-testid="scan-whole-session">The session is still going. A volume rule holds a whole day's volume against an average, so it is judged on the last whole session; today's volume so far is not compared.</p>}
           {preset.live && !preset.basis && <p className="k-note" data-testid="scan-live-note">The session is still going: each price is the last price so far, not a close.</p>}
           <DataTable stack phonePage={25} label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
@@ -221,7 +319,7 @@ export function ScanPage() {
                   {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}</>) },   // (no "Deep dive →" under every row: the name is the link, LIVE1A-032)
               { key: "p", header: "Price", numeric: true, cell: (r) => (
                 <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
-              { key: "m", header: `Matches ${scan.name.toLowerCase()}`, wrap: true, lead: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago, preset.basis ? "whole" : preset.live ? "live" : undefined)}</span></> },
+              { key: "m", header: preset.scan === CUSTOM_ID ? "Matches your rules" : `Matches ${scan.name.toLowerCase()}`, wrap: true, lead: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago, preset.basis ? "whole" : preset.live ? "live" : undefined)}</span></> },
               { key: "d", header: "The numbers", wrap: true, cell: (r) => r.detail || "–" },
             ]} />
           {preset.matches > preset.rows.length && <p className="k-note">Showing the first {preset.rows.length} of {preset.matches.toLocaleString("en-IN")} matches, the most recent first.</p>}

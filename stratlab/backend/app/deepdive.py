@@ -170,6 +170,9 @@ def numbers(p: dict) -> dict:
     fa = _align(bcols, _series(bal, "Fixed Assets", "Net Block"), ycols)
     cwip = _align(bcols, _series(bal, "CWIP", "Capital Work"), ycols)
     debt = _align(bcols, _series(bal, "Borrowings"), ycols)
+    equity_capital, reserves = _align(bcols, _series(bal, "Equity Capital"), ycols), _align(bcols, _series(bal, "Reserves"), ycols)
+    # the shareholders' money at each year's end (equity capital and reserves), for the return on equity a target is checked against
+    worth = [e + r if e is not None and r is not None else None for e, r in zip(equity_capital, reserves)] if equity_capital and reserves else [None] * n
     ccols = _years(cf)
     cfo = _align(ccols, _series(cf, "Cash from Operating"), ycols)
     cfi = _align(ccols, _series(cf, "Cash from Investing"), ycols)
@@ -193,7 +196,11 @@ def numbers(p: dict) -> dict:
                 capex, cut = None, True
         s = sales[i] if i < len(sales) else None
         c = cfo[i] if cfo else None
-        years.append({"year": y, "sales": s, "profit": profit[i] if i < len(profit) else None, "opm": opm[i] if i < len(opm) else None,
+        pr = profit[i] if i < len(profit) else None
+        # profit over the average of this year's and the year before's equity (the year's own when it is the first)
+        base = [w for w in (worth[i], worth[i - 1] if i > 0 else None) if w is not None and w > 0] if i < len(worth) else []
+        roe = round(pr / (sum(base) / len(base)) * 100, 1) if pr is not None and base and not part_year(y) else None
+        years.append({"year": y, "roe": roe, "sales": s, "profit": profit[i] if i < len(profit) else None, "opm": opm[i] if i < len(opm) else None,
                       "capex": round(capex, 1) if capex is not None else None,
                       "capex_pct_sales": round(capex / s * 100, 1) if capex is not None and s else None, "capex_cut": cut,
                       "capex_na": capex is None and not cut,            # no balance sheet for the year yet (a half-yearly reporter)
