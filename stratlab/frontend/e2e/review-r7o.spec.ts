@@ -31,6 +31,8 @@ async function smallTargets(page: Page) {
       const r = b.getBoundingClientRect();
       if (!(r.width > 0 && r.height > 0) || getComputedStyle(b).visibility === "hidden") return false;
       if (b.closest(".skip-links, .skip") || b.classList.contains("skip-link") || (r.width <= 1 && r.height <= 1)) return false;
+      // a stacked table's header row is read by screen readers only (1px, clipped) when its rows are cards: its sort buttons can't be tapped, so they are no target (MOOD-1)
+      if (b.closest(".k-tbl-wrap.stack thead")) return false;
       return r.height < 32 || r.width < 32;
     })
     .map((b) => `${b.tagName.toLowerCase()}.${String(b.className).split(" ").slice(0, 3).join(".")} "${(b.innerText || b.getAttribute("aria-label") || "").trim().slice(0, 30)}" ${Math.round(b.getBoundingClientRect().width)}x${Math.round(b.getBoundingClientRect().height)}`));

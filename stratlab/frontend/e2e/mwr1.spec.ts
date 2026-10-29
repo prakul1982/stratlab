@@ -6,7 +6,9 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 const session = (token: string, id: string, email: string) => ({ access_token: token, token_type: "bearer", expires_in: 86400,
   expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r", user: { id, aud: "authenticated", email, role: "authenticated", app_metadata: {}, user_metadata: {} } });
-const WHO = { pro: session("pro-token", "u-pro", "pro@example.com"), admin: session("admin-token", "u-admin", "owner@example.com") };
+// its own Pro accounts (the fake world's load-242 and load-284), not admin and pro: e2e/mw1-watch.spec.ts resets those two's lists and drawings in each
+// test's setup, which cleared a list here mid-test when the two files ran side by side
+const WHO = { pro: session("load-284", "u-load-284", "load284@example.com"), admin: session("load-242", "u-load-242", "load242@example.com") };
 type Who = keyof typeof WHO;
 const mine = (info: { project: { name: string } }): Who => (info.project.name === "phone" ? "pro" : "admin");
 
@@ -113,7 +115,7 @@ test("the list tabs are reached with the arrow keys and keep their row when the 
 
 test("a stock starred on a company page and one added in the panel are both on the first list", async ({ page, request }, info) => {
   test.skip(info.project.name === "phone", "desktop only: the panel floats over the page it follows");
-  const auth = { Authorization: "Bearer admin-token" };
+  const auth = { Authorization: `Bearer ${WHO.admin.access_token}` };
   const { errors } = await open(page, "/", "admin", OPEN_FLOAT);
   const mw = panel(page);
   await expect(mw).toBeVisible();

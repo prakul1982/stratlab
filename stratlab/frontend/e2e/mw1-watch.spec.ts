@@ -7,7 +7,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 const session = (token: string, id: string, email: string) => ({ access_token: token, token_type: "bearer", expires_in: 86400,
   expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r", user: { id, aud: "authenticated", email, role: "authenticated", app_metadata: {}, user_metadata: {} } });
-const WHO = { free: session("free-token", "u-free", "free@example.com"), basic: session("basic-token", "u-basic", "basic@example.com"), pro: session("pro-token", "u-pro", "pro@example.com"), admin: session("admin-token", "u-admin", "owner@example.com") };
+const WHO = { free: session("free-token", "u-free", "free@example.com"), basic: session("basic-token", "u-basic", "basic@example.com"), pro: session("pro-token", "u-pro", "pro@example.com"), drawer: session("load-233", "u-load-233", "load233@example.com"), admin: session("admin-token", "u-admin", "owner@example.com") };
 const ADS_ON = { ADS_ENABLED: "true", ADSENSE_CLIENT: "ca-pub-1234567890123456", ADSENSE_SLOT_PUBLIC: "1111111111", ADSENSE_SLOT_AI: "2222222222" };
 
 type Who = keyof typeof WHO;
@@ -123,7 +123,9 @@ test("the panel stays mounted from page to page", async ({ page }, info) => {
 
 test("open the chart, change the timeframe, add an indicator, draw a trend line, reload: all of it is still there", async ({ page, request }, info) => {
   test.skip(info.project.name === "phone", "the chart's drawing tools have their own phone test (drawings.spec)");
-  const { errors } = await open(page, "/");
+  // (its own Pro user, not admin: other specs clear admin's drawings in their setup while this one draws and reloads)
+  await reset(request, "drawer");
+  const { errors } = await open(page, "/", { who: "drawer" });
   const mw = await openPanel(page);
   await mw.getByRole("button", { name: "+ Add symbol" }).click();
   await mw.getByRole("combobox", { name: /^Search/ }).fill("INFY");
@@ -162,7 +164,7 @@ test("open the chart, change the timeframe, add an indicator, draw a trend line,
   await expect(chart).toHaveAttribute("data-drawings", "1");
   // kept on the account for this symbol: the drawing, the indicator and the timeframe
   await expect.poll(async () => {
-    const got = await (await request.get(`${API}/me/drawings/IN/INFY`, { headers: { Authorization: "Bearer admin-token" } })).json();
+    const got = await (await request.get(`${API}/me/drawings/IN/INFY`, { headers: { Authorization: "Bearer load-233" } })).json();
     return [got.drawings.length, got.layout?.studies?.length, got.layout?.tf];
   }, { timeout: 10_000 }).toEqual([1, 1, "5m"]);
   await page.reload();
