@@ -51,4 +51,4 @@ def test_the_events_reminder_sample_is_for_a_weekday(monkeypatch):
     real = M.reminder_text
     monkeypatch.setattr(M, "reminder_text", lambda evs, n, day: seen.append(day) or real(evs, n, day))
     email_previews._events()
-    assert seen == [date(2026, 10, 26)]
+    assert seen == [date(2026, 10, 27)]      # a Tuesday: NIFTY's weekly expiry is one (LIVE1C-033)

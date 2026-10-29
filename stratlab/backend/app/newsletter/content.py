@@ -345,7 +345,7 @@ LEVEL_OFF = 0.07       # a level named in a headline more than this far from the
 _OPEN_WORD = r"(?:mixed|flat|higher|lower|positive|negative|muted|weak|strong|firm|soft|cautious|subdued|tepid|quiet|steady|gap-?up|gap-?down)"
 # a story about one moment before the close (the open, early trade, the morning): the brief reports the day's close
 _EARLY = re.compile(r"\b(early (?:session|trade|trading|deals|hours)|opening (?:bell|trade|session|deals)|pre-?open(?:ing)?|"
-                    r"mid-?session|morning (?:trade|session|deals)|intraday|"
+                    r"mid-?session|morning (?:trade|session|deals)|intraday (?:trade|trading|deals|session)|(?:points?|pts) intraday|"
                     r"(?:set|poised|likely|seen|expected) (?:for|to) (?:a |an )?(?:" + _OPEN_WORD + r" )?(?:open|start)\b(?! to (?:the )?year)|(?:mixed|flat|higher|lower|positive|negative|muted|weak|strong|gap-?up|gap-?down) "
                     r"(?:open|opening|start)|opens? (?:higher|lower|flat|in the green|in the red))\b", re.I)
 
