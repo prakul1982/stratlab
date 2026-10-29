@@ -3,8 +3,22 @@ import { expect, test, type Page } from "@playwright/test";
 // RES-1: the results calendar as a table a day, narrowed by size, sector, index, F&O and the meeting's purpose. The fake world has twenty
 // companies reporting over this week and next (four today), each with earlier results days and a made-up price history, so the
 // "Past results-day moves" column fills in; the options-implied move comes from made-up option prices for the F&O stocks.
-const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
-  refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
+const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
+// each project signs in as its own Pro account of the fake world, set up here with RELIANCE as its one stock: the calendar puts a user's own stocks first,
+// and admin's list is changed by other specs (a holding or a starred ITC left there put ITC first in "by name" when the files ran side by side)
+const USERS: Record<string, number> = { desktop: 104, phone: 107 };
+let session = sessionFor(104);
+function sessionFor(n: number) {
+  return { access_token: `load-${n}`, token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
+    refresh_token: "r", user: { id: `u-load-${n}`, aud: "authenticated", email: `load${n}@example.com`, role: "authenticated", app_metadata: {}, user_metadata: {} } };
+}
+test.beforeEach(async ({ request }, info) => {
+  const n = USERS[info.project.name] ?? 104;
+  session = sessionFor(n);
+  const headers = { Authorization: `Bearer load-${n}` };
+  await request.put(`${API}/me/prefs`, { headers, data: { level: "some", focus: "both" } });
+  await request.put(`${API}/research/watchlist`, { headers, data: { items: [{ region: "IN", symbol: "RELIANCE" }] } });
+});
 const SHOTS = process.env.E2E_SHOTS;
 
 async function open(page: Page, path: string, ready: string) {

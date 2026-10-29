@@ -14,7 +14,7 @@
   .adm-menu { position: static; flex-direction: row; flex-wrap: wrap; gap: var(--s1); padding-bottom: var(--s1); }   /* the tabs wrap onto more lines, so none hides off the edge */
   .adm-link { flex: none; white-space: nowrap; min-height: var(--ctl-sm); background: var(--chip); }
   .adm-link.active { background: var(--ink); }
-  .adm-tail { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .adm-tail { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }      /* (clip as .sr-only has it, so the 400px spill check knows it is hidden for the eye) */
   .adm-link { padding: 0 var(--s2); }
 }
 @media (pointer: coarse) { .adm-link { min-height: var(--ctl); } }

@@ -53,7 +53,8 @@ for (const scheme of ["dark", "light"] as const) {
 }
 
 test("RC7-002: the welcome question shows all four choices on a 360 x 640 phone with no scroll, and the optional level question comes after them", async ({ page }, info) => {
-  const u = who(270, info.project.name === "phone");
+  // a fresh account of its own per project (209 and 212 are in no other spec): 270 and 271 were also etf-gaps's and fo-changes's, who had answered the welcome question
+  const u = who(info.project.name === "phone" ? 209 : 212, false);
   await page.setViewportSize({ width: 360, height: 640 });
   const errors = await signIn(page, u, "/", false);
   const dialog = page.getByRole("dialog", { name: "What brings you here?" });

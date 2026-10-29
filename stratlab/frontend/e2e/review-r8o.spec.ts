@@ -82,6 +82,7 @@ test("R8O-002: Account says the day's fresh AI reads against the cap", async ({ 
 
 test("R8O-002: Plans lists the fresh AI reads a day, Pro with no cap", async ({ page }) => {
   const errors = await open(page, "/plans", visitor, { "stratlab.currency": "INR" });
+  await page.getByText("Compare every limit and feature side by side").click({ timeout: 30_000 });          // (LIVE1C-092: the app's comparison is one fold, closed)
   const row = page.getByRole("row", { name: /Fresh AI reads a day/ });
   await expect(row).toContainText("60", { timeout: 30_000 });
   await expect(row).toContainText("Unlimited");
