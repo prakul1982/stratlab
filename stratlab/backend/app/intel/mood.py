@@ -496,16 +496,24 @@ class Mood:
         members = {n: (sector_members.IN.get(n) if region == "IN" else sector_members.US.get(n)) or [] for n in names}
         syms = [s for n in names for s in members[n][:per]]
         quotes = self._quotes(region, syms)
+        nm = self._names(region)
         moves = {}
         for n in names:
             key = US_NAMES.get(n, n) if region == "US" else n
-            rows = [{"symbol": s, "change_pct": round(num(quotes[s].get("change_pct")), 2)} for s in members[n][:per]
+            rows = [{"symbol": s, "name": nm.get(s) or s, "change_pct": round(num(quotes[s].get("change_pct")), 2)} for s in members[n][:per]
                     if s in quotes and num(quotes[s].get("change_pct")) is not None]
             if rows:
                 moves[key] = sorted(rows, key=lambda r: -abs(r["change_pct"] * (caps.get(r["symbol"]) or 1.0)))[:2]
         closes = self._closes_for(region, names, today, "sectors")
         closes = {US_NAMES.get(n, n): v for n, v in closes.items()} if region == "US" else closes      # the table is keyed by the sector's name
         return sector_table(now, closes, moves, self._label(region)), quotes
+
+    def _names(self, region: str) -> dict[str, str]:
+        try:
+            from .. import screens
+            return {r["symbol"]: short_name(r.get("name") or r["symbol"]) for r in screens.load_index(region).get("rows") or []}
+        except Exception:
+            return {}
 
     def _caps(self, region: str) -> dict[str, float]:
         try:
@@ -537,12 +545,8 @@ class Mood:
             except Exception:
                 names = {}
         quotes = {**have, **self._quotes(region, [s for s in syms if s not in have])}
-        try:
-            from .. import screens
-            nm = {r["symbol"]: r.get("name") for r in screens.load_index(region).get("rows") or []}
-        except Exception:
-            nm = {}
-        members = [{"symbol": s, "name": short_name(nm.get(s) or names.get(s) or s), "market_cap": caps.get(s), "change_pct": (quotes.get(s) or {}).get("change_pct")}
+        nm = self._names(region)
+        members = [{"symbol": s, "name": nm.get(s) or short_name(names.get(s) or s), "market_cap": caps.get(s), "change_pct": (quotes.get(s) or {}).get("change_pct")}
                    for s in syms]
         return index_movers(members, lvl["prev_close"], name, total=total)
 
