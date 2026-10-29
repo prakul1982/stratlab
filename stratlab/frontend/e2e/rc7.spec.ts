@@ -86,9 +86,16 @@ test("RC7-003: the plan-lock note is one place, straight under the page's title,
     await expect(lock, path).toHaveCount(1, { timeout: 30_000 });
     await expect(page.locator("main .k-page-head h1").first()).toBeVisible({ timeout: 30_000 });
     await expect(page.locator("main .page-lock-slot .page-lock"), `${path}: in the title's slot`).toHaveCount(1, { timeout: 30_000 });
-    const [h1, head, note] = [await page.locator("main h1").first().boundingBox(), await page.locator("main .k-page-head").first().boundingBox(), await lock.boundingBox()];
-    expect(note!.y, `${path}: under the title`).toBeGreaterThan(h1!.y + h1!.height - 1);
-    expect(note!.y - (head!.y + head!.height), `${path}: right under the title block, not further down`).toBeLessThan(40);
+    // (the three boxes are read together until all are drawn: the note's block is replaced as the plan loads, and a box read in between is null)
+    const box = async () => {
+      const [h1, head, note] = [await page.locator("main h1").first().boundingBox(), await page.locator("main .k-page-head").first().boundingBox(), await lock.boundingBox()];
+      return h1 && head && note ? { h1, head, note } : null;
+    };
+    let got: Awaited<ReturnType<typeof box>> = null;
+    await expect.poll(async () => (got = await box()), { timeout: 30_000 }).not.toBeNull();
+    const { h1, head, note } = got!;
+    expect(note.y, `${path}: under the title`).toBeGreaterThan(h1.y + h1.height - 1);
+    expect(note.y - (head.y + head.height), `${path}: right under the title block, not further down`).toBeLessThan(40);
   }
   expect(errors).toEqual([]);
 });
