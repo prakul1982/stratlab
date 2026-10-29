@@ -2611,11 +2611,16 @@ def corp_ready(region: str):
 
 
 @app.get("/research/corp-actions")
-def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind: str = "", profile=Depends(current_profile)):
-    """Dividends, bonus issues, splits, buybacks and rights issues by ex-date: the user's stocks or every company."""
+def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind: str = "", size: str = "", sector: str = "", index: str = "",
+                      fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None, profile=Depends(current_profile)):
+    """Dividends, bonus issues, splits, buybacks and rights issues by ex-date: the user's stocks or every company, narrowed by the kind
+    of action, company size (`size`: large, mid, small, micro, comma-separated), `sector`, `index`, `fo` (stocks with futures and options)
+    and `on` (today, tomorrow or an ex-date), and sorted within each day (`sort`: date, cap, yield, name)."""
     r = research_routes.region_of(region)
     corp_ready(r)
-    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20]))
+    return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20],
+                                                size=[x for x in size.split(",") if x][:4], sector=sector[:80], index=index[:20], fo=fo, on=on[:10],
+                                                sort=sort[:10], desc=desc))
 
 
 @app.get("/research/corp-actions/{region}/{symbol}/unadjusted")
@@ -5325,6 +5330,13 @@ def admin_redflags_run(region: str = "IN", _=Depends(admin.leader_admin)):
             redflags._set_state(region, last_error=str(e)[:200], failed_at=redflags._now())
     threading.Thread(target=work, daemon=True, name="redflags-now").start()
     return {"started": True, "region": region, "state": redflags.state(region)}
+
+
+@app.get("/admin/business-updates/coverage")
+def admin_biz_coverage(_=Depends(admin.admin_profile)):
+    """The business updates audit: per category and company, whether it was looked through, how many filings were read, how many months
+    back the figure goes and how old the newest one is (from what is stored; nothing is read)."""
+    return biz_updates.coverage()
 
 
 @app.get("/admin/business-updates/reliability")

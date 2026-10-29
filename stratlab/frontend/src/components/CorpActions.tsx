@@ -10,7 +10,7 @@ import { Badge, ErrorState, Skeleton } from "./kit";
 export type ActionKind = "dividend" | "bonus" | "split" | "buyback" | "rights" | "demerger";
 export interface CorpAction {
   id: string; region: Region; symbol: string; name: string | null; kind: ActionKind; label: string; text: string;
-  amount: number | null; ratio: number[] | null; factor: number | null; currency: string;
+  amount: number | null; ratio: number[] | null; factor: number | null; premium?: number | null; currency: string;
   ex_date: string; record_date: string | null; purpose: string; src: string; url?: string | null; mine?: boolean;
   /** a dividend declared before a later bonus or split: its amount in today's shares, and why (DD-013) */ now_amount?: number | null; now_note?: string | null;
   /** a trust's distribution, part by part (interest, dividend, capital repayment): DE-029 */

@@ -109,7 +109,9 @@ test("DE-028/DE-029/DE-031: dividends ahead in the US, a distribution's parts, t
   const p = read("src/pages/CorpActionsPage.tsx");
   assert.doesNotMatch(p, /Only ex-dates that have already happened are available for the US/);
   assert.doesNotMatch(p, /in India it's also the record date/);
-  assert.match(p, /<ActionLine key=\{r\.id\} a=\{r\} showEx=\{false\} showMine=\{showMine\} \/>/);
+  // the ex-date is said once, in its day's heading, and each day is a table (RES-1): no Ex-date column repeats it
+  assert.match(p, /<span className="k-eyebrow">Ex-date \{exDay\(d\)\}/);
+  assert.doesNotMatch(p, /header: "Ex-date"/);
   assert.match(p, /placeholder=\{region === "IN" \? "Like TCS or Infosys" : "Like AAPL or Apple"\}/);
   assert.match(read("src/components/CorpActions.tsx"), /dividend: "Dividends and distributions"/);
 });

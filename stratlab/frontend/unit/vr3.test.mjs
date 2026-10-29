@@ -27,7 +27,8 @@ test("VR3-002: 'Yours' and 'record date the same day' are not printed on every r
   assert.match(ca, /showMine = true/);
   assert.match(ca, /\{showMine && a\.mine && <Badge tone="plain" dot=\{false\}>Yours<\/Badge>\}/);
   const page = read("src/pages/CorpActionsPage.tsx");
-  assert.match(page, /showMine=\{scope === "all"\}/);
+  assert.match(page, /const showMine = scope === "all";/);          // the table's company cell (RES-1) says "Yours" only on the all-companies list
+  assert.match(page, /\{showMine && r\.mine && <Badge tone="plain" dot=\{false\}>Yours<\/Badge>\}/);
   assert.match(page, /the record date \(on each row when it's another day\)/);
 });
 

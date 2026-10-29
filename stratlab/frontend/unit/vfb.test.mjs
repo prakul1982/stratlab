@@ -101,7 +101,7 @@ test("VR1-121, VR1-122, VR1-123, VR1-124, VR1-125: IPO badge, fold width, the is
   assert.doesNotMatch(p, /Offer for sale \(shares existing holders offer\)/);
   assert.match(p, /r\.hours\.replace\(\/\\\.\+\$\/, ""\)/);
   assert.match(read("src/pages/ipo.css"), /\.ipo-terms \.k-stats, \.ipo-terms \.ipo-facts, \.ipo-terms \.ipo-dates \{ grid-template-columns: repeat\(auto-fill/);
-  assert.match(read("src/pages/ResultsPage.tsx"), /<div className=\{`k-cols\$\{[^`]*\}`\}>\{data\.weeks\.map/);       // side by side; stacked only when a week has nothing left (LIVE1C)
+  assert.match(read("src/pages/ResultsPage.tsx"), /data\.weeks\.map\(\(w\) => \{[\s\S]*<DataTable label=\{`Results on \$\{resultDay\(d\)\}`\}/);       // one table a day (RES-1), where two columns of chips stood side by side (VR1-125)
 });
 
 test("VR1-130: the alerts summary is one sentence row with the settings link in it", () => {

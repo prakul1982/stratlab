@@ -869,6 +869,36 @@ def _snap(region: str) -> dict[str, dict]:
         return {}
 
 
+class Context:
+    """What the app keeps about the companies of a market, read once for a page: the screener's stored rows (market value, sector, last
+    close, the latest quarter against a year before), the indices' members and the stocks with futures and options. `facts(symbol)` is
+    what a calendar row says about its company; `facets(...)` what the filters offer."""
+
+    def __init__(self, region: str):
+        self.region = region
+        self.snaps = _snap(region)
+        self.sets = index_sets(region)
+        self.fos = fo_symbols() if region == "IN" else set()
+
+    def facts(self, symbol: str) -> dict:
+        s = self.snaps.get(symbol) or {}
+        return {"cap": s.get("market_cap"), "band": band_of(self.region, s), "sector": s.get("sector"), "last": s.get("price"),
+                "last_at": s.get("price_at"), "fo": symbol in self.fos, "indices": [name for pid, (name, mem) in self.sets.items() if symbol in mem],
+                "q": ({"sales": s.get("q_sales"), "profit": s.get("q_profit"), "of": s.get("q_of")} if s.get("q_sales") is not None or s.get("q_profit") is not None else None)}
+
+    def passes(self, r: dict, size=(), sector: str = "", index: str = "", fo: bool = False) -> bool:
+        """Whether a row (with its company's facts) meets the size, sector, index and F&O choices."""
+        return ((not size or r["band"] in size) and (not sector or r["sector"] == sector) and (not index or self.sets[index][0] in r["indices"])
+                and (not fo or r["fo"]))
+
+    def clean(self, size=(), sector: str = "", index: str = "") -> tuple[list[str], str, str]:
+        """The choices as they can be used: sizes that exist, a sector as text, an index of this market (else none)."""
+        return [b for b in (size or ()) if b in SIZES], str(sector or "")[:80], index if index in self.sets else ""
+
+    def facets(self, rows: list[dict]) -> dict:
+        return facets(self.region, rows, self.sets, bool(self.fos))
+
+
 def _plain(r: dict) -> bool:
     """A meeting about the results alone, not "Financial Results/Dividend" or "...Fund Raising"."""
     return bool(PLAIN_RESULTS.match(str(r.get("purpose") or "").strip()))
@@ -905,33 +935,25 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
     mine = set(my_stocks(uid, region))
     q = re.sub(r"[^A-Z0-9&.\- ]", "", (q or "").upper()).strip()[:30]
     day = day if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(day or "")) else None
-    size = [b for b in (size or ()) if b in SIZES]
-    sector = str(sector or "")[:80]
-    sets = index_sets(region)
-    index = index if index in sets else ""
+    ctx = Context(region)
+    size, sector, index = ctx.clean(size, sector, index)
     only = _today_dates(on, today)
     sort = sort if sort in SORTS else "cap"
     desc = (sort != "name") if desc is None else bool(desc)
-    snaps, fos, mv = _snap(region), (fo_symbols() if region == "IN" else set()), load_moves(region)
+    mv = load_moves(region)
     first, last = week_of(today)[0], week_of(today)[0] + timedelta(days=13)
 
     def rich(r: dict) -> dict:
-        s = snaps.get(r["symbol"]) or {}
-        out = {**r, "mine": r["symbol"] in mine, "cap": s.get("market_cap"), "band": band_of(region, s), "sector": s.get("sector"),
-               "last": s.get("price"), "last_at": s.get("price_at"), "fo": r["symbol"] in fos,
-               "indices": [name for pid, (name, mem) in sets.items() if r["symbol"] in mem],
-               "q": ({"sales": s.get("q_sales"), "profit": s.get("q_profit"), "of": s.get("q_of")} if s.get("q_sales") is not None or s.get("q_profit") is not None else None),
-               "moves": _moves_of(region, r["symbol"], mv)}
-        if not r.get("name") and s.get("name"):
-            out["name"] = s["name"]
+        out = {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"]), "moves": _moves_of(region, r["symbol"], mv)}
+        if not r.get("name") and (ctx.snaps.get(r["symbol"]) or {}).get("name"):
+            out["name"] = ctx.snaps[r["symbol"]]["name"]
         return out
 
     window = [rich(r) for r in cal["rows"] if first.isoformat() <= r["date"] <= last.isoformat()
               and (scope == "all" or r["symbol"] in mine) and (not q or q in r["symbol"] or q in str(r.get("name") or "").upper())]
 
     def keep(r: dict) -> bool:
-        return ((not size or r["band"] in size) and (not sector or r["sector"] == sector) and (not index or index_name(sets, index) in r["indices"])
-                and (not fo or r["fo"]) and (purpose != "results" or _plain(r)) and (purpose != "more" or not _plain(r))
+        return (ctx.passes(r, size, sector, index, fo) and (purpose != "results" or _plain(r)) and (purpose != "more" or not _plain(r))
                 and (not only or r["date"] == only))
 
     narrowed = [r for r in window if keep(r)]
@@ -962,11 +984,7 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
             "more": more, "day_rows": limit, "mine_count": len(mine), "alerts": alerts_on(uid), "note": NOTE,
             "total": len(window), "matching": len(narrowed), "unknown_size": unknown,
             "filters": {"size": size, "sector": sector, "index": index, "fo": bool(fo), "purpose": purpose if purpose in ("results", "more") else "", "on": on if only else "", "sort": sort},
-            "facets": facets(region, window, sets, bool(fos))}
-
-
-def index_name(sets: dict, pid: str) -> str:
-    return sets[pid][0]
+            "facets": ctx.facets(window)}
 
 
 def facets(region: str, rows: list[dict], sets: dict, has_fo: bool) -> dict:
@@ -1071,22 +1089,47 @@ def reaction(bars: list[dict], day: date) -> float | None:
     return round((end / before[-1] - 1) * 100, 2)
 
 
+SINCE_DAYS = 7                       # a results day this recent has "since the results" beside it
+_since = None
+
+
+def recent_event(region: str, symbol: str, today: date) -> str | None:
+    """The date of this company's newest results day in the last SINCE_DAYS days that has come (a day before today, or today's once
+    its results are filed), from the stored calendar."""
+    frm = (today - timedelta(days=SINCE_DAYS)).isoformat()
+    days = [r["date"] for r in load(region)["rows"] if r["symbol"] == symbol and frm <= r["date"] <= today.isoformat()
+            and (r["date"] < today.isoformat() or r.get("out"))]
+    return max(days) if days else None
+
+
+def since_move(bars: list[dict], day: date) -> float | None:
+    """The change from the close before a results day to the latest close, once a session on or after the day has traded."""
+    seen = sorted(((str(b["t"])[:10], float(b["c"])) for b in bars if b.get("c")), key=lambda x: x[0])
+    before = [c for d, c in seen if d < day.isoformat()]
+    if not before or not seen or seen[-1][0] < day.isoformat() or before[-1] <= 0:
+        return None
+    return round((seen[-1][1] / before[-1] - 1) * 100, 2)
+
+
 def moves_for(region: str, symbols: list[str], today: date | None = None) -> dict[str, dict | None]:
-    """Each company's moves over its earlier results days, worked out from its daily prices (read once, kept: a company's list
-    changes only when it has a new results day). At most MOVES_PER_ASK companies' prices are read in one call; one with no price
-    history or no earlier results day is None."""
+    """For each company: {"moves": ..., "since": ...}. `moves`: what its price did over its earlier results days (see reaction),
+    worked out from its daily prices, read once and kept (a company's list changes only when it has a new results day); `since`:
+    the change from the close before its newest results day (the last week's) to the latest close, kept ten minutes. At most
+    MOVES_PER_ASK companies' price histories are read in one call, the rest on the next; a company with neither is None."""
+    from .intel.net import TTLCache
+    global _since
+    if _since is None:
+        _since = TTLCache(max_items=500, max_bytes=1024 * 1024)
     today = today or local_today(region)
     past = load_past(region)["rows"]
     store = load_moves(region)
     rows = store["rows"]
-    todo = []
-    for s in dict.fromkeys(symbols):
-        dates = past.get(s) or []
-        have = rows.get(s)
-        if dates and (not have or have.get("dates") != dates):
-            todo.append(s)
+    uniq = list(dict.fromkeys(symbols))
+    events = {s: recent_event(region, s, today) for s in uniq}
+    todo = [s for s in uniq if (past.get(s) and (not rows.get(s) or rows[s].get("dates") != past[s]))
+            or (events[s] and _since.get((region, s, events[s])) is None)]
     read = _hist.get("fn")
-    done = 0
+    done, changed = 0, False
     for s in todo:
         if read is None or done >= MOVES_PER_ASK:
             break
@@ -1095,20 +1138,33 @@ def moves_for(region: str, symbols: list[str], today: date | None = None) -> dic
             bars = read(region, s, HISTORY_DAYS)
         except Exception as e:
             print("results moves:", region, s, str(e)[:100])
-            rows[s] = {"at": today.isoformat(), "dates": past[s], "moves": []}
+            if past.get(s):
+                rows[s] = {"at": today.isoformat(), "dates": past[s], "moves": []}
+                changed = True
+            if events[s]:
+                _since.set((region, s, events[s]), {"pct": None}, 600)
             continue
-        mv = [[d, reaction(bars, date.fromisoformat(d))] for d in past[s][:PAST_KEEP]]
-        rows[s] = {"at": today.isoformat(), "dates": past[s], "moves": [m for m in mv if m[1] is not None]}
-    if done:
+        if past.get(s) and (not rows.get(s) or rows[s].get("dates") != past[s]):
+            mv = [[d, reaction(bars, date.fromisoformat(d))] for d in past[s][:PAST_KEEP]]
+            rows[s] = {"at": today.isoformat(), "dates": past[s], "moves": [m for m in mv if m[1] is not None]}
+            changed = True
+        if events[s]:
+            _since.set((region, s, events[s]), {"pct": since_move(bars, date.fromisoformat(events[s]))}, 600)
+    if changed:
         with _lock:
             fresh = load_moves(region)["rows"]
-            fresh.update({s: rows[s] for s in todo[:done] if s in rows})
+            fresh.update({s: rows[s] for s in uniq if s in rows})
             if len(fresh) > MAX_PAST:
                 for s in sorted(fresh, key=lambda s: fresh[s].get("at") or "")[: len(fresh) - MAX_PAST]:
                     fresh.pop(s)
             db.set_setting(MOVES_KEY + region, json.dumps({"rows": fresh}, separators=(",", ":")))
         rows = fresh
-    return {s: _moves_of(region, s, {"rows": rows}) for s in dict.fromkeys(symbols)}
+    out: dict[str, dict | None] = {}
+    for s in uniq:
+        got = (_since.get((region, s, events[s])) or {}).get("pct") if events[s] else None
+        mv = _moves_of(region, s, {"rows": rows})
+        out[s] = {"moves": mv, "since": {"date": events[s], "pct": got} if got is not None else None} if (mv or got is not None) else None
+    return out
 
 
 def implied_for(symbols: list[str], day: str | None = None) -> dict[str, dict | None]:

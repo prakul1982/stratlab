@@ -1083,24 +1083,60 @@ def ahead_note(region: str, known: bool, has_ahead: bool, cal: dict) -> str | No
     return "Nothing announced with an ex-date ahead."
 
 
-def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = "", today: date | None = None, limit: int = 400) -> dict:
-    """Ex-dates from today on, and the last two weeks: the user's own stocks, or every company in the calendar."""
+SORTS = ("date", "cap", "yield", "name")          # ex-date (the order of the days), then market value, yield of the payment, name within each day
+
+
+def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = "", today: date | None = None, limit: int = 400, *,
+         size=(), sector: str = "", index: str = "", fo: bool = False, on: str = "", sort: str = "date", desc: bool | None = None) -> dict:
+    """Ex-dates from today on, and the last two weeks: the user's own stocks, or every company in the calendar, narrowed by the kind of
+    action, company size, sector, index, F&O and an ex-date, and sorted within each day. Each row carries what the app keeps about the
+    company (market value, sector, last close, F&O, indices) and, for a dividend, its yield at that close."""
     today = today or local_today(region)
     cal = load(region)
     mine = set(results.my_stocks(uid, region))
     q, kind = _clean_q(q), kind if kind in KINDS else ""
-    rows = [r for r in cal["rows"] if (scope == "all" or r["symbol"] in mine) and (not kind or r["kind"] == kind)
-            and (not q or q in r["symbol"] or q in str(r.get("name") or "").upper())]
+    ctx = results.Context(region)
+    size, sector, index = ctx.clean(size, sector, index)
+    only = results._today_dates(on, today)
+    sort = sort if sort in SORTS else "date"
+    desc = (sort in ("cap", "yield")) if desc is None else bool(desc)
+
+    def rich(r: dict) -> dict:
+        out = {k: v for k, v in {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"])}.items() if k != "fresh"}
+        px, amt = out.get("last"), out.get("amount")
+        out["yield_pct"] = round(amt / px * 100, 2) if out.get("kind") == "dividend" and amt and px else None
+        if not out.get("name") and (ctx.snaps.get(r["symbol"]) or {}).get("name"):
+            out["name"] = ctx.snaps[r["symbol"]]["name"]
+        return out
+
+    window = [rich(r) for r in cal["rows"] if (scope == "all" or r["symbol"] in mine) and (not q or q in r["symbol"] or q in str(r.get("name") or "").upper())]
+    rows = [r for r in window if (not kind or r["kind"] == kind) and ctx.passes(r, size, sector, index, fo) and (not only or r["ex_date"] == only)]
     recent_days = KEEP_DAYS if region == "US" else RECENT_DAYS      # the US list's past ex-dates are its fullest part: it reaches back further
     t, back = today.isoformat(), (today - timedelta(days=recent_days)).isoformat()
-    ahead = sorted((r for r in rows if r["ex_date"] >= t), key=lambda r: (r["ex_date"], r["symbol"] not in mine, r["symbol"]))
-    recent = sorted((r for r in rows if back <= r["ex_date"] < t), key=lambda r: (r["ex_date"], r["symbol"]), reverse=True)
-    show = lambda rs: [{k: v for k, v in {**r, "mine": r["symbol"] in mine}.items() if k != "fresh"} for r in rs[:limit]]
-    return {"region": region, "scope": scope, "kind": kind, "today": t, "updated_at": cal["at"], "ahead": show(ahead), "recent": show(recent),
+    val = {"cap": lambda r: r["cap"], "yield": lambda r: r["yield_pct"], "name": lambda r: str(r.get("name") or r["symbol"]).lower(), "date": lambda r: None}[sort]
+
+    def ordered(rs: list[dict], newest_first: bool) -> list[dict]:
+        """The days in order (the next one first, or the latest for those gone by); within a day by the figure chosen, a company without
+        it after the rest, the user's own stocks first when no figure is chosen."""
+        rs = sorted(rs, key=lambda r: r["symbol"])
+        if sort != "date":
+            have = sorted((r for r in rs if val(r) is not None), key=val, reverse=desc)
+            rs = have + [r for r in rs if val(r) is None]
+        else:
+            rs = sorted(rs, key=lambda r: r["symbol"] not in mine)
+        return sorted(rs, key=lambda r: r["ex_date"], reverse=newest_first)
+
+    ahead = ordered([r for r in rows if r["ex_date"] >= t], False)
+    recent = ordered([r for r in rows if back <= r["ex_date"] < t], True)
+    unknown = sum(1 for r in window if r["band"] is None) if size else 0
+    return {"region": region, "scope": scope, "kind": kind, "today": t, "updated_at": cal["at"], "ahead": ahead[:limit], "recent": recent[:limit],
             "more": max(0, len(ahead) - limit) + max(0, len(recent) - limit), "mine_count": len(mine), "alerts": alerts_on(uid),
             "kinds": list(KINDS), "ahead_known": ahead_known(region, cal["rows"], cal.get("declared_at")), "note": NOTE, "recent_days": recent_days,
             "ahead_note": ahead_note(region, ahead_known(region, cal["rows"], cal.get("declared_at")), bool(ahead), cal),
-            "universe": {"companies": cal.get("universe"), "updated_at": cal.get("universe_at")} if region == "US" else None}
+            "universe": {"companies": cal.get("universe"), "updated_at": cal.get("universe_at")} if region == "US" else None,
+            "total": len([r for r in window if r["ex_date"] >= back]), "matching": len(ahead) + len(recent), "unknown_size": unknown,
+            "filters": {"size": size, "sector": sector, "index": index, "fo": bool(fo), "on": on if only else "", "sort": sort},
+            "facets": ctx.facets([r for r in window if r["ex_date"] >= back])}
 
 
 # actions the backtests' prices don't adjust for: the broker's daily candles are adjusted for bonus issues and splits,

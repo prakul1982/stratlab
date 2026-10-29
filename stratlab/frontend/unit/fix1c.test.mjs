@@ -225,9 +225,3 @@ test("LIVE1C-093: Account's AI builds line is shorter for an admin", async () =>
   const { aiBuildsUse } = await import("../src/lib/account.ts");
   assert.equal(aiBuildsUse(28, null, 200, true), "28 (unlimited; up to 200 a day, not enforced for you)");
 });
-
-test("LIVE1C: a results week with nothing left is stacked above the other, not a short card beside a long one", () => {
-  const page = readFileSync(new URL("../src/pages/ResultsPage.tsx", import.meta.url), "utf8");
-  assert.match(page, /k-cols\$\{data\.weeks\.some\(\(w\) => !w\.rows\.some\(\(r\) => r\.date >= data\.today\)\) \? " stacked" : ""\}/);
-  assert.match(readFileSync(new URL("../src/styles-invest.css", import.meta.url), "utf8"), /\.k-cols\.stacked \{ grid-template-columns: minmax\(0, 1fr\); \}/);
-});
