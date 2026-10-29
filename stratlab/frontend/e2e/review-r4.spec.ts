@@ -47,10 +47,11 @@ test("R4-006: the menu locks only a page that is locked whole; a part-paid page 
 
 test("R4-007: the year follows one rule, and 'as in tax tools' lands on the same year and number", async ({ page }) => {
   const errors = await open(page, "/holdings");
-  const stat = page.getByText("FY 2026-27 (estimated)").first();
-  await expect(stat).toBeVisible({ timeout: 30_000 });
-  const figure = await page.locator(".k-stat", { has: stat }).locator(".k-stat-v").first().innerText();
-  await page.locator(".k-stat", { has: stat }).getByRole("link", { name: "as in tax tools" }).click();
+  // (a row of the dividends table, UI-CO: the year, its amount, and the link in the note beside it)
+  const row = page.getByRole("table", { name: "Dividends in total" }).getByRole("row").filter({ hasText: "FY 2026-27 (estimated)" });
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  const figure = await row.getByRole("cell").first().innerText();
+  await row.getByRole("link", { name: "as in tax tools" }).click();
   await expect(page).toHaveURL(/\/money\/tax-tools\?fy=2026/);
   await expect(page.getByRole("heading", { name: "Dividends, FY 2026-27" })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("main")).toContainText(figure);

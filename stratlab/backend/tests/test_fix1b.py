@@ -207,7 +207,8 @@ def test_live1b_039_a_return_not_needed_says_when_dividends_are_not_in_it(w, mon
         b"Date,Symbol,ISIN,Type,Quantity,Price\n2025-05-02,INFY,INE009A01021,BUY,10,1500\n2025-11-03,INFY,INE009A01021,SELL,10,1400\n").decode(), "mode": "replace"}).status_code == 200
     got = c.get("/money/itr?fy=2025", headers=PRO).json()
     by = {s["label"]: s["value"] for s in got["summary"]}
-    assert by["Dividends in the year (India)"] == "₹1,800"
+    # (LIVE1C: the dividends are left out of the total here, so the line says so beside the figure)
+    assert by["Dividends in the year (India), not in the total tax estimate below"] == "₹1,800"
     # within the basic exemption: the answer names what it leaves out
     assert "dividends of ₹1,800 are not counted in it" in by["Return needed"]
 

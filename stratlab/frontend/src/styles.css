@@ -2742,6 +2742,12 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 410px) { .k-nowrap { white-space: normal; } }
 /* ...and at 360px even so the first plan table was 311px in 292px ("Unlimited" and its cell padding): a size and a padding down in the plan tables */
 @media (max-width: 380px) { .k-compare .k-table th, .k-compare .k-table td, .k-tbl-wrap.pinhead .k-table th, .k-tbl-wrap.pinhead .k-table td { font-size: 13px; padding-left: 4px; padding-right: 4px; } }
+/* VR5-011 at 390px (the first plan table sits one fold deeper in the app, LIVE1C-092, in a 308px box): the same size and padding, and a Free column wide enough that the
+   note breaks "(5-market-" / "day trial)", two lines, not one word to a line; the table still fits its box (VR7-013) */
+@media (min-width: 381px) and (max-width: 410px) {
+  .k-compare .k-table th, .k-compare .k-table td, .k-tbl-wrap.pinhead .k-table th, .k-tbl-wrap.pinhead .k-table td { font-size: 13px; padding-left: 4px; padding-right: 4px; }
+  .k-compare .k-table th:nth-child(2), .k-compare .k-table td:nth-child(2) { min-width: 74px; }
+}
 /* VR5-003: at 400px and under the Menu sits near the right edge (the button beside it reads "Sign in"): its list opens leftwards; from its left it ran 31px past the screen */
 @media (max-width: 400px) { .pub-nav .pub-menu.pub-menu-start nav { left: auto; right: 0; } }
 /* VR5-014: on a phone the picker's tiles (Net worth's "Add an entry": fourteen kinds) are rows, the picture beside the words, not a 120px

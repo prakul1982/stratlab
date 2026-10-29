@@ -73,7 +73,10 @@ test("a failed /me shows Retry, and Retry brings the account back (R5O-002)", as
   await expect(banner).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Checking access")).toHaveCount(0);
   down = false;
-  await banner.getByRole("button", { name: "Retry" }).click();
+  // one Retry to press, not two side by side (UI-CO): the page's own when it shows its error state, else the banner's
+  const retry = page.getByRole("button", { name: "Retry", exact: true });
+  await expect(retry).toHaveCount(1);
+  await retry.click();
   await expect(banner).toHaveCount(0, { timeout: 15_000 });
 });
 

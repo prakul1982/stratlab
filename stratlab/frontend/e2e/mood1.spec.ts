@@ -118,6 +118,13 @@ for (const group of ["nifty500", "sp500"]) {
       const f = frame(title);
       const btn = f.getByRole("button", { name: "Table", exact: true });
       if ((await btn.getAttribute("aria-pressed")) !== "true") await btn.click();
+      // a table of more than a hundred days comes a hundred rows at a time, newest first (FIX-2's ChartFrame): the chart's first day is on the last page
+      const nav = f.getByRole("navigation", { name: "Pages" });
+      if (await nav.count()) {
+        const pages = Number(((await nav.innerText()).match(/Page \d+ of (\d+)/) ?? [])[1] ?? 1);
+        for (let p = 1; p < pages; p++) await f.getByRole("button", { name: "Next →" }).click();
+        await expect(nav).toContainText(`Page ${pages} of ${pages}`);
+      }
       const rows = f.locator("tbody tr");
       const n = await rows.count();
       const day = (await rows.nth(n - 1).locator("th").innerText()).trim();

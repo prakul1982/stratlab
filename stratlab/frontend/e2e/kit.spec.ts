@@ -66,9 +66,10 @@ test("dev kit: every component renders and the switches work", async ({ page }) 
   await bar.getByRole("button", { name: "+ Custom" }).click();
   await page.getByLabel("How many").fill("35");
   await page.getByRole("button", { name: "Use this" }).click();
-  await expect(bar.getByRole("button", { name: "35 minutes" })).toHaveAttribute("aria-pressed", "true");
+  // (a remembered custom chip has its own "Remove 35 minutes" button beside it, MOOD-1: the chip itself is the exact name)
+  await expect(bar.getByRole("button", { name: "35 minutes", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.reload();
-  await expect(page.getByRole("group", { name: "Timeframe" }).getByRole("button", { name: "35 minutes" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Timeframe" }).getByRole("button", { name: "35 minutes", exact: true })).toBeVisible();
 
   const frame = page.locator("section.k-card", { has: page.getByRole("heading", { name: "The market's MTF book" }) }).last();
   await frame.getByRole("button", { name: "Table" }).click();

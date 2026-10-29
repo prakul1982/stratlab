@@ -121,6 +121,8 @@ test("VR7-009, VR7-011: the Market Watch sheet's controls are 44px on a phone", 
 test("VR7-013: the plans tables fit their cards at 390px and 360px", async ({ page }) => {
   for (const w of [390, 360]) {
     await open(page, "/plans", ADMIN, w);
+    // (LIVE1C-092: in the app the side-by-side tables are one fold, closed: opened here, so the tables are there to measure)
+    await page.getByText("Compare every limit and feature side by side").click({ timeout: 30_000 });
     await expect(page.locator(".k-tbl-wrap table").first()).toBeVisible({ timeout: 30_000 });
     const over = await page.locator(".k-tbl-wrap table").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width - (e.parentElement as HTMLElement).clientWidth)).filter((d) => d > 1));
     expect(over, `${w}px: tables wider than their cards`).toEqual([]);

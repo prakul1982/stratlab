@@ -31,7 +31,9 @@ export default defineConfig({
             { name: "boot", test: /src[\\/]lib[\\/](entry|config|http|returnTo)\.ts$/ },
             // (the public pages use them too: none of them may import the account code below)
             // the consent banner and its settings too (ADS-1): every page draws it, so it rides in this file rather than adding its own
-            { name: "common", test: /src[\\/](lib[\\/](brand|format|marketHours|rotating|lazyRetry|ads|adsConfig|track|plans)|components[\\/](Icons|Logo|ui|Tracking))\.tsx?$/ },
+            { name: "common", test: /src[\\/](lib[\\/](brand|format|marketHours|rotating|lazyRetry|ads|adsConfig|track)|components[\\/](Icons|Logo|ui|Tracking))\.tsx?$/ },
+            // the plans' prices and feature lists (14 kB) are the landing page's and the app's, not a policy page's: apart from this file they stay out of its download (R5V-020)
+            { name: "plans", test: /src[\\/]lib[\\/]plans\.ts$/ },
             // the signed-in app's own start-up: server calls with a login, and the account state. A visitor never downloads it
             // the two kit pieces that read the account (a plan note, the company picker): apart from the rest of the kit, which the public pages use
             // the two the landing page uses (the billing switch and the sign-in panel), on their own so the landing page stays small

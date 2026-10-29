@@ -207,15 +207,16 @@ test("the privacy page and the FAQ say plainly: Google ads after consent, what G
 
 test("the cards that hold a Free account's place state facts: no advice wording, no data vendors, the plan's real numbers", async () => {
   const P = await import("../src/lib/plans.ts");
-  assert.equal(A.HOUSE.length, 3);
-  const all = A.HOUSE.map((c) => `${c.title} ${c.text} ${c.cta}`).join(" ");
+  const H = await import("../src/lib/houseAds.ts");        // (apart from lib/ads.ts so a policy page doesn't download the plans: R5V-020)
+  assert.equal(H.HOUSE.length, 3);
+  const all = H.HOUSE.map((c) => `${c.title} ${c.text} ${c.cta}`).join(" ");
   assert.doesNotMatch(all, /\b(buy|sell|hold|target|recommend)\b|yahoo|screener|finnhub|kite|zerodha/i);
-  const plans = A.HOUSE.find((c) => c.id === "plans");
+  const plans = H.HOUSE.find((c) => c.id === "plans");
   for (const n of [P.LIMITS.free.ai_builds_per_month, P.LIMITS.free.deepdives_per_month, P.LIMITS.basic.ai_builds_per_month, P.LIMITS.basic.deepdives_per_month]) assert.ok(plans.text.includes(String(n)), String(n));
-  assert.deepEqual(A.HOUSE.map((c) => c.title), ["Basic has more AI builds and deep dives", "Test your idea with the four luck checks", "Read today's market brief"]);
+  assert.deepEqual(H.HOUSE.map((c) => c.title), ["Basic has more AI builds and deep dives", "Test your idea with the four luck checks", "Read today's market brief"]);
   // the same company always gets the same card, and the cards are spread over companies
-  assert.equal(A.houseCard("RELIANCE"), A.houseCard("RELIANCE"));
-  assert.ok(new Set(["RELIANCE", "TCS", "INFY", "AAPL", "MSFT", "HDFCBANK", "ITC", "SBIN"].map((s) => A.houseCard(s).id)).size >= 2);
+  assert.equal(H.houseCard("RELIANCE"), H.houseCard("RELIANCE"));
+  assert.ok(new Set(["RELIANCE", "TCS", "INFY", "AAPL", "MSFT", "HDFCBANK", "ITC", "SBIN"].map((s) => H.houseCard(s).id)).size >= 2);
 });
 
 // ---------- the host's rules ----------
