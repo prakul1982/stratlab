@@ -17,6 +17,7 @@ import pytest
 from app import main  # noqa: F401, I001  (first: the app loads the newsletter job before the modules built on it)
 from app import corp_actions, db, screens, stock_pages
 from app.intel import screener, sec
+from tests.tiles import stat
 
 FIX = Path(__file__).parent / "fixtures" / "sec_r8v"
 JPY, BRL = 1 / 158.2, 0.1996              # US dollars to one yen and one real on 8 Oct 2026, as the review read them
@@ -120,7 +121,7 @@ def test_a_foreign_filers_value_out_of_line_with_its_profit_is_na_with_the_note(
     assert stock_pages.cap_problem(mfg) == "out of line with profit"
     assert stock_pages.shown_cap(mfg) is None and stock_pages.shown_pe(mfg) is None
     page = stock_pages.render(mfg, "US", "MFG", None)
-    assert "<span>Market cap</span><b>n/a</b>" in page and "<span>P/E (year to Mar 2026)</span><b>n/a</b>" in page
+    assert stat(page, "Market cap") is None and stat(page, "P/E (year to Mar 2026)") is None
     assert "data-cap-check" in page and "13.3B" not in page and ">1.8<" not in page
     # the corrected value passes: $132.8B, P/E 18.1
     assert stock_pages.cap_problem({**mfg, "market_cap": 132_840.0, "pe": 18.1}) is None
@@ -200,7 +201,7 @@ def test_a_march_or_june_years_20f_missing_from_the_company_facts_is_read_from_t
     pe, basis = sec.pe_and_basis(p, 186.0 if symbol == "TM" else 60.0)
     assert basis == {"basis": "year", "end": end} and pe and pe > 0
     f = us(symbol=symbol, pe=round(pe, 1), pe_basis=basis["basis"], pe_end=basis["end"])
-    assert f"<span>P/E (year to {last})</span>" in stock_pages.render(f, "US", symbol, None)
+    assert stat(stock_pages.render(f, "US", symbol, None), f"P/E (year to {last})") is not None
 
 
 def test_toyotas_profit_in_the_new_column_is_the_filings():
@@ -217,10 +218,10 @@ def test_a_page_stored_before_pe_bases_were_kept_names_its_year_and_drops_a_stal
     assert stock_pages.pe_period(old) == ("year", "2025-03-31")
     assert stock_pages.pe_stale(old) and stock_pages.shown_pe(old) is None
     page = stock_pages.render(old, "US", "TM", None)
-    assert "<span>P/E (year to Mar 2025)</span><b>n/a</b>" in page and "data-pe-old" in page
+    assert stat(page, "P/E (year to Mar 2025)") is None and "data-pe-old" in page
     # ASML's: a Dec 2025 year, shown and labelled
     asml = us(symbol="ASML", unit="EUR million", pe=63.9, v=3, years=[{"year": "Dec 2025", "sales": 32_000.0, "profit": 9_609.4}])
-    assert "<span>P/E (year to Dec 2025)</span><b>63.9</b>" in stock_pages.render(asml, "US", "ASML", None)
+    assert stat(stock_pages.render(asml, "US", "ASML", None), "P/E (year to Dec 2025)") == "63.9"
     # a page with the last twelve months' profit is on those: plain "P/E"
     assert stock_pages.pe_label(us(v=3, profit_ttm=2_100.0)) == "P/E"
     # a page of today's version says its own basis, and is never second-guessed

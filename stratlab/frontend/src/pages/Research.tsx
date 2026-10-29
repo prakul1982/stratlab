@@ -185,23 +185,33 @@ const openOut = (url: string) => { const h = safeHref(url); if (h) window.open(h
  * Nothing failed, so there is no "Try again". */
 function NoSuchCompany({ region, sym, eyebrow }: { region: Region; sym: string; eyebrow: string }) {
   const [near, setNear] = useState<Suggestion[] | null>(null);
+  const [other, setOther] = useState<Suggestion[]>([]);
   useEffect(() => {
     let live = true;
     const q = sym.replace(/[^A-Z0-9&]/gi, "").slice(0, 6);       // the start of what was typed finds near spellings
     (q.length >= 2 ? suggestions(q, region) : Promise.resolve([])).then((r) => live && setNear(r.slice(0, 5))).catch(() => live && setNear([]));
+    // the other market's company of that name (RC6-002: "BERKSHIRE" with India chosen was a dead end, though the US list has it)
+    setOther([]);
+    if (q.length >= 2) suggestions(q, region === "IN" ? "US" : "IN").then((r) => live && setOther(r.slice(0, 3))).catch(() => undefined);
     return () => { live = false; };
   }, [region, sym]);
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrow} title={`No listed company called ${sym}`} />
       <Card>
-        <EmptyState title={`${sym} isn't a ${region === "IN" ? "NSE symbol or BSE code" : "US ticker"} we know`}>
+        <EmptyState title={`${sym} isn't ${region === "IN" ? "an NSE symbol or BSE code" : "a US ticker"} we know`}>
           {region === "IN" ? "Use the NSE symbol (like RELIANCE or TCS), the BSE code for a company listed only on BSE, or search by name below." : "Use the exact ticker (like AAPL or NVDA), or search by name below."}
         </EmptyState>
         {near && near.length > 0 && (
           <div className="k-row" aria-label="Close matches">
             <span className="k-small k-muted">Did you mean</span>
             {near.map((s) => <Link key={`${s.market}:${s.id}`} className="btn quiet sm" to={`/research/${s.market}/${encodeURIComponent(s.id)}`} title={s.name}>{s.symbol}</Link>)}
+          </div>
+        )}
+        {other.length > 0 && (
+          <div className="k-row" aria-label={`Matches in ${region === "IN" ? "the United States" : "India"}`}>
+            <span className="k-small k-muted">In {region === "IN" ? "the United States" : "India"}</span>
+            {other.map((s) => <Link key={`${s.market}:${s.id}`} className="btn quiet sm" to={`/research/${s.market}/${encodeURIComponent(s.id)}`} title={s.name}>{s.symbol}</Link>)}
           </div>
         )}
         <OpenCompany region={region} label="Look up a company" autoFocus={typingFirst()} />
@@ -762,7 +772,7 @@ export function ComparePage() {
   // can differ, and a bare "Latest YoY" read as one period for both (R50-003)
   // and a qualifier the company's page gives a figure stays with it: TCS's 4.4% yield says it counts a ₹46 special dividend and is 2.6% without
   // it (RC2A-028)
-  const QUALIFIES = /special|like-for-like|against a quarter|n\/m|not meaningful/i;
+  const QUALIFIES = /special|like-for-like|against a quarter|other income|n\/m|not meaningful/i;
   const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => {
     if (!m) return "–";
     const note = (m as { note?: string }).note;

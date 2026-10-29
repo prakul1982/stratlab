@@ -45,6 +45,13 @@
     return n;
   }
   function drop(box) { if (box.parentNode) box.parentNode.removeChild(box); }
+  // the button pressed goes with the question, so focus is put somewhere on purpose (the box, now "Advertisement", after Allow; the page's
+  // main part after "No thanks") and not left to fall to the top of the document for a screen reader (A11Y-2, WCAG 2.4.3)
+  function keep(n) {
+    if (!n) return;
+    n.setAttribute("tabindex", "-1");
+    try { n.focus({ preventScroll: true }); } catch (e) { /* an old browser keeps nothing focused */ }
+  }
 
   function fill(box) {
     var area = box.querySelector(".ad-box");
@@ -104,8 +111,8 @@
     var yes = el("button", "ad-yes", "Allow ads");
     var no = el("button", "ad-no", "No thanks");
     yes.type = "button"; no.type = "button";
-    yes.addEventListener("click", function () { write("yes"); area.style.minHeight = ""; if (label) label.textContent = "Advertisement"; box.setAttribute("aria-label", "Advertisement"); load(); });
-    no.addEventListener("click", function () { write("no"); boxes.forEach(drop); });
+    yes.addEventListener("click", function () { write("yes"); area.style.minHeight = ""; if (label) label.textContent = "Advertisement"; box.setAttribute("aria-label", "Advertisement"); load(); keep(box); });
+    no.addEventListener("click", function () { write("no"); boxes.forEach(drop); keep(document.getElementById("main")); });
     row.appendChild(yes); row.appendChild(no);
     card.appendChild(row);
     area.appendChild(card);

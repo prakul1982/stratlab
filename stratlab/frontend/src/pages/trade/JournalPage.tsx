@@ -10,7 +10,7 @@ import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
 import { journalEmpty } from "../../lib/journalEmpty";
 import { JOURNAL_LEDE, journalSavedNote, journalVsTax } from "../../lib/journalTax";
-import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column, UploadProblem, useUploadProblem } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
@@ -122,6 +122,7 @@ export function JournalPage() {
   /** What the server sends after a change is its default view; with a market or segment picked, the page asks again. */
   const adopt = (x: Journal) => { if (market || segment !== "all") load(); else setJ(x); };
 
+  const { problem, clear: clearProblem, refused } = useUploadProblem();     // a refused file's reason stays beside the upload (RC6-010)
   const pick = async (files: FileList | null, reset: () => void) => {
     const list = Array.from(files ?? []).filter((f) => {
       if (f.size <= MAX_MB * 1024 * 1024) return true;
@@ -129,7 +130,7 @@ export function JournalPage() {
       return false;
     });
     if (!list.length) { reset(); return; }
-    setBusy(true);
+    setBusy(true); clearProblem();
     let last: Imported | null = null, added = 0, dup = 0;
     try {
       for (const [i, f] of list.entries()) {
@@ -138,7 +139,7 @@ export function JournalPage() {
         added += last.added; dup += last.duplicates;
         track("journal file imported", { rows: last.added, zip: /\.zip$/i.test(f.name) });
       }
-    } catch (e) { fail(e); } finally {
+    } catch (e) { if (!refused(e)) fail(e); } finally {
       // a later file that failed doesn't hide the files before it: those are stored, so the page shows them, then the error stands
       if (last) { setResult({ ...last, added, duplicates: dup }); adopt(last.journal); setMode("add"); }
       setBusy(false); reset();
@@ -201,6 +202,7 @@ export function JournalPage() {
             {/* with trades waiting in the tax report and none here, the card below offers them as its one button: a second one here said the same (VR1-094) */}
             {!(!has && taxTrades > 0 && j.show !== "practice") && <button type="button" className="btn outline" disabled={busy} onClick={fromTax}>Use my tax report's trades</button>}
           </div>
+          <UploadProblem problem={problem} />
           {result && (
             <div className="k-stack k-tight" role="status">
               <p className="k-small"><b>{result.added.toLocaleString("en-IN")} trade line{result.added === 1 ? "" : "s"} added</b>{result.duplicates > 0 && `, ${result.duplicates.toLocaleString("en-IN")} already in the journal (skipped)`}{result.broker !== "CSV" ? ` from a ${result.broker} file` : ""}.</p>

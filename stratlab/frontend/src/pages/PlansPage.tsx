@@ -11,7 +11,7 @@ import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanCompare } from "../components/PlanCompare";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
-import { FEATURES, LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
+import { FEATURES, LIMITS, PRICE, splitFeatures, WHO, type Limits, type PlanId } from "../lib/plans";
 import { readViewAs } from "../lib/viewAs";
 import { canBuy, chargeAboutNote, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 
@@ -156,9 +156,23 @@ export function PlansPage() {
                 {price.inr && gst && <span className="k-note">incl. GST</span>}
                 {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}
               </div>
-              <ul className="k-plan-list">
-                {FEATURES[p].map((f) => f.endsWith(":") ? <li key={f} className="head">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}
-              </ul>
+              {/* VR6-013: about 400 characters of each card's lines, the rest one tap away (lib/plans.ts splitFeatures): the three cards stood 984, 1,176 and
+                  1,015px tall, each a wall of small text that the Side by side tables below say again; every line is still in the page */}
+              {(() => {
+                const line = (f: string) => f.endsWith(":") ? <li key={f} className="head">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>;
+                const { head, shown, more } = splitFeatures(FEATURES[p]);
+                return (
+                  <>
+                    <ul className="k-plan-list">{[...head, ...shown].map(line)}</ul>
+                    {more.length > 0 && (
+                      <details className="k-plan-more" data-testid={`plan-more-${p}`}>
+                        <summary>{more.length} more included in {planName(p)}</summary>
+                        <ul className="k-plan-list">{more.map(line)}</ul>
+                      </details>
+                    )}
+                  </>
+                );
+              })()}
               {cur ? <button className="btn outline" disabled>Current plan</button>
                 : p === "free" ? <span className="k-small k-muted">Included whenever a paid plan ends</span>
                   // the current plan isn't known until /me answers: no "Upgrade to Pro" for a Pro reader meanwhile

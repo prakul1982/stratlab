@@ -160,6 +160,7 @@ export function DeepDivePage() {
   const [v, setV] = useState<DeepView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [limited, setLimited] = useState(false);         // the plan's monthly deep dives are used up
+  const [tries, setTries] = useState(0);                   // one more with each "Try again" (RC5-001)
   const u = me?.usage;
   const [reading, setReading] = useState(false);
   const [carding, setCarding] = useState(false);
@@ -188,7 +189,7 @@ export function DeepDivePage() {
       .then((x) => { if (live) { setV(x); void refreshMe(); } })
       .catch((e) => { if (live) { setError((e as Error).message); setLimited(e instanceof ApiError && e.status === 402); } });
     return () => { live = false; };
-  }, [sym, region]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sym, region, tries]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const readDocs = async (refresh = false) => {
     const mine = here.current;
@@ -242,7 +243,7 @@ export function DeepDivePage() {
         {v && <Link className="btn quiet sm" to="/research/investor">Watchlist at a glance →</Link>}
       </div>
       {limited && <PlanNote>{error}</PlanNote>}
-      {!limited && error && <ErrorState title="The deep dive couldn't be opened">{error}</ErrorState>}
+      {!limited && error && <ErrorState title="The deep dive couldn't be opened" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
       {!v && !error && <Card><Skeleton label="Reading the reported numbers" lines={5} /></Card>}
       {v && u?.deepdive_limit != null && (
         <p className="k-note">{deepDiveLimitLine(u.deepdive_used ?? 0, u.deepdive_limit, u.deck_used ?? 0, u.deck_limit)} <Link className="link" to="/plans">Plans</Link></p>

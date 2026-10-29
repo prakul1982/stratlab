@@ -153,7 +153,7 @@ test("R26-002: the library's search box and the notes box are 16px on a phone to
 
 test("R39: on a phone the plan switch's buttons and the footer's policy links are 44px tall, by padding and height", () => {
   const css = read("src/styles.css");
-  const phone = css.slice(css.indexOf("R39:"));
+  const phone = css.slice(css.indexOf("R39:"), css.indexOf("/* VR5-005"));     // (VR6 added rules after it: this block only)
   assert.match(phone, /@media \(max-width: 640px\) \{[^@]*\.lp-period \.k-seg button \{ min-height: 44px; \}/);
   assert.match(phone, /\.lp-foot \.legal-links a \{[^}]*min-height: 44px; padding-block: 12px/);
   assert.doesNotMatch(phone, /font-size/);

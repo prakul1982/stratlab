@@ -129,17 +129,23 @@ test("draw a trend line and a long position, reload, edit and delete", async ({ 
   await (await openList(page, chart, phone)).getByRole("button", { name: "Trend line", exact: true }).click();
   await closeList(page, phone);
   await expect(chart.getByRole("toolbar", { name: "Trend line settings" })).toBeVisible();
-  const box = await stageBox(chart);
-  const ax = box.x + box.width * 0.3 * 0.82, ay = box.y + box.height * (0.55 * 0.72 + 0.04);
-  // the drag is tried again while the redrawn chart settles after the reload (a drag on a chart still laying out lands nowhere);
-  // a handle that never moves still fails
+  let box = await stageBox(chart);
+  // the drag starts where the chart says it drew the handle (data-grip; the magnet and the redrawn view after the reload move it
+  // away from where it was tapped), read again on each try while the chart settles: on a phone it is still resizing.
+  // A handle that never moves still fails. (CI, 28 Oct: on a busy 2-core runner the save after the drag took over 3 s.)
+  const canvas = chart.locator(".pc-canvas");
+  await expect(canvas).toHaveAttribute("data-grip", /^-?\d+,-?\d+$/);
   await expect(async () => {
+    box = await stageBox(chart);
+    const [gx, gy] = (await canvas.getAttribute("data-grip"))!.split(",").map(Number);
+    const at = (await canvas.boundingBox())!;
+    const ax = at.x + gx, ay = at.y + gy;
     await page.mouse.move(ax, ay);
     await page.mouse.down();
     await page.mouse.move(ax, ay + 40, { steps: 5 });
     await page.mouse.up();
-    await expect.poll(async () => (await saved(request)).drawings[0].points[0].p, { timeout: 3000 }).not.toBe(before);
-  }).toPass({ timeout: 15_000 });
+    await expect.poll(async () => (await saved(request)).drawings[0].points[0].p, { timeout: 6000 }).not.toBe(before);
+  }).toPass({ timeout: 30_000 });
   expect(box.width).toBeGreaterThan(0);
 
   // colour and line style

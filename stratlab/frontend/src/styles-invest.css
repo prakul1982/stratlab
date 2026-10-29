@@ -43,12 +43,12 @@
 /* CK-2 (R9): the peers fill the card in equal rows (6 = 3 + 3, 4 = 2 + 2), never five across and one left over */
 .co-peers-1 .inv-tiles { grid-template-columns: minmax(0, 1fr); } .co-peers-2 .inv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .co-peers-3 .inv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 640px) { .co-peers .inv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.inv-tile { display: flex; flex-direction: column; gap: 4px; padding: var(--s3); min-width: 0; border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--card); color: var(--ink); text-decoration: none; }
+.inv-tile { display: flex; flex-direction: column; gap: 3px; padding: 10px 10px; min-width: 0; border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--card); color: var(--ink); text-decoration: none; }
 .inv-tile:hover { border-color: var(--ink); color: var(--ink); }
 .inv-tile-top { display: flex; justify-content: space-between; gap: var(--s2); align-items: baseline; min-width: 0; }
 .inv-tile-top b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inv-tile-px { font-weight: 500; white-space: nowrap; }
-.inv-tile-chg { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s2); align-items: center; min-height: 22px; }
+.inv-tile-chg { display: flex; flex-wrap: wrap; gap: var(--s1) 6px; align-items: center; min-height: 22px; }
 
 /* headlines */
 .inv-news { display: flex; flex-direction: column; }

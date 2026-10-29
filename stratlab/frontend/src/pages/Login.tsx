@@ -293,17 +293,17 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
           <div className="stack g22 lp-hero-copy">
             {/* an address of its own (/help, /faq, /pricing, /about) leads with its own heading and line, not the home page's
                 hero under a renamed eyebrow (DI-033) */}
-            <span className="eyebrow">{heading ? <><em>Test</em> it, research it, track it.</> : "Trade · Invest · Money · Ten markets"}</span>
+            <span className="eyebrow">{heading ? <><em>Test</em> it, research it, track it.</> : "Trade · Invest · Money"}</span>
             {heading
               ? <h1 className="serif lp-h1 lp-own-h1">{heading}</h1>
               : <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>}
-            <p className="serif lp-lede">{heading && intro ? intro : "One place for trading ideas, company research and your own money. Facts and tests, never tips."}</p>
+            <p className="serif lp-lede">{heading && intro ? intro : "One place for trading ideas, company research and your own money."}</p>
             <div className="row wrap g12">
               {cta()}
               {full && <a className="btn quiet lp-cta-2" href="#trade">See how it works</a>}
             </div>
             {error && <p className="banner" role="alert">{error}</p>}
-            <p className="small muted">Free to start · No card · No code · Paper trading only, no real orders</p>
+            <p className="small muted">Free to start · No card · No code</p>
           </div>
           {full && <HeroDemo />}
         </div>
@@ -372,7 +372,6 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
               <b className="serif lp-opt-title">Paper trade option structures on live prices.</b>
               <p className="small muted k-measure m60">Straddles, strangles, condors or any structure up to eight legs, filled at the real bid and ask. See the Greeks, the payoff today beside the one at expiry, and breakevens after charges.</p>
             </div>
-            <span className="lp-tag">No real orders, ever</span>
           </div>
 
           <ToolList items={TOOLS} label="Trade tools" />
@@ -589,7 +588,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                   <span className="small muted">{WHO[p]}</span>
                 </div>
                 <div className="stack g2">
-                  {loading ? <span className="lp-skel lp-skel-amount" aria-label="Loading the price" /> : (
+                  {loading ? <span className="lp-skel lp-skel-amount" role="img" aria-label="Loading the price" /> : (
                     <div className="lp-amount-row">
                       <div className="serif lp-amount">{price(p, year)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
                       {about && <span className="small muted" data-testid={`about-${p}`}>{about}</span>}

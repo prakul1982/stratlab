@@ -39,8 +39,9 @@ def test_trial_counts_market_days():
     # Saturday: the weekend doesn't count, and neither does Thursday 2 Oct (Gandhi Jayanti, markets shut):
     # Mon 29, Tue 30, Wed 1, Fri 3, Mon 6 → ends at midnight after Monday 6 Oct
     assert trial_end(datetime(2025, 9, 27, 10, 0, tzinfo=IST), 5) == datetime(2025, 10, 7, tzinfo=IST)
-    # Monday late at night still counts Monday as day one
-    assert trial_end(datetime(2025, 9, 22, 23, 0, tzinfo=IST), 5) == datetime(2025, 9, 27, tzinfo=IST)
+    # Monday late at night: after the close, so day one is Tuesday (owner, 28 Oct: it used to count Monday):
+    # Tue 23, Wed 24, Thu 25, Fri 26, Mon 29 → ends at midnight after Monday 29 Sep
+    assert trial_end(datetime(2025, 9, 22, 23, 0, tzinfo=IST), 5) == datetime(2025, 9, 30, tzinfo=IST)
 
 
 def test_each_plan_gets_what_pricing_lists_payments_or_not(monkeypatch):
@@ -63,3 +64,13 @@ def test_each_plan_gets_what_pricing_lists_payments_or_not(monkeypatch):
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "plan_p")
     assert not has_indicators("free") and has_indicators("basic") and not has_fno("basic") and has_fno("pro")
     assert (deepdives("free"), decks("free"), deepdives("basic"), decks("basic")) == (2, 1, 15, 5)
+
+
+def test_a_trial_started_after_the_close_counts_from_the_next_trading_day():
+    # owner, 28 Oct: an evening start shouldn't spend a day of the five
+    from datetime import datetime
+    from app.plans import IST, trial_end
+    before = trial_end(datetime(2026, 10, 27, 15, 29, tzinfo=IST), 1)     # a Tuesday, before 15:30: that day counts
+    after = trial_end(datetime(2026, 10, 27, 15, 30, tzinfo=IST), 1)      # at the close: Wednesday is the first day
+    assert before == datetime(2026, 10, 28, tzinfo=IST)
+    assert after == datetime(2026, 10, 29, tzinfo=IST)

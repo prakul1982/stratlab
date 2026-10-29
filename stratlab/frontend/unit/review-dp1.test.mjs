@@ -85,7 +85,7 @@ test("DP1-011: risk per trade with only a trailing stop says it is measured from
 
 test("DP1-013, DP1-015: the start dialog says Free's trial and its last day in India's calendar, and that a stop is final", () => {
   assert.equal(P.trialLastDay("2026-10-29T18:30:00+00:00"), "Thu 29 Oct");          // midnight India time after the 29th
-  assert.match(P.trialStartLine({ started: false, active: false, ends_at: null, days: 5 }), /^On Free, paper trading is a trial of 5 Indian market days from this first start \(weekends and market holidays don't count, even for crypto\)/);
+  assert.match(P.trialStartLine({ started: false, active: false, ends_at: null, days: 5 }), /^On Free, paper trading is a trial of 5 Indian market days from this first start \(a start after the 3:30 PM close counts from the next market day; weekends and market holidays don't count, even for crypto\)/);
   assert.equal(P.trialStartLine({ started: true, active: true, ends_at: "2026-10-29T18:30:00+00:00", days: 5 }),
     "Your Free trial runs until the end of Thu 29 Oct (India time); the session stops then unless you upgrade.");
   assert.equal(P.trialStartLine(null), null);

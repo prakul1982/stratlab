@@ -18,7 +18,9 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   const names = { free: "Free", basic: "Basic", pro: "Pro" };
   type Row = { id: string; label: string; cell: (p: PlanId) => string };
   // VR1-163: a value's own note ("Unlimited (up to 200 a day)", "1 (5-market-day trial)") is a line under it, not four lines in a 55px column; a long note on a row's name sits behind an (i)
-  const valueOf = (v: string): ReactNode => { const m = /^(.+?) (\(.+\))$/.exec(v); return m ? <>{m[1]} <span className="k-sub-line">{m[2]}</span></> : v; };
+  // VR5-011: a hyphenated word in the note stays whole ("(5-market-day trial)" broke at each hyphen into five lines in the 55px column on a phone)
+  const noteOf = (t: string): ReactNode => t.split(/(\S+-\S+)/).map((x, i) => (i % 2 ? <span key={i} className="k-nowrap">{x}</span> : x));
+  const valueOf = (v: string): ReactNode => { const m = /^(.+?) (\(.+\))$/.exec(v); return m ? <>{m[1]} <span className="k-sub-line">{noteOf(m[2])}</span></> : v; };
   const nameOf = (v: string): ReactNode => { const m = /^(.+?) \((.{20,})\)$/.exec(v); return m ? <>{m[1]}<Info label={`About ${m[1].toLowerCase()}`}>{m[2].charAt(0).toUpperCase() + m[2].slice(1)}.</Info></> : v; };
   // "What each plan adds" in three parts under subheadings (DI-032: 40-odd rows mixing trading, research and money)
   const flagRows = (g: string) => FLAGS.filter(([f]) => (FLAG_GROUP[f] ?? "research") === g)

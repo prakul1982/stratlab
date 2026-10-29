@@ -116,7 +116,7 @@ test("the landing's drawings stay inside their cards at phone width (R6V-006)", 
 
 test("a public company page names its year range intraday and a capped search says 'first' (R6V-014, R6V-015)", async ({ page }) => {
   const errors = await open(page, "/stocks/us/AAPL");
-  await expect(page.locator(".stat", { hasText: "1-year range (intraday)" })).toHaveCount(1);
+  await expect(page.locator("[data-range] .range-name")).toHaveText(/^(1-year range|Range since listing on .+) \(intraday\)$/);      // (PUB-2: a bar of its own)
   for (const caption of await page.locator("[data-peers]").allInnerTexts())
     expect(caption).toMatch(/^(The largest companies in the (same industry|wider sector) \(.+\), by market value\.|Companies StratLab lists in the same sector, in no particular order\.)$/);
   await page.goto("/stocks?q=a&m=us");

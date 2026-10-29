@@ -247,8 +247,12 @@ _per_user: dict[tuple[str, str], int] = {}
 _lock = threading.Lock()
 
 
+_clock = time.time                  # the allowance's clock: a test pins it to one minute (on the real clock a test crossing a
+                                    # minute boundary started a new allowance halfway, CI 29 Oct)
+
+
 def _allow_post() -> bool:
-    minute = int(time.time() // 60)
+    minute = int(_clock() // 60)
     with _lock:
         for k in [k for k in _posts if k != minute]:
             del _posts[k]

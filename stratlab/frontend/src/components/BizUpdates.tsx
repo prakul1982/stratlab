@@ -49,7 +49,8 @@ export function BizChart({ m, label }: { m: BizMetric; label?: string }) {
   const name = `${label ? `${label}: ` : ""}${m.metric}${m.segment ? ` (${m.segment})` : ""}`;
   return (
     <LineChart lines={[{ values: pts.map((p) => p.value), color: "var(--blue)", width: 2, label: m.metric }]}
-      labels={pts.map((p) => `${periodName(p.period, m.span)}${p.filed_later ? " (as stated a year later)" : ""}`)} height={200}
+      labels={pts.map((p) => `${periodName(p.period, m.span)}${p.filed_later ? " (as stated a year later)" : ""}`)}
+      axisLabels={pts.map((p) => periodName(p.period, m.span))} height={200}   // VR5-012: the axis says the period; "(as stated a year later)" is for the hover, where it fits (the axis names ran into each other)
       format={(v) => bizValue(v, m.unit)} axisFormat={(v) => v.toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 1 })}
       ariaLabel={`${name} by ${m.span === "quarter" ? "quarter" : "month"}, ${periodName(pts[0].period, m.span)} to ${periodName(pts[pts.length - 1].period, m.span)}`} />
   );

@@ -12,19 +12,18 @@ APP = Path(__file__).resolve().parents[1] / "app"
 def test_a_research_posts_table_says_its_period_once_and_a_column_only_where_one_test_differs(w):
     rows = library_rows()
     post = blog_research.classic_strategies(rows, datetime(2026, 11, 3, tzinfo=timezone.utc))
-    tables = [b for b in post["blocks"] if b["t"] == "table"]
+    tables = [b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Rule set"]     # (the four checks have a table of their own)
     assert tables and all("Period" not in t["head"] and "Other period" not in t["head"] for t in tables)        # every row had the same period
     assert all(len(r) == 6 for t in tables for r in t["rows"])
     assert all("tested 1 Oct 2021 to 30 Sep 2026" in t["caption"] for t in tables), tables[0]["caption"]
-    # one test over another period: its row names it, and the other rows stay blank there
+    # one test over another period: its row names it in small type under its name (PUB-2: no column that is blank for all the others)
     other = library_rows()
     other[0] = entry("ema-20-50", "IN", "20/50 EMA cross", 10.0, 20.0, frm="2026-09-29")
     post = blog_research.classic_strategies(other, datetime(2026, 11, 3, tzinfo=timezone.utc))
     india = next(b for b in post["blocks"] if b["t"] == "table" and b["caption"].startswith("India"))
-    assert india["head"][-1] == "Other period" and "last column" in india["caption"]
-    named = [r[-1] for r in india["rows"] if r[-1]]
-    assert named == ["29 Sep 2026 to 30 Sep 2026"] and len(india["rows"]) > 1
-    assert all(len(r) == 7 for r in india["rows"])
+    assert "Other period" not in india["head"] and all(len(r) == 6 for r in india["rows"])
+    named = [r[0][1]["s"] for r in india["rows"] if isinstance(r[0], list)]
+    assert named == ["Tested 29 Sep 2026 to 30 Sep 2026"] and len(india["rows"]) > 1
 
 
 def test_a_brief_does_not_show_the_scans_shorthand(w):
@@ -58,8 +57,8 @@ def test_a_markets_own_directory_page_names_its_market(w):
 
 def test_the_company_pages_figures_and_table_fit_a_phone():
     src = (APP / "stock_pages.py").read_text()
-    # a long value takes the row on a phone, so "₹18.94 lakh crore" is not wrapped in a half-width column beside a one-line value
-    assert 'else " long" if len(val) > 12 else ""' in src and ".stat.wide,.stat.long{grid-column:1/-1}" in src
+    # a long value ("₹18.94 lakh crore") is set smaller and never wraps in a phone's half-width column beside a one-line value (PUB-2: it no longer takes the row)
+    assert '"long": len(val) > 12' in src and ".stat.long b{font-size:17px}" in src and "white-space:nowrap}" in src
     # the revenue table shows whole years, three at a time (two on a narrower card) beside the labels, whatever the phone's width
     assert 'class="tbl fin"' in src and "(100cqw - 110px) / 3" in src and "(100cqw - 110px) / 2" in src and ".tbl.fin{container-type:inline-size;scroll-padding-left:110px}" in src
 

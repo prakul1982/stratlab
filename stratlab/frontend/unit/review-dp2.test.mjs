@@ -130,7 +130,7 @@ test("DP2-020, DP1-007: locked alert kinds and indicators are marked, and pickin
 
 test("DP2-023, DP1-023, DP2-024: plain 'Sent by', no address printed, a far level noticed, the form in a pop-up, Stage's own words", () => {
   const a = read("src/pages/AlertsPage.tsx");
-  assert.match(a, /: "This page only"\}/);
+  assert.match(a, /Shown <b>on this page only<\/b>/);
   assert.doesNotMatch(a, /: "Nowhere yet"|confirmed \{page\.email\}/);
   assert.match(a, /<Modal title=\{full \? "Your alerts are full" : "New alert"\}/);
   assert.match(a, /page\.active\.length > FIND_FROM \?/);

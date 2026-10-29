@@ -239,9 +239,11 @@ def test_public_company_page_shows_the_flags(w):
     block = stock_pages.surveillance_html(S.flags_for("RELIANCE"))
     assert block in page and not PROVIDERS.search(block) and not ADVICE.search(block)
     assert "Exchange surveillance" not in w["client"].get("/stocks/in/TCS").text
-    stored = '<h1>X</h1><div class="card grid"></div>'
+    stored = '<h1>X</h1><h2>Share price</h2><div class="card chart"></div><h2>Key figures</h2><div class="card figs"></div><h2>Price trend</h2><div></div>'
     flags = S.flags_for("RELIANCE")
-    assert stock_pages.with_surveillance(stored, flags).index("data-surveillance") < stored.index("card grid") + 60
+    got = stock_pages.with_surveillance(stored, flags)
+    assert got.index("Share price") < got.index("Key figures") < got.index("data-surveillance") < got.index("Price trend")         # after the price, chart and key figures (VR6-002)
+    assert "<h2>Exchange surveillance</h2><div class=\"card\" data-surveillance>" in got and "not a view on the company" in block
     assert stock_pages.with_surveillance(stored, []) == stored
     assert "&lt;b&gt;" in stock_pages.surveillance_html([{"short": "<b>", "label": "x", "text": "y", "as_of": None}])
 

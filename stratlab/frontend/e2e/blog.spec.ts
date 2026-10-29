@@ -84,8 +84,11 @@ test("blog: the list shows the briefs and the research as cards, and a post is a
   await page.locator("ul.posts a.post", { hasText: "India market brief" }).first().click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("India market brief");
   await expect(page.getByRole("heading", { level: 2, name: "Index closes" })).toBeVisible();
-  const table = page.locator(".btbl table").first();
-  await expect(table.locator("tbody tr").first()).toContainText("NIFTY 50");
+  // VR6-005: each index is a tile (its close, its change under it), not a paragraph and a table saying the same figures
+  const tile = page.locator("article ul.kpis li").first();
+  await expect(tile).toContainText("NIFTY 50");
+  await expect(tile).toContainText(/on the day/);
+  await expect(page.locator("article .btbl table")).toHaveCount(0);
   await expect(page.getByText("Facts, not advice.").first()).toBeVisible();
   await expect(page.locator("article").getByRole("link", { name: "Company pages" })).toHaveAttribute("href", "/stocks");
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /^https:\/\/stratlab\.studio\/blog\/india-market-brief-\d{4}-\d{2}-\d{2}$/);
@@ -150,4 +153,40 @@ test("admin: the Blog panel's buttons add the stored briefs and write the resear
   await page.getByRole("button", { name: "Write the research posts" }).click();
   await expect(page.getByTestId("blog-run")).toContainText("Research last written", { timeout: 60_000 });
   await expect(page.getByRole("button", { name: "Write the research posts" })).toBeEnabled({ timeout: 90_000 });
+});
+
+test("PUB-2: a post has one content width, headline numbers as tiles, tables that line up, and its method folded", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/blog/classic-strategies-ten-markets-after-costs");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Classic strategies");
+  // the byline's facts are one quiet line, not a box
+  const facts = page.locator("p.facts");
+  await expect(facts).toContainText("Facts, not advice");
+  expect(await facts.evaluate((e) => ({ lines: Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)), bg: getComputedStyle(e).backgroundColor, border: getComputedStyle(e).borderLeftWidth }))).toMatchObject({ bg: "rgba(0, 0, 0, 0)", border: "0px" });
+  if (!phone) expect(await facts.evaluate((e) => e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight))).toBeLessThan(1.5);
+  // one width: the text, the tiles, the chart and the tables share their left and right edges
+  const edges = await page.evaluate(() => Array.from(document.querySelectorAll("article > p:not(.blog-eyebrow):not(.byline):not(.facts), article > ul.kpis, article > figure.hbars, article > .btbl, article > details"))
+    .map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right)]; }));
+  expect(edges.length).toBeGreaterThan(8);
+  expect(new Set(edges.map((x) => x[0])).size, "left edges").toBe(1);
+  expect(new Set(edges.map((x) => x[1])).size, "right edges").toBe(1);
+  // the headline numbers are a row of tiles, with one small chart under them
+  const tiles = page.locator("ul.kpis li");
+  expect(await tiles.count()).toBe(4);
+  await expect(tiles.first()).toContainText(/\d+ of \d+/);
+  expect(await tiles.evaluateAll((e) => new Set(e.map((x) => Math.round(x.getBoundingClientRect().height))).size)).toBe(1);        // tiles of one height
+  expect(await page.locator("figure.hbars li").count()).toBeGreaterThanOrEqual(10);                                                // a bar for each market
+  // the method is folded (its text is in the page); a table's names don't wrap, its numbers sit right, its text left
+  await expect(page.locator("details[data-method]").first()).not.toHaveAttribute("open", "");
+  expect(await page.locator("details[data-method]").first().textContent()).toContain("slippage");
+  const t = page.locator(".btbl.fx").filter({ hasText: "Rule set" }).first();
+  expect(await t.locator("thead th").evaluateAll((e) => e.every((x) => x.getBoundingClientRect().height < 40))).toBe(true);        // no header wraps
+  expect(await t.locator("tbody th[scope=row]").evaluateAll((e) => e.every((x) => x.querySelector("a")!.getBoundingClientRect().height < 30 && x.scrollWidth <= x.clientWidth + 1))).toBe(true);   // no name wraps or is cut
+  expect(await t.locator("td").evaluateAll((e) => e.every((x) => x.scrollWidth <= x.clientWidth + 1))).toBe(true);                       // no figure or check is cut
+  // (on a phone a table of five columns or more is a card per row, VR5-007: its figures are laid out left, each under its column's name)
+  if (!phone) expect(await t.locator("tbody tr").first().locator("td").evaluateAll((e) => e.map((x) => getComputedStyle(x).textAlign))).toEqual(["right", "right", "right", "right", "left"]);
+  await noSideways(page);
+  expect(errors).toEqual([]);
 });

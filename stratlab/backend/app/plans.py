@@ -453,12 +453,19 @@ def plan_of(profile: dict) -> str:
     return p if p in PLANS else access_plan(profile)
 
 
+TRIAL_DAY_CLOSE = (15, 30)      # NSE's close, India time
+
+
 def trial_end(started: datetime, days: int) -> datetime:
-    """Midnight (India time) after the `days`-th Indian trading day, counting the start day if it is one.
-    Weekends and exchange holidays don't count: started on a Saturday, it runs to the end of the fifth
-    trading day after."""
+    """Midnight (India time) after the `days`-th Indian trading day, counting the start day if it is one and the
+    start came before the 15:30 close. Weekends and exchange holidays don't count: started on a Saturday, or on a
+    weekday after the close, it runs to the end of the fifth trading day after (owner, 28 Oct: an evening start
+    shouldn't spend a day of the trial)."""
     from .data.calendar import is_trading_day
-    d = started.astimezone(IST).date()
+    at = started.astimezone(IST)
+    d = at.date()
+    if (at.hour, at.minute) >= TRIAL_DAY_CLOSE:
+        d += timedelta(days=1)             # after the close: the trial's first day is the next trading day
     left = days
     while True:
         if is_trading_day("IN", d):

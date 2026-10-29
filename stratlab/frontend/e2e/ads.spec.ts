@@ -249,7 +249,17 @@ test("trackers: nothing loads or is asked of Meta or Microsoft before Allow; No 
 });
 
 test("trackers: Allow loads the pixel (PageView) and Clarity (masked), and the private pages stop them", async ({ page }) => {
+  // a page load, the question, three client-side moves and four polls: on a busy 2-core runner beside the chart tests it ran past
+  // the default 60 s (CI shard 3, 28 Oct) — every check is unchanged
+  test.slow();
   const { google, errors } = await open(page, "/mine", /./, { who: "free", extra: TRACK });
+  // the shared Free account may not have answered the welcome question yet (it depends on which test ran first), and it can come
+  // after open()'s short wait: the analytics question waits for it (never stacked on it), so answer it first when it shows
+  const welcome = page.getByRole("dialog", { name: /What brings you here/ });
+  if (await welcome.waitFor({ timeout: 10_000 }).then(() => true, () => false)) {
+    await expect(page.getByTestId("consent"), "the analytics question never stands over the welcome question").toHaveCount(0);
+    await welcome.getByRole("button", { name: /All of it/ }).first().click();
+  }
   await expect(page.getByTestId("consent")).toBeVisible({ timeout: 30_000 });
   expect(google).toEqual([]);
   await page.getByTestId("consent").getByRole("button", { name: "Allow" }).click();

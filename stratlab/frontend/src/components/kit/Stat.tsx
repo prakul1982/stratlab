@@ -1,4 +1,4 @@
-import { Children, createContext, useContext, type ReactNode } from "react";
+import { Children, createContext, useContext, useLayoutEffect, type ReactNode } from "react";
 import { changeDir, minusNode } from "../../lib/format";
 import { useNoOrphan } from "../../lib/noOrphan";
 
@@ -41,8 +41,45 @@ export function Stat({ label, value, note, delta, tone, item, testId }: { label:
   );
 }
 
+/** VR5-006: on a phone the figures of a row were one under another, each with the right half of its line empty (Invest's market breadth,
+ * Holdings' totals). When they would be one per row, they go two across (`.duo`) if every figure still fits its half on one line; a
+ * figure that would wrap ("₹1,06,50,136" in a half) keeps the row as it was. A last one alone takes the whole line (CSS). */
+function useDuo(ref: { current: HTMLDivElement | null }) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let width = -1;
+    const fix = () => {
+      el.classList.remove("duo", "tight");
+      if (window.innerWidth > 640 || el.children.length < 2) return;
+      const cols = getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length;
+      if (cols !== 1) return;
+      el.classList.add("duo");
+      const wrapping = () => Array.from(el.querySelectorAll<HTMLElement>(".k-stat-v")).some((v) => v.getBoundingClientRect().height > parseFloat(getComputedStyle(v).lineHeight) * 1.5);
+      // VR6-023: "₹1,06,50,136" did not fit half a line at 28px and kept the three totals one under another: a size down (22px) is tried first
+      let wraps = wrapping();
+      if (wraps) { el.classList.add("tight"); wraps = wrapping(); }
+      // labels of different heights in one row (one wrapping to three lines beside one of a line) are the uneven row the owner dislikes
+      const rows = new Map<number, number[]>();
+      el.querySelectorAll<HTMLElement>(".k-stat-k").forEach((k) => {
+        const top = Math.round(k.parentElement!.getBoundingClientRect().top);
+        rows.set(top, [...(rows.get(top) ?? []), Math.round(k.getBoundingClientRect().height)]);
+      });
+      const uneven = Array.from(rows.values()).some((hs) => Math.max(...hs) - Math.min(...hs) > 3);
+      if (wraps || uneven) el.classList.remove("duo", "tight");
+    };
+    const ro = new ResizeObserver(() => { const w = el.clientWidth; if (w !== width) { width = w; fix(); } });
+    const mo = new MutationObserver(fix);
+    ro.observe(el);
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
+    fix();
+    return () => { ro.disconnect(); mo.disconnect(); };
+  }, [ref]);
+}
+
 /** Stats side by side; they wrap to the width (about three across on a desktop card, one on a phone). */
 export function StatRow({ children, label }: { children: ReactNode; label?: string }) {
   const ref = useNoOrphan<HTMLDivElement>();      // 4 + 1 and 5 + 1 become 3 + 2 and 3 + 3 (UI-FIX-1, R9)
+  useDuo(ref);
   return <div className="k-stats" ref={ref} role={label ? "list" : undefined} aria-label={label}><InList.Provider value={!!label}>{children}</InList.Provider></div>;
 }

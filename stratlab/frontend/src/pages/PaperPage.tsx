@@ -1,6 +1,6 @@
 import { RiskOverview } from "../components/RiskOverview";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money, pct, price, qty, TF_NAME, tzOf, when, fmtDate, fmtDateTime } from "../lib/format";
@@ -324,11 +324,12 @@ export function PaperPage() {
         : failed ? <ErrorState title="Your sessions couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
         : rows.length === 0 ? (
           <EmptyState title="No paper trades yet" action={{ label: "Go to your notebooks", to: "/notebooks" }}>
-            Open a notebook and choose Paper trade. A session runs its rules on live prices with fake money.
+            Open a notebook and choose Paper trade, or <Link className="link" to="/options">build an options strategy</Link> and paper trade it. A session runs its rules on live prices with fake money.
           </EmptyState>
         ) : (
           <Card label="Your sessions">
-            <CardHead title="Your sessions" />
+            {/* a second session starts from here: a notebook's rules or an options strategy built in the builder (owner, 28 Oct) */}
+            <CardHead title="Your sessions" actions={<NewSessionButtons />} />
             {current.length ? <SessionCards rows={current} sid={sid} open={open} />
               : <p className="k-small k-muted">None running. {stopped.length === 1 ? "The stopped one is" : "Stopped ones are"} below.</p>}
             <Earlier label="Stopped sessions" count={stopped.length} open={!!sid && stopped.some((r) => r.id === sid)}>
@@ -348,5 +349,15 @@ export function PaperPage() {
         </ConfirmDialog>
       )}
     </div>
+  );
+}
+
+/** Start another session from the paper trading page: a notebook's rules, or an options strategy from the builder. */
+function NewSessionButtons() {
+  return (
+    <span className="k-row">
+      <Link className="btn sm" to="/options">Build an options strategy</Link>
+      <Link className="btn quiet sm" to="/notebooks">Paper trade a notebook</Link>
+    </span>
   );
 }

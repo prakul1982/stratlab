@@ -583,6 +583,8 @@ function NotebookView() {
       {removing && (
         <ConfirmDialog title={`Delete the notebook "${nb.name}"?`} confirmLabel="Delete notebook" onConfirm={del} onClose={() => setRemoving(false)}>
           This removes the notebook and all its experiments. It can't be undone.
+          {/* a paper session has its own page and isn't the notebook's to stop (RC6-014) */}
+          {live && <> Its paper session is running and stays running: stop it on the <Link className="link" to="/paper">Paper trading</Link> page.</>}
         </ConfirmDialog>
       )}
     </div>

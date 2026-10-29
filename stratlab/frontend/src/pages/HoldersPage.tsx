@@ -50,6 +50,9 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
   const [text, setText] = useState(q);
   const [ans, setAns] = useState<SearchAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // the search's own first read failed (not a later action): Try again reads it, where Dismiss would leave a page with nothing on it (RC6-006)
+  const [readFailed, setReadFailed] = useState(false);
+  const [tries, setTries] = useState(0);
   const [locked, setLocked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [group, setGroup] = useState<NameGroup | null>(null);
@@ -64,7 +67,7 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
   useEffect(() => {
     if (off) { setLocked(true); return; }
     let live = true;
-    setBusy(true); setError(null); setGroup(null); setHold(null);
+    setBusy(true); setError(null); setReadFailed(false); setGroup(null); setHold(null);
     api<SearchAnswer>(`/invest/holders${q ? `?q=${encodeURIComponent(q)}` : ""}`)
       .then((a) => {
         if (!live) return;
@@ -72,11 +75,11 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
         const exact = a.groups.find((g) => g.label.toLowerCase() === q.toLowerCase());     // a name picked from the suggestions
         if (a.groups.length === 1) choose(a.groups[0]); else if (exact) choose(exact);
       })
-      .catch((e) => { if (!live) return; if ((e as ApiError).status === 402) setLocked(true); else setError((e as Error).message); })
+      .catch((e) => { if (!live) return; if ((e as ApiError).status === 402) setLocked(true); else { setError((e as Error).message); setReadFailed(true); } })
       .finally(() => live && setBusy(false));
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, off]);
+  }, [q, off, tries]);
 
   useEffect(() => {
     if (!picked.length) { setHold(null); return; }
@@ -147,7 +150,9 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
               </div>
             )}
           </Card>
-          {error && <ErrorState title="That didn't work" action={{ label: "Dismiss", onClick: () => setError(null) }}>{error}</ErrorState>}
+          {error && (readFailed
+            ? <ErrorState title="Named holders couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>
+            : <ErrorState title="That didn't work" action={{ label: "Dismiss", onClick: () => setError(null) }}>{error}</ErrorState>)}
 
           {follows.length > 0 && (
             <Card label="Holders you follow">

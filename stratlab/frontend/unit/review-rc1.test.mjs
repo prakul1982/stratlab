@@ -43,7 +43,8 @@ test("RC1-008: the paper session's caption says a forming candle is forming when
 
 test("RC1-010 and DB-002: an import's notes stay until read; DB-004: the hours warning names the close", async () => {
   const src = read("src/pages/OptionsPage.tsx");
-  assert.match(src, /const NOTES = "stratlab\.options\.importnotes\.v1"/);
+  assert.match(src, /const DRAFT = OPTIONS_DRAFT, NOTES = OPTIONS_NOTES;/);
+  assert.match(read("src/lib/options.ts"), /export const OPTIONS_NOTES = "stratlab\.options\.importnotes\.v1"/);
   assert.match(src, /useState<string\[\]>\(loadNotes\)/);
   assert.match(src, /optionsMarket\(markets, s\.exchange\)\?\.hours \?\? FALLBACK_HOURS\[s\.exchange\]/);
   const { timingIssues, FALLBACK_HOURS } = await import("../src/lib/options.ts");

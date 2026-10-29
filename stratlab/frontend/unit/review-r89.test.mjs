@@ -270,7 +270,7 @@ test("DOC-2: the landing page names the newer tools, its lists keep full grid ro
   assert.equal(list("PORTFOLIO") % 2, 0);                // Money's cards in pairs
   for (const t of ["IPOs", "Business updates", "Named holders", "Closing auction", "Market events", "Chart replay", "Forward test", "Test a SIP", "Rates after tax"])
     assert.match(login, new RegExp(`\\["${t}",`), t);
-  assert.match(login, /Trade · Invest · Money · Ten markets/);
+  assert.match(login, /"Trade · Invest · Money"/);                              // ("Ten markets" is in the intro's sentence only: VR5-owner-2)
   assert.doesNotMatch(login, /Yahoo|Screener|Finnhub|Kite|Zerodha Kite/);        // no data vendor named on the page
   // docs/UI_CHECKER.md names every rule the checker has, R1 to R25
   const rules = read("e2e/ui-lint.spec.ts").match(/^  R\d+: /gm) ?? [];
@@ -284,7 +284,7 @@ test("PUB-1: the policies use the public frame (header with the site's links, fo
   const page = read("src/pages/LegalPage.tsx"), css = read("src/styles.css");
   assert.match(page, /<PublicFrame className="legal">/);
   assert.doesNotMatch(page, /legal-head|<Logo|SkipLink/);                                           // the frame brings the logo, the skip link and the header
-  assert.match(page, /<nav className="legal-tabs" aria-label="Policies">/);                        // the other policies stay one tap away
+  assert.match(page, /<nav className="legal-tabs" aria-label="Policy pages">/);                        // the other policies stay one tap away
   assert.match(css, /\.pub-main\.legal \{ max-width: 800px; \}/);
   assert.match(css, /\.legal-body \.h3 \{[^}]*font: 600 21px\/1\.25 var\(--serif\)/);               // a heading for each part, not a bold line of body text
   assert.match(css, /@media \(max-width: 640px\) \{ \.legal-tabs a \{ min-height: 44px; \} \}/);   // a tap target on a phone

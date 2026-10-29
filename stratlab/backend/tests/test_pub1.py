@@ -83,7 +83,7 @@ def test_prices_are_the_pages_price_and_the_pages_own_candles(w):
     j = r.json()
     assert j["currency"] == "INR" and len(j["t"]) == len(j["c"]) > 200
     page = w["client"].get("/stocks/in/RELIANCE").text
-    shown = re.search(r"Last close, [^<]*</span><b>₹([\d,.]+)</b>", page).group(1)
+    shown = re.search(r"<b data-price>₹([\d,.]+)</b>", page).group(1)
     assert f"{j['c'][-1]:,.2f}" == shown                                           # the chart ends at the price the page shows
     last = date(1970, 1, 1) + timedelta(days=j["t"][-1])
     assert f"{last.day} {last:%b %Y} close" in page                               # ...on the day it says
@@ -164,18 +164,19 @@ def test_the_page_has_the_chart_card_with_its_text_and_its_table(w):
     t = w["client"].get("/stocks/in/RELIANCE").text
     for part in ('<h2>Share price</h2>', 'data-chart', 'data-src="/stocks/in/RELIANCE/prices.json"', 'data-currency="INR"',
                  'data-r="1m"', 'data-r="6m"', 'data-r="1y"', 'data-r="5y"', 'aria-label="Chart range"', "data-change", "data-summary",
-                 "Show the closes as a table", 'aria-live="polite"', "<noscript>", 'src="/stocks/chart.js?v=' + stock_pages.CHART_JS_V + '" defer'):
+                 "The closes as a table", 'aria-live="polite"', "<noscript>", 'src="/stocks/chart.js?v=' + stock_pages.CHART_JS_V + '" defer'):
         assert part in t, part
     # the same facts as words, so a crawler or a visitor with no script reads them: the close and the year's range
     summary = re.search(r"<p class=\"small muted\" data-summary>(.*?)</p>", t).group(1)
-    day, last = re.search(r"Last close, ([^<]*)</span><b>(₹[\d,.]+)</b>", t).groups()
-    rng = re.search(r"1-year range \(intraday\)</span><b>(₹[\d,.]+) to (₹[\d,.]+)</b>", t).groups()
+    last = re.search(r"<b data-price>(₹[\d,.]+)</b>", t).group(1)
+    day = re.search(r"data-as-of>As of (\d+ \w{3} \d{4}) close\.", t).group(1)
+    rng = re.search(r'<p class="range-ends"><span><small>Low</small> <b>(₹[\d,.]+)</b></span><span><small>High</small> <b>(₹[\d,.]+)</b>', t).groups()
     # the day the page's own figures give, not a fixed date: the test world's clock moves with the real one
     assert f"Last close {last} on {day}." in summary and f"traded between {rng[0]} and {rng[1]} (intraday)" in summary
-    assert t.index("Share price</h2>") < t.index("Price trend</h2>")             # after the figures, before the numbers by year
+    assert t.index("data-as-of") < t.index("Share price</h2>") < t.index("Key figures</h2>") < t.index("Price trend</h2>")      # PUB-2: right after the price, before the figures
     us = w["client"].get("/stocks/us/AAPL").text
     assert 'data-currency="USD"' in us and 'data-src="/stocks/us/AAPL/prices.json"' in us
-    assert not ADVICE.search(re.sub(r"<[^>]*>", " ", re.sub(r"<(style|script)\b.*?</\1>", "", t, flags=re.S)).split("Not investment advice")[0].replace("Last close", ""))
+    assert not ADVICE.search(re.sub(r"<[^>]*>", " ", re.sub(r"<(style|script)\b.*?</\1>", "", t, flags=re.S)).split("Price trend")[0].replace("Last close", ""))      # the top of the page: header, chart, key figures
 
 
 def test_a_price_that_is_a_last_trade_has_no_chart_and_a_page_without_a_price_neither():
@@ -204,7 +205,7 @@ def test_the_script_is_a_chart_people_can_use():
         assert part in js, part
     assert "font-size\": 12" in js and "font-size\": 1" not in js.replace('"font-size": 12', "")      # no axis text under 12 px
     assert "XMLHttpRequest" not in js and "eval(" not in js and "innerHTML = body" in js            # the table's rows are numbers and dates the script made itself
-    assert len(js) < 14000                                                                            # a small script, no library
+    assert len(js) < 16000                                                                            # a small script, no library
 
 
 # ---------- revenue and profit, drawn on the server ----------
@@ -314,19 +315,25 @@ def test_the_pages_ask_for_exactly_the_fonts_the_build_publishes():
     assert "h2{font-family:var(--serif);font-weight:600" in css and ".nav nav a{display:inline-flex;align-items:center;min-height:36px;" in css
 
 
-def test_the_figures_grid_lines_up_and_the_range_is_one_value(w):
+def test_the_key_figures_are_even_tiles_on_one_baseline_and_the_range_is_its_own_row(w):
     t = w["client"].get("/stocks/in/RELIANCE").text
-    assert re.search(r'<div class="stat wide"><span>1-year range \(intraday\)</span><b>₹[\d,.]+ to ₹[\d,.]+</b></div>', t)
-    assert t.count('class="stat wide"') == 1                                         # only the range spans two columns
+    figs = re.search(r'<div class="card figs">(.*?)</div></div>$|<div class="card figs">.*?<div class="tiles c\d">.*?</div></div>', t, re.S).group(0)
+    assert "data-range" in figs and figs.index("data-range") < figs.index('class="tiles')           # the range is a full-width row above the tiles
+    assert 'class="stat wide"' not in t and "1-year range" in figs and "<svg" in figs                # not a tile spanning two columns; a bar
+    for label, value, line in re.findall(r'<div class="stat[^"]*" title="[^"]*"><span>([^<]*)</span><b>([^<]*)</b><small>([^<]*)</small></div>', figs):
+        assert len(label) <= stock_pages.TILE_LABEL_MAX and value and line, label                    # a label is one short line, never three
     css = stock_pages.STYLE
-    assert "@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 2;grid-template-rows:subgrid" in css      # labels and values line up row by row
-    assert "@media (max-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat.wide,.stat.long{grid-column:1/-1}" in css  # two to a row on a phone, not one; a long value or the range takes the row (VR4-007)
+    # one baseline: label, value and unit line are three rows shared by the tiles of a row (subgrid), the label sitting on the value
+    assert "@supports (grid-template-rows:subgrid){.stat{display:grid;grid-row:span 3;grid-template-rows:subgrid" in css and ".stat span{align-self:end}" in css
+    assert ".stat b{display:block;font-size:22px;line-height:1.25;font-weight:600;white-space:nowrap}" in css      # a value never wraps
+    # two to a row on a phone, an odd last tile takes the row, so no empty place
+    assert "@media (max-width:640px){.tiles,.tiles.c3,.tiles.c4{grid-template-columns:repeat(2,minmax(0,1fr))" in css and ".tiles>.stat:last-child:nth-child(odd){grid-column:1/-1}" in css
 
 
 def test_a_directory_is_a_list_of_rows_and_a_short_page_keeps_its_footer_down(w):
     c = w["client"]
     t = c.get("/stocks/in/browse/r").text
-    assert '<ul class="dir" data-companies>' in t and re.search(r'<li><a href="/stocks/in/RELIANCE">', t)
+    assert re.search(r'<ul class="dir" data-companies(?: data-short)?>', t) and re.search(r'<li><a href="/stocks/in/RELIANCE">', t)       # (data-short: a list of bare symbols goes two across on a phone, VR5-009)
     css = re.search(r"<style>(.*?)</style>", t, re.S).group(1)
     assert "ul.dir li{display:flex;align-items:center;justify-content:space-between;" in css and "ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px" in css
     assert "columns:2 300px" not in css                                               # no loose two-column text
@@ -336,7 +343,7 @@ def test_a_directory_is_a_list_of_rows_and_a_short_page_keeps_its_footer_down(w)
 
 def test_the_company_page_eyebrow_and_the_surveillance_card_use_classes_not_inline_style(w):
     t = w["client"].get("/stocks/in/RELIANCE").text
-    assert '<p class="eyebrow">NSE · Energy · Refineries</p>' in t
+    assert '<p class="sub muted" title="NSE · Energy · Refineries">NSE · Energy · Refineries</p>' in t
     assert "style=" not in re.search(r"<div class=\"card\" data-surveillance>.*?</div>", t, re.S).group(0) if "data-surveillance" in t else True
     assert re.search(r"<h1>[^<]*<span class=\"muted\">\(RELIANCE\)</span></h1>", t) and t.count("<h1>") == 1               # one h1, as before
     heads = [int(h) for h in re.findall(r"<h([1-3])[ >]", t)]

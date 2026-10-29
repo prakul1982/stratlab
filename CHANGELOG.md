@@ -4,6 +4,35 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 28 October 2026: the main review, the whole app end to end (RC-6)
+
+A Free newcomer, a trader, an investor, a money user and an admin, in the test world at 1440, 390 and 360 px, with the live site's public pages checked against the exchange's closes. What it found:
+
+- **Tickers:** `TCS.NS`, `TCS.BO`, `TCS-EQ` and `NSE:TCS` are TCS in the search, the research address, the public page address (a 301) and the alerts; `BRK.B` finds Berkshire in the search box. A company typed under the wrong market (a US name with India chosen) is offered under the right one instead of a dead end.
+- **Uploads:** a broker file whose "Stock Name" column holds the symbol is read; a tradebook with "Net Rate" and "Executed date and time" is read; a refused file's reason stays on the page beside the upload (Holdings, Tax report, Trade journal, Dividends, Mutual funds, statements, US tax) instead of a toast that disappeared.
+- **A P/E with a booked gain in it:** where one of the four quarters behind a trailing P/E had other income at least twice the usual (Tata Motors Passenger Vehicles' demerger gain, P/E 1.2; Hindustan Unilever's), the company page, its public page and the side-by-side page say which quarter and how much, as a fact beside the figure.
+- **Same figure, same words:** a market value of a lakh crore or more has two decimals (₹18.95 lakh cr) as on the public page; a deals summary rounds a tie up, as its table does.
+- **Try again:** the invite page, newsletter settings, trend scan groups, named holders and the options builder's offline note offer a button when their read failed; the two fund notes no longer also tell the person to reload.
+- **Sign-out:** the options structure being built is forgotten with the rest of what the browser kept.
+- **Checked and right:** the RC-5 fixes, alerts' bad input, every main page with the API at 500 or down, the Free plan's 37 pages, 33 pages at 360 and 390 px, the admin jobs, the tax report's holding periods, IPO, breadth and ETF arithmetic, and 20 live public pages against the exchange's closes.
+### 28 October 2026: the blog's posts and lists redrawn (PUB-2)
+
+The posts had two widths (a text column of about 820 px sitting left, tables across about 1,180 px), their headline numbers were a wall of bullet sentences, their tables wrapped headers and names and wandered right-aligned text, and a heavy "Facts, not advice" box and a long Method list sat in the middle.
+
+- **One width:** text, tiles, chart and tables share the page's own 960 px column, centred as a company page is; a wide table scrolls inside its card on a phone.
+- **Headline numbers as tiles, and one small chart:** the strategy post leads with four tiles ("1 of 43 tests ahead of the passive return", "34 of 43 behind it", "25 of 35 that traded lost money", "7 of 43 passed their checks") and a stacked bar for each market (ahead, behind, not compared); the IPO post with its issue count, closes above the issue price and medians; the SIP post with each end value and annual return and a bar for each horizon. The sentences stay below, shorter. The four checks are one small table, not four sentences of counts.
+- **Tables:** short unwrapped headers ("After costs", "Passive"), fixed column widths shared by the tables of a post, names on one line, figures right-aligned and text left-aligned, a short caption; a test run over another period says so in small type under its name instead of an "Other period" column that was blank for the rest.
+- **Quiet facts line** under the byline instead of a boxed paragraph; **the method is folded** ("How these tests were run", "How this was worked out", "How the comparison was run", "How this brief is made"), its words still in the page. The daily briefs get the same width, facts line and folded method; the list cards share one layout (kind and date, title, at most two lines).
+
+### 28 October 2026: the public company page's top half redesigned (PUB-2)
+
+The key figures were misaligned (labels of one, two and three lines left the values at different heights, "P/E" far above its "54.4", the range took two columns and left a hole) and the page led with a dense paragraph, with the explanations under the figures.
+
+- **New order:** the name (the ticker small and muted) with one quiet line under it (exchange · sector · industry in sentence case; the whole industry is its tooltip), the price block (last close large, what it moved that day in colour, "As of 28 Oct 2026 close" small), one short "Not investment advice" line, the share-price chart, the key figures, then the sections as before. "About" (the same sentences, one to a line) comes after "Go further with" and "How these figures are worked out" is last, folded, with the P/E-against-profit and last-12-months notes in it. Every number, the one h1, the heading order, the JSON-LD and the wording that avoids advice are unchanged.
+- **Key figures as tiles:** a short one-line label ("P/E", "Profit, last 12 months", "Profit incl. minorities", "Return on equity"), the value ("₹29,678 cr") and a small line for its unit or period ("on last 12 months' profit", "to shareholders", "year to Mar 2026"); the full wording is each tile's tooltip. Label, value and unit line share rows, so the values of a row sit on one baseline. Four to a row (three where that leaves fewer empty places), two on a phone; a short last row's last tile takes what is left. A figure that is n/a has no tile (the notes say why); a page with none has no card.
+- **The 1-year range** is a full-width row of its own: a bar with the last close marked and the low and high at its ends (intraday).
+- **The day's move** beside the price is read by the chart's script from the same closes, and shown only when the series ends on the page's day and price.
+
 ### 28 October 2026: a correctness review of what shipped on 27-28 October (RC-4)
 
 About 420 company pages, the directories, the redirects, the four blog posts and the consent code were checked against their sources. What it found:
@@ -20,6 +49,14 @@ About 420 company pages, the directories, the redirects, the four blog posts and
 - **Lined up:** Account's six data cards share the rows (3 + 3); the update filings' titles start at one x; the cookie question's two buttons share a width (also on the server-drawn pages, where the question no longer sits in a box held at 280px).
 - **Phone:** the public company page's revenue table shows whole years beside its labels (three where the card is 320px wide, else two) and a long figure such as the market value takes its row.
 - Live refresh checked with a faked market-open clock for two minutes on My space, Trade, Invest, Money, Holdings and Net worth, at 1440 and 390: no layout shift, no skeleton flash.
+### 28 October 2026: the main review of the whole app, as a newcomer, a trader, an investor and a money user (RC-5)
+
+- **Bajaj Auto and any company whose symbol has a dash:** the company search cut every dash off an NSE symbol (to drop a series suffix like -BE), so "Bajaj Auto" was offered as BAJAJ, which has no page, and the Watchlist saved it. Only a real series suffix comes off now, so `BAJAJ-AUTO` and `MCDOWELL-N` stay whole.
+- **The phone tour's second step** pointed at the page's heading, where the menu's search button had just been, instead of the magnifier; it now waits for the menu to slide away.
+- **Retries and messages:** a deep dive that can't be opened offers Try again; an IPO address no issue has says so and no longer offers a retry that could never help; a refused upload's explanation (and any long message) stays long enough to read, up to 15 seconds; the idea box says it can't reach StratLab instead of blaming the AI builder when the connection is down.
+- **Alerts:** "Sent by This page only" reads "Shown on this page only", and an unconfirmed email is explained once.
+- **Checked and unchanged:** deleting all data leaves nothing behind (every store scanned), other accounts' notebooks, sessions and alerts answer 404, plan limits hold under parallel requests, and the FIFO tax, mutual fund XIRR and options figures match a recomputation.
+- **Checks:** `tests/test_review_rc5.py`, `unit/rc5.test.mjs` and `e2e/rc5.spec.ts`.
 
 ### 28 October 2026: charts on the public company pages, and the public pages made to look like one product (PUB-1)
 

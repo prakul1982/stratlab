@@ -8,6 +8,9 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 // landing and Plans pages signed out; light and dark; phone and desktop) and added what axe can't see: a text field's edge is 3:1 against
 // what is behind it, whatever takes a click takes the keyboard, every Tab stop shows where it is, a link in an (i) box can be read, a chart
 // menu closed with Esc hands focus back, a changing placeholder stops for "reduce motion", and the (i) is 44px on a phone.
+// A11Y-2 added what is new since: the pages the API draws (company pages with their chart, the directories, the blog) and the policy pages and the
+// library signed out go through axe too, in both themes and both viewports; the cookie banner is first in the page's order, named, and never
+// hides what has focus; the public chart is a slider a screen reader can drive; a number that refreshes by itself is not in a live region.
 const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
   refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
 
@@ -53,8 +56,10 @@ async function ownNotebook(request: APIRequestContext, name: string) {
   await request.post(`${API}/notebooks/${nb.id}/experiments`, { headers: admin, data: { days: 800 } });
   return nb.id as string;
 }
+// serious and critical fail; so do two moderate ones that make a screen reader's list of landmarks and headings useless (A11Y-2: a name used twice, a skipped level)
+const ALSO = ["landmark-unique", "heading-order"];
 const serious = (r: { violations: { id: string; impact?: string | null; help: string; nodes: { target: unknown[] }[] }[] }, where: string) =>
-  r.violations.filter((x) => x.impact === "serious" || x.impact === "critical").map((v) => `${where} ${v.id}: ${v.help} (${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join(", ")})`);
+  r.violations.filter((x) => x.impact === "serious" || x.impact === "critical" || ALSO.includes(x.id)).map((v) => `${where} ${v.id}: ${v.help} (${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join(", ")})`);
 
 test("axe finds no serious or critical problems on the main pages", async ({ page, request }, info) => {
   test.setTimeout(420_000);
@@ -93,14 +98,14 @@ test("axe: the dark theme passes too", async ({ browser, request }, info) => {
   expect(found, found.join("\n")).toEqual([]);
 });
 
-test("axe: the landing page and Plans, signed out, in both themes", async ({ browser }, info) => {
-  test.setTimeout(240_000);
+test("axe: the landing page, Plans, the policies and the library, signed out, in both themes", async ({ browser }, info) => {
+  test.setTimeout(420_000);
   const phone = info.project.name === "phone";
   const found: string[] = [];
   for (const scheme of ["light", "dark"] as const) {
     const ctx = await browser.newContext({ colorScheme: scheme, viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 }, hasTouch: phone, isMobile: phone });
     const page = await ctx.newPage();
-    for (const path of ["/", "/plans"]) {
+    for (const path of ["/", "/plans", "/terms", "/privacy", "/library"]) {       // the landing page, Plans, the policies (the public frame) and the library
       await open(page, path, { as: true });                      // `as`: no sign-in, so this is what a visitor sees
       await page.waitForLoadState("networkidle").catch(() => undefined);
       await page.waitForTimeout(300);
@@ -437,4 +442,141 @@ test("phone: the drawing sheet is a clean list of drawings under properly ordere
   expect(mine.map((v) => `${v.id}: ${v.help}`), JSON.stringify(mine.map((v) => v.nodes.map((n) => n.target)))).toEqual([]);
   expect(await sheet.locator("h4").count()).toBe(0);
   expect(await sheet.locator("h2").count()).toBeGreaterThan(0);
+});
+
+// ---- A11Y-2: the pages the API draws, the cookie banner, the public chart, the live refresh --------------------------------------------------------
+
+test("axe: the company pages, directories and blog the API draws, in both themes", async ({ browser }, info) => {
+  test.setTimeout(420_000);
+  const found: string[] = [];
+  for (const scheme of ["light", "dark"] as const) {
+    const ctx = await browser.newContext({ colorScheme: scheme, ...viewFor(info.project.name) });
+    const page = await ctx.newPage();
+    for (const path of ["/stocks", "/stocks/in", "/stocks/in/RELIANCE", "/stocks/us/AAPL", "/stocks/in/browse/r", "/stocks/in/index/nifty-50", "/blog", "/blog/briefs", "/blog/research"]) {
+      await page.goto(API + path, { waitUntil: "networkidle" });
+      if (path.endsWith("/RELIANCE")) {                       // the chart and its table as a person uses them: drawn, and the table open
+        await page.locator("[data-chart]").scrollIntoViewIfNeeded();
+        await expect(page.locator("[data-chart]")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
+        await page.locator("details[data-table] summary").click();
+      }
+      const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"]).analyze();
+      found.push(...serious(r, `${path} [${scheme}, ${info.project.name}]`));
+    }
+    await ctx.close();
+  }
+  expect(found, found.join("\n")).toEqual([]);
+});
+
+const MY_ADS = { ADS_ENABLED: "true", ADSENSE_CLIENT: "ca-pub-1234567890123456", ADSENSE_SLOT_PUBLIC: "1111111111", ADSENSE_SLOT_AI: "2222222222" };
+const FREE = { access_token: "free-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r",
+  user: { id: "u-free", aud: "authenticated", email: "free@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
+
+test("the cookie banner is named and described, comes first for the keyboard, and what has focus is never hidden under it", async ({ page }) => {
+  test.setTimeout(240_000);
+  // a Free account on a company page with ads switched on (a fake config): the question is asked, and a StratLab card holds the place of the ad
+  await page.route(/googlesyndication/, (r) => r.fulfill({ status: 200, contentType: "text/javascript", body: "" }));
+  await page.route("**/research/company/IN/RELIANCE/ai*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summary: "Runs refineries.", valuation_note: "", facts: [], bull: [], bear: [], segments: [], position: "", watch: [], ideas: [], generated_at: Date.now() / 1000 }) }));
+  await page.route(/\/config\.js(\?|$)/, async (r) => r.fulfill({ status: 200, contentType: "text/javascript", body: `${await (await r.fetch()).text()}\nObject.assign(window.STRATLAB_CONFIG, ${JSON.stringify(MY_ADS)});\n` }));
+  const errors = await open(page, "/research/IN/RELIANCE", { tour: true, as: true });
+  await page.addInitScript((s) => localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)), FREE);
+  await page.reload();
+  await page.getByText("What brings you here?").waitFor({ timeout: 4000 }).then(() => page.getByRole("dialog").getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
+  const banner = page.getByTestId("consent");
+  await expect(banner).toBeVisible({ timeout: 30_000 });
+  await expect(banner).toHaveAttribute("role", "dialog");
+  await expect(banner).toHaveAccessibleName(/on StratLab$/);
+  expect(await banner.getAttribute("aria-describedby")).toBeTruthy();
+  await expect(page.locator(`[id="${await banner.getAttribute("aria-describedby")}"]`)).toContainText("Google ads");
+  // the question comes before the page for the keyboard: the answers are among the first few Tab stops, not the last
+  await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); window.scrollTo(0, 0); });
+  let at = 0;
+  for (let i = 1; i <= 6 && !at; i++) { await page.keyboard.press("Tab"); if (await focusIn(page, "[data-testid=consent]")) at = i; }
+  expect(at, "the banner is among the first six Tab stops").toBeGreaterThan(0);
+  // and it does not hold focus: Tab walks on through the page, and no stop sits under the banner
+  const under: string[] = [];
+  for (let i = 0; i < 70; i++) {
+    await page.keyboard.press("Tab");
+    const s = await page.evaluate(() => {
+      const e = document.activeElement as HTMLElement | null, c = document.querySelector("[data-testid=consent]");
+      if (!e || e === document.body || !c || e.closest("[data-testid=consent]")) return null;
+      const a = e.getBoundingClientRect(), b = c.getBoundingClientRect();
+      return a.bottom > b.top && a.top < b.bottom && a.right > b.left && a.left < b.right ? `${e.tagName}.${e.className} "${(e.textContent ?? "").trim().slice(0, 20)}"` : null;
+    });
+    if (s) under.push(s);
+  }
+  expect(under, "stops hidden under the banner").toEqual([]);
+  // answered, the banner goes and the page's scroll padding with it
+  await banner.getByRole("button", { name: "No thanks" }).click();
+  await expect(banner).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.style.scrollPaddingBottom)).toBe("");
+  expect(errors).toEqual([]);
+});
+
+test("a company page's chart is a slider over the closes: the arrow keys say the day and its close, a range switch says what it shows", async ({ page }) => {
+  await page.goto(API + "/stocks/in/RELIANCE", { waitUntil: "networkidle" });
+  const card = page.locator("[data-chart]");
+  await card.scrollIntoViewIfNeeded();
+  await expect(card).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
+  const svg = card.locator(".plot svg");
+  await expect(svg).toHaveAttribute("role", "slider");
+  await expect(svg).toHaveAttribute("tabindex", "0");
+  const reads = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d+ \w+ \d{4}: [₹$][\d,]+\.\d\d$/;
+  const max = Number(await svg.getAttribute("aria-valuemax"));
+  expect(max).toBeGreaterThan(100);
+  expect(await svg.getAttribute("aria-valuenow")).toBe(String(max));                  // at the latest close, where the arrows start
+  expect(await svg.getAttribute("aria-valuetext")).toMatch(reads);
+  await svg.focus();
+  await expect(svg).toBeFocused();
+  const latest = await svg.getAttribute("aria-valuetext");
+  await page.keyboard.press("ArrowLeft");
+  expect(await svg.getAttribute("aria-valuenow")).toBe(String(max - 1));
+  const before = await svg.getAttribute("aria-valuetext");
+  expect(before).toMatch(reads);
+  expect(before).not.toBe(latest);
+  await page.keyboard.press("Home");
+  expect(await svg.getAttribute("aria-valuenow")).toBe("1");
+  await page.keyboard.press("End");
+  expect(await svg.getAttribute("aria-valuenow")).toBe(String(max));
+  await page.keyboard.press("Escape");
+  await expect(card.locator(".tip")).toBeHidden();
+  expect(await svg.getAttribute("aria-valuetext")).toBe(latest);                       // Esc puts it back
+  // the range switch by keyboard: Space presses the button, the pressed state moves, and the new range is said once in the polite region
+  await card.locator('.seg [data-r="6m"]').focus();
+  await page.keyboard.press("Space");
+  await expect(card.locator('.seg [aria-pressed="true"]')).toHaveAttribute("data-r", "6m");
+  await expect(card.locator("[data-live]")).toContainText(/over 6 months/);
+  await expect(card.locator("[data-live]")).toContainText(/^(Up|Down) \d+\.\d%|^Unchanged/);
+  await expect(card.locator('.seg [data-r="6m"]')).toBeFocused();
+  // the table of the same closes opens from the keyboard
+  await card.locator("details[data-table] summary").focus();
+  await page.keyboard.press("Enter");
+  expect(await card.locator("[data-table] tbody tr").count()).toBeGreaterThan(5);
+});
+
+test("a number that refreshes by itself is not in a live region, and what has focus keeps it", async ({ page }, info) => {
+  test.skip(info.project.name === "phone", "the same page code on both; the clock is faked once");
+  test.setTimeout(120_000);
+  const at = "2026-10-28T05:00:00Z";                                              // 10:30 IST on a Wednesday: India trades, so the page reads prices again each minute
+  await page.route("**/*", (r) => { const h = new URL(r.request().url()).hostname; return h === "127.0.0.1" || h === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" }); });
+  const lasting = { ...session, expires_at: Math.floor(Date.parse(at) / 1000) + 86400 * 30 };
+  await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, lasting);
+  await page.clock.install({ time: new Date(at) });
+  await page.goto("/mine");
+  await expect(page.getByTestId("mine-markets").locator(".mine-mkt")).toHaveCount(6, { timeout: 30_000 });
+  const control = page.getByTestId("mine-markets").locator("button, a").first();      // the strip that refreshes holds a control the keyboard can be on
+  await expect(control).toBeVisible({ timeout: 30_000 });
+  await control.focus();
+  const what = await control.evaluate((e) => e.getAttribute("aria-label") ?? e.getAttribute("href") ?? e.textContent);
+  await page.evaluate(() => {
+    const w = window as unknown as { __said: number };
+    w.__said = 0;
+    new MutationObserver((ms) => { for (const m of ms) { const t = m.target.nodeType === 1 ? (m.target as Element) : m.target.parentElement; if (t?.closest("[aria-live]:not([aria-live=off]), [role=status], [role=alert]")) w.__said++; } })
+      .observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+  const stamp = await page.getByTestId("mine-mkt-at").innerText();
+  await page.clock.runFor(61_000);
+  await expect(page.getByTestId("mine-mkt-at")).not.toHaveText(stamp, { timeout: 15_000 });            // it did refresh
+  await page.clock.runFor(61_000);
+  expect(await page.evaluate(() => (window as unknown as { __said: number }).__said), "nothing in a live region changed: a screen reader said nothing").toBe(0);
+  expect(await page.evaluate(() => { const e = document.activeElement; return e?.getAttribute("aria-label") ?? e?.getAttribute("href") ?? e?.textContent; }), "focus stayed on the control it was on").toBe(what);
 });

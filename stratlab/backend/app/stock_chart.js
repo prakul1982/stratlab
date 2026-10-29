@@ -81,6 +81,9 @@
     return "The close was " + price(s.c[0]) + " on " + dlabel(s.t[0]) + " and " + price(s.c[n - 1]) + " on " + dlabel(s.t[n - 1]) + ". " + extremes(s);
   }
 
+  /* a close as words, for a screen reader */
+  function reading(s, i) { return WD[day(s.t[i]).getUTCDay()] + " " + dlabel(s.t[i]) + ": " + price(s.c[i]); }
+
   function draw() {
     var r = range, s = slice(r), n = s.c.length;
     if (n < 2) return;
@@ -95,7 +98,9 @@
     plot.style.height = H + "px";
     var old = plot.querySelector("svg");
     if (old) plot.removeChild(old);
-    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", tabindex: "0",
+    // a slider over the closes: on an image a screen reader keeps the arrow keys, on a slider it hands them over and says each value (A11Y-2)
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "slider", tabindex: "0",
+      "aria-valuemin": 1, "aria-valuemax": n, "aria-valuenow": n, "aria-valuetext": reading(s, n - 1),
       "aria-label": "Share price over " + RANGES[r][1] + ". " + words(s) + " Use the left and right arrow keys to read each close." });
     svg.style.touchAction = "pan-y";
     ticks.forEach(function (v) {
@@ -116,7 +121,7 @@
     plot.insertBefore(svg, tip);
     state = { at: -1 };
 
-    function at(i, announce) {
+    function at(i) {
       i = Math.max(0, Math.min(n - 1, i));
       state.at = i;
       var x = sx(s.t[i]), y = sy(s.c[i]);
@@ -132,9 +137,10 @@
       var w = tip.offsetWidth, left = Math.min(Math.max(x - w / 2, 0), W - w);
       tip.style.left = left + "px";
       tip.style.top = Math.max(0, Math.min(y - 60, H - padB - 46)) + "px";
-      if (announce && live) live.textContent = a.textContent + ": " + b.textContent;
+      say(i);
     }
-    function off() { cross.setAttribute("visibility", "hidden"); end.setAttribute("visibility", "visible"); tip.hidden = true; state.at = -1; }
+    function say(i) { svg.setAttribute("aria-valuenow", i + 1); svg.setAttribute("aria-valuetext", reading(s, i)); }
+    function off() { cross.setAttribute("visibility", "hidden"); end.setAttribute("visibility", "visible"); tip.hidden = true; state.at = -1; say(n - 1); }
     function nearest(ev) {
       var rect = svg.getBoundingClientRect(), px = (ev.clientX - rect.left) * (W / rect.width), a = 0, b = n - 1;
       while (a < b) { var m = (a + b) >> 1; if (sx(s.t[m]) < px) a = m + 1; else b = m; }
@@ -152,7 +158,7 @@
       else if (k === "End") i = n - 1;
       else if (k === "Escape") { off(); return; }
       else return;
-      ev.preventDefault(); at(i, true);
+      ev.preventDefault(); at(i);
     });
   }
 
@@ -166,6 +172,22 @@
     });
     adjNote.textContent = bits.join(" ");
     adjNote.hidden = !bits.length;
+  }
+
+  // what the last close moved on its day, beside the price at the top of the page: the last two closes of the series, only when the series
+  // ends on the day and at the price the page shows (a page older than its series, or a price from another source, shows no move)
+  function dayChange() {
+    var out = document.querySelector("[data-day]"), n = data.t.length;
+    if (!out || n < 2) return;
+    var last = data.c[n - 1], prev = data.c[n - 2], shown = parseFloat(root.getAttribute("data-price")), at = Date.parse(root.getAttribute("data-price-at")) / DAY;
+    if (!(shown > 0) || data.t[n - 1] !== at || data.t[n - 1] - data.t[n - 2] > 5 || Math.abs(last - shown) > shown * 0.005 || !(prev > 0)) return;
+    var d = last - prev, pct = d / prev * 100, flat = Math.abs(pct) < 0.005, sign = flat ? "" : d > 0 ? "+" : "\u2212";
+    var sym = cur === "INR" ? "\u20B9" : "$", mag = Math.abs(d);
+    var amt = sym + new Intl.NumberFormat(loc, { minimumFractionDigits: 2, maximumFractionDigits: mag < 0.1 ? 4 : 2 }).format(mag);
+    out.textContent = flat ? "Unchanged on the day" : sign + amt + " (" + sign + Math.abs(pct).toFixed(2) + "%)";
+    out.setAttribute("data-dir", flat ? "flat" : d > 0 ? "up" : "down");
+    out.setAttribute("aria-label", (flat ? "Unchanged" : d > 0 ? "Up " : "Down ") + (flat ? "" : amt + ", " + Math.abs(pct).toFixed(2) + "%") + " on the day");
+    out.hidden = false;
   }
 
   function show() {
@@ -199,6 +221,7 @@
     }).then(function (j) {
       if (!j || !j.t || j.t.length < 2) throw new Error("none");
       data = j;
+      dayChange();
       Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) {
         var ok = available(b.getAttribute("data-r"));
         b.disabled = !ok;
@@ -213,6 +236,7 @@
     }).catch(function (err) {
       var none = err.message === "none";
       started = none;
+      root.setAttribute("data-empty", "1");       // no chart: a short card, not 280px of nothing (VR6-004)
       status.hidden = false;
       status.textContent = none ? "No price chart is available for this company yet. The figures here are unaffected." : "The price chart couldn't be loaded just now. The figures on this page are unaffected. ";
       if (none) return;
@@ -228,6 +252,8 @@
     if (!b || b.disabled || !data) return;
     range = b.getAttribute("data-r");
     show();
+    // the buttons say which is pressed; what the range shows is said here, once (A11Y-2)
+    if (live) live.textContent = chg.textContent + note.textContent;
   });
   var timer = 0;
   window.addEventListener("resize", function () { clearTimeout(timer); timer = setTimeout(function () { if (data) draw(); }, 120); });

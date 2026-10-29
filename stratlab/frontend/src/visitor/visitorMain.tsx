@@ -34,8 +34,8 @@ export function startVisitor(root: HTMLElement) {
       <LoadGuard>
         <BrowserRouter>
           <Watch />
+          <Tracking />{/* before the page in its order, so the keyboard meets the question first (A11Y-2) */}
           <VisitorApp />
-          <Tracking />
         </BrowserRouter>
       </LoadGuard>
     </StrictMode>,

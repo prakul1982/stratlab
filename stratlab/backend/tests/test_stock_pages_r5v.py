@@ -75,7 +75,7 @@ def test_the_page_says_last_close_and_the_edge_keeps_it_a_day(w):
     assert int(re.search(r"max-age=(\d+)", cc).group(1)) <= 300 and int(re.search(r"s-maxage=(\d+)", cc).group(1)) == 86400
     assert int(re.search(r"stale-while-revalidate=(\d+)", cc).group(1)) == 604800
     t = r.text
-    assert "Last price" not in t and re.search(r"As of \d{1,2} \w{3} 20\d\d close", t) and re.search(r"Last close, \d{1,2} \w{3}", t)
+    assert "Last price" not in t and re.search(r"As of \d{1,2} \w{3} 20\d\d close", t) and re.search(r"<b data-price>₹[\d,.]+</b>", t)
 
 
 def test_a_us_page_prices_its_ratios_at_the_close_it_shows(w):
@@ -106,8 +106,9 @@ def test_margins_are_called_ebitda_margin_and_whole_percent_shows_no_point_zero(
 
 def test_unknown_figures_are_na_never_zero(w):
     page = stock_pages.render(_facts(div_yield=None, pe=None), "IN", "ACME", None)
-    assert "<span>Dividend yield</span><b>n/a</b>" in page and "<span>P/E</span><b>n/a</b>" in page
-    assert "0.00%" not in page
+    # PUB-2: a figure with no value has no tile (no "n/a" hole in the grid); the foot of the page says what a missing figure means
+    assert "<span>Dividend yield</span>" not in page and "<span>P/E</span>" not in page and "<b>n/a</b>" not in page
+    assert "0.00%" not in page and "<span>Return on equity</span>" in page and "A loss has no P/E" in page
 
 
 def test_a_foreign_filer_says_which_currency_is_which(w):

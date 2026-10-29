@@ -520,13 +520,14 @@ def parse(data: bytes, filename: str = "") -> dict:
 TRADE_COLUMNS = {
     "date": {"tradedate", "date", "transactiondate", "executiondate", "executiondateandtime", "tradedatetime", "orderdate",
              "datetime", "tradedon", "dateoftransaction", "executedat", "executedon", "executiontimestamp", "orderexecutiontimestamp",
-             "orderexecutedtime"},         # Groww's order history: "Executed at"
+             "orderexecutedtime", "executeddateandtime", "tradedateandtime", "orderexecutiondateandtime"},         # Groww's order history: "Executed at"
     "time": {"tradetime", "orderexecutiontime", "executiontime", "time", "ordertime", "tradetimestamp"},
     "side": {"tradetype", "type", "side", "buysell", "bs", "action", "transactiontype", "buyorsell", "trantype",
              "buysellindicator", "transaction"},
     "qty": COLUMNS["qty"] | {"tradeqty", "tradedquantity", "quantitytraded", "filledqty", "tradedqty", "executedqty"},
     "price": {"price", "tradeprice", "rate", "transactionprice", "tradedprice", "averageprice", "avgprice", "executionprice",
-              "marketrate", "grossrate", "pricepershare", "executedprice"},
+              "marketrate", "grossrate", "pricepershare", "executedprice", "netrate", "netprice", "avgrate", "averagerate", "tradedrate",
+              "executionrate"},
     "value": {"value", "tradevalue", "amount", "totalvalue", "grossamount", "transactionvalue", "grossvalue"},
     "trade_id": {"tradeid", "tradeno", "tradenum", "tradenumber", "exchangetradeid", "tradereference"},
     "segment": {"segment", "instrumenttype", "series", "assetclass"},

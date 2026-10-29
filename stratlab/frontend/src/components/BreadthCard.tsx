@@ -4,7 +4,7 @@ import { BROAD_GROUP, breadthApi, cardDates, cardFigures, count, savedPick, shar
 import { homeRegion } from "../lib/homeMarket";
 import { Panel } from "./Research";
 import { AsOf, PanelSkel } from "./ui";
-import { Badge, Stat } from "./kit";
+import { Stat, StatRow } from "./kit";
 import { marketTz } from "../lib/format";
 import { useMarketRefresh } from "../lib/marketLive";
 
@@ -40,15 +40,16 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
         : !f ? <p className="small muted">The first counts for {d.group.name} come after the next close.</p>
         : (
           <div className="k-stack" data-testid="breadth-card" data-live={f.live ? "1" : "0"}>
-            <span className="eyebrow">{d.group.name} · <span data-testid="breadth-card-when">{f.when}</span> {f.live && !f.final && <Badge tone="live">Live</Badge>}</span>
-            <div className="k-stats">
+            {/* VR5-002: "Live as of 15:30 IST" says it is live: no second "Live" pill beside it */}
+            <span className="eyebrow">{d.group.name} · <span data-testid="breadth-card-when">{f.when}</span></span>
+            <StatRow>
               <Stat label="Rose / fell" value={`${count(f.adv)} / ${count(f.dec)}`} note={dates?.counts} />
               <Stat label="Above 50-day average" value={share(f.pct50)} note={dates?.counts} />
               {/* the live count has no new highs and lows: those stay the last close's, said so */}
               {f.live
                 ? (d.today ? <Stat label="52-week highs / lows" value={`${count(d.today.highs.value)} / ${count(d.today.lows.value)}`} note={dates?.highs} /> : null)
                 : <Stat label="52-week highs / lows" value={`${count(f.highs)} / ${count(f.lows)}`} />}
-            </div>
+            </StatRow>
             {!f.live && <AsOf parts={[["Prices", d.as_of]]} tz={marketTz(d.group.region)} />}
           </div>
         )}

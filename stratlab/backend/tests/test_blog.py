@@ -139,7 +139,7 @@ def test_a_post_is_real_html_with_canonical_tags_json_ld_and_links(w):
     assert a["publisher"]["name"] == "StratLab" and a["publisher"]["logo"]["url"].endswith("/icon-512.png")
     assert a["mainEntityOfPage"]["@id"] == "https://stratlab.studio/blog/india-market-brief-2026-10-01"
     assert "Facts, not advice." in html and "not investment advice" in html
-    assert "<h1>India market brief, 1 Oct 2026: NIFTY 50 +0.42%</h1>" in html and "<h2>Index closes</h2>" in html and "<table>" in html
+    assert "<h1>India market brief, 1 Oct 2026: NIFTY 50 +0.42%</h1>" in html and "<h2>Index closes</h2>" in html and '<ul class="kpis"><li><b>24,812.30</b><span>NIFTY 50</span><small>+0.42% on the day</small></li>' in html     # each index a tile (VR6-005)
     assert "Nifty IT moved from Improving to Leading" in html
     assert '<a href="/stocks/in/TCS">TCS</a> matches the Stage 2 rule' in html            # a company name goes to its page
     for link in ('href="/library"', 'href="/new"', 'href="/stocks"', 'href="/blog/briefs"', 'href="/research/rotation?region=IN"'):
@@ -256,7 +256,7 @@ def test_the_strategy_post_states_the_librarys_own_numbers(w):
     assert post["slug"] == "classic-strategies-ten-markets-after-costs" and post["kind"] == "research"
     text = blog.plain_text(post["blocks"])
     # every table row says the entry's own return, passive return and trade count, and links to its library page
-    tables = [b for b in post["blocks"] if b["t"] == "table"]
+    tables = [b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Rule set"]     # (the four checks have a table of their own, below)
     assert len(tables) == 10 and sum(len(t["rows"]) for t in tables) == len(rows)
     by_link = {r[0]["href"]: r for t in tables for r in t["rows"]}
     for e in rows:
@@ -275,7 +275,7 @@ def test_the_strategy_post_states_the_librarys_own_numbers(w):
     assert f"ahead in {ahead} of {len(rows)} tests, behind in {behind}" in text
     lost = sum(1 for e in rows if e["stats"]["trades"] and e["stats"]["ret"] < 0)
     assert f"{lost} of the {len(rows) - 1} tests that traded lost money after costs" in text
-    for must in ("Method", "Limits", "slippage", "four checks", "70/30", "1,000 times", "past prices", "StratLab's own backtester"):
+    for must in ("How these tests were run", "Limits", "slippage", "four checks", "70/30", "1,000 times", "past prices", "StratLab's own backtester"):
         assert must in text, must
     assert blog_research.classic_strategies(rows[:9]) is None               # too few tests for a post
 
@@ -372,7 +372,7 @@ def test_the_sip_post_is_the_sip_test_engines_own_arithmetic(w):
         lump_ahead += b["value"] > a["value"]
     assert spread[1][1:4] == [str(windows), str(ahead), str(lump_ahead)]
     text = blog.plain_text(post["blocks"])
-    for must in ("price index", "dividends are not included", "stamp duty", "Limits", "Method", "no sale is made"):
+    for must in ("price index", "dividends are not included", "stamp duty", "Limits", "How the comparison was run", "no sale is made"):
         assert must.lower() in text.lower(), must
     assert blog_research.sip_vs_lump({d: v for d, v in list(closes.items())[:300]}) is None            # under four years of history
 

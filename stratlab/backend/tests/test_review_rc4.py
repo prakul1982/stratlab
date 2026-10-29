@@ -102,13 +102,11 @@ def test_999_5_million_is_a_billion_not_1000_million():
 
 
 # ---------- RC4-007: the market value answer names the price it rests on ----------
-def test_the_market_value_answer_says_close_or_last_price_as_the_page_does(monkeypatch):
-    # the page is the market's latest close (fixed here: on a later day the real clock would make it "behind")
-    real_behind = stock_pages.behind
-    monkeypatch.setattr(stock_pages, "behind", lambda f, *a, **k: False)
-    close = stock_pages.faq_items(facts(), "IN", "ACME", "Acme Ltd")[0][1]
-    monkeypatch.setattr(stock_pages, "behind", real_behind)
-    assert close.startswith("Acme Ltd's market value is ₹7.70 lakh crore as of 27 Oct 2026 close: the last close times the shares in issue.")
+def test_the_market_value_answer_says_close_or_last_price_as_the_page_does():
+    # the market's latest completed session, whatever day the suite runs (it read "27 Oct" as the latest until the 28th's close)
+    last = stock_pages.last_close("IN")[0]
+    close = stock_pages.faq_items(facts(price_at=last.isoformat()), "IN", "ACME", "Acme Ltd")[0][1]
+    assert close.startswith(f"Acme Ltd's market value is ₹7.70 lakh crore as of {last.day} {last:%b %Y} close: the last close times the shares in issue.")
     assert "the last close over earnings per share" in close
     old = stock_pages.faq_items(facts(price_at="2026-10-05"), "IN", "ACME", "Acme Ltd")[0][1]
     assert "as of 5 Oct 2026: the last price this page has times the shares in issue." in old

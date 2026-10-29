@@ -79,7 +79,10 @@ export function MineHome() {
     networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={coming} more={upAll ? upAll.length - (coming?.length ?? 0) : 0} />, watch: <WatchCard />,
   })[id];
   // each card's width from its place in the chosen order, so the grid keeps that order with no gaps (DI-005)
-  const spans = slotSpans(shown);
+  // VR6-010: an empty watchlist is one short message: it takes its own row (Coming up widens to fill the one before), instead of standing
+  // beside six dated rows with 230px of nothing under it. Until the list is read the two keep sharing the row.
+  const { items: watchItems } = useWatchlist();
+  const spans = slotSpans(shown, watchItems !== null && watchItems.length === 0 ? ["watch"] : []);
 
   return (
     <div className="space-home mine" data-testid="mine-home">
@@ -234,8 +237,12 @@ function PaperCard() {
   if (rows === null) return <Card testId="mine-paper"><Skeleton label="Opening your paper sessions" lines={5} /></Card>;
   if (!rows.length) {
     return (
+      // VR6-017: the same shape as its neighbours (a title, one figure and a line), not a centred icon and three lines: beside Net worth and Your P&L
+      // it stood 100px taller than they are, leaving both with an empty lower half
       <Card testId="mine-paper">
-        <EmptyState title="Paper sessions" action={{ label: "Start paper trading", to: "/paper" }}>Rules running live on real prices with fake money show here.</EmptyState>
+        <CardHead title="Paper sessions" />
+        <Stat label="Running now" value="None running" note="Rules running live on real prices with fake money show here." />
+        <div><Link className="btn sm" to="/paper">Start paper trading</Link></div>
       </Card>
     );
   }

@@ -87,11 +87,18 @@ test("My space has one name, and Look up a company differs from the Invest home 
   expect(errors).toEqual([]);
 });
 
+// on a phone the library pages its cards (VR6-024: "Show 12 more"); open every page so a check reads the whole library
+async function showAllCards(page: import("@playwright/test").Page) {
+  const more = page.getByTestId("lib-show-more").getByRole("button", { name: /^Show \d+ more$/ });
+  for (let i = 0; i < 20 && await more.isVisible(); i++) await more.click();
+}
+
 test("Library: groups say what they hold and ST S2 is spelled out (R3-014)", async ({ page }) => {
   const errors = await open(page, "/library");
   await page.getByRole("radio", { name: "StratLab's own" }).click();
   const cards = page.locator(".k-cards > section");
   await expect(cards.first()).toBeVisible({ timeout: 30_000 });
+  await showAllCards(page);
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/\bST S2\b/);
   expect(text).toMatch(/Stage 2 \+ Supertrend/);

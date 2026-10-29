@@ -21,12 +21,14 @@ function InviteCard() {
   const { me, notify } = useApp();
   const [v, setV] = useState<Invites | null>(null);
   const [bad, setBad] = useState(false);
+  const [tries, setTries] = useState(0);
   useEffect(() => {
     let live = true;
+    setBad(false);
     api<Invites>("/me/referrals").then((x) => { if (live && x?.code) setV(x); else if (live) setBad(true); }).catch(() => { if (live) setBad(true); });
     return () => { live = false; };
-  }, []);
-  if (!v && bad) return <Card label="Invite friends"><ErrorState title="Your invite link isn't available right now">Reload the page to try again.</ErrorState></Card>;
+  }, [tries]);
+  if (!v && bad) return <Card label="Invite friends"><ErrorState title="Your invite link isn't available right now" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>It couldn't be read just now.</ErrorState></Card>;
   if (!v || !me) return <Card label="Invite friends"><Skeleton label="Loading invite details" lines={3} /></Card>;
   const paid = me.paid_plan ?? me.plan;       // the plan they have; me.plan is Pro for everyone during the launch offer
   const link = `${siteUrl()}/?ref=${v.code}`;

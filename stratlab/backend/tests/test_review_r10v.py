@@ -16,6 +16,7 @@ import pytest
 from app import main  # noqa: F401, I001  (first: the app loads the newsletter job before the modules built on it)
 from app import deepdive, screens, stock_pages
 from app.intel import screener, sec
+from tests.tiles import stat  # noqa: F401  (key figures are tiles, PUB-2; test_review_r12 reads them through here)
 
 TODAY = date(2026, 10, 9)
 
@@ -222,7 +223,7 @@ def test_deutsche_banks_page_has_no_margin_where_it_has_no_profit_and_none_of_an
     assert f["net_margin"] is None and f["growth"]["profit_cagr_3y"] is None
     page = stock_pages.render({**f, "unit": "EUR million"}, "US", "DB", None)
     assert "20.1%" not in page and "135.8" not in page and "net profit grew" not in page
-    assert "<span>Net margin</span>" not in page            # blank, not another year's number
+    assert stat(page, "Net margin") is None                # blank, not another year's number
 
 
 # ---------- R10V-002: the newest 20-F, and key figures past 15 months ----------
@@ -236,17 +237,12 @@ def facts_page(last_year="Mar 2025", at="2026-09-30", **kw):
     return {**base, **kw}
 
 
-def stat(page: str, label: str) -> str | None:
-    m = re.search(rf"<span>{re.escape(label)}</span><b>([^<]*)</b>", page)
-    return m.group(1) if m else None
-
-
 def test_the_key_figures_of_a_year_over_15_months_old_are_na_and_say_why():
     old = facts_page("Mar 2025")                              # Dr. Reddy's: a table to Mar 2025 beside a Sep 2026 price
     assert stock_pages.figures_stale(old) and stock_pages.figures_end(old) == "2025-03-31"
     page = stock_pages.render(old, "US", "RDY", None)
     for label in ("Return on equity", "EBITDA margin", "Debt to equity", "Net margin"):
-        assert stat(page, label + " (year to Mar 2025)" if label != "Debt to equity" else label) == "n/a", label
+        assert stat(page, label + " (year to Mar 2025)" if label != "Debt to equity" else label) is None, label
     assert "17.0%" not in page and "27.3%" not in page and "17.4%" not in page
     assert "data-figures-old" in page and "31 Mar 2025" in page and "15 months" in page
     # the same page with its newest year in the table: the figures stand, no note
@@ -471,7 +467,7 @@ def test_a_price_only_page_shows_the_price_and_range_and_says_why_it_has_no_numb
     assert f["no_numbers"] and f["price"] == 27.9 and not stock_pages.has_content(f)
     page = stock_pages.render(f, "US", "IBN", None)
     assert "$27.90" in page and "$26.00 to $31.00" in page and "aren't available to show here right now" not in page
-    assert stat(page, "Market cap") == "n/a" and "data-cap-missing" in page and "not as structured data" in page
+    assert stat(page, "Market cap") is None and "data-cap-missing" in page and "not as structured data" in page
     assert '<meta name="robots" content="noindex,follow">' in page and 'rel="canonical"' not in page
     assert len(re.search(r'<meta name="description" content="([^"]*)"', page).group(1)) <= 160
     assert "Revenue and profit trend" not in page
@@ -497,11 +493,11 @@ def test_the_price_only_company_is_built_from_the_sec_listing_and_never_for_a_fu
 def test_a_page_with_no_market_value_says_why_when_it_knows():
     f = facts_page("Mar 2026", market_cap=None, pe=None, cap_why="shares")
     page = stock_pages.render(f, "US", "BIDU", None)
-    assert stat(page, "Market cap") == "n/a" and "data-cap-missing" in page and "number of shares in issue couldn't be read" in page
+    assert stat(page, "Market cap") is None and "data-cap-missing" in page and "number of shares in issue couldn't be read" in page
     # no reason known (an older page): no cause is claimed, but the item is still there, as n/a with a plain note
     # (changed on purpose for R12-005: the item used to be left out, and BP's page showed no Market cap at all)
     page = stock_pages.render(facts_page("Mar 2026", market_cap=None, pe=None), "US", "BIDU", None)
-    assert stat(page, "Market cap") == "n/a" and "data-cap-missing" in page and "couldn't be read" not in page
+    assert stat(page, "Market cap") is None and "data-cap-missing" in page and "couldn't be read" not in page
     # a failed check keeps its own note
     assert stock_pages.cap_missing_reason(facts_page("Mar 2026", cap_why="shares")) is None
 
@@ -534,7 +530,7 @@ def test_a_us_company_is_named_the_same_in_title_description_og_tags_and_json_ld
 def test_policy_links_and_email_links_are_44_px_tall_on_phones():
     style = stock_pages.STYLE
     phone = style[style.rindex("@media (max-width:640px){footer.site nav a"):]
-    assert "footer.site nav a{padding:12px 0;min-height:44px}" in phone
+    assert "footer.site nav a{padding:12px 0;min-height:44px;min-width:44px}" in phone
     assert ".links a{min-height:44px}" in phone
     assert 'a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}' in phone
 

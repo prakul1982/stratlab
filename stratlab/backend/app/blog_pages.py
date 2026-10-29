@@ -33,8 +33,7 @@ admin_router = APIRouter(tags=["admin"])
 # feed is read by programs that poll it, so it stays at ten minutes.
 CACHE = sp.CACHE_CONTROL
 FEED_CACHE = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
-FACTS = ("Facts, not advice. This post reports data and method for research and education. It is not investment advice or a "
-         "recommendation about any security.")
+FACTS = "Facts, not advice. Data and method for research and education; not investment advice or a recommendation about any security."
 KIND_NAME = {"brief": "Market brief", "research": "Research"}
 TITLES = {None: ("StratLab blog: daily market briefs and research from market data",
                  "Daily India and US market briefs and research built from StratLab's own data: index closes, sector rotation, strategy tests, IPO "
@@ -48,26 +47,56 @@ TITLES = {None: ("StratLab blog: daily market briefs and research from market da
 PATHS = {None: "/blog", "brief": "/blog/briefs", "research": "/blog/research"}
 
 STYLE = """
+/* PUB-2: one content width for a post and a list (the page's own 960 px column, as a company page has), text and tables alike */
 .blog-eyebrow{font-size:13px;color:var(--muted);margin:0 0 4px}.blog-eyebrow a{color:var(--muted)}
-.byline{font-size:14px;color:var(--muted);margin:2px 0 14px}
-.facts{border-left:3px solid var(--blue);background:var(--card);padding:8px 12px;margin:12px 0 18px;border-radius:0 10px 10px 0;font-size:14px;color:var(--ink-2)}
-article h2{margin-top:28px}article h3{font-family:var(--serif);font-weight:600;font-size:17px;margin:20px 0 6px}
-article p,article li{max-width:68ch}article ul{padding-left:20px}article li{margin:5px 0}
-.btbl{overflow-x:auto;margin:12px 0 16px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
-.btbl table{font-size:14px}.btbl caption{text-align:left;padding:8px 10px 0;font-size:13px;color:var(--muted)}
-.btbl th,.btbl td{text-align:right;white-space:nowrap}.btbl th[scope=row],.btbl thead th:first-child{text-align:left;white-space:normal;min-width:140px;position:static;background:transparent}
-.btbl thead th{font-weight:600;color:var(--ink-2);white-space:normal;vertical-align:bottom}
+.byline{font-size:14px;color:var(--muted);margin:2px 0 4px}
+.facts{font-size:13.5px;color:var(--muted);margin:0 0 22px}
+article h2{margin-top:32px}article h3{font-family:var(--serif);font-weight:600;font-size:17px;margin:20px 0 6px}
+article p,article li{max-width:none}article>p,article li{font-size:16px;line-height:1.6}article ul{padding-left:20px}article li{margin:5px 0}
+.btbl{overflow-x:auto;margin:12px 0 18px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.btbl table{font-size:14px}.btbl caption{text-align:left;padding:10px 14px 2px;font-size:13px;color:var(--muted)}
+.btbl th,.btbl td{text-align:right;white-space:nowrap;padding:9px 10px;vertical-align:middle}.btbl .l{text-align:left}
+.btbl th[scope=row],.btbl thead th:first-child{text-align:left;position:static;background:transparent;min-width:0;white-space:nowrap}
+.btbl thead th{font-weight:600;color:var(--ink-2);vertical-align:bottom}.btbl td small.sub,.btbl th small.sub{display:block;font-weight:400;font-size:12.5px;color:var(--muted)}
 .btbl tr:last-child td,.btbl tr:last-child th{border-bottom:0}
+.btbl.fx table{table-layout:fixed;min-width:880px}.btbl.fx td,.btbl.fx tbody th{overflow:hidden;text-overflow:ellipsis}
+article ul.kpis{list-style:none;padding:0;margin:14px 0 8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpis li{margin:0;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;display:grid;grid-template-rows:auto 1fr auto;gap:2px}
+.kpis b{font-size:26px;line-height:1.2;font-weight:600;white-space:nowrap}.kpis span{font-size:14px;line-height:1.35;color:var(--ink-2)}
+article .kpis small{font-size:12.5px;line-height:1.35;color:var(--muted)}
+.hbars{margin:14px 0 18px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:12px}.hbars figcaption{font-size:13px;color:var(--muted);margin:0 0 8px}
+.hbars .key{display:flex;flex-wrap:wrap;gap:4px 18px;margin:0 0 10px;font-size:13px;color:var(--ink-2)}.hbars ul{list-style:none;margin:0;padding:0}
+.hbars li{display:grid;grid-template-columns:minmax(84px,150px) 1fr auto;align-items:center;gap:12px;margin:0;padding:5px 0;font-size:14px}
+.hbars .track{display:flex;gap:2px;height:14px}.hbars .seg{display:block;height:100%;min-width:3px;border-radius:3px}
+.hbars .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}.hbars .n{display:flex;gap:14px;font-variant-numeric:tabular-nums;min-width:96px;justify-content:flex-end}
+.seg.one,.sw.one{background:var(--blue)}.seg.two,.sw.two{background:var(--orange)}.seg.none,.sw.none{background:repeating-linear-gradient(135deg,var(--line-2) 0 2px,var(--card) 2px 4px);box-shadow:inset 0 0 0 1px var(--line-2)}
+article details.how{margin:22px 0 8px}article details.how ul{margin:4px 0 8px}
+/* VR5-007: on a phone the four columns of a results table fit the screen (the rule set's name wraps, the figures are a size down and
+   closer): at 390px the 140px name column pushed "Difference" and its figures past the edge, cut off */
+@media (max-width:640px){.btbl table{font-size:13px}.btbl th,.btbl td{padding:8px 5px}.btbl th[scope=row],.btbl thead th:first-child{min-width:0}.btbl caption{padding-inline:8px}}
+@media (max-width:640px){.btbl.wide table,.btbl.wide tbody,.btbl.wide caption{display:block}.btbl.wide thead{display:none}
+.btbl.wide tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px;padding:10px 12px;border-bottom:1px solid var(--line)}.btbl.wide tr:last-child{border-bottom:0}
+.btbl.wide th[scope=row]{grid-column:1/-1;padding:0;border:0;font-size:14px}.btbl.wide td{padding:0;border:0;text-align:left;white-space:normal;min-width:0}
+.btbl.wide td::before{content:attr(data-l);display:block;font-size:12px;color:var(--muted)}.btbl.wide td:empty{display:none}
+.btbl.wide td:nth-child(6){grid-column:span 2}.btbl.wide.fx table{min-width:0}.btbl.wide.fx td{overflow:visible}}
+/* VR6-007: a table of three or four columns stays a table on a phone and must fit it: its headers, its row names and its caption wrap
+   (only a figure keeps to one line); at 390px "Lump sum" and the last column of the subscription table ran past the edge, cut off, with no cue.
+   VR6-008: four figures to a card across, not three and an orphan (the four checks). VR6-009: an odd last tile takes its row */
+@media (max-width:640px){.btbl:not(.wide) thead th,.btbl:not(.wide) tbody th,.btbl caption{white-space:normal}.btbl:not(.wide) thead th{vertical-align:bottom}
+.btbl.wide.w4 tr{grid-template-columns:repeat(4,minmax(0,1fr))}
+/* VR6-019: in a card, a figure sits at the foot of its cell, so a label that wraps to three lines does not leave the figure beside it higher than the others */
+.btbl.wide td{display:flex;flex-direction:column;justify-content:flex-end}.kpis li:last-child:nth-child(odd){grid-column:1/-1}}
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.tabs a{display:inline-flex;align-items:center;min-height:44px;padding:4px 16px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink-2);background:var(--card)}
 .tabs a[aria-current=page]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
 ul.posts{list-style:none;padding:0;margin:0}ul.posts li{margin:12px 0}
-ul.posts a.post{display:block;text-decoration:none;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+ul.posts a.post{display:grid;gap:4px;text-decoration:none;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px}
 ul.posts a.post:hover{border-color:var(--line-2)}ul.posts .kind{font-size:13px;color:var(--muted)}
-ul.posts h2{font-size:19px;margin:2px 0 4px;color:var(--ink)}ul.posts p{margin:0;color:var(--ink-2);font-size:14px}
+ul.posts h2{font-size:19px;margin:0;color:var(--ink)}ul.posts p{margin:0;color:var(--ink-2);font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .pager{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:24px 0 8px}
 .pager a{display:inline-flex;align-items:center;min-height:44px;padding:6px 14px;border:1px solid var(--line);border-radius:10px;text-decoration:none;background:var(--card)}
 .more{margin-top:28px}.more ul{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-wrap:wrap;gap:8px}
 .more a{display:inline-flex;align-items:center;min-height:44px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
+@media (max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis b{font-size:22px}.hbars li{grid-template-columns:1fr auto;gap:2px 10px}.hbars .k{grid-column:1/-1}.hbars{padding:12px}}
 """
 
 
