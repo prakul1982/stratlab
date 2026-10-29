@@ -44,7 +44,7 @@ function offline(path) {
 // app shell. Everything else that answers with HTML is its own page and must never stand in for the app when offline: the server's
 // pages (/stocks, /c, /v, /unsubscribe, /email, /news-link), the pages built ahead of time (the policies, /pricing, /faq, /about,
 // /help, /login, /signup, /plans, /library and each /library/<id>) and a shared /verdict.
-const APP_PATH = /^\/(?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|upgrade|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|scans|watchlist|dev)(?:\/|$)/;
+const APP_PATH = /^\/(?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|upgrade|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|scans|watchlist|dev|calendar)(?:\/|$)/;
 const isAppPath = (path) => path === "/" || APP_PATH.test(path);
 const shellOr = (fallback) => caches.match("/").then((hit) => hit || fallback()).catch(() => fallback());
 

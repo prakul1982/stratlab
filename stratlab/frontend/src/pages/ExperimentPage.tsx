@@ -395,7 +395,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title={nb.name}
+      <PageHeader eyebrow="Trade · Strategies" title={nb.name}
         lede={<>{[
           <Link key="back" to={`/n/${nb.id}`} className="link back-link">← Back to the notebook</Link>,
           /^Experiment v\d+$/.test(e.label) ? e.label : `v${e.v}: ${e.label}`, e.instrument.symbol, TF_NAME[e.tf], yearSpan(e.range.from.slice(0, 4), e.range.to.slice(0, 4)), withOpen(st.n, open),
@@ -548,9 +548,9 @@ export function ExperimentPage() {
   const { id, v } = useParams();
   const { nb, problem, reload } = useNotebook(id, `Run v${v}`);
   if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
-  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><Card><Skeleton label="Opening experiment" /></Card></div>;
+  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Strategies" title="Experiment" /><Card><Skeleton label="Opening experiment" /></Card></div>;
   const e = nb.experiments.find((x) => String(x.v) === v);
-  if (!e) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><EmptyState title="That experiment wasn't found." action={{ label: "Back to the notebook", to: `/n/${nb.id}` }} /></div>;
+  if (!e) return <div className="k-page"><PageHeader eyebrow="Trade · Strategies" title="Experiment" /><EmptyState title="That experiment wasn't found." action={{ label: "Back to the notebook", to: `/n/${nb.id}` }} /></div>;
   return <ExperimentView key={e.v} nb={nb} e={e} />;
 }
 

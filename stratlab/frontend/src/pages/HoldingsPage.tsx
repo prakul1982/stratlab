@@ -245,7 +245,7 @@ export function HoldingsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · What you own" title="My Holdings" asOf={view?.prices_at} asOfTz={rows.length > 0 && rows.every(isUS) ? marketTz("US") : undefined}
+      <PageHeader eyebrow="Money · Portfolio" title="My Holdings" asOf={view?.prices_at} asOfTz={rows.length > 0 && rows.every(isUS) ? marketTz("US") : undefined}
         asOfLabel={view?.us_prices_at ? "India prices as of" : "Prices as of"}
         actions={view?.us_prices_at ? <Badge>US prices as of {asOfText(view.us_prices_at, { tz: marketTz("US") })}</Badge> : undefined}
         lede="Your broker's holdings file, valued at the latest prices (the last close when the market is shut): each stock's value, gain or loss, and your sector mix."

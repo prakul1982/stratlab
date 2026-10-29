@@ -15,7 +15,7 @@ export function ImportPage() {
   const create = useCreateNotebook(null);
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title="Import a strategy"
+      <PageHeader eyebrow="Trade · Strategies" title="Import a strategy"
         lede="Drop in a strategy you already run: a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export, or plain words. StratLab works out what it is and sets it up in the right place." />
       <Card label="Where an import goes">
         <CardHead title="Where it ends up" info="StratLab reads what you bring and puts it in the place that fits. Anything that can't be carried over, such as order types, spread filters or broker logins, is listed on the notebook so nothing is silently dropped." />

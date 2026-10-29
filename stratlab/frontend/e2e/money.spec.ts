@@ -124,18 +124,18 @@ test("money calendar: tax dates, an own date added, the month view and the priva
   await sane(page, errors);
 });
 
-test("money calendar: reachable from the menu", async ({ page }, info) => {
+test("money calendar: reachable from the menu (IA-1: Money's Calendar entry opens it on the person's own dates)", async ({ page }, info) => {
   const n = info.project.name === "phone" ? 158 : 155;
-  const errors = await open(page, "/money", "Your money", n);          // Money's own menu, with its Plan group
+  const errors = await open(page, "/money", "Your money", n);          // Money's own menu, with its Calendar entry
   if (info.project.name === "phone") await page.getByRole("button", { name: "Open menu" }).click();
   if (info.project.name === "phone") await expect(async () => {
       if (!(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
       await expect(page.locator("aside.sidebar.open")).toBeInViewport({ timeout: 1500 });
     }).toPass({ timeout: 15_000 });
-  await page.locator('aside.sidebar [data-group="plan"] .side-toggle').click();      // the Plan group is folded until opened
-  await page.locator("aside.sidebar").getByRole("link", { name: "Money calendar" }).click();
+  await page.locator("aside.sidebar").getByRole("link", { name: "Calendar", exact: true }).click();
   await expect(page).toHaveURL(/\/money\/calendar$/);
   await expect(page.getByRole("heading", { name: "Money calendar" })).toBeVisible();
+  await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "My money dates" })).toHaveAttribute("aria-current", "page");
   expect(errors).toEqual([]);
 });
 

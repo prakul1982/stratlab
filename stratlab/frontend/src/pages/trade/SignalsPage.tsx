@@ -338,7 +338,7 @@ export function SignalsPage() {
   );
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title="Forward test"
+      <PageHeader eyebrow="Trade · Practise" title="Forward test"
         // what it is for, in the line itself and not only in the lock note (DA-039)
         lede="A forward test tries a strategy on days that have not happened yet: connect your TradingView or Chartink alerts, and each one is filled on paper at StratLab's live price, with charges, and logged."
         infoLabel="How this works"

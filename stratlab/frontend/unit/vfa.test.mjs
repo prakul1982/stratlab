@@ -68,7 +68,7 @@ test("VR1-021, VR1-022, VR1-031: the 'more you can do' tiles keep a card's width
 
 test("owner, 29 Oct: More you can do shows every group of tools, with no button folding them away", () => {
   const ex = read("src/components/Explore.tsx");
-  assert.match(ex, /\{goals\.map\(\(g\) => \{/);
+  assert.match(ex, /\{\[\.\.\.many, \.\.\.\(ones\.length \? \[/);          // IA-1: every menu entry of the space, in the menu's shape
   assert.doesNotMatch(ex, /more tools|aria-expanded|explore\.open/);
 });
 

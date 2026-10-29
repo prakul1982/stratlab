@@ -113,7 +113,7 @@ test("DP2-011: the ITR downloads look alike and say why they're off", () => {
 });
 
 test("DP2-014: Money's home cards carry their plan tags and read in full on a phone", () => {
-  assert.match(read("src/pages/SpaceHomes.tsx"), /\{at && <PageTags page=\{at\.page\} \/>\}<\/Link>;/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /<PageTags page=\{p\} \/><\/Link>\)\}/);          // IA-1: under the entry each is a tab of
   assert.match(read("src/styles.css"), /\.money-cards \.explore-card \.small \{ display: block; -webkit-line-clamp: unset; overflow: visible; \}/);
 });
 

@@ -11,13 +11,15 @@ const { ALL_PAGES, NAV, groupPath, locate, locateGroup } = await import("../src/
 const { match } = await import("../src/lib/features.ts");
 const { cleanLayout } = await import("../src/lib/mineLayout.ts");
 
-test("the map has the owner's groups, in order", () => {
-  assert.deepEqual(NAV.trade.groups.map((g) => g.label), ["Build and test", "Practise", "F&O desk", "My trades"]);
-  assert.deepEqual(NAV.invest.groups.map((g) => g.label), ["Companies", "Find stocks", "Market view", "Company news", "Watch"]);
-  assert.deepEqual(NAV.money.groups.map((g) => g.label), ["What you own", "Tax", "Plan"]);
-  assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-view").pages.map((p) => p.label),
-    ["Market pulse", "Market breadth", "Sector rotation", "ETF vs NAV", "Margin funding", "Stock lending fees"]);
-  assert.equal(ALL_PAGES.length, 42);
+test("the map has the owner's menu entries, in order (IA-1: 42 entries became 14, each a page of tabs)", () => {
+  assert.deepEqual(NAV.trade.groups.map((g) => g.label), ["Strategies", "Practise", "F&O desk", "Trade journal", "Calendar"]);
+  assert.deepEqual(NAV.invest.groups.map((g) => g.label), ["Companies", "Find stocks", "Themes", "Market today", "Market data", "Calendar", "Watchlist"]);
+  assert.deepEqual(NAV.money.groups.map((g) => g.label), ["Portfolio", "Tax", "Plan", "Calendar"]);
+  assert.deepEqual(NAV.invest.groups.find((g) => g.id === "find-stocks").pages.map((p) => p.label), ["Figures", "Chart rules", "Filings"]);
+  assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-today").pages.map((p) => p.label), ["Mood", "Breadth", "Sectors", "Flows", "Today's brief"]);
+  assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-data").pages.map((p) => p.label), ["ETF vs NAV", "Margin funding", "Stock lending fees"]);
+  // nothing removed: the 42 pages the menu had, plus Flows and the Calendar's All dates
+  assert.equal(ALL_PAGES.length, 44);
 });
 
 test("each page has one address, a one-liner and a place", () => {
@@ -33,12 +35,17 @@ test("each page has one address, a one-liner and a place", () => {
 test("addresses find their page, including the ones that were tabs", () => {
   assert.equal(locate("/research/IN/RELIANCE").page.label, "Look up a company");
   assert.equal(locate("/research/IN/RELIANCE/deep").page.label, "Look up a company");
-  assert.equal(locate("/research/investor").page.label, "Watchlist");
+  assert.equal(locate("/research/investor").page.label, "Stocks");          // IA-1: the Watchlist entry's Stocks tab
   assert.equal(locate("/trade/positioning/stocks").page.label, "Positioning");
   assert.equal(locate("/n/abc/e/3").page.label, "Notebooks");
   assert.equal(locate("/trade/signals/xyz").page.label, "Forward test");
-  assert.equal(locate("/invest/margin-funding?x=1").group.label, "Market view");
+  assert.equal(locate("/invest/margin-funding?x=1").group.label, "Market data");
   assert.equal(locate("/account"), null);
+  // the old groups' own pages open the entry that took each over
+  assert.equal(locateGroup("/trade/g/build-and-test").group.id, "strategies");
+  assert.equal(locateGroup("/invest/g/market-view").group.id, "market-today");
+  assert.equal(locateGroup("/invest/g/company-news").group.id, "calendar");
+  assert.equal(locateGroup("/money/g/what-you-own").group.id, "portfolio");
 });
 
 test("search finds a page by its everyday words", () => {

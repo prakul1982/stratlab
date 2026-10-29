@@ -175,7 +175,7 @@
       "destination": "https://stratlab-production-ca25.up.railway.app/news-link/:issue/:n"
     },
     {
-      "source": "/((?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict)(?:/.*)?|pricing|faq|terms|privacy|refunds|contact)",
+      "source": "/((?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar)(?:/.*)?|pricing|faq|terms|privacy|refunds|contact)",
       "destination": "/index.html"
     }
   ]

@@ -111,7 +111,7 @@ export function NotebookProblem({ problem, retry }: { problem: "missing" | "erro
   );
   if (problem === "error") return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title="Notebook" />
+      <PageHeader eyebrow="Trade · Strategies" title="Notebook" />
       <ErrorState title="The notebook couldn't be opened" action={{ label: "Try again", onClick: retry }}>
         Nothing in it has changed. Try again in a moment, or go to <Link className="link" to="/notebooks">your notebooks</Link>.
       </ErrorState>
@@ -216,7 +216,7 @@ function NotebookView() {
   }, []);
 
   if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
-  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Notebook" /><Card><Skeleton label="Opening notebook" /></Card></div>;
+  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Strategies" title="Notebook" /><Card><Skeleton label="Opening notebook" /></Card></div>;
   const s = nb.strategy;
   const inst = nb.instrument && "symbol" in nb.instrument ? nb.instrument : null;
   const group = nb.group && nb.group.members?.length ? nb.group : null;
@@ -403,7 +403,7 @@ function NotebookView() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title={nb.name}
+      <PageHeader eyebrow="Trade · Strategies" title={nb.name}
         lede={nb.question ? <span title={s.text && s.text.trim() !== nb.question ? s.text.trim() : undefined} data-testid="nb-question">{nb.question}</span> : "Write the question this notebook should answer."}
         actions={<span className="k-note nb-save" aria-live="polite">{saving === "failed"
           ? <button type="button" className="link k-down" data-testid="save-retry" onClick={() => void flush()}>Not saved · Retry</button>

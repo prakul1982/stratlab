@@ -197,7 +197,7 @@ export function MutualFundsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · What you own" title="Your mutual funds, in one place"
+      <PageHeader eyebrow="Money · Portfolio" title="Your mutual funds, in one place"
         lede="Upload your Consolidated Account Statement to see every scheme's value at the latest NAV, the gain, XIRR and capital gains for each financial year."
         asOf={t?.held ? (t.nav_dates?.[1] ?? view?.nav_date) : undefined} asOfLabel="NAVs up to"
         info="Your value, what you put in, the gain, XIRR, your mix by category, and capital gains for each financial year. Only you can see your funds, and you can delete them at any time." infoLabel="What this page shows" />

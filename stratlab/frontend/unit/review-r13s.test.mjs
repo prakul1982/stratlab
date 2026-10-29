@@ -110,7 +110,7 @@ test("R13S-013: the axe items listed in the review", () => {
   assert.match(read("src/pages/trade/SignalsPage.tsx"), /<CardHead level=\{2\} title="Your webhook URL"/);
   assert.match(read("src/pages/admin/AuditPanel.tsx"), /"Whole-market findings by area" : "Data audit findings by area"/);
   assert.match(read("src/pages/MarketPage.tsx"), /className="chip-row" role="group" [^>]*tabIndex=\{0\}/);
-  assert.match(read("src/pages/ExperimentPage.tsx"), /<PageHeader eyebrow="Trade · Build and test" title="Experiment" \/><EmptyState title="That experiment wasn't found\."/);
+  assert.match(read("src/pages/ExperimentPage.tsx"), /<PageHeader eyebrow="Trade · Strategies" title="Experiment" \/><EmptyState title="That experiment wasn't found\."/);
   const sw = read("public/sw.js");
   assert.doesNotMatch(sw, /http-equiv/);
 });

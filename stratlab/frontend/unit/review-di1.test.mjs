@@ -162,14 +162,16 @@ test("DI-016: a menu link with its own rule for 'here' is marked by that rule al
 });
 
 test("DI-017, DI-018, DI-019: two kinds of alerts named apart; My space's menu has the everyday pages; trails and titles", () => {
-  assert.equal(nav.pageAt("/alerts").page.label, "Stock alerts");
+  // IA-1: the Watchlist entry's Alerts tab, still found by its old name
+  assert.equal(nav.pageAt("/alerts").page.label, "Alerts");
+  assert.equal(nav.pageAt("/alerts").page.was, "Stock alerts");
   assert.match(read("src/components/AlertSettings.tsx"), /title="Paper-trade alerts and the daily report"/);
   const shell = read("src/components/Shell.tsx");
-  for (const t of ['"Watchlist"', '"Stock alerts"', '"Settings"']) assert.ok(shell.includes(t), t);
+  for (const t of ['"Watchlist"', '"Calendar"', '"Settings"']) assert.ok(shell.includes(t), t);
   assert.match(shell, /me\?\.plan_info\?\.features\?\.assistant !== false && item\("\/assistant"/);
   const crumb = read("src/components/PageBreadcrumb.tsx");
   assert.match(crumb, /"\/plans": "Plans", "\/help": "Help", "\/features": "All features"/);
-  assert.match(crumb, /if \(mine && MINE_LINKED\.includes\(page\.to\)\)/);
+  assert.match(crumb, /if \(mine && \(MINE_LINKED\.includes\(page\.to\) \|\| MINE_ENTRIES\.includes\(group\.id\)\)\)/);
   assert.match(read("src/lib/title.ts"), /"\/assistant": "Connect an AI assistant"/);
   for (const f of ["src/pages/SettingsPage.tsx", "src/pages/InvitePage.tsx", "src/pages/AppPage.tsx", "src/pages/AssistantPage.tsx"]) assert.doesNotMatch(read(f), /<PageHeader eyebrow=/, f);
 });

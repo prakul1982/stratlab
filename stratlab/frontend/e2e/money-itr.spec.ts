@@ -140,15 +140,24 @@ test("ITR-ready export: the schedules on the page, and the workbook, CSV files a
   await sane(page, errors);
 });
 
-test("ITR-ready export and US stocks tax: in the Money menu", async ({ page }, info) => {
+test("ITR-ready export and US stocks tax: tabs of the Money menu's Tax entry", async ({ page }, info) => {
   const n = info.project.name === "phone" ? 290 : 287;
   const errors = await open(page, "/money/tax-tools", "Tax tools", n);
+  // IA-1: the menu's Tax entry opens the tax report; the rest of Tax is its row of tabs
   if (info.project.name === "phone") await page.getByRole("button", { name: "Open menu" }).click();
-  await page.getByRole("link", { name: "ITR-ready export" }).click();
+  await expect(page.locator("aside.sidebar").getByRole("link", { name: "Tax", exact: true })).toHaveAttribute("href", "/tax-report");
+  if (info.project.name === "phone") await page.getByRole("button", { name: "Close menu" }).click();
+  // the tabs: the row beside the breadcrumb on a laptop, the breadcrumb's menu on a phone
+  const tab = async (name: string) => {
+    if (info.project.name === "phone") {
+      await page.getByRole("navigation", { name: "Breadcrumb" }).locator(".k-crumb-btn").click();
+      await page.getByRole("menuitem", { name, exact: true }).click();
+    } else await page.getByRole("navigation", { name: "Tax" }).getByRole("link", { name, exact: true }).click();
+  };
+  await tab("ITR export");
   await expect(page).toHaveURL(/\/money\/itr$/);
   await expect(page.getByRole("heading", { name: "Your year, laid out for the return" })).toBeVisible();
-  if (info.project.name === "phone") await page.getByRole("button", { name: "Open menu" }).click();
-  await page.getByRole("link", { name: "US stocks tax" }).click();
+  await tab("US stocks tax");
   await expect(page).toHaveURL(/\/money\/us-tax$/);
   await expect(page.getByRole("heading", { name: "US stocks in Indian tax" })).toBeVisible();
   expect(errors).toEqual([]);

@@ -120,7 +120,7 @@ export function LibraryPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title="Strategy library"
+      <PageHeader eyebrow="Trade · Strategies" title="Strategy library"
         lede={onlyOurs ? "Rules StratLab tested itself, each with the result of its checks and its return beside buying and holding. Publish your own from a verdict, and copy any rule to test it yourself: a result here describes the past, not what comes next." : "Rules published by StratLab and by people using it, each with the result of its checks and its return beside buying and holding. Copy one and test it yourself: a result here describes the past, not what comes next."}
         info="Rules published from experiments, each with the result its checks gave: the ones that failed are shown as plainly as the ones that passed. Copy any of them into a notebook of your own and re-test it on your market and dates. Publish yours from a verdict: Share verdict → Publish to the library." infoLabel="About the library" />
       <Card label="Find a strategy">

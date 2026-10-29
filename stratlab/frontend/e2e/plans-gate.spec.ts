@@ -67,10 +67,10 @@ for (const who of ["free", "basic", "pro"] as Plan[]) {
         expect(r.status(), `${c.action[1]} on ${who}`).not.toBe(402);
       }
     }
-    // the menu marks whole pages that are locked (desktop: the menu is always open)
+    // the entry's tabs mark whole pages that are locked (IA-1: the lock the menu used to show; desktop: the tabs are in view)
     if (!phone) {
       await page.goto("/research/scan");
-      const entry = page.locator("aside.sidebar").getByRole("link", { name: /Trend scan/ });
+      const entry = page.getByRole("navigation", { name: "Find stocks" }).getByRole("link", { name: /Chart rules/ });
       await expect(entry).toBeVisible({ timeout: 30_000 });
       if (who === "free") await expect(entry.locator(".side-lock")).toHaveAttribute("data-plan", "Basic");
       else await expect(entry.locator(".side-lock")).toHaveCount(0);

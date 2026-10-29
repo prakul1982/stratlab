@@ -11,6 +11,7 @@ import { buildIdea, findInstrument } from "./IdeaComposer";
 import { track, trackBacktest } from "../lib/analytics";
 import { Book, Close, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
 import { SPACES, spaceOf, type Space } from "../lib/spaces";
+import { pageAt, placeName } from "../lib/nav";
 import { useDialogFocus } from "./kit/Dialog";
 import { asksContract, companyFirst, companyHits, compareTo, firstForQuestion, isCompany, namesFeature, offerIdeas, pickCompany, type CompanyHit } from "../lib/paletteRank";
 import { signOutHere } from "../lib/signout";
@@ -28,6 +29,8 @@ const LAST_MARKET = "stratlab.lastMarket";
 const lastMarket = () => { try { return localStorage.getItem(LAST_MARKET) || "IN"; } catch { return "IN"; } };
 /** Investor phrasings that should open a page directly, before any AI guessing. `name` is a company to look up. */
 type Intent = { title: string; sub: string; to?: string; deep?: string; compare?: [string, string] };
+/** A page's name where it is now (IA-1): "Market today › Sectors (Sector rotation)". */
+const here = (to: string) => { const l = pageAt(to); return l ? placeName(l, true) : to; };
 function intentFor(q: string): Intent | null {
   const t = q.trim();
   let m = t.match(/^(?:deep ?dive|deepdive)(?:\s+(?:on|of|into|for))?\s+(.+)$/i) || t.match(/^(.+?)\s+deep ?dive$/i);
@@ -35,18 +38,18 @@ function intentFor(q: string): Intent | null {
   m = t.match(/^compare\s+(.+?)\s+(?:and|vs\.?|versus|with)\s+(.+)$/i);
   if (m) return { title: `Compare ${m[1]} and ${m[2]}`, sub: "Side by side, with an AI read", compare: [m[1], m[2]] };
   if (/\bsector(s)?\b.*\b(lead|leading|rotat|strong|weak|lagging|improving)|sector rotation/i.test(t))
-    return { title: "Sector rotation", sub: "Which sectors lead, weaken, lag or improve against the market", to: "/research/rotation" };
+    return { title: here("/research/rotation"), sub: "Which sectors lead, weaken, lag or improve against the market", to: "/research/rotation" };
   if (/market breadth|advances?.{0,3}declines?|\ba\/?d line\b|mcclellan|new (52.week )?highs (and|vs\.?) lows|stocks above (the |their )?(20|50|200)/i.test(t))
-    return { title: "Market breadth", sub: "How many stocks rose, fell, sit above their averages or made new highs and lows", to: "/invest/breadth" };
+    return { title: here("/invest/breadth"), sub: "How many stocks rose, fell, sit above their averages or made new highs and lows", to: "/invest/breadth" };
   if (/red flags?|\bqip\b|pledge|fund ?raise|auditor resign/i.test(t))
-    return { title: "Red flags in your holdings and watchlist", sub: "Fund raises, pledges, resignations and defaults filed in the last 3 months", to: "/research/filings" };
+    return { title: here("/research/filings"), sub: "Fund raises, pledges, resignations and defaults filed in the last 3 months", to: "/research/filings" };
   if (/stage ?(2|two)|supertrend|\bst ?s2\b/i.test(t))
     return { title: "Stage 2 + Supertrend scan", sub: "Which stocks are in Stage 2 with the Supertrend up",
              to: /nifty ?50/i.test(t) ? "/research/scan?set=nifty50" : /bank ?nifty/i.test(t) ? "/research/scan?set=banknifty" : "/research/scan" };
   if (/dividend|ex[- ]?date|record date|bonus (issue|share)|stock split|corporate action/i.test(t))
-    return { title: "Corporate actions", sub: "Dividends, bonus issues and splits by ex-date, for your stocks or every company", to: "/research/corporate-actions" };
+    return { title: here("/research/corporate-actions"), sub: "Dividends, bonus issues and splits by ex-date, for your stocks or every company", to: "/research/corporate-actions" };
   if (/capital gains?|\b(st|lt)cg\b|tax (report|p&l|loss|harvest)|tradebook|grandfather/i.test(t))
-    return { title: "Tax report", sub: "Short- and long-term capital gains by financial year, from your tradebooks", to: "/tax-report" };
+    return { title: here("/tax-report"), sub: "Short- and long-term capital gains by financial year, from your tradebooks", to: "/tax-report" };
   if (/my holdings|my portfolio|(import|upload) (my )?(holdings|portfolio)|holdings (file|csv)/i.test(t))
     return { title: "My Holdings", sub: "Your stocks from your broker's file: value, P&L, sectors and filings", to: "/holdings" };
   if (/investor home|my watchlist|watchlist overview/i.test(t))

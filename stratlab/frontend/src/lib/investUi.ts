@@ -66,7 +66,7 @@ export function investStrip(region: Region): { to: string; key: string }[] {
 }
 
 /* ---------- a brief's links ---------- */
-const IN_APP = /^\/(research|paper|news|account|invest|money|trade)(\/|$)/;
+const IN_APP = /^\/(research|paper|news|account|invest|money|trade|calendar)(\/|$)/;
 const bare = (host: string) => host.toLowerCase().replace(/^www\./, "");
 
 /** A link in a brief that opens a page of this app: its path (with its query and #part) when it is on this site's own host

@@ -157,7 +157,7 @@ export function MarketPage() {
   }, [nb, markets, sel, loc.state]);
 
   if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
-  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Where do you want to test it?" /><Card><Skeleton label="Opening markets" /></Card></div>;
+  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Strategies" title="Where do you want to test it?" /><Card><Skeleton label="Opening markets" /></Card></div>;
   const market = markets.find((m) => m.id === sel);
 
   const choose = async (i: Instrument) => {
@@ -184,7 +184,7 @@ export function MarketPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title="Where do you want to test it?" info={HELP.markets} infoLabel="About markets"
+      <PageHeader eyebrow="Trade · Strategies" title="Where do you want to test it?" info={HELP.markets} infoLabel="About markets"
         lede={<><Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link> · The same rules run on any market. Prices, trading hours, currency and costs switch to match it.</>} />
       {live && (
         <div data-testid="market-live-note">

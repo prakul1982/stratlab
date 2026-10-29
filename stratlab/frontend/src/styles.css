@@ -2092,6 +2092,23 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-crumb-menu a[aria-current="page"] { background: var(--paper-2); color: var(--ink); font-weight: 600; }
 .k-crumb-menu a.all { color: var(--blue-ink); }
 .k-crumb-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+/* IA-1: a menu entry's tabs, under the breadcrumb: one row of the kit's chips (the current one filled), wrapping on a phone rather than
+   cut off at its edge; a locked tab carries the plan the menu used to show */
+/* on a laptop the tabs sit at the end of the breadcrumb's own row, so a page with tabs starts its title where every other page does
+   (ui-lint R17); on a phone they wrap onto the line under it */
+.crumb-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--s3); row-gap: 6px; margin: 0 0 var(--s3); }
+.crumb-row:empty { display: none; }
+.crumb-row > .k-crumb { margin: 0; }
+.hub-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 0 auto; }
+@media (max-width: 900px) { .hub-tabs { margin-left: 0; flex-basis: 100%; } }
+/* on a phone the entry's tabs are the breadcrumb menu's items instead (PageBreadcrumb), so the title starts where every page's does */
+@media (max-width: 640px) { .hub-tabs { display: none; } }
+.hub-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card);
+  color: var(--ink-2); font-size: var(--t-label); font-weight: 500; text-decoration: none; white-space: nowrap; }
+.hub-tab:hover { border-color: var(--ink); color: var(--ink); }
+.hub-tab.active { background: var(--ink); border-color: var(--ink); color: var(--on-ink); font-weight: 600; }
+.hub-tab .side-lock { margin-left: 0; }
+.hub-tab.active .side-lock { background: transparent; color: inherit; }
 
 .k-spark { display: block; width: 100%; overflow: visible; }
 .k-spark .line { fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; stroke: var(--blue); }

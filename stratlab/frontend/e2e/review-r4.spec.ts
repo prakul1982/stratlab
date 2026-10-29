@@ -33,15 +33,18 @@ test("R4-006: the menu locks only a page that is locked whole; a part-paid page 
   test.skip(info.project.name === "phone", "the menu is a drawer on a phone");
   const errors = await open(page, "/money/net-worth", person(165));          // Free: 5 net worth entries and 5 funds are free
   const side = page.locator("aside.sidebar");
-  await expect(side.getByRole("link", { name: /^Net worth/ })).toBeVisible({ timeout: 30_000 });
-  await expect(side.getByRole("link", { name: /^Net worth/ }).locator(".side-lock"), "Net worth is free in the main").toHaveCount(0);
-  await expect(side.getByRole("link", { name: /^Mutual funds/ }).locator(".side-lock")).toHaveCount(0);
+  // IA-1: the locks are on the entry's tabs now (the menu's entries hold free tabs too, so none is locked as a whole)
+  const tabs = page.getByRole("navigation", { name: "Portfolio" });
+  await expect(tabs.getByRole("link", { name: /^Net worth/ })).toBeVisible({ timeout: 30_000 });
+  await expect(tabs.getByRole("link", { name: /^Net worth/ }).locator(".side-lock"), "Net worth is free in the main").toHaveCount(0);
+  await expect(tabs.getByRole("link", { name: /^Mutual funds/ }).locator(".side-lock")).toHaveCount(0);
+  await expect(side.locator(".side-entries .side-lock")).toHaveCount(0);
   await expect(page.locator("main")).toContainText(/\d+ of 5 free entries used/, { timeout: 30_000 });
   await page.goto("/money/mutual-funds");
   await expect(page.locator("main").getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
   // a whole-locked page still has its lock
   await page.goto("/research/scan");
-  await expect(side.getByRole("link", { name: /Trend scan/ }).locator(".side-lock")).toHaveAttribute("data-plan", "Basic", { timeout: 30_000 });
+  await expect(page.getByRole("navigation", { name: "Find stocks" }).getByRole("link", { name: /Chart rules/ }).locator(".side-lock")).toHaveAttribute("data-plan", "Basic", { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
 
@@ -91,7 +94,9 @@ test("R4-016: the menu fades where more is behind it, and its last row scrolls f
   const errors = await open(page, "/invest/business-updates");
   const nav = page.locator("aside.sidebar nav.side-groups");
   await expect(nav).toBeVisible({ timeout: 30_000 });
-  await page.evaluate(() => document.querySelectorAll<HTMLElement>(".side-toggle[aria-expanded=false]").forEach((b) => b.click()));
+  // IA-1: Invest's seven entries fit a 600px laptop screen whole, so nothing fades; on a shorter window the rule still holds
+  await expect(nav).toHaveAttribute("data-fade", "none");
+  await page.setViewportSize({ width: 1280, height: 430 });
   await expect(nav).toHaveAttribute("data-fade", "bottom");
   await nav.evaluate((n) => { n.scrollTop = n.scrollHeight; });
   await expect(nav).toHaveAttribute("data-fade", "top");

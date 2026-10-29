@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ALL_PAGES, NAV, groupPath } from "../src/lib/nav";
+import { ALL_GROUPS, ALL_PAGES, NAV, groupPath, placeName } from "../src/lib/nav";
 
-// Navigation: the sidebar is the only menu (no second row of tabs), group titles open a page of cards, every page has a
-// breadcrumb whose last part lists its neighbours, "All features" lists every page, and ⌘K finds pages by everyday words.
+// Navigation (IA-1): the sidebar is one short list of entries, each a page whose tools are its row of tabs; an entry's page of
+// cards and the old groups' addresses open it; every page has a breadcrumb, "All features" lists every page, and ⌘K finds pages
+// by everyday words and by their old names.
 // Signed in as the owner; the choices of space are kept out of the shared account.
 const SHOTS = process.env.E2E_SHOTS;
 const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
@@ -35,13 +36,16 @@ async function closeMenu(page: Page, phone: boolean) {
   if (phone && (await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Close menu" }).click();
 }
 
-test("a group's title opens its page: one card for each feature, with its name, a line on what it is for and a link", async ({ page }, info) => {
+test("an entry's page has one card for each of its tabs, and an old group's address opens the entry that took it over", async ({ page }, info) => {
   const phone = info.project.name === "phone";
+  // IA-1: Market view's tools are now Market today's and Market data's tabs; its old address opens Market today
   const errors = await open(page, "/invest/g/market-view");
-  const g = NAV.invest.groups.find((x) => x.id === "market-view")!;
+  await expect(page).toHaveURL(/\/invest\/g\/market-today$/, { timeout: 30_000 });
+  await page.goto("/invest/g/market-data");
+  const g = NAV.invest.groups.find((x) => x.id === "market-data")!;
   const cards = page.getByTestId("group-card");
   await expect(cards).toHaveCount(g.pages.length, { timeout: 30_000 });
-  await expect(page.getByRole("heading", { name: "Market view", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Market data", level: 1 })).toBeVisible();
   for (const p of g.pages) {
     const card = cards.filter({ has: page.getByRole("link", { name: p.label, exact: true }) });
     await expect(card, p.label).toHaveCount(1);
@@ -49,13 +53,13 @@ test("a group's title opens its page: one card for each feature, with its name, 
     await expect(card.locator(".nav-card-line")).toHaveText(p.blurb);
     await expect(card.getByRole("link", { name: `Open ${p.label}` })).toHaveAttribute("href", p.to);
   }
-  // the breadcrumb ends at the group, the sidebar title is lit, and a card opens its page
+  // the breadcrumb ends at the entry, its menu entry is lit, and a card opens its page
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(crumb).toHaveText(/Invest\s*›\s*Market view/);
+  await expect(crumb).toHaveText(/Invest\s*›\s*Market data/);
   await expect(crumb.getByRole("link", { name: "Invest", exact: true })).toHaveAttribute("href", "/invest");
   const side = await sideMenu(page, phone);
-  await expect(side.locator('[data-group="market-view"] .side-title')).toHaveClass(/active/);
-  await expect(side.locator('[data-group="market-view"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
+  await expect(side.locator('[data-group="market-data"] > a')).toHaveClass(/active/);
+  await expect(side.locator(".side-toggle")).toHaveCount(0);           // no groups to open or close
   if (SHOTS) {
     await closeMenu(page, phone);
     for (const scheme of ["dark", "light"] as const) {
@@ -72,11 +76,11 @@ test("a group's title opens its page: one card for each feature, with its name, 
   await expect(page).toHaveURL(/\/features$/);
 });
 
-test("every page has a breadcrumb: space, group and page, and the page's menu lists its neighbours", async ({ page }, info) => {
+test("every page has a breadcrumb: space, entry and tab; the entry's tabs are the row under it", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/invest/margin-funding");
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(crumb).toHaveText(/Invest\s*›\s*Market view\s*›\s*Margin funding/, { timeout: 30_000 });
+  await expect(crumb).toHaveText(/Invest\s*›\s*Market data\s*›\s*Margin funding/, { timeout: 30_000 });
   if (SHOTS) {
     await closeMenu(page, phone);
     for (const scheme of ["dark", "light"] as const) {
@@ -92,27 +96,35 @@ test("every page has a breadcrumb: space, group and page, and the page's menu li
   await button.click();
   await expect(button).toHaveAttribute("aria-expanded", "true");
   const menu = page.getByRole("menu", { name: /Pages near Margin funding/ });
+  // IA-1: on a laptop the neighbours are the row of tabs beside the trail, so the menu holds the pin alone (said once, not twice);
+  // on a phone, where that row is folded away, the menu lists the entry's tabs, as it listed a group's pages before
+  await expect(menu.getByRole("menuitem")).toHaveText(phone ? ["ETF vs NAV", "Margin funding", "Stock lending fees", "Pin to sidebar"] : ["Pin to sidebar"]);
   await expect(menu.getByRole("menuitem").first()).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await expect(menu.getByRole("menuitem").nth(1)).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(button).toBeFocused();
-  // a neighbour is one click away
-  await button.click();
-  await menu.getByRole("menuitem", { name: "Stock lending fees" }).click();
+  // a neighbour is one tab away, and the current tab is the one marked
+  const tabs = page.getByTestId("hub-tabs");
+  await expect(tabs.locator("a")).toHaveText(["ETF vs NAV", "Margin funding", "Stock lending fees"]);
+  await expect(tabs.locator("a", { hasText: "Margin funding" })).toHaveAttribute("aria-current", "page");
+  if (phone) {
+    await expect(tabs).toBeHidden();
+    await button.click();
+    await menu.getByRole("menuitem", { name: "Stock lending fees" }).click();
+  } else await tabs.getByRole("link", { name: "Stock lending fees" }).click();
   await expect(page).toHaveURL(/\/invest\/stock-lending$/);
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveText(/Market view\s*›\s*Stock lending fees/);
-  // "All of Market view" goes to the group's page
-  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: /Stock lending fees/ }).click();
-  await page.getByRole("menuitem", { name: "All of Market view" }).click();
-  await expect(page).toHaveURL(/\/invest\/g\/market-view$/);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveText(/Market data\s*›\s*Stock lending fees/);
+  await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "Stock lending fees" })).toHaveAttribute("aria-current", "page");
+  // the entry's name in the trail goes to its page of cards
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Market data" }).click();
+  await expect(page).toHaveURL(/\/invest\/g\/market-data$/);
 
   // a few pages from other spaces and ones that were tabs or deeper
   for (const [path, trail] of [
-    ["/trade/signals", /Trade\s*›\s*Build and test\s*›\s*Forward test/], ["/trade/positioning/stocks", /Trade\s*›\s*F&O desk\s*›\s*Positioning/],
-    ["/research/IN/TCS", /Invest\s*›\s*Companies\s*›\s*Look up a company/], ["/research/investor", /Invest\s*›\s*Watch\s*›\s*Watchlist/],
-    ["/money/calendar", /Money\s*›\s*Plan\s*›\s*Money calendar/], ["/holdings", /Money\s*›\s*What you own\s*›\s*Holdings/], ["/notebooks", /Trade\s*›\s*Build and test\s*›\s*Notebooks/],
+    ["/trade/signals", /Trade\s*›\s*Practise\s*›\s*Forward test/], ["/trade/positioning/stocks", /Trade\s*›\s*F&O desk\s*›\s*Positioning/],
+    ["/research/IN/TCS", /Invest\s*›\s*Companies\s*›\s*Look up a company/], ["/research/investor", /Invest\s*›\s*Watchlist\s*›\s*Stocks/],
+    ["/money/calendar", /Money\s*›\s*Calendar\s*›\s*My money dates/], ["/holdings", /Money\s*›\s*Portfolio\s*›\s*Holdings/], ["/notebooks", /Trade\s*›\s*Strategies\s*›\s*Notebooks/],
+    ["/trade/journal", /^Trade\s*›\s*Trade journal\s*▾/], ["/research/themes", /^Invest\s*›\s*Themes\s*▾/],
   ] as const) {
     await page.goto(path);
     await expect(page.getByRole("navigation", { name: "Breadcrumb" }), path).toHaveText(trail, { timeout: 30_000 });
@@ -121,14 +133,24 @@ test("every page has a breadcrumb: space, group and page, and the page's menu li
   expect(errors).toEqual([]);
 });
 
-test("the second rows of tabs are gone: Watchlist and Positioning switch views with a switch inside the page", async ({ page }, info) => {
+test("one row of tabs, the entry's (IA-1): the old rows are gone, and Watchlist and Positioning switch views inside the page", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research/pulse");
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible({ timeout: 30_000 });
-  for (const path of ["/research", "/research/pulse", "/research/scan", "/research/screens", "/research/rotation", "/research/results", "/invest/breadth", "/research/watchlist", "/trade/positioning"]) {
+  for (const [path, entry] of [["/research", "Companies"], ["/research/pulse", "Market today"], ["/research/scan", "Find stocks"], ["/research/screens", "Find stocks"], ["/research/rotation", "Market today"],
+    ["/research/results", "Calendar"], ["/invest/breadth", "Market today"], ["/research/watchlist", "Watchlist"], ["/trade/positioning", "F&O desk"]] as const) {
     await page.goto(path);
     await expect(page.getByRole("navigation", { name: "Breadcrumb" }), path).toBeVisible({ timeout: 30_000 });
-    await expect(page.locator(".research-nav, .sub-seg, .pos-tabs, nav.seg"), `${path} has no row of tabs`).toHaveCount(0);
+    await expect(page.locator(".research-nav, .sub-seg, .pos-tabs, nav.seg"), `${path} has no old row of tabs`).toHaveCount(0);
+    await expect(page.getByTestId("hub-tabs"), `${path} has its entry's tabs`).toHaveCount(1);
+    await expect(page.getByTestId("hub-tabs")).toHaveAttribute("aria-label", entry);
+    await expect(page.getByTestId("hub-tabs").locator("[aria-current=page]")).toHaveCount(1);
+  }
+  // a tab's own detail pages keep the breadcrumb only; an entry of one page has no tabs
+  for (const path of ["/research/IN/TCS", "/research/themes", "/trade/journal"]) {
+    await page.goto(path);
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" }), path).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("hub-tabs"), path).toHaveCount(0);
   }
   // Positioning: index view and stock futures are two views of one page
   await page.goto("/trade/positioning");
@@ -159,17 +181,22 @@ test("All features lists every page by space and group, is linked from the accou
   await expect(page).toHaveURL(/\/features$/);
   const features = page.getByTestId("features-page");
   await expect(features.getByRole("heading", { name: "All features", level: 1 })).toBeVisible();
-  // every page, each under its group, linking to its address, with a line on what it is for
-  for (const { space, group, page: p } of ALL_PAGES) {
+  // every page, each under its entry (the shared Calendar once, under Invest), linking to its address, with a line on what it is for
+  for (const { group, page: p } of ALL_PAGES) {
+    const space = ALL_GROUPS.find((x) => x.group === group)!.space;
     const section = features.getByRole("region", { name: `${NAV[space].label}: ${group.label}` });
     const row = section.locator("li").filter({ has: page.getByRole("link", { name: p.label, exact: true }) });
     await expect(row, `${p.label} under ${group.label}`).toHaveCount(1);
     await expect(row.getByRole("link", { name: p.label, exact: true })).toHaveAttribute("href", p.to);
     await expect(row.locator(".feat-line")).toHaveText(p.line);
   }
-  await expect(features.getByRole("link", { name: "Market view", exact: true })).toHaveAttribute("href", groupPath("invest", "market-view"));
+  await expect(features.getByRole("link", { name: "Market data", exact: true })).toHaveAttribute("href", groupPath("invest", "market-data"));
   // no "New" tags: everything is new at launch (owner, 25 Oct)
-  await expect(features.getByRole("region", { name: "Invest: Market view" }).locator("li").filter({ hasText: "Margin funding" })).not.toContainText(/\bNew\b/);
+  await expect(features.getByRole("region", { name: "Invest: Market data" }).locator("li").filter({ hasText: "Margin funding" })).not.toContainText(/\bNew\b/);
+  // a renamed tab says its old name, and the list narrows by it
+  await features.getByLabel("Narrow the list of features").fill("screener");
+  await expect(features.getByRole("link", { name: "Figures", exact: true })).toBeVisible();
+  await expect(features.locator("li").filter({ hasText: "Figures" }).first()).toContainText("was Screener");
   // narrowing, and a friendly message when nothing matches
   await features.getByLabel("Narrow the list of features").fill("tax");
   await expect(features.getByRole("link", { name: "Tax report", exact: true })).toBeVisible();
@@ -207,14 +234,17 @@ test("⌘K finds every page, including by everyday words: MTF and 'borrowed mone
     await expect(first, q).toContainText(name);
     await expect(first.locator(".space-tag")).toHaveText(space);
   }
-  // every page opens from its own name
-  for (const { page: p } of ALL_PAGES) {
-    const box = await ask(p.label);
-    await expect(box.getByRole("option", { name: new RegExp(`^${p.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) }).first(), p.label).toBeVisible();
+  // every page opens from its own name, and from the name it had before IA-1; each says where it is now ("Find stocks › Figures (Screener)")
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  for (const l of ALL_PAGES) {
+    for (const q of [l.page.label, ...(l.page.was ? [l.page.was] : [])]) {
+      const box = await ask(q);
+      await expect(box.getByRole("option", { name: new RegExp(`^${esc(placeName(l, true))}`) }).first(), q).toBeVisible();
+    }
   }
   // choosing a page by its everyday word opens it
   const box = await ask("MTF");
-  await box.getByRole("option", { name: /^Margin funding/ }).first().click();
+  await box.getByRole("option", { name: /^Market data › Margin funding/ }).first().click();
   await expect(page).toHaveURL(/\/invest\/margin-funding$/);
   expect(errors).toEqual([]);
 });

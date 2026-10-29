@@ -77,9 +77,10 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   await page.keyboard.press("Escape");                                                    // the open note would cover the filters below it on a phone
   await expect(head).toContainText("Up to 30 trading days");                             // the days used, never a promised 30 (DF-003)
   await expect(rows.last()).toHaveAttribute("data-etf", "BANKBEES");                    // no published NAV: no gap, last
-  // the page sits in Invest › Market view, in the breadcrumb at the top
+  // the page sits in Invest › Market data (IA-1), in the breadcrumb at the top, and is the entry's first tab
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(crumb.getByRole("link", { name: "Market view" })).toHaveAttribute("href", "/invest/g/market-view");
+  await expect(crumb.getByRole("link", { name: "Market data" })).toHaveAttribute("href", "/invest/g/market-data");
+  await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "ETF vs NAV" })).toHaveAttribute("aria-current", "page");
   await expect(crumb.getByRole("button", { name: /ETF vs NAV/ })).toBeVisible();
 
   await page.getByRole("button", { name: /^Gold/ }).click();

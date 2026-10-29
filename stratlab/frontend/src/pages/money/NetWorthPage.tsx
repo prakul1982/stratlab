@@ -461,7 +461,7 @@ export function NetWorthPage() {
   const priced = !!view?.assets.some((r) => r.basis === "market price" && r.value);
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · What you own" title="Net worth" asOf={priced ? view?.as_of : undefined} asOfLabel="Prices as of"
+      <PageHeader eyebrow="Money · Portfolio" title="Net worth" asOf={priced ? view?.as_of : undefined} asOfLabel="Prices as of"
         lede="What you own minus what you owe: your stocks from My Holdings and mutual funds from your statement (both added on their own), plus the deposits, provident funds, gold, property and loans you add here."
         info="Each value shows how it's worked out and the date it's as of. Arithmetic on what you enter, not advice. Only you can see it, and you can delete it at any time." infoLabel="How this is worked out"
         // MO-2 (owner, 25 Oct): adding is the page's main action, so a full-size button at the top, not a small one in a card

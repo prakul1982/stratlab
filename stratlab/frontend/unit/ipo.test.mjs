@@ -59,11 +59,11 @@ test("the US has no Open tab: it has no public bidding window", () => {
 test("the section is in the menu, ⌘K and All features, and its pages are app addresses", async () => {
   const { ALL_PAGES, locate, NAV } = await import("../src/lib/nav.ts");
   const at = ALL_PAGES.find((x) => x.page.to === "/invest/ipos");
-  assert.ok(at && at.space === "invest" && at.group.id === "company-news");
+  assert.ok(at && at.space === "invest" && at.group.id === "calendar");          // IA-1: a tab of the one Calendar
   assert.equal(locate("/invest/ipos/in-bonfig").page.to, "/invest/ipos");                        // an issue's page is part of the IPOs page
   assert.match(at.page.words, /drhp/); assert.match(at.page.words, /price band/); assert.match(at.page.words, /subscription/);
   assert.equal(at.page.flag, "ipo_alerts");
-  assert.ok(NAV.invest.groups.find((g) => g.id === "company-news").pages.some((p) => p.to === "/invest/ipos"));
+  assert.ok(NAV.invest.groups.find((g) => g.id === "calendar").pages.some((p) => p.to === "/invest/ipos"));
   const { isAppPath } = await import("../src/lib/deepLinks.ts");
   assert.ok(isAppPath("/invest/ipos") && isAppPath("/invest/ipos/us-1273626-119431"));
   const { match } = await import("../src/lib/features.ts");

@@ -152,7 +152,7 @@ test("R8O-009: a lazy page's tab has its title before its code arrives", async (
   const held = new Promise<void>((ok) => { release = ok; });
   await page.route(/\/assets\/Research-[A-Za-z0-9_-]+\.js$/, async (r) => { await held; return r.fallback(); });
   const errors = await open(page, "/research/rotation");
-  await expect(page).toHaveTitle("Sector rotation · StratLab", { timeout: 15_000 });
+  await expect(page).toHaveTitle("Sectors · Market today · StratLab", { timeout: 15_000 });          // IA-1: Market today's Sectors tab (was Sector rotation)
   release();
   expect(errors).toEqual([]);
 });

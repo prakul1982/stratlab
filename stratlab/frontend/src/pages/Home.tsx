@@ -171,7 +171,7 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
   };
   return (
     <div className="k-page">{/* the same 1080px column as every app page (VR1-040: a 920px column ended 160px short of the rest) */}
-      <PageHeader eyebrow="Trade · Build and test" title="What trading idea do you want to test?"
+      <PageHeader eyebrow="Trade · Strategies" title="What trading idea do you want to test?"
         lede="Write it the way you'd explain it to a friend. We'll turn it into exact rules and ask about anything that's missing."
         actions={!hide.includes("import") ? <button type="button" className="btn quiet sm" onClick={() => { setImporting(true); window.setTimeout(() => importRef.current?.scrollIntoView({ behavior: scrollBehavior() }), 50); }}>
           <Upload size={16} />Import a strategy
@@ -203,7 +203,7 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
         <Starters where={where} />
       </section>
       {/* the import button is in the header and the library is in the menu: each is offered once here (LIVE1A-003) */}
-      <Explore title="More you can do" hide={[...hide, "import", "library"]} />
+      <Explore title="More you can do" hide={[...hide, "/import", "/library"]} space="trade" />
     </div>
   );
 }
@@ -227,15 +227,15 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
     // pinned first; within each group keep the server's most-recent-first order unless sorting by name or verdict
     return [...rows].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (sort === "recent" ? 0 : key(a).localeCompare(key(b))));
   }, [notebooks, q, sort]);
-  if (notebooks === null) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Your notebooks" /><Card><Skeleton label="Opening your notebooks" onRetry={() => { void refreshNotebooks(); }} /></Card></div>;
+  if (notebooks === null) return <div className="k-page"><PageHeader eyebrow="Trade · Strategies" title="Your notebooks" /><Card><Skeleton label="Opening your notebooks" onRetry={() => { void refreshNotebooks(); }} /></Card></div>;
   if (notebooksFailed && notebooks.length === 0) return (
-    <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Your notebooks" />
+    <div className="k-page"><PageHeader eyebrow="Trade · Strategies" title="Your notebooks" />
       <ErrorState title="Your notebooks couldn't be read" action={{ label: "Try again", onClick: () => { void refreshNotebooks(); } }}>Nothing was changed. Check your connection and try again.</ErrorState></div>
   );
   // /notebooks is always the list (the menu's "Notebooks"); with none yet it says so and offers the first, on /new
   if (notebooks.length === 0) return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title="Your notebooks" lede="Each notebook holds one idea: its rules, every test run on real prices after costs, and the verdict." />
+      <PageHeader eyebrow="Trade · Strategies" title="Your notebooks" lede="Each notebook holds one idea: its rules, every test run on real prices after costs, and the verdict." />
       <EmptyState title="No notebooks yet" action={{ label: "Test your first idea", to: "/new" }}>
         Describe a trading idea in plain words; StratLab turns it into rules and tests it on years of real prices.
       </EmptyState>
@@ -248,7 +248,7 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title="Your notebooks"
+      <PageHeader eyebrow="Trade · Strategies" title="Your notebooks"
         lede="Each notebook holds one idea: its rules, every test run on real prices after costs, and the verdict."
         actions={<button type="button" className="btn" onClick={() => nav("/new")}>Test a new idea</button>} />
       {notebooks.length > 3 && (
@@ -284,7 +284,7 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
           );
         })}
       </TileGrid>
-      <Explore hide={hide} />
+      <Explore hide={hide} space="trade" />
     </div>
   );
 }
