@@ -2296,6 +2296,32 @@ def proper_name(name: str | None) -> str | None:
     return re.sub(r"\bAmazon Com\b", "Amazon.com", " ".join(word(w) for w in name.split(" ")))
 
 
+_IN_SMALL = {"of", "and", "the", "for", "in", "to", "on", "at", "by"}
+# four- and five-letter names that are letters, not words, though they have a vowel in them
+_IN_ACRONYMS = {"ONGC", "BHEL", "SAIL", "GAIL", "NHPC", "NMDC", "NTPC", "IRFC", "RVNL", "SJVN", "IFCI", "IDBI", "HUDCO", "ICICI", "IRCON", "HAL", "ITC", "LIC", "UCO", "IOC", "BPCL", "HPCL",
+                "CESC", "MRPL", "KPIT", "NBCC", "RITES", "TVS", "BSE", "NSE", "MCX", "CDSL", "NSDL", "IIFL", "L&T", "ABB", "SKF", "UPL", "DLF", "GMR", "JSW", "NLC", "NALCO", "MOIL", "RBL"}
+
+
+def tidy_in_name(name: str | None) -> str | None:
+    """An Indian company's name as one style: a name the exchange's list gives in capitals ("TATA CONSUMER PRODUCTS LIMITED") in title case, and the
+    small joining words in lower case ("National Stock Exchange of India Ltd", not "Of"). Letters that are not words (HDFC, ONGC, TVS) stay as they are."""
+    if not name:
+        return name
+    caps = name == name.upper() and bool(re.search(r"[A-Z]{3}", name))
+    out = []
+    for i, w in enumerate(name.split(" ")):
+        core = re.sub(r"[^A-Za-z&]", "", w)
+        low = core.lower()
+        if i and low in _IN_SMALL and (caps or core[:1].isupper()):
+            out.append(w.replace(core, low))
+        elif caps and core:
+            keep = core in _IN_ACRONYMS or (len(core) <= 5 and not re.search(r"[AEIOUY]", core)) or re.search(r"[A-Za-z]&[A-Za-z]", w)
+            out.append(w if keep else "-".join(x[:1] + x[1:].lower() for x in w.split("-")))
+        else:
+            out.append(w)
+    return " ".join(out)
+
+
 # ---------- a company's own words: one short paragraph and the questions its page can answer (SEO-1) ----------
 # Every company page had the same sentences round different numbers, which Google calls thin. These are sentences built from the
 # page's own figures (nothing new is fetched or made up), worded as facts: no buy, sell, hold or target (SEBI's research analyst
@@ -2418,6 +2444,8 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     name = (f or {}).get("name") or name or symbol
     if region == "US":                    # filings' capitals; Indian names are kept as listed ("ITC Ltd", not "Itc Ltd")
         name = proper_name(name)
+    else:
+        name = tidy_in_name(name)           # (LIVE2-017) "Of" and "TATA CONSUMER PRODUCTS LIMITED" in one style
     market = "US" if region == "US" else "IN"
     app = f"{site}/research/{market}/{quote(symbol, safe='')}"
     deep = app + "/deep"
@@ -3208,7 +3236,7 @@ def label_of(region: str, symbol: str, co: dict | None = None) -> str:
     with no name."""
     co = co if co is not None else companies(region).get(symbol) or {}
     name = co.get("name")
-    return str((proper_name(name) if region == "US" else name) or symbol)
+    return str((proper_name(name) if region == "US" else tidy_in_name(name)) or symbol)
 
 
 def directory(region: str) -> dict:

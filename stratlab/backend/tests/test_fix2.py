@@ -598,3 +598,12 @@ def test_a_year_of_stock_series_does_not_keep_a_year_of_whole_day_records(w):
     assert [d for d in new.days() if new.get(d)] == new.days()[-5:]
     from app import stock_futures
     assert stock_futures.DESK.store.rows_keep == stock_futures.ROWS_KEEP < stock_futures.KEEP and stock_futures.DESK.backfill_days == stock_futures.KEEP
+
+
+def test_indian_company_names_are_one_style():
+    from app.stock_pages import tidy_in_name as t
+    assert t("National Stock Exchange Of India Ltd") == "National Stock Exchange of India Ltd"
+    assert t("TATA CONSUMER PRODUCTS LIMITED") == "Tata Consumer Products Limited"
+    assert t("HDFC BANK LIMITED") == "HDFC Bank Limited" and t("ONGC LIMITED") == "ONGC Limited" and t("LARSEN & TOUBRO LIMITED") == "Larsen & Toubro Limited"
+    assert t("Tata Communications Limited") == "Tata Communications Limited" and t("ITC Ltd") == "ITC Ltd" and t(None) is None
+    assert t("Bank of Baroda") == "Bank of Baroda" and t("OF INDIA FUND") == "Of India Fund"                 # the first word keeps its capital
