@@ -193,7 +193,7 @@ export function ScreensPage() {
   const more = useMoreColumns("screens", Math.max(0, cols.length - 5));
   const tableCols: Column<ScreenRow>[] = cols.map((c) => c.id === "name"
     ? { key: c.id, header: c.short ?? c.label, rowHeader: true, wrap: true, sortable: true, cell: (r: ScreenRow) => (
-      <><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link><span className="k-sub-line k-note">{r.symbol}</span>
+      <><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link><span className="k-sub-line k-note">{r.symbol}{r.sector && <span className="scr-sector"> · {r.sector}</span>}</span>
         {r.surveillance && r.surveillance.length > 0 && <> <SurvBadges region={region} symbol={r.symbol} codes={r.surveillance} /></>}</>) }
     : { key: c.id, header: c.short ?? c.label, numeric: !c.text, sortable: true, cell: (r: ScreenRow) => (
       // a row whose close is of another day than the header's says its own day (R7O-004)

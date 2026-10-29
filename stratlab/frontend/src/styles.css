@@ -1126,10 +1126,19 @@ label.btn.disabled { opacity: .5; }
 /* while the first matches load: the table's own height, so the card below doesn't jump when they arrive */
 .screens-wait { min-height: 70vh; }
 .screens-filters-wait { min-height: min(70vh, 640px); }   /* the filter card keeps its height while it loads, so the page does not jump beside the 70vh results (LIVE1A-035) */
+/* LIVE2-020: a page showing its own "Try again" for the same failure leaves the account banner's Retry out: one retry, not two */
+body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account-retry { display: none; }
 .screens-table { margin: 0 -24px; }
 @media (max-width: 640px) { .screens-table { margin: 0 -16px; } }
 .screens-table td:first-child { white-space: normal; min-width: 180px; }
-.screens-table th[scope="row"] { min-width: 240px; }   /* VR1-103: a company's name was wrapping over three lines beside a sector column with room to spare */
+.screens-table th[scope="row"] { min-width: 200px; }
+.screens-table td { white-space: normal; }
+.screens-table .k-table :is(th, td) { padding-inline: 10px; }
+.scr-sector { display: none; }
+/* beside the open filters (1361 to 1480px) the Sector column moves under the company's name, so the table needs no sideways scroll */
+@media (min-width: 1361px) and (max-width: 1480px) { .screens-table .k-table :is(th, td):nth-child(2) { display: none; } .scr-sector { display: inline; } }
+.screens-table td.k-num { white-space: nowrap; }
+   /* VR1-103: a company's name was wrapping over three lines beside a sector column with room to spare */
 /* VR1-104: on a phone, "Save this screen" sits under the filters it saves, not 20 company cards further down */
 /* UI-CO item 9: on a phone the results come first: the filters are one folded "Filters (n)" bar; opened, "Save this screen" sits under them (VR1-104), folded it is not in the way */
 @media (max-width: 640px) { .screens-main > .screens-save { order: -1; } .screens-main > .screens-save.folded { display: none; } }

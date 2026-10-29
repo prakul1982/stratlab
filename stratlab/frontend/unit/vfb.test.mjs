@@ -52,7 +52,7 @@ test("VR1-101, VR1-103, VR1-104: the scan page says things once; the screener's 
   assert.doesNotMatch(s, /: "A match says the rule held on the date shown/);
   assert.match(read("src/pages/Screens.tsx"), /className="k-stack screens-main"/);
   assert.match(css, /\.screens-main > \.screens-save \{ order: -1; \}/);
-  assert.match(css, /\.screens-table th\[scope="row"\] \{ min-width: 240px; \}/);
+  assert.match(css, /\.screens-table th\[scope="row"\] \{ min-width: 200px; \}/);
   assert.match(invest, /\.inv-bounds \{[^}]*minmax\(0, 1fr\) auto;/);
 });
 
