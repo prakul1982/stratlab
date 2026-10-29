@@ -108,6 +108,8 @@
 .lib-actions { align-self: end; }
 .lib-buttons { align-items: center; }
 .explore-go { color: var(--blue-ink); font-weight: 500; }
+/* the card's "Open →" sits at its foot, so a card with a shorter description beside longer ones has no empty band under it (ui-lint R1, 29 Oct: all groups now show at once) */
+.explore-card .explore-go { margin-top: auto; }
 
 /* a trade's marker for the unseen part of the test (VR1-064): a filled dot, and a ring for one that spans the split; the words are its hover text and
    its screen-reader name, and the one legend line under the table */
