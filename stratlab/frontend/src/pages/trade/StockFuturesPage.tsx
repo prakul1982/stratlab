@@ -7,7 +7,7 @@ import { AlertButton } from "../../components/AlertForm";
 import { Info } from "../../components/ui";
 import { Search } from "../../components/Icons";
 import { POSITIONING_VIEWS, RouteSeg } from "../../components/RouteSeg";
-import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, RangeChips, Select, Signed, Skeleton, Stat, StatRow, useRange, type Column } from "../../components/kit";
+import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, FactTable, PageHeader, RangeChips, Select, Signed, Skeleton, useRange, type Column } from "../../components/kit";
 import "./trade.css";
 import "./positioning.css";
 
@@ -89,12 +89,12 @@ function Detail({ symbol, t, onClose }: { symbol: string; t: FutTable; onClose: 
             {r.oc == null ? " was unchanged" : <> {r.oc >= 0 ? "rose" : "fell"} <Signed value={r.oc}>{Math.abs(r.oc).toFixed(2)}%</Signed></>}
             {r.b ? `: ${t.labels[r.b].toLowerCase()}${r.streak && r.streak > 1 ? `, ${r.streak} days in a row` : ""}` : ""}.
           </p>
-          <StatRow label={`${symbol} figures`}>
-            <Stat label="Open interest" value={sharesShort(r.oi)} note={`near ${sharesShort(r.n)} · next ${sharesShort(r.x)} · far ${sharesShort(r.f)}`} />
-            <Stat label="In later expiries" value={plainPct(r.r)} note={`${r.td} trading day${r.td === 1 ? "" : "s"} to ${dayText(r.e)}`} />
-            <Stat label="Basis" value={signedPct(r.bp)} note={`${signedPct(r.ba)} a year · share ₹${r.s?.toLocaleString("en-IN")}`} />
-            <Stat label="MWPL use" value={plainPct(r.m)} note={r.ban_next ? "No fresh positions the next day" : `ban from ${t.ban_at}%`} />
-          </StatRow>
+          <FactTable label={`${symbol} figures`} itemHead="Figure" figureHead="Now" noteHead="What it is" rows={[
+            { id: "oi", k: "Open interest", v: sharesShort(r.oi), n: `near ${sharesShort(r.n)} · next ${sharesShort(r.x)} · far ${sharesShort(r.f)}` },
+            { id: "roll", k: "In later expiries", v: plainPct(r.r), n: `${r.td} trading day${r.td === 1 ? "" : "s"} to ${dayText(r.e)}` },
+            { id: "basis", k: "Basis", v: signedPct(r.bp), n: `${signedPct(r.ba)} a year · share ₹${r.s?.toLocaleString("en-IN")}` },
+            { id: "mwpl", k: "MWPL use", v: plainPct(r.m), n: r.ban_next ? "No fresh positions the next day" : `ban from ${t.ban_at}%` },
+          ]} />
           {!d.full ? (
             <div className="k-stack" data-testid="sf-locked">
               <p className="k-small k-muted">Each day's open interest, buildup, rollover, basis and MWPL use for {symbol}, and an alert when MWPL use crosses 80%, are on the {d.plan_needed} plan.</p>

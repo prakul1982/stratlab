@@ -24,7 +24,7 @@ test("RC2A-004: a closing time is shown only when the exchange's page gave one",
 test("RC2A-003 (O7): the issue's terms and dates are rows of a table, so a label can never sit over another row's value", () => {
   const page = read("src/pages/IpoPage.tsx");
   assert.doesNotMatch(page, /<dt>|<dl|className="ipo-facts"/);                                   // no grid of label and value pairs
-  assert.match(page, /function LineTable\(/);
+  assert.match(page, /const LineTable = FactTable;/);
   assert.equal((page.match(/\{ id: "/g) ?? []).length >= 20, true);
   assert.match(page, /<LineTable label="The terms of the issue"/);
   assert.match(page, /<LineTable label="The dates of the issue"/);

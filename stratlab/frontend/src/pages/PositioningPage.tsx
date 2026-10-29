@@ -12,7 +12,7 @@ import { Legend, LineChart } from "../components/Charts";
 import { StrikeChart } from "../components/StrikeChart";
 import { useMoreColumns } from "../components/MoreColumns";
 import { VixPanel } from "../components/VixPanel";
-import { Card, CardHead, ChipBar, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, PageHeader, RangeChips, Seg, Select, Signed, Skeleton, Stat, StatRow, useRange, type Column } from "../components/kit";
+import { Card, CardHead, ChipBar, DataTable, Disclosure, EmptyState, ErrorState, FactTable, Field, FieldGroup, PageHeader, RangeChips, Seg, Select, Signed, Skeleton, useRange, type Column, type Fact } from "../components/kit";
 import { PosTabs } from "./trade/StockFuturesPage";
 import "./trade/trade.css";
 import "./trade/positioning.css";
@@ -93,17 +93,13 @@ function ParticipantTable({ rows, kind, seg, split }: { rows: PRow[]; kind: "oi"
 const pts = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)} pts`;
 
 /** A figure with both sides written out, one to a line ("19.3% long", "80.7% short"), the bar under them. */
-function SidesFig({ label, long, short, words, chg }: { label: string; long: number | null; short: number | null; words: [string, string]; chg: number | null }) {
-  return (
-    <div className="k-stat" data-testid="sides-fig">
-      <span className="k-stat-k">{label}</span>
-      {/* one number like its neighbours, the other side and the bar in the note: two lines of 20px text among 32px figures put this one's caption lower (VR1-070) */}
-      <span className="k-stat-v">{long == null || short == null ? "–" : pct(long)}</span>
-      {long != null && short != null && (
-        <span className="k-stat-d pos-sides"><PosBar long={long} /><span>{pct(short)} {words[1]}{chg != null && <> · <Signed value={chg}>{pts(chg)}</Signed> from the previous trading day</>}</span></span>
-      )}
-    </div>
-  );
+/** A figure whose sign colours it: green above zero, red below (the same classes the tiles used). */
+const tv = (text: ReactNode, tone?: "up" | "down") => <span className={tone ? `k-${tone}` : undefined}>{text}</span>;
+
+/** The long share as a row of the FII table: the long share as its figure, the short side and the bar in its note (VR1-070). */
+function sidesFact(label: string, long: number | null, short: number | null, words: [string, string], chg: number | null): Fact {
+  return { id: label, k: label, v: <span data-testid="sides-fig">{long == null || short == null ? "–" : pct(long)}</span>,
+    n: long != null && short != null ? <span className="pos-sides"><PosBar long={long} /><span>{pct(short)} {words[1]}{chg != null && <> · <Signed value={chg}>{pts(chg)}</Signed> from the previous trading day</>}</span></span> : undefined };
 }
 
 function Participants({ s }: { s: Summary }) {
@@ -134,16 +130,15 @@ function Participants({ s }: { s: Summary }) {
       </p>
       {fii && (
         <div data-testid="part-figs">
-          <StatRow label="FII figures">
-            <Stat label={`FII ${segWord} futures, net`} value={signed(n(fii, `fut_${seg}_net`))} tone={signTone(n(fii, `fut_${seg}_net`))}
-              note={<><Sgn v={n(fii, `fut_${seg}_net_chg`)} /> from the previous trading day</>} />
-            <SidesFig label={`FII ${segWord} futures, ${words[0]} share`} long={n(fii, `fut_${seg}_long_pct`)} short={n(fii, `fut_${seg}_short_pct`)} words={words}
-              chg={kind === "oi" ? n(fii, `fut_${seg}_long_pct_chg`) : null} />
-            <Stat label={`FII ${segWord} calls, net`} value={signed(n(fii, `opt_${seg}_call_net`))} tone={signTone(n(fii, `opt_${seg}_call_net`))}
-              note={`${sides(n(fii, `opt_${seg}_call_long_pct`), n(fii, `opt_${seg}_call_short_pct`), words)}`} />
-            <Stat label={`FII ${segWord} puts, net`} value={signed(n(fii, `opt_${seg}_put_net`))} tone={signTone(n(fii, `opt_${seg}_put_net`))}
-              note={`${sides(n(fii, `opt_${seg}_put_long_pct`), n(fii, `opt_${seg}_put_short_pct`), words)}`} />
-          </StatRow>
+          <FactTable label="FII figures" itemHead="FII" figureHead="Now" noteHead="Against the day before" rows={[
+            { id: "fut", k: `FII ${segWord} futures, net`, v: tv(signed(n(fii, `fut_${seg}_net`)), signTone(n(fii, `fut_${seg}_net`))),
+              n: <><Sgn v={n(fii, `fut_${seg}_net_chg`)} /> from the previous trading day</> },
+            sidesFact(`FII ${segWord} futures, ${words[0]} share`, n(fii, `fut_${seg}_long_pct`), n(fii, `fut_${seg}_short_pct`), words, kind === "oi" ? n(fii, `fut_${seg}_long_pct_chg`) : null),
+            { id: "call", k: `FII ${segWord} calls, net`, v: tv(signed(n(fii, `opt_${seg}_call_net`)), signTone(n(fii, `opt_${seg}_call_net`))),
+              n: sides(n(fii, `opt_${seg}_call_long_pct`), n(fii, `opt_${seg}_call_short_pct`), words) },
+            { id: "put", k: `FII ${segWord} puts, net`, v: tv(signed(n(fii, `opt_${seg}_put_net`)), signTone(n(fii, `opt_${seg}_put_net`))),
+              n: sides(n(fii, `opt_${seg}_put_long_pct`), n(fii, `opt_${seg}_put_short_pct`), words) },
+          ]} />
         </div>
       )}
       {rows.length ? <ParticipantTable rows={rows} kind={kind} seg={seg} split={more.on} /> : <EmptyState title={`No ${kind === "oi" ? "open interest" : "volume"} file stored yet`}>It appears here once the exchange's file for a trading day is read.</EmptyState>}
@@ -165,14 +160,12 @@ function Cash({ s }: { s: Summary }) {
       {c.fii && c.dii ? (
         // full width now (MO-4b), so the bought and sold figures sit in the row beside each net, not in a note under it:
         // two figures in the left third of a wide card was the gap the owner asked to remove
-        <StatRow label="Cash market">
-          <Stat label="FII/FPI net" value={crore(c.fii.net, true)} tone={signTone(c.fii.net)} />
-          <Stat label="FII/FPI bought" value={crore(c.fii.buy)} />
-          <Stat label="FII/FPI sold" value={crore(c.fii.sell)} />
-          <Stat label="DII net" value={crore(c.dii.net, true)} tone={signTone(c.dii.net)} />
-          <Stat label="DII bought" value={crore(c.dii.buy)} />
-          <Stat label="DII sold" value={crore(c.dii.sell)} />
-        </StatRow>
+        <DataTable label="Cash market" rows={[{ id: "fii", k: "FII/FPI", n: c.fii }, { id: "dii", k: "DII", n: c.dii }]} rowKey={(r) => r.id} columns={[
+          { key: "k", header: "Who", rowHeader: true, cell: (r) => r.k },
+          { key: "net", header: "Net", numeric: true, cell: (r) => tv(crore(r.n.net, true), signTone(r.n.net)) },
+          { key: "buy", header: "Bought", numeric: true, cell: (r) => crore(r.n.buy) },
+          { key: "sell", header: "Sold", numeric: true, cell: (r) => crore(r.n.sell) },
+        ]} />
       ) : null}
       {/* the figures first, where they come from after them (LIVE1A-024) */}
       <Source testId="cash-source">
@@ -299,15 +292,16 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
               </p>
               <Source testId="chain-recorded">{recordedLine(name, c.recorded)}</Source>
             </div>
-            <StatRow label="Option chain figures">
-              <Stat label="PCR (open interest)" value={ratio(c.pcr?.oi)} note={[`${c.near_strikes ?? NEAR_STRIKES} strikes either side of the money`, `volume ${ratio(c.pcr?.vol)}`,
-                strikesRead(c.strikes_counted, c.near_strikes, c.pcr_all, ratio)].filter(Boolean).join(" · ")} />
-              <Stat label="Max pain, near the money" value={strike(c.max_pain)} note={chainCounts(c).maxPain} />
-              <Stat label="Most call open interest" value={strike(c.top?.call?.strike)} note={c.top?.call ? `${contracts(c.top.call.oi)} ${unit}` : undefined} />
-              <Stat label="Most put open interest" value={strike(c.top?.put?.strike)} note={c.top?.put ? `${contracts(c.top.put.oi)} ${unit}` : undefined} />
-              <Stat label={atmIvLabel(c.atm, strike)} value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(2)}%`} note={`StratLab's model, from this chain's prices, ${istTime(c.as_of)}${!expiringToday(c) ? "" : c.atm_iv == null ? EXPIRED_IV : EXPIRING_IV}`} />
-              <IvFig c={c} full={full} plan={plan} />
-            </StatRow>
+            <FactTable label="Option chain figures" itemHead="Figure" figureHead="Level" noteHead="What it is" rows={[
+              { id: "pcr", k: "PCR (open interest)", v: ratio(c.pcr?.oi), n: [`${c.near_strikes ?? NEAR_STRIKES} strikes either side of the money`, `volume ${ratio(c.pcr?.vol)}`,
+                strikesRead(c.strikes_counted, c.near_strikes, c.pcr_all, ratio)].filter(Boolean).join(" · ") },
+              { id: "pain", k: "Max pain, near the money", v: strike(c.max_pain), n: chainCounts(c).maxPain },
+              { id: "call", k: "Most call open interest", v: strike(c.top?.call?.strike), n: c.top?.call ? `${contracts(c.top.call.oi)} ${unit}` : undefined },
+              { id: "put", k: "Most put open interest", v: strike(c.top?.put?.strike), n: c.top?.put ? `${contracts(c.top.put.oi)} ${unit}` : undefined },
+              { id: "iv", k: atmIvLabel(c.atm, strike), v: c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(2)}%`,
+                n: `StratLab's model, from this chain's prices, ${istTime(c.as_of)}${!expiringToday(c) ? "" : c.atm_iv == null ? EXPIRED_IV : EXPIRING_IV}` },
+              ivFact(c, full, plan),
+            ]} />
             <div className="k-spread">
               <Seg label="Open interest or its change" value={mode} onChange={(v) => setMode(v as "oi" | "chg")} options={[{ value: "oi", label: "Open interest" }, { value: "chg", label: "Change" }]} />
               <Legend items={[{ label: "Calls", color: "var(--pos-call)" }, { label: "Puts", color: "var(--pos-put)" }]} />
@@ -339,17 +333,17 @@ const EXPIRING_IV = ". These options expire today, so their IV runs high in thei
 // after the close they have no time left, so no IV at all (R66-007: "–" under the live hours' reason at 15:35 IST)
 const EXPIRED_IV = ". These options expired at today's close, so there is no time left to work out an IV from; pick the next expiry for one";
 
-function IvFig({ c, full, plan }: { c: ChainFacts; full: boolean; plan: string }) {
-  if (!full) return <Stat label="IV percentile and rank" value={<Link to="/plans" className="link k-small">{plan} plan</Link>} note="Over StratLab's recorded days" />;
+function ivFact(c: ChainFacts, full: boolean, plan: string): Fact {
+  if (!full) return { id: "ivp", k: "IV percentile and rank", v: <Link to="/plans" className="link k-small">{plan} plan</Link>, n: "Over StratLab's recorded days" };
   const s = c.iv;
   // why there's none, in a whole sentence (R64-002: "Given for the nearest expiry only: the recorded days are its" with the
   // nearest expiry picked)
   const why = expiringToday(c) ? "Not given on the day these options expire: their last hours aren't comparable with the recorded days. Pick the next expiry for it."
     : "Given for the nearest expiry only, as the recorded days are that expiry's.";
   if (!s || s.percentile == null)
-    return <Stat label="IV percentile and rank" value="–" note={s ? `${ivWait(s.days, s.need)} (${s.days} of ${s.need} so far; today is the day compared with them, so it isn't counted)` : why} />;
-  return <Stat label="IV percentile · rank" value={`${s.percentile.toFixed(0)} · ${s.rank == null ? "–" : s.rank.toFixed(0)}`}
-    note={`Over ${s.days} recorded days (${s.low?.toFixed(1)}%–${s.high?.toFixed(1)}%)`} />;
+    return { id: "ivp", k: "IV percentile and rank", v: "–", n: s ? `${ivWait(s.days, s.need)} (${s.days} of ${s.need} so far; today is the day compared with them, so it isn't counted)` : why };
+  return { id: "ivp", k: "IV percentile · rank", v: `${s.percentile.toFixed(0)} · ${s.rank == null ? "–" : s.rank.toFixed(0)}`,
+    n: `Over ${s.days} recorded days (${s.low?.toFixed(1)}%–${s.high?.toFixed(1)}%)` };
 }
 
 /* ---------- history (Basic) ---------- */

@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { inr, price, qty as qtyText } from "../lib/format";
 import { exDay } from "./CorpActions";
 import { fyLink } from "../lib/fy";
-import { Card, CardHead, DataTable, Notice, Stat, StatRow, type Column } from "./kit";
+import { Card, CardHead, DataTable, FactTable, Notice, type Column } from "./kit";
 
 /* My Holdings: bonuses and splits since the holdings were saved (offered, never made silently), and dividend income. */
 interface IncomeLine { symbol: string; label: string; ex_date: string; record_date: string | null; amount: number; qty: number; total: number }
@@ -95,11 +95,12 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
         <Card id="holdings-dividends">
           <CardHead title="Dividends" info="Amount a share as the company announced it, times the shares you'd hold on the ex-date. The last 12 months assume you held today's quantity throughout (worked back through any bonus or split), so they're an estimate; amounts are before tax. Tax tools and the ITR export add the same dividends up by financial year (April to March), each in the year of its record date, so their figures are the financial-year ones below, not the rolling twelve months."
             actions={<Link className="link k-small" to="/research/corporate-actions?region=IN">Corporate actions calendar →</Link>} />
-          <StatRow>
-            <Stat label="Announced, ex-date ahead" value={inr(data.ahead_total)} />
-            <Stat label="Last 12 months (estimated)" value={inr(data.received_total)} />
-            {(data.by_fy ?? []).filter((y) => y.count > 0).map((y) => <Stat key={y.fy} label={`${y.label} (estimated)`} value={inr(y.total)} note={<>{y.count} payment{y.count === 1 ? "" : "s"} · <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>as in tax tools</Link></>} />)}
-          </StatRow>
+          <FactTable label="Dividends in total" itemHead="Period" figureHead="Amount" noteHead="Payments" rows={[
+            { id: "ahead", k: "Announced, ex-date ahead", v: inr(data.ahead_total) },
+            { id: "12m", k: "Last 12 months (estimated)", v: inr(data.received_total) },
+            ...(data.by_fy ?? []).filter((y) => y.count > 0).map((y) => ({ id: `fy${y.fy}`, k: `${y.label} (estimated)`, v: inr(y.total),
+              n: <>{y.count} payment{y.count === 1 ? "" : "s"} · <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>as in tax tools</Link></> })),
+          ]} />
           {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} stack phonePage={8} /></>}
           {received.length > 0 && <><h3 className="k-sub">Paid in the last 12 months, by company</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack phonePage={8} /></>}
           {data.received.length > 6 && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setShowAll(!showAll)}>{showAll ? "Show fewer" : `Show all ${data.received.length}`}</button>}

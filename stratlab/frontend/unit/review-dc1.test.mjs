@@ -28,7 +28,7 @@ test("DC-003: the chain says whether its open interest is the exchange's end-of-
 test("DB-012: max pain is labelled near the money; DC-008: the IV tile counts down the days it needs", async () => {
   const { chainCounts, ivWait } = await import("../src/lib/positioning.ts");
   assert.match(chainCounts({ rows: [], near_strikes: 15, window_strikes: 31 }).maxPain, /^near-the-money max pain: over the 31 strikes/);
-  assert.match(read("src/pages/PositioningPage.tsx"), /label="Max pain, near the money"/);
+  assert.match(read("src/pages/PositioningPage.tsx"), /k: "Max pain, near the money"/);
   assert.equal(ivWait(17, 20), "Needs 3 more recorded days");
   assert.equal(ivWait(19, 20), "Needs 1 more recorded day");
   assert.doesNotMatch(read("src/pages/PositioningPage.tsx"), /needed so far/);

@@ -112,7 +112,7 @@ test("DF-022: lending across the market for anyone, and the lending facts as hea
   const page = read("src/pages/StockLendingPage.tsx");
   assert.match(page, /Lending across the market on \$\{dayText\(m\.day\)\}/);
   assert.match(page, /\{ value: "fee", label: "Highest fee" \}/);
-  assert.match(page, /<dl className="k-dl prose">/);
+  assert.match(page, /<FactTable label="How the lending fee works" itemHead="Point" figureHead="What it says"/);          // (O7 tables: the facts are a table of points)
   assert.match(read("src/styles.css"), /\.k-dl\.prose dd \{ font-weight: 400;/);
 });
 

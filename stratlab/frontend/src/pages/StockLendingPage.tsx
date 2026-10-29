@@ -7,7 +7,7 @@ import { dayText, desksApi, plainPct, sharesShort, statusText, type DeskStatus, 
 import { Earlier } from "../components/Earlier";
 import { Info } from "../components/ui";
 import { LineChart } from "../components/Charts";
-import { Card, CardHead, ChartFrame, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Skeleton, Stat, StatRow, StockPicker, useRange, type Column } from "../components/kit";
+import { Card, CardHead, ChartFrame, DataTable, EmptyState, ErrorState, FactTable, Field, PageHeader, Seg, Skeleton, StockPicker, useRange, type Column } from "../components/kit";
 
 /* /invest/stock-lending: what lending fees traded on the exchange's SLB segment for the stocks you hold and watch,
  * over the last 30 and 90 days, and any stock looked up day by day. Past traded fees with dates, never "you can earn";
@@ -52,9 +52,8 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
         <>
           <p className="k-small">{eligibleText(d)}{d.eligible_as_of ? ` (the exchange's list of ${dayText(d.eligible_as_of)})` : ""}.
             {" "}{d.summaries.map((s) => `${s.traded_days} of the last ${s.days} days had trades`).join("; ")}.</p>
-          <StatRow>
-            {d.summaries.map((s) => <Stat key={s.days} label={`Last ${s.days} days, a year`} value={range(s.ann_low, s.ann_high)} note={`${sharesShort(s.shares)} shares lent`} />)}
-          </StatRow>
+          <FactTable label={`${symbol}'s lending fee over the last days`} itemHead="Period" figureHead="Fee a year, of the price" noteHead="Lent"
+            rows={d.summaries.map((s) => ({ id: String(s.days), k: `Last ${s.days} days`, v: range(s.ann_low, s.ann_high), n: `${sharesShort(s.shares)} shares lent` }))} />
           {hist.length >= 3 && (
             <ChartFrame title="The fee a year, by day" info="Each day with lending trades: the fee per share the day's trades paid, as a percent of that day's closing price, scaled to a year. Days with no trades are not drawn."
               ranges={rng.options} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "slb-fee", times }}
@@ -150,7 +149,7 @@ export function StockLendingPage() {
         <Card>
           <CardHead title="How lending works" />
           {/* a heading over plain prose for each point, not four columns of bold body text (DF-022) */}
-          <dl className="k-dl prose">{t.facts.map((f) => <div key={f.title}><dt>{f.title}</dt><dd className="k-small">{f.text}</dd></div>)}</dl>
+          <FactTable label="How the lending fee works" itemHead="Point" figureHead="What it says" rows={t.facts.map((f) => ({ id: f.title, k: f.title, v: f.text }))} />
           <p className="k-note">Past fees, not what lending would fetch now. Lending goes through an approved intermediary, usually your broker.</p>
         </Card>
       )}

@@ -5,7 +5,7 @@ import { useMarketRefresh } from "../lib/marketLive";
 import { etfGapApi, gapAtPrice, gapShort, gapSummary, gapWords, useEtfGaps, type EtfGapDetail } from "../lib/etfGaps";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
-import { ChartFrame, Disclosure, ErrorState, Skeleton, Stat, StatRow, useRange } from "./kit";
+import { ChartFrame, Disclosure, ErrorState, FactTable, Skeleton, useRange } from "./kit";
 
 /** An Indian ETF's gap to its last NAV as a small factual badge ("4.2% above last NAV"; "iNAV" only when a source
  * gives a real indicative NAV) that opens the ETF's page. Nothing for a stock, or for an ETF with neither value. With `price`
@@ -71,12 +71,12 @@ export function EtfGapDetailView({ symbol, quiet, price: shown, day: shownDay }:
       actions={d.alerts ? <AlertButton region="IN" symbol={r.symbol} label="Alert on the gap" condition="etfgap_either" />
         : <Link className="btn quiet sm" to="/plans">Alerts on the gap: Basic</Link>}
       stats={
-        <StatRow label={`${r.symbol} price against NAV`}>
-          <Stat item label="Gap to NAV" value={headline} note={against} />
-          <Stat item label="Price" value={price(r.price, "INR")} note={r.price_at ? `As of ${asOf(r.price_at)}` : "Last traded"} />
-          {r.inav != null && <Stat item label="Indicative NAV" value={price(r.inav, "INR")} note={r.inav_gap != null ? gapShort(r.inav_gap) : undefined} />}
-          <Stat item label="Last NAV" value={r.nav == null ? "–" : price(r.nav, "INR")} note={r.nav_date ? `NAV of ${day(r.nav_date)}` : undefined} />
-        </StatRow>
+        <FactTable label={`${r.symbol} price against NAV`} figureHead="Now" noteHead="What it is" rows={[
+          { id: "gap", k: "Gap to NAV", v: <b>{headline}</b>, n: against },
+          { id: "price", k: "Price", v: price(r.price, "INR"), n: r.price_at ? `As of ${asOf(r.price_at)}` : "Last traded" },
+          ...(r.inav != null ? [{ id: "inav", k: "Indicative NAV", v: price(r.inav, "INR"), n: r.inav_gap != null ? gapShort(r.inav_gap) : undefined }] : []),
+          { id: "nav", k: "Last NAV", v: r.nav == null ? "–" : price(r.nav, "INR"), n: r.nav_date ? `NAV of ${day(r.nav_date)}` : undefined },
+        ]} />
       }
       table={all.length >= 2 ? { label: `${r.symbol}'s gap to NAV by day`, rows: [...hist].reverse(), rowKey: (h) => h.day,
         columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dayY(h.day) }, { key: "c", header: "Close", numeric: true, cell: (h) => (h.close == null ? "–" : price(h.close, "INR")) },
@@ -94,7 +94,8 @@ export function EtfGapDetailView({ symbol, quiet, price: shown, day: shownDay }:
               labels={hist.map((h) => dayY(h.day))} times={hist.map((h) => h.day)} height={190} baseline={0} ranges={false} table={false}
               format={(v) => pct(v, 2)} axisFormat={(v) => `${num(v, 1)}%`}
               ariaLabel={`${r.symbol}'s gap to NAV at each close, ${day(hist[0].day)} to ${day(hist[hist.length - 1].day)}`} />
-            {sum && <span className="k-small" data-testid="etf-gap-line">{sum.days} trading days, {dayY(sum.from)} to {dayY(sum.to)}: from {gapShort(sum.low)} to {gapShort(sum.high)}, {gapShort(sum.avg)} on average.</span>}
+            {sum && <div data-testid="etf-gap-line"><FactTable label={`${r.symbol}'s gap over the days shown`} itemHead={`${sum.days} trading days, ${dayY(sum.from)} to ${dayY(sum.to)}`} figureHead="Gap" rows={[
+              { id: "low", k: "Lowest", v: gapShort(sum.low) }, { id: "high", k: "Highest", v: gapShort(sum.high) }, { id: "avg", k: "Average", v: gapShort(sum.avg) }]} /></div>}
           </>
         ) : <p className="k-small k-muted">The daily history builds up from each close; there isn't enough of it yet.</p>}
       </div>

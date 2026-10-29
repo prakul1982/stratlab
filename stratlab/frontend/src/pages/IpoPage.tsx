@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -10,7 +10,7 @@ import {
   KPI_LABELS, badgeOf, bandText, clockText, croreText, expectedText, figure, firstAndRest, freshCrore, growthPct, kpiText, minText, objectRows, partsText, periodText,
   priceToEarnings, sharesText, sizeText, spanText, timesText, yearKey,
 } from "../lib/ipoText";
-import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Signed, Skeleton, type Column } from "../components/kit";
+import { Badge, Card, CardHead, DataTable, Disclosure, FactTable, type Fact, EmptyState, ErrorState, PageHeader, PlanNote, Signed, Skeleton, type Column } from "../components/kit";
 import { LockedPreview } from "../components/LockedPreview";
 import "./ipo.css";
 
@@ -21,18 +21,10 @@ import "./ipo.css";
  * peers' at the top of the band. All free for everyone. The AI summary (Basic) is the business and how its revenue splits, each
  * statement with the document's words behind one fold. Facts only, in the document's and the exchanges' own figures. */
 
-type Line = { id: string; k: ReactNode; v: ReactNode; n?: ReactNode };
+type Line = Fact;
 
 /** A block of "item, figure, note" rows: the issue's terms, its dates, a US offering's facts. */
-function LineTable({ label, rows, noteHead = "Note" }: { label: string; rows: Line[]; noteHead?: string }) {
-  const notes = rows.some((r) => r.n);
-  const cols: Column<Line>[] = [
-    { key: "k", header: "Item", rowHeader: true, wrap: true, cell: (r) => r.k },
-    { key: "v", header: "Figure", wrap: true, cell: (r) => r.v },
-    ...(notes ? [{ key: "n", header: noteHead, wrap: true, cell: (r: Line) => (r.n ? <span className="k-note">{r.n}</span> : "") } as Column<Line>] : []),
-  ];
-  return <DataTable label={label} rows={rows} rowKey={(r) => r.id} columns={cols} />;
-}
+const LineTable = FactTable;
 
 function Terms({ d }: { d: IpoDetail }) {
   const r = d.ipo;

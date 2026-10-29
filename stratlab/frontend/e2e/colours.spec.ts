@@ -49,14 +49,14 @@ test("positioning: net figures carry the up or down colour; changes in long and 
   for (const t of await main.locator(".k-up").allInnerTexts()) expect(t.trim(), "green is never a minus").not.toMatch(/^−/);
   for (const t of await main.locator(".k-down").allInnerTexts()) expect(t.trim(), "red is never a plus").not.toMatch(/^\+/);
   // the headline net and its change from the day before
-  const net = main.getByTestId("part-figs").locator(".k-stat").first();
-  await expect(net.locator(".k-stat-v")).toHaveClass(/k-(up|down)/);
-  await expect(net.locator(".k-stat-d .k-up, .k-stat-d .k-down")).toContainText(/^[+−]/);
-  await expect(net.locator(".k-stat-d")).toContainText("from the previous trading day");
+  const net = main.getByTestId("part-figs").locator("tbody tr").first();
+  await expect(net.locator("td").first().locator(".k-up, .k-down")).toHaveClass(/k-(up|down)/);
+  await expect(net.locator("td").nth(1).locator(".k-up, .k-down").first()).toContainText(/^[+−]/);
+  await expect(net.locator("td").nth(1)).toContainText("from the previous trading day");
   // a level stays plain
   await expect(table.locator("tbody tr").first().locator("td").nth(1).locator(":scope > .k-up, :scope > .k-down")).toHaveCount(0);
   // the FII/DII cash figures are coloured by sign too
-  await expect(main.locator("#pos-cash .k-stat-v.k-up, #pos-cash .k-stat-v.k-down").first()).toBeVisible();
+  await expect(main.locator("#pos-cash .k-up, #pos-cash .k-down").first()).toBeVisible();
   expect(errors).toEqual([]);
 });
 

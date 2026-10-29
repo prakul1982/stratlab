@@ -15,6 +15,7 @@ export { StockPicker } from "./StockPicker";
 export { Suggest, type SuggestItem } from "./Suggest";
 export { TilePicker, type Tile, type TileGroup } from "./TilePicker";
 export { DataTable, usePhone, type Column } from "./DataTable";
+export { FactTable, type Fact } from "./FactTable";
 export { Notice, PlanNote } from "./Notice";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { Dialog, useDialogFocus, usePopover, tabbables } from "./Dialog";

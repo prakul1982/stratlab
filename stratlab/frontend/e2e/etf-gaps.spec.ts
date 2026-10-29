@@ -99,9 +99,9 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   const panel = page.locator("#etf-gap");
   await expect(panel.getByRole("heading", { name: "Price against NAV" })).toBeVisible();
   // the gap is the headline (O1): one row of figures, the gap first
-  const stats = panel.getByRole("list", { name: "SILVERBEES price against NAV" }).getByRole("listitem");
-  await expect(stats.first()).toContainText("Gap to NAV");
-  await expect(stats.first()).toContainText("6.9% above");
+  const stats = panel.getByRole("table", { name: "SILVERBEES price against NAV" }).getByRole("row");
+  await expect(stats.nth(1)).toContainText("Gap to NAV");
+  await expect(stats.nth(1)).toContainText("6.9% above");
   await expect(panel.getByText("Indicative NAV", { exact: true })).toHaveCount(0);        // no figure: the note only says none is shown (DF-007)
   // the NAV is dated the latest trading day (the demo's list is stamped with the last close): a weekday, never a future day
   const navDay = (await panel.getByText(/NAV of \d{1,2} \w{3}/).innerText()).match(/NAV of (\d{1,2}) (\w{3})/)!;
