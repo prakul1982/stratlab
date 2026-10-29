@@ -221,12 +221,14 @@ def test_a_page_still_waiting_for_its_new_close_is_kept_a_minute_and_a_busy_one_
 
 
 def test_blog_pages_are_kept_a_day_and_the_feed_ten_minutes(w):
-    from app import blog
+    from app import blog, blog_pages
     blog.add_once({"slug": "seo1-post", "kind": "research", "title": "A post", "summary": "A post.", "blocks": [{"t": "p", "text": "Facts."}], "published": True})
     c = w["client"]
-    for u in ("/blog", "/blog/research", "/blog/seo1-post"):
+    for u in ("/blog", "/blog/research"):                                           # the lists change each trading day (LIVE1B-082): minutes
         r = c.get(u)
-        assert r.status_code == 200 and r.headers["cache-control"] == LONG, (u, r.headers.get("cache-control"))
+        assert r.status_code == 200 and r.headers["cache-control"] == blog_pages.LIST_CACHE, (u, r.headers.get("cache-control"))
+    r = c.get("/blog/seo1-post")                                                    # a post's page is kept the day
+    assert r.status_code == 200 and r.headers["cache-control"] == LONG, r.headers.get("cache-control")
     assert c.get("/blog/feed.xml").headers["cache-control"] == "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
 
 
