@@ -41,11 +41,16 @@ test("MO-4a: the notebook is centred like every page, and the Lab notes float, o
   await expect(page.getByRole("region", { name: "Lab notes" })).toBeHidden();
   const vp = page.viewportSize()!;
   const b = await btn.boundingBox();
-  // at the right: level with the page's right edge on a laptop (VR1-050), within a finger of the screen's on a phone
-  if (phone) expect(b!.x + b!.width, "at the right").toBeGreaterThan(vp.width - 40);
-  else expect(Math.abs((b!.x + b!.width) - (main!.x + main!.width)), "level with the page's right edge").toBeLessThan(2);
-  expect(b!.y + b!.height, "at the bottom").toBeGreaterThan(vp.height - 40);
-  expect(b!.height, "a finger-sized target").toBeGreaterThanOrEqual(44);
+  // at the right: on a laptop an edge handle on the window's right edge, in the margin beside the page (LIVE1A-001: the bottom tab lay over cards), within a finger of the screen's on a phone
+  if (phone) {
+    expect(b!.x + b!.width, "at the right").toBeGreaterThan(vp.width - 40);
+    expect(b!.y + b!.height, "at the bottom").toBeGreaterThan(vp.height - 40);
+    expect(b!.height, "a finger-sized target").toBeGreaterThanOrEqual(44);
+  } else {
+    expect(b!.x + b!.width, "on the window's right edge").toBeGreaterThan(vp.width - 2);
+    expect(b!.x, "in the margin, clear of the page").toBeGreaterThanOrEqual(main!.x + main!.width - 1);
+    expect(b!.width, "a finger-sized target").toBeGreaterThanOrEqual(40);
+  }
   await expect(btn.locator(".ln-dot")).toHaveCount(0);
 
   // open: the notes get the focus, the panel is a labelled region, the placeholder and the tip are there

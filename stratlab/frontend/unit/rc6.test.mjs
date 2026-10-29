@@ -51,7 +51,7 @@ test("the trend scan says its groups couldn't be loaded, with Try again, instead
 test("named holders whose first read fails offers Try again, where Dismiss left a page with nothing on it (RC6-006)", () => {
   const src = read("src/pages/HoldersPage.tsx");
   assert.match(src, /const \[readFailed, setReadFailed\] = useState\(false\)/);
-  assert.match(src, /\}, \[q, off, tries\]\);/);
+  assert.match(src, /\}, \[q, off, tries, !!me\]\);/);       // (LIVE1A-043: not before the plan is known)
   assert.match(src, /<ErrorState title="Named holders couldn't be read" action=\{\{ label: "Try again", onClick: \(\) => setTries\(\(n\) => n \+ 1\) \}\}>/);
   // a failed action (follow, a name too short) keeps its Dismiss
   assert.match(src, /<ErrorState title="That didn't work" action=\{\{ label: "Dismiss"/);

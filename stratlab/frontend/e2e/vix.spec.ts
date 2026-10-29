@@ -50,7 +50,7 @@ test("India VIX on Positioning: today, the day's line, the past year and NIFTY A
   await expect(panel.getByRole("heading", { name: "India VIX", level: 2 })).toContainText("India VIX");
   const figs = panel.getByTestId("vix-figs");
   await expect(figs).toContainText("15.03");
-  await expect(panel.getByTestId("vix-change")).toHaveText("+0.57 (+3.94%) from 14.46");
+  await expect(panel.getByTestId("vix-change")).toHaveText("+0.57 (+3.99%) from 14.46");
   await expect(figs).toContainText("13.50 – 15.19");                       // today's low and high
   await expect(panel.getByTestId("vix-pct")).toContainText(/Higher than \d+% of the past year's closes; range \d+\.\d\d – \d+\.\d\d/);
   await expect(figs).toContainText("NIFTY ATM IV");

@@ -393,23 +393,6 @@ function CompanyView() {
       {!c.delisted && <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>}
       {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} quiet />}
 
-      {/* (the facts under "What they do": not the market cap, which has its own place, nor where it is listed, which the heading says) */}
-      <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
-        {(wiki || c.about.profile) && (
-          <Card>
-            <CardHead title="What they do" info="From an encyclopedia entry and the company's own profile: facts, not AI." />
-            {/* the one-line description ("Indian multinational conglomerate") and then the entry's first sentence, which says it again; and "Listed: NSE ·
-                RELIANCE" under a page headed "NSE · RELIANCE" (VR4-013): each is said once */}
-            {wiki?.description && !(wiki.extract && wiki.extract.toLowerCase().includes(wiki.description.toLowerCase())) && <p className="k-sub">{wiki.description}</p>}
-            <p className="k-small">{wiki?.extract || c.about.profile}</p>
-            {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
-            {shownFacts.length > 0 && <dl className="k-dl pairs">{shownFacts.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
-            {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
-          </Card>
-        )}
-        {c.margins && c.margins.gross != null && <Card><CardHead title="Where a sale goes" info={HELP.researchMargins} /><MarginCascade {...c.margins} /></Card>}
-      </div>
-
       {c.metrics.length > 0 && (
         <Card id="co-numbers">
           <CardHead title="Key numbers" info={HELP.researchMetrics} actions={<Link className="btn quiet sm" to={deepTo}>10 years in the deep dive →</Link>} />
@@ -428,8 +411,28 @@ function CompanyView() {
             <TrendBars points={trend.prof.points} label={trend.t.profit_label} unit={trend.prof.unit}
               baseSales={trend.rev.points.find((p) => p.y === trend.prof.points[0]?.y)?.v ?? null} />
           </div>
+          {/* bars written "10.56L" are lakh crore under a title that says crore: said once under both charts (LIVE1A-063) */}
+          {[trend.rev, trend.prof].some((x) => /cr/i.test(x.unit) && !/lakh/i.test(x.unit) && x.points.some((p) => trendValue(p.v, x.unit).length > 7)) && <p className="k-note" data-testid="trend-lakh">A figure written with L is in lakh crore (1 lakh crore is 1,00,000 crore).</p>}
         </ChartFrame>
       )}
+
+      {/* the description comes after the figures: it sat between the chart and the key numbers (LIVE1A-062; owner pattern 14: the visual, the figures, then the words) */}
+      {/* (the facts under "What they do": not the market cap, which has its own place, nor where it is listed, which the heading says) */}
+      <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
+        {(wiki || c.about.profile) && (
+          <Card>
+            <CardHead title="What they do" info="From an encyclopedia entry and the company's own profile: facts, not AI." />
+            {/* the one-line description ("Indian multinational conglomerate") and then the entry's first sentence, which says it again; and "Listed: NSE ·
+                RELIANCE" under a page headed "NSE · RELIANCE" (VR4-013): each is said once */}
+            {wiki?.description && !(wiki.extract && wiki.extract.toLowerCase().includes(wiki.description.toLowerCase())) && <p className="k-sub">{wiki.description}</p>}
+            <p className="k-small">{wiki?.extract || c.about.profile}</p>
+            {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
+            {shownFacts.length > 0 && <dl className="k-dl pairs">{shownFacts.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
+            {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
+          </Card>
+        )}
+        {c.margins && c.margins.gross != null && <Card><CardHead title="Where a sale goes" info={HELP.researchMargins} /><MarginCascade {...c.margins} /></Card>}
+      </div>
 
       <div className="k-cols">
         {c.earnings.length > 1 && <Card><CardHead title="Results versus expectations" info={HELP.researchEarnings} /><EarningsBars rows={c.earnings} basis={c.earnings_basis} /></Card>}
@@ -774,11 +777,27 @@ export function ComparePage() {
   // and a qualifier the company's page gives a figure stays with it: TCS's 4.4% yield says it counts a ₹46 special dividend and is 2.6% without
   // it (RC2A-028)
   const QUALIFIES = /special|like-for-like|against a quarter|other income|n\/m|not meaningful/i;
-  const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => {
+  // that qualifier is a long sentence ("Includes Mar 2024: HDFC Ltd merged into it: ..."): it ran out of its table cell over the other
+  // company's figures and was said six times in two tables. The cell carries a small number and the sentence is said once, under the
+  // table, naming the company (LIVE1A-048)
+  type Foot = { n: number; symbol: string; text: string };
+  type Item = Company["metrics"][number]["items"][number];
+  const qualifier = (m: Item | undefined) => { const note = (m as { note?: string } | undefined)?.note; return note && QUALIFIES.test(note) ? note : null; };
+  // worked out before the table is drawn, so the list under it and the numbers in its cells agree
+  const footsOf = (sec: { title: string; labels: string[] }): Foot[] => {
+    const out: Foot[] = [];
+    for (const l of sec.labels) for (const c of [res!.a, res!.b]) {
+      const q = qualifier((c === res!.a ? ra : rb)[key(sec.title, l)]);
+      if (q && !out.some((f) => f.symbol === c.symbol && f.text === q)) out.push({ n: out.length + 1, symbol: c.symbol, text: q });
+    }
+    return out;
+  };
+  const show = (m: Item | undefined, c: Company, foots: Foot[]) => {
     if (!m) return "–";
-    const note = (m as { note?: string }).note;
-    return <>{metricText(m, c.currency)}{(m as { period?: string }).period && <span className="k-sub-line">{(m as { period?: string }).period}</span>}
-      {note && QUALIFIES.test(note) && <span className="k-sub-line" data-testid="cmp-note">{note}</span>}</>;
+    const q = qualifier(m);
+    const foot = q ? foots.find((f) => f.symbol === c.symbol && f.text === q) : undefined;
+    return <>{metricText(m, c.currency)}{foot && <sup className="cmp-foot-mark" aria-label={`see note ${foot.n}`}>{foot.n}</sup>}
+      {(m as { period?: string }).period && <span className="k-sub-line">{(m as { period?: string }).period}</span>}</>;
   };
   return (
     <div className="k-page">
@@ -797,21 +816,6 @@ export function ComparePage() {
       {a && b && !same && !sameMsg && !res && !error && <Card><Skeleton label={`Comparing ${a} and ${b}`} lines={4} /></Card>}
       {res && (
         <>
-          <Card>
-            <CardHead title="AI comparison" />
-            {res.ai && !res.ai.error && res.ai.verdict ? (
-              <>
-                <p className="inv-summary">{res.ai.verdict}</p>
-                {res.ai.differences.length > 0 && <ul className="k-list">{res.ai.differences.map((d) => <li key={d}>{d}</li>)}</ul>}
-              </>
-            ) : (
-              // no comparison is one calm line and one button, like the company page's AI read
-              <div className="k-row ai-read-off" role="status" data-testid="compare-ai-off">
-                <span className="k-small k-muted">No AI comparison right now{aiReason(res.ai?.error ?? null)} The numbers below don't depend on it.</span>
-                {!aiLimited(res.ai?.error ?? null) && <button type="button" className="btn quiet sm" disabled={asking === shownKey} onClick={askAgain}>{asking === shownKey ? "Asking…" : "Ask again"}</button>}
-              </div>
-            )}
-          </Card>
           <div className="k-cols">
             {([["a", res.a], ["b", res.b]] as const).map(([k, c]) => (
               <Card key={k}>
@@ -835,15 +839,19 @@ export function ComparePage() {
             <CardHead title="The numbers side by side" />
             {/* every section's columns line up: the same widths in each table, so TCS and INFY never shift (DD-060) */}
             <div className="k-stack cmp-sections">
-            {sections.map((sec) => (
+            {sections.map((sec) => {
+              const foots = footsOf(sec);
+              return (
               <div key={sec.title} className="k-stack">
                 <span className="k-eyebrow">{sec.title}</span>
                 <DataTable stack label={`${sec.title} for both companies`} rows={sec.labels} rowKey={(l) => l}
                   columns={[{ key: "m", header: "Measure", rowHeader: true, cell: (l) => l },
-                    { key: "a", header: res.a.symbol, numeric: true, cell: (l) => show(ra[key(sec.title, l)], res.a) },
-                    { key: "b", header: res.b.symbol, numeric: true, cell: (l) => show(rb[key(sec.title, l)], res.b) }]} />
+                    { key: "a", header: res.a.symbol, numeric: true, cell: (l) => show(ra[key(sec.title, l)], res.a, foots) },
+                    { key: "b", header: res.b.symbol, numeric: true, cell: (l) => show(rb[key(sec.title, l)], res.b, foots) }]} />
+                {foots.length > 0 && <ul className="k-note cmp-foots" data-testid="cmp-note">{foots.map((f) => <li key={f.n}><sup>{f.n}</sup> {f.symbol}: {f.text}</li>)}</ul>}
               </div>
-            ))}
+              );
+            })}
             {owners.length > 0 && (
               <div className="k-stack" data-testid="cmp-owners">
                 <span className="k-eyebrow">Who owns it</span>
@@ -855,6 +863,23 @@ export function ComparePage() {
               </div>
             )}
             </div>
+          </Card>
+          {/* the AI's read comes after the figures it reads: a five-line paragraph above the two companies and the chart pushed them
+              down the page (LIVE1A-049) */}
+          <Card>
+            <CardHead title="AI comparison" />
+            {res.ai && !res.ai.error && res.ai.verdict ? (
+              <>
+                <p className="inv-summary">{res.ai.verdict}</p>
+                {res.ai.differences.length > 0 && <ul className="k-list">{res.ai.differences.map((d) => <li key={d}>{d}</li>)}</ul>}
+              </>
+            ) : (
+              // no comparison is one calm line and one button, like the company page's AI read
+              <div className="k-row ai-read-off" role="status" data-testid="compare-ai-off">
+                <span className="k-small k-muted">No AI comparison right now{aiReason(res.ai?.error ?? null)} The numbers below don't depend on it.</span>
+                {!aiLimited(res.ai?.error ?? null) && <button type="button" className="btn quiet sm" disabled={asking === shownKey} onClick={askAgain}>{asking === shownKey ? "Asking…" : "Ask again"}</button>}
+              </div>
+            )}
           </Card>
         </>
       )}
@@ -907,7 +932,7 @@ export function WatchlistPage() {
   const factText = (sym: string) => {
     const f = facts?.[sym];
     if (!f) return null;
-    const parts = [f.pe != null ? `P/E ${f.pe.toFixed(1)}` : null,
+    const parts = [f.pe != null ? `P/E ${f.pe.toFixed(2)}` : null,
       f.from_high != null ? (f.from_high > -0.5 ? "near its 52-week high" : `${Math.abs(f.from_high).toFixed(1)}% below its 52-week high`) : null].filter(Boolean);
     return parts.length ? parts.join(" · ") : null;
   };

@@ -52,6 +52,14 @@ export const CONDITIONS: { key: string; label: string; kind: AlertKind; op: Aler
 ];
 /** Alerts on exchange disclosures and surveillance lists, checked against the exchange's daily lists rather than the
  * live price. */
+/** The heading each kind of alert sits under in the form's list. */
+export const CONDITION_GROUP: Record<AlertKind, string> = {
+  price: "Price", ma: "Price", high52: "Price", low52: "Price", move: "Moves", rsi: "Momentum", stage: "Momentum",
+  insider: "Disclosures and lists", deal: "Disclosures and lists", surveillance: "Disclosures and lists", bizupdate: "Disclosures and lists", mwpl: "Disclosures and lists",
+  etfgap: "Funds and margin", mtf: "Funds and margin",
+};
+/** The order of the headings (a kind keeps its place inside its own heading). */
+export const CONDITION_GROUP_ORDER = ["Price", "Moves", "Momentum", "Disclosures and lists", "Funds and margin"];
 export const EVENT_KINDS: AlertKind[] = ["insider", "deal", "surveillance", "bizupdate", "mwpl", "mtf"];
 export const MA_PERIODS = [20, 50, 100, 150, 200];
 

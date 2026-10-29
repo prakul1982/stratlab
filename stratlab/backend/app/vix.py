@@ -132,8 +132,11 @@ def parse_quote(data) -> dict | None:
     opened = _num(row.get("open"))
     if opened is not None and prev is not None and opened == prev:
         opened = None          # the list carries yesterday's close where no open was read: not shown as the day's open (R28-011)
-    return {"value": v, "prev_close": prev, "change": round(v - prev, 2) if prev else None,
-            "change_pct": round((v / prev - 1) * 100, 2) if prev else None, "open": opened,
+    # the exchange's own change and percentage when its list gives them: it works them out from unrounded levels, so 16.36 against 16.40 shown
+    # is -0.28% there and was -0.24% from the two rounded figures (LIVE1A-023)
+    own_pct, own_chg = _num(row.get("percentChange")), _num(row.get("variation"))
+    return {"value": v, "prev_close": prev, "change": round(own_chg, 2) if own_chg is not None else round(v - prev, 2) if prev else None,
+            "change_pct": round(own_pct, 2) if own_pct is not None else round((v / prev - 1) * 100, 2) if prev else None, "open": opened,
             "high": _num(row.get("high")), "low": _num(row.get("low")), "year_high": _num(row.get("yearHigh")),
             "year_low": _num(row.get("yearLow")), "as_of": as_of, "source": "exchange"}
 

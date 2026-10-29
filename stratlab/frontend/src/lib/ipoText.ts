@@ -94,3 +94,14 @@ export function badgeOf(r: Pick<IpoRow, "stage" | "issue_status">) {
 }
 
 export const segmentWord = (r: Pick<IpoRow, "segment" | "market">) => (r.market === "US" ? "" : r.segment === "sme" ? "SME" : r.segment === "mainboard" ? "Mainboard" : "");
+
+/** The note under the title when a read had trouble. The job's raw lines name a company and a server's error code ("SEC filings for
+ *  Amaero Inc.: The SEC is having trouble (500)"), which says nothing to a reader: one plain sentence says what is affected. When only
+ *  the filings of single companies failed, the list of issues itself was read (LIVE1A-061). */
+export function problemNote(problems: string[], at: string | null): string {
+  const when = at ? ` of ${at}` : "";
+  const filingsOnly = problems.length > 0 && problems.every((p) => /^(SEC filings|final prospectuses)/i.test(p));
+  return filingsOnly
+    ? `At the list's read${when} some companies' filings couldn't be read, so a few details (the offer documents and what they say) may be missing. The list of issues itself was read. It is read again within the hour.`
+    : `At the list's read${when} a source couldn't be read, so this list may be missing a few issues. It is read again within the hour.`;
+}

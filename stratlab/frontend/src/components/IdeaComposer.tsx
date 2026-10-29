@@ -149,7 +149,7 @@ export async function buildIdea(idea: string, market?: string, opts: { allIndica
     ...s, text: idea, entry: checked.entry.kept, exit: checked.exit.kept, entryJoin: out.entryJoin || "all", tf: out.tf || "1d",
     side: out.side === "short" || out.side === "both" ? out.side : "long", shortEntry: checked.shortEntry.kept, shortExit: checked.shortExit.kept,
     minScore: out.minScore ?? 0, session: out.session ?? s.session, product: out.product ?? "auto",
-    risk: riskForCurrency({ ...s.risk, ...extra, ...out.risk }, instrument?.currency),
+    risk: riskForCurrency({ ...s.risk, ...extra, ...out.risk }, instrument?.currency, instrument ? { market: instrument.market, type: instrument.type, tf: out.tf || "1d" } : undefined),
   };
   // a trailing stop asked for is the stop: the notebook's default 2% stop is not added beside it, where it would decide nearly
   // every exit unseen (DA-008)

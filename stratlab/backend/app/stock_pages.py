@@ -3136,6 +3136,9 @@ def index_page(region: str | None, q: str = "") -> str:
     if region and not q:
         crumbs, ld = _crumbs([("Companies", "/stocks"), ("India" if region == "IN" else "US", f"/stocks/{region.lower()}")])
         body.insert(0, crumbs)
+    elif not q:
+        # /stocks itself had no structured data (LIVE1A-066): its place in the site, as the market pages have theirs
+        ld = _crumbs([("Companies", "/stocks")])[1]
     if q:
         for r in regions:
             got = search(r, q, SEARCH_SHOWN + 1)
@@ -3150,8 +3153,9 @@ def index_page(region: str | None, q: str = "") -> str:
         for r in regions:
             big, ranked = largest(r)
             if big:
-                where = "India" if r == "IN" else "US"
-                head = (f"{where}: the largest companies" if ranked else f"{where}: some of the companies")
+                # (not `where`: this loop used to overwrite the page's own `where`, so /stocks' description read "listed in US", LIVE1A-065)
+                place = "India" if r == "IN" else "US"
+                head = (f"{place}: the largest companies" if ranked else f"{place}: some of the companies")
                 cap = ('<p class="small muted">By market value, among companies whose value passed StratLab\'s checks against '
                        "their reported figures. Funds and notes are left out.</p>" if ranked else "")
                 body.append(f"<h2>{head}</h2>{cap}{_links(r.lower(), big)}")

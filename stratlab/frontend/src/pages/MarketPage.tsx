@@ -161,7 +161,7 @@ export function MarketPage() {
   const market = markets.find((m) => m.id === sel);
 
   const choose = async (i: Instrument) => {
-    patch({ instrument: i, instrumentId: i.id, strategy: { ...nb.strategy, risk: riskForCurrency(nb.strategy.risk, i.currency) } }, true);
+    patch({ instrument: i, instrumentId: i.id, strategy: { ...nb.strategy, risk: riskForCurrency(nb.strategy.risk, i.currency, { market: i.market, type: i.type, tf: nb.strategy.tf }) } }, true);
     if (await flush(true)) nav(`/n/${nb.id}`);      // a save that failed stays here, said, to be tried again
   };
 
@@ -225,7 +225,7 @@ export function MarketPage() {
       {market?.id === "CSV" && (
         <Card label="Upload candles">
           <CardHead title="Upload candles as a CSV" info={HELP.csv} infoLabel="What should the file look like?" />
-          <p className="k-small k-muted">Any market, any timeframe. The first row should be headings: <span className="k-mono">date, open, high, low, close, volume</span>. Most charting sites and brokers can export this.</p>
+          <p className="k-small k-muted">Any market, any timeframe. The first row should be headings: <span className="k-mono">date, open, high, low, close, volume</span>. Exports from charting sites, broker apps and Excel work as they are: commas or semicolons between the columns, dates as 2026-10-28 or 28-10-2026, and extra columns (an adjusted close, say) are ignored.</p>
           <label className="btn outline k-btn-end">
             Choose a CSV file
             <input type="file" accept=".csv,text/csv,.txt" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />

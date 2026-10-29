@@ -163,10 +163,6 @@ function Cash({ s }: { s: Summary }) {
     <Card id="pos-cash" label="FII and DII cash market">
       <CardHead title="FII and DII cash market" infoLabel="About the cash market figures"
         info="The exchange's provisional numbers for the day: what foreign portfolio investors (FII/FPI) and domestic institutions (DII) bought and sold in the cash market, in ₹ crore. Final numbers can differ a little." />
-      <Source testId="cash-source">
-        The exchange's provisional FII/DII figures, published each trading evening. The exchange shows only its latest day, so the history starts when StratLab began reading them{cov ? `: ${spanLine(cov)}` : ""}.
-      </Source>
-      <p className="k-small k-muted" data-testid="cash-status">{statusLine(c, "cash numbers")}</p>
       {c.fii && c.dii ? (
         // full width now (MO-4b), so the bought and sold figures sit in the row beside each net, not in a note under it:
         // two figures in the left third of a wide card was the gap the owner asked to remove
@@ -179,6 +175,11 @@ function Cash({ s }: { s: Summary }) {
           <Stat label="DII sold" value={crore(c.dii.sell)} />
         </StatRow>
       ) : null}
+      {/* the figures first, where they come from after them (LIVE1A-024) */}
+      <Source testId="cash-source">
+        The exchange's provisional FII/DII figures, published each trading evening. The exchange shows only its latest day, so the history starts when StratLab began reading them{cov ? `: ${spanLine(cov)}` : ""}.
+      </Source>
+      <p className="k-small k-muted" data-testid="cash-status">{statusLine(c, "cash numbers")}</p>
     </Card>
   );
 }

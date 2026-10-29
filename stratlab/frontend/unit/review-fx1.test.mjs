@@ -35,7 +35,7 @@ test("RC2A-002: the latest close is dated on the list", () => {
 test("RC2A-006: the list says when the bids were read, and the banner names its own read", () => {
   const list = read("src/pages/IposPage.tsx");
   assert.match(list, /data-testid="ipo-bids-read">Bids read /);
-  assert.match(list, /At the list's read\{d\.problems_at/);
+  assert.match(list, /problemNote\(d\.problems, d\.problems_at/);       // (LIVE1A-061: the sentence is ipoText's problemNote)
 });
 
 test("RC2A-011: alerts switched on with nowhere to send them say so, with the link", () => {
@@ -80,7 +80,9 @@ test("RC2A-027: a US company's page has holders above 5% and its flagged filings
 });
 
 test("RC2A-028: a qualifier the company page gives a figure stays with it in the comparison", () => {
-  assert.match(read("src/pages/Research.tsx"), /QUALIFIES\.test\(note\) && <span className="k-sub-line" data-testid="cmp-note">/);
+  // LIVE1A-048: the sentence is a numbered note under its table (it ran out of its cell), not a line in each cell
+  assert.match(read("src/pages/Research.tsx"), /const qualifier = .*QUALIFIES\.test\(note\)/);
+  assert.match(read("src/pages/Research.tsx"), /className="k-note cmp-foots" data-testid="cmp-note"/);
 });
 
 test("RC2A-031: the start dialog says when the session will enter", async () => {

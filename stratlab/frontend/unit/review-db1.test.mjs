@@ -86,7 +86,7 @@ test("DB-009 and DB-010: export is said, the import names the options builder, t
 test("DB-020 and DB-021: one 'now' price, the chart says closed candles, fills and fees said truthfully", async () => {
   const { fillsLine } = await import("../src/lib/paperText.ts");
   const line = fillsLine({ slippage: 0.05, brokerage: 0 }, "0.1% exchange fee each way", "$0.00");
-  assert.equal(line, "Orders fill at the close of the candle your rules act on, 0.05% worse for slippage (your setting), not at the live price, and pay 0.1% exchange fee each way. Unrealised P&L already counts the entry's costs.");
+  assert.equal(line, "Orders fill at the close of the candle your rules act on, 0.05% worse for slippage (your setting), not at the live price, and pay 0.1% exchange fee each way. Unrealised P&L already counts the entry's costs. The notebook's test fills at the next candle's open instead, so a paper run can differ a little from it.");
   assert.match(fillsLine({ slippage: 0, brokerage: 20 }, "STT, stamp duty, GST", "₹20.00"), /not at the live price, and pay STT, stamp duty, GST, plus brokerage of ₹20\.00 an order\./);
   assert.match(fillsLine({ slippage: 0, brokerage: 0 }, "Commission, SEC and FINRA fees", "$0.00"), /and pay commission, SEC and FINRA fees\./);
   assert.doesNotMatch(read("src/pages/NotebookPage.tsx"), /Orders fill at live prices/);

@@ -5,7 +5,7 @@ import { price } from "../lib/format";
 import { alertPriceHint, farLevel, type Shut } from "../lib/alerts";
 import { marketState } from "../lib/marketHours";
 import { researchApi, type Region } from "../lib/research";
-import { CONDITIONS, EVENT_KINDS, MA_PERIODS, alertsApi, conditionKey, fittingConditions, type AlertBody, type AlertFits, type AlertsPage, type StockAlert } from "../lib/alerts";
+import { CONDITIONS, CONDITION_GROUP, CONDITION_GROUP_ORDER, EVENT_KINDS, MA_PERIODS, alertsApi, conditionKey, fittingConditions, type AlertBody, type AlertFits, type AlertsPage, type StockAlert } from "../lib/alerts";
 import { Bell } from "./Icons";
 import { Modal } from "./ui";
 import { CheckField, Field, FormActions, FormGrid, Notice, PlanNote, Select, StockPicker } from "./kit";
@@ -156,9 +156,9 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         </>
       )}
       <Field label="Alert me when" wide>
-        {(id) => <Select id={id} value={c.key} onChange={setCond} options={offered.map((x) => {
+        {(id) => <Select id={id} value={c.key} onChange={setCond} options={[...offered].sort((a, b) => CONDITION_GROUP_ORDER.indexOf(CONDITION_GROUP[a.kind]) - CONDITION_GROUP_ORDER.indexOf(CONDITION_GROUP[b.kind])).map((x) => {
           const plan = editing ? null : lockedOf(x.kind);
-          return { value: x.key, label: plan ? `${x.label} (${plan === "pro" ? "Pro" : "Basic"})` : x.label };
+          return { value: x.key, label: plan ? `${x.label} (${plan === "pro" ? "Pro" : "Basic"})` : x.label, group: CONDITION_GROUP[x.kind] };
         })} />}
       </Field>
       {c.kind === "price" && <Field label="Price level" unit={region === "IN" ? "₹" : "$"} inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)}

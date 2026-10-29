@@ -66,6 +66,8 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
 
   useEffect(() => {
     if (off) { setLocked(true); return; }
+    // not before the plan is known: a Free account's first read went out ahead of it and was refused, a 402 in the console (LIVE1A-043)
+    if (!me) return;
     let live = true;
     setBusy(true); setError(null); setReadFailed(false); setGroup(null); setHold(null);
     api<SearchAnswer>(`/invest/holders${q ? `?q=${encodeURIComponent(q)}` : ""}`)
@@ -79,7 +81,7 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
       .finally(() => live && setBusy(false));
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, off, tries]);
+  }, [q, off, tries, !!me]);
 
   useEffect(() => {
     if (!picked.length) { setHold(null); return; }

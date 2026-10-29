@@ -416,11 +416,22 @@ a.link { margin-inline: -2px; }
   .ln-panel .lab-note { max-height: max(172px, calc(60vh - 140px)); }
 }
 
+/* LIVE1A-001/052: on a desktop window the tab is an edge handle in the page's right margin (the main column is padded 44px or more there), so it
+ * never lies over a card (it covered the right side of an answer card), and the panel opens beside it, above the bottom edge. A narrower window
+ * keeps the bottom tab. */
+@media (min-width: 1100px) {
+  .ln-btn { position: fixed; right: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; min-height: 0; min-width: 40px; padding: 16px 0; gap: 8px;
+    border-radius: 12px 0 0 12px; border: 1px solid var(--line-2); border-right: 0; box-shadow: -4px 0 14px rgba(0, 0, 0, .14); }
+  .ln-btn[aria-expanded="true"] { border-color: var(--ink); }
+  .ln-panel { position: fixed; right: 52px; bottom: 16px; }
+}
+
 /* ---------- verdict ---------- */
-.verdict-head { font-family: var(--serif); font-size: clamp(44px, 6vw, 76px); line-height: .95; font-weight: 400; letter-spacing: -.035em; }
+.verdict-head { font-family: var(--serif); font-size: clamp(44px, 6vw, 76px); line-height: 1.05; font-weight: 400; letter-spacing: -.035em; }
 .verdict-head.edge { color: var(--blue); }
 .verdict-head.luck, .verdict-head.no_edge { color: var(--orange); }
 .verdict-head.mixed, .verdict-head.not_enough { color: var(--ink); }
+.verdict-head.not_enough { font-size: clamp(32px, 4.6vw, 52px); }   /* LIVE1A-006: "too few trades to judge" is a non-verdict: smaller type than a result, as the journal's is (DB-044) */
 .dots { display: flex; gap: 8px; }
 .dots span { width: 40px; height: 12px; border-radius: 6px; background: var(--line); }
 .dots span.on { background: var(--blue); }
@@ -819,7 +830,7 @@ kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radi
 table.legs select, table.legs input { height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); padding: 0 8px; font: inherit; }
 table.legs td { vertical-align: middle; }
 .opt-charge-lines > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--muted); }
-.opt-charge-lines table { width: 100%; max-width: 360px; margin: 4px 0 8px; }
+.opt-charge-lines table { width: 100%; max-width: none; margin: 4px 0 8px; }   /* fills its box: it was 360px in a 460px one (LIVE1A-017) */
 .opt-charge-lines td { padding: 3px 0; }
 .opt-charge-lines td.num { text-align: right; }
 
@@ -855,7 +866,8 @@ table.legs input[type=number] { width: 72px !important; }
 
 .more-menu { position: relative; display: inline-flex; }
 .more-caret { display: inline-block; width: 6px; height: 6px; margin-left: 2px; margin-top: -3px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
-.more-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 190px; display: flex; flex-direction: column; padding: 6px;
+.more-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: max(190px, 100%); width: max-content; max-width: min(340px, calc(100vw - 32px)); display: flex; flex-direction: column; padding: 6px;   /* as wide as its longest item (LIVE1A-008: two of three wrapped) and never narrower than its button */
+ 
   background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, .18); }
 .more-pop button { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px;
   padding: 9px 10px; border-radius: 8px; cursor: pointer; text-align: left; }
@@ -1075,6 +1087,7 @@ label.btn.disabled { opacity: .5; }
 
 /* while the first matches load: the table's own height, so the card below doesn't jump when they arrive */
 .screens-wait { min-height: 70vh; }
+.screens-filters-wait { min-height: min(70vh, 640px); }   /* the filter card keeps its height while it loads, so the page does not jump beside the 70vh results (LIVE1A-035) */
 .screens-table { margin: 0 -24px; }
 @media (max-width: 640px) { .screens-table { margin: 0 -16px; } }
 .screens-table td:first-child { white-space: normal; min-width: 180px; }
@@ -2649,3 +2662,13 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .link-btn.inr-pick, body .k-search input { min-height: 44px; }
   .nw-snaps .btn.quiet.sm { min-width: 44px; }
 }
+/* the Compare page's qualifier for a figure is a numbered note under its table, not a sentence in the cell (LIVE1A-048) */
+.cmp-foots { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; max-width: 100%; overflow-wrap: anywhere; }
+.cmp-foot-mark { margin-left: 2px; font-size: 11px; color: var(--muted); }
+/* LIVE1A-004: the instrument search's groups (stock, futures, options) have a small heading; the rest of the options are one row away */
+.results .search-group { margin: 0; padding-block: 8px 2px; font-weight: 600; text-transform: none; }
+.results .search-more { justify-content: center; color: var(--blue-ink); font-weight: 600; }
+/* LIVE1A-018: the options builder's "More settings" are one grid of four columns, not rows of 5, 3 and 1 */
+.k-form.k-form-quad { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .k-form.k-form-quad { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .k-form.k-form-quad { grid-template-columns: minmax(0, 1fr); } }

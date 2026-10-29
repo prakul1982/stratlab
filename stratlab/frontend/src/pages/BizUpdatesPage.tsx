@@ -55,20 +55,21 @@ export function BizUpdatesPage() {
   const off = me?.plan_info.features?.biz_updates === false;
 
   useEffect(() => {
-    if (off) return;
+    if (off || !me) return;       // not before the plan is known (LIVE1A-043)
     let live = true;
     api<Mine>("/invest/business-updates/mine").then((x) => live && setMine(x)).catch(() => live && setMine(null));
     return () => { live = false; };
-  }, [tries, off]);
+  }, [tries, off, !!me]);
   useEffect(() => {
     if (off) { setLocked(true); return; }
+    if (!me) return;
     let live = true;
     setD(null); setError(null); setLocked(false);
     api<Sector>(`/invest/business-updates?sector=${encodeURIComponent(sector)}`)
       .then((x) => live && setD(x))
       .catch((e) => { if (!live) return; if ((e as ApiError).status === 402) setLocked(true); else setError((e as Error).message); });
     return () => { live = false; };
-  }, [sector, tries, off]);
+  }, [sector, tries, off, !!me]);
 
   const pick = (id: string) => { const p = new URLSearchParams(params); p.set("sector", id); setParams(p, { replace: true }); };
   const filed = (d?.rows ?? []).filter((r) => r.value != null);

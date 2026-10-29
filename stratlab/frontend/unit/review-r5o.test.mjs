@@ -54,7 +54,7 @@ test("AAPL's page: no unsourced segment split, an insider net that matches its r
 test("TCS's key numbers: no scraped strengths and concerns, and a figure's note shows (R5O-011)", () => {
   const research = read("src/pages/Research.tsx");
   assert.doesNotMatch(research, /Strengths and concerns|c\.pros|c\.cons/);
-  assert.match(read("src/components/Research.tsx"), /\{m\.label\}\{m\.note && <span className="k-sub-line">\{m\.note\}<\/span>\}/);
+  assert.match(read("src/components/Research.tsx"), /\{m\.label\}\{m\.note && !mark\(m\) && <span className="k-sub-line">\{m\.note\}<\/span>\}\{mark\(m\) && <sup/);
 });
 
 test("the screener starts with the largest companies (R5O-012)", () => {

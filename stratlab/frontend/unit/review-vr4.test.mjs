@@ -13,7 +13,7 @@ test("VR4-001: Account's six data cards share the row (3 + 3), not 4 + 2 with th
 });
 
 test("VR4-005: the business-update filings' titles start at one x, whatever the width of each date", () => {
-  assert.match(read("src/components/BizUpdates.tsx"), /<span className="k-note biz-day">\{day\(f\.at\)\}<\/span> \{f\.title\}/);
+  assert.match(read("src/components/BizUpdates.tsx"), /<span className="k-note biz-day">\{day\(f\.at\)\}<\/span> \{tidyTitle\(f\.title\)\}/);
   assert.match(read("src/styles.css"), /\.biz-day \{ display: inline-block; min-width: 6\.5em; font-variant-numeric: tabular-nums; \}/);
 });
 

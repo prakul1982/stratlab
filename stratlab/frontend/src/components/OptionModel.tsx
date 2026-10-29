@@ -8,7 +8,7 @@ import { curve, legGreeks, NO_MOVE, scenario, type GreekModel, type ModelLeg, ty
 import type { HeldLeg } from "../lib/options";
 import type { OptChain, OptRoll } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "./Charts";
-import { DataTable, Field, FormActions, FormGrid, Select, Stat, StatRow, type Column } from "./kit";
+import { DataTable, Disclosure, Field, FormActions, FormGrid, Select, Stat, StatRow, type Column } from "./kit";
 import "../pages/trade/trade.css";
 import "../pages/trade/options.css";
 import { PlanInline } from "./PlanInterest";
@@ -177,10 +177,13 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
       <div className="k-stack k-tight">
         <span className="k-eyebrow">Greeks, model estimate{settings ? ` (${settings})` : ""}</span>
         <GreeksTable rows={rows} spot={model.spot} w={{ ...w, days }} r={r} net={complete && sc ? sc : null} />
-        <p className="k-note" data-testid="greeks-sum-note">Each leg's Greeks are for the units it holds, negative for a sold leg, so the legs add up to the net (give or take rounding). IV is per option.</p>
         {!complete && <p className="k-note">{missing.join(", ")}: no price right now, so the model can't value {missing.length === 1 ? "it" : "them"} and the net Greeks and the today curve wait for one.</p>}
         {rows.some((x) => x.g?.iv_from === "atm") && <p className="k-note">* IV of the at-the-money strike: this option's own price gives none.</p>}
-        <ModelInputs m={model} extra={moved ? `What-if: ${settings}; IV floored at 0.5%.` : undefined} />
+        {/* the explanations come after the figures, behind one line (LIVE1A-016: two grey paragraphs sat between the chart and the numbers) */}
+        <Disclosure className="opt-explain" summary="How the Greeks are worked out">
+          <p className="k-note" data-testid="greeks-sum-note">Each leg's Greeks are for the units it holds, negative for a sold leg, so the legs add up to the net (give or take rounding). IV is per option.</p>
+          <ModelInputs m={model} extra={moved ? `What-if: ${settings}; IV floored at 0.5%.` : undefined} />
+        </Disclosure>
       </div>
     </div>
   );

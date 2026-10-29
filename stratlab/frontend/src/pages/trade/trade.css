@@ -58,6 +58,8 @@
 @media (max-width: 700px) { .k-checks-slot[data-i="1"] { order: 1; } .k-checks-slot[data-i="2"] { order: 2; } .k-checks-slot[data-i="3"] { order: 3; } }
 .k-money { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--s4); align-items: start; }
 @media (max-width: 960px) { .k-money { grid-template-columns: minmax(0, 1fr); } }
+/* LIVE1A-005: the numbers (8 figures) beside the cost list (10 rows) left an empty block under the numbers: each is a full-width card, the costs in two columns */
+.k-money.k-money-even { grid-template-columns: minmax(0, 1fr); }
 .search-box.compact { min-height: 50px; }
 .k-pad { padding: 14px; }
 .pub-head { font-size: clamp(40px, 7vw, 76px); font-weight: 400; letter-spacing: -.03em; line-height: 1; }
@@ -99,6 +101,7 @@
 .lib-figs > .k-stat { display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 2px; }
 .lib-figs .k-stat-k { align-self: end; line-height: 1.3; }
 .lib-figs .k-stat-v { font-size: 20px; white-space: nowrap; }
+.lib-dates { display: block; }
 .lib-status { align-items: center; }
 .lib-details { align-self: start; }
 .lib-line { margin: 0; }
@@ -113,3 +116,11 @@
 /* The numbers beside What you'd keep: four across, so eight figures are two even rows, not 5 + 3 (VR1-061) */
 .k-numbers .k-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 700px) { .k-numbers .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* LIVE1A-036: on a phone the Next step buttons are one column of full-width, 44px buttons, each with its words on as many lines as it needs, not rows of 1, 1, 2, 1 of uneven widths */
+@media (max-width: 640px) {
+  .next-steps { flex-direction: column; align-items: stretch; }
+  .next-steps > .btn, .next-steps > .more-menu > .btn { width: 100%; justify-content: center; min-height: 44px; height: auto; text-align: center; }
+  .next-steps > .more-menu { display: flex; }
+}
+@media (max-width: 640px) { .back-link { display: inline-flex; align-items: center; min-height: 44px; } }   /* LIVE1A-036: the run's "Back to the notebook" was 38px tall */

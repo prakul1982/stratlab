@@ -705,10 +705,16 @@ const [saveNote, setSaveNote] = useState("");
   const sw = (color: string, dash = false) => <span className={`sw${dash ? " dash" : ""}`} style={dash ? { color } : { background: color }} aria-hidden="true" />;
   const th = e ? readThemeCached(rootRef.current) : null;
   const slotColor = (slot: number) => (th ? th.slots[slot % th.slots.length] : "currentColor");
-  const cmpPct = (() => {
+  // the compared symbol's % is from the left edge of the window shown, and the legend says so ("+1.1% since 29 Oct 2025"): next
+  // to the company's own day change and the table's 1Y it was the third unlabelled percentage on the page (LIVE1A-049)
+  const cmpFrom = (() => {
     if (!e || !cmp || !h) return null;
     const [a] = e.visibleRange();
-    const first = indexAtOrBefore(cmp.bars, e.bars[a]?.t ?? 0);
+    return e.bars[a]?.t ?? null;
+  })();
+  const cmpPct = (() => {
+    if (!e || !cmp || !h || cmpFrom == null) return null;
+    const first = indexAtOrBefore(cmp.bars, cmpFrom);
     const now = indexAtOrBefore(cmp.bars, h.bar.t);
     return first >= 0 && now >= 0 ? (cmp.bars[now].c / cmp.bars[first].c - 1) * 100 : null;
   })();
@@ -829,7 +835,7 @@ const [saveNote, setSaveNote] = useState("");
             </div>
           )}
           {h && showVolume && h.bar.v > 0 && <div className="pc-hide-phone"><span><span className="k">Vol</span>{compact(h.bar.v)}</span></div>}
-          {cmp && <div>{sw(th?.ink ?? "currentColor")}<span>{cmp.symbol}</span><span className={signCls(cmpPct, signedPct(cmpPct))}>{signedPct(cmpPct)}</span></div>}
+          {cmp && <div>{sw(th?.ink ?? "currentColor")}<span>{cmp.symbol}</span><span className={signCls(cmpPct, signedPct(cmpPct))}>{signedPct(cmpPct)}</span>{cmpFrom != null && <span className="k" data-testid="pc-cmp-since">since {new Date(cmpFrom).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}</div>}
           {e?.studies.map((s) => {
             const i = h?.index ?? -1;
             const own = STUDY[s.config.type].params.length > 0;

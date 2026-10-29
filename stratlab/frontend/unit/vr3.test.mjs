@@ -97,8 +97,9 @@ test("VR3-016: the plan tables do not repeat their heading as the first column's
 });
 
 test("VR3-017, VR3-019: the two run pickers have the width of their names; the US holder company box's hint fits it", () => {
-  assert.match(read("src/pages/CompareExperiments.tsx"), /<div className="k-two k-two-start cmp-top">/);
-  assert.match(css, /\.k-two\.cmp-top \{ grid-template-columns: minmax\(0, 2fr\) minmax\(0, 1fr\); \}/);
+  // LIVE1A-009: the two selects fill one card's width (a pair of columns), with what changed under them
+  assert.match(read("src/pages/CompareExperiments.tsx"), /<FormGrid label="Pick two runs" pair>/);
+  assert.match(css, /\.k-form\.k-form-pair \{ grid-template-columns: repeat\(auto-fit, minmax\(min\(260px, 100%\), 1fr\)\); \}/);
   assert.match(read("src/pages/HoldersPage.tsx"), /placeholder="Like AAPL or Apple"/);
 });
 

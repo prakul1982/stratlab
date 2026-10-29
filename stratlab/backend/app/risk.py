@@ -9,6 +9,8 @@ day, so that day's whole loss since the start, −₹2,11,285, read as one day's
 - its closed trades (the P&L after each one, from its start at its capital);
 - the closing equity it keeps for every day (`day_equity`, open positions at their marks), which wins for the days it has;
 - now, for today."""
+from datetime import datetime, timezone
+
 from .kite_service import ist_date
 
 END = "T23:59:59"              # a day's close sorts after every trade of that day
@@ -116,22 +118,27 @@ def session_of(currency: str, today: str) -> str:
 
 
 def summary(snaps: list[dict], today: str | None = None) -> dict:
+    explicit = today
     today = today or ist_date().isoformat()
     sessions, by_cur = [], {}
     for s in snaps:
+        # a coin trades round the clock and its session page counts its day from 00:00 UTC (its candles' own days); the roll-up counted it from
+        # 00:00 IST, so for the 5.5 hours after UTC midnight the two said different "Today" figures for one session (LIVE1A-044)
+        crypto = (s.get("instrument") or {}).get("market") == "CRYPTO"
+        sday = (explicit or datetime.now(timezone.utc).date().isoformat()) if crypto else today
         acct = s.get("account") or {}
         cap = float(acct.get("capital") or 0)
         eq = float(acct.get("equity") if acct.get("equity") is not None else cap)
-        closes, points, complete = _series(s, cap, eq, today)
-        before = [v for d, v in sorted(closes.items()) if d < today]
+        closes, points, complete = _series(s, cap, eq, sday)
+        before = [v for d, v in sorted(closes.items()) if d < sday]
         start_of_day = cap + before[-1] if before else cap
         cur = _currency(s)
         # crypto trades every day: its day is today, never "Last session (Fri)" from the US calendar (DB-023)
-        session = today if (s.get("instrument") or {}).get("market") == "CRYPTO" else session_of(cur, today)
+        session = sday if (s.get("instrument") or {}).get("market") == "CRYPTO" else session_of(cur, sday)
         # the latest session's result, for a day the market doesn't trade (a weekend, a holiday): "today" is then a day with
         # no session, not an empty one, and the page names the session instead (R41A: "Today ₹0" on a Saturday)
         s_before = [v for d, v in sorted(closes.items()) if d < session]
-        session_pnl = round(_carry(closes, session, 0.0) - (s_before[-1] if s_before else 0.0), 2) if session < today else None
+        session_pnl = round(_carry(closes, session, 0.0) - (s_before[-1] if s_before else 0.0), 2) if session < sday else None
         row = {"id": s["id"], "name": s.get("name"), "kind": s.get("kind") or "single", "currency": cur,
                "market": (s.get("instrument") or {}).get("market"), "capital": cap, "equity": round(eq, 2),
                "pnl": round(eq - cap, 2), "today": round(eq - start_of_day, 2), "open_value": round(open_value(s), 2),

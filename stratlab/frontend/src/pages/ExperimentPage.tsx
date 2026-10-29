@@ -1,10 +1,10 @@
 import { isLegacyEmptied, legacyNote } from "../lib/legacyRun";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { candleSpan, charge, fall, fmtDate, money, monthYear, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
-import { CHECKS, checkTone, checksLine, heroSummary, qtyNote, splitHeadline, tradeListFacts, upDown } from "../lib/tradeUi";
+import { CHECKS, checkTone, checksLine, heroSummary, qtyNote, readablePoints, SHARPE_MIN_DAYS, runDays, tradeListFacts, upDown, verdictLines } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
 import { pctTick, moneyCompact } from "../lib/chartFormat";
@@ -285,14 +285,13 @@ function NextSteps({ nb, e, onDelete }: { nb: Notebook; e: Experiment; onDelete:
   return (
     <Card label="Next step" compact>
       <CardHead title="Next step" level={3} info={HELP.nextSteps} infoLabel="About next steps" />
-      <div className="k-toolbar" role="toolbar" aria-label="Next step">
+      <div className="k-toolbar next-steps" role="toolbar" aria-label="Next step">
         <button type="button" className="btn" onClick={() => go(main.action)}>{main.action === "paper_trade" ? <Pulse size={17} /> : null}{main.text}</button>
         {rest.map((s) => <button type="button" key={s.action} className="btn quiet sm" onClick={() => go(s.action)}>{s.action === "paper_trade" ? <Pulse size={17} /> : null}{s.text}</button>)}
         {main.action !== "edit_rules" && <button type="button" className="btn quiet sm" onClick={() => go("edit_rules")}><Pencil size={17} />Change the rules</button>}
-        {prev.length > 0 && (
-          <button type="button" className="btn quiet sm" onClick={() => nav(`/n/${nb.id}/compare?a=${Math.max(...prev)}&b=${e.v}`)}>Compare with v{Math.max(...prev)}</button>
-        )}
+        {/* "Compare with vN" is behind More, so More never stands alone on a second row (LIVE1A-007) */}
         <MoreMenu items={[
+          ...(prev.length > 0 ? [{ label: `Compare with v${Math.max(...prev)}`, icon: <Layers size={17} />, run: () => nav(`/n/${nb.id}/compare?a=${Math.max(...prev)}&b=${e.v}`) }] : []),
           ...(steps.some((s) => s.action === "paper_trade") ? [] : [{ label: "Paper trade it", icon: <Pulse size={17} />, run: () => go("paper_trade") }]),
           { label: "Try another market", icon: <Globe size={17} />, run: () => nav(`/n/${nb.id}/market`) },
           ...(!nb.group ? [{ label: "Test on a group", icon: <Layers size={17} />, run: () => nav(`/n/${nb.id}/market#group`) }] : []),
@@ -338,7 +337,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const tz = tzOf(e.instrument);
   const intraday = e.tf !== "1d";
   const v = e.verdict;
-  const head = splitHeadline(v.headline);
+  const head = verdictLines(v.headline, v.verdict);
   const unseen = v.checks.find((c) => c.id === "unseen")?.data;
   const cap = e.strategy.risk.capital;
   const st = e.stats;
@@ -386,7 +385,8 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     ["Worst fall", fall(st.mdd), st.mdd, HELP.worstFall],
     ["Win rate", st.n ? `${st.win.toFixed(0)}%` : "–", null, HELP.winRate],
     ["Profit factor", st.pf == null ? "∞" : !st.n ? "–" : st.pf > 100 ? "> 100" : st.pf.toFixed(2), null, HELP.profitFactor],
-    ["Sharpe ratio", num(st.sharpe, 2), null, HELP.sharpe],
+    // a yearly ratio worked out from under six months of days is not a measure (LIVE1A-028: -9.69 from two months of a re-test)
+    ["Sharpe ratio", runDays(e) < SHARPE_MIN_DAYS ? "–" : num(st.sharpe, 2), null, runDays(e) < SHARPE_MIN_DAYS ? `${HELP.sharpe} Not shown for a test under six months: a yearly ratio from so few days is not a measure.` : HELP.sharpe],
     ["Average trade", money(st.avg, cur), st.avg, HELP.avgTrade],
     // the period as the value, the candles in its (i): a note under one stat made its row taller than the first and lifted this card
     // above "What you'd keep" beside it (VR1-061, VR2-014)
@@ -396,7 +396,13 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title={nb.name}
-        lede={<><Link to={`/n/${nb.id}`} className="link">← Back to the notebook</Link> · {/^Experiment v\d+$/.test(e.label) ? e.label : `v${e.v}: ${e.label}`} · {e.instrument.symbol} · {TF_NAME[e.tf]} · {yearSpan(e.range.from.slice(0, 4), e.range.to.slice(0, 4))} · {withOpen(st.n, open)}</>}
+        lede={<>{[
+          <Link key="back" to={`/n/${nb.id}`} className="link back-link">← Back to the notebook</Link>,
+          /^Experiment v\d+$/.test(e.label) ? e.label : `v${e.v}: ${e.label}`, e.instrument.symbol, TF_NAME[e.tf], yearSpan(e.range.from.slice(0, 4), e.range.to.slice(0, 4)), withOpen(st.n, open),
+        ].map((f, i, all) => (
+          // each fact keeps its dot at its own end and wraps whole, so a line never starts with a dot or leaves "9 trades" alone (LIVE1A-007); the run's name may wrap inside itself
+          <Fragment key={i}><span className={i === 1 ? undefined : "nowrap"}>{f}{i < all.length - 1 ? " ·" : ""}</span>{i < all.length - 1 ? " " : ""}</Fragment>
+        ))}</>}
         actions={<ShareMenu nb={nb} e={e} pub={pub} />} />
       <PublicLinkNote pub={pub} />
       {legacy && (
@@ -426,7 +432,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
           {head.checks && <p className="k-small k-muted" data-testid="verdict-checks">{head.checks}</p>}
           <div className="k-stack k-tight" data-testid="verdict-summary">
             {/* the comparison with buy and hold is the headline and its two figures are in The numbers: not said a third time (VR1-062) */}
-            {heroSummary(v.summary, head.checks).map((line) => <p key={line} className="k-lede">{line}</p>)}
+            {heroSummary(v.summary, head.swapped ? head.main : head.checks).map((line) => <p key={line} className="k-lede">{readablePoints(line)}</p>)}
           </div>
           {open > 0 && (
             <p className="k-note" data-testid="open-trade-note">
@@ -481,11 +487,12 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
         <Card label="What you'd keep">
           <CardHead title="What you'd keep" info={HELP.keep} infoLabel="About costs" actions={<span className="k-note">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span>} />
-          <div className="k-rows" role="list" aria-label="Profit and costs">
+          <div className="k-rows two" role="list" aria-label="Profit and costs">
             <div role="listitem"><span>Profit before costs</span><b>{money(e.costs.gross_pnl, cur)}</b></div>
-            {e.costs.items.map((i) => <div role="listitem" key={i.label}><span>{i.label}</span><b>{charge(i.amount, cur)}</b></div>)}
+            {/* the flat brokerage the rules assume is said beside its total, so a person can see what it rests on (LIVE1A-010) */}
+            {e.costs.items.map((i) => <div role="listitem" key={i.label}><span>{i.label === "Brokerage" && e.strategy.risk.brokerage > 0 ? `Brokerage (${money(e.strategy.risk.brokerage, cur)} an order, from the rules)` : i.label}</span><b>{charge(i.amount, cur)}</b></div>)}
             {e.costs.tax.amount != null && <div role="listitem"><span>Tax estimate</span><b>{charge(e.costs.tax.amount, cur)}</b></div>}
-            <div role="listitem" className="hl"><span>{e.costs.tax.amount != null ? "In your pocket" : "After costs"}</span><b className={upDown(e.costs.kept)}>{money(e.costs.kept, cur)}</b></div>
+            <div role="listitem" className="hl wide"><span>{e.costs.tax.amount != null ? "In your pocket" : "After costs"}</span><b className={upDown(e.costs.kept)}>{money(e.costs.kept, cur)}</b></div>
           </div>
           <p className="k-note">{e.costs.tax.note}</p>
         </Card>

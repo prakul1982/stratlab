@@ -92,7 +92,7 @@ test("DP1-013, DP1-015: the start dialog says Free's trial and its last day in I
   assert.equal(P.trialStartLine({ started: true, active: false, ends_at: "2026-10-29T18:30:00+00:00" }), "Your Free paper trading trial has ended, so a new session needs Basic or Pro.");
   assert.match(P.STOP_IS_FINAL, /can't be restarted or paused/);
   const nb = read("src/pages/NotebookPage.tsx");
-  assert.match(nb, /me\?\.plan === "free" && trialStartLine\(me\.trial\) \? <span className="k-note" data-testid="paper-trial">/);
+  assert.match(nb, /me\?\.plan === "free" && trialStartLine\(me\.trial\) \? <span data-testid="paper-trial">/);
   assert.match(read("src/pages/PaperPage.tsx"), /`Free trial until the end of \$\{trialLastDay\(me\.trial\.ends_at\)\} \(India time\)`/);
 });
 

@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { absolute, BROWSE_COMPANIES, HOME_DESCRIPTION, INSTAGRAM, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
 import { FAQ, faqText } from "../src/content/faq.ts";
 import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED } from "../src/content/legal.ts";
+import { PLAN_IDS, PLAN_NAME, PRICE, WHO } from "../src/lib/plans.ts";
 
 const attr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 const text = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
@@ -32,6 +33,20 @@ export function homeJsonLd() {
 
 /** /faq's structured data: the questions it answers (R7V-008: only the home page carried them). */
 export const faqJsonLd = () => ld([faqPage()]);
+
+/** /plans' structured data: each plan with its prices in rupees (GST included), a month and a year, from the same numbers the page draws
+ * (lib/plans.ts, which the server's tests keep equal to plans.py): so a crawler reads the plans without running the page (LIVE1A-066). */
+export function plansJsonLd() {
+  const offer = (plan, label, amount, billing) => ({ "@type": "Offer", name: label === "free" ? PLAN_NAME[plan] : `${PLAN_NAME[plan]}, ${label}`, price: String(amount), priceCurrency: "INR", url: `${SITE}/plans`,
+    availability: "https://schema.org/InStock",
+    priceSpecification: { "@type": "UnitPriceSpecification", price: String(amount), priceCurrency: "INR", valueAddedTaxIncluded: true, ...(billing ? { billingDuration: billing, unitCode: billing === "P1Y" ? "ANN" : "MON" } : {}) } });
+  return ld([{ "@context": "https://schema.org", "@type": "ItemList", name: "StratLab plans", itemListElement: PLAN_IDS.map((id, i) => ({
+    "@type": "ListItem", position: i + 1, item: { "@type": "Product", name: `StratLab ${PLAN_NAME[id]}`, description: WHO[id], brand: { "@type": "Brand", name: "StratLab" },
+      offers: id === "free" ? [offer(id, "free", 0, null)] : [offer(id, "monthly", PRICE[id][0], "P1M"), offer(id, "yearly", PRICE[id][1], "P1Y")] } })) }]);
+}
+
+/** The plans as plain text under /plans' opening words: each plan, what it is for and its prices, for a crawler that runs no script. */
+export const plansList = () => `\n<ul class="boot-links">\n${PLAN_IDS.map((id) => `<li><b>${text(PLAN_NAME[id])}</b>: ${text(WHO[id])}. ${id === "free" ? "₹0, no card needed." : `₹${PRICE[id][0].toLocaleString("en-IN")} a month or ₹${PRICE[id][1].toLocaleString("en-IN")} a year, GST included.`}</li>`).join("\n")}\n</ul>`;
 
 /** The plain block's words for a page: its heading, its opening paragraphs and, on /faq, every question and answer. */
 export function bootBody({ heading, summary, faq = false }) {
@@ -94,9 +109,9 @@ export const HOME_LINKS = `\n<ul class="boot-links">\n${BROWSE_COMPANIES.map(([t
 export function pageFiles(template) {
   const files = PAGES.map((p) => [p.path === "/" ? "index.html" : `${p.path.slice(1)}/index.html`,
     pageHtml(template, { title: p.title, description: p.description, canonical: p.index ? absolute(p.canonical ?? p.path) : null, index: p.index,
-      jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : "", heading: p.heading, summary: p.summary,
+      jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : p.path === "/plans" ? plansJsonLd() : "", heading: p.heading, summary: p.summary,
       body: LEGAL_BLOCKS[p.path] ? legalBody(p.path, p.heading) : "",
-      after: p.path === "/library" ? LIBRARY_LINKS : p.path === "/" ? HOME_LINKS : "",
+      after: p.path === "/library" ? LIBRARY_LINKS : p.path === "/" ? HOME_LINKS : p.path === "/plans" ? plansList() : "",
       faq: p.path === "/faq" })]);
   files.push(["404.html", pageHtml(template, { title: "Page not found · StratLab", description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
     heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION], after: NOT_FOUND_LINKS, readable: true })]);
