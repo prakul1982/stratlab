@@ -583,6 +583,9 @@ def doc_to_read(row: dict) -> dict | None:
 
 
 # ---------- reading the sources ----------
+MINOR_PREFIX = "SEC filings for "        # one company's filing page: a read that fails here leaves the feed a Check, not a Problem (LIVE1C-002)
+
+
 def _try(problems: list[str], what: str, fn, default=None):
     try:
         return fn()
@@ -738,7 +741,7 @@ def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookup
         if not (r.get("expected") or r.get("priced") or r.get("filed", "") >= (today - timedelta(days=45)).isoformat()):
             continue
         n += 1
-        got = _try(problems, f"SEC filings for {r['name'][:30]}", lambda r=r: edgar.docs_for(r["name"], today))
+        got = _try(problems, f"{MINOR_PREFIX}{r['name'][:30]}", lambda r=r: edgar.docs_for(r["name"], today))
         r["docs_checked"] = today.isoformat()
         if got and got.get("docs"):
             r["docs"] = [{"kind": d["form"], "form": d["form"], "label": d["form"], "url": d["url"], "link": d.get("link"), "date": d["date"], "source": "sec"}
@@ -1284,11 +1287,18 @@ class Job:
         lines = [(f"{'India' if m == 'IN' else 'US'}", x) for m in ("IN", "US") for x in (st.get(m) or {}).get("missing", [])[:6]]
         gaps = [f"Missing ({where}): {x}" for where, x in lines if not awaits(x)]
         waits = [f"To check ({where}): {x}" for where, x in lines if awaits(x)]
+        # one company's filing page the SEC answered with a 500 is a Check with its own words, not a red feed (LIVE1C-002): a Problem is
+        # the feed itself failing, and the same feed reads India's issues and bids besides
+        minor = [p for p in problems if p.startswith(MINOR_PREFIX)]
+        major = [p for p in problems if not p.startswith(MINOR_PREFIX)]
+        notes = ([f"{len(waits)} filing{'s' if len(waits) != 1 else ''} with the regulators {'has' if len(waits) == 1 else 'have'} no exchange "
+                  "listing yet; looked for again each day."] if waits else []) \
+            + ([f"{len(minor)} company filing page{'s' if len(minor) != 1 else ''} the SEC didn't answer just now ({minor[0][len(MINOR_PREFIX):].split(':')[0]}"
+                f"{' and more' if len(minor) > 1 else ''}); read again at the next run."] if minor else [])
         self.status.update(last_run=now.isoformat(timespec="seconds"), read=market, problems=(gaps + waits + problems[:5])[:10],
                            last_error=(f"{len(gaps)} issue{'s' if len(gaps) != 1 else ''} on the exchanges' lists {'is' if len(gaps) == 1 else 'are'} missing from ours."
-                                       if gaps else problems[0][:200] if problems else None),
-                           check=(f"{len(waits)} filing{'s' if len(waits) != 1 else ''} with the regulators {'has' if len(waits) == 1 else 'have'} no exchange "
-                                  "listing yet; looked for again each day." if waits else None))
+                                       if gaps else major[0][:200] if major else None),
+                           check=" ".join(notes) or None)
         return {"rows": len(rows), "problems": problems, "missing": missing}
 
     def read_open(self, now: datetime, final: bool = False) -> int:

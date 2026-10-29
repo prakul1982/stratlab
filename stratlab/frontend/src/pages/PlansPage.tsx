@@ -197,7 +197,7 @@ export function PlansPage() {
       </div>
       {anyRupees && billing && <Notice>{rupeesNote(currency, priceOf("basic", period).about && priceOf("pro", period).about
         ? { basic: priceOf("basic", period).about as string, pro: priceOf("pro", period).about as string } : null)}</Notice>}
-      <PlanCompare plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
+      <PlanCompare folded plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}

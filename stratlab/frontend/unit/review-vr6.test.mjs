@@ -27,8 +27,9 @@ test("VR6-010: an empty watchlist takes a row of its own on My space, and Coming
 
 test("VR6-011: the Invest home stacks its three cards when nothing is watched, instead of a one-line card beside two tall ones", () => {
   const src = read("src/pages/SpaceHomes.tsx");
-  assert.match(src, /const nothingWatched = watching !== null && !watching\.some\(\(w\) => w\.region === region\);/);
-  assert.match(src, /className=\{nothingWatched \? "space-col" : "grid2 space-panels"\}/);
+  // (LIVE1C-090: one or two stocks stack the cards as none do)
+  assert.match(src, /const fewWatched = watching !== null && watching\.filter\(\(w\) => w\.region === region\)\.length <= 2;/);
+  assert.match(src, /className=\{fewWatched \? "space-col" : "grid2 space-panels"\}/);
 });
 
 test("VR6-012: with fewer than three snapshots the list sits inside the totals card, not in a card of its own with one line", () => {

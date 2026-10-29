@@ -95,12 +95,19 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
         <Card id="holdings-dividends">
           <CardHead title="Dividends" info="Amount a share as the company announced it, times the shares you'd hold on the ex-date. The last 12 months assume you held today's quantity throughout (worked back through any bonus or split), so they're an estimate; amounts are before tax. Tax tools and the ITR export add the same dividends up by financial year (April to March), each in the year of its record date, so their figures are the financial-year ones below, not the rolling twelve months."
             actions={<Link className="link k-small" to="/research/corporate-actions?region=IN">Corporate actions calendar →</Link>} />
-          <FactTable label="Dividends in total" itemHead="Period" figureHead="Amount" noteHead="Payments" rows={[
-            { id: "ahead", k: "Announced, ex-date ahead", v: inr(data.ahead_total) },
-            { id: "12m", k: "Last 12 months (estimated)", v: inr(data.received_total) },
-            ...(data.by_fy ?? []).filter((y) => y.count > 0).map((y) => ({ id: `fy${y.fy}`, k: `${y.label} (estimated)`, v: inr(y.total),
-              n: <>{y.count} payment{y.count === 1 ? "" : "s"} · <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>as in tax tools</Link></> })),
-          ]} />
+          {/* a financial year with the same total as the last twelve months is that figure said twice (LIVE1C-058: ₹49,724 twice): one row, which says it is both */}
+          {(() => {
+            const years = (data.by_fy ?? []).filter((y) => y.count > 0);
+            const same = years.find((y) => Math.round(y.total) === Math.round(data.received_total));
+            return (
+              <FactTable label="Dividends in total" itemHead="Period" figureHead="Amount" noteHead="Payments" rows={[
+                { id: "ahead", k: "Announced, ex-date ahead", v: inr(data.ahead_total) },
+                ...(!same ? [{ id: "12m", k: "Last 12 months (estimated)", v: inr(data.received_total) }] : []),
+                ...years.map((y) => ({ id: `fy${y.fy}`, k: `${y.label} (estimated)`, v: inr(y.total),
+                  n: <>{y.count} payment{y.count === 1 ? "" : "s"}{y === same ? ", the same as the last 12 months" : ""} · <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>as in tax tools</Link></> })),
+              ]} />
+            );
+          })()}
           {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} stack phonePage={8} /></>}
           {received.length > 0 && <><h3 className="k-sub">Paid in the last 12 months, by company</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack phonePage={8} /></>}
           {data.received.length > 6 && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setShowAll(!showAll)}>{showAll ? "Show fewer" : `Show all ${data.received.length}`}</button>}

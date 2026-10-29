@@ -474,10 +474,10 @@ export function NetWorthPage() {
         <>
           <Card label="Totals">
             <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined} />
+            {/* with no loans the assets are the net worth: the same figure said again is left out (LIVE1C-056: ₹20,33,027 five times) */}
             <FactTable label="Where you stand" itemHead="" figureHead="Now" noteHead="Change" rows={[
               { id: "net", k: "Net worth", v: <b>{inr(t.net)}</b>, n: <>{move && <Delta value={move.change}>{signedInrCompact(move.change)}</Delta>} {move ? sinceNote(move, day, inrCompact) : restatedNote(hist, view?.valuation, day) ?? undefined}</> },
-              { id: "assets", k: "Assets", v: inr(t.assets) },
-              { id: "loans", k: "Loans", v: inr(t.liabilities) },
+              ...(t.liabilities > 0 ? [{ id: "assets", k: "Assets", v: inr(t.assets) }, { id: "loans", k: "Loans", v: inr(t.liabilities) }] : []),
             ]} />
             {/* a source that couldn't be read or valued: named; snapshots of such a total are marked partial */}
             {/* DG-016: something with no price yet is a routine note; a source that couldn't be read is the warning */}
@@ -519,7 +519,8 @@ export function NetWorthPage() {
             </Notice>
           )}
 
-          {view.allocation.length > 0 && (
+          {/* a single class is a bar at 100% that says nothing the table does not (LIVE1C-056) */}
+          {view.allocation.length > 1 && (
             <Card>
               <CardHead title="By asset class" />
               <BarList label="Assets by class" footnote="Share of total assets, before loans."

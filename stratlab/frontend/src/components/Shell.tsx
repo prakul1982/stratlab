@@ -201,7 +201,7 @@ export function Shell({ children }: { children: ReactNode }) {
   };
   const homeLabel = space === "mine" ? MINE_NAME : `${SPACES[space].label} home`;
   // the space's main action, in the menu and on a phone's top bar alike (DI-021: the phone's "+" was always New notebook)
-  const main = mainAction(space, focus);
+  const main = mainAction(space, focus, !!me?.has_holdings);
   const sidebar = (
     <aside ref={aside} id="side-menu" className={`sidebar${open ? " open" : ""}`} aria-label={open ? "Menu" : "Navigation"}
       {...(open ? { role: "dialog", "aria-modal": true } : {})}>
@@ -279,9 +279,10 @@ export function Shell({ children }: { children: ReactNode }) {
 
 
 /** Each space's main button: what the space is for, in one action. My space's follows what the person came for. */
-export function mainAction(space: SpaceView, focus: string | null | undefined): { to: string; icon: ReactNode; label: string } {
+export function mainAction(space: SpaceView, focus: string | null | undefined, hasHoldings = false): { to: string; icon: ReactNode; label: string } {
   return space === "invest" || (space === "mine" && focus === "invest") ? { to: "/research", icon: <Lens size={16} />, label: "Look up a company" }
-    : space === "money" || (space === "mine" && focus === "money") ? { to: "/holdings", icon: <Book size={16} />, label: "Add your holdings" }
+    // the next real step: add them when there are none, update them when there are (LIVE1C-055: "Add your holdings" beside three holdings)
+    : space === "money" || (space === "mine" && focus === "money") ? { to: "/holdings", icon: <Book size={16} />, label: hasHoldings ? "Update holdings" : "Add your holdings" }
     : { to: "/new", icon: <Plus size={16} />, label: "New notebook" };
 }
 

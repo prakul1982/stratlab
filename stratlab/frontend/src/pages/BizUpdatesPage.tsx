@@ -6,7 +6,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { safeHref } from "../lib/format";
 import { bizChange, bizValue, filedOn, periodName, type Exchange } from "../components/BizUpdates";
 import { foldEmptyMonths } from "../lib/biz";
-import { Badge, Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, type Column } from "../components/kit";
+import { Badge, Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, Spark, type Column } from "../components/kit";
 import { LockedPreview } from "../components/LockedPreview";
 import { useApp } from "../lib/app";
 
@@ -19,23 +19,34 @@ interface SectorRow {
   symbol: string; name: string; metric: string | null; unit: string | null; span: "month" | "quarter" | null; period: string | null; value: number | null;
   change_prev: number | null; change_year: number | null; step: "month" | "quarter" | null; filed: string | null; url: string | null;
   page: number | null; exchange: Exchange | null; reads: number; read_ok: number;
+  /** the headline figure by period, oldest first (up to 24 months) */ points?: { period: string; value: number }[];
+  /** "read", "none_filed" (its filings were looked through: no update among them), "reading" or "unchecked" */ status?: string;
 }
+interface Total { period: string; unit: string; value: number; companies: number; of: number; names: string[]; year_ago: number | null; change_year: number | null }
 interface CompareCell { value: number; year_change: number | null; year_ago: number | null; url: string; page: number | null; exchange: Exchange | null; filed: string }
 interface CompareColumn { symbol: string; name: string; metric: string | null; unit: string | null; step: "month" | "quarter" | null; points: Record<string, CompareCell> }
 interface Compare { periods: string[]; companies: CompareColumn[]; without: string[]; note: string }
-interface Sector { sector: string; label: string; rows: SectorRow[]; sectors: { id: string; label: string }[]; note: string; compare: Compare }
+interface Sector { sector: string; label: string; rows: SectorRow[]; sectors: { id: string; label: string }[]; note: string; compare: Compare; total?: Total | null; months?: number }
 interface MineRow extends SectorRow { kind: "holding" | "watchlist" }
-interface Mine { rows: MineRow[]; without: { symbol: string; name: string; kind: "holding" | "watchlist" }[]; note: string }
+interface Mine { rows: MineRow[]; without: { symbol: string; name: string; kind: "holding" | "watchlist"; status?: string }[]; note: string }
+
+/** How many months of each company's figures the small charts show: one choice for every table on the page. */
+const RANGES = [{ value: "6", label: "6 months" }, { value: "12", label: "1 year" }, { value: "24", label: "2 years" }];
 
 const kindName = (k: "holding" | "watchlist") => (k === "holding" ? "Holding" : "Watchlist");
 
 /** The company, its figure and the period it is for, the changes, and the filing it came from: the same columns in My stocks and in a sector. */
-function figureColumns(extra?: Column<SectorRow>): Column<SectorRow>[] {
+function figureColumns(months: number, extra?: Column<SectorRow>): Column<SectorRow>[] {
   const cols: Column<SectorRow>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => <><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#business-updates`}><b>{r.name}</b></Link><span className="k-sub-line">{r.metric}</span></> },
     { key: "v", header: "Latest figure", numeric: true, cell: (r) => <>{bizValue(r.value, r.unit)}<span className="k-sub-line">{r.period ? periodName(r.period, r.span ?? "month") : ""}</span></> },
     { key: "p", header: "On the previous", numeric: true, cell: (r) => bizChange(r.change_prev, r.unit) },
     { key: "y", header: "On the year", numeric: true, cell: (r) => bizChange(r.change_year, r.unit) },
+    { key: "h", header: "History", cardLabel: "History", cell: (r) => {
+      const pts = (r.points ?? []).slice(-months);
+      return pts.length < 2 ? <span className="k-muted">Too few months</span>
+        : <span className="biz-spark"><Spark values={pts.map((x) => x.value)} tone="neutral" height={28} label={`${r.name}, ${r.metric ?? "figure"}, ${pts.length} ${r.span === "quarter" ? "quarters" : "months"} to ${periodName(pts[pts.length - 1].period, r.span ?? "month")}`} /></span>;
+    } },
     { key: "f", header: "Filing", cell: (r) => (r.url ? <a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">{filedOn(r.filed)}{r.exchange ? ` · ${r.exchange}` : ""}{r.page ? `, p. ${r.page}` : ""} ↗</a> : "–") },
   ];
   if (extra) cols.splice(1, 0, extra);
@@ -50,6 +61,8 @@ export function BizUpdatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
   const [tries, setTries] = useState(0);
+  const [range, setRange] = useState("12");
+  const months = Number(range);
   // the plan says it's locked: nothing is asked of the server that it would refuse (DP1-019: 402s in the console)
   const { me } = useApp();
   const off = me?.plan_info.features?.biz_updates === false;
@@ -73,7 +86,8 @@ export function BizUpdatesPage() {
 
   const pick = (id: string) => { const p = new URLSearchParams(params); p.set("sector", id); setParams(p, { replace: true }); };
   const filed = (d?.rows ?? []).filter((r) => r.value != null);
-  const waiting = (d?.rows ?? []).filter((r) => r.value == null);
+  const waiting = (d?.rows ?? []).filter((r) => r.value == null && r.status !== "none_filed");
+  const none = (d?.rows ?? []).filter((r) => r.value == null && r.status === "none_filed");
   const choices = (d?.sectors ?? []).map((s) => ({ value: s.id, label: s.label }));
 
   return (
@@ -105,20 +119,26 @@ export function BizUpdatesPage() {
               <CardHead title="My stocks" info="Your holdings first, then your watchlist: the Indian stocks that have business updates read into numbers. A stock with none read yet is named below the table." infoLabel="About my stocks" />
               {/* stack: on a phone each company is a card with every figure labelled, not a table cut to its first column (DF-014) */}
               <DataTable stack label="My stocks' latest business updates" rows={mine.rows} rowKey={(r) => r.symbol} rowAttrs={(r) => ({ "data-company": r.symbol })}
-                columns={figureColumns({ key: "k", header: "From", cell: (r) => <Badge tone="plain" dot={false}>{kindName((r as MineRow).kind)}</Badge> })} />
-              {mine.without.length > 0 && <p className="k-note">Not read yet: {mine.without.map((x) => x.name).join(", ")}.</p>}
+                columns={figureColumns(months, { key: "k", header: "From", cell: (r) => <Badge tone="plain" dot={false}>{kindName((r as MineRow).kind)}</Badge> })} />
+              {mine.without.some((x) => x.status === "none_filed") && <p className="k-note" data-testid="biz-mine-none">No business update among their exchange filings: {mine.without.filter((x) => x.status === "none_filed").map((x) => x.name).join(", ")}.</p>}
+              {mine.without.some((x) => x.status !== "none_filed") && <p className="k-note">Not read yet: {mine.without.filter((x) => x.status !== "none_filed").map((x) => x.name).join(", ")}.</p>}
               <p className="k-note">{mine.note}</p>
             </Card>
           ))}
           <div className="k-toolbar">
             {choices.length <= 4 ? <Seg label="Sector" value={sector} onChange={pick} options={choices} /> : <ChipBar label="Sector" value={sector} onChange={pick} options={choices} />}
+            <Seg label="Range of the small charts" value={range} onChange={setRange} options={RANGES} />
           </div>
           <Card>
             <CardHead title={d.label} info="Each filing is read once: the figures are copied from the company's own document and kept only when the line they come from is found in it. Each company's page shows the line, the page and its 24-month chart." infoLabel="How the figures are read" />
             {filed.length === 0 ? <EmptyState title="Nothing read into numbers yet">No update in this list has been read into numbers yet. They are read each evening after they're filed.</EmptyState> : (
               <DataTable stack label={d.label} rows={filed} rowKey={(r) => r.symbol} sticky={filed.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
-                columns={[...figureColumns(), { key: "r", header: "Filings read", numeric: true, info: "How many of this company's update filings were read into figures that could be checked against the document.", cell: (r) => `${r.read_ok} of ${r.reads}` }]} />
+                columns={[...figureColumns(months), { key: "r", header: "Filings read", numeric: true, info: "How many of this company's update filings were read into figures that could be checked against the document.", cell: (r) => `${r.read_ok} of ${r.reads}` }]}
+                foot={d.total ? { c: `Total of ${d.total.companies} companies`, v: <>{bizValue(d.total.value, d.total.unit)}<span className="k-sub-line">{periodName(d.total.period, filed[0]?.span ?? "month")}</span></>,
+                  p: "", y: bizChange(d.total.change_year, d.total.unit), h: "", f: "", r: "" } : undefined} />
             )}
+            {d.total && <p className="k-note" data-testid="biz-total">Total: the {d.total.companies} {d.total.companies === 1 ? "company" : "companies"} here with a figure in {d.total.unit} for {periodName(d.total.period, filed[0]?.span ?? "month")} added together{d.total.of > d.total.companies ? ` (${d.total.of - d.total.companies} others use another unit or period)` : ""}; each is the company's own total, so their definitions differ.{d.total.change_year == null ? " No change on the year: not every one of them has its year-ago figure." : ""}</p>}
+            {none.length > 0 && <p className="k-note" data-testid="biz-none">No business update among their exchange filings: {none.map((r) => r.name).join(", ")}.</p>}
             {waiting.length > 0 && <p className="k-note">Not read yet: {waiting.map((r) => r.name).join(", ")}.</p>}
             <p className="k-note">{d.note}</p>
           </Card>

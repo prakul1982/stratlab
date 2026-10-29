@@ -41,7 +41,7 @@ test("UI-FIX-1 (R1): the Invest home pairs short cards with short cards, and the
 });
 
 test("UI-FIX-1 (R2): lists spread over the card instead of one narrow column", () => {
-  assert.match(read("src/pages/CorpActionsPage.tsx"), /className="inv-days"/);
+  assert.match(read("src/pages/CorpActionsPage.tsx"), /className="k-stack">\{\[\.\.\.new Set\(rows\.map\(\(r\) => r\.ex_date\)\)\]/);     // one table under another, full width (RES-1): two columns of tables cut every one at its right edge
   assert.match(read("src/components/CorpActions.tsx"), /<DataTable label="Corporate actions: ahead, and the past three years, newest first"/);   // (UI-CO item 1: one table, no two columns of chips)
   assert.match(read("src/pages/HoldingsPage.tsx"), /className="h-filings"/);
   assert.match(read("src/pages/AccountPage.tsx"), /className="k-dl spread"/);

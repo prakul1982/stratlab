@@ -4,6 +4,11 @@
 /* side-by-side cards keep their own height (R5O-036): stretched to the taller one, the other was a big empty box */
 .k-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: start; }
 .k-cols > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* the results calendar's filters: one compact grid, the size chips across the top, the choices in as many columns as fit (RES-1) */
+.res-filters { gap: var(--s3); }
+.res-count { justify-content: space-between; }
+.res-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--s3) var(--s4); align-items: start; }
+.res-filter-grid > .k-field.wide { grid-column: 1 / -1; }
 @media (max-width: 900px) { .k-cols { grid-template-columns: minmax(0, 1fr); } }
 .k-split2 { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--s5); align-items: start; }
 /* side by side only when the results still get a wide column next to the filters and the menu (R1-045) */
@@ -37,6 +42,7 @@
 
 /* company tiles */
 .inv-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s2); }
+.inv-tiles.fill { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }   /* LIVE1C-090: one or two stocks share the card's width, not a third of it */
 /* CK-2 (R9): the peers fill the card in equal rows (6 = 3 + 3, 4 = 2 + 2), never five across and one left over */
 .co-peers-1 .inv-tiles { grid-template-columns: minmax(0, 1fr); } .co-peers-2 .inv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .co-peers-3 .inv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 640px) { .co-peers .inv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -46,6 +52,8 @@
 .inv-tile-top b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inv-tile-px { font-weight: 500; white-space: nowrap; }
 .inv-tile-chg { display: flex; flex-wrap: wrap; gap: var(--s1) 6px; align-items: center; min-height: 22px; }
+/* LIVE1C-090: a tile's F&O note ("Lot 225→250 from the Jan 2027 series") wraps inside its pill rather than being cut off with an ellipsis */
+.inv-tile .surv-badge.fo-badge { white-space: normal; overflow: visible; text-overflow: clip; border-radius: 12px; line-height: 1.3; }
 
 /* headlines */
 .inv-news { display: flex; flex-direction: column; }
@@ -137,10 +145,6 @@ a.inv-theme:hover { border-color: var(--ink); }
 .inv-day { display: flex; flex-direction: column; gap: var(--s2); }
 /* the days side by side where there is room, in the order they come (across, then down): one column of them left a wide card two-thirds empty (UI-FIX-1, R2) */
 /* VR1-105: rows two across where there is room (past corporate actions), each a block of its own, no rule between */
-.inv-rows.inv-rows-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s4) var(--s6, 32px); align-items: start; }
-.inv-rows.inv-rows-cols > .inv-row { border-top: 0; padding: 0; }
-.inv-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s4) var(--s6, 32px); align-items: start; }
-.inv-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); gap: var(--s4) var(--s5); align-items: start; }
 .inv-alert { display: flex; justify-content: space-between; align-items: center; gap: var(--s3) var(--s4); flex-wrap: wrap; padding: var(--s3) 0; border-top: 1px solid var(--line); }
 .inv-alert > .k-stack { flex: 1 1 280px; gap: 4px; }
 .inv-rows > .inv-alert:first-child { border-top: 0; padding-top: 0; }
@@ -181,3 +185,7 @@ a.inv-theme:hover { border-color: var(--ink); }
   .cmp-sections .k-table { table-layout: fixed; width: 100%; }
   .cmp-sections .k-table th:first-child { width: 44%; }
 }
+/* business updates: the small history chart in a company's row (RES-1 follow-up) */
+.biz-spark { display: block; width: 120px; max-width: 100%; }
+.res-sym { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; white-space: nowrap; }
+.res-moves { display: flex; flex-wrap: wrap; gap: 0 8px; }

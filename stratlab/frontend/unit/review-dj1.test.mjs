@@ -68,8 +68,11 @@ test("DJ-002, DJ-007: AI providers waiting on their quota are one line; a cut li
     p("SambaNova", "failed", { state_text: "Failing: timed out." })];
   const ov = { server: { kite_ready: true, feed_connected: true, live_sessions: 0, auto_login_configured: true, auto_login: { ok: true, message: "ok" }, ai, billing_enabled: true }, stats: {} };
   const items = attention(ov, null, [{ id: "events", name: "Market events", schedule: "x", last_run: "2026-10-24T13:00:00Z", error: "Partial: 4 of 5 sources read. Not read: Index provider: down.", state: "warn" }]).map((a) => a.text);
-  assert.ok(items.includes("AI: 3 providers paused for now (free quota used up, or resting), 2 working; they reset on their own, nothing to do."), items.join("\n"));
-  assert.ok(items.includes("AI, SambaNova: Failing: timed out."), items.join("\n"));
+  // LIVE1C-003: what resets on its own ("nothing to do") and a passing server fault are on the AI light, not in Needs your attention
+  assert.ok(!items.some((t) => /paused for now|nothing to do/.test(t)), items.join("\n"));
+  assert.ok(!items.some((t) => t.startsWith("AI, SambaNova")), items.join("\n"));
+  const rejected = attention({ ...ov, server: { ...ov.server, ai: [...ai, p("Mistral", "failed", { state_text: "401: the key was rejected." })] } }, null, []).map((a) => a.text);
+  assert.ok(rejected.includes("AI, Mistral: 401: the key was rejected."), rejected.join("\n"));
   assert.ok(!items.some((t) => t.startsWith("AI, Cerebras")));
   assert.ok(items.some((t) => t.includes("Market events (Partial: 4 of 5 sources read. Not read: Index provider: down.)")), items.join("\n"));
   const cut = oneLine("SambaNova is currently experiencing high demand and cannot serve the request right now please", 40);
@@ -176,9 +179,9 @@ test("DJ-004, DJ-005, DJ-006, DJ-008: Overview puts what needs you first, names 
   assert.equal(revenueText({ USD: 16, INR: 6990 }), "INR 6,990 · USD 16");
   const src = read("src/pages/admin/OverviewSection.tsx");
   assert.ok(src.indexOf('<Card label="Needs your attention">') < src.indexOf("<ViewAsCard />"));
-  assert.match(src, /label="Server errors \(since restart\)"/);
-  assert.match(src, /label="Revenue, last 30 days"/);
-  assert.match(src, /label="Active users, last 7 days"/);
+  assert.match(src, /label: "Server errors \(since restart\)"/);
+  assert.match(src, /label: "Revenue, last 30 days"/);
+  assert.match(src, /label: "Active users, last 7 days"/);
   assert.match(src, /Bills StratLab can't read:/);
   assert.match(src, /<Disclosure summary=\{`Show the \$\{okFeeds\.length\} feeds that are OK`\}/);
 });
@@ -205,7 +208,7 @@ test("DJ-020, DJ-025: storage shows a meter per real database, and the reclaim s
 test("DJ-013, DJ-023: the job buttons are quiet and the tables are cards on a phone; session cells break inside the card", () => {
   const data = read("src/pages/admin/DataSection.tsx");
   assert.match(data, /className="btn quiet sm" disabled=\{j\.running/);
-  assert.match(data, /columns=\{cols\} stack \/>/);
+  assert.match(data, /columns=\{cols\} stack phonePage=\{8\} \/>/);
   const users = read("src/pages/admin/UsersSection.tsx");
   assert.match(users, /<DataTable label="Paper trading sessions"[^\n]*stack \/>/);
   assert.match(users, /<span className="adm-break">\{s\.email\}<\/span>/);

@@ -74,11 +74,35 @@ def mode() -> str:
     return "live" if key.startswith("rzp_live_") else "test" if key.startswith("rzp_test_") else "unknown"
 
 
+def hook_status() -> dict:
+    """{"mode", "last_at"}: the key's mode and when Razorpay last delivered a signed event (None: never). Admin's Payments light is
+    Check, not OK, in live mode with none ever received (LIVE1C-008): a first real payment would not upgrade the plan by itself."""
+    try:
+        last = (db.json_value(db.get_setting(LAST_WEBHOOK), {}) or {}).get("at")
+    except Exception:
+        last = None
+    return {"mode": mode(), "last_at": last}
+
+
 def _when(ts) -> str | None:
     try:
         return datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat(timespec="seconds") if ts else None
     except (TypeError, ValueError, OverflowError):
         return None
+
+
+def price_of(sub: dict) -> dict:
+    """{"amount", "currency", "period"} a subscription charges, from the plan, period and currency it was made with (its notes) and the
+    prices on the Plans page; empty when the notes don't say (LIVE1C-007: a table of bare IDs, with no amount)."""
+    notes = sub.get("notes") if isinstance(sub.get("notes"), dict) else {}
+    plan, period, cur = notes.get("plan"), notes.get("period") or "month", notes.get("currency") or "INR"
+    if plan not in ("basic", "pro"):
+        return {"amount": None, "currency": None, "period": None}
+    try:
+        amount = (pricing.table().get(cur) or {}).get(plan + ("_year" if period == "year" else ""))
+    except Exception:
+        amount = None
+    return {"amount": float(amount) if amount is not None else None, "currency": cur, "period": period}
 
 
 def activity(count: int = 50) -> dict:
@@ -96,7 +120,8 @@ def activity(count: int = 50) -> dict:
         subs = (c.subscription.all({"count": count}) or {}).get("items") or []
         out["subscriptions"] = [{"id": x.get("id"), "status": x.get("status"), "plan": plan_for(x), "plan_id": x.get("plan_id"),
                                  "created_at": _when(x.get("created_at")), "current_end": _when(x.get("current_end")),
-                                 "paid_count": x.get("paid_count")} for x in subs]
+                                 "paid_count": x.get("paid_count"), "user_id": (x.get("notes") or {}).get("user_id") if isinstance(x.get("notes"), dict) else None,
+                                 **price_of(x)} for x in subs]
     except Exception as e:
         out["errors"]["subscriptions"] = (str(e) or e.__class__.__name__)[:200]
     try:

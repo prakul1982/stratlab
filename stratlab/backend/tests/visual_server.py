@@ -81,6 +81,7 @@ def build():
     mp.setattr(mood, "US_MIN_COVER", 0.0)
     mp.setattr(mood, "ADD_UP", 1e9)           # ...and the points of a score of companies can't add up to an index's own move
     sizes = breadth(mp)
+    results_calendar(mp)
     positioning_history()
     stock_desks_history(mp)
     # the public NAV files, from the test fixtures, for the mutual funds page
@@ -517,6 +518,9 @@ def screen_index():
                          roce=round(rng.uniform(0, 40), 1), div_yield=round(rng.uniform(0, 4), 2), net_margin=round(rng.uniform(-5, 30), 1),
                          opm=round(rng.uniform(5, 40), 1), debt_equity=round(rng.uniform(0, 2), 2), bank=False,
                          growth={"sales_cagr_3y": round(rng.uniform(-10, 30), 1)})
+            if region == "IN" and page:
+                from app import stock_pages
+                f["q"] = stock_pages.quarter_yoy(s)         # the latest quarter against a year before, for the results calendar
             r = screens.row(region, sym, f)
             if region == "IN":          # a promoter or insider bought on the open market: 10 days ago for every fourth
                 r["insider_buy_at"] = (date.today() - timedelta(days=10 if i % 4 == 1 else 200)).isoformat() if i % 2 else None
@@ -526,6 +530,80 @@ def screen_index():
         if region == "IN":          # the stored purchase dates reach back 120 days: the 30 and 90 day windows are covered, 180 and 365 not (RC3M-009)
             index["insider_from"] = (date.today() - timedelta(days=120)).isoformat()
         db.set_setting(screens.INDEX_KEY + region, json.dumps(index))
+
+
+def results_calendar(mp):
+    """The results calendar with a day's table to read: the twenty companies of the screens' index spread over this week and next
+    (four today), each with earlier results days and a made-up price history that jumps on them, and made-up option prices for
+    the F&O stocks, so the table's price, move and implied-move columns have something to show."""
+    import random
+    import zlib
+    from datetime import date, datetime, timedelta
+    from app import results as R
+    from tests import fake_prices as P
+    today = R.local_today("IN")
+    first = R.week_of(today)[0]
+    last = first + timedelta(days=13)
+    # today's four: one of the owner's own stocks (RELIANCE) and three he doesn't hold, so Invest home's "Results today" stays one line long
+    syms = ["RELIANCE", "ICICIBANK", "ONGC", "ITC", "TCS", "INFY", "HDFCBANK", "HINDUNILVR", "TATASTEEL", "JSWSTEEL",
+            "WIPRO", "HCLTECH", "NTPC", "COALINDIA", "SBIN", "AXISBANK", "NESTLEIND", "DABUR", "VEDL", "SAIL"]
+    offsets = [0, 0, 0, 0, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 10, 11, 12, 12]
+    meetings = []
+    for k, (sym, off) in enumerate(zip(syms, offsets)):
+        d = min(P.on_trading_day(today + timedelta(days=off), "IN"), last)
+        days = [(d, "Financial Results/Dividend" if zlib.crc32(sym.encode()) % 4 == 0 else "Financial Results")]
+        days += [(P.on_trading_day(today - timedelta(days=75 * n + 10 + k % 5), "IN", back=True), "Financial Results") for n in (1, 2, 3)]      # earlier quarters
+        meetings += [{"bm_symbol": sym, "sm_name": P.name_of(sym) or sym, "bm_date": x.strftime("%d-%b-%Y"), "bm_purpose": p,
+                      "bm_desc": f"To consider: {p.lower()}", "attachment": "https://nsearchives.nseindia.com/bm.pdf"} for x, p in days]
+    original = main.filings_feed.board_meetings
+
+    def board_meetings(frm, to):
+        # the exchange's list as the world has it, and these twenty companies' meetings (this fortnight's and three earlier quarters')
+        extra = [m for m in meetings if frm.date() <= datetime.strptime(m["bm_date"], "%d-%b-%Y").date() <= to.date()]
+        return [m for m in original(frm, to) if m["bm_symbol"] not in syms] + extra
+
+    mp.setattr(main.filings_feed, "board_meetings", board_meetings)
+    main.results_job.refresh("IN")
+    R.backfill("IN", main.results_job.sources(), today)               # the weekly read of the earlier results days
+    main.results_job.refresh("US")
+
+    def history(region, symbol, days):
+        rng = random.Random(zlib.crc32(symbol.encode()))
+        past = R.load_past(region)["rows"].get(symbol, [])
+        px, out = 100.0, []
+        for i in range(days, -1, -1):
+            d = today - timedelta(days=i)
+            if d.weekday() > 4:
+                continue
+            px *= 1 + rng.uniform(-0.01, 0.01)
+            if d.isoformat() in {(date.fromisoformat(x) + timedelta(days=1)).isoformat() for x in past}:
+                px *= 1 + rng.choice([-1, 1]) * rng.uniform(0.02, 0.06)           # a move the day after a results day
+            out.append({"t": f"{d.isoformat()}T00:00:00+05:30", "c": round(px, 2)})
+        return out
+
+    def options(symbol, day):
+        k = zlib.crc32(symbol.encode())
+        expiry = (date.fromisoformat(day) if day else today) + timedelta(days=21 + k % 7)
+        return {"pct": round(1.5 + (k % 40) / 10, 1), "strike": 100 * (1 + k % 30), "expiry": expiry.isoformat(), "straddle": round(50 + k % 90, 2)}
+
+    R.setup(history=history, options=options)
+    # the corporate actions calendar: the world's own rows and a dozen more, so a day's table has several rows and each kind of action
+    from app import corp_actions as C
+    original_actions = main.filings_feed.corporate_actions
+    each = [("ICICIBANK", "Interim Dividend - Rs 11 Per Share", 0), ("ONGC", "Interim Dividend - Rs 5 Per Share", 0), ("SBIN", "Dividend - Rs 15.9 Per Share", 1),
+            ("HINDUNILVR", "Final Dividend - Rs 24 Per Share", 1), ("COALINDIA", "Interim Dividend - Rs 15.5 Per Share", 1), ("WIPRO", "Bonus 1:1", 2),
+            ("NTPC", "Interim Dividend - Rs 3.35 Per Share", 2), ("VEDL", "Face Value Split (Sub-Division) - From Rs 10/- Per Share To Re 1/- Per Share", 3),
+            ("SAIL", "Rights 1:5 @ Premium Rs 100/-", 4), ("JSWSTEEL", "Dividend - Rs 3.5 Per Share", 4), ("DABUR", "Interim Dividend - Rs 5 Per Share", -2),
+            ("HCLTECH", "Special Dividend - Rs 18 Per Share", 6)]
+
+    def actions(frm, to):
+        day = lambda d: P.on_trading_day(today + timedelta(days=d), "IN", back=d <= 0).strftime("%d-%b-%Y")        # noqa: E731
+        more = [{"symbol": s, "series": "EQ", "comp": P.name_of(s) or s, "subject": sub, "exDate": day(d), "recDate": day(d), "faceVal": "1",
+                 "bcStartDate": "-", "bcEndDate": "-", "isin": "-"} for s, sub, d in each]
+        return list(original_actions(frm, to)) + more
+
+    mp.setattr(main.filings_feed, "corporate_actions", actions)
+    main.corp_job.refresh("IN")
 
 
 if __name__ == "__main__":

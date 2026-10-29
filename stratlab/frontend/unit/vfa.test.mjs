@@ -51,7 +51,7 @@ test("VR1-003, VR1-004, VR1-005: My space's heading says only the market state, 
 test("VR1-010, VR1-011, VR1-012, VR1-013, VR1-014: Invest home's panels, tiles, card heads and the lead card's link", () => {
   const homes = read("src/pages/SpaceHomes.tsx");
   const inv = homes.slice(homes.indexOf("export function InvestHome"), homes.indexOf("/** The next few market events"));
-  assert.match(inv, /<WatchPanel region=\{region\} \/>\s*\{nothingWatched \? <><NextEvents region=\{region\} \/><ResultsToday region=\{region\} \/><\/> : \(\s*<div className="space-col">\s*<NextEvents region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>\s*<\/div>\s*\)\}/);   // (VR6-011: stacked when nothing is watched)
+  assert.match(inv, /<WatchPanel region=\{region\} \/>\s*\{fewWatched \? <><NextEvents region=\{region\} \/><ResultsToday region=\{region\} \/><\/> : \(\s*<div className="space-col">\s*<NextEvents region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>\s*<\/div>\s*\)\}/);   // (VR6-011: stacked when nothing is watched)
   assert.match(inv, /<\/div>\s*<RedFlags region=\{region\} \/>/);
   assert.doesNotMatch(inv, /space-panels even/);
   assert.doesNotMatch(css, /\.space-panels \.inv-tiles \{ align-items: start; \}/);   // VR2-002: the tiles of a row are as tall as each other

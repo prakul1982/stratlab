@@ -82,7 +82,7 @@ def test_a_report_sent_after_midnight_still_counts_the_day_that_ended_and_goes_o
     rep = R.Reporter(FakeDB({"u1": {}}))
     run = lambda now: rep.run([s], now, can_alert=lambda p: True, market_name=str, send=lambda p, subj, body: sent.append(body))
     assert run(utc(2026, 10, 14, 23, 56)) == [("u1", "CRYPTO")]
-    assert "1 trade closed (1 won), +₹300" in sent[0]
+    assert "Trades closed today: 1 (1 won)" in sent[0] and "Result of those: +₹300" in sent[0]
     assert run(utc(2026, 10, 15, 0, 10)) == [] and len(sent) == 1
     late = R.Reporter(FakeDB({"u1": {}}))                                             # the server was down at 23:56
     assert late.run([s], utc(2026, 10, 15, 0, 10), can_alert=lambda p: True, market_name=str, send=lambda p, subj, body: sent.append(body)) \
@@ -104,8 +104,8 @@ def test_report_sent_once_with_the_days_numbers():
     assert run(utc(2026, 9, 24, 10, 15)) == [("u1", "IN")]          # only India is due, and u2 has alerts off
     subj, body = sent[0]
     assert subj == "StratLab daily report: India, Thu 24 Sep"          # the day in the subject (R69-006)
-    assert "2 trades closed (1 won), +₹200" in body and "1 open, +₹120 on paper" in body      # ₹, as the app writes it
-    assert "Since start: +₹500 (+5.0%)" in body
+    assert "Trades closed today: 2 (1 won)" in body and "Result of those: +₹200" in body and "Open now: 1, +₹120 on paper" in body      # ₹, as the app writes it
+    assert "Since the start: +₹500 (+5.0%)" in body              # (LIVE1C-034: each session a card of rows)
     assert run(utc(2026, 9, 24, 10, 20)) == []                     # not twice
     assert R.Reporter(db).run([a], utc(2026, 9, 24, 10, 25), can_alert=lambda p: True, market_name=str,
                               send=lambda *x: sent.append(x)) == []  # nor after a restart

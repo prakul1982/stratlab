@@ -295,7 +295,12 @@ def set_promo(days: int | None) -> datetime | None:
     """Start the offer now for `days` days, or end it (None)."""
     from . import db
     if days:
-        until = datetime.now(timezone.utc) + timedelta(days=days)
+        # ends at the end of an Indian day (midnight IST) on or after the `days`, not at the minute it was started: an offer begun at 1:56 am
+        # "ended at 1:56 am", which confused (LIVE1C-037); it lasts at least the days asked
+        t = (datetime.now(timezone.utc) + timedelta(days=days)).astimezone(IST)
+        if (t.hour, t.minute, t.second, t.microsecond) != (0, 0, 0, 0):
+            t = (t + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        until = t.astimezone(timezone.utc)
         db.set_setting(PROMO_KEY, until.isoformat())
     else:
         until = None

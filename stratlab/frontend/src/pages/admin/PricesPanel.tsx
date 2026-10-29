@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, fmtDate, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
-import { Badge, Card, CardHead, DataTable, ErrorState, Field, FormGrid, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, DataTable, ErrorState, Field, FormGrid, Select, Skeleton, type Column } from "../../components/kit";
 import { aboutRupees, parsePrice, priceLabel, rateNote, ratesRead } from "./prices";
 
 type Row = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number; charged_in: string;
@@ -64,6 +64,8 @@ export function PricesPanel() {
   };
 
   const list = Object.entries(rows ?? {}).filter(([c]) => c !== "INR").map(([c, r]) => ({ c, r }));
+  /** a row that departs from the rule (the set price, charged in rupees) */
+  const odd = (r: Row) => !!r.no_rate || r.price_set === "owner" || r.price_set === "follows" || !r.price_set;
   const cols: Column<{ c: string; r: Row }>[] = [
     { key: "cur", header: "Currency", rowHeader: true, wrap: true, cell: ({ c, r }) => (
       <span><b>{c}</b> <span className="k-small k-muted">{r.name}{r.rate ? ` · ${money(r.rate, "INR", r.rate < 1 ? 4 : 2)}` : ""}</span></span>) },
@@ -73,12 +75,12 @@ export function PricesPanel() {
         {/* what the price is in rupees today, so the spread between currencies shows (DJ-019) */}
         {aboutRupees(Number(val(c, f)), r.rate) && <span className="k-note k-muted">{aboutRupees(Number(val(c, f)), r.rate)}</span>}
         {errs[`${c}.${f}`] && <span id={`price-err-${c}-${f}`} className="k-note" role="alert">{errs[`${c}.${f}`]}</span>}</span>) })),
-    { key: "mode", header: "Price", cell: ({ c, r }) => r.no_rate ? <Badge tone="warn" dot={false}>No rate: not shown to visitors</Badge>
+    // the chips say only what differs from the rule: the set price and rupee charging are said once under the table, not on all 18 rows (LIVE1C-009)
+    ...(list.some(({ r }) => odd(r)) ? [{ key: "mode", header: "Price", cell: ({ c, r }) => r.no_rate ? <Badge tone="warn" dot={false}>No rate: not shown to visitors</Badge>
       : r.price_set === "owner" ? <button type="button" className="btn quiet sm" disabled={busy} onClick={() => automatic(c)}
         title={`Go back to the price set ${fixedOn ? fmtDate(fixedOn, { year: false }) : "by StratLab"}`}>{priceLabel(r.price_set, fixedOn)} · undo</button>
-      : <Badge tone="ok" dot={false}>{priceLabel(r.price_set ?? (r.auto ? "follows" : "owner"), fixedOn)}</Badge> },
-    { key: "in", header: "Charged in", cell: ({ c, r }) => <Badge tone={r.charged_in === c ? "ok" : "plain"} dot={false}>{r.charged_in === c ? c : "Rupees"}</Badge> },
-    { key: "plans", header: <span className="sr-only">Razorpay plans</span>, action: true, cell: ({ c }) => <button type="button" className="btn quiet sm" onClick={() => setOpen(open === c ? null : c)}>{open === c ? "Hide plans" : "Razorpay plans"}</button> },
+      : r.price_set === "follows" || !r.price_set ? <Badge tone="ok" dot={false}>{priceLabel(r.price_set ?? (r.auto ? "follows" : "owner"), fixedOn)}</Badge> : null } as Column<{ c: string; r: Row }>] : []),
+    ...(list.some(({ c, r }) => r.charged_in === c) ? [{ key: "in", header: "Charged in", cell: ({ c, r }) => (r.charged_in === c ? <Badge tone="ok" dot={false}>{c}</Badge> : null) } as Column<{ c: string; r: Row }>] : []),
   ];
 
   return (
@@ -92,7 +94,17 @@ export function PricesPanel() {
         </>} />
       <p className="k-note k-muted">{ratesRead(fx.readAt, ago)}
         {rows ? ` ${rateNote(fx.errors, rows)}` : ""}</p>
-      {!rows ? (failed ? <ErrorState title="The prices couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }} /> : <Skeleton label="Loading prices" />) : <DataTable label="Prices outside India" rows={list} rowKey={(x) => x.c} columns={cols} />}
+      {!rows ? (failed ? <ErrorState title="The prices couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }} /> : <Skeleton label="Loading prices" />) : (
+        <>
+          <DataTable label="Prices outside India" rows={list} rowKey={(x) => x.c} columns={cols} />
+          <p className="k-note k-muted">{list.some(({ r }) => odd(r)) ? "Rows without a mark are the set price" : "Every price is the set price"}{fixedOn ? ` of ${fmtDate(fixedOn, { year: false })}` : ""}, and a card is charged in rupees unless a row says it has a plan in its own currency.</p>
+          <div className="k-row">
+            <label htmlFor="price-plan-currency" className="k-small">Razorpay plan IDs for</label>
+            <Select id="price-plan-currency" small value={open ?? ""} onChange={(v) => setOpen(v || null)} label="Currency for the Razorpay plan IDs"
+              options={[{ value: "", label: "Choose a currency" }, ...list.map(({ c }) => ({ value: c, label: c }))]} />
+          </div>
+        </>
+      )}
       {open && rows?.[open] && (
         <FormGrid label={`${open} Razorpay plans`}>
           {PLAN.map((f) => (

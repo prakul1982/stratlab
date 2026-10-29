@@ -341,9 +341,11 @@ def _row_html(r: Row, first: bool) -> str:
     d_html = delta(r.change, tone=r.tone)[0] if r.change is not None else ""
     since = f'<div class="c-muted" style="font:13px/1.4 {SANS};color:{L["muted"]}">{escape(r.since)}</div>' if r.since and d_html else ""
     right = ""
+    # a signed amount in green or red, as a change is (LIVE1C-034: a report's profit and loss in one colour); the sign carries it too
+    vcls, vcol = (("c-up", L["up"]) if (r.value or "").startswith("+") else ("c-down", L["down"]) if (r.value or "").startswith(MINUS) else ("c-ink", L["ink"]))
     if r.value or d_html:
-        right = (f'<td class="c-ink" align="right" valign="top" nowrap style="padding:10px 0 0 12px;font:600 15px/1.4 {SANS};'
-                 f'color:{L["ink"]};text-align:right;white-space:nowrap">{escape(r.value) if r.value else ""}'
+        right = (f'<td class="{vcls}" align="right" valign="top" nowrap style="padding:10px 0 0 12px;font:600 15px/1.4 {SANS};'
+                 f'color:{vcol};text-align:right;white-space:nowrap">{escape(r.value) if r.value else ""}'
                  + (f'<div style="font:600 13px/1.4 {SANS}">{d_html}</div>' if d_html else "") + since + "</td>")
     subs = ""
     for item in ([r.sub] if r.sub else []) + ([r.source] if r.source else []) + list(r.lines):
@@ -697,7 +699,9 @@ def message(subject: str, text: str, path: str, label: str, why: str, *, summary
             legal = tail
         if raw.startswith("- "):
             rows.append(_row(raw[2:]))
-        elif raw.endswith(":") and not rows and not links:
+        elif raw.endswith(":") and not links and (not rows or head is not None):
+            # (a second heading after the rows of a card with its own heading starts the next card: a report of several sessions, LIVE1C-034)
+            flush()
             head = raw[:-1]
         elif raw:
             flush()

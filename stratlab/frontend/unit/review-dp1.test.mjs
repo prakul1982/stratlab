@@ -58,8 +58,8 @@ test("DP1-004: the simple converter's rules are shown for a yes, with the classi
 test("DP1-008: a library card says what a copy needs on the plan, before the copy", () => {
   const st = { ...R.blankStrategy(), entry: [{ l: { t: "price" }, op: "gt", r: { t: "supertrend", p: 10, m: 3 } }] };
   const free = { allIndicators: false, groupCap: 10, basicCap: 25, proCap: 50 };
-  assert.equal(R.copyNeeds(st, 20, free), "Runs on Basic: it uses Supertrend, and its group of 20 is over your plan's 10. A copy is yours to edit on any plan.");
-  assert.equal(R.copyNeeds(R.blankStrategy(), 30, free), "Runs on Pro: its group of 30 is over your plan's 10. A copy is yours to edit on any plan.");
+  assert.equal(R.copyNeeds(st, 20, free), "Runs on Basic: it uses Supertrend, and its group of 20 is over your plan's 10.");
+  assert.equal(R.copyNeeds(R.blankStrategy(), 30, free), "Runs on Pro: its group of 30 is over your plan's 10.");
   assert.equal(R.copyNeeds(st, 20, { ...free, allIndicators: true, groupCap: 25 }), null);
   assert.match(read("src/pages/LibraryPage.tsx"), /\{needs\(e\) && <span className="k-note" data-testid="lib-needs">\{needs\(e\)\}<\/span>\}/);
 });

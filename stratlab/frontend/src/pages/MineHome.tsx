@@ -77,12 +77,15 @@ export function MineHome() {
 
   const change = (next: Layout) => { setRaw(next); void savePrefs({ mine: next }, true); };
   const cardFor = (id: CardId) => ({
-    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={coming} more={upAll ? upAll.length - (coming?.length ?? 0) : 0} />, watch: <WatchCard />,
+    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={comingShown} more={upAll ? upAll.length - (comingShown?.length ?? 0) : 0} />, watch: <WatchCard />,
   })[id];
   // each card's width from its place in the chosen order, so the grid keeps that order with no gaps (DI-005)
   // VR6-010: an empty watchlist is one short message: it takes its own row (Coming up widens to fill the one before), instead of standing
   // beside six dated rows with 230px of nothing under it. Until the list is read the two keep sharing the row.
   const { items: watchItems } = useWatchlist();
+  // beside a watchlist of one to three stocks, "Coming up" is a few rows shorter than its six, so the pair ends near level instead of one at half
+  // the other's height with a block of nothing under it (LIVE1C-091); the rest are one tap away in the calendar ("+N more")
+  const comingShown = coming && watchItems && watchItems.length > 0 && watchItems.length <= 3 ? coming.slice(0, Math.max(3, watchItems.length + 2)) : coming;
   const spans = slotSpans(shown, watchItems !== null && watchItems.length === 0 ? ["watch"] : []);
 
   return (
@@ -321,10 +324,11 @@ function ComingCard({ rows, more = 0 }: { rows: Up[] | null; more?: number }) {
               const d = dayNum(u.date);
               return (
                 <li key={u.key} className="mine-tl-i">
-                  <span className="dt"><b>{d.d}</b>{d.m}</span>
-                  <span className="body">{u.to ? <Link to={u.to}><b>{u.title}</b></Link> : <b>{u.title}</b>}{u.detail && <span className="k-stat-d" title={u.detail}>{firstSentence(u.detail)}</span>}</span>
+                  {/* the day and its weekday are read together, ahead of the title (LIVE1C-091: "Fri 3 Nov NIFTY weekly expiry" with the chip's "Tue" read after it) */}
+                  <span className="dt" aria-hidden="true"><b>{d.d}</b>{d.m}</span>
+                  <span className="body"><span className="sr-only">{d.w} {d.d} {d.m}: </span>{u.to ? <Link to={u.to}><b>{u.title}</b></Link> : <b>{u.title}</b>}{u.detail && <span className="k-stat-d" title={u.detail}>{firstSentence(u.detail)}</span>}</span>
                   {/* every row gives its weekday; a tax date keeps its colour (and says so to a screen reader) (R48-011) */}
-                  <Badge tone={u.tone === "warn" ? "warn" : "plain"} dot={false}>{d.w}{u.tone === "warn" && <span className="sr-only"> · {u.tag} date</span>}</Badge>
+                  <Badge tone={u.tone === "warn" ? "warn" : "plain"} dot={false}><span aria-hidden="true">{d.w}</span>{u.tone === "warn" && <span className="sr-only"> · {u.tag} date</span>}</Badge>
                 </li>
               );
             })}

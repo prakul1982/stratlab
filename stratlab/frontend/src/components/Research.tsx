@@ -381,7 +381,7 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
 }
 
 /** Companies as small tiles that open them: the symbol, its name, the price and the day's change (a neutral pill). */
-export function QuoteGrid({ region, symbols, names, empty }: { region: Region; symbols: string[]; names?: Record<string, string | null>; empty?: ReactNode }) {
+export function QuoteGrid({ region, symbols, names, empty, fill }: { region: Region; symbols: string[]; names?: Record<string, string | null>; empty?: ReactNode; fill?: boolean }) {
   const [q, setQ] = useState<Record<string, Quote | null> | null>(null);
   const key = symbols.join(",");
   useEffect(() => {
@@ -399,7 +399,7 @@ export function QuoteGrid({ region, symbols, names, empty }: { region: Region; s
   });
   if (!symbols.length) return <>{empty}</>;
   return (
-    <div className="inv-tiles">
+    <div className={`inv-tiles${fill ? " fill" : ""}`}>
       {symbols.map((s) => {
         const x = q?.[s];
         return (

@@ -675,10 +675,11 @@ def read_index_changes(text: str, title: str = "") -> dict:
 def refresh_index(web, st: dict, today: date) -> dict:
     part = dict(st or {})
     changes = {c["url"]: c for c in part.get("changes") or [] if isinstance(c, dict) and c.get("url")}
-    tried = {k: v for k, v in (part.get("tried") or {}).items() if isinstance(v, int)}
+    # (a failed read once kept its time under this same key, as a string: "'str' object has no attribute 'items'" every run after, LIVE1C-001)
+    tried = {k: v for k, v in (part.get("tried") if isinstance(part.get("tried"), dict) else {}).items() if isinstance(v, int)}
     # a notice that failed three times is left for the day, not for good (RC2A-025: one bad afternoon left a notice unread for ever, and
     # the page said "the press release has the list" for weeks)
-    tried_on = {k: v for k, v in (part.get("tried_on") or {}).items() if isinstance(v, str)}
+    tried_on = {k: v for k, v in (part.get("tried_on") if isinstance(part.get("tried_on"), dict) else {}).items() if isinstance(v, str)}
     items = [i for i in read_index_list(web.text(INDEX_LIST)) if (today - date.fromisoformat(i["date"])).days <= 120]
     budget = INDEX_PDFS_PER_RUN
     for it in sorted(items, key=lambda i: i["date"], reverse=True):        # the newest notices first
@@ -817,8 +818,12 @@ def refresh(web=None, today: date | None = None, now: datetime | None = None, on
                 st[name] = part
                 read.append(name)
             except (SourceError, ValueError, TypeError, KeyError, AttributeError) as e:
-                problems.append(f"{SOURCES[name]}: {str(e)[:160]}")
-                st[name] = {**old, "error": str(e)[:200], "tried": stamp}
+                # a bug or a changed page layout is a Python message nobody can act on: said plainly, the text kept in the log (LIVE1C-001)
+                said = str(e) if isinstance(e, (SourceError, ValueError)) else "The reader hit an unexpected page layout."
+                if not isinstance(e, (SourceError, ValueError)):
+                    print("market events: reader failed:", name, type(e).__name__, str(e)[:160])
+                problems.append(f"{SOURCES[name]}: {said[:160]}")
+                st[name] = {**old, "error": said[:200], "failed_at": stamp}
         st["last_run"] = stamp
         db.set_setting(KEY, json.dumps(st, separators=(",", ":")))
     _cache.clear()

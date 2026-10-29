@@ -23,7 +23,8 @@ def test_offer_gives_pro_then_ends(store, monkeypatch):
     free = {"id": "u1", "plan": "free"}
     assert plans.access_plan(free) == "free"
     until = plans.set_promo(10)
-    assert timedelta(days=9, hours=23) < until - datetime.now(timezone.utc) <= timedelta(days=10)
+    assert timedelta(days=9, hours=23) < until - datetime.now(timezone.utc) <= timedelta(days=11)       # ends at midnight India time (LIVE1C-037)
+    assert (until.astimezone(plans.IST).hour, until.astimezone(plans.IST).minute) == (0, 0)
     assert plans.access_plan(free) == "pro" and plans.effective_plan(free) == "free"   # what they pay for is unchanged
     assert not plans.promo_active(now=until + timedelta(seconds=1))                   # over by itself at the end
     plans.set_promo(None)

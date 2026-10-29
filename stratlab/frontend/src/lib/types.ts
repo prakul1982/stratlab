@@ -174,6 +174,8 @@ export interface Me {
   onboarding?: { welcome: string | null; tour: "done" | "skipped" | null };
   /** The account already has holdings, notebooks, a paper session or a watchlist: the welcome question is not asked of it. */
   established?: boolean;
+  /** My Holdings has at least one stock: the Money space's main button then says "Update holdings" (LIVE1C-055). */
+  has_holdings?: boolean;
 }
 
 /** plans.offer_state() on the server: payments on or not, the launch offer, and Free's limits as they apply today. */

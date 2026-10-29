@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { NAV } from "../src/lib/nav";
 
 // Signed in as the site owner (the fake database's admin-token), with the tour already seen.
@@ -99,6 +99,15 @@ for (const [path, ready] of PAGES) {
     await sane(page, await open(page, path, ready));
     if (info.project.name === "phone") await touchable(page);
   });
+}
+
+/** Open "The same working in words" under the tax estimate's table, unless it is already open. The workings are folded until asked for
+ *  (LIVE1B-010), so "How we got here" is opened first. */
+async function openWorking(total: Locator) {
+  const outer = total.locator("details", { has: total.page().locator("summary", { hasText: "How we got here" }) }).first();
+  if (!(await outer.evaluate((d) => (d as HTMLDetailsElement).open))) await outer.locator("summary", { hasText: "How we got here" }).first().click();
+  const fold = total.locator("details", { has: total.page().locator("summary", { hasText: "The same working in words" }) }).last();
+  if (!(await fold.evaluate((d) => (d as HTMLDetailsElement).open))) await fold.locator("summary", { hasText: "The same working in words" }).click();
 }
 
 test("results calendar: every company's dates, and the company page links to it", async ({ page }, info) => {
@@ -220,6 +229,7 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   }
   for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
   expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
+  await page.getByTestId("plans-compare-fold").locator("summary").first().click();          // the comparison is one fold under the cards (LIVE1C-092)
   const table = page.locator("#compare");        // one table for each group (how much, what each plan adds, on every plan), each with the plan names on top
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
   await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
@@ -514,10 +524,9 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   const total = page.getByRole("region", { name: "Total tax estimate" });
   await expect(total.getByRole("heading", { name: "Total tax estimate, FY 2024-25" })).toBeVisible();
   await expect(total.getByRole("table", { name: "Total tax breakdown" }), "the workings are folded until asked for (LIVE1B-010)").toBeHidden();
-  await total.getByText("How we got here").click();
-  const chips = total.getByRole("list", { name: "Where the tax comes from" });
-  await expect(chips.getByRole("listitem")).toHaveCount(4);
-  for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("listitem").filter({ hasText: c })).toHaveCount(1);
+  const chips = total.getByRole("table", { name: "Where the tax comes from" });          // a table (RES-1): a row for each source
+  await expect(chips.getByRole("row")).toHaveCount(5);                                      // the header and four sources
+  for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("row").filter({ hasText: c })).toHaveCount(1);
   await expect(total.getByText(/no other income entered yet/)).toBeVisible();
   await expect(total.getByRole("table", { name: "Total tax breakdown" }).getByText("Estimated total tax")).toBeVisible();
   // F&O by segment, and the return and audit facts
@@ -538,6 +547,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await expect(page.getByText("Saved. The estimate is updated.")).toBeVisible();
   await expect(total.getByText(/^Old regime/)).toBeVisible();
   await expect(total.getByText(/With the same figures, the new regime works out to/)).toBeVisible();
+  await openWorking(total);          // the steps in words are one fold under the table (LIVE1C-056)
   await expect(total.getByText(/Deductions you entered \(80C and the like\): ₹1,50,000/)).toBeVisible();
   const amount = await page.locator('span[aria-label="Total tax estimate"]').innerText();      // the summary at the top: the total is not printed twice (VR1-144)
   expect(Number(amount.replace(/[^\d]/g, ""))).toBeGreaterThan(100000);
@@ -560,6 +570,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   if (info.project.name === "phone") await touchable(page);
   await total.getByRole("button", { name: "Save and update" }).click();
   await expect(total.getByText(/resident, aged 60 to 79/)).toBeVisible();
+  await openWorking(total);          // the steps in words are one fold under the table (LIVE1C-056)
   await expect(total.getByText(/the old regime's basic exemption is ₹3,00,000/)).toBeVisible();
   const senior = Number((await page.locator('span[aria-label="Total tax estimate"]').innerText()).replace(/[^\d]/g, ""));
   expect(senior).toBeLessThan(Number(amount.replace(/[^\d]/g, "")));
@@ -600,9 +611,16 @@ async function answerLevel(page: Page) {
   await expect(ask).toHaveCount(0);
 }
 
+/** Each project signs in as its own user, so two projects running together never set the same alert on the same stock. */
+function ownUser(info: { project: { name: string } }, desktop: number, phone: number) {
+  const n = info.project.name === "phone" ? phone : desktop;
+  return sessionAs(`load-${n}`, `u-load-${n}`, `load${n}@example.com`);
+}
+
 test("alerts: set one on a company page, then edit and delete it on the Alerts page", async ({ page }, info) => {
   const tag = `e2e ${info.project.name} ${Date.now()}`;             // both projects share the fake database
-  let errors = await open(page, "/research/IN/RELIANCE", "Reliance");
+  const me = ownUser(info, 253, 256);
+  let errors = await open(page, "/research/IN/RELIANCE", "Reliance", me);
   await answerLevel(page);
   await page.getByRole("button", { name: "Set alert" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Alert on RELIANCE" });
@@ -614,7 +632,7 @@ test("alerts: set one on a company page, then edit and delete it on the Alerts p
   await expect(page.getByText(/already above ₹1/).first()).toBeVisible();   // the price is far above: it waits for a cross
   await sane(page, errors);
 
-  errors = await open(page, "/alerts", "Your stock alerts");
+  errors = await open(page, "/alerts", "Your stock alerts", me);
   await answerLevel(page);
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Price crosses above ₹1");
@@ -663,7 +681,8 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
 
 test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, info) => {
   const tag = `e2e-watch ${info.project.name} ${Date.now()}`;
-  const errors = await open(page, "/research/watchlist?region=IN", "Companies you're watching");
+  const me = ownUser(info, 259, 266);
+  const errors = await open(page, "/research/watchlist?region=IN", "Companies you're watching", me);
   await answerLevel(page);
   // a watchlist of one, without changing the shared one other tests read
   await page.route("**/research/watchlist", (r) => r.request().method() === "GET"
@@ -679,7 +698,7 @@ test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, in
   await dialog.getByRole("button", { name: "Set alert" }).click();
   await expect(page.getByText("Alert set on RELIANCE.")).toBeVisible();
   await sane(page, errors);
-  await open(page, "/alerts", "Your stock alerts");
+  await open(page, "/alerts", "Your stock alerts", me);
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Makes a new 52-week high");
   await row.getByRole("button", { name: /Delete/ }).click();
@@ -1318,14 +1337,16 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   const past = page.locator("details.earlier", { hasText: "Last two weeks" });
   if (await past.count()) await expect(past).not.toHaveAttribute("open", "");
   await seeUnfolded(page, page.getByRole("link", { name: "TCS" }).first());
-  await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();
-  await expect(page.getByText(/Interim dividend ₹11 a share/).first()).toBeVisible();
+  // each action is a row of a table (RES-1): the kind, its figure in its own column, and what the figure does not say under the kind
+  await expect(page.getByRole("row", { name: /TCS.*Bonus 1:1/ }).first()).toContainText("1 new share for every 1 held");
+  await expect(page.getByRole("row", { name: /TCS.*Interim dividend/ }).first()).toContainText("₹11");
   await expect(page.getByText("Annual General Meeting")).toHaveCount(0);           // a meeting isn't an action
+  if (info.project.name === "phone") await page.getByRole("button", { name: /^Filters/ }).click();       // the filters sit behind a button on a phone
   await page.getByRole("combobox", { name: "Kind of action" }).selectOption("bonus");
   await expect(page.getByText(/Dividend - Rs|₹5.50 a share/)).toHaveCount(0);
-  await seeUnfolded(page, page.getByText("Bonus 1:1 (1 new share for every 1 held)"));
+  await seeUnfolded(page, page.getByText("1 new share for every 1 held").first());
   await page.getByRole("radio", { name: "My stocks" }).click();
-  await seeUnfolded(page, page.getByText("Bonus 1:1 (1 new share for every 1 held)"));      // TCS is in the holdings
+  await seeUnfolded(page, page.getByText("1 new share for every 1 held").first());      // TCS is in the holdings
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
   expect(await page.locator("main").innerText()).not.toMatch(/yahoo|finnhub|kite|screener/i);
@@ -1439,6 +1460,7 @@ test("admin: the whole-market audit tells facts and companies not checked yet ap
   await india.getByRole("button", { name: "Not checked yet", exact: true }).click();
   await expect(india.getByText("Tiny Co Ltd")).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
+  await india.locator("summary", { hasText: "Manage this check" }).click();                  // the check's buttons are behind one fold (LIVE1C-020)
   await india.getByRole("button", { name: "Re-check the 2 not checked yet" }).click();
   await expect.poll(() => sent).toEqual([{ region: "IN", retry: true }]);
   await expect(india.getByText("Re-checking companies not checked yet:")).toBeVisible();
@@ -1492,7 +1514,8 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   await expect(india.getByTestId("audit-age")).toHaveText(" · open 3 days");
   await india.getByRole("button", { name: "Re-check Acme Ltd" }).click();
   await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", recheck: "ACME" });
-  // the monthly check can be switched off
+  // the monthly check can be switched off (its buttons are behind one fold, LIVE1C-020)
+  await india.locator("summary", { hasText: "Manage this check" }).click();
   await india.getByRole("checkbox", { name: "Full re-check on the 1st of each month" }).click();
   await expect(india.getByText("Only new listings, until you reset")).toBeVisible();
   // reset asks first, in the page (never the browser's own box): Cancel does nothing, confirming clears and starts from 0
@@ -1663,7 +1686,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   await settle(page);
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByRole("link", { name: "Tax tools" })).toBeVisible();      // a line in the total's card, no card of its own (LIVE1B-011)
   await page.getByLabel("Financial year").selectOption(String(fy));
-  await page.getByRole("region", { name: "Total tax estimate" }).getByText("How we got here").click();        // the workings are folded (LIVE1B-010)
+  await openWorking(page.getByRole("region", { name: "Total tax estimate" }));          // LIVE1C-056
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByText(/Dividends of ₹15,000 are income from other sources/)).toBeVisible();
   expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
 });

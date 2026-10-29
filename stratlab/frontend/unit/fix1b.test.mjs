@@ -176,7 +176,7 @@ test("LIVE1B-020: a signed US figure is one unbreakable piece; the US tile's lab
   assert.match(nb, /className="k-nb"/);
   assert.match(read("src/styles.css"), /\.k-nb \{ white-space: nowrap; \}/);
   for (const f of ["src/pages/HoldingsPage.tsx", "src/pages/MineHome.tsx", "src/pages/SpaceHomes.tsx"]) assert.match(read(f), /<NoBreak text=/, f);
-  assert.match(read("src/pages/SpaceHomes.tsx"), /<Fig label="US stocks" value=\{money\(h\.us\.value, "USD"\)\}/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /label: "US stocks", value: money\(h\.us\.value, "USD"\)/);       // a row of the holdings table (RES-1), still the short label
 });
 
 test("LIVE1B-021: Money home's two summary cards are one height", () => {

@@ -187,10 +187,16 @@ test("Admin: the email previews say the briefs are real, and Data and jobs has a
   await expect(page.getByText("The market briefs are the newest real issues; the rest use made-up details.")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("with made-up details. Nothing here is sent.")).toHaveCount(0);
   errors = errors.concat(await open(page, "/admin/data"));
+  // on a phone the jobs table shows a page of rows at a time: open the rest
+  const more = page.getByRole("button", { name: /^Show \d+ more$/ });
+  await expect(page.getByRole("table", { name: "Background jobs" })).toBeVisible({ timeout: 30_000 });
+  for (let i = 0; i < 10 && (await more.count()); i++) await more.first().click();
   const row = page.locator("main").getByText("Newsletters", { exact: true }).first();
   await expect(row).toBeVisible({ timeout: 30_000 });
-  // R13-003 changed this on purpose: the US brief goes once the closing prints have settled, at 16:50 New York time
-  await expect(page.locator("main")).toContainText("India 4:15 PM IST and US 4:50 PM New York time");
+  // R13-003 changed this on purpose: the US brief goes once the closing prints have settled, at 16:50 New York time.
+  // LIVE1C-014: the row shows the next time; the schedule sentence is behind its (i)
+  await page.getByRole("button", { name: "Schedule of Newsletters" }).click();
+  await expect(page.getByRole("note").filter({ hasText: "India 4:15 PM IST and US 4:50 PM New York time" })).toBeVisible();
   expect(errors).toEqual([]);
 });
 

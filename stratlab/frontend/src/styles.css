@@ -346,6 +346,9 @@ a.link { margin-inline: -2px; }
 .brand:hover { color: var(--ink); }
 .main { min-width: 0; padding: 40px clamp(24px, 4vw, 56px) 80px; }
 .page { max-width: 1320px; margin: 0 auto; }
+/* the question stands over the corner while it is up (--mw-lift is its height, lib/consentLift): the foot of the page keeps that much room, so the last
+   rows can be scrolled clear of it instead of sitting under it (LIVE1C-077: the PCR table's edge and a library card's text) */
+.shell .page { padding-bottom: var(--mw-lift, 0px); }
 .topbar { display: none; }
 /* the menu folded away on a laptop (Shell "slim"): the page takes the whole width, one button brings the menu back */
 .side-hide, .side-show { display: none; }
@@ -972,7 +975,16 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 .money-panels .k-stats { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: var(--s3) var(--s4); }
 /* VR6-016: four figures on a phone are two and two, not three (labels wrapping to two lines) and one left alone below */
 @media (max-width: 640px) { .money-panels .k-stats:has(> .k-stat:nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); }
+.money-panels .k-stat-v { font-size: clamp(20px, 1.7vw, 28px); white-space: nowrap; overflow-wrap: normal; }
+/* LIVE1C-050: a figure never breaks inside its digits ("₹77,61,2" over "98" read as two numbers). Four or more figures are two across (a column of
+   a four-across card is under 120px, narrower than "₹2,13,00,765"), three stay in one row; on a phone every card is two across with a last one alone
+   taking the line, and the figure a size down */
+.money-panels .k-stats:has(> .k-stat:nth-child(4)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 640px) {
+  .money-panels .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .money-panels .k-stats > .k-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .money-panels .k-stat-v { font-size: clamp(19px, 5.4vw, 22px); }
+}
 .space-panels.money-panels { align-items: stretch; }       /* LIVE1B-021: My Holdings and the tax card are one height side by side, not 205px and 237px */
 .explore-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .explore-card:hover { border-color: var(--ink-2); }
@@ -1818,6 +1830,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   /* UI-FIX-1 (R10): a long status badge ("Social Stock Exchange raise, not an IPO") wraps inside its cell instead of running under the next */
   .k-tbl-wrap.stack .k-table td .k-badge { white-space: normal; max-width: 100%; border-radius: 14px; }
   .k-tbl-wrap.stack .k-table td.k-act, .k-tbl-wrap.stack .k-table td.k-row-note, .k-tbl-wrap.stack .k-table td.k-empty-row { grid-column: 1 / -1; }
+  .k-tbl-wrap.stack .k-table td.k-act[data-label]::before { display: none; }   /* LIVE1C-015: a stray "Run now and log" over the buttons */
   .k-tbl-wrap.stack .k-table td.k-act { text-align: right; width: auto; }   /* the whole card's width: 1% of a grid cell put the Edit and remove buttons off the card (DP2-007) */
   /* VR2-017: a card's one button (Edit) sits at its top right, beside the name, not alone in a blank bottom corner under the figures */
   .k-tbl-wrap.stack .k-table tr:has(> td.k-corner) { position: relative; }
@@ -1952,7 +1965,13 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 }
 .k-table .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-table td.k-wrap, .k-table th.k-wrap { white-space: normal; min-width: 160px; }
-@media (min-width: 900px) { .rates-page .k-table th.k-wrap[scope="row"] { min-width: 260px; } }   /* VR1-151: "Government bond, 6.20% GS 2029" over three lines beside a Tax column with room to spare */
+@media (min-width: 900px) { .rates-page .k-table th.k-wrap[scope="row"] { min-width: 260px; } }
+/* LIVE1C-062: the market and small-savings tables share their column positions (the Rate and After tax figures of one sat left of the other's) */
+@media (min-width: 900px) {
+  .rates-page .k-table { table-layout: fixed; width: 100%; }
+  .rates-page .k-table th:nth-child(1) { width: 32%; } .rates-page .k-table th:nth-child(2), .rates-page .k-table th:nth-child(3) { width: 11%; }
+  .rates-page .k-table th:nth-child(4) { width: 22%; } .rates-page .k-table th:nth-child(5) { width: 24%; }
+}   /* VR1-151: "Government bond, 6.20% GS 2029" over three lines beside a Tax column with room to spare */
 .k-table td.k-act, .k-table th.k-act { text-align: right; width: 1%; padding-left: var(--s1); }
 .k-table td.k-act .k-row { justify-content: flex-end; flex-wrap: nowrap; }
 .k-table td.k-act .k-row.k-col { flex-direction: column; align-items: flex-end; gap: var(--s1); }   /* two actions stacked, so the column stays narrow */
@@ -2182,7 +2201,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-light.ok { color: var(--ink-2); }
 .k-light.warn { color: var(--orange-ink); }
 .k-light.bad { color: var(--down); }
-.k-health { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s2); }
+.k-health { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--s2); }
 .k-health-i { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--s2) var(--s3); border-radius: var(--r-ctl); background: var(--paper-2); border: 1px solid transparent; color: inherit; text-decoration: none; min-width: 0; }
 .k-health-cell { display: flex; min-width: 0; }
 .k-health-cell > .k-health-i { flex: 1 1 auto; }
@@ -2218,7 +2237,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-progress::-moz-progress-bar { background: var(--blue); border-radius: 99px; }
 
 /* plans */
-.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a band in the middle (LIVE1B-077 shortened the lists instead) */
+.k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a 260px band in the middle (LIVE1C-092 tried level cards: the layout checker's R13 found that band again at 1280) */
 .k-plan.pro { border: 2px solid var(--ink); }
 @media (min-width: 601px) and (max-width: 1000px) { /* a tablet: two columns, the last plan across both, never one narrow column */
   .k-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); }

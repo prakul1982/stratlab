@@ -386,6 +386,7 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
             rows += [r for r in old if r["date"] in unread and r["symbol"] not in have]
         merged = merge(old, rows, frm, today)
         save(region, merged)
+    add_past(region, merged, today)          # the days gone by stay on a company's list of earlier results days (the table's usual move)
     return {"rows": len(merged), "problems": problems}
 
 
@@ -662,6 +663,16 @@ class Job:
                     else:
                         self.mark(name, day.strftime("%Y-%m-%d"))
                     ran = True
+            name = f"history-{region}"            # once a week: the results days of the last sixteen months, for each company's usual move
+            week = now.astimezone(ZoneInfo(TZ[region])).strftime("%G-W%V")
+            if now >= self.retry.get(name, now) and self.due(name, now, region, REFRESH_AT[region][0], stamp="%G-W%V", commit=False):
+                try:
+                    backfill(region, self.sources(), now.astimezone(ZoneInfo(TZ[region])).date())
+                    self.mark(name, week)
+                except Exception as e:
+                    print("results history failed:", region, str(e)[:160])
+                    self.retry[name] = now + timedelta(minutes=RETRY_MINUTES)
+                ran = True
             name = f"reread-{region}"
             if load(region)["v"] < CAL_VERSION and now >= self.retry.get(name, now):
                 # the stored list is from an older reader: read again now, again in half an hour if no feed answered
@@ -789,35 +800,401 @@ class Job:
 
 
 # ---------- the page ----------
-DAY_ROWS = 40          # rows a day shows at first on "All companies"; the rest of that day opens on request (DE-026)
+DAY_ROWS = 25          # rows a day shows at first on "All companies"; the rest of that day opens on request (DE-026)
+INDEX_SETS = {         # the indices a table can be narrowed to: id -> name, per market (the members are read from what the app keeps)
+    "IN": (("nifty50", "NIFTY 50"), ("banknifty", "NIFTY Bank"), ("nifty500", "NIFTY 500"), ("midcap150", "NIFTY Midcap 150"),
+           ("smallcap250", "NIFTY Smallcap 250")),
+    "US": (("sp500", "S&P 500"),)}
+SIZES = ("large", "mid", "small", "micro")
+SORTS = ("cap", "name", "move", "sales", "profit")      # market value (largest first), name, the usual results-day move, revenue and profit growth
+PLAIN_RESULTS = re.compile(r"^(?:board meeting to consider )?(?:financial|quarterly) results(?: \(.*\))?$", re.I)
+_sets = None
+
+
+def _members(region: str, pid: str) -> set[str]:
+    """One index's stocks as the app keeps them (the exchange's last list, or the app's own for the NIFTY 50 and Bank)."""
+    from . import breadth, universes
+    try:
+        if pid == "sp500":
+            return set(universes.sp500_symbols())
+        if pid in ("nifty50", "banknifty"):
+            return set(universes.symbols("IN", pid))
+        key = {"nifty500": "nifty500", "midcap150": "midcap150", "smallcap250": "smallcap250"}[pid]
+        return {x for x in db.json_value(db.get_setting(breadth.MEMBERS_KEY + key), []) if isinstance(x, str)}
+    except Exception:                          # a list that can't be read narrows to nothing, it never breaks the page
+        return set()
+
+
+def index_sets(region: str) -> dict[str, tuple[str, set[str]]]:
+    """{id: (name, members)} for a market's indices, kept for ten minutes."""
+    from .intel.net import TTLCache
+    global _sets
+    if _sets is None:
+        _sets = TTLCache(max_items=4, max_bytes=2 * 1024 * 1024)
+    hit = _sets.get(region)
+    if hit is None:
+        hit = {pid: (name, _members(region, pid)) for pid, name in INDEX_SETS.get(region, ())}
+        _sets.set(region, hit, 600)
+    return hit
+
+
+def fo_symbols() -> set[str]:
+    """The stocks that have futures and options, from the exchange's lot-size file the F&O changes page keeps."""
+    from . import fo_changes
+    try:
+        rows = (fo_changes.load_state().get("lots") or {}).get("rows") or {}
+        return {s for s, r in rows.items() if isinstance(r, dict) and not r.get("index")}
+    except Exception:
+        return set()
+
+
+def band_of(region: str, r: dict | None) -> str | None:
+    """A company's size, by the definitions the screener uses: India by rank in market value, the US by amount."""
+    from . import screens
+    if not r or screens._num(r.get("market_cap")) is None:
+        return None
+    for b in SIZES:
+        if screens._in_band(region, r, [b]):
+            return b
+    return None
+
+
+def _snap(region: str) -> dict[str, dict]:
+    """{symbol: the screener's stored row}: market value, sector, last close, the latest quarter against its year-ago quarter."""
+    from . import screens
+    try:
+        return {r["symbol"]: r for r in screens.load_index(region).get("rows") or []}
+    except Exception as e:
+        print("results: the screener's rows could not be read:", str(e)[:120])
+        return {}
+
+
+class Context:
+    """What the app keeps about the companies of a market, read once for a page: the screener's stored rows (market value, sector, last
+    close, the latest quarter against a year before), the indices' members and the stocks with futures and options. `facts(symbol)` is
+    what a calendar row says about its company; `facets(...)` what the filters offer."""
+
+    def __init__(self, region: str):
+        self.region = region
+        self.snaps = _snap(region)
+        self.sets = index_sets(region)
+        self.fos = fo_symbols() if region == "IN" else set()
+
+    def facts(self, symbol: str) -> dict:
+        s = self.snaps.get(symbol) or {}
+        return {"cap": s.get("market_cap"), "band": band_of(self.region, s), "sector": s.get("sector"), "last": s.get("price"),
+                "last_at": s.get("price_at"), "fo": symbol in self.fos, "indices": [name for pid, (name, mem) in self.sets.items() if symbol in mem],
+                "q": ({"sales": s.get("q_sales"), "profit": s.get("q_profit"), "of": s.get("q_of")} if s.get("q_sales") is not None or s.get("q_profit") is not None else None)}
+
+    def passes(self, r: dict, size=(), sector: str = "", index: str = "", fo: bool = False) -> bool:
+        """Whether a row (with its company's facts) meets the size, sector, index and F&O choices."""
+        return ((not size or r["band"] in size) and (not sector or r["sector"] == sector) and (not index or self.sets[index][0] in r["indices"])
+                and (not fo or r["fo"]))
+
+    def clean(self, size=(), sector: str = "", index: str = "") -> tuple[list[str], str, str]:
+        """The choices as they can be used: sizes that exist, a sector as text, an index of this market (else none)."""
+        return [b for b in (size or ()) if b in SIZES], str(sector or "")[:80], index if index in self.sets else ""
+
+    def facets(self, rows: list[dict]) -> dict:
+        return facets(self.region, rows, self.sets, bool(self.fos))
+
+
+def _plain(r: dict) -> bool:
+    """A meeting about the results alone, not "Financial Results/Dividend" or "...Fund Raising"."""
+    return bool(PLAIN_RESULTS.match(str(r.get("purpose") or "").strip()))
+
+
+def _moves_of(region: str, symbol: str, store: dict) -> dict | None:
+    got = (store.get("rows") or {}).get(symbol)
+    if not got or not got.get("moves"):
+        return None
+    pcts = [m[1] for m in got["moves"] if isinstance(m, list) and len(m) == 2 and isinstance(m[1], (int, float))]
+    if not pcts:
+        return None
+    return {"avg": round(sum(abs(x) for x in pcts) / len(pcts), 1), "n": len(pcts), "last": pcts[:4], "dates": [m[0] for m in got["moves"]][:4]}
+
+
+def _today_dates(day: str | None, today: date) -> str | None:
+    """The `on` choice as an ISO date: "today", "tomorrow" or a date; None for every day."""
+    if day in ("today", "tomorrow"):
+        return (today + timedelta(days=1 if day == "tomorrow" else 0)).isoformat()
+    return day if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(day or "")) else None
 
 
 def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | None = None, limit: int = DAY_ROWS,
-         day: str | None = None) -> dict:
-    """This week and next, Monday to Sunday: the user's own stocks, or every company in the calendar, day by day.
-    Every day is listed with how many companies it has; on "All companies" a day shows its first `limit` rows (the
-    user's own first) and says how many more it has, and `day` (ISO) asks for one day in full. DE-026: a cut at the
-    400th row of the week dropped all of Saturday 31 Oct (NTPC among them) under "And 66 more"."""
+         day: str | None = None, *, size=(), sector: str = "", index: str = "", fo: bool = False, purpose: str = "", on: str = "",
+         sort: str = "cap", desc: bool | None = None) -> dict:
+    """This week and next, Monday to Sunday: the user's own stocks, or every company in the calendar, day by day, narrowed by
+    company size, sector, index, F&O and the meeting's purpose, and sorted. Every day is listed with how many companies it has;
+    on "All companies" a day shows its first `limit` rows (the user's own first) and says how many more it has, and `day` (ISO)
+    asks for one day in full. DE-026: a cut at the 400th row of the week dropped all of Saturday 31 Oct (NTPC among them) under
+    "And 66 more". Each row carries what the app already keeps about the company (its market value, sector, last close, the
+    latest quarter against a year before and its usual move on a results day) and whether it has futures and options."""
     today = today or local_today(region)
     cal = load(region)
     mine = set(my_stocks(uid, region))
     q = re.sub(r"[^A-Z0-9&.\- ]", "", (q or "").upper()).strip()[:30]
     day = day if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(day or "")) else None
+    ctx = Context(region)
+    size, sector, index = ctx.clean(size, sector, index)
+    only = _today_dates(on, today)
+    sort = sort if sort in SORTS else "cap"
+    desc = (sort != "name") if desc is None else bool(desc)
+    mv = load_moves(region)
+    first, last = week_of(today)[0], week_of(today)[0] + timedelta(days=13)
+
+    def rich(r: dict) -> dict:
+        out = {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"]), "moves": _moves_of(region, r["symbol"], mv)}
+        if not r.get("name") and (ctx.snaps.get(r["symbol"]) or {}).get("name"):
+            out["name"] = ctx.snaps[r["symbol"]]["name"]
+        return out
+
+    window = [rich(r) for r in cal["rows"] if first.isoformat() <= r["date"] <= last.isoformat()
+              and (scope == "all" or r["symbol"] in mine) and (not q or q in r["symbol"] or q in str(r.get("name") or "").upper())]
+
+    def keep(r: dict) -> bool:
+        return (ctx.passes(r, size, sector, index, fo) and (purpose != "results" or _plain(r)) and (purpose != "more" or not _plain(r))
+                and (not only or r["date"] == only))
+
+    narrowed = [r for r in window if keep(r)]
+    val = {"cap": lambda r: r["cap"], "name": lambda r: str(r.get("name") or r["symbol"]).lower(), "move": lambda r: (r["moves"] or {}).get("avg"),
+           "sales": lambda r: (r["q"] or {}).get("sales"), "profit": lambda r: (r["q"] or {}).get("profit")}[sort]
+
+    def ordered(rows: list[dict]) -> list[dict]:
+        """By the figure chosen (a company without it after the rest), then by day, the user's own stocks first within each."""
+        rows = sorted(rows, key=lambda r: r["symbol"])
+        have = sorted((r for r in rows if val(r) is not None), key=val, reverse=desc)
+        rows = have + [r for r in rows if val(r) is None]
+        return sorted(rows, key=lambda r: (r["date"], r["symbol"] not in mine))
+
     weeks, more = [], 0
-    for label, start in (("This week", week_of(today)[0]), ("Next week", week_of(today)[0] + timedelta(days=7))):
+    for label, start in (("This week", first), ("Next week", first + timedelta(days=7))):
         end = start + timedelta(days=6)
-        rows = [r for r in cal["rows"] if start.isoformat() <= r["date"] <= end.isoformat()
-                and (scope == "all" or r["symbol"] in mine)
-                and (not q or q in r["symbol"] or q in str(r.get("name") or "").upper())]
-        rows.sort(key=lambda r: (r["date"], r["symbol"] not in mine, r["symbol"]))
+        rows = ordered([r for r in narrowed if start.isoformat() <= r["date"] <= end.isoformat()])
         days, shown = [], []
         for d in sorted({r["date"] for r in rows}):
-            on = [r for r in rows if r["date"] == d]
-            cap = len(on) if scope != "all" or d == day else max(1, limit)
-            shown += on[:cap]
-            days.append({"date": d, "count": len(on), "shown": min(cap, len(on))})
-            more += max(0, len(on) - cap)
-        weeks.append({"label": label, "from": start.isoformat(), "to": end.isoformat(), "days": days,
-                      "rows": [{**r, "mine": r["symbol"] in mine} for r in shown]})
+            on_day = [r for r in rows if r["date"] == d]
+            cap = len(on_day) if scope != "all" or d == day else max(1, limit)
+            shown += on_day[:cap]
+            days.append({"date": d, "count": len(on_day), "shown": min(cap, len(on_day))})
+            more += max(0, len(on_day) - cap)
+        weeks.append({"label": label, "from": start.isoformat(), "to": end.isoformat(), "days": days, "rows": shown})
+    unknown = sum(1 for r in window if r["band"] is None) if size else 0
     return {"region": region, "scope": scope, "today": today.isoformat(), "updated_at": cal["at"], "weeks": weeks,
-            "more": more, "day_rows": limit, "mine_count": len(mine), "alerts": alerts_on(uid), "note": NOTE}
+            "more": more, "day_rows": limit, "mine_count": len(mine), "alerts": alerts_on(uid), "note": NOTE,
+            "total": len(window), "matching": len(narrowed), "unknown_size": unknown,
+            "filters": {"size": size, "sector": sector, "index": index, "fo": bool(fo), "purpose": purpose if purpose in ("results", "more") else "", "on": on if only else "", "sort": sort},
+            "facets": ctx.facets(window)}
+
+
+def facets(region: str, rows: list[dict], sets: dict, has_fo: bool) -> dict:
+    """What the filters offer for these companies, each with how many it holds: the sizes, the sectors, the indices, F&O stocks."""
+    sectors: dict[str, int] = {}
+    sizes: dict[str, int] = {}
+    for r in rows:
+        if r.get("sector"):
+            sectors[r["sector"]] = sectors.get(r["sector"], 0) + 1
+        if r.get("band"):
+            sizes[r["band"]] = sizes.get(r["band"], 0) + 1
+    from . import screens
+    return {"sizes": [{"id": b, "label": screens.CAP_BANDS[region][b][0], "count": sizes.get(b, 0)} for b in SIZES],
+            "sectors": [{"name": n, "count": c} for n, c in sorted(sectors.items(), key=lambda kv: (-kv[1], kv[0]))],
+            "indices": [{"id": pid, "name": name, "count": sum(1 for r in rows if name in r["indices"])} for pid, (name, _) in sets.items()],
+            "fo": sum(1 for r in rows if r.get("fo")) if has_fo else None}
+
+
+# ---------- what the app keeps about a company's earlier results days ----------
+PAST_KEY = "results:past:"           # results:past:<region> = {"at", "rows": {symbol: [ISO dates, newest first, at most PAST_KEEP]}}
+MOVES_KEY = "results:mv:"            # results:mv:<region> = {"rows": {symbol: {"at", "moves": [[date, % move], ...]}}}
+PAST_KEEP = 6                        # results days kept for each company
+PAST_BACK_DAYS = 480                 # how far back the weekly read of the calendar goes
+PAST_CHUNK = 92                      # days asked for in one read
+MOVES_PER_ASK = 6                    # companies' price histories read for one request: the rest wait for the next
+MAX_PAST = 4000                      # companies in either store
+HISTORY_DAYS = 500                   # days of daily prices read for a company's moves
+_hist = {"fn": None, "options": None}
+
+
+def setup(history=None, options=None):
+    """Where the daily prices (region, symbol, days) and a stock's option chain (symbol, expiry) come from: main.py's readers, or a test's."""
+    _hist["fn"], _hist["options"] = history, options
+
+
+def load_past(region: str) -> dict:
+    got = db.json_value(db.get_setting(PAST_KEY + region), {})
+    return {"at": got.get("at"), "rows": got.get("rows") if isinstance(got.get("rows"), dict) else {}}
+
+
+def add_past(region: str, rows: list[dict], today: date) -> int:
+    """Put results days (calendar rows with a date before `today`) in the company's list of earlier ones. Returns how many were new."""
+    new = 0
+    with _lock:
+        st = load_past(region)
+        have = st["rows"]
+        for r in rows:
+            if not r.get("date") or r["date"] >= today.isoformat() or not r.get("symbol"):
+                continue
+            ds = have.get(r["symbol"]) or []
+            if r["date"] not in ds:
+                ds = sorted(set(ds) | {r["date"]}, reverse=True)[:PAST_KEEP]
+                have[r["symbol"]] = ds
+                new += 1
+        if new:
+            if len(have) > MAX_PAST:
+                for s in sorted(have, key=lambda s: have[s][0])[: len(have) - MAX_PAST]:
+                    have.pop(s)
+            db.set_setting(PAST_KEY + region, json.dumps({"at": datetime.now(ZoneInfo(TZ[region])).isoformat(timespec="minutes"), "rows": have}, separators=(",", ":")))
+    return new
+
+
+def backfill(region: str, sources: dict, today: date | None = None) -> int:
+    """The results days of the last sixteen months, read from the same feeds as the calendar (India's board meetings, the US results
+    list) a quarter at a time: what a company's earlier moves are worked out from. Returns how many days were new."""
+    today = today or local_today(region)
+    new = 0
+    for k in range(0, PAST_BACK_DAYS, PAST_CHUNK):
+        to = today - timedelta(days=k + 1)
+        frm = max(today - timedelta(days=PAST_BACK_DAYS), to - timedelta(days=PAST_CHUNK - 1))
+        try:
+            if region == "IN":
+                got = india_rows(sources["in"].board_meetings(datetime.combine(frm, datetime.min.time()), datetime.combine(to, datetime.min.time())))
+            else:
+                got = us_rows(sources["us"].earnings_between(frm, to))
+        except (SourceError, AttributeError, KeyError) as e:
+            print("results history:", region, str(e)[:120])
+            continue
+        new += add_past(region, [r for r in got if frm.isoformat() <= r["date"] <= to.isoformat()], today)
+    return new
+
+
+def load_moves(region: str) -> dict:
+    try:
+        got = db.json_value(db.get_setting(MOVES_KEY + region), {})
+    except Exception:
+        return {"rows": {}}
+    return {"rows": got.get("rows") if isinstance(got.get("rows"), dict) else {}}
+
+
+def reaction(bars: list[dict], day: date) -> float | None:
+    """The change in the close over a results day and the next session: the close of the session after the results day (or the
+    day itself when it is the last one so far) against the close of the session before it. A results day falls before the open, in
+    the session or after the close, so one figure for both. None without a session on each side."""
+    seen = sorted(((str(b["t"])[:10], float(b["c"])) for b in bars if b.get("c")), key=lambda x: x[0])
+    before = [c for d, c in seen if d < day.isoformat()]
+    after = [c for d, c in seen if d > day.isoformat()]
+    on = [c for d, c in seen if d == day.isoformat()]
+    end = after[0] if after else (on[0] if on else None)
+    if not before or end is None or before[-1] <= 0:
+        return None
+    return round((end / before[-1] - 1) * 100, 2)
+
+
+SINCE_DAYS = 7                       # a results day this recent has "since the results" beside it
+_since = None
+
+
+def recent_event(region: str, symbol: str, today: date) -> str | None:
+    """The date of this company's newest results day in the last SINCE_DAYS days that has come (a day before today, or today's once
+    its results are filed), from the stored calendar."""
+    frm = (today - timedelta(days=SINCE_DAYS)).isoformat()
+    days = [r["date"] for r in load(region)["rows"] if r["symbol"] == symbol and frm <= r["date"] <= today.isoformat()
+            and (r["date"] < today.isoformat() or r.get("out"))]
+    return max(days) if days else None
+
+
+def since_move(bars: list[dict], day: date) -> float | None:
+    """The change from the close before a results day to the latest close, once a session on or after the day has traded."""
+    seen = sorted(((str(b["t"])[:10], float(b["c"])) for b in bars if b.get("c")), key=lambda x: x[0])
+    before = [c for d, c in seen if d < day.isoformat()]
+    if not before or not seen or seen[-1][0] < day.isoformat() or before[-1] <= 0:
+        return None
+    return round((seen[-1][1] / before[-1] - 1) * 100, 2)
+
+
+def moves_for(region: str, symbols: list[str], today: date | None = None) -> dict[str, dict | None]:
+    """For each company: {"moves": ..., "since": ...}. `moves`: what its price did over its earlier results days (see reaction),
+    worked out from its daily prices, read once and kept (a company's list changes only when it has a new results day); `since`:
+    the change from the close before its newest results day (the last week's) to the latest close, kept ten minutes. At most
+    MOVES_PER_ASK companies' price histories are read in one call, the rest on the next; a company with neither is None."""
+    from .intel.net import TTLCache
+    global _since
+    if _since is None:
+        _since = TTLCache(max_items=500, max_bytes=1024 * 1024)
+    today = today or local_today(region)
+    past = load_past(region)["rows"]
+    store = load_moves(region)
+    rows = store["rows"]
+    uniq = list(dict.fromkeys(symbols))
+    events = {s: recent_event(region, s, today) for s in uniq}
+    todo = [s for s in uniq if (past.get(s) and (not rows.get(s) or rows[s].get("dates") != past[s]))
+            or (events[s] and _since.get((region, s, events[s])) is None)]
+    read = _hist.get("fn")
+    done, changed = 0, False
+    for s in todo:
+        if read is None or done >= MOVES_PER_ASK:
+            break
+        done += 1
+        try:
+            bars = read(region, s, HISTORY_DAYS)
+        except Exception as e:
+            print("results moves:", region, s, str(e)[:100])
+            if past.get(s):
+                rows[s] = {"at": today.isoformat(), "dates": past[s], "moves": []}
+                changed = True
+            if events[s]:
+                _since.set((region, s, events[s]), {"pct": None}, 600)
+            continue
+        if past.get(s) and (not rows.get(s) or rows[s].get("dates") != past[s]):
+            mv = [[d, reaction(bars, date.fromisoformat(d))] for d in past[s][:PAST_KEEP]]
+            rows[s] = {"at": today.isoformat(), "dates": past[s], "moves": [m for m in mv if m[1] is not None]}
+            changed = True
+        if events[s]:
+            _since.set((region, s, events[s]), {"pct": since_move(bars, date.fromisoformat(events[s]))}, 600)
+    if changed:
+        with _lock:
+            fresh = load_moves(region)["rows"]
+            fresh.update({s: rows[s] for s in uniq if s in rows})
+            if len(fresh) > MAX_PAST:
+                for s in sorted(fresh, key=lambda s: fresh[s].get("at") or "")[: len(fresh) - MAX_PAST]:
+                    fresh.pop(s)
+            db.set_setting(MOVES_KEY + region, json.dumps({"rows": fresh}, separators=(",", ":")))
+        rows = fresh
+    out: dict[str, dict | None] = {}
+    for s in uniq:
+        got = (_since.get((region, s, events[s])) or {}).get("pct") if events[s] else None
+        mv = _moves_of(region, s, {"rows": rows})
+        out[s] = {"moves": mv, "since": {"date": events[s], "pct": got} if got is not None else None} if (mv or got is not None) else None
+    return out
+
+
+def implied_for(symbols: list[str], day: str | None = None) -> dict[str, dict | None]:
+    """For stocks with futures and options: the at-the-money straddle of the first expiry on or after the results day, as a share
+    of the price (the move the options price in to that expiry). From the option prices the app already reads; None for a stock
+    without them now (the broker is not connected, no quote for the strike, no expiry that late). At most 8 stocks."""
+    fn = _hist.get("options")
+    out: dict[str, dict | None] = {}
+    fos = fo_symbols()
+    for s in list(dict.fromkeys(symbols))[:8]:
+        out[s] = None
+        if fn is None or s not in fos:
+            continue
+        try:
+            got = fn(s, day)
+        except Exception as e:
+            print("results implied:", s, str(e)[:100])
+            continue
+        out[s] = got
+    return out
+
+
+def straddle_move(chain: dict) -> dict | None:
+    """The implied move from an option chain read around the money: ({"spot", "atm", "expiry", "rows": [{"strike", "ce", "pe"}]})."""
+    spot, rows = chain.get("spot"), chain.get("rows") or []
+    if not spot or not rows or not chain.get("expiry"):
+        return None
+    near = min(rows, key=lambda r: abs(r["strike"] - spot))
+    px = lambda q: (q or {}).get("ltp") if (q or {}).get("ltp") else None          # noqa: E731
+    ce, pe = px(near.get("ce")), px(near.get("pe"))
+    if ce is None or pe is None:
+        return None
+    return {"pct": round((ce + pe) / spot * 100, 1), "strike": near["strike"], "expiry": chain["expiry"], "straddle": round(ce + pe, 2)}

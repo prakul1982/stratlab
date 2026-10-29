@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { fmtDateTime } from "../../lib/format";
-import { Card, CardHead, DataTable, EmptyState, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, Disclosure, EmptyState, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin } from "./AdminContext";
 import { AIPanel } from "./AIPanel";
 import { errorCounts, groupErrors, mailFix, service, type ErrorGroup } from "./attention";
@@ -14,14 +14,16 @@ type FilingCheck = { ok: boolean; symbol: string; count?: number; error?: string
   documents_found?: number; document?: { ok: boolean; title: string; kind: string; chars?: number; error?: string } | null };
 
 // grouped, and in India time as the rest of Admin (DJ-035: UTC here, IST elsewhere, and 22 rows of the same error)
+// each error is a two-line row: what happened in words, then when and where (Ref · Request · Newest); the program's own text and its place
+// in the code are behind Details, so nothing hides behind a fade at the edge (LIVE1C-022, LIVE1C-024)
 const ERRORS: Column<ErrorGroup>[] = [
   { key: "err", header: "Error", rowHeader: true, wrap: true, cell: (x) => (
-    <span className="k-stack">{x.plain && <b className="k-small">{x.plain}</b>}<span className="adm-cell">{x.error}</span></span>) },
+    <span className="k-stack tight">
+      <b className="k-small">{x.plain ?? "An unexpected error in the server."}</b>
+      <span className="k-note k-muted">Ref <span className="adm-mono">{x.ref}</span> · <span className="adm-mono adm-break">{x.path}</span> · newest {fmtDateTime(x.at, { seconds: true, zone: true, tz: IST })}</span>
+      <Disclosure summary="Details" className="adm-err-details"><span className="adm-cell adm-break">{x.error}</span><br /><span className="adm-mono adm-break k-muted">{x.where}</span></Disclosure>
+    </span>) },
   { key: "n", header: "Times", numeric: true, cell: (x) => x.count },
-  { key: "at", header: "Newest", cell: (x) => fmtDateTime(x.at, { seconds: true, zone: true, tz: IST }) },
-  { key: "ref", header: "Ref", cell: (x) => <span className="adm-mono">{x.ref}</span> },
-  { key: "req", header: "Request", wrap: true, cell: (x) => <span className="adm-mono">{x.path}</span> },
-  { key: "where", header: "Where", wrap: true, cell: (x) => <span className="adm-mono">{x.where}</span> },
 ];
 
 type AutoCheck = { name: string; state: "pass" | "warn" | "fail"; detail: string };

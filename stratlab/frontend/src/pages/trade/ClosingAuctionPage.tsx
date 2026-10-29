@@ -198,7 +198,7 @@ function History({ v }: { v: CasView }) {
     <Card label="Past auctions">
       <CardHead title="Past auctions" />
       {!v.history.allowed ? (
-        <p className="k-small">60 days of auction closes against the reference price, and each index's close against its value at 15:15, are on the {v.history.plan} plan. <Link className="link" to="/plans">See the {v.history.plan} plan</Link></p>
+        <p className="k-small">Up to 60 days of auction closes (every day StratLab has saved) against the reference price, and each index's close against its value at 15:15, are on the {v.history.plan} plan. <Link className="link" to="/plans">See the {v.history.plan} plan</Link></p>
       ) : error ? <ErrorState title="The history couldn't be read">{error}</ErrorState> : !h ? <Skeleton label="Reading past auctions" /> : !h.days.length ? (
         <EmptyState title="No auctions recorded yet">Each trading day's auction is saved after 15:40.</EmptyState>
       ) : (

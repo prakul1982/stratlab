@@ -104,8 +104,7 @@ test("VR1-121, VR1-122, VR1-123, VR1-124, VR1-125: IPO badge, fold width, the is
   assert.doesNotMatch(p, /Offer for sale \(shares existing holders offer\)/);
   assert.match(p, /r\.hours\.replace\(\/\\\.\+\$\/, ""\)/);
   assert.match(read("src/pages/ipo.css"), /\.ipo-terms \.k-tbl-wrap \{ margin-bottom: var\(--s3\); \}/);          // (O7: the terms and the dates are two tables in one card)
-  // the two weeks side by side (VR1-125) when both have days to come; a week with nothing left sits above the other (ui-lint R1)
-  assert.match(read("src/pages/ResultsPage.tsx"), /<div className=\{data\.weeks\.every\(\(w\) => w\.rows\.some\(\(r\) => r\.date >= data\.today\)\) \? "k-cols" : "k-stack"\}>\{data\.weeks\.map/);
+  assert.match(read("src/pages/ResultsPage.tsx"), /data\.weeks\.map\(\(w\) => \{[\s\S]*<DataTable label=\{`Results on \$\{resultDay\(d\)\}`\}/);       // one table a day (RES-1), where two columns of chips stood side by side (VR1-125)
 });
 
 test("VR1-130: the alerts summary is one sentence row with the settings link in it", () => {
@@ -173,5 +172,5 @@ test("VR1-171, VR1-173, VR1-180, VR1-181: the library's width, count line, level
   assert.match(p, /<ChipBar label="Market" options=\{markets\} value=\{market\} onChange=\{setMarket\} wrap \/>/);
   assert.match(read("src/pages/LibraryPage.tsx"), /<ChipBar label="Market" options=\{choices\} value=\{market\} onChange=\{setMarket\} wrap \/>/);
   assert.match(read("src/pages/trade/trade.css"), /\.lib-card \.lib-head > \.k-card-head \{ margin-top: auto; \}/);
-  assert.match(read("src/pages/admin/admin.css"), /\.adm-plan \{ align-items: flex-start; gap: 2px; min-height: 48px; \}/);
+  assert.match(read("src/pages/admin/admin.css"), /\.adm-plan \{ align-items: flex-start; justify-content: center; gap: 2px; min-height: 48px; \}/);
 });

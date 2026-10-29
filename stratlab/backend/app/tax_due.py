@@ -108,7 +108,26 @@ def return_dates(fy: int) -> str:
             f"{said(fy, 'audit')} with one.")
 
 
-def audit_dates(fy: int) -> str:
+def _today() -> date:
+    from datetime import datetime, timedelta, timezone
+    return datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+
+
+def deadline(fy: int, kind: str, today: date | None = None) -> str:
+    """"by 21 November 2026 (extended from 31 October by CBDT Circular 7/2026 of 28 Sep 2026)" for a date still ahead, and once it has
+    passed "was due on 21 October 2026 (7 days ago; extended from 30 September by …)": a date that went by is not a deadline still to
+    meet (LIVE1C-052: "report by 21 October 2026" on 28 October)."""
+    today = today or _today()
+    x = due(fy, kind)
+    ext = f"extended from {x['statutory'].day} {x['statutory']:%B} by {x['source']}" if x["extended"] else ""
+    if x["date"] >= today:
+        return f"by {day(x['date'])}" + (f" ({ext})" if ext else "")
+    n = (today - x["date"]).days
+    ago = f"{n} day{'s' if n != 1 else ''} ago"
+    return f"was due on {day(x['date'])} ({ago}{'; ' + ext if ext else ''})"
+
+
+def audit_dates(fy: int, today: date | None = None) -> str:
     """The audit report's and the audit case's return dates, for a year a tax audit applies to."""
-    return (f"Tax audit report (Form 3CA or 3CB, with Form 3CD) by {said(fy, 'audit_report')}; the return by "
-            f"{said(fy, 'audit')}.")
+    return (f"Tax audit report (Form 3CA or 3CB, with Form 3CD) {deadline(fy, 'audit_report', today)}; the return "
+            f"{deadline(fy, 'audit', today)}.")
