@@ -182,8 +182,11 @@ def test_the_brokers_requests_are_paced_in_the_order_they_asked():
     for _ in range(4):
         k._throttle()
         stamps.append(time.time())
-    gaps = [b - a for a, b in zip(stamps, stamps[1:])]
-    assert all(g >= 0.045 for g in gaps), gaps
+    # each request waits for its booked turn: the i-th goes no sooner than i gaps after the first. Measured from the first, not
+    # between neighbours: a caller woken late on a busy machine leaves the next one's turn already due, so one gap can be short
+    # while none of them goes early.
+    since = [s - stamps[0] for s in stamps]
+    assert all(t >= i * 0.05 - 0.005 for i, t in enumerate(since)), since
 
 
 # ---------- the two candle routes ----------
