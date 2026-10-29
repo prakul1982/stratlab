@@ -569,3 +569,10 @@ def test_a_description_is_cut_at_a_word_to_what_a_search_result_shows():
     assert sp.clamp_desc("Short one.") == "Short one."
     page = sp._head("T", long, "https://x.test/")
     assert f'content="{cut}"' in page and long.strip() not in page
+
+
+def test_the_a_to_z_with_its_zero_to_nine_pill_is_two_rows_and_the_pill_keeps_one_line():
+    from app import stock_pages as sp
+    assert 'data-cd="13"' in sp._az_style(26) and 'data-cd="14"' in sp._az_style(27) and 'data-cd="13"' in sp._az_style(7)      # (LIVE2-019)
+    src = open(sp.__file__, encoding="utf8").read()
+    assert 'nav.links[data-cd="14"]{--azd:14}' in src and "repeat(var(--azd,13),44px)" in src and "white-space:nowrap;padding:4px 6px" in src

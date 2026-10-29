@@ -2101,7 +2101,9 @@ ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.link
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
 .links a:hover{border-color:var(--line-2);color:var(--ink)}nav.links[data-az] a{min-width:44px;min-height:44px;justify-content:center;padding:4px 10px}
 /* VR6-022: A to Z in two rows of thirteen on a wide screen, not nineteen and an orphan row of seven (44 px taps, A11Y-2) */
-@media (min-width:641px){nav.links[data-az]{display:grid;grid-template-columns:repeat(13,44px)}}
+@media (min-width:641px){nav.links[data-az]{display:grid;grid-template-columns:repeat(var(--azd,13),44px)}nav.links[data-az] a{white-space:nowrap;padding:4px 6px}}
+/* LIVE2-019: with the "0–9" pill the 27 boxes are two rows of 14 and 13 (data-cd), not 13, 13 and one alone; its label stays on one line */
+nav.links[data-cd="14"]{--azd:14}nav.links[data-cd="15"]{--azd:15}nav.links[data-cd="16"]{--azd:16}
 /* VR7-003: on a phone the same letters fill the row (a 44 px box each, the row as wide as the screen) in as many columns as leave the last row nearly
    full (data-c7 for a screen 375px and wider, data-c6 for a narrower one), not a last row of one or two letters */
 nav.links[data-c7="1"]{--az7:1}nav.links[data-c7="2"]{--az7:2}nav.links[data-c7="3"]{--az7:3}nav.links[data-c7="4"]{--az7:4}nav.links[data-c7="5"]{--az7:5}nav.links[data-c7="6"]{--az7:6}nav.links[data-c7="7"]{--az7:7}
@@ -2330,65 +2332,6 @@ def listed_on(f: dict, region: str, symbol: str) -> str:
     return "on NSE and BSE" if ex == "NSE" and symbol in set(nse_twins().values()) else f"on {ex}"
 
 
-def about_text(f: dict, region: str, symbol: str, name: str) -> str:
-    """The sentences of about_parts as one paragraph (the text the checks of SEO-1 read)."""
-    return " ".join(about_parts(f, region, symbol, name))
-
-
-def about_parts(f: dict, region: str, symbol: str, name: str) -> list[str]:
-    """The company's own sentences, one to an item, from the company's own figures: its sector, where it is listed, its year's range and last close, the
-    latest reported year's revenue and profit, the last 12 months' profit and its market value. Each sentence is left out when
-    its figures are n/a on the page (the same checks the page's figures pass)."""
-    out = []
-    ind = shown_industry(f.get("industry"), plain=region == "US")
-    where = ""
-    if region == "IN" and ind:
-        where = f"is in the {ind[0]} sector" + (f", in the {ind[-1]} industry," if len(ind) > 1 and ind[-1] != ind[0] else ",")
-    elif ind:
-        where = f"is in the {ind[-1]} industry,"
-    out.append(f"{name} {where} listed {listed_on(f, region, symbol)}.".replace(" ,", ",") if where else f"{name} is listed {listed_on(f, region, symbol)}.")
-    price = _num(f.get("price"))
-    if price is not None:
-        word = "last price" if behind(f) or not is_close(f) else "last close"
-        when = f" on {_date(f['price_at'])}" if _date(f.get("price_at")) else ""
-        bit = f"Its {word} was {_money(f, price)}{when}"
-        if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None:
-            span = (f"since its listing on {_date(f['range_since'])}" if f.get("range_since") and _date(f.get("range_since"))
-                    else "over the last 12 months")
-            bit += f"; {span} its share price traded between {_money(f, f['low52'])} and {_money(f, f['high52'])} (intraday)"
-        out.append(bit + ".")
-    ys = [y for y in f.get("years") or [] if y.get("year")]
-    if ys:
-        y = ys[-1]
-        # the precision the page's own table uses for these years (see _table), so a small company's figure reads as there
-        dy = small_digits(*[x.get(k) for x in f.get("years") or [] for k in (("sales", "profit") if f.get("bank") else ("sales", "profit", "debt"))])
-        sales, profit = report_amount(f, y.get("sales"), dy), _num(y.get("profit"))
-        bits = []
-        if sales and _num(y.get("sales")) is not None and _num(y["sales"]) > 0:
-            bits.append(f"revenue of {sales}")
-        if profit is not None:
-            bits.append(f"a net loss of {report_amount(f, -profit, dy)}" if profit < 0 else f"net profit of {report_amount(f, profit, dy)}")
-        if bits:
-            g = f.get("growth") or {}
-            grow = [w for w in (growth_words("revenue", g.get("sales_cagr_3y")), growth_words("net profit", g.get("profit_cagr_3y"))) if w]
-            out.append(f"In its latest reported year ({y['year']}) it reported " + " and ".join(bits)
-                       + (f"; over three years, compounded, its {', and its '.join(grow)}" if grow else "") + ".")
-    ttm, owners = _num(f.get("profit_ttm")), owners_profit(f)
-    dt = small_digits(ttm, owners)              # as the key figures show them (_stats)
-    if owners is not None or ttm is not None:
-        # the page's own two lines for an Indian company whose table profit includes minority holders (_stats): the shareholders'
-        if owners is not None:
-            text = f"profit to its shareholders over the last 12 months was {report_amount(f, owners, dt)}"
-        else:
-            text = (f"it made a net loss of {report_amount(f, -ttm, dt)} over the last 12 months" if ttm < 0
-                    else f"its net profit over the last 12 months was {report_amount(f, ttm, dt)}")
-        out.append(text[0].upper() + text[1:] + " (the four latest reported quarters).")
-    if cap_text(f) != "–":
-        pe = shown_pe(f)
-        out.append(f"Its market value is {cap_text(f)}" + (f", with a P/E of {_fmt(pe)}" if pe is not None else "") + ".")
-    return out
-
-
 def faq_extras(region: str, symbol: str) -> dict:
     """What the company's page can say that is stored apart from its facts, read without asking any source: its next results
     date (the results calendar) and the named holders above 1% in its latest shareholding pattern (India). Empty parts when
@@ -2516,10 +2459,8 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
             + "</li>" for x in unique_filings(shown)) + "</ul></div>")
     parts.append(faq_html(questions, name))
     parts.append(_cta(symbol, test, deep))
-    about = about_parts(f, region, symbol, name) if has_content(f) else []
-    if about:
-        # SEO-1: this company's own sentences, from the figures above, one to a line (PUB-2: not one dense paragraph)
-        parts.append(f'<h2>About {e(name)}</h2><div class="card"><ul class="plain" data-about>' + "".join(f"<li>{e(x)}</li>" for x in about) + "</ul></div>")
+    # LIVE2-018: no "About" section. It said again, in sentences, the last close, the year's range, the revenue and profit, the market value and the
+    # P/E that the tiles, the table and the questions already give (a company's market value and P/E were on the page three times)
     for sec in peer_sections(region, symbol, f.get("industry") or [], shown_cap(f)):
         parts.append(f'<h2>{e(sec["title"])}</h2><p class="small muted" data-peers>{e(sec["caption"])}</p>' + _links(region, sec["rows"]))
     parts.append(browse_block(region, symbol))        # SEO-1: the companies before and after it A to Z, its letter's list and its indexes
@@ -3385,7 +3326,7 @@ def _az_cols(n: int, widest: int) -> int:
 
 def _az_style(n: int) -> str:
     """The columns as two attributes (the page's body carries no inline style): data-c7 for a screen 375px and wider, data-c6 for a narrower one."""
-    return f' data-c7="{_az_cols(n, 7)}" data-c6="{_az_cols(n, 6)}"'
+    return f' data-c7="{_az_cols(n, 7)}" data-c6="{_az_cols(n, 6)}" data-cd="{max(13, -(-n // 2))}"'
 
 
 def az_nav(region: str) -> str:

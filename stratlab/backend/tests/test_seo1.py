@@ -308,12 +308,6 @@ def stored_facts(sym: str, region: str = "IN") -> dict:
     return json.loads(db.get_setting(f"stocks:page:{region}:{sym}"))["facts"]
 
 
-def about_of(html: str) -> str:
-    """The About section's sentences, one to a line (PUB-2), as one text."""
-    items = re.search(r'<ul class="plain" data-about>(.*?)</ul>', html, re.S).group(1)
-    return " ".join(re.findall(r"<li>(.*?)</li>", items, re.S)).replace("&#x27;", "'").replace("&amp;", "&")
-
-
 def rupees(v: float) -> str:
     """₹ crore as the page words it, written out here independently of the page's code (Indian grouping for under a lakh crore)."""
     return f"₹{v / 1e5:,.2f} lakh crore" if round(v) >= 1e5 else f"₹{round(v):,} crore"
@@ -324,32 +318,14 @@ def dollars(v: float) -> str:
     return f"${v / 1e6:,.2f}T" if round(v / 1e3, 1) >= 1e3 else f"${v / 1e3:,.1f}B" if v >= 1e3 else f"${round(v):,}M"
 
 
-def test_the_paragraph_uses_the_pages_own_figures_for_an_indian_company(w):
+def test_the_figures_are_said_once_on_a_company_page_not_again_in_an_about_section(w):
+    """LIVE2-018: market value and P/E were on the page three times (tile, question, About)."""
     c = w["client"]
-    t = c.get("/stocks/in/RELIANCE").text
-    f = stored_facts("RELIANCE")
-    text = about_of(t)
-    last = f["years"][-1]
-    assert text.startswith("Reliance Industries Ltd is in the Energy sector, in the Refineries industry, listed on NSE.")
-    assert f"Its last close was ₹{f['price']:,.2f} on " in text and f"between ₹{f['low52']:,.2f} and ₹{f['high52']:,.2f} (intraday)" in text
-    assert f"In its latest reported year ({last['year']}) it reported revenue of {rupees(last['sales'])} and net profit of {rupees(last['profit'])}" in text
-    assert f"its revenue grew {f['growth']['sales_cagr_3y']:,.1f}% a year" in text and f"its net profit grew {f['growth']['profit_cagr_3y']:,.1f}% a year" in text
-    assert f"Its market value is {rupees(f['market_cap'])}" in text and f"with a P/E of {f['pe']:,.1f}" in text
-    assert f"<b data-price>₹{f['price']:,.2f}</b>" in t                   # the header shows the same last close
-    assert t.index("Key figures</h2>") < t.index("data-about") < t.index("data-how")      # PUB-2: the About section is near the end, the explanations last
-    assert t.count("<li>") > 5 and "</li>" in t.split("data-about>")[1]
-
-
-def test_the_paragraph_uses_the_pages_own_figures_for_a_us_company(w):
-    t = w["client"].get("/stocks/us/AAPL").text
-    f = stored_facts("AAPL", "US")
-    text = about_of(t)
-    last = f["years"][-1]
-    assert text.startswith("Apple Inc. is in the ") and "listed in the US." in text
-    assert f"Its last close was ${f['price']:,.2f} on " in text and f"between ${f['low52']:,.2f} and ${f['high52']:,.2f}" in text
-    assert f"revenue of {dollars(last['sales'])} and net profit of {dollars(last['profit'])}" in text
-    assert f"net profit over the last 12 months was {dollars(f['profit_ttm'])}" in text
-    assert f"Its market value is {dollars(f['market_cap'])}" in text
+    for u, cap in (("/stocks/in/RELIANCE", None), ("/stocks/us/AAPL", None)):
+        t = c.get(u).text
+        assert "data-about" not in t and "<h2>About " not in t, u
+        assert "Its market value is" not in t and "Its last close was" not in t and "In its latest reported year" not in t, u
+        assert "<h2>Key figures</h2>" in t and "data-faq" in t, u
 
 
 def synthetic(**more) -> dict:
@@ -361,24 +337,12 @@ def synthetic(**more) -> dict:
     return {**f, **more}
 
 
-def test_losses_missing_figures_and_other_currencies_are_worded_plainly():
-    f = synthetic()
-    text = stock_pages.about_text(f, "IN", "ACME", "Acme Ltd")
-    assert "reported revenue of ₹1,200 crore and a net loss of ₹36 crore; over three years" in text      # as the table rounds -35.5
-    assert "Acme Ltd is in the Metals sector, in the Steel industry, listed on BSE." in text
-    assert "P/E" not in text and "its revenue grew 4.2% a year" in text and "net profit grew" not in text
-    bare = stock_pages.about_text({**f, "years": [], "price": None, "market_cap": None, "profit_ttm": None}, "IN", "ACME", "Acme Ltd")
-    assert bare == "Acme Ltd is in the Metals sector, in the Steel industry, listed on BSE."          # nothing is invented for what is missing
-    foreign = stock_pages.about_text({**f, "region": "US", "currency": "USD", "unit": "EUR million", "industry": ["Banks"]}, "US", "ACME", "Acme Plc")
-    assert "revenue of 1,200 EUR million" in foreign and "listed in the US" in foreign
-
-
 def test_no_advice_wording_or_vendor_name_in_any_paragraph_question_or_answer(w):
     c = w["client"]
     seen = 0
     for u in ("/stocks/in/RELIANCE", "/stocks/us/AAPL", "/stocks/in/ONGC", "/stocks/us/MSFT"):
         t = c.get(u).text
-        for chunk in re.findall(r'<ul class="plain" data-about>.*?</ul>|<div class="card faq" data-faq>.*?</div>', t, re.S):
+        for chunk in re.findall(r'<div class="card faq" data-faq>.*?</div>', t, re.S):
             seen += 1
             assert not ADVICE.search(words(chunk)) and not PROVIDERS.search(words(chunk)), (u, ADVICE.search(words(chunk)))
         assert not ADVICE.search(words(t)), (u, ADVICE.search(words(t)).group(0))
