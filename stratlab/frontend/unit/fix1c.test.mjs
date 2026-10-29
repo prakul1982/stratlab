@@ -32,8 +32,8 @@ test("LIVE1C-004, LIVE1C-024: the link sits under the sentence, never in a colum
 test("LIVE1C-005: this month's counts sit in Money, use and limits; a row of feed tiles fills its width", () => {
   const src = read("src/pages/admin/OverviewSection.tsx");
   assert.doesNotMatch(src, /<Card label="This month">/);
-  assert.match(src, /label="Experiments this month"/);
-  assert.match(src, /label="AI builds this month"/);
+  assert.match(src, /label: "Experiments this month"/);
+  assert.match(src, /label: "AI builds this month"/);
   assert.match(src, /data-testid="posthog-dashboard"/);
   assert.match(read("src/styles.css"), /\.k-health \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(190px, 1fr\)\)/);
 });

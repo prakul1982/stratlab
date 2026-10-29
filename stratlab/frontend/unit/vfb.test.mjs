@@ -59,11 +59,11 @@ test("VR1-102: the space's main button keeps its place on the page it points to"
   assert.match(css, /\.side-new-gap \{ display: block; height: 34px; \}/);
 });
 
-test("VR1-105: a company's past corporate actions sit two across under a short 'Coming up'", () => {
+test("VR1-105: a company's corporate actions are two tables, one under the other, so no short list sits beside a long one", () => {
   const c = read("src/components/CorpActions.tsx");
-  assert.match(c, /inv-rows\$\{wide \? " inv-rows-cols" : ""\}/);
-  assert.match(c, /const wide = past\.length >= 3 && data\.ahead\.length <= 1;/);
-  assert.match(invest, /\.inv-rows\.inv-rows-cols \{ display: grid;/);
+  assert.match(c, /label="Corporate actions coming up"/);
+  assert.match(c, /label="Corporate actions in the past three years"/);
+  assert.doesNotMatch(c, /inv-pair|inv-rows-cols/);
 });
 
 test("VR1-110, VR1-112, VR1-113: a chart's Table button stays beside a long title; the alert and the rotation controls are one row", () => {

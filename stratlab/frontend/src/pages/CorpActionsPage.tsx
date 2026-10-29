@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, fmtTime, marketTz, pctPlain, price, safeHref } from "../lib/format";
+import { ago, fmtTime, marketTz, pctPlain, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { LIVE_ROWS, useRowQuotes } from "../lib/rowQuotes";
 import { REGION_NAME, saveRegion, savedRegion, screenCap, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
-import { KIND_NAME, exDay, type ActionKind, type CorpAction } from "../components/CorpActions";
+import { ActionCell, ActionFigure, KIND_NAME, exDay, recordCell, type ActionKind, type CorpAction } from "../components/CorpActions";
 import { CalendarFilters, NO_CAL, SIZE_NAME, calCount, keepFilters, keptFilters, type CalFilters, type Facets } from "../components/CalendarFilters";
 import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
@@ -27,24 +27,6 @@ interface CalendarView {
 const KEEP = "stratlab.corp.filters.v1";
 const NO_FILTERS: CalFilters = { ...NO_CAL, sort: "date" };
 const SORT_NAME: Record<string, string> = { date: "Ex-date, soonest first", cap: "Market value, largest first", yield: "Yield of the payment, highest first", name: "Company name" };
-
-/** The figure of an action in its own column: a dividend's amount, a bonus's or rights issue's ratio, a split's factor, a buyback's price. */
-function Figure({ a, cur }: { a: ActionRow; cur: string }) {
-  if (a.kind === "dividend") return a.amount ? <>{price(a.amount, cur, a.amount < 1 ? 4 : 2)}<span className="k-note k-muted"> a {/unit/i.test(a.text) ? "unit" : "share"}</span></> : <span className="k-muted">Not stated</span>;
-  if ((a.kind === "bonus" || a.kind === "rights") && a.ratio) return <>{a.ratio[0]}:{a.ratio[1]}</>;
-  if (a.kind === "split" && a.factor) return a.factor >= 1 ? <>{+a.factor.toFixed(2)} for 1</> : <>1 for {+(1 / a.factor).toFixed(2)}</>;
-  if (a.kind === "buyback" && a.amount) return <>{price(a.amount, cur)}<span className="k-note k-muted"> a share</span></>;
-  return <span className="k-muted">Not stated</span>;
-}
-
-/** What the figure alone does not say: a split's face values, a rights issue's premium, a distribution's parts, a dividend in today's shares. */
-function aside(a: ActionRow, cur: string): string | null {
-  if (a.kind === "split" || a.kind === "demerger") { const rest = a.text.toLowerCase().startsWith(a.label.toLowerCase()) ? a.text.slice(a.label.length).replace(/^[\s:·-]+/, "") : a.text; return rest && rest.toLowerCase() !== a.label.toLowerCase() ? rest : null; }
-  if (a.kind === "bonus") { const rest = a.text.replace(/^Bonus[^(]*/, "").trim(); return rest.startsWith("(") ? rest.slice(1, -1) : null; }     // "1 new share for every 1 held"
-  if (a.kind === "rights" && a.premium) return `at a premium of ${price(a.premium, cur)}`;
-  if (a.parts?.length) return a.parts.map((p) => `${p.label} ${p.amount == null ? "" : price(p.amount, cur, 2)}`.trim()).join(", ");
-  return null;
-}
 
 export function CorpActionsPage() {
   const [params, setParams] = useSearchParams();
@@ -113,18 +95,9 @@ export function CorpActionsPage() {
         </span>
         {r.name && <span className="k-note k-muted">{r.name}</span>}
       </span>) },
-    { key: "act", header: "Action", wrap: true, cell: (r) => {
-      const more = aside(r, cur);
-      return (
-        <span className="k-stack">
-          <span><Badge tone="plain" dot={false}>{r.label}</Badge></span>
-          {more && <span className="k-note k-muted">{more}</span>}
-          {r.now_note && <span className="k-note k-muted" data-testid="div-now">{r.now_note}</span>}
-          {r.url && <span className="k-note"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Notice ↗</a></span>}
-        </span>);
-    } },
-    { key: "fig", header: "Amount or ratio", numeric: true, cell: (r) => <Figure a={r} cur={cur} /> },
-    { key: "rec", header: "Record date", cell: (r) => (r.record_date ? (r.record_date === r.ex_date ? <span className="k-muted">Same day</span> : exDay(r.record_date)) : <span className="k-muted">Not given</span>) },
+    { key: "act", header: "Action", wrap: true, cell: (r) => <ActionCell a={r} cur={cur} /> },
+    { key: "fig", header: "Amount or ratio", numeric: true, cell: (r) => <ActionFigure a={r} cur={cur} /> },
+    { key: "rec", header: "Record date", cell: (r) => recordCell(r) },
     { key: "px", header: "Price now", numeric: true, cell: (r) => {
       const x = quotes[r.symbol];
       if (x?.price != null) return <span title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur)}</span>;

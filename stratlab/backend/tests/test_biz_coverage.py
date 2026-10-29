@@ -179,3 +179,13 @@ def test_the_admin_audit_is_for_the_admin(w):
     assert c.get("/admin/business-updates/coverage", headers=headers("basic-token")).status_code == 403
     r = c.get("/admin/business-updates/coverage", headers=headers("admin-token"))
     assert r.status_code == 200 and {x["category"] for x in r.json()["categories"]} == set(B.SECTORS) and "rule" in r.json()
+
+
+def test_my_stocks_tell_a_company_that_files_none_from_one_not_read_yet(w, paid, monkeypatch):
+    monkeypatch.setattr(B, "my_symbols", lambda uid: [("MARUTI", "holding"), ("ZEEL", "watchlist"), ("TCS", "watchlist"), ("RELIANCE", "holding")])
+    store("MARUTI")
+    B.mark_checked("ZEEL", 0)
+    B.mark_checked("TCS", 0)
+    got = w["client"].get("/invest/business-updates/mine", headers=headers("basic-token")).json()
+    assert [r["symbol"] for r in got["rows"]] == ["MARUTI"]
+    assert {x["symbol"]: x["status"] for x in got["without"]} == {"ZEEL": "none_filed", "TCS": "none_filed", "RELIANCE": "unchecked"}

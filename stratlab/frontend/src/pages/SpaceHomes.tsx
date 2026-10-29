@@ -17,8 +17,8 @@ import { evWhen, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
-import { AsOf, Fig, Loading, PanelSkel, VerdictBadge } from "../components/ui";
-import { Card, CardHead, Disclosure, PageHeader, Seg } from "../components/kit";
+import { AsOf, Loading, PanelSkel, VerdictBadge } from "../components/ui";
+import { Card, CardHead, Disclosure, FigureTable, PageHeader, Seg, Signed } from "../components/kit";
 import { Panel, QuoteGrid } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
@@ -492,18 +492,21 @@ function HoldingsSummary() {
           </div>
         ) : (
           <div className="k-stack" data-testid="holdings-summary">
-            <div className="k-stats">
-              {(() => { const n = h.totals.count - (h.totals.no_cost?.count ?? 0);   // the lines the value is of
-                return <Fig label={`Value · ${n} stock${n === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />; })()}
-              {/* DG-050: of the lines with a price only, said so, as My Holdings says it (DG-001) */}
-              <Fig label={pnlLabel("Gain or loss", h.totals.pnl_partial)} tone={signCls(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
-                note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signCls(h.totals.pnl)} missing={gainMissing(h.totals)} />
-              {/* "Today" only of today's session: the session the change belongs to is named when it is an earlier day (R41A) */}
-              {/* VR2-003: the label does not carry the date here: "Last session (Mon 26 Oct)" wrapped to three lines and staggered the three labels; "Prices as of" below says the day */}
-              {h.totals.day != null && <Fig label={h.totals.session && h.totals.session < istToday() ? "Last session" : "Today"} tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
-              {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")}
-                note={h.us.in_total && h.usd_inr ? `at ₹${h.usd_inr.toFixed(2)} a dollar` : undefined} />}
-            </div>
+            {(() => {
+              const n = h.totals.count - (h.totals.no_cost?.count ?? 0);   // the lines the value is of
+              const gone = h.totals.pnl == null;
+              return (
+                <FigureTable label="My Holdings totals" header="Holdings" valueHeader="Now" noteHeader="Change" rows={[
+                  { key: "value", label: `Value · ${n} stock${n === 1 ? "" : "s"}`, value: money(h.totals.value, "INR") },
+                  // DG-050: of the lines with a price only, said so, as My Holdings says it (DG-001)
+                  { key: "pnl", label: pnlLabel("Gain or loss", h.totals.pnl_partial), tone: signCls(h.totals.pnl), value: gone ? <span className="k-muted">{gainMissing(h.totals)}</span> : money(h.totals.pnl!, "INR"),
+                    note: h.totals.pnl_pct != null ? <Signed value={h.totals.pnl_pct}>{pct(h.totals.pnl_pct)}</Signed> : undefined },
+                  // "Today" only of today's session: the session the change belongs to is named when it is an earlier day (R41A)
+                  ...(h.totals.day != null ? [{ key: "day", label: h.totals.session && h.totals.session < istToday() ? "Last session" : "Today", tone: signCls(h.totals.day), value: money(h.totals.day, "INR") }] : []),
+                  ...(h.us && h.us.count > 0 ? [{ key: "us", label: `US stocks${h.us.in_total ? " (in the rupee value)" : ""}`, value: money(h.us.value, "USD"),
+                    note: h.us.in_total && h.usd_inr ? `at ₹${h.usd_inr.toFixed(2)} a dollar` : undefined }] : []),
+                ]} />);
+            })()}
             {/* the same lines as My Holdings: one with a price but no buy price is named, not half counted (R5O-004) */}
             {h.totals.no_cost && <p className="small muted">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}), except Today, which includes {h.totals.no_cost.count === 1 ? "its" : "their"} change.</p>}
             {(() => { const n = priceNote(h.prices ?? true, h.closes, h.rows, (d) => fmtDate(d, { weekday: true, year: false })); return n && <p className="small muted" data-testid="holdings-prices">{n}{h.totals.pnl_partial ? " The gain or loss is of the lines with a price." : ""}</p>; })()}
@@ -537,16 +540,16 @@ function TaxSummary() {
           </div>
         ) : (
           <div className="k-stack" data-testid="tax-summary">
-            <div className="k-stats">
-              {/* the tax report's own total (capital gains, F&O and intraday business income, slab, surcharge and cess), so the
-                  two pages agree; the capital gains part alone said ₹0 beside a report of ₹77,61,298 */}
-              <Fig label="Total tax estimate" value={money(year?.total?.available ? year.total.total ?? 0 : year?.tax_with_cess ?? 0, "INR")} />
-              {/* where the tax comes from: the F&O and intraday income beside the gains (R6O-014: ₹77,61,298 beside −₹59 and ₹0) */}
-              {!!year?.total?.income?.business && <Fig label="F&O and other business income" tone={signCls(year.total.income.business)} value={money(year.total.income.business, "INR")} />}
-              {!!year?.total?.income?.intraday && <Fig label="Intraday income" tone={signCls(year.total.income.intraday)} value={money(year.total.income.intraday, "INR")} />}
-              <Fig label="Short-term gains" tone={signCls(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
-              <Fig label="Long-term gains" tone={signCls(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
-            </div>
+            <FigureTable label="Tax estimate" header="Tax" valueHeader="Amount" noteHeader={null} rows={[
+              // the tax report's own total (capital gains, F&O and intraday business income, slab, surcharge and cess), so the
+              // two pages agree; the capital gains part alone said ₹0 beside a report of ₹77,61,298
+              { key: "total", label: "Total tax estimate", value: money(year?.total?.available ? year.total.total ?? 0 : year?.tax_with_cess ?? 0, "INR") },
+              // where the tax comes from: the F&O and intraday income beside the gains (R6O-014: ₹77,61,298 beside −₹59 and ₹0)
+              ...(year?.total?.income?.business ? [{ key: "biz", label: "F&O and other business income", tone: signCls(year.total.income.business), value: money(year.total.income.business, "INR") }] : []),
+              ...(year?.total?.income?.intraday ? [{ key: "intra", label: "Intraday income", tone: signCls(year.total.income.intraday), value: money(year.total.income.intraday, "INR") }] : []),
+              { key: "stcg", label: "Short-term gains", tone: signCls(year?.stcg.net), value: money(year?.stcg.net ?? 0, "INR") },
+              { key: "ltcg", label: "Long-term gains", tone: signCls(year?.ltcg.net), value: money(year?.ltcg.net ?? 0, "INR") },
+            ]} />
             {/* the tax audit fact (turnover, the report's date, the penalty) is seven lines: behind a fold, so this card is not twice My Holdings' height (LIVE1C-051) */}
             {year?.audit && <Disclosure summary="Tax audit (section 44AB)" testId="tax-audit"><p className="small">{year.audit}</p></Disclosure>}
             <p className="tiny muted">{year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>

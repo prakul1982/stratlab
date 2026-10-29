@@ -151,9 +151,6 @@ a.inv-theme:hover { border-color: var(--ink); }
 .inv-day { display: flex; flex-direction: column; gap: var(--s2); }
 /* the days side by side where there is room, in the order they come (across, then down): one column of them left a wide card two-thirds empty (UI-FIX-1, R2) */
 /* VR1-105: rows two across where there is room (past corporate actions), each a block of its own, no rule between */
-.inv-rows.inv-rows-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s4) var(--s6, 32px); align-items: start; }
-.inv-rows.inv-rows-cols > .inv-row { border-top: 0; padding: 0; }
-.inv-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s4) var(--s6, 32px); align-items: start; }
 .inv-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); gap: var(--s4) var(--s5); align-items: start; }
 .inv-alert { display: flex; justify-content: space-between; align-items: center; gap: var(--s3) var(--s4); flex-wrap: wrap; padding: var(--s3) 0; border-top: 1px solid var(--line); }
 .inv-alert > .k-stack { flex: 1 1 280px; gap: 4px; }
@@ -195,3 +192,5 @@ a.inv-theme:hover { border-color: var(--ink); }
   .cmp-sections .k-table { table-layout: fixed; width: 100%; }
   .cmp-sections .k-table th:first-child { width: 44%; }
 }
+/* business updates: the small history chart in a company's row (RES-1 follow-up) */
+.biz-spark { display: block; width: 120px; max-width: 100%; }

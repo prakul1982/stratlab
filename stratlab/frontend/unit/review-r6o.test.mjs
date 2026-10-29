@@ -96,7 +96,7 @@ test("View as chips fit the menu, paper-trade messages say Basic, and locks and 
 
 test("Money: the tax card shows the F&O income the tax is on; Today names its US part, live or at the close (R6O-014, R6O-015)", async () => {
   const homes = read("src/pages/SpaceHomes.tsx");
-  assert.match(homes, /label="F&O and other business income"/);
+  assert.match(homes, /label: "F&O and other business income"/);
   const { usTodayNote } = await import("../src/lib/marketHours.ts");
   const us = { id: "US", name: "US", venues: "", currency: "USD", symbol: "", tz: "America/New_York", hours: { open: "09:30", close: "16:00", days: "Mon-Fri" },
     what: "", costs: "", brokerage: 0, status: "live", max_days: null };

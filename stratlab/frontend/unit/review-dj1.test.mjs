@@ -179,9 +179,9 @@ test("DJ-004, DJ-005, DJ-006, DJ-008: Overview puts what needs you first, names 
   assert.equal(revenueText({ USD: 16, INR: 6990 }), "INR 6,990 · USD 16");
   const src = read("src/pages/admin/OverviewSection.tsx");
   assert.ok(src.indexOf('<Card label="Needs your attention">') < src.indexOf("<ViewAsCard />"));
-  assert.match(src, /label="Server errors \(since restart\)"/);
-  assert.match(src, /label="Revenue, last 30 days"/);
-  assert.match(src, /label="Active users, last 7 days"/);
+  assert.match(src, /label: "Server errors \(since restart\)"/);
+  assert.match(src, /label: "Revenue, last 30 days"/);
+  assert.match(src, /label: "Active users, last 7 days"/);
   assert.match(src, /Bills StratLab can't read:/);
   assert.match(src, /<Disclosure summary=\{`Show the \$\{okFeeds\.length\} feeds that are OK`\}/);
 });

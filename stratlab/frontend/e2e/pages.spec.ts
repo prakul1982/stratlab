@@ -1332,14 +1332,15 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   const past = page.locator("details.earlier", { hasText: "Last two weeks" });
   if (await past.count()) await expect(past).not.toHaveAttribute("open", "");
   await seeUnfolded(page, page.getByRole("link", { name: "TCS" }).first());
-  await expect(page.getByText("Bonus 1:1 (1 new share for every 1 held)")).toBeVisible();
-  await expect(page.getByText(/Interim dividend ₹11 a share/).first()).toBeVisible();
+  // each action is a row of a table (RES-1): the kind, its figure in its own column, and what the figure does not say under the kind
+  await expect(page.getByRole("row", { name: /TCS.*Bonus 1:1/ }).first()).toContainText("1 new share for every 1 held");
+  await expect(page.getByRole("row", { name: /TCS.*Interim dividend/ }).first()).toContainText("₹11");
   await expect(page.getByText("Annual General Meeting")).toHaveCount(0);           // a meeting isn't an action
   await page.getByRole("combobox", { name: "Kind of action" }).selectOption("bonus");
   await expect(page.getByText(/Dividend - Rs|₹5.50 a share/)).toHaveCount(0);
-  await seeUnfolded(page, page.getByText("Bonus 1:1 (1 new share for every 1 held)"));
+  await seeUnfolded(page, page.getByText("1 new share for every 1 held"));
   await page.getByRole("radio", { name: "My stocks" }).click();
-  await seeUnfolded(page, page.getByText("Bonus 1:1 (1 new share for every 1 held)"));      // TCS is in the holdings
+  await seeUnfolded(page, page.getByText("1 new share for every 1 held"));      // TCS is in the holdings
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
   expect(await page.locator("main").innerText()).not.toMatch(/yahoo|finnhub|kite|screener/i);
@@ -1348,8 +1349,8 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
   const panel = page.locator("#corporate-actions");
   // the fake exchange's dates are relative to India's day, so a run that crosses midnight IST reads the list again and
   // carries the dividend under two ex-dates (CI at 00:10 IST, 24 Oct): one is enough, as in the calendar above
-  await expect(panel.getByText(/Interim dividend ₹11 a share/).first()).toBeVisible({ timeout: 30_000 });
-  await expect(panel.getByText(/Final dividend ₹30 a share/)).toBeVisible();
+  await expect(panel.getByRole("row", { name: /Interim dividend/ }).first()).toContainText("₹11", { timeout: 30_000 });
+  await expect(panel.getByRole("row", { name: /Final dividend/ })).toContainText("₹30");
   await expect(panel.getByText(/Dividends with an ex-date in the last 12 months/)).toBeVisible();
 
   errors = await open(page, "/holdings", "By sector", who);

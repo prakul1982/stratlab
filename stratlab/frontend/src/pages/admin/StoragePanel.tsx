@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, safeHref } from "../../lib/format";
-import { Card, CardHead, ConfirmDialog, Disclosure, ErrorState, Meter, Notice, Skeleton } from "../../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, ErrorState, Meter, Notice, Skeleton } from "../../components/kit";
 
 type Sized = { name: string; bytes: number };
 type Group = { prefix: string; bytes: number; rows: number };
@@ -184,7 +184,10 @@ function Sizes({ title, rows }: { title: string; rows: [string, number][] }) {
   return (
     <div>
       <div className="k-note k-muted">{title}</div>
-      <div className="k-rows">{rows.map(([name, bytes]) => <div key={name}><span>{name}</span><b>{mb(bytes)}</b></div>)}</div>
+      <DataTable label={title} rows={rows} rowKey={([name]) => name} columns={[
+        { key: "n", header: "Name", rowHeader: true, wrap: true, cell: ([name]) => name },
+        { key: "s", header: "Size", numeric: true, cell: ([, bytes]) => mb(bytes) },
+      ]} />
     </div>
   );
 }

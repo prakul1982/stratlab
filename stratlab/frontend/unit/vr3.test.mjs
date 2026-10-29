@@ -24,8 +24,6 @@ test("VR3-001, VR3-009: two or three cards of a group page or a file list share 
 test("VR3-002: 'Yours' and 'record date the same day' are not printed on every row of a list that is all the person's own", () => {
   const ca = read("src/components/CorpActions.tsx");
   assert.doesNotMatch(ca, /record date the same day/);
-  assert.match(ca, /showMine = true/);
-  assert.match(ca, /\{showMine && a\.mine && <Badge tone="plain" dot=\{false\}>Yours<\/Badge>\}/);
   const page = read("src/pages/CorpActionsPage.tsx");
   assert.match(page, /const showMine = scope === "all";/);          // the table's company cell (RES-1) says "Yours" only on the all-companies list
   assert.match(page, /\{showMine && r\.mine && <Badge tone="plain" dot=\{false\}>Yours<\/Badge>\}/);

@@ -4,7 +4,7 @@ import { Info, Modal } from "../../components/ui";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, istToday, plainDates } from "../../lib/format";
-import { Card, CardHead, DataTable, Light, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, FigureTable, Light, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type JobRow } from "./AdminContext";
 import { plainError, services } from "./attention";
 import { BlogPanel } from "./BlogPanel";
@@ -27,12 +27,12 @@ function JobLog({ job, mine, onClose }: { job: JobRow; mine: Outcome[]; onClose:
   return (
     <Modal title={`${job.name}: log`} onClose={onClose}>
       <div className="k-stack">
-        <div className="k-rows">
-          <div><span>Last run</span><b>{job.last_run ? `${ago(job.last_run)} (${dateOnly(job.last_run)})` : "Not yet"}</b></div>
-          <div><span>Next run</span><b>{job.next ?? (job.schedule || "–")}</b></div>
-          {job.next && job.schedule && <div><span>Schedule</span><b className="adm-break">{job.schedule}</b></div>}
-          <div><span>Status</span><b><Light state={job.state} /></b></div>
-        </div>
+        <FigureTable label={`${job.name}: when it runs`} header="Job" valueHeader="Value" noteHeader={null} rows={[
+          { key: "last", label: "Last run", value: job.last_run ? `${ago(job.last_run)} (${dateOnly(job.last_run)})` : "Not yet" },
+          { key: "next", label: "Next run", value: job.next ?? (job.schedule || "–") },
+          ...(job.next && job.schedule ? [{ key: "sched", label: "Schedule", value: <span className="adm-break">{job.schedule}</span> }] : []),
+          { key: "status", label: "Status", value: <Light state={job.state} /> },
+        ]} />
         {job.error && <p className={`k-small ${job.state === "bad" ? "k-down" : ""}`} role="alert" title={plainError(job.error).full}>{job.state === "bad" ? "Last problem" : "To check"}: {plainError(job.error).text}</p>}
         {job.note && <p className="k-small k-muted">{job.note}</p>}
         <h3 className="adm-sub">What it reported</h3>

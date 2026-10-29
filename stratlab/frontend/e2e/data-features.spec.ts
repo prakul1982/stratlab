@@ -221,8 +221,10 @@ test("US corporate actions: every company's dividends and splits for the last fo
   await expect(fold).toBeVisible();
   if (!(await fold.evaluate((el) => (el as HTMLDetailsElement).open))) await fold.locator("summary").click();       // it opens by itself when nothing is ahead
   await expect(fold).toContainText("MSFT");
-  await expect(fold).toContainText(/Dividend \$\d/);
-  await expect(fold).toContainText(/Split 10-for-1/);
+  await expect(fold).toContainText("Dividend");
+  await expect(fold).toContainText(/\$\d+\.\d+/);                 // a dividend's amount, in its own column
+  await expect(fold).toContainText("Split");
+  await expect(fold).toContainText("10 for 1");
   await page.getByRole("button", { name: "About the US list" }).click();
   await expect(page.getByText(/price history/).first()).toBeVisible();
   await expect(page.getByText(/companies read/).first()).toBeVisible();

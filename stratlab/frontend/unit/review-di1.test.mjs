@@ -104,7 +104,7 @@ test("DI-006: the layout is kept on the account", () => {
 test("DI-007: the holdings tile says the prices are missing when the buy prices are there", () => {
   const src = read("src/pages/SpaceHomes.tsx");
   assert.match(src, /if \(t\.priced === 0 && noCost < t\.count\) return "Needs today's prices, not in yet";/);
-  assert.match(src, /missing=\{gainMissing\(h\.totals\)\}/);
+  assert.match(src, /<span className="k-muted">\{gainMissing\(h\.totals\)\}<\/span>/);          // in the totals table the gain's cell says why it is missing (RES-1)
 });
 
 test("DI-009: a results day reads the same whichever calendar it came from, and the rest are counted", () => {

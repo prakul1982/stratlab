@@ -63,3 +63,17 @@ test("RES-1: facts and arrows, never a view: no advice words on the page", () =>
   assert.match(page, /\$\{v > 0 \? "▲" : v < 0 \? "▼" : ""\} \$\{Math\.abs\(v\)\.toFixed\(1\)\}%/);
   assert.match(page, /Facts, not a forecast\./);
 });
+
+test("RES-1 follow-up: business updates have a chart per company on one range, a category total and the companies that file none", () => {
+  const b = read("src/pages/BizUpdatesPage.tsx");
+  assert.match(b, /import \{[^}]*Spark[^}]*\} from "\.\.\/components\/kit"/);
+  assert.match(b, /\{ value: "6", label: "6 months" \}, \{ value: "12", label: "1 year" \}, \{ value: "24", label: "2 years" \}/);
+  assert.match(b, /<Seg label="Range of the small charts" value=\{range\} onChange=\{setRange\}/);
+  assert.match(b, /figureColumns\(months\)/);                                  // the sector table
+  assert.match(b, /figureColumns\(months, \{ key: "k", header: "From"/);       // and My stocks, on the same range
+  assert.match(b, /foot=\{d\.total \?/);
+  assert.match(b, /Total of \$\{d\.total\.companies\} companies/);
+  assert.match(b, /data-testid="biz-none">No business update among their exchange filings:/);
+  assert.match(b, /data-testid="biz-mine-none">No business update among their exchange filings:/);
+  assert.doesNotMatch(b, /\b(buy|sell|beat|miss)\b/i);
+});

@@ -82,7 +82,7 @@ test("whole-number growth rates stay whole, and the compare page names each sect
 test("the Money card's tax is the tax report's total, with the audit fact (R5O-022)", () => {
   const card = read("src/pages/SpaceHomes.tsx");
   assert.match(card, /year\?\.total\?\.available \? year\.total\.total/);
-  assert.match(card, /<Fig label="Total tax estimate"/);           // the card heading carries the year
+  assert.match(card, /label: "Total tax estimate"/);           // the card heading carries the year; the figures are a table (RES-1)
   assert.match(card, /\{year\?\.audit && <Disclosure summary="Tax audit \(section 44AB\)" testId="tax-audit"><p className="small">\{year\.audit\}<\/p><\/Disclosure>\}/);   // (behind a fold, LIVE1C-051)
   assert.doesNotMatch(card, /Capital gains tax, \$\{year/);
 });

@@ -895,7 +895,7 @@ def my_view(uid: str) -> dict:
         reads = stored(sym)
         row = _headline_row(sym, names.get(sym, sym), reads)
         if row["value"] is None:
-            without.append({"symbol": sym, "name": row["name"], "kind": kind})
+            without.append({"symbol": sym, "name": row["name"], "kind": kind, "status": row["status"]})
             continue
         rows.append({**row, "kind": kind})
     return {"rows": rows, "without": without, "sectors": [{"id": k, "label": v["label"]} for k, v in SECTORS.items()],

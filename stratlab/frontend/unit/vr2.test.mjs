@@ -14,7 +14,7 @@ test("VR2-001, VR2-002: the tool tiles and the watchlist tiles of one row are as
 
 test("VR2-003: Money home's holdings card does not carry the date in its day label; the tax link is short (the page's own name)", () => {
   const home = read("src/pages/SpaceHomes.tsx");
-  assert.match(home, /label=\{h\.totals\.session && h\.totals\.session < istToday\(\) \? "Last session" : "Today"\}/);
+  assert.match(home, /label: h\.totals\.session && h\.totals\.session < istToday\(\) \? "Last session" : "Today"/);
   assert.match(home, />Tax report →<\/Link>/);
 });
 

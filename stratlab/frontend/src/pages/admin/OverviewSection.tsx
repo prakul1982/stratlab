@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { analyticsDashboard } from "../../lib/analytics";
 import { money, safeHref } from "../../lib/format";
-import { Badge, Card, CardHead, Disclosure, EmptyState, ErrorState, HealthGrid, HealthTile, Skeleton, Stat, StatRow } from "../../components/kit";
+import { Badge, Card, CardHead, Disclosure, EmptyState, ErrorState, FigureTable, HealthGrid, HealthTile, Skeleton } from "../../components/kit";
 import { ViewAsCard } from "../../components/ViewAs";
 import { useAdmin } from "./AdminContext";
 import { attention, errorCounts, lights, paidUsers, quotaLine, revenueText } from "./attention";
@@ -61,29 +61,29 @@ export function OverviewSection() {
       <Card label="Today's numbers">
         <CardHead title="Today's numbers" info={`Sign-ups and revenue are for today in India (IST). Server errors are the crashes since the server last started. Test accounts (the +sl- addresses made for reviewers) are ${showTest ? "counted, as asked in Users and growth" : "left out of every count; Users and growth can show them"}.`}
           actions={tested ? <span className="k-small k-muted">{tested}</span> : undefined} />
-        <StatRow label="Today">
-          <Stat item label="Sign-ups today" value={st.signups_today} note={`${st.new_7d} in the last 7 days · ${st.users} in all`} />
-          <Stat item label={paidStat.label} value={paidStat.value} note={paidStat.note} />
-          <Stat item label="Revenue today" value={invoices ? money(rupees, "INR") : "–"}
-            note={invoices ? `${todays.length} invoice${todays.length === 1 ? "" : "s"}${others.length ? ` · also in ${others.join(", ")}` : ""}` : undefined} />
-          {/* named for what it counts, which isn't today (DJ-005) */}
-          <Stat item label="Server errors (since restart)" value={errors.since} note={<Link className="link" to="/admin/system">{errors.before ? `${errors.before} kept from before it` : "see System"}</Link>} />
-        </StatRow>
+        <FigureTable label="Today" rows={[
+          { key: "signups", label: "Sign-ups today", value: st.signups_today, note: `${st.new_7d} in the last 7 days · ${st.users} in all` },
+          { key: "paid", label: paidStat.label, value: paidStat.value, note: paidStat.note },
+          { key: "revenue", label: "Revenue today", value: invoices ? money(rupees, "INR") : "–",
+            note: invoices ? `${todays.length} invoice${todays.length === 1 ? "" : "s"}${others.length ? ` · also in ${others.join(", ")}` : ""}` : undefined },
+          // named for what it counts, which isn't today (DJ-005)
+          { key: "errors", label: "Server errors (since restart)", value: errors.since, note: <Link className="link" to="/admin/system">{errors.before ? `${errors.before} kept from before it` : "see System"}</Link> },
+        ]} />
       </Card>
 
       <Card label="Money, use and limits">
         <CardHead title="Money, use and limits" info="What StratLab itself can read: its own invoices, who used it, this month's experiments and AI builds, and the email service's daily limit. Bills it can't read (hosting, AI, payments) are linked to their own dashboards rather than guessed." />
-        <StatRow label="Money and use">
-          <Stat item label="Revenue, last 30 days" value={st.revenue_30d ? revenueText(st.revenue_30d.by_currency, (v, c) => money(v, c)) : "–"}
-            note={st.revenue_30d ? `${st.revenue_30d.count} invoice${st.revenue_30d.count === 1 ? "" : "s"}` : "Not read"} />
-          <Stat item label="Active users, last 7 days" value={st.active_7d ?? "–"} note={st.active_7d == null ? "Not read" : "signed in, or ran an experiment or AI build"} />
-          {st.plan_interest != null && <Stat item label="Waiting for plans" value={st.plan_interest} note={st.plan_interest === 1 ? "person asked to be told when plans open" : "people asked to be told when plans open"} />}
-          <Stat item label="Emails sent today" value={sv.admin_alerts?.quota?.sent_today ?? "–"}
-            note={quota?.left ?? (sv.admin_alerts?.via === "Brevo" ? "Brevo didn't say" : `Not read from ${sv.admin_alerts?.via ?? "the email service"}`)} />
-          {/* the month's two counts sit with the other counts, not alone in a full-width card (LIVE1C-005) */}
-          <Stat item label="Experiments this month" value={st.experiments_month} note="all users" />
-          <Stat item label="AI builds this month" value={st.ai_month} note={`all users${st.ai_reads_month != null ? `; ${st.ai_reads_month} AI reads` : ""}`} />
-        </StatRow>
+        <FigureTable label="Money and use" rows={[
+          { key: "rev30", label: "Revenue, last 30 days", value: st.revenue_30d ? revenueText(st.revenue_30d.by_currency, (v, c) => money(v, c)) : "–",
+            note: st.revenue_30d ? `${st.revenue_30d.count} invoice${st.revenue_30d.count === 1 ? "" : "s"}` : "Not read" },
+          { key: "active", label: "Active users, last 7 days", value: st.active_7d ?? "–", note: st.active_7d == null ? "Not read" : "signed in, or ran an experiment or AI build" },
+          ...(st.plan_interest != null ? [{ key: "plans", label: "Waiting for plans", value: st.plan_interest, note: st.plan_interest === 1 ? "person asked to be told when plans open" : "people asked to be told when plans open" }] : []),
+          { key: "emails", label: "Emails sent today", value: sv.admin_alerts?.quota?.sent_today ?? "–",
+            note: quota?.left ?? (sv.admin_alerts?.via === "Brevo" ? "Brevo didn't say" : `Not read from ${sv.admin_alerts?.via ?? "the email service"}`) },
+          // the month's two counts sit with the other counts, not alone in a full-width card (LIVE1C-005)
+          { key: "exp", label: "Experiments this month", value: st.experiments_month, note: "all users" },
+          { key: "ai", label: "AI builds this month", value: st.ai_month, note: `all users${st.ai_reads_month != null ? `; ${st.ai_reads_month} AI reads` : ""}` },
+        ]} />
         <p className="k-small k-muted" data-testid="cost-links">
           Bills StratLab can't read: <a className="link" href="https://railway.com/dashboard" target="_blank" rel="noopener noreferrer">Railway (usage and bill)</a>
           {" · "}<a className="link" href="https://dashboard.razorpay.com/" target="_blank" rel="noopener noreferrer">Razorpay</a>

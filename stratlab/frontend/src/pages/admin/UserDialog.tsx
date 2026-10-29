@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { dateOnly } from "../../lib/format";
 import { Modal } from "../../components/ui";
-import { Badge, Field, FieldGroup, FormActions, FormGrid, Notice, Seg } from "../../components/kit";
+import { Badge, Field, FigureTable, FieldGroup, FormActions, FormGrid, Notice, Seg } from "../../components/kit";
 import type { Plan } from "./AdminContext";
 import { confirmMatches, confirmWord, PLAN_NAME, planNote, type UserRow } from "./users";
 
@@ -18,14 +18,14 @@ export function UserDialog({ user, onClose, onChanged }: { user: UserRow; onClos
     <Modal title={step === "plan" ? `Change plan: ${who}` : step === "erase" ? `Delete the data of ${who}?` : who} onClose={onClose}>
       {step === "menu" && (
         <div className="k-stack">
-          <div className="k-rows">
-            <div><span>Plan</span><b><Badge tone={user.plan === "free" ? "plain" : "ok"} dot={false}>{PLAN_NAME[user.plan]}</Badge></b></div>
-            {user.plan !== "free" && <div><span>How</span><b>{planNote(user)}</b></div>}
-            <div><span>Joined</span><b>{dateOnly(user.created_at)}</b></div>
-            <div><span>Experiments this month</span><b>{user.experiments}</b></div>
-            <div><span>AI builds this month</span><b>{user.ai_builds}</b></div>
-            <div><span>Invited</span><b>{user.referrals ?? 0}</b></div>
-          </div>
+          <FigureTable label={`${who}: account`} header="Account" valueHeader="Value" noteHeader={null} rows={[
+            { key: "plan", label: "Plan", value: <Badge tone={user.plan === "free" ? "plain" : "ok"} dot={false}>{PLAN_NAME[user.plan]}</Badge> },
+            ...(user.plan !== "free" ? [{ key: "how", label: "How", value: planNote(user) }] : []),
+            { key: "joined", label: "Joined", value: dateOnly(user.created_at) },
+            { key: "exp", label: "Experiments this month", value: user.experiments },
+            { key: "ai", label: "AI builds this month", value: user.ai_builds },
+            { key: "inv", label: "Invited", value: user.referrals ?? 0 },
+          ]} />
           <div className="k-row">
             <button type="button" className="btn outline" onClick={() => setStep("plan")}>Change plan</button>
             <button type="button" className="btn quiet danger" onClick={() => setStep("erase")}>Delete data…</button>
