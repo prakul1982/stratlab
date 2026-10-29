@@ -45,6 +45,13 @@ def cached(kind: str, key_parts: tuple, ttl: float, refresh: bool, build) -> tup
     return out, True
 
 
+def keep(kind: str, key_parts: tuple, out: dict, ttl: float) -> dict:
+    """Store a read built elsewhere (a checked theme map) as `cached` would."""
+    out = {**out, "generated_at": out.get("generated_at") or time.time()}
+    _cache.set(_key(kind, *key_parts), out, ttl)
+    return out
+
+
 def peek(kind: str, key_parts: tuple) -> bool:
     return _cache.get(_key(kind, *key_parts)) is not None
 
@@ -315,6 +322,23 @@ def core_phrase(text) -> str:
     return t
 
 
+def claim_items(x, n: int, length: int = 400) -> list[dict]:
+    """A map's tailwinds or risks as [{"text", "policy", "search"}]: each text through theme_text (no advice, no figure); an item may be a
+    plain text (a map kept from before) or an object naming the programme it rests on and a few words to search the news for it (THEME-1)."""
+    out = []
+    for i in (x if isinstance(x, list) else [])[:n * 2]:
+        if isinstance(i, str):
+            i = {"text": i}
+        if not isinstance(i, dict):
+            continue
+        t = theme_text(i.get("text"), length)
+        if t:
+            out.append({"text": t, "policy": " ".join(str(i.get("policy") or "").split())[:80], "search": " ".join(str(i.get("search") or "").split())[:80]})
+        if len(out) >= n:
+            break
+    return out
+
+
 def theme_served(out: dict) -> dict:
     """A stored theme map's text as today's checks would write it (DE-013), however long ago it was kept."""
     out = dict(out)
@@ -324,13 +348,18 @@ def theme_served(out: dict) -> dict:
     out["sub_themes"] = [x for x in out["sub_themes"] if x["detail"]]
     out["value_chain"] = [{**v, "description": theme_text(v.get("description"), 600)} for v in out.get("value_chain") or [] if isinstance(v, dict)]
     out["screen"] = [{**x, "one_line": theme_text(x.get("one_line"), 300)} for x in out.get("screen") or [] if isinstance(x, dict)]
-    out["tailwinds"] = [t for t in (theme_text(x, 400) for x in out.get("tailwinds") or []) if t]
-    out["risks"] = [t for t in (theme_text(x, 400) for x in out.get("risks") or []) if t]
+    out["tailwinds"] = claim_items(out.get("tailwinds"), 5)
+    out["risks"] = claim_items(out.get("risks"), 5)
     return out
 
 
 def theme_list(x, n: int, length: int = 400) -> list:
     return [t for t in (theme_text(i, length) for i in _clip(x, n, 2000)) if t]
+
+
+def ask(system: str, text: str, ai, max_tokens: int = 3000) -> dict:
+    """A JSON answer to a check the theme map's claims go through (theme_check.py): the same providers as every other read."""
+    return _ask(system, text, ai, max_tokens)
 
 
 def sector(q: str, region: str, ai) -> dict:
@@ -342,15 +371,19 @@ def sector(q: str, region: str, ai) -> dict:
 Return ONLY this JSON:
 {{"sector": "name", "summary": "3-4 sentences: what's happening, why now, and the key dynamic",
  "etfs": [{{"ticker": "", "name": ""}}],
- "sub_themes": [{{"name": "", "detail": "2 specific sentences"}}],
+ "sub_themes": [{{"name": "", "detail": "2 specific sentences on what this part of the theme does", "companies": [{{"name": "", "ticker": ""}}]}}],
  "core": "the point everything converges on",
  "clusters": [{{"name": "cluster", "companies": [{{"name": "", "ticker": ""}}]}}],
  "screen": [{{"name": "", "ticker": "", "layer": "value-chain layer", "one_line": "what it supplies to the theme, as a fact"}}],
- "value_chain": [{{"layer": "", "description": "3 sentences on its economics and where the margin sits",
+ "value_chain": [{{"layer": "", "description": "3 sentences: what this layer does, then what sets its margin (pricing power, capital intensity, import dependence, policy), in words and without any figure",
                    "companies": [{{"name": "", "ticker": ""}}]}}],
- "tailwinds": ["specific sentences naming the policy, programme, product or customer"], "risks": ["specific sentences naming what could go wrong"]}}
-Sizes: 4-5 clusters of 4-6 real listed companies, 4 sub-themes, 6-8 screen names (listed companies with the most
+ "tailwinds": [{{"text": "one specific sentence naming the policy, programme, product or customer", "policy": "the programme or rule it rests on, or empty", "search": "3 to 5 words to search the news for it, or empty"}}],
+ "risks": [{{"text": "one specific sentence naming what could go wrong", "policy": "", "search": ""}}]}}
+Sizes: 4-5 clusters of 4-6 real listed companies, 4 sub-themes of 2-5 listed companies each, 6-8 screen names (listed companies with the most
 direct link to the theme, in value-chain order, not ranked), up to 4 ETFs, 4-5 value-chain layers of 3-5 listed companies, 4 tailwinds, 4 risks. Nothing generic.
+Put a listed company in a layer or sub-theme only when its own business is that very work (it makes, mines, refines, builds or operates it); a customer, a
+supplier of something else or another company of the same group does not belong. Fewer companies, all of them right, is better than many.
+Name a policy, scheme or rule only when it exists today and you know whether it is in force; leave "policy" and "search" empty for a tailwind or risk that rests on none.
 Only companies listed on the market's exchanges, each with its own ticker: never a private company, an unlisted
 subsidiary or a division under its parent's ticker. No figures at all (no budgets, market sizes, growth rates, order
 values, targets or years of targets): there is no source here to check them. Name only programmes, products and
@@ -368,7 +401,7 @@ policies that exist; leave out anything you aren't sure of.
         "market_size": "", "cagr": None, "cagr_note": "",
         "etfs": [{"ticker": str(e.get("ticker") or "")[:20], "name": str(e.get("name") or "")[:80]}
                  for e in (r.get("etfs") or []) if isinstance(e, dict)][:4],
-        "sub_themes": [{"name": str(s.get("name") or "")[:80], "detail": theme_text(s.get("detail"), 400)}
+        "sub_themes": [{"name": str(s.get("name") or "")[:80], "detail": theme_text(s.get("detail"), 400), "companies": cos(s.get("companies"))}
                        for s in (r.get("sub_themes") or []) if isinstance(s, dict)][:6],
         "core": core_phrase(r.get("core")),
         "clusters": [{"name": str(c.get("name") or "")[:60], "companies": cos(c.get("companies"))}
@@ -378,7 +411,7 @@ policies that exist; leave out anything you aren't sure of.
                    for s in (r.get("screen") or []) if isinstance(s, dict) and s.get("name")][:8],
         "value_chain": [{"layer": str(v.get("layer") or "")[:60], "description": theme_text(v.get("description"), 600),
                          "companies": cos(v.get("companies"))} for v in (r.get("value_chain") or []) if isinstance(v, dict)][:6],
-        "tailwinds": theme_list(r.get("tailwinds"), 5), "risks": theme_list(r.get("risks"), 5),
+        "tailwinds": claim_items(r.get("tailwinds"), 5), "risks": claim_items(r.get("risks"), 5),
     }
 
 
