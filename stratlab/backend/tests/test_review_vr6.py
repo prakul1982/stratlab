@@ -36,11 +36,11 @@ def test_the_blogs_tiles_bars_and_folded_method_are_drawn():
 def test_the_brief_leads_with_one_line_and_a_tile_for_each_index_not_a_paragraph_and_a_table_saying_the_same_figures():
     post = blog.brief_post(issue_for("IN"))
     kinds = [b["t"] for b in post["blocks"]]
-    assert kinds[:3] == ["p", "h2", "stats"] and "table" not in kinds[:4]
+    assert kinds[:3] == ["p", "h2", "table"]                                                # (O5: the indices are one table: index, close, day, from the 52-week high)
     assert len(post["blocks"][0]["text"]) < 90                                              # "The India market on Thursday 1 October 2026, from the day's closing figures."
-    tiles = post["blocks"][2]["items"]
-    assert tiles[0] == {"v": "24,812.30", "l": "NIFTY 50", "s": "+0.42% on the day"}
-    assert 'class="kpis"' in blog.blocks_html(post["blocks"])
+    tbl = post["blocks"][2]
+    assert tbl["head"][:3] == ["Index", "Close", "Day %"] and tbl["rows"][0][0] == "NIFTY 50" and tbl["rows"][0][1] == "24,812.30"
+    assert "<table" in blog.blocks_html(post["blocks"])
 
 
 def test_the_research_posts_say_their_headline_figures_once_in_tiles_and_keep_the_sentences_folded():
@@ -51,7 +51,7 @@ def test_the_research_posts_say_their_headline_figures_once_in_tiles_and_keep_th
     assert any(i.startswith("Against the passive return, after costs: ahead in") for i in words["items"])
     html = blog.blocks_html(post["blocks"])
     assert html.count("The headline figures in words") == 1 and '<details class="how card" data-words><summary>The headline figures in words' in html
-    assert html.count("data-method") == 1                                                      # the method is the one fold the page's tests look for
+    assert html.count("data-method") == 2                                                      # the method and the limits, one fold each (LIVE2-003)
 
 
 def test_a_table_of_three_or_four_columns_wraps_to_fit_a_phone_and_the_four_checks_go_four_across():
