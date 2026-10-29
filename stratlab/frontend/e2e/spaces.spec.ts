@@ -108,9 +108,13 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
 
   // Mine: its own menu, not the groups
   if (phone) await expect(page.locator("aside.sidebar.open")).toHaveCount(0);     // the drawer closes after a pick
-  side = await menu(page, phone);
-  await side.getByRole("group", { name: "Space" }).getByRole("button", { name: "My space" }).click();
-  await expect(page).toHaveURL(/\/mine$/);
+  // (on a phone the drawer from the last pick can still be closing as it is opened again on a busy runner, CI shard 4, 29 Oct:
+  // open it and pick again until the pick lands; the place it lands on is still checked)
+  await expect(async () => {
+    side = await menu(page, phone);
+    await side.getByRole("group", { name: "Space" }).getByRole("button", { name: "My space" }).click({ timeout: 2000 });
+    await expect(page).toHaveURL(/\/mine$/, { timeout: 2000 });
+  }).toPass({ timeout: 20_000 });
   if (phone) await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
   side = await menu(page, phone);
   await expect(side.getByRole("link", { name: "My space" })).toHaveAttribute("href", "/mine");
