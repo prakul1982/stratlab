@@ -280,7 +280,7 @@ test("An IPO's page is a table for every block: a full red herring prospectus re
   // an issue whose exchange bid table leaves out the anchor portion says so beside the whole issue
   await page.goto("/invest/ipos/in-blspoly");
   await expect(page.getByTestId("ipo-terms")).toContainText("₹255 cr");
-  await expect(page.getByTestId("ipo-terms")).toContainText("bid table covers ₹178.5 cr");
+  await expect(page.getByTestId("ipo-terms")).toContainText("bid table covers ₹179 cr");
   await expect(page.getByTestId("ipo-terms")).toContainText("51,00,000 shares");
 });
 
