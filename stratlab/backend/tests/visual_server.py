@@ -74,6 +74,11 @@ def build():
     mp.setattr(market_events, "refresh", lambda web=None, today=None, now=None, only=None: (
         fake_market_events.seed(today), {"problems": [], "read": [n for n, _ in market_events.READERS]})[1])
     screen_index()
+    # the demo world holds a score of companies, not the fifty and five hundred of the real indices: the Market pulse's "what moved
+    # the index" table is shown on what is there (the real thresholds are pinned in tests/test_mood1.py)
+    from app.intel import mood
+    mp.setattr(mood, "MIN_COVER", 0.2)
+    mp.setattr(mood, "US_MIN_COVER", 0.0)
     sizes = breadth(mp)
     positioning_history()
     stock_desks_history(mp)

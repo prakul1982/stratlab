@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { useMarketRefresh } from "../lib/marketLive";
 import {
-  BROAD_GROUP, breadthApi, breadthChipLabel, dailyTitle, breadthStart, count, delta, liveReadLine, withLive, MOVES_LABEL, MOVES_TITLE, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, spikeCap, thrustDays,
-  type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
+  BROAD_GROUP, breadthApi, breadthChipLabel, dailyTitle, breadthStart, count, liveReadLine, withLive, MOVES_TITLE, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, spikeCap, thrustDays,
+  type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
 import { eyebrowOf } from "../lib/eyebrow";
@@ -12,9 +12,11 @@ import { flatZero } from "../lib/chartFormat";
 import { latestDue, marketTz, minus, softHyphens, type Pending } from "../lib/format";
 import { homeRegion } from "../lib/homeMarket";
 import { LineChart, PairBars } from "../components/Charts";
+import { BreadthAlertButton } from "../components/BreadthAlert";
+import { change as figChange, figure, liveRows, measureRows, type MeasureRow, type Part } from "../lib/breadthTable";
 import { Info } from "../components/ui";
 import {
-  Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, PlanNote, Skeleton, Stat, StatRow,
+  Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Notice, PageHeader, PlanNote, Skeleton, Stat, StatRow,
   type Column,
 } from "../components/kit";
 
@@ -78,12 +80,13 @@ export function BreadthPage() {
   // the days stored, the periods that tell apart, and the history cut to the one chosen
   const all = data?.history ?? null;
   const span = all ? spanDays(all.days) : 0;
-  const presets = useMemo(() => offeredPresets(span), [span]);
-  const isPreset = /^(3m|6m|1y|2y)$/.test(period);
+  const lastDay = all?.days[all.days.length - 1];
+  const presets = useMemo(() => offeredPresets(span, lastDay), [span, lastDay]);
+  const isPreset = /^(1w|1m|3m|6m|ytd|1y|2y|3y|5y)$/.test(period);
   const chosen = !isPeriod(period) || (isPreset && !presets.some((p) => p.value === period)) ? "all" : period;     // a preset the days can't tell from All isn't kept
   const from = all ? firstInPeriod(all.days, chosen) : 0;
   const shown = useMemo(() => (all ? cutSeries(all, from) : null), [all, from]);
-  const days = periodDays(chosen);
+  const days = periodDays(chosen, lastDay);
   const coversAll = !!all && days != null && days >= span;
   const pick = (p: string) => { setPeriod(p); savePick(group, p); };
   const pickGroup = (g: GroupId) => {
@@ -99,29 +102,22 @@ export function BreadthPage() {
         info={help.members} infoLabel="Which stocks are counted"
         lede="How many stocks in a group rose or fell, sit above their averages, or made new highs and lows, day by day, from daily closes. Every stock counts once: facts about what happened, not a forecast." />
 
-      <Card>
-        <FormGrid label="What to show">
-          <Field label="Group of stocks">
-            {(id) => (
-              <select id={id} className="k-input" aria-label="Group of stocks" value={group} onChange={(e) => pickGroup(e.target.value as GroupId)}>
-                {(["IN", "US"] as const).map((r) => (
-                  <optgroup key={r} label={r === "IN" ? "India" : "United States"}>
-                    {orderGroups((data?.groups ?? []).filter((x) => x.region === r), r).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                    {!data && r === "IN" && <option value={group}>Loading…</option>}
-                  </optgroup>
-                ))}
-              </select>
-            )}
-          </Field>
-          {data && !data.locked && all && (
-            // named for what it moves: the history charts, not the live card under it (R63-008)
-            <FieldGroup label="History charts' range" wide>
-              <ChipBar label="History charts' range" options={presets} value={chosen} onChange={pick} custom={{ storageKey: "stratlab.breadth.periods", units: PERIOD_UNITS, defaultUnit: "months" }} />
-            </FieldGroup>
-          )}
-        </FormGrid>
-        {coversAll && chosen !== "all" && <p className="k-note">Only {Math.round(span).toLocaleString("en-IN")} days of data so far, so this shows all of them.</p>}
-      </Card>
+      {/* one compact row, as the other pages' filter bars (MOOD-1): the group, and the range the history charts below are drawn over */}
+      <div className="k-toolbar breadth-bar" role="group" aria-label="What to show">
+        <select className="k-input" aria-label="Group of stocks" value={group} onChange={(e) => pickGroup(e.target.value as GroupId)}>
+          {(["IN", "US"] as const).map((r) => (
+            <optgroup key={r} label={r === "IN" ? "India" : "United States"}>
+              {orderGroups((data?.groups ?? []).filter((x) => x.region === r), r).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              {!data && r === "IN" && <option value={group}>Loading…</option>}
+            </optgroup>
+          ))}
+        </select>
+        {data && !data.locked && all && (
+          // named for what it moves: the history charts, not the live card under it (R63-008)
+          <ChipBar label="History charts' range" options={presets} value={chosen} onChange={pick} custom={{ storageKey: "stratlab.breadth.periods", units: PERIOD_UNITS, defaultUnit: "months" }} />
+        )}
+      </div>
+      {coversAll && chosen !== "all" && <p className="k-note">Only {Math.round(span).toLocaleString("en-IN")} days of data so far, so this shows all of them.</p>}
 
       {!data && loading ? <Card><Skeleton label="Counting the market" lines={4} /></Card>
         : !data ? <ErrorState title="Market breadth couldn't be opened just now" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error ?? "Check your connection and try again."}</ErrorState>
@@ -133,14 +129,11 @@ export function BreadthPage() {
               </Card>
             ) : (
               <>
-                {data.live && <LiveCard live={data.live} group={data.group} />}
-                <Headline t={data.today} help={help} live={data.live} pending={data.pending} revised={data.revised} />
+                {data.live && <LiveCard live={data.live} group={data.group} today={data.today} lastLevel={data.history?.index?.filter((v): v is number => v != null).slice(-1)[0] ?? null} help={help} />}
+                <Headline t={data.today} h={data.history} group={data.group} help={help} live={data.live} pending={data.pending} revised={data.revised} locked={data.locked} />
                 {data.locked ? (
                   <div data-testid="breadth-locked"><PlanNote>Today's numbers and today's charts are on every plan. The history charts, from 3 months back, and the sector table are on the {data.plan_needed} plan.</PlanNote></div>
-                ) : shown && <>
-                  <AlertBox group={data.group} />
-                  <Charts data={data} h={shown} help={help} />
-                </>}
+                ) : shown && <Charts data={data} h={shown} help={help} />}
               </>
             )}
           </div>
@@ -154,9 +147,31 @@ const LIVE_INFO = "Worked out every 15 minutes while the market is open, from li
   + "(rose, fell, unchanged), and against its 20-, 50- and 200-day averages with the live price counted as the latest close. "
   + "The numbers for the close, further down, are worked out after the market shuts and are not changed by these.";
 
-/** While the market is open: the counts so far today, with a line through the day. When live prices can't be read it says so
- * in words and the last close below stands. */
-function LiveCard({ live, group }: { live: LiveView; group: Group }) {
+/** A measure's name with its (i) and a line on what it means, as the breadth tables write it. */
+function MeasureName({ r, help, extra }: { r: MeasureRow; help: Record<string, string>; extra?: ReactNode }) {
+  return (
+    <>
+      <b>{r.label}</b>{r.info && help[r.info] && <Info label={`About ${r.label.toLowerCase()}`}>{help[r.info]}</Info>}
+      <span className="k-sub-line">{r.means}</span>
+      {extra && <span className="k-sub-line k-alert-row">{extra}</span>}
+    </>
+  );
+}
+
+/** One cell of a measure row: its parts side by side ("254 / 244"), a pair coloured the way the page always did (rose green, fell red). */
+function Parts({ parts, of }: { parts: Part[]; of: (p: Part) => ReactNode }) {
+  return <>{parts.map((p, i) => <span key={i}>{i > 0 && <span className="k-muted"> / </span>}{of(p)}</span>)}</>;
+}
+const figCell = (p: Part, v: number | null) => <span className={p.tone === "up" ? "k-up" : p.tone === "down" ? "k-down" : undefined}>{figure(v, p.unit)}</span>;
+/** The change of a row: its parts' changes with a ▲/▼ and a sign (never colour alone); TRIN, the fallers and the lows keep the direction without judging it. */
+function Changes({ parts }: { parts: Part[] }) {
+  if (parts.every((p) => p.change == null)) return <>–</>;
+  return <Parts parts={parts} of={(p) => (p.change == null ? "–" : <Delta value={Number(p.change.toFixed(p.unit === "count" ? 0 : p.unit === "ratio" || p.unit === "level" ? 2 : 1))} tone={p.neutral ? "neutral" : "auto"}>{figChange(p.change, p.unit)}</Delta>)} />;
+}
+
+/** While the market is open: the counts so far today against the last close, as one table, with the line through the day under it. When
+ * live prices can't be read it says so in words and the last close below stands. */
+function LiveCard({ live, group, today, lastLevel, help }: { live: LiveView; group: Group; today: Today | null; lastLevel: number | null; help: Record<string, string> }) {
   if ((live.state !== "live" && live.state !== "final") || !live.latest) {
     return (
       <Card label="Breadth today" testId="breadth-live-off">
@@ -170,18 +185,27 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
   const tag = liveTag(live), read = liveReadLine(l);
   const several = s.times.length > 1;
   const at = (i: number) => `${group.name}, ${s.times[i]}`;
+  const rows = today ? liveRows(l, today, group.index_name, lastLevel) : [];
+  const cols: Column<MeasureRow>[] = [
+    { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <MeasureName r={r} help={help} /> },
+    { key: "now", header: "Now", numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.now)} /> },
+    { key: "prev", header: today ? `Close, ${shortDay(today.day)}` : "Last close", numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.before)} /> },
+    { key: "chg", header: "Change", numeric: true, cell: (r) => <Changes parts={r.parts} /> },
+  ];
   return (
     <div className="k-page" data-testid="breadth-live">
       <Card label="Breadth today, live">
         <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<span data-testid="breadth-live-tag"><Badge tone={tag.tone}>{tag.text}</Badge></span>} />
         {live.late && <Notice tone="warn" role="status">The newest live point is {live.age_minutes} minutes old. A point is added every {live.every_minutes} minutes while the market is open; the next one comes when live prices are read again.</Notice>}
-        <StatRow>
-          <Stat label="Rose / fell" value={<><span className="k-up">{count(l.adv)}</span> <span className="k-muted">/</span> <span className="k-down">{count(l.dec)}</span></>} note={`${count(l.unch)} unchanged · against the previous close`} />
-          <Stat label="Above 20-day average" value={share(l.pct20)} />
-          <Stat label="Above 50-day average" value={share(l.pct50)} />
-          <Stat label="Above 200-day average" value={share(l.pct200)} />
-          {l.idx != null && <Stat label={group.index_name} value={l.idx.toLocaleString("en-IN", { maximumFractionDigits: 2 })} note="latest level" />}
-        </StatRow>
+        {rows.length > 0
+          ? <DataTable stack label="Breadth so far today against the last close" columns={cols} rows={rows} rowKey={(r) => r.key} />
+          : <StatRow>
+              <Stat label="Rose / fell" value={<><span className="k-up">{count(l.adv)}</span> <span className="k-muted">/</span> <span className="k-down">{count(l.dec)}</span></>} note={`${count(l.unch)} unchanged · against the previous close`} />
+              <Stat label="Above 20-day average" value={share(l.pct20)} />
+              <Stat label="Above 50-day average" value={share(l.pct50)} />
+              <Stat label="Above 200-day average" value={share(l.pct200)} />
+            </StatRow>}
+        <p className="k-note">{count(l.unch)} unchanged against the previous close.</p>
         {read && <p className="k-note" data-testid="breadth-live-read">{read}.</p>}
         {!several && live.state !== "final" && <p className="k-note">A point is added every {live.every_minutes} minutes while the market is open, so the line through the day starts after the second.</p>}
       </Card>
@@ -209,95 +233,26 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
   );
 }
 
-function Headline({ t, help, live, pending, revised }: { t: Today; help: Record<string, string>; live?: unknown; pending?: Pending; revised?: Revision[] }) {
+function Headline({ t, h, group, help, live, pending, revised, locked }: { t: Today; h: History | null; group: Group; help: Record<string, string>; live?: unknown; pending?: Pending; revised?: Revision[]; locked: boolean }) {
   const changed = revisionLines(revised, shortDay);
-  const vs = t.prev_day ? ` vs ${shortDay(t.prev_day)}` : "";
-  const lab = (label: string, info?: string) => <>{label}{info && <Info label={`About ${label.toLowerCase()}`}>{info}</Info>}</>;
-  // a change in a share or an oscillator is up or down in colour; TRIN is the one inverted figure (a rise in it is selling pressure), so its change keeps the direction without judging
-  const chg = (v: number | null | undefined, unit: "" | "pts", dp: number, neutral = false) => {
-    if (v == null) return undefined;
-    const text = delta(v, unit, dp);
-    return text ? <Delta value={Number(v.toFixed(dp))} tone={neutral ? "neutral" : "auto"}>{text}{vs}</Delta> : undefined;
-  };
-  const pts = (k: "pct20" | "pct50" | "pct200" | "stage2") => chg(t[k].change, "pts", 1);
-  // two counts: the day before's pair, which reads more plainly than two signed changes
-  const pair = (a: keyof Today, b: keyof Today) => {
-    const x = t[a] as Today["adv"], y = t[b] as Today["adv"];
-    if (!t.prev_day || (x.prev == null && y.prev == null)) return undefined;
-    // DE-023: "Same as 22 Oct" didn't say what was the same
-    return x.change === 0 && y.change === 0 ? `${shortDay(t.prev_day)}: the same ${count(x.prev)} / ${count(y.prev)}` : `${shortDay(t.prev_day)}: ${count(x.prev)} / ${count(y.prev)}`;
-  };
+  const rows = measureRows(t, h);
+  const cols: Column<MeasureRow>[] = [
+    { key: "m", header: "Measure", rowHeader: true, wrap: true,
+      cell: (r) => <MeasureName r={r} help={help} extra={r.key === "p50" && !locked ? <BreadthAlertButton group={group} /> : undefined} /> },
+    { key: "now", header: shortDay(t.day), numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.now)} /> },
+    { key: "prev", header: t.prev_day ? shortDay(t.prev_day) : "Day before", numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.before)} /> },
+    { key: "chg", header: "Change", numeric: true, cell: (r) => <Changes parts={r.parts} /> },
+    // the average of the last 20 days of the stored history, where there is one (the history is a Basic plan's)
+    ...(h ? [{ key: "avg", header: "20-day average", numeric: true, cell: (r: MeasureRow) => <Parts parts={r.parts} of={(p) => (p.avg == null ? "–" : figure(p.avg, p.unit))} /> } as Column<MeasureRow>] : []),
+  ];
   return (
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
       <CardHead title={latestDue(t.day, pending) ?? dailyTitle(shortDay(t.day), live)} />
-      <StatRow>
-        <Stat label={lab("Rose / fell", help.ad)} value={<><span className="k-up">{count(t.adv.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.dec.value)}</span></>}
-          note={<>Ratio {t.ad_ratio.value == null ? "–" : t.ad_ratio.value.toFixed(2)} · {count(t.unch.value)} unchanged · {count(t.stocks.value)} stocks{pair("adv", "dec") ? ` · ${pair("adv", "dec")}` : ""}</>} />
-        <Stat label={lab("Above 50-day average", help.ma)} value={share(t.pct50.value)} delta={pts("pct50")} note={<span className="nowrap">{`20\u2011day: ${share(t.pct20.value)}`}</span>} />
-        <Stat label={lab("Above 200-day average", help.ma)} value={share(t.pct200.value)} delta={pts("pct200")} />
-        <Stat label={lab("52-week highs / lows", help.highs_lows)} value={<><span className="k-up">{count(t.highs.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.lows.value)}</span></>} note={pair("highs", "lows")} />
-        <Stat label={lab(MOVES_LABEL, help.moves)} value={<><span className="k-up">{count(t.up4.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.down4.value)}</span></>} note={pair("up4", "down4")} />
-        <Stat label={lab("In Stage 2", help.stage2)} value={share(t.stage2.value)} delta={pts("stage2")} />
-        <Stat label={lab("McClellan oscillator", help.mcclellan)} value={t.mcclellan.value == null ? "–" : fmt1(t.mcclellan.value)}
-          delta={chg(t.mcclellan.change, "", 1)} note={t.summation.value == null ? undefined : `Summation ${fmt1(t.summation.value)}`} />
-        <Stat label={lab("TRIN", help.trin)} value={t.trin.value == null ? "–" : t.trin.value.toFixed(2)} delta={chg(t.trin.change, "", 2, true)} />
-      </StatRow>
+      <DataTable stack label={`Breadth on ${shortDay(t.day)} against the day before`} columns={cols} rows={rows} rowKey={(r) => r.key} />
+      <p className="k-note" data-testid="breadth-counted">{count(t.stocks.value)} stocks counted · {count(t.unch.value)} unchanged.</p>
       {/* DE-023: the correction is one short line with its details behind the (i), not a paragraph in the headline card */}
       {changed.length > 0 && <p className="k-note" data-testid="breadth-revised">{changed.length === 1 ? "An earlier day's count was revised" : `${changed.length} earlier counts were revised`}
         <Info label="About the revision">{changed.join(". ")}. A stock's price was corrected after the day was first counted.</Info></p>}
-    </Card>
-  );
-}
-
-/* ---------- an alert on the share above the 50-day average ---------- */
-function AlertBox({ group }: { group: Group }) {
-  const { fail, notify } = useApp();
-  const [alerts, setAlerts] = useState<BreadthAlerts | null>(null);
-  const [level, setLevel] = useState("60");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { breadthApi.alerts().then(setAlerts).catch(() => setAlerts(null)); }, []);
-  const n = Number(level);
-  const ok = level.trim() !== "" && Number.isFinite(n) && n >= 1 && n <= 99;
-  // DE-024: a level the alert can't take says why, not only a greyed-out button
-  const why = level.trim() === "" ? "Enter a level from 1 to 99%." : !ok ? "The level is a share of stocks: a number from 1 to 99." : null;
-  const add = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!ok) return;
-    setBusy(true);
-    try {
-      setAlerts(await breadthApi.addAlert(group.id, n));
-      notify(`You'll get a message after the close when ${group.name}'s share above the 50-day average crosses ${n}%.`);
-    } catch (err) { fail(err); } finally { setBusy(false); }
-  };
-  const remove = async (id: string) => {
-    try { setAlerts(await breadthApi.deleteAlert(id)); } catch (e) { fail(e); }
-  };
-  const mine = alerts?.items ?? [];
-  const name = (id: string) => (id === group.id ? group.name : id);
-  return (
-    <Card label="Breadth alerts">
-      <CardHead title="Alert on the share above the 50-day average"
-        info="Checked once a day, after the counts for the close are in. You get one message each time the share moves from one side of your level to the other, by phone notification, Telegram or email, whichever you set up in Settings. Up to 5." infoLabel="About breadth alerts" />
-      <FormGrid label="New breadth alert" onSubmit={add} inline>
-        <Field label="Alert level" unit="%" inputMode="decimal" value={level} onChange={(e) => setLevel(e.target.value)} aria-invalid={!ok}
-          aria-label={`Alert me when the share of ${group.name} stocks above their 50-day average crosses`} />
-        {why && <p className="k-note k-down k-field wide" role="alert" data-testid="breadth-alert-why">{why}</p>}
-        {ok && alerts && mine.length >= alerts.limit && <p className="k-note k-field wide">You have the {alerts.limit} alerts a plan keeps: delete one to add another.</p>}
-        <FormActions>
-          <button className="btn" disabled={!ok || busy || (alerts ? mine.length >= alerts.limit : false)}>Add alert</button>
-        </FormActions>
-      </FormGrid>
-      {mine.length > 0 && (
-        <div className="inv-rows">
-          {mine.map((a) => (
-            <div key={a.id} className="inv-alert">
-              <span className="k-small">{name(a.group)} crosses {a.level}%{a.side ? ` · now ${a.side}` : ""}{a.fired_at ? ` · last sent ${shortDay(a.fired_at.slice(0, 10))}` : ""}</span>
-              <button className="btn quiet sm" aria-label={`Delete the alert at ${a.level}% on ${name(a.group)}`} onClick={() => remove(a.id)}>Delete</button>
-            </div>
-          ))}
-        </div>
-      )}
-      {alerts && !alerts.channels.length && <p className="k-note">Set up a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link> for alerts to reach you.</p>}
     </Card>
   );
 }

@@ -92,11 +92,11 @@ test("DE-022: one Table switch per breadth chart, a zoom hint on every zoomable 
 
 test("DE-023/DE-024: the headline card's notes, the sector table's small sectors and the alert level's reason", () => {
   const s = read("src/pages/BreadthPage.tsx");
-  assert.match(s, /20\\u2011day/);
-  assert.match(s, /: the same \$\{count\(x\.prev\)\}/);
+  // MOOD-1: the figures are one table (measure, the day, the day before, the change and the 20-day average): no "the same 359 / 141" note, and the alert's reason lives in its dialog
+  assert.match(s, /header: "20-day average"/);
   assert.match(s, /An earlier day's count was revised/);
   assert.match(s, /data-testid="breadth-small-sectors"/);
-  assert.match(s, /data-testid="breadth-alert-why"/);
+  assert.match(read("src/components/BreadthAlert.tsx"), /data-testid="breadth-alert-why"/);
   assert.match(s, /read its direction, not its level against another group's/);
 });
 

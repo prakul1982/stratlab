@@ -30,6 +30,7 @@ CHUNK = 24                                # hub.quotes reads at most this many s
 SECTOR_MEMBERS = {"IN": 4, "US": 3}       # the largest members of a sector read to say what moved it
 US_MOVERS_FROM = 24                       # the US index's biggest companies read for the points table
 MIN_COVER = 0.8                           # the share of an index's companies that must be read for its points table
+US_MIN_COVER = 0.9                        # ...and the share of the US index's companies that must have a market value to weigh by
 _pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="mood")
 
 # the two markets' other prices: (label, Yahoo-style symbol, kind). `kind` decides how a move is worded.
@@ -537,7 +538,7 @@ class Mood:
             from .. import universes
             sp = set(universes.sp500_symbols())
             ranked = sorted((s for s in caps if s in sp), key=lambda s: -caps[s])
-            if len(ranked) < 0.9 * len(sp):                  # too few of the index's companies have a value to weigh by
+            if len(ranked) < US_MIN_COVER * len(sp):                  # too few of the index's companies have a value to weigh by
                 return None
             total = sum(caps[s] for s in ranked)
             syms = ranked[:US_MOVERS_FROM]

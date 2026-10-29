@@ -283,3 +283,31 @@ def test_the_mood_is_the_same_read_for_everyone_and_stays_small(world):
         before = m.payloads.kept("IN")[0]
         c.get("/research/pulse/mood?region=IN", headers={"authorization": "Bearer free-token"})
         assert m.payloads.kept("IN")[0] == before                      # another person's look reads nothing again within the minute
+
+
+# ---------- the rotation table's returns against the benchmark (MOOD-1) ----------
+def test_relative_returns_are_points_over_the_benchmark_for_a_week_a_month_and_three_months():
+    import pandas as pd
+    from app import rotation
+    idx = pd.bdate_range("2026-06-01", periods=70)
+    bench = pd.Series([100.0 + i for i in range(70)], index=idx)                     # +1 a day
+    member = pd.Series([100.0 * (1.01 ** i) for i in range(70)], index=idx)          # +1% a day
+    r = rotation.relative_returns(member, bench)
+    assert r["w1"] == round((1.01 ** 69 / 1.01 ** 64 - 1 - (169 / 164 - 1)) * 100, 2)
+    assert r["m1"] == round((1.01 ** 69 / 1.01 ** 48 - 1 - (169 / 148 - 1)) * 100, 2)
+    assert r["m3"] == round((1.01 ** 69 / 1.01 ** 6 - 1 - (169 / 106 - 1)) * 100, 2)
+    # a member with fewer shared sessions than a span has none for it, never a made-up one
+    short = rotation.relative_returns(member.tail(30), bench)
+    assert short["w1"] is not None and short["m1"] is not None and short["m3"] is None
+    assert rotation.relative_returns(member.tail(3), bench) == {"w1": None, "m1": None, "m3": None}
+
+
+@pytest.mark.parametrize("region", ["IN", "US"])
+def test_the_rotation_rows_carry_their_returns(world, region):
+    with time_machine.travel(DAY, tick=False):
+        c = world["client"]
+        got = c.get(f"/research/rotation?region={region}&set=sectors&interval=weekly&tail=4", headers=H).json()
+        assert got["v"] == 3 and len(got["rows"]) >= 5
+        rows = [r for r in got["rows"] if r.get("ret")]
+        assert rows and all(set(r["ret"]) == {"w1", "m1", "m3"} for r in rows)
+        assert any(r["ret"]["m3"] is not None for r in rows)

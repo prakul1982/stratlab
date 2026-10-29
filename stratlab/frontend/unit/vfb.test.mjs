@@ -71,7 +71,8 @@ test("VR1-105: a company's past corporate actions sit two across under a short '
 test("VR1-110, VR1-112, VR1-113: a chart's Table button stays beside a long title; the alert and the rotation controls are one row", () => {
   assert.match(read("src/components/kit/ChartFrame.tsx"), /className=\{rangeBar \|\| actions \? undefined : "k-chart-plain"\}/);
   assert.match(css, /\.k-chart-plain > \.k-card-head \{ flex-wrap: nowrap;/);
-  assert.match(read("src/pages/BreadthPage.tsx"), /<FormGrid label="New breadth alert" onSubmit=\{add\} inline>/);
+  assert.match(read("src/components/BreadthAlert.tsx"), /<FormGrid label="New breadth alert" onSubmit=\{add\} inline>/);       // MOOD-1: in the row's dialog
+  assert.match(read("src/pages/BreadthPage.tsx"), /<div className="k-toolbar breadth-bar" role="group" aria-label="What to show">/);
   assert.match(read("src/pages/ResearchScans.tsx"), /<FormGrid label="What to show" inline>/);
   assert.match(read("src/components/kit/Form.tsx"), /k-form-inline/);
   assert.match(css, /\.k-form\.k-form-inline \{ display: flex; flex-wrap: wrap; align-items: flex-end;/);

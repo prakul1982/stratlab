@@ -7,8 +7,8 @@ import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDay
 const days = (n, end = "2026-10-05") => Array.from({ length: n }, (_, i) => new Date(Date.parse(end) - (n - 1 - i) * 86_400_000).toISOString().slice(0, 10));
 
 test("a period is a preset, all, or a number with a unit", () => {
-  for (const p of ["3m", "6m", "1y", "2y", "all", "45 days", "2 weeks", "18 months", "3 years", "1000 days"]) assert.ok(isPeriod(p), p);
-  for (const p of ["", "5y", "0 days x", "10000 days", "ten days", null, 3]) assert.ok(!isPeriod(p), String(p));
+  for (const p of ["1w", "1m", "3m", "6m", "ytd", "1y", "3y", "5y", "all", "45 days", "2 weeks", "18 months", "3 years", "1000 days"]) assert.ok(isPeriod(p), p);
+  for (const p of ["", "7y", "0 days x", "10000 days", "ten days", null, 3]) assert.ok(!isPeriod(p), String(p));
 });
 
 test("periodDays counts calendar days, and all has none", () => {
@@ -17,13 +17,20 @@ test("periodDays counts calendar days, and all has none", () => {
   assert.equal(periodDays("45 days"), 45);
   assert.equal(periodDays("2 weeks"), 14);
   assert.equal(periodDays("all"), null);
+  assert.equal(periodDays("1w"), 7);
+  assert.equal(periodDays("5y"), 1826);
+  assert.equal(periodDays("ytd", "2026-10-05"), 277);              // 1 January to 5 October
+  assert.equal(periodDays("ytd"), null);
 });
 
 test("only the presets shorter than the stored history are offered, then All", () => {
-  assert.deepEqual(offeredPresets(40).map((o) => o.value), ["all"]);
-  assert.deepEqual(offeredPresets(100).map((o) => o.value), ["3m", "all"]);
-  assert.deepEqual(offeredPresets(400).map((o) => o.value), ["3m", "6m", "1y", "all"]);
-  assert.deepEqual(offeredPresets(800).map((o) => o.value), ["3m", "6m", "1y", "2y", "all"]);
+  assert.deepEqual(offeredPresets(5).map((o) => o.value), ["all"]);
+  assert.deepEqual(offeredPresets(40).map((o) => o.value), ["1w", "1m", "all"]);
+  assert.deepEqual(offeredPresets(100).map((o) => o.value), ["1w", "1m", "3m", "all"]);
+  assert.deepEqual(offeredPresets(400, "2026-10-05").map((o) => o.value), ["1w", "1m", "3m", "6m", "ytd", "1y", "all"]);
+  assert.deepEqual(offeredPresets(800, "2026-10-05").map((o) => o.value), ["1w", "1m", "3m", "6m", "ytd", "1y", "all"]);
+  assert.deepEqual(offeredPresets(1900, "2026-02-01").map((o) => o.value), ["1w", "1m", "ytd", "3m", "6m", "1y", "3y", "5y", "all"]);   // YTD sits by its length
+  assert.deepEqual(offeredPresets(800).map((o) => o.value), ["1w", "1m", "3m", "6m", "1y", "all"]);          // no last day, no YTD
 });
 
 test("each period starts at a different day, counted back from the last one", () => {
@@ -33,6 +40,11 @@ test("each period starts at a different day, counted back from the last one", ()
   assert.deepEqual(starts, [...starts].sort((a, b) => b - a));            // longer period, earlier start
   assert.equal(new Set(starts).size, 5);
   assert.equal(starts[4], 0);
+  // every offered preset (the owner's set) starts on a different day, and YTD on 1 January
+  const set = ["1w", "1m", "3m", "6m", "ytd", "1y", "all"].map((p) => firstInPeriod(d, p));
+  assert.equal(new Set(set).size, 7);
+  assert.equal(d[firstInPeriod(d, "ytd")], "2026-01-01");
+  assert.equal(d.length - firstInPeriod(d, "1w"), 8);
   assert.equal(d.length - starts[0], 92);                                // 91 days back, both ends in
   assert.equal(d.length - firstInPeriod(d, "45 days"), 46);
 });

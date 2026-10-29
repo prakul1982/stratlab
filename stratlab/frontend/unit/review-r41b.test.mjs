@@ -70,6 +70,7 @@ test("the breadth big-move counts say what they count", () => {
   assert.equal(MOVES_LABEL, "Stocks up 4% or more / down 4% or more on the day");
   assert.equal(MOVES_TITLE, "Stocks up 4% or more and down 4% or more, each day");
   const page = read("src/pages/BreadthPage.tsx");
-  assert.match(page, /lab\(MOVES_LABEL, help\.moves\)/);
+  assert.match(read("src/lib/breadthTable.ts"), /label: MOVES_LABEL, means: "Stocks that moved 4% or more in a day, up \/ down\."/);       // MOOD-1: the measure's row in the one table
+  assert.match(page, /<MeasureName r=\{r\} help=\{help\}/);
   assert.match(page, /<Box title=\{MOVES_TITLE\}/);
 });
