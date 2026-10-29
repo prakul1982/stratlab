@@ -69,9 +69,9 @@ test("VR3-010: Deep dive's look-back box is as wide as its words and its button 
   assert.match(css, /\.dd-ask > select\.k-input \{ width: auto; flex: none; min-width: 150px; \}/);
 });
 
-test("VR3-011: a checklist value with a sentence in it goes under its rule across the row", () => {
-  assert.match(read("src/pages/DeepDive.tsx"), /className=\{`small num\$\{x\.value\.length > 32 \? " long" : ""\}`\}/);
-  assert.match(css, /\.check-row > \.num\.long \{ grid-column: 1 \/ 3; grid-row: 2; text-align: left; \}/);
+test("VR3-011 (UI-CO item 5): a checklist value with a sentence in it reads left in its own cell; figures stay right-aligned", () => {
+  assert.match(read("src/pages/DeepDive.tsx"), /className=\{x\.value\.length > 32 \? "ck-long" : undefined\}/);
+  assert.match(css, /\.check-group \.ck-long \{ display: block; text-align: left; \}/);
 });
 
 test("VR3-012: the Plans page says 'Basic and Pro aren't on sale yet' once (its heading line); the box only offers to tell", () => {
