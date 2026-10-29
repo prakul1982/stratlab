@@ -24,6 +24,12 @@ async function open(page: Page, path: string, ready: string) {
   return errors;
 }
 
+// the jobs table shows a page of rows at a time on a phone: open them all before looking for one by name
+async function allJobs(page: Page) {
+  const more = page.getByRole("button", { name: /^Show \d+ more$/ });
+  for (let i = 0; i < 10 && (await more.count()); i++) await more.first().click();
+}
+
 async function sane(page: Page, errors: string[]) {
   expect(errors, "uncaught errors in the page").toEqual([]);
   const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: window.innerWidth }));
@@ -111,6 +117,7 @@ test("admin data and jobs: last run, next run, Run now and a log for each job; t
   page.on("dialog", (d) => { boxes.push(d.message()); void d.dismiss(); });
   const errors = await open(page, "/admin/data", "Background jobs");
   const table = page.getByRole("table", { name: "Background jobs" });
+  await allJobs(page);
   await expect(table.getByRole("columnheader", { name: "Last run" })).toBeVisible();
   await expect(table.getByText(/Next run: Every 12 hours/)).toBeVisible();
   for (const job of ["Market breadth", "Positioning", "ETF price against NAV", "Fund costs (TER)", "Exchange holidays", "Results calendar", "Corporate actions", "F&O contract changes"])
@@ -238,6 +245,7 @@ test("admin: Overview, Data and jobs and System tell a service's state in the sa
   // a job's problem is in words: no raw error class, and the SQL for storage is folded away
   const jobs = page.getByRole("table", { name: "Background jobs" });
   await expect(jobs.getByRole("rowheader").first()).toBeVisible({ timeout: 30_000 });
+  await allJobs(page);
   await expect(jobs).not.toContainText(/\(\w*(Error|Exception)\)/);
   await expect(jobs.getByRole("row", { name: /^Market events/ })).not.toContainText("Problem");
   if (await page.getByRole("button", { name: "Copy SQL" }).count()) {
@@ -253,10 +261,10 @@ test("admin: Overview, Data and jobs and System tell a service's state in the sa
   await shot(page, "admin-system-after", info);
 });
 
-test("admin emails: 28 kinds listed, each shown in a frame with no scripts at a desktop or a phone width, or as text", async ({ page }, info) => {
+test("admin emails: 29 kinds listed, each shown in a frame with no scripts at a desktop or a phone width, or as text", async ({ page }, info) => {
   const errors = await open(page, "/admin/emails", "Confirm your email");
   const list = page.getByRole("list", { name: "Emails" });
-  await expect(list.getByRole("listitem")).toHaveCount(28, { timeout: 30_000 });
+  await expect(list.getByRole("listitem")).toHaveCount(29, { timeout: 30_000 });
   await shot(page, "admin-emails", info);
   await list.getByRole("link", { name: /Market brief, India \(daily\)/ }).click();
   await expect(page).toHaveURL(/\/admin\/emails\/market_in$/);
