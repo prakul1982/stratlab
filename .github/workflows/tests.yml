@@ -54,8 +54,14 @@ jobs:
   browser:
     # every main page on desktop and phone against the fake world, checking what is drawn (e2e/pages.spec.ts).
     # The slowest job, so it starts only once the frontend builds: a build that fails costs no browser minutes.
+    # Split four ways (each runner takes a quarter of the tests; Actions minutes are free on a public repository), so the
+    # browser tests take about a quarter of the 46 minutes they took on one runner. "browser" passes when all four do.
     needs: [frontend]
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false        # every shard reports its failures, so one push shows them all
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -72,7 +78,7 @@ jobs:
         working-directory: stratlab/backend
       - run: npm ci && npm run build && npx playwright install --with-deps chromium
         working-directory: stratlab/frontend
-      - run: npm run e2e
+      - run: npm run e2e -- --shard=${{ matrix.shard }}/4
         working-directory: stratlab/frontend
         env:
           CI: "1"
@@ -80,7 +86,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: browser-test-screenshots
+          name: browser-test-screenshots-${{ matrix.shard }}
           path: stratlab/frontend/test-results/
 
   ui-lint:
