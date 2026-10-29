@@ -192,7 +192,8 @@ export interface PulseMood {
   breadth: { group: string; live: boolean; day: string | null; close_day: string | null; prev_day: string | null; adv: number | null; dec: number | null; unch: number | null;
     stocks: number | null; highs: number | null; lows: number | null; ratio: number | null; rows: MoodBreadthRow[] } | null;
   sectors: { rows: MoodSectorRow[]; up: number; down: number; unchanged: number; of: number; leader: string; laggard: string } | null;
-  movers: { index: string; adding: MoodMover[]; taking: MoodMover[]; of: number; note: string } | null;
+  /** One table for each index of the market (NIFTY 50 and SENSEX; the S&P 500); `est_total` and `actual` (India) say what the companies add up to and what the index moved. */
+  movers: { index: string; adding: MoodMover[]; taking: MoodMover[]; of: number; note: string; est_total?: number | null; actual?: number | null }[] | null;
   flows: { as_of: string; rows: { day: string; fii: number; dii: number }[]; fii_total: number; dii_total: number; note: string } | null;
   risk: { rows: MoodQuoteRow[] } | null;
   global: { rows: MoodQuoteRow[] } | null;

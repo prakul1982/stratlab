@@ -49,6 +49,15 @@ GLOBAL = {
 # the breadth group each market's mood counts, and the index whose usual daily move and points it is held to
 BREADTH_GROUP = {"IN": "nifty500", "US": "sp500"}
 INDEX_SYMBOL = {"IN": ("NIFTY 50", "^NSEI"), "US": ("S&P 500", "^GSPC")}
+# the indices whose point movers are listed: (the card's name, the list of its companies: a universes preset, "sp500", or SENSEX_30)
+MOVER_INDICES = {"IN": [("NIFTY 50", "nifty50"), ("SENSEX", "sensex30")], "US": [("S&P 500", "sp500")]}
+# The SENSEX's 30 companies as StratLab keeps them (the app had no list; BSE publishes its own and changes it twice a year, and the weights
+# are in its monthly factsheet, which can't be read cheaply). A list that is a name or two out still gives a close estimate, and the table is left
+# out when its points don't add up to the index's own move (index_movers' `actual_points` check), so a stale list never shows a wrong table.
+SENSEX_30 = ["ADANIPORTS", "ASIANPAINT", "AXISBANK", "BAJFINANCE", "BAJAJFINSV", "BEL", "BHARTIARTL", "HCLTECH", "HDFCBANK", "HINDUNILVR",
+             "ICICIBANK", "INFY", "ITC", "KOTAKBANK", "LT", "M&M", "MARUTI", "NTPC", "POWERGRID", "RELIANCE", "SBIN", "SUNPHARMA", "TATASTEEL",
+             "TCS", "TECHM", "TITAN", "TMPV", "TRENT", "ULTRACEMCO", "ETERNAL"]
+ADD_UP = 0.4                              # the estimated points of every company may differ from the index's own move by this share
 # a short name for a sector index in a sentence, and the words a text may use for it (grounding.sector_direction_ok)
 SECTOR_WORDS = {
     "NIFTY BANK": r"\bbank(?:s|ing)?\b", "NIFTY IT": r"\bit (?:sector|stocks?|shares|index|services)\b|\btech(?:nology)?\b|\bsoftware\b",
@@ -211,12 +220,14 @@ def sector_table(today: dict, closes: dict, movers: dict | None = None, label=la
             "leader": rows[0]["label"], "laggard": rows[-1]["label"]}
 
 
-def index_movers(members: list[dict], prev_level: float | None, index_name: str, top: int = TOP, total: int | None = None) -> dict | None:
+def index_movers(members: list[dict], prev_level: float | None, index_name: str, top: int = TOP, total: int | None = None,
+                 actual_points: float | None = None) -> dict | None:
     """The stocks adding and taking the most points from an index, estimated from each company's market value:
     weight = value / the index's total value, points = weight x its move x the index's previous level. `members` are
     {"symbol", "name", "market_cap", "change_pct"}; `total` the market value of every company in the index when more
     were read than `members` (the US index's largest are read, the weights are over all). None when too few were read
-    to say."""
+    to say. `actual_points`: the index's own move in points, for an index whose every company is read (no `total`): when the companies' estimated
+    points differ from it by more than ADD_UP of it (a list a name or two out of date, a weight far off), no table is better than a wrong one."""
     prev_level = num(prev_level)
     pool = [m for m in members if num(m.get("market_cap")) and num(m.get("change_pct")) is not None]
     whole = total or sum(m["market_cap"] for m in pool)
@@ -228,7 +239,12 @@ def index_movers(members: list[dict], prev_level: float | None, index_name: str,
     taking = sorted((r for r in rows if sgn(r["points"], 0) < 0), key=lambda r: r["points"])[:top]
     if not adding and not taking:
         return None
-    return {"index": index_name, "adding": adding, "taking": taking, "of": len(pool),
+    est = round(sum(r["points"] for r in rows), 1)
+    actual = num(actual_points)
+    if total is None and actual is not None and abs(est - actual) > max(ADD_UP * abs(actual), 0.0005 * prev_level):
+        return None
+    return {"index": index_name, "adding": adding, "taking": taking, "of": len(pool), "est_total": est if total is None else None,
+            "actual": round(actual, 1) if actual is not None and total is None else None,
             "note": "Points are estimated from each company's market value, so they differ a little from the exchange's own free-float figures."}
 
 
@@ -323,7 +339,7 @@ def lines_of(p: dict) -> list[str]:
     if s:
         lead, lag = s["rows"][0], s["rows"][-1]
         out.append(("sectors", f"{s['up']} of {s['of']} sector indices rose and {s['down']} fell; {lead['label']} led ({fpct(lead['change_pct'])}) and {lag['label']} lagged ({fpct(lag['change_pct'])})."))
-    m = p.get("movers")
+    m = (p.get("movers") or [None])[0]
     if m and (m["adding"] or m["taking"]):
         bits = []
         if m["adding"]:
@@ -529,33 +545,39 @@ class Mood:
         except Exception:
             return {}
 
-    def _movers(self, region: str, caps: dict[str, float], levels: list[dict], have: dict) -> dict | None:
-        name, _sym = INDEX_SYMBOL[region]
-        lvl = next((i for i in levels if i.get("name") == name), None)
-        if not lvl or not num(lvl.get("prev_close")):
-            return None
-        names = {}
-        total = None
-        if region == "IN":
-            from .. import universes
-            syms = next((p["symbols"] for p in universes.PRESETS["IN"] if p["id"] == "nifty50"), [])
-        else:
-            from .. import universes
-            sp = set(universes.sp500_symbols())
-            ranked = sorted((s for s in caps if s in sp), key=lambda s: -caps[s])
-            if len(ranked) < US_MIN_COVER * len(sp):                  # too few of the index's companies have a value to weigh by
-                return None
-            total = sum(caps[s] for s in ranked)
-            syms = ranked[:US_MOVERS_FROM]
-            try:
-                names = universes.sp500_names()
-            except Exception:
-                names = {}
-        quotes = {**have, **self._quotes(region, [s for s in syms if s not in have])}
+    def _movers(self, region: str, caps: dict[str, float], levels: list[dict], have: dict) -> list[dict] | None:
+        """One table of points added and taken for each index of the market (NIFTY 50 and SENSEX; the S&P 500)."""
+        from .. import universes
         nm = self._names(region)
-        members = [{"symbol": s, "name": nm.get(s) or short_name(names.get(s) or s), "market_cap": caps.get(s), "change_pct": (quotes.get(s) or {}).get("change_pct")}
-                   for s in syms]
-        return index_movers(members, lvl["prev_close"], name, total=total)
+        out = []
+        for name, kind in MOVER_INDICES[region]:
+            lvl = next((i for i in levels if i.get("name") == name), None)
+            if not lvl or not num(lvl.get("prev_close")):
+                continue
+            total = None
+            if kind == "sp500":
+                sp = set(universes.sp500_symbols())
+                ranked = sorted((s for s in caps if s in sp), key=lambda s: -caps[s])
+                if len(ranked) < US_MIN_COVER * len(sp):         # too few of the index's companies have a value to weigh by
+                    continue
+                total = sum(caps[s] for s in ranked)
+                syms = ranked[:US_MOVERS_FROM]
+                try:
+                    names = universes.sp500_names()
+                except Exception:
+                    names = {}
+            elif kind == "sensex30":
+                syms, names = SENSEX_30, {}
+            else:
+                syms, names = next((p["symbols"] for p in universes.PRESETS[region] if p["id"] == kind), []), {}
+            have.update(self._quotes(region, [s for s in syms if s not in have]))          # shared by the indices: read once
+            members = [{"symbol": s, "name": nm.get(s) or short_name(names.get(s) or s), "market_cap": caps.get(s),
+                        "change_pct": (have.get(s) or {}).get("change_pct")} for s in syms]
+            block = index_movers(members, lvl["prev_close"], name, total=total,
+                                 actual_points=(num(lvl.get("price")) - lvl["prev_close"]) if num(lvl.get("price")) else None)
+            if block:
+                out.append(block)
+        return out or None
 
     def _flows(self) -> dict | None:
         try:

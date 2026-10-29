@@ -98,6 +98,32 @@ def test_the_index_movers_are_weighed_by_market_value():
     assert mood.index_movers(members, None, "NIFTY 50") is None
 
 
+def test_a_points_table_that_does_not_add_up_to_the_index_is_left_out():
+    # every company read and weighed: A +100, B -120, C +5 (members of the test above): the estimated total is -15, so an index that moved
+    # -15 points agrees; one that moved +400 does not (a list a name or two out of date, a weight far off), and no table is better than a wrong one
+    members = [{"symbol": s, "name": s, "market_cap": cap, "change_pct": ch}
+               for s, cap, ch in (("A", 500.0, 1.0), ("B", 300.0, -2.0), ("C", 100.0, 0.5), ("D", 50.0, 0.0), ("E", 50.0, -1.0))]
+    ok = mood.index_movers(members, 20000.0, "SENSEX", actual_points=-20.0)
+    assert ok and ok["est_total"] == -20.0 and ok["actual"] == -20.0
+    assert mood.index_movers(members, 20000.0, "SENSEX", actual_points=400.0) is None
+    assert mood.index_movers(members, 20000.0, "SENSEX") is not None                      # no actual to check against: the estimate stands
+    # the US index's largest only are read, so its points can't be added up to the index's: not checked
+    assert mood.index_movers(members[:3], 7000.0, "S&P 500", total=2000.0, actual_points=900.0) is not None
+
+
+def test_the_sensex_has_its_thirty_and_every_index_of_a_market_gets_a_table(world):
+    assert len(mood.SENSEX_30) == 30 and len(set(mood.SENSEX_30)) == 30
+    assert [n for n, _ in mood.MOVER_INDICES["IN"]] == ["NIFTY 50", "SENSEX"] and [n for n, _ in mood.MOVER_INDICES["US"]] == ["S&P 500"]
+    from app.intel import routes
+    from unittest import mock
+    with time_machine.travel(DAY, tick=False), mock.patch.object(mood, "MIN_COVER", 0.0), mock.patch.object(mood, "ADD_UP", 1e9):
+        m = routes.mood_hub()
+        levels, _ = routes.hub.indices_now("IN", wait=8.0)
+        caps = {s: 1000.0 + i for i, s in enumerate(mood.SENSEX_30)}
+        got = m._movers("IN", caps, levels, {})
+        assert got and "SENSEX" in [b["index"] for b in got]
+
+
 # ---------- the institutions' flows ----------
 def test_flows_have_both_fii_and_dii_and_five_days():
     days = [(f"2026-10-{d}", {"fii": {"net": -100.0 * d}, "dii": {"net": 50.0 * d}}) for d in range(20, 29)]
@@ -114,9 +140,9 @@ def full_payload():
     t = mood.sector_table(SEC_TODAY, {n: CLOSES for n in SEC_TODAY})
     p = {"region": "IN", "compare": mood.compare_today("NIFTY 50", 0.39, {"avg_abs": 0.62, "days": 20}),
          "breadth": mood.breadth_block(TODAY, None, "NIFTY 500", "2026-10-29"), "sectors": t,
-         "movers": mood.index_movers([{"symbol": "A", "name": "Reliance Industries", "market_cap": 500.0, "change_pct": 1.0},
+         "movers": [mood.index_movers([{"symbol": "A", "name": "Reliance Industries", "market_cap": 500.0, "change_pct": 1.0},
                                       {"symbol": "B", "name": "HDFC Bank", "market_cap": 300.0, "change_pct": -2.0},
-                                      {"symbol": "C", "name": "TCS", "market_cap": 100.0, "change_pct": 0.5}], 22512.0, "NIFTY 50"),
+                                      {"symbol": "C", "name": "TCS", "market_cap": 100.0, "change_pct": 0.5}], 22512.0, "NIFTY 50")],
          "flows": mood.flows_block({"status": "ok", "as_of": "2026-10-28", "fii": {"net": -2800.0}, "dii": {"net": 1400.0}},
                                    [("2026-10-28", {"fii": {"net": -2800.0}, "dii": {"net": 1400.0}})]),
          "risk": {"rows": [{"label": "India VIX", "kind": "vol", "tag": "vol", "price": 13.2, "change_pct": 2.1}]}}

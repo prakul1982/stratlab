@@ -82,7 +82,7 @@ export function SectorsTable({ s }: { s: NonNullable<PulseMood["sectors"]> }) {
   );
 }
 
-export function MoversTable({ m }: { m: NonNullable<PulseMood["movers"]> }) {
+export function MoversTable({ m }: { m: NonNullable<PulseMood["movers"]>[number] }) {
   const rows = moverRows(m);
   const cols: Column<(typeof rows)[number]>[] = [
     { key: "n", header: "Company", rowHeader: true, cell: (r) => r.name ?? r.symbol },
@@ -90,9 +90,11 @@ export function MoversTable({ m }: { m: NonNullable<PulseMood["movers"]> }) {
     { key: "p", header: "Points", numeric: true, cell: (r) => <Delta value={r.points}>{signedPoints(r.points)}</Delta> },
   ];
   return (
-    <Card testId="pulse-movers">
+    <Card testId="pulse-movers" label={`What moved the ${m.index}`}>
       <CardHead title={`What moved the ${m.index}`} info="The companies adding the most points to the index and taking the most from it today. Points are estimated from each company's market value against the index's total, so they differ a little from the exchange's own free-float figures." />
-      <DataTable stack label={`Companies that moved the ${m.index} most`} columns={cols} rows={rows} rowKey={(r) => r.symbol} />
+      <DataTable stack label={`Companies that moved the ${m.index} most`} columns={cols} rows={rows} rowKey={(r) => r.symbol}
+        foot={m.est_total != null && m.actual != null ? { n: "All its companies, estimated", c: "", p: <span>{signedPoints(m.est_total)}</span> } : undefined} />
+      {m.actual != null && <p className="k-note" data-testid="pulse-movers-actual">The {m.index} itself moved {signedPoints(m.actual)} points.</p>}
     </Card>
   );
 }

@@ -628,7 +628,7 @@ export function PulsePage() {
         ? <Card><ErrorState title="The market's figures couldn't be read" action={{ label: "Try again", onClick: moodRetry }}>{moodErr}</ErrorState></Card> : <MoodSkeleton />}
       {mood?.breadth && <BreadthTable b={mood.breadth} />}
       {mood?.sectors && <SectorsTable s={mood.sectors} />}
-      {mood?.movers && <MoversTable m={mood.movers} />}
+      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} />)}
       {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
         left={mood.flows ? <FlowsTable f={mood.flows} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
       {mood?.global && <GlobalTable g={mood.global} region={region} />}

@@ -35,7 +35,7 @@ export function riskLevel(r: Pick<MoodQuoteRow, "label" | "tag" | "price">): str
 export const pairable = (a: number, b: number): boolean => a > 0 && b > 0 && a === b;
 
 /** The movers table's rows: the most points added first, then the most taken, as one list ordered by points. */
-export function moverRows(m: NonNullable<PulseMood["movers"]>): MoodMover[] {
+export function moverRows(m: NonNullable<PulseMood["movers"]>[number]): MoodMover[] {
   return [...m.adding, ...m.taking].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
 }
 

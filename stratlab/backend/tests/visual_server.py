@@ -79,6 +79,7 @@ def build():
     from app.intel import mood
     mp.setattr(mood, "MIN_COVER", 0.2)
     mp.setattr(mood, "US_MIN_COVER", 0.0)
+    mp.setattr(mood, "ADD_UP", 1e9)           # ...and the points of a score of companies can't add up to an index's own move
     sizes = breadth(mp)
     positioning_history()
     stock_desks_history(mp)
