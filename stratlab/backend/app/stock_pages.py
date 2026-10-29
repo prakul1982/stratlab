@@ -1161,6 +1161,20 @@ def _ttm_profit(p: dict):
     return _num(row[len(cols) - 1])
 
 
+def quarter_yoy(snap: dict) -> dict | None:
+    """The latest reported quarter's revenue and profit against the same quarter a year before, as the results calendar's table
+    shows them: {"sales": %, "profit": %, "of": "Sep 2026 vs Sep 2025"}. None unless the source gave a quarter (a year's figures
+    are not a quarter's, so a company with no quarterly table has none)."""
+    ly = snap.get("latest_yoy") if isinstance(snap, dict) else None
+    if not isinstance(ly, dict) or ly.get("basis") != "quarter":
+        return None
+    out = {"of": str(ly.get("of") or "")[:40] or None}
+    for k in ("sales", "profit"):
+        v = _num(ly.get(k))
+        out[k] = round(v, 1) if v is not None else None
+    return out if out["sales"] is not None or out["profit"] is not None else None
+
+
 def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict | None, prices: dict | None,
           filings: list[dict], exchange: str, red_flags: int | None = None, checks: dict | None = None) -> dict:
     """What a page shows, from what the deep dive already works out. Plain numbers and words; nothing from AI.
@@ -1205,6 +1219,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "net_margin": snap.get("net_margin"), "opm": opm, "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
         "bank": financial, "years": years, "currency_note": p.get("currency_note"),
         "growth": {k: (nums.get("growth") or {}).get(k) for k in ("sales_cagr_3y", "profit_cagr_3y", "sales_cagr_5y", "profit_cagr_5y")},
+        "q": quarter_yoy(snap),
         "stage": (trend or {}).get("stage"), "stage_days": (trend or {}).get("stage_days"),
         "st_up": (trend or {}).get("st_up"), "st_days": (trend or {}).get("st_days"),
         "filings": listed_filings(filings)[:6],

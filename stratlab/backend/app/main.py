@@ -2541,12 +2541,38 @@ def results_ready(region: str):
 
 
 @app.get("/research/results")
-def results_page(region: str = "IN", scope: str = "mine", q: str = "", day: str = "", profile=Depends(current_profile)):
+def results_page(region: str = "IN", scope: str = "mine", q: str = "", day: str = "", size: str = "", sector: str = "", index: str = "",
+                 fo: bool = False, purpose: str = "", on: str = "", sort: str = "cap", desc: bool | None = None, profile=Depends(current_profile)):
     """Results dates this week and next: the user's stocks (watchlist, notebooks, paper sessions) or every company,
-    day by day; `day` opens one day of "All companies" in full (DE-026)."""
+    day by day, narrowed by company size (`size`: large, mid, small, micro, comma-separated), `sector`, `index`, `fo` (stocks with
+    futures and options), `purpose` (results, or more than results) and `on` (today, tomorrow or a date), and sorted (`sort`).
+    `day` opens one day of "All companies" in full (DE-026)."""
     r = research_routes.region_of(region)
     results_ready(r)
-    return research_routes.ok(results_calendar.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], day=day[:10] or None))
+    return research_routes.ok(results_calendar.view(
+        r, profile["id"], "all" if scope == "all" else "mine", q[:30], day=day[:10] or None, size=[x for x in size.split(",") if x][:4],
+        sector=sector[:80], index=index[:20], fo=fo, purpose=purpose[:10], on=on[:10], sort=sort[:10], desc=desc))
+
+
+def _symbols_arg(symbols: str, region: str, most: int) -> list[str]:
+    return [research_routes.symbol_of(x) for x in dict.fromkeys(x for x in symbols.split(",") if x.strip())][:most]
+
+
+@app.get("/research/results/moves")
+def results_moves(region: str = "IN", symbols: str = Query("", max_length=400), profile=Depends(current_profile)):
+    """What each company's price did over its earlier results days (the close after the results day against the close before it),
+    from its daily prices, kept once worked out. Up to 12 companies; the prices of 6 are read in one call, the rest on the next."""
+    r = research_routes.region_of(region)
+    throttle(profile, "results_moves", 30, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
+    return research_routes.ok({"moves": results_calendar.moves_for(r, _symbols_arg(symbols, r, 12))})
+
+
+@app.get("/research/results/implied")
+def results_implied(symbols: str = Query("", max_length=200), day: str = "", profile=Depends(current_profile)):
+    """For stocks with futures and options (India): the move their options price in to the first expiry on or after the results
+    day, from the at-the-money straddle. Up to 8 stocks; none without the broker's option prices."""
+    throttle(profile, "results_implied", 20, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
+    return research_routes.ok({"implied": results_calendar.implied_for(_symbols_arg(symbols, "IN", 8), day[:10] or None)})
 
 
 @app.get("/research/results/{region}/{symbol}")
@@ -5152,6 +5178,19 @@ def breadth_load(region: str, symbol: str, days: int) -> list[dict]:
             raise LookupError("not listed")
         return kite.history(inst["token"], "1d", days, store=False)
     return markets.provider(region).history({"token": symbol}, "1d", days)
+
+
+def results_options(symbol: str, day: str | None) -> dict | None:
+    """The first expiry of a stock's options on or after a results day, and the move its at-the-money straddle prices in."""
+    if not kite.ready():
+        return None
+    expiries = [e for e in options_data.expiries("NSE", symbol) if not day or e >= day]
+    if not expiries:
+        return None
+    return results_calendar.straddle_move(options_data.chain("NSE", symbol, expiries[0], around=1))
+
+
+results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d), options=results_options)
 
 
 def breadth_index(region: str, symbol: str, days: int) -> list[dict]:

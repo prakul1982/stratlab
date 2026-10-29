@@ -193,6 +193,9 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
            # a foreign company's page (a 20-F filer, depositary shares): a US company's peers aren't foreign filers (R10V-007)
            "foreign": bool(f["foreign"]) if region == "US" and f.get("foreign") is not None else None,
            "price_at": str(f.get("price_at") or "")[:10] or None, "built_at": f.get("built_at")}
+    q = f.get("q") if isinstance(f.get("q"), dict) else None       # the latest quarter against its year-ago quarter, for the results calendar
+    if q:
+        out["q_sales"], out["q_profit"], out["q_of"] = _num(q.get("sales")), _num(q.get("profit")), str(q.get("of") or "")[:40] or None
     return out
 
 
