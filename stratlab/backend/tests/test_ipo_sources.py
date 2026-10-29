@@ -215,7 +215,8 @@ def test_objects_in_the_documents_own_words():
     assert hun["text"].startswith("We propose to utilise the Net Proceeds towards the following") and "General corporate purposes" in hun["text"]
     mk = D.objects(F.pages_of("mk_rhp"))
     assert "inventory costs" in mk["text"] and "Repayment" in mk["text"]
-    assert D.objects(F.pages_of("sfc_rhp")) is None          # its objects section is past the pages saved: nothing is guessed
+    sfc = D.objects(F.pages_of("sfc_rhp"))
+    assert sfc["page"] == 168 and sfc["text"].startswith("Our Company proposes to utilise the Net Proceeds from the Fresh Issue")
 
 
 def test_a_document_the_rules_cannot_read_gives_nothing_rather_than_a_guess():
@@ -287,18 +288,16 @@ def test_a_summary_statement_stays_only_with_a_quote_really_in_the_document(iamb
     assert good_q in ex
     parsed = {
         "business": {"text": "An AI-enabled drug discovery company with one program in a Phase 1/1b trial.", "quote": "Our most advanced program, IAM1363, is in an early-stage Phase 1/1b clinical trial"},
-        "financials": [{"text": "Collaboration revenue was $9,426 thousand.", "quote": "Collaboration revenue $ 9,426 $ 1,194"},
-                       {"text": "Revenue was $40 million.", "quote": "Collaboration revenue $ 9,426 $ 1,194"},                 # a figure the quote doesn't have
-                       {"text": "Profit was strong.", "quote": "this sentence is not in the document at all anywhere"}],        # an invented quote
-        "objects": [{"text": "The company will use the money to increase its capitalization and financial flexibility.", "quote": "The principal purposes of this offering are to increase our capitalization and financial flexibility"}],
-        "risks": [{"text": "The company has a limited operating history and has made large losses.", "quote": good_q},
-                  {"text": "You should buy it now; it is an attractive opportunity.", "quote": good_q}],                       # advice words
-        "promoters": [],
+        "segments": [{"text": "Collaboration revenue was $9,426 thousand.", "quote": "Collaboration revenue $ 9,426 $ 1,194"},
+                     {"text": "Revenue was $40 million.", "quote": "Collaboration revenue $ 9,426 $ 1,194"},                 # a figure the quote doesn't have
+                     {"text": "Profit was strong.", "quote": "this sentence is not in the document at all anywhere"},          # an invented quote
+                     {"text": "You should buy it now; it is an attractive opportunity.", "quote": good_q}],                   # advice words
+        "risks": [{"text": "The company has a limited operating history.", "quote": good_q}],                                   # the rules read these: the AI's are dropped
     }
     got = D.clean_summary(parsed, ex)
     assert got["business"]["text"].startswith("An AI-enabled")
-    assert [x["text"] for x in got["financials"]] == ["Collaboration revenue was $9,426 thousand."]
-    assert len(got["objects"]) == 1 and len(got["risks"]) == 1 and got["promoters"] == []
+    assert [x["text"] for x in got["segments"]] == ["Collaboration revenue was $9,426 thousand."]
+    assert set(got) == {"business", "segments"}                  # (O7) only the business and its segments come from the AI
     assert not ADVICE.search(json.dumps(got))
 
 
@@ -309,7 +308,7 @@ def test_summarise_asks_the_ai_once_and_checks_its_answer(iambic, monkeypatch):
     def ai(system, text, **kw):
         asked.append((system, text))
         return json.dumps({"business": {"text": "A drug discovery company.", "quote": "Our approach to drug discovery, which integrates AI with automated experimentation, is novel and unproven"},
-                           "financials": [], "objects": [], "risks": [], "promoters": []})
+                           "segments": []})
 
     monkeypatch.setattr(D, "complete", ai)
     got = D.summarise(ex, (None, None))

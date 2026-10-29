@@ -296,3 +296,228 @@ def test_a_walk_that_finished_at_a_year_goes_on_to_the_new_depth(w):
         bf = r.backfill(today, step=5, days=60)
     assert bf["done"] and min(d for d, _ in P.history("part")) <= (today - timedelta(days=58)).isoformat()
     assert P.BACKFILL_DAYS >= 1800
+
+
+# ---- O5, O6, LIVE2-029: the briefs as tables, as a PDF, and written again after a deploy -----------------------------
+import io  # noqa: E402
+
+from app.newsletter import job, pdf as news_pdf, tables as news_tables, write  # noqa: E402
+from tests.fake_db import headers  # noqa: E402
+
+OLD_ISSUE = {   # a brief as it was stored before tables: item texts only
+    "id": "market.IN.2026-10-28", "kind": "market", "region": "IN", "day": "2026-10-28", "weekly": False, "subject": "Market Brief India, Wed 28 Oct: NIFTY 50 −0.22%",
+    "summary": "NIFTY 50 −0.22%; SENSEX −0.20% today.", "at": "2026-10-28T16:00+05:30",
+    "indices": [{"name": "NIFTY 50", "price": 22698.85, "change_pct": -0.22, "from_high_pct": -14.6}],
+    "sections": [
+        {"title": "Indices", "items": [{"text": "NIFTY 50: 22,698.85, −0.22% on the day"}, {"text": "SENSEX: 73,246.03, −0.20% on the day"}, {"text": "INDIA VIX: 11.20, +1.50% on the day"}]},
+        {"title": "Sector rotation", "items": [{"text": "Nifty IT moved from Weakening to Leading on the rotation chart (weekly, against the NIFTY 500)", "url": "https://stratlab.studio/research/rotation?region=IN"}]},
+        {"title": "Newly matched Stage 2 + Supertrend today (NIFTY 50)", "items": [
+            {"text": "TCS matches the Stage 2 rule with the price above its Supertrend (ST S2)", "url": "https://stratlab.studio/research/IN/TCS"}]},
+        {"title": "Newly in Stage 2, Supertrend not up (NIFTY 50)", "items": [
+            {"text": "INFY moved into Stage 2 (matches the Stage 2 rule; its Supertrend isn't up)", "url": "https://stratlab.studio/research/IN/INFY"}]},
+        {"title": "Headlines", "items": [{"text": "Sensex ends lower on profit taking", "url": "https://example.com/a", "source": "Example Wire"},
+                                         {"text": "Rupee steady", "url": "https://example.com/b", "source": "Example Daily"}]},
+    ]}
+
+
+def test_a_brief_stored_before_tables_is_read_into_tables():
+    tabs = {t["title"]: t for t in news_tables.of(OLD_ISSUE)}
+    idx = tabs["Indices"]
+    assert idx["head"] == ["Index", "Close", "Day %", "From 52-week high"] and idx["align"] == "lrrr"
+    assert idx["rows"][0][:2] == ["NIFTY 50", "22,698.85"] and idx["rows"][0][2] == {"t": "▼ −0.22%", "tone": "down"} and idx["rows"][0][3] == "14.6% below"
+    assert idx["rows"][2][2]["tone"] == "flat"                                   # a rise in the VIX is not good news: an arrow, no green
+    rot = tabs["Sector rotation"]
+    assert rot["head"] == ["Sector", "From → To"] and rot["rows"] == [["Nifty IT", "Weakening → Leading"]] and rot["link"]["href"].endswith("/research/rotation?region=IN")
+    st = tabs["Newly matched Stage 2 + Supertrend today (NIFTY 50)"]
+    assert st["head"] == ["Stock", "Stage", "Supertrend"]                          # a column none of the old rows can fill is left out, not left empty
+    assert st["rows"][0] == [{"t": "TCS", "href": "https://stratlab.studio/research/IN/TCS"}, "Stage 2 (advancing)", "Up"]
+    assert tabs["Newly in Stage 2, Supertrend not up (NIFTY 50)"]["rows"][0][2] == "Not up"
+    hd = tabs["Headlines"]
+    assert hd["head"] == ["Headline", "Source"] and hd["rows"][0][1] == {"t": "Example Wire", "href": "https://example.com/a", "ext": True}
+    assert "ST S2" not in news_tables.plain(st["rows"][0][0]) and "ST S2" not in str(tabs)
+
+
+def test_a_new_brief_carries_close_day_move_stage_supertrend_and_the_time_of_a_headline():
+    issue = {**OLD_ISSUE, "sections": [
+        {"title": "Newly matched Stage 2 + Supertrend today (NIFTY 50)", "items": [
+            {"text": "TCS matches the Stage 2 rule with the price above its Supertrend (ST S2)", "url": "https://stratlab.studio/research/IN/TCS",
+             "price": 2478.0, "change_pct": 0.73, "stage": 2, "stage_days": 3, "st_up": True, "st_since": "2026-10-27", "matched_on": "2026-10-27"}]},
+        {"title": "Headlines", "items": [{"text": "Sensex ends lower", "url": "https://example.com/a", "source": "Example Wire", "at": "2026-10-28T10:05:00+05:30"}]}]}
+    st, hd = news_tables.of(issue)
+    assert st["head"] == ["Stock", "Close", "Day %", "Stage", "Supertrend", "Since"] and st["align"] == "lrrlll"
+    assert st["rows"][0][1:] == ["₹2,478.00", {"t": "▲ +0.73%", "tone": "up"}, "Stage 2 (advancing), 3 days", "Up since Tue 27 Oct", "Tue 27 Oct"]
+    assert hd["head"] == ["Time", "Headline", "Source"] and hd["rows"][0][0] == "10:05 IST"
+
+
+def test_my_stocks_results_actions_and_paper_are_tables_and_prose_stays_prose():
+    f = {"kind": "my_stocks", "uid": "u", "day": "2026-10-28", "weekly": False, "since": "2026-10-27",
+         "stocks": [{"symbol": "TCS", "region": "IN", "price": 2478.0, "change_pct": 0.73, "filings": [{"label": "Results", "subject": "Q2", "severity": "info", "url": "https://example.com/f"}]}],
+         "results": [{"symbol": "INFY", "region": "IN", "date": "2026-10-29", "purpose": "Quarterly results", "when": "after the close"}],
+         "actions": [{"symbol": "ITC", "region": "IN", "text": "Dividend ₹7.50", "ex_date": "2026-11-05", "record_date": "2026-11-06"}],
+         "unchanged": ["HDFCBANK", "SBIN"]}
+    tabs = {t["title"]: t for t in news_tables.of({"region": None, "weekly": False, "sections": write.sections(f)})}
+    ch = tabs["What changed for your stocks"]
+    assert ch["head"] == ["Stock", "Close", "Change", "What changed"] and ch["rows"][0][1] == "₹2,478.00" and ch["rows"][0][2]["t"] == "▲ +0.73%"
+    assert ch["rows"][0][3]["lines"][0]["t"].startswith("New filing: Results")
+    assert tabs["Results this week"]["rows"][0][1:] == ["Quarterly results", "Thu 29 Oct", "after the close"]
+    assert tabs["Corporate actions"]["rows"][0][1:] == ["Dividend ₹7.50", "Thu 5 Nov", "Fri 6 Nov"]
+    assert tabs["No change"]["kind"] == "text"
+
+
+def test_the_email_draws_the_tables_with_a_one_column_fallback_on_a_phone():
+    html, text = write.render(OLD_ISSUE)
+    assert "<th" not in html and html.count("hide-sm") >= 10 and "@media (max-width:480px)" in html and ".hide-sm{display:none!important" in html
+    assert 'class="show-sm' in html and "Close 22,698.85 · Day % ▼ −0.22%" in html            # the phone's one line under the first cell
+    assert ">NIFTY 50<" in html and ">TCS</a>" in html and ">Example Wire</a>" in html and ">Open the rotation chart</a>" in html
+    assert "(ST S2)" not in html and "(ST S2)" not in text
+    assert "INDICES\nIndex  Close  Day %  From 52-week high\n- NIFTY 50  22,698.85  ▼ −0.22%  14.6% below" in text
+    assert "Headline  Source" in text and "Sensex ends lower on profit taking  Example Wire (https://example.com/a)" in text
+
+
+def _pdf_text(data: bytes) -> str:
+    from pypdf import PdfReader
+    r = PdfReader(io.BytesIO(data))
+    return "\n".join(p.extract_text() for p in r.pages)
+
+
+def test_the_brief_pdf_has_the_tables_the_date_the_name_the_disclaimer_and_links():
+    data = news_pdf.build(OLD_ISSUE)
+    assert data[:5] == b"%PDF-"
+    text = _pdf_text(data)
+    for want in ("Market brief · India · Wed 28 Oct", "Prices and numbers as of", "NIFTY 50", "22,698.85", "▼ −0.22%", "Day %", "Close", "Index",
+                 "Nifty IT", "Weakening → Leading", "Stage 2 (advancing)", "Example Wire", "Not investment advice", "StratLab", "Page 1"):
+        assert want in text, want
+    from pypdf import PdfReader
+    links = {str(a.get_object().get("/A", {}).get("/URI")) for p in PdfReader(io.BytesIO(data)).pages for a in (p.get("/Annots") or [])}
+    assert {"https://example.com/a", "https://example.com/b", "https://stratlab.studio/research/IN/TCS"} <= links          # headline sources stay clickable
+    assert news_pdf.filename(OLD_ISSUE) == "stratlab-market-brief-india-2026-10-28.pdf"
+    assert news_pdf.filename({"kind": "my_stocks", "day": "2026-10-28", "weekly": True}) == "stratlab-my-stocks-2026-10-28-weekly.pdf"
+
+
+def test_the_pdf_route_is_open_to_whoever_can_read_the_brief(w):
+    c = w["client"]
+    c.get("/me", headers=headers("free-token"))
+    job.save({**OLD_ISSUE, "html": "<p>{unsubscribe_url}</p>", "text": "x"})
+    mine = {"id": "my_stocks.u-pro.2026-10-28", "kind": "my_stocks", "uid": "u-pro", "region": None, "day": "2026-10-28", "weekly": False,
+            "subject": "My Stocks", "summary": "1 of your stocks had news.", "at": "2026-10-28T16:20", "html": "<p>x {unsubscribe_url}</p>", "text": "x",
+            "sections": [{"title": "What changed for your stocks", "items": [{"text": "TCS", "url": "https://stratlab.studio/research/IN/TCS", "price": 2478.0, "currency": "INR", "region": "IN",
+                                                                         "change_pct": 0.5, "since": "since Tue 27 Oct", "lines": []}]}]}
+    job.save(mine)
+    r = c.get("/news/market.IN.2026-10-28/pdf", headers=headers("free-token"))             # a market brief: every plan
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and "attachment" in r.headers["content-disposition"]
+    assert "22,698.85" in _pdf_text(r.content) and "Index" in _pdf_text(r.content)
+    assert r.headers["cache-control"] == "private, no-store"
+    assert c.get("/news/my_stocks.u-pro.2026-10-28/pdf", headers=headers("free-token")).status_code == 404          # another reader's: not found
+    mine_pdf = c.get("/news/my_stocks.u-pro.2026-10-28/pdf", headers=headers("pro-token"))
+    assert mine_pdf.status_code == 200 and "Stock" in _pdf_text(mine_pdf.content) and "TCS" in _pdf_text(mine_pdf.content)
+    assert c.get("/news/market.IN.2026-10-28/pdf").status_code in (401, 403)                                         # signed out: no
+    assert c.get("/news/market.IN.1999-01-01/pdf", headers=headers("free-token")).status_code == 404
+    page = c.get("/news/market.IN.2026-10-28", headers=headers("free-token")).json()
+    assert [t["title"] for t in page["tables"]][:2] == ["Indices", "Sector rotation"]
+
+
+def test_stored_brief_posts_are_written_again_once_after_a_change_to_how_they_are_written(w, monkeypatch):
+    from app import blog
+    old_post = blog.brief_post(OLD_ISSUE)
+    old_post["blocks"] = [{"t": "ul", "items": ["TCS matches the Stage 2 rule (ST S2)"]}]            # as stored before the fix
+    old_post.pop("gen")
+    assert blog.add_once(old_post)
+    assert "ST S2" in blog.plain_text(blog.get(old_post["slug"])["body"]["blocks"])
+    out = blog.refresh_briefs([OLD_ISSUE])
+    assert out == {"updated": 1, "added": 0, "same": 0}
+    row = blog.get(old_post["slug"])
+    assert row["body"]["gen"] == blog.BRIEF_GEN and "ST S2" not in blog.plain_text(row["body"]["blocks"])
+    assert any(b["t"] == "table" and b["head"][:2] == ["Index", "Close"] for b in row["body"]["blocks"])
+    assert row["published_at"] == old_post["published_at"] and row["published"] is True                 # its first date, and whether it was hidden
+    assert blog.refresh_briefs([OLD_ISSUE]) == {"updated": 0, "added": 0, "same": 1}                      # once
+
+
+def test_the_research_posts_are_written_again_at_the_first_check_after_a_deploy(w, monkeypatch):
+    from app import blog_research
+    runs = []
+    monkeypatch.setattr(blog_research, "generate", lambda now=None, builders=None: runs.append(1) or {"made": [], "problems": []})
+    now = datetime(2026, 10, 29, 12, 0, tzinfo=X.IST)
+    assert blog_research.stale(now) and blog_research.run_if_stale(now) is not None and runs == [1]
+    assert not blog_research.stale(now) and blog_research.run_if_stale(now) is None and runs == [1]        # once for a version
+    monkeypatch.setattr(blog_research, "GEN", blog_research.GEN + 1)                                        # a deploy that changed the builders
+    assert blog_research.stale(now) and blog_research.run_if_stale(now) is not None and runs == [1, 1]
+    # a run that had problems is tried again an hour later, three times at most
+    monkeypatch.setattr(blog_research, "generate", lambda now=None, builders=None: runs.append(1) or {"made": [], "problems": ["x"]})
+    monkeypatch.setattr(blog_research, "GEN", blog_research.GEN + 1)
+    blog_research.run_if_stale(now)
+    assert not blog_research.stale(now + timedelta(minutes=30)) and blog_research.stale(now + timedelta(hours=2))
+
+
+# ---- O7: the offer document read into tables by fixed rules ---------------------------------------------------------
+def _sfc():
+    from tests import fake_ipo as F
+    return F.pages_of("sfc_rhp")
+
+
+def test_the_objects_table_has_each_object_with_its_amount_from_the_document():
+    from app import ipo_docs as D
+    u = D.utilisation(_sfc())
+    assert u["unit"] == "₹ crore" and u["page"] == 168
+    amounts = {r["label"].split(" ")[0]: r["amount"] for r in u["rows"]}
+    assert amounts["Prepayment"] == 42.23 and amounts["Funding"] == 74.92
+    assert u["rows"][-1]["label"] == "General corporate purposes" and u["rows"][-1]["amount"] is None      # no amount given: none shown, none guessed
+
+
+def test_the_risks_are_the_documents_own_numbered_headings_with_their_pages():
+    from app import ipo_docs as D
+    r = D.risk_headings(_sfc())
+    assert [x["n"] for x in r[:3]] == [3, 4, 5] and r[0]["page"] == 31 and r[0]["text"].startswith("We derive a significant part of our revenue from our top 10 customers")
+    assert all(x["page"] >= 30 and 40 <= len(x["text"]) <= 700 for x in r) and len(r) <= 12
+    assert D.risk_headings([""] * 20) == []
+
+
+def test_the_key_indicators_sit_beside_the_listed_peers_per_period():
+    from app import ipo_docs as D
+    k = D.kpis(_sfc())
+    assert k["peers"] == ["Thermax", "Praj", "Ion"] and k["unit"] == "₹ crore"
+    first = k["periods"][0]
+    assert first["label"].startswith("the three months ending June 30, 2026")
+    assert first["values"]["revenue"] == 133.94 and first["values"]["order_book"] == 1570.07
+    assert first["peers"]["revenue"] == [2302.73, 715.82, 700.46] and first["peers"]["roe"] == [None, None, None]
+    assert D.kpis([""] * 5) is None
+
+
+def test_the_holders_before_the_offer_keep_their_groups_and_sub_totals():
+    from app import ipo_docs as D
+    h = D.shareholding(_sfc())
+    rows = h["rows"]
+    promoters = [r for r in rows if r["group"] == "Promoters" and not r["total"]]
+    assert [r["name"] for r in promoters][0] == "Sandeep Sudhakar Asolkar" and promoters[0]["shares"] == 13_500_000 and promoters[0]["pct"] == 14.45
+    sub = next(r for r in rows if r["name"] == "Sub-total (A)")
+    assert sub["total"] and sub["shares"] == 40_019_595 and sub["pct"] == 42.84
+    assert sum(r["shares"] for r in promoters) == sub["shares"]                                        # the rows add to the document's own sub-total
+    assert rows[-1]["name"].startswith("Sub-total") and any(r["name"] == "Public shareholders" for r in rows)
+
+
+def test_the_peer_ratios_and_the_earnings_per_share_are_read_from_their_tables():
+    from app import ipo_docs as D
+    p = D.peer_table(_sfc())
+    assert p["price_on"] == "October 16, 2026" and p["company"]["eps"] == 16.52 and p["company"]["revenue"] == 803.63
+    assert [x["name"] for x in p["peers"]] == ["Thermax Limited", "Praj Industries Limited", "Ion Exchange Limited"]
+    assert p["peers"][0]["pe"] == 52.01 and p["peers"][1]["pe"] == 220.77
+    e = D.eps_rows(_sfc())
+    assert [r["period"] for r in e["rows"][:3]] == ["March 31, 2026", "March 31, 2025", "March 31, 2024"] and e["rows"][0]["basic"] == 16.52
+    assert e["rows"][-1]["basic"] == -0.14 and D.peer_table([""] * 4) is None and D.eps_rows([""] * 4) is None
+
+
+def test_the_issue_size_counts_the_whole_issue_and_says_what_the_bid_table_covers():
+    from app import ipo as I
+    got = I.sizes({"market": "IN", "fresh": 17_000_000, "ofs": 0, "size_shares": 14_000_000, "high": 150.0})
+    assert got["amount"] == 255.0 and got["in_bids"] == 210.0                                           # (LIVE2-022) ₹255 cr, of which ₹210 cr is in the bid table
+    assert I.sizes({"market": "IN", "total_cr": 300.0}) == {"amount": 300.0, "basis": "stated"}
+
+
+def test_a_read_document_gives_every_table_to_the_page(monkeypatch):
+    from app import ipo_docs as D, ipo as I
+    assert D.READER >= 2 and D.SUMMARY_READER >= 2                       # raised: documents read before are read again for the new tables
+    keys = ("utilisation", "risks", "kpis", "holding", "peers", "eps")
+    stored = {"kind": "RHP", "promoters": ["A"], "pages_read": 3, "excerpt": "words", "reader": D.READER, **{k: {"page": 1} for k in keys}}
+    monkeypatch.setattr(I, "doc_to_read", lambda row: {"kind": "RHP", "url": "u", "source": "nse"})
+    monkeypatch.setattr(I, "facts_of", lambda d: stored)
+    got = I.facts_view({"market": "IN", "id": "x"})
+    assert got["state"] == "ready" and all(got[k] == {"page": 1} for k in keys) and "excerpt" not in got
