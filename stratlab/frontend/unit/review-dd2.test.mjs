@@ -11,11 +11,13 @@ register("data:text/javascript," + encodeURIComponent(`export async function res
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
-test("DD-001: the mood card leads with the mood and the main story, and says where the FII/DII figures come from", () => {
-  const page = read("src/pages/Research.tsx");
-  assert.match(page, /\{ai\.mood && <p className="inv-summary" data-testid="pulse-mood"><b>\{ai\.mood\}<\/b><\/p>\}/);
+test("DD-001 (MOOD-1): the mood card leads with the headline from the tables' figures, the main story names its headlines, and the FII/DII source is said", () => {
+  // the mood is no longer a sentence the AI wrote: its headline and lines come with the tables (mood.py), the story with the headlines it counts
+  const mood = read("src/pages/PulseMood.tsx"), page = read("src/pages/Research.tsx");
+  assert.match(mood, /\{m\.headline \? <p className="inv-summary" data-testid="pulse-mood"><b>\{m\.headline\}<\/b><\/p>/);
+  assert.match(mood, /data-testid="pulse-story">The main story in today's headlines: \{story\.label\}, \{story\.n\} of \{story\.of\} \(marked above\)/);
   assert.match(page, /\{ai\.flows_source && <p className="k-note" data-testid="pulse-flows-source">\{ai\.flows_source\}<\/p>\}/);
-  assert.match(read("src/lib/research.ts"), /mood\?: string;[\s\S]*flows_source\?: string;/);
+  assert.match(read("src/lib/research.ts"), /story\?: \{ label: string; n: number; of: number; indices: number\[\]; headlines: string\[\] \} \| null;[\s\S]*flows_source\?: string;/);
 });
 
 test("DD-002: one Invest home, no second company search box; Look up a company is the search", () => {

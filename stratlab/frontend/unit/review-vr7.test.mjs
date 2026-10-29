@@ -75,7 +75,7 @@ test("VR7-013: the first plan table fits its card at 390px and 360px", () => {
 test("VR7-014, VR7-015: the 52-week phrase is a line of its own on a phone; a holdings filing's pill takes its own line when it does not fit beside the date", () => {
   const css = read("src/styles.css");
   assert.match(css, /@media \(max-width: 420px\) \{ \.nowrap\.fit \{ display: block; white-space: normal; \} \.fit-dot \{ display: none; \} \}/);
-  assert.match(read("src/pages/Research.tsx"), /below its <span className="nowrap">52-week<\/span> high/);
+  assert.match(read("src/pages/PulseMood.tsx"), /header: "Against 52-week high"/);          // MOOD-1: a table column of its own, no longer a phrase in a tile
   assert.match(css, /@media \(max-width: 420px\) \{ \.h-filing \{ display: flex; flex-wrap: wrap;/);
 });
 

@@ -284,6 +284,9 @@ interface RotationOut {
   kept?: boolean;
 }
 
+/** The four quadrants, said once behind the table's (i) (they were four run-on sentences above the chart). */
+export const QUADRANT_INFO = "Leading: stronger than the benchmark and still gaining. Improving: weaker, but picking up. Weakening: stronger, but losing pace. Lagging: weaker and still slipping. Most move clockwise through the four.";
+
 /** What the Strength and Momentum numbers are in (DE-019: "100 = its usual level" read as a percentage). */
 export const ROTATION_UNITS = "Not a percentage. 100 is the ratio's own average of the last 14 candles; each point above or below is one usual swing (a standard deviation) of that ratio. 102.79 is about 2.8 swings above its average.";
 
@@ -305,6 +308,8 @@ export function RotationPage() {
   const [askTail, setAskTail] = useState(start.tail);
   const [picked, setPicked] = useState<Set<string> | null>(null);   // null = the default set (main sectors)
   const [focus, setFocus] = useState<string | null>(null);          // the slider settles before it asks the server
+  const [quad, setQuad] = useState<Quadrant | "all">("all");          // the table's filter, with each quadrant's count (MOOD-1)
+  const [sort, setSort] = useState<{ key: string; desc: boolean } | null>(null);
   const [out, setOut] = useState<RotationOut | null>(null);
   const [busy, setBusy] = useState(false);
   const [tries, setTries] = useState(0);
@@ -334,7 +339,7 @@ export function RotationPage() {
     return () => { live = false; window.clearTimeout(late); };
   }, [region, setId, interval, askTail, tries]);
 
-  useEffect(() => { setPicked(null); setFocus(null); }, [region, setId]);
+  useEffect(() => { setPicked(null); setFocus(null); setQuad("all"); }, [region, setId]);
   useEffect(() => {
     const next = withParams(params, rotationQuery({ set: setId, from: backTo, interval, tail: askTail }));
     if (next !== params) setParams(next, { replace: true });
@@ -358,14 +363,22 @@ export function RotationPage() {
     if (next.has(r.id)) { next.delete(r.id); if (focus === r.id) setFocus(null); } else next.add(r.id);
     setPicked(next);
   };
-  // the summary reads the chart: the same ones as are drawn, so its counts add up to "n of N on the chart"
-  const names = (q: Quadrant) => all.filter((r) => r.quadrant === q).map((r) => r.name);
-  const entered = all.filter((r) => r.quadrant === "leading" && r.moved && r.moved !== "leading").map((r) => r.name);
+  // the table's own counts, which add up to every one in the set (no "and 7 more": every one is a row)
+  const counts = Object.fromEntries(QUADRANTS.map((q) => [q.id, all.filter((r) => r.quadrant === q.id).length])) as Record<Quadrant, number>;
+  const entered = (r: RotationRow) => r.quadrant === "leading" && !!r.moved && r.moved !== "leading";
   const unit = interval === "weekly" ? "week" : "day";
   // just after the US close the last candle is today's provisional close, as the company pages and tiles say (R89-002)
   const provisional = region === "US" && !!out?.as_of && out.as_of.slice(0, 10) === dayIn(now, marketTz("US"))
     && usSettling(markets.find((m) => m.id === "US"), new Date(now));
-  const few = (xs: string[], n = 5) => !xs.length ? "none" : xs.length <= n + 1 ? xs.join(", ") : `${xs.slice(0, n).join(", ")} and ${xs.length - n} more`;
+  const listed = all.filter((r) => quad === "all" || r.quadrant === quad);
+  const qOrder = (r: RotationRow) => QUADRANTS.findIndex((x) => x.id === r.quadrant);
+  const by: Record<string, (r: RotationRow) => number | string | null> = { n: (r) => r.name.toLowerCase(), q: qOrder, x: (r) => r.x, y: (r) => r.y, w1: (r) => r.ret?.w1 ?? null, m1: (r) => r.ret?.m1 ?? null, m3: (r) => r.ret?.m3 ?? null };
+  const rowsShown = !sort ? listed : [...listed].sort((a, b) => {
+    const f = by[sort.key], x = f(a), y = f(b);
+    if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;          // no value goes last, either way
+    return (x < y ? -1 : x > y ? 1 : 0) * (sort.desc ? -1 : 1);
+  });
+  const onSort = (key: string) => setSort((cur) => (cur?.key === key ? (cur.desc ? null : { key, desc: true }) : { key, desc: key !== "n" && key !== "q" }));
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of}
@@ -398,52 +411,53 @@ export function RotationPage() {
       {failed && <ErrorState title="The rotation couldn't be worked out" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{failed}</ErrorState>}
       {busy && !out && !failed && <Card><Skeleton label="Comparing each one with the market" lines={4} />
         {slow && <p className="k-small k-muted" role="status" data-testid="rotation-slow">Still working: the first look after the close reads the day's closes for every member. It can take up to a minute, and the answer is kept for the next visit.</p>}</Card>}
+      {/* the table first (MOOD-1: four run-on sentences with "and 7 more" became a table of every one), the chart below it with the same ticks */}
+      {out && all.length > 0 && (
+        <Card testId="rot-table">
+          <CardHead title={isIndex ? "Every index" : "Every stock"} info={QUADRANT_INFO} infoLabel="About the four quadrants" actions={<>
+            <button className="btn quiet sm" onClick={() => setPicked(new Set(all.map((r) => r.id)))}>Show all {all.length} on the chart</button>
+            {picked !== null && <button className="btn quiet sm" onClick={() => setPicked(null)}>{mainRows.length > 6 ? "The 5 furthest out" : "Main sectors only"}</button>}
+            <button className="btn quiet sm" onClick={() => setPicked(new Set())}>Clear the chart</button></>} />
+          <ChipBar label="Show quadrant" value={quad} onChange={(v) => setQuad(v as Quadrant | "all")}
+            options={[{ value: "all", label: `All ${all.length}` }, ...QUADRANTS.map((x) => ({ value: x.id, label: `${x.name} ${counts[x.id]}` }))]} />
+          <DataTable stack label="Where each one stands" rows={rowsShown} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
+            sort={{ key: sort?.key ?? "", desc: sort?.desc ?? false, onSort }} empty="None in this quadrant."
+            columns={[
+              { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, sortable: true, cell: (r) => (isIndex
+                ? <span className="rot-name"><label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label>
+                    <span>{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}
+                      {/* under the name, not beside it: a button in every row made the table wider than its card and the 3M column went off the edge */}
+                      {(r.stocks ?? 0) > 0
+                        ? <button className="link k-sub-line" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>
+                        : <span className="k-sub-line" title="No list of this index's main stocks is kept here">No stocks list</span>}</span></span>
+                : <span className="rot-name"><label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label>
+                    <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link></span>) },
+              { key: "q", header: "Quadrant", sortable: true, cell: (r) => <QuadrantTag q={r.quadrant} /> },
+              { key: "x", header: "Strength", numeric: true, sortable: true, info: ROTATION_UNITS, cell: (r) => r.x.toFixed(2) },
+              // its heading (the way the dot moved in the last step) is the arrow beside the momentum: a column of its own made the table wider than the page
+              { key: "y", header: "Momentum", numeric: true, sortable: true, cell: (r) => <>{r.y.toFixed(2)} <span className="k-muted" title="The way it moved in the last step" aria-label={r.heading == null ? "no move" : `heading ${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span></> },
+              { key: "m", header: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`, cardLabel: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`,
+                cell: (r) => (r.moved ? (r.moved === r.quadrant ? <span className="k-small k-muted">no change</span>
+                  : <span className="rot-move"><span className="rot-was"><QuadrantTag q={r.moved} /><span aria-hidden="true">→</span><QuadrantTag q={r.quadrant} /></span>{entered(r) && <Badge tone="ok">Entered Leading</Badge>}</span>) : "–") },
+              ...(["w1", "m1", "m3"] as const).map((k) => ({ key: k, header: { w1: "1W", m1: "1M", m3: "3M" }[k], cardLabel: { w1: "1 week vs the benchmark", m1: "1 month vs the benchmark", m3: "3 months vs the benchmark" }[k],
+                numeric: true, sortable: true, cell: (r: RotationRow) => (r.ret?.[k] == null ? "–" : <Delta value={r.ret[k]!}>{pct(r.ret[k]!, 2)}</Delta>) })),
+            ]} />
+          <p className="k-note">1W, 1M and 3M: how much more (or less) each returned than {out.benchmark} over the last 5, 21 and 63 sessions, in percentage points. Heading, the arrow beside Momentum, is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. {counts.leading + counts.improving + counts.weakening + counts.lagging === all.length ? `All ${all.length} are listed.` : ""}</p>
+          {out.skipped.length > 0 && <p className="k-note">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
+        </Card>
+      )}
       {out && (
         <ChartFrame title={`${out.name} vs ${out.benchmark}`}
           // the four-box key under the title names the same four tags with their counts: the legend is only for a chart with no key (VR3-018)
           actions={rows.length > 0 ? undefined : <div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
-          footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row below, to follow one.</p> : undefined}>
+          footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row above, to follow one. The ticks in the table choose what is drawn.</p> : undefined}>
           <div className="k-stack">
             <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${step === 1 ? `from ${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago` : `${unit} ${step - 1} of ${out.tail}`}` : ""}{out.kept ? " · kept from the last close; it updates when the market reopens" : ""}</span>
-            {rows.length > 0 && (
-              <div className="rot-read">
-                {([["leading", `stronger than ${drilled && out.parent ? out.parent.name : "the market"} and still gaining`], ["improving", "weaker, but picking up"],
-                   ["weakening", "stronger, but losing pace"], ["lagging", "weaker and still slipping"]] as [Quadrant, string][]).map(([q, says]) => (
-                  <div key={q}><QuadrantTag q={q} /><span className="k-muted k-small">{says}</span><span className="k-small" data-testid={`rot-${q}`}>{names(q).length ? `${names(q).length} of ${all.length} · ${few(names(q))}` : `none of ${all.length}`}</span></div>
-                ))}
-                {entered.length > 0 && <p className="k-small">Moved into Leading over the last {out.tail === 1 ? unit : `${out.tail} ${unit}s`}: <b>{few(entered)}</b></p>}
-              </div>
-            )}
-            {rows.length === 0 ? <EmptyState title={all.length ? "Nothing is ticked" : "Not enough price history to draw this yet"}>{all.length ? "Tick a few in the table below to draw them." : "It fills in as more closes are stored."}</EmptyState>
+            {rows.length === 0 ? <EmptyState title={all.length ? "Nothing is ticked" : "Not enough price history to draw this yet"}>{all.length ? "Tick a few in the table above to draw them." : "It fills in as more closes are stored."}</EmptyState>
               : <RotationChart rows={rows} benchmark={out.benchmark} step={step} focus={focus} onFocus={setFocus} />}
-            {picked === null && mainRows.length > 6 && rows.length > 0 && <p className="k-note" data-testid="rot-default-note">Drawn: the {rows.length} furthest from the centre of {mainRows.length} main {isIndex ? "indices" : "stocks"}. Tick more in the table below.</p>}
+            {picked === null && mainRows.length > 6 && rows.length > 0 && <p className="k-note" data-testid="rot-default-note">Drawn: the {rows.length} furthest from the centre of {mainRows.length} main {isIndex ? "indices" : "stocks"}. Tick more in the table above.</p>}
           </div>
         </ChartFrame>
-      )}
-      {out && all.length > 0 && (
-        <Card>
-          <CardHead title={isIndex ? "The indices" : "The stocks"} actions={<>
-            <button className="btn quiet sm" onClick={() => setPicked(new Set(all.map((r) => r.id)))}>Show all {all.length}</button>
-            {picked !== null && <button className="btn quiet sm" onClick={() => setPicked(null)}>{mainRows.length > 6 ? "The 5 furthest out" : "Main sectors only"}</button>}
-            <button className="btn quiet sm" onClick={() => setPicked(new Set())}>Clear</button></>} />
-          <DataTable stack label="Where each one stands" rows={all} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
-            columns={[
-              { key: "on", header: <span className="sr-only">Show on chart</span>, cell: (r) => <label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label> },
-              { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, cell: (r) => (isIndex
-                ? <span className="k-row">{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}
-                    {(r.stocks ?? 0) > 0
-                      ? <button className="btn quiet sm" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>
-                      : <button className="btn quiet sm" disabled title="No list of this index's main stocks is kept here">Stocks →</button>}</span>
-                : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link>) },
-              { key: "q", header: "Now", cell: (r) => <QuadrantTag q={r.quadrant} /> },
-              { key: "x", header: "Strength", numeric: true, info: ROTATION_UNITS, cell: (r) => r.x.toFixed(2) },
-              { key: "y", header: "Momentum", numeric: true, cell: (r) => r.y.toFixed(2) },
-              { key: "h", header: "Heading", cell: (r) => <span aria-label={r.heading == null ? "no move" : `${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span> },
-              { key: "m", header: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago`, cell: (r) => (r.moved ? (r.moved === r.quadrant ? <span className="k-small k-muted">same</span> : <QuadrantTag q={r.moved} />) : "–") },
-            ]} />
-          <p className="k-note">Heading is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. The trail on the chart shows the {out.tail} {unit}{out.tail === 1 ? "" : "s"} before it. The counts above are for all {all.length}, not only the ones ticked.</p>
-          {out.skipped.length > 0 && <p className="k-note">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
-        </Card>
       )}
       <p className="k-note inv-text">
         {drilled && out?.parent ? `Here each stock is measured against the ${out.parent.name} index itself, so Leading means it's beating its own sector. These are the sector's largest stocks, not its full official list. ` : ""}

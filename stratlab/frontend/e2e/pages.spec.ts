@@ -1668,8 +1668,10 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
 test("market breadth: today's numbers, small charts, sectors, groups and ranges; facts only, no provider names", async ({ page }, info) => {
   const errors = await open(page, "/invest/breadth", "Rose / fell");
   const today = page.getByTestId("breadth-today");
-  await expect(today.getByText("Above 50-day average")).toBeVisible();
-  await expect(today.getByText(/vs \d+ \w+/).first()).toBeVisible();                     // the change against the day before
+  // MOOD-1: the figures are one table: a measure, its day, the day before, the change (with ▲/▼ and a sign)
+  await expect(today.getByRole("rowheader", { name: /Above 50-day average/ })).toBeVisible();
+  for (const head of [/^\d+ \w+$/, "Change"]) await expect(today.getByRole("columnheader", { name: head }).first()).toBeVisible();
+  await expect(today.locator(".k-delta").first()).toContainText(/[▲▼]/);
   const charts = page.getByTestId("breadth-charts");
   await expect(charts.getByRole("heading", { name: "Advance/decline line" })).toBeVisible();
   for (const name of ["Above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
@@ -1689,14 +1691,16 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   // a hover shows the day's numbers on the bars
   await charts.locator("svg[aria-label^='New 52-week highs']").hover();
   await expect(page.locator(".chart-tip")).toContainText("new highs");
-  // an alert on the share above the 50-day average: added, listed, deleted
-  const box = page.getByRole("region", { name: "Breadth alerts" });
+  // an alert on the share above the 50-day average, from the bell on its row: added (the row then says the level), listed, deleted
   const level = info.project.name === "phone" ? "45" : "55";            // the two projects share one account
+  await today.getByTestId("breadth-alert-open").click();
+  const box = page.getByRole("dialog", { name: "Alert on the share above the 50-day average" });
   await box.getByLabel(/crosses$/).fill(level);
   await box.getByRole("button", { name: "Add alert" }).click();
-  await expect(box.getByText(`NIFTY 500 crosses ${level}%`)).toBeVisible();
+  await expect(box.getByRole("cell", { name: `${level}%`, exact: true })).toBeVisible();
   await box.getByRole("button", { name: `Delete the alert at ${level}% on NIFTY 500` }).click();
-  await expect(box.getByText(`NIFTY 500 crosses ${level}%`)).toHaveCount(0);
+  await expect(box.getByRole("cell", { name: `${level}%`, exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
 

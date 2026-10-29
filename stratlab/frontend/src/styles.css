@@ -1612,6 +1612,12 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chip:hover { border-color: var(--ink); }
 .k-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-chip.add { border-style: dashed; color: var(--blue-ink); }
+/* a remembered custom choice: its chip and a small × that forgets it (the pair is one rounded shape) */
+.k-chip-mine { display: inline-flex; flex: none; align-items: stretch; }
+.k-chip-mine > .k-chip { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-right: 8px; }
+.k-chip-x { flex: none; height: 32px; min-width: 28px; padding: 0 8px 0 4px; border: 1px solid var(--line-2, var(--line)); border-left-width: 0; border-radius: 0 999px 999px 0; background: var(--card); color: var(--muted); cursor: pointer; font: inherit; }
+.k-chip-x:hover { color: var(--ink); border-color: var(--ink); }
+@media (max-width: 640px) { .k-chip-x { height: 44px; min-width: 44px; } }
 @media (max-width: 640px) { .k-chip { height: 44px; } }   /* a phone-wide window: 44px, as on a touch screen below, not 32px (R86-004) */
 /* a set of on/off chips (ChipSet): on is filled with a tick, off is plain and muted, so "all on" still reads as on */
 .k-chipset .k-chip { color: var(--muted); }
@@ -2236,6 +2242,15 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-card-title a { color: inherit; text-decoration: none; }
 .k-card-title a:hover { text-decoration: underline; }
 .k-toolbar > select.k-input { width: auto; min-width: 170px; flex: 0 1 220px; }
+.breadth-bar > .k-chipwrap { flex: 1 1 320px; min-width: 0; }             /* the group and the range on one row, the chips taking the rest (MOOD-1) */
+.k-alert-row { margin-top: 4px; }
+/* the rotation table: "was → now" on one line with its mark under it, and a name with its "Stocks →" beside it, so a row is not three lines tall (MOOD-1) */
+.rot-move { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.rot-move > span.k-badge { white-space: nowrap; }
+.rot-was { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.rot-name { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.rot-name > .k-tap { flex: none; }
+.rot-name > span { min-width: 0; text-align: left; }
 .k-toolbar > .k-search { flex: 1 1 280px; }
 @media (max-width: 480px) { .k-toolbar > select.k-input { flex: 1 1 100%; } }
 .k-address { display: inline-block; max-width: 100%; padding: var(--s2) var(--s3); background: var(--paper-2); color: var(--ink); border-radius: var(--r-ctl); font: 13.5px/1.4 var(--mono); overflow-wrap: anywhere; user-select: all; }

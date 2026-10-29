@@ -34,6 +34,7 @@ import { NamedHoldersPanel } from "../components/NamedHolders";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
+import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
 import { FilingsPanel } from "../components/Filings";
@@ -77,18 +78,8 @@ export function indexLevel(name: string, price: number): string {
 export function IndexStrip({ indices, missing }: { indices: IndexLevel[] | null; missing?: string[] }) {
   if (!indices) return <Skeleton label="Loading the market" lines={2} />;
   if (!indices.length) return <EmptyState title="Index levels are unavailable right now">They come back on their own; this page checks again when you open it.</EmptyState>;
-  return (
-    <>
-    <StatRow label="Index levels">
-      {indices.map((i) => (
-        <Stat key={i.name} item label={i.name} value={indexLevel(i.name, i.price)}
-          delta={i.change_pct != null ? <Delta value={i.change_pct} tone={i.stale ? "neutral" : "auto"}>{pct(i.change_pct, 2)}</Delta> : undefined}
-          note={<span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{indexWhen(i, (d) => fmtDate(d, { year: false }))}{i.from_high_pct != null && <><span className="fit-dot"> · </span><span className="nowrap fit">{i.from_high_pct > -0.5 ? "near its 52-week high" : <>{Math.abs(i.from_high_pct).toFixed(1)}% below its <span className="nowrap">52-week</span> high</>}</span></>}</span>} />
-      ))}
-    </StatRow>
-    {!!missing?.length && <p className="k-small k-muted" data-testid="index-missing">{missing.join(", ")} couldn't load.</p>}
-    </>
-  );
+  // a table, not tiles each with its own small line (MOOD-1, the owner's "wherever you can, just make a table")
+  return <IndexTable indices={indices} missing={missing} dayText={(d) => fmtDate(d, { year: false })} whenOf={(i) => indexWhen(i, (d) => fmtDate(d, { year: false }))} />;
 }
 
 /** A box that finds a company by name or symbol and opens its page. */
@@ -607,6 +598,7 @@ export function PulsePage() {
   const [region, setRegion] = useRegion();
   const levels = usePulse(region);
   const data = levels.data;
+  const { mood, error: moodErr, retry: moodRetry } = usePulseMood(region);
   const [ai, setAi] = useState<PulseAI | null>(null);
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -623,12 +615,7 @@ export function PulsePage() {
     loadAI();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region]);
-  // the mood is written from a fresh read of the levels, which the cards above may not have had yet: they are read again at once, so the
-  // sentence and the cards quote one set of figures (RC2A-024: cards 22,664 at +0.28%, the mood a minute later 22,684 at +0.37%)
-  const cardsAt = data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? null;
-  const reloadCards = levels.reload;
-  useEffect(() => { if (ai?.levels_at && cardsAt && ai.levels_at > cardsAt) reloadCards(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [ai?.levels_at]);
-  const moodOlder = !!(ai?.levels_at && cardsAt && Date.parse(cardsAt) - Date.parse(ai.levels_at) > 120_000);
+  const aiNothing = !!ai && !ai.tone && !ai.hot.length && !ai.flows.length && !ai.themes.length;
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={pulseClosedDay(data?.indices) ? "How the market felt at the last close" : "How the market feels today"}
@@ -636,64 +623,37 @@ export function PulsePage() {
         asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><PulseLevels p={levels} /></Card>
+      {/* the mood and every table under it come from one read of the figures (mood.py): a line and its table cannot disagree (MOOD-1) */}
+      {mood ? <MoodCard m={mood} region={region} /> : moodErr
+        ? <Card><ErrorState title="The market's figures couldn't be read" action={{ label: "Try again", onClick: moodRetry }}>{moodErr}</ErrorState></Card> : <MoodSkeleton />}
+      {mood?.breadth && <BreadthTable b={mood.breadth} />}
+      {mood?.sectors && <SectorsTable s={mood.sectors} />}
+      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} />)}
+      {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
+        left={mood.flows ? <FlowsTable f={mood.flows} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
+      {mood?.global && <GlobalTable g={mood.global} region={region} />}
+      {mood?.calendar && <CalendarTable c={mood.calendar} />}
       <Card>
-        <CardHead title="The mood" info={HELP.researchPulse}
-          actions={ai?.tone && !aiErr ? <><span className="k-note">Written {writtenAt(ai.generated_at, marketTz(region))}{ai.levels_at ? `, levels of ${asOf(ai.levels_at, { tz: marketTz(region) })}` : ""}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
-        {/* "Written" only beside a read that exists; no read is one calm line and one button, like a company's AI read */}
-        {aiErr || (ai && !ai.tone) ? (
+        <CardHead title="What the headlines say" info={HELP.researchPulse}
+          actions={ai && !aiErr ? <><span className="k-note">Written {writtenAt(ai.generated_at, marketTz(region))}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
+        {aiErr ? (
           <div className="k-row ai-read-off" role="status">
-            <span className="k-small k-muted">No AI read of the mood right now{aiReason(aiErr)} The index levels and headlines don't depend on it.</span>
+            <span className="k-small k-muted">No AI read of the headlines right now{aiReason(aiErr)} The tables above don't depend on it.</span>
             {!aiLimited(aiErr) && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Asking…" : "Ask again"}</button>}
           </div>
-        ) : !ai ? <Skeleton label="Reading the tape" lines={2} /> : (
-          <>
-            {/* the mood and the main story first, worked out from the moves and headlines; then the read (DD-001) */}
-            {ai.mood && <p className="inv-summary" data-testid="pulse-mood"><b>{ai.mood}</b></p>}
-            <p className="inv-summary">{ai.tone}</p>
-            {moodOlder && ai.levels_at && <p className="k-note" data-testid="pulse-mood-older">The sentences above quote the levels of {asOf(ai.levels_at, { tz: marketTz(region) })}; the cards are newer.</p>}
-            {ai.flows_source && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
-          </>
-        )}
+        ) : !ai ? <Skeleton label="Reading the headlines" lines={2} />
+          : aiNothing ? <p className="k-small k-muted" data-testid="pulse-ai-none">Nothing in today's headlines held up against the figures above, so there is no AI summary.</p>
+          : (
+            <>
+              {ai.tone && <p className="inv-summary" data-testid="pulse-tone">{ai.tone}</p>}
+              {ai.flows_source && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
+            </>
+          )}
       </Card>
-      {ai && (ai.hot.length > 0 || ai.flows.length > 0) && (
-        <div className="k-cols">
-          {ai.hot.length > 0 && <Card>
-            <CardHead title="In today's headlines" />
-            <div className="inv-rows">
-              {ai.hot.map((h) => (
-                <div key={h.ticker + h.name} className="inv-row">
-                  <span><b>{h.name}</b> {h.ticker && <Link className="link k-small" to={`/research/${region}/${encodeURIComponent(h.ticker)}`}>{h.ticker} →</Link>}</span>
-                  <span className="k-small k-muted">{h.why}</span>
-                </div>
-              ))}
-            </div>
-          </Card>}
-          {ai.flows.length > 0 && <Card>
-            <CardHead title={ai.flows.some((f) => f.direction) ? "Where money is flowing" : "Money and markets in the headlines"} />
-            <div className="inv-rows">
-              {ai.flows.map((f) => (
-                <div key={f.title} className="inv-row">
-                  <span className="k-row"><b>{f.title}</b>{f.direction && <Badge tone="plain" dot={false}>{f.direction.toLowerCase()}</Badge>}</span>
-                  <span className="k-small k-muted">{f.detail}</span>
-                </div>
-              ))}
-            </div>
-          </Card>}
-        </div>
-      )}
-      {ai && ai.themes.length > 0 && (
-        <Card>
-          <CardHead title="Themes in play" />
-          <div className="inv-themes">
-            {ai.themes.map((t) => (
-              <Link key={t.theme} className="inv-theme" to={`/research/themes?region=${region}&q=${encodeURIComponent(t.theme)}`}>
-                <b>{t.theme}</b><span className="k-small k-muted">{t.detail}</span>{t.example && <span className="k-note">e.g. {t.example}</span>}
-              </Link>
-            ))}
-          </div>
-        </Card>
-      )}
-      {data && <Card><CardHead title="Headlines" /><NewsList items={data.headlines} limit={14} /></Card>}
+      {ai && ai.hot.length > 0 && <HotTable ai={ai} region={region} />}
+      {ai && ai.flows.length > 0 && <TopicsTable ai={ai} />}
+      {ai && ai.themes.length > 0 && <ThemesTable ai={ai} region={region} />}
+      {data && <Card><CardHead title="Headlines" /><HeadlinesTable items={data.headlines} ai={ai} /></Card>}
     </div>
   );
 }

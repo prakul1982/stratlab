@@ -66,10 +66,11 @@ test("RC2A-021, 022: a scan says which price its rows hold", () => {
   assert.match(scans, /list of \$\{s\.as_of\}/);
 });
 
-test("RC2A-024: the pulse reads its cards again when the mood was written on newer levels", () => {
-  const r = read("src/pages/Research.tsx");
-  assert.match(r, /ai\.levels_at > cardsAt\) reloadCards\(\)/);
-  assert.match(r, /data-testid="pulse-mood-older"/);
+test("RC2A-024 (MOOD-1): the mood never quotes a level, so the cards and the sentences cannot be of two moments; the tables are read again each minute", () => {
+  // the lines are built from the tables' figures with no index level in them (test_mood1.py), so there is no newer-levels note to show
+  const r = read("src/pages/Research.tsx"), m = read("src/pages/PulseMood.tsx");
+  assert.doesNotMatch(r, /pulse-mood-older|reloadCards/);
+  assert.match(m, /useLiveRefresh\(!!mood\?\.is_open, \(\) => \{ researchApi\.pulseMood\(region\)/);
 });
 
 test("RC2A-027: a US company's page has holders above 5% and its flagged filings", () => {

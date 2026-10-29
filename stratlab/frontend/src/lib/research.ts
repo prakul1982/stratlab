@@ -173,10 +173,32 @@ export interface PulseAI {
   tone: string; hot: { name: string; ticker: string; why: string }[];
   flows: { title: string; detail: string; direction: "INFLOW" | "OUTFLOW" | "ROTATION" | "" }[];
   themes: { theme: string; detail: string; example: string }[]; generated_at: number; levels_at?: string | null;
-  /** The mood worked out from the day's moves, and the headlines' main story (DD-001); absent on an older read. */
-  mood?: string;
+  /** The main story as one sentence, and the headlines it counts (the positions of the carrying ones in `headlines`), so "3 of 8"
+   *  can be counted on the page (MOOD-1). The mood itself is the tables' (`PulseMood`), not a sentence of this read. */
+  story_line?: string;
+  story?: { label: string; n: number; of: number; indices: number[]; headlines: string[] } | null;
   /** Where the FII/DII figures the read quotes come from, when it quotes them (DD-001). */
   flows_source?: string;
+}
+/** The Market pulse's tables (intel/mood.py): each part is null when its figures can't be read, and the page leaves it out. */
+export interface MoodMover { symbol: string; name?: string; change_pct: number; points?: number }
+export interface MoodBreadthRow { key: string; label: string; now: number | null; before: number | null; change: number | null; kind: "count" | "share"; means: string; unit: string }
+export interface MoodSectorRow { name: string; label: string; change_pct: number; w1: number | null; m1: number | null; movers: MoodMover[] }
+export interface MoodQuoteRow { label: string; symbol: string; tag: string; price: number; change_pct: number | null; day: string | null; same_day: boolean | null }
+export interface PulseMood {
+  pending?: boolean; region: Region; is_open: boolean; today: string; levels_at: string | null; read_at?: string | null;
+  headline: string; lines: string[];
+  compare: { index: string; avg_abs: number; days: number; ratio: number; words: string } | null;
+  breadth: { group: string; live: boolean; day: string | null; close_day: string | null; prev_day: string | null; adv: number | null; dec: number | null; unch: number | null;
+    stocks: number | null; highs: number | null; lows: number | null; ratio: number | null; rows: MoodBreadthRow[] } | null;
+  sectors: { rows: MoodSectorRow[]; up: number; down: number; unchanged: number; of: number; leader: string; laggard: string } | null;
+  /** One table for each index of the market (NIFTY 50 and SENSEX; the S&P 500); `est_total` and `actual` (India) say what the companies add up to and what the index moved. */
+  movers: { index: string; adding: MoodMover[]; taking: MoodMover[]; of: number; note: string; est_total?: number | null; actual?: number | null }[] | null;
+  flows: { as_of: string; rows: { day: string; fii: number; dii: number }[]; fii_total: number; dii_total: number; note: string } | null;
+  risk: { rows: MoodQuoteRow[] } | null;
+  global: { rows: MoodQuoteRow[] } | null;
+  calendar: { results: { symbol: string; name: string; date: string; purpose?: string | null }[]; ipos: { name: string; close: string | null; low: number | null; high: number | null }[];
+    events: { date: string; time: string | null; title: string; kind: string }[] } | null;
 }
 export interface CompareAI {
   verdict: string; differences: string[];
@@ -218,6 +240,8 @@ export const researchApi = {
     if ("unavailable" in got) throw new Error(got.message);
     return got;
   },
+  /** The mood as tables and a headline with a few lines (MOOD-1); `pending` until the server's first read is back. */
+  pulseMood: (r: Region) => api<PulseMood>(`/research/pulse/mood?region=${r}`),
   sector: (r: Region, q: string, refresh = false) => api<SectorAI>(`/research/sector?region=${r}&q=${encodeURIComponent(q)}${refresh ? "&refresh=true" : ""}`),
   compare: (r: Region, a: string, b: string, refresh = false) => api<{ a: Company; b: Company; ai: CompareAI }>(`/research/compare?region=${r}&a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}${refresh ? "&refresh=true" : ""}`),
 };

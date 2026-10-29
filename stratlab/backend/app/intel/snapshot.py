@@ -40,6 +40,16 @@ class Snapshot:
         with self._lock:
             return self._kept.get(key)
 
+    def keys(self) -> list:
+        with self._lock:
+            return list(self._kept)
+
+    def drop(self, key):
+        """Forget a key's kept value (a key that carries a day, once the day is over: nothing else ever removes it)."""
+        with self._lock:
+            self._kept.pop(key, None)
+            self._running.pop(key, None)
+
     def put(self, key, value, at: float | None = None):
         with self._lock:
             self._kept[key] = (self.clock() if at is None else at, value)

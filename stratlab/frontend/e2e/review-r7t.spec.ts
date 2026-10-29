@@ -48,10 +48,10 @@ test("SENSEX at the 8 Oct close after the open says so, and the mood waits (R7T-
     [/\/research\/pulse\/ai\?/, { unavailable: true, code: "stale", message: "SENSEX hasn't updated for today's session yet, so no mood is written on a previous session's numbers. Ask again in a minute." }],
     [/\/research\/pulse\?/, { indices, headlines: [] }],
   ]);
-  const sensex = page.locator(".k-stat", { hasText: "SENSEX" }).first();
+  const sensex = page.locator("tr", { hasText: "SENSEX" }).first();
   await expect(sensex.getByTestId("index-when")).toHaveText(/^8 Oct close · not updated today yet/, { timeout: 30_000 });
   await expect(sensex).not.toContainText("today ·");
-  await expect(page.locator(".k-stat", { hasText: "NIFTY 50" }).first().getByTestId("index-when")).toHaveText(/^today/);
+  await expect(page.locator("tr", { hasText: "NIFTY 50" }).first().getByTestId("index-when")).toHaveText(/^today/);
   await expect(page.locator("main")).toContainText("SENSEX hasn't updated for today's session yet");
   await expect(page.locator("main")).not.toContainText("Written");
   expect(errors).toEqual([]);
