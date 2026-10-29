@@ -42,7 +42,7 @@ import { UsFilingsCards } from "../components/UsFilings";
 import { CompanyActions } from "../components/CorpActions";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import {
-  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StatRow, StockPicker,
+  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StockPicker,
 } from "../components/kit";
 import { resultDay, type ResultRow } from "./ResultsPage";
 import { pairKey, quotesInBatches } from "../lib/investUi";
