@@ -1156,7 +1156,8 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     `red_flags` is how many red-flag filings (India) the last three months held, for the stock screens. `checks` carries
     what the market value is checked against (see cap_problem): "sales_usd" (a year's revenue, $ million),
     "cap_unverified" (depositary shares whose ratio couldn't be read) and "not_company" (what the symbol is instead)."""
-    years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt")} for y in (nums.get("years") or [])[-5:]]
+    # (cash from operations too, for a theme's cash-against-profit line: THEME-1; a page stored before has none, and the line says how many it counts)
+    years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt", "cfo")} for y in (nums.get("years") or [])[-5:]]
     prices = dict(prices or {})
     checks = checks or {}
     if _num(prices.get("price")) is None and _num(snap.get("price")) is not None:
@@ -1192,7 +1193,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
         "div_yield": snap.get("div_yield"), "div_special": snap.get("div_special"), "profit_ttm": _ttm_profit(p),
         "net_margin": snap.get("net_margin"), "opm": opm, "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
-        "bank": financial, "years": years, "currency_note": p.get("currency_note"),
+        "bank": financial, "years": years, "currency_note": p.get("currency_note"), "basis": nums.get("basis"),
         "growth": {k: (nums.get("growth") or {}).get(k) for k in ("sales_cagr_3y", "profit_cagr_3y", "sales_cagr_5y", "profit_cagr_5y")},
         "stage": (trend or {}).get("stage"), "stage_days": (trend or {}).get("stage_days"),
         "st_up": (trend or {}).get("st_up"), "st_days": (trend or {}).get("st_days"),
