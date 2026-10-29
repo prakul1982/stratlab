@@ -1214,6 +1214,10 @@ export class PriceChartEngine {
       const dr = this.draftDrawing();
       if (dr) paintDrawing(c, dr, m, dth, true, fmt);
       c.restore();
+      // where the selected drawing's first handle is drawn (px from the chart's top left), so a browser test drags the handle itself
+      const sel = this.selected ? this.drawings.find((d) => d.id === this.selected) : undefined;
+      const grip = sel?.points[0] ? `${Math.round(m.x(sel.points[0].t))},${Math.round(m.y(sel.points[0].p))}` : "";
+      if (this.host.dataset.grip !== grip) this.host.dataset.grip = grip;
     }
     const x = this.cross;
     if (!x || this.hoverIndex < 0) return;
