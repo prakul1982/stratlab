@@ -204,11 +204,13 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
             {snap.bars.length ? <LiveChart snap={snap} cur={cur} note={chartNote} /> : <p className="k-small k-muted">The chart fills in as candles close.</p>}
           </Card>
           <ChartFrame title="Paper equity" info={HELP.equityLive}>
-            {curve.length > 1 ? (
+            {curve.length > 1 && span > 0 ? (
               <LineChart ariaLabel="Paper account value" labels={curve.map((p) => when(p.t, tz, intraday))} times={curve.map((p) => p.t)} tz={tz} height={160}
                 format={(x) => money(x, cur, 2)} axisFormat={axis} baseline={a.capital} lines={[{ label: "Equity", values: curve.map((p) => p.eq), color: "var(--series-1)", width: 2 }]} />
-            ) : <ChartEmpty height={72}>Your equity curve starts after the first closed candle.</ChartEmpty>}{/* VR1-092: a 160px box for one line */}
-            {curve.length > 1 && <p className="k-note">From the starting {money(a.capital, cur, 0)} (the grey line), after each closed candle.</p>}
+            ) : <ChartEmpty height={72}>{curve.length > 1
+              ? `No trades yet: the account is still at the starting ${money(a.capital, cur, 0)}. The line appears once an order fills and the value moves.`   // (LIVE2-014: a flat line on a $0 to $1 axis looked broken)
+              : "Your equity curve starts after the first closed candle."}</ChartEmpty>}{/* VR1-092: a 160px box for one line */}
+            {curve.length > 1 && span > 0 && <p className="k-note">From the starting {money(a.capital, cur, 0)} (the grey line), after each closed candle.</p>}
           </ChartFrame>
         </div>
         <div className="k-page">

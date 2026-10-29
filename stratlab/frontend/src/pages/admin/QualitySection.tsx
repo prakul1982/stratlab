@@ -29,8 +29,9 @@ export function QualitySection() {
       <div className="k-toolbar">
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "India" }, { value: "US", label: "US" }]} />
       </div>
-      <AuditPanel region={region} />
+      {/* the live whole-market result first (LIVE2-027): the form that runs a chosen set sits under it, not above it */}
       <MarketAuditPanel region={region} />
+      <AuditPanel region={region} />
 
       <Card label="Reported strategies">
         <CardHead title={`Reported strategies (${entries.length})`} info="An entry is hidden by itself after 3 reports from different people, until you look at it here." />

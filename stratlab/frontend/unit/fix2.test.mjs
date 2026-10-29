@@ -135,3 +135,20 @@ test("O7: every block of the issue page is a table, the risks have one fold, and
   assert.match(page, /firstAndRest\(risks, 5\)/);
   assert.doesNotMatch(page, /Statements|ipo-sum-promoters|ipo-sum-risks/);              // the AI no longer writes the risks, the promoters or the objects
 });
+
+test("LIVE2-013: Free is priced in the money the paid cards are charged in", () => {
+  const plans = read("src/pages/PlansPage.tsx"), land = read("src/pages/Login.tsx");
+  assert.match(plans, /currency !== "INR" && chargedInRupees\(row, currency, per === "year" \? row\.yearly_charged_in : row\.charged_in\) \? "₹0" : money\(row, 0, currency\)/);
+  assert.match(land, /p === "free" \? \(inRupees\("basic", year\) \? rupees\(p, year\)/);
+});
+
+test("LIVE2-014, 027, 033: no flat equity line for a session with no trades, the whole-market audit above the form, the dividends list asks again by itself", () => {
+  assert.match(read("src/pages/PaperPage.tsx"), /curve\.length > 1 && span > 0 \?/);
+  assert.match(read("src/pages/PaperPage.tsx"), /No trades yet: the account is still at the starting/);
+  const q = read("src/pages/admin/QualitySection.tsx");
+  assert.ok(q.indexOf("<MarketAuditPanel") < q.indexOf("<AuditPanel"), "the whole-market result first");
+  assert.doesNotMatch(read("src/pages/admin/AuditPanel.tsx"), /Running · up to date/);
+  const h = read("src/components/HoldingsActions.tsx");
+  assert.match(h, /setTimeout\(\(\) => setAgain\(\(n\) => n \+ 1\), 30_000\)/);
+  assert.doesNotMatch(h, /reload in a minute/);
+});

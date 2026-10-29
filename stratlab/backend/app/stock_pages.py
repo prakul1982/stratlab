@@ -2139,7 +2139,7 @@ footer.site p{max-width:72ch;margin:0 0 8px}footer.site nav{display:flex;flex-wr
 .tip{position:absolute;z-index:3;pointer-events:none;display:flex;flex-direction:column;gap:2px;min-width:128px;background:var(--card);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:14px;box-shadow:0 8px 24px rgba(29,27,23,.14)}
 .tip[hidden]{display:none}.tip span{color:var(--muted);font-size:12.5px;white-space:nowrap}.tip b{font-weight:600}
 .chart [data-summary]{margin:10px 0 0;max-width:72ch}.chart .how{margin-top:4px}.tbl2{overflow-x:auto}.tbl2 td:last-child,.tbl2 th:last-child{text-align:right}
-@media (max-width:640px){.plot{height:210px}.seg button{min-height:44px;min-width:52px}.chg b{font-size:20px}.chart-top{min-height:0}}
+@media (max-width:640px){.plot{height:210px}.seg button{min-height:44px;min-width:52px}.chg b{font-size:20px}.chart-top{min-height:112px}[data-empty] .chart-top{min-height:0}}   /* LIVE2-031: the change line and the range buttons take two rows once the prices arrive: their place is kept from the first paint (130px shift) */
 .by{margin:0 0 6px}.by-key{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px;color:var(--ink-2);margin-bottom:26px}
 .by-key .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px}.sw.rev,.by-bar.rev{background:var(--blue)}.sw.pro,.by-bar.pro{background:var(--orange)}
 .by-plot{position:relative;height:180px;margin:0 0 30px 56px}.by-line{position:absolute;left:0;right:0;height:0;border-top:1px solid var(--line)}

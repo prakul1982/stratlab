@@ -45,12 +45,19 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
   const [data, setData] = useState<HoldingsActions | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [again, setAgain] = useState(0);              // how many times the page has asked again while some stocks were still being read
   useEffect(() => {
     let live = true;
     // onLoaded: the page keeps the cards below this one waiting until it knows its size, so nothing jumps when it arrives
     api<HoldingsActions>("/holdings/corp-actions").then((x) => live && setData(x)).catch(() => live && setData(null)).finally(() => live && onLoaded?.());
     return () => { live = false; };
-  }, [version]);
+  }, [version, again]);
+  // stocks whose dividends are still being read: the page asks again by itself every half minute (six times at most), so nobody has to reload (LIVE2-033)
+  useEffect(() => {
+    if (!data || data.checking <= 0 || again >= 6) return;
+    const t = setTimeout(() => setAgain((n) => n + 1), 30_000);
+    return () => clearTimeout(t);
+  }, [data, again]);
 
   const act = async (symbol: string, id: string, action: "apply" | "dismiss" | "undo", done: string) => {
     setBusy(`${symbol}:${action}`);
@@ -96,7 +103,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
           {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} stack phonePage={8} /></>}
           {received.length > 0 && <><h3 className="k-sub">Paid in the last 12 months, by company</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack phonePage={8} /></>}
           {data.received.length > 6 && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setShowAll(!showAll)}>{showAll ? "Show fewer" : `Show all ${data.received.length}`}</button>}
-          {data.checking > 0 && <p className="k-note">Still reading the history of {data.checking} stock{data.checking === 1 ? "" : "s"}; reload in a minute.</p>}
+          {data.checking > 0 && <p className="k-note" data-testid="ha-checking">The dividends of {data.checking} of your stocks are still being collected, so the totals above may leave some payments out for now. This list asks again by itself.</p>}
         </Card>
       )}
     </>

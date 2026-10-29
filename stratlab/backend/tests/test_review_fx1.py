@@ -236,7 +236,7 @@ def test_a_cause_without_a_headline_is_dropped_and_a_base_quarter_is_named():
 def test_a_lot_badge_names_the_series_a_revision_starts_with():
     e = {"kind": "lot", "symbol": "TCS", "was": 225, "now": 250, "effective": "2026-10-28", "series": "2027-01", "circ": True, "source": "circular_x"}
     b = fo_changes.badge_of(e, date(2026, 10, 26))
-    assert b["short"] == "Lot 225→250 from the Jan 2027 series"
+    assert b["short"] == "Lot 225→250 from Jan 2027"
     assert fo_changes.badge_of({**e, "circ": False}, date(2026, 10, 26))["short"] == "Lot 225→250 from 28 Oct"
 
 
