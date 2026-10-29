@@ -20,6 +20,8 @@ from . import blog, db, email_kit as kit
 IST = ZoneInfo("Asia/Kolkata")
 STATE_KEY = "blog:research:state"
 MONTH_KEY = "blog:research:month"
+GEN = 3                             # the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
+GEN_KEY = "blog:research:gen"       # {"gen", "ok", "tries", "at"} of the last run made for a version
 SIP_AMOUNT = 10000
 SIP_HORIZONS = (3, 5)
 IPO_ROWS_SHOWN = 50
@@ -507,3 +509,32 @@ def run_monthly(now: datetime | None = None) -> dict | None:
         return None
     db.set_setting(MONTH_KEY, month)
     return generate(now)
+
+
+def stale(now: datetime) -> bool:
+    """Whether the posts were last written by an older version of the builders (or a run for this version failed and is due again:
+    at most three tries, an hour apart)."""
+    st = db.json_value(db.get_setting(GEN_KEY), {})
+    if st.get("gen") != GEN:
+        return True
+    if st.get("ok") or int(st.get("tries") or 0) >= 3:
+        return False
+    try:
+        return (now - datetime.fromisoformat(st["at"])).total_seconds() >= 3600
+    except (KeyError, ValueError):
+        return True
+
+
+def run_if_stale(now: datetime | None = None) -> dict | None:
+    """Write the research posts again when the builders changed since they were last written (a deploy), so a fix is on the live
+    posts at the next check and not at the next month's run. Marked before it starts (a crash mid-run doesn't loop)."""
+    now = now or datetime.now(timezone.utc)
+    if not stale(now):
+        return None
+    st = db.json_value(db.get_setting(GEN_KEY), {})
+    tries = int(st.get("tries") or 0) + 1 if st.get("gen") == GEN else 1
+    db.set_setting(GEN_KEY, json.dumps({"gen": GEN, "ok": False, "tries": tries, "at": now.isoformat(timespec="seconds")}))
+    out = generate(now)
+    ok = not out["problems"]
+    db.set_setting(GEN_KEY, json.dumps({"gen": GEN, "ok": ok, "tries": tries, "at": now.isoformat(timespec="seconds")}))
+    return out

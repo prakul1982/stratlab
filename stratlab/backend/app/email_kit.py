@@ -45,6 +45,8 @@ a{{color:{L['blue']}}}
   .btn-t{{width:100%!important}}
   .btn-a{{display:block!important;text-align:center!important}}
   .meta{{text-align:left!important;display:block!important;width:100%!important;padding-top:4px!important}}
+  .hide-sm{{display:none!important;width:0!important;max-height:0!important;overflow:hidden!important}}
+  .show-sm{{display:block!important;max-height:none!important;overflow:visible!important}}
 }}
 @media (prefers-color-scheme:dark){{
   .bg-page{{background:{D['page']}!important}}
@@ -394,6 +396,67 @@ def table(headers: list[str], rows: list[list[str]], right: tuple[int, ...] = ()
             f'{head}<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>{th}</tr>{body}</table></td></tr></table>')
     text = ([f"\n{title.upper()}"] if title else []) + ["  ".join(headers)] + ["  ".join(_t(c) for c in r) for r in rows]
     return Block(html, "\n".join(text))
+
+
+_TONE = {"up": ("c-up", "up"), "down": ("c-down", "down"), "flat": ("c-muted", "muted")}
+
+
+def _cell(c, link_cls: str = "c-blue") -> tuple[str, str]:
+    """(html, text) of one table cell: a string, or {"t", "href", "tone", "sub", "lines": [{"t", "href"}]}."""
+    if not isinstance(c, dict):
+        return escape(str(c or "")), _t(c or "")
+    t, href = str(c.get("t") or ""), c.get("href")
+    cls, key = _TONE.get(c.get("tone") or "", (None, None))
+    inner = _a(href, t) if href and t else escape(t)
+    if cls and inner:
+        inner = f'<span class="{cls}" style="color:{L[key]};white-space:nowrap">{inner}</span>'
+    html = inner
+    if c.get("sub"):
+        html += f'<div class="c-muted" style="font:12px/1.4 {SANS};color:{L["muted"]}">{escape(str(c["sub"]))}</div>'
+    for ln in c.get("lines") or []:
+        lt = str(ln.get("t") or "")
+        html += f'<div class="c-muted" style="font:13px/1.45 {SANS};color:{L["muted"]};padding-top:2px">{_a(ln.get("href"), lt)}</div>'
+    text = " ".join(x for x in [t] + [str(ln.get("t") or "") for ln in c.get("lines") or []] if x)
+    if c.get("sub"):
+        text += f" ({c['sub']})"
+    href_t = plain_url(href) if href else None
+    return html, _t(text) + (f" ({href_t})" if href_t else "")
+
+
+def grid(title: str | None, head: list[str], rows: list[list], align: str = "", note: str | None = None, link: tuple[str, str] | None = None) -> Block:
+    """A table in an email: a header row, a bordered row for each line, numbers on the right (`align`: "l" or "r" for each column).
+    On a phone every column after the first is hidden and its figures run on as one small line under the first cell, so the table
+    is one column wide there (email clients take a media query at 480px or less; those that don't show the table as it is)."""
+    align = (align or "l" + "r" * (len(head) - 1)).ljust(len(head), "l")
+    th = "".join(f'<td class="c-muted{" hide-sm" if i else ""}" align="{"right" if align[i] == "r" else "left"}" style="padding:6px 8px 6px 0;'
+                 f'font:600 12px/1.3 {SANS};letter-spacing:.06em;text-transform:uppercase;color:{L["muted"]};border-bottom:1px solid {L["line"]}">{escape(h)}</td>'
+                 for i, h in enumerate(head))
+    body, text = "", []
+    for r in rows:
+        cells = [_cell(c) for c in r]
+        short = " · ".join(f"{head[i]} {cells[i][1]}" for i in range(1, len(cells)) if cells[i][1] and cells[i][1] != "–")
+        tds = ""
+        for i, (h, t) in enumerate(cells):
+            first = (f'<div class="show-sm c-muted" style="display:none;max-height:0;overflow:hidden;mso-hide:all;font:13px/1.45 {SANS};color:{L["muted"]};'
+                     f'padding-top:2px">{escape(short)}</div>') if i == 0 and short else ""
+            tds += (f'<td class="c-ink bd{" hide-sm" if i else ""}" align="{"right" if align[i] == "r" else "left"}" valign="top" style="padding:8px 8px 8px 0;'
+                    f'font:{600 if i == 0 else 400} 15px/1.4 {SANS};color:{L["ink"]};border-bottom:1px solid {L["line"]}">{h}{first}</td>')
+        body += f"<tr>{tds}</tr>"
+        text.append("- " + "  ".join(t for _, t in cells if t))
+    head_html = (f'<div class="c-muted" style="font:600 12px/1.2 {SANS};letter-spacing:.08em;text-transform:uppercase;'
+                 f'color:{L["muted"]};padding-bottom:4px">{escape(title)}</div>') if title else ""
+    foot = ""
+    if note:
+        foot += f'<div class="c-muted" style="font:13px/1.5 {SANS};color:{L["muted"]};padding-top:8px">{escape(note)}</div>'
+    if link and safe_url(link[1]):
+        foot += f'<div style="font:13px/1.5 {SANS};padding-top:6px">{_a(link[1], link[0])}</div>'
+    html = (f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="bg-card bd" bgcolor="{L["card"]}" '
+            f'style="margin:0 0 14px;background:{L["card"]};border:1px solid {L["line"]};border-radius:12px"><tr><td style="padding:14px 16px">'
+            f'{head_html}<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>{th}</tr>{body}</table>{foot}</td></tr></table>')
+    out = ([f"\n{title.upper()}"] if title else []) + ["  ".join(head)] + text + ([note] if note else [])
+    if link and plain_url(link[1]):
+        out.append(f"{link[0]}: {plain_url(link[1])}")
+    return Block(html, "\n".join(out))
 
 
 def bullets(items: list) -> Block:

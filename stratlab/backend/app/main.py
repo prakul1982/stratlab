@@ -7305,6 +7305,9 @@ def news_view(issue: dict) -> dict:
     # the session the numbers are the close of, holidays known: the page said "the close of 2 Oct", a holiday (DI-026)
     if (day := news.write.close_day(issue)):
         out["close_day"] = day
+    # every section that lists figures as a table (O5): drawn by the Briefs page, the email and the PDF alike, from the stored issue
+    from .newsletter import tables as news_tables
+    out["tables"] = news_tables.of(issue)
     return out
 
 

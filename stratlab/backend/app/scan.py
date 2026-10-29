@@ -77,7 +77,7 @@ def analyse(bars: list[dict]) -> dict | None:
         "stage_capped": stage_now is not None and (since >= last or pd.isna(stg.iloc[last - since - 1])),      # began at or before the first candle read: the true length is longer
         "st_up": st_up, "st_days": flip + 1, "st_level": None if pd.isna(st.iloc[-1]) else float(st.iloc[-1]),
         "signal": "fresh" if in_s2 and flip + 1 <= FRESH else "st_s2" if in_s2 else "stage2" if stage_now == 2 else None,
-        "st_since": str(bars[last - flip]["t"])[:10], "t": bars[-1]["t"], "recent": [float(x) for x in c.iloc[-5:]],
+        "st_since": str(bars[last - flip]["t"])[:10], "stage_since": str(bars[last - since]["t"])[:10] if stage_now else None, "t": bars[-1]["t"], "recent": [float(x) for x in c.iloc[-5:]],
         "day_low": float(df["l"].iloc[-1]), "day_high": float(df["h"].iloc[-1]),    # the last session's range
     }
 

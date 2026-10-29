@@ -926,15 +926,35 @@ class Job:
             print("newsletters: the brief's blog post failed:", str(e)[:160])
             return False
 
+    def blog_versions(self, now: datetime, blog, blog_research) -> None:
+        """LIVE2-029: a fix to how a post is written reaches the posts already stored. The research posts are written again at the first
+        check after a deploy that changed them (blog_research.GEN), and the brief posts are written again from their stored issues
+        (blog.BRIEF_GEN): not at the next month's run, and not by hand. Remembered in memory once looked at, so a check with nothing
+        to do reads nothing."""
+        want = (blog.BRIEF_GEN, blog_research.GEN)
+        if self.last.get("blog-gen") == want:
+            return
+        try:
+            blog_research.run_if_stale(now)
+            if db.get_setting("blog:brief:gen") != str(blog.BRIEF_GEN):
+                issues = recent("market", "IN", INDEX_CAP) + recent("market", "US", INDEX_CAP)
+                blog.refresh_briefs(issues)
+                db.set_setting("blog:brief:gen", str(blog.BRIEF_GEN))
+            if not blog_research.stale(now):
+                self.last["blog-gen"] = want
+        except Exception as e:
+            print("newsletters: the blog's posts couldn't be written again:", str(e)[:160])
+
     def research_posts(self, now: datetime) -> None:
         """Once a month, from the third day, the blog's research posts are written again from the app's own data
         (blog_research.py). The month is remembered in memory after the first look, so a tick that has nothing to do reads
         nothing."""
         local = now.astimezone(ZoneInfo("Asia/Kolkata"))
         month = f"{local:%Y-%m}"
+        from .. import blog, blog_research
+        self.blog_versions(now, blog, blog_research)
         if self.last.get("blog-research") == month:
             return
-        from .. import blog_research
         try:
             blog_research.run_monthly(now)
         except Exception as e:                      # the month is marked first (run_monthly), so a failure is tried again from Admin
