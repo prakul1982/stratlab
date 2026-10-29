@@ -80,9 +80,10 @@ test("the watchlist is never saved over a list that was not read", () => {
 
 test("Pulse and Themes ignore a late answer for the market or theme that was left", () => {
   const src = read("src/pages/Research.tsx");
-  assert.match(src, /const mine = \+\+seq\.current;\s*\n\s*setBusy\(true\); setError\(null\)/);
-  assert.match(src, /if \(mine === seq\.current\) setR\(out\)/);
-  assert.match(src, /finally \{ if \(mine === seq\.current\) setBusy\(false\); \}/);
+  const themes = read("src/pages/ThemesPage.tsx");          // (the Themes page moved out of Research.tsx: THEME-1)
+  assert.match(themes, /const mine = \+\+seq\.current;\s*\n\s*setBusy\(true\); setError\(null\)/);
+  assert.match(themes, /if \(mine === seq\.current\) setR\(out\)/);
+  assert.match(themes, /finally \{ if \(mine === seq\.current\) setBusy\(false\); \}/);
   assert.match(src, /try \{ const out = await researchApi\.pulseAI\(region, "", refresh\); if \(mine === seq\.current\) setAi\(out\); \}/);
   // R24-001: the levels load through usePulse, which still drops an answer for a market that was left
   assert.match(src, /researchApi\.pulse\(region\)\.then\(\(d\) => \{\s*if \(!live\) return;/);
