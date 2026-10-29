@@ -135,7 +135,7 @@ class Desk(X.Desk):
     what = "daily securities lending file"
     ready_at = "19:00"
     backfill_days = 260
-    store = X.DayStore(PREFIX, KEEP, point, shards=8)
+    store = X.DayStore(PREFIX, KEEP, point, shards=8, rows_keep=40)      # a year of each lender's series, whole day records for the newest forty
 
     def read(self, files: X.Files, day: date):
         text = files.text(SLB_BHAV.format(dmy=X.dmy(day)), want=".dat")

@@ -576,3 +576,25 @@ def test_the_a_to_z_with_its_zero_to_nine_pill_is_two_rows_and_the_pill_keeps_on
     assert 'data-cd="13"' in sp._az_style(26) and 'data-cd="14"' in sp._az_style(27) and 'data-cd="13"' in sp._az_style(7)      # (LIVE2-019)
     src = open(sp.__file__, encoding="utf8").read()
     assert 'nav.links[data-cd="14"]{--azd:14}' in src and "repeat(var(--azd,13),44px)" in src and "white-space:nowrap;padding:4px 6px" in src
+
+
+def test_a_year_of_stock_series_does_not_keep_a_year_of_whole_day_records(w):
+    from app import db, exchange_days as X
+    store = X.DayStore("zz1:", 20, lambda row: [row["px"]], shards=2, rows_keep=5)
+    days = [(date(2026, 9, 1) + timedelta(days=i)).isoformat() for i in range(30)]
+    store.put_many([(d, {"AAA": {"px": 10.0 + i}}, {}) for i, d in enumerate(days[:12])])          # an older stretch first (the archive walk)
+    store.put_many([(d, {"AAA": {"px": 20.0 + i}}, {}) for i, d in enumerate(days[12:])])
+    kept = store.days()
+    assert len(kept) == 20 and kept[-1] == days[-1]                                            # the series go back `keep` days
+    assert len(store.series("AAA")) == 20
+    assert [d for d in kept if store.get(d)] == kept[-5:]                                      # whole records only for the newest five
+    assert store.latest()[0] == days[-1] and store.latest(before=days[-1])[0] == days[-2]
+    assert db.get_setting(f"zz1:d:{days[0]}") is None
+    old = X.DayStore("zz2:", 20, lambda row: [row["px"]], shards=2)                            # a store that kept every record (before the change)...
+    old.put_many([(d, {"AAA": {"px": 1.0}}, {}) for d in days[10:]])
+    assert all(old.get(d) for d in old.days())
+    new = X.DayStore("zz2:", 20, lambda row: [row["px"]], shards=2, rows_keep=5)               # ...drops the old ones at its next write
+    new.put_many([(days[-1], {"AAA": {"px": 2.0}}, {})])
+    assert [d for d in new.days() if new.get(d)] == new.days()[-5:]
+    from app import stock_futures
+    assert stock_futures.DESK.store.rows_keep == stock_futures.ROWS_KEEP < stock_futures.KEEP and stock_futures.DESK.backfill_days == stock_futures.KEEP

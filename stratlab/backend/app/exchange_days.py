@@ -231,8 +231,12 @@ class DayStore:
     """One desk's days, kept as described above. `point(row)` is what a stock's history keeps for one day (a short
     list); `keep` is how many trading days are kept."""
 
-    def __init__(self, prefix: str, keep: int, point=None, shards: int = 16):
+    def __init__(self, prefix: str, keep: int, point=None, shards: int = 16, rows_keep: int | None = None):
         self.prefix, self.keep, self.shards = prefix, keep, shards
+        # rows_keep: how many of the newest days also keep their whole day record (every stock's full row). The stock series (`point`) go back `keep`
+        # days; a full record is read for the latest day and the one before it only, so the older ones are not stored (O3: a year of series
+        # without a year of full records, which were ten times the size)
+        self.rows_keep = min(rows_keep, keep) if rows_keep else keep
         self.point = point or (lambda row: row)
 
     def _shard(self, symbol: str) -> str:
@@ -264,12 +268,15 @@ class DayStore:
         if not items:
             return
         with _lock:
-            for day, rows, meta in items:
-                _save(f"{self.prefix}d:{day}", {"rows": rows, "meta": meta or {}})
             idx = db.json_value(db.get_setting(self.prefix + "days"), {})
             days = sorted(set(idx.get("days") or []) | {d for d, _, _ in items})
             drop = days[:-self.keep] if len(days) > self.keep else []
             days = days[len(drop):]
+            # the newest `rows_keep` days keep a full record; the ones before them are left unwritten, and those already stored are deleted once
+            rows_from = days[-self.rows_keep] if len(days) > self.rows_keep else (days[0] if days else None)
+            for day, rows, meta in items:
+                if rows_from and day >= rows_from:
+                    _save(f"{self.prefix}d:{day}", {"rows": rows, "meta": meta or {}})
             cut = days[0] if days else None
             by_shard: dict[str, dict[str, dict[str, list]]] = {}
             for day, rows, _ in items:
@@ -289,8 +296,13 @@ class DayStore:
                 if cut:
                     cur = {s: kept for s, ser in cur.items() if (kept := [x for x in ser if x[0] >= cut])}
                 _save(key, cur)
-            _save(self.prefix + "days", {"days": days})
-            for d in drop:
+            was_from = idx.get("rows_from")
+            _save(self.prefix + "days", {"days": days, "rows_from": rows_from})
+            # full records that fell out of the window: the days dropped from the store, and (once) the days between the old window and the new
+            gone = list(drop)
+            if rows_from and self.rows_keep < self.keep:
+                gone += [d for d in days if d < rows_from and (was_from is None or d >= was_from or d in {x for x, _, _ in items})]
+            for d in gone:
                 try:
                     db.delete_setting(f"{self.prefix}d:{d}")
                 except Exception:
