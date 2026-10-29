@@ -606,9 +606,16 @@ async function answerLevel(page: Page) {
   await expect(ask).toHaveCount(0);
 }
 
+/** Each project signs in as its own user, so two projects running together never set the same alert on the same stock. */
+function ownUser(info: { project: { name: string } }, desktop: number, phone: number) {
+  const n = info.project.name === "phone" ? phone : desktop;
+  return sessionAs(`load-${n}`, `u-load-${n}`, `load${n}@example.com`);
+}
+
 test("alerts: set one on a company page, then edit and delete it on the Alerts page", async ({ page }, info) => {
   const tag = `e2e ${info.project.name} ${Date.now()}`;             // both projects share the fake database
-  let errors = await open(page, "/research/IN/RELIANCE", "Reliance");
+  const me = ownUser(info, 253, 256);
+  let errors = await open(page, "/research/IN/RELIANCE", "Reliance", me);
   await answerLevel(page);
   await page.getByRole("button", { name: "Set alert" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Alert on RELIANCE" });
@@ -620,7 +627,7 @@ test("alerts: set one on a company page, then edit and delete it on the Alerts p
   await expect(page.getByText(/already above ₹1/).first()).toBeVisible();   // the price is far above: it waits for a cross
   await sane(page, errors);
 
-  errors = await open(page, "/alerts", "Your stock alerts");
+  errors = await open(page, "/alerts", "Your stock alerts", me);
   await answerLevel(page);
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Price crosses above ₹1");
@@ -669,7 +676,8 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
 
 test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, info) => {
   const tag = `e2e-watch ${info.project.name} ${Date.now()}`;
-  const errors = await open(page, "/research/watchlist?region=IN", "Companies you're watching");
+  const me = ownUser(info, 259, 266);
+  const errors = await open(page, "/research/watchlist?region=IN", "Companies you're watching", me);
   await answerLevel(page);
   // a watchlist of one, without changing the shared one other tests read
   await page.route("**/research/watchlist", (r) => r.request().method() === "GET"
@@ -685,7 +693,7 @@ test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, in
   await dialog.getByRole("button", { name: "Set alert" }).click();
   await expect(page.getByText("Alert set on RELIANCE.")).toBeVisible();
   await sane(page, errors);
-  await open(page, "/alerts", "Your stock alerts");
+  await open(page, "/alerts", "Your stock alerts", me);
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Makes a new 52-week high");
   await row.getByRole("button", { name: /Delete/ }).click();
