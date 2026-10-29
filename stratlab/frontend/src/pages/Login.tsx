@@ -7,7 +7,7 @@ import { signIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
-import { DIFF_TITLE, DIFFERENT, HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_LINE, INTRO_SPACES, INTRO_TITLE } from "../content/intro";
+import { HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_LINE, INTRO_SPACES, INTRO_TITLE } from "../content/intro";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
@@ -335,12 +335,6 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
               {HOW_STEPS.map(([t, b], k) => <li key={t} className="lp-card"><span className="lp-num">{k + 1}</span><b>{t}</b><p className="small muted">{b}</p></li>)}
             </ol>
             <p className="small muted">{HOW_MONEY}</p>
-          </div>
-          <div className="stack g14">
-            <h3 className="serif lp-h3">{DIFF_TITLE}</h3>
-            <div className="lp-tools lp-tools-3">
-              {DIFFERENT.map(([t, b]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>)}
-            </div>
           </div>
         </div>
       </section>}
