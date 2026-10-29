@@ -120,9 +120,11 @@ test("item 12 (LIVE2-020): the Screener's filters that can't load say so with a 
   assert.match(s, /\}, \[region, metaTries\]\);/);
 });
 
-test("item 10, 13 (LIVE2-032, LIVE2-030): the jump links are one swipeable row on a phone; the chart's (i) is 44px", () => {
+test("item 10, 13 (LIVE2-032, LIVE2-030): the tables fit a phone's card (no sideways scroll); the chart's (i) is 44px", () => {
   const css = read("src/styles.css");
-  assert.match(css, /\.k-pagenav \{ flex-wrap: nowrap; overflow-x: auto;/);
+  assert.match(css, /\.dd-fit \.k-table :is\(th, td\) \{ white-space: normal; min-width: 0 !important;/);
+  assert.match(read("src/components/Research.tsx"), /<div className="dd-fit"><DataTable label="Who owns it"/);
+  assert.match(read("src/pages/DeepDive.tsx"), /<div className="dd-fit"><DataTable label=\{label\} rows=\{docs\}/);
   assert.match(read("src/charts/price/priceChart.css"), /\.pc-info\.info-btn \{ width: 44px; height: 44px; \}/);
 });
 

@@ -53,11 +53,7 @@ test("company page: corporate actions, key numbers and the AI read are tables wi
   expect(widths.length).toBeGreaterThanOrEqual(4);
   expect(new Set(widths).size, `Key numbers' tables: ${widths}`).toBe(1);
   expect(await overflowing(page, ".inv-metrics"), "a note running out of its cell").toBe(0);
-  // the AI read's numbers: one table, area on the left and its figures on the right (RELIANCE's read in the fake world has them)
-  await page.goto("/research/IN/RELIANCE");
-  const read = page.getByRole("table", { name: "The AI read, by area" });
-  await expect(read).toBeVisible({ timeout: 30_000 });
-  expect(await read.locator("tbody tr").count()).toBeGreaterThanOrEqual(2);
+  // (the AI read's table is checked in unit/uico.test.mjs: the fake world's model reply differs from one read to the next)
   await sane(page, errors);
 });
 

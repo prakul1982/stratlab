@@ -115,7 +115,7 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
         columns={[
           { key: "ex", header: "Ex-date", rowHeader: true, cell: (r) => ("gap" in r ? <b className="k-small">{r.head}</b> : (
             <span className="ca-ex">{exDay(r.a.ex_date, true)}{r.ahead && <b className="k-note ca-soon">Coming up</b>}</span>)) },
-          { key: "ty", header: "Type", cell: (r) => ("gap" in r ? null : <Badge tone="plain" dot={false}>{r.a.label}</Badge>) },
+          { key: "ty", header: "Type", cell: (r) => ("gap" in r ? null : <span className="ca-type">{r.a.label}</span>) },
           { key: "am", header: "Amount a share", numeric: true, cell: (r) => ("gap" in r ? null : (
             <span className="ca-amt"><span>{actionAmount(r.a, ccy).amount}{notes.find((n) => n.id === r.id) && <sup className="cmp-foot-mark" aria-label={`see note ${notes.find((n) => n.id === r.id)!.n}`}>{notes.find((n) => n.id === r.id)!.n}</sup>}</span>
               {actionAmount(r.a, ccy).more && <span className="k-note">{actionAmount(r.a, ccy).more}</span>}</span>)) },

@@ -1030,10 +1030,11 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 @media (max-width: 640px) { .ca-table .k-table { font-size: 13px; } .ca-table .k-table th, .ca-table .k-table td { padding: 9px 6px; white-space: normal; min-width: 0; vertical-align: top; } .ca-table .k-badge { white-space: normal; } .ca-table .k-table :is(th, td):first-child { min-width: 0 !important; max-width: none !important; } }
 [data-testid="scan-custom"] .add-rule { align-self: flex-start; }
 .ts-words { align-items: flex-start; } .ts-words .k-input { flex: 1 1 260px; width: auto; }
+.ca-type { font-weight: 600; font-size: var(--t-label); }
 .ca-soon { color: var(--blue-ink); white-space: nowrap; }
 .ca-ex, .ca-amt { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; } .ca-amt { align-items: flex-end; }
-.dd-fit .k-table :is(th, td) { white-space: normal; min-width: 0; max-width: none; }
-@media (max-width: 560px) { .dd-fit .k-table :is(th, td) { padding: 9px 8px; } }
+.dd-fit .k-table :is(th, td) { white-space: normal; min-width: 0 !important; max-width: none !important; }
+@media (max-width: 560px) { .dd-fit .k-table :is(th, td) { padding: 9px 6px; } .dd-fit .k-table { font-size: 13px; } }
 .rc-target, .rc-said, .rc-result { display: flex; flex-direction: column; gap: 4px; }
 .rc-said { align-items: flex-end; } .rc-result { align-items: flex-start; }
 .rc-quote { max-width: 70ch; }
@@ -1043,12 +1044,10 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 .promise { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .promise-facts { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
 .checklist { display: flex; flex-direction: column; gap: var(--s5); }
-.check-group .k-table { table-layout: fixed; }
+@media (min-width: 641px) { .check-group .k-table { table-layout: fixed; } }
 .check-group .k-table :is(th, td) { white-space: normal; max-width: none; min-width: 0; overflow-wrap: anywhere; vertical-align: middle; }
-.check-group .k-table :is(th, td):nth-child(2) { width: 30%; }
-.check-group .k-table :is(th, td):nth-child(3) { width: 172px; }
+@media (min-width: 641px) { .check-group .k-table :is(th, td):nth-child(2) { width: 30%; } .check-group .k-table :is(th, td):nth-child(3) { width: 172px; } }
 .check-group .k-table thead th:first-child { color: var(--ink-2); font-weight: 600; }
-@media (max-width: 560px) { .check-group .k-table :is(th, td):nth-child(2) { width: 27%; } .check-group .k-table :is(th, td):nth-child(3) { width: 96px; } .check-group .badge { white-space: normal; text-align: center; line-height: 1.25; } .check-group .k-table :is(th, td) { padding: 9px 6px; } }
 
 .inv-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 
@@ -2368,8 +2367,6 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .k-pagenav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .k-pagenav-k { font-size: var(--t-eyebrow); font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: var(--s1); }
 .k-pagenav-a { display: inline-flex; align-items: center; min-height: var(--ctl-sm); padding: 0 var(--s3); border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-size: var(--t-note); text-decoration: none; }
-/* LIVE2-032: on a phone the jump links are one row you swipe, not three rows of chips before the chart */
-@media (max-width: 640px) { .k-pagenav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; } .k-pagenav::-webkit-scrollbar { display: none; } .k-pagenav > * { flex: none; } }
 .k-pagenav-a:hover { border-color: var(--line-2); background: var(--paper-2); }
 .k-pagenav-a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .k-card[id] { scroll-margin-top: 72px; }

@@ -160,10 +160,10 @@ function ChecklistPanel({ c }: { c: Checklist }) {
 /** Documents as a table: Document (its title under its kind) | Date | link (UI-CO item 6: the list of documents read was one long run-on line). */
 function DocTable({ docs, label, empty }: { docs: { kind: string; at: string; title: string; url: string }[]; label: string; empty?: string }) {
   return (
-    <DataTable label={label} rows={docs} rowKey={(d, i) => `${d.url}-${d.at}-${i}`} stack={false} empty={empty}
+    <div className="dd-fit"><DataTable label={label} rows={docs} rowKey={(d, i) => `${d.url}-${d.at}-${i}`} stack={false} empty={empty}
       columns={[{ key: "d", header: "Document", rowHeader: true, cell: (d) => <span className="k-stack"><span className="k-small">{KIND[d.kind] ?? d.kind}</span>{d.title && d.title.trim().toLowerCase() !== (KIND[d.kind] ?? "").toLowerCase() && <span className="k-note">{d.title}</span>}</span> },
         { key: "t", header: "Date", numeric: true, cell: (d) => day(d.at) },
-        { key: "l", header: "Link", numeric: true, cell: (d) => (d.url ? <a className="link" href={safeHref(d.url)} target="_blank" rel="noopener noreferrer" title={d.title}>Open ↗</a> : "") }]} />
+        { key: "l", header: "Link", numeric: true, cell: (d) => (d.url ? <a className="link" href={safeHref(d.url)} target="_blank" rel="noopener noreferrer" title={d.title}>Open ↗</a> : "") }]} /></div>
   );
 }
 
@@ -371,10 +371,10 @@ export function DeepDivePage() {
             <Panel title="Business model">
               <p>{b.summary}</p>
               {b.segments.length > 0 && (
-                <DataTable label="What the business earns from" rows={b.segments} rowKey={(x) => x.name} stack={false}
+                <div className="dd-fit"><DataTable label="What the business earns from" rows={b.segments} rowKey={(x) => x.name} stack={false}
                   columns={[{ key: "n", header: "Business", rowHeader: true, cell: (x) => <b className="k-small">{x.name}</b> },
                     { key: "s", header: "Share of revenue", numeric: true, cell: (x) => (x.share_pct != null ? <span className="dd-share"><span>{x.share_pct.toFixed(0)}%</span><Meter pct={x.share_pct} /></span> : "") },
-                    { key: "w", header: "What it is", cell: (x) => <span className="k-small">{x.what}</span> }]} />
+                    { key: "w", header: "What it is", cell: (x) => <span className="k-small">{x.what}</span> }]} /></div>
               )}
               {/* the rest of the read as one table too: the area on the left, its points on the right (the same grid as the company page's AI read) */}
               {(() => {

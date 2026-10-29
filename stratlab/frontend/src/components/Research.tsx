@@ -157,10 +157,10 @@ export function MarginCascade({ gross, operating, net }: { gross: number | null;
   // a table (UI-CO: tables wherever there are figures): the step, what is left of every 100 in sales (with its bar), and what was lost to get there
   return (
     <div className="k-stack">
-      <DataTable label="Where a sale goes" rows={rows} rowKey={(r) => r.k} stack={false}
+      <div className="dd-fit"><DataTable label="Where a sale goes" rows={rows} rowKey={(r) => r.k} stack={false}
         columns={[{ key: "s", header: "Step", rowHeader: true, cell: (r) => r.k },
           { key: "v", header: "Left of 100 in sales", numeric: true, cell: (r) => <span className="dd-share"><span>{r.v.toFixed(1)}%</span><Meter pct={Math.max(0, Math.min(100, r.v))} /></span> },
-          { key: "l", header: "Lost on the way", numeric: true, cell: (r) => (r.drop > 0 ? `−${r.drop.toFixed(1)} to ${r.lost}` : "–") }]} />
+          { key: "l", header: "Lost on the way", numeric: true, cell: (r) => (r.drop > 0 ? `−${r.drop.toFixed(1)} to ${r.lost}` : "–") }]} /></div>
       <p className="k-note">Of every 100 in sales, what is left at each step.</p>
     </div>
   );
@@ -432,10 +432,10 @@ export function QuoteTable({ region, symbols, label }: { region: Region; symbols
   }, [region, key]);
   const ccy = region === "IN" ? "INR" : "USD";
   return (
-    <DataTable label={label} rows={symbols} rowKey={(s) => s} stack={false}
+    <div className="dd-fit"><DataTable label={label} rows={symbols} rowKey={(s) => s} stack={false}
       columns={[{ key: "c", header: "Company", rowHeader: true, cell: (s) => <Link className="link" to={`/research/${region}/${encodeURIComponent(s)}`}><b>{s}</b></Link> },
         { key: "p", header: "Price", numeric: true, cell: (s) => (q == null ? <span className="skel" /> : q[s]?.price != null ? price(q[s]!.price!, ccy) : "–") },
-        { key: "d", header: "Change", numeric: true, cell: (s) => (q?.[s]?.change_pct != null ? <Delta value={q[s]!.change_pct}>{pct(q[s]!.change_pct!, 2)}</Delta> : "–") }]} />
+        { key: "d", header: "Change", numeric: true, cell: (s) => (q?.[s]?.change_pct != null ? <Delta value={q[s]!.change_pct}>{pct(q[s]!.change_pct!, 2)}</Delta> : "–") }]} /></div>
   );
 }
 
@@ -449,10 +449,10 @@ export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> })
   // a table: who, their share (with its bar) and the change over the last year, in percentage points
   return (
     <div className="k-stack">
-      <DataTable label="Who owns it" rows={s.rows} rowKey={(r) => r.label} stack={false}
+      <div className="dd-fit"><DataTable label="Who owns it" rows={s.rows} rowKey={(r) => r.label} stack={false}
         columns={[{ key: "h", header: "Holder", rowHeader: true, cell: (r) => holderRowName(r.label) },
           { key: "v", header: "Share", numeric: true, cell: (r) => <span className="dd-share"><span>{r.value.toFixed(1)}%</span><Meter pct={Math.min(100, r.value)} /></span> },
-          { key: "c", header: "Change in a year", numeric: true, cell: (r) => (r.change != null && Math.abs(r.change) >= 0.05 ? <Signed value={r.change}>{r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)} pts</Signed> : "–") }]} />
+          { key: "c", header: "Change in a year", numeric: true, cell: (r) => (r.change != null && Math.abs(r.change) >= 0.05 ? <Signed value={r.change}>{r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)} pts</Signed> : "–") }]} /></div>
       <p className="k-note">{`As of ${s.as_of}${holdersAge(s.as_of)}. The change is over the last year, in percentage points.${s.note ? ` ${s.note}` : ""}`}</p>
     </div>
   );
