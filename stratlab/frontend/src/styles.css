@@ -2499,6 +2499,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-fold-cell:has(.k-none) { display: none; }   /* a figure it has none of takes no line on a phone */
   .k-fold-body .k-dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mf-stats .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); }   /* seven figures one under another were 600 px: two across */
+  #h-summary .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4) var(--s3); }   /* LIVE1B-037: four figures one under another were a 520px card: two by two */
   .k-fold-body { padding-inline: var(--s2); }
 }
 

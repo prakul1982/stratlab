@@ -346,3 +346,9 @@ test("LIVE1B-077, 079: plan cards end level and the payment button names its amo
   assert.match(read("src/pages/PlansPage.tsx"), /confirmLabel=\{`Continue to payment · \$\{chargeAmount\(switching\)\}`\}/);
   assert.match(read("src/styles.css"), /\.k-plans \{ display: grid;[^}]*align-items: stretch; \}/);
 });
+
+test("LIVE1B-037: Holdings' four summary figures are two by two on a phone", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /@media \(max-width: 640px\) \{[\s\S]*?#h-summary \.k-stats \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(read("src/pages/HoldingsPage.tsx"), /<Card id="h-summary">/);
+});
