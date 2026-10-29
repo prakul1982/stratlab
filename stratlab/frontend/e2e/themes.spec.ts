@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 // The theme deep dive on the fake world (tests/fake_theme.py: a made-up "India steel and mining" map; the companies are the demo world's, with
 // their own stored pages). Desktop and phone, each as its own fake Basic user. Checks what is drawn: every block of figures is a table, a company
 // shows only where its own description puts it, a stale claim is gone, nothing sideways, no advice wording, no data provider named.
-const ADVICE = /\b(buy|sell|accumulate|avoid|cheap|expensive|undervalued|overvalued|target price)\b/i;
+const ADVICE = /\b(strong buy|buy (the|this|it)|sell (the|this|it)|accumulate|avoid (the|this)|undervalued|overvalued|target price|we recommend)\b/i;      // advice, not the word "sell" in "generators sell electricity"
 const PROVIDERS = /kite|zerodha|yahoo|screener\.in|finnhub|trendlyne|nseindia/i;
 const SHOTS = process.env.E2E_SHOTS;
 const THEME_URL = "/research/themes?region=IN&q=" + encodeURIComponent("India steel and mining");

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Badge, BarList, Card, CardHead, DataTable, Select, Spark, Signed, usePhone, type Column } from "./kit";
+import { Badge, Card, CardHead, DataTable, Select, Spark, Signed, Meter, usePhone, type Column } from "./kit";
 import { LineChart } from "./Charts";
 import { bizChange, bizValue, periodName } from "../lib/biz";
 import { filedOn } from "./BizUpdates";
@@ -29,7 +29,7 @@ export function ChainCard({ dive }: { dive: Dive }) {
     { key: "l", header: "Layer", rowHeader: true, wrap: true, cell: (x) => <>{x.layer}{x.layer === dive.chain.highest && <> <Badge tone="plain" dot={false}>Highest</Badge></>}{x.layer === dive.chain.lowest && <> <Badge tone="plain" dot={false}>Lowest</Badge></>}</> },
     { key: "n", header: "Companies", numeric: true, cell: (x) => x.n },
     { key: "rev", header: "Revenue", numeric: true, info: "The layer's companies' revenue added together, latest full year.", cell: (x) => amount(x.revenue, r) },
-    { key: "e", header: "EBITDA margin", numeric: true, info: "Median of the layer's companies. Operating profit before depreciation as a share of revenue.", cell: (x) => pc(x.ebitda) },
+    { key: "e", header: "EBITDA margin", numeric: true, info: "Median of the layer's companies. Operating profit before depreciation as a share of revenue. The bar compares the layers.", cell: (x) => <>{pc(x.ebitda)}{x.ebitda != null && top > 0 && <Meter pct={(x.ebitda / top) * 100} />}</> },
     { key: "nm", header: "Net margin", numeric: true, cell: (x) => pc(x.net) },
     { key: "c", header: "ROCE", numeric: true, info: "Return on capital employed, median of the layer's companies.", cell: (x) => pc(x.roce) },
   ];
@@ -38,9 +38,6 @@ export function ChainCard({ dive }: { dive: Dive }) {
       <CardHead title="The whole chain in one table" info={dive.basis} />
       <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows} rowKey={(x) => x.layer} />
       {dive.chain.line && <p className="k-small">{dive.chain.line}</p>}
-      {top > 0 && dive.chain.rows.some((x) => x.ebitda != null) && (
-        <BarList label="Median EBITDA margin by layer" rows={dive.chain.rows.filter((x) => x.ebitda != null).map((x) => ({ key: x.layer, name: x.layer, value: pc(x.ebitda), pct: ((x.ebitda ?? 0) / top) * 100, note: `${x.ebitda_n} compan${x.ebitda_n === 1 ? "y" : "ies"}` }))} />
-      )}
       <p className="k-note">{dive.basis}</p>
     </Card>
   );
