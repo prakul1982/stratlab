@@ -139,8 +139,8 @@ test("R92-002/003/005: the notebook says what its plan won't run before Run; a p
   assert.match(read("src/pages/OptionsSession.tsx"), /!\(feed === closed && \/\^Waiting for \(live prices\|the option chain\)\/\.test\(snap\.note\)\)/);
 });
 
-test("R93-004: a weekly brief's headline shows the day it ran", () => {
-  assert.match(read("src/pages/NewsPage.tsx"), /\{it\.day && <span className="k-note" data-testid="news-item-day">\{it\.day\}: <\/span>\}<ItemText/);
+test("R93-004: a weekly brief's headline shows the day it ran (the Time column of the Headlines table since O5; see tests/test_fix2.py)", () => {
+  assert.match(read("src/components/BriefTables.tsx"), /key: `c\$\{k\}`, header: h/);          // the server's header row is the table's own
 });
 
 test("R95: phone tap targets, a dated first axis tick, charts measured again after first paint", async () => {

@@ -284,6 +284,8 @@ def blog_posts():
                 issue = job.build_market(region, day, False, store=False)
                 if issue:
                     blog.save_brief(issue)
+                    if got == 0:
+                        job.save(issue)              # the newest one is also an issue the Briefs page lists and can make a PDF of (e2e/fix2.spec.ts)
                 got += 1
             day -= timedelta(days=1)
     print("blog:", blog_research.generate(builders=blog_research.source_posts()))

@@ -7359,6 +7359,21 @@ def news_issue(iid: str, profile=Depends(current_profile)):
     return news_view(issue)
 
 
+@app.get("/news/{iid}/pdf")
+def news_issue_pdf(iid: str, profile=Depends(current_profile)):
+    """One issue as a PDF (O6): the same tables as the page and the email, made when asked and not kept. Whoever can read the issue can
+    download it: a market issue is for everyone, a My Stocks issue only for its reader."""
+    throttle(profile, "news_pdf", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
+    parts = news.parse_id(iid)
+    issue = news.load(iid) if parts and (parts[0] == "market" or parts[1] == profile["id"]) else None
+    if not issue:
+        err(404, "not_found", "That issue wasn't found.")
+    from .newsletter import pdf as news_pdf
+    issue = news.write.regional_links(issue)
+    return Response(news_pdf.build(issue), media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{news_pdf.filename(issue)}"', "Cache-Control": "private, no-store"})
+
+
 def newsletters_view(profile: dict) -> dict:
     to = news.address(profile)
     return {**newsletter_prefs.get(profile["id"]), "email": to, "confirmed": bool(to) and news.confirmed(profile),
