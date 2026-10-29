@@ -61,3 +61,81 @@ test("item 4: the price header is one block: price and change, market value, the
   const css = read("src/styles-invest.css");
   assert.match(css, /@media \(max-width: 560px\) \{ \.inv-head \{ grid-template-columns: minmax\(0, 1fr\); \} \}/);
 });
+
+test("item 5: the investor checklist is a table a group (Check with its rule under it | Value | Result), one under the other", () => {
+  const dd = read("src/pages/DeepDive.tsx");
+  assert.match(dd, /<DataTable label=\{`Investor checklist: \$\{g\}`\}/);
+  assert.match(dd, /header: "Value", numeric: true/);
+  assert.match(dd, /header: "Result"/);
+  assert.match(dd, /<span className="k-note">\{x\.rule\}<\/span>/);                                  // the rule is small text under the check's name
+  const css = read("src/styles.css");
+  assert.match(css, /\.checklist \{ display: flex; flex-direction: column; gap: var\(--s5\); \}/);        // no more two-column masonry
+  assert.doesNotMatch(css, /\.checklist \{ columns: 2/);
+});
+
+test("item 6: the documents read, the business model, the measures, the plans and the documents are tables", () => {
+  const dd = read("src/pages/DeepDive.tsx");
+  assert.match(dd, /function DocTable\(/);
+  assert.match(dd, /<DocTable label="The documents the read used"/);                                  // not one long run-on line
+  assert.match(dd, /<DocTable label="Documents" docs=\{v\.documents\}/);
+  assert.match(dd, /header: "Share of revenue"/);
+  assert.match(dd, /label="The business, in the company's words"/);                                  // customers, drivers, strengths and risks on one grid
+  assert.match(dd, /label="Capex plans, in management's words"/);
+  assert.match(dd, /label="Outlook, in management's words"/);
+  assert.match(dd, /label="Operating measures, from the company"/);
+  assert.doesNotMatch(dd, /className="rs-grid"/);
+  assert.doesNotMatch(dd, /className="promises"/);
+  assert.match(dd, /<DataTable label="Growth a year"/);                                              // the growth tiles are a table too
+  assert.match(dd, /<DataTable label="How it's valued"/);
+});
+
+test("item 8 (LIVE1A-048): a long note on a compared figure is a numbered note under its table, with its mark beside the value", () => {
+  const r = read("src/pages/Research.tsx");
+  assert.match(r, /note\.length > 48/);
+  assert.match(r, /<sup className="cmp-foot-mark" aria-label=\{`see note \$\{foot\.n\}`\}>/);
+  assert.match(r, /data-testid="cmp-note"/);
+});
+
+test("item 11: Compare shows its two companies as one table; a link with no market tries the other market once", () => {
+  const r = read("src/pages/Research.tsx");
+  assert.match(r, /<DataTable label="The two companies"/);
+  assert.ok(r.indexOf('label="The two companies"') < r.indexOf('title="The numbers side by side"'));
+  assert.ok(r.indexOf('title="The numbers side by side"') < r.indexOf('<CardHead title="AI comparison" />'));       // the figures first, the AI paragraph after (LIVE1A-049)
+  assert.match(r, /if \(!params\.get\("region"\) && !t\.tried\)/);                                              // LIVE2-021
+});
+
+test("item 9: the Screener's numeric filters are a table; one Filters (n) bar on a phone; results before Save", () => {
+  const s = read("src/pages/Screens.tsx");
+  assert.match(s, /<DataTable label="Filters on figures: at least and at most"/);
+  assert.match(s, /className="k-input-unit"/);                                                              // the unit inside the box, whatever it is
+  assert.match(s, /title=\{n \? `Filters \(\$\{n\}\)` : "Filters"\}/);
+  assert.match(s, /className=\{`screens-save\$\{showFilters \? "" : " folded"\}`\}/);
+  const css = read("src/styles.css");
+  assert.match(css, /\.screens-main > \.screens-save\.folded \{ display: none; \}/);
+});
+
+test("item 12 (LIVE2-020): the Screener's filters that can't load say so with a Try again", () => {
+  const s = read("src/pages/Screens.tsx");
+  assert.match(s, /<ErrorState title="The filters couldn't be loaded" action=\{\{ label: "Try again", onClick: \(\) => setMetaTries/);
+  assert.match(s, /\}, \[region, metaTries\]\);/);
+});
+
+test("item 10, 13 (LIVE2-032, LIVE2-030): the jump links are one swipeable row on a phone; the chart's (i) is 44px", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.k-pagenav \{ flex-wrap: nowrap; overflow-x: auto;/);
+  assert.match(read("src/charts/price/priceChart.css"), /\.pc-info\.info-btn \{ width: 44px; height: 44px; \}/);
+});
+
+test("item 14: Trend scan has Build your own: the notebook's rule sentences, the notebook's words builder, a check under the box, a limit on rules and groups", () => {
+  const s = read("src/pages/ResearchScans.tsx");
+  assert.match(s, /const CUSTOM_SCAN: ScanInfo = \{ id: CUSTOM_ID, name: "Build your own"/);
+  assert.match(s, /<ConditionList conds=\{conds\}/);
+  assert.match(s, /import \{ buildIdea \} from "\.\.\/components\/IdeaComposer"/);                           // the existing parser of words into rules
+  assert.match(s, /data-testid="custom-error"/);
+  assert.match(s, /ready-made scans only/);
+  assert.match(s, /body: \{ region, set: setId, scan: scan\.id, \.\.\.\(custom \? \{ rules: conds, within \} : \{\}\) \}/);
+  const rules = read("src/components/Rules.tsx");
+  assert.match(rules, /export function ConditionList\(/);
+  assert.match(rules, /<CondSentence key=\{i\}/);                                                           // the very sentence the notebook edits
+  assert.match(rules, /tf="1d"/);
+});

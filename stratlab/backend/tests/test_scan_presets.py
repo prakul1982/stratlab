@@ -317,3 +317,89 @@ def test_a_stock_with_no_candle_for_weeks_is_not_matched_as_of_today():
     assert doc["checked"] == 1 and doc["as_of"] == "2026-09-30"
     assert all(r["s"] != "HALT" for r in doc["rows"])
     assert P.is_stale("2026-08-14", "2026-09-30") and not P.is_stale("2026-09-25", "2026-09-30")
+
+
+# ---------- UI-CO item 14: "Build your own": a person's own rules over the same groups ----------
+VOLUME_RULES = [{"l": {"t": "volume"}, "op": "gt", "r": {"t": "vol_sma", "p": 20, "ago": 1, "k": 2}},
+                {"l": {"t": "price"}, "op": "gt", "r": {"t": "price", "ago": 1}}]
+BREAKOUT = [{"l": {"t": "price"}, "op": "xa", "r": {"t": "dc_upper", "p": 252}}]
+
+
+def test_custom_rules_are_checked_before_any_chart_is_read():
+    assert len(P.custom_conds(VOLUME_RULES)) == 2
+    for bad, said in [([], "at least one"), (None, "at least one"), ([BREAKOUT[0]] * 6, "up to 5 rules"),
+                      ([{"l": {"t": "num", "v": 1}, "op": "gt", "r": {"t": "num", "v": 2}}], "two plain numbers"),
+                      ([{"l": {"t": "price"}, "op": "gt", "r": {"t": "sma", "p": 20, "tf": "1h"}}], "daily candles"),
+                      ([{"l": {"t": "price"}, "op": "wobble", "r": {"t": "sma", "p": 20}}], "Rule 1"),
+                      ([{"l": {"t": "rsi", "p": 9999}, "op": "gt", "r": {"t": "num", "v": 30}}], "Rule 1"),
+                      ([{"l": {"t": "nonsense"}, "op": "gt", "r": {"t": "num", "v": 30}}], "Rule 1")]:
+        with pytest.raises(P.RuleError, match=said):
+            P.custom_conds(bad)
+    assert P.custom_within(0) == 1 and P.custom_within(99) == P.CUSTOM_WITHIN and P.custom_within("x") == 1
+
+
+def test_a_custom_rule_matches_as_a_preset_does_and_says_the_numbers():
+    flat = list(100 + noise(280, 3, 0.4))
+    top = max(flat[-252:])
+    conds = P.custom_conds(BREAKOUT)
+    got = P.evaluate(bars(flat + [top + 5]), only=["custom"], custom=(conds, 3))["matches"]["custom"]
+    assert got["days_ago"] == 0 and "Closed at" in got["detail"] and "crosses above" in got["detail"]
+    assert P.evaluate(bars(flat + [top - 5]), only=["custom"], custom=(conds, 3))["matches"] == {}
+    older = P.evaluate(bars(flat + [top + 5, top + 6, top + 6.5]), only=["custom"], custom=(conds, 3))["matches"]["custom"]
+    assert older["days_ago"] == 2                                  # within 3 candles
+    assert P.evaluate(bars(flat + [top + 5] + [top + 4] * 5), only=["custom"], custom=(conds, 3))["matches"] == {}      # older than the look-back
+    # the brief's own example: volume above twice its 20-day average, and the price above its price a candle ago
+    vol = [1000.0] * 100 + [5000.0]
+    up = list(100 + np.arange(101) * 0.1)
+    hit = P.evaluate(bars(up, vol=vol), only=["custom"], custom=(P.custom_conds(VOLUME_RULES), 1))["matches"]["custom"]
+    assert "Volume" in hit["detail"] and "Price" in hit["detail"] and not ADVICE.search(hit["detail"])
+
+
+def test_custom_scan_endpoint_runs_the_rules_over_a_group_and_refuses_the_big_ones(client):
+    ok = client.post("/research/scan", json={"region": "US", "set": "us_mega", "scan": "custom", "rules": BREAKOUT, "within": 3})
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert body["kind"] == "preset" and body["scan"] == "custom" and body["scan_name"] == "Your own rules" and body["stored"] is False
+    assert [r["symbol"] for r in body["rows"]] == ["AAPL"] and body["checked"] == 20 and body["within"] == 3 and body["rules"]
+    assert not ADVICE.search(str(body["rows"])) and not PROVIDERS.search(str(body))
+    # the rules are checked first, with a clear message
+    bad = client.post("/research/scan", json={"region": "US", "set": "us_mega", "scan": "custom", "rules": []})
+    assert bad.status_code == 400 and "at least one rule" in bad.text
+    # the 500-stock groups are read once a day for the ready-made scans only
+    P.save("sp500", P.build({"AAPL": P.evaluate(bars(client.flat + [client.top + 5]))}))
+    big = client.post("/research/scan", json={"region": "US", "set": "sp500", "scan": "custom", "rules": BREAKOUT})
+    assert big.status_code == 400 and "ready-made scans only" in big.text
+    # the look-back is capped, and an unknown preset is still a 404
+    assert client.post("/research/scan", json={"region": "US", "set": "us_mega", "scan": "custom", "rules": BREAKOUT, "within": 99}).json()["within"] == P.CUSTOM_WITHIN
+    assert client.post("/research/scan", json={"region": "US", "set": "us_mega", "scan": "nope"}).status_code == 404
+
+
+def test_custom_scan_needs_the_scans_plan(client, monkeypatch):
+    from app.config import settings
+    for k, v in (("RAZORPAY_KEY_ID", "rzp_test_x"), ("RAZORPAY_KEY_SECRET", "s"), ("RAZORPAY_PLAN_BASIC", "plan_b"), ("RAZORPAY_PLAN_PRO", "plan_p")):
+        monkeypatch.setattr(settings, k, v)
+    client.who["p"] = {"id": "u1", "plan": "free", "_plan": "free"}
+    assert client.post("/research/scan", json={"region": "US", "set": "us_mega", "scan": "custom", "rules": BREAKOUT}).status_code == 402
+    assert client.get("/research/scan/custom").status_code == 402
+
+
+def test_custom_scans_are_kept_on_the_account_and_run_again(client):
+    assert client.get("/research/scan/custom").json()["items"] == []
+    r = client.put("/research/scan/custom", json={"name": "Volume breakout", "region": "US", "rules": VOLUME_RULES, "within": 2})
+    assert r.status_code == 200, r.text
+    item = r.json()["items"][0]
+    assert item["name"] == "Volume breakout" and item["within"] == 2 and len(item["rules"]) == 2 and item["id"]
+    # saved rules run as they were written
+    again = client.post("/research/scan", json={"region": "US", "set": "us_mega", "scan": "custom", "rules": item["rules"], "within": item["within"]})
+    assert again.status_code == 200 and again.json()["checked"] == 20
+    # renamed in place; checked on the way in; a person's own list only
+    assert client.put("/research/scan/custom", json={"name": "Renamed", "region": "US", "rules": VOLUME_RULES, "id": item["id"]}).json()["items"][0]["name"] == "Renamed"
+    assert client.put("/research/scan/custom", json={"name": "Bad", "region": "US", "rules": []}).status_code == 400
+    client.who["p"] = {"id": "u2", "plan": "pro", "_plan": "pro"}
+    assert client.get("/research/scan/custom").json()["items"] == []
+    client.who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
+    for i in range(P.CUSTOM_SAVED):
+        client.put("/research/scan/custom", json={"name": f"s{i}", "region": "IN", "rules": BREAKOUT})
+    full = client.put("/research/scan/custom", json={"name": "one too many", "region": "IN", "rules": BREAKOUT})
+    assert full.status_code == 400 and "up to 10" in full.text
+    assert len(client.delete(f"/research/scan/custom/{item['id']}").json()["items"]) == P.CUSTOM_SAVED - 1
