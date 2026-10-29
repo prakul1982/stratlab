@@ -544,7 +544,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
           <div className="lp-head">
             <h1 className="serif lp-h2">{top.heading}</h1>
             {top.error && <p className="banner" role="alert">{top.error}</p>}
-            {loading ? <span className="lp-skel lp-skel-p" /> : <p className="lp-p">{line}</p>}
+            {loading ? <span className="lp-skel lp-skel-p lp-skel-p-one" /> : <p className="lp-p">{line}</p>}
           </div>
         ) : loading ? (
           <div className="lp-head lp-head-skel"><span className="eyebrow">Plans</span><span className="lp-skel lp-skel-h" /><span className="lp-skel lp-skel-p" /></div>

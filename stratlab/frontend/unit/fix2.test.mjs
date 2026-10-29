@@ -152,3 +152,10 @@ test("LIVE2-014, 027, 033: no flat equity line for a session with no trades, the
   assert.match(h, /setTimeout\(\(\) => setAgain\(\(n\) => n \+ 1\), 30_000\)/);
   assert.doesNotMatch(h, /reload in a minute/);
 });
+
+test("LIVE2-031: the Plans page's lede placeholder is one line, as its text is, so the cards do not move when the prices arrive", () => {
+  assert.match(read("src/pages/Login.tsx"), /lp-skel lp-skel-p lp-skel-p-one/);
+  const css = read("src/styles.css");
+  assert.match(css, /\.lp-skel-p\.lp-skel-p-one, \.lp-skel-p\.lp-skel-p-one \{ height: calc\(17px \* 1\.6\); \}/);
+  assert.ok(css.indexOf("  .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }") > css.indexOf("  .lp-skel-p { height: calc(17px * 1.6 * 4); }"), "after the phone rule");
+});
