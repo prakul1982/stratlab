@@ -428,3 +428,46 @@ def test_a_new_issue_is_in_the_theme_only_on_words_from_its_own_offer():
     got = C.match_listings(items, MAP, ask, "India EV battery", {})
     assert [g["id"] for g in got] == ["ipo-1"]                                 # ipo-3's words aren't in its text; ipo-2 shares nothing with the theme
     assert "Cell manufacturing" in got[0]["groups"] and got[0]["what"].startswith("manufactures lithium ion")
+
+
+# ---------- cash is read once for each read of the fundamentals ----------
+def test_a_second_page_build_makes_no_cash_request():
+    import copy
+    import httpx
+    from app.intel.net import RateLimit
+    from app.intel.screener import Screener
+    seen = []
+
+    def handler(req: httpx.Request):
+        seen.append(req.url.path)
+        return httpx.Response(200, json={"Cash Equivalents": {"Mar 2026": "250", "Mar 2025": "100"}})
+    scr = Screener(transport=httpx.MockTransport(handler))
+    scr.limit = RateLimit(10**6, 10**6)
+    page = {"company_id": "77", "basis": "consolidated", "fetched_at": "2026-10-29T10:00",
+            "balance": {"cols": ["Mar 2025", "Mar 2026"], "rows": {"Other Assets": [500.0, 600.0]}}}
+    first = scr.with_cash(copy.deepcopy(page))
+    assert first["balance"]["rows"]["Cash Equivalents"] == [100.0, 250.0] and len(seen) == 1
+    second = scr.with_cash(copy.deepcopy(page))                    # the next page build: the same read of the fundamentals
+    assert second["balance"]["rows"]["Cash Equivalents"] == [100.0, 250.0] and len(seen) == 1
+    # the fundamentals read again (a new read time): the site's own breakdown is kept as long as the balance sheet is, so at most one more request
+    again = scr.with_cash({**copy.deepcopy(page), "fetched_at": "2026-10-29T17:00"})
+    assert again["balance"]["rows"]["Cash Equivalents"] == [100.0, 250.0] and len(seen) <= 2
+
+
+def test_a_busy_or_empty_cash_answer_is_not_asked_again_until_the_fundamentals_are_read_again():
+    import copy
+    import httpx
+    from app.intel.net import RateLimit
+    from app.intel.screener import Screener
+    seen = []
+
+    def handler(req: httpx.Request):
+        seen.append(1)
+        return httpx.Response(500)
+    scr = Screener(transport=httpx.MockTransport(handler))
+    scr.limit = RateLimit(10**6, 10**6)
+    page = {"company_id": "78", "basis": "consolidated", "fetched_at": "t1", "balance": {"cols": ["Mar 2026"], "rows": {"Other Assets": [600.0]}}}
+    for _ in range(3):
+        out = scr.with_cash(copy.deepcopy(page))
+        assert "Cash Equivalents" not in out["balance"]["rows"]
+    assert len(seen) == 1
