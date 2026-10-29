@@ -14,6 +14,7 @@ Everything here is a function of plain data so it can be checked against what it
 Facts and arithmetic only: no ranking of what to own, no advice wording, no forecast."""
 import re
 from collections import Counter
+from decimal import ROUND_HALF_UP, Decimal
 from datetime import date, timedelta
 from statistics import median
 
@@ -47,9 +48,14 @@ def r1(v):
     return None if v is None else round(float(v), 1)
 
 
+def f1(v: float) -> str:
+    """One decimal, a half rounded up as the browser's toFixed does, so a sentence here and a table cell there never differ in the last digit."""
+    return str(Decimal(float(v)).quantize(Decimal("0.1"), ROUND_HALF_UP))
+
+
 def pts(v: float) -> str:
     """12.3% (one decimal, a real minus)."""
-    return f"{v:.1f}%".replace("-", "−")
+    return f"{f1(v)}%".replace("-", "−")
 
 
 def full_years(f: dict) -> list[dict]:
@@ -156,29 +162,20 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
 
 
 def margin_line(block: dict, chain_median: float | None, several: bool = True) -> str | None:
-    """What a layer's figures show, in a sentence made of its own numbers."""
-    e, n, c = (block["stats"].get(k) for k in ("ebitda", "net", "roce"))
-    if not e and not n:
-        return None
-    bits = []
-    if e:
-        bits.append(f"The median EBITDA margin of its {e['n']} compan{'y' if e['n'] == 1 else 'ies'} with one is {pts(e['median'])}"
-                    + (f" (from {pts(e['min'])} to {pts(e['max'])})" if e["n"] > 1 else ""))
-    if n:
-        bits.append(f"the median net margin is {pts(n['median'])}" + (f" (from {pts(n['min'])} to {pts(n['max'])})" if n["n"] > 1 else ""))
-    if c:
-        bits.append(f"the median ROCE is {pts(c['median'])}")
-    text = "; ".join(bits) + "."
+    """What a layer's table doesn't say by itself: how its median EBITDA margin stands against the whole map's, and which figures are the whole
+    company's. (The median and range are rows of the table, not said again.) None when there is nothing more to say."""
+    e = block["stats"].get("ebitda")
+    parts = []
     if e and chain_median is not None and several:
         d = e["median"] - chain_median
         if abs(d) >= 0.05:
-            text += f" That is {abs(d):.1f} points {'above' if d > 0 else 'below'} the median EBITDA margin of the whole map ({pts(chain_median)})."
+            parts.append(f"The median EBITDA margin ({pts(e['median'])}) is {f1(abs(d))} points {'above' if d > 0 else 'below'} the median of the whole map ({pts(chain_median)}).")
     if block["left_out"]:
-        text += (f" {block['left_out']} figure{'s are' if block['left_out'] > 1 else ' is'} the whole company's and left out of these medians"
-                 " because the company runs other businesses too.")
-    elif block["stats_over"] == "all":
-        text += " Every figure here is the whole company's, since each runs other businesses too."
-    return text
+        parts.append(f"{block['left_out']} figure{'s are' if block['left_out'] > 1 else ' is'} the whole company's and left out of the medians"
+                     " because the company runs other businesses too.")
+    elif block["stats_over"] == "all" and block["companies"]:
+        parts.append("Every figure here is the whole company's, since each runs other businesses too.")
+    return " ".join(parts) or None
 
 
 def chain_table(blocks: list[dict]) -> dict:
@@ -193,11 +190,12 @@ def chain_table(blocks: list[dict]) -> dict:
     line = None
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
-        if hi["layer"] != lo["layer"]:
+        if hi["layer"] != lo["layer"] and hi["ebitda"] != lo["ebitda"]:
             line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'])}) and lowest in {lo['layer']} ({pts(lo['ebitda'])}), "
-                    f"a gap of {hi['ebitda'] - lo['ebitda']:.1f} points.")
-    return {"rows": rows, "line": line, "highest": max(have, key=lambda r: r["ebitda"])["layer"] if have else None,
-            "lowest": min(have, key=lambda r: r["ebitda"])["layer"] if have else None}
+                    f"a gap of {f1(hi['ebitda'] - lo['ebitda'])} points.")
+    spread = len(have) >= 2 and max(r["ebitda"] for r in have) != min(r["ebitda"] for r in have)       # layers with the same figure have no highest or lowest
+    return {"rows": rows, "line": line, "highest": max(have, key=lambda r: r["ebitda"])["layer"] if spread else None,
+            "lowest": min(have, key=lambda r: r["ebitda"])["layer"] if spread else None}
 
 
 def layer_history(rows: list[dict]) -> dict | None:

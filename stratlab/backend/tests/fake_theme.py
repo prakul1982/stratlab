@@ -22,7 +22,7 @@ MAP = {
         {"layer": "Power generation", "description": "Power generators sell electricity to the plants and the grid.", "companies": [{"name": "NTPC", "ticker": "NTPC"}]}],
     "tailwinds": [{"text": "Public spending on roads and rail raises the demand for steel.", "policy": "", "search": ""},
                   {"text": "The old steel export scheme extension supports sales abroad.", "policy": "Old steel scheme", "search": "Old steel scheme"}],
-    "risks": [{"text": "Cheap imports can pull prices down.", "policy": "", "search": ""}],
+    "risks": [{"text": "Imports from abroad can pull domestic prices down.", "policy": "", "search": ""}],
 }
 
 
@@ -36,6 +36,6 @@ def answer(system: str, text: str) -> str | None:
                                       for c in body["companies"] for g in c["check_groups"]]})
     if "still current" in system:
         body = json.loads(text.split("CLAIMS:\n", 1)[1])
-        return json.dumps({"claims": [{"id": c["id"], "status": "outdated" if "Old steel" in c["claim"] else "unclear", "headline": c["headlines"][0]["id"]}
+        return json.dumps({"claims": [{"id": c["id"], "status": "outdated" if "old steel" in c["claim"].lower() else "unclear", "headline": c["headlines"][0]["id"]}
                                       for c in body["claims"] if c["headlines"]]})
     return None

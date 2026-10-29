@@ -21,8 +21,9 @@ export interface LayerLine { kind: "company" | "median" | "range"; key: string; 
 export function layerLines(l: Layer): LayerLine[] {
   const out: LayerLine[] = l.companies.map((row) => ({ kind: "company", key: row.symbol, row }));
   if (l.companies.length > 0) {
-    out.push({ kind: "median", key: "~median", stats: l.stats, label: l.stats_over === "all" ? "Median (all company-wide)" : "Median" });
-    out.push({ kind: "range", key: "~range", stats: l.stats, label: "Range" });
+    const n = l.stats.ebitda?.n ?? l.stats.net?.n ?? 0;
+    out.push({ kind: "median", key: "~median", stats: l.stats, label: `Median of ${n} compan${n === 1 ? "y" : "ies"}${l.stats_over === "all" ? " (company-wide figures)" : ""}` });
+    if (n > 1) out.push({ kind: "range", key: "~range", stats: l.stats, label: "Range" });
   }
   return out;
 }

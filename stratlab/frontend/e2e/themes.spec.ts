@@ -36,7 +36,7 @@ test("the theme page is a deep dive made of tables, with each company only where
   const main = page.locator("main").first();
   // the whole chain in one table, with the basis said
   const chain = page.getByRole("table", { name: /value chain by layer/i });
-  await expect(chain.locator("thead th")).toHaveText(["Layer", "Companies", "Revenue", "EBITDA margin", "Net margin", "ROCE"]);
+  await expect(chain.locator("thead th")).toHaveText([/^Layer$/, /^Companies$/, /^i?Revenue$/, /^i?EBITDA margin$/, /^Net margin$/, /^i?ROCE$/]);
   await expect(chain.locator("tbody tr")).toHaveCount(3);
   await expect(main).toContainText("Consolidated accounts where the company files them");
   // a layer: its companies in their own words, the median and the range as rows; the wrong placement (ONGC under steel) isn't there

@@ -75,7 +75,7 @@ function layerColumns(r: Region, wide: Set<string>): Column<LayerLine>[] {
     { key: "e", header: "EBITDA margin", numeric: true, cell: f("ebitda") },
     { key: "n", header: "Net margin", numeric: true, cell: f("net") },
     { key: "roce", header: "ROCE", numeric: true, cell: f("roce") },
-    { key: "y", header: "Year", cell: (x) => (x.kind === "company" ? x.row!.year ?? dash : x.kind === "median" ? `${x.stats?.ebitda?.n ?? 0} with an EBITDA margin` : "") },
+    { key: "y", header: "Year", cell: (x) => (x.kind === "company" ? x.row!.year ?? dash : "") },
   ];
 }
 
@@ -297,7 +297,7 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
           ...own.insider_buys.map((b) => ({ key: `b${b.symbol}`, what: "Promoter or insider bought", name: b.name, sym: b.symbol, at: b.at, url: null as string | null })),
           ...own.pledges.map((p, i) => ({ key: `p${i}${p.symbol}`, what: p.label, name: p.name, sym: p.symbol, at: p.at, url: p.url ?? null })),
         ]} rowKey={(x) => x.key} empty="No promoter or insider purchases and no pledge filings in the last 90 days." />
-        <p className="k-note">Promoters' stake rose at {own.promoter_up} and fell at {own.promoter_down} of the {own.holdings.length} companies with two quarters stored.</p>
+        {own.holdings.length > 0 && <p className="k-note">Promoters' stake rose at {own.promoter_up} and fell at {own.promoter_down} of the {own.holdings.length} companies with a filing stored.</p>}
       </Card>
 
       <Card id="numbers-events" label="Events">

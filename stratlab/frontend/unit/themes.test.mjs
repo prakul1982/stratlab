@@ -27,12 +27,13 @@ test("the theme figures are written the app's way: Indian money, one-decimal per
 
 test("a layer's table is its companies, then the median and the range as rows; a layer with no company has no table", async () => {
   const { layerLines } = await import("../src/lib/themeFormat.ts");
-  const layer = (companies, over = "own") => ({ layer: "L", companies, stats: { ebitda: null, net: null, roce: null }, stats_over: over });
+  const layer = (companies, over = "own") => ({ layer: "L", companies, stats: { ebitda: { n: companies.length, median: 1, min: 1, max: 2 }, net: null, roce: null }, stats_over: over });
   const lines = layerLines(layer([{ symbol: "A" }, { symbol: "B" }]));
   assert.deepEqual(lines.map((l) => l.kind), ["company", "company", "median", "range"]);
-  assert.equal(lines[2].label, "Median");
-  assert.equal(layerLines(layer([{ symbol: "A" }], "all"))[1].label, "Median (all company-wide)");
+  assert.equal(lines[2].label, "Median of 2 companies");
+  assert.equal(layerLines(layer([{ symbol: "A" }], "all"))[1].label, "Median of 1 company (company-wide figures)");
   assert.deepEqual(layerLines(layer([])), []);
+  assert.deepEqual(layerLines(layer([{ symbol: "A" }])).map((l) => l.kind), ["company", "median"]);        // one company: no range
 });
 
 test("the page is made of tables: no stat tiles, no chips, the kit's DataTable, and the company links go to the company page", () => {

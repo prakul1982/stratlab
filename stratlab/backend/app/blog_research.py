@@ -528,10 +528,10 @@ def theme_post(dive: dict, theme: str, region: str, now: datetime | None = None)
     for n in notable:
         if n["kind"] == "gap":
             lines.append(f"The median EBITDA margin is {theme_data.pts(n['high_value'])} in {n['high']} and {theme_data.pts(n['low_value'])} in {n['low']}, "
-                         f"a gap of {n['gap']:.1f} points.")
+                         f"a gap of {theme_data.f1(n['gap'])} points.")
         elif n["kind"] == "move":
             lines.append(f"{n['layer']}: the EBITDA margin of its {n['n']} companies together went from {theme_data.pts(n['from'])} in {n['from_year']} to "
-                         f"{theme_data.pts(n['to'])} in {n['to_year']}, a move of {abs(n['move']):.1f} points {'up' if n['move'] > 0 else 'down'}.")
+                         f"{theme_data.pts(n['to'])} in {n['to_year']}, a move of {theme_data.f1(abs(n['move']))} points {'up' if n['move'] > 0 else 'down'}.")
     table = [[r["layer"], str(r["n"]), p1_plain(r["revenue"], unit), pts_or_dash(r["ebitda"]), pts_or_dash(r["net"]), pts_or_dash(r["roce"])] for r in dive["chain"]["rows"]]
     blocks = [
         {"t": "p", "text": f"{dive.get('members')} listed companies placed in {len(dive['layers'])} layers of the {dive.get('sector') or theme} value chain, each one only where its "
