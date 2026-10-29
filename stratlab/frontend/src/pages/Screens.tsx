@@ -257,7 +257,7 @@ export function ScreensPage() {
                         {bad.has(`${r.id}.order`) && <span className="k-note k-down" role="alert">"At least" is above "at most": no company can meet this.</span>}
                       </span>) },
                     ...(["min", "max"] as const).map((side) => ({ key: side, header: side === "min" ? "At least" : "At most", cell: (r: (typeof meta.ranges)[number]) => (
-                      <span className="k-input-unit" style={{ "--unit-w": "30px" } as React.CSSProperties}>
+                      <span className="k-input-unit">
                         <input className="k-input" inputMode="decimal" value={draft[r.id]?.[side] ?? ""} placeholder="Any" aria-label={`${r.label}: ${side === "min" ? "at least" : "at most"}`}
                           aria-invalid={bad.has(`${r.id}.${side}`) || undefined} onChange={(e) => setBound(r.id, side, e.target.value)} />
                         <span className="u" aria-hidden="true">{r.unit === "%" ? "%" : "×"}</span>

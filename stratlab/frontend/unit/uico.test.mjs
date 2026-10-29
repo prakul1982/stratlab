@@ -139,3 +139,14 @@ test("item 14: Trend scan has Build your own: the notebook's rule sentences, the
   assert.match(rules, /<CondSentence key=\{i\}/);                                                           // the very sentence the notebook edits
   assert.match(rules, /tf="1d"/);
 });
+
+test("tables everywhere on the company page: where a sale goes, who owns it, what they do and similar companies are tables", () => {
+  const c = read("src/components/Research.tsx");
+  assert.match(c, /<DataTable label="Where a sale goes"/);
+  assert.match(c, /<DataTable label="Who owns it"/);
+  assert.match(c, /export function QuoteTable\(/);
+  const r = read("src/pages/Research.tsx");
+  assert.match(r, /<DataTable label="Facts about the company"/);
+  assert.match(r, /<QuoteTable region=\{region\} symbols=\{c\.peers\}/);
+  assert.doesNotMatch(r, /className="k-dl pairs"/);
+});

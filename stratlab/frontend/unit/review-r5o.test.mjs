@@ -54,7 +54,7 @@ test("AAPL's page: no unsourced segment split, an insider net that matches its r
 test("TCS's key numbers: no scraped strengths and concerns, and a figure's note shows (R5O-011)", () => {
   const research = read("src/pages/Research.tsx");
   assert.doesNotMatch(research, /Strengths and concerns|c\.pros|c\.cons/);
-  assert.match(read("src/components/Research.tsx"), /\{m\.label\}\{m\.note && !mark\(m\) && <span className="k-sub-line">\{m\.note\}<\/span>\}\{mark\(m\) && <sup/);
+  assert.match(read("src/components/Research.tsx"), /m\.note && !mark\(m\) \? m\.note : ""/);       // (UI-CO item 2: the note is the Basis column's, a long one a numbered note)
 });
 
 test("the screener starts with the largest companies (R5O-012)", () => {
@@ -353,7 +353,7 @@ test("round 39: the company page states figures and the checklist reads against 
   assert.doesNotMatch(home, /\} pass<\/b>|Failed checks/);
   const research = read("src/components/Research.tsx");
   assert.doesNotMatch(research, />Strengths<|>Risks</);
-  assert.match(research, /<b className="k-sub">Notable figures<\/b>/);
+  assert.match(research, /area: "Notable figures"/);       // (UI-CO item 3: a row of the AI read table)
   assert.match(research, /\[\.\.\.r\.bull, \.\.\.r\.bear\]/);
   // the Screens page's claim stays true
   assert.match(read("src/pages/Screens.tsx"), /Nothing here scores companies/);

@@ -38,7 +38,7 @@ test("VR4-013: the company page does not say the one-line description and the en
   const src = read("src/pages/Research.tsx");
   assert.match(src, /wiki\?\.description && !\(wiki\.extract && wiki\.extract\.toLowerCase\(\)\.includes\(wiki\.description\.toLowerCase\(\)\)\) && <p className="k-sub">/);
   assert.match(src, /const shownFacts = c\.facts\.filter\(\(f\) => !\/market cap\/i\.test\(f\.label\) && !\(\/\^listed\$\/i\.test\(f\.label\) && f\.value\.includes\(c\.symbol\)\)\);/);
-  assert.match(src, /\{shownFacts\.map\(\(f\) =>/);
+  assert.match(src, /rows=\{shownFacts\}/);
 });
 
 test("VR4-014: My space's watchlist card has a title short enough to stay on one line beside Open at 1280px", () => {

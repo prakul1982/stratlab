@@ -15,7 +15,7 @@ import { surpriseShown } from "../lib/surprise";
 import { tinyBase } from "../lib/researchFormat";
 import { Star } from "./Icons";
 import { Info } from "./ui";
-import { BarList, Card, CardHead, DataTable, Delta, Disclosure, Notice, Seg, Signed, Skeleton } from "./kit";
+import { Card, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signed, Skeleton } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { FoBadges } from "./FoBadges";
 import { AiAd } from "./AiAd";
@@ -153,12 +153,16 @@ export function MarginCascade({ gross, operating, net }: { gross: number | null;
   if (gross == null || operating == null || net == null || gross <= 0) return null;
   const steps = [{ k: "Revenue", v: 100, lost: "" }, { k: "Gross profit", v: gross, lost: "cost of goods" },
     { k: "Operating profit", v: operating, lost: "running costs, R&D" }, { k: "Net profit", v: net, lost: "tax, interest, other" }];
+  const rows = steps.map((s, i) => ({ ...s, drop: i ? steps[i - 1].v - s.v : 0 }));
+  // a table (UI-CO: tables wherever there are figures): the step, what is left of every 100 in sales (with its bar), and what was lost to get there
   return (
-    <BarList label="Where a sale goes" footnote="Of every 100 in sales, what is left at each step."
-      rows={steps.map((s, i) => {
-        const lost = i ? steps[i - 1].v - s.v : 0;
-        return { key: s.k, name: s.k, note: lost > 0 ? `−${lost.toFixed(1)} to ${s.lost}` : undefined, value: `${s.v.toFixed(1)}%`, pct: Math.max(0, Math.min(100, s.v)) };
-      })} />
+    <div className="k-stack">
+      <DataTable label="Where a sale goes" rows={rows} rowKey={(r) => r.k} stack={false}
+        columns={[{ key: "s", header: "Step", rowHeader: true, cell: (r) => r.k },
+          { key: "v", header: "Left of 100 in sales", numeric: true, cell: (r) => <span className="dd-share"><span>{r.v.toFixed(1)}%</span><Meter pct={Math.max(0, Math.min(100, r.v))} /></span> },
+          { key: "l", header: "Lost on the way", numeric: true, cell: (r) => (r.drop > 0 ? `−${r.drop.toFixed(1)} to ${r.lost}` : "–") }]} />
+      <p className="k-note">Of every 100 in sales, what is left at each step.</p>
+    </div>
   );
 }
 
@@ -414,6 +418,27 @@ export function QuoteGrid({ region, symbols, names, empty }: { region: Region; s
   );
 }
 
+/** Companies as a table (UI-CO): the name with its symbol, the price and the day's change; each name opens the company. */
+export function QuoteTable({ region, symbols, label }: { region: Region; symbols: string[]; label: string }) {
+  const [q, setQ] = useState<Record<string, Quote | null> | null>(null);
+  const key = symbols.join(",");
+  useEffect(() => {
+    let live = true;
+    setQ(null);
+    if (!symbols.length) return;
+    researchApi.quotes(region, symbols).then((r) => live && setQ(r)).catch(() => live && setQ({}));
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region, key]);
+  const ccy = region === "IN" ? "INR" : "USD";
+  return (
+    <DataTable label={label} rows={symbols} rowKey={(s) => s} stack={false}
+      columns={[{ key: "c", header: "Company", rowHeader: true, cell: (s) => <Link className="link" to={`/research/${region}/${encodeURIComponent(s)}`}><b>{s}</b></Link> },
+        { key: "p", header: "Price", numeric: true, cell: (s) => (q == null ? <span className="skel" /> : q[s]?.price != null ? price(q[s]!.price!, ccy) : "–") },
+        { key: "d", header: "Change", numeric: true, cell: (s) => (q?.[s]?.change_pct != null ? <Delta value={q[s]!.change_pct}>{pct(q[s]!.change_pct!, 2)}</Delta> : "–") }]} />
+  );
+}
+
 /** " (16 months old)" when a newer quarter's shareholding should have been filed by now (within 21 days of its end). */
 function holdersAge(asOf: string): string {
   const n = staleQuarter(asOf, 21);
@@ -421,12 +446,15 @@ function holdersAge(asOf: string): string {
 }
 
 export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> }) {
+  // a table: who, their share (with its bar) and the change over the last year, in percentage points
   return (
-    <BarList label="Who owns it" footnote={`As of ${s.as_of}${holdersAge(s.as_of)}. The change is over the last year, in percentage points.${s.note ? ` ${s.note}` : ""}`}
-      rows={s.rows.map((r) => ({
-        key: r.label, name: holderRowName(r.label), pct: Math.min(100, r.value),
-        value: <>{r.value.toFixed(1)}%{r.change != null && Math.abs(r.change) >= 0.05 && <span className="k-note"> <Signed value={r.change}>{r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)} pts</Signed></span>}</>,
-      }))} />
+    <div className="k-stack">
+      <DataTable label="Who owns it" rows={s.rows} rowKey={(r) => r.label} stack={false}
+        columns={[{ key: "h", header: "Holder", rowHeader: true, cell: (r) => holderRowName(r.label) },
+          { key: "v", header: "Share", numeric: true, cell: (r) => <span className="dd-share"><span>{r.value.toFixed(1)}%</span><Meter pct={Math.min(100, r.value)} /></span> },
+          { key: "c", header: "Change in a year", numeric: true, cell: (r) => (r.change != null && Math.abs(r.change) >= 0.05 ? <Signed value={r.change}>{r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)} pts</Signed> : "–") }]} />
+      <p className="k-note">{`As of ${s.as_of}${holdersAge(s.as_of)}. The change is over the last year, in percentage points.${s.note ? ` ${s.note}` : ""}`}</p>
+    </div>
   );
 }
 

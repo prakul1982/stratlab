@@ -61,7 +61,7 @@ test("DD-018: a growth rate off a tiny base is n/m, on the page and in its bars"
   assert.equal(metricText({ label: "3Y CAGR", value: null, unit: "%±", text: "n/m" }, "INR"), "n/m");
   assert.equal(metricText({ label: "3Y CAGR", value: 55, unit: "%±" }, "INR"), "+55.0%");
   assert.match(read("src/components/Research.tsx"), /n\/m: from a small base/);
-  assert.match(read("src/pages/DeepDive.tsx"), /nm=\{n\.growth_nm\?\.profit_cagr_3y\}/);
+  assert.match(read("src/pages/DeepDive.tsx"), /n\.growth_nm\?\.profit_cagr_3y, notes\)/);      // (UI-CO: the growth figures are a table; n/m is a cell with its note)
 });
 
 test("DD-030, DD-031: results bars name the fiscal quarter and say what the EPS counts", () => {

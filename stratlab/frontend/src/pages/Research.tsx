@@ -13,7 +13,7 @@ import {
 import { askAgain, PULSE_PENDING_EVERY_MS, PULSE_SLOW_MS, pulseLoad } from "../lib/pulseLoad";
 import { bseTwinMoved, delistedLine, regionOf } from "../lib/researchFormat";
 import {
-  AIRead, aiLimited, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
+  AIRead, aiLimited, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteTable, Rail52, RegionSwitch,
   Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
 import { preloadPriceChart } from "../charts/price/lazy";
@@ -433,7 +433,8 @@ function CompanyView() {
             {wiki?.description && !(wiki.extract && wiki.extract.toLowerCase().includes(wiki.description.toLowerCase())) && <p className="k-sub">{wiki.description}</p>}
             <p className="k-small">{wiki?.extract || c.about.profile}</p>
             {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
-            {shownFacts.length > 0 && <dl className="k-dl pairs">{shownFacts.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
+            {shownFacts.length > 0 && <DataTable label="Facts about the company" rows={shownFacts} rowKey={(f) => f.label} stack={false}
+              columns={[{ key: "f", header: "Fact", rowHeader: true, cell: (f) => f.label }, { key: "v", header: "Value", cell: (f) => f.value }]} />}
             {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
           </Card>
         )}
@@ -479,7 +480,7 @@ function CompanyView() {
 
       {/* CK-2 (R1): one card under the other: the news list is shorter than the peers' tiles, so side by side it left 120px of blank beside it */}
       <div className="k-stack">
-        {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><div className={`co-peers co-peers-${c.peers.length === 4 ? 2 : Math.min(3, c.peers.length)}`}><QuoteGrid region={region} symbols={c.peers} /></div></Card>}
+        {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><QuoteTable region={region} symbols={c.peers} label="Similar companies" /></Card>}
         <Card id="co-news"><CardHead title="Latest news" />{c.lazy?.length ? <Skeleton label="Loading the latest news" lines={2} />
           : c.news_failed && !c.news.length ? <p className="k-small k-muted" data-testid="news-failed">The news couldn't be loaded just now. It is read again when you open the page.</p>
           : <NewsList items={c.news} />}</Card>
