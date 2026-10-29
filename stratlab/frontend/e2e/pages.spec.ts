@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { NAV } from "../src/lib/nav";
 
 // Signed in as the site owner (the fake database's admin-token), with the tour already seen.
@@ -99,6 +99,12 @@ for (const [path, ready] of PAGES) {
     await sane(page, await open(page, path, ready));
     if (info.project.name === "phone") await touchable(page);
   });
+}
+
+/** Open "The same working in words" under the tax estimate's table, unless it is already open. */
+async function openWorking(total: Locator) {
+  const fold = total.locator("details", { has: total.page().locator("summary", { hasText: "The same working in words" }) }).last();
+  if (!(await fold.evaluate((d) => (d as HTMLDetailsElement).open))) await fold.locator("summary", { hasText: "The same working in words" }).click();
 }
 
 test("results calendar: every company's dates, and the company page links to it", async ({ page }, info) => {
@@ -220,7 +226,7 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   }
   for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
   expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
-  await page.getByTestId("plans-compare-fold").locator("summary").click();          // the comparison is one fold under the cards (LIVE1C-092)
+  await page.getByTestId("plans-compare-fold").locator("summary").first().click();          // the comparison is one fold under the cards (LIVE1C-092)
   const table = page.locator("#compare");        // one table for each group (how much, what each plan adds, on every plan), each with the plan names on top
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
   await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
@@ -536,6 +542,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await expect(page.getByText("Saved. The estimate is updated.")).toBeVisible();
   await expect(total.getByText(/^Old regime/)).toBeVisible();
   await expect(total.getByText(/With the same figures, the new regime works out to/)).toBeVisible();
+  await openWorking(total);          // the steps in words are one fold under the table (LIVE1C-056)
   await expect(total.getByText(/Deductions you entered \(80C and the like\): ₹1,50,000/)).toBeVisible();
   const amount = await page.locator('span[aria-label="Total tax estimate"]').innerText();      // the summary at the top: the total is not printed twice (VR1-144)
   expect(Number(amount.replace(/[^\d]/g, ""))).toBeGreaterThan(100000);
@@ -558,7 +565,7 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   if (info.project.name === "phone") await touchable(page);
   await total.getByRole("button", { name: "Save and update" }).click();
   await expect(total.getByText(/resident, aged 60 to 79/)).toBeVisible();
-  await total.locator("summary", { hasText: "The same working in words" }).click();          // the steps in words are one fold under the table (LIVE1C-056)
+  await openWorking(total);          // the steps in words are one fold under the table (LIVE1C-056)
   await expect(total.getByText(/the old regime's basic exemption is ₹3,00,000/)).toBeVisible();
   const senior = Number((await page.locator('span[aria-label="Total tax estimate"]').innerText()).replace(/[^\d]/g, ""));
   expect(senior).toBeLessThan(Number(amount.replace(/[^\d]/g, "")));
@@ -1207,7 +1214,7 @@ test("alerts: one on bulk or block deals, India only", async ({ page }, info) =>
   await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
-  await page.getByLabel("Market").selectOption("US");
+  await page.getByLabel("Market", { exact: true }).selectOption("US");
   await expect(page.getByLabel("Alert me when").locator("option", { hasText: "bulk or block deal" })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -1298,7 +1305,7 @@ test("alerts: one on a stock entering or leaving a surveillance list, India only
   await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
-  await page.getByLabel("Market").selectOption("US");
+  await page.getByLabel("Market", { exact: true }).selectOption("US");
   await expect(page.getByLabel("Alert me when").locator("option", { hasText: "surveillance list" })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -1661,6 +1668,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   await settle(page);
   await expect(page.getByRole("region", { name: "Tax tools" }).getByRole("link", { name: "Open tax tools" })).toBeVisible();
   await page.getByLabel("Financial year").selectOption(String(fy));
+  await openWorking(page.getByRole("region", { name: "Total tax estimate" }));          // LIVE1C-056
   await expect(page.getByRole("region", { name: "Total tax estimate" }).getByText(/Dividends of ₹15,000 are income from other sources/)).toBeVisible();
   expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
 });
