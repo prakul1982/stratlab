@@ -20,3 +20,13 @@ test("item 7: the management report card is a table (Target | For | Said | Resul
   // a plan with no figure is not "couldn't check": it has its own line under the counts
   assert.match(dd, /more \{c\.no_figure === 1 \? "is a plan" : "are plans"\} with no figure to check/);
 });
+
+test("item 1: corporate actions are one table with headers; the dividend total stays a line above it and long notes are numbered notes", () => {
+  const c = read("src/components/CorpActions.tsx");
+  for (const h of ['header: "Ex-date"', 'header: "Type"', 'header: "Amount a share"', 'header: "Record date"']) assert.ok(c.includes(h), h);
+  assert.match(c, /Dividends with an ex-date in the last 12 months/);
+  assert.ok(c.indexOf("Dividends with an ex-date in the last 12 months") < c.indexOf("<DataTable"));          // the summary line is above the table
+  assert.match(c, /head: "Coming up"/);                                                                      // nothing ahead: a line in the table's own style
+  assert.match(c, /<ul className="k-note cmp-foots" data-testid="div-now">/);                                // "in today's shares": a numbered note
+  assert.doesNotMatch(c, /inv-rows/);                                                                        // no more two columns of chips
+});

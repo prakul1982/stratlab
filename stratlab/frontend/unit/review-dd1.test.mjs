@@ -49,7 +49,7 @@ test("DD-012: a merged company's page says what became of it and offers nothing 
 
 test("DD-013: a dividend declared before a bonus shows its amount in today's shares", () => {
   const c = read("src/components/CorpActions.tsx");
-  assert.match(c, /a\.now_note && <span className="k-sub-line" data-testid="div-now">/);
+  assert.match(c, /<ul className="k-note cmp-foots" data-testid="div-now">/);       // (UI-CO item 1: a numbered note under the table, the mark beside the amount)
   assert.match(c, /dividends_12m\.adjusted \? " in today's shares" : ""/);
 });
 
