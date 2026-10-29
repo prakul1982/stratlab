@@ -132,7 +132,7 @@ test("VR1-060, VR1-061, VR1-063, VR1-064, VR1-065: the experiment page's layout"
 
 test("VR1-070, VR1-071, VR1-072, VR1-073: Positioning", async () => {
   const page = read("src/pages/PositioningPage.tsx");
-  assert.match(page, /<span className="k-stat-v">\{long == null \|\| short == null \? "–" : pct\(long\)\}<\/span>/);       // a number among numbers
+  assert.match(page, /<span data-testid="sides-fig">\{long == null \|\| short == null \? "–" : pct\(long\)\}<\/span>/);       // a number among numbers
   assert.match(page, /futures, \$\{words\[0\]\} share/);
   assert.match(page, /<span data-testid="part-source">/);                                      // the source and the "as of" line in one paragraph
   assert.match(page, /<span data-testid="part-status">/);
@@ -160,7 +160,7 @@ test("VR1-090, VR1-091, VR1-092, VR1-093, VR1-094, VR1-095: Paper, Options, Jour
   assert.match(risk, /\{rows\.length > 1 && <DataTable stack label=\{`Running sessions in/);
   const paper = read("src/pages/PaperPage.tsx");
   assert.match(paper, /<Badge tone="plain" dot=\{false\}>\{sub\}<\/Badge>\}<Info label="About paper trading">\{HELP\.paper\}<\/Info>/);
-  assert.match(paper, /<ChartEmpty height=\{72\}>Your equity curve starts/);
+  assert.match(paper, /"Your equity curve starts after the first closed candle\."/);
   const o = read("src/pages/trade/options.css");
   assert.match(o, /\.legs-box > summary > span:first-of-type \{ flex: 1;/);
   assert.match(o, /\.k-struct \.k-row > select\.k-input \{ width: auto; min-width: 260px;/);

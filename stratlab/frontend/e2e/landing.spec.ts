@@ -215,15 +215,15 @@ test("landing: the intro under the hero says what StratLab is, in three columns,
   const errors = await open(page);
   const intro = page.locator("section.lp-spaces-sec");
   await expect(intro.getByRole("heading", { level: 2, name: "What StratLab is" })).toBeVisible();
-  await expect(intro).toContainText("a lab for testing trading ideas and understanding your own money, across ten markets, on real prices with real costs");
+  await expect(intro).toContainText("a lab for testing trading ideas and understanding your own money, across ten markets, with paper trading only");
   await expect(intro).toContainText("never real orders");
-  await expect(intro.getByRole("heading", { level: 3 })).toHaveText(["Trade", "Invest", "Money", "How it works", "What makes it different"]);
+  await expect(intro.getByRole("heading", { level: 3 })).toHaveText(["Trade", "Invest", "Money", "How it works"]);
   await expect(page.locator("h1")).toHaveCount(1);
   await expect(intro.locator(".lp-steps li")).toHaveCount(3);
   await expect(intro.locator(".lp-steps li").first()).toContainText("plain words");
   await expect(intro).toContainText("upload your files, then see your value, gains and tax worked out");
-  // the three claims the intro's sentence makes are not said again by this list (VR5-owner-2)
-  await expect(intro.locator(".lp-tool b")).toHaveText(["Real costs, per market", "Four checks for luck", "Your data stays yours"]);
+  // LIVE2-011: no "what makes it different" trio any more: the Trade and Money sections say those things once
+  await expect(intro.locator(".lp-tool")).toHaveCount(0);
   // right under the hero: the section starts within a screen and a half, and comes before every other section
   const top = (await intro.boundingBox())!.y;
   expect(top, "the intro is close under the hero").toBeLessThan(info.project.name === "phone" ? 1700 : 1300);

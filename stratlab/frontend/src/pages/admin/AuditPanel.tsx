@@ -173,7 +173,7 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
       ) : (
         <>
           <p className="k-small">
-            <b>{m.paused ? PAUSED[m.paused] : m.due ? `Running · ${m.due.toLocaleString("en-IN")} to check` : "Running · up to date"}</b>
+            <b>{m.paused ? PAUSED[m.paused] : m.due ? `Running · ${m.due.toLocaleString("en-IN")} to check` : "Running · every company checked"}</b>
             {m.paused === "cooling" && !!m.cool_minutes && ` ${m.cool_minutes} min between companies now.`}
             {/* a pause reason is a full sentence, so the counts start a new one rather than hang off a "." with a "·" */}
             {m.paused ? " " : " · "}{m.listed ? `${m.listed.toLocaleString("en-IN")} companies listed` : m.paused ? "List not read yet" : "list not read yet"}, {m.checked.toLocaleString("en-IN")} checked

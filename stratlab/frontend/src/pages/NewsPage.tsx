@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
-import { asOf, marketTz, pct, price, safeHref } from "../lib/format";
-import { itemCurrency } from "../lib/newsPrice";
+import { useApp } from "../lib/app";
+import { asOf, marketTz, safeHref } from "../lib/format";
 import { dayName, issueStamp, issueTab, issueToShow, NEWS_FOOTER, type Issue, type IssueRow } from "../lib/news";
 import { Badge, Card, EmptyState, ErrorState, PageHeader, Seg, Skeleton } from "../components/kit";
+import { BriefTables } from "../components/BriefTables";
 import { inAppPath } from "../lib/investUi";
 import { scrollBehavior } from "../lib/motion";
 
@@ -114,8 +115,20 @@ export function NewsPage() {
 }
 
 function IssueView({ id }: { id: string }) {
+  const { fail } = useApp();
   const [issue, setIssue] = useState<Issue | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [getting, setGetting] = useState(false);
+  // the brief as a PDF (O6): made by the server when asked, the same tables as the page; whoever can read the brief can download it
+  const download = async () => {
+    setGetting(true);
+    try {
+      const r = await api<Response>(`/news/${encodeURIComponent(id)}/pdf`, { raw: true });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await r.blob()); a.download = `stratlab-${id.replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}.pdf`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch (e) { fail(e); } finally { setGetting(false); }
+  };
 
   useEffect(() => {
     let live = true;
@@ -136,6 +149,7 @@ function IssueView({ id }: { id: string }) {
           <span className="k-row">
             <span className="k-eyebrow">{label} · {dayName(issue.day, true)}</span>
             {issue.weekly && <Badge tone="ok" dot={false}>Weekly</Badge>}
+            <button type="button" className="btn quiet sm k-btn-end" onClick={() => void download()} disabled={getting} data-testid="news-pdf">{getting ? "Making the PDF…" : "Download PDF"}</button>
           </span>
           <h2 className="k-card-title">{issue.subject}</h2>
           {(() => { const when = issueStamp({ ...issue, day: issue.close_day ?? issue.day, weekly: issue.close_day ? false : issue.weekly }, asOf(issue.at) ? asOf(issue.at, { tz: marketTz(issue.region) }) : null);
@@ -143,21 +157,14 @@ function IssueView({ id }: { id: string }) {
           {issue.summary && <p className="k-lede">{issue.summary}</p>}
           {issue.ai_summary && <p data-testid="news-ai-summary">{issue.ai_summary}</p>}
         </div>
-        {(issue.sections ?? []).filter((s) => s.items?.length).map((s, i) => (
+        {issue.tables?.length ? <BriefTables tables={issue.tables} /> : (issue.sections ?? []).filter((s) => s.items?.length).map((s, i) => (
           <section key={i} className="k-stack">
             <h3 className="k-sub">{s.title}</h3>
             <ul className="news-items">
-              {s.items.map((it, j) => {
-                const region = it.region ?? issue.region ?? null;
-                return (
-                  <li key={j}>
-                    {it.day && <span className="k-note" data-testid="news-item-day">{it.day}: </span>}<ItemText text={it.text} url={it.url} />
-                    {it.price != null && <span className="k-note"> {price(it.price, itemCurrency(it.region ?? issue.region, it.currency), 2)}{it.change_pct != null && <>, {pct(it.change_pct, 2)} {it.since}</>}</span>}
-                    {it.symbol && region && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(it.symbol)}`}>{it.symbol}</Link></>}
-                    {!!it.lines?.length && <ul className="news-lines">{it.lines.map((l, k) => <li key={k}><ItemText text={l.text} url={l.url} /></li>)}</ul>}
-                  </li>
-                );
-              })}
+              {s.items.map((it, j) => (
+                <li key={j}><ItemText text={it.text} url={it.url} />
+                  {!!it.lines?.length && <ul className="news-lines">{it.lines.map((l, k) => <li key={k}><ItemText text={l.text} url={l.url} /></li>)}</ul>}</li>
+              ))}
             </ul>
           </section>
         ))}

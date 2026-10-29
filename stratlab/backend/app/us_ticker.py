@@ -11,9 +11,14 @@ import re
 CLASS = re.compile(r"^([A-Z][A-Z0-9]{0,5})[./]([A-Z])$")
 
 
+# a US ticker as other sites write it with its exchange in front: NYSE:JPM, NASDAQ:AAPL (LIVE2-001: "NYSE:JPM" found nothing, as TCS.NS and NSE:TCS do)
+US_EXCHANGE = re.compile(r"^(?:NYSE\s*AMERICAN|NYSE\s*ARCA|NYSEARCA|NYSEAMERICAN|NYSEMKT|NYSE|NASDAQ|AMEX|ARCA|CBOE|BATS)\s*[:/]\s*")
+
+
 def canon_us(symbol: str | None) -> str:
-    """BRK.B, brk.b and BRK/B -> BRK-B; any other ticker upper-cased and trimmed, otherwise as it is."""
+    """BRK.B, brk.b and BRK/B -> BRK-B; NYSE:JPM -> JPM; any other ticker upper-cased and trimmed, otherwise as it is."""
     s = str(symbol or "").strip().upper()
+    s = US_EXCHANGE.sub("", s).strip() or s
     m = CLASS.match(s)
     return f"{m.group(1)}-{m.group(2)}" if m else s
 

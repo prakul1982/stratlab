@@ -96,7 +96,7 @@ def test_the_post_says_why_the_charges_and_the_deepest_fall_are_the_same_for_bot
     table = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "")["rows"]
     charges, fall = next(r for r in table if r[0] == "Charges paid"), next(r for r in table if r[0].startswith("Deepest fall"))
     assert charges[1] == charges[2] and fall[1] == fall[2]                           # the engine's own result: both are the same arithmetic
-    assert fall[0] == "Deepest fall of the units' price"
+    assert fall[0] == "Deepest fall of the index's price (the same for both)"
     text = blog.plain_text(post["blocks"])
     assert "so it is the same number for the SIP and the lump sum" in text and "Charges are a share of each purchase" in text
     assert not blog_research.advice_words(post)

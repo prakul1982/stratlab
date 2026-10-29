@@ -128,7 +128,10 @@ def stage2_names(region: str, weekly: bool) -> dict:
     window = 5 if weekly else 1
 
     def row(r):
-        out = {"symbol": r["symbol"], "name": r.get("name"), "price": round(r["price"], 2)}
+        out = {"symbol": r["symbol"], "name": r.get("name"), "price": round(r["price"], 2),
+               # for the brief's table (O5): the stage and the Supertrend as the scan read them, and the day the rule newly matched
+               "stage": r.get("stage"), "stage_days": r.get("stage_days"), "st_up": bool(r.get("st_up")), "st_since": r.get("st_since"),
+               "matched_on": max([d for d in (r.get("st_since"), r.get("stage_since")) if d], default=None) if r.get("st_up") else r.get("stage_since")}
         # the scan's change is the last session's alone: a weekly brief carried it and its summary called a one-day fall
         # the week's (DI-024: "Tech Mahindra dropped 2.14%" in a week it was flat), so only a daily brief has it
         if not weekly:

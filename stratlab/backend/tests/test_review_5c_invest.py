@@ -34,7 +34,7 @@ def test_the_fallback_quote_keeps_the_time_of_its_last_trade(monkeypatch):
 
 def test_a_price_from_the_fundamentals_page_has_no_time_and_no_fresh_as_of(monkeypatch):
     scr = {"name": "Titan Company Ltd", "ratios": {"Current Price": 3410.5}, "fetched_at": "2026-10-08T06:00:00+00:00"}
-    monkeypatch.setattr(company_mod, "scr_summary", lambda s: {"price": 3410.5})
+    monkeypatch.setattr(company_mod, "scr_summary", lambda s, listed_on=None: {"price": 3410.5})
     c = _fallback_company(monkeypatch, {"scr": scr})
     assert c["quote"] == {"price": 3410.5, "at": None}
     assert routes.prices_as_of(c) is None                     # never "now"

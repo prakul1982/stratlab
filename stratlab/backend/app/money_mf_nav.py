@@ -301,9 +301,10 @@ def gf_navs() -> dict:
     return out
 
 
-def fetch_history(code: str, start: str, end: str) -> dict:
-    """One scheme's NAV history for a range, as the industry body's service sends it. Tests replace this."""
-    with httpx.Client(timeout=TIMEOUT, follow_redirects=True, headers={"User-Agent": UA, "Accept": "application/json"}) as c:
+def fetch_history(code: str, start: str, end: str, timeout: float = TIMEOUT) -> dict:
+    """One scheme's NAV history for a range (under five years), as the industry body's service sends it. It answers about 7 KB a
+    second, so five years take half a minute: the ETF back-fill asks with a longer `timeout`. Tests replace this."""
+    with httpx.Client(timeout=timeout, follow_redirects=True, headers={"User-Agent": UA, "Accept": "application/json"}) as c:
         r = c.get(HIST_URL, params={"query_type": "historical_period", "from_date": start, "to_date": end, "sd_id": code})
         if r.status_code == 200 and "No records" in r.text[:200]:
             return {}

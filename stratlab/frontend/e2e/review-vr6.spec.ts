@@ -61,17 +61,14 @@ test("VR6-007: a post's three and four column tables fit a 360px phone, the four
   expect(new Set(tops).size, `the four figures of a check ${tops}`).toBe(1);
 });
 
-test("VR6-005: a brief opens with one line and a tile for each index, not a paragraph and a table saying the same figures", async ({ page, baseURL }) => {
+test("VR6-005 (O5): a brief opens with one line and one table of the indices, not a paragraph and tiles saying the same figures", async ({ page, baseURL }) => {
   await open(page, `${baseURL}/blog/briefs`, null, 390);
   await page.locator("ul.posts a.post", { hasText: "India market brief" }).first().click();
   await expect(page.getByRole("heading", { level: 2, name: "Index closes" })).toBeVisible({ timeout: 30_000 });
-  const tiles = page.locator("article ul.kpis li");
-  expect(await tiles.count()).toBeGreaterThanOrEqual(2);
-  await expect(tiles.first()).toContainText("on the day");
-  await expect(page.locator("article .btbl")).toHaveCount(0);
-  // two to a row, the odd last one takes the whole row
-  const tops = await tiles.evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.width)]; }));
-  if (tops.length % 2 === 1) expect(tops[tops.length - 1][1], "the last tile's width").toBeGreaterThan(390 * 0.8);
+  await expect(page.locator("article ul.kpis li")).toHaveCount(0);
+  const idx = page.locator("article .btbl").first();
+  await expect(idx).toContainText("NIFTY 50");
+  expect(await idx.locator("tbody tr").count()).toBeGreaterThanOrEqual(2);
   await noSideways(page);
 });
 

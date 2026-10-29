@@ -65,5 +65,5 @@ test("the positioning page's change and net cells are drawn with Signed", () => 
   // DC-005: a change in a long or a short count is in the text colour (more shorts read green); the nets keep Signed
   assert.match(src, /<span className="k-sub-line k-muted num" data-testid="pos-chg">\{signed\(v\)\}<\/span>/, "the change line under each cell");
   assert.match(src, /k\.endsWith\("_net"\) \? <Sgn v=/, "the net futures column");
-  assert.match(src, /tone=\{signTone\(n\(fii, `fut_\$\{seg\}_net`\)\)\}/, "the headline net");
+  assert.match(src, /v: tv\(signed\(n\(fii, `fut_\$\{seg\}_net`\)\), signTone\(n\(fii, `fut_\$\{seg\}_net`\)\)\)/, "the headline net");
 });

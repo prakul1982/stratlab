@@ -2415,6 +2415,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .lp-head-skel { gap: 12px; }
 .lp-skel-h { height: calc(clamp(32px, 4vw, 50px) * 2.1); width: min(20ch, 100%); max-width: 520px; }
 .lp-skel-p { height: calc(17px * 1.6 * 2); width: min(56ch, 100%); }
+.lp-skel-p.lp-skel-p-one, .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }   /* LIVE2-031: the Plans page's one-line lede: a two-line (four on a phone) placeholder moved the cards up 27 to 81px when the prices arrived */
 .lp-period { min-height: 44px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
 .lp-currency { display: inline-flex; align-items: center; gap: 8px; }
 .lp-currency select { width: auto; min-height: 44px; }
@@ -2426,6 +2427,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
    that room so the page below doesn't jump when the prices arrive (the FAQ moved 122px on a 412px phone) */
 @media (max-width: 640px) {
   .lp-skel-p { height: calc(17px * 1.6 * 4); }
+  .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }
   .lp-skel-fine { height: calc(13.5px * 1.5 * 6); }
   .lp-skel-seg { height: 50px; }
 }

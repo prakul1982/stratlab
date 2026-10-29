@@ -28,7 +28,7 @@ LEGAL = {"ltd", "limited", "inc", "incorporated", "corp", "corporation", "plc", 
 # the broker's list cuts long names short: "APOLLO HOSPITALS ENTER. L", "TATA CONSULTANCY SERV LT"
 CUT_LIMITED = {"l", "li", "lim", "limi", "limit", "lt", "ltd"}
 ISIN = re.compile(r"[A-Z]{2}[A-Z0-9]{9}[0-9]")
-_listing_affix = re.compile(r"^(?:NSE|BSE)\s*[:/]\s*|(?:\.NS|\.BO|\.NSE|\.BSE|-EQ)$", re.I)
+_listing_affix = re.compile(r"^(?:NSE|BSE|NYSE\s*AMERICAN|NYSE\s*ARCA|NYSEARCA|NYSE|NASDAQ|AMEX)\s*[:/]\s*|(?:\.NS|\.BO|\.NSE|\.BSE|-EQ)$", re.I)
 _TOKEN = re.compile(r"[a-z0-9&]+")
 
 # short names people use for a company, by market: name -> symbols it means (the first listed first)

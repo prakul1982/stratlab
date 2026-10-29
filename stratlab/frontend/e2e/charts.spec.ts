@@ -158,7 +158,8 @@ test("charts: an experiment's equity curve has ranges, Index to 100 and a legend
   await expect(chart).toBeVisible({ timeout: 30_000 });
   // ranges: 1Y shows the last year only
   const ranges = chart.getByRole("group", { name: "Chart range" });
-  await expect(ranges.getByRole("button")).toHaveText(["1M", "3M", "6M", "1Y", "All"]);
+  // the shared range control (lib/period.ts): only the ranges ~4 years of history reaches, then All and "+ Custom"
+  await expect(ranges.getByRole("button", { name: /^(1W|1M|3M|6M|YTD|1Y|3Y|All)$/ })).toHaveText(["1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "All"]);
   await ranges.getByRole("button", { name: "1Y" }).click();
   await expect(ranges.getByRole("button", { name: "1Y" })).toHaveAttribute("aria-pressed", "true");
   await expect(chart.getByRole("button", { name: "Reset zoom" })).toBeVisible();

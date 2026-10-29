@@ -340,7 +340,7 @@ def test_every_brief_opens_with_the_facts_line_and_the_ai_words_go_under_it(monk
     html, text = write.render(issue)
     assert text.index("NIFTY 50 +1.30%; SENSEX +1.23% today.") < text.index(ai)
     assert ">NIFTY 50 +1.30%; SENSEX +1.23% today. 1 sector moved to another quadrant on the rotation chart.</div>" in html
-    assert "14.6% below its 52-week high" in html and "below its high" not in html
+    assert "14.6% below" in html and "From 52-week high" in html and "below its high" not in html           # a column of the Indices table (O5)
     # a day whose AI words didn't pass has the same first line and nothing under it
     monkeypatch.setattr(write, "ai_summary", lambda f: None)
     write._cache.clear()

@@ -18,14 +18,16 @@ test("RC2A-004: a closing time is shown only when the exchange's page gave one",
   const list = read("src/pages/IposPage.tsx"), page = read("src/pages/IpoPage.tsx"), text = read("src/lib/ipoText.ts");
   assert.doesNotMatch(list + page + text, /5 PM IST/);
   assert.match(list, /r\.close_time && <span className="k-sub-line">\{clockText\(r\.close_time\)\} IST/);
-  assert.match(page, /r\.close_time && <span className="k-note" data-testid="ipo-close-time">/);
+  assert.match(page, /n: r\.close_time \? <span data-testid="ipo-close-time">\{clockText\(r\.close_time\)\} IST<\/span> : undefined/);
 });
 
-test("RC2A-003: the key and value of the issue grid are one item, so a wrapping grid cannot pair a label with the next value", () => {
-  const page = read("src/pages/IpoPage.tsx"), css = read("src/pages/ipo.css");
-  assert.doesNotMatch(page, /<><dt>/);
-  assert.equal((page.match(/<div(?: className="wide")?><dt>/g) ?? []).length >= 15, true);
-  assert.match(css, /\.ipo-facts > div\.wide \{ grid-column: 1 \/ -1; \}/);
+test("RC2A-003 (O7): the issue's terms and dates are rows of a table, so a label can never sit over another row's value", () => {
+  const page = read("src/pages/IpoPage.tsx");
+  assert.doesNotMatch(page, /<dt>|<dl|className="ipo-facts"/);                                   // no grid of label and value pairs
+  assert.match(page, /const LineTable = FactTable;/);
+  assert.equal((page.match(/\{ id: "/g) ?? []).length >= 20, true);
+  assert.match(page, /<LineTable label="The terms of the issue"/);
+  assert.match(page, /<LineTable label="The dates of the issue"/);
 });
 
 test("RC2A-002: the latest close is dated on the list", () => {
@@ -34,7 +36,8 @@ test("RC2A-002: the latest close is dated on the list", () => {
 
 test("RC2A-006: the list says when the bids were read, and the banner names its own read", () => {
   const list = read("src/pages/IposPage.tsx");
-  assert.match(list, /data-testid="ipo-bids-read">Bids read /);
+  assert.match(list, /asOfLabel=\{liveBids \? "Bids read" : "Read"\}/);                 // (LIVE2-023: one stamp: the bids' on the Open tab, the list's elsewhere)
+  assert.doesNotMatch(list, /data-testid="ipo-bids-read"/);
   assert.match(list, /problemNote\(d\.problems, d\.problems_at/);       // (LIVE1A-061: the sentence is ipoText's problemNote)
 });
 

@@ -21,6 +21,7 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends
 
 from . import db, instrument_kinds, money_mf_nav
+from .packed import pack, unpack
 from .auth import current_profile
 from .intel.net import TTLCache
 from .newsletter import job as news_job
@@ -30,7 +31,14 @@ from .responses import err, ok
 NAV_DAY_KEY = "etfnav:navday:"     # etfnav:navday:<YYYY-MM-DD> = {isin: that trading day's NAV} (DF-006)
 LIVE_KEY = "etfnav:live"           # {"read", "as_of", "rows": {symbol: [name, isin, price, inav, underlying, nav, nav date, volume]}}
 DAY_KEY = "etfnav:day:"            # etfnav:day:<YYYY-MM-DD> = {symbol: [close, that day's NAV or None, 1 when the close is the exchange's official one]}
-KEEP_DAYS = 30                     # trading days of history kept
+KEEP_DAYS = 30                     # trading days of history the list's 30-day column is worked out over
+ROW_DAYS = 45                      # day rows kept as they are; past ROLL_AT rows, the oldest move into each ETF's long series (O1)
+ROLL_AT = 70
+SERIES_KEY = "etfnav:ser:"         # etfnav:ser:<SYMBOL> = packed {"o": first day ordinal, "d": [days after the one before], "c": [closes], "n": [NAVs], "bf": 1 once back-filled}
+BACKFILL_KEY = "etfnav:bf"         # {"fail": {symbol: [tries, last day tried]}}
+BACKFILL_DAYS = 1800               # the NAV history service's limit is under five years
+BACKFILL_PER_TICK = 3              # ETFs one run of the job back-fills (two reads each, about a minute)
+BACKFILL_RETRY_DAYS = 7            # an ETF that failed three times is left alone for this long
 FILL_DAYS = 5                      # days back whose missing NAVs are still looked for
 IST = timezone(timedelta(hours=5, minutes=30))
 WIDE_GAP = 50.0                    # a gap beyond this is shown, said to be that wide (DF-001): an overseas fund at its limit
@@ -329,6 +337,82 @@ def fill_day_navs(data: dict) -> int:
     return kept
 
 
+# ---------- the one-off back-fill of the long series (O1) ----------
+_hist = {"closes": None}
+
+
+def setup_history(closes_fn):
+    """Where an ETF's daily closes come from for the back-fill: `closes_fn(symbol)` -> [{"t": ISO day, "c": close}, ...] (main.py's
+    price client, or a test's fake)."""
+    _hist["closes"] = closes_fn
+
+
+def nav_history(code: str, start: str, end: str) -> dict[str, float]:
+    """A scheme's NAV on each day of a range, {day: NAV}, from the industry body's NAV history service (public)."""
+    got = money_mf_nav.fetch_history(code, start, end, timeout=120.0)
+    groups = ((got or {}).get("data") or {}).get("nav_groups") or [{}]
+    out = {}
+    for r in (groups[0] or {}).get("historical_records") or []:
+        n = money_mf_nav._num(str(r.get("nav") if r.get("nav") is not None else ""))
+        if n and str(r.get("date") or "")[:10]:
+            out[str(r["date"])[:10]] = n
+    return out
+
+
+def backfill_state() -> dict:
+    return db.json_value(db.get_setting(BACKFILL_KEY), {})
+
+
+def backfill_one(sym: str, row: dict, data: dict, today: date) -> bool:
+    """Read one ETF's five years once: its scheme's NAV on each day and the exchange-traded price's daily closes, joined by day into the
+    long series. False when the NAV scheme or the closes can't be found."""
+    sch = money_mf_nav.find(data, isin=row.get("isin") or "") if row.get("isin") else None
+    fn = _hist["closes"]
+    if not sch or not sch.get("code") or fn is None:
+        return False
+    start = (today - timedelta(days=BACKFILL_DAYS)).isoformat()
+    navs_ = nav_history(sch["code"], start, today.isoformat())
+    bars = fn(sym) or []
+    closes = {str(b["t"])[:10]: num(b.get("c")) for b in bars if num(b.get("c")) is not None}
+    rows = {d: (c, navs_.get(d)) for d, c in closes.items() if d >= start and str(d) < today.isoformat()}
+    if not rows:
+        return False
+    save_series(sym, rows, backfilled=True)
+    return True
+
+
+def backfill_step(data: dict, today: date, limit: int = BACKFILL_PER_TICK) -> int:
+    """Back-fill up to `limit` more ETFs, once each. Three failures put an ETF aside for BACKFILL_RETRY_DAYS. Returns how many were done.
+    The whole walk is about 360 ETFs; once every one is in the state, a run costs one read of that state."""
+    live = load_live()["rows"]
+    st = backfill_state()
+    done, fail = set(st.get("done") or []), dict(st.get("fail") or {})
+    todo = []
+    for s in sorted(live):
+        if s in done:
+            continue
+        n, last = (fail.get(s) or [0, ""])
+        if n >= 3 and last and (today - date.fromisoformat(last)).days < BACKFILL_RETRY_DAYS:
+            continue
+        todo.append(s)
+    n_done = 0
+    for s in todo[:limit]:
+        try:
+            ok_ = backfill_one(s, live[s], data, today)
+        except Exception as e:
+            print("ETF back-fill failed:", s, type(e).__name__, str(e)[:100])
+            ok_ = False
+        if ok_:
+            done.add(s)
+            fail.pop(s, None)
+            n_done += 1
+        else:
+            n, _ = (fail.get(s) or [0, ""])
+            fail[s] = [1 if n >= 3 else n + 1, today.isoformat()]          # after the wait, a first failure again
+        db.set_setting(BACKFILL_KEY, json.dumps({"done": sorted(done), "fail": fail}, separators=(",", ":")))
+    return n_done
+
+
 # ---------- the history ----------
 def _days() -> dict[str, dict]:
     """Every stored day: {"2026-10-03": {symbol: [close, nav]}}."""
@@ -346,6 +430,55 @@ def _days() -> dict[str, dict]:
         return {}
     _cache.set("days", out, 600)
     return out
+
+
+# ---------- the long series (O1) ----------
+def load_series(symbol: str) -> dict:
+    """One ETF's long series as stored: {"o", "d", "c", "n", "bf"}; {} when it has none."""
+    key = SERIES_KEY + symbol
+    hit = _cache.get(("ser", symbol))
+    if hit is not None:
+        return hit
+    try:
+        got = unpack(db.get_setting(key))
+    except Exception:
+        got = {}
+    _cache.set(("ser", symbol), got, 300)
+    return got
+
+
+def series_rows(symbol: str) -> list[tuple[str, float | None, float | None]]:
+    """The long series as [(day, close, NAV)], oldest first."""
+    s = load_series(symbol)
+    if not s.get("d"):
+        return []
+    out, o = [], int(s["o"])
+    for i, step in enumerate(s["d"]):
+        o += int(step)
+        out.append((date.fromordinal(o).isoformat(), s["c"][i], s["n"][i]))
+    return out
+
+
+def save_series(symbol: str, rows: dict[str, tuple[float | None, float | None]], backfilled: bool | None = None):
+    """Merge days {day: (close, NAV)} into an ETF's long series (a value given replaces the one stored; None keeps it)."""
+    have = {d: (c, n) for d, c, n in series_rows(symbol)}
+    for day, (c, n) in rows.items():
+        oc, on = have.get(day, (None, None))
+        have[day] = (c if c is not None else oc, n if n is not None else on)
+    days = sorted(have)
+    if not days:
+        return
+    first = date.fromisoformat(days[0]).toordinal()
+    prev, deltas = first, []
+    for d in days:
+        o = date.fromisoformat(d).toordinal()
+        deltas.append(o - prev)
+        prev = o
+    old = load_series(symbol)
+    doc = {"o": first, "d": deltas, "c": [have[d][0] for d in days], "n": [have[d][1] for d in days],
+           **({"bf": 1} if (backfilled if backfilled is not None else old.get("bf")) else {})}
+    db.set_setting(SERIES_KEY + symbol, pack(doc))
+    _cache.set(("ser", symbol), doc, 300)
 
 
 def whole_market(official: dict, symbols) -> bool:
@@ -431,21 +564,32 @@ def fill_navs(data: dict, today: date) -> int:
 
 
 def prune():
-    """Only the newest KEEP_DAYS days stay."""
+    """Past ROLL_AT day rows, the oldest move into each ETF's long series (one write per ETF, about once a month) and the
+    rows go: the newest ROW_DAYS stay as they are. Nothing is thrown away (O1)."""
     days = sorted(_days())
-    for day in days[:-KEEP_DAYS]:
+    if len(days) <= ROLL_AT:
+        return
+    old = days[:-ROW_DAYS]
+    add: dict[str, dict[str, tuple]] = {}
+    every = _days()
+    for day in old:
+        for sym, v in (every.get(day) or {}).items():
+            if isinstance(v, list) and len(v) >= 2 and (num(v[0]) is not None or num(v[1]) is not None):
+                add.setdefault(sym, {})[day] = (num(v[0]), num(v[1]))
+    for sym, pts in add.items():
+        save_series(sym, pts)
+    for day in old:
         db.delete_setting(DAY_KEY + day)
-    if len(days) > KEEP_DAYS:
-        _cache.clear()
+    _cache.clear()
 
 
-def history(symbol: str, doubtful_day: str | None = None) -> list[dict]:
+def history(symbol: str, doubtful_day: str | None = None, keep: int | None = KEEP_DAYS) -> list[dict]:
     """One ETF's stored days, oldest first: {"day", "close", "nav", "gap", "official"} (gap and nav None until that
     day's NAV is out; `official` when the close is the exchange's own). `doubtful_day` is the day whose gap the row
     leaves out (its close and the latest price disagree): it is left out of the history too, marked `doubtful`, so the
     range never holds the gap the row says it left out (DF-004: GROWWN200's "left out" gap was in its range)."""
     out = []
-    for day, rows in sorted(_days().items())[-KEEP_DAYS:]:
+    for day, rows in (sorted(_days().items())[-keep:] if keep else sorted(_days().items())):
         v = rows.get(symbol)
         if not isinstance(v, list) or len(v) < 2:
             continue
@@ -454,6 +598,21 @@ def history(symbol: str, doubtful_day: str | None = None) -> list[dict]:
                     **({"doubtful": True} if day == doubtful_day else {}),
                     **({"mismatch": True} if g is None and day != doubtful_day and mismatched(v[0], v[1]) else {})})
     return out
+
+
+def long_history(symbol: str, doubtful_day: str | None = None) -> list[dict]:
+    """One ETF's whole stored history, oldest first, in history()'s shape: the long series (back-filled and rolled over) up to the
+    day rows, which win on a day both have (their closes are the exchange's official ones)."""
+    recent = history(symbol, doubtful_day, keep=None)
+    first = recent[0]["day"] if recent else None
+    out = []
+    for day, close, nav in series_rows(symbol):
+        if first and day >= first:
+            continue
+        g = gap(close, nav)
+        out.append({"day": day, "close": num(close), "nav": num(nav), "gap": g,
+                    **({"mismatch": True} if g is None and mismatched(close, nav) else {})})
+    return out + recent
 
 
 def summary(hist: list[dict]) -> dict | None:
@@ -599,7 +758,7 @@ def detail(symbol: str) -> dict | None:
     if not r:
         return None
     row = row_view(sym, r, navs(), live["as_of"])
-    h = history(sym, row["nav_date"] if row["nav_doubtful"] else None)
+    h = long_history(sym, row["nav_date"] if row["nav_doubtful"] else None)
     return {"row": row, "history": h, "days": summary(h), "note": note(r.get("inav") is not None)}
 
 
@@ -643,7 +802,7 @@ class Job(news_job.Job):
     def __init__(self, feed_fn):
         super().__init__()
         self.feed_fn = feed_fn
-        self.status.update(read=None, recorded=None, filled=0)
+        self.status.update(read=None, recorded=None, filled=0, backfilled=0)
         self._read = 0.0
         self._first = 0.0
 
@@ -678,6 +837,10 @@ class Job(news_job.Job):
             data = navs()
             fill_day_navs(data)
             self.status["filled"] = fill_navs(data, local)
+            from .stock_alerts import market_open
+            if load_live()["rows"] and not market_open("IN", now):
+                # the one-off long history, a few ETFs a run, outside market hours (O1); over once every ETF is in
+                self.status["backfilled"] += backfill_step(data, local)
         except Exception as e:
             self.status["last_error"] = str(e)[:200]
         return 0

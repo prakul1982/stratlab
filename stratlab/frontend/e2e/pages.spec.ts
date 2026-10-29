@@ -1758,8 +1758,9 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   const split = await main.getByTestId("split-fii").innerText();
   const [lo, sh] = (split.match(/[\d.]+(?=%)/g) ?? []).map(Number);
   expect(lo + sh).toBeCloseTo(100, 1);
-  await expect(main.getByTestId("sides-fig")).toContainText(/long share\s*[\d.]+%\s*[\d.]+% short/);        // VR1-070: the long share as the figure, the short side in its note
-  await expect(main.getByTestId("sides-fig")).toContainText(/[+−][\d.]+ pts from the previous trading day/);
+  const sidesRow = main.getByTestId("part-figs").locator("tbody tr").filter({ has: page.getByTestId("sides-fig") });
+  await expect(sidesRow).toContainText(/long share\s*[\d.]+%\s*[\d.]+% short/);        // VR1-070: the long share as the figure, the short side in its note
+  await expect(sidesRow).toContainText(/[+−][\d.]+ pts from the previous trading day/);
   // a figure is three rows shared with its neighbours (label, number, note): nothing in one draws over the next
   const overlaps = await main.locator(".k-stat").evaluateAll((figs) => figs.flatMap((f) => {
     const rows = Array.from(f.children).map((c) => c.getBoundingClientRect()).filter((b) => b.height > 0);
@@ -1780,7 +1781,7 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await main.getByRole("radio", { name: "Volume", exact: true }).click();
   await expect(main.getByRole("columnheader", { name: "Futures bought", exact: true })).toBeVisible();
   await expect(main.getByRole("columnheader", { name: "Futures bought / sold" })).toBeVisible();
-  await expect(main.getByText("FII/FPI net")).toBeVisible();
+  await expect(main.locator("#pos-cash").getByRole("row", { name: /^FII\/FPI/ })).toBeVisible();          // the cash market is a table: who, net, bought, sold
   const pcr = main.getByTestId("pcr-table");
   for (const n of ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]) await expect(pcr.locator(`tr[data-pcr="${n}"]`)).toBeVisible({ timeout: 30_000 });
   await expect(pcr.locator('tr[data-pcr="NIFTY"]').getByTestId("pcr-expiry")).toHaveText(/\d/);     // the expiry, under the index's name

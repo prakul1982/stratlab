@@ -358,6 +358,8 @@ def blog_posts():
                 issue = job.build_market(region, day, False, store=False)
                 if issue:
                     blog.save_brief(issue)
+                    if got == 0:
+                        job.save(issue)              # the newest one is also an issue the Briefs page lists and can make a PDF of (e2e/fix2.spec.ts)
                 got += 1
             day -= timedelta(days=1)
     print("blog:", blog_research.generate(builders=blog_research.source_posts()))
@@ -432,6 +434,7 @@ def etf_gaps(mp):
     mp.setattr(etf_nav, "navs", lambda: data)
     etf_nav.refresh(main.filings_feed)
     fake_etf.seed_history(date.today())
+    fake_etf.seed_long(date.today())               # three years more behind the 30 days, for the range chips (O1)
     mp.setattr(main.etf_job, "start", lambda: None)          # the stored list stays as it is for the whole run
 
 

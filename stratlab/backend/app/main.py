@@ -263,6 +263,8 @@ invite_job = invite_rewards.Job()
 positioning_runner = positioning.Runner(lambda: filings_feed)
 positioning_job = positioning.Job(positioning_runner)
 etf_nav.setup(lambda: filings_feed)              # ETF prices against their NAV: the exchange's ETF list
+# ...and each ETF's five years of daily closes for the one-off long history (ttl 0: read once, never kept in the price cache)
+etf_nav.setup_history(lambda sym: research_hub.yahoo.chart(f"{sym}.NS", "1d", 1830, ttl=0)["candles"])
 
 
 def _exchange_files():
@@ -2873,7 +2875,13 @@ def deep_view(sym: str, base: dict) -> dict:
         reads = {**reads, "problems": deepdive.customer_problems(reads["problems"])}
     nums = deepdive.numbers(p)
     card_view = report_card.view(card, nums)
-    snap = screener_summary(p)
+    listed_on = None
+    if not us:
+        try:
+            listed_on = (stock_page_store.peek("IN", sym) or {}).get("range_since")      # the public page's own listing day (LIVE2-025)
+        except Exception:
+            listed_on = None
+    snap = screener_summary(p, listed_on)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
         snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
         # the public page's market value check: a failed value is blank here too, with the P/E, the deck's tile, the
@@ -2891,7 +2899,7 @@ def deep_view(sym: str, base: dict) -> dict:
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
-            "snapshot": {**{k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
+            "snapshot": {**{k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pe_why", "pb", "roce", "roe", "debt_equity", "div_yield")},
                          "cap_note": stock_pages.CAP_UNAVAILABLE if snap.get("cap_problem") else None},
             "industry_measures": industry.measures(p, sym),
             "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
@@ -4480,7 +4488,8 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             if pe and pe > 0:
                 checks["eps"] = round(close / pe, 4)
     nums = deepdive.numbers(p)
-    snap = screener_summary(p)
+    # a share listed within the year: its balance sheet predates the issue, so the source's share count stands (LIVE2-025)
+    snap = screener_summary(p, (prices or {}).get("range_since") if region == "IN" else None)
     if region == "IN":
         if not close:
             # no daily candles: the exchange's own close of the market's last session, dated (R7V-004), before the
@@ -7334,6 +7343,9 @@ def news_view(issue: dict) -> dict:
     # the session the numbers are the close of, holidays known: the page said "the close of 2 Oct", a holiday (DI-026)
     if (day := news.write.close_day(issue)):
         out["close_day"] = day
+    # every section that lists figures as a table (O5): drawn by the Briefs page, the email and the PDF alike, from the stored issue
+    from .newsletter import tables as news_tables
+    out["tables"] = news_tables.of(issue)
     return out
 
 
@@ -7383,6 +7395,21 @@ def news_issue(iid: str, profile=Depends(current_profile)):
     if not issue:
         err(404, "not_found", "That issue wasn't found.")
     return news_view(issue)
+
+
+@app.get("/news/{iid}/pdf")
+def news_issue_pdf(iid: str, profile=Depends(current_profile)):
+    """One issue as a PDF (O6): the same tables as the page and the email, made when asked and not kept. Whoever can read the issue can
+    download it: a market issue is for everyone, a My Stocks issue only for its reader."""
+    throttle(profile, "news_pdf", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
+    parts = news.parse_id(iid)
+    issue = news.load(iid) if parts and (parts[0] == "market" or parts[1] == profile["id"]) else None
+    if not issue:
+        err(404, "not_found", "That issue wasn't found.")
+    from .newsletter import pdf as news_pdf
+    issue = news.write.regional_links(issue)
+    return Response(news_pdf.build(issue), media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{news_pdf.filename(issue)}"', "Cache-Control": "private, no-store"})
 
 
 def newsletters_view(profile: dict) -> dict:

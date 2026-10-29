@@ -14,7 +14,16 @@ export interface IssueItem { text: string; url?: string | null; symbol?: string 
   /** A weekly brief's headline: the day it ran ("Thu 22 Oct") */ day?: string | null;
   /** My stocks: the price, its move since the previous session and the "since …" label the email shows */ price?: number | null; currency?: string | null; change_pct?: number | null; since?: string | null }
 
+/** One cell of a brief's table (the server's newsletter/tables.py): text, or text with an address, a tone (the arrow's colour), a small
+ * line under it and lines of its own (what changed for a stock). `ext`: a link out of the site. */
+export type BriefCell = string | { t?: string; href?: string; tone?: "up" | "down" | "flat"; sub?: string; ext?: boolean; lines?: { t: string; href?: string }[] };
+export type BriefTable =
+  | { title: string; kind: "table"; head: string[]; align: string; rows: BriefCell[][]; note?: string | null; link?: { a: string; href: string } | null }
+  | { title: string; kind: "text"; items: (string | { t?: string; href?: string })[] };
+
 export interface Issue {
+  /** every section that lists figures as a table, the prose sections as text (O5) */
+  tables?: BriefTable[];
   id: string; kind: NewsKind; region: Region | null; day: string; weekly: boolean; subject: string;
   summary: string | null; /** the AI's words, under the facts line (R8B-007) */ ai_summary?: string | null; sections: { title: string; items: IssueItem[] }[]; html: string; at: string;
   /** a Market Brief's: the session its numbers are the close of, holidays known (DI-026: a week whose Friday was a holiday) */ close_day?: string | null;

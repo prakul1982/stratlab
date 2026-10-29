@@ -1,21 +1,33 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Card, CardHead } from "./Card";
 import { ChipBar } from "./ChipBar";
+import { RangeChips } from "./RangeChips";
 import { DataTable, type Column } from "./DataTable";
+import { Pager } from "./Pager";
 import { Seg, type Choice } from "./Seg";
+
+const TABLE_PAGE = 100;
 
 /** A chart in its card: the title and (i) on the left, and in the same row the range switch (a Seg for up to four
  * ranges, a ChipBar for more) and a "Table" switch that swaps the chart for the same numbers as a table. Put a StatRow
  * in `stats` to show the headline figures above the chart; `actions` adds a card's own buttons after Table; `footer` is for one line under it. The chart inside should
  * be drawn with its own range buttons and table switch turned off (`ranges={false} table={false}`): this frame has them. */
-export function ChartFrame<R>({ title, info, infoLabel, id, label, ranges, range, onRange, table, actions, stats, footer, children }: {
+export function ChartFrame<R>({ title, info, infoLabel, id, label, ranges, range, onRange, rangeFor, table, actions, stats, footer, children }: {
   title: ReactNode; info?: ReactNode; infoLabel?: string; id?: string; label?: string; ranges?: Choice[]; range?: string; onRange?: (v: string) => void; actions?: ReactNode;
+  /** The standard range control (O4): the chart's name and its points, so "+ Custom" and the remembered choice work; `ranges` come from useRange. */
+  rangeFor?: { chart: string; times: (string | number)[] };
   table?: { label: string; columns: Column<R>[]; rows: R[]; rowKey: (r: R) => string; empty?: ReactNode };
   stats?: ReactNode; footer?: ReactNode; children: ReactNode;
 }) {
   const [asTable, setAsTable] = useState(false);
+  // a table of years of days comes a hundred rows at a time, newest first as given (never "and 900 more")
+  const [page, setPage] = useState(1);
+  const total = table?.rows.length ?? 0;
+  const pages = Math.max(1, Math.ceil(total / TABLE_PAGE));
+  useEffect(() => { setPage(1); }, [total]);
   const rangeBar = ranges && ranges.length > 1 && range != null && onRange
-    ? (ranges.length <= 4 ? <Seg label="Range" options={ranges} value={range} onChange={onRange} /> : <ChipBar label="Range" options={ranges} value={range} onChange={onRange} />) : null;
+    ? (rangeFor ? <RangeChips chart={rangeFor.chart} times={rangeFor.times} options={ranges} value={range} onChange={onRange} />
+      : ranges.length <= 4 ? <Seg label="Range" options={ranges} value={range} onChange={onRange} /> : <ChipBar label="Range" options={ranges} value={range} onChange={onRange} />) : null;
   return (
     <Card id={id} label={label} className={rangeBar || actions ? undefined : "k-chart-plain"}>
       <CardHead title={title} info={info} infoLabel={infoLabel} actions={<>
@@ -24,7 +36,10 @@ export function ChartFrame<R>({ title, info, infoLabel, id, label, ranges, range
         {actions}
       </>} />
       {stats}
-      <div className="k-chart-body">{asTable && table ? <DataTable {...table} /> : children}</div>
+      <div className="k-chart-body">{asTable && table
+        ? <><DataTable {...table} rows={table.rows.slice((Math.min(page, pages) - 1) * TABLE_PAGE, Math.min(page, pages) * TABLE_PAGE)} />
+          <Pager page={Math.min(page, pages)} pages={pages} total={total} noun="rows" onPage={setPage} /></>
+        : children}</div>
       {footer}
     </Card>
   );

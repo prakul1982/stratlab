@@ -225,9 +225,16 @@ def sizes(row: dict) -> dict:
         stated = row["total_cr"]
     if stated:
         return {"amount": stated, "basis": "stated"}
-    shares = row.get("size_shares") or ((row.get("fresh") or 0) + (row.get("ofs") or 0)) or None
+    # LIVE2-022: the whole issue (fresh issue and offer for sale) when both are given in shares: the exchange's own "issue size" is the shares
+    # in its bid table, which leave out the anchor portion (BLS Polymers: ₹179 cr against 1,70,00,000 fresh shares at ₹150, ₹255 cr)
+    whole = (row.get("fresh") or 0) + (row.get("ofs") or 0)
+    shares = whole or row.get("size_shares") or None
     if shares and top:
-        return {"amount": round(shares * top / 1e7, 2), "basis": "shares at the top of the price band"}
+        out = {"amount": round(shares * top / 1e7, 2), "basis": "shares at the top of the price band" if not row.get("price") else "shares at the issue price"}
+        bid = row.get("size_shares")
+        if whole and bid and bid < whole:
+            out["in_bids"] = round(bid * top / 1e7, 2)            # what the exchange's bid table covers: the rest is the anchor portion
+        return out
     return {"amount": None, "basis": None}
 
 
@@ -237,8 +244,22 @@ def public(row: dict, now: datetime | None = None) -> dict:
     out = {k: v for k, v in row.items() if k not in ("seen", "docs_checked", "detail_at", "_keys")}
     out["stage"] = stage_of(row, now)
     out.update(timeline(row, now))
+    # SEBI's timetable: the money is unblocked or refunded and the shares credited two working days after bidding closes (T+2), between the
+    # allotment and the listing; the exchanges publish no day for it, so it is given only while it is ahead, marked as the timetable's
+    if row["market"] == "IN" and row.get("close") and not row.get("issue_status") and not row.get("social"):
+        try:
+            when = next_working(date.fromisoformat(row["close"]), 2)
+            if when >= (now or _now()).astimezone(IST).date():
+                out["credit"], out["credit_expected"] = when.isoformat(), True
+        except ValueError:
+            pass
     sz = sizes(row)
     out["size"], out["size_basis"] = sz["amount"], sz["basis"]
+    if sz.get("in_bids"):
+        out["size_in_bids"] = sz["in_bids"]
+    anchor = re.search(r"anchor[^0-9]{0,30}([\d,]{5,})\s+equity shares", str(row.get("issue_text") or ""), re.I)
+    if anchor:
+        out["anchor_shares"] = int(anchor.group(1).replace(",", ""))
     if sz.get("parts"):
         out["size_parts"] = {k: v for k, v in sz["parts"].items() if v}
     if row["market"] == "IN" and row.get("lot") and (row.get("high") or row.get("price")):
@@ -946,7 +967,11 @@ def _read_doc(row: dict, d: dict, url: str, sebi=None) -> dict:
                 raise SourceError("SEBI", "SEBI's filing page has no offer document attached.")
         pages = D.pdf_pages(D.pdf_from(D.download(pdf_url)))
         facts = {"kind": d.get("kind"), "url": url, "pdf": pdf_url, "pages_read": len(pages), "promoters": D.promoters(pages),
-                 "selling": D.selling_holders(pages), "objects": D.objects(pages), "financials": D.financials(pages)}
+                 "selling": D.selling_holders(pages), "objects": D.objects(pages), "financials": D.financials(pages),
+                 # the tables read by fixed rules (O7): the proceeds' use, the risks the document puts first, its key indicators beside its
+                 # listed peers', the holders before the offer, the peers' ratios and the earnings per share
+                 "utilisation": D.utilisation(pages), "risks": D.risk_headings(pages), "kpis": D.kpis(pages), "holding": D.shareholding(pages),
+                 "peers": D.peer_table(pages), "eps": D.eps_rows(pages)}
         excerpt = D.india_excerpt(pages)
     out = {**{k: v for k, v in facts.items() if v not in (None, [], {})}, "reader": D.READER, "read_at": _now().isoformat(timespec="seconds"), "excerpt": excerpt[:34000]}
     db.set_setting(D.FACTS_KEY + doc_key(d), json.dumps(out, separators=(",", ":"), ensure_ascii=False))
@@ -1470,7 +1495,7 @@ def facts_view(row: dict) -> dict:
         return {"state": "none"}
     if not f:
         return {"state": "pending", "kind": d.get("kind")}
-    out = {k: f[k] for k in ("promoters", "selling", "objects", "financials", "us", "pages_read") if k in f}
+    out = {k: f[k] for k in ("promoters", "selling", "objects", "financials", "us", "pages_read", "utilisation", "risks", "kpis", "holding", "peers", "eps") if k in f}
     if out.get("objects"):
         out["objects"] = D.objects_view(out["objects"])
     return {"state": "ready", "kind": f.get("kind"), "read_at": f.get("read_at"), **out}
@@ -1536,7 +1561,7 @@ def ipo_detail(rid: str, profile=Depends(current_profile)):
     keys = ("id", "market", "segment", "name", "symbol", "stage", "isin", "industry", "exchanges", "exchange", "open", "close", "close_time", "hours", "allotment", "allotment_expected",
             "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status",
             "fresh", "ofs", "fresh_cr", "ofs_cr", "size_shares", "issue_type", "issue_text", "lead_managers", "registrar", "expected", "priced", "filed",
-            "shares", "amount", "currency", "industry")
+            "shares", "amount", "currency", "industry", "credit", "credit_expected", "size_in_bids", "anchor_shares")
     ipo = {k: pub.get(k) for k in keys if pub.get(k) is not None}
     if row["market"] == "IN" and row.get("symbol"):
         ipo["company_link"] = f"/research/IN/{row['symbol']}"

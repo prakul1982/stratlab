@@ -213,8 +213,8 @@ test("PUB-2: the company page's top is the price, the chart, then even key figur
     const ctx = await browser.newContext({ viewport: { width: w, height: 900 }, hasTouch: w < 600 });
     const page = await ctx.newPage();
     const errors = await open(page, "/stocks/in/RELIANCE", baseURL!);
-    // the order down the page: the price, the chart, the key figures, ... the About list, the folded explanations
-    const order = await page.evaluate(() => ["[data-price]", "[data-chart]", ".figs", ".tbl.fin", "[data-faq]", "[data-about]", "[data-how]"].map((q) => document.querySelector(q)!.getBoundingClientRect().top + scrollY));
+    // the order down the page: the price, the chart, the key figures, ... the questions, the folded explanations
+    const order = await page.evaluate(() => ["[data-price]", "[data-chart]", ".figs", ".tbl.fin", "[data-faq]", "[data-how]"].map((q) => document.querySelector(q)!.getBoundingClientRect().top + scrollY));
     expect(order, `order at ${w}px`).toEqual([...order].sort((a, b) => a - b));
     await expect(page.locator("[data-how]")).not.toHaveAttribute("open", "");                // folded; its words are in the page
     expect(await page.locator("[data-how]").textContent()).toContain("P/E");

@@ -45,7 +45,8 @@ export function PlansPage() {
    * visitor's currency only as "about $7 at today's rate" beside it (DK-001); a currency with its own plan shows its fixed price. */
   const priceOf = (p: PlanId, per: string) => {
     const none = { charged: null as string | null, inr: false, about: null as string | null, aside: null as string | null };
-    if (p === "free" && row) return { ...none, shown: money(row, 0, currency) };
+    // Free is in the money the other cards are charged in: "₹0 always" beside "₹699 / month, about ¥1,158", not "¥0" beside rupees (LIVE2-013)
+    if (p === "free" && row) return { ...none, shown: currency !== "INR" && chargedInRupees(row, currency, per === "year" ? row.yearly_charged_in : row.charged_in) ? "₹0" : money(row, 0, currency) };
     if (p === "free" || !row || currency === "INR") return { ...none, shown: `₹${rupees(p, per).toLocaleString("en-IN")}`, inr: p !== "free" };
     const field = (per === "year" ? `${p}_year` : p) as "basic" | "pro" | "basic_year" | "pro_year";
     const local = (row as unknown as Record<string, number>)[field];

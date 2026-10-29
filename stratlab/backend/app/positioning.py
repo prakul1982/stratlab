@@ -57,7 +57,7 @@ CASH_PATHS = ("/api/fiidiiTradeReact", "/api/fiidiiTradeNse")
 CASH_PAGE = "https://www.nseindia.com/reports/fii-dii"
 PUBLISH_FROM, PUBLISH_UNTIL = "18:40", "21:30"     # the job's window, India time: the files usually land 18:30-20:00
 RETRY_MINUTES = 20
-BACKFILL_DAYS = 365          # how far back the archives are read on a new server
+BACKFILL_DAYS = 1830         # how far back the archives are read on a new server: five years (O3; the participant files go back to 2019), about 1.5 MB
 BACKFILL_STEP = 25           # days of archive files read per run, so one run never hammers the exchange
 MISS_RUN = 5                 # trading days in a row the archive hasn't got: it's refusing, not missing them
 CATCH_UP_DAYS = 10           # recent days whose files the catch-up looks for when the evening run missed them
@@ -1315,8 +1315,14 @@ class Runner:
         recorded chains not yet summarised. Stops for good when it reaches `days` back."""
         from .data.calendar import is_trading_day
         bf = dict(state().get("backfill") or {})
+        if bf.get("done") and (bf.get("target") or 365) < days:
+            # a walk that finished when the target was shorter (a year) goes on from its oldest day to the new target (O3)
+            old = min((k for k, v in history("part", (today - timedelta(days=days)).isoformat()) if v.get("oi")), default=None)
+            bf = {**bf, "done": False, "next": (date.fromisoformat(old) - timedelta(days=1)).isoformat() if old else None, "target": days}
+            bf.pop("error", None)
         if bf.get("done"):
             return bf
+        bf["target"] = days
         self.running = True
         try:
             feed = self._feed()

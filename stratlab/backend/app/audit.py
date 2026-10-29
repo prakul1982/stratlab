@@ -228,6 +228,9 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
         slack = PE_TOLERANCE + (0.005 if abs(ttm) < 10 else 0.5) / abs(ttm)
         if off is not None and off > slack and abs(ours - snap["pe"]) > PE_ROUNDING and not explained:
             out.append(_issue("mismatch", "Valuation", f"P/E {pe_text(snap['pe'])} on the company page, {pe_text(ours)} from market cap ÷ trailing profit"))
+    if snap.get("pe_why"):
+        # LIVE2-025: the page holds the figure back itself, so there is nothing wrong on show; a fact, not a mismatch
+        out.append(_issue("fact", "Valuation", f"P/E not shown: {snap['pe_why']}"))
     if snap.get("pe") is not None and 0 < float(snap["pe"]) < SUSPECT_PE:
         if p.get("region") == "US":        # filed in dollars against a dollar price: no units to slip, so a profit above the market value is a one-off gain
             out.append(_issue("fact", "Valuation", f"P/E {pe_text(snap['pe'])} is under 1: the last twelve months' profit is more than the "

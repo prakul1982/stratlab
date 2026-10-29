@@ -63,3 +63,13 @@ export function gapAtLastTrade(r: EtfGap, tradeDay: string | null | undefined): 
 export function dayCount(d: { days: number; stored?: number }): string {
   return d.stored && d.stored > d.days ? `${d.days} of ${d.stored} days` : `${d.days} day${d.days === 1 ? "" : "s"}`;
 }
+
+/** The gaps of the days shown: how many days had one, the lowest, the highest and the average (the range chosen on the chart, not the
+ * stored 30). Null with no gap in them. */
+export function gapSummary(days: { day: string; gap: number | null }[]): { days: number; shown: number; low: number; high: number; avg: number; from: string; to: string } | null {
+  const g = days.filter((d) => d.gap != null) as { day: string; gap: number }[];
+  if (!g.length) return null;
+  const sum = g.reduce((a, d) => a + d.gap, 0);
+  return { days: g.length, shown: days.length, low: Math.min(...g.map((d) => d.gap)), high: Math.max(...g.map((d) => d.gap)),
+    avg: Math.round((sum / g.length) * 100) / 100, from: g[0].day, to: g[g.length - 1].day };
+}

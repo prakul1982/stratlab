@@ -6,7 +6,7 @@ from . import library, library_seed
 
 # (address, day the page's words last changed)
 PAGES = [
-    ("/", "2026-10-28"),
+    ("/", "2026-10-29"),
     ("/plans", "2026-10-24"),
     ("/faq", "2026-10-08"),
     ("/library", "2026-10-24"),

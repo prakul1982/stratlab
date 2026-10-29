@@ -151,7 +151,7 @@ test("An IPO's page: terms, bids, the offer document's facts and its summary (Ba
   const terms = page.getByTestId("ipo-terms");
   await expect(terms).toContainText("₹558 to ₹586");
   await expect(terms).toContainText("25 shares");
-  await expect(terms).toContainText("minimum ₹14,650");
+  await expect(terms).toContainText("Minimum bid ₹14,650");
   await expect(terms).toContainText("4,32,39,042 shares");                                        // the offer for sale, in Indian grouping
   await expect(terms).toContainText("Industrial Products");
   await expect(page.getByTestId("ipo-dates")).toContainText("5 PM IST");
@@ -164,20 +164,22 @@ test("An IPO's page: terms, bids, the offer document's facts and its summary (Ba
   await expect(bids.locator(".k-badge.live")).toBeVisible();
 
   const facts = page.getByTestId("ipo-facts");
-  // what the summary below says (promoters, what the money is for), with the words under it, is not said twice (RC2A-007): a Basic page has it once
-  await expect(facts.getByTestId("ipo-promoters")).toHaveCount(0);
-  await expect(facts.getByTestId("ipo-objects")).toHaveCount(0);
-  await expect(facts.getByTestId("ipo-selling")).toContainText("Bonfiglioli S.p.A. (promoter)");
+  // the document's facts are tables (O7): the promoters with who sells, the objects, revenue and profit with the change on the year before
+  await expect(facts.getByTestId("ipo-promoters").getByRole("row", { name: /Bonfiglioli S\.p\.A\..*Promoter.*Yes/ })).toBeVisible();
+  await expect(facts.getByTestId("ipo-objects")).toContainText("The objects of the Offer are to");
   await expect(facts).toContainText("Dec 2025");
   await expect(facts).toContainText("Revenue from operations");
   await expect(facts).toContainText("₹2,014 cr");                                                // 2,013.53 crore
+  await expect(facts.getByTestId("ipo-financials")).toContainText("Latest year's change");
   await expect(facts).toContainText("Page 72 of the PDF");
 
+  // the summary is the business and its segments, and one fold holds the words behind them
   const sum = page.getByTestId("ipo-summary");
-  await expect(sum.getByTestId("ipo-sum-promoters")).toContainText("The promoters are Sonia Bonfiglioli");
-  await sum.getByTestId("ipo-sum-promoters").locator("summary").click();
-  await expect(sum.getByTestId("ipo-sum-promoters")).toContainText("OUR PROMOTERS: SONIA BONFIGLIOLI");      // the words of the document under each statement
-  await expect(sum.getByTestId("ipo-sum-objects")).toContainText("carry out the offer for sale");
+  await expect(sum.getByTestId("ipo-sum-business")).toContainText("The company's promoters are Italian and Indian");
+  await expect(sum.getByTestId("ipo-sum-segments")).toContainText("The promoters are Sonia Bonfiglioli");
+  await expect(sum.getByText("Show the document's words")).toHaveCount(1);
+  await sum.getByTestId("ipo-sum-words").locator("summary").click();
+  await expect(sum.getByTestId("ipo-sum-words")).toContainText("OUR PROMOTERS: SONIA BONFIGLIOLI");      // the words of the document behind each statement
 
   const docs = page.getByTestId("ipo-docs");
   const sebi = docs.getByRole("link", { name: /Red herring prospectus \(RHP\)/ }).first();
@@ -219,15 +221,92 @@ test("A Free account sees the lists and the facts, and the summary and the alert
   expect((await request.put(`${API}/invest/ipos/alerts`, { headers: { Authorization: `Bearer load-${free(phone)}` }, data: { on: true, events: ["open"], markets: ["IN"], sme: false } })).status()).toBe(402);
 
   await page.goto("/invest/ipos/in-bonfig");
-  await expect(page.getByTestId("ipo-facts").getByTestId("ipo-promoters")).toContainText("Sonia Bonfiglioli");               // facts and bids stay free
+  await expect(page.getByTestId("ipo-facts").getByTestId("ipo-promoters")).toContainText("Sonia Bonfiglioli");               // the tables and bids stay free
   await expect(page.getByTestId("ipo-facts").getByTestId("ipo-objects")).toContainText("The objects of the Offer are to");
   await expect(page.getByTestId("ipo-facts").getByTestId("ipo-objects")).toContainText("Page 111 of the PDF");
   await expect(page.getByTestId("ipo-bids")).toContainText("46.06 times");
   const sum = page.getByTestId("ipo-summary");
   await expect(sum).toContainText("The summary of the offer document is on the Basic plan");
-  await expect(page.getByTestId("locked-preview")).toContainText("The risk factors the document puts first");
-  await expect(sum.getByTestId("ipo-sum-promoters")).toHaveCount(0);
+  await expect(page.getByTestId("locked-preview")).toContainText("How its revenue splits by business segment");
+  await expect(sum.getByTestId("ipo-sum-segments")).toHaveCount(0);
   await expect(page.locator(".page-lock")).toHaveCount(0);                                                                    // one lock note on the page, not two
   await sane(page, errors);
   await page.screenshot({ path: `${SHOTS}/ipo-detail-free-${info.project.name}.png`, fullPage: true });
+});
+
+
+test("An IPO's page is a table for every block: a full red herring prospectus read into the objects, risks, indicators, holders and peers", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/invest/ipos/in-sfctech", "Bids received", sessionFor(free(phone)));
+  await expect(page.getByRole("heading", { name: "SFC Environmental Technologies Limited", level: 1 })).toBeVisible();
+  const terms = page.getByTestId("ipo-terms");
+  await expect(terms).toContainText("Fresh issue");
+  await expect(terms).toContainText("₹668 cr");                                                   // 400 + 268 crore
+  // the objects with their amounts and share of the fresh issue
+  const objects = page.getByTestId("ipo-objects");
+  await expect(objects.getByRole("row", { name: /Prepayment of all or a portion.*42\.23.*10\.6%/ })).toBeVisible();
+  await expect(objects.getByRole("row", { name: /Funding our working capital.*74\.92.*18\.7%/ })).toBeVisible();
+  await expect(objects.getByRole("row", { name: /General corporate purposes.*Not given/ })).toBeVisible();
+  // the risks: five, then one fold with the rest, each with its page
+  const risks = page.getByTestId("ipo-risks");
+  await expect(risks).toContainText("top 10 customers");
+  await expect(risks.getByRole("row", { name: /We derive a significant part of our revenue.*31$/ })).toBeVisible();
+  await expect(risks.locator("details")).toHaveCount(1);
+  await expect(risks.getByTestId("ipo-risks-more").locator("summary")).toContainText("Show the other 7 risks");
+  // the key indicators beside the peers, and the price to earnings against them
+  await expect(page.getByTestId("ipo-kpis")).toContainText("Order book");
+  await expect(page.getByTestId("ipo-peer-kpis")).toContainText("Thermax");
+  const peers = page.getByTestId("ipo-peers");
+  await expect(peers.getByRole("row", { name: /Thermax Limited.*52\.0×/ })).toBeVisible();
+  await expect(peers.getByRole("row", { name: /SFC Environmental Technologies Limited.*17\.9×/ })).toBeVisible();      // ₹296 over ₹16.52 a share
+  // who holds the shares before the offer, with the document's own sub-totals
+  const holding = page.getByTestId("ipo-holding");
+  await expect(holding.getByRole("row", { name: /Sub-total \(A\).*4,00,19,595.*42\.84%/ })).toBeVisible();
+  await expect(page.getByTestId("ipo-financials")).toContainText("Earnings per share, basic");
+  // no list of facts and no empty tile: every card has a table
+  for (const id of ["ipo-terms", "ipo-bids", "ipo-objects", "ipo-promoters", "ipo-holding", "ipo-financials", "ipo-kpis", "ipo-peers", "ipo-risks", "ipo-docs"])
+    await expect(page.getByTestId(id).locator("table").first()).toBeVisible();
+  await sane(page, errors);
+  if (phone) await touchable(page);
+  await page.screenshot({ path: `${SHOTS}/ipo-detail-sfc-${info.project.name}.png`, fullPage: true });
+
+  // an issue that has not opened has the whole timetable as a table, with SEBI's rule beside each day it gives (the refund and credit day too)
+  await page.goto("/invest/ipos/in-mksons");
+  const dates = page.getByTestId("ipo-dates");
+  await expect(dates.getByRole("row", { name: /Money unblocked or refunded, shares credited.*\(expected\).*two working days after bidding closes/ })).toBeVisible();
+  await expect(dates.getByRole("row", { name: /Listing.*\(expected\).*three working days/ })).toBeVisible();
+  await expect(dates.getByRole("columnheader", { name: "Rule" })).toBeVisible();
+
+  // an issue whose exchange bid table leaves out the anchor portion says so beside the whole issue
+  await page.goto("/invest/ipos/in-blspoly");
+  await expect(page.getByTestId("ipo-terms")).toContainText("₹255 cr");
+  await expect(page.getByTestId("ipo-terms")).toContainText("bid table covers ₹179 cr");
+  await expect(page.getByTestId("ipo-terms")).toContainText("51,00,000 shares");
+});
+
+// one of every kind of issue the lists hold (O7): main board open, upcoming, closed, listed, an SME issue, one the exchange withdrew or postponed,
+// a Social Stock Exchange raise, a draft filing with no dates, and the US kinds: each opens with its terms as a table and nothing broken
+const KINDS: [string, string][] = [
+  ["in-bonfig", "Bonfiglioli Transmissions Limited"], ["in-mksons", "M. K. Sons Fine Jewels Limited"], ["in-sfctech", "SFC Environmental Technologies Limited"],
+  ["in-blspoly", "BLS Polymers Limited"], ["in-bse-4907", "Wiscon Industries Limited"], ["in-bse-4902", "Core4 Engineers Limited"],
+  ["in-zetwerk", "Zetwerk Manufacturing Businesses Limited"], ["in-tonbo", "Tonbo Imaging Limited"], ["in-zenith", "Zenith Foods Limited"],
+  ["in-orbit", "Orbit Textiles Limited"], ["in-momsbelief", "Rays of Belief Limited"], ["in-f-105347", "Hunger Pangs Limited"],
+  ["us-1100000-1", "Northfield Biologics, Inc."], ["us-1273626-119431", "Iambic Therapeutics, Inc."], ["us-1403574-119467", "City Therapeutics, Inc."],
+  ["us-1407089-119692", "Nodthera Inc."],
+];
+test("every kind of issue opens as tables with nothing broken, on a desktop and a phone", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, `/invest/ipos/${KINDS[0][0]}`, KINDS[0][1], sessionFor(basic(phone)));
+  for (const [id, name] of KINDS) {
+    await page.goto(`/invest/ipos/${id}`);
+    await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("ipo-terms").locator("table").first(), `${id}: the terms are a table`).toBeVisible();
+    await expect(page.locator("main dl, main ul.k-stats, main .k-stat"), `${id}: no tiles or lists of facts`).toHaveCount(0);
+    const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: document.documentElement.clientWidth }));
+    expect(scroll, `${id}: scrolls sideways`).toBeLessThanOrEqual(width + 1);
+    const text = await page.locator("main").innerText();
+    for (const bad of [/\bNaN\b/, /\bundefined\b/, /\[object Object\]/, /\bInfinity\b/]) expect(text, `${id}: "${bad}"`).not.toMatch(bad);
+    if (!phone) await page.screenshot({ path: `${SHOTS}/kind-${id}.png`, fullPage: true });
+  }
+  expect(errors).toEqual([]);
 });

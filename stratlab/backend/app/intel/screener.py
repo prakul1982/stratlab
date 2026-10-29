@@ -237,6 +237,53 @@ def _pe(p: dict, price: float | None) -> float | None:
     return pe
 
 
+PE_AGREE = 0.25               # a P/E and market value ÷ last-12-months profit this far apart (as a share of the P/E) are different bases
+PE_ROUNDING = 0.5             # ...but half a turn apart is rounding
+
+
+def ttm_profit(p: dict) -> float | None:
+    """The trailing-twelve-months net profit of the annual table (its TTM column), when it has one."""
+    pl = p.get("pl") or {}
+    cols = pl.get("cols") or []
+    if not cols or str(cols[-1]).strip().upper() != "TTM":
+        return None
+    for name, vals in (pl.get("rows") or {}).items():
+        if str(name).lower().startswith("net profit") and vals and len(vals) == len(cols):
+            return num(vals[-1]) if not isinstance(vals[-1], (int, float)) else vals[-1]
+    return None
+
+
+def pe_agrees(shown: float, implied: float, ttm: float) -> bool:
+    """Whether a P/E and the one worked out from market value ÷ last-12-months profit are one figure: within PE_AGREE, or half a
+    turn, with the slack a profit given to the whole crore (or the paisa below 10) allows. The quality audit judges a page by
+    this same rule (LIVE2-025)."""
+    slack = PE_AGREE + (0.005 if abs(ttm) < 10 else 0.5) / abs(ttm)
+    return abs(implied - shown) <= PE_ROUNDING or abs(implied - shown) / abs(shown) <= slack
+
+
+def checked_pe(p: dict, price: float | None, cap_cr: float | None) -> tuple[float | None, str | None]:
+    """(P/E, why it is n/a). The price over the trailing earnings per share (_pe), set against the market value over the
+    last 12 months' profit (LIVE2-025): where the two bases disagree beyond PE_AGREE the figure is not published unless something
+    reconciles it. The source's own P/E settles it when it agrees with the market value (BLUECLOUDS: the EPS row counts fewer shares than
+    are in issue now, 28.5 against 40.6) or when it agrees with ours (minority holders' share of the profit, which the page's
+    note says); with neither, no P/E is shown, with the reason, until the numbers agree."""
+    pe = _pe(p, price)
+    ttm = ttm_profit(p)
+    if p.get("region") == "US" or pe is None or pe <= 0 or not cap_cr or not ttm or ttm <= 0:
+        return pe, None
+    implied = cap_cr / ttm
+    if pe_agrees(pe, implied, ttm):
+        return pe, None
+    own = num((p.get("ratios") or {}).get("Stock P/E"))
+    if own is not None and own > 0:
+        if pe_agrees(own, implied, ttm):
+            return own, None
+        if pe_agrees(pe, own, ttm):
+            return pe, None
+    return None, (f"Price over earnings per share gives {pe:,.1f}, market value over the last 12 months' net profit gives {implied:,.1f}, "
+                  "and no third figure settles which is right")
+
+
 MIN_PE = 1.0                   # a P/E under one means the EPS row and the price aren't in the same units (Coromandel Agro: 0.1)
 
 
@@ -267,7 +314,18 @@ SHARES_DRIFT = 0.015           # the source's market value and its share capital
 TRUST_GAP = 0.05
 
 
-def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | None, face: float | None) -> float | None:
+def balance_ends_before(p: dict | None, day: str | None) -> bool:
+    """Whether the latest balance sheet column ("Mar 2026") ends before the month of `day`: its share capital then predates a
+    listing on that day, and the shares issued in the IPO aren't in it (DD-011)."""
+    cols = ((p or {}).get("balance") or {}).get("cols") or []
+    try:
+        d = datetime.strptime(str(cols[-1]).strip(), "%b %Y").date()
+    except (IndexError, ValueError):
+        return False
+    return bool(day) and d.isoformat()[:7] < str(day)[:7]
+
+
+def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | None, face: float | None, issued_since: bool = False) -> float | None:
     """Market value in crore: price times the shares in issue. The source's own figure is price times its share count at
     the moment it was read, which can lag (TCS, 8 Oct 2026: the screener said 370.3 crore shares, the company page
     361.7, from two reads). The share capital over the face value counts the shares from the balance sheet; when the
@@ -282,14 +340,19 @@ def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | Non
         return cap_cr
     if not cap_cr:
         return round(price * shares, 2)
+    if issued_since:
+        # LIVE2-025: the balance sheet predates the listing, so its share capital lacks the shares the issue added (JPL: 3%
+        # short, so ₹12.67 lakh crore beside ₹13.05; TONBO ₹6,707 crore beside ₹6,986): the source's count is the shares in issue now
+        return cap_cr
     source = cap_cr / price
     if abs(source / shares - 1) > SHARES_DRIFT and shares >= source * (1 - TRUST_GAP):
         return round(price * shares, 2)
     return cap_cr
 
 
-def summary(p: dict) -> dict:
-    """The handful of numbers the research page and the AI need."""
+def summary(p: dict, listed_on: str | None = None) -> dict:
+    """The handful of numbers the research page and the AI need. `listed_on`: the day a share listed within the year, when it
+    did: a balance sheet from before it doesn't count the shares the issue added (market_cap)."""
     r = p.get("ratios", {})
     pl, bal = p.get("pl"), p.get("balance")
     sales = [v for v in _row(pl, "Sales", "Revenue") if v is not None]
@@ -344,14 +407,16 @@ def summary(p: dict) -> dict:
         y_now, y_prev = year_name(latest), year_name(before)
         latest_yoy = {"sales": grow(s_now, s_prev), "profit": grow(p_now, p_prev), "basis": "year",
                       "of": f"Year to {y_now} vs year to {y_prev}" if y_now and y_prev else None}
+    cap = market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face, balance_ends_before(p, listed_on))
+    pe, pe_why = checked_pe(p, price, cap)
     return {
         "latest_yoy": latest_yoy,
         # the periods the ratios are of, so each says it (DD-015: P/E on the last 12 months beside margins of the last year)
         "fy": year_name(latest), "pe_basis": pe_basis(p),
         "book_as_of": (str(bal["cols"][-1]).strip() or None) if (bal or {}).get("cols") else None,
-        "market_cap_cr": market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face), "price": price,
+        "market_cap_cr": cap, "price": price,
         "high52": hi_lo[0], "low52": hi_lo[1] if len(hi_lo) > 1 else None,
-        "pe": _pe(p, price), "book_value": book, "pb": (price / book) if price and book and book > 0 else None,
+        "pe": pe, "pe_why": pe_why, "book_value": book, "pb": (price / book) if price and book and book > 0 else None,
         "div_yield": num(r.get("Dividend Yield")), "roce": num(r.get("ROCE")), "roe": num(r.get("ROE")),
         "face_value": num(r.get("Face Value")),
         "net_margin": net_margin, "opm": cell(opm_all, latest),

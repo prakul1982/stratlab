@@ -220,6 +220,11 @@ def _of(item: dict, period: str | None, more: str | None = None) -> dict:
     return {**item, "period": period, "note": item.get("note") or (f"{period}. {more}" if more else period)}
 
 
+def _pe_item(item: dict, why: str | None) -> dict:
+    """A P/E the figures don't settle (screener.checked_pe) shows no number and says why in a line, as the public page does (LIVE2-025)."""
+    return {**item, "note": f"Not shown: {why[:1].lower() + why[1:]}."} if why and item.get("value") is None else item
+
+
 def _nm(item: dict, nm: dict | None, unit_word: str = "₹") -> dict:
     """A growth rate off a tiny base as "n/m", with the base it starts from (DD-018), else the item as it is."""
     if not nm:
@@ -717,12 +722,8 @@ def against_issue(q: dict, issue) -> dict:
 def balance_before(scr: dict | None, day: str) -> bool:
     """Whether the latest balance sheet column ("Mar 2026") ends before `day`: its share capital then predates a listing
     on that day, and the shares issued in the IPO aren't in it (DD-011)."""
-    cols = ((scr or {}).get("balance") or {}).get("cols") or []
-    try:
-        d = datetime.strptime(str(cols[-1]).strip(), "%b %Y").date()
-    except (IndexError, ValueError):
-        return False
-    return d.isoformat()[:7] < day[:7]
+    from .screener import balance_ends_before
+    return balance_ends_before(scr, day)
 
 
 def reported_quarters(rows: list[dict], today: str, n: int = 4) -> list[dict]:
@@ -1411,7 +1412,7 @@ class Research:
                 listed_on = None                     # an older share that didn't trade early in the year, not a new one
         elif listing and listing.get("first_trade"):
             listed_on = listing["first_trade"] if listing_day([{"t": listing["first_trade"]}]) else None
-        s = scr_summary(scr) if scr else {}
+        s = scr_summary(scr, listed_on) if scr else {}
         if listed_on and scr and balance_before(scr, listed_on):
             # the balance sheet's share count is from before the IPO: the source's own market value, on the shares in issue
             # now, stands (DD-011: TONBO ₹6,236 cr on the pre-IPO count against ₹6,495 cr)
@@ -1531,7 +1532,7 @@ class Research:
             "quote": quote, "range52": {"low": lo52, "high": hi52, **({"since": listed_on} if listed_on else {})},
             "margins": None,
             "metrics": _groups(
-                ("Valuation", [_of(_item("P/E", s.get("pe")), pe_of, lifted), _of(_item("P/B", s.get("pb")), f"Book value as of {s['book_as_of']}" if s.get("book_as_of") else None),
+                ("Valuation", [_pe_item(_of(_item("P/E", s.get("pe")), pe_of, lifted), s.get("pe_why")), _of(_item("P/B", s.get("pb")), f"Book value as of {s['book_as_of']}" if s.get("book_as_of") else None),
                                _item("Div yield", s.get("div_yield"), "%"), _of(_item("Book value", s.get("book_value"), "money"), f"as of {s['book_as_of']}" if s.get("book_as_of") else None),
                                _item("Face value", s.get("face_value"), "money")]),
                 # a bank's or lender's "operating profit" is after interest paid, so an EBITDA margin (ICICIBANK -20.0%)

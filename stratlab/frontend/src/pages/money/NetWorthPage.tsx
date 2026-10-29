@@ -11,7 +11,7 @@ import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
 import { Download, Plus, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, TilePicker, type Choice, type Column, type TileGroup } from "../../components/kit";
+import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, FactTable, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, TilePicker, useRange, type Column, type TileGroup } from "../../components/kit";
 
 /* /money/net-worth: what you own minus what you owe: stocks from My Holdings, plus the deposits, provident funds, gold,
  * property and loans added here, each with how it is worked out and its date. Built from the kit (components/kit). */
@@ -292,8 +292,6 @@ function PrepayBox({ loan, onClose }: { loan: Row; onClose: () => void }) {
   );
 }
 
-const RANGE_DAYS: [string, string, number][] = [["3m", "3M", 93], ["1y", "1Y", 366], ["3y", "3Y", 1096]];
-
 export function NetWorthPage() {
   const { fail, notify, me } = useApp();
   const [view, setView] = useState<View | null>(null);
@@ -304,7 +302,6 @@ export function NetWorthPage() {
   const [prepay, setPrepay] = useState<Row | null>(null);
   const [addStart, setAddStart] = useState(() => fresh("cash"));
   const [ask, setAsk] = useState<Ask | null>(null);
-  const [pick, setPick] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [step, setStep] = useState<"pick" | "form">("pick");
   const [fieldErrs, setFieldErrs] = useState<Record<string, string> | null>(null);
@@ -391,17 +388,12 @@ export function NetWorthPage() {
   const hist = useMemo(() => view?.history ?? [], [view?.history]);
   const full = view?.limit != null && view.count >= view.limit;
 
-  // the history's range: only the spans the snapshots cover, always "All"
-  const span = hist.length > 1 ? (Date.parse(hist[hist.length - 1].d) - Date.parse(hist[0].d)) / 86_400_000 : 0;
-  const rangeChoices: Choice[] = useMemo(() => {
-    const fit = RANGE_DAYS.filter(([, , d]) => span > d).map(([value, label]) => ({ value, label }));
-    return fit.length ? [...fit, { value: "all", label: "All" }] : [];
-  }, [span]);
-  const range = rangeChoices.some((c) => c.value === pick) ? pick! : "all";
-  const keepDays = RANGE_DAYS.find(([v]) => v === range)?.[2];
+  // the history's range: the app's one range control, only the stretches the snapshots cover (O4)
+  const days = useMemo(() => hist.map((h) => h.d), [hist]);
+  const rng = useRange("networth", days);
   // every snapshot is drawn; a partial one (something wasn't counted) is marked, so a dip it shows isn't read as a fall
   const whole = hist;
-  const shown = whole.filter((h) => keepDays == null || (Date.parse(whole[whole.length - 1].d) - Date.parse(h.d)) / 86_400_000 <= keepDays);
+  const shown = whole.slice(rng.from);
   const marked = shown.flatMap((h, i) => (h.partial?.length ? [{ i, kind: "dot" as const, color: "var(--orange)" }] : []));
   const last = hist[hist.length - 1], move = t ? netWorthDelta(t.net, t.partial, hist, undefined, view?.valuation) : null;
 
@@ -455,19 +447,13 @@ export function NetWorthPage() {
     <details className={cls} data-testid="nw-snapshots" open={empty || undefined}>
       {/* VR1-142: a plain "History: 3 snapshots", not "The history's snapshots (3): remove one"; each row's date and figure, its notes smaller under it, an icon to remove */}
       <summary className="k-small">History: {hist.length} snapshot{hist.length === 1 ? "" : "s"}</summary>
-      <ul className="k-stack k-tight">
-        {[...hist].reverse().map((h) => {
-          const why = [h.why === "change" ? "taken when an entry changed" : h.why === "month" ? "monthly" : "", h.added ? `${signedInrCompact(h.added)} from entries added or changed` : "", h.partial?.length ? `partial (not counted: ${h.partial.join("; ")})` : ""].filter(Boolean).join(" · ");
-          return (
-            <li key={h.d} className="k-row">
-              <span className="k-small"><b>{dateOnly(h.d)}</b> · {inr(h.net)}{why && <span className="k-note k-sub-line">{why}</span>}</span>
-              <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`} title="Remove this snapshot">
-                <Trash size={14} />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <DataTable label="The history's snapshots" rows={[...hist].reverse()} rowKey={(h) => h.d} columns={[
+        { key: "d", header: "Date", rowHeader: true, cell: (h) => <b>{dateOnly(h.d)}</b> },
+        { key: "n", header: "Net worth", numeric: true, cell: (h) => inr(h.net) },
+        { key: "w", header: "How it was taken", wrap: true, cell: (h) => <span className="k-note">{[h.why === "change" ? "taken when an entry changed" : h.why === "month" ? "monthly" : "", h.added ? `${signedInrCompact(h.added)} from entries added or changed` : "", h.partial?.length ? `partial (not counted: ${h.partial.join("; ")})` : ""].filter(Boolean).join(" · ")}</span> },
+        { key: "x", header: "", action: true, cell: (h) => (
+          <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`} title="Remove this snapshot"><Trash size={14} /></button>) },
+      ]} />
     </details>
   );
   // "Prices as of" only over market prices: with none on the page the server dates it today, and "Prices as of 19 Oct" stood
@@ -488,11 +474,11 @@ export function NetWorthPage() {
         <>
           <Card label="Totals">
             <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined} />
-            <StatRow>
-              <Stat label="Net worth" value={inr(t.net)} delta={move ? <Delta value={move.change}>{signedInrCompact(move.change)}</Delta> : undefined} note={move ? sinceNote(move, day, inrCompact) : restatedNote(hist, view?.valuation, day) ?? undefined} />
-              <Stat label="Assets" value={inr(t.assets)} />
-              <Stat label="Loans" value={inr(t.liabilities)} />
-            </StatRow>
+            <FactTable label="Where you stand" itemHead="" figureHead="Now" noteHead="Change" rows={[
+              { id: "net", k: "Net worth", v: <b>{inr(t.net)}</b>, n: <>{move && <Delta value={move.change}>{signedInrCompact(move.change)}</Delta>} {move ? sinceNote(move, day, inrCompact) : restatedNote(hist, view?.valuation, day) ?? undefined}</> },
+              { id: "assets", k: "Assets", v: inr(t.assets) },
+              { id: "loans", k: "Loans", v: inr(t.liabilities) },
+            ]} />
             {/* a source that couldn't be read or valued: named; snapshots of such a total are marked partial */}
             {/* DG-016: something with no price yet is a routine note; a source that couldn't be read is the warning */}
             {t.partial && t.partial.length > 0 && <Notice tone={t.partial_lasting ? "info" : "warn"} role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. {t.partial_lasting ? "The history goes on meanwhile, with each snapshot marked partial." : "Only the monthly snapshot is kept meanwhile, marked partial."}</Notice>}
@@ -542,7 +528,7 @@ export function NetWorthPage() {
           )}
 
           {view.history_allowed && whole.length >= 3 && (
-            <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rangeChoices} range={range} onRange={setPick}
+            <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rng.options} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "networth", times: days }}
               footer={<><p className="k-note">Last snapshot {day(last.d)}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>{snapsList("nw-snaps")}</>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
                 columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dateOnly(h.d) }, { key: "net", header: "Net worth", numeric: true, cell: (h) => <>{inr(h.net)}{h.partial?.length ? <span className="k-sub-line">partial</span> : null}</> },

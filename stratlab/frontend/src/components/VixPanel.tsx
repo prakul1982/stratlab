@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, ApiError } from "../lib/api";
 import { vixChange, vixFreshness, vixNum, vixPercentileLine, type Vix } from "../lib/vix";
 import { ChartEmpty, LineChart } from "./Charts";
-import { Badge, Card, CardHead, ErrorState, Skeleton, Stat, StatRow } from "./kit";
+import { Badge, Card, CardHead, ErrorState, FactTable, Skeleton } from "./kit";
 import "../pages/trade/trade.css";
 import "../pages/trade/positioning.css";
 import { asOf, fmtDate, IST } from "../lib/format";
@@ -51,18 +51,18 @@ export function VixPanel() {
         : (
           <>
             <div data-testid="vix-figs">
-              <StatRow label="India VIX figures">
-                <Stat label="India VIX" value={val(v.value != null ? vixNum(v.value) : null, "Not read yet")}
-                  note={vixChange(q ?? null) ? <span data-testid="vix-change">{vixChange(q ?? null)} from {q?.prev_close != null ? vixNum(q.prev_close) : "the last close"}</span> : undefined} />
-                <Stat label={fresh?.rangeLabel ?? "Today's range"} value={val(q?.low != null && q?.high != null ? `${vixNum(q.low)} – ${vixNum(q.high)}` : null, "Not available")}
-                  note={q?.open != null || q?.range_off_line ? <span data-testid="vix-range-note">{[q?.open != null ? `Opened at ${vixNum(q.open)}` : "",
+              <FactTable label="India VIX figures" itemHead="Figure" figureHead="Now" noteHead="What it is" rows={[
+                { id: "vix", k: "India VIX", v: val(v.value != null ? vixNum(v.value) : null, "Not read yet"),
+                  n: vixChange(q ?? null) ? <span data-testid="vix-change">{vixChange(q ?? null)} from {q?.prev_close != null ? vixNum(q.prev_close) : "the last close"}</span> : undefined },
+                { id: "range", k: fresh?.rangeLabel ?? "Today's range", v: val(q?.low != null && q?.high != null ? `${vixNum(q.low)} – ${vixNum(q.high)}` : null, "Not available"),
+                  n: q?.open != null || q?.range_off_line ? <span data-testid="vix-range-note">{[q?.open != null ? `Opened at ${vixNum(q.open)}` : "",
                     // the exchange's day range can hold an opening tick the minute chart starts after (R79-002)
-                    q?.range_off_line ? "The exchange's range includes ticks the chart below doesn't draw" : ""].filter(Boolean).join(". ")}</span> : undefined} />
-                <Stat label="Percentile, past year" value={val(v.percentile.percentile != null ? String(Math.round(v.percentile.percentile)) : null, "Not enough days yet")}
-                  note={<span data-testid="vix-pct">{vixPercentileLine(v.percentile)}{v.percentile.low != null && v.percentile.high != null ? `; range ${vixNum(v.percentile.low)} – ${vixNum(v.percentile.high)}` : ""}</span>} />
-                <Stat label={VIX_IV_LABEL} value={val(ivNow ? `${ivNow.iv.toFixed(2)}%` : null, "Not recorded yet")}
-                  note={ivNow ? vixIvLine(ivNow.strike, upperFirst(chainWithTime(ivNow, vixTime(ivNow.as_of))), strike, !!ivNow.rolled) : undefined} />
-              </StatRow>
+                    q?.range_off_line ? "The exchange's range includes ticks the chart below doesn't draw" : ""].filter(Boolean).join(". ")}</span> : undefined },
+                { id: "pct", k: "Percentile, past year", v: val(v.percentile.percentile != null ? String(Math.round(v.percentile.percentile)) : null, "Not enough days yet"),
+                  n: <span data-testid="vix-pct">{vixPercentileLine(v.percentile)}{v.percentile.low != null && v.percentile.high != null ? `; range ${vixNum(v.percentile.low)} – ${vixNum(v.percentile.high)}` : ""}</span> },
+                { id: "iv", k: VIX_IV_LABEL, v: val(ivNow ? `${ivNow.iv.toFixed(2)}%` : null, "Not recorded yet"),
+                  n: ivNow ? vixIvLine(ivNow.strike, upperFirst(chainWithTime(ivNow, vixTime(ivNow.as_of))), strike, !!ivNow.rolled) : undefined },
+              ]} />
             </div>
             <div className="k-two">
               <div className="k-stack pos-chart">
@@ -75,12 +75,12 @@ export function VixPanel() {
                 )}
               </div>
               <div className="k-stack pos-chart">
-                <h3 className="k-sub">Past year: India VIX and NIFTY ATM IV (%)</h3>
+                <h3 className="k-sub">India VIX and NIFTY ATM IV (%)</h3>
                 {!year || year.days.length < 2 ? <ChartEmpty height={200}>The history is being read; it shows here once stored.</ChartEmpty> : (
                   <LineChart lines={[{ values: year.vix, color: "var(--series-1)", width: 2, label: "India VIX" },
                     ...(year.iv.some((x) => x != null) ? [{ values: year.iv, color: "var(--series-2)", width: 1.6, label: "NIFTY ATM IV" }] : [])]}
-                    labels={year.days.map(short)} times={year.days} legend ranges={false} format={(x) => x.toFixed(2)} height={200}
-                    testId="vix-year" ariaLabel="India VIX's daily close and NIFTY's at-the-money IV over the past year" />
+                    labels={year.days.map(short)} times={year.days} legend format={(x) => x.toFixed(2)} height={200}
+                    rangeStart="1y" testId="vix-year" ariaLabel="India VIX's daily close and NIFTY's at-the-money IV by day" />
                 )}
               </div>
             </div>

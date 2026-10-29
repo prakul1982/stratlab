@@ -16,8 +16,11 @@ test("a weekly brief's close is the last weekday before its Saturday, not the Sa
   assert.match(src, /closeDay\(issue\.day, issue\.weekly\)/);
 });
 
-test("the Briefs page shows My stocks' price and move", () => {
+test("the Briefs page shows My stocks' price and move, as a table the server made (O5)", () => {
   const page = read("src/pages/NewsPage.tsx");
-  assert.match(page, /it\.price != null/);
-  assert.match(page, /pct\(it\.change_pct, 2\)/);
+  assert.match(page, /<BriefTables tables=\{issue\.tables\} \/>/);
+  const t = read("src/components/BriefTables.tsx");
+  assert.match(t, /DataTable label=\{t\.title\}/);
+  assert.match(t, /numeric: t\.align\[k\] === "r"/);                       // figures on the right, as in every table of the app
+  assert.match(t, /TONE = \{ up: "k-up", down: "k-down", flat: "k-muted" \}/);
 });

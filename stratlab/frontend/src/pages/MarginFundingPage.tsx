@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
-import { axisCrore, costProblems, RANGE_DAYS, rangesFor } from "../lib/mtfCost";
+import { axisCrore, costProblems } from "../lib/mtfCost";
 import { eyebrowOf } from "../lib/eyebrow";
 import { CRORE, inr, inrCompact, pct, pctPlain, signedInrCompact } from "../lib/format";
 import { dayText, desksApi, sharesShort, type CostIn, type CostOut, type MtfChange, type MtfOne, type MtfPage } from "../lib/stockDesks";
 import { LineChart } from "../components/Charts";
 import { AlertButton } from "../components/AlertForm";
 import { Info } from "../components/ui";
-import { Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, ResultBlock, Skeleton, Stat, StatRow, StockPicker, type Choice } from "../components/kit";
+import { Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, FactTable, Field, FormActions, FormGrid, PageHeader, ResultBlock, Skeleton, StockPicker, useRange } from "../components/kit";
 
 /* /invest/margin-funding: what brokers together had funded under the margin trading facility, for the whole market and
  * for each stock you hold or watch (the exchange's daily disclosure), and your own MTF position worked out. Dated facts
@@ -22,35 +22,20 @@ const chg = (c: MtfChange | undefined) => (c ? `${signedInrCompact(c.crore * CRO
 const exact = (crore: number | null | undefined) => (crore == null ? "–" : `${inr(crore, 2)} cr`);
 const cr = (crore: number | null | undefined) => (crore == null ? "–" : inrCompact(crore * CRORE));
 
-function useRange(days: string[]) {
-  const [pick, setPick] = useState<string | null>(null);
-  const span = days.length > 1 ? (Date.parse(days[days.length - 1]) - Date.parse(days[0])) / 86_400_000 : 0;
-  const choices: Choice[] = useMemo(() => {
-    const fit = rangesFor(span).map(([value, label]) => ({ value, label }));
-    return fit.length ? [...fit, { value: "all", label: "All" }] : [];
-  }, [span]);
-  const range = choices.some((c) => c.value === pick) ? pick! : choices.some((c) => c.value === "3m") ? "3m" : "all";
-  const keep = (day: string) => {
-    const d = RANGE_DAYS.find(([v]) => v === range)?.[2];
-    return d == null || days.length === 0 || (Date.parse(days[days.length - 1]) - Date.parse(day)) / 86_400_000 <= d;
-  };
-  return { choices, range, setPick, keep };
-}
-
 function Market({ p }: { p: MtfPage }) {
   const m = p.market;
   const h = useMemo(() => m.history ?? [], [m.history]);
-  const { choices, range, setPick, keep } = useRange(h.map((x) => x.day));
-  const shown = h.filter((x) => keep(x.day));
+  const days = useMemo(() => h.map((x) => x.day), [h]);
+  const rng = useRange("mtf-market", days);           // O4: the one standard range control, remembered for this chart
+  const shown = h.slice(rng.from);
   const day = m.end != null && m.start != null ? m.end - m.start : null;
   const stats = m.as_of ? (
-    <StatRow>
-      <Stat label={`Funded on ${dayText(m.as_of).replace(/ \d{4}$/, "")}`} value={cr(m.end)} note={m.stocks != null ? `${m.stocks.toLocaleString("en-IN")} stocks` : undefined} />
-      <Stat label="That day" value={day != null ? signedInrCompact(day * CRORE) : "–"} note={`${cr(m.fresh)} new · ${cr(m.liquidated)} closed`} />
-      <Stat label="Over 30 days" value={m.d30 ? signedInrCompact(m.d30.crore * CRORE) : "–"}
-        delta={m.d30 ? <Delta value={m.d30.crore} tone="neutral">{pct(m.d30.pct, 1)}</Delta> : undefined}
-        note={m.d30 ? `since ${dayText(m.d30.from).replace(/ \d{4}$/, "")}` : "Needs 30 days of data"} />
-    </StatRow>
+    <FactTable label="The market's margin funding" figureHead="Amount" noteHead="What it is" rows={[
+      { id: "end", k: `Funded on ${dayText(m.as_of).replace(/ \d{4}$/, "")}`, v: cr(m.end), n: m.stocks != null ? `${m.stocks.toLocaleString("en-IN")} stocks` : undefined },
+      { id: "day", k: "That day", v: day != null ? signedInrCompact(day * CRORE) : "–", n: `${cr(m.fresh)} new · ${cr(m.liquidated)} closed` },
+      { id: "d30", k: "Over 30 days", v: <>{m.d30 ? signedInrCompact(m.d30.crore * CRORE) : "–"}{m.d30 && <> <Delta value={m.d30.crore} tone="neutral">{pct(m.d30.pct, 1)}</Delta></>}</>,
+        n: m.d30 ? `since ${dayText(m.d30.from).replace(/ \d{4}$/, "")}` : "Needs 30 days of data" },
+    ]} />
   ) : null;
   let body;
   if (!m.as_of) body = <EmptyState title="No margin funding data yet">{p.status.reason ?? "The exchange's first disclosure will show here once it is published."}</EmptyState>;
@@ -62,7 +47,7 @@ function Market({ p }: { p: MtfPage }) {
   );
   const canTable = !!m.as_of && p.full && h.length >= 2;
   return (
-    <ChartFrame title="The market's MTF book" info={p.about.book} stats={stats} ranges={canTable ? choices : undefined} range={range} onRange={setPick}
+    <ChartFrame title="The market's MTF book" info={p.about.book} stats={stats} ranges={canTable ? rng.options : undefined} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "mtf-market", times: days }}
       table={canTable ? { label: "The market's margin-funded book by day", rows: [...shown].reverse(), rowKey: (r) => r.day,
         columns: [{ key: "day", header: "Day", rowHeader: true, cell: (r) => <b>{dayText(r.day)}</b> }, { key: "end", header: "Funded", numeric: true, cell: (r) => exact(r.end) },
           { key: "fresh", header: "New", numeric: true, cell: (r) => exact(r.fresh) }, { key: "liq", header: "Closed", numeric: true, cell: (r) => exact(r.liquidated) }] } : undefined}>
@@ -80,8 +65,9 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
     return () => { live = false; };
   }, [symbol]);
   const h = useMemo(() => d?.history ?? [], [d?.history]);
-  const { choices, range, setPick, keep } = useRange(h.map((x) => x.day));
-  const shown = h.filter((x) => keep(x.day));
+  const days = useMemo(() => h.map((x) => x.day), [h]);
+  const rng = useRange("mtf-stock", days);
+  const shown = h.slice(rng.from);
   const actions = <>
     {d?.full && d.funded && <AlertButton region="IN" symbol={symbol} condition="mtf_above" label="Alert on a level" />}
     <button className="btn quiet sm" onClick={onClose}>Close</button>
@@ -100,14 +86,14 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
   }
   const canDraw = d.full && h.length >= 2;
   return (
-    <ChartFrame id="mtf-one" title={title} actions={actions} ranges={canDraw ? choices : undefined} range={range} onRange={setPick}
+    <ChartFrame id="mtf-one" title={title} actions={actions} ranges={canDraw ? rng.options : undefined} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "mtf-stock", times: days }}
       stats={
-        <StatRow>
-          <Stat label={`Funded on ${dayText(d.as_of).replace(/ \d{4}$/, "")}`} value={cr(d.crore)} note={d.pct_shares != null ? <>{pctPlain(d.pct_shares, 2)} of shares issued<Info label="Of shares issued">{d.about.pct_shares}</Info></> : undefined} />
-          <Stat label="Shares funded" value={sharesShort(d.shares)} />
-          <Stat label="Of market value" value={pctPlain(d.pct_mcap, 2)} note={<>at the close of {inr(d.close, 2)}<Info label="Of market value">{d.about.pct_mcap}</Info></>} />
-          <Stat label="That day" value={d.day ? signedInrCompact(d.day.crore * CRORE) : "–"} delta={d.day ? <Delta value={d.day.crore} tone="neutral">{pct(d.day.pct, 1)}</Delta> : undefined} note={`30 days: ${chg(d.d30)}`} />
-        </StatRow>
+        <FactTable label={`${symbol}'s margin funding`} figureHead="Amount" noteHead="What it is" rows={[
+          { id: "funded", k: `Funded on ${dayText(d.as_of).replace(/ \d{4}$/, "")}`, v: cr(d.crore), n: d.pct_shares != null ? <>{pctPlain(d.pct_shares, 2)} of shares issued<Info label="Of shares issued">{d.about.pct_shares}</Info></> : undefined },
+          { id: "shares", k: "Shares funded", v: sharesShort(d.shares) },
+          { id: "mcap", k: "Of market value", v: pctPlain(d.pct_mcap, 2), n: <>at the close of {inr(d.close, 2)}<Info label="Of market value">{d.about.pct_mcap}</Info></> },
+          { id: "day", k: "That day", v: <>{d.day ? signedInrCompact(d.day.crore * CRORE) : "–"}{d.day && <> <Delta value={d.day.crore} tone="neutral">{pct(d.day.pct, 1)}</Delta></>}</>, n: `30 days: ${chg(d.d30)}` },
+        ]} />
       }
       table={canDraw ? { label: `${symbol}'s margin funding by day`, rows: [...shown].reverse(), rowKey: (r) => r.day,
         columns: [{ key: "day", header: "Day", rowHeader: true, cell: (r) => <b>{dayText(r.day)}</b> }, { key: "crore", header: "Funded", numeric: true, cell: (r) => exact(r.crore) },

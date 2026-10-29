@@ -34,7 +34,7 @@ def test_a_research_posts_table_says_its_period_once_and_a_column_only_where_one
 def test_a_brief_does_not_show_the_scans_shorthand(w):
     blog.save_brief(issue_for("IN"), datetime(2026, 10, 1, 11, 0, tzinfo=timezone.utc))
     html = page(w["client"], "/blog/india-market-brief-2026-10-01")
-    assert "matches the Stage 2 rule" in html and "(ST S2)" not in html and "ST S2" not in html
+    assert "Stocks newly matching a price rule" in html and "Stage 2" in html and "(ST S2)" not in html and "ST S2" not in html          # (O5: the stocks are a table under that heading)
 
 
 def test_the_blog_list_gives_each_brief_its_figures_not_its_day_and_not_the_footer_line_again(w):

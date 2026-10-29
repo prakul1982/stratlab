@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../../lib/api";
-import { useApp } from "../../lib/app";
 import { dayShort, dayText, desksApi, plainPct, sharesShort, signedPct, statusText, type Buildup, type FutDetail, type FutRow, type FutTable } from "../../lib/stockDesks";
-import { spanCheck, spanDays, SPAN_UNITS } from "../../lib/intervals";
 import { ChartEmpty, LineChart } from "../../components/Charts";
 import { AlertButton } from "../../components/AlertForm";
 import { Info } from "../../components/ui";
 import { Search } from "../../components/Icons";
 import { POSITIONING_VIEWS, RouteSeg } from "../../components/RouteSeg";
-import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
+import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, FactTable, PageHeader, RangeChips, Select, Signed, Skeleton, useRange, type Column } from "../../components/kit";
 import "./trade.css";
 import "./positioning.css";
 
@@ -64,21 +62,19 @@ function Mwpl({ r, ban }: { r: FutRow; ban: number }) {
 }
 
 function Detail({ symbol, t, onClose }: { symbol: string; t: FutTable; onClose: () => void }) {
-  const { me } = useApp();
   const [d, setD] = useState<FutDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState("6m");
-  const custom = spanDays(range);
-  const key = ["1m", "3m", "6m", "1y"].includes(range) ? range : "1y";
   useEffect(() => {
     let live = true;
     setError(null);
-    desksApi.future(symbol, key).then((x) => live && setD(x)).catch((e) => live && setError(e instanceof ApiError ? e.message : "That stock couldn't be read."));
+    // everything stored (about a year of days): the range is cut here, by the app's one range control (O4)
+    desksApi.future(symbol, "1y").then((x) => live && setD(x)).catch((e) => live && setError(e instanceof ApiError ? e.message : "That stock couldn't be read."));
     return () => { live = false; };
-  }, [symbol, key]);
+  }, [symbol]);
   const r = d?.row;
-  const from = custom != null ? new Date(Date.now() - custom * 86400_000).toISOString().slice(0, 10) : "";
-  const h = (d?.history ?? []).filter((p) => !from || p.day.slice(0, 10) >= from);
+  const everyDay = useMemo(() => (d?.history ?? []).map((p) => p.day.slice(0, 10)), [d]);
+  const rng = useRange("stock-futures", everyDay, "6m");
+  const h = (d?.history ?? []).slice(rng.from);
   const labels = h.map((p) => dayText(p.day)), times = h.map((p) => p.day);
   return (
     <Card id="sf-detail" label={`${symbol} futures`}>
@@ -93,12 +89,12 @@ function Detail({ symbol, t, onClose }: { symbol: string; t: FutTable; onClose: 
             {r.oc == null ? " was unchanged" : <> {r.oc >= 0 ? "rose" : "fell"} <Signed value={r.oc}>{Math.abs(r.oc).toFixed(2)}%</Signed></>}
             {r.b ? `: ${t.labels[r.b].toLowerCase()}${r.streak && r.streak > 1 ? `, ${r.streak} days in a row` : ""}` : ""}.
           </p>
-          <StatRow label={`${symbol} figures`}>
-            <Stat label="Open interest" value={sharesShort(r.oi)} note={`near ${sharesShort(r.n)} · next ${sharesShort(r.x)} · far ${sharesShort(r.f)}`} />
-            <Stat label="In later expiries" value={plainPct(r.r)} note={`${r.td} trading day${r.td === 1 ? "" : "s"} to ${dayText(r.e)}`} />
-            <Stat label="Basis" value={signedPct(r.bp)} note={`${signedPct(r.ba)} a year · share ₹${r.s?.toLocaleString("en-IN")}`} />
-            <Stat label="MWPL use" value={plainPct(r.m)} note={r.ban_next ? "No fresh positions the next day" : `ban from ${t.ban_at}%`} />
-          </StatRow>
+          <FactTable label={`${symbol} figures`} itemHead="Figure" figureHead="Now" noteHead="What it is" rows={[
+            { id: "oi", k: "Open interest", v: sharesShort(r.oi), n: `near ${sharesShort(r.n)} · next ${sharesShort(r.x)} · far ${sharesShort(r.f)}` },
+            { id: "roll", k: "In later expiries", v: plainPct(r.r), n: `${r.td} trading day${r.td === 1 ? "" : "s"} to ${dayText(r.e)}` },
+            { id: "basis", k: "Basis", v: signedPct(r.bp), n: `${signedPct(r.ba)} a year · share ₹${r.s?.toLocaleString("en-IN")}` },
+            { id: "mwpl", k: "MWPL use", v: plainPct(r.m), n: r.ban_next ? "No fresh positions the next day" : `ban from ${t.ban_at}%` },
+          ]} />
           {!d.full ? (
             <div className="k-stack" data-testid="sf-locked">
               <p className="k-small k-muted">Each day's open interest, buildup, rollover, basis and MWPL use for {symbol}, and an alert when MWPL use crosses 80%, are on the {d.plan_needed} plan.</p>
@@ -106,9 +102,7 @@ function Detail({ symbol, t, onClose }: { symbol: string; t: FutTable; onClose: 
             </div>
           ) : (
             <div className="k-stack">
-              <ChipBar label="History range" value={range} onChange={setRange}
-                options={[["1m", "1M"], ["3m", "3M"], ["6m", "6M"], ["1y", "1Y"]].map(([value, label]) => ({ value, label }))}
-                custom={{ storageKey: `stratlab.chips.stockfutures.${me?.id ?? "anon"}`, units: SPAN_UNITS, defaultUnit: "months", validate: spanCheck(366, 5) }} />
+              <RangeChips chart="stock-futures" times={everyDay} options={rng.options} value={rng.value} onChange={rng.pick} label="History range" />
               {h.length < 2 ? <ChartEmpty height={180}>Not enough days yet to draw.</ChartEmpty> : (
                 <div className="k-two">
                   <div className="k-stack">

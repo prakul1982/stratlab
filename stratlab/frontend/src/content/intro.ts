@@ -5,7 +5,7 @@
 export const INTRO_TITLE = "What StratLab is";
 
 /** The one sentence a first-time visitor needs. */
-export const INTRO_LINE = "StratLab is a lab for testing trading ideas and understanding your own money, across ten markets, on real prices with real costs, with paper trading only (never real orders) and facts, not tips.";
+export const INTRO_LINE = "StratLab is a lab for testing trading ideas and understanding your own money, across ten markets, with paper trading only (never real orders) and facts, not tips.";
 
 export type IntroSpace = { id: "trade" | "invest" | "money"; name: string; sub: string; line: string; things: [string, string][] };
 
@@ -28,17 +28,10 @@ export const INTRO_SPACES: IntroSpace[] = [
 export const HOW_TITLE = "How it works";
 export const HOW_STEPS: [string, string][] = [
   ["Describe an idea", "Write it in plain words, like \"Buy Reliance when it's above its 200-day average.\" StratLab turns it into rules you can tap to change."],
-  ["Test it on real prices", "Years of real prices, after real costs, with four checks for whether the result was luck."],
-  ["Trade it on paper", "Run it live on real prices with fake money, with a report after each close."],
+  ["Test it on real prices", "See what it would have done over years of history, and whether the result was luck."],
+  ["Trade it on paper", "Run it live with fake money, with a report after each close."],
 ];
 /** Money has its own two steps, under the three above. */
 export const HOW_MONEY = "Money works the same way: upload your files, then see your value, gains and tax worked out.";
-
-export const DIFF_TITLE = "What makes it different";
-// VR5-owner-2 (the owner's choice for VR4-018): "ten markets", "paper trading only / never real orders" and "facts, not tips" are said once on the
-// landing page, in INTRO_LINE above; this list used to say each again, beside the hero's eyebrow and line, the line under the button and a tag on Options
-export const DIFFERENT: [string, string][] = [
-  ["Real costs, per market", "Brokerage, taxes, exchange fees and slippage of each market, taken off every trade."],
-  ["Four checks for luck", "Unseen years, nearby settings, a bad-luck shuffle and enough trades."],
-  ["Your data stays yours", "Holdings, funds and tax figures are seen only by you, and deleted in one step."],
-];
+// LIVE2-011: the old "What makes it different" trio (real costs, four checks for luck, your data stays yours) is gone: the Trade section below says the first two in
+// full, the Money section the third. Each phrase is said once on the page.
