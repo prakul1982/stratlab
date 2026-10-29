@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { publicGet } from "./http";
 import type { Offer } from "./types";
+import { usdRate } from "./usdAbout";
 
 export type CurrencyRow = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number;
   charged_in: string; yearly_charged_in: string;
@@ -12,28 +13,20 @@ export type CurrencyRow = { symbol: string; name: string; basic: number; pro: nu
   charge_about?: Partial<Record<"basic" | "pro" | "basic_year" | "pro_year", number>> };
 export type Pricing = { currencies: Record<string, CurrencyRow>; countries: Record<string, string>; offer?: Offer;
   /** whether invoices carry GST (the seller's GSTIN is set in Admin → Money); the pages say "incl. GST" only then (R7M-001) */
-  invoice?: { gst: boolean } };
+  invoice?: { gst: boolean };
+  /** rupees per dollar for the "about $" beside every rupee price (item 34): the daily read, or the server's fixed rate (`fallback`) */
+  usd_inr?: { rate: number; fallback?: boolean } };
 
+/** The currency picker's old choice on this device: no longer read (item 34: every price is in rupees, with the dollar beside it),
+ * and cleared so a stale "USD" can't come back. */
 const KEY = "stratlab.currency";
+try { localStorage.removeItem(KEY); } catch { /* storage off */ }
 
-/** The visitor's country: India by its time zone (most Indian browsers say en-US), else the browser's region. */
-function country(): string | null {
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-    if (tz === "Asia/Kolkata" || tz === "Asia/Calcutta") return "IN";
-    for (const l of navigator.languages ?? [navigator.language]) {
-      const m = /-([A-Z]{2})$/i.exec(l);
-      if (m) return m[1].toUpperCase();
-    }
-  } catch { /* no Intl: fall through */ }
-  return null;
-}
-
-/** Prices in every currency, and the one this visitor sees: their own choice, else their country's, else dollars
- * (rupees in India). */
+/** Prices, from /pricing: always shown in rupees, the currency every card is charged in, with "about $" beside each (item 34,
+ * owner 29 Oct: no browser locale or saved choice shows dollars alone, LIVE1B-067/078). `rate` is the USD/INR rate the dollar
+ * figures use (lib/usdAbout.ts). */
 export function usePricing() {
   const [p, setP] = useState<Pricing | null>(null);
-  const [code, setCode] = useState<string>(() => { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } });
   const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
   useEffect(() => {
     let live = true;
@@ -45,18 +38,7 @@ export function usePricing() {
     void read(2);
     return () => { live = false; window.clearTimeout(timer); };
   }, []);
-  const chosen = pickCurrency(p, code);
-  const pick = (c: string) => { setCode(c); try { localStorage.setItem(KEY, c); } catch { /* private window */ } };
-  // the currency came from the browser (its time zone and language), not from the visitor: an Indian visitor whose browser
-  // says another country is offered rupees in one tap beside the list (RC2B-034)
-  const guessed = !!p && !(code && p.currencies[code]);
-  return { pricing: p, currency: chosen, pick, status, offerRupees: guessed && chosen !== "INR" && !!p?.currencies.INR };
-}
-
-/** The currency a visitor sees: their own choice, else their country's, else dollars (rupees in India). */
-function pickCurrency(p: Pricing | null, code: string): string {
-  const auto = p ? p.countries[country() ?? ""] ?? (country() ? "USD" : "INR") : "INR";
-  return p && code && p.currencies[code] ? code : auto;
+  return { pricing: p, currency: "INR" as const, status, rate: usdRate(p) };
 }
 
 let shared: Promise<Pricing> | null = null;
@@ -73,21 +55,18 @@ export function usePlanPrice(plan: "basic" | "pro" | null | undefined): string |
     return () => { live = false; };
   }, [plan]);
   if (!plan || !p) return null;
-  let code = "";
-  try { code = localStorage.getItem(KEY) || ""; } catch { /* private window */ }
-  return planPriceLine(plan, p, pickCurrency(p, code));
+  return planPriceLine(plan, p);
 }
 
 /** The same line outside a component (a 402's toast, DP2-022): from the one shared read of /pricing, null when it can't be read. */
 export function planPriceFor(plan: "basic" | "pro"): Promise<string | null> {
   shared ??= publicGet<Pricing>("/pricing").catch((e) => { shared = null; throw e; });
-  let code = "";
-  try { code = localStorage.getItem(KEY) || ""; } catch { /* private window */ }
-  return shared.then((r) => planPriceLine(plan, r, pickCurrency(r, code))).catch(() => null);
+  return shared.then((r) => planPriceLine(plan, r)).catch(() => null);
 }
 
 export { money, planPriceLine } from "./planPrice";
 export { aboutLine, aboutMoney, chargedInRupees } from "./rupeeCharge";
+export { aboutUsd, inrWithUsd, rupees, usdNote, usdRate, USD_INR_FALLBACK } from "./usdAbout";
 import { planPriceLine } from "./planPrice";
 
 /** The page's note while a currency is charged in rupees, with the actual amounts when its price is a fixed one

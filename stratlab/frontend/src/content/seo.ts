@@ -51,17 +51,17 @@ export const PAGES: PageMeta[] = [
       "Free to start with no card; Basic and Pro raise the limits.",
       "Browse companies: every Indian and US company page, A to Z, and the NIFTY 50 and S&P 500 lists."] },
   { path: "/pricing", title: "Plans · StratLab",
-    description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, canonical: "/plans", updated: "2026-10-08",     // the landing page scrolled to its prices: the plans page is the one address for them (R26-006, RC1-011)
+    description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees, with the dollar figure beside each, and charged in rupees.", index: true, canonical: "/plans", updated: "2026-10-08",     // the landing page scrolled to its prices: the plans page is the one address for them (R26-006, RC1-011)
     heading: "Plans and prices",
     summary: ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on backtests, AI builds and how many strategies you can paper trade at a time.",
-      "Prices are in Indian rupees. Outside India the page shows the price in your own currency and the payment is charged in rupees. You can cancel any time from Account."] },
+      "Prices are in Indian rupees, with the dollar figure beside each at today's rate, and the payment is charged in rupees. You can cancel any time from Account."] },
   // /plans: the prices on their own page (the landing page scrolled to them is /pricing). Indexed, with its own address as the canonical
   // one, and listed in the sitemap (DK-006: it was noindex with no canonical, a page the sitemap and the menus point to)
   { path: "/plans", title: "Plans and prices · StratLab",
-    description: "Free, Basic and Pro side by side: what each plan includes and costs, with prices in rupees or your own currency, and how to cancel.", index: true, updated: "2026-10-24",
+    description: "Free, Basic and Pro side by side: what each plan includes and costs, with prices in rupees and about how much each is in dollars, and how to cancel.", index: true, updated: "2026-10-24",
     heading: "Plans and prices",
     summary: ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on backtests, AI builds and how many strategies you can paper trade at a time.",
-      "Prices are in Indian rupees. Outside India the page shows the price in your own currency and the payment is charged in rupees. You can cancel any time from Account."] },
+      "Prices are in Indian rupees, with the dollar figure beside each at today's rate, and the payment is charged in rupees. You can cancel any time from Account."] },
   { path: "/faq", title: "Questions · StratLab",
     description: "Answers about StratLab: whether it gives tips or places real trades, how the four checks work, options, invite rewards, who can see your money data, and the app.", index: true, updated: "2026-10-08",
     heading: "Questions" },

@@ -26,9 +26,11 @@ test("B2: a currency charged by its own plan names that currency's amount, with 
   assert.equal(paymentWindowLine("Pro", "month", "USD"), 'The payment window that opens next is headed "StratLab · Pro, monthly" and shows the amount in USD.');
   assert.match(paymentWindowLine("Pro", "month", "INR"), /in rupees\.$/);
   assert.match(paymentWindowLine("Pro", "month"), /in rupees\.$/);
+  // item 34 (owner, 29 Oct): the page always asks for the rupee plan and says the rupee charge, with the dollar beside it
   const plans = src("pages/PlansPage.tsx");
-  assert.match(plans, /if \(own\) return `\$\{money\(row,/);
-  assert.ok(plans.indexOf("if (own) return") < plans.indexOf("rupeeCharge(rupees(p, period), gst)"));
+  assert.match(plans, /body: \{ plan, period, currency: "INR" \}/);
+  assert.match(plans, /const chargeAmount = \(p: "basic" \| "pro"\) => rupeeCharge\(rupees\(p, period\), gst\);/);
+  assert.doesNotMatch(plans, /if \(own\) return/);
 });
 
 test("B3: Account and the connection check name the real plan; the badge alone keeps (launch offer)", () => {

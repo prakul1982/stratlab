@@ -202,9 +202,12 @@ test("a company page's test link opens a new test on that company", async ({ pag
 
 test.describe("a visitor from the UK", () => {
   test.use({ locale: "en-GB", timezoneId: "Europe/London" });
-  test("sees prices in pounds", async ({ page }) => {
+  // changed on purpose by item 34 (owner, 29 Oct): rupees first, the currency charged, with the dollar beside them, never pounds alone
+  test("sees prices in rupees, with the dollar figure beside them", async ({ page }) => {
     const errors = await open(page, "/plans", "Plans");
-    await expect(page.getByText(/£\d+/).first()).toBeVisible();
+    await expect(page.getByText("₹699 / month", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("about-basic")).toHaveText(/^about \$\d+$/);
+    await expect(page.locator("main")).not.toContainText("£");
     await sane(page, errors);
   });
 });

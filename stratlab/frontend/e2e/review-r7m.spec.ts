@@ -74,7 +74,7 @@ test("Plans: no word of GST while the invoice has none; the confirm step follows
   await page.getByRole("button", { name: "Upgrade to Basic" }).click({ timeout: 30_000 });
   const dialog = page.getByRole("dialog");
   const confirm = dialog.getByTestId("plan-confirm");
-  await expect(confirm).toContainText(/Basic plan, billed monthly: ₹[\d,]+, every month\./);
+  await expect(confirm).toContainText(/Basic plan, billed monthly: ₹[\d,]+ \(about \$\d+\), every month\./);
   await expect(confirm).toContainText('The payment window that opens next is headed "StratLab · Basic, monthly" and shows the amount in rupees.');
   await expect(confirm).not.toContainText(/GST|shows the amount only/);
   await dialog.getByRole("button", { name: "Cancel" }).click();
@@ -90,7 +90,7 @@ test("Plans: with a GSTIN set the words are as before, and the window sentence i
   const errors = await open(page, "/plans", load(297), { "stratlab.currency": "INR" });
   await page.getByRole("button", { name: "Upgrade to Basic" }).click({ timeout: 30_000 });
   const confirm = page.getByRole("dialog").getByTestId("plan-confirm");
-  await expect(confirm).toContainText(/Basic plan, billed monthly: ₹[\d,]+ incl\. 18% GST, every month\./);
+  await expect(confirm).toContainText(/Basic plan, billed monthly: ₹[\d,]+ incl\. 18% GST \(about \$\d+\), every month\./);
   await expect(confirm).toContainText('headed "StratLab · Basic, monthly"');
   await expect(confirm).not.toContainText("shows the amount only");
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();

@@ -212,14 +212,27 @@ def table() -> dict:
     return out
 
 
+# rupees per dollar when no rate has been read yet (a fresh database, a feed down for days): the dollar figure beside a rupee
+# price is still only "about", so a safe round rate is better than none (owner, 29 Oct: "₹699 a month (about $8)")
+USD_INR_FALLBACK = 88.0
+
+
+def usd_inr() -> dict:
+    """{"rate": rupees per dollar, "fallback": bool}: the daily read the app already keeps (cached), else USD_INR_FALLBACK."""
+    rate = rates().get("USD")
+    ok = isinstance(rate, (int, float)) and 20 < rate < 500
+    return {"rate": round(float(rate), 4) if ok else USD_INR_FALLBACK, "fallback": not ok}
+
+
 def public() -> dict:
     """What the landing page and Plans need: prices, symbols and which currency is charged. Plan IDs stay on the
     server. Each currency shows the admin price table's amount ($8 and $20 for dollars, the owner's choice, 7 Oct);
-    `charged_in` says when a card is still charged the rupee price instead."""
+    `charged_in` says when a card is still charged the rupee price instead. `usd_inr` is the rate every price's
+    "about $" is worked out from (item 34: rupees first, the dollar beside them)."""
     shown = {c: r for c, r in table().items() if not r.get("no_rate")}
     return {"currencies": {c: {**{k: v for k, v in r.items() if k not in PLAN_FIELDS + ("rate", "auto", "no_rate", "price_set")}, **charge_about(c, r)}
                            for c, r in shown.items()},
-            "countries": {k: c for k, c in COUNTRIES.items() if c in shown}}
+            "countries": {k: c for k, c in COUNTRIES.items() if c in shown}, "usd_inr": usd_inr()}
 
 
 def charge_about(code: str, row: dict) -> dict:

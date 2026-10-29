@@ -46,7 +46,8 @@ test("R9P-006: the confirm step names the rupee charge in the currency shown, fr
   assert.equal(chargeAboutNote(false, "$8", about), "");                                                    // charged in the currency shown, or INR
   assert.equal(chargeAboutNote(true, "$8", null), "");
   const src = read("src/pages/PlansPage.tsx");
-  assert.match(src, /chargeAboutNote\(!!shown\.charged, shown\.shown, shown\.about\)/);
+  // item 34: the confirm step says the rupee charge and its dollar figure, the same "about $" as the cards
+  assert.match(src, /const chargeWords = \(p: "basic" \| "pro"\) => `\$\{rupeeCharge\(rupees\(p, period\), gst\)\} \(\$\{aboutUsd\(rupees\(p, period\), rate\)\}\), every \$\{period\}`;/);
   // the headline prices are the owner's fixed ones and are not touched here
   assert.match(read("../backend/app/pricing.py"), /FIXED/);
 });
