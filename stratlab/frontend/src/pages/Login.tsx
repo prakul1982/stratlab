@@ -569,7 +569,8 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                       {about && <span className="small muted" data-testid={`about-${p}`}>{about}</span>}
                     </div>
                   )}
-                  {p !== "free" && (
+                  {/* only when it has something to say: an empty note kept a two-line gap under Basic's and Pro's prices (item 44) */}
+                  {p !== "free" && (loading || gst || save != null) && (
                     <span className="small lp-price-note">
                       {loading ? <span className="lp-skel lp-skel-note" />
                         : gst ? "incl. GST" : ""}

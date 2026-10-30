@@ -130,6 +130,9 @@ export function PlansPage() {
               </div>
               {/* VR6-013: about 400 characters of each card's lines, the rest one tap away (lib/plans.ts splitFeatures): the three cards stood 984, 1,176 and
                   1,015px tall, each a wall of small text that the Side by side tables below say again; every line is still in the page */}
+              {/* item 44: the list and the button are the card's third row, so the names, the prices and the lists start on one line in
+                  the three cards and the buttons sit on one line at their foot (styles.css .k-plans) */}
+              <div className="k-plan-body">
               {(() => {
                 const line = (f: string) => f.endsWith(":") ? <li key={f} className="head">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>;
                 const { head, shown, more } = splitFeatures(FEATURES[p]);
@@ -156,6 +159,7 @@ export function PlansPage() {
                       title={viewAs ? viewingPlansNote(planName(viewAs)) : undefined} aria-describedby={viewAs ? "plans-viewas" : undefined}>
                       {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${planName(p)}`}
                       {viewAs && <span className="k-small"> (off while viewing as {planName(viewAs)})</span>}</button>}
+              </div>
             </Card>
           );
         })}

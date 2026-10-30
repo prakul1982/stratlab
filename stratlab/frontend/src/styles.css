@@ -779,6 +779,9 @@ td.num, .num { font-family: var(--sans); }
 /* the plans: three cards, Pro outlined */
 .lp-prices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
 .lp-price { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
+/* item 44: each card takes four rows of the plans' grid (name, price, button, list): the buttons and the "Everything in ..., plus:" lists
+   start on one line across the three cards, Free's button no longer 100px above the others', with no reserved gap under a price */
+.lp-prices > .lp-price { display: grid; grid-row: span 4; grid-template-rows: subgrid; row-gap: 16px; align-content: start; }
 .lp-price-top { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
 .lp-amount-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }   /* VR1-162: "about $8 at today's rate" always on its own line, so Basic and Pro start their next line at the same height (it sat beside the price in one and under it in the other) */
 .lp-amount { font-size: 44px; letter-spacing: -.02em; line-height: 1.05; }
@@ -2284,6 +2287,12 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 
 /* plans */
 .k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a 260px band in the middle (LIVE1C-092 tried level cards: the layout checker's R13 found that band again at 1280) */
+/* item 44 (owner, 30 Oct: the plan cards' heads did not line up): each card takes three rows of the plans' grid (its name, its price,
+   then its list and button), so the names, the prices and the lists start on one line across the cards, and the buttons sit on one
+   line at the cards' foot. (A card on its own subgrid rows is as tall as its row, whatever align-items says.) */
+.k-plans > .k-plan { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: var(--s4); }
+.k-plan-body { display: flex; flex-direction: column; gap: var(--s4); }
+.k-plan-body > :last-child { margin-top: auto; }
 .k-plan.pro { border: 2px solid var(--ink); }
 @media (min-width: 601px) and (max-width: 1000px) { /* a tablet: two columns, the last plan across both, never one narrow column */
   .k-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2505,7 +2514,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .lp-skel-fine { height: calc(13.5px * 1.5 * 6); }
   .lp-skel-seg { height: 50px; }
 }
-.lp-price-note { display: block; min-height: calc(1.4em * 2); line-height: 1.4; color: var(--ink-2); }
+.lp-price-note { display: block; line-height: 1.4; color: var(--ink-2); }
 .lp-save { display: block; color: var(--ink-2); font-weight: 600; }
 .lp-price > .btn:disabled { opacity: .6; }
 

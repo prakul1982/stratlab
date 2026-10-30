@@ -124,3 +124,16 @@ test("items 40, 41: the IPO summary waits out 'busy' by itself and says 'queued'
   assert.match(s, /<p className="k-small k-muted" data-testid="ipo-sum-queued">/);
   assert.doesNotMatch(s, /role="alert">\{error\}/);
 });
+
+// Item 44 (owner screenshot, 30 Oct, /plans: "ui fix need"): the plan cards' heads are one height, so the buttons and the lists start on one line.
+test("item 44: each plan card takes its rows from the plans' grid (subgrid), and no empty note keeps a gap under a price", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.lp-prices > \.lp-price \{ display: grid; grid-row: span 4; grid-template-rows: subgrid; row-gap: 16px; align-content: start; \}/);
+  assert.match(css, /\.k-plans > \.k-plan \{ display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: var\(--s4\); \}/);
+  assert.match(css, /\.k-plan-body > :last-child \{ margin-top: auto; \}/);
+  assert.match(css, /\.lp-price-note \{ display: block; line-height: 1\.4; color: var\(--ink-2\); \}/);
+  assert.match(read("src/pages/Login.tsx"), /\{p !== "free" && \(loading \|\| gst \|\| save != null\) && \(\n\s*<span className="small lp-price-note">/);
+  // the signed-in cards: name, price, then the list and the button in one body
+  const plans = read("src/pages/PlansPage.tsx");
+  assert.ok(plans.indexOf('<div className="k-plan-body">') < plans.indexOf('<ul className="k-plan-list">'));
+});

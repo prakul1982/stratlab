@@ -331,3 +331,52 @@ test("items 40, 41: asking for an IPO's summary waits out a busy reader by itsel
   await expect(page.getByText(/limit is reached|Every AI provider/)).toHaveCount(0);
 });
 
+// Item 44 (owner screenshot, 30 Oct, /plans signed out: "ui fix need"): Free's button sat ~100px above Basic's and Pro's, and Basic and
+// Pro had an empty gap under their "about $" line. The three cards' heads are one height: the buttons on one line, the lists starting on
+// one line, no reserved gap; signed out (the landing's plans) and signed in (/plans).
+const tops = (page: Page, sel: string) => page.locator(sel).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+test("item 44: the plan cards' buttons and lists start on one line, signed out and signed in, with no reserved gap", async ({ page }, info) => {
+  test.skip(info.project.name === "phone", "each width is set here");
+  for (const w of [1440, 1280]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    await page.goto("/plans");
+    const cards = page.locator(".lp-prices > .lp-price");
+    await expect(cards).toHaveCount(3, { timeout: 30_000 });
+    await expect(cards.locator("[data-testid=about-basic]")).toBeVisible({ timeout: 30_000 });
+    const buttons = await tops(page, ".lp-prices > .lp-price > :is(.btn, .lp-plan-note)");
+    expect(new Set(buttons).size, `${w}: buttons at ${buttons}`).toBe(1);
+    const lists = await tops(page, ".lp-prices > .lp-price > .lp-plan-list");
+    expect(new Set(lists).size, `${w}: lists at ${lists}`).toBe(1);
+    // no empty note kept open under a price
+    for (const h of await page.locator(".lp-price-note").evaluateAll((els) => els.map((e) => [e.textContent?.trim(), e.getBoundingClientRect().height] as const))) expect(h[0], `an empty note ${h[1]}px tall`).toBeTruthy();
+    // and the gap between the price block and the button is the cards' one gap, not a reserved slot
+    const gaps = await page.locator(".lp-prices > .lp-price").evaluateAll((els) => els.map((c) => {
+      const price = c.children[1].getBoundingClientRect(), btn = c.children[2].getBoundingClientRect();
+      return Math.round(btn.top - price.bottom);
+    }));
+    expect(Math.min(...gaps), `${w}: gaps ${gaps}`).toBeGreaterThanOrEqual(15);
+    expect(Math.min(...gaps), `${w}: gaps ${gaps}`).toBeLessThanOrEqual(17);       // the tallest price block sits right above its button
+  }
+  await open(page, "/plans", ADMIN38, 1440, 900);
+  const plans = page.locator(".k-plans > .k-plan");
+  await expect(plans).toHaveCount(3, { timeout: 30_000 });
+  for (const w of [1440, 1280]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    const lists = await tops(page, ".k-plans > .k-plan .k-plan-body > .k-plan-list");
+    expect(new Set(lists).size, `${w} signed in: lists at ${lists}`).toBe(1);
+    const foot = await page.locator(".k-plans > .k-plan .k-plan-body > :last-child").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().bottom)));
+    expect(Math.max(...foot) - Math.min(...foot), `${w} signed in: buttons' feet at ${foot}`).toBeLessThanOrEqual(12);
+  }
+  if (SHOTS) for (const [path, who] of [["/plans", null], ["/plans", ADMIN38]] as const) for (const [w, h] of [[1440, 900], [1280, 800], [390, 844], [360, 780]]) for (const scheme of ["light", "dark"] as const) {
+    const ctx = await page.context().browser()!.newContext({ viewport: { width: w, height: h }, colorScheme: scheme });
+    const p = await ctx.newPage();
+    if (who) await p.addInitScript((x) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(x)); localStorage.setItem("stratlab.tour.v1", "1"); }, who);
+    await p.route("**/*", (r) => { const host = new URL(r.request().url()).hostname; return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" }); });
+    await p.goto(`${info.project.use.baseURL}${path}`);
+    const grid = p.locator(who ? ".k-plans" : ".lp-prices");
+    await grid.waitFor({ timeout: 30_000 });
+    await p.waitForTimeout(800);
+    await grid.screenshot({ path: `${SHOTS}/plans-${who ? "in" : "out"}-${w}-${scheme}.png` });
+    await ctx.close();
+  }
+});
