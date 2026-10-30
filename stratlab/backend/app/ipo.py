@@ -986,7 +986,12 @@ def facts_of(d: dict | None) -> dict | None:
     if not d:
         return None
     got = db.json_value(db.get_setting(D.FACTS_KEY + doc_key(d)), {})
-    return got if got.get("reader") == D.READER else None
+    return got if (got.get("reader") or 0) >= D.READER_KEPT else None
+
+
+def facts_stale(f: dict | None) -> bool:
+    """Facts an older reader made: shown until the document is read again with the current rules (LO1-2)."""
+    return bool(f) and (f.get("reader") or 0) < D.READER
 
 
 def summary_of(d: dict | None) -> dict | None:
@@ -1372,8 +1377,10 @@ class Job:
             for r in load(m)["rows"]:
                 d = doc_to_read(r)
                 st = stage_of(r, now)
-                if d and st in ("open", "upcoming", "closed", "listed", "filed") and not facts_of(d) and (st != "listed" or not (r.get("listing") or r.get("priced") or "") < (now.date() - timedelta(days=30)).isoformat()):
-                    todo.append((0 if st in ("open", "closed") else 1 if st == "upcoming" else 2, r.get("open") or r.get("expected") or r.get("filed") or "", r, d))
+                kept = facts_of(d) if d else None
+                if d and st in ("open", "upcoming", "closed", "listed", "filed") and (not kept or facts_stale(kept)) and (st != "listed" or not (r.get("listing") or r.get("priced") or "") < (now.date() - timedelta(days=30)).isoformat()):
+                    # a document an older reader read waits behind every one not read at all (LO1-2)
+                    todo.append(((0 if st in ("open", "closed") else 1 if st == "upcoming" else 2) + (3 if kept else 0), r.get("open") or r.get("expected") or r.get("filed") or "", r, d))
         todo.sort(key=lambda t: (t[0], t[1]))
         done, problems = 0, []
         for _, _, r, d in todo[:limit]:
@@ -1553,6 +1560,8 @@ def facts_view(row: dict) -> dict:
     out = {k: f[k] for k in ("promoters", "selling", "objects", "financials", "us", "pages_read", "utilisation", "risks", "kpis", "holding", "peers", "eps") if k in f}
     if out.get("objects"):
         out["objects"] = D.objects_view(out["objects"])
+    if "us" not in f and not out.get("holding") and not facts_stale(f):
+        out["holding_unread"] = True          # the page says the table couldn't be read, not an empty space (LO1-2)
     return {"state": "ready", "kind": f.get("kind"), "read_at": f.get("read_at"), **out}
 
 

@@ -164,12 +164,16 @@ test("draw a trend line and a long position, reload, edit and delete", async ({ 
   // duplicate, then undo and redo it
   await trend.getByRole("button", { name: "Duplicate" }).click();
   await count(chart, 3);
-  await chart.getByRole("button", { name: "Undo", exact: true }).click();
+  // on a phone undo and redo are in the Draw sheet, out of the two-row top bar (LO1-1)
+  const hist = phone ? page.getByRole("dialog", { name: "Drawing tools" }) : chart;
+  if (phone) await chart.getByRole("button", { name: "Draw", exact: true }).click();
+  await hist.getByRole("button", { name: "Undo", exact: true }).click();
   await count(chart, 2);
-  await chart.getByRole("button", { name: "Redo", exact: true }).click();
+  await hist.getByRole("button", { name: "Redo", exact: true }).click();
   await count(chart, 3);
-  await chart.getByRole("button", { name: "Undo", exact: true }).click();
+  await hist.getByRole("button", { name: "Undo", exact: true }).click();
   await count(chart, 2);
+  if (phone) await closeList(page, true);
 
   // hide all, then show again (the drawings are kept)
   if (!phone) {
@@ -292,6 +296,7 @@ test("a fibonacci, the measure tools, a note and the magnet", async ({ page, req
 test("the shortcut list and keys", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const { chart } = await open(page, "/research/IN/INFY");
+  if (phone) await chart.getByRole("button", { name: "Draw", exact: true }).click();      // the (i) is in the Draw sheet on a phone (LO1-1)
   await chart.getByRole("button", { name: "Drawing tools and shortcuts" }).click();
   const dlg = page.getByRole("dialog", { name: "Drawing shortcuts" });
   await expect(dlg).toContainText("Trend line");

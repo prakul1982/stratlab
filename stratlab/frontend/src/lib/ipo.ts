@@ -33,12 +33,15 @@ export interface Utilisation { page: number; unit: string; rows: { label: string
 export interface Risk { n: number; page: number; text: string }
 export interface KpiPeriod { label: string; values: Record<string, number | null>; peers: Record<string, (number | null)[]> }
 export interface Kpis { page: number; unit: string; peers: string[]; periods: KpiPeriod[] }
-export interface Holder { group: string; name: string; shares: number | null; pct: number | null; post_pct: number | null; total: boolean }
+export interface Holder { group: string; name: string; shares: number | null; pct: number | null; post_shares?: number | null; post_pct: number | null; total: boolean; promoter?: boolean }
+/** The promoter and public split before the offer (and after it once the document has the figures), from the document's own tables (LO1-2). */
+export interface HoldSplit { page: number; promoter_shares: number; promoter_pct: number; public_shares: number; public_pct: number; basis: "pattern" | "holders";
+  post_promoter_pct?: number; post_public_pct?: number; post_promoter_shares?: number; post_public_shares?: number }
 export interface PeerRow { name: string; price: number | null; revenue: number | null; eps: number | null; nav: number | null; pe: number | null; ronw: number | null }
 export interface PeerTable { page: number; price_on?: string; company: { revenue?: number | null; eps?: number | null; nav?: number | null; ronw?: number | null }; peers: PeerRow[] }
 export interface Facts {
   state: "none" | "pending" | "ready"; kind?: string; read_at?: string; pages_read?: number;
-  utilisation?: Utilisation; risks?: Risk[]; kpis?: Kpis; holding?: { page: number; rows: Holder[] }; peers?: PeerTable; eps?: { page: number; rows: { period: string; basic: number | null; diluted: number | null }[] };
+  utilisation?: Utilisation; risks?: Risk[]; kpis?: Kpis; holding?: { page: number; layout?: "holders" | "promoters" | "pattern"; rows: Holder[]; split?: HoldSplit | null }; holding_unread?: boolean; peers?: PeerTable; eps?: { page: number; rows: { period: string; basic: number | null; diluted: number | null }[] };
   promoters?: string[]; selling?: { name: string; kind: string }[];
   objects?: { page: number; text: string; table?: { unit: string | null; rows: { label: string; figures: string | null }[] } }; financials?: Financials;
   us?: { company_shares?: number; selling_shares?: number; price?: number; range?: number[]; listing?: string; symbol?: string; proceeds?: string };

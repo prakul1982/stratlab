@@ -62,6 +62,25 @@ async function touchable(chart: Locator) {
   expect(small, "controls too small to tap").toEqual([]);
 }
 
+/** The top bar is at most two rows on a phone (it was three at 360-390px), and still has every control (LO1-1). */
+async function twoRows(page: Page, chart: Locator) {
+  for (const w of [390, 360]) {
+    await page.setViewportSize({ width: w, height: 860 });
+    await expect.poll(async () => chart.locator(".pc-bar").evaluate((bar) => {
+      const tops = Array.from(bar.children).filter((el) => el.getBoundingClientRect().height > 0).map((el) => el.getBoundingClientRect().top).sort((a, b) => a - b);
+      return tops.filter((t, i) => i === 0 || t - tops[i - 1] > 20).length;      // a new row starts more than 20px lower
+    }), { message: `top bar rows at ${w}px` }).toBeLessThanOrEqual(2);
+    for (const name of ["Chart type", "Timeframe"]) await expect(chart.getByRole("combobox", { name })).toBeVisible();
+    for (const name of ["Indicators", "Draw"]) await expect(chart.getByRole("button", { name, exact: true })).toBeVisible();
+    await touchable(chart);
+  }
+  await chart.getByRole("button", { name: "Draw", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Drawing tools" });
+  for (const name of ["Undo", "Redo", "Drawing tools and shortcuts"]) await expect(sheet.getByRole("button", { name, exact: true })).toBeVisible();
+  await sheet.getByRole("button", { name: "Done" }).click();
+  await page.setViewportSize({ width: 412, height: 839 });
+}
+
 async function addIndicator(page: Page, chart: Locator, name: RegExp) {
   await chart.getByRole("button", { name: "Indicators" }).click();
   await page.getByRole("menuitem", { name, exact: true }).click();
@@ -206,6 +225,7 @@ test("price chart on a company page: types, indicators, drawings, zoom, full scr
   page.on("request", (r) => { if (/PriceChart-[\w-]+\.js$/.test(r.url())) chunks.push(r.url()); });
   const { chart, errors } = await open(page, "/research/IN/RELIANCE");
   expect(chunks.length, "the chart's code loads in its own file").toBe(1);
+  if (phone) await twoRows(page, chart);
   await exercise(page, chart, phone, "IN:RELIANCE");
   // timeframes: hourly candles, then scroll back until older ones load (a phone picks it from one box)
   if (phone) await chart.getByRole("combobox", { name: "Timeframe" }).selectOption("1h");

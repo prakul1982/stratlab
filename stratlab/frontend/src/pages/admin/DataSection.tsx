@@ -7,6 +7,7 @@ import { ago, dateOnly, istToday, plainDates } from "../../lib/format";
 import { Card, CardHead, DataTable, FigureTable, Light, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type JobRow } from "./AdminContext";
 import { plainError, services } from "./attention";
+import { BizCoveragePanel } from "./BizCoveragePanel";
 import { BlogPanel } from "./BlogPanel";
 import { HolidaysPanel } from "./HolidaysPanel";
 import { StoragePanel } from "./StoragePanel";
@@ -144,6 +145,7 @@ export function DataSection() {
 
       {sv?.calendar && <HolidaysPanel status={sv.calendar} onSaved={(c) => setOv((o) => o && { ...o, server: { ...o.server, calendar: c } })} />}
       <BlogPanel />
+      <BizCoveragePanel />
       <StoragePanel />
       {open && <JobLog job={open} mine={mine[open.id] ?? []} onClose={() => setLog(null)} />}
     </>

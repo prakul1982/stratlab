@@ -159,6 +159,7 @@
   border-top: 1px solid var(--line-2); border-radius: 16px 16px 0 0; box-shadow: 0 -8px 30px rgba(0,0,0,.18); padding-bottom: env(safe-area-inset-bottom); }
 .pc-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
 .pc-sheet-acts { display: flex; gap: 6px; align-items: center; }
+.pc-sheet-more { display: flex; gap: 6px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); }   /* undo, redo and (i), out of a phone's top bar (LO1-1) */
 .pc-sheet-body { overflow: auto; padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
 .pc-sheet-body h2 { margin: 4px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
 .pc-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }

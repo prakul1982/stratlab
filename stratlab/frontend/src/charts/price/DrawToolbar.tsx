@@ -192,6 +192,8 @@ export function DrawSheet(p: ToolState & { onClose: () => void }) {
           <button type="button" className="pc-btn" onClick={p.onClose}>Done</button>
         </span>
       </div>
+      {/* undo, redo and the shortcuts live here on a phone: in the chart's top bar they made it three rows at 360-390px (LO1-1) */}
+      <div className="pc-sheet-more"><HistoryButtons {...p} /><ShortcutsButton /></div>
       <div className="pc-sheet-body">
         {TOOL_GROUPS.map((g) => (
           <section key={g.id} aria-label={g.name}>
