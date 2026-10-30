@@ -244,7 +244,7 @@ a.link { margin-inline: -2px; }
 .side-more:hover { color: var(--ink); }
 .side-group { display: flex; flex-direction: column; gap: 2px; }
 .side-head { display: flex; align-items: center; gap: 4px; }
-.side-toggle { flex: none; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; color: var(--muted); }
+.side-toggle { flex: none; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; color: var(--muted); position: relative; }
 .side-toggle:hover { color: var(--ink); background: var(--side-hover); }
 .side-title { flex: 1; min-width: 0; display: flex; align-items: center; height: 26px; padding: 0 6px; border-radius: 6px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font: 600 11px/1 var(--sans); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
@@ -278,7 +278,7 @@ a.link { margin-inline: -2px; }
 .side-list a.active > svg { color: var(--ink); }
 .side-list a:focus-visible, .side-toggle:focus-visible { outline-offset: -2px; }
 .nb-dot { width: 16px; display: grid; place-items: center; flex: none; }
-.nb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: relative; }   /* its hidden verdict words stay inside it (a long name put them 84px past the menu's edge) */
 .nb-pin { flex: none; display: inline-flex; color: var(--muted); }
 .side-list a.nb-more { padding-left: 34px; font-size: 13px; color: var(--muted); }
 .side-list a.nb-more:hover { color: var(--ink); }

@@ -158,7 +158,10 @@ for (const group of ["nifty500", "sp500"]) {
     const custom = await firstDay(A);
     expect(custom.n).toBeLessThanOrEqual(21);
     expect(custom.n).toBeGreaterThan(5);
-    expect(custom.day > seen[chips[chips.length - 2]] || chips.length <= 2).toBeTruthy();
+    // the days read "2 Oct" (this year) or "30 Oct 2025": compared as dates, not as text ("2 Oct" sorted before "30 Oct 2025")
+    const dayOf = (s: string) => Date.parse(/\d{4}$/.test(s) ? s : `${s} ${new Date().getFullYear()}`);
+    expect(Number.isFinite(dayOf(custom.day)), custom.day).toBe(true);
+    expect(chips.length <= 2 || dayOf(custom.day) > dayOf(seen[chips[chips.length - 2]]), `20 days from ${custom.day}, ${chips[chips.length - 2]} from ${seen[chips[chips.length - 2]]}`).toBe(true);
     await page.reload();
     const again = page.getByRole("group", { name: "History charts' range" });
     await expect(again.getByRole("button", { name: "20 days", exact: true })).toHaveAttribute("aria-pressed", "true", { timeout: 60_000 });

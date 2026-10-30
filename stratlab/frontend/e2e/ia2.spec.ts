@@ -142,6 +142,7 @@ test("item 36: on a 1280x800 laptop the menu does not scroll with the section yo
     await expect(nav.locator(".nb-more")).toHaveText("All 8 notebooks", { timeout: 30_000 });
     const over = await nav.evaluate((el) => el.scrollHeight - el.clientHeight);
     expect(over, `${to} with 8 notebooks: the menu scrolls by ${over}px`).toBeLessThanOrEqual(0);
+    expect(await nav.evaluate((el) => el.scrollWidth - el.clientWidth), `${to}: nothing in the menu runs past its edge`).toBeLessThanOrEqual(0);
   }
   for (const space of ["trade", "invest", "money"] as const) for (const g of NAV[space].groups) {
     const to = startOf(g, space);
@@ -378,5 +379,22 @@ test("item 44: the plan cards' buttons and lists start on one line, signed out a
     await p.waitForTimeout(800);
     await grid.screenshot({ path: `${SHOTS}/plans-${who ? "in" : "out"}-${w}-${scheme}.png` });
     await ctx.close();
+  }
+});
+
+// Item 43's narrower laptop column: the Calendar's page of cards had a 90px hole in its Results card at 1280 on CI's fonts (ui-lint R13).
+// Each card's words now fill it to within 60px of its foot, at the laptop widths.
+test("item 43: the Calendar's page of cards keeps no tall empty band in a card at 1280 and 1440", async ({ page }, info) => {
+  test.skip(info.project.name === "phone", "a laptop's widths");
+  await open(page, "/invest/g/calendar", who(false), 1280);
+  for (const w of [1280, 1440]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    await expect(page.getByTestId("group-card").first()).toBeVisible({ timeout: 30_000 });
+    const bands = await page.locator(".nav-card").evaluateAll((cards) => cards.map((c) => {
+      const line = c.querySelector(".nav-card-line")!, foot = c.querySelector(".nav-card-foot")!;
+      const r = document.createRange(); r.selectNodeContents(line);
+      return { name: c.querySelector(".k-card-title")?.textContent?.trim(), band: Math.round(foot.getBoundingClientRect().top - r.getBoundingClientRect().bottom) };
+    }));
+    for (const b of bands) expect(b.band, `${w}: ${b.name}`).toBeLessThanOrEqual(60);
   }
 });
