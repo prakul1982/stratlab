@@ -18,7 +18,7 @@ const ctx = (o) => ({ slot: "ai", cfg: on, path: "/research/IN/RELIANCE", choice
 
 // ---------- the settings ----------
 test("ads are off unless the switch, the publisher ID and the slot's ID are all set", () => {
-  assert.deepEqual(off, { on: false, client: "ca-pub-8125241692814953", slots: { public: "", ai: "" }, pixel: "", clarity: "z4n5s4xn12" }, "the owner's IDs are the defaults; no slot, so no ad draws; no pixel");
+  assert.deepEqual(off, { on: false, client: "ca-pub-8125241692814953", slots: { public: "", ai: "" }, pixel: "1460063386042993", clarity: "z4n5s4xn12" }, "the owner's IDs are the defaults; no slot, so no ad draws");
   assert.equal(A.adsLive(off, "public"), false);
   assert.equal(A.adsLive(on, "public"), true);
   assert.equal(A.adsLive(on, "ai"), true);
@@ -242,10 +242,14 @@ test("the security policy lets in only what AdSense needs and stays strict other
 const T = { ...A.adsConfig({ VITE_META_PIXEL_ID: "1234567890", VITE_CLARITY_ID: "abc123def4" }) };
 const track = (o) => A.trackersFor({ cfg: T, choice: "yes", path: "/library", ...o });
 
-test("Clarity is the owner's project unless set; an empty setting turns it off; the pixel has no default", () => {
+test("Clarity and the pixel are the owner's unless set; an empty setting turns each off", () => {
   assert.equal(A.DEFAULT_CLARITY, "z4n5s4xn12");
   assert.equal(A.adsConfig({}).clarity, "z4n5s4xn12");
-  assert.equal(A.adsConfig({}).pixel, "");
+  // item 46: the owner's Meta Pixel is the default, as Clarity's project is
+  assert.equal(A.DEFAULT_PIXEL, "1460063386042993");
+  assert.equal(A.adsConfig({}).pixel, "1460063386042993");
+  assert.equal(A.adsConfig({ VITE_META_PIXEL_ID: "" }).pixel, "");
+  assert.equal(A.adsConfig({}, { META_PIXEL_ID: "" }).pixel, "", "/config.js can switch it off without a rebuild");
   assert.equal(A.adsConfig({ VITE_CLARITY_ID: "" }).clarity, "");
   assert.equal(A.adsConfig({}, { CLARITY_PROJECT_ID: "" }).clarity, "", "/config.js can switch it off without a rebuild");
   assert.equal(A.adsConfig({ VITE_CLARITY_ID: "abc123def4" }).clarity, "abc123def4");
@@ -259,8 +263,8 @@ test("nothing loads before Allow: no tracker without a saved yes, whatever the p
   for (const choice of [null, "no"]) for (const path of ["/", "/library", "/research/IN/RELIANCE", "/mine"]) assert.deepEqual(track({ choice, path }), { pixel: false, clarity: false }, `${choice} ${path}`);
   assert.deepEqual(track({}), { pixel: true, clarity: true });
   assert.deepEqual(track({ path: "/mine" }), { pixel: true, clarity: true }, "the app shell is included");
-  assert.deepEqual(A.trackersFor({ cfg: A.adsConfig({}), choice: "yes", path: "/library" }), { pixel: false, clarity: true }, "no pixel ID: no pixel");
-  assert.deepEqual(A.trackersFor({ cfg: A.adsConfig({}, { CLARITY_PROJECT_ID: "" }), choice: "yes", path: "/library" }), { pixel: false, clarity: false });
+  assert.deepEqual(A.trackersFor({ cfg: A.adsConfig({}, { META_PIXEL_ID: "" }), choice: "yes", path: "/library" }), { pixel: false, clarity: true }, "no pixel ID: no pixel");
+  assert.deepEqual(A.trackersFor({ cfg: A.adsConfig({}, { CLARITY_PROJECT_ID: "", META_PIXEL_ID: "" }), choice: "yes", path: "/library" }), { pixel: false, clarity: false });
   assert.deepEqual(track({ dnt: true }), { pixel: false, clarity: false }, "Do Not Track and Global Privacy Control win over a yes");
 });
 
@@ -276,23 +280,26 @@ test("the question is asked only when something needs it, once, and not on a pri
   assert.equal(ask({ choice: "yes" }), false);
   assert.equal(ask({ choice: "no" }), false);
   for (const path of ["/money", "/holdings", "/account", "/admin", "/plans"]) assert.equal(ask({ path }), false, path);
-  const none = A.adsConfig({}, { CLARITY_PROJECT_ID: "" });
+  const none = A.adsConfig({}, { CLARITY_PROJECT_ID: "", META_PIXEL_ID: "" });          // (item 46: the pixel has a default now, as Clarity has)
   assert.equal(A.askNeeded(none), false, "no slot, no pixel, no Clarity: nothing to ask");
   assert.equal(A.askNow({ cfg: none, choice: null, path: "/library" }), false);
-  assert.equal(A.askNeeded(A.adsConfig(ENV, { CLARITY_PROJECT_ID: "" })), true, "an ad slot alone needs the question");
+  assert.equal(A.askNeeded(A.adsConfig(ENV, { CLARITY_PROJECT_ID: "", META_PIXEL_ID: "" })), true, "an ad slot alone needs the question");
   assert.equal(A.askNeeded(A.adsConfig({ VITE_META_PIXEL_ID: "1234567890" }, { CLARITY_PROJECT_ID: "" })), true);
 });
 
 test("the question names only what is switched on, in plain words", () => {
   const w = (cfg) => A.consentWords(cfg);
   assert.match(w(A.adsConfig({})).text, /Microsoft Clarity, which records how pages are used with all text hidden/);
-  assert.doesNotMatch(w(A.adsConfig({})).text, /Google|Meta/);
+  // item 46: the defaults are the owner's Clarity project and Meta Pixel; no ads until a slot is set
+  assert.match(w(A.adsConfig({})).text, /Meta's ad measurement and Microsoft Clarity/);
+  assert.doesNotMatch(w(A.adsConfig({})).text, /Google/);
+  assert.doesNotMatch(w(A.adsConfig({}, { META_PIXEL_ID: "" })).text, /Google|Meta/);
   assert.equal(w(A.adsConfig({})).title, "Analytics");
   const all = w(A.adsConfig({ ...ENV, VITE_META_PIXEL_ID: "1234567890" }));
   assert.equal(all.title, "Ads and analytics");
   assert.match(all.text, /Google ads, Meta's ad measurement and Microsoft Clarity/);
   assert.match(all.text, /Say no and none of them load/);
-  assert.equal(w(A.adsConfig(ENV, { CLARITY_PROJECT_ID: "" })).title, "Ads");
+  assert.equal(w(A.adsConfig(ENV, { CLARITY_PROJECT_ID: "", META_PIXEL_ID: "" })).title, "Ads");
   assert.doesNotMatch(all.text, /\b(buy|sell|hold|target)\b/i);
 });
 

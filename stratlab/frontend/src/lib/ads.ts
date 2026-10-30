@@ -12,7 +12,7 @@ export type AdSlotName = "public" | "ai";
 export type AdMode = "ad" | "house" | "none";
 export interface AdsConfig {
   on: boolean; client: string; slots: Record<AdSlotName, string>;
-  /** Meta Pixel ID (digits), "" = no pixel. Nothing by default. */
+  /** Meta Pixel ID (digits), "" = no pixel. The owner's pixel by default; an empty setting turns it off. */
   pixel: string;
   /** Microsoft Clarity project ID, "" = no Clarity. The owner's project by default; an empty setting turns it off. */
   clarity: string;
@@ -28,22 +28,27 @@ const CLIENT = /^ca-pub-\d{10,20}$/;
 export const DEFAULT_CLIENT = "ca-pub-8125241692814953";
 /** The owner's Clarity project (public, not a secret). It loads only after "Allow", and never on the pages in TRACK_NEVER. */
 export const DEFAULT_CLARITY = "z4n5s4xn12";
+/** The owner's Meta Pixel (public, not a secret; item 46). Like Clarity it loads only after "Allow", only on the pages tracking is
+ * allowed on, and sends PageView and CompleteRegistration only (lib/track.ts, components/Tracking.tsx). */
+export const DEFAULT_PIXEL = "1460063386042993";
 const PIXEL = /^\d{5,20}$/;
 const CLARITY = /^[a-z0-9]{6,16}$/;
 const SLOT = /^\d{6,20}$/;
 
 /** The settings from the build's env (VITE_…) with /config.js over them. A value that isn't an ID counts as not set; no publisher
  * ID at all means the owner's (DEFAULT_CLIENT). Names: ADS_ENABLED, ADSENSE_CLIENT, ADSENSE_SLOT_PUBLIC, ADSENSE_SLOT_AI, META_PIXEL_ID
- * (env: VITE_META_PIXEL_ID) and CLARITY_PROJECT_ID (env: VITE_CLARITY_ID); Clarity is the owner's project unless set, and set to
- * "" it is off. */
+ * (env: VITE_META_PIXEL_ID) and CLARITY_PROJECT_ID (env: VITE_CLARITY_ID); the pixel and Clarity are the owner's unless set, and
+ * set to "" they are off. */
 export function adsConfig(env: Record<string, unknown> = {}, runtime: Record<string, unknown> = {}): AdsConfig {
   const pick = (name: string) => String(runtime[name] ?? env[`VITE_${name}`] ?? "").trim();
   const id = (name: string, re: RegExp) => { const v = pick(name); return re.test(v) ? v : ""; };
   const clarityRaw = runtime.CLARITY_PROJECT_ID ?? env.VITE_CLARITY_ID;
   const clarity = clarityRaw === undefined || clarityRaw === null ? DEFAULT_CLARITY : String(clarityRaw).trim();
+  const pixelRaw = runtime.META_PIXEL_ID ?? env.VITE_META_PIXEL_ID;
+  const pixel = pixelRaw === undefined || pixelRaw === null ? DEFAULT_PIXEL : String(pixelRaw).trim();
   return { on: pick("ADS_ENABLED").toLowerCase() === "true", client: pick("ADSENSE_CLIENT") ? id("ADSENSE_CLIENT", CLIENT) : DEFAULT_CLIENT,
     slots: { public: id("ADSENSE_SLOT_PUBLIC", SLOT), ai: id("ADSENSE_SLOT_AI", SLOT) },
-    pixel: id("META_PIXEL_ID", PIXEL), clarity: CLARITY.test(clarity) ? clarity : "" };
+    pixel: PIXEL.test(pixel) ? pixel : "", clarity: CLARITY.test(clarity) ? clarity : "" };
 }
 
 /** Ads can draw in this slot: the switch is on and both IDs are set. */

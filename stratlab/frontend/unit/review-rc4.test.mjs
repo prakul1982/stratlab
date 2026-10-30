@@ -39,7 +39,7 @@ test("RC4-005: that yes does not start the pixel or Clarity, and the app asks ab
   assert.equal(ask({ adsOnly: true }), true, "the question about the others is still open");
   assert.equal(ask({ adsOnly: true, declined: true }), false, "and once No thanks is said it is not asked again");
   assert.equal(ask({ adsOnly: true, path: "/money" }), false, "never on a private page");
-  const adsOnlyCfg = A.adsConfig({ VITE_ADSENSE_CLIENT: "ca-pub-1234567890123456", VITE_ADSENSE_SLOT_PUBLIC: "1111111111", VITE_ADS_ENABLED: "true" }, { CLARITY_PROJECT_ID: "" });
+  const adsOnlyCfg = A.adsConfig({ VITE_ADSENSE_CLIENT: "ca-pub-1234567890123456", VITE_ADSENSE_SLOT_PUBLIC: "1111111111", VITE_ADS_ENABLED: "true" }, { CLARITY_PROJECT_ID: "", META_PIXEL_ID: "" });   // (item 46: the pixel's default off too)
   assert.equal(A.askNow({ cfg: adsOnlyCfg, choice: "yes", path: "/library", adsOnly: true }), false, "nothing else is on: nothing more to ask");
   assert.equal(A.askNow({ cfg: PIXEL, choice: "no", path: "/library", adsOnly: false }), false, "No thanks sticks");
   const words = A.consentWords(PIXEL, true);
