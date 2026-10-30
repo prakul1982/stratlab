@@ -143,3 +143,29 @@ export function useSync(group: string | undefined, id: string, on: (m: SyncMsg) 
 
 /** A rough width of a label in pixels at the axis font (11px sans, tabular figures), for spacing ticks. */
 export const textWidth = (s: string, size = 11) => s.length * size * 0.58 + 2;
+
+let ctx2d: CanvasRenderingContext2D | null | undefined;
+/** The width a label takes as the browser draws it (the app's sans at `size` px), never less than the rough width: item 38's labels ran
+ * together on Safari, whose letters came out wider than the estimate. Without a canvas (a test) it is the rough width. */
+export function labelWidth(s: string, size = 11): number {
+  if (ctx2d === undefined) { try { ctx2d = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d"); } catch { ctx2d = null; } }
+  if (!ctx2d) return textWidth(s, size);
+  ctx2d.font = `${size}px "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif`;
+  return Math.max(textWidth(s, size), ctx2d.measureText(s).width + 2);
+}
+
+/** Where a label sits on an axis from `lo` to `hi`: centred on its point, or held in from an end (anchored at its start or end),
+ * with its left and right edges, so labels can be thinned by where they really are. */
+export function placeLabel(px: number, w: number, lo: number, hi: number): { anchor: "start" | "middle" | "end"; l: number; r: number } {
+  const anchor = px - w / 2 < lo ? "start" : px + w / 2 > hi ? "end" : "middle";
+  const l = anchor === "start" ? px : anchor === "end" ? px - w : px - w / 2;
+  return { anchor, l, r: l + w };
+}
+
+/** The end labels' column: its width, or 0 when a label would not fit (the legend then carries the names). The column is at most 140px
+ * and a fifth of the chart, so the plot keeps its width; 22px is the dash beside each label and the gaps. */
+export function endColumn(widths: number[], chartW: number): number {
+  if (!widths.length) return 0;
+  const need = Math.max(...widths) + 22;
+  return need <= Math.min(140, Math.floor(chartW / 5)) ? need : 0;
+}

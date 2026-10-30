@@ -58,8 +58,12 @@ test("an entry's page has one card for each of its tabs, and an old group's addr
   await expect(crumb).toHaveText(/Invest\s*›\s*Market data/);
   await expect(crumb.getByRole("link", { name: "Invest", exact: true })).toHaveAttribute("href", "/invest");
   const side = await sideMenu(page, phone);
-  await expect(side.locator('[data-group="market-data"] > a')).toHaveClass(/active/);
-  await expect(side.locator(".side-toggle")).toHaveCount(0);           // no groups to open or close
+  // IA-2 (item 36): on the section's own page its heading is the selected item, its pages are listed open under it, the other sections fold
+  await expect(side.locator('[data-group="market-data"] > .side-head > a')).toHaveClass(/active/);
+  await expect(side.locator('[data-group="market-data"] > .side-head > a')).toHaveAttribute("aria-current", "page");
+  await expect(side.locator('[data-group="market-data"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
+  await expect(side.locator("#side-sub-market-data a")).toHaveText(g.pages.map((p) => p.label));
+  await expect(side.locator('.side-toggle[aria-expanded="true"]')).toHaveCount(1);
   if (SHOTS) {
     await closeMenu(page, phone);
     for (const scheme of ["dark", "light"] as const) {

@@ -70,8 +70,11 @@ const CALENDAR: NavGroup = {
     page("/calendar", "All dates", "calendar", "calendar all dates upcoming week ahead what is coming dates results dividends ex date ipo open close listing rbi fed expiry holiday tax due my stocks",
       { line: "Results, corporate actions, IPO dates and market events, day by day, for your stocks or every company.",
         blurb: "One table of the days ahead: results days, ex-dates, IPO openings, closings and listings, and the market's own events, narrowed by type, company size, sector or your own stocks.", space: "invest" }),
-    page("/research/results", "Results", "calendar", "results quarterly earnings calendar results dates q1 q2 q3 q4 profit revenue announcement board meeting", { line: "Results days for your stocks, or every company, week by week.", space: "invest" }),
-    page("/research/corporate-actions", "Corporate actions", "calendar", "corporate actions dividend dividends ex date record date bonus issue stock split rights buyback demerger", { line: "Dividends, bonus issues and splits by ex-date, for your stocks or every company.", space: "invest" }),
+    page("/research/results", "Results", "calendar", "results quarterly earnings calendar results dates q1 q2 q3 q4 profit revenue announcement board meeting", { line: "Results days for your stocks, or every company, week by week.", space: "invest",
+        // its card on the Calendar's page said one short line beside two of three or four: a 90px hole in it at 1280 (ui-lint R13, item 43)
+        blurb: "Each company's results day this week and next, its latest quarter's revenue and profit against a year before, and how its price moved on past results days." }),
+    page("/research/corporate-actions", "Corporate actions", "calendar", "corporate actions dividend dividends ex date record date bonus issue stock split rights buyback demerger", { line: "Dividends, bonus issues and splits by ex-date, for your stocks or every company.", space: "invest",
+        blurb: "Dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, with the record date, the amount or ratio and a dividend's yield at today's price." }),
     page("/invest/ipos", "IPOs", "calendar", "ipo ipos initial public offering new issue public issue drhp rhp red herring prospectus price band lot size subscription subscribed times allotment listing listing gain sme mainboard s-1 f-1 prospectus nasdaq nyse upcoming open closed recently listed",
       { flag: "ipo_alerts", also: /^\/invest\/ipos\/[^/]+$/, space: "invest",
         line: "India's and the US's IPOs: dates, price band, lot, bids and how a listing has traded against its issue price.",

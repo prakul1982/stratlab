@@ -84,7 +84,7 @@ function Body() {
             <Stat label="Funded on 30 Sep" value="₹1.51 lakh cr" note="2,192 stocks" />
             <Stat label="That day" value="+₹296 cr" tone="up" delta={<Delta value={296}>₹296 cr</Delta>} note="that day" />
             <Stat label="Over 30 days" value="−₹5,209 cr" tone="down" delta={<Delta value={-3.6}>3.6%</Delta>} note="since 31 Aug" />
-            <Stat label="Neutral change" value="+₹42 cr" delta={<Delta value={42} tone="neutral">0.1%</Delta>} note="direction only" />
+            <Stat label="A rise" value="+₹42 cr" delta={<Delta value={42}>0.1%</Delta>} note="green up, red down: direction only" />
             <Stat label="Not available" value="–" note="Needs 30 days of data" />
           </StatRow>
         </Card>

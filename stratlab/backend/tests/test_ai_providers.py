@@ -220,15 +220,14 @@ def test_empty_reply_gets_one_second_chance_with_more_room_then_the_next_model(m
     def handler(req: httpx.Request):
         body = json.loads(req.content)
         seen.append(body)
-        if body["model"] == "llama-3.3-70b":
-            return chat(None, "length")
+        # IA-2 item 45: Cerebras retired llama-3.3-70b and qwen-3-235b-a22b-instruct-2507 (404), so its list starts at gpt-oss-120b
         if body["model"] == "gpt-oss-120b":
-            return chat("Sure thing!")
+            return chat(None, "length")
         return chat()
     out = P.complete("s", "t", transport=httpx.MockTransport(handler))
-    assert "entry" in out and [b["model"] for b in seen] == ["llama-3.3-70b", "llama-3.3-70b", "gpt-oss-120b", "qwen-3-235b-a22b-instruct-2507"]
+    assert "entry" in out and [b["model"] for b in seen] == ["gpt-oss-120b", "gpt-oss-120b", "llama3.1-8b"]
     assert seen[1]["max_tokens"] >= 8000                          # it ran out of room while reasoning: more room
-    thinker = next(b for b in seen if b["model"] == "gpt-oss-120b")
+    thinker = seen[0]
     assert thinker["reasoning_effort"] == "low" and thinker["max_tokens"] >= 4000
 
 

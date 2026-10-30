@@ -380,7 +380,7 @@ function PriceCards({ dive, prices, busy }: { dive: Dive; prices: Prices | null;
           <h3 className="k-sub">The theme against {prices.benchmark}, weekly, rebased to 100</h3>
           <LineChart ariaLabel={`The theme's equal-weighted price line and relative strength against ${prices.benchmark}`} height={220} format={(v) => v.toFixed(1)} labels={prices.line.weeks.map((w) => fmtDate(w))}
             lines={[{ label: "Theme", color: "var(--blue)", values: prices.line.theme }, { label: prices.benchmark, color: "var(--muted)", values: prices.line.bench },
-              { label: "Relative strength (theme over index)", color: "var(--orange)", values: prices.line.rs, dash: "4 3" }]} legend baseline={100} />
+              { label: "Relative strength (theme over index)", short: "Rel. strength", color: "var(--orange)", values: prices.line.rs, dash: "4 3" }]} legend baseline={100} />
         </>
       )}
       <DataTable label="Breadth inside the theme" columns={[

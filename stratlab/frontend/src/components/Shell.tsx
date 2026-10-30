@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useDialogFocus } from "./kit/Dialog";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
@@ -30,6 +30,10 @@ const SIDE_NOTEBOOKS = 6;
 
 /** Icons a menu entry can name (NavPage.icon). */
 const ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book, receipt: Receipt, bell: Bell, lens: Lens, news: News, pin: Pin, pulse: Pulse, layers: Layers, library: Library, upload: Upload, search: Search, compass: Compass, wallet: Wallet, calendar: Calendar };
+/** Which menu sections the person opened or folded (IA-2, item 36), remembered on this device per person ("stratlab.side.open.<id>"),
+ * so two people on one browser keep their own menus. A section with no entry follows the rule: the one you are in is open. */
+const OPEN_KEY = "stratlab.side.open";
+const NO_CHOICE: Record<string, boolean> = {};
 /** The pages Mine's own menu links to: opening one keeps Mine's menu showing. */
 export const MINE_LINKS = ["/news", "/alerts", "/research/watchlist", "/calendar"];
 /** Menu entries Mine's own menu has too (IA-1): moving between their tabs keeps Mine's menu showing. */
@@ -42,6 +46,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const { notebooks, markets, me, focus, space: saved, setSpace } = useApp();
   const [open, setOpen] = useState(false);
   const pins = usePins();
+  const [opened, setOpened] = usePersisted<Record<string, boolean>>(`${OPEN_KEY}.${me?.id ?? "guest"}`, NO_CHOICE);
   // on a laptop the menu can fold away for wide tables, remembered on this device (R1-082); a phone has its drawer
   const [slim, setSlim] = usePersisted<boolean>("stratlab.side.slim", false);
   const [search, setSearch] = useState(false);
@@ -101,7 +106,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const item = (to: string, icon: ReactNode, label: ReactNode, active?: boolean, title?: string) => (active === undefined
     ? <NavLink key={to} to={to} title={title} end>{icon}{label}</NavLink>
     : <Link key={to} to={to} title={title} className={active ? "active" : undefined} aria-current={active ? "page" : undefined}>{icon}{label}</Link>);
-  const pageLink = (p: NavPage, name: string = p.label) => {
+  // `bare`: a page listed under its section's heading, without an icon (the heading has it), so the list reads as one section's pages
+  const pageLink = (p: NavPage, name: string = p.label, bare = false) => {
     const Icon = ICONS[p.icon] ?? Compass;
     // a page that is a paid feature this plan lacks carries its plan, with a lock (lib/gates.ts)
     const gate = gateFor(p.to);
@@ -115,7 +121,7 @@ export function Shell({ children }: { children: ReactNode }) {
     // inside a notebook the notebook under Notebooks is the one selected entry: Notebooks itself isn't highlighted too
     // (owner, 26 Oct: both had the selected background)
     const here = at?.page.to === p.to && !(p.to === "/notebooks" && path.startsWith("/n/"));
-    return item(p.to, <Icon />, label, here, off ? `${p.line} (${gate!.whole ? "" : "part of it "}on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
+    return item(p.to, bare ? null : <Icon />, label, here, off ? `${p.line} (${gate!.whole ? "" : "part of it "}on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
   };
   const allNotebooks = "/notebooks";
   const notebookList = (
@@ -143,27 +149,65 @@ export function Shell({ children }: { children: ReactNode }) {
   );
   // the notebooks list shows under Notebooks while you are in a notebook (or the list), so it never makes the menu long
   const inNotebooks = path === allNotebooks || path.startsWith("/n/") || path === "/new";
-  // IA-1: a space's menu is one short list of entries, each one page of tabs (lib/nav.ts); no groups to open or close. The entry
-  // holding the page showing is the one selected; inside a notebook the notebook under Strategies is, not Strategies too (owner,
-  // 26 Oct: both had the selected background)
+  // IA-2 (item 36, owner 30 Oct: "you have squeezed the menu bar too much"): the 14 headings stay, and under each heading are its pages,
+  // the same pages, names, plan locks and order as its tabs, so nothing is reachable only through a tab or the breadcrumb's menu. The
+  // section you are in is open; the others fold, each with its own open/close button, and what the person opened or folded is kept.
+  // A heading with one page (Themes, Trade journal) is that page, with no list under it.
+  const current = space === "mine" ? null
+    : onGroup?.space === space ? onGroup.group.id
+    : at && NAV[space].groups.some((g) => g.id === at.group.id) ? at.group.id : null;
+  const isOpen = (g: NavGroup) => opened[g.id] ?? g.id === current;
+  const toggle = (g: NavGroup) => { const now = isOpen(g); setOpened((cur) => ({ ...cur, [g.id]: !now })); };
+  // coming back into a section opens it again, even if it was folded the last time the person was in it
+  useEffect(() => {
+    if (current && opened[current] === false) setOpened((cur) => { const { [current]: _, ...rest } = cur; return rest; });
+  }, [current, me?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // The heading opens its section's first page. It is the selected item only when its own page is showing (a one-page section, or
+  // the section's page of cards); when one of its pages is, that page is the selected one and the heading is only bold (owner, 26
+  // Oct: never two selected at once). Inside a notebook the notebook is selected, not Strategies or Notebooks too.
   const entryLink = (g: NavGroup, sp: Exclude<SpaceView, "mine">) => {
     const Icon = ICONS[g.icon] ?? Compass;
-    const here = (at?.group.id === g.id || (onGroup?.space === sp && onGroup.group.id === g.id)) && !(g.id === "strategies" && path.startsWith("/n/"));
+    const inIt = g.id === current && !(g.id === "strategies" && path.startsWith("/n/"));
+    const here = inIt && (g.pages.length === 1 || onGroup?.group.id === g.id);
     // an entry is locked only when every tab of it is a paid page this plan lacks (none is today): a locked tab carries its lock on the tab
     const locks = g.pages.map((p) => { const gate = gateFor(p.to); return gate && gate.whole && me?.plan_info?.features?.[gate.feature] === false ? gate : null; });
     const locked = locks.every(Boolean) ? locks[0] : null;
     const label = locked ? <>{g.label}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(locked)]} aria-hidden="true" /></> : g.label;
     const tabs = g.pages.length > 1 ? `${g.label}: ${g.pages.map((p) => p.label).join(", ")}` : g.pages[0].line;
-    return item(startOf(g, sp), <Icon />, label, here, locked ? `${tabs} (on the ${PLAN_NAME[gatePlan(locked)]} plan)` : tabs);
+    const to = startOf(g, sp);
+    return <Link key={to} to={to} title={locked ? `${tabs} (on the ${PLAN_NAME[gatePlan(locked)]} plan)` : tabs}
+      className={here ? "active" : inIt ? "in-section" : undefined} aria-current={here ? "page" : undefined}><Icon />{label}</Link>;
   };
   const spaceGroups = space === "mine" ? null : (
     <div className="side-list side-nav side-entries">
-      {NAV[space].groups.map((g) => (
-        <div key={g.id} className="side-entry" data-group={g.id}>
-          {entryLink(g, space)}
-          {g.id === "strategies" && inNotebooks && notebookList}
-        </div>
-      ))}
+      {NAV[space].groups.map((g) => {
+        const many = g.pages.length > 1;
+        const open = many && isOpen(g);
+        return (
+          <div key={g.id} className="side-entry" data-group={g.id} data-open={many ? String(open) : undefined}>
+            <div className="side-head">
+              {entryLink(g, space)}
+              {many && (
+                // named by its words (hidden), not an aria-label, so a page's own "Stock" field is the only thing labelled "Stock"
+                <button type="button" className="side-toggle" aria-expanded={open} aria-controls={`side-sub-${g.id}`}
+                  title={open ? `Fold ${g.label}` : `Show the pages of ${g.label}`} onClick={() => toggle(g)}>
+                  <span className="side-chev" aria-hidden="true"><Chevron size={12} /></span><span className="sr-only">{g.label} pages</span>
+                </button>
+              )}
+            </div>
+            {many && (
+              <div id={`side-sub-${g.id}`} className="side-list side-sub" hidden={!open}>
+                {g.pages.map((p) => (
+                  <Fragment key={p.to}>
+                    {pageLink(p, p.label, true)}
+                    {p.to === allNotebooks && inNotebooks && notebookList}
+                  </Fragment>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
   const minePart = (

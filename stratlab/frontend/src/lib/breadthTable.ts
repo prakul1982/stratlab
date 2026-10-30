@@ -5,7 +5,7 @@ import type { History, Today } from "./breadth";
  * average of the last 20 days where the stored history has it. Pure, so the unit tests read it. */
 
 export type Unit = "count" | "pct" | "num" | "ratio" | "level";
-export type Part = { now: number | null; before: number | null; change: number | null; avg: number | null; unit: Unit; neutral?: boolean; tone?: "up" | "down" };
+export type Part = { now: number | null; before: number | null; change: number | null; avg: number | null; unit: Unit; tone?: "up" | "down" };
 export type MeasureRow = { key: string; label: string; means: string; info: "ad" | "ma" | "highs_lows" | "moves" | "stage2" | "mcclellan" | "summation" | "trin" | null; parts: Part[] };
 
 /** The mean of the last 20 days of a series (today's included), skipping days with no value; null with under 5 of them. */
@@ -22,17 +22,17 @@ const fig = (t: Today, k: keyof Today & string, h: History | null, series: keyof
 /** The rows, in the order the page has always listed the figures. A pair (rose / fell) is one row with two parts. */
 export function measureRows(t: Today, h: History | null): MeasureRow[] {
   return [
-    { key: "ad", label: "Rose / fell", means: "Stocks that closed above / below the previous close.", info: "ad", parts: [fig(t, "adv", h, "adv", "count", { tone: "up" }), fig(t, "dec", h, "dec", "count", { neutral: true, tone: "down" })] },
+    { key: "ad", label: "Rose / fell", means: "Stocks that closed above / below the previous close.", info: "ad", parts: [fig(t, "adv", h, "adv", "count", { tone: "up" }), fig(t, "dec", h, "dec", "count", { tone: "down" })] },
     { key: "ratio", label: "Rose for each fell", means: "Risers divided by fallers.", info: "ad", parts: [fig(t, "ad_ratio", h, "ad_ratio", "ratio")] },
     { key: "p20", label: "Above 20-day average", means: "Share of stocks priced above their 20-day average.", info: "ma", parts: [fig(t, "pct20", h, "pct20", "pct")] },
     { key: "p50", label: "Above 50-day average", means: "Share of stocks priced above their 50-day average.", info: "ma", parts: [fig(t, "pct50", h, "pct50", "pct")] },
     { key: "p200", label: "Above 200-day average", means: "Share of stocks priced above their 200-day average.", info: "ma", parts: [fig(t, "pct200", h, "pct200", "pct")] },
-    { key: "hl", label: "52-week highs / lows", means: "Stocks at their highest / lowest price of the past year.", info: "highs_lows", parts: [fig(t, "highs", h, "highs", "count", { tone: "up" }), fig(t, "lows", h, "lows", "count", { neutral: true, tone: "down" })] },
-    { key: "mv", label: MOVES_LABEL, means: "Stocks that moved 4% or more in a day, up / down.", info: "moves", parts: [fig(t, "up4", h, "up4", "count", { tone: "up" }), fig(t, "down4", h, "down4", "count", { neutral: true, tone: "down" })] },
+    { key: "hl", label: "52-week highs / lows", means: "Stocks at their highest / lowest price of the past year.", info: "highs_lows", parts: [fig(t, "highs", h, "highs", "count", { tone: "up" }), fig(t, "lows", h, "lows", "count", { tone: "down" })] },
+    { key: "mv", label: MOVES_LABEL, means: "Stocks that moved 4% or more in a day, up / down.", info: "moves", parts: [fig(t, "up4", h, "up4", "count", { tone: "up" }), fig(t, "down4", h, "down4", "count", { tone: "down" })] },
     { key: "s2", label: "In Stage 2", means: "Share of stocks in a Stage 2 uptrend.", info: "stage2", parts: [fig(t, "stage2", h, "stage2", "pct")] },
     { key: "mc", label: "McClellan oscillator", means: "A fast against a slow average of net risers.", info: "mcclellan", parts: [fig(t, "mcclellan", h, "mcclellan", "num")] },
     { key: "su", label: "McClellan summation", means: "The oscillator added up from the first stored day.", info: "summation", parts: [fig(t, "summation", h, "summation", "num")] },
-    { key: "tr", label: "TRIN", means: "Risers per faller against their volumes.", info: "trin", parts: [fig(t, "trin", h, "trin", "ratio", { neutral: true })] },
+    { key: "tr", label: "TRIN", means: "Risers per faller against their volumes.", info: "trin", parts: [fig(t, "trin", h, "trin", "ratio")] },
   ];
 }
 
@@ -58,7 +58,7 @@ export function change(v: number | null | undefined, unit: Unit): string {
 export function liveRows(l: { adv: number; dec: number; pct20: number | null; pct50: number | null; pct200: number | null; idx: number | null }, t: Today, indexName: string, lastLevel: number | null): MeasureRow[] {
   const part = (now: number | null, before: number | null, unit: Unit, extra: Partial<Part> = {}): Part => ({ now, before, change: now != null && before != null ? now - before : null, avg: null, unit, ...extra });
   return [
-    { key: "ad", label: "Rose / fell", means: "Stocks above / below the previous close so far today.", info: "ad", parts: [part(l.adv, t.adv.value, "count", { tone: "up" }), part(l.dec, t.dec.value, "count", { neutral: true, tone: "down" })] },
+    { key: "ad", label: "Rose / fell", means: "Stocks above / below the previous close so far today.", info: "ad", parts: [part(l.adv, t.adv.value, "count", { tone: "up" }), part(l.dec, t.dec.value, "count", { tone: "down" })] },
     { key: "p20", label: "Above 20-day average", means: "Share of stocks priced above their 20-day average.", info: "ma", parts: [part(l.pct20, t.pct20.value, "pct")] },
     { key: "p50", label: "Above 50-day average", means: "Share of stocks priced above their 50-day average.", info: "ma", parts: [part(l.pct50, t.pct50.value, "pct")] },
     { key: "p200", label: "Above 200-day average", means: "Share of stocks priced above their 200-day average.", info: "ma", parts: [part(l.pct200, t.pct200.value, "pct")] },

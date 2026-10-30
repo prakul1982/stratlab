@@ -86,7 +86,7 @@ export function Change({ q, currency, closed: shut = false, preOpen = false, set
       <span className="k-stat-v">{price(q.price, currency)}</span>
       {q.change_pct != null && (
         <span className="k-stat-d">
-          <Delta value={q.change_pct} tone={preOpen ? "neutral" : "auto"}>{q.change != null ? `${signedMove(q.change, 2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> <span className="nowrap">{closed && (q.change_day || quoteDay) ? `on ${fmtDate((q.change_day || quoteDay)!, { year: false })}` : since}</span>{/* "on 16 Oct" never splits (R53-008); a US quote has no change_day, so its own session's day (R90-008: AAPL "on the day" beside RELIANCE "on 23 Oct") */}
+          <Delta value={q.change_pct}>{q.change != null ? `${signedMove(q.change, 2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> <span className="nowrap">{closed && (q.change_day || quoteDay) ? `on ${fmtDate((q.change_day || quoteDay)!, { year: false })}` : since}</span>{/* "on 16 Oct" never splits (R53-008); a US quote has no change_day, so its own session's day (R90-008: AAPL "on the day" beside RELIANCE "on 23 Oct") */}
         </span>
       )}
       {/* the close the move is from, while it trades and after its close too (R71-006: "$216.31 ▲ +2.18 (+1.02%) today"

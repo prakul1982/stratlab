@@ -64,7 +64,7 @@ async function sane(page: Page, errors: string[], phone: boolean) {
 }
 
 /** The menu's entries, in order (IA-1: each a link to its page of tabs); Mine's menu has its Pinned group instead. */
-const groups = (side: ReturnType<Page["locator"]>) => side.getByRole("navigation", { name: "Main" }).locator(".side-entries > .side-entry > a");
+const groups = (side: ReturnType<Page["locator"]>) => side.getByRole("navigation", { name: "Main" }).locator(".side-entries > .side-entry > .side-head > a");
 const mineGroups = (side: ReturnType<Page["locator"]>) => side.getByRole("navigation", { name: "Main" }).locator(".side-group .side-title");
 const labelsOf = (space: "trade" | "invest" | "money") => NAV[space].groups.map((g) => g.label);
 
@@ -81,7 +81,7 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   await expect(space.getByRole("button")).toHaveText(["My space", "Trade", "Invest", "Money"]);
   await expect(space.getByRole("button", { name: "Trade" })).toHaveAttribute("aria-pressed", "true");
   await expect(groups(side)).toHaveText(labelsOf("trade"));
-  for (const g of NAV.trade.groups) await expect(side.locator(`[data-group="${g.id}"] > a`)).toHaveAttribute("href", startOf(g, "trade"));
+  for (const g of NAV.trade.groups) await expect(side.locator(`[data-group="${g.id}"] > .side-head > a`)).toHaveAttribute("href", startOf(g, "trade"));
   // the space's main action is a normal-sized button, not a banner
   const action = side.getByRole("button", { name: "New notebook" });
   await expect(action).toBeVisible();
@@ -93,8 +93,8 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   if (phone) side = await menu(page, phone);
   await expect(space.getByRole("button", { name: "Money" })).toHaveAttribute("aria-pressed", "true");
   await expect(groups(side)).toHaveText(labelsOf("money"));
-  await expect(side.locator('[data-group="portfolio"] > a')).toHaveAttribute("href", "/money/net-worth");
-  await expect(side.locator('[data-group="calendar"] > a')).toHaveAttribute("href", "/money/calendar");          // Money opens the Calendar on its own dates
+  await expect(side.locator('[data-group="portfolio"] > .side-head > a')).toHaveAttribute("href", "/money/net-worth");
+  await expect(side.locator('[data-group="calendar"] > .side-head > a')).toHaveAttribute("href", "/money/calendar");          // Money opens the Calendar on its own dates
   expect(ALL_PAGES.filter((l) => l.space === "money").map((l) => l.page.to).sort(), "every Money feature is in the menu").toEqual(NAV_GROUPS.Money.map((e) => e.to).sort());
   await expect(side.getByRole("link", { name: "Money home" })).toHaveAttribute("href", "/money");
   // kept on the account and on this device
@@ -142,7 +142,10 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   await page.goto("/research/pulse");
   side = await menu(page, phone);
   await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Invest" })).toHaveAttribute("aria-pressed", "true");
-  await expect(side.locator('[data-group="market-today"] > a')).toHaveClass(/active/);
+  // IA-2 (item 36): the page is the selected item, its section's heading only bold, its section open
+  await expect(side.locator('#side-sub-market-today a[href="/research/pulse"]')).toHaveClass(/active/);
+  await expect(side.locator('[data-group="market-today"] > .side-head > a')).toHaveClass(/in-section/);
+  await expect(side.locator('[data-group="market-today"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
   await sane(page, errors, phone);
 });
 
@@ -158,7 +161,8 @@ test("spaces: a deep link opens its own space, without changing the account's ch
     await expect(page.locator("main").getByText(ready).first()).toBeVisible({ timeout: 30_000 });
     const side = await menu(page, phone);
     await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name }), `${path} opens in ${name}`).toHaveAttribute("aria-pressed", "true");
-    if (name === "Money") await expect(side.getByRole("link", { name: path === "/holdings" ? "Portfolio" : "Tax", exact: true })).toHaveClass(/active/);
+    // IA-2 (item 36): the page is the one lit, under its heading
+    if (name === "Money") await expect(side.locator(path === "/holdings" ? '#side-sub-portfolio a[href="/holdings"]' : '#side-sub-tax a[href="/tax-report"]')).toHaveClass(/active/);
   }
   // a deep link only switches the menu on this device; `/` still opens the space the person picked
   expect((await prefs(request, u)).space ?? null).toBeNull();

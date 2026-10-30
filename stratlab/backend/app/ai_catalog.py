@@ -53,7 +53,8 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
              limit_scope="model", ctx=128000, prior=(1, 5, 4), tight_daily_tokens=True),
     Provider("cerebras", "Cerebras", "openai", "https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", "https://cloud.cerebras.ai",
              "Free tier: about 1 million tokens a day (new accounts may get trial credit instead).", "ok",
-             ("llama-3.3-70b", "gpt-oss-120b", "qwen-3-235b-a22b-instruct-2507", "llama3.1-8b"),
+             # item 45: llama-3.3-70b and qwen-3-235b-a22b-instruct-2507 answer 404 "Model does not exist" (retired by Cerebras, Oct 2026)
+             ("gpt-oss-120b", "llama3.1-8b"),
              ctx=64000, prior=(2, 1, 3)),
     Provider("gemini", "Google Gemini", "gemini", "https://generativelanguage.googleapis.com/v1beta", "GEMINI_API_KEY",
              "https://aistudio.google.com/apikey",

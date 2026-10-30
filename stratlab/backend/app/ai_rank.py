@@ -9,6 +9,7 @@ and the curated defaults in ai_catalog cover the very first start.
 Every real request also counts: successes, failures and how long each took are kept per model, and a circuit
 breaker per model and per provider skips whatever keeps failing, for longer each time. A rate limit skips the
 provider (or just the model, where limits are per model) until the reset time the provider gave."""
+import hashlib
 import json
 import os
 import re
@@ -147,6 +148,10 @@ class Status:
     probing: bool = False
     healed_at: float = 0.0
     keep_order: bool = False             # the Admin page put the earlier order back while a measuring was running: keep it
+    # item 45 (owner, 30 Oct: Cerebras's "couldn't use llama-3.3-70b (404: Model does not exist)" on Admin, again and again): a model the
+    # provider says does not exist is retired: never asked again until the provider's list of models changes. model -> list_sig then
+    retired: dict = field(default_factory=dict)
+    list_sig: str = ""                   # a fingerprint of the model ids the provider listed at the last measuring
 
 
 class _Statuses(dict):
@@ -204,6 +209,8 @@ def _ensure_loaded():
             st.discovered, st.skipped = d.get("discovered"), d.get("skipped") or {}
             st.order = [m for m in d.get("order") or [] if isinstance(m, str)]
             st.aliases = {k: v for k, v in (d.get("aliases") or {}).items() if isinstance(k, str) and isinstance(v, str)}
+            st.retired = {k: v for k, v in (d.get("retired") or {}).items() if isinstance(k, str) and isinstance(v, str)}
+            st.list_sig = d.get("list_sig") if isinstance(d.get("list_sig"), str) else ""
             for mid, md in (d.get("models") or {}).items():
                 if isinstance(md, dict):
                     st.models[mid] = ModelStats.load(name, mid, md)
@@ -217,7 +224,8 @@ def save(name: str):
         keep = set(st.order) | {m for m, s in st.models.items() if s.probe_tries or s.live}
         models = {m: st.models[m].dump() for m in list(keep)[:16] if m in st.models}
         value = json.dumps({"at": st.ranked_at, "error": st.rank_error, "discovered": st.discovered, "skipped": st.skipped,
-                            "order": st.order, "models": models, "aliases": dict(list(st.aliases.items())[:200])})
+                            "order": st.order, "models": models, "aliases": dict(list(st.aliases.items())[:200]),
+                            "retired": dict(list(st.retired.items())[:100]), "list_sig": st.list_sig})
     STORE.set(f"ai:rank:{name}", value)
 
 
@@ -328,10 +336,27 @@ def in_use(name: str) -> list[str]:
     if p and not blocked(name, p) and not pin_gone(name, p):      # a blocked pin (Railway's too) holds nothing
         return [p]
     st = status(name)
-    order = [m for m in st.order if not blocked(name, m) and m != p and not _UUID.match(m)]
+    order = [m for m in st.order if not blocked(name, m) and m != p and not _UUID.match(m) and m not in st.retired]
     if order:
         return order[:IN_USE]
-    return [m for m in PROVIDERS[name].defaults if not blocked(name, m) and m != p][:IN_USE]
+    return [m for m in PROVIDERS[name].defaults if not blocked(name, m) and m != p and m not in st.retired][:IN_USE]
+
+
+def retired(name: str, model: str) -> bool:
+    """The provider said this model does not exist (404/400 "does not exist", "not found", "no longer available"): it is not asked again
+    until the provider's list of models changes (item 45)."""
+    return model in status(name).retired
+
+
+def list_changed(name: str, ids: list[str]) -> bool:
+    """Note the provider's list of model ids; a different list than last time frees the retired models to be measured once more."""
+    st = status(name)
+    sig = hashlib.sha1("\n".join(sorted(ids)).encode()).hexdigest()[:16]
+    with _lock:
+        if sig == st.list_sig:
+            return False
+        st.list_sig, st.retired = sig, {}
+    return True
 
 
 # a model the provider says doesn't exist (any more) for this key: retired, renamed, or never served to it
@@ -478,6 +503,8 @@ def record_fail(name: str, model: str, err: Exception, live: bool = True) -> str
             _open_provider(st, 30 * 60, detail)
         elif kind in ("model", "forbidden"):
             _open_model(s, 6 * 3600, detail)               # unknown, retired or not on this plan
+            if _GONE.search(detail or ""):
+                st.retired[model] = st.list_sig            # the provider says it does not exist: not asked again until its list changes
         elif kind == "transient" and err.scope == "provider":
             st.fails += 1
             if st.fails >= 3:
@@ -607,7 +634,7 @@ def candidates(name: str, listed: list[dict] | None) -> tuple[list[str], dict, d
             ids.append(item["id"])
             if item.get("ctx"):
                 ctx[item["id"]] = item["ctx"]
-    ids = [m for m in dict.fromkeys(ids) if not blocked(name, m)]
+    ids = [m for m in dict.fromkeys(ids) if not blocked(name, m) and not retired(name, m)]
     known = [m for m in p.defaults if m in ids]
     rest = sorted((m for m in ids if m not in known), key=lambda m: (-strength(m), thinks(m), -(size_b(m) or 30), m))
     return (known + rest)[:p.probe_max], skipped, ctx
@@ -639,6 +666,8 @@ def rerank(name: str, transport=None) -> Status:
                 st.rank_error = f"couldn't list models, measured the defaults ({e.detail})"
         p = pinned(name)
         st.aliases.update(getattr(cl, "aliases", None) or {})     # R7M-008: a stored UUID is shown by its model's name
+        if listed is not None:
+            list_changed(name, [x["id"] for x in listed if isinstance(x, dict) and x.get("id")])
         cands, skipped, ctx = candidates(name, listed)
         if p and not blocked(name, p) and p not in cands:
             cands = [p] + cands[:PROVIDERS[name].probe_max - 1]

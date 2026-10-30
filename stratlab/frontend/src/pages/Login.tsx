@@ -569,7 +569,8 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                       {about && <span className="small muted" data-testid={`about-${p}`}>{about}</span>}
                     </div>
                   )}
-                  {p !== "free" && (
+                  {/* only when it has something to say: an empty note kept a two-line gap under Basic's and Pro's prices (item 44) */}
+                  {p !== "free" && (loading || gst || save != null) && (
                     <span className="small lp-price-note">
                       {loading ? <span className="lp-skel lp-skel-note" />
                         : gst ? "incl. GST" : ""}
@@ -672,7 +673,7 @@ function ResearchMock() {
       <span className="lp-illus">Illustration: a made-up company and made-up figures</span>
       <div className="spread lp-top">
         <div className="stack g2"><span className="eyebrow">SAMPLE · made-up ticker</span><b className="serif lp-rm-title">Sample Motors Inc.</b></div>
-        <div className="stack g4 lp-end"><b className="serif lp-rm-title">$183.20</b><span className="badge next">Last close ▲ 1.33%</span></div>
+        <div className="stack g4 lp-end"><b className="serif lp-rm-title">$183.20</b><span className="k-delta up">Last close ▲ 1.33%</span></div>
       </div>
       <div className="lp-rfacts">
         {facts.map(([l, t]) => <div key={l} className="stack g1"><b className="small">{l}</b><span className="small muted">{t}</span></div>)}

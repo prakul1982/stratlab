@@ -208,7 +208,8 @@ a.link { margin-inline: -2px; }
 /* the sidebar: a slim header, one menu that scrolls, a slim footer. Every row lines up on one 8px inset. */
 .sidebar { position: sticky; top: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column;
   background: var(--paper-2); border-right: 1px solid var(--line); font-size: 14px; }
-.side-top { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 14px 12px 10px; }
+/* IA-2 (item 36): a little tighter, so a 1280x800 laptop shows the whole menu with one section and six notebooks open */
+.side-top { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 12px 12px 8px; }
 .side-brand { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 4px 2px; }
 .side-close { display: none; }
 .side-new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px;
@@ -225,10 +226,13 @@ a.link { margin-inline: -2px; }
 .space-switch button[aria-pressed="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); }
 .space-switch button:focus-visible { outline-offset: 0; }
 
-.side-groups { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; padding: 4px 12px 28px;
+.side-groups { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 4px 12px 14px;
   scrollbar-width: thin; scrollbar-color: transparent transparent; }
 /* the scrollbar shows when the pointer is over the menu, and the edge with more behind it fades (Shell: data-fade) */
 .side-groups:hover, .side-groups:focus-within { scrollbar-color: var(--dash) transparent; }
+/* IA-2: the menu holds the hidden words of each section's button (sr-only, absolutely placed); placed against the menu, they scroll and
+   clip with it, instead of against the whole sidebar, where the ones below the fold made the sidebar itself scroll (89px at 1024x768) */
+.side-groups { position: relative; }
 .side-groups[data-fade="bottom"] { -webkit-mask-image: linear-gradient(#000 calc(100% - 32px), transparent); mask-image: linear-gradient(#000 calc(100% - 32px), transparent); }
 .side-groups[data-fade="top"] { -webkit-mask-image: linear-gradient(transparent, #000 24px); mask-image: linear-gradient(transparent, #000 24px); }
 .side-groups[data-fade="both"] { -webkit-mask-image: linear-gradient(transparent, #000 24px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(transparent, #000 24px, #000 calc(100% - 32px), transparent); }
@@ -240,7 +244,7 @@ a.link { margin-inline: -2px; }
 .side-more:hover { color: var(--ink); }
 .side-group { display: flex; flex-direction: column; gap: 2px; }
 .side-head { display: flex; align-items: center; gap: 4px; }
-.side-toggle { flex: none; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; color: var(--muted); }
+.side-toggle { flex: none; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; color: var(--muted); position: relative; }
 .side-toggle:hover { color: var(--ink); background: var(--side-hover); }
 .side-title { flex: 1; min-width: 0; display: flex; align-items: center; height: 26px; padding: 0 6px; border-radius: 6px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font: 600 11px/1 var(--sans); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
@@ -249,6 +253,17 @@ a.link { margin-inline: -2px; }
 .side-title.plain, .side-title.plain:hover { background: none; color: var(--muted); cursor: default; padding-left: 8px; }
 .side-title:focus-visible { outline-offset: -2px; }
 .side-entry { display: flex; flex-direction: column; gap: 1px; }
+/* IA-2 (item 36): each heading with its pages under it. The heading row: the heading's link, then its open/close button; the pages sit on a
+   thin guide line, their names lined up with the heading's (8 + 16 + 10px), in shorter 28px rows so a 1280x800 laptop shows the whole menu
+   with one section open. The heading of the section you are in is bold, never a second selected row (owner, 26 Oct) */
+.side-entry > .side-head > a { flex: 1; }
+.side-list a.in-section { color: var(--ink); font-weight: 600; }
+.side-list a.in-section > svg { color: var(--ink); }
+.side-sub { margin: 0 0 4px 15px; padding-left: 0; border-left: 1px solid var(--line-2); }
+.side-list.side-sub a { height: 28px; padding-left: 18px; border-radius: 0 6px 6px 0; font-size: 13.5px; }
+.side-sub .side-nbs { padding-left: 8px; }
+.side-sub .side-nbs a { height: 26px; }
+.side-sub .side-note, .side-list.side-sub a.nb-more { padding-left: 22px; }
 .side-nbs { padding-left: 14px; }
 .side-note-wrap { display: block; padding: 4px 8px 6px; line-height: 1.4; }
 .side-chev { display: inline-flex; opacity: .55; transition: transform .15s, opacity .15s; }
@@ -263,7 +278,7 @@ a.link { margin-inline: -2px; }
 .side-list a.active > svg { color: var(--ink); }
 .side-list a:focus-visible, .side-toggle:focus-visible { outline-offset: -2px; }
 .nb-dot { width: 16px; display: grid; place-items: center; flex: none; }
-.nb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: relative; }   /* its hidden verdict words stay inside it (a long name put them 84px past the menu's edge) */
 .nb-pin { flex: none; display: inline-flex; color: var(--muted); }
 .side-list a.nb-more { padding-left: 34px; font-size: 13px; color: var(--muted); }
 .side-list a.nb-more:hover { color: var(--ink); }
@@ -318,11 +333,15 @@ a.link { margin-inline: -2px; }
 @media (pointer: coarse) {
   .side-new, .side-new-gap, .search-btn { height: 40px; }
   .space-switch button { height: 36px; }
-  .side-list a { height: 40px; }
+  .side-list a, .side-list.side-sub a { height: 40px; }
   .side-toggle { height: 32px; width: 32px; }
   .side-title { height: 32px; }
   .side-note { height: 32px; }
-  .mkt-btn { height: 36px; }
+  .mkt-btn { height: 32px; }
+  .side-more { min-height: 32px; margin: 0; }   /* IA-2: a menu with a section open can run past a phone's height, and this shows then */
+  /* when it shows, it takes its own row (R34-013): the foot gives back 12px so a long menu still keeps most of a phone's height
+     (CI #323: a 390x844 drawer in India's market hours had 499px of menu, under the 504 the sidebar test asks for) */
+  .side-foot { padding: 4px 8px 6px; }
   .acct-btn { height: 44px; }
   .acct-pop [role="menuitem"] { height: 44px; }
   .acct-pop [role="menuitemradio"] { height: 44px; }
@@ -766,6 +785,9 @@ td.num, .num { font-family: var(--sans); }
 /* the plans: three cards, Pro outlined */
 .lp-prices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
 .lp-price { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
+/* item 44: each card takes four rows of the plans' grid (name, price, button, list): the buttons and the "Everything in ..., plus:" lists
+   start on one line across the three cards, Free's button no longer 100px above the others', with no reserved gap under a price */
+.lp-prices > .lp-price { display: grid; grid-row: span 4; grid-template-rows: subgrid; row-gap: 16px; align-content: start; }
 .lp-price-top { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
 .lp-amount-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }   /* VR1-162: "about $8 at today's rate" always on its own line, so Basic and Pro start their next line at the same height (it sat beside the price in one and under it in the other) */
 .lp-amount { font-size: 44px; letter-spacing: -.02em; line-height: 1.05; }
@@ -1322,6 +1344,9 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 /* RC2B-041: the two columns end together; "start" left the add-a-date card 190px short of the reminders beside it */
 .mc-grid { align-items: stretch; }
 .mc-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s2); }      /* LIVE1B-072 */
+/* item 43: with the page column 29px narrower on a 1280 laptop, Reminders' form grew 175px taller than the calendar link beside it (R1):
+   up to 1360px the two cards are one above the other */
+@media (max-width: 1360px) { .k-two.mc-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) {
   .mc-grid { grid-template-columns: minmax(0, 1fr); }
   .mc-cell { min-height: 48px; padding: 4px; align-items: center; }
@@ -2271,6 +2296,12 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 
 /* plans */
 .k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: start; }   /* CK-2 (R13): each plan its own height, its button directly under its list: stretched to the longest list, the Free card had a 260px band in the middle (LIVE1C-092 tried level cards: the layout checker's R13 found that band again at 1280) */
+/* item 44 (owner, 30 Oct: the plan cards' heads did not line up): each card takes three rows of the plans' grid (its name, its price,
+   then its list and button), so the names, the prices and the lists start on one line across the cards, and the buttons sit on one
+   line at the cards' foot. (A card on its own subgrid rows is as tall as its row, whatever align-items says.) */
+.k-plans > .k-plan { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: var(--s4); }
+.k-plan-body { display: flex; flex-direction: column; gap: var(--s4); }
+.k-plan-body > :last-child { margin-top: auto; }
 .k-plan.pro { border: 2px solid var(--ink); }
 @media (min-width: 601px) and (max-width: 1000px) { /* a tablet: two columns, the last plan across both, never one narrow column */
   .k-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2492,7 +2523,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .lp-skel-fine { height: calc(13.5px * 1.5 * 6); }
   .lp-skel-seg { height: 50px; }
 }
-.lp-price-note { display: block; min-height: calc(1.4em * 2); line-height: 1.4; color: var(--ink-2); }
+.lp-price-note { display: block; line-height: 1.4; color: var(--ink-2); }
 .lp-save { display: block; color: var(--ink-2); font-weight: 600; }
 .lp-price > .btn:disabled { opacity: .6; }
 

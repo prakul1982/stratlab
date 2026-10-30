@@ -144,15 +144,20 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   await expect(space.getByRole("button")).toHaveText(["My space", "Trade", "Invest", "Money"]);
   await expect(space.getByRole("button", { name: "Invest" })).toHaveAttribute("aria-pressed", "true");
   // Invest: its home, then its seven entries; the other spaces' entries wait behind the switcher
-  const entries = main.locator(".side-entries > .side-entry > a");
+  const entries = main.locator(".side-entries > .side-entry > .side-head > a");
   await expect(entries).toHaveText(NAV.invest.groups.map((g) => g.label));
   for (const g of ["Practise", "Strategies", "Tax", "Plan", "Portfolio"]) await expect(main.getByRole("link", { name: g, exact: true })).toHaveCount(0);
   await expect(main.getByRole("link", { name: "Invest home" })).toHaveAttribute("href", "/invest");
-  // the entry holding the page you are on is the one lit; no groups to open or close; each entry opens its first tab
-  await expect(main.getByRole("link", { name: "Companies", exact: true })).toHaveClass(/active/);
+  // IA-2 (item 36): the page you are on is the one lit (its section's heading only bold); its section is open with its pages, the
+  // others folded, each heading with more than one page has its open/close button; each heading opens its first page
+  await expect(main.getByRole("link", { name: "Look up a company", exact: true })).toHaveClass(/active/);
+  await expect(main.getByRole("link", { name: "Look up a company", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(main.getByRole("link", { name: "Companies", exact: true })).toHaveClass(/in-section/);
   await expect(main.locator(".side-entries a.active")).toHaveCount(1);
-  await expect(main.locator(".side-toggle")).toHaveCount(0);
-  for (const g of NAV.invest.groups) await expect(main.locator(`[data-group="${g.id}"] > a`)).toHaveAttribute("href", startOf(g, "invest"));
+  await expect(main.locator(".side-toggle")).toHaveCount(NAV.invest.groups.filter((g) => g.pages.length > 1).length);
+  await expect(main.getByRole("button", { name: "Companies pages" })).toHaveAttribute("aria-expanded", "true");
+  await expect(main.getByRole("button", { name: "Find stocks pages" })).toHaveAttribute("aria-expanded", "false");
+  for (const g of NAV.invest.groups) await expect(main.locator(`[data-group="${g.id}"] > .side-head > a`)).toHaveAttribute("href", startOf(g, "invest"));
   await expect(main.getByRole("link", { name: "Scans", exact: true })).toHaveCount(0);       // no catch-all "Scans" entry any more
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
@@ -175,14 +180,18 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   await expect(page.getByRole("navigation", { name: "Scans" }), "no old second row of tabs").toHaveCount(0);
   await expect(page.locator(".research-nav, .sub-seg")).toHaveCount(0);
   side = await menu(page, phone);
-  await expect(side.getByRole("link", { name: "Find stocks", exact: true })).toHaveClass(/active/);
+  // IA-2 (item 36): the page is the one lit, under its heading (bold, open)
+  await expect(side.locator('#side-sub-find-stocks a[href="/research/scan"]')).toHaveClass(/active/);
+  await expect(side.getByRole("link", { name: "Find stocks", exact: true })).toHaveClass(/in-section/);
   await side.getByRole("link", { name: "Market today", exact: true }).click();
   await expect(page).toHaveURL(/\/research\/pulse$/);
   await tab(page, phone, "Market today", "Sectors");
   await expect(page).toHaveURL(/\/research\/rotation$/);
   side = await menu(page, phone);
-  await expect(side.getByRole("link", { name: "Market today", exact: true })).toHaveClass(/active/);
-  await expect(side.getByRole("link", { name: "Find stocks", exact: true })).not.toHaveClass(/active/);    // one entry lit at a time
+  await expect(side.locator('#side-sub-market-today a[href="/research/rotation"]')).toHaveClass(/active/);
+  await expect(side.getByRole("link", { name: "Market today", exact: true })).toHaveClass(/in-section/);
+  await expect(side.getByRole("link", { name: "Find stocks", exact: true })).not.toHaveClass(/active|in-section/);    // one entry lit at a time
+  await expect(side.locator("nav .active")).toHaveCount(1);
   // an entry's page of cards is the breadcrumb's middle link
   if (phone) await page.getByRole("button", { name: "Close menu" }).click();
   await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Market today" }).click();
@@ -218,7 +227,7 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   await page.keyboard.press("Tab");
   await expect(side.getByRole("link", { name: "Invest home" })).toBeFocused();
   await page.keyboard.press("Tab");
-  const first = side.locator(".side-entries > .side-entry > a").first();
+  const first = side.locator(".side-entries > .side-entry > .side-head > a").first();
   await expect(first).toBeFocused();
   expect(await first.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
   await sane(page, errors);

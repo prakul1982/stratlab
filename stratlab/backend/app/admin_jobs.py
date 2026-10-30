@@ -422,12 +422,17 @@ def rows() -> list[dict]:
     def ipos():
         from . import ipo
         st = _plain(ipo.job, "ipo")
+        ai = ipo.ai_counts()
         at, why = _ran(st, "last_run", data=lambda: max(filter(None, ((ipo.state().get(r) or {}).get("read") for r in ("IN", "US"))), default=None))
         return _row("ipo", "IPOs", "India 7:40 AM and 8:10 PM IST, US 8:30 AM and 9:30 PM IST; bids every 15 minutes from 9:55 AM to 5:30 PM IST while an issue is open; "
                     "alerts 8:00 AM (India) and 7:00 PM (US dates) IST", at, st.get("last_error"), _problems(st) + why,
                     [{"label": "Run now", "path": "/admin/ipos/refresh"}], check=st.get("check"),
                     note="Offer documents are read and summarised a few at a time between the reads. After each read the lists are checked against the exchanges' and the regulators' own: "
-                         "an issue an exchange lists that ours does not is a Problem; a prospectus filed with the regulator that no exchange lists yet is a Check.")
+                         "an issue an exchange lists that ours does not is a Problem; a prospectus filed with the regulator that no exchange lists yet is a Check. "
+                         # item 40: the AI summaries today, and the backlog the catch-up still has
+                         f"AI summaries today: {ai['scheduled']} of {ai['cap']} by the catch-up, {ai['asked']} written when someone opened an IPO (never capped). "
+                         f"{ai['waiting']} document{'' if ai['waiting'] == 1 else 's'} wait{'s' if ai['waiting'] == 1 else ''} for a summary"
+                         + (f": about {ai['days']} day{'' if ai['days'] == 1 else 's'} at the catch-up's {ai['cap']} a day." if ai["waiting"] else "."))
     add("IPOs", ipos)
 
     def fo():

@@ -12,7 +12,7 @@ import { Card, CardHead, DataTable, Delta, EmptyState, Skeleton, type Column } f
  * come from the same payload (intel/mood.py), so a line and its table agree. Facts only: no advice, no forecast. */
 
 const day = (iso: string | null | undefined) => (iso ? fmtDate(iso, { year: false }) : "");
-const chg = (v: number | null | undefined, neutral = false) => (v == null ? "–" : <Delta value={v} tone={neutral ? "neutral" : "auto"}>{pct(v, 2)}</Delta>);
+const chg = (v: number | null | undefined) => (v == null ? "–" : <Delta value={v}>{pct(v, 2)}</Delta>);
 
 /** The mood as the server read it, again each minute while the market trades; `pending` until its first read is back. */
 export function usePulseMood(region: Region) {
@@ -53,7 +53,7 @@ export function BreadthTable({ b }: { b: NonNullable<PulseMood["breadth"]> }) {
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <><b>{r.label}</b><span className="k-sub-line">{r.means}</span></> },
     { key: "now", header: b.live ? "Today" : day(b.day), numeric: true, cell: (r) => (r.now == null ? "–" : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
     { key: "prev", header: day(b.prev_day) || "Day before", numeric: true, cell: (r) => (r.before == null ? "–" : r.kind === "share" ? `${r.before.toFixed(1)}%` : whole(r.before)) },
-    { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta value={r.change} tone={r.key === "dec" || r.key === "lows" || r.key === "unch" ? "neutral" : "auto"}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
+    { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
   ];
   return (
     <Card testId="pulse-breadth">
@@ -101,7 +101,7 @@ export function MoversTable({ m }: { m: NonNullable<PulseMood["movers"]>[number]
 
 export function FlowsTable({ f }: { f: NonNullable<PulseMood["flows"]> }) {
   type Row = (typeof f.rows)[number];
-  const net = (v: number) => <Delta value={v} tone="neutral">{crore(v)}</Delta>;
+  const net = (v: number) => <Delta value={v}>{crore(v)}</Delta>;
   const cols: Column<Row>[] = [
     { key: "d", header: "Day", rowHeader: true, cell: (r) => day(r.day) },
     { key: "f", header: "FII net", numeric: true, cell: (r) => net(r.fii) },
@@ -120,7 +120,7 @@ export function RiskTable({ r }: { r: NonNullable<PulseMood["risk"]> }) {
   const cols: Column<(typeof r.rows)[number]>[] = [
     { key: "n", header: "Measure", rowHeader: true, cell: (x) => x.label },
     { key: "p", header: "Level", numeric: true, cell: (x) => riskLevel(x) },
-    { key: "c", header: "Change", numeric: true, cell: (x) => chg(x.change_pct, true) },
+    { key: "c", header: "Change", numeric: true, cell: (x) => chg(x.change_pct) },
   ];
   return (
     <Card testId="pulse-risk">
@@ -179,7 +179,7 @@ export function IndexTable({ indices, missing, dayText, whenOf }: { indices: { n
   const cols: Column<Row>[] = [
     { key: "n", header: "Index", rowHeader: true, cell: (i) => i.name },
     { key: "l", header: "Level", numeric: true, cell: level },
-    { key: "c", header: "Change", numeric: true, cell: (i) => (i.change_pct == null ? "–" : <Delta value={i.change_pct} tone={i.stale ? "neutral" : "auto"}>{pct(i.change_pct, 2)}</Delta>) },
+    { key: "c", header: "Change", numeric: true, cell: (i) => (i.change_pct == null ? "–" : <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta>) },
     { key: "h", header: "Against 52-week high", numeric: true, cell: (i) => (i.from_high_pct == null ? "–" : i.from_high_pct > -0.5 ? "near its high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below`) },
     { key: "w", header: "As of", cell: (i) => <span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{whenOf(i)}</span> },
   ];
