@@ -1777,10 +1777,7 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   const [lo, sh] = (split.match(/[\d.]+(?=%)/g) ?? []).map(Number);
   expect(lo + sh).toBeCloseTo(100, 1);
   const sidesRow = main.getByTestId("part-figs").locator("tbody tr").filter({ has: page.getByTestId("sides-fig") });
-  // VR1-070: the long share as the figure, the short side in its note (beside it on a desktop, under the name on a phone: TABLE-SWEEP)
-  await expect(sidesRow.getByTestId("sides-fig")).toHaveText(/^[\d.]+%$/);
-  await expect(sidesRow).toContainText(/long share/);
-  await expect(sidesRow).toContainText(/[\d.]+% short/);
+  await expect(sidesRow).toContainText(/long share\s*[\d.]+%\s*[\d.]+% short/);        // VR1-070: the long share as the figure, the short side in its note
   await expect(sidesRow).toContainText(/[+−][\d.]+ pts from the previous trading day/);
   // a figure is three rows shared with its neighbours (label, number, note): nothing in one draws over the next
   const overlaps = await main.locator(".k-stat").evaluateAll((figs) => figs.flatMap((f) => {

@@ -155,7 +155,7 @@ export function BehaviourDetail({ q, id, name }: { q: BehaviourQuery; id: string
   return (
     <section aria-label={name ? `How you invested, ${name}` : "How you invested"}>
       <h3>How you invested</h3>
-      <FactTable label={name ? `How you invested in ${name}` : "How you invested in it"} itemHead="Fact" figureHead="Figure" noteHead="Detail" rows={facts} />
+      <FactTable label={name ? `How you invested in ${name}` : "How you invested in it"} itemHead="Fact" figureHead="Figure" noteHead="Detail" rows={facts} noteUnder />
       <Notes label="About these figures" items={[
         s.idcw && "IDCW option: the NAV return leaves out payouts; your XIRR counts them.",
         s.short_span && "Under a year: both rates annualised from a short span.",

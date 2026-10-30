@@ -51,9 +51,8 @@ test("positioning: net figures carry the up or down colour; changes in long and 
   // the headline net and its change from the day before
   const net = main.getByTestId("part-figs").locator("tbody tr").first();
   await expect(net.locator("td").first().locator(".k-up, .k-down")).toHaveClass(/k-(up|down)/);
-  // the change sits in its own column on a desktop and under the figure's name on a phone (TABLE-SWEEP: a fact table stays two columns across there)
-  const change = net.locator("td, th").filter({ hasText: "from the previous trading day" }).last();
-  await expect(change.locator(".k-up, .k-down").first()).toContainText(/^[+−]/);
+  await expect(net.locator("td").nth(1).locator(".k-up, .k-down").first()).toContainText(/^[+−]/);
+  await expect(net.locator("td").nth(1)).toContainText("from the previous trading day");
   // a level stays plain
   await expect(table.locator("tbody tr").first().locator("td").nth(1).locator(":scope > .k-up, :scope > .k-down")).toHaveCount(0);
   // the FII/DII cash figures are coloured by sign too
