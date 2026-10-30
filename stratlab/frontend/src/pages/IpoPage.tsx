@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -373,7 +373,12 @@ function FromTheDocument({ f, d }: { f: Facts; d: IpoDetail }) {
   );
 }
 
-function SummaryCard({ d, sum, onWrite, busy, error }: { d: IpoDetail; sum: Summary; onWrite: () => void; busy: boolean; error: string | null }) {
+/** Said in the card's own quiet style when the summary couldn't be written just now (the AI unavailable): it is queued, never a red error
+ * (item 40, owner 30 Oct: a red "Today's summary limit is reached" on an IPO page). */
+export const SUMMARY_QUEUED = "The written summary of this document is queued and is usually ready within a day.";
+export const SUMMARY_TABLES = "The tables above are read from the document already.";
+
+function SummaryCard({ d, sum, onWrite, busy, queued }: { d: IpoDetail; sum: Summary; onWrite: () => void; busy: boolean; queued: boolean }) {
   const kind = sum.kind ?? "offer document";
   if (sum.state === "locked") {
     return (
@@ -415,13 +420,14 @@ function SummaryCard({ d, sum, onWrite, busy, error }: { d: IpoDetail; sum: Summ
         <p className="k-small k-muted">No offer document has been found for this issue yet, so there is nothing to summarise.</p>
       ) : sum.state === "problem" ? (
         <p className="k-small k-muted">{sum.message ?? "The document couldn't be summarised."}</p>
+      ) : queued ? (
+        <p className="k-small k-muted" data-testid="ipo-sum-queued">{SUMMARY_QUEUED}{d.ipo.market === "IN" ? ` ${SUMMARY_TABLES}` : ""}</p>
       ) : (
         <EmptyState title="The summary isn't written yet" action={{ label: busy ? "Reading the document…" : "Write it now", onClick: onWrite }}>
           It is written automatically, a few documents at a time. Reading a long offer document takes a minute or two.
         </EmptyState>
       )}
-      {error && <p className="k-small k-down" role="alert">{error}</p>}
-      {d.ipo.market === "IN" && sum.state === "pending" && <p className="k-note">The tables above are already read; this adds the business and its segments in words.</p>}
+      {d.ipo.market === "IN" && sum.state === "pending" && !queued && <p className="k-note">The tables above are already read; this adds the business and its segments in words.</p>}
     </Card>
   );
 }
@@ -449,7 +455,9 @@ export function IpoPage() {
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState(false);            // the address names no issue: nothing to try again (RC5-004)
   const [busy, setBusy] = useState(false);
-  const [writeError, setWriteError] = useState<string | null>(null);
+  const [queued, setQueued] = useState(false);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
   const load = useCallback((quiet = false) => {
     if (!quiet) { setD(null); setError(null); setGone(false); }
     ipoApi.one(id).then(setD).catch((e) => {
@@ -460,15 +468,26 @@ export function IpoPage() {
   }, [id]);
   useEffect(() => { load(); }, [load]);
   useLiveRefresh(d?.ipo.stage === "open", () => load(true));       // each minute while bidding is open (LIVE-1; was every two)
+  // Item 41 (owner, 30 Oct): the summary is written on the spot for whoever opens the issue. While another document is being read
+  // ("busy") the page waits and asks again by itself; when the AI can't be reached the card says, calmly, that it is queued.
   const write = async () => {
-    setBusy(true); setWriteError(null);
+    setBusy(true); setQueued(false);
     try {
-      const got = await ipoApi.summary(id);
-      setD((cur) => (cur ? { ...cur, facts: got.facts, summary: got.summary } : cur));
-    } catch (e) {
-      if (e instanceof ApiError && (e.status === 429 || e.status === 503)) setWriteError(e.message);
-      else fail(e);
-    } finally { setBusy(false); }
+      for (let tries = 0; ; tries++) {
+        try {
+          const got = await ipoApi.summary(id);
+          if (alive.current) setD((cur) => (cur ? { ...cur, facts: got.facts, summary: got.summary } : cur));
+          return;
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 429 && e.code === "busy" && tries < 10 && alive.current) {
+            await new Promise((ok) => window.setTimeout(ok, 15_000));
+            continue;
+          }
+          if (e instanceof ApiError && (e.status === 429 || e.status === 503)) { if (alive.current) setQueued(true); return; }
+          throw e;
+        }
+      }
+    } catch (e) { fail(e); } finally { if (alive.current) setBusy(false); }
   };
 
   const r = d?.ipo;
@@ -489,7 +508,7 @@ export function IpoPage() {
           <Bids d={d} />
           <Listing d={d} />
           <FromTheDocument f={d.facts} d={d} />
-          <SummaryCard d={d} sum={d.summary} onWrite={write} busy={busy} error={writeError} />
+          <SummaryCard d={d} sum={d.summary} onWrite={write} busy={busy} queued={queued} />
           <Documents docs={d.documents} d={d} />
           <p className="k-small">Alerts for when an issue opens, closes, is allotted or lists are set on the <Link className="link" to={`/invest/ipos?m=${d.ipo.market}`}>IPOs page</Link>.</p>
         </>

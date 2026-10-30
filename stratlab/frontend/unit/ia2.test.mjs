@@ -115,3 +115,12 @@ test("item 39: the change pill always takes its direction's colour, and nothing 
   }
 });
 
+// Items 40, 41: the IPO page never shows the summary's limit or a busy reader as a red error.
+test("items 40, 41: the IPO summary waits out 'busy' by itself and says 'queued' calmly on a failure", () => {
+  const s = read("src/pages/IpoPage.tsx");
+  assert.match(s, /export const SUMMARY_QUEUED = "The written summary of this document is queued and is usually ready within a day\.";/);
+  assert.match(s, /export const SUMMARY_TABLES = "The tables above are read from the document already\.";/);
+  assert.match(s, /if \(e instanceof ApiError && e\.status === 429 && e\.code === "busy" && tries < 10 && alive\.current\) \{\n\s*await new Promise\(\(ok\) => window\.setTimeout\(ok, 15_000\)\);/);
+  assert.match(s, /<p className="k-small k-muted" data-testid="ipo-sum-queued">/);
+  assert.doesNotMatch(s, /role="alert">\{error\}/);
+});

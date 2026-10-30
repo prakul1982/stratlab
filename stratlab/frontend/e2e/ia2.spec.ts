@@ -306,3 +306,28 @@ test("item 39: every ▲/▼ change is green up or red down, light and dark, on 
   }
 });
 
+// Items 40 and 41 (owner screenshot, 30 Oct: a red "Today's summary limit is reached…" on an IPO page): a person's summary is written on
+// the spot; while another document is being read the page waits and asks again by itself, and when the AI can't be reached the card says
+// calmly that the summary is queued, in its own muted style, never a red error.
+test("items 40, 41: asking for an IPO's summary waits out a busy reader by itself, and a failure is a calm queued note", async ({ page }, info) => {
+  test.skip(info.project.name === "phone", "the same card on a phone");
+  test.setTimeout(90_000);
+  let asked = 0;
+  await open(page, "/invest", ADMIN38, 1440, 900);
+  await page.route(/\/invest\/ipos\/[^/]+\/summary$/, (r) => {
+    asked++;
+    return asked === 1 ? r.fulfill({ status: 429, json: { detail: { code: "busy", message: "Another offer document is being read. Try again in a minute." } } })
+      : r.fulfill({ status: 503, json: { detail: { code: "ai_unavailable", message: "Every AI provider is busy." } } });
+  });
+  await page.goto("/invest/ipos/us-1273626-119431");
+  const sum = page.getByTestId("ipo-summary");
+  await expect(sum).toContainText("isn't written yet", { timeout: 30_000 });
+  await sum.getByRole("button", { name: "Write it now" }).click();
+  await expect(sum.getByRole("button", { name: "Reading the document…" })).toBeVisible();
+  await expect(sum.getByTestId("ipo-sum-queued")).toHaveText("The written summary of this document is queued and is usually ready within a day.", { timeout: 40_000 });
+  expect(asked, "asked again by itself after the busy answer").toBe(2);
+  await expect(sum.getByTestId("ipo-sum-queued")).toHaveClass(/k-muted/);
+  await expect(sum.locator("[role=alert], .k-down")).toHaveCount(0);
+  await expect(page.getByText(/limit is reached|Every AI provider/)).toHaveCount(0);
+});
+

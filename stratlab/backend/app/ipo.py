@@ -68,7 +68,8 @@ def awaits(line: str) -> bool:
 CATCH_LISTED_DAYS = 60                # an issue BSE's table says listed, that no issue list gave, becomes a row for this many days
 EVENTS = {"open": "Opens for bidding", "close": "Closes for bidding", "allotment": "Allotment", "listing": "Listing"}
 SMALL = 3                             # offer documents the job reads per pass (each is a download and a long read)
-AI_PER_DAY = 120                      # summaries the AI writes a day across everyone (each document is summarised once)
+AI_PER_DAY = 120                      # summaries the scheduled catch-up writes a day (each document is summarised once, for everyone); a person
+                                      # opening an IPO is never held to it: theirs is written on the spot (item 41, owner 30 Oct)
 NOTE = {"IN": ("Dates, price band, lot size and the bids received are from the exchanges' public-issue pages; the offer documents are the "
                "draft and red herring prospectuses filed with SEBI. An allotment or listing date marked expected is the one SEBI's timetable "
                "gives (allotment the working day after the close, listing three working days after it) until the exchange publishes it. "
@@ -995,14 +996,54 @@ def summary_of(d: dict | None) -> dict | None:
     return got if got.get("reader") == D.SUMMARY_READER else None
 
 
+def _ai_day() -> str:
+    return _now().astimezone(IST).date().isoformat()
+
+
 def _ai_budget() -> bool:
-    """One more summary fits today's cap (shared by everyone); counts it when it does."""
-    day = _now().astimezone(IST).date().isoformat()
+    """One more summary fits the scheduled catch-up's cap for today; counts it when it does. Item 41 (owner, 30 Oct): the cap is the
+    catch-up's alone. Since SUMMARY_READER went to 2 every document summarised before wants a new summary, and the catch-up spent the
+    whole shared cap re-doing old ones, so a person opening an IPO met a red "Today's summary limit is reached"."""
+    day = _ai_day()
     n = int(db.get_setting("ipo:ai:" + day) or 0)
     if n >= AI_PER_DAY:
         return False
     db.set_setting("ipo:ai:" + day, str(n + 1))
     return True
+
+
+def _count_asked() -> None:
+    """A summary written because a person opened the IPO: counted apart, for Admin, never against the catch-up's cap."""
+    day = _ai_day()
+    db.set_setting("ipo:ai:asked:" + day, str(int(db.get_setting("ipo:ai:asked:" + day) or 0) + 1))
+
+
+def _catch_up_rank(r: dict, now: datetime) -> int:
+    """The catch-up's order (item 40): open and closed issues first, then upcoming, then those listed in the last 30 days, then the
+    filed ones, the old listed issues last."""
+    st = stage_of(r, now)
+    if st in ("open", "closed"):
+        return 0
+    if st == "upcoming":
+        return 1
+    if st == "listed":
+        return 2 if (r.get("listing") or r.get("priced") or "") >= (now.date() - timedelta(days=30)).isoformat() else 4
+    return 3 if st == "filed" else 5
+
+
+def ai_counts(now: datetime | None = None) -> dict:
+    """Admin's line: today's catch-up summaries against its cap, the ones people asked for, and the documents still waiting with the
+    days they take at the cap."""
+    day = _ai_day()
+    waiting = 0
+    for m in ("IN", "US"):
+        for r in load(m)["rows"]:
+            d = doc_to_read(r)
+            facts = facts_of(d) if d else None
+            if d and not summary_of(d) and (facts is None or facts.get("excerpt")):
+                waiting += 1
+    return {"scheduled": int(db.get_setting("ipo:ai:" + day) or 0), "cap": AI_PER_DAY, "asked": int(db.get_setting("ipo:ai:asked:" + day) or 0),
+            "waiting": waiting, "days": -(-waiting // AI_PER_DAY)}
 
 
 def make_summary(row: dict, d: dict, facts: dict, ai) -> dict:
@@ -1346,21 +1387,25 @@ class Job:
                 problems.append(f"{r['name'][:30]}: {str(e)[:100]}")
                 db.set_setting("ipo:try:" + doc_key(d), json.dumps({"n": tried.get("n", 0) + 1, "at": now.isoformat(timespec="seconds")}))
         made = 0
+        waiting = []
         for m in ("IN", "US"):
             for r in load(m)["rows"]:
                 d = doc_to_read(r)
                 facts = facts_of(d)
-                if made >= 2 or not d or not facts or summary_of(d) or not facts.get("excerpt"):
-                    continue
-                if not _ai_budget():
-                    problems.append("Today's summary limit is reached; the rest are written tomorrow.")
-                    break
-                try:
-                    make_summary(r, d, facts, _wire["ai"]() if _wire["ai"] else None)
-                    made += 1
-                except AIError as e:
-                    problems.append(f"{r['name'][:30]}: {str(e)[:100]}")
-                    break
+                if d and facts and not summary_of(d) and facts.get("excerpt"):
+                    waiting.append((_catch_up_rank(r, now), -int((r.get("open") or r.get("listing") or r.get("priced") or r.get("filed") or "0000").replace("-", "")[:8] or 0), r, d, facts))
+        # the issues people are looking at now first, the old listed ones last (item 40)
+        waiting.sort(key=lambda t: (t[0], t[1]))
+        for _, _, r, d, facts in waiting[:2]:
+            if not _ai_budget():
+                problems.append("Today's catch-up limit is reached; the rest are written tomorrow (a person opening an IPO still gets its summary).")
+                break
+            try:
+                make_summary(r, d, facts, _wire["ai"]() if _wire["ai"] else None)
+                made += 1
+            except AIError as e:
+                problems.append(f"{r['name'][:30]}: {str(e)[:100]}")
+                break
         if done or made or problems:
             self.status.update(docs=self.status["docs"] + done, summaries=self.status["summaries"] + made, last_run=now.isoformat(timespec="seconds"),
                                **({"problems": problems[:5], "last_error": problems[0][:200]} if problems else {}))
@@ -1588,7 +1633,8 @@ _reading = threading.Lock()
 @router.post("/invest/ipos/{rid}/summary")
 def ipo_summary(rid: str, profile=Depends(current_profile)):
     """Read the offer document and write its summary now, when the scheduled job hasn't yet (Basic and up). Each document is
-    summarised once for everyone; this reads one at a time."""
+    summarised once for everyone; this reads one at a time ("busy": the page waits and asks again by itself). Item 41: a person is
+    never held to the day's cap, which is the scheduled catch-up's alone."""
     if not allows(profile["_plan"], "ipo_summary"):
         err(402, "upgrade_required", f"The summary of the offer document is on the {PLANS[FEATURE_PLAN['ipo_summary']]['name']} plan.")
     row = _find(rid)
@@ -1603,9 +1649,8 @@ def ipo_summary(rid: str, profile=Depends(current_profile)):
             try:
                 facts = facts or read_doc(row, d, _wire["sebi"]())
                 if not summary_of(d):
-                    if not _ai_budget():
-                        err(429, "ai_limit", "Today's summary limit is reached. The summary is written tomorrow, or by the schedule when its turn comes.")
                     make_summary(row, d, facts, _wire["ai"]() if _wire["ai"] else None)
+                    _count_asked()
             except AIError as e:
                 err(503, "ai_unavailable", str(e))
             except SourceError as e:
