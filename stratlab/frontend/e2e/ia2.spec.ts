@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { NAV, startOf } from "../src/lib/nav";
 
 // IA-2 (owner, 30 Oct). Item 37: Market Watch's button on a laptop, both ways the owner is choosing between (lib/mwButton.ts):
 // "float" (the default) keeps the round button, in a real margin clear of the cards; "menu" makes the menu's market line the Markets
@@ -124,4 +125,116 @@ test(`item 37, "menu" on a phone: the menu sheet's Markets line opens Market Wat
   await line.click();
   await expect(watch(page)).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
+});
+
+// Item 36 (owner, 30 Oct: "you have squeezed the menu bar too much"): the 14 headings stay, and under each heading are its pages, the same
+// pages, names and locks as its tabs. The section you are in is open, the others fold behind a disclosure button, and what the person
+// opened or folded is kept. A heading with one page has no list. The current page is marked.
+const side = (page: Page) => page.locator("aside.sidebar");
+const mainNav = (page: Page) => side(page).getByRole("navigation", { name: "Main" });
+
+test("item 36: each heading lists its pages; the section you are in is open, the others fold, and the choice is kept", async ({ page }, info) => {
+  test.skip(info.project.name === "phone", "the phone's sheet has its own test below");
+  const errors = await open(page, "/research/screens", who(false), 1280);
+  const nav = mainNav(page);
+  await expect(nav.locator(".side-entries > .side-entry > .side-head > a")).toHaveText(NAV.invest.groups.map((g) => g.label), { timeout: 30_000 });
+  // Find stocks is open with its pages, as its tabs name them; Figures is the page marked
+  const find = NAV.invest.groups.find((g) => g.id === "find-stocks")!;
+  const sub = nav.locator("#side-sub-find-stocks");
+  await expect(sub.getByRole("link")).toHaveText(find.pages.map((p) => p.label));
+  await expect(page.getByTestId("hub-tabs").getByRole("link")).toHaveText(find.pages.map((p) => p.label));
+  for (const p of find.pages) await expect(sub.getByRole("link", { name: p.label, exact: true })).toHaveAttribute("href", p.to);
+  await expect(sub.getByRole("link", { name: "Figures", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(nav.locator("[aria-current=page]")).toHaveCount(1);
+  await expect(nav.getByRole("link", { name: "Find stocks", exact: true })).not.toHaveClass(/active/);      // never two selected at once
+  // the others are folded behind their buttons; a heading with one page has none
+  for (const g of NAV.invest.groups) {
+    const btn = nav.getByRole("button", { name: `${g.label} pages`, exact: true });
+    if (g.pages.length === 1) { await expect(btn).toHaveCount(0); await expect(nav.locator(`#side-sub-${g.id}`)).toHaveCount(0); continue; }
+    await expect(btn).toHaveAttribute("aria-expanded", g.id === "find-stocks" ? "true" : "false");
+    await expect(btn).toHaveAttribute("aria-controls", `side-sub-${g.id}`);
+  }
+  // the keyboard opens a folded section; it stays open after a reload (kept for this person)
+  const today = nav.getByRole("button", { name: "Market today pages", exact: true });
+  await today.focus();
+  await page.keyboard.press("Enter");
+  await expect(today).toHaveAttribute("aria-expanded", "true");
+  await expect(nav.locator("#side-sub-market-today").getByRole("link")).toHaveText(NAV.invest.groups.find((g) => g.id === "market-today")!.pages.map((p) => p.label));
+  await page.reload();
+  await expect(mainNav(page).getByRole("button", { name: "Market today pages", exact: true })).toHaveAttribute("aria-expanded", "true", { timeout: 30_000 });
+  await mainNav(page).getByRole("button", { name: "Market today pages", exact: true }).click();
+  await expect(mainNav(page).getByRole("button", { name: "Market today pages", exact: true })).toHaveAttribute("aria-expanded", "false");
+  // the section you are in can be folded too; coming back into it opens it again
+  await mainNav(page).getByRole("button", { name: "Find stocks pages", exact: true }).click();
+  await expect(mainNav(page).locator("#side-sub-find-stocks")).toBeHidden();
+  // a heading still opens its first page, and its section opens
+  await mainNav(page).getByRole("link", { name: "Market data", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${startOf(NAV.invest.groups.find((g) => g.id === "market-data")!, "invest")}$`));
+  await expect(mainNav(page).getByRole("button", { name: "Market data pages", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await mainNav(page).getByRole("link", { name: "Find stocks", exact: true }).click();
+  await expect(mainNav(page).getByRole("button", { name: "Find stocks pages", exact: true })).toHaveAttribute("aria-expanded", "true");
+  expect(errors).toEqual([]);
+});
+
+test("item 36: on a 1280x800 laptop the menu does not scroll with the section you are in open, in every space", async ({ page }, info) => {
+  test.skip(info.project.name === "phone", "a laptop's size");
+  await open(page, "/invest", who(false), 1280, 800);
+  // a person with many notebooks: the menu lists six of them and "All 8 notebooks" under Notebooks, the longest a section gets
+  await page.route(`${process.env.E2E_API ?? "http://127.0.0.1:8765"}/notebooks`, (r) => r.request().method() !== "GET" ? r.fallback() : r.fulfill({ json: Array.from({ length: 8 }, (_, i) => ({
+    id: `nb-${i}`, name: `Opening range breakout with a long name ${i}`, pinned: i < 2, instrument: { market: "IN", symbol: "RELIANCE" }, summary: { experiments: 2, last_verdict: "robust" } })) }));
+  await expect(mainNav(page)).toBeVisible({ timeout: 30_000 });
+  const seen = new Set<string>(["/notebooks"]);
+  for (const to of ["/notebooks"]) {
+    await page.goto(to);
+    const nav = side(page).locator("nav.side-groups");
+    await expect(nav.locator(".nb-more")).toHaveText("All 8 notebooks", { timeout: 30_000 });
+    const over = await nav.evaluate((el) => el.scrollHeight - el.clientHeight);
+    expect(over, `${to} with 8 notebooks: the menu scrolls by ${over}px`).toBeLessThanOrEqual(0);
+  }
+  for (const space of ["trade", "invest", "money"] as const) for (const g of NAV[space].groups) {
+    const to = startOf(g, space);
+    if (seen.has(to)) continue;
+    seen.add(to);
+    await page.goto(to);
+    const nav = side(page).locator("nav.side-groups");
+    await expect(nav.locator(".side-entries")).toBeVisible({ timeout: 30_000 });
+    const over = await nav.evaluate((el) => el.scrollHeight - el.clientHeight);
+    expect(over, `${to}: the menu scrolls by ${over}px`).toBeLessThanOrEqual(0);
+    await expect(side(page).locator(".side-more")).toHaveCount(0);
+  }
+});
+
+test("item 36: the phone's menu sheet shows the same headings and pages", async ({ page }, info) => {
+  test.skip(info.project.name !== "phone", "the phone's sheet");
+  await open(page, "/invest/breadth", who(true), 390, 844);
+  await page.getByRole("button", { name: "Open menu" }).click();
+  const nav = mainNav(page);
+  await expect(nav.locator(".side-entries > .side-entry > .side-head > a")).toHaveText(NAV.invest.groups.map((g) => g.label), { timeout: 30_000 });
+  await expect(nav.locator("#side-sub-market-today").getByRole("link", { name: "Breadth", exact: true })).toHaveAttribute("aria-current", "page");
+  const btn = nav.getByRole("button", { name: "Companies pages", exact: true });
+  expect((await btn.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await btn.click();
+  await nav.getByRole("link", { name: "Compare", exact: true }).click();
+  await expect(page).toHaveURL(/\/research\/compare$/);
+  await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
+});
+
+// screenshots of the menu for a person to LOOK at (IA2_SHOTS=<folder>)
+const SHOTS = process.env.IA2_SHOTS;
+test("item 36: menu screenshots", async ({ page }, info) => {
+  test.skip(!SHOTS, "only when asked for");
+  const phone = info.project.name === "phone";
+  const sizes = phone ? [[390, 844], [360, 780]] : [[1440, 900], [1280, 800]];
+  for (const [path, name] of [["/research/screens", "invest"], ["/notebooks", "trade"], ["/money/tax-tools", "money"]] as const) {
+    await open(page, path, who(phone), sizes[0][0], sizes[0][1]);
+    for (const [w, h] of sizes) for (const scheme of ["light", "dark"] as const) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.emulateMedia({ colorScheme: scheme });
+      if (phone && !(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
+      await expect(mainNav(page).locator(".side-entries")).toBeVisible({ timeout: 30_000 });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `${SHOTS}/menu-${name}-${w}-${scheme}.png` });
+    }
+    await page.goto("about:blank");
+  }
 });

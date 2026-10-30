@@ -100,8 +100,9 @@ test("DI-013, DI-016: `/` and the logo open the home of What you see first; the 
   await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
   await page.goto("/");
   await expect(page).toHaveURL(/\/mine$/, { timeout: 30_000 });
-  // one link is the page you are on
-  for (const [path, current] of [["/research/watchlist", "Watchlist"], ["/research/investor", "Watchlist"], ["/settings#notifications", "Settings"]] as const) {
+  // one link is the page you are on (IA-2, item 36: in Invest's menu that is the page under its heading,
+  // "Stocks" under Watchlist; My space's own menu names it Watchlist)
+  for (const [path, current] of [["/research/watchlist", /^(Watchlist|Stocks)$/], ["/research/investor", /^(Watchlist|Stocks)$/], ["/settings#notifications", "Settings"]] as const) {
     await page.goto(path);
     await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
     const side = await menu(page, phone);

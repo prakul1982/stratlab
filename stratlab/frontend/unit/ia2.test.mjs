@@ -71,3 +71,34 @@ test("item 37: on a laptop the 'float' way keeps an 80px right margin with the b
   // from 1600px the pill keeps its word in both ways (nothing above 1599px reads the switch)
   assert.doesNotMatch(css.replace(block, "").replace(/\/\*[^]*?\*\//g, ""), /data-mw-button/);
 });
+
+// Item 36 (owner, 30 Oct: "you have squeezed the menu bar too much"): the 14 headings stay and list their pages under them, the same
+// pages as their tabs; the section you are in is open, the others fold behind a disclosure button, kept per person.
+const { NAV } = await import("../src/lib/nav.ts");
+
+test("item 36: the 14 headings stay; every heading with more than one page lists them, as its tabs do", () => {
+  const ids = new Set(Object.values(NAV).flatMap((s) => s.groups.map((g) => g.id)));
+  assert.equal(ids.size, 14);
+  const shell = read("src/components/Shell.tsx");
+  // the list is drawn from the heading's own pages (the tabs' list), through the same link the menu always used (locks, titles)
+  assert.match(shell, /<div id=\{`side-sub-\$\{g\.id\}`\} className="side-list side-sub" hidden=\{!open\}>\n\s*\{g\.pages\.map\(\(p\) => \(/);
+  assert.match(shell, /\{pageLink\(p, p\.label, true\)\}/);
+  assert.match(read("src/components/HubTabs.tsx"), /\{at\.group\.pages\.map\(\(t\) => \{/);
+  // one page: no list and no button
+  assert.match(shell, /const many = g\.pages\.length > 1;/);
+});
+
+test("item 36: a disclosure button per section, the section you are in open, the person's choice kept per person", () => {
+  const shell = read("src/components/Shell.tsx");
+  assert.match(shell, /<button type="button" className="side-toggle" aria-expanded=\{open\} aria-controls=\{`side-sub-\$\{g\.id\}`\} aria-label=\{`\$\{g\.label\} pages`\}/);
+  assert.match(shell, /const OPEN_KEY = "stratlab\.side\.open";/);
+  assert.match(shell, /usePersisted<Record<string, boolean>>\(`\$\{OPEN_KEY\}\.\$\{me\?\.id \?\? "guest"\}`, NO_CHOICE\)/);
+  assert.match(shell, /const isOpen = \(g: NavGroup\) => opened\[g\.id\] \?\? g\.id === current;/);
+  // the heading still opens the section's first page; it is marked only when its own page shows, else only bold
+  assert.match(shell, /const to = startOf\(g, sp\);/);
+  assert.match(shell, /className=\{here \? "active" : inIt \? "in-section" : undefined\} aria-current=\{here \? "page" : undefined\}/);
+  const css = read("src/styles.css");
+  assert.match(css, /\.side-list a\.in-section \{ color: var\(--ink\); font-weight: 600; \}/);
+  assert.match(css, /\.side-list\.side-sub a \{ height: 28px;/);
+  assert.match(css, /@media \(pointer: coarse\) \{[^]*?\.side-list a, \.side-list\.side-sub a \{ height: 40px; \}/);
+});

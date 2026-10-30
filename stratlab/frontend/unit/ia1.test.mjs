@@ -122,7 +122,8 @@ test("IA-1: the plan locks are the ones they were, now on the tabs", () => {
 test("IA-1: the menu is one short list of entries; the tabs show on each tab's page, not on a company's or a notebook's", () => {
   const shell = read("src/components/Shell.tsx");
   assert.match(shell, /<div className="side-list side-nav side-entries">/);
-  assert.doesNotMatch(shell, /side-toggle|aria-label="Open or close this group"/);
+  // IA-2 (item 36): each heading now lists its pages under it, with an open/close button (unit/ia2.test.mjs); the old groups' button is not back
+  assert.doesNotMatch(shell, /aria-label="Open or close this group"/);
   assert.match(shell, /<div className="crumb-row"><PageBreadcrumb mine=\{space === "mine"\} space=\{space\} \/>\{at && <HubTabs at=\{at\} path=\{path\} \/>\}<\/div>/);
   assert.match(read("src/styles.css"), /\.hub-tabs \{ display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 0 auto; \}/);          // on the breadcrumb's row: every title starts at one height (R17)
   assert.match(read("src/styles.css"), /@media \(max-width: 640px\) \{ \.hub-tabs \{ display: none; \} \}/);          // a phone has them in the breadcrumb's menu

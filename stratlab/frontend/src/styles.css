@@ -208,7 +208,8 @@ a.link { margin-inline: -2px; }
 /* the sidebar: a slim header, one menu that scrolls, a slim footer. Every row lines up on one 8px inset. */
 .sidebar { position: sticky; top: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column;
   background: var(--paper-2); border-right: 1px solid var(--line); font-size: 14px; }
-.side-top { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 14px 12px 10px; }
+/* IA-2 (item 36): a little tighter, so a 1280x800 laptop shows the whole menu with one section and six notebooks open */
+.side-top { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 12px 12px 8px; }
 .side-brand { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 4px 2px; }
 .side-close { display: none; }
 .side-new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px;
@@ -225,7 +226,7 @@ a.link { margin-inline: -2px; }
 .space-switch button[aria-pressed="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); }
 .space-switch button:focus-visible { outline-offset: 0; }
 
-.side-groups { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; padding: 4px 12px 28px;
+.side-groups { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 4px 12px 14px;
   scrollbar-width: thin; scrollbar-color: transparent transparent; }
 /* the scrollbar shows when the pointer is over the menu, and the edge with more behind it fades (Shell: data-fade) */
 .side-groups:hover, .side-groups:focus-within { scrollbar-color: var(--dash) transparent; }
@@ -249,6 +250,17 @@ a.link { margin-inline: -2px; }
 .side-title.plain, .side-title.plain:hover { background: none; color: var(--muted); cursor: default; padding-left: 8px; }
 .side-title:focus-visible { outline-offset: -2px; }
 .side-entry { display: flex; flex-direction: column; gap: 1px; }
+/* IA-2 (item 36): each heading with its pages under it. The heading row: the heading's link, then its open/close button; the pages sit on a
+   thin guide line, their names lined up with the heading's (8 + 16 + 10px), in shorter 28px rows so a 1280x800 laptop shows the whole menu
+   with one section open. The heading of the section you are in is bold, never a second selected row (owner, 26 Oct) */
+.side-entry > .side-head > a { flex: 1; }
+.side-list a.in-section { color: var(--ink); font-weight: 600; }
+.side-list a.in-section > svg { color: var(--ink); }
+.side-sub { margin: 0 0 4px 15px; padding-left: 0; border-left: 1px solid var(--line-2); }
+.side-list.side-sub a { height: 28px; padding-left: 18px; border-radius: 0 6px 6px 0; font-size: 13.5px; }
+.side-sub .side-nbs { padding-left: 8px; }
+.side-sub .side-nbs a { height: 26px; }
+.side-sub .side-note, .side-list.side-sub a.nb-more { padding-left: 22px; }
 .side-nbs { padding-left: 14px; }
 .side-note-wrap { display: block; padding: 4px 8px 6px; line-height: 1.4; }
 .side-chev { display: inline-flex; opacity: .55; transition: transform .15s, opacity .15s; }
@@ -325,12 +337,13 @@ a.link { margin-inline: -2px; }
 @media (pointer: coarse) {
   .side-new, .side-new-gap, .search-btn { height: 40px; }
   .space-switch button { height: 36px; }
-  .side-list a { height: 40px; }
+  .side-list a, .side-list.side-sub a { height: 40px; }
   .side-toggle { height: 32px; width: 32px; }
   .side-title { height: 32px; }
   .side-note { height: 32px; }
   .mkt-btn { height: 36px; }
   .mkt-btn.mkt-mw { height: 44px; }
+  .side-more { min-height: 32px; }   /* IA-2: a menu with a section open can run past a phone's height, and this shows then */
   .acct-btn { height: 44px; }
   .acct-pop [role="menuitem"] { height: 44px; }
   .acct-pop [role="menuitemradio"] { height: 44px; }
