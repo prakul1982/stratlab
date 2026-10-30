@@ -307,8 +307,17 @@ def test_us_companies_are_audited_from_their_sec_filings(monkeypatch):
 
 
 def test_whole_market_audit_retries_a_company_whose_source_was_down(monkeypatch):
+    import time_machine
     from datetime import datetime, timedelta, timezone
     from tests import world as W
+    # at midday UTC, so "an hour on" is the same day: the retries' rest is the subject here (before 02:00 UTC "an hour on" was
+    # yesterday, and a new listing's daily check came due as well, so the test failed in the first hours of each day)
+    noon = datetime.now(timezone.utc).replace(hour=12, minute=0, second=0, microsecond=0)
+    with time_machine.travel(noon, tick=True):
+        _retries_rest(monkeypatch, W, datetime, timedelta, timezone)
+
+
+def _retries_rest(monkeypatch, W, datetime, timedelta, timezone):
     w = W.build(monkeypatch)
     try:
         listing = _recent("AAA", days=1) + _recent("BBB", days=2)
@@ -465,3 +474,22 @@ def test_deep_view_yield_is_the_pages_ex_dated_one(monkeypatch):
     monkeypatch.setattr(main, "page_dividend_yield", lambda region, sym, price, as_of, co=None, fetch=True: seen.update(price=price) or 5.35)
     view = main.deep_view("ACME", base_for(p, {"price": 100.0})("ACME"))
     assert view["snapshot"]["div_yield"] == 5.35 and seen["price"] == 100.0       # not the source's last reported year's 3.08
+
+
+def test_whole_market_audit_queues_a_company_once_when_it_is_due_its_daily_check_and_a_retry(monkeypatch):
+    """A new listing a source turned away yesterday is due its daily check and a retry: it is queued once, at any hour."""
+    from datetime import datetime, timedelta, timezone
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        listing = _recent("AAA", days=1)
+
+        def check(sym):
+            return {**_clean(sym), "issues": [{"level": "error", "area": "Company page", "detail": "source busy"}]}
+        a = audit.MarketAudit(lambda: listing, check, pause=0)
+        a.set_enabled(True)
+        assert a.step() == "AAA"
+        a.rows["AAA"]["at"] = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()      # yesterday, and past the retry wait
+        assert a.queue() == ["AAA"]
+    finally:
+        w["close"]()

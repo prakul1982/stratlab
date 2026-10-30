@@ -1252,7 +1252,9 @@ class MarketAudit:
                 new.append((info.get("listed") or info.get("seen") or "", sym))
             elif at[:10] < today.isoformat() and (self._listed_days(sym, today) or 0) <= NEW_DAILY_DAYS:     # ...and again each day of its first 10 (MS1-006)
                 again.append((info.get("listed") or info.get("seen") or "", sym))
-        first = [s for _, s in sorted(new, reverse=True)] + [s for _, s in sorted(again, reverse=True)] + self._retries_now(now)
+        # once each: a new listing turned away yesterday is both due its daily check and a retry (it was queued twice, and the
+        # test of the retries failed in the first hours of each UTC day)
+        first = list(dict.fromkeys([s for _, s in sorted(new, reverse=True)] + [s for _, s in sorted(again, reverse=True)] + self._retries_now(now)))
         taken = set(first)
         first += [s for s in self.stale_mismatches(now) if s not in taken]
         taken = set(first)
