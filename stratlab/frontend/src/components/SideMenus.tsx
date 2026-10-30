@@ -7,7 +7,8 @@ import { VIEW_AS_CHOICES, choiceToPlan, planToChoice } from "../lib/viewAs";
 import { inWords, marketState } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
 import type { Market, Me } from "../lib/types";
-import { Close, Compass, Download, Gear, Help, Layers, LogOut, Share, Shield, Updown, User, Wallet } from "./Icons";
+import { Close, Compass, Download, Gear, Help, Layers, LogOut, Markets, Share, Shield, Updown, User, Wallet } from "./Icons";
+import { openMarkets } from "./watch/Launcher";
 
 // The two small menus at the foot of the sidebar: which markets are open, and the account. Each is one line until
 // opened; opened, it floats above the line (a sheet from the bottom on a phone) and closes with Esc or a click outside.
@@ -57,8 +58,9 @@ function when(m: Market, now: number) {
   return { st, text: st.closedFor === "holiday" ? `Holiday · ${opens.toLowerCase()}` : opens };
 }
 
-/** "● 1 of 10 markets open": one line that opens the list of markets. */
-export function MarketsNow({ markets }: { markets: Market[] }) {
+/** "● 1 of 10 markets open": one line that opens the list of markets. With `opensWatch` (item 37's "menu" way, lib/mwButton.ts) the
+ * line is the Markets button instead: the candles and the word, the markets' state beside them, and a press opens Market Watch. */
+export function MarketsNow({ markets, opensWatch = false, onGo }: { markets: Market[]; opensWatch?: boolean; onGo?: () => void }) {
   const { open, setOpen, btn, panel } = usePop();
   const id = useId();
   const now = useMinute();
@@ -68,6 +70,22 @@ export function MarketsNow({ markets }: { markets: Market[] }) {
   const openCount = rows.filter((r) => r.st.open).length;
   // India leads (the dot is India's), so the line agrees with "Indian markets open in …" on My space (R1-070)
   const india = rows.find((r) => r.m.id === "IN");
+  if (opensWatch) {
+    // named for what it does, as the floating button is; the state it shows is its description, so a screen reader hears both
+    return (
+      <div className="side-pop-wrap">
+        <button className="mkt-btn mkt-mw" aria-label="Open Market Watch" aria-describedby={id} data-testid="markets-menu"
+          onClick={() => { onGo?.(); openMarkets({ open: true }); }}>
+          <Markets size={16} /><span className="mkt-mw-word">Markets</span>
+          <span id={id} className="mkt-mw-state">
+            <span className={`mkt-dot${(india ? india.st.open : openCount) ? " on" : ""}`} aria-hidden="true" />
+            {/* "India open · 6/10": the button's width holds no more beside the word (the count's meaning is read out in full) */}
+            {india ? `India ${india.st.open ? "open" : "closed"} · ` : ""}{openCount}/{live.length}<span className="sr-only"> markets open</span>
+          </span>
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="side-pop-wrap">
       <button ref={btn} className="mkt-btn" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>

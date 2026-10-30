@@ -21,6 +21,7 @@ import { PLAN_NAME } from "../lib/plans";
 import { watchSize } from "../lib/resize";
 import { importWithRetry } from "../lib/lazyRetry";
 import { scrollBehavior } from "../lib/motion";
+import { useMwButton } from "../lib/mwButton";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => importWithRetry(() => import("./SearchPalette")).then((m) => ({ default: m.SearchPalette })));
@@ -59,6 +60,8 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => { const t = window.setInterval(() => tick((x) => x + 1), 60000); return () => window.clearInterval(t); }, []);
   const loc = useLocation();
   const nav = useNavigate();
+  // item 37: where Market Watch's button is on a laptop, the owner's switch until he picks one (lib/mwButton.ts)
+  const mwButton = useMwButton(loc.search);
   useEffect(() => setOpen(false), [loc.pathname]);
   // on a phone (or zoomed in) the menu is a drawer: a modal while it's open. Focus moves in and stays in, Esc closes it
   // (a pop-up inside it closes first, on its own), and focus goes back to the menu button.
@@ -231,7 +234,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </button>
       )}
       <div className="side-foot">
-        <MarketsNow markets={markets} />
+        <MarketsNow markets={markets} opensWatch={mwButton === "menu"} onGo={() => setOpen(false)} />
         <AccountMenu me={me} onTour={() => { setOpen(false); openTour(); }} onGo={() => setOpen(false)} />
       </div>
     </aside>
