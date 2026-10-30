@@ -113,3 +113,84 @@ def test_facts_an_older_reader_made_still_show_and_are_read_again_after_the_unre
     monkeypatch.setattr(I, "_wire", {"sebi": lambda: None, "ai": None})
     I.Job().read_docs(datetime(2026, 10, 30, 6, tzinfo=timezone.utc), limit=5)
     assert read == ["in-b", "in-a"]                                                            # the one never read first, though the other is open
+
+
+# ---- LO1-3: the NIFTY 100's business updates coverage, and the update filings the reader missed ----
+def _store(monkeypatch):
+    from app import biz_updates as B, db
+    kept: dict = {}
+    monkeypatch.setattr(db, "get_setting", lambda k, default=None: kept.get(k, default))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: kept.__setitem__(k, v))
+    monkeypatch.setattr(db, "prefetch_settings", lambda keys: None)
+    B.forget()
+    return kept
+
+
+def test_the_nifty_100s_missed_update_filings_are_taken_and_an_earnings_presentation_is_not():
+    # the exchange's own rows (NSE, Oct 2026): "Production Release", "Provisional Financial figures for Qtr", "Update for Q1 FY27", and
+    # a "General Updates" whose file is the provisional figures; Max Healthcare's "Earnings Update" presentation is not one
+    from app import biz_updates as B
+    got = json.load(open(F.DIR.parent / "business_updates" / "n100_missed.json", encoding="utf8"))
+    for sym in ("HINDZINC", "UNIONBANK", "TRENT", "VAML"):
+        assert got[sym] and all(B.is_update(i) for i in got[sym]), sym
+    assert got["MAXHEALTH"] and not any(B.is_update(i) for i in got["MAXHEALTH"])
+    assert not B.is_update({"subject": "Updates", "text": "Infosys Limited has informed the Exchange regarding 'Form 20-F and Press Release'.", "url": "https://nsearchives.nseindia.com/corporate/x.pdf"})
+
+
+def test_the_nifty_100_coverage_line_counts_the_covered_and_says_why_for_the_rest(monkeypatch):
+    from datetime import date
+    from app import biz_updates as B
+    kept = _store(monkeypatch)
+    fig = {"figures": [{"metric": "Total sales", "value": 1}], "period": "2026-09"}
+
+    def put(sym, reads=None, checked=None):
+        kept[B.KEY + sym] = json.dumps({"reads": reads or {}, **({"checked": checked} if checked else {})})
+
+    put("MARUTI", {"a": {"at": "2026-10-01T12:00:00", **fig}}, {"at": "2026-10-29T14:00:00", "found": 30, "newest": "2026-10-01"})
+    put("UNIONBANK", {"b": {"at": "2026-10-01T22:00:00", "figures": [], "period": None, "problem": "No figure could be checked against the document."}},
+        {"at": "2026-10-29T14:00:00", "found": 2, "newest": "2026-10-01"})
+    put("TCS", None, {"at": "2026-10-29T14:00:00", "found": 0})
+    put("HINDZINC", {"c": {"at": "2026-04-02T12:00:00", **fig}}, {"at": "2026-10-29T14:00:00", "found": 3, "newest": "2026-10-03"})    # filed, the newest not read yet
+    put("ASIANPAINT", {"d": {"at": "2026-03-01T12:00:00", **fig}}, {"at": "2026-10-29T14:00:00", "found": 1, "newest": "2026-03-01"})  # nothing lately
+    put("ITC", {"e": {"at": "2026-10-05T12:00:00", "skip": True, "problem": "Not a business update."}}, None)                           # never looked through
+    got = B.index_coverage(date(2026, 10, 30), ["MARUTI", "UNIONBANK", "TCS", "HINDZINC", "ASIANPAINT", "ITC"])
+    assert got["companies"] == 6 and got["covered"] == 1 and got["days"] == 120
+    why = {r["symbol"]: r["why"] for r in got["without"]}
+    assert why == {"UNIONBANK": "unreadable", "TCS": "none_found", "HINDZINC": "not_fetched", "ASIANPAINT": "none_found", "ITC": "not_fetched"}
+    assert got["counts"] == {"unreadable": 1, "not_fetched": 2, "none_found": 2}
+    u = next(r for r in got["without"] if r["symbol"] == "UNIONBANK")
+    assert u["problem"].startswith("No figure") and u["why_text"] == "Filing unreadable" and u["newest_filed"] == "2026-10-01"
+
+
+def test_the_index_list_is_kept_and_the_daily_run_looks_through_it_and_notes_the_newest_update(monkeypatch):
+    from datetime import datetime, timezone
+    from app import biz_updates as B
+    kept = _store(monkeypatch)
+    hundred = [f"S{i:03d}" for i in range(100)]
+
+    class Feed:
+        def __init__(self, members):
+            self.members, self.asked = members, []
+
+        def index_members(self, name):
+            assert name == "NIFTY 100"
+            if self.members is None:
+                raise RuntimeError("turned away")
+            return self.members
+
+        def announcements(self, sym, days):
+            self.asked.append(sym)
+            return [{"at": "2026-10-03 14:00:00", "subject": "Updates", "text": "Production Release for the second quarter", "url": "https://nsearchives.nseindia.com/corporate/x.pdf"}] if sym == "S001" else []
+
+    feed = Feed(hundred)
+    monkeypatch.setattr(B, "_wire", {"feed": lambda: feed, "docs": lambda: None, "ai": None})
+    assert B.index_symbols() == hundred and json.loads(kept[B.INDEX_KEY]) == hundred
+    feed.members = None
+    assert B.index_symbols() == hundred                                                        # the exchange turning us away: the kept list
+    feed.members = hundred
+    monkeypatch.setattr(B, "SECTORS", {})
+    monkeypatch.setattr(B, "user_symbols", lambda: [])
+    monkeypatch.setattr(B, "read_new", lambda *a, **k: {"read": 0, "problems": []})
+    B.Job(lambda rows, now: 0, lambda: []).run(datetime(2026, 10, 30, 14, tzinfo=timezone.utc))
+    assert sorted(feed.asked) == hundred                                                       # no NIFTY 100 company is left "not looked at"
+    assert B.checked("S001") == {"at": "2026-10-30T14:00:00+00:00", "found": 1, "newest": "2026-10-03"} and B.checked("S002")["found"] == 0

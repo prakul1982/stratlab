@@ -120,10 +120,13 @@ UPDATE = re.compile(
     r"\bproduction (?:and|&) (?:sales|deliver\w+|despatch\w*)|\boperat(?:ing|ional) (?:statistics|data|metrics|highlights|numbers|report)\b|"
     r"\bkey operating (?:data|metrics)|\bstore (?:count|network|additions?)|\bnew stores\b|\bassets under management\b|"
     r"\bdeposits? and advances\b|\bbusiness (?:highlights|performance|numbers)\b|\bsubscriber (?:base|numbers|additions?)\b|"
-    r"\bcapacity utili[sz]ation\b", re.I)
+    r"\bcapacity utili[sz]ation\b|"
+    # LO1-3, the NIFTY 100's own filings (Oct 2026): Hindustan Zinc's and Vedanta Aluminium's "Production Release", Union Bank's
+    # "Provisional Financial figures for Qtr", Trent's "Update for Q1 FY27" were not taken for updates
+    r"\bproduction release\b|\bprovisional financial (?:figures|numbers|data|results)\b|(?<!earnings )\bupdate for (?:the )?(?:q[1-4]|quarter)\b", re.I)
 # the file name says it when the subject is a generic "General Updates"
 UPDATE_FILE = re.compile(r"operat(?:ing|ional)update|businessupdate|generationupdate|trafficupdate|productionupdate|salesupdate|(?:" + MONTHS + r")salesrelease|salesdata|salesvolume|sales(?:" + MONTHS + r")|productionvolume|prod(?:uction)?(?:" + MONTHS +
-                         r")|businessupdate|financialupdate|financialdisclosure|initial(?:financial|final)disclosure", re.I)
+                         r")|businessupdate|financialupdate|financialdisclosure|initial(?:financial|final)disclosure|provisionalfina|productionrelease", re.I)
 NOT_UPDATE = re.compile(r"\bsale of\b|slump sale|offer for sale|sales tax|record date|trading window|newspaper|"
                         r"transcript|recording|schedule of (?:analyst|investor|meet)|"
                         # a Regulation 30 "update to disclosures", and news of a tie-up or a franchise, are filings but not business figures
@@ -513,13 +516,14 @@ def checked(symbol: str) -> dict | None:
     return c if isinstance(c, dict) and c.get("at") else None
 
 
-def mark_checked(symbol: str, found: int, now: datetime | None = None) -> None:
+def mark_checked(symbol: str, found: int, now: datetime | None = None, newest: str | None = None) -> None:
     """Note that the company's filings were looked through just now and `found` of them were business updates (so a company that
-    files none is told apart from one not looked at yet)."""
+    files none is told apart from one not looked at yet), and the day the newest of them was filed (LO1-3: the coverage line tells
+    "none filed lately" from "filed, not read yet")."""
     with _lock:
         got = db.json_value(db.get_setting(KEY + symbol), {})
         got = got if isinstance(got, dict) else {}
-        got["checked"] = {"at": (now or datetime.now(timezone.utc)).isoformat(timespec="seconds"), "found": int(found)}
+        got["checked"] = {"at": (now or datetime.now(timezone.utc)).isoformat(timespec="seconds"), "found": int(found), **({"newest": newest[:10]} if newest else {})}
         got.setdefault("reads", {})
         db.set_setting(KEY + symbol, json.dumps(got, separators=(",", ":"), ensure_ascii=False))
         _cache.clear()
@@ -976,6 +980,59 @@ def coverage(today: date | None = None) -> dict:
                     "Reading: update filings found, not all read yet. None filed: the company's filings were looked through and none is a business update."}
 
 
+INDEX = "NIFTY 100"
+INDEX_KEY = "bizupd:index"         # the NIFTY 100's stocks, the last good list from the exchange (LO1-3)
+COVER_DAYS = 120                   # "has a business update": one read into figures from a filing of the last 120 days (a quarter and its filing month)
+WHY = {"unreadable": "Filing unreadable", "not_fetched": "Not fetched yet", "none_found": "No filing found"}
+
+
+def index_symbols() -> list[str]:
+    """The NIFTY 100's stocks: the exchange's list (the feed keeps it a day), kept as the last good one; the kept list when the
+    exchange doesn't answer, else none."""
+    kept = [x for x in db.json_value(db.get_setting(INDEX_KEY), []) if isinstance(x, str)]
+    try:
+        feed = _wire["feed"]() if _wire.get("feed") else None
+        got = [x for x in dict.fromkeys(str(x).upper() for x in feed.index_members(INDEX)) if SYMBOL.match(x)] if feed else []
+    except Exception:
+        got = []
+    if len(got) >= 90:
+        if got != kept:
+            db.set_setting(INDEX_KEY, json.dumps(got))
+        return got
+    return kept
+
+
+def index_coverage(today: date | None = None, symbols: list[str] | None = None) -> dict:
+    """Admin's coverage line for the NIFTY 100, from what is stored (nothing is read): how many have a business update read into
+    figures from a filing of the last COVER_DAYS days, and for each that hasn't, why: its newest update in that window was read
+    but gave no figure ("unreadable"), it files updates but the newest isn't read yet or it was never looked through ("not_fetched"),
+    or it was looked through and filed none in that window ("none_found")."""
+    today = today or datetime.now(IST).date()
+    cutoff = (today - timedelta(days=COVER_DAYS)).isoformat()
+    syms = index_symbols() if symbols is None else symbols
+    prime(syms)
+    rows = []
+    for sym in syms:
+        reads = [r for r in stored(sym).values() if not r.get("skip")]
+        recent = sorted((r for r in reads if (r.get("at") or "")[:10] >= cutoff), key=lambda r: r.get("at") or "", reverse=True)
+        c = checked(sym)
+        newest = max([str((c or {}).get("newest") or "")] + [(r.get("at") or "")[:10] for r in reads]) or None
+        if any(r.get("figures") and r.get("period") for r in recent):
+            why = None
+        elif recent:
+            why = "unreadable"
+        elif c is None or (newest and newest >= cutoff):
+            why = "not_fetched"
+        else:
+            why = "none_found"
+        rows.append({"symbol": sym, "why": why, "why_text": WHY.get(why or ""), "newest_filed": newest, "checked_at": (c or {}).get("at"),
+                     "problem": recent[0].get("problem") if why == "unreadable" else None})
+    counts = {k: sum(1 for r in rows if r["why"] == k) for k in WHY}
+    return {"index": INDEX, "days": COVER_DAYS, "as_of": today.isoformat(), "companies": len(rows), "covered": sum(1 for r in rows if r["why"] is None),
+            "counts": counts, "without": [r for r in rows if r["why"]],
+            "rule": f"Covered: a business update filed in the last {COVER_DAYS} days was read into figures checked against the filing."}
+
+
 def series_of(category: str, symbol: str | None = None, months: int = CHART_MONTHS, every: bool = False) -> dict:
     """The stored figures as a read API for other pages (themes, company pages): category -> company -> series. Each company's headline
     measure with its points ({"period", "value", "year_change", "url", "page", "exchange", "filed"}), the change on the previous
@@ -1096,7 +1153,7 @@ class Job:
         feed, docs_api, ai = _wire["feed"](), _wire["docs"](), _wire["ai"]() if _wire["ai"] else None
         since = (now.astimezone(IST) - timedelta(days=JOB_DAYS)).date().isoformat()
         symbols = sorted({s for v in SECTORS.values() for s, _ in v["symbols"]} | set(self.alert_symbols())
-                         | set(user_symbols()))
+                         | set(user_symbols()) | set(index_symbols()))      # and the NIFTY 100, so none of it stays "not looked at" (LO1-3)
         rows, read, problems = [], 0, []
         for sym in symbols:
             try:
@@ -1105,7 +1162,8 @@ class Job:
                 problems.append(f"{sym}: {e}")
                 continue
             try:
-                mark_checked(sym, len(updates(items)), now)
+                ups = updates(items)
+                mark_checked(sym, len(ups), now, max((u["at"] for u in ups), default=None))
             except Exception as e:                           # a store that can't be written leaves the company "not looked at", nothing else
                 problems.append(f"{sym}: {str(e)[:80]}")
             try:

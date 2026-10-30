@@ -5425,6 +5425,12 @@ def admin_biz_coverage(_=Depends(admin.admin_profile)):
     return biz_updates.coverage()
 
 
+@app.get("/admin/business-updates/index")
+def admin_biz_index(_=Depends(admin.admin_profile)):
+    """The NIFTY 100's business updates coverage line: how many have one read in the last 120 days, and why each other hasn't (LO1-3)."""
+    return biz_updates.index_coverage()
+
+
 @app.get("/admin/business-updates/reliability")
 def admin_biz_reliability(_=Depends(admin.admin_profile)):
     """Which sectors and companies read into checked figures, from the filings read so far."""

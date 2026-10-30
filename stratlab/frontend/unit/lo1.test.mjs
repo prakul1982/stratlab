@@ -20,3 +20,11 @@ test("LO1-2: the holder card shows the promoter/public split and says plainly wh
   assert.match(page, /\{\(any \|\| !f\.holding_unread\) && <Holding f=\{f\} \/>\}/);
   assert.match(read("src/lib/ipo.ts"), /holding_unread\?: boolean;/);
 });
+
+test("LO1-3: Admin → Data has the NIFTY 100's business updates coverage line, its reasons as a table", () => {
+  const panel = read("src/pages/admin/BizCoveragePanel.tsx");
+  assert.match(panel, /api<IndexCoverage>\("\/admin\/business-updates\/index"\)/);
+  for (const why of ["No filing found", "Filing unreadable", "Not fetched yet"]) assert.match(panel, new RegExp(`label: "${why}"`));
+  assert.match(panel, /have a business update read in the last \{cov\.days\} days/);
+  assert.match(read("src/pages/admin/DataSection.tsx"), /<BlogPanel \/>\s*<BizCoveragePanel \/>/);
+});

@@ -76,6 +76,8 @@ test("admin: a left menu with seven sections, each its own address, and the old 
 test("admin: the breadcrumb says Mine > Admin, and only an admin gets in", async ({ page }) => {
   const errors = await open(page, "/admin/data", "Background jobs");
   await expect(page.getByRole("navigation", { name: /breadcrumb/i }).getByText("Admin")).toBeVisible();
+  // the NIFTY 100's business updates coverage line, from what is stored (LO1-3)
+  await expect(page.getByTestId("adm-biz-coverage")).toContainText(/NIFTY 100(: \d+ of \d+ have a business update read in the last 120 days|'s list of stocks)/, { timeout: 30_000 });
   await sane(page, errors);
 });
 
