@@ -230,6 +230,9 @@ a.link { margin-inline: -2px; }
   scrollbar-width: thin; scrollbar-color: transparent transparent; }
 /* the scrollbar shows when the pointer is over the menu, and the edge with more behind it fades (Shell: data-fade) */
 .side-groups:hover, .side-groups:focus-within { scrollbar-color: var(--dash) transparent; }
+/* IA-2: the menu holds the hidden words of each section's button (sr-only, absolutely placed); placed against the menu, they scroll and
+   clip with it, instead of against the whole sidebar, where the ones below the fold made the sidebar itself scroll (89px at 1024x768) */
+.side-groups { position: relative; }
 .side-groups[data-fade="bottom"] { -webkit-mask-image: linear-gradient(#000 calc(100% - 32px), transparent); mask-image: linear-gradient(#000 calc(100% - 32px), transparent); }
 .side-groups[data-fade="top"] { -webkit-mask-image: linear-gradient(transparent, #000 24px); mask-image: linear-gradient(transparent, #000 24px); }
 .side-groups[data-fade="both"] { -webkit-mask-image: linear-gradient(transparent, #000 24px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(transparent, #000 24px, #000 calc(100% - 32px), transparent); }

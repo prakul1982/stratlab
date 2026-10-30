@@ -57,6 +57,8 @@ test("item 36: a disclosure button per section, the section you are in open, the
   const css = read("src/styles.css");
   assert.match(css, /\.side-list a\.in-section \{ color: var\(--ink\); font-weight: 600; \}/);
   assert.match(css, /\.side-list\.side-sub a \{ height: 28px;/);
+  // the buttons' hidden words are placed against the menu, so the sidebar itself never scrolls (e2e/screens.spec.ts at 1024x768)
+  assert.match(css, /\.side-groups \{ position: relative; \}/);
   assert.match(css, /@media \(pointer: coarse\) \{[^]*?\.side-list a, \.side-list\.side-sub a \{ height: 40px; \}/);
 });
 
