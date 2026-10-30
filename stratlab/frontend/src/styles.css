@@ -337,8 +337,11 @@ a.link { margin-inline: -2px; }
   .side-toggle { height: 32px; width: 32px; }
   .side-title { height: 32px; }
   .side-note { height: 32px; }
-  .mkt-btn { height: 36px; }
-  .side-more { min-height: 32px; }   /* IA-2: a menu with a section open can run past a phone's height, and this shows then */
+  .mkt-btn { height: 32px; }
+  .side-more { min-height: 32px; margin: 0; }   /* IA-2: a menu with a section open can run past a phone's height, and this shows then */
+  /* when it shows, it takes its own row (R34-013): the foot gives back 12px so a long menu still keeps most of a phone's height
+     (CI #323: a 390x844 drawer in India's market hours had 499px of menu, under the 504 the sidebar test asks for) */
+  .side-foot { padding: 4px 8px 6px; }
   .acct-btn { height: 44px; }
   .acct-pop [role="menuitem"] { height: 44px; }
   .acct-pop [role="menuitemradio"] { height: 44px; }
