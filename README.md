@@ -348,8 +348,8 @@ cd stratlab/frontend && npm run build && npm run ui-lint
 - **On live data:** **Check every feature** runs daily at 4:50 pm IST, and the whole-market audit checks every new
   listing. See [docs/ADMIN.md](docs/ADMIN.md).
 - **On GitHub** (`.github/workflows/tests.yml`, Node 22 and Python 3.11 on Ubuntu 24.04): the backend suite in parallel
-  and the frontend build side by side, then the browser tests on the built site and the UI checker (its own job, in strict mode);
-  a newer push cancels the run before it.
+  and the frontend build side by side, then the browser tests on the built site (six runners at once, each with an even share)
+  and the UI checker (its own job, in strict mode); a newer push cancels the run before it.
 - **Screenshots:** `npx playwright test -c scripts/docs-shots.config.ts` (from `stratlab/frontend`, after a build)
   retakes the README's pictures in `docs/screenshots` from the same fake world.
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Coachmark } from "./kit";
 
 /** One step: a short title and line, pointed at the real control it is about (the desktop menu's, then the phone's
- * top bar's). Four steps, the ones a newcomer needs; every page is also one search away. `menu`: on a phone the thing is
+ * top bar's). Five steps, the ones a newcomer needs; every page is also one search away. `menu`: on a phone the thing is
  * inside the menu, so the step opens the menu and points at it there (DI-023: every phone step pointed at the closed
  * menu button, so nothing being described was ever on screen). */
 type Step = { title: string; body: string; phone?: string; at: string[]; menu?: boolean };
@@ -22,6 +22,9 @@ export function tourSteps(main = "New notebook"): Step[] {
       phone: "Type a company, a page or an idea, like \"test RSI below 30 on NIFTY\". The magnifier at the top opens it from any page." },
     { title: "Start here", at: [".sidebar .side-new", `.topbar [aria-label='${main}']`],
       body: `This space's main button. ${what}` },
+    // IA-1: the menu is a few entries, each a page of tabs; the pages people knew by name are its tabs, and search finds them by either name
+    { title: "One page for each job", at: [".sidebar .side-groups"], menu: true,
+      body: "Each entry in the menu is one page, with the tools that belong together as its tabs: Find stocks holds the screener, the trend scan and the red flags; Calendar holds results, dividends, IPOs, market events and your money dates." },
     // the button is named Account (with the plan beside it), the theme is in Settings, not in this menu (DI-023), and "Take the tour" is in this
     // menu (LIVE1B-045: "the button with your email's first part", and "Take the tour there" with no tour button in Settings)
     { title: "Your account", at: [".sidebar .acct-btn"], menu: true,

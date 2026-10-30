@@ -63,6 +63,18 @@ def test_tell_me_when_plans_open_is_per_person_once_and_counted_for_admin(w):
     assert plan_interest.count() == 1
 
 
+def test_admins_count_of_the_list_is_read_again_when_someone_joins_or_leaves(w):
+    """Overview's counts are kept 45 seconds; someone joining or leaving the list reads them again, so Admin's count is
+    never the one from before (the browser test saw 0 after joining when Overview had just been opened)."""
+    c, H = w["client"], w["headers"]
+    free, admin = H("free-token"), H("admin-token")
+    before = c.get("/admin/overview", headers=admin).json()["stats"]["plan_interest"]        # the counts are now kept
+    c.put("/me/plan-interest", headers=free, json={"source": "lock"})
+    assert c.get("/admin/overview", headers=admin).json()["stats"]["plan_interest"] == before + 1
+    c.delete("/me/plan-interest", headers=free)
+    assert c.get("/admin/overview", headers=admin).json()["stats"]["plan_interest"] == before
+
+
 def test_the_list_goes_with_the_persons_data(w):
     from app import plan_interest, user_data
     c, H = w["client"], w["headers"]

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { aboutLine, chargedInRupees, money, usePricing } from "../lib/currency";
+import { aboutUsd, usdNote, usePricing } from "../lib/currency";
 import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 import { FEATURES, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
 import { signIn } from "../lib/signin";
@@ -499,35 +499,23 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
   );
 }
 
-/** The three plans, priced in the visitor's currency (rupees in India), with the same lines as the Plans page. One look in
- * every case: while the prices are coming the cards are drawn with their amounts held back (so nothing flashes rupees and
- * then changes, and nothing moves), and if they can't be read the cards show the rupee prices with a line saying so. */
+/** The three plans, priced in rupees (the currency every card is charged in) with the dollar figure beside each price (item 34,
+ * owner 29 Oct: "₹699 a month (about $8)", whatever the browser's locale; LIVE1B-078 had an en-US browser read "$8" alone), with the
+ * same lines as the Plans page. One look in every case: while the prices are coming the cards are drawn with their amounts held back
+ * (so nothing flashes and then changes, and nothing moves), and if they can't be read the cards show the rupee prices with a line saying so. */
 function Pricing({ top }: { top?: { heading: string; error: string | null } } = {}) {
-  const { pricing, currency, pick, status, offerRupees } = usePricing();
+  const { pricing, status, rate } = usePricing();
   const loading = status === "loading";
   // what's on sale today comes from the server (plans.offer_state), the same answer the Plans page reads
   const offer = pricing?.offer ?? null;
-  const local = currency !== "INR" ? pricing?.currencies[currency] : undefined;
   const rupees = (p: PlanId, year = false) => `₹${PRICE[p][year ? 1 : 0].toLocaleString("en-IN")}`;
-  /** The amount in the visitor's currency: the admin price table's ($8 and $20 for dollars). */
-  const amount = (p: PlanId, year = false): number => {
-    if (p === "free") return 0;
-    if (!local) return PRICE[p][year ? 1 : 0];
-    return (local as unknown as Record<string, number>)[year ? `${p}_year` : p];
-  };
-  /** Whether this card is really charged in rupees though the visitor's currency is another: then the rupee price is its main
-   * price and the visitor's currency an "about" beside it (DK-001). A currency with its own plan keeps its fixed price. */
-  const inRupees = (p: PlanId, year = false) => p !== "free" && chargedInRupees(local, currency, year ? local?.yearly_charged_in : local?.charged_in);
-  // Free is in the money the paid cards are charged in ("₹0 always" beside "₹699 / month, about ¥1,158"), LIVE2-013
-  const price = (p: PlanId, year = false) => (p === "free" ? (inRupees("basic", year) ? rupees(p, year) : local ? money(local, 0, currency) : rupees(p, year))
-    : inRupees(p, year) ? rupees(p, year) : local ? money(local, amount(p, year), currency) : rupees(p, year));
   const intro = pricingIntro(offer, LIMITS.pro, "landing");
   const [period, setPeriod] = useState<"month" | "year">("month");
-  // the fine print's yearly prices are the ones a card shows (rupees where it is charged in rupees, so it never lists two amounts)
-  const yearly = (p: PlanId) => price(p, true);
+  // the fine print's yearly prices are the ones a card shows
+  const yearly = (p: PlanId) => rupees(p, true);
   // "incl. GST" only while the invoices carry GST (the seller's GSTIN is set); nothing speaks of it before (R7M-001)
   const gst = pricing?.invoice?.gst === true;
-  const small = finePrint(offer, { currency: local ? currency : "INR", inRupees: local?.charged_in === "INR", inRupeesYear: local?.yearly_charged_in === "INR",
+  const small = finePrint(offer, { currency: "INR", inRupees: false, inRupeesYear: false,
     year: { basic: yearly("basic"), pro: yearly("pro") }, charged: { basic: rupees("basic"), pro: rupees("pro") },
     gst });
   const showYear = !!(offer?.yearly && offer.payments);
@@ -555,28 +543,19 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
             <Seg label="Billing period" value={period} onChange={(v) => setPeriod(v as "month" | "year")}
               options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
           ) : loading ? <span className="lp-skel lp-skel-seg" /> : <span className="small muted">Prices are per month</span>}
-          {/* the currency, as the signed-in Plans page offers it (R65-004: an Indian visitor whose browser says en-US saw only
-              dollars, with no way to pick rupees) */}
-          {/* there from the first frame (disabled until the prices come), so nothing below moves when they arrive (R5V-006) */}
-          <label className="small muted lp-currency">Prices in{" "}
-            <select className="k-input" value={currency} onChange={(e) => pick(e.target.value)} aria-label="Prices in" disabled={!pricing}>
-              {pricing ? Object.entries(pricing.currencies).map(([c, r]) => <option key={c} value={c}>{c} · {r.name}</option>)
-                : <option value={currency}>{currency}</option>}
-            </select>
-          </label>
-          {offerRupees && !loading && <button type="button" className="link-btn inr-pick small" onClick={() => pick("INR")}>In India? Show prices in ₹</button>}
+          {/* no currency picker (item 34): rupees, with the dollar beside each price, for every visitor */}
         </div>
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {
             const year = showYear && period === "year" && p !== "free";
             const act = landingAction(offer, p);
             const per = showYear && period === "year" ? "year" : "month";     // Free's $0 follows the switch too (R17-001)
-            const rupeeCard = inRupees(p, year);
-            // a year's saving in the unit the card shows: rupees where it is charged in rupees (DK-001), else the currency's own
-            const save = p !== "free" && year ? (rupeeCard ? yearlySaving(PRICE[p][0], PRICE[p][1]) : yearlySaving(amount(p), amount(p, true))) : null;
-            const saveText = save == null ? "" : rupeeCard ? `₹${save.toLocaleString("en-IN")}` : money(local, save, currency);
-            // the rupee charge in the visitor's currency, whole units, beside the rupee price (R8O-006, DK-001)
-            const about = rupeeCard && local ? aboutLine(local, currency, (year ? `${p}_year` : p) as "basic" | "pro" | "basic_year" | "pro_year") : null;
+            // a year's saving in rupees, with its dollar figure
+            const save = p !== "free" && year ? yearlySaving(PRICE[p][0], PRICE[p][1]) : null;
+            const saveText = save == null ? "" : `₹${save.toLocaleString("en-IN")} (${aboutUsd(save, rate)})`;
+            // the rupee price in dollars, whole units, at the app's USD/INR rate, beside it (item 34)
+            const inr = PRICE[p][year ? 1 : 0];
+            const about = inr > 0 ? aboutUsd(inr, rate) : null;
             return (
               <div key={p} className={`lp-card lp-price${p === "pro" ? " lp-price-top" : ""}`} data-plan={p}>
                 <div className="stack g2">
@@ -586,14 +565,14 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                 <div className="stack g2">
                   {loading ? <span className="lp-skel lp-skel-amount" role="img" aria-label="Loading the price" /> : (
                     <div className="lp-amount-row">
-                      <div className="serif lp-amount">{price(p, year)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
+                      <div className="serif lp-amount">{rupees(p, year)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
                       {about && <span className="small muted" data-testid={`about-${p}`}>{about}</span>}
                     </div>
                   )}
                   {p !== "free" && (
                     <span className="small lp-price-note">
                       {loading ? <span className="lp-skel lp-skel-note" />
-                        : (rupeeCard || !local) && gst ? "incl. GST" : ""}
+                        : gst ? "incl. GST" : ""}
                       {!loading && save != null && <span className="lp-save">{`Saves ${saveText} a year against paying monthly`}</span>}
                     </span>
                   )}
@@ -609,7 +588,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
           })}
         </div>
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
-        {loading ? <span className="lp-skel lp-skel-fine" /> : small.length > 0 && <p className="small muted k-measure m80">{small.join(" ")}</p>}
+        {loading ? <span className="lp-skel lp-skel-fine" /> : <p className="small muted k-measure m80" data-testid="usd-note">{[...small, usdNote(rate, pricing?.usd_inr?.fallback)].join(" ")}</p>}
       </div>
     </section>
   );

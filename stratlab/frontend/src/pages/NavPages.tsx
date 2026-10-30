@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import { Card, EmptyState, PageHeader } from "../components/kit";
 import { PageTags } from "../components/PageTags";
 import { TileGrid } from "../components/TileGrid";
-import { NAV, SPACE_LIST, groupPath, locateGroup, type NavPage } from "../lib/nav";
+import { ALL_GROUPS, NAV, SPACE_LIST, groupPath, locateGroup, type NavPage } from "../lib/nav";
 import { MINE_NAME } from "../lib/spaces";
 
 /* The two pages that list the menu as cards: a group's own page (/trade/g/practise, from the group's title in the sidebar)
@@ -15,7 +15,7 @@ function FeatureCard({ page }: { page: NavPage }) {
   return (
     <Card testId="group-card">
       <div className="nav-card">
-        <h2 className="k-card-title"><Link to={page.to}>{page.label}</Link></h2>
+        <h2 className="k-card-title"><Link to={page.to}>{page.label}</Link>{page.was && <span className="k-note k-muted nav-was"> was {page.was}</span>}</h2>
         <p className="nav-card-line">{page.blurb}</p>
         <div className="nav-card-foot">
           <Link className="btn quiet sm" to={page.to} aria-label={`Open ${page.label}`}>Open</Link>
@@ -26,11 +26,13 @@ function FeatureCard({ page }: { page: NavPage }) {
   );
 }
 
-/** /trade/g/<group>, /invest/g/<group>, /money/g/<group>: one card for each page in the group. */
+/** /trade/g/<entry>, /invest/g/<entry>, /money/g/<entry>: one card for each tab of a menu entry. An old group's address
+ * (IA-1: /trade/g/build-and-test) moves to the entry that took it over. */
 export function GroupPage() {
   const { pathname } = useLocation();
   const g = locateGroup(pathname);
   if (!g) return <Navigate to="/features" replace />;
+  if (pathname.replace(/\/$/, "") !== groupPath(g.space, g.group)) return <Navigate to={groupPath(g.space, g.group)} replace />;
   return (
     <div className="stack nav-page" data-testid="group-page" data-group={g.group.id}>
       <PageHeader eyebrow={`${NAV[g.space].label} · ${g.group.label}`} title={g.group.label} lede={g.group.blurb} />
@@ -45,7 +47,9 @@ export function GroupPage() {
  * Settings, Account, Plans, Help, Contact and the assistant were missing). */
 const MINE_PAGES: { to: string; label: string; line: string }[] = [
   { to: "/mine", label: MINE_NAME, line: "Your net worth, today's change, the markets, what is coming up and your watchlist, in the order you choose." },
-  { to: "/news", label: "Briefs", line: "A short brief after each market close, for India, the US and the companies you follow." },
+  { to: "/news", label: "Today's brief", line: "A short brief after each market close, for India, the US and the companies you follow." },
+  { to: "/research/watchlist", label: "Watchlist", line: "The companies you follow, and the Alerts tab: a message when a stock or the market does what you asked about." },
+  { to: "/calendar", label: "Calendar", line: "Results, corporate actions, IPO dates, market events and your own money dates, day by day." },
   { to: "/settings#accounts", label: "Connected accounts", line: "Your broker's holdings file and tradebooks, your funds statement, the statements inbox, and the connections that update them by themselves: Zerodha, IBKR, EPF, NPS and the tax statement." },
   { to: "/settings", label: "Settings", line: "Where alerts and emails go, what you see first, the theme and the connection check." },
   { to: "/account", label: "Account", line: "Your profile, plan, usage, invoices, how you sign in and your data." },
@@ -67,16 +71,17 @@ const HOME_LINE: Record<string, string> = {
 export function FeaturesPage() {
   const [q, setQ] = useState("");
   const t = q.trim().toLowerCase();
-  const has = (p: { label: string; line: string; words?: string }) => !t || `${p.label} ${p.line} ${p.words ?? ""}`.toLowerCase().includes(t);
+  const has = (p: { label: string; line: string; words?: string; was?: string }) => !t || `${p.label} ${p.line} ${p.words ?? ""} ${p.was ?? ""}`.toLowerCase().includes(t);
   const spaces = useMemo(() => SPACE_LIST.map((s) => ({
     id: s, label: NAV[s].label, home: NAV[s].home,
     homeShown: has({ label: `${NAV[s].label} home`, line: HOME_LINE[s] }),
-    groups: NAV[s].groups.map((g) => ({ g, pages: g.pages.filter(has) })).filter((x) => x.pages.length),
+    // each entry once: the Calendar every space shares is listed under Invest, where its own page is
+    groups: ALL_GROUPS.filter((x) => x.space === s).map(({ group: g }) => ({ g, pages: g.pages.filter((p) => has(p) || has({ label: g.label, line: g.blurb })) })).filter((x) => x.pages.length),
   })).filter((s) => s.groups.length || s.homeShown), [t]);   // eslint-disable-line react-hooks/exhaustive-deps
   const mine = MINE_PAGES.filter(has);
   return (
     <div className="stack nav-page" data-testid="features-page">
-      <PageHeader title="All features" lede="Every page in StratLab by space and group, with what it is for in a line. Press Ctrl K or ⌘K to go to any of them by name." />
+      <PageHeader title="All features" lede="Every page in StratLab by space and menu entry, with what it is for in a line. Press Ctrl K or ⌘K to go to any of them by name." />
       <div className="k-field wide">
         <input className="k-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Narrow the list: a page, or a word like “tax” or “options”" aria-label="Narrow the list of features" />
       </div>
@@ -98,7 +103,7 @@ export function FeaturesPage() {
               <h3 className="feat-group-title"><Link to={groupPath(s.id, g)}>{g.label}</Link></h3>
               <ul className="feat-list">
                 {pages.map((p) => (
-                  <li key={p.to}><Link to={p.to}><b>{p.label}</b></Link><PageTags page={p} /><span className="feat-line">{p.line}</span></li>
+                  <li key={p.to}><Link to={p.to}><b>{p.label}</b></Link>{p.was && <span className="k-note k-muted"> was {p.was}</span>}<PageTags page={p} /><span className="feat-line">{p.line}</span></li>
                 ))}
               </ul>
             </section>

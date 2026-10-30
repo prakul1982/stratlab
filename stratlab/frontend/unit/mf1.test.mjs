@@ -43,9 +43,11 @@ test("RC2B-047: every fact the page showed is still reachable", () => {
   // costs: plan, TER and its date, both plans, the gap a year, since you bought, category changes, the parts of the TER
   for (const w of ["Direct plan TER", "Regular plan TER", "Gap a year", "TER since you bought", "Category changed on", "Parts of the TER", "Not in the TER disclosure yet"]) assert.ok(costs.includes(w), w);
   // behaviour: the period, gap in rupees, IDCW and short-span notes, the SIP record, the redemptions after a fall
-  for (const w of ["Compared over", "Gap in ₹", "IDCW option", "Under a year", "SIP record.", "Redemptions after a fall of", "those units today"]) assert.ok(behaviour.includes(w), w);
+  // TABLE-SWEEP: the scheme's story is a table of facts and the redemptions after a fall a table of their own, named after the scheme
+  for (const w of ["Compared over", "Gap in ₹", "IDCW option", "Under a year", "SIP record", "Redemptions after a fall of", "Those units today"]) assert.ok(behaviour.includes(w), w);
   // the totals are one block: stats once, the explanations behind one fold
-  assert.match(page, /<CostStats q=\{costs\} \/><BehaviourStats q=\{habits\} \/>/);
+  // TABLE-SWEEP: the totals are rows of one table (they were two rows of tiles)
+  assert.match(page, /rows=\{\[\.\.\.costFigures\(costs\), \.\.\.behaviourFigures\(habits\)\]\}/);
   assert.match(page, /summary="How this is worked out"/);
   // the by-category mix sits in the card of the totals (it was a card of its own)
   assert.doesNotMatch(page, /<CardHead title="By category"/);
@@ -88,7 +90,7 @@ test("RC2B-045: one US stock's value is its row's, not said again above the tabl
 
 test("RC2B-046: Tax tools' dividend card says the Indian total only when there is a US one beside it", () => {
   const t = read("src/pages/money/TaxToolsPage.tsx");
-  assert.match(t, /\{y\.us && <Stat label="Indian companies"/);
+  assert.match(t, /\.\.\.\(y\.us \? \[\{ key: "india", label: "Indian companies"/);          // TABLE-SWEEP: a row of the dividends table
   assert.match(t, /!y\.us \? \(y\.tds\.threshold != null/);
   assert.equal((t.match(/<CardHead title="Your dividends"/g) ?? []).length, 1);          // only when there is no year to show
 });

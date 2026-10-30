@@ -104,7 +104,7 @@ Time zones: **a market's times are in the market's own zone, with the zone's nam
 - **Names start with the visible words** ("owner Pro plan, account menu"); add words after, in `.sr-only`, rather than an `aria-label` that says something else.
 - **A table column with no heading** (Edit buttons) still gets one for screen readers: `DataTable` writes "Actions".
 - **Space for late cards:** a card that arrives after the page should not push what's already on screen. Give its loading state the height it will have (`Skeleton` lines, a `min-height`), or keep the cards below it waiting (Holdings does this for its dividends card).
-- `e2e/a11y.spec.ts` runs axe-core on the main pages (serious and critical problems fail) and checks the keyboard behaviour above.
+- `e2e/a11y-axe.spec.ts` runs axe-core on the main pages (serious and critical problems fail) and `e2e/a11y.spec.ts` checks the keyboard behaviour above.
 
 ## Drawing tools on the price chart
 

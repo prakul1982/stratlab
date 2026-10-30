@@ -353,10 +353,16 @@ def blog_posts():
     from app.data.calendar import is_trading_day
     from app.newsletter import job
     for region in ("IN", "US"):
-        day, got = date.today(), 0
+        day, got, start = date.today(), 0, date.today()
         while got < 3:
             if is_trading_day(region, day):
                 issue = job.build_market(region, day, False, store=False)
+                # a day the fake world has no close for yet (today, before its market shuts: from midnight UTC until India's
+                # close) makes a brief with no index figures; the briefs are the last three days that closed (e2e/fix2.spec.ts
+                # failed in those hours on a brief with no Indices table)
+                if issue and not issue.get("indices") and (start - day).days < 10:
+                    day -= timedelta(days=1)
+                    continue
                 if issue:
                     blog.save_brief(issue)
                     if got == 0:

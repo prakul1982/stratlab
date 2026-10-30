@@ -120,20 +120,21 @@ test("R8O-007: a page whose code never arrives says so after 15 seconds, with Re
   expect(errors).toEqual([]);
 });
 
-test("R8O-006: a euro price charged in rupees says that charge in euros, and the note says the actual difference", async ({ page }) => {
+test("R8O-006, item 34: a visitor who once chose euros sees the rupee charge with its dollar figure, and the note says the rate", async ({ page }) => {
   await page.route(`${API}/me`, edited(onSale));
   await page.route(`${API}/pricing`, edited((j) => onSale({
     ...j, invoice: { gst: true },
     currencies: { ...j.currencies, EUR: { symbol: "€", name: "Euro", basic: 8, pro: 19, basic_year: 80, pro_year: 190, charged_in: "INR", yearly_charged_in: "INR",
       converted: false, charge_about: { basic: 6.44, pro: 18.43, basic_year: 64.53, pro_year: 184.39 } } },
-    countries: { ...j.countries, DE: "EUR" } })));
+    countries: { ...j.countries, DE: "EUR" }, usd_inr: { rate: 90, fallback: false } })));
+  // changed on purpose by item 34 (owner, 29 Oct): rupees first, the dollar beside them, whatever was chosen on this device before
   const errors = await open(page, "/plans", visitor, { "stratlab.currency": "EUR" });
-  // DK-001: the rupee price is the card's main price, with the euros beside it as "about"
-  await expect(page.getByTestId("about-basic")).toHaveText("about €6 at today's rate", { timeout: 30_000 });
-  await expect(page.getByTestId("about-pro")).toHaveText("about €18 at today's rate");
+  await expect(page.getByTestId("about-basic")).toHaveText("about $8", { timeout: 30_000 });
+  await expect(page.getByTestId("about-pro")).toHaveText("about $22");
   await expect(page.locator(".k-plan-price").nth(1)).toContainText("₹699");
   const main = page.locator("main");
-  await expect(main).toContainText("about €6 for Basic and €18 for Pro at today's rate");
+  await expect(main.getByTestId("usd-note")).toContainText("at ₹90 to the dollar (today's rate)");
+  await expect(main).not.toContainText("€");
   await expect(main).not.toContainText("can differ slightly");
   expect(errors).toEqual([]);
 });
@@ -152,7 +153,7 @@ test("R8O-009: a lazy page's tab has its title before its code arrives", async (
   const held = new Promise<void>((ok) => { release = ok; });
   await page.route(/\/assets\/Research-[A-Za-z0-9_-]+\.js$/, async (r) => { await held; return r.fallback(); });
   const errors = await open(page, "/research/rotation");
-  await expect(page).toHaveTitle("Sector rotation · StratLab", { timeout: 15_000 });
+  await expect(page).toHaveTitle("Sectors · Market today · StratLab", { timeout: 15_000 });          // IA-1: Market today's Sectors tab (was Sector rotation)
   release();
   expect(errors).toEqual([]);
 });

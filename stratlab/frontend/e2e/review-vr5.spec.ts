@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // VR-5 (28 Oct 2026): what a harsh phone-first visual review found, checked on the drawn pages. Each test sets its own width (390 or 360),
 // so it is the same on the desktop and phone projects.
@@ -21,13 +21,13 @@ const noSideways = async (page: Page) => {
   expect(scroll, "the page scrolls sideways").toBeLessThanOrEqual(width + 1);
 };
 
-test("VR5-006: Holdings' four totals go two across on a phone, and the breadth card's three go 2 + 1, not one under another", async ({ page }) => {
+test("VR5-006: Holdings' four totals are one table on a phone, and the breadth card's three go 2 + 1, not one under another", async ({ page }) => {
   await open(page, "/holdings", ADMIN, 390);
-  const stats = page.locator("#h-summary .k-stats");
-  await expect(stats).toBeVisible({ timeout: 30_000 });
-  await expect(stats).toHaveClass(/\bduo\b/);
-  const tops = await stats.locator(".k-stat").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-  expect([...new Set(tops)].length, `tops ${tops}`).toBe(2);
+  // TABLE-SWEEP (owner, 29 Oct): the four totals are rows of one table now (they were four tiles, two across on a phone)
+  const totals = page.locator("#h-summary").getByRole("table", { name: "Where your stocks stand" });
+  await expect(totals).toBeVisible({ timeout: 30_000 });
+  await expect(totals.locator("tbody tr")).toHaveCount(4);
+  await noSideways(page);
   await page.goto("/invest");
   const card = page.getByTestId("breadth-card");
   await expect(card).toBeVisible({ timeout: 30_000 });
@@ -120,14 +120,23 @@ test("VR5-014: Net worth's 'Add an entry' kinds are short rows on a phone (the p
 });
 
 // VR5-owner-1 (the owner's choice for VR4-016): the Invest home's watchlist shows its first six stocks and "See all" for the rest
+// The two watchlist tests set the watchlist of a Pro user of the fake database, one per project: on the owner's own list the desktop and
+// phone runs (two workers at once) set it under each other, so the phone one saw the other's three stocks, not its eight.
+async function watcher(request: APIRequestContext, phone: boolean, API: string) {
+  const n = phone ? 89 : 83;
+  const head = { Authorization: `Bearer load-${n}` };
+  await request.put(`${API}/me/prefs`, { headers: head, data: { focus: "both", level: "some", space: "all" } });
+  return { head, who: session(`load-${n}`, `u-load-${n}`, `load${n}@example.com`) };
+}
+
 test("VR5-owner-1: the Invest home's watchlist card shows six of a longer list, with See all to the full watchlist, and ends near its neighbour column", async ({ page, request }, info) => {
   const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
-  const head = { Authorization: "Bearer admin-token" };
+  const { head, who } = await watcher(request, info.project.name === "phone", API);
   const before = await (await request.get(`${API}/research/watchlist`, { headers: head })).json();
   const eight = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ITC", "SBIN", "WIPRO", "AXISBANK"].map((symbol) => ({ region: "IN", symbol }));
   try {
     await request.put(`${API}/research/watchlist`, { headers: head, data: { items: eight } });
-    await open(page, "/invest", ADMIN, info.project.name === "phone" ? 390 : 1440);
+    await open(page, "/invest", who, info.project.name === "phone" ? 390 : 1440);
     const card = page.locator(".k-card", { has: page.getByRole("heading", { name: "Your watchlist" }) });
     await expect(card.locator(".inv-tile").first()).toBeVisible({ timeout: 30_000 });
     await expect(card.locator(".inv-tile")).toHaveCount(6);
@@ -149,13 +158,13 @@ test("VR5-owner-1: the Invest home's watchlist card shows six of a longer list, 
   }
 });
 
-test("VR5-owner-1: a list of six or fewer has no See all", async ({ page, request }) => {
+test("VR5-owner-1: a list of six or fewer has no See all", async ({ page, request }, info) => {
   const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
-  const head = { Authorization: "Bearer admin-token" };
+  const { head, who } = await watcher(request, info.project.name === "phone", API);
   const before = await (await request.get(`${API}/research/watchlist`, { headers: head })).json();
   try {
     await request.put(`${API}/research/watchlist`, { headers: head, data: { items: ["RELIANCE", "TCS", "INFY"].map((symbol) => ({ region: "IN", symbol })) } });
-    await open(page, "/invest", ADMIN, 390);
+    await open(page, "/invest", who, 390);
     await expect(page.locator(".inv-tile").first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId("watch-see-all")).toHaveCount(0);
   } finally {

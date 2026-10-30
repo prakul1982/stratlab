@@ -56,9 +56,9 @@ test("RC2A-010: a lock names the rupee price a plan is charged, the local amount
     JPY: { symbol: "¥", name: "Yen", basic: 1150, pro: 3300, basic_year: 11500, pro_year: 33000, charged_in: "INR", yearly_charged_in: "INR",
       charge_about: { basic: 1155, pro: 3305, basic_year: 11550, pro_year: 33050 } },
     USD: { symbol: "$", name: "Dollar", basic: 8, pro: 24, basic_year: 80, pro_year: 240, charged_in: "USD", yearly_charged_in: "USD" } } };
-  assert.equal(planPriceLine("basic", p, "JPY"), "Basic is ₹699 a month or ₹6,999 a year, paid in rupees (about ¥1,155 or ¥11,550 at today's rate).");
-  assert.equal(planPriceLine("basic", p, "USD"), "Basic is $8 a month or $80 a year.");
-  assert.equal(planPriceLine("basic", p, "INR"), "Basic is ₹699 a month or ₹6,999 a year.");
+  // item 34: whatever the browser's currency, the rupee price the card is charged, with the dollar figure at the app's rate beside it
+  assert.equal(planPriceLine("basic", p), "Basic is ₹699 a month (about $8) or ₹6,999 a year (about $80).");          // no rate read: the fixed ₹88
+  assert.equal(planPriceLine("basic", { ...p, usd_inr: { rate: 95.21 } }), "Basic is ₹699 a month (about $7) or ₹6,999 a year (about $74).");
 });
 
 test("RC2A-021, 022: a scan says which price its rows hold", () => {

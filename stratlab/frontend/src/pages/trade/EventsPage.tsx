@@ -201,7 +201,7 @@ export function EventsPage() {
 
   return (
     <div className="k-page ev-page">
-      <PageHeader eyebrow="Trade · F&O desk" title="Market events"
+      <PageHeader eyebrow="Trade · Calendar" title="Market events"
         lede="RBI policy, India's data releases, the US Fed and US data, index changes, F&O expiries and exchange holidays on one calendar. The repo rate, the Fed's range and India's CPI, IIP and GDP once published; the US reports as dates with a link. Never a forecast. Facts, not advice."
         info={v ? <span data-testid="ev-asof">{v.sources.map((s) => `${s.label} ${s.as_of ? `as of ${asOf(s.as_of)}` : "not read yet"}${s.failed ? " (couldn't be refreshed since)" : ""}`).join(" · ")}</span> : undefined}
         infoLabel="Where this comes from" />

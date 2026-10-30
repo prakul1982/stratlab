@@ -161,8 +161,9 @@ test("LIVE1B-017: a total with nothing to say is left out of the costs and habit
   assert.match(c, /export const costStatsShown = \(q: CostsQuery\) => q\.c\?\.state === "ok" && !!q\.c\.total && q\.c\.total\.funds > 0;/);
   const b = read("src/pages/money/FundBehaviour.tsx");
   assert.match(b, /return \{ gap: t\.compared > 0, sips: \(t\.sips \?\? 0\) > 0, falls: b\.pending > 0 \|\| \(t\.falls \?\? 0\) > 0, held: t\.avg_days_held != null, long: t\.long_share != null \};/);
-  assert.match(b, /\{parts\.sips && <Stat label="SIPs"/);
-  assert.match(read("src/pages/money/MutualFundsPage.tsx"), /\{\(costStatsShown\(costs\) \|\| behaviourStatsShown\(habits\)\) && <StatRow>/);
+  // TABLE-SWEEP: the costs and habits are rows of one table now, each row only when it has something to say
+  assert.match(b, /if \(parts\.sips\) out\.push\(\{ key: "sips", label: "SIPs"/);
+  assert.match(read("src/pages/money/MutualFundsPage.tsx"), /\{\(costStatsShown\(costs\) \|\| behaviourStatsShown\(habits\)\) && <FigureTable label="What your funds cost, and how you invested"/);
 });
 
 test("LIVE1B-064: the footer date is the day it was worked out, not a second 'as of'", () => {
@@ -237,10 +238,10 @@ test("LIVE1B-060, 061: the add-a-trade form says what is wrong under each box", 
 test("LIVE1B-028: the ITR page's answers are tiles, its other figures a list, its schedules one card, its sources a fold", () => {
   const p = read("src/pages/money/ItrExportPage.tsx");
   assert.match(p, /const HEADLINE = \/\^\(Total tax estimate\|Payable now\)\/;/);
-  assert.match(p, /<dl className="k-dl figs" aria-label="The year's figures">/);
+  assert.match(p, /<FigureTable label="The year's figures"/);          // TABLE-SWEEP: one table, not two columns of rows
   assert.match(p, /<ul className="k-fold-rows" aria-label="Schedules with lines">/);
   assert.match(p, /<Disclosure summary="Where the figures come from, and the assumptions">/);
-  assert.match(read("src/styles.css"), /\.k-dl\.figs > div \{ flex-direction: row; justify-content: space-between;/);
+  assert.doesNotMatch(read("src/styles.css"), /\.k-dl\.figs/);          // TABLE-SWEEP: the rows-of-pairs list is gone with it
 });
 
 test("LIVE1B-029: dividends left out of the total are said beside it", () => {

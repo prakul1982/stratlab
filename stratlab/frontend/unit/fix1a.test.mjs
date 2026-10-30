@@ -147,7 +147,7 @@ test("LIVE1A-066: /plans carries its plans as structured data and as plain text"
 
 test("LIVE1A-003/010/056/057/058: the new-idea page and the builder's brokerage default", async () => {
   const h = read("src/pages/Home.tsx");
-  assert.match(h, /hide=\{\[\.\.\.hide, "import", "library"\]\}/);
+  assert.match(h, /hide=\{\[\.\.\.hide, "\/import", "\/library"\]\}/);          // IA-1: Explore hides pages by their address
   assert.doesNotMatch(h, /useEffect\(\(\) => \{ if \(where\.market\) try \{ localStorage\.setItem\(LAST_MARKET/);
   const { riskForCurrency, blankStrategy, noRuleNote } = await import("../src/lib/rules.ts");
   const r = blankStrategy().risk;

@@ -157,10 +157,11 @@ test("my space: the menu has My space, Pinned, Briefs, Watchlist, Stock alerts, 
   await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "My space" })).toHaveAttribute("aria-pressed", "true");
   await expect(side.getByRole("link", { name: "My space" })).toHaveClass(/active/);
   await expect(side.locator('[data-group="pinned"]')).toContainText("Nothing pinned yet");
-  await expect(side.getByRole("link", { name: "Briefs" })).toHaveAttribute("href", "/news");
+  await expect(side.getByRole("link", { name: "Today's brief" })).toHaveAttribute("href", "/news");
   await expect(side.getByRole("link", { name: "Connected accounts" })).toHaveAttribute("href", "/settings#accounts");
   await expect(side.getByRole("link", { name: "Watchlist" })).toHaveAttribute("href", "/research/watchlist");
-  await expect(side.getByRole("link", { name: "Stock alerts" })).toHaveAttribute("href", "/alerts");
+  // IA-1: Stock alerts is the Watchlist entry's Alerts tab; the one Calendar is in My space's menu too
+  await expect(side.getByRole("link", { name: "Calendar" })).toHaveAttribute("href", "/calendar");
   await expect(side.getByRole("link", { name: "Settings", exact: true })).toHaveAttribute("href", "/settings");
   // the assistant only for a plan that has it, not as a locked upsell (DI-018)
   const feats = (await (await request.get(`${API}/me`, { headers: auth(u) })).json()).plan_info.features;
@@ -171,11 +172,12 @@ test("my space: the menu has My space, Pinned, Briefs, Watchlist, Stock alerts, 
   await page.goto("/invest/margin-funding");
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(crumb.getByRole("link", { name: "Invest", exact: true })).toHaveAttribute("href", "/invest");
-  await expect(crumb.getByRole("link", { name: "Market view" })).toHaveAttribute("href", "/invest/g/market-view");
+  await expect(crumb.getByRole("link", { name: "Market data" })).toHaveAttribute("href", "/invest/g/market-data");
   await crumb.getByRole("button", { name: /Margin funding/ }).click();
   const menu = page.getByRole("menu", { name: /Pages near Margin funding/ });
-  await expect(menu.getByRole("menuitem")).toHaveText(["Market pulse", "Market breadth", "Sector rotation", "ETF vs NAV", "Margin funding", "Stock lending fees", "All of Market view", "Pin to sidebar"]);
-  await expect(menu.getByRole("menuitem", { name: "Margin funding" })).toHaveAttribute("aria-current", "page");
+  // IA-1: on a laptop the neighbours are the row of tabs beside the trail, so its menu is the pin; on a phone it lists the tabs too
+  await expect(menu.getByRole("menuitem")).toHaveText(phone ? ["ETF vs NAV", "Margin funding", "Stock lending fees", "Pin to sidebar"] : ["Pin to sidebar"]);
+  await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "Margin funding" })).toHaveAttribute("aria-current", "page");
   await menu.getByRole("menuitem", { name: "Pin to sidebar" }).click();
   await expect(menu).toHaveCount(0);
   // Mine's menu lists it, and opening it keeps Mine's menu

@@ -37,7 +37,8 @@ test("rev10b: section 234B says whether it has stopped or is still growing", asy
   assert.equal(b234Note({ months: 7, until: "2026-10-15", to_today: true, unpaid: 50000, self_assessment: 50000 }, fmt),
     "7 months, to October 2026; ₹50000 still unpaid, so it goes up each month until paid");
   assert.equal(b234Note({ months: 4, until: "2026-07-31", unpaid: 100000 }, fmt), "4 months, to July 2026, as if the rest is paid by the return's due date");
-  assert.match(read("src/pages/money/TaxToolsPage.tsx"), /<Stat label="Interest \(234B\)" value=\{inr\(s\.b234\.interest\)\} tone="down" note=\{b234Note\(s\.b234, inr\)\} \/>/);
+  // TABLE-SWEEP: a row of the payable table now
+  assert.match(read("src/pages/money/TaxToolsPage.tsx"), /\{ key: "234b", label: "Interest \(234B\)", value: inr\(s\.b234\.interest\), tone: "down", note: b234Note\(s\.b234, inr\) \}/);
 });
 
 test("rev10b: a failed reload of the US tax page shows an error with Try again, not the old figures under a toast", () => {

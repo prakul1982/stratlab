@@ -14,7 +14,7 @@ import { HoldingsActionsPanel } from "../components/HoldingsActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Signed, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, ShareTable, Signed, Skeleton, StockPicker, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
 import { dayLabel, dollarRate, editChange, pnlLabel, priceNote, syncedNote, type Change, type Closes, type Mkt } from "../lib/holdingsEdit";
@@ -245,7 +245,7 @@ export function HoldingsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · What you own" title="My Holdings" asOf={view?.prices_at} asOfTz={rows.length > 0 && rows.every(isUS) ? marketTz("US") : undefined}
+      <PageHeader eyebrow="Money · Portfolio" title="My Holdings" asOf={view?.prices_at} asOfTz={rows.length > 0 && rows.every(isUS) ? marketTz("US") : undefined}
         asOfLabel={view?.us_prices_at ? "India prices as of" : "Prices as of"}
         actions={view?.us_prices_at ? <Badge>US prices as of {asOfText(view.us_prices_at, { tz: marketTz("US") })}</Badge> : undefined}
         lede="Your broker's holdings file, valued at the latest prices (the last close when the market is shut): each stock's value, gain or loss, and your sector mix."
@@ -277,7 +277,7 @@ export function HoldingsPage() {
               {result.unmatched_count > 0 && ` ${result.unmatched_count} line${result.unmatched_count === 1 ? "" : "s"} couldn't be matched (below).`}
             </p>
             {result.over_limit.length > 0 && (
-              <p className="k-small">Your plan keeps {result.limit} stocks, so {result.over_limit.length} were left out: {result.over_limit.slice(0, 12).join(", ")}{result.over_limit.length > 12 ? "…" : ""}. <PlanInline /></p>
+              <p className="k-small">Your plan keeps {result.limit} stocks, so {result.over_limit.length} were left out: {result.over_limit.join(", ")}. <PlanInline /></p>
             )}
             {result.unmatched.length > 0 && <DataTable label="Lines that couldn't be matched" columns={unmatchedCols} rows={result.unmatched.map((u, i) => ({ ...u, i }))} rowKey={(u) => String(u.i)} />}
             {result.unmatched.length > 0 && <p className="k-note">Add any of these by hand below with its NSE symbol or BSE code.</p>}
@@ -302,13 +302,15 @@ export function HoldingsPage() {
           <PageNav items={[{ id: "h-summary", label: "Where you stand" }, { id: "h-positions", label: "Positions" }, { id: "h-add", label: "Add a stock" }, ...(withFilings.length > 0 ? [{ id: "h-filings", label: "Filings" }] : [])]} />
           <Card id="h-summary">
             <CardHead title="Where your stocks stand" />
-            <StatRow>
-              <Stat label="Current value" value={inr(t.value)} />
-              <Stat label="Invested" value={inr(t.invested)} />
-              <Stat label={pnlLabel("Unrealised P&L", t.pnl_partial)} value={t.pnl == null ? "–" : inr(t.pnl)} tone={signTone(t.pnl)} delta={t.pnl == null ? undefined : <Delta value={t.pnl}>{pct(t.pnl_pct)}</Delta>}
-                note={t.pnl_partial ? `On the ${t.pnl_partial.priced} with a price; the rest are at cost` : undefined} />
-              <Stat label={dayLabel(t.session, istToday(), (d) => fmtDate(d, { weekday: true, year: false }))} value={t.day == null ? "–" : inr(t.day)} tone={signTone(t.day)} delta={t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta>} />
-            </StatRow>
+            {/* TABLE-SWEEP: the totals as a table (the figure, the amount and its change), not four tiles with their changes under them */}
+            <FigureTable label="Where your stocks stand" header="Total" valueHeader="Amount" noteHeader="Change" rows={[
+              { key: "value", label: "Current value", value: inr(t.value) },
+              { key: "invested", label: "Invested", value: inr(t.invested) },
+              { key: "pnl", label: pnlLabel("Unrealised P&L", t.pnl_partial), value: t.pnl == null ? "–" : inr(t.pnl), tone: signTone(t.pnl),
+                note: t.pnl == null ? undefined : <><Delta value={t.pnl}>{pct(t.pnl_pct)}</Delta>{t.pnl_partial ? ` on the ${t.pnl_partial.priced} with a price; the rest are at cost` : ""}</> },
+              { key: "day", label: dayLabel(t.session, istToday(), (d) => fmtDate(d, { weekday: true, year: false })), value: t.day == null ? "–" : inr(t.day), tone: signTone(t.day),
+                note: t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta> },
+            ]} />
             <p className="k-note">
               {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${sourceWords(view.source)}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
               {(() => { const n = priceNote(view.prices, view.closes, rows, (d) => fmtDate(d, { weekday: true, year: false })); return n && ` · ${n}`; })()}
@@ -343,8 +345,8 @@ export function HoldingsPage() {
           <Card>
             <CardHead title="By sector" />
             {/* a fund's line is what it holds (DG-003), so a count is of holdings, not "stocks"; a line with no price is at cost */}
-            <BarList label="Holdings by sector" footnote={`Share of the current value${rows.some((r) => r.value == null) ? " (at cost where there's no price)" : ""}, by the exchange's sector for each company and by what each fund holds.`}
-              rows={view.allocation.map((a) => ({ key: a.sector, name: a.sector, note: `${a.count} holding${a.count === 1 ? "" : "s"}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
+            <ShareTable label="Holdings by sector" head="Sector" countHead="Holdings" footnote={`Share of the current value${rows.some((r) => r.value == null) ? " (at cost where there's no price)" : ""}, by the exchange's sector for each company and by what each fund holds.`}
+              rows={view.allocation.map((a) => ({ key: a.sector, name: a.sector, count: a.count, value: inr(a.value), pct: a.pct }))} />
           </Card>
 
           <Card id="h-positions" label="Positions">

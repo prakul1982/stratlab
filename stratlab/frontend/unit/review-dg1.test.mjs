@@ -91,7 +91,7 @@ test("DG-030 .. DG-034, DP2-002: the SIP test's words, its start date and a resu
   const sip = read("src/pages/money/SipTestPage.tsx");
   assert.match(sip, /"Pick a stock or ETF first\."/);
   assert.match(sip, /Mutual fund SIPs, priced at each day's NAV, aren't tested here yet\./);
-  assert.match(sip, /<Stat label="Median XIRR"/);
+  assert.match(sip, /\{ key: "med", label: "Median XIRR"/);          // TABLE-SWEEP: a row of the spread table
   assert.match(sip, /<DateField label="Start" optional/);
   assert.match(sip, /data-testid="sip-stale"/);
   assert.match(read("src/components/InstrumentSearch.tsx"), /r\.etf \|\| r\.type === "ETF" \? "ETF"/);

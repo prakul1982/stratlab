@@ -48,7 +48,7 @@ export function Breadcrumb({ trail, page, siblings = [], seeAll, pinned, onToggl
             {hasMenu ? (
               <>
                 <button ref={btn} type="button" className="k-crumb-btn" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
-                  onClick={() => setOpen(!open)}><span aria-current="page">{page}</span><span className="caret" aria-hidden="true">▾</span><span className="sr-only"> (other pages in this group)</span></button>
+                  onClick={() => setOpen(!open)}><span aria-current="page">{page}</span><span className="caret" aria-hidden="true">▾</span><span className="sr-only">{siblings.length > 1 ? " (other pages in this group)" : " (page menu)"}</span></button>
                 {open && (
                   <div ref={menu} id={id} className="k-crumb-menu" role="menu" aria-label={`Pages near ${page}`} onKeyDown={keys}>
                     {siblings.map((s) => (

@@ -1133,12 +1133,16 @@ def my_plan_interest(profile=Depends(current_profile)):
 @app.put("/me/plan-interest")
 def ask_plan_interest(req: PlanInterestReq, profile=Depends(current_profile)):
     """"Tell me when plans open": put the person on the list (asking twice changes nothing)."""
-    return plan_interest.add(profile["id"], req.source)
+    out = plan_interest.add(profile["id"], req.source)
+    forget_overview()          # Admin's count of the list is read again, not held for 45 seconds (it showed 0 after someone joined)
+    return out
 
 
 @app.delete("/me/plan-interest")
 def drop_plan_interest(profile=Depends(current_profile)):
-    return plan_interest.remove(profile["id"])
+    out = plan_interest.remove(profile["id"])
+    forget_overview()
+    return out
 
 
 def onboarding_of(uid: str) -> dict:

@@ -110,8 +110,11 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
                 {columns.map((c, i) => {
                   if (note !== undefined && i > 0) return i === 1 ? <td key={c.key} colSpan={columns.length - 1} className="k-row-note">{note}</td> : null;
                   const label = c.cardLabel ?? (typeof c.header === "string" ? c.header : textOf(c.header).trim() || undefined);
-                  return c.rowHeader ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined} className={cls(c)}>{minusNode(c.cell(r))}</th>
-                    : <td key={c.key} role={stack ? "cell" : undefined} data-label={label} className={cls(c)}>{minusNode(c.cell(r))}</td>;
+                  const v = minusNode(c.cell(r));
+                  // TABLE-SWEEP: an empty cell is marked, so a phone card leaves it out instead of a label over nothing
+                  const blank = v == null || v === "" || v === false;
+                  return c.rowHeader ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined} className={cls(c)}>{v}</th>
+                    : <td key={c.key} role={stack ? "cell" : undefined} data-label={label} data-blank={blank ? "" : undefined} className={cls(c)}>{v}</td>;
                 })}
               </tr>
             );

@@ -12,7 +12,7 @@ export const SPACE_IDS: Space[] = SPACE_LIST;
 
 export const SPACES: Record<Space, { label: string; home: string; what: string; paths: RegExp }> = {
   trade: { label: "Trade", home: NAV.trade.home, what: "Test strategies, paper trade them, options", paths: /^\/(trade|notebooks|new|n|paper|options|import|library)(\/|$)/ },
-  invest: { label: "Invest", home: NAV.invest.home, what: "Research companies, scans, watchlist, alerts", paths: /^\/(invest|research|news|alerts|scans|watchlist)(\/|$)/ },
+  invest: { label: "Invest", home: NAV.invest.home, what: "Research companies, scans, watchlist, alerts", paths: /^\/(invest|research|news|alerts|scans|watchlist|calendar)(\/|$)/ },
   money: { label: "Money", home: NAV.money.home, what: "Holdings, tax and everything you own", paths: /^\/(money|holdings|tax-report)(\/|$)/ },
 };
 

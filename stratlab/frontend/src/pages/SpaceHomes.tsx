@@ -11,8 +11,7 @@ import { homeOf, startView } from "../lib/spaces";
 import { homeRegion } from "../lib/homeMarket";
 import { usTodayNote } from "../lib/marketHours";
 import { pnlLabel, priceNote, type Closes } from "../lib/holdingsEdit";
-import { NAV_GROUPS } from "../lib/navGroups";
-import { pageAt } from "../lib/nav";
+import { NAV } from "../lib/nav";
 import { PageTags } from "../components/PageTags";
 import { evWhen, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
@@ -84,7 +83,7 @@ function ToolStrip({ label, tools }: { label: string; tools: Tool[] }) {
 
 /* ---------- Trade: the strategy lab ---------- */
 /** Tools the strip and the positioning panel already link to: "more you can do" leaves them out. */
-const TRADE_LINKED = ["options", "positioning", "paper", "library", "idea"];
+const TRADE_LINKED = ["/options", "/trade/positioning", "/paper", "/library", "/new", "/trade/journal"];
 type Journal = { count: number; net: number; win_rate: number | null };
 
 /** Trade's first three tools: the home's cards and the All home's row. */
@@ -132,7 +131,7 @@ export function TradeHome() {
       <NextIdea hideStart={steps} />
       <ToolStrip label="Trade tools" tools={tools} />
       <p className="k-small k-muted" data-testid="positioning-link">FII and DII flows, futures positions, PCR and India VIX are on <Link className="link tap-link" to="/trade/positioning">Positioning</Link>.</p>
-      <Explore title="More you can do" hide={TRADE_LINKED} order="trade" />
+      <Explore title="More you can do" hide={TRADE_LINKED} space="trade" />
     </div>
   );
 }
@@ -225,7 +224,7 @@ function NextIdea({ count = 3, hideStart = false }: { count?: number; hideStart?
 
 /* ---------- Invest: research ---------- */
 /** Tools the strip and the panels on the Invest home already link to. */
-const INVEST_LINKED = ["breadth", "filings", "investor", "watchlist", "rotation", "scan", "research", "holdings"];
+const INVEST_LINKED = ["/invest/breadth", "/research/filings", "/research/investor", "/research/watchlist", "/research/rotation", "/research/scan", "/research", "/research/screens", "/research/corporate-actions"];
 
 /** The strip's cards; where each opens (on the market picked at the top) is lib/investUi investStrip's. */
 const INVEST_STRIP: Record<string, Omit<Tool, "to">> = {
@@ -273,7 +272,7 @@ export function InvestHome() {
       </div>
       <RedFlags region={region} />
       <BreadthCard region={region} />
-      <Explore title="More you can do" hide={INVEST_LINKED} order="invest" />
+      <Explore title="More you can do" hide={INVEST_LINKED} space="invest" />
     </div>
   );
 }
@@ -290,7 +289,7 @@ function NextEvents({ limit = 3, testId = "invest-events", region }: { limit?: n
   if (next && !next.length) return null;
   return (
     <Card testId={testId} label="Coming up">
-      <CardHead title="Coming up" actions={<Link to="/trade/events" className="link small">Market events →</Link>} />
+      <CardHead title="Coming up" actions={<Link to="/calendar" className="link small">Calendar →</Link>} />{/* IA-1: the one Calendar, every date */}
       {next === null ? <PanelSkel label="Reading the market events" lines={1} /> : (
         <div className="space-events">
           {next.map((e) => <span key={e.id} className="small"><span className="muted">{evWhen(e)}</span> {e.title}</span>)}
@@ -435,9 +434,10 @@ type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; la
 
 
 export function MoneyHome() {
-  // the two summaries (holdings and tax) stand for their tools; every other Money tool is one card below, so each feature shows once
+  // the two summaries (holdings and tax) stand for their tools; every other Money tool is one card below, under the menu entry it
+  // is a tab of (IA-1), so each feature shows once; of the shared Calendar, Money's own dates and the one list of every date
   const PANELS = ["/holdings", "/tax-report"];
-  const rest = NAV_GROUPS.Money.filter((e) => !PANELS.includes(e.to));
+  const entries = NAV.money.groups.map((g) => ({ g, pages: g.pages.filter((p) => !PANELS.includes(p.to) && ((p.space ?? "money") === "money" || p.to === "/calendar")) })).filter((x) => x.pages.length);
   return (
     <div className="space-home">
       <Head eyebrow="Money · seen only by you" title="Your money">
@@ -451,16 +451,18 @@ export function MoneyHome() {
         <HoldingsSummary />
         <TaxSummary />
       </div>
-      {rest.length > 0 && (
+      {entries.length > 0 && (
         <section className="k-stack" aria-labelledby="money-tools">
           <h2 id="money-tools" className="k-card-title">More in Money</h2>
-          {/* each card with its plan tag, as on the group pages ("Basic for part"), and its line in full on a phone (DP2-014) */}
-          <TileGrid className="explore-grid money-cards">
-            {rest.map((e) => {
-              const at = pageAt(e.to);
-              return <Link key={e.to} to={e.to} className="k-linkcard explore-card" data-money={e.to}><b>{e.label}</b><span className="small muted">{e.blurb ?? e.title}</span>{at && <PageTags page={at.page} />}</Link>;
-            })}
-          </TileGrid>
+          {entries.map(({ g, pages }) => (
+            <div key={g.id} className="k-stack" data-entry={g.id}>
+              <div className="k-stack k-tight"><b>{g.label}</b><span className="small muted">{g.blurb}</span></div>
+              {/* each card with its plan tag, as on the entry pages ("Basic for part"), and its line in full on a phone (DP2-014) */}
+              <TileGrid className="explore-grid money-cards">
+                {pages.map((p) => <Link key={p.to} to={p.to} className="k-linkcard explore-card" data-money={p.to}><b>{p.label}</b><span className="small muted">{p.blurb}</span><PageTags page={p} /></Link>)}
+              </TileGrid>
+            </div>
+          ))}
         </section>
       )}
     </div>

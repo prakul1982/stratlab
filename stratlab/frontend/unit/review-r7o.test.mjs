@@ -48,7 +48,8 @@ test("Plans: a price converted from the rupee charge is said as 'about', beside 
   const sar = { symbol: "SAR ", basic: 27, pro: 77, basic_year: 270, pro_year: 770, charged_in: "INR", yearly_charged_in: "INR", converted: true };
   assert.equal(aboutLine(sar, "SAR", "basic"), "about SAR 27 at today's rate");
   assert.equal(aboutLine({ ...sar, symbol: "$", converted: false }, "USD", "basic"), null);   // dollars: $8 and $20 as the owner set them, no conversion claimed
-  assert.match(read("src/pages/PlansPage.tsx"), /aside: aboutLine\(row, currency, field\)/);
+  // item 34: the Plans cards' "about" figure is the dollar at the app's USD/INR rate, beside every rupee price
+  assert.match(read("src/pages/PlansPage.tsx"), /about: inr > 0 \? aboutUsd\(inr, rate\) : null/);
 });
 
 test("A paper session's minute-by-minute value across days is labelled by day, never one day's clock times (R7O-010)", async () => {

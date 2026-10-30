@@ -8,7 +8,7 @@ import { track } from "../../lib/analytics";
 import { fyLink, movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { tradeProblems } from "../../lib/validate";
-import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton, useUploadProblem } from "../../components/kit";
+import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, UploadButton, useUploadProblem, Notes, FigureTable } from "../../components/kit";
 
 /* /money/us-tax: US share sales in rupees the way the Income-tax Rules convert them, long or short term under the
  * 24-month rule, US dividends with the tax withheld and the foreign tax credit, and the calendar-year Schedule FA table.
@@ -242,7 +242,7 @@ export function UsTaxPage() {
         )}
         {v && v.trades.length > 0 && (
           <Disclosure summary={<>{v.trades.length} trade{v.trades.length === 1 ? "" : "s"}{v.files.length ? ` · last file ${ago(v.files[v.files.length - 1].at)}` : ""}</>}>
-            <DataTable stack phonePage={10} label="US trades" columns={tradeCols} rows={v.trades.slice(0, 200)} rowKey={(t) => t.id || `${t.d}${t.sym}${t.qty}${t.price}`} />
+            <DataTable stack phonePage={10} label="US trades" columns={tradeCols} rows={v.trades} rowKey={(t) => t.id || `${t.d}${t.sym}${t.qty}${t.price}`} />
             {/* VR1-148: "Delete all" was a head button of the same weight as Upload; it sits under the list it empties */}
             <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete all US trades</button>
           </Disclosure>
@@ -271,14 +271,17 @@ export function UsTaxPage() {
           {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="us-moved-year">{movedYearNote(movedFrom, y.fy, Math.max(...v.years.map((x) => x.fy)), "sales")}</p>}
           <Card>
             <CardHead title={`Sales in ${y.label}`} />
-            <StatRow>
-              <Stat label="Short-term gain (held 24 months or less)" value={inr(y.st)} tone={signTone(y.st)} note="at your slab rate" />
-              <Stat label={<>Long-term gain</>} value={inr(y.lt)} tone={signTone(y.lt)} note="12.5% (section 112)" />
-              <Stat label={`Sales in ${y.label}`} value={y.count} note={`${inr(y.sale)} sale value`} />
-            </StatRow>
-            <p className="k-note">Shares listed abroad are taxed like unlisted shares in India: long term when held more than 24 months, at 12.5% without indexation for sales from 23 July 2024 (20% with indexation before), with no ₹1.25 lakh exemption. Short-term gains are added to your income at your slab rate.</p>
+            {/* TABLE-SWEEP: the year's sales as one table (the figure, the amount, how it is taxed), the rules as numbered notes under it */}
+            <FigureTable label={`Sales in ${y.label}`} header={y.label} valueHeader="Amount" noteHeader="How it is taxed" rows={[
+              { key: "st", label: "Short-term gain (held 24 months or less)", value: inr(y.st), tone: signTone(y.st), note: "At your slab rate" },
+              { key: "lt", label: "Long-term gain", value: inr(y.lt), tone: signTone(y.lt), note: "12.5% (section 112)" },
+              { key: "n", label: `Sales in ${y.label}`, value: y.count, note: `${inr(y.sale)} sale value` },
+            ]} />
             {y.unpriced > 0 && <p className="k-small">{y.unpriced} sale{y.unpriced === 1 ? " has" : "s have"} no rupee rate for its dates yet, so {y.unpriced === 1 ? "it isn't" : "they aren't"} counted.</p>}
-            <p className="k-note">These sales are in your <Link className="link" to={fyLink("/tax-report", y.fy)}>tax report</Link> too, where losses are set off against your other gains, and in the <Link className="link" to={fyLink("/money/itr", y.fy)}>ITR-ready export</Link>.</p>
+            <Notes label="How US sales are taxed" items={[
+              "Shares listed abroad are taxed like unlisted shares in India: long term when held more than 24 months, at 12.5% without indexation for sales from 23 July 2024 (20% with indexation before), with no ₹1.25 lakh exemption. Short-term gains are added to your income at your slab rate.",
+              <>These sales are in your <Link className="link" to={fyLink("/tax-report", y.fy)}>tax report</Link> too, where losses are set off against your other gains, and in the <Link className="link" to={fyLink("/money/itr", y.fy)}>ITR export</Link>.</>,
+            ]} />
           </Card>
 
           {v.locked ? <PlanNote>Each sale's rupee workings, US dividends with the foreign tax credit, and Schedule FA are on the {v.plan} plan.</PlanNote> : (
@@ -329,9 +332,9 @@ export function UsTaxPage() {
 
       <Card>
         <CardHead title="Deadlines and rules" />
-        <ul className="k-list" aria-label="Deadlines and rules">{(v?.facts ?? []).map((f, i) => <li key={i}>{f}</li>)}</ul>
+        <Notes label="Deadlines and rules" items={v?.facts ?? []} />
         <h3 className="k-sub">How these figures are worked out</h3>
-        <ul className="k-list muted">{(v?.assumptions ?? []).map((f, i) => <li key={i}>{f}</li>)}</ul>
+        <Notes label="How these figures are worked out" items={v?.assumptions ?? []} />
         {v?.rates.sbi_to && <p className="k-note">Rupees a dollar: {v.rates.source}, from SBI's daily rate sheets ({dateOnly(v.rates.sbi_from)} to {dateOnly(v.rates.sbi_to)}); the RBI reference rate where SBI's isn't known, marked "RBI".</p>}
       </Card>
 

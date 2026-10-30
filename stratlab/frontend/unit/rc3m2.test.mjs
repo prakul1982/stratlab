@@ -22,7 +22,7 @@ test("RC3M-007: the ETFs and gold bonds card shows the indexed and 10% heads, an
 test("RC3M-009: Screens shows the note when the stored promoter and insider purchases don't reach back over the window", () => {
   assert.match(read("src/lib/screens.ts"), /insider_note\?: string \| null/);
   assert.match(read("src/pages/Screens.tsx"), /\{out\?\.insider_note && <p className="k-note" data-testid="screens-insider-note">\{out\.insider_note\}<\/p>\}/);
-  assert.match(read("e2e/pages.spec.ts"), /no company can be shown as having had none/);
+  assert.match(read("e2e/pages-research.spec.ts"), /no company can be shown as having had none/);      // the screens tests moved there from pages.spec.ts (CI split)
 });
 
 test("RC3M-010: a mutual fund's kind says when it was only guessed from the fund's name", () => {

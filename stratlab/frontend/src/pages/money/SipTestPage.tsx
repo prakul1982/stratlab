@@ -9,7 +9,7 @@ import { LineChart } from "../../components/Charts";
 import { Info } from "../../components/ui";
 import { sipParams } from "../../lib/sip";
 import { numberProblem, type Limits } from "../../lib/validate";
-import { Card, CardHead, ChartFrame, DataTable, DateField, Disclosure, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Select, Seg, Signed, Stat, StatRow, type Column } from "../../components/kit";
+import { Card, CardHead, ChartFrame, DataTable, DateField, Disclosure, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Select, Seg, Signed, type Column, Notes, FigureTable } from "../../components/kit";
 
 /* /money/sip-test: test a stock or ETF SIP before setting one up: a fixed amount (or number of shares) every day, week or
  * month into one Indian stock or ETF or a split across up to 10, with a yearly step-up and an optional dip rule, on past
@@ -136,7 +136,7 @@ export function SipTestPage() {
     if (res.lump_sum) sideBySide.push({ key: "lump", name: `All of it on ${dateOnly(r.start)}`, invested: res.lump_sum.invested, value: res.lump_sum.value, xirr: res.lump_sum.xirr, fall: res.lump_sum.deepest_fall_pct, charges: res.lump_sum.charges });
   }
   const sideCols: Column<Compare>[] = [
-    { key: "name", header: "", rowHeader: true, cell: (x) => x.name },
+    { key: "name", header: "How the money went in", rowHeader: true, cell: (x) => x.name },
     { key: "in", header: "Put in", numeric: true, cell: (x) => inr(x.invested) },
     { key: "val", header: "Value", numeric: true, cell: (x) => inr(x.value) },
     { key: "xirr", header: "XIRR", numeric: true, cell: (x) => rateNode(x.xirr) },
@@ -221,16 +221,17 @@ export function SipTestPage() {
           <Card>
             <CardHead title="What this SIP did" />
             <p className="k-small k-muted">{dateOnly(r.start)} to {dateOnly(r.end)}: {r.instalments} instalment{r.instalments === 1 ? "" : "s"}{res.legs.length > 1 ? ` into ${res.legs.map((l) => `${l.weight}% ${l.symbol}`).join(", ")}` : ` into ${res.legs[0].symbol}`}.</p>
-            <StatRow>
-              <Stat label="Put in" value={inr(r.invested)} />
-              <Stat label="Value at the end" value={inr(r.value)} note={<><Signed value={r.gain_pct}>{pct(r.gain_pct)}</Signed> on the money put in</>} />
-              {/* DG-034: a fact, in the page's plain colour, beside the same money put in on day one */}
-              <Stat label="XIRR" value={rate(r.xirr)} note={res.lump_sum ? `${rate(res.lump_sum.xirr)} for the lump sum on day one` : undefined} />
-              <Stat label={<>Deepest fall <Info label="What the deepest fall is">The largest drop of the pot from a high, leaving out the instalments themselves.</Info></>} value={pctPlain(r.deepest_fall_pct, 1)} />
-              <Stat label="Longest below the money put in" value={r.underwater_days ? span(r.underwater_days) : "Never"} note={r.underwater_from ? `${dateOnly(r.underwater_from)} to ${dateOnly(r.underwater_to)}` : undefined} />
-              <Stat label="Charges" value={inr(r.charges)} note={`${inr(r.stamp)} of it stamp duty`} />
-            </StatRow>
-            {(res.notes ?? []).map((n) => <p key={n} className="k-small k-muted" data-testid="sip-note">{n}</p>)}
+            {/* TABLE-SWEEP: the result as one table (the figure, its amount, what it is against); it was six tiles with lines under them */}
+            <FigureTable label="What this SIP did" header="Result" valueHeader="Figure" noteHeader="Against" rows={[
+              { key: "in", label: "Put in", value: inr(r.invested) },
+              { key: "value", label: "Value at the end", value: inr(r.value), note: <><Signed value={r.gain_pct}>{pct(r.gain_pct)}</Signed> on the money put in</> },
+              // DG-034: a fact, in the page's plain colour, beside the same money put in on day one
+              { key: "xirr", label: "XIRR", value: rate(r.xirr), note: res.lump_sum ? `${rate(res.lump_sum.xirr)} for the lump sum on day one` : undefined },
+              { key: "fall", label: <>Deepest fall <Info label="What the deepest fall is">The largest drop of the pot from a high, leaving out the instalments themselves.</Info></>, value: pctPlain(r.deepest_fall_pct, 1) },
+              { key: "under", label: "Longest below the money put in", value: r.underwater_days ? span(r.underwater_days) : "Never", note: r.underwater_from ? `${dateOnly(r.underwater_from)} to ${dateOnly(r.underwater_to)}` : undefined },
+              { key: "charges", label: "Charges", value: inr(r.charges), note: `${inr(r.stamp)} of it stamp duty` },
+            ]} />
+            {(res.notes ?? []).length > 0 && <Notes label="About this result" testId="sip-note" items={res.notes ?? []} />}
             {r.cash_waiting > 1 && <p className="k-small">{inr(r.cash_waiting)} was still waiting as cash at the end{res.plain ? ", for a dip that hadn't come" : ", short of a whole share"}; it is counted in the value.</p>}
           </Card>
 
@@ -254,12 +255,12 @@ export function SipTestPage() {
               info="How much the answer depends on when you began."
               stats={<>
                 <p className="k-small k-muted">{res.spread.count} runs of {res.spread.years} year{res.spread.years === 1 ? "" : "s"} each, starting {res.spread.every_months > 1 ? `every ${res.spread.every_months} months` : "every month"} from {month(res.spread.runs[0].start)}.</p>
-                <StatRow>
-                  <Stat label="Lowest XIRR" value={rateNode(res.spread.worst.xirr)} note={`from ${month(res.spread.worst.start)}`} />
-                  <Stat label="Median XIRR" value={rateNode(res.spread.median)} />
-                  <Stat label="Highest XIRR" value={rateNode(res.spread.best.xirr)} note={`from ${month(res.spread.best.start)}`} />
-                  <Stat label="Runs below zero" value={`${res.spread.below_zero} of ${res.spread.count}`} />
-                </StatRow>
+                <FigureTable label="Every start month, in figures" header="Across the runs" valueHeader="Figure" noteHeader="Start" rows={[
+                  { key: "low", label: "Lowest XIRR", value: rateNode(res.spread.worst.xirr), note: `From ${month(res.spread.worst.start)}` },
+                  { key: "med", label: "Median XIRR", value: rateNode(res.spread.median) },
+                  { key: "high", label: "Highest XIRR", value: rateNode(res.spread.best.xirr), note: `From ${month(res.spread.best.start)}` },
+                  { key: "below", label: "Runs below zero", value: `${res.spread.below_zero} of ${res.spread.count}` },
+                ]} />
               </>}
               table={{ label: "XIRR by start month", rows: res.spread.runs.map((x, i) => ({ ...x, i })), rowKey: (x) => String(x.i),
                 columns: [{ key: "s", header: "Started", rowHeader: true, cell: (x) => month(x.start) }, { key: "x", header: "XIRR", numeric: true, cell: (x) => rateNode(x.xirr) },
@@ -284,7 +285,7 @@ export function SipTestPage() {
             <p className="k-small" data-testid="sip-words">{res.words}</p>
             <p className="k-note">Prices from {dateOnly(res.history.from)} to {dateOnly(res.history.to)}. {res.disclaimer}</p>
             <Disclosure summary="How this is worked out">
-              <ul className="k-list muted">{res.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+              <Notes label="Assumptions" items={res.assumptions} />
             </Disclosure>
           </Card>
         </section>

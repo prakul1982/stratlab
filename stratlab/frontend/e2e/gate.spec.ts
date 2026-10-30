@@ -161,10 +161,10 @@ test("onboarding: asked once, on a home page only; the short tour once; the acco
   // then the short tour, pointed at the real controls
   const tour = page.getByRole("dialog", { name: "A quick tour" });
   await expect(tour).toBeVisible();
-  await expect(tour).toContainText("Step 1 of 4");
+  await expect(tour).toContainText("Step 1 of 5");          // IA-1: a step on the menu's entries and their tabs
   await expect(tour).toContainText("Four spaces");
   await expect(tour).not.toContainText(/\bAll\b tab|three spaces/i);
-  for (let i = 2; i <= 4; i++) { await tour.getByRole("button", { name: "Next" }).click(); await expect(tour).toContainText(`Step ${i} of 4`); }
+  for (let i = 2; i <= 5; i++) { await tour.getByRole("button", { name: "Next" }).click(); await expect(tour).toContainText(`Step ${i} of 5`); }
   // the last step: Back and Done, nothing else to guess at
   await expect(tour.getByRole("button", { name: "Skip tour" })).toHaveCount(0);
   await expect(tour.getByRole("button", { name: "Done" })).toBeFocused();

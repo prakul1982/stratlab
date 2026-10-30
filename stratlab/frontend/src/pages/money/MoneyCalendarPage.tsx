@@ -239,7 +239,7 @@ export function MoneyCalendarPage() {
   useEffect(() => { if (view?.feed) setAmounts(view.feed.amounts); }, [view?.feed]);
 
   const head = (
-    <PageHeader eyebrow="Money · Plan" title="Money calendar" asOf={view?.as_of} asOfLabel="As of"
+    <PageHeader eyebrow="Money · Calendar" title="Money calendar" asOf={view?.as_of} asOfLabel="As of"
       lede="Tax due dates, results and dividends for your holdings and watchlist, plus your own dates. Subscribe from any calendar app with a private link." />
   );
   if (!view) {

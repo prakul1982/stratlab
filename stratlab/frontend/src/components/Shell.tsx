@@ -7,12 +7,13 @@ import { Logo } from "./Logo";
 import { VERDICT_FACT } from "./ui";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { useScrollMemory } from "../lib/scrollMemory";
-import { NAV, groupPath, locate, locateGroup, type NavPage } from "../lib/nav";
+import { NAV, locate, locateGroup, startOf, type NavGroup, type NavPage } from "../lib/nav";
 import { MINE_HOME, MINE_NAME, SPACE_IDS, SPACES, homeOf, menuView, spaceOf, type SpaceView } from "../lib/spaces";
 import { titleFor } from "../lib/title";
 import { usePersisted } from "../lib/persist";
 import { usePins } from "../lib/pins";
 import { PageBreadcrumb } from "./PageBreadcrumb";
+import { HubTabs } from "./HubTabs";
 import { Onboarding, openTour } from "./Onboarding";
 import { MarketsLauncher, openMarkets } from "./watch/Launcher";
 import { gateFor, gatePlan } from "../lib/gates";
@@ -29,11 +30,10 @@ const SIDE_NOTEBOOKS = 6;
 
 /** Icons a menu entry can name (NavPage.icon). */
 const ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book, receipt: Receipt, bell: Bell, lens: Lens, news: News, pin: Pin, pulse: Pulse, layers: Layers, library: Library, upload: Upload, search: Search, compass: Compass, wallet: Wallet, calendar: Calendar };
-/** Which menu groups are open, remembered on this device. */
-const OPEN_KEY = "stratlab.side.groups";     // per person: "stratlab.side.groups.<id>", so two people on one browser keep their own menus
-const NO_GROUPS: Record<string, boolean> = {};
 /** The pages Mine's own menu links to: opening one keeps Mine's menu showing. */
-export const MINE_LINKS = ["/news", "/alerts", "/research/watchlist"];
+export const MINE_LINKS = ["/news", "/alerts", "/research/watchlist", "/calendar"];
+/** Menu entries Mine's own menu has too (IA-1): moving between their tabs keeps Mine's menu showing. */
+export const MINE_GROUPS = ["watch", "calendar"];
 /** Pages that belong to the person, not to a space (Account, Settings, the assistant, the app, invites): they open Mine's menu. */
 const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 
@@ -41,7 +41,6 @@ export function Shell({ children }: { children: ReactNode }) {
   useScrollMemory();
   const { notebooks, markets, me, focus, space: saved, setSpace } = useApp();
   const [open, setOpen] = useState(false);
-  const [openGroups, setOpenGroups] = usePersisted<Record<string, boolean>>(`${OPEN_KEY}.${me?.id ?? "guest"}`, NO_GROUPS);
   const pins = usePins();
   // on a laptop the menu can fold away for wide tables, remembered on this device (R1-082); a phone has its drawer
   const [slim, setSlim] = usePersisted<boolean>("stratlab.side.slim", false);
@@ -81,7 +80,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const onGroup = locateGroup(path);
   // a link into another space shows that space's menu, so where you are is always in it. Mine keeps its own menu on the
   // pages it links to (pinned pages, Briefs, Connected accounts): that is what it is for.
-  const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to));
+  const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to) || MINE_GROUPS.includes(at.group.id));
   // the menu comes from the address itself (lib/spaces menuView), so it can't lag behind a saved choice that loads later
   const space = menuView(path, saved, keepsMine);
   // remember it on this device, so the front door opens the space last used (only real spaces and Mine's own pages).
@@ -102,7 +101,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const item = (to: string, icon: ReactNode, label: ReactNode, active?: boolean, title?: string) => (active === undefined
     ? <NavLink key={to} to={to} title={title} end>{icon}{label}</NavLink>
     : <Link key={to} to={to} title={title} className={active ? "active" : undefined} aria-current={active ? "page" : undefined}>{icon}{label}</Link>);
-  const pageLink = (p: NavPage) => {
+  const pageLink = (p: NavPage, name: string = p.label) => {
     const Icon = ICONS[p.icon] ?? Compass;
     // a page that is a paid feature this plan lacks carries its plan, with a lock (lib/gates.ts)
     const gate = gateFor(p.to);
@@ -112,17 +111,12 @@ export function Shell({ children }: { children: ReactNode }) {
     const off = !!gate && me?.plan_info?.features?.[gate.feature] === false;
     const locked = off && gate!.whole;
     // drawn by CSS from data-plan, so the link's name stays the page's own; the plan is in its title
-    const label = locked ? <>{p.label}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(gate!)]} aria-hidden="true" /></> : p.label;
+    const label = locked ? <>{name}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(gate!)]} aria-hidden="true" /></> : name;
     // inside a notebook the notebook under Notebooks is the one selected entry: Notebooks itself isn't highlighted too
     // (owner, 26 Oct: both had the selected background)
     const here = at?.page.to === p.to && !(p.to === "/notebooks" && path.startsWith("/n/"));
     return item(p.to, <Icon />, label, here, off ? `${p.line} (${gate!.whole ? "" : "part of it "}on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
   };
-  // the group holding the page showing is open (and stays as the person leaves it, so the menu only ever grows toward what they use); the others are as they left them
-  const activeGroup = space !== "mine" ? (onGroup?.space === space ? onGroup.group.id : at?.space === space ? at.group.id : null) : null;
-  const isOpen = (g: string) => openGroups[g] ?? false;
-  const toggle = (g: string) => setOpenGroups((cur) => ({ ...cur, [g]: !(cur[g] ?? false) }));
-  useEffect(() => { if (activeGroup) setOpenGroups((cur) => (cur[activeGroup] ? cur : { ...cur, [activeGroup]: true })); }, [activeGroup, me?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
   const allNotebooks = "/notebooks";
   const notebookList = (
     <div className="side-list side-nbs">
@@ -149,34 +143,36 @@ export function Shell({ children }: { children: ReactNode }) {
   );
   // the notebooks list shows under Notebooks while you are in a notebook (or the list), so it never makes the menu long
   const inNotebooks = path === allNotebooks || path.startsWith("/n/") || path === "/new";
-  const spaceGroups = space === "mine" ? null : NAV[space].groups.map((g) => {
-    const shutNow = !isOpen(g.id);
-    const here = onGroup?.space === space && onGroup.group.id === g.id;
-    return (
-      <section key={g.id} className="side-group" data-group={g.id}>
-        <div className="side-head">
-          <button className="side-toggle" aria-expanded={!shutNow} aria-controls={`side-${g.id}`} aria-label="Open or close this group" onClick={() => toggle(g.id)}>
-            <span className="side-chev" aria-hidden="true"><Chevron size={12} /></span>
-          </button>
-          <Link to={groupPath(space, g)} className={`side-title${here ? " active" : ""}`} aria-current={here ? "page" : undefined} title={`${g.label}: everything in this group`}>{g.label}</Link>
+  // IA-1: a space's menu is one short list of entries, each one page of tabs (lib/nav.ts); no groups to open or close. The entry
+  // holding the page showing is the one selected; inside a notebook the notebook under Strategies is, not Strategies too (owner,
+  // 26 Oct: both had the selected background)
+  const entryLink = (g: NavGroup, sp: Exclude<SpaceView, "mine">) => {
+    const Icon = ICONS[g.icon] ?? Compass;
+    const here = (at?.group.id === g.id || (onGroup?.space === sp && onGroup.group.id === g.id)) && !(g.id === "strategies" && path.startsWith("/n/"));
+    // an entry is locked only when every tab of it is a paid page this plan lacks (none is today): a locked tab carries its lock on the tab
+    const locks = g.pages.map((p) => { const gate = gateFor(p.to); return gate && gate.whole && me?.plan_info?.features?.[gate.feature] === false ? gate : null; });
+    const locked = locks.every(Boolean) ? locks[0] : null;
+    const label = locked ? <>{g.label}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(locked)]} aria-hidden="true" /></> : g.label;
+    const tabs = g.pages.length > 1 ? `${g.label}: ${g.pages.map((p) => p.label).join(", ")}` : g.pages[0].line;
+    return item(startOf(g, sp), <Icon />, label, here, locked ? `${tabs} (on the ${PLAN_NAME[gatePlan(locked)]} plan)` : tabs);
+  };
+  const spaceGroups = space === "mine" ? null : (
+    <div className="side-list side-nav side-entries">
+      {NAV[space].groups.map((g) => (
+        <div key={g.id} className="side-entry" data-group={g.id}>
+          {entryLink(g, space)}
+          {g.id === "strategies" && inNotebooks && notebookList}
         </div>
-        <div id={`side-${g.id}`} className="side-list side-nav" hidden={shutNow}>
-          {g.pages.map((p) => (
-            <div key={p.to} className="side-entry">
-              {pageLink(p)}
-              {p.to === "/notebooks" && inNotebooks && notebookList}
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  });
+      ))}
+    </div>
+  );
   const minePart = (
     <>
       <section className="side-group" data-group="pinned">
         <div className="side-head"><span className="side-title plain">Pinned</span></div>
         <div className="side-list side-nav" id="side-pinned">
-          {pins.pins.map((l) => pageLink(l.page))}
+          {/* a tab renamed by IA-1 is pinned with its entry's name ("Find stocks: Figures"): "Figures" alone says nothing in this menu */}
+          {pins.pins.map((l) => pageLink(l.page, l.page.was ? `${l.group.label}: ${l.page.label}` : l.page.label))}
           {!pins.pins.length && <span className="small muted side-note-wrap" title="Open the menu in a page's breadcrumb to pin it here">Nothing pinned yet. Pin a page from its breadcrumb menu.</span>}
         </div>
       </section>
@@ -184,9 +180,9 @@ export function Shell({ children }: { children: ReactNode }) {
           upsell on Free and Basic (DI-017, DI-018) */}
       <section className="side-group" data-group="mine-more">
         <div className="side-list side-nav">
-          {item("/news", <News />, "Briefs", at?.page.to === "/news", "Today's brief, past issues and the subscribe switches")}
-          {item("/research/watchlist", <Pin />, "Watchlist", at?.page.to === "/research/watchlist", "The companies you follow")}
-          {item("/alerts", <Bell />, "Stock alerts", at?.page.to === "/alerts", "A message when a stock or the market does what you asked about")}
+          {item("/news", <News />, "Today's brief", at?.page.to === "/news", "Today's brief, past issues and the subscribe switches")}
+          {item("/research/watchlist", <Pin />, "Watchlist", at?.group.id === "watch", "Watchlist: the companies you follow, and Alerts: a message when a stock or the market does what you asked about")}
+          {item("/calendar", <Calendar />, "Calendar", at?.group.id === "calendar", "Calendar: results, corporate actions, IPOs, market events and your own money dates")}
           {item("/settings#accounts", <Wallet />, "Connected accounts", path === "/settings" && loc.hash === "#accounts", "Your holdings, funds and tradebooks: the files StratLab reads")}
           {item("/settings", <Gear />, "Settings", path === "/settings" && loc.hash !== "#accounts", "Notifications, what you see first, the theme and the connection check")}
           {me?.plan_info?.features?.assistant !== false && item("/assistant", <Sparkle />, "Connect an AI assistant", path === "/assistant", "Keys that let Claude or ChatGPT use your StratLab")}
@@ -266,7 +262,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
-      <main className="main" id="main" tabIndex={-1}><div className="page"><PageBreadcrumb mine={space === "mine"} />{children}</div></main>
+      <main className="main" id="main" tabIndex={-1}><div className="page"><div className="crumb-row"><PageBreadcrumb mine={space === "mine"} space={space} />{at && <HubTabs at={at} path={path} />}</div>{children}</div></main>
       <Suspense fallback={null}>
         {search && <SearchPalette onClose={() => setSearch(false)} />}
       </Suspense>

@@ -6,7 +6,7 @@ import { asOf as asOfText, dateOnly, inr, money, qty as qtyText, signTone } from
 import { Info } from "../../components/ui";
 import { Lock, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, UploadProblem, useUploadProblem } from "../../components/kit";
+import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, UploadButton, UploadProblem, useUploadProblem, Notes, FigureTable } from "../../components/kit";
 import { fyLink, movedYearNote, openFy } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { usSharesNote } from "../../lib/usGains";
@@ -216,19 +216,17 @@ function DividendsTab() {
             )}
             {y.source === "none" ? <EmptyState title={`No dividends in ${y.label}`}>No dividends in your files or holdings for the year. Upload a dividend statement above to add them.</EmptyState> : (
               <>
-                <StatRow>
-                  <Stat label="Dividend income" value={<span aria-label="Dividend income">{inr(y.total)}</span>} note={`${y.count} payment${y.count === 1 ? "" : "s"} from ${y.companies_count} compan${y.companies_count === 1 ? "y" : "ies"}${!y.us ? (y.tds.threshold != null ? ` · TDS above ${inr(y.tds.threshold)} a company` : " · exempt that year") : ""}`} />
-                  {/* RC2B-046: with no US dividends the Indian total is the income above, the same figure twice; its note goes under the income */}
-                  {y.us && <Stat label="Indian companies" value={inr(y.india_total)} note={y.tds.threshold != null ? `TDS above ${inr(y.tds.threshold)} a company` : "Exempt that year"} />}
-                  {!y.locked && y.tds.threshold != null && (
-                    <Stat label={<>TDS expected <Info label="About TDS on dividends">A company cuts {+(y.tds.rate * 100).toFixed(2)}% TDS (20% without a PAN) from a resident once its dividends to you in the year are over the threshold, on the whole amount: {inr(y.tds.threshold)} for {y.label} under {y.tds.section}.{y.tds.note ? ` ${y.tds.note}` : ""} Form 26AS or the AIS shows what was actually cut.</Info></>}
-                      value={inr(y.tds.expected)} note={`${y.tds.companies_over} compan${y.tds.companies_over === 1 ? "y" : "ies"} over the threshold${y.tds.in_file != null ? ` · ${inr(y.tds.in_file)} in your file` : ""}`} />
-                  )}
-                  {!y.locked && y.us && (
-                    <Stat label={<>US dividends <Info label="About US dividends">The US withholds 25% under the India-US tax treaty (with a W-8BEN). In India the dividend is taxed at your slab rate, and the US tax can be claimed as a foreign tax credit, up to the Indian tax on that income, by filing Form 67 by the end of the assessment year (31 March {y.fy + 2}; Rule 128(9)).</Info></>}
-                      value={inr(y.us.gross)} note={`${usd(y.us.gross_usd)} · US tax withheld ${usd(y.us.withheld_usd)} (${inr(y.us.withheld)}), the foreign tax credit figure`} />
-                  )}
-                </StatRow>
+                {/* TABLE-SWEEP: the year's totals as one table (the figure, its amount, what it counts), not tiles with lines under them */}
+                <FigureTable label={`Dividends, ${y.label}`} header={y.label} valueHeader="Amount" rows={[
+                  { key: "income", label: "Dividend income", value: <span aria-label="Dividend income">{inr(y.total)}</span>,
+                    note: `${y.count} payment${y.count === 1 ? "" : "s"} from ${y.companies_count} compan${y.companies_count === 1 ? "y" : "ies"}${!y.us ? (y.tds.threshold != null ? ` · TDS above ${inr(y.tds.threshold)} a company` : " · exempt that year") : ""}` },
+                  // RC2B-046: with no US dividends the Indian total is the income above, the same figure twice; its note goes with the income
+                  ...(y.us ? [{ key: "india", label: "Indian companies", value: inr(y.india_total), note: y.tds.threshold != null ? `TDS above ${inr(y.tds.threshold)} a company` : "Exempt that year" }] : []),
+                  ...(!y.locked && y.tds.threshold != null ? [{ key: "tds", label: <>TDS expected <Info label="About TDS on dividends">A company cuts {+(y.tds.rate * 100).toFixed(2)}% TDS (20% without a PAN) from a resident once its dividends to you in the year are over the threshold, on the whole amount: {inr(y.tds.threshold)} for {y.label} under {y.tds.section}.{y.tds.note ? ` ${y.tds.note}` : ""} Form 26AS or the AIS shows what was actually cut.</Info></>,
+                    value: inr(y.tds.expected), note: `${y.tds.companies_over} compan${y.tds.companies_over === 1 ? "y" : "ies"} over the threshold${y.tds.in_file != null ? ` · ${inr(y.tds.in_file)} in your file` : ""}` }] : []),
+                  ...(!y.locked && y.us ? [{ key: "us", label: <>US dividends <Info label="About US dividends">The US withholds 25% under the India-US tax treaty (with a W-8BEN). In India the dividend is taxed at your slab rate, and the US tax can be claimed as a foreign tax credit, up to the Indian tax on that income, by filing Form 67 by the end of the assessment year (31 March {y.fy + 2}; Rule 128(9)).</Info></>,
+                    value: inr(y.us.gross), note: `${usd(y.us.gross_usd)} · US tax withheld ${usd(y.us.withheld_usd)} (${inr(y.us.withheld)}), the foreign tax credit figure` }] : []),
+                ]} />
                 {/* RC2B-046: the choice is the switch above; this line says only what it does, once */}
                 <p className="k-small">{y.taxed ? (y.include
                   ? <>Counted in the <Link className="link" to={fyLink("/tax-report", y.fy)}>total tax estimate</Link> as income from other sources, at your slab rate.</>
@@ -238,7 +236,8 @@ function DividendsTab() {
                 {y.source === "files" && y.estimate_total != null && <p className="k-note">From your holdings, the estimate for {y.label} is {inr(y.estimate_total)}.</p>}
                 {y.ais_note && <p className="k-note">{y.ais_note}</p>}
                 {y.unpriced > 0 && <p className="k-note">{y.unpriced} US payment{y.unpriced === 1 ? " isn't" : "s aren't"} counted: the dollar rate isn't available right now.</p>}
-                {!y.locked && y.companies.length > 0 && <DataTable label="Dividends by company" columns={companyCols} rows={y.companies} rowKey={(c) => `${c.country}${c.symbol}`} />}
+                {/* no "US tax withheld" column standing empty when every company is Indian (TABLE-SWEEP) */}
+                {!y.locked && y.companies.length > 0 && <DataTable label="Dividends by company" columns={companyCols.filter((c) => c.key !== "us" || y.companies.some((x) => x.country === "US"))} rows={y.companies} rowKey={(c) => `${c.country}${c.symbol}`} />}
               </>
             )}
           </Card>
@@ -255,7 +254,7 @@ function DividendsTab() {
 
       <Card>
         <CardHead title="How these are worked out" />
-        <ul className="k-list muted">{v.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+        <Notes label="How these are worked out" items={v.assumptions} />
         <Dated label="Dividends as of" iso={v.as_of} />
       </Card>
       {asking && <ConfirmDialog title="Delete the dividends you uploaded?" confirmLabel="Delete uploaded dividends" busy={busy} onConfirm={() => void remove()} onClose={() => setAsking(false)}>The estimate from your holdings stays, as it is worked out each time.</ConfirmDialog>}
@@ -331,27 +330,31 @@ function AdvanceTab() {
       <Card label="Advance tax due dates">
         <CardHead title={`Due dates, ${v.label}`} info={`Advance tax is due when the year's tax less TDS is ${inr(v.threshold)} or more (section 208; section 404 of the Income-tax Act, 2025 from FY 2026-27).`} />
         {/* a date already gone is marked, and the next one (DP2-013: 15 Jun and 15 Sep showed as if still ahead) */}
-        <ul className="k-list" aria-label="Due dates">
-          {v.dates.map((d) => <li key={d.n} className={d.date < today ? "k-muted" : undefined}><b>{d.label}</b>: {d.pct * 100}% of the year's tax (less TDS), counting what was paid before
-            {v.plain && v.plain.tax > 0 && <> · {inr(v.plain.rows[d.n]?.amount)} of the {inr(v.plain.tax)} on your tax report, before TDS</>}
-            {d.date < today ? <span className="k-note"> · passed</span> : d.n === nextDue ? <span className="k-note"> · next</span> : null}</li>)}
-        </ul>
+        {/* TABLE-SWEEP: the dates as a table (the date, the share due by it, what that is of your tax, passed or next); it was a list of sentences */}
+        <DataTable label="Due dates" rows={v.dates} rowKey={(d) => String(d.n)} rowAttrs={(d): Record<string, string> => (d.date < today ? { "data-passed": "" } : {})} columns={[
+          { key: "d", header: "Due by", rowHeader: true, cell: (d) => <b className={d.date < today ? "k-muted" : undefined}>{d.label}</b> },
+          { key: "p", header: "Share of the year's tax, less TDS", numeric: true, cell: (d) => `${+(d.pct * 100).toFixed(0)}%` },
+          ...(v.plain && v.plain.tax > 0 ? [{ key: "a", header: `Of the ${inr(v.plain.tax)} on your tax report`, numeric: true, cell: (d: (typeof v.dates)[number]) => inr(v.plain!.rows[d.n]?.amount) }] : []),
+          { key: "s", header: "When", cell: (d) => (d.date < today ? <span className="k-muted">Passed</span> : d.n === nextDue ? <b>Next</b> : "Ahead") },
+        ]} />
+        <p className="k-note">Each date counts what was paid before it{v.plain && v.plain.tax > 0 ? "; the amounts are of the tax report's figure before TDS" : ""}.</p>
       </Card>
 
       {s && v.inputs && (
         <>
           <Card label="Advance tax amounts">
             <CardHead title="What is due" />
-            <StatRow>
-              <Stat label="Tax for the year (estimate)" value={<span aria-label="Tax for the year">{inr(s.tax)}</span>}
-                note={<>from the <Link className="link" to={fyLink("/tax-report", v.fy)}>tax report</Link>{v.income_saved ? "" : ", no other income entered"}{v.dividends_in_estimate ? ` · ${inr(v.dividends_in_estimate)} of dividends in it` : ""}</>} />
-              <Stat label="Less TDS" value={inr(s.tds)} note="as you entered it" />
-              <Stat label="Advance tax for the year" value={<span aria-label="Advance tax for the year">{s.due ? inr(s.net) : "None due"}</span>} note={s.due ? `${inr(s.paid)} paid so far` : `below ${inr(s.threshold)}`} />
-              {s.due && <Stat label="Interest so far (234C)" value={inr(s.interest_234c)} tone={s.interest_234c > 0 ? "down" : undefined} note="on instalments already due" />}
-              {s.b234.applies && <Stat label="Interest (234B)" value={inr(s.b234.interest)} tone="down" note={b234Note(s.b234, inr)} />}
-            </StatRow>
+            {/* TABLE-SWEEP: the figures as one table, each with what it is; they were up to five tiles with lines under them */}
+            <FigureTable label="What is due" header={v.label} valueHeader="Amount" rows={[
+              { key: "tax", label: "Tax for the year (estimate)", value: <span aria-label="Tax for the year">{inr(s.tax)}</span>,
+                note: <>From the <Link className="link" to={fyLink("/tax-report", v.fy)}>tax report</Link>{v.income_saved ? "" : ", no other income entered"}{v.dividends_in_estimate ? ` · ${inr(v.dividends_in_estimate)} of dividends in it` : ""}</> },
+              { key: "tds", label: "Less TDS", value: inr(s.tds > 0 ? -s.tds : 0), note: "As you entered it" },          // TABLE-SWEEP: taken off, so signed as in the payable table
+              { key: "net", label: "Advance tax for the year", value: <span aria-label="Advance tax for the year">{s.due ? inr(s.net) : "None due"}</span>, note: s.due ? `${inr(s.paid)} paid so far` : `Below ${inr(s.threshold)}` },
+              ...(s.due ? [{ key: "234c", label: "Interest so far (234C)", value: inr(s.interest_234c), tone: s.interest_234c > 0 ? "down" : undefined, note: "On instalments already due" }] : []),
+              ...(s.b234.applies ? [{ key: "234b", label: "Interest (234B)", value: inr(s.b234.interest), tone: "down", note: b234Note(s.b234, inr) }] : []),
+            ]} />
             {s.due && <DataTable label="Instalments" columns={cols} rows={s.instalments} rowKey={(r) => String(r.n)} />}
-            <ol className="k-list">{s.steps.map((x, i) => <li key={i}>{x}</li>)}</ol>
+            <Notes label="How the advance tax is worked out" items={s.steps} />
           </Card>
           <PaymentsForm key={v.fy} v={v} onSaved={setV} />
         </>
@@ -359,16 +362,16 @@ function AdvanceTab() {
 
       <Card>
         <CardHead title="The rules, in plain words" />
-        <ul className="k-list">
-          <li>15% of the year's tax less TDS by 15 June, 45% by 15 September, 75% by 15 December and all of it by 15 March.</li>
-          <li>Capital gains and dividends that arise after a due date go into the instalments still to come (by 31 March when none is left), without interest when paid by then.</li>
-          <li>Section 234C: 1% a month on each instalment's shortfall, for 3 months (1 month for March). None for June when 12% was paid by then, none for September when 36% was.</li>
-          <li>Section 234B: when advance tax paid by 31 March is under 90% of the tax, 1% a month on the shortfall from 1 April until it is paid. A self-assessment payment (one dated after 31 March) stops it on the amount paid.</li>
-          <li>From FY 2026-27 the Income-tax Act, 2025 numbers these sections 404 (who pays), 424 (234B) and 425 (234C).</li>
-        </ul>
+        <Notes label="The rules" items={[
+          "15% of the year's tax less TDS by 15 June, 45% by 15 September, 75% by 15 December and all of it by 15 March.",
+          "Capital gains and dividends that arise after a due date go into the instalments still to come (by 31 March when none is left), without interest when paid by then.",
+          "Section 234C: 1% a month on each instalment's shortfall, for 3 months (1 month for March). None for June when 12% was paid by then, none for September when 36% was.",
+          "Section 234B: when advance tax paid by 31 March is under 90% of the tax, 1% a month on the shortfall from 1 April until it is paid. A self-assessment payment (one dated after 31 March) stops it on the amount paid.",
+          "From FY 2026-27 the Income-tax Act, 2025 numbers these sections 404 (who pays), 424 (234B) and 425 (234C).",
+        ]} />
         {/* the assumptions under their own heading, in the same size as the rules above them (DP2-013: two sizes of bullet) */}
         <h3 className="k-sub">Assumptions</h3>
-        <ul className="k-list">{v.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+        <Notes label="Assumptions" items={v.assumptions} />
         <Dated label="Worked out" iso={v.as_of} />
       </Card>
     </>
@@ -385,7 +388,11 @@ function PayableCard({ p }: { p: Payable }) {
       <p className="k-note">{p.past_due ? `The return's due date, ${dateOnly(p.due)}, has passed: worked out as if paid and filed today. Interest under sections 234A and 234B grows by 1% a month of the tax unpaid.`
         : `Worked out as if paid, and the return filed, by its due date, ${dateOnly(p.due)}. Each month after it adds interest under sections 234A and 234B.`}
         {p.refund > 0.5 ? ` TDS and tax paid are more than the tax by ${inr(p.refund)}.` : ""}</p>
-      <ul className="k-list" aria-label="How the payable figure adds up">{p.lines.map((l) => <li key={l.label} className="k-spread"><span>{l.label}</span><b>{inr(l.amount)}</b></li>)}</ul>
+      <FigureTable label="How the payable figure adds up" header="Line" valueHeader="Amount" noteHeader={null} rows={p.lines.map((l, i) => {
+        // TABLE-SWEEP: the last line is the figure the lines add up to, so it reads as the total
+        const total = i === p.lines.length - 1;
+        return { key: l.label, label: total ? <b>{l.label}</b> : l.label, value: total ? <b>{inr(l.amount)}</b> : inr(l.amount) };
+      })} />
     </Card>
   );
 }
@@ -481,20 +488,19 @@ function LtcgTab() {
     { key: "t", header: "Term today", cell: (r) => (r.term === "LT" ? "Long-term" : `Short-term, long-term from ${dateOnly(r.long_from)}`) },
   ];
   // a locked figure is "–" with the lock, never a 0 that reads as a fact (DP2-003)
-  const lockedStat = (label: string) => <Stat label={label} value={<span aria-label={`${label}: on the Pro plan`}><Lock />–</span>} note="on the Pro plan" />;
+  const lockedFig = (key: string, label: string) => ({ key, label, value: <span aria-label={`${label}: on the Pro plan`}><Lock />–</span>, note: "On the Pro plan" });
   return (
     <>
       {lock}
       <Card label="Long-term exemption">
         <CardHead title={`Long-term exemption, ${v.label}`} />
-        <StatRow>
-          <Stat label="Used by gains realised" value={<span aria-label="Exemption used">{inr(ex.used)}</span>} note={`of ${inr(ex.limit)} · ${inr(ex.left)} left`} />
-          <Stat label={ex.realised_us_lt_net != null ? "Long-term gains realised, Indian shares and funds (net)" : "Long-term gains realised (net)"} value={inr(ex.realised_lt_net)} tone={signTone(ex.realised_lt_net)} note={`short-term ${inr(ex.realised_st_net)}`} />
-          {v.open_lt ? <Stat label="Open long-term lots" value={v.open_lt.lots} note={`unrealised gains ${inr(v.open_lt.gains)}${v.open_lt.losses < 0 ? ` · losses ${inr(v.open_lt.losses)}` : ""}`} />
-            : lockedStat("Open long-term lots")}
-          {v.soon_counts ? <Stat label="Turning long-term soon" value={v.soon_counts["90"]} note={`${v.soon_counts["30"]} in 30 days · ${v.soon_counts["60"]} in 60 · ${v.soon_counts["90"]} in 90`} />
-            : lockedStat("Turning long-term soon")}
-        </StatRow>
+        {/* TABLE-SWEEP: the four figures as one table, each with what it counts; they were tiles with lines under them */}
+        <FigureTable label={`Long-term exemption, ${v.label}`} header={v.label} valueHeader="Figure" rows={[
+          { key: "used", label: "Used by gains realised", value: <span aria-label="Exemption used">{inr(ex.used)}</span>, note: `Of ${inr(ex.limit)} · ${inr(ex.left)} left` },
+          { key: "lt", label: ex.realised_us_lt_net != null ? "Long-term gains realised, Indian shares and funds (net)" : "Long-term gains realised (net)", value: inr(ex.realised_lt_net), tone: signTone(ex.realised_lt_net), note: `Short-term ${inr(ex.realised_st_net)}` },
+          v.open_lt ? { key: "open", label: "Open long-term lots", value: v.open_lt.lots, note: `Unrealised gains ${inr(v.open_lt.gains)}${v.open_lt.losses < 0 ? ` · losses ${inr(v.open_lt.losses)}` : ""}` } : lockedFig("open", "Open long-term lots"),
+          v.soon_counts ? { key: "soon", label: "Turning long-term soon", value: v.soon_counts["90"], note: `${v.soon_counts["30"]} in 30 days · ${v.soon_counts["60"]} in 60 · ${v.soon_counts["90"]} in 90` } : lockedFig("soon", "Turning long-term soon"),
+        ]} />
         {ex.limit > 0 && ex.used > 0 && <Meter pct={(ex.used / ex.limit) * 100} />}
         <p className="k-small">{inr(ex.left)} of this year's {inr(ex.limit)} exemption is unused. It doesn't carry forward to next year.</p>
         {ex.realised_us_lt_net != null && <p className="k-small k-muted" data-testid="ltcg-us-apart">{usSharesNote(ex.realised_us_st_net, ex.realised_us_lt_net, inr)} The exemption is for Indian shares and equity funds only.</p>}
@@ -527,7 +533,7 @@ function LtcgTab() {
 
       <Card>
         <CardHead title="The facts behind it" />
-        <ul className="k-list">{v.facts.map((f, i) => <li key={i}>{f}</li>)}</ul>
+        <Notes label="The rules" items={v.facts} />
         {v.unpriced > 0 && <p className="k-note">{v.unpriced} lot{v.unpriced === 1 ? " has" : "s have"} no price today{v.prices ? "" : " (live prices are offline right now)"}.</p>}
         <Dated label="Prices as of" iso={v.as_of} />
       </Card>

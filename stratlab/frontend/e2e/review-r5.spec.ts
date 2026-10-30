@@ -117,10 +117,10 @@ test.describe("plans: the right currency at once, the charged amount on the card
     await expect(sec).not.toContainText("₹");
     const before = await page.evaluate(() => (document.querySelector("#faq") as HTMLElement).getBoundingClientRect().top + scrollY);
     release();
-    // DK-001: a card charged in rupees shows the rupee price as its main price, the visitor's dollars only as "about" beside it
+    // DK-001, item 34: every card shows the rupee price it is charged as its main price, the dollars only as "about" beside it
     await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699");
     await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("₹1,999");
-    await expect(sec.getByTestId("about-basic")).toHaveText(/^about \$\d+ at today's rate$/);
+    await expect(sec.getByTestId("about-basic")).toHaveText(/^about \$\d+$/);
     const after = await page.evaluate(() => (document.querySelector("#faq") as HTMLElement).getBoundingClientRect().top + scrollY);
     // (the heading and the lines under the cards wrap differently on a narrow screen, and a touch screen's switch is 44px
     // tall (R13S-011), so a phone gets more room than a laptop)
@@ -132,7 +132,7 @@ test.describe("plans: the right currency at once, the charged amount on the card
     // the yearly choice says "about" and each card states its exact saving
     await sec.getByRole("radio", { name: "Yearly · about 2 months free" }).click();
     await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("₹19,999");
-    await expect(sec.getByTestId("about-pro")).toHaveText(/^about \$\d+ at today's rate$/);
+    await expect(sec.getByTestId("about-pro")).toHaveText(/^about \$\d+$/);
     await expect(sec.locator('.lp-price[data-plan="basic"] .lp-save')).toContainText("Saves");
     await expect(sec.locator('.lp-price[data-plan="free"] .lp-save')).toHaveCount(0);
     await expect(sec.locator('.lp-price[data-plan="basic"] button')).toHaveText("Continue with Google to get Basic");

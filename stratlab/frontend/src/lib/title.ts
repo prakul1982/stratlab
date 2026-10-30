@@ -46,7 +46,8 @@ export function titleFor(path: string): string {
   const g = locateGroup(p);
   if (g) return withBrand(`${g.group.label} · ${NAV[g.space].label}`);
   const at = locate(p);
-  if (at) return withBrand(at.page.label);
+  // a tab renamed by IA-1 names its entry too ("Figures · Find stocks · StratLab"): "Figures" or "Mood" alone says nothing
+  if (at) return withBrand(at.page.was ? `${at.page.label} · ${at.group.label}` : at.page.label);
   return DEFAULT_TITLE;
 }
 

@@ -109,7 +109,8 @@ test("DK-014, DK-015: the library says its result once per card, sums the list f
 
 test("DK-001: a card charged in rupees leads with the rupee price on the landing page and on Plans", () => {
   const login = read("src/pages/Login.tsx"), plans = read("src/pages/PlansPage.tsx");
-  assert.match(login, /inRupees\(p, year\) \? rupees\(p, year\) : local \? money\(local, amount\(p, year\), currency\)/);
-  assert.match(plans, /if \(!chargedInRupees\(row, currency, chargedIn\)\) return \{ \.\.\.none, shown: money\(row, local, currency\) \};/);
-  assert.match(plans, /const charged = money\(inr, rupees\(p, per\), "INR"\);\n\s+return \{ shown: charged,/);
+  // item 34 (owner, 29 Oct) made it every card's rule: the rupee price leads, the dollar figure beside it
+  assert.match(login, /<div className="serif lp-amount">\{rupees\(p, year\)\}/);
+  assert.match(login, /const about = inr > 0 \? aboutUsd\(inr, rate\) : null;/);
+  assert.match(plans, /return \{ shown: `₹\$\{inr\.toLocaleString\("en-IN"\)\}`, inr: p !== "free", about: inr > 0 \? aboutUsd\(inr, rate\) : null \};/);
 });

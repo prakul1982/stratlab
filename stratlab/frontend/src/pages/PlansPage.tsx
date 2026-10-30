@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { AccountWait } from "../components/AccountWait";
-import { Card, ConfirmDialog, Field, FieldGroup, FormGrid, Notice, PageHeader, Select, Seg } from "../components/kit";
+import { Card, ConfirmDialog, FieldGroup, FormGrid, Notice, PageHeader, Seg } from "../components/kit";
 import { Link } from "react-router-dom";
 import { LegalLinks } from "../components/LegalLinks";
 import { api, loadRazorpay } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
-import { aboutLine, aboutMoney, chargedInRupees, money, rupeesNote, usePricing } from "../lib/currency";
+import { aboutUsd, usdNote, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanCompare } from "../components/PlanCompare";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
 import { FEATURES, LIMITS, PRICE, splitFeatures, WHO, type Limits, type PlanId } from "../lib/plans";
 import { readViewAs } from "../lib/viewAs";
-import { canBuy, chargeAboutNote, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
+import { canBuy, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 
 const planName = (p: PlanId) => ({ free: "Free", basic: "Basic", pro: "Pro" }[p]);
 
@@ -23,7 +23,9 @@ export function PlansPage() {
   // buttons from the public prices while /me is still on its way, and they must already be off (R7M-010, again in R8)
   const viewAs = me ? viewAsMe : readViewAs();
   const [busy, setBusy] = useState<string | null>(null);
-  const { pricing, currency, pick, offerRupees } = usePricing();
+  // item 34 (owner, 29 Oct): rupees first, the currency every card is charged in, with "about $" beside each price; no currency
+  // picker and no browser locale that shows dollars alone (LIVE1B-067/078)
+  const { pricing, rate } = usePricing();
   // one answer for what's on sale today (plans.offer_state): /me's, else the public one the landing page reads
   const offer = me?.offer ?? pricing?.offer ?? null;
   const billing = offer ? canBuy(offer) : me?.billing_enabled !== false;
@@ -32,8 +34,6 @@ export function PlansPage() {
   const [yearly, setYearly] = useState(false);
   const period = yearly && yearlyOk ? "year" : "month";
   const paid = me?.paid_plan ?? me?.plan;   // me.plan is Pro for everyone during the launch offer
-  const row = pricing?.currencies[currency];
-  const inr = pricing?.currencies.INR;
   // GST is spoken of only while the invoices carry it (the seller's GSTIN is set in Admin → Money): an invoice with no GSTIN
   // says the supplier isn't registered and charges none, so "incl. GST" and "a GST invoice" would contradict it (R7M-001)
   const gst = pricing?.invoice?.gst === true;
@@ -41,37 +41,23 @@ export function PlansPage() {
     const sp = me?.plans?.[p];
     return sp ? (per === "year" ? sp.price_year : sp.price) : PRICE[p][per === "year" ? 1 : 0];
   };
-  /** The price a card shows as its main price, and the one it is charged. A card charged in rupees shows the rupee price, with the
-   * visitor's currency only as "about $7 at today's rate" beside it (DK-001); a currency with its own plan shows its fixed price. */
+  /** A card's price: the rupee amount it is charged, and the dollar figure beside it ("about $8"); Free is "₹0", no dollars. */
   const priceOf = (p: PlanId, per: string) => {
-    const none = { charged: null as string | null, inr: false, about: null as string | null, aside: null as string | null };
-    // Free is in the money the other cards are charged in: "₹0 always" beside "₹699 / month, about ¥1,158", not "¥0" beside rupees (LIVE2-013)
-    if (p === "free" && row) return { ...none, shown: currency !== "INR" && chargedInRupees(row, currency, per === "year" ? row.yearly_charged_in : row.charged_in) ? "₹0" : money(row, 0, currency) };
-    if (p === "free" || !row || currency === "INR") return { ...none, shown: `₹${rupees(p, per).toLocaleString("en-IN")}`, inr: p !== "free" };
-    const field = (per === "year" ? `${p}_year` : p) as "basic" | "pro" | "basic_year" | "pro_year";
-    const local = (row as unknown as Record<string, number>)[field];
-    const chargedIn = per === "year" ? row.yearly_charged_in : row.charged_in;
-    if (!chargedInRupees(row, currency, chargedIn)) return { ...none, shown: money(row, local, currency) };
-    // the admin table's amount, rounded to a whole unit, is what the rupee charge is in the visitor's currency today (R7O-008, R8O-006)
-    const aboutV = row.charge_about?.[field] ?? (row.converted ? local : undefined);
-    const charged = money(inr, rupees(p, per), "INR");
-    return { shown: charged, charged, inr: true, about: aboutV != null ? aboutMoney(row, aboutV, currency) : null, aside: aboutLine(row, currency, field) };
+    const inr = p === "free" ? 0 : rupees(p, per);
+    return { shown: `₹${inr.toLocaleString("en-IN")}`, inr: p !== "free", about: inr > 0 ? aboutUsd(inr, rate) : null };
   };
-  /** What a year saves against twelve months, in the price's own currency (Pro's year is ₹9 over ten months, so each card says its own number). */
+  /** What a year saves against twelve months, in rupees with its dollar figure. */
   const savingOf = (p: "basic" | "pro") => {
-    const foreign = !!row && currency !== "INR" && !chargedInRupees(row, currency, period === "year" ? row.yearly_charged_in : row.charged_in);
-    const month = foreign ? (row as unknown as Record<string, number>)[p] : rupees(p, "month");
-    const year = foreign ? (row as unknown as Record<string, number>)[`${p}_year`] : rupees(p, "year");
-    const save = yearlySaving(month, year);
-    return save == null ? null : money(foreign ? row : inr, save, foreign ? currency : "INR");
+    const save = yearlySaving(rupees(p, "month"), rupees(p, "year"));
+    return save == null ? null : `₹${save.toLocaleString("en-IN")} (${aboutUsd(save, rate)})`;
   };
-  const anyRupees = currency !== "INR" && !!row && (period === "year" ? row.yearly_charged_in : row.charged_in) === "INR";
 
   const subscribe = async (plan: "basic" | "pro") => {
     track("upgrade clicked", { plan, period, source: "plans" });
     setBusy(plan);
     try {
-      const d = await api<{ subscription_id: string; key_id: string; email: string; currency: string }>("/billing/subscribe", { method: "POST", body: { plan, period, currency } });
+      // always the rupee plan: Razorpay charges rupees exactly as before (item 34 changed only what the page shows)
+      const d = await api<{ subscription_id: string; key_id: string; email: string; currency: string }>("/billing/subscribe", { method: "POST", body: { plan, period, currency: "INR" } });
       await loadRazorpay();
       track("checkout started", { plan, period });
       const rz = new window.Razorpay({
@@ -97,24 +83,11 @@ export function PlansPage() {
   const ask = (plan: "basic" | "pro") => setSwitching(plan);
   const given = !!me?.billing?.given_by_owner;
   const RANK: Record<PlanId, number> = { free: 0, basic: 1, pro: 2 };
-  /** What the card is charged, in words: "₹699 incl. 18% GST, every month". */
-  const chargeWords = (p: "basic" | "pro") => {
-    const shown = priceOf(p, period);
-    // a currency with its own Razorpay plan is charged in that currency: its amount, no rupees or GST
-    const own = row && currency !== "INR" && (period === "year" ? row.yearly_charged_in : row.charged_in) === currency;
-    if (own) return `${money(row, (row as unknown as Record<string, number>)[period === "year" ? `${p}_year` : p], currency)}, every ${period}`;
-    const rs = rupeeCharge(rupees(p, period), gst);
-    // charged in rupees from another currency's card: the dialog says what that is there today ("₹699 (about $7.23 today)")
-    return `${rs}${chargeAboutNote(!!shown.charged, shown.shown, shown.about)}${shown.charged || currency === "INR" ? "" : ` (shown as ${shown.shown})`}, every ${period}`;
-  };
+  /** What the card is charged, in words: "₹699 incl. 18% GST (about $8), every month". */
+  const chargeWords = (p: "basic" | "pro") => `${rupeeCharge(rupees(p, period), gst)} (${aboutUsd(rupees(p, period), rate)}), every ${period}`;
 
   /** The amount charged, alone, for the dialog's button (LIVE1B-079: "Continue to payment" did not say what it would charge). */
-  const chargeAmount = (p: "basic" | "pro") => {
-    const own = row && currency !== "INR" && (period === "year" ? row.yearly_charged_in : row.charged_in) === currency;
-    return own ? money(row, (row as unknown as Record<string, number>)[period === "year" ? `${p}_year` : p], currency) : rupeeCharge(rupees(p, period), gst);
-  };
-
-  const ownCurrency = row && currency !== "INR" && (period === "year" ? row.yearly_charged_in : row.charged_in) === currency ? currency : undefined;
+  const chargeAmount = (p: "basic" | "pro") => rupeeCharge(rupees(p, period), gst);
 
   // signed in: hold until the account has answered, so the signed-out page is never drawn for someone who is signed in
   if (!ready || (session && !me)) return <div className="k-page"><PageHeader eyebrow="Account · Plans" title="Plans" /><Card label="Loading plans"><AccountWait label="Loading plans" /></Card></div>;
@@ -130,20 +103,12 @@ export function PlansPage() {
           Press the button and we'll tell you the day they open.
         </Notice>
       )}
-      {(pricing || (billing && yearlyOk)) && (
+      {billing && yearlyOk && (
         <FormGrid label="Price options">
-          {pricing && (
-            <Field label="Prices in">
-              {(id) => <Select id={id} value={currency} onChange={pick} options={Object.entries(pricing.currencies).map(([c, r]) => ({ value: c, label: `${c} · ${r.name}` }))} />}
-            </Field>
-          )}
-          {pricing && offerRupees && <button type="button" className="link-btn inr-pick k-small" onClick={() => pick("INR")}>In India? Show prices in ₹</button>}
-          {billing && yearlyOk && (
-            <FieldGroup label="Billed">
-              <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}
-                options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
-            </FieldGroup>
-          )}
+          <FieldGroup label="Billed">
+            <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}
+              options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
+          </FieldGroup>
         </FormGrid>
       )}
       {viewAs && billing && <div id="plans-viewas" data-testid="plans-viewas"><Notice tone="warn" role="status">{viewingPlansNote(planName(viewAs))}</Notice></div>}
@@ -159,7 +124,7 @@ export function PlansPage() {
               </div>
               <div className="k-stack tight">
                 <div className="k-plan-price">{price.shown}<span>{p === "free" ? " always" : ` / ${period}`}</span></div>
-                {price.aside && <span className="k-note" data-testid={`about-${p}`}>{price.aside}</span>}
+                {price.about && <span className="k-note" data-testid={`about-${p}`}>{price.about}</span>}
                 {price.inr && gst && <span className="k-note">incl. GST</span>}
                 {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}
               </div>
@@ -195,8 +160,6 @@ export function PlansPage() {
           );
         })}
       </div>
-      {anyRupees && billing && <Notice>{rupeesNote(currency, priceOf("basic", period).about && priceOf("pro", period).about
-        ? { basic: priceOf("basic", period).about as string, pro: priceOf("pro", period).about as string } : null)}</Notice>}
       <PlanCompare folded plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
@@ -204,9 +167,10 @@ export function PlansPage() {
       {billing ? (
         <p className="k-small k-muted k-measure">{gst ? "Rupee prices include 18% GST, and every payment gets a GST invoice in Account." : "The price shown is all you pay: no GST is added. Every payment gets an invoice in Account."} Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by our payment partner.</p>
       ) : (
-        <p className="k-small k-muted k-measure">{finePrint(offer, { currency: row && currency !== "INR" ? currency : "INR", inRupees: row?.charged_in === "INR", inRupeesYear: row?.yearly_charged_in === "INR",
+        <p className="k-small k-muted k-measure">{finePrint(offer, { currency: "INR", inRupees: false, inRupeesYear: false,
           charged: { basic: `₹${rupees("basic", "month").toLocaleString("en-IN")}`, pro: `₹${rupees("pro", "month").toLocaleString("en-IN")}` }, gst }).join(" ")}</p>
       )}
+      <p className="k-small k-muted k-measure" data-testid="usd-note">{usdNote(rate, pricing?.usd_inr?.fallback)}</p>
       <p className="k-small k-muted k-measure">StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past results don't predict future returns.</p>
       <LegalLinks blog />
       {switching && (
@@ -215,7 +179,7 @@ export function PlansPage() {
           onClose={() => setSwitching(null)} onConfirm={() => { const p = switching; setSwitching(null); void subscribe(p); }}>
           <span data-testid="plan-confirm">
             {planName(switching)} plan, billed {period === "year" ? "yearly" : "monthly"}: {chargeWords(switching)}. It renews automatically
-            each {period} until you cancel, any time from Account. {paymentWindowLine(planName(switching), period, ownCurrency)}
+            each {period} until you cancel, any time from Account. {paymentWindowLine(planName(switching), period)}
             {paid !== "free" && me && !given ? ` ${switchEndsNote(planName(paid as PlanId))}` : ""}
           </span>
         </ConfirmDialog>

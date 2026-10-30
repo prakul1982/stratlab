@@ -1,5 +1,5 @@
 import { searchWords } from "./helpTopics";
-import { ALL_PAGES, NAV } from "./nav";
+import { ALL_PAGES, NAV, placeName } from "./nav";
 
 /** Everything StratLab can do, with the words people might search for. Used by search and the home page grid.
  * `to` is a route; "@notebook", "@market" and "@verdict" mean the notebook you're in (or your latest one). */
@@ -10,6 +10,8 @@ export interface Feature {
   goal?: Goal;
   /** The plan feature (plans.ts) it needs, so a home tile is tagged for a plan without it (DP1-020). */
   flag?: string;
+  /** Other whole names it goes by (IA-1: a tab's own name and its old one), each as good as the title when typed in full. */
+  names?: string[];
 }
 
 export type Goal = "find" | "understand" | "test" | "trade";
@@ -113,7 +115,7 @@ export const FEATURES: Feature[] = [
 const OWN_ROW = ["options_greeks", "risk", "deepdive"];
 
 const EXTRA: Feature[] = [
-  { id: "features", title: "All features", what: "Every page by space and group, with what it is for in a line.", to: "/features",
+  { id: "features", title: "All features", what: "Every page by space and menu entry, with what it is for in a line.", to: "/features",
     words: "all features pages list everything index menu map sitemap browse what can stratlab do where is" },
   { id: "mine_home", title: "My space", what: "Your net worth, today's change, the markets, what is coming up and your watchlist, in the order you choose.", to: "/mine",
     words: "mine my space home customise customize pinned dashboard today pnl net worth coming up" },
@@ -140,9 +142,12 @@ const SEARCHABLE: Feature[] = (() => {
     if (!OWN_ROW.includes(f.id) && ALL_PAGES.some((l) => l.page.to === f.to)) merged.set(f.to, [...(merged.get(f.to) ?? []), f.words]);
     else alone.push(f);
   }
-  const pages: Feature[] = ALL_PAGES.map(({ space, group, page }) => ({
-    id: `page:${page.to}`, title: page.label, what: page.line, to: page.to,
-    words: [page.words, ...(merged.get(page.to) ?? []), NAV[space].label, group.label].join(" "),
+  // IA-1: a tab is found by its new name, its entry's and its old one, and says where it is now: "Find stocks › Figures (Screener)"
+  const pages: Feature[] = ALL_PAGES.map((l) => ({
+    id: `page:${l.page.to}`, title: placeName(l, true), what: l.page.line, to: l.page.to,
+    words: [l.page.label, l.page.words, ...(merged.get(l.page.to) ?? []), NAV[l.space].label, l.group.label].join(" "),
+    // the entry's own name ("Find stocks", "Calendar") is its first tab's
+    names: [l.page.label, l.page.was, l.group.pages.length > 1 ? `${l.group.label} ${l.page.label}` : null, l.group.pages[0] === l.page ? l.group.label : null].filter((x): x is string => !!x).map((x) => x.toLowerCase()),
   }));
   return [...pages, ...alone, ...EXTRA];
 })();
@@ -187,7 +192,7 @@ export function match(q: string, limit = 6): Feature[] {
       return n + (inTitle === 2 ? 3 : inTitle === 1 ? 2 : inWords ? 1 : 0);
     }, 0);
     if (words.length > 1 && (hay.includes(text) || hay.includes(words.join(" ")))) s += 4;       // the whole phrase ("borrowed money") counts for more than its words
-    if (title === text) s += 6;
+    if (title === text || f.names?.includes(text)) s += 6;
     if (s > 0 && !solid) typoOnly.add(f);
     return [s, f] as const;
   }).filter(([s]) => s > 0);

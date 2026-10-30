@@ -71,9 +71,10 @@ test("loan check: a repo-linked loan against repo + spread, each change's effect
   await expect(card.getByText("7.25%").first()).toBeVisible();
   await expect(card.getByText("+0.40 pts")).toBeVisible();
   await expect(card.getByText(/Your entered rate is 0.40 points above repo \+ spread after the 1 Oct 2026 reset/)).toBeVisible();
-  const changes = card.getByRole("list", { name: "Rate changes on Home loan, Example Bank" });
-  await expect(changes.getByText(/1 Jan 2026: 7.50% to 7.25%/)).toBeVisible();
-  await expect(card.getByText(/Earlier rate changes/)).toBeVisible();
+  // TABLE-SWEEP (owner, 29 Oct): every rate change is a row of one table, newest first, none folded away under "Earlier"
+  const changes = card.getByRole("table", { name: "Rate changes on Home loan, Example Bank" });
+  await expect(changes.getByRole("row", { name: /1 Jan 2026 .*7\.50% → 7\.25%/ })).toBeVisible();
+  await expect(card.getByText(/Earlier rate changes/)).toHaveCount(0);
   await card.getByText("Draft: what the Reserve Bank's 2026 loan pricing rules propose").click();
   await expect(card.getByText(/Not in force: the final rules may differ/)).toBeVisible();
   if (process.env.E2E_SHOTS) {

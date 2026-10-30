@@ -117,6 +117,9 @@ const MarginFundingPage = page(() => import("./pages/MarginFundingPage"), "Margi
 const IposPage = page(() => import("./pages/IposPage"), "IposPage");
 const IpoPage = page(() => import("./pages/IpoPage"), "IpoPage");
 const ChartPage = page(() => import("./pages/ChartPage"), "ChartPage");
+// IA-1: the one Calendar's "All dates" and Market today's Flows
+const CalendarPage = page(() => import("./pages/CalendarPage"), "CalendarPage");
+const FlowsPage = page(() => import("./pages/FlowsPage"), "FlowsPage");
 const DevKit = page(() => import("./pages/DevKit"), "DevKit");   // /dev/kit: the design kit on one page (dev builds and admins only)
 
 /** Start downloading the first page's code now, alongside the sign-in check, instead of after it. */
@@ -312,6 +315,8 @@ function Routed() {
         <Route path="/invest/margin-funding" element={<MarginFundingPage />} />
         <Route path="/invest/ipos" element={<IposPage />} />
         <Route path="/invest/ipos/:id" element={<IpoPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/invest/flows" element={<FlowsPage />} />
         <Route path="/dev/kit" element={import.meta.env.DEV ? <DevKit /> : <AdminOnly what="The design kit"><DevKit /></AdminOnly>} />
         <Route path="/chart/:market/:symbol" element={<ChartPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />

@@ -38,7 +38,7 @@ test("DH-012, DH-020, DH-021, DH-022: Tax tools' Form 67 date, the year still ow
 
 test("DH-011: the ITR page lists what the return needs beyond its schedules", () => {
   const src = read("src/pages/money/ItrExportPage.tsx");
-  assert.match(src, /data-testid="itr-not-covered"/);
+  assert.match(src, /<Notes label="Not covered here" testId="itr-not-covered"/);          // TABLE-SWEEP: numbered notes
   assert.match(src, /the ITR-2 and ITR-3 schedules they cover/);
 });
 

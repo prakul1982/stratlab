@@ -18,6 +18,8 @@ export const APP_ROUTES = [
   "/invest/business-updates", "/invest/stock-lending", "/invest/margin-funding", "/invest/ipos", "/invest/ipos/:id", "/dev/kit", "/research/filings",
   "/research/results", "/research/corporate-actions", "/research/IN/:symbol/deep", "/research/US/:symbol/deep",
   "/research/investor", "/chart/:market/:symbol", "/research/:region/:symbol", "/login", "/signup", "/about",
+  // IA-1: the one Calendar's own page and Market today's Flows tab
+  "/calendar", "/invest/flows",
 ];
 
 const PATTERNS = APP_ROUTES.map((r) => new RegExp("^" + r.replace(/\/\*$/, "(/.*)?").replace(/:[A-Za-z]+/g, "[^/]+") + "/?$"));
@@ -85,7 +87,8 @@ export function describePath(path: string): Described | null {
   const g = locateGroup(p);
   if (g) return { what: g.group.label };
   const at = locate(p);
-  return { what: at ? at.page.label : "this page" };
+  // a tab renamed by IA-1 is named with its entry: "Find stocks: Figures"
+  return { what: at ? (at.page.was ? `${at.group.label}: ${at.page.label}` : at.page.label) : "this page" };
 }
 
 /** What a visitor (no account) gets at an address. The landing page and its sections, the policies, a shared verdict

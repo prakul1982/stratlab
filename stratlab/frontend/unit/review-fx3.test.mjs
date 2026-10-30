@@ -75,10 +75,12 @@ test("RC2B-033: the example tabs stay on one line on a phone", () => {
   assert.match(read("src/styles.css"), /\.lp-demo-tabs button \{ flex: 1 1 auto; white-space: nowrap; padding: 0 10px; \}/);
 });
 
-test("RC2B-034: an Indian visitor whose browser says another country is offered rupees in one tap", () => {
+test("RC2B-034, item 34: no visitor is shown another currency first, so there is nothing to switch back to rupees", () => {
+  // changed on purpose by item 34 (owner, 29 Oct): the browser's country no longer picks dollars; every price is rupees with "about $"
   const cur = read("src/lib/currency.ts");
-  assert.match(cur, /offerRupees: guessed && chosen !== "INR" && !!p\?\.currencies\.INR/);
-  for (const f of ["src/pages/Login.tsx", "src/pages/PlansPage.tsx"]) assert.match(read(f), /In India\? Show prices in ₹/, f);
+  assert.doesNotMatch(cur, /function country\(\)|offerRupees|pickCurrency/);
+  assert.match(cur, /return \{ pricing: p, currency: "INR" as const, status, rate: usdRate\(p\) \};/);
+  for (const f of ["src/pages/Login.tsx", "src/pages/PlansPage.tsx"]) assert.doesNotMatch(read(f), /In India\? Show prices in ₹|aria-label="Prices in"|label="Prices in"/, f);
 });
 
 test("DF-018: the US tab opens with the holder's name, then one company's filings", () => {

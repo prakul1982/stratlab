@@ -20,7 +20,7 @@ export function CompareExperiments() {
   const nav = useNavigate();
   const { nb, problem, reload } = useNotebook(id, "Compare runs");
   if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
-  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Compare experiments" /><Card><Skeleton label="Opening the notebook" /></Card></div>;
+  if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Strategies" title="Compare experiments" /><Card><Skeleton label="Opening the notebook" /></Card></div>;
   // a run whose figures contradict each other is never charted or compared: it is listed with the reason (R38-001)
   const { shown: exps, legacy } = splitLegacy(nb.experiments);
   const notShown = legacy.length > 0 && (
@@ -33,7 +33,7 @@ export function CompareExperiments() {
   const a = exps.find((e) => e.v === va) ?? exps[exps.length - 2], b = exps.find((e) => e.v === vb) ?? exps[exps.length - 1];
   if (!a || !b) return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title="Compare experiments" lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
+      <PageHeader eyebrow="Trade · Strategies" title="Compare experiments" lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
       <EmptyState title="Nothing to compare yet" action={{ label: exps.length ? "Change the rules and run again" : "Run the first test", to: `/n/${nb.id}` }}>
         {compareGap(exps.length, legacy.length)}
       </EmptyState>
@@ -53,7 +53,7 @@ export function CompareExperiments() {
   // the same run on both sides: the pickers stay, so either side can be changed
   if (a.v === b.v) return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title="Compare experiments" lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
+      <PageHeader eyebrow="Trade · Strategies" title="Compare experiments" lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
       {pickers}
       <Notice tone="warn" role="status">Pick two different runs: v{a.v} is on both sides.</Notice>
       {notShown}
@@ -108,7 +108,7 @@ export function CompareExperiments() {
   ];
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Build and test" title={`v${a.v} against v${b.v}`} lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
+      <PageHeader eyebrow="Trade · Strategies" title={`v${a.v} against v${b.v}`} lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
       {/* the pickers and what changed in one card: a 700px card holding two small selects beside a card of another height left dead space (LIVE1A-009) */}
       <Card label="Pick two runs">
         {selects}

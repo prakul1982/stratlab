@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { NAV_GROUPS } from "../src/lib/navGroups";
-import { NAV } from "../src/lib/nav";
+import { ALL_PAGES, NAV, pageAt, startOf } from "../src/lib/nav";
 
 // The three spaces: Trade (the strategy lab), Invest and Money. The switcher at the top of the menu, the welcome
 // question that picks the first space, each space's home, deep links opening their own space, and search labelling
@@ -63,8 +63,9 @@ async function sane(page: Page, errors: string[], phone: boolean) {
   expect(small, "controls too small to tap").toEqual([]);
 }
 
-/** The group titles in the menu, in order (each is a link to the group's own page). */
-const groups = (side: ReturnType<Page["locator"]>) => side.getByRole("navigation", { name: "Main" }).locator(".side-group .side-title");
+/** The menu's entries, in order (IA-1: each a link to its page of tabs); Mine's menu has its Pinned group instead. */
+const groups = (side: ReturnType<Page["locator"]>) => side.getByRole("navigation", { name: "Main" }).locator(".side-entries > .side-entry > a");
+const mineGroups = (side: ReturnType<Page["locator"]>) => side.getByRole("navigation", { name: "Main" }).locator(".side-group .side-title");
 const labelsOf = (space: "trade" | "invest" | "money") => NAV[space].groups.map((g) => g.label);
 
 test("spaces: the switcher goes to a space's home and shows its groups, Mine shows its own menu, and the choice is kept", async ({ page, request }, info) => {
@@ -80,7 +81,7 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   await expect(space.getByRole("button")).toHaveText(["My space", "Trade", "Invest", "Money"]);
   await expect(space.getByRole("button", { name: "Trade" })).toHaveAttribute("aria-pressed", "true");
   await expect(groups(side)).toHaveText(labelsOf("trade"));
-  for (const g of NAV.trade.groups) await expect(side.locator(`[data-group="${g.id}"] > .side-nav > .side-entry > a`)).toHaveText(g.pages.map((p) => p.label));
+  for (const g of NAV.trade.groups) await expect(side.locator(`[data-group="${g.id}"] > a`)).toHaveAttribute("href", startOf(g, "trade"));
   // the space's main action is a normal-sized button, not a banner
   const action = side.getByRole("button", { name: "New notebook" });
   await expect(action).toBeVisible();
@@ -92,8 +93,9 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   if (phone) side = await menu(page, phone);
   await expect(space.getByRole("button", { name: "Money" })).toHaveAttribute("aria-pressed", "true");
   await expect(groups(side)).toHaveText(labelsOf("money"));
-  await expect(side.locator('[data-group="what-you-own"] .side-nav a')).toHaveText(["Net worth", "Holdings", "Mutual funds"]);
-  expect(NAV.money.groups.flatMap((g) => g.pages.map((p) => p.to)).sort(), "every Money feature is in the menu").toEqual(NAV_GROUPS.Money.map((e) => e.to).sort());
+  await expect(side.locator('[data-group="portfolio"] > a')).toHaveAttribute("href", "/money/net-worth");
+  await expect(side.locator('[data-group="calendar"] > a')).toHaveAttribute("href", "/money/calendar");          // Money opens the Calendar on its own dates
+  expect(ALL_PAGES.filter((l) => l.space === "money").map((l) => l.page.to).sort(), "every Money feature is in the menu").toEqual(NAV_GROUPS.Money.map((e) => e.to).sort());
   await expect(side.getByRole("link", { name: "Money home" })).toHaveAttribute("href", "/money");
   // kept on the account and on this device
   await expect.poll(async () => (await prefs(request, u)).space).toBe("money");
@@ -118,8 +120,10 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   if (phone) await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
   side = await menu(page, phone);
   await expect(side.getByRole("link", { name: "My space" })).toHaveAttribute("href", "/mine");
-  await expect(groups(side)).toHaveText(["Pinned"]);
-  await expect(side.getByRole("link", { name: "Briefs" })).toHaveAttribute("href", "/news");
+  await expect(mineGroups(side)).toHaveText(["Pinned"]);
+  await expect(groups(side)).toHaveCount(0);
+  await expect(side.getByRole("link", { name: "Today's brief" })).toHaveAttribute("href", "/news");
+  await expect(side.getByRole("link", { name: "Calendar" })).toHaveAttribute("href", "/calendar");
   await expect(side.getByRole("link", { name: "Connected accounts" })).toHaveAttribute("href", "/settings#accounts");
   const feats = (await (await request.get(`${API}/me`, { headers: auth(u) })).json()).plan_info.features;
   await expect(side.getByRole("link", { name: "AI assistant" })).toHaveCount(feats.assistant === false ? 0 : 1);
@@ -138,7 +142,7 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   await page.goto("/research/pulse");
   side = await menu(page, phone);
   await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Invest" })).toHaveAttribute("aria-pressed", "true");
-  await expect(side.locator('[data-group="market-view"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
+  await expect(side.locator('[data-group="market-today"] > a')).toHaveClass(/active/);
   await sane(page, errors, phone);
 });
 
@@ -154,7 +158,7 @@ test("spaces: a deep link opens its own space, without changing the account's ch
     await expect(page.locator("main").getByText(ready).first()).toBeVisible({ timeout: 30_000 });
     const side = await menu(page, phone);
     await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name }), `${path} opens in ${name}`).toHaveAttribute("aria-pressed", "true");
-    if (name === "Money") await expect(side.getByRole("link", { name: path === "/holdings" ? "Holdings" : "Tax report", exact: true })).toHaveClass(/active/);
+    if (name === "Money") await expect(side.getByRole("link", { name: path === "/holdings" ? "Portfolio" : "Tax", exact: true })).toHaveClass(/active/);
   }
   // a deep link only switches the menu on this device; `/` still opens the space the person picked
   expect((await prefs(request, u)).space ?? null).toBeNull();
@@ -245,10 +249,12 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   await page.keyboard.press("Escape");
   // no "Prices as of" stamp: the tax total is worked out from the tradebooks' sales, not today's prices (R66)
   await expect(tax.locator(".as-of")).toHaveCount(0);
-  // one card per Money feature that exists, and nothing for one that doesn't yet
+  // one card per Money feature that exists (and the Calendar's All dates beside My money dates, IA-1), nothing for one that doesn't yet;
+  // each card under its menu entry, named as its tab is
   const cards = page.locator("[data-money]");
-  await expect(cards).toHaveCount(NAV_GROUPS.Money.length);
-  for (const e of NAV_GROUPS.Money) await expect(page.locator(`[data-money="${e.to}"]`)).toContainText(e.label);
+  await expect(cards).toHaveCount(NAV_GROUPS.Money.length + 1);
+  for (const e of NAV_GROUPS.Money) await expect(page.locator(`[data-money="${e.to}"]`)).toContainText(["/holdings", "/tax-report"].includes(e.to) ? e.label : pageAt(e.to)!.page.label);
+  await expect(page.locator('[data-entry="tax"] [data-money]')).toHaveCount(3);
   await sane(page, errors, phone);
   await cards.first().click();
   await expect(page).toHaveURL(new RegExp(NAV_GROUPS.Money[0].to + "$"));
@@ -320,10 +326,10 @@ test("space homes line up: one content width, four equal tool cards without hole
         // each tool once: the strip's card, not again as a card, a button or a "what you can do" entry
         await expect(page.locator('main a[href="/trade/positioning"]')).toHaveCount(1);
         expect(await page.locator("main").getByRole("button", { name: /Import a strategy/ }).count(), `${at}: Import offered at most once`).toBeLessThanOrEqual(1);
-        await expect(page.locator(".explore-card").filter({ hasText: /^(Strategy library|Paper trade options|Paper trade|Test an idea)/ })).toHaveCount(0);
+        await expect(page.locator(".explore-card").filter({ hasText: /^(Strategy library|Options builder|Paper trading|Trade journal|Test an idea)/ })).toHaveCount(0);
       }
       if (path === "/invest") {
-        await expect(page.locator(".explore-card").filter({ hasText: /^(Red flags in my watchlist|My watchlist at a glance)/ })).toHaveCount(0);
+        await expect(page.locator(".explore-card").filter({ hasText: /^(Filings|Stocks|Investor home|Breadth|Sectors|Chart rules|Figures)/ })).toHaveCount(0);
       }
       await sane(page, errors, phone);
     }
@@ -340,9 +346,10 @@ test("search labels each result with its space", async ({ page }, info) => {
   await box.getByLabel("Search or ask anything").fill("tax report");
   await expect(box.getByRole("option", { name: /Tax report/ }).first().locator(".space-tag")).toHaveText("Money");
   await box.getByLabel("Search or ask anything").fill("options");
-  await expect(box.getByRole("option", { name: /^Options builder/ }).locator(".space-tag")).toHaveText("Trade");
+  // IA-1: a tab's result names its entry, and an old name finds it where it is now
+  await expect(box.getByRole("option", { name: /^Practise › Options builder/ }).locator(".space-tag")).toHaveText("Trade");
   await box.getByLabel("Search or ask anything").fill("sector rotation");
-  await expect(box.getByRole("option", { name: /^Sector rotation/ }).first().locator(".space-tag")).toHaveText("Invest");
+  await expect(box.getByRole("option", { name: /^Market today › Sectors \(Sector rotation\)/ }).first().locator(".space-tag")).toHaveText("Invest");
   await box.getByLabel("Search or ask anything").fill("money");
   await box.getByRole("option", { name: /^Money/ }).first().click();
   await expect(page).toHaveURL(/\/money$/);

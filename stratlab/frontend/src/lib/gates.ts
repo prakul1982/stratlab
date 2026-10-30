@@ -15,6 +15,8 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/research/filings": { feature: "filings", whole: true },
   "/invest/breadth": { feature: "breadth", whole: false },
   "/trade/positioning": { feature: "positioning", whole: false },
+  // Market today's Flows: Positioning's cash card and its history, on the same plan as there (IA-1)
+  "/invest/flows": { feature: "positioning", whole: false },
   "/trade/positioning/stocks": { feature: "stock_futures", whole: false },
   "/trade/journal": { feature: "journal", whole: false },
   "/trade/closing-auction": { feature: "cas_history", whole: false },
