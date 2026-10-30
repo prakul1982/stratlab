@@ -15,15 +15,12 @@
 /* VR7-019: on a laptop the page's content runs to within 56px of the window's edge, so the 108px "Markets" pill stood over the right end of the cards behind it (the
    "Calendar →" on Invest, the corner of the last Money card). Under 1600px it is a round 44px button that fits the margin (its name is its tooltip and its label for a
    screen reader); from 1600px the margin is 136px or more and the pill keeps its word.
-   Item 37 (owner, 30 Oct: "not aligned properly", the button sat 1px from the cards at 1280 and 6px at 1440): two ways, one switch (lib/mwButton.ts,
-   <body data-mw-button>) until the owner picks. "float" (the default): the page column keeps an 80px right margin on a laptop and the button sits
-   centred in it, 18px clear of the cards, its bottom where it was. "menu": no floating button here; the menu's market line is the Markets button
-   (a menu folded away keeps the floating one, so Market Watch is always one press away) */
+   Items 37 and 43 (owner, 30 Oct: "not aligned properly", it sat 1px from the cards at 1280 and 6px at 1440; he picked this of the two ways shown):
+   the page column keeps an 80px right margin on a laptop and the button sits centred in it, 18px clear of the cards, its bottom where it was */
 @media (min-width: 901px) and (max-width: 1599px) {
   .mw-launch.app { width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 18px; }
   .mw-launch.app span { display: none; }
-  body:not([data-mw-button="menu"]):not(.mw-docked) .shell > .main { padding-right: 80px; }
-  body[data-mw-button="menu"] .shell:not(.slim) .mw-launch.app { display: none; }
+  body:not(.mw-docked) .shell > .main { padding-right: 80px; }
 }
 /* a docked panel takes its width from the page, and the cookie question moves out from under it */
 body.mw-docked .shell { padding-right: var(--mw-dock, 0px); }
