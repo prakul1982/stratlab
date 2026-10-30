@@ -72,6 +72,7 @@ async function pickTool(page: Page, chart: Locator, phone: boolean, group: strin
     await chart.getByRole("button", { name: group, exact: true }).click();
     await page.getByRole("menuitem", { name, exact: true }).click();
   }
+  await expect(chart).not.toHaveAttribute("data-tool", "");      // the tool is armed before the first tap
 }
 
 const saved = async (request: APIRequestContext) => (await (await request.get(MINE, { headers: auth })).json());
@@ -228,31 +229,42 @@ test("a fibonacci, the measure tools, a note and the magnet", async ({ page, req
   await place(page, chart, phone, 0.7, 0.45);
   await count(chart, 2);
   await pickTool(page, chart, phone, "Measure", "Date range");
-  await place(page, chart, phone, 0.2, 0.2);
-  await place(page, chart, phone, 0.5, 0.2);
+  // below the legend: in India's market hours its "Live" badge sits over (0.2, 0.2) and took the tap, so the date range
+  // was never drawn (CI, 30 Oct, 09:45 IST); each drawing is counted as it is made, so a lost one is named where it happens
+  await place(page, chart, phone, 0.2, 0.32);
+  await place(page, chart, phone, 0.5, 0.32);
+  await count(chart, 3);
   await pickTool(page, chart, phone, "Measure", "Price range");
   await place(page, chart, phone, 0.75, 0.3);
   await place(page, chart, phone, 0.85, 0.6);
+  await count(chart, 4);
   await pickTool(page, chart, phone, "Notes", "Text note");
   await place(page, chart, phone, 0.35, 0.25);
   await chart.getByLabel("Note text").fill("Planning note");
+  await count(chart, 5);
   await pickTool(page, chart, phone, "Lines", "Vertical line");
   await place(page, chart, phone, 0.45, 0.5);
+  await count(chart, 6);
   await pickTool(page, chart, phone, "Notes", "Arrow");
   await place(page, chart, phone, 0.15, 0.8);
   await place(page, chart, phone, 0.25, 0.7);
+  await count(chart, 7);
   await pickTool(page, chart, phone, "Shapes and Fibonacci", "Parallel channel");
   await place(page, chart, phone, 0.1, 0.9);
   await place(page, chart, phone, 0.4, 0.75);
   await place(page, chart, phone, 0.4, 0.9);
+  await count(chart, 8);
   await pickTool(page, chart, phone, "Lines", "Horizontal ray");
   await place(page, chart, phone, 0.5, 0.65);
+  await count(chart, 9);
   await pickTool(page, chart, phone, "Shapes and Fibonacci", "Rectangle");
   await place(page, chart, phone, 0.55, 0.8);
   await place(page, chart, phone, 0.7, 0.9);
+  await count(chart, 10);
   await pickTool(page, chart, phone, "Lines", "Ray");
   await place(page, chart, phone, 0.2, 0.4);
   await place(page, chart, phone, 0.3, 0.35);
+  await count(chart, 11);
   await pickTool(page, chart, phone, "Notes", "Brush");
   const b = await stageBox(chart);
   await page.mouse.move(b.x + b.width * 0.5, b.y + b.height * 0.15);
