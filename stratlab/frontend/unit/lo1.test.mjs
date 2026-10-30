@@ -12,3 +12,11 @@ test("LO1-1: on a phone undo, redo and the shortcuts (i) move from the chart's t
   assert.match(sheet, /<div className="pc-sheet-more"><HistoryButtons \{\.\.\.p\} \/><ShortcutsButton \/><\/div>/);
   assert.match(read("src/charts/price/priceChart.css"), /\.pc-sheet-more \{ display: flex;/);
 });
+
+test("LO1-2: the holder card shows the promoter/public split and says plainly when the table couldn't be read", () => {
+  const page = read("src/pages/IpoPage.tsx");
+  assert.match(page, /testId="ipo-holding">\s*<CardHead level=\{2\} title="Who holds the shares" \/>\s*<p className="k-small k-muted" data-testid="ipo-holding-unread">/);
+  assert.match(page, /label="Promoters and public, before the offer"/);
+  assert.match(page, /\{\(any \|\| !f\.holding_unread\) && <Holding f=\{f\} \/>\}/);
+  assert.match(read("src/lib/ipo.ts"), /holding_unread\?: boolean;/);
+});

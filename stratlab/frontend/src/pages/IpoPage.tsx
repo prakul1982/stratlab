@@ -212,18 +212,45 @@ function Owners({ f }: { f: Facts }) {
 
 function Holding({ f }: { f: Facts }) {
   const h = f.holding;
-  if (!h?.rows.length) return null;
+  // a table the rules couldn't read is said plainly, not left as an empty space (LO1-2)
+  if (!h?.rows.length && !h?.split) {
+    if (!f.holding_unread) return null;
+    return (
+      <Card label="Who holds the shares" testId="ipo-holding">
+        <CardHead level={2} title="Who holds the shares" />
+        <p className="k-small k-muted" data-testid="ipo-holding-unread">The shareholding table in this document couldn't be read by StratLab's fixed rules, so no figures are shown here. It is in the document's capital structure chapter (open it under Documents).</p>
+      </Card>
+    );
+  }
+  const s = h.split;
   const post = h.rows.some((x) => x.post_pct != null);
+  const splitRows = s ? [
+    { key: "p", name: "Promoters and promoter group", shares: s.promoter_shares, pct: s.promoter_pct, post: s.post_promoter_pct ?? null },
+    { key: "u", name: "Public and other holders", shares: s.public_shares, pct: s.public_pct, post: s.post_public_pct ?? null },
+  ] : [];
+  const splitPost = splitRows.some((x) => x.post != null);
+  const pctText = (v: number | null | undefined) => (v == null ? "–" : `${figure(v)}%`);
   return (
-    <Card label="Who holds the shares before the offer" testId="ipo-holding">
-      <CardHead level={2} title="Who holds the shares before the offer" info="The document's table of the shareholding of the promoters, the promoter group and other holders before the issue." infoLabel="About this table" />
-      <DataTable stack label="Shareholding before the offer" rows={h.rows} rowKey={(_x, i) => `${i}`} columns={[
-        { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (x) => (x.total ? <b>{x.name}</b> : <>{x.name}<span className="k-sub-line">{x.group}</span></>) },
-        { key: "s", header: "Shares", numeric: true, cell: (x) => sharesText(x.shares) },
-        { key: "p", header: "Share of the company", numeric: true, cell: (x) => (x.pct == null ? "–" : `${figure(x.pct)}%`) },
-        ...(post ? [{ key: "q", header: "After the offer", numeric: true, cell: (x: (typeof h.rows)[number]) => (x.post_pct == null ? "–" : `${figure(x.post_pct)}%`) } as Column<(typeof h.rows)[number]>] : []),
-      ]} />
-      <p className="k-note">As at the date the document gives. {pageOf(h.page)}</p>
+    <Card label="Who holds the shares" testId="ipo-holding">
+      <CardHead level={2} title="Who holds the shares" info="The document's own tables: its shareholding pattern for the promoter and public split, and its table of the promoters, the promoter group and other holders. After the offer is filled in once the price is set." infoLabel="About these tables" />
+      {s && (
+        <DataTable stack label="Promoters and public, before the offer" rows={splitRows} rowKey={(x) => x.key} columns={[
+          { key: "n", header: "Holders", rowHeader: true, cell: (x) => x.name },
+          { key: "s", header: "Shares", numeric: true, cell: (x) => sharesText(x.shares) },
+          { key: "p", header: "Before the offer", numeric: true, cell: (x) => pctText(x.pct) },
+          ...(splitPost ? [{ key: "q", header: "After the offer", numeric: true, cell: (x: (typeof splitRows)[number]) => pctText(x.post) } as Column<(typeof splitRows)[number]>] : []),
+        ]} />
+      )}
+      {h.rows.length > 0 && (
+        <DataTable stack label="Shareholding before the offer" rows={h.rows} rowKey={(_x, i) => `${i}`} columns={[
+          { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (x) => (x.total ? <b>{x.name}</b> : <>{x.name}<span className="k-sub-line">{x.group}</span></>) },
+          { key: "s", header: "Shares", numeric: true, cell: (x) => sharesText(x.shares) },
+          { key: "p", header: "Before the offer", numeric: true, cell: (x) => pctText(x.pct) },
+          ...(post ? [{ key: "q", header: "After the offer", numeric: true, cell: (x: (typeof h.rows)[number]) => pctText(x.post_pct) } as Column<(typeof h.rows)[number]>] : []),
+        ]} />
+      )}
+      <p className="k-note">As at the date the document gives.{!post && !splitPost ? " The holdings after the offer are filled in once the price is set." : ""}{" "}
+        {s && h.rows.length && s.page !== h.page ? `The split is on page ${s.page} of the PDF, the holders on page ${h.page}.` : pageOf(s && !h.rows.length ? s.page : h.page)}</p>
     </Card>
   );
 }
@@ -363,7 +390,7 @@ function FromTheDocument({ f, d }: { f: Facts; d: IpoDetail }) {
       {!any && <Card compact label="From the offer document"><p className="k-small k-muted">The rules couldn't read the cover or the summary tables of this document. Open it under Documents.</p></Card>}
       <Objects f={f} d={d} />
       <Owners f={f} />
-      <Holding f={f} />
+      {(any || !f.holding_unread) && <Holding f={f} />}
       <Financials f={f} kind={kind} />
       <Indicators f={f} />
       <Valuation f={f} d={d} />

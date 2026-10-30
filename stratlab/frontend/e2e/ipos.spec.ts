@@ -172,6 +172,8 @@ test("An IPO's page: terms, bids, the offer document's facts and its summary (Ba
   await expect(facts).toContainText("₹2,014 cr");                                                // 2,013.53 crore
   await expect(facts.getByTestId("ipo-financials")).toContainText("Latest year's change");
   await expect(facts).toContainText("Page 72 of the PDF");
+  // its holder table isn't in the pages read: the page says so plainly, not an empty space (LO1-2)
+  await expect(facts.getByTestId("ipo-holding-unread")).toContainText("couldn't be read by StratLab's fixed rules");
 
   // the summary is the business and its segments, and one fold holds the words behind them
   const sum = page.getByTestId("ipo-summary");
@@ -262,6 +264,8 @@ test("An IPO's page is a table for every block: a full red herring prospectus re
   // who holds the shares before the offer, with the document's own sub-totals
   const holding = page.getByTestId("ipo-holding");
   await expect(holding.getByRole("row", { name: /Sub-total \(A\).*4,00,19,595.*42\.84%/ })).toBeVisible();
+  await expect(holding.getByRole("row", { name: /Promoters and promoter group.*48\.18%/ })).toBeVisible();      // the split: (A) + (B) (LO1-2)
+  await expect(holding.getByRole("row", { name: /Public and other holders.*51\.81%/ })).toBeVisible();
   await expect(page.getByTestId("ipo-financials")).toContainText("Earnings per share, basic");
   // no list of facts and no empty tile: every card has a table
   for (const id of ["ipo-terms", "ipo-bids", "ipo-objects", "ipo-promoters", "ipo-holding", "ipo-financials", "ipo-kpis", "ipo-peers", "ipo-risks", "ipo-docs"])

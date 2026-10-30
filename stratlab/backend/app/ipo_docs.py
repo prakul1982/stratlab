@@ -32,7 +32,9 @@ HOSTS = ("nsearchives.nseindia.com", "archives.nseindia.com", "www.sebi.gov.in",
 MAX_BYTES = 40 * 1024 * 1024          # a red herring prospectus with its annexures runs to 15 MB, a US prospectus to 60 MB of pictures
 HTML_HEAD = 3_600_000                 # the first part of a US prospectus holds everything read here (the summary, the risks, the proceeds)
 MAX_PAGES = 230                       # pages of an Indian offer document read (the summary tables, the objects and the business are in them)
-READER = 2                            # how the documents are read: raise it to read them again (2: the proceeds table, the first risk factors, the KPIs, the shareholding and the peer ratios, O7)
+READER = 3                            # how the documents are read: raise it to read them again (2: the proceeds table, the first risk factors, the KPIs, the shareholding and the peer ratios, O7;
+                                      # 3: every holder-table layout and the promoter/public split, LO1-2)
+READER_KEPT = 2                       # facts an older reader made still show until the document is read again (LO1-2: no IPO page goes blank meanwhile)
 SUMMARY_READER = 2                    # (2: the business and its segments only: the rest is read by rules into tables)
 
 
@@ -523,57 +525,154 @@ def kpis(pages: list[str]) -> dict | None:
     return None
 
 
-def shareholding(pages: list[str]) -> dict | None:
-    """The pre-offer shareholding of the promoters, the rest of the promoter group and the largest other holders, from the table the
-    document gives before the offer's capital structure: {"page", "rows": [{"group", "name", "shares", "pct"}], "post": bool} with
-    the post-offer shares when the price band is fixed; a "[●]" (to be filled in after allotment) leaves `post_pct` None. Names that
-    wrap over lines are joined; a sub-total line is kept as its own row."""
+# the offer documents' holder tables come in more than one layout (LO1-2): the combined pre-/post-Offer table of the promoters, promoter group,
+# top 10 and public (main board, "Offer" or "Issue", "Promoter" or "Promoters", "14.45%" or "66.43"), and the SME table of the promoters and
+# promoter group alone (pre-Offer and post-Offer columns, "Total (A)" sub-totals, "Negligible" for a tiny holding)
+HOLD_HEADS = (("holders", re.compile(r"Pre-?\s?(?:Offer|Issue) shareholding as\s*(?:\n\s*)?on the date", re.I)),
+              ("promoters", re.compile(r"^\s*(?:\d+\.|\([ivx]+\))?\s*(?:Details of )?(?:Equity )?Shareholding of (?:our |the )?Promoters?\s+and\s+(?:the\s+)?(?:members of (?:our |the )?)?Promoter\s*Group", re.I | re.M)))
+HOLD_GROUP = re.compile(r"(Promoters?(?:\s+and\s+(?:members of (?:our |the )?)?Promoter Group)?|Promoter Group(?:\s*\(other than (?:our |the )?Promoters?\))?|Additional top 10 Shareholders|"
+                        r"Other public [Ss]hareholders|Public(?: [Ss]hareholders)?)[\s*#^]*$", re.I)
+HOLD_NUM = r"\d{1,3}(?:,\d{2,3})+|\d+"
+HOLD_ROW = re.compile(rf"(?:^|\s)(?P<sh>{HOLD_NUM})[*#^]*(?:\(\d+\))?\s+(?P<pct>\d{{1,3}}(?:\.\d{{1,4}})?|Negligible)\s*%?(?P<tail>(?:\s+(?:\[●\]|{HOLD_NUM}|\d{{1,3}}\.\d{{1,4}}%?|Negligible))*)\s*$", re.I)
+HOLD_SERIAL = re.compile(r"^(?:\d{1,2}\.|\(?[ivx]{1,5}\)|\(\d{1,2}\))\s*")
+HOLD_PROMOTER = re.compile(r"^Promoter", re.I)
+
+
+def _hold_pct(t: str) -> float | None:
+    return 0.0 if t.lower() == "negligible" else float(t.rstrip("%"))
+
+
+def _hold_rows(text: str) -> list[dict]:
+    """The rows of a holder table, from its first group line ("Promoters") to its grand total or the prose after it."""
+    lines = [ln.strip() for ln in text.split("\n")]
+    first = next((k for k, ln in enumerate(lines) if HOLD_GROUP.match(ln) and HOLD_PROMOTER.match(ln)), None)
+    if first is None:
+        return []
+    rows, group, buf, skipping = [], "Promoters", "", False
+    for ln in lines[first:]:
+        if not ln:
+            continue
+        if re.fullmatch(r"\d{2,4}", ln):                 # a page break: the table's header lines repeat, then its rows go on
+            skipping, buf = True, ""
+            continue
+        if skipping:
+            if HOLD_SERIAL.match(ln) or HOLD_GROUP.match(ln):
+                skipping = False
+            else:
+                continue
+        if HOLD_GROUP.match(ln):
+            group, buf = re.sub(r"[\s*#^]+$", "", ln), ""
+            continue
+        if re.match(r"Total\s*(?:\(?[A-Z]\)?\s*\+|\d|$)|Grand Total", ln, re.I):    # the grand total ends the table ("Total (A + B + C + D)")
+            break
+        if re.match(r"[*#^]|\(\d+\)\s*[A-Z][a-z]|Notes?:", ln):                        # a note under the table
+            continue
+        m = HOLD_ROW.search(ln)
+        if not m:
+            if rows and len(ln) >= 60 and len(re.findall(r"\b[a-z]{2,}\b", ln)) >= 6:   # the prose after the table
+                break
+            if HOLD_SERIAL.fullmatch(ln + " "):                                           # "(i)" on a line of its own
+                continue
+            if HOLD_SERIAL.match(ln) and buf and rows and not rows[-1]["total"]:         # a name that ran on after its row's figures
+                rows[-1]["name"] = _flat(f"{rows[-1]['name']} {buf}")
+                buf = ""
+            buf = _flat(f"{buf} {ln}")
+            continue
+        name = _flat(f"{buf} {ln[: m.start()]}")
+        buf = ""
+        total = bool(re.match(r"(?:Sub-?\s?total|Total)\s*\(?[A-Z]\)?$", name, re.I))
+        name = re.sub(r"(?:\s*(?:\(\d+\)|[*#^]))+$", "", HOLD_SERIAL.sub("", name)).strip()      # a note mark after the name ("S.p.A.(3)")
+        if not name or re.fullmatch(r"[-*#^ ]*(?:\(\d+\))?[-*#^ ]*", name):
+            name = "Public shareholders"
+        pct = _hold_pct(m.group("pct"))
+        if not name or pct > 100:
+            continue
+        tail = re.findall(rf"\[●\]|\d{{1,3}}\.\d{{1,4}}%?|Negligible|{HOLD_NUM}", m.group("tail"), re.I)
+        post_shares = post_pct = None
+        for k in range(len(tail) - 1, 0, -1):      # the last filled pair: the upper end of the price band once the price is set
+            if re.fullmatch(HOLD_NUM, tail[k - 1]) and re.fullmatch(r"\d{1,3}\.\d{1,4}%?|Negligible", tail[k], re.I):
+                post_shares, post_pct = int(tail[k - 1].replace(",", "")), _hold_pct(tail[k])
+                break
+        rows.append({"group": group, "name": name, "shares": int(m.group("sh").replace(",", "")), "pct": pct, "post_shares": post_shares, "post_pct": post_pct,
+                     "total": total, "promoter": bool(HOLD_PROMOTER.match(group))})
+    return rows
+
+
+def _hold_sane(rows: list[dict]) -> bool:
+    """The rows add up: each sub-total is the sum of the rows above it in its group, and the holders' own percentages come to at most 100."""
+    held = [r for r in rows if not r["total"]]
+    if not held or sum(r["pct"] for r in held) > 100.6:
+        return False
+    for k, r in enumerate(rows):
+        if r["total"]:
+            part = [x["shares"] for x in rows[:k] if x["group"] == r["group"] and not x["total"]]
+            if part and sum(part) != r["shares"]:
+                return False
+    return True
+
+
+def holding_split(pages: list[str]) -> dict | None:
+    """The promoter and public split from the document's shareholding pattern (the SEBI table every offer document has: "(A) Promoter &
+    Promoter Group", "(B) Public", their shares and their % of all shares): {"page", "promoter_shares", "promoter_pct", "public_shares",
+    "public_pct"}. Read only when the two come to 100% (give or take 0.5), else None."""
     for i, pg in enumerate(pages):
-        if not re.search(r"Pre-Offer shareholding as\s*(?:\n\s*)?on the date", pg, re.I) or re.search(r"\.{4,}", pg[:300]):
+        if not re.search(r"shareholding pattern of (?:our|the) Company", pg, re.I) or re.search(r"\.{4,}", pg[:300]):
             continue
-        text = pg + "\n" + (pages[i + 1] if i + 1 < len(pages) else "")
-        start = re.search(r"Promoters\s*\n", text)
-        if not start:
+        t = re.sub(r"(\d),\s*\n\s*(\d{3})\b", r"\1,\2", pg)                 # a figure the PDF broke over two lines ("187,995,\n834")
+        m = re.search(r"\(A\)\s*Promoters?\s*(?:&|and)\s*Promoter\s*Group[#*^]*(?P<a>.*?)\(B\)\s*Public(?P<b>.*?)(?:\(C\)|Total)", t, re.S | re.I)
+        if not m:
             continue
-        rows, group, buf, skipping = [], "Promoters", "", False
-        for ln in text[start.start():].split("\n"):
-            ln = ln.strip()
-            if not ln:
+        got = []
+        for part in (m.group("a"), m.group("b")):
+            toks = re.findall(r"\d{1,3}(?:,\d{2,3})+|\d+(?:\.\d+)?|Negligible|(?<=\s)-(?=\s)", part, re.I)
+            toks = [x for x in toks if x != "-"]
+            if len(toks) < 2:
+                got.append((0, 0.0) if not toks else None)       # "(B) Public - - -": no public holders yet
                 continue
-            if re.match(r"^\d{3}$", ln):                      # a page break: the table's header lines repeat, then its rows go on
-                skipping, buf = True, ""
-                continue
-            if skipping:
-                if re.match(r"^\d+\.\s+\S|^(Promoters?|Promoter Group|Additional top|Other public|Public)\b", ln):
-                    skipping = False
-                else:
-                    continue
-            if re.match(r"(Promoters?|Promoter Group.*|Additional top.*|Other public.*|Public)\s*$", ln, re.I) and not buf:
-                group = ln.strip()
-                continue
-            if re.match(r"(Total|Notes?:|\*|#|\^)", ln):
-                if re.match(r"Total", ln):
-                    break
-                continue
-            m = re.search(r"([\d,]{5,})\s+([\d.]+)%\s+(.*)$", ln)
-            if not m:
-                buf = _flat(f"{buf} {ln}") if not re.match(r"^\d+\.\s*$", ln) else buf
-                continue
-            head = ln[: m.start()].strip()
-            name = _flat(f"{buf} {head}")
-            buf = ""
-            name = re.sub(r"^\d+\.\s+", "", name).strip()
-            if re.fullmatch(r"[-*#^ ]*", name):
-                name = "Public shareholders"
-            if not name:
-                continue
-            tail = re.findall(r"\[●\]|[\d,]{5,}|[\d.]+%", m.group(3))
-            post_pct = next((float(t.rstrip("%")) for t in tail if t.endswith("%")), None)
-            rows.append({"group": group, "name": name, "shares": int(m.group(1).replace(",", "")), "pct": float(m.group(2)), "post_pct": post_pct,
-                         "total": bool(re.match(r"Sub-total", name, re.I))})
-        if len(rows) >= 2:
-            return {"page": i + 1, "rows": rows[:40]}
+            sh = toks[1]
+            at = next((k for k in range(2, len(toks) - 1) if toks[k] == sh), None)   # the total of the row (VII), then its % (VIII)
+            got.append((int(sh.replace(",", "")), _hold_pct(toks[at + 1])) if at is not None and re.fullmatch(r"\d{1,3}(?:\.\d+)?|Negligible", toks[at + 1], re.I) else None)
+        if None in got or not 99.5 <= got[0][1] + got[1][1] <= 100.5:
+            continue
+        return {"page": i + 1, "promoter_shares": got[0][0], "promoter_pct": got[0][1], "public_shares": got[1][0], "public_pct": got[1][1]}
     return None
+
+
+def shareholding(pages: list[str]) -> dict | None:
+    """The holders before (and, once the price is set, after) the offer, from the document's own table: {"page", "layout": "holders" (the
+    promoters, promoter group, top 10 and the public) or "promoters" (the promoters and promoter group alone), "rows": [{"group", "name",
+    "shares", "pct", "post_shares", "post_pct", "total", "promoter"}], "split": the promoter and public shares and % before the offer, and
+    after it when the table has the figures}. A "[●]" (filled in after allotment) leaves the post-offer figures None; a "Negligible" holding is
+    0. Names that wrap over lines are joined; a sub-total line is kept as its own row. Only rows that add up to the table's own sub-totals are
+    kept; None when no table could be read (the page then says so)."""
+    found = None
+    for layout, head in HOLD_HEADS:
+        for i, pg in enumerate(pages):
+            if not head.search(pg) or re.search(r"\.{4,}", pg[:300]):
+                continue
+            rows = _hold_rows(pg[head.search(pg).start():] + "\n" + (pages[i + 1] if i + 1 < len(pages) else ""))
+            if rows and _hold_sane(rows):                 # one holder is a table too (a company its promoter holds whole)
+                found = {"page": i + 1, "layout": layout, "rows": rows[:40]}
+                break
+        if found:
+            break
+    pattern = holding_split(pages)
+    if not found and not pattern:
+        return None
+    rows = found["rows"] if found else []
+    held = [r for r in rows if not r["total"]]
+    split = None
+    if pattern:
+        split = {**pattern, "basis": "pattern"}
+    elif found and found["layout"] == "holders":
+        prom, pub = [r for r in held if r["promoter"]], [r for r in held if not r["promoter"]]
+        split = {"page": found["page"], "promoter_shares": sum(r["shares"] for r in prom), "promoter_pct": round(sum(r["pct"] for r in prom), 2),
+                 "public_shares": sum(r["shares"] for r in pub), "public_pct": round(sum(r["pct"] for r in pub), 2), "basis": "holders"}
+    if split and found and found["layout"] == "holders" and held and all(r["post_pct"] is not None for r in held):
+        prom, pub = [r for r in held if r["promoter"]], [r for r in held if not r["promoter"]]
+        split.update(post_promoter_pct=round(sum(r["post_pct"] for r in prom), 2), post_public_pct=round(sum(r["post_pct"] for r in pub), 2),
+                     post_promoter_shares=sum(r["post_shares"] or 0 for r in prom), post_public_shares=sum(r["post_shares"] or 0 for r in pub))
+    return {"page": found["page"] if found else pattern["page"], "layout": found["layout"] if found else "pattern", "rows": rows, "split": split}
 
 
 PEER_COLS = (("revenue", r"Revenue"), ("face", r"Face\s*Value"), ("price", r"(?:Closing\s*)?price"), ("eps", r"EPS|Earnings\s*per"),
