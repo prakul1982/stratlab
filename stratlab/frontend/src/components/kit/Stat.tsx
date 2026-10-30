@@ -33,16 +33,15 @@ function textOf(node: ReactNode): string {
   return Children.toArray(node).map((c) => (typeof c === "string" || typeof c === "number" ? String(c) : "")).join("");
 }
 
-/** A change as a pill: ▲ up, ▼ down. The colour follows the sign (`tone="auto"`); pass `tone="neutral"` where a rise is
- * not good news and a fall is not bad (the market's margin-funded book, open interest): the arrow still shows the
- * direction, the colour does not judge. Screen readers hear "up" or "down". `value` decides the direction, except that a change whose printed
+/** A change as a pill: ▲ up in green, ▼ down in red, the same pill everywhere. The colour shows the direction only, never good or
+ * bad news (item 39, owner 30 Oct: the grey ▲/▼ pills on Market today's FII/DII and volatility tables beside green and red ones read as
+ * broken, so there is no grey "neutral" pill any more). Screen readers hear "up" or "down". `value` decides the direction, except that a change whose printed
  * figure rounds to nothing ("0.00%") is flat: no arrow, and screen readers hear "Unchanged", not "Up 0.00%" (R11P-010). */
-export function Delta({ value, children, tone = "auto" }: { value: number | null | undefined; children: ReactNode; tone?: "auto" | "neutral" }) {
+export function Delta({ value, children }: { value: number | null | undefined; children: ReactNode }) {
   if (value == null || !Number.isFinite(value)) return null;
   const dir = changeDir(value, textOf(children));
-  const cls = tone === "neutral" ? "flat" : dir;
   return (
-    <span className={`k-delta ${cls}`}>
+    <span className={`k-delta ${dir}`}>
       {dir !== "flat" && <span aria-hidden="true">{dir === "up" ? "▲" : "▼"}</span>}
       <span className="sr-only">{dir === "up" ? "Up " : dir === "down" ? "Down " : "Unchanged "}</span>
       {children}

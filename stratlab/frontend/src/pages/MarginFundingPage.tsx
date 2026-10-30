@@ -33,7 +33,7 @@ function Market({ p }: { p: MtfPage }) {
     <FactTable label="The market's margin funding" figureHead="Amount" noteHead="What it is" rows={[
       { id: "end", k: `Funded on ${dayText(m.as_of).replace(/ \d{4}$/, "")}`, v: cr(m.end), n: m.stocks != null ? `${m.stocks.toLocaleString("en-IN")} stocks` : undefined },
       { id: "day", k: "That day", v: day != null ? signedInrCompact(day * CRORE) : "–", n: `${cr(m.fresh)} new · ${cr(m.liquidated)} closed` },
-      { id: "d30", k: "Over 30 days", v: <>{m.d30 ? signedInrCompact(m.d30.crore * CRORE) : "–"}{m.d30 && <> <Delta value={m.d30.crore} tone="neutral">{pct(m.d30.pct, 1)}</Delta></>}</>,
+      { id: "d30", k: "Over 30 days", v: <>{m.d30 ? signedInrCompact(m.d30.crore * CRORE) : "–"}{m.d30 && <> <Delta value={m.d30.crore}>{pct(m.d30.pct, 1)}</Delta></>}</>,
         n: m.d30 ? `since ${dayText(m.d30.from).replace(/ \d{4}$/, "")}` : "Needs 30 days of data" },
     ]} />
   ) : null;
@@ -92,7 +92,7 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
           { id: "funded", k: `Funded on ${dayText(d.as_of).replace(/ \d{4}$/, "")}`, v: cr(d.crore), n: d.pct_shares != null ? <>{pctPlain(d.pct_shares, 2)} of shares issued<Info label="Of shares issued">{d.about.pct_shares}</Info></> : undefined },
           { id: "shares", k: "Shares funded", v: sharesShort(d.shares) },
           { id: "mcap", k: "Of market value", v: pctPlain(d.pct_mcap, 2), n: <>at the close of {inr(d.close, 2)}<Info label="Of market value">{d.about.pct_mcap}</Info></> },
-          { id: "day", k: "That day", v: <>{d.day ? signedInrCompact(d.day.crore * CRORE) : "–"}{d.day && <> <Delta value={d.day.crore} tone="neutral">{pct(d.day.pct, 1)}</Delta></>}</>, n: `30 days: ${chg(d.d30)}` },
+          { id: "day", k: "That day", v: <>{d.day ? signedInrCompact(d.day.crore * CRORE) : "–"}{d.day && <> <Delta value={d.day.crore}>{pct(d.day.pct, 1)}</Delta></>}</>, n: `30 days: ${chg(d.d30)}` },
         ]} />
       }
       table={canDraw ? { label: `${symbol}'s margin funding by day`, rows: [...shown].reverse(), rowKey: (r) => r.day,

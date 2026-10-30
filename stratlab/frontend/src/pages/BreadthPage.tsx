@@ -163,10 +163,10 @@ function Parts({ parts, of }: { parts: Part[]; of: (p: Part) => ReactNode }) {
   return <>{parts.map((p, i) => <span key={i}>{i > 0 && <span className="k-muted"> / </span>}{of(p)}</span>)}</>;
 }
 const figCell = (p: Part, v: number | null) => <span className={p.tone === "up" ? "k-up" : p.tone === "down" ? "k-down" : undefined}>{figure(v, p.unit)}</span>;
-/** The change of a row: its parts' changes with a ▲/▼ and a sign (never colour alone); TRIN, the fallers and the lows keep the direction without judging it. */
+/** The change of a row: its parts' changes with a ▲/▼ and a sign (never colour alone), green up and red down like every change pill (item 39). */
 function Changes({ parts }: { parts: Part[] }) {
   if (parts.every((p) => p.change == null)) return <>–</>;
-  return <Parts parts={parts} of={(p) => (p.change == null ? "–" : <Delta value={Number(p.change.toFixed(p.unit === "count" ? 0 : p.unit === "ratio" || p.unit === "level" ? 2 : 1))} tone={p.neutral ? "neutral" : "auto"}>{figChange(p.change, p.unit)}</Delta>)} />;
+  return <Parts parts={parts} of={(p) => (p.change == null ? "–" : <Delta value={Number(p.change.toFixed(p.unit === "count" ? 0 : p.unit === "ratio" || p.unit === "level" ? 2 : 1))}>{figChange(p.change, p.unit)}</Delta>)} />;
 }
 
 /** While the market is open: the counts so far today against the last close, as one table, with the line through the day under it. When

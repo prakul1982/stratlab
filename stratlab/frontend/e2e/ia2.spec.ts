@@ -255,3 +255,54 @@ test("item 38: on every page of charts, at 1440, 1280, 390 and 360, no chart lab
   }
 });
 
+// Item 39 (owner screenshot, 30 Oct: Market today, "these not colored"): every ▲/▼ change is green up and red down, the same pill everywhere;
+// the FII/DII and volatility tables' grey pills were the odd ones out. On each page, every piece of text with an arrow is drawn in the up or
+// down colour.
+const arrowFaults = (page: Page) => page.evaluate(() => {
+  const probe = (cls: string) => { const s = document.createElement("span"); s.className = cls; document.body.appendChild(s); const c = getComputedStyle(s).color; s.remove(); return c; };
+  const ok = new Set([probe("k-delta up"), probe("k-delta down"), probe("k-up"), probe("k-down")]);
+  const out: string[] = [];
+  let arrows = 0;
+  const walk = document.createTreeWalker(document.querySelector("main") ?? document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    if (!/[▲▼]/.test(n.textContent ?? "")) continue;
+    const el = n.parentElement!;
+    const r = el.getBoundingClientRect();
+    if (!r.width || el.closest("[hidden], .sr-only, svg")) continue;
+    arrows++;
+    const pill = el.closest(".k-delta");
+    if (pill && !/\b(up|down)\b/.test(pill.className)) out.push(`a pill "${pill.textContent?.trim()}" without its up/down class (${pill.className})`);
+    if (!ok.has(getComputedStyle(el).color)) out.push(`"${(el.closest(".k-delta") ?? el).textContent?.trim().slice(0, 40)}" is ${getComputedStyle(el).color}, not the up or down colour`);
+  }
+  return { arrows, faults: out };
+});
+
+test("item 39: every ▲/▼ change is green up or red down, light and dark, on the pages with changes", async ({ page }, info) => {
+  test.skip(info.project.name === "phone", "colours are the same on a phone");
+  test.setTimeout(240_000);
+  await open(page, "/research/pulse", ADMIN38, 1440, 900);
+  let arrows = 0;
+  const faults: string[] = [];
+  for (const path of ["/research/pulse", "/invest/flows", "/invest/breadth", "/invest/margin-funding", "/research/IN/RELIANCE", "/research/watchlist", "/research/rotation", "/mine"]) {
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto(path);
+      await expect(page.locator("main h1").first()).toBeVisible({ timeout: 30_000 });
+      await page.waitForLoadState("networkidle").catch(() => undefined);
+      const got = await arrowFaults(page);
+      arrows += got.arrows;
+      faults.push(...got.faults.map((f) => `${path} (${scheme}): ${f}`));
+    }
+  }
+  expect(arrows, "the pages drew their changes").toBeGreaterThan(20);
+  expect(faults).toEqual([]);
+  // Market today's two tables the owner pointed at: their pills are green or red
+  await page.goto("/research/pulse");
+  for (const id of ["pulse-flows", "pulse-risk"]) {
+    const pills = page.getByTestId(id).locator(".k-delta");
+    await expect(pills.first()).toBeVisible({ timeout: 30_000 });
+    for (const cls of await pills.evaluateAll((els) => els.map((e) => e.className))) expect(cls, id).toMatch(/\bk-delta (up|down|flat)\b/);
+    expect(await pills.evaluateAll((els) => els.filter((e) => /\b(up|down)\b/.test(e.className)).length), `${id}: coloured pills`).toBeGreaterThan(0);
+  }
+});
+

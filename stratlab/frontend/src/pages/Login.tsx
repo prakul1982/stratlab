@@ -672,7 +672,7 @@ function ResearchMock() {
       <span className="lp-illus">Illustration: a made-up company and made-up figures</span>
       <div className="spread lp-top">
         <div className="stack g2"><span className="eyebrow">SAMPLE · made-up ticker</span><b className="serif lp-rm-title">Sample Motors Inc.</b></div>
-        <div className="stack g4 lp-end"><b className="serif lp-rm-title">$183.20</b><span className="badge next">Last close ▲ 1.33%</span></div>
+        <div className="stack g4 lp-end"><b className="serif lp-rm-title">$183.20</b><span className="k-delta up">Last close ▲ 1.33%</span></div>
       </div>
       <div className="lp-rfacts">
         {facts.map(([l, t]) => <div key={l} className="stack g1"><b className="small">{l}</b><span className="small muted">{t}</span></div>)}

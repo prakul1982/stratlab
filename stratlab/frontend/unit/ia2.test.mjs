@@ -93,3 +93,25 @@ test("item 38: end-of-line labels get a column as wide as the longest one, or no
   assert.match(read("src/components/ThemeDive.tsx"), /label: "Relative strength \(theme over index\)", short: "Rel\. strength"/);
 });
 
+// Item 39 (owner, 30 Oct: "these not colored"): every ▲/▼ change pill is green up and red down; there is no grey "neutral" pill any more.
+test("item 39: the change pill always takes its direction's colour, and nothing asks for a grey one", async () => {
+  const stat = read("src/components/kit/Stat.tsx");
+  assert.match(stat, /export function Delta\(\{ value, children \}: \{ value: number \| null \| undefined; children: ReactNode \}\) \{/);
+  assert.match(stat, /<span className=\{`k-delta \$\{dir\}`\}>\n\s*\{dir !== "flat" && <span aria-hidden="true">\{dir === "up" \? "▲" : "▼"\}<\/span>\}/);
+  // an arrow is drawn only for "up" or "down", so an arrowed pill always has the class that colours it
+  const css = read("src/styles.css");
+  assert.match(css, /\.k-delta\.up \{ background: var\(--up-soft\); color: var\(--up\); \}/);
+  assert.match(css, /\.k-delta\.down \{ background: var\(--down-soft\); color: var\(--down\); \}/);
+  const { readdirSync, statSync } = await import("node:fs");
+  const files = [];
+  const walk = (d) => { for (const f of readdirSync(new URL(`../${d}`, import.meta.url))) { const p = `${d}/${f}`; if (statSync(new URL(`../${p}`, import.meta.url)).isDirectory()) walk(p); else if (/\.(tsx|ts)$/.test(f)) files.push(p); } };
+  walk("src");
+  for (const f of files) {
+    const s = read(f);
+    assert.doesNotMatch(s, /<Delta [^>]*tone=/, `${f}: a Delta with a tone`);
+    // an arrow in a hand-made badge must carry the up/down colour too (the landing's sample card had a grey "Last close ▲ 1.33%")
+    // (a chart's key to its buy and sell marks is not a change: "▲ buy ▼ sell")
+    for (const m of s.matchAll(/className="([^"]*)"[^>]*>[^<{]*[▲▼]/g)) if (!/▲ buy/.test(m[0] + s.slice(m.index + m[0].length, m.index + m[0].length + 8))) assert.match(m[1], /\b(k-up|k-down|up|down|k-delta up|k-delta down)\b/, `${f}: "${m[0].slice(0, 60)}"`);
+  }
+});
+
