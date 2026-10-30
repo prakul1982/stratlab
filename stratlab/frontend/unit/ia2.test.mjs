@@ -46,7 +46,8 @@ test("item 36: the 14 headings stay; every heading with more than one page lists
 
 test("item 36: a disclosure button per section, the section you are in open, the person's choice kept per person", () => {
   const shell = read("src/components/Shell.tsx");
-  assert.match(shell, /<button type="button" className="side-toggle" aria-expanded=\{open\} aria-controls=\{`side-sub-\$\{g\.id\}`\} aria-label=\{`\$\{g\.label\} pages`\}/);
+  assert.match(shell, /<button type="button" className="side-toggle" aria-expanded=\{open\} aria-controls=\{`side-sub-\$\{g\.id\}`\}/);
+  assert.match(shell, /<span className="sr-only">\{g\.label\} pages<\/span>/);
   assert.match(shell, /const OPEN_KEY = "stratlab\.side\.open";/);
   assert.match(shell, /usePersisted<Record<string, boolean>>\(`\$\{OPEN_KEY\}\.\$\{me\?\.id \?\? "guest"\}`, NO_CHOICE\)/);
   assert.match(shell, /const isOpen = \(g: NavGroup\) => opened\[g\.id\] \?\? g\.id === current;/);
@@ -91,3 +92,4 @@ test("item 38: end-of-line labels get a column as wide as the longest one, or no
   assert.match(read("src/components/Charts.tsx"), /series=\{lines\.map\(\(l\) => \(\{ label: l\.label, short: l\.short,/);
   assert.match(read("src/components/ThemeDive.tsx"), /label: "Relative strength \(theme over index\)", short: "Rel\. strength"/);
 });
+

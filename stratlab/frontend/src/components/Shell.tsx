@@ -188,9 +188,10 @@ export function Shell({ children }: { children: ReactNode }) {
             <div className="side-head">
               {entryLink(g, space)}
               {many && (
-                <button type="button" className="side-toggle" aria-expanded={open} aria-controls={`side-sub-${g.id}`} aria-label={`${g.label} pages`}
-                  title={open ? `Fold ${g.label}` : `Show ${g.label}'s pages`} onClick={() => toggle(g)}>
-                  <span className="side-chev" aria-hidden="true"><Chevron size={12} /></span>
+                // named by its words (hidden), not an aria-label, so a page's own "Stock" field is the only thing labelled "Stock"
+                <button type="button" className="side-toggle" aria-expanded={open} aria-controls={`side-sub-${g.id}`}
+                  title={open ? `Fold ${g.label}` : `Show the pages of ${g.label}`} onClick={() => toggle(g)}>
+                  <span className="side-chev" aria-hidden="true"><Chevron size={12} /></span><span className="sr-only">{g.label} pages</span>
                 </button>
               )}
             </div>

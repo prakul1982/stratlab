@@ -254,3 +254,4 @@ test("item 38: on every page of charts, at 1440, 1280, 390 and 360, no chart lab
     await request.delete(`${API38}/notebooks/${nb.id}`, { headers: auth });
   }
 });
+
