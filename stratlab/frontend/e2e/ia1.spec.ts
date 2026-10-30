@@ -23,6 +23,9 @@ async function open(page: Page, path: string) {
   return errors;
 }
 
+// a /me read still in flight when a test ends must not fail it: its route callback would fetch on a closed page (CI #323)
+test.afterEach(async ({ page }) => { await page.unrouteAll({ behavior: "ignoreErrors" }); });
+
 test("every page of the menu opens at its own address as the right tab of its entry", async ({ page }) => {
   test.setTimeout(240_000);
   const errors = await open(page, "/invest");
