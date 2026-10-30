@@ -179,6 +179,10 @@ test("DI-023: on a phone the tour opens the menu for the steps about it, and ste
   await tour.getByRole("button", { name: "Next" }).click();
   await tour.getByRole("button", { name: "Next" }).click();
   await expect(tour).toContainText("Add your holdings");
+  // IA-1: a step about the menu's entries and their tabs comes before the account one, with the menu open on it
+  await tour.getByRole("button", { name: "Next" }).click();
+  await expect(tour).toContainText("One page for each job");
+  await expect(page.locator("aside.sidebar.open")).toHaveCount(1);
   await tour.getByRole("button", { name: "Next" }).click();
   await expect(tour).toContainText("Settings");
   await expect(page.locator("aside.sidebar .acct-btn")).toBeInViewport();
