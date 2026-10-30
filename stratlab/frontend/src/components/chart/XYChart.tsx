@@ -4,7 +4,7 @@ import { dayTicks, distinctTicks, honestTicks, isIntraday, niceDomain, niceTicks
 import { offeredRanges, rangeStart, saveRange, startRange } from "../../lib/range";
 import { RangeChips } from "../kit/RangeChips";
 import { signCls, tzLabel } from "../../lib/format";
-import { linePath, linear, lowerBound, nearest, plotHeight, textWidth, useSync, useTween, useWidth } from "./core";
+import { endColumn, labelWidth, linePath, linear, lowerBound, nearest, placeLabel, plotHeight, textWidth, useSync, useTween, useWidth } from "./core";
 import { ChartEmpty, ChartTip, LegendToggles, TipRow } from "./parts";
 
 /* The one chart behind every line, area and column chart in the app. Series share one x (a time per point, or a number
@@ -27,6 +27,8 @@ import { ChartEmpty, ChartTip, LegendToggles, TipRow } from "./parts";
 export interface Series {
   id?: string;                      // stable key; the label when missing
   label: string;
+  /** A short name for the label at the line's end, when `label` is long ("Rel. strength"); the legend and tooltip keep the full one (item 38) */
+  short?: string;
   tipLabel?: string;                // the words after the value in the tooltip, when they differ from the legend's
   values: (number | null)[];
   color: string;                    // a CSS colour, usually a token: var(--series-1)
@@ -225,7 +227,7 @@ export function XYChart(p: XYChartProps) {
     const out: { label: string; color: string; y: number; v: number }[] = [];
     series.forEach((s, k) => {
       if (hidden.has(key(s)) || s.inLegend === false || s.kind === "bar") return;
-      for (let i = in1; i >= in0; i--) { const v = vals[k][i]; if (v != null && Number.isFinite(v)) { out.push({ label: s.label, color: s.color, v, y: 0 }); break; } }
+      for (let i = in1; i >= in0; i--) { const v = vals[k][i]; if (v != null && Number.isFinite(v)) { out.push({ label: s.short ?? s.label, color: s.color, v, y: 0 }); break; } }
     });
     return out.length >= 2 && out.length <= 4 ? out : [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -234,15 +236,16 @@ export function XYChart(p: XYChartProps) {
   // marker labels take one row above the plot, or two when there are several (one that would overlap moves up a row)
   const labelled = xMarkers.filter((m) => m.label).length;
   const padT = PAD.t + (p.split != null && p.splitNotes ? 20 : 0) + (labelled ? (labelled > 1 ? 28 : 14) : 0);
-  // direct labels: placed at their line ends; if two would touch, none are drawn (the legend carries identity) and no
-  // room is kept for them, so the plot keeps the card's full width
+  // direct labels: placed at their line ends; if two would touch, or one is too long for the column beside the plot, none are drawn
+  // (the legend carries identity) and no room is kept for them, so the plot keeps the card's full width. The column is as wide as
+  // the longest label, so a label always ends inside the card (item 38: "Relative strength (theme over index)" ran past its edge)
   const endLabels = useMemo(() => {
     const y = linear(ymin, ymax, H - PAD.b, padT);
     const ls = ends.map((e) => ({ ...e, y: y(e.v) })).sort((m, k) => m.y - k.y);
     for (let k = 1; k < ls.length; k++) if (ls[k].y - ls[k - 1].y < 14) return [];
-    return ls;
-  }, [ends, ymin, ymax, H, padT]);
-  const endW = endLabels.length ? Math.min(140, Math.max(...endLabels.map((e) => textWidth(e.label, 12))) + 22) : 0;
+    return endColumn(ls.map((e) => labelWidth(e.label, 12)), W) ? ls : [];
+  }, [ends, ymin, ymax, H, padT, W]);
+  const endW = endColumn(endLabels.map((e) => labelWidth(e.label, 12)), W);
   const padR = PAD.r + endW;
   const plotW = Math.max(40, W - padL - padR);
   const sx = linear(a, b, padL, padL + plotW);
@@ -250,16 +253,20 @@ export function XYChart(p: XYChartProps) {
   const clip = `ch-clip-${uid.replace(/:/g, "")}`;
 
   // ---- x ticks ----
+  // Each label is measured and placed where it will be drawn (an end one held inside the plot, anchored at its start or end); one
+  // that would come within 10px of the label before it is left out. Item 38: the first label, held in from the left edge, ran into the
+  // second ("13 Oct 20232 Feb 2024") because the spacing was checked on the labels' centres.
   const xTicks = useMemo((): { px: number; label: string; anchor: "start" | "middle" | "end" }[] => {
     const max = Math.max(2, Math.floor(plotW / 84));
-    const out: { px: number; label: string }[] = [];
+    const out: { px: number; label: string; anchor: "start" | "middle" | "end"; r: number }[] = [];
     const push = (px: number, label: string) => {
       if (px < padL - 1 || px > padL + plotW + 1) return;
-      const w = textWidth(label);
+      const at = placeLabel(px, labelWidth(label), padL, padL + plotW);
       const prevT = out[out.length - 1];
-      if (prevT && px - prevT.px < (textWidth(prevT.label) + w) / 2 + 10) return;
-      out.push({ px, label });
+      if (prevT && at.l < prevT.r + 10) return;
+      out.push({ px, label, anchor: at.anchor, r: at.r });
     };
+    const done = () => out.map(({ px, label, anchor }) => ({ px, label, anchor }));
     if (!n) return [];
     if (T) {
       // the first and last points in the window, by position: with a numeric x (times placed by date, DA-031) the window's
@@ -268,7 +275,7 @@ export function XYChart(p: XYChartProps) {
       if (intraday && spansDays(ta, tb, p.tz)) {
         // points across days on an axis that skips the hours between sessions: each day's first point named by its day
         for (const d of dayTicks(T, in0, in1, p.tz)) push(sx(X[d.i]), d.label);
-        return out.map((t) => ({ ...t, anchor: (t.px - textWidth(t.label) / 2 < padL ? "start" : t.px + textWidth(t.label) / 2 > padL + plotW ? "end" : "middle") as "start" | "middle" | "end" }));
+        return done();
       }
       const ticks = timeTicks(ta, tb, max, p.tz, !intraday);
       // a clock-time axis in a market's zone names the zone once, on its last clock time: "12:00 IST"
@@ -287,8 +294,7 @@ export function XYChart(p: XYChartProps) {
         if (changes ? i > 0 && ax[i] !== ax[i - 1] : i % step === 0) push(sx(X[i]), ax[i] ?? "");
       }
     }
-    // keep the end labels inside the plot
-    return out.map((t) => ({ ...t, anchor: (t.px - textWidth(t.label) / 2 < padL ? "start" : t.px + textWidth(t.label) / 2 > padL + plotW ? "end" : "middle") as "start" | "middle" | "end" }));
+    return done();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [T, a, b, plotW, padL, n, p.tz, p.x, p.xFormat, p.axisLabels, p.labels, intraday, in0, in1]);
 

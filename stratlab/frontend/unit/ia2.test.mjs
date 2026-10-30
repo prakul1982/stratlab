@@ -58,3 +58,36 @@ test("item 36: a disclosure button per section, the section you are in open, the
   assert.match(css, /\.side-list\.side-sub a \{ height: 28px;/);
   assert.match(css, /@media \(pointer: coarse\) \{[^]*?\.side-list a, \.side-list\.side-sub a \{ height: 40px; \}/);
 });
+
+// Item 38 (owner screenshot, 30 Oct): a theme's chart had its first two axis labels run together and its end-of-line names past the card.
+const C = await import("../src/components/chart/core.ts");
+
+test("item 38: an axis label held in from the plot's edge is measured where it is drawn, so the next one cannot run into it", () => {
+  const w = C.textWidth("13 Oct 2023");
+  // the first label at the plot's left edge is drawn from its point rightwards, not centred on it
+  const first = C.placeLabel(40, w, 40, 900);
+  assert.equal(first.anchor, "start");
+  assert.equal(first.l, 40);
+  assert.equal(first.r, 40 + w);
+  // the second, 84px on: its centres were far enough apart for the old check, but its left edge sits inside the first label
+  const second = C.placeLabel(124, C.textWidth("2 Feb 2024"), 40, 900);
+  assert.ok((124 - 40) >= (w + C.textWidth("2 Feb 2024")) / 2 + 10, "the old centre-to-centre test let it through");
+  assert.ok(second.l < first.r + 10, "the new test, on the drawn edges, leaves it out");
+  // a label at the right edge is drawn leftwards from its point
+  assert.deepEqual(C.placeLabel(900, 50, 40, 900), { anchor: "end", l: 850, r: 900 });
+  assert.equal(C.labelWidth("abc", 11), C.textWidth("abc", 11), "without a canvas the rough width");
+});
+
+test("item 38: end-of-line labels get a column as wide as the longest one, or none when it would not fit (the legend names the lines)", () => {
+  assert.equal(C.endColumn([], 1000), 0);
+  assert.equal(C.endColumn([60, 80], 1000), 102);
+  assert.equal(C.endColumn([200], 1000), 0, "too long for 140px: no end labels, never cut or past the card");
+  assert.equal(C.endColumn([110], 600), 0, "more than a fifth of a narrow chart");
+  // XYChart draws the short name at the end, the full one in the legend and tooltip; the theme's long line name has one
+  const xy = read("src/components/chart/XYChart.tsx");
+  assert.match(xy, /out\.push\(\{ label: s\.short \?\? s\.label, color: s\.color, v, y: 0 \}\)/);
+  assert.match(xy, /const endW = endColumn\(endLabels\.map\(\(e\) => labelWidth\(e\.label, 12\)\), W\);/);
+  assert.match(xy, /if \(prevT && at\.l < prevT\.r \+ 10\) return;/);
+  assert.match(read("src/components/Charts.tsx"), /series=\{lines\.map\(\(l\) => \(\{ label: l\.label, short: l\.short,/);
+  assert.match(read("src/components/ThemeDive.tsx"), /label: "Relative strength \(theme over index\)", short: "Rel\. strength"/);
+});

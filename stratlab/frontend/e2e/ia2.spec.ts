@@ -190,3 +190,67 @@ test("item 36: menu screenshots", async ({ page }, info) => {
     await page.goto("about:blank");
   }
 });
+
+// Item 38 (owner screenshot, 30 Oct: a theme's "against NIFTY 500" chart): the time axis's first two labels ran together ("13 Oct 20232 Feb
+// 2024") and the end-of-line names ran past the card's right edge. Every chart drawn by the shared chart (chart/XYChart) is checked on the
+// drawn page, at the four widths: no two of its labels overlap, and none is outside its card.
+const API38 = process.env.E2E_API ?? "http://127.0.0.1:8765";
+const ADMIN38 = session("admin-token", "u-admin", "owner@example.com");
+const CHART_PAGES = ["/research/themes?region=IN&q=" + encodeURIComponent("India steel and mining"), "/invest/breadth", "/invest/flows", "/research/rotation",
+  "/invest/etf-gaps", "/invest/margin-funding", "/invest/stock-lending", "/research/IN/RELIANCE", "/trade/positioning"];
+/** Each chart's labels that cross another, or reach past the chart's card, as text for the failure message. */
+const chartFaults = (page: Page) => page.evaluate(() => {
+  const out: string[] = [];
+  const svgs = Array.from(document.querySelectorAll("svg.ch-svg")).filter((s) => { const r = s.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+  for (const svg of svgs) {
+    const name = svg.getAttribute("aria-label")?.slice(0, 50) ?? "a chart";
+    const card = (svg.closest(".k-card, .card, [class*=-card]") ?? svg.parentElement!).getBoundingClientRect();
+    const texts = Array.from(svg.querySelectorAll("text")).filter((t) => (t.textContent ?? "").trim()).map((t) => ({ s: (t.textContent ?? "").trim(), r: t.getBoundingClientRect() }))
+      .filter((t) => t.r.width > 0);
+    for (const t of texts) if (t.r.right > card.right + 1 || t.r.left < card.left - 1) out.push(`${name}: "${t.s}" outside its card (${Math.round(t.r.left)}–${Math.round(t.r.right)} vs ${Math.round(card.left)}–${Math.round(card.right)})`);
+    for (let i = 0; i < texts.length; i++) for (let k = i + 1; k < texts.length; k++) {
+      const [a, b] = [texts[i].r, texts[k].r];
+      if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1) out.push(`${name}: "${texts[i].s}" and "${texts[k].s}" overlap`);
+    }
+  }
+  return { charts: svgs.length, faults: out };
+});
+
+test("item 38: on every page of charts, at 1440, 1280, 390 and 360, no chart label overlaps another or leaves its card", async ({ page, request }, info) => {
+  test.skip(info.project.name === "phone", "each width is set here");
+  test.setTimeout(300_000);
+  const auth = { Authorization: "Bearer admin-token" };
+  // a notebook with two finished tests: an experiment's charts and the comparison of two
+  const ema = { name: "Labels check", tf: "1d", entry: [{ l: { t: "ema", p: 10 }, op: "xa", r: { t: "ema", p: 30 } }],
+    exit: [{ l: { t: "ema", p: 10 }, op: "xb", r: { t: "ema", p: 30 } }], risk: { capital: 10000, riskPct: 2, sl: 4, tgt: 0, brokerage: 0, slippage: 0.05 } };
+  const nb = await (await request.post(`${API38}/notebooks`, { headers: auth, data: { name: "Item 38 labels", question: "q", strategy: ema, instrument: "CRYPTO:BTC-USD" } })).json();
+  for (const days of [800, 400]) await request.post(`${API38}/notebooks/${nb.id}/experiments`, { headers: auth, data: { days } });
+  try {
+    const pages = [...CHART_PAGES, `/n/${nb.id}/e/1`, `/n/${nb.id}/compare?a=1&b=2`];
+    await open(page, "/invest", ADMIN38, 1440, 900);
+    const faults: string[] = [];
+    let charts = 0;
+    for (const path of pages) for (const [w, h] of [[1440, 900], [1280, 800], [390, 844], [360, 780]]) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.goto(path);
+      await expect(page.locator("main h1").first()).toBeVisible({ timeout: 30_000 });
+      await page.waitForLoadState("networkidle").catch(() => undefined);
+      await page.waitForTimeout(400);
+      const got = await chartFaults(page);
+      charts += got.charts;
+      faults.push(...got.faults.map((f) => `${path} at ${w}: ${f}`));
+      if (SHOTS) for (const scheme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: scheme });
+        const cards = page.locator("svg.ch-svg");
+        for (let k = 0; k < Math.min(await cards.count(), 4); k++) {
+          const card = cards.nth(k).locator("xpath=ancestor::*[contains(@class,'card')][1]");
+          await (await card.count() ? card : cards.nth(k)).screenshot({ path: `${SHOTS}/chart-${path.replace(/[^a-z0-9]+/gi, "_").slice(0, 40)}-${k}-${w}-${scheme}.png` }).catch(() => undefined);
+        }
+      }
+    }
+    expect(charts, "the pages drew their charts").toBeGreaterThan(20);
+    expect(faults).toEqual([]);
+  } finally {
+    await request.delete(`${API38}/notebooks/${nb.id}`, { headers: auth });
+  }
+});

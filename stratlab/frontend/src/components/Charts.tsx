@@ -19,6 +19,8 @@ export interface Line {
   width?: number;
   dash?: string;
   label: string;
+  /** A short name for the line's end label when `label` is long; the legend and tooltip keep the full one (item 38) */
+  short?: string;
 }
 export interface Marker { i: number; side: "buy" | "sell" }
 
@@ -38,7 +40,7 @@ interface LineChartProps extends Partial<Omit<XYChartProps, "series" | "format" 
 export function LineChart({ lines, baseline, levels = [], markers = [], legend = false, refs = [], ...rest }: LineChartProps) {
   return (
     <XYChart {...rest} legend={legend}
-      series={lines.map((l) => ({ label: l.label, values: l.values, color: l.color, width: l.width ?? 2, dash: l.dash }))}
+      series={lines.map((l) => ({ label: l.label, short: l.short, values: l.values, color: l.color, width: l.width ?? 2, dash: l.dash }))}
       refs={[...(baseline != null ? [{ v: baseline, strong: baseline === 0 }] : []), ...levels.map((lv) => ({ v: lv.v, color: lv.color, dash: true, label: lv.label })), ...refs]}
       points={markers.map((m) => ({ i: m.i, kind: m.side }))} />
   );
