@@ -1338,6 +1338,9 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 /* RC2B-041: the two columns end together; "start" left the add-a-date card 190px short of the reminders beside it */
 .mc-grid { align-items: stretch; }
 .mc-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s2); }      /* LIVE1B-072 */
+/* item 43: with the page column 29px narrower on a 1280 laptop, Reminders' form grew 175px taller than the calendar link beside it (R1):
+   up to 1360px the two cards are one above the other */
+@media (max-width: 1360px) { .k-two.mc-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) {
   .mc-grid { grid-template-columns: minmax(0, 1fr); }
   .mc-cell { min-height: 48px; padding: 4px; align-items: center; }

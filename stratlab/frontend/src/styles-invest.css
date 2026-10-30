@@ -54,6 +54,9 @@
 .inv-tile-chg { display: flex; flex-wrap: wrap; gap: var(--s1) 6px; align-items: center; min-height: 22px; }
 /* LIVE1C-090: a tile's F&O note ("Lot 225→250 from the Jan 2027 series") wraps inside its pill rather than being cut off with an ellipsis */
 .inv-tile .surv-badge.fo-badge { white-space: normal; overflow: visible; text-overflow: clip; border-radius: 12px; line-height: 1.3; }
+/* item 43: the page column is 29px narrower on a 1280 laptop (the Markets button's margin), and "Lot 500→250 from 25 Nov" in the mono badge
+   font ran onto a second line in a 170px tile (the layout checker's R19); the note is a short sentence, in the sans font it fits one line */
+.inv-tile .surv-badge.fo-badge { font-family: var(--sans); }
 
 /* headlines */
 .inv-news { display: flex; flex-direction: column; }

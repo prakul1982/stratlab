@@ -137,3 +137,10 @@ test("item 44: each plan card takes its rows from the plans' grid (subgrid), and
   const plans = read("src/pages/PlansPage.tsx");
   assert.ok(plans.indexOf('<div className="k-plan-body">') < plans.indexOf('<ul className="k-plan-list">'));
 });
+
+// Item 43's narrower page column on a 1280 laptop: the two layouts the layout checker found pinched are fixed, not allowed.
+test("item 43: a tile's F&O note fits one line and the Money calendar's two cards stack up to 1360px", () => {
+  assert.match(read("src/styles-invest.css"), /\.inv-tile \.surv-badge\.fo-badge \{ font-family: var\(--sans\); \}/);
+  assert.match(read("src/styles.css"), /@media \(max-width: 1360px\) \{ \.k-two\.mc-grid \{ grid-template-columns: minmax\(0, 1fr\); \} \}/);
+  assert.equal(JSON.parse(read("e2e/ui-lint.allow.json")).allow.length, 1);
+});
