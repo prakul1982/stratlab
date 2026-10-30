@@ -52,16 +52,19 @@ jobs:
       - run: npm run build
 
   browser:
-    # every main page on desktop and phone against the fake world, checking what is drawn (e2e/pages.spec.ts).
+    # every main page on desktop and phone against the fake world, checking what is drawn (e2e/pages-*.spec.ts and the rest).
     # The slowest job, so it starts only once the frontend builds: a build that fails costs no browser minutes.
-    # Split four ways (each runner takes a quarter of the tests; Actions minutes are free on a public repository), so the
-    # browser tests take about a quarter of the 46 minutes they took on one runner. "browser" passes when all four do.
+    # Split six ways (Actions minutes are free on a public repository). Playwright gives each shard an even share of the tests
+    # by count, a file per project kept whole, so the longest file sets the floor: pages.spec.ts (11 minutes) is now six
+    # files and a11y's axe passes (6 of its 10 minutes) a file of their own. On 29 Oct the longest of four shards took 25
+    # minutes; with each test's measured time, the longest of these six takes about 12. "browser" passes when all six do (the
+    # merge job's needs name the job, so they stay as they are).
     needs: [frontend]
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false        # every shard reports its failures, so one push shows them all
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -78,7 +81,7 @@ jobs:
         working-directory: stratlab/backend
       - run: npm ci && npm run build && npx playwright install --with-deps chromium
         working-directory: stratlab/frontend
-      - run: npm run e2e -- --shard=${{ matrix.shard }}/4
+      - run: npm run e2e -- --shard=${{ matrix.shard }}/6
         working-directory: stratlab/frontend
         env:
           CI: "1"

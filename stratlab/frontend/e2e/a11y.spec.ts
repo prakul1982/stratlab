@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { session, open, focusIn, staysIn, API, viewFor, MY_ADS, FREE } from "./a11y-kit";
 
 // Accessibility: axe-core on the main pages (fails on serious or critical problems), and the keyboard behaviour axe
 // can't see: every dialog keeps focus inside and hands it back to what opened it, the phone menu is a modal, pop-ups
@@ -11,112 +12,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 // A11Y-2 added what is new since: the pages the API draws (company pages with their chart, the directories, the blog) and the policy pages and the
 // library signed out go through axe too, in both themes and both viewports; the cookie banner is first in the page's order, named, and never
 // hides what has focus; the public chart is a slider a screen reader can drive; a number that refreshes by itself is not in a live region.
-const session = { access_token: "admin-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
-  refresh_token: "r", user: { id: "u-admin", aud: "authenticated", email: "owner@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
-
-async function open(page: Page, path: string, { tour = true, as = false } = {}) {
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await page.route("**/*", (r) => {
-    const host = new URL(r.request().url()).hostname;
-    return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
-  });
-  await page.addInitScript(([s, seen, own]) => {
-    if (!own) localStorage.setItem("sb-demo-auth-token", JSON.stringify(s));
-    if (seen) localStorage.setItem("stratlab.tour.v1", "1"); else localStorage.removeItem("stratlab.tour.v1");
-  }, [session, tour, as] as const);
-  await page.goto(path);
-  await page.getByText("What brings you here?").waitFor({ timeout: 4000 }).then(() => page.getByRole("dialog").getByRole("button", { name: /All of it/ }).first().click()).catch(() => undefined);
-  await expect(page.locator("main")).toBeVisible();
-  return errors;
-}
-
-/** What has focus, and whether it is inside `sel`. */
-const focusIn = (page: Page, sel: string) => page.evaluate((s) => !!document.activeElement?.closest(s), sel);
-
-/** Tab `n` times (Shift+Tab for the second half) and say whether focus ever left `sel`. */
-async function staysIn(page: Page, sel: string, n = 24) {
-  for (let i = 0; i < n; i++) {
-    await page.keyboard.press(i < n / 2 ? "Tab" : "Shift+Tab");
-    if (!(await focusIn(page, sel))) return false;
-  }
-  return true;
-}
-
-const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
-const admin = { Authorization: "Bearer admin-token" };
-const PAGES = ["/mine", "/trade", "/invest", "/money", "/holdings", "/money/net-worth", "/research/IN/RELIANCE", "/research/screens", "/library",
-  "/notebooks", "/options", "/paper", "/trade/positioning", "/alerts", "/settings", "/new", "/admin/emails", "/invest/ipos", "/money/mutual-funds",
-  "/tax-report", "/money/us-tax", "/account"];
-/** A notebook with one finished experiment, made for this run (the pages of a notebook and of an experiment); the caller deletes it. */
-async function ownNotebook(request: APIRequestContext, name: string) {
-  const ema = { name: "Axe check", tf: "1d", entry: [{ l: { t: "ema", p: 10 }, op: "xa", r: { t: "ema", p: 30 } }],
-    exit: [{ l: { t: "ema", p: 10 }, op: "xb", r: { t: "ema", p: 30 } }], risk: { capital: 10000, riskPct: 2, sl: 4, tgt: 0, brokerage: 0, slippage: 0.05 } };
-  const nb = await (await request.post(`${API}/notebooks`, { headers: admin, data: { name, question: "q", strategy: ema, instrument: "CRYPTO:BTC-USD" } })).json();
-  await request.post(`${API}/notebooks/${nb.id}/experiments`, { headers: admin, data: { days: 800 } });
-  return nb.id as string;
-}
-// serious and critical fail; so do two moderate ones that make a screen reader's list of landmarks and headings useless (A11Y-2: a name used twice, a skipped level)
-const ALSO = ["landmark-unique", "heading-order"];
-const serious = (r: { violations: { id: string; impact?: string | null; help: string; nodes: { target: unknown[] }[] }[] }, where: string) =>
-  r.violations.filter((x) => x.impact === "serious" || x.impact === "critical" || ALSO.includes(x.id)).map((v) => `${where} ${v.id}: ${v.help} (${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join(", ")})`);
-
-test("axe finds no serious or critical problems on the main pages", async ({ page, request }, info) => {
-  test.setTimeout(420_000);
-  const found: string[] = [];
-  const nb = await ownNotebook(request, `Axe ${info.project.name} light`);
-  for (const path of [...PAGES, `/n/${nb}`, `/n/${nb}/e/1`]) {
-    await open(page, path);
-    await page.waitForLoadState("networkidle").catch(() => undefined);
-    await page.waitForTimeout(500);
-    // a person opens the folded parts to use them: check them open
-    await page.evaluate(() => document.querySelectorAll("details:not([open])").forEach((d) => d.setAttribute("open", "")));
-    const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]).analyze();
-    found.push(...serious(r, `${path.replace(nb, "<notebook>")} [${info.project.name}]`));
-  }
-  await request.delete(`${API}/notebooks/${nb}`, { headers: admin });
-  expect(found, found.join("\n")).toEqual([]);
-});
-
-test("axe: the dark theme passes too", async ({ browser, request }, info) => {
-  test.setTimeout(420_000);
-  const phone = info.project.name === "phone";
-  const ctx = await browser.newContext({ colorScheme: "dark", viewport: phone ? { width: 390, height: 844 } : { width: 1300, height: 900 }, hasTouch: phone, isMobile: phone });
-  const page = await ctx.newPage();
-  const found: string[] = [];
-  const nb = await ownNotebook(request, `Axe ${info.project.name} dark`);
-  for (const path of [...PAGES, `/n/${nb}`, `/n/${nb}/e/1`]) {
-    await open(page, path);
-    await page.waitForLoadState("networkidle").catch(() => undefined);
-    await page.waitForTimeout(300);
-    await page.evaluate(() => document.querySelectorAll("details:not([open])").forEach((d) => d.setAttribute("open", "")));
-    const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-    found.push(...serious(r, `${path.replace(nb, "<notebook>")} [dark]`));
-  }
-  await ctx.close();
-  await request.delete(`${API}/notebooks/${nb}`, { headers: admin });
-  expect(found, found.join("\n")).toEqual([]);
-});
-
-test("axe: the landing page, Plans, the policies and the library, signed out, in both themes", async ({ browser }, info) => {
-  test.setTimeout(420_000);
-  const phone = info.project.name === "phone";
-  const found: string[] = [];
-  for (const scheme of ["light", "dark"] as const) {
-    const ctx = await browser.newContext({ colorScheme: scheme, viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 }, hasTouch: phone, isMobile: phone });
-    const page = await ctx.newPage();
-    for (const path of ["/", "/plans", "/terms", "/privacy", "/library"]) {       // the landing page, Plans, the policies (the public frame) and the library
-      await open(page, path, { as: true });                      // `as`: no sign-in, so this is what a visitor sees
-      await page.waitForLoadState("networkidle").catch(() => undefined);
-      await page.waitForTimeout(300);
-      await page.evaluate(() => document.querySelectorAll("details:not([open])").forEach((d) => d.setAttribute("open", "")));
-      const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "best-practice"]).analyze();
-      found.push(...serious(r, `${path} [signed out, ${scheme}]`));
-    }
-    await ctx.close();
-  }
-  expect(found, found.join("\n")).toEqual([]);
-});
+// The axe passes themselves are in a11y-axe.spec.ts (their own file, so the browser tests spread evenly over CI's shards).
 
 test("the command palette keeps focus inside, Esc closes it and focus goes back to its button", async ({ page }, info) => {
   test.skip(info.project.name === "phone", "the button is in the desktop sidebar");
@@ -257,10 +153,6 @@ test("removing a holding moves focus to the next row's Edit button, not the top 
   await expect(page.getByRole("button", { name: third })).toBeFocused();
   await request.put(`${api}/holdings`, { headers, data: { items: [] } });
 });
-
-// ---- A11Y-1: what axe can't see ----------------------------------------------------------------------------------------------------------------
-
-const viewFor = (name: string) => (name === "phone" ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true } : { viewport: { width: 1440, height: 900 } });
 
 test("a text field's edge is 3:1 against what is behind it, in light and dark (WCAG 1.4.11)", async ({ browser }, info) => {
   test.setTimeout(240_000);
@@ -444,33 +336,6 @@ test("phone: the drawing sheet is a clean list of drawings under properly ordere
   expect(await sheet.locator("h4").count()).toBe(0);
   expect(await sheet.locator("h2").count()).toBeGreaterThan(0);
 });
-
-// ---- A11Y-2: the pages the API draws, the cookie banner, the public chart, the live refresh --------------------------------------------------------
-
-test("axe: the company pages, directories and blog the API draws, in both themes", async ({ browser }, info) => {
-  test.setTimeout(420_000);
-  const found: string[] = [];
-  for (const scheme of ["light", "dark"] as const) {
-    const ctx = await browser.newContext({ colorScheme: scheme, ...viewFor(info.project.name) });
-    const page = await ctx.newPage();
-    for (const path of ["/stocks", "/stocks/in", "/stocks/in/RELIANCE", "/stocks/us/AAPL", "/stocks/in/browse/r", "/stocks/in/index/nifty-50", "/blog", "/blog/briefs", "/blog/research"]) {
-      await page.goto(API + path, { waitUntil: "networkidle" });
-      if (path.endsWith("/RELIANCE")) {                       // the chart and its table as a person uses them: drawn, and the table open
-        await page.locator("[data-chart]").scrollIntoViewIfNeeded();
-        await expect(page.locator("[data-chart]")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
-        await page.locator("details[data-table] summary").click();
-      }
-      const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"]).analyze();
-      found.push(...serious(r, `${path} [${scheme}, ${info.project.name}]`));
-    }
-    await ctx.close();
-  }
-  expect(found, found.join("\n")).toEqual([]);
-});
-
-const MY_ADS = { ADS_ENABLED: "true", ADSENSE_CLIENT: "ca-pub-1234567890123456", ADSENSE_SLOT_PUBLIC: "1111111111", ADSENSE_SLOT_AI: "2222222222" };
-const FREE = { access_token: "free-token", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r",
-  user: { id: "u-free", aud: "authenticated", email: "free@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
 
 test("the cookie banner is named and described, comes first for the keyboard, and what has focus is never hidden under it", async ({ page }) => {
   test.setTimeout(240_000);
