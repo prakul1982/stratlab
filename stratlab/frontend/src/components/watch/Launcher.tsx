@@ -45,7 +45,17 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
   // a sheet is never open at page load: a full-height sheet over a page that just opened is in the way, so a sheet shows only
   // once the person has asked for it on this page
   const asked = useRef(!isSheet(window.innerWidth));
-  const openIt = useCallback((p: Partial<PanelLayout> = {}) => { asked.current = true; patch({ ...p, open: true }); }, [patch]);
+  // a press before the account has loaded opens the panel under the guest's key; the person's own key, read once it loads, said closed,
+  // so the press was lost (the Markets button did nothing about one time in eight in the browser tests): it is kept and applied then
+  const pending = useRef<Partial<PanelLayout> | null>(null);
+  const openIt = useCallback((p: Partial<PanelLayout> = {}) => {
+    asked.current = true;
+    if (mode === "app" && !userId) pending.current = p;
+    patch({ ...p, open: true });
+  }, [patch, mode, userId]);
+  useEffect(() => {
+    if (userId && pending.current) { const p = pending.current; pending.current = null; patch({ ...p, open: true }); }
+  }, [userId, patch]);
 
   useEffect(() => { if (autoOpen) openIt(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- once, as this mounts
   useEffect(() => {

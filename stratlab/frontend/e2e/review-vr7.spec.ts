@@ -16,12 +16,20 @@ async function open(page: Page, path: string, s: object | null, width: number, h
   return errors;
 }
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
-/** Three instruments on the owner's Market Watch list (the fake world starts with none). */
-async function seed(request: APIRequestContext) {
-  await request.put(`${API}/watch/lists/default/items`, { headers: { Authorization: "Bearer admin-token" },
+/** A Pro user of the fake database for each project: the desktop and phone runs go at once (two workers), and on the owner's one list
+ * each run's clearing after a test emptied the list under the other's check. */
+const watcher = (phone: boolean) => { const n = phone ? 128 : 122; return { token: `load-${n}`, who: session(`load-${n}`, `u-load-${n}`, `load${n}@example.com`) }; };
+/** Three instruments on that user's Market Watch list (the fake world starts with none). */
+async function seed(request: APIRequestContext, phone: boolean) {
+  const { token, who } = watcher(phone);
+  await request.put(`${API}/me/prefs`, { headers: { Authorization: `Bearer ${token}` }, data: { focus: "both", level: "some", space: "all" } });
+  await request.put(`${API}/watch/lists/default/items`, { headers: { Authorization: `Bearer ${token}` },
     data: { items: [{ market: "IN", symbol: "INFY", name: "Infosys" }, { market: "IN", symbol: "TCS", name: "Tata Consultancy Services" }, { market: "IN", symbol: "RELIANCE", name: "Reliance Industries" }] } });
+  return who;
 }
-test.afterEach(async ({ request }) => { await request.put(`${API}/watch/lists/default/items`, { headers: { Authorization: "Bearer admin-token" }, data: { items: [] } }); });
+test.afterEach(async ({ request }, info) => {
+  await request.put(`${API}/watch/lists/default/items`, { headers: { Authorization: `Bearer ${watcher(info.project.name === "phone").token}` }, data: { items: [] } });
+});
 const small = (page: Page, sel: string) => page.locator(sel).evaluateAll((els) => els.filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.width < 43.5 || r.height < 43.5); })
   .map((e) => `${e.tagName.toLowerCase()} "${(e.getAttribute("aria-label") || e.textContent || "").trim().slice(0, 20)}" ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)}`));
 
@@ -89,9 +97,9 @@ test("VR7-006 (UI-CO item 2): Key numbers' groups are tables of one width, in tw
   await expect(page.getByRole("table", { name: "Key numbers: Valuation" }).getByRole("columnheader")).toHaveText(["Valuation", "Value", "Basis", "Range"]);
 });
 
-test("VR7-008, VR7-019: the Markets button fits the margin on a laptop, and a chart in the panel is as tall as its tool rail", async ({ page, request }) => {
-  await seed(request);
-  await open(page, "/invest", ADMIN, 1440);
+test("VR7-008, VR7-019: the Markets button fits the margin on a laptop, and a chart in the panel is as tall as its tool rail", async ({ page, request }, info) => {
+  const who = await seed(request, info.project.name === "phone");
+  await open(page, "/invest", who, 1440);
   const btn = page.getByTestId("markets-launch");
   await expect(btn).toBeVisible({ timeout: 30_000 });
   const b = (await btn.boundingBox())!;
@@ -106,9 +114,9 @@ test("VR7-008, VR7-019: the Markets button fits the margin on a laptop, and a ch
   expect(stage!.height + 1).toBeGreaterThanOrEqual(rail!.height);
 });
 
-test("VR7-009, VR7-011: the Market Watch sheet's controls are 44px on a phone", async ({ page, request }) => {
-  await seed(request);
-  await open(page, "/mine", ADMIN, 390, 800);
+test("VR7-009, VR7-011: the Market Watch sheet's controls are 44px on a phone", async ({ page, request }, info) => {
+  const who = await seed(request, info.project.name === "phone");
+  await open(page, "/mine", who, 390, 800);
   await page.getByRole("button", { name: "Markets", exact: true }).click();
   const mw = page.getByTestId("market-watch");
   await expect(mw).toBeVisible();
