@@ -217,9 +217,9 @@ for (const region of ["IN", "US"] as const) {
     await expect(page.getByText("Nothing is ticked")).toBeVisible();
     await table.getByRole("checkbox").first().check();
     await expect(page.getByTestId("rot-count")).toContainText(`1 of ${total} on the chart`);
-    // the table is above the chart, and the page doesn't scroll sideways
+    // the chart (the map) is above the table (owner, 31 Oct), and the page doesn't scroll sideways
     const [t, c] = await Promise.all([table.boundingBox(), page.getByTestId("rot-count").boundingBox()]);
-    expect(t!.y).toBeLessThan(c!.y);
+    expect(c!.y).toBeLessThan(t!.y);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
     expect(errors).toEqual([]);
   });

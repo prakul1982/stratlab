@@ -110,6 +110,6 @@ test("MOOD-1: the rotation's four run-on sentences are a table of every one, wit
   assert.doesNotMatch(s, /<Badge[^>]*>New</);                                       // no "New" tag anywhere (owner's rule): the mark says what it is
   assert.match(s, /header: "1W"[\s\S]*"1M"[\s\S]*"3M"|\{ w1: "1W", m1: "1M", m3: "3M" \}/);
   assert.match(s, /sort=\{\{ key: sort\?\.key \?\? "", desc: sort\?\.desc \?\? false, onSort \}\}/);
-  // the table comes before the chart
-  assert.ok(s.indexOf('testId="rot-table"') < s.indexOf("<ChartFrame title={`${out.name} vs ${out.benchmark}`}"));
+  // the chart (the map) comes first, the table below it (owner, 31 Oct: "the map should be up")
+  assert.ok(s.indexOf("<ChartFrame title={`${out.name} vs ${out.benchmark}`}") < s.indexOf('testId="rot-table"'));
 });

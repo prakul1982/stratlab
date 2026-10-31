@@ -188,21 +188,47 @@ def test_a_wrong_placement_is_rejected_and_the_right_one_shows_its_own_words():
     assert out["placements"]["checked"] and out["placements"]["left_out"] == 3
 
 
-def test_a_company_with_no_description_is_left_out_and_one_not_read_yet_waits():
+def test_a_paraphrased_quote_is_backed_by_the_companys_own_sentence_and_a_made_up_one_still_places_nothing():
+    # 31 Oct, "India Defence" empty: the free models paraphrase, and every paraphrase was a "no"
+    yes = {"L2|CELLA": "makes lithium battery cells for EVs",                         # not the description's words, but it says what it says
+           "S0|MINEA": "builds battery cells for electric vehicles"}                   # its description says nothing of the kind
+    out = C.check_placements(MAP, evidence(), answer(yes), "India EV battery")
+    cell = out["value_chain"][2]["companies"]
+    assert [c["ticker"] for c in cell] == ["CELLA"]
+    assert cell[0]["what"] == "Cell A manufactures lithium ion battery cells for electric vehicles at its plant"   # the company's own words
+    assert [c["ticker"] for c in out["sub_themes"][0]["companies"]] == []
+
+
+def test_an_answer_that_cannot_be_read_waits_for_the_next_request_instead_of_dropping_everyone():
+    out = C.check_placements(MAP, evidence(), lambda system, text: {"something": "else"}, "India EV battery")
+    assert not out["placements"]["checked"] and out["placements"]["left_out"] == 0 and out["placements"]["pending"] == 4
+    assert out["placements"]["unconfirmed"] == 4 and all(c["verified"] is False and c["what"] == "" for v in out["value_chain"] for c in v["companies"])
+    half = lambda system, text: {"checks": [{"id": "L0|MINEA", "does": True, "quote": "mines lithium and nickel ore in several countries"}]}
+    out = C.check_placements(MAP, evidence(), half, "India EV battery")
+    assert [(c["ticker"], c["verified"]) for c in out["value_chain"][0]["companies"]] == [("MINEA", True), ("JINDALSTEL", False)]
+    assert not out["placements"]["checked"] and out["placements"]["left_out"] == 0  # the unanswered pairs wait, shown as not yet confirmed
+
+
+# owner, 31 Oct: "the whole purpose of themes is company discoverability" -- a company is hidden only on a clear "no" from its own
+# words; one not checked yet, or with no description to check it by, is shown and marked not yet confirmed
+def test_a_company_with_no_description_or_not_read_yet_is_shown_unconfirmed_and_a_clear_no_is_left_out():
     out = C.check_placements(MAP, evidence({"MINEA": DESCR["MINEA"]}, pending={"CELLA"}), answer({"L0|MINEA": "mines lithium and nickel ore"}), "India EV battery")
-    assert [c["ticker"] for c in out["value_chain"][0]["companies"]] == ["MINEA"]
-    assert out["value_chain"][2]["companies"] == []                                  # CELLA isn't read yet: not shown yet
+    assert [(c["ticker"], c["verified"]) for c in out["value_chain"][0]["companies"]] == [("MINEA", True), ("JINDALSTEL", False)]
+    assert [(c["ticker"], c["verified"]) for c in out["value_chain"][2]["companies"]] == [("CELLA", False)]    # not read yet: shown, not yet confirmed
+    assert [(c["ticker"], c["verified"]) for c in out["value_chain"][1]["companies"]] == [("COALINDIA", False)]
     assert not out["placements"]["checked"] and out["placements"]["pending"] == 1
-    assert out["placements"]["left_out"] == 3                                        # Jindal, Coal India and Mine A (sub-theme): nothing to check them by
+    assert out["placements"]["left_out"] == 1                                        # Mine A in the cell sub-theme: its own words say no
+    assert out["placements"]["unconfirmed"] == 3
 
 
-def test_an_ai_that_cannot_answer_places_nothing_and_asks_again_later():
+def test_an_ai_that_cannot_answer_confirms_nothing_shows_the_companies_unconfirmed_and_asks_again_later():
     from app.ai_providers import AIBusy
 
     def busy(system, text):
         raise AIBusy()
     out = C.check_placements(MAP, evidence(), busy, "India EV battery")
-    assert all(v["companies"] == [] for v in out["value_chain"]) and not out["placements"]["checked"]
+    assert all(c["verified"] is False for v in out["value_chain"] for c in v["companies"]) and not out["placements"]["checked"]
+    assert sum(len(v["companies"]) for v in out["value_chain"]) == 4 and out["placements"]["left_out"] == 0
 
 
 def test_a_quote_must_be_word_for_word_and_about_the_group():

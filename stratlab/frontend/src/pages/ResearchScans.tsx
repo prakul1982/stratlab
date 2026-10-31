@@ -509,7 +509,20 @@ export function RotationPage() {
       {failed && <ErrorState title="The rotation couldn't be worked out" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{failed}</ErrorState>}
       {busy && !out && !failed && <Card><Skeleton label="Comparing each one with the market" lines={4} />
         {slow && <p className="k-small k-muted" role="status" data-testid="rotation-slow">Still working: the first look after the close reads the day's closes for every member. It can take up to a minute, and the answer is kept for the next visit.</p>}</Card>}
-      {/* the table first (MOOD-1: four run-on sentences with "and 7 more" became a table of every one), the chart below it with the same ticks */}
+      {out && (
+        <ChartFrame title={`${out.name} vs ${out.benchmark}`}
+          // the four-box key under the title names the same four tags with their counts: the legend is only for a chart with no key (VR3-018)
+          actions={rows.length > 0 ? undefined : <div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
+          footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row below, to follow one. The ticks in the table choose what is drawn.</p> : undefined}>
+          <div className="k-stack">
+            <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${step === 1 ? `from ${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago` : `${unit} ${step - 1} of ${out.tail}`}` : ""}{out.kept ? " · kept from the last close; it updates when the market reopens" : ""}</span>
+            {rows.length === 0 ? <EmptyState title={all.length ? "Nothing is ticked" : "Not enough price history to draw this yet"}>{all.length ? "Tick a few in the table below to draw them." : "It fills in as more closes are stored."}</EmptyState>
+              : <RotationChart rows={rows} benchmark={out.benchmark} step={step} focus={focus} onFocus={setFocus} />}
+            {picked === null && mainRows.length > 6 && rows.length > 0 && <p className="k-note" data-testid="rot-default-note">Drawn: the {rows.length} furthest from the centre of {mainRows.length} main {isIndex ? "indices" : "stocks"}. Tick more in the table below.</p>}
+          </div>
+        </ChartFrame>
+      )}
+      {/* the chart first (owner, 31 Oct: "the map should be up"), then the table of every one below it with the same ticks (MOOD-1: four run-on sentences with "and 7 more" became a table) */}
       {out && all.length > 0 && (
         <Card testId="rot-table">
           <CardHead title={isIndex ? "Every index" : "Every stock"} info={QUADRANT_INFO} infoLabel="About the four quadrants" actions={<>
@@ -543,19 +556,6 @@ export function RotationPage() {
           <p className="k-note">1W, 1M and 3M: how much more (or less) each returned than {out.benchmark} over the last 5, 21 and 63 sessions, in percentage points. Heading, the arrow beside Momentum, is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. {counts.leading + counts.improving + counts.weakening + counts.lagging === all.length ? `All ${all.length} are listed.` : ""}</p>
           {out.skipped.length > 0 && <p className="k-note">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
         </Card>
-      )}
-      {out && (
-        <ChartFrame title={`${out.name} vs ${out.benchmark}`}
-          // the four-box key under the title names the same four tags with their counts: the legend is only for a chart with no key (VR3-018)
-          actions={rows.length > 0 ? undefined : <div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
-          footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row above, to follow one. The ticks in the table choose what is drawn.</p> : undefined}>
-          <div className="k-stack">
-            <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${step === 1 ? `from ${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago` : `${unit} ${step - 1} of ${out.tail}`}` : ""}{out.kept ? " · kept from the last close; it updates when the market reopens" : ""}</span>
-            {rows.length === 0 ? <EmptyState title={all.length ? "Nothing is ticked" : "Not enough price history to draw this yet"}>{all.length ? "Tick a few in the table above to draw them." : "It fills in as more closes are stored."}</EmptyState>
-              : <RotationChart rows={rows} benchmark={out.benchmark} step={step} focus={focus} onFocus={setFocus} />}
-            {picked === null && mainRows.length > 6 && rows.length > 0 && <p className="k-note" data-testid="rot-default-note">Drawn: the {rows.length} furthest from the centre of {mainRows.length} main {isIndex ? "indices" : "stocks"}. Tick more in the table above.</p>}
-          </div>
-        </ChartFrame>
       )}
       <p className="k-note inv-text">
         {drilled && out?.parent ? `Here each stock is measured against the ${out.parent.name} index itself, so Leading means it's beating its own sector. These are the sector's largest stocks, not its full official list. ` : ""}

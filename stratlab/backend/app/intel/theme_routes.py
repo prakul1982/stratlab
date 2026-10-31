@@ -123,11 +123,11 @@ def checked(region: str, theme: str, m: dict) -> dict:
     """The map as the page shows it: placements checked against the companies' own descriptions, claims against dated headlines. A part
     that can't be checked right now (a source or the AI is busy) is left to the next request, never shown unchecked."""
     key = (region, theme.lower(), int(float(m.get("generated_at") or 0)))
-    hit = A.get("sector_checked", key)
+    hit = A.get("sector_checked2", key)
     if hit is not None:
         return hit
     with _ai_gate:                                  # one check at a time: the sources and the AI are shared
-        hit = A.get("sector_checked", key)
+        hit = A.get("sector_checked2", key)
         if hit is not None:
             return hit
         if len(VERDICTS) > VERDICT_KEEP:
@@ -142,7 +142,7 @@ def checked(region: str, theme: str, m: dict) -> dict:
                 claims = _plain_claims(m)
         out["tailwinds"], out["risks"] = claims["tailwinds"], claims["risks"]
         if out["placements"]["checked"]:
-            A.keep("sector_checked", key, out, 24 * 3600)
+            A.keep("sector_checked2", key, out, 24 * 3600)   # 2: placements re-checked after the 31 Oct fix (a paraphrased or unreadable answer no longer drops a company)
     return out
 
 
