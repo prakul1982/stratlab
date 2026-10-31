@@ -72,6 +72,25 @@ def clean_description(text) -> str:
     return " ".join(str(text or "").split())[:EVIDENCE_CHARS]
 
 
+_SENTENCE = re.compile(r"[^.;!?]+")
+
+
+def own_words(about, group_text, claimed) -> str:
+    """The first sentence of the company's own description that speaks of the group's work (a distinctive word in common with
+    the group) AND says what the AI claimed (two distinctive words in common with its quote), or "". Used when the AI says the
+    company does the work but its quote isn't the description's exact words: the free models paraphrase, and a paraphrase
+    dropped every company of a theme (31 Oct, "India Defence"). A quote the description doesn't back still places nothing."""
+    want = stems(claimed)
+    for part in _SENTENCE.findall(str(about or "")):
+        words = part.split()
+        if len(words) < MIN_QUOTE_WORDS:
+            continue
+        quote = " ".join(words[:MAX_QUOTE_WORDS])
+        if supports(quote, group_text) and len(stems(quote) & want) >= 2 and quote_in(quote, about):
+            return quote
+    return ""
+
+
 # ---------- the groups of a map ----------
 def groups_of(out: dict) -> list[dict]:
     """[{id, kind, index, name, text, companies}] for the map's value-chain layers ("L0"...) and sub-themes ("S0"...)."""
@@ -182,6 +201,8 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
         try:
             res = verdicts(batch, by_id, ask, theme)
         except AIError:
+            res = None
+        if not res:              # no answer, or none that could be read: not a "no" for every company, so they wait for the next request
             failed = True
             for c in batch:
                 pending.add(c["symbol"])
@@ -189,13 +210,19 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
         for c in batch:
             ev = evidence[c["symbol"]]
             for gid in c["groups"]:
-                v = res.get(f"{gid}|{c['symbol']}") or {"does": False, "quote": ""}
                 g = by_id[gid]
-                ok = bool(v["does"]) and quote_in(v["quote"], ev["about"]) and supports(v["quote"], f"{g['name']} {g['text']}")
-                answer = {"does": ok, "quote": v["quote"] if ok else ""}
+                v = res.get(f"{gid}|{c['symbol']}")
+                if v is None:            # this pair went unanswered: asked again next time, not counted as a "no"
+                    pending.add(c["symbol"])
+                    continue
+                gtext = f"{g['name']} {g['text']}"
+                quote = v["quote"] if quote_in(v["quote"], ev["about"]) and supports(v["quote"], gtext) else (own_words(ev["about"], gtext, v["quote"]) if v["does"] else "")
+                ok = bool(v["does"]) and bool(quote)
+                answer = {"does": ok, "quote": quote if ok else ""}
                 cache[(theme, gid, g["name"], c["symbol"], norm(ev["about"])[:200])] = answer
                 got[f"{gid}|{c['symbol']}"] = answer
     left_out = 0
+    unconfirmed = set()
 
     def keep(gid, cos):
         nonlocal left_out
@@ -205,8 +232,12 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
             v = got.get(f"{gid}|{sym}")
             if v and v["does"]:
                 kept.append({**c, "what": v["quote"].strip(" ,;:-–—"), "verified": True})
-            elif sym in pending:
-                continue                           # not checked yet: not shown yet
+            elif v is None:
+                # not checked yet (the AI or a source busy) or nothing to check it by (no description found): shown, marked not yet
+                # confirmed. A theme is for finding the companies in it; hiding every one a free model couldn't answer for left
+                # "India Defence" with none (owner, 31 Oct). Only a clear "no" from the company's own words leaves it out.
+                kept.append({**c, "what": "", "verified": False})
+                unconfirmed.add(sym)
             else:
                 left_out += 1
         return kept
@@ -215,7 +246,8 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
     placed = {c["ticker"] for v in out["value_chain"] + out["sub_themes"] for c in v["companies"]}
     out["screen"] = [x for x in out.get("screen") or [] if x.get("ticker") in placed]
     out["clusters"] = [c for c in ({**c, "companies": [x for x in c.get("companies") or [] if x.get("ticker") in placed]} for c in out.get("clusters") or []) if c["companies"]]
-    out["placements"] = {"checked": not pending and not failed, "pending": len(pending), "left_out": left_out, "placed": len(placed)}
+    out["placements"] = {"checked": not pending and not failed, "pending": len(pending), "left_out": left_out, "placed": len(placed),
+                         "unconfirmed": len(unconfirmed)}
     return out
 
 

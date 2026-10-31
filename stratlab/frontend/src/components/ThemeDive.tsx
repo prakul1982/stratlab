@@ -67,7 +67,7 @@ function layerColumns(r: Region, wide: Set<string>): Column<LayerLine>[] {
   const f = (k: "ebitda" | "net" | "roce") => (x: LayerLine) => x.kind === "company" ? pc(x.row![k]) : x.kind === "median" ? <b>{pc(x.stats?.[k]?.median)}</b> : span(x.stats?.[k]);
   return [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => x.kind !== "company" ? <b>{x.label}</b>
-      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{x.row!.what && <span className="k-sub-line">In its own words: “{x.row!.what}”</span>}</> },
+      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{x.row!.what ? <span className="k-sub-line">In its own words: “{x.row!.what}”</span> : <span className="k-sub-line k-muted">Not yet confirmed from its own description</span>}</> },
     { key: "rev", header: "Revenue", numeric: true, cell: (x) => x.kind === "company" ? amount(x.row!.revenue, r) : "" },
     { key: "e", header: "EBITDA margin", numeric: true, cell: f("ebitda") },
     { key: "n", header: "Net margin", numeric: true, cell: f("net") },
@@ -115,7 +115,7 @@ export function SubThemesCard({ dive, business }: { dive: Dive; business?: Busin
   if (dive.subs.length === 0) return null;
   const cols: Column<(typeof dive.subs)[number]["companies"][number]>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} wide={x.company_wide} /> },
-    { key: "w", header: "What it does here, in its own words", wrap: true, cell: (x) => (x.what ? <>“{x.what}”</> : dash) },
+    { key: "w", header: "What it does here, in its own words", wrap: true, cell: (x) => (x.what ? <>“{x.what}”</> : <span className="k-muted">Not yet confirmed from its own description</span>) },
     { key: "m", header: "Market value", numeric: true, cell: (x) => amount(x.cap, r) },
     { key: "g", header: "Revenue growth", numeric: true, info: "Latest full year against the year before.", cell: (x) => chg(x.sales_1y) },
     { key: "e", header: "EBITDA margin", numeric: true, cell: (x) => pc(x.ebitda) },

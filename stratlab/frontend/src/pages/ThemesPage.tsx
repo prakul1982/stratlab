@@ -123,7 +123,7 @@ export function ThemesPage() {
           </Card>
           {pending && (
             <Notice tone="warn" action={{ label: "Check again", onClick: () => run(q, { keep: true }) }}>
-              {r.placements!.pending} compan{r.placements!.pending === 1 ? "y is" : "ies are"} still being checked against their own descriptions, so {r.placements!.pending === 1 ? "it isn't" : "they aren't"} shown yet.
+              {r.placements!.pending} compan{r.placements!.pending === 1 ? "y is" : "ies are"} still being checked against their own descriptions; until then {r.placements!.pending === 1 ? "it shows" : "they show"} as not yet confirmed.
             </Notice>
           )}
           {diveError && <ErrorState title="The theme's numbers couldn't be loaded" action={{ label: "Try again", onClick: () => run(q, { keep: true }) }}>{diveError}</ErrorState>}

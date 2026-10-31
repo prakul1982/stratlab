@@ -31,7 +31,7 @@ export interface Dive {
   region: Region; sector: string; as_of: string | null; unit: string | null; basis: string; members: number; company_wide: string[];
   layers: Layer[]; chain: { rows: ChainRow[]; line: string | null; highest: string | null; lowest: string | null };
   subs: { name: string; detail: string; companies: SubCompany[] }[];
-  placements?: { checked: boolean; pending: number; left_out: number; placed: number } | null;
+  placements?: { checked: boolean; pending: number; left_out: number; placed: number; unconfirmed?: number } | null;
   notable: { kind: "gap" | "move" }[];
   sections: {
     size: { companies: number; with_value: number; total_cap: number | null; biggest: { symbol: string; name: string; cap: number; share: number }[]; top3_share: number | null };
