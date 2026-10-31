@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // RES-1: the results calendar as a table a day, narrowed by size, sector, index, F&O and the meeting's purpose. The fake world has twenty
 // companies reporting over this week and next (four today), each with earlier results days and a made-up price history, so the
@@ -20,6 +20,17 @@ test.beforeEach(async ({ request }, info) => {
   await request.put(`${API}/research/watchlist`, { headers, data: { items: [{ region: "IN", symbol: "RELIANCE" }] } });
 });
 const SHOTS = process.env.E2E_SHOTS;
+
+// the day the calendar opens on, from the API: today on a trading day; on a weekend or a holiday the exchange is shut, the world's
+// "today" companies report on the next session and no day is marked today (these tests failed every Saturday while they assumed one)
+async function firstDay(request: APIRequestContext) {
+  const n = Number(session.access_token.slice(5));
+  const r = await request.get(`${API}/research/results?region=IN&scope=all`, { headers: { Authorization: `Bearer load-${n}` } });
+  expect(r.ok()).toBeTruthy();
+  const j = await r.json() as { today: string; weeks: { days?: { date: string }[] }[] };
+  const first = j.weeks.flatMap((w) => w.days ?? []).map((d) => d.date.slice(0, 10)).filter((d) => d >= j.today).sort()[0];
+  return { today: j.today, first, open: first === j.today };
+}
 
 async function open(page: Page, path: string, ready: string) {
   const errors: string[] = [];
@@ -51,14 +62,20 @@ async function shot(page: Page, name: string, info: { project: { name: string } 
   await page.screenshot({ path: `${SHOTS}/${name}-${phone ? "390" : "1440"}.png`, fullPage: true });
 }
 
-test("results calendar: a table a day with live prices, the latest quarter, earlier results-day moves and the options' implied move", async ({ page }, info) => {
+test("results calendar: a table a day with live prices, the latest quarter, earlier results-day moves and the options' implied move", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
+  const cal = await firstDay(request);
   const errors = await open(page, "/research/results?region=IN&scope=all", "Board meetings companies have called");
   await expect(page.getByTestId("results-count")).toHaveText("20 companies", { timeout: 30_000 });
   const today = page.getByRole("table", { name: /^Results on .*/ }).first();
   await expect(today).toBeVisible();
   const days = page.getByTestId("results-day");
-  await expect(days.first().locator(".k-eyebrow")).toContainText("today · 4 companies");
+  // the first day has the world's four: marked today on a trading day; on a shut day it is the next session, after today
+  if (cal.open) await expect(days.first().locator(".k-eyebrow")).toContainText("today · 4 companies");
+  else {
+    expect(cal.first > cal.today, "a shut day's calendar opens on a later session").toBeTruthy();
+    await expect(days.first().locator(".k-eyebrow")).toHaveText(/^[A-Z][a-z]{2},? \d{1,2} [A-Z][a-z]{2} · 4 companies$/);
+  }
   if (!phone) {
     for (const h of ["Company", "Market value", "Price now", "Day", "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply"])
       await expect(today.getByRole("columnheader").filter({ hasText: h }).first()).toBeVisible();
@@ -78,8 +95,9 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   await shot(page, "res1-india", info);
 });
 
-test("results calendar: size, sector, index, F&O and purpose narrow the table, the count says how many, and the choice is kept", async ({ page }, info) => {
+test("results calendar: size, sector, index, F&O and purpose narrow the table, the count says how many, and the choice is kept", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
+  const cal = await firstDay(request);
   const errors = await open(page, "/research/results?region=IN&scope=all", "Board meetings companies have called");
   const count = page.getByTestId("results-count");
   await expect(count).toHaveText("20 companies", { timeout: 30_000 });
@@ -107,7 +125,7 @@ test("results calendar: size, sector, index, F&O and purpose narrow the table, t
   await expect(page.getByTestId("results-count")).toHaveText("20 companies", { timeout: 30_000 });
   // the day and the meeting's purpose
   if (phone && (await page.getByRole("button", { name: /^Filters/ }).getAttribute("aria-expanded")) !== "true") await page.getByRole("button", { name: /^Filters/ }).click();
-  await filters.getByLabel("Day", { exact: true }).selectOption("today");
+  await filters.getByLabel("Day", { exact: true }).selectOption(cal.open ? "today" : cal.first);        // the first session's four
   await expect(count).toHaveText("20 companies · 4 shown");
   await filters.getByLabel("Meeting", { exact: true }).selectOption("more");
   await expect(page.getByTestId("results-count")).toContainText("20 companies ·");
@@ -126,8 +144,9 @@ test("results calendar: the US has its own table without the options column", as
   await shot(page, "res1-us", info);
 });
 
-test("corporate actions: a table a day with the price now, the payment's yield and the market value, narrowed like the results", async ({ page }, info) => {
+test("corporate actions: a table a day with the price now, the payment's yield and the market value, narrowed like the results", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
+  const cal = await firstDay(request);
   const errors = await open(page, "/research/corporate-actions?region=IN&scope=all", "Dividends, bonuses and splits");
   const count = page.getByTestId("actions-count");
   await expect(count).toContainText(/\d+ actions?/, { timeout: 30_000 });
@@ -138,10 +157,13 @@ test("corporate actions: a table a day with the price now, the payment's yield a
     await expect(table.getByRole("columnheader").filter({ hasText: h }).first()).toBeVisible();
   // today: TCS's bonus 1:1 (the world's own row) and the dividends the world adds
   await expect(page.getByRole("table", { name: /^Corporate actions going ex on/ }).first()).toBeVisible();
-  const tcs = page.getByRole("row", { name: /TCS/ }).first();
+  // on a shut day the actions "going ex today" went ex on the last session (an ex-date is a trading day), so they are under the
+  // earlier weeks, folded until opened
+  if (!cal.open) await page.locator("details.earlier summary").filter({ hasText: /^Last (two|four) weeks/ }).first().click();
+  const tcs = page.getByRole("row", { name: /TCS/ }).filter({ hasText: "Bonus 1:1" }).first();
   await expect(tcs).toContainText("Bonus 1:1");
   await expect(tcs).toContainText("1:1");
-  const icici = page.getByRole("row", { name: /ICICIBANK/ }).first();
+  const icici = page.getByRole("row", { name: /ICICIBANK/ }).filter({ hasText: "₹11" }).first();
   await expect(icici).toContainText("₹11");
   await expect(icici).toContainText(/\d\.\d\d%/);              // the payment's yield: ₹11 over the price
   await expect(icici).toContainText(/₹\d/);                    // the price now (or the last close)

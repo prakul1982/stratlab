@@ -555,8 +555,11 @@ def results_calendar(mp):
             "WIPRO", "HCLTECH", "NTPC", "COALINDIA", "SBIN", "AXISBANK", "NESTLEIND", "DABUR", "VEDL", "SAIL"]
     offsets = [0, 0, 0, 0, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 10, 11, 12, 12]
     meetings = []
+    # counted from the session the calendar opens on: today on a trading day; on a weekend or a holiday the next one (Monday's),
+    # so that day has today's four and not eight (on a Saturday the offsets 0, 1 and 2 all moved to Monday)
+    session = P.on_trading_day(today, "IN")
     for k, (sym, off) in enumerate(zip(syms, offsets)):
-        d = min(P.on_trading_day(today + timedelta(days=off), "IN"), last)
+        d = min(P.on_trading_day(session + timedelta(days=off), "IN"), last)
         days = [(d, "Financial Results/Dividend" if zlib.crc32(sym.encode()) % 4 == 0 else "Financial Results")]
         days += [(P.on_trading_day(today - timedelta(days=75 * n + 10 + k % 5), "IN", back=True), "Financial Results") for n in (1, 2, 3)]      # earlier quarters
         meetings += [{"bm_symbol": sym, "sm_name": P.name_of(sym) or sym, "bm_date": x.strftime("%d-%b-%Y"), "bm_purpose": p,

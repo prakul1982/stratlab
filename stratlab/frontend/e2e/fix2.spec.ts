@@ -40,7 +40,9 @@ async function sane(page: Page, errors: string[]) {
 test("O5, O6: a brief's sections are tables, and the PDF button downloads the brief", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/news?tab=IN", "Briefs", phone ? 283 : 282);
-  if (phone) await page.getByRole("button", { name: /Market Brief India/ }).first().click();
+  // the daily issue, opened by name: on a Saturday the newest issue is the weekly one, whose index table has "Week %" in place of
+  // the day's change and the 52-week high (it failed every weekend while the test read whichever issue came first)
+  await page.getByRole("button", { name: /Market Brief India/ }).filter({ hasNotText: "Weekly" }).first().click();
   const pane = page.locator(".news-issue");
   await expect(pane).toContainText("Market brief · India", { timeout: 30_000 });
   // the indices are a table with a header row, not a bullet list
