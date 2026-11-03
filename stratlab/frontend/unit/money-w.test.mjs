@@ -47,3 +47,16 @@ test("MONEY-4: a fold asked open later opens, and the stopped sessions are open 
   assert.match(read("src/components/Earlier.tsx"), /useEffect\(\(\) => \{ if \(open\) setShown\(true\); \}, \[open\]\);/);
   assert.match(read("src/pages/PaperPage.tsx"), /<Earlier label="Stopped sessions" count=\{stopped\.length\} open=\{!current\.length \|\| /);
 });
+
+test("MONEY-5: money forms say what is needed up front; funds at cost wait for a NAV; dividends on one date basis; Schedule FA says its rate and dividend source", () => {
+  const nw = read("src/pages/money/NetWorthPage.tsx");
+  assert.match(nw, /data-testid="entry-needed">Every box is needed unless it says optional\.<\/p>/);
+  assert.match(nw, /aria-required=\{!f\.optional \|\| undefined\}/);
+  const mf = read("src/pages/money/MutualFundsPage.tsx");
+  assert.match(mf, /const base = t \? t\.invested_priced \?\? t\.invested : 0;/);
+  assert.match(mf, /at cost from your statement: \$\{t\.no_nav === 1 \? "its value waits" : "their values wait"\} for a NAV/);
+  assert.match(read("src/components/HoldingsActions.tsx"), /k: "Last 12 months \(estimated\)", v: inr\(data\.received_total\), n: "by record date"/);
+  const us = read("src/pages/money/UsTaxPage.tsx");
+  assert.match(us, /The initial value is the lot's cost at Rule 115's rate/);
+  assert.match(us, /FA_INCOME_FROM\[r\.income_from\]/);
+});

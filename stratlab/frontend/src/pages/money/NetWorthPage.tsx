@@ -216,6 +216,8 @@ function EntryForm({ kind, start, busy, onSave, onCancel, onRemove, saveLabel, s
   };
   return (
     <FormGrid label={spec.title} onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      {/* MONEY-5: what must be filled is said before Add, not first as an error after it (Instinct: an FD's maturity date) */}
+      {spec.fields.some((f) => !f.optional && f.type !== "select") && <p className="k-note k-field wide" data-testid="entry-needed">Every box is needed unless it says optional.</p>}
       {spec.fields.filter((f) => !f.floating || isFloating(form)).map((f) => {
         const unit = f.unit ?? (f.type === "money" ? "₹" : f.type === "rate" ? "% / yr" : undefined);
         if (f.type === "select") {
@@ -223,7 +225,7 @@ function EntryForm({ kind, start, busy, onSave, onCancel, onRemove, saveLabel, s
         }
         if (f.type === "date") return <DateField key={f.k} label={f.label} optional={f.optional} info={f.info} value={form[f.k] ?? ""} onChange={set(f.k)} error={errs[f.k]} />;
         return <Field key={f.k} label={f.label} optional={f.optional} unit={f.type === "text" ? undefined : unit} info={f.info}
-          value={form[f.k] ?? ""} type="text" inputMode={f.type === "text" ? undefined : "decimal"} error={errs[f.k]}
+          value={form[f.k] ?? ""} type="text" inputMode={f.type === "text" ? undefined : "decimal"} error={errs[f.k]} aria-required={!f.optional || undefined}
           placeholder={f.hint ?? (f.type === "money" ? "1,00,000" : f.type === "rate" ? "7" : "")} maxLength={f.type === "text" ? 60 : undefined}
           onChange={(e) => set(f.k)(e.target.value)} />;
       })}

@@ -671,7 +671,7 @@ def replay(trades: list[dict], splits: list[dict], upto: str) -> list[dict]:
 def schedule_fa(cy: int, trades: list[dict], splits: dict[str, list[dict]], closes: dict[str, dict[str, float]],
                 divs: dict[str, list[dict]], hist: dict, names_of: dict[str, str] | None = None) -> dict:
     """Table A3 for a calendar year: one row per purchase lot held at any time from 1 January to 31 December, with the
-    initial value (its cost, at the rate on the purchase day), the peak (the highest of shares × that day's close ×
+    initial value (its cost, at Rule 115's rate for the purchase, as in the gains table), the peak (the highest of shares × that day's close ×
     that day's rate), the closing value on 31 December, the dividends credited and the sale proceeds in the year.
     `closes` is each stock's daily close in today's (split-adjusted) shares; `divs` each stock's dividends: {d,
     amount} for the user's whole holding (from their own file), shared by the lots held that day, or {d, per_share}
@@ -688,7 +688,9 @@ def schedule_fa(cy: int, trades: list[dict], splits: dict[str, list[dict]], clos
             held = _qty_on(ch, f"{cy - 1}-12-31") > 1e-7 or any(start <= d <= end for d, _ in ch)
             if not held:
                 continue
-            init = fx.rate_on(hist, lot["d"])
+            # MONEY-5: the initial value is the lot's cost at Rule 115's rate (the SBI TT buying rate on the last day of the
+            # month before the purchase), the rate the gains table puts on the same lot's cost; it was the purchase day's
+            init = fx.rule115(hist, lot["d"])
             peak = peak_day = None
             for k in days:
                 q = _qty_on(ch, k)
@@ -707,11 +709,12 @@ def schedule_fa(cy: int, trades: list[dict], splits: dict[str, list[dict]], clos
                 closing = None
             if closing is None or peak is None:     # a lot sold in the year needs its peak too
                 missing_prices.add(sym)
-            income = 0.0
+            income, came = 0.0, set()
             for dv in divs.get(sym) or []:
                 q = _qty_on(ch, dv["d"]) if start <= dv["d"] <= end else 0.0
                 if q <= 1e-7:
                     continue
+                came.add("declared" if "per_share" in dv else "file")
                 rt = fx.rate_on(hist, dv["d"])
                 if not rt:
                     missing_rates += 1
@@ -738,7 +741,10 @@ def schedule_fa(cy: int, trades: list[dict], splits: dict[str, list[dict]], clos
                          "peak": round(peak, 2) if peak is not None else None, "peak_day": peak_day,
                          "closing": round(closing, 2) if closing is not None else None, "closing_qty": round(q_end, 6),
                          "closing_rate": end_rate if q_end > 1e-7 else None,
-                         "income": round(income, 2), "proceeds": round(proceeds, 2) if sold else None})
+                         "income": round(income, 2), "proceeds": round(proceeds, 2) if sold else None,
+                         # MONEY-5: where the dividend income comes from: the user's dividend file, or the company's declared
+                         # payouts × the lot's shares on each date (never the trades entered)
+                         "income_from": "file" if came == {"file"} else "declared" if came == {"declared"} else "both" if came else None})
     tot = lambda k: round(sum(r[k] or 0.0 for r in rows), 2)
     return {"cy": cy, "fy": cy, "label": f"Calendar year {cy} (1 Jan to 31 Dec {cy}), reported in the return for {fy_label(cy)}",
             "rows": rows, "totals": {k: tot(k) for k in ("initial", "peak", "closing", "income", "proceeds")},

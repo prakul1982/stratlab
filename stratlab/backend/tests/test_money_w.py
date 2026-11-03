@@ -119,3 +119,16 @@ def test_adding_a_stock_already_held_merges_and_says_so(w):
     row = next(x for x in r.json()["holdings"]["rows"] if x["symbol"] == "TCS")
     assert row["qty"] == 15 and abs(row["avg"] - 3200) < 1e-6                     # the merge stays: weighted by quantity
     assert r.json()["notes"] == ["TCS was already held (5), so the 10 are added to it: 15 now."]
+
+
+def test_schedule_fa_says_where_each_lot_s_dividends_come_from():
+    from app import money_us_tax as us
+    trades = [{"d": "2024-06-10", "side": "B", "sym": "AAPL", "qty": 10, "price": 100.0, "charges": 0.0}]
+    hist = {"sbi": {"2024-05-31": 83.0, "2024-06-10": 83.5, "2024-08-15": 84.0, "2024-12-31": 85.0}}
+    closes = {"AAPL": {"2024-06-10": 100.0, "2024-12-31": 120.0}}
+    fa = us.schedule_fa(2024, trades, {}, closes, {"AAPL": [{"d": "2024-08-15", "per_share": 0.25}]}, hist)
+    row = fa["rows"][0]
+    assert row["initial"] == round(1000 * 83.0, 2) and row["initial_rate"]["on"] == "2024-05-31"      # Rule 115, as the gains table
+    assert row["income_from"] == "declared" and row["income"] == round(10 * 0.25 * 84.0, 2)
+    mine = us.schedule_fa(2024, trades, {}, closes, {"AAPL": [{"d": "2024-08-15", "amount": 2.5}]}, hist)
+    assert mine["rows"][0]["income_from"] == "file"

@@ -754,7 +754,9 @@ def holdings_view(items: list[dict], actions: dict[str, list[dict]], today: date
             if a["ex_date"] > today.isoformat():
                 ahead.append(line)
             else:
-                if a["ex_date"] >= year_ago and q > 0:      # DP2-018: a payment on no shares held isn't one received
+                # MONEY-5: the twelve months are on the same date as the financial-year slices (the record date, else the
+                # ex-date), so one payment never sits in one total and not the other (Instinct: ₹110 for the year, ₹120 paid)
+                if (a.get("record_date") or a["ex_date"]) >= year_ago and q > 0:      # DP2-018: a payment on no shares held isn't one received
                     received.append(line)
                 if q > 0 and fy_of(a.get("record_date") or a["ex_date"]) in by_fy:
                     slot = by_fy[fy_of(a.get("record_date") or a["ex_date"])]

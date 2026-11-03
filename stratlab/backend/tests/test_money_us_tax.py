@@ -157,7 +157,9 @@ def test_schedule_fa_peak_and_closing_per_lot():
     assert [(r["symbol"], r["lot"]) for r in fa["rows"]] == [("AAPL", 1), ("AAPL", 2)]       # OLD was sold out in 2024
     a, b = fa["rows"]
     rate = lambda s: fx_rates.rate(date.fromisoformat(s))
-    assert a["acquired"] == "2024-06-10" and a["initial"] == pytest.approx(1001 * rate("2024-06-10"), abs=0.01)
+    # MONEY-5: the initial value at Rule 115's rate (the last day of the month before the purchase), as the gains table's cost
+    assert a["acquired"] == "2024-06-10" and a["initial"] == pytest.approx(1001 * rate("2024-05-31"), abs=0.01)
+    assert a["initial_rate"]["on"] <= "2024-05-31" and a["initial_rate"]["event"] == "2024-06-10"
     assert a["peak_day"] == peak_day and a["peak"] == pytest.approx(6 * 300 * rate(peak_day), abs=0.01)   # 6 shares after March
     # the December sale took the first lot's last 6 shares and 2 of the second: both close the year at nothing
     assert a["closing"] == 0 and b["closing"] == 0 and a["closing_qty"] == 0
