@@ -42,3 +42,8 @@ test("MONEY-3: files are saved by one helper (in the page while clicked, address
   }
   assert.match(read("src/components/kit/StockPicker.tsx"), /if \(!typed && !open && text\.trim\(\) && !clearOnPick\) return;\n      e\.preventDefault\(\);/);
 });
+
+test("MONEY-4: a fold asked open later opens, and the stopped sessions are open when none is running", () => {
+  assert.match(read("src/components/Earlier.tsx"), /useEffect\(\(\) => \{ if \(open\) setShown\(true\); \}, \[open\]\);/);
+  assert.match(read("src/pages/PaperPage.tsx"), /<Earlier label="Stopped sessions" count=\{stopped\.length\} open=\{!current\.length \|\| /);
+});

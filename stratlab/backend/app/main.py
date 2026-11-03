@@ -3664,6 +3664,10 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             elif old and c.op == "add":
                 rows[k] = holdings.merge([old, {"exchange": old.get("exchange"), "symbol": old["symbol"], "qty": c.qty,
                                                 "avg": c.avg or None}])[0]
+                # MONEY-4: a stock already held is added to, and the page says so (it said only "X added.")
+                q = lambda v: f"{v:,.4f}".rstrip("0").rstrip(".")
+                out["notes"].append(f"{old['symbol']} was already held ({q(old['qty'])}), so the {q(c.qty)} are added to it: "
+                                    f"{q(rows[k]['qty'])} now" + ("." if rows[k].get("avg") else ", without an average price (one of the two has none)."))
             elif old:                      # "set": only the fields sent change
                 new = {**old, **({"qty": c.qty} if c.qty is not None else {})}
                 if "avg" in c.model_fields_set and not _same_avg(old, c.avg):

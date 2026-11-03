@@ -187,3 +187,45 @@ test("MONEY-3: a new alert is set on the first click, and Enter in the picked st
   expect(made()).toBe(2);
   await sane(page, errors);
 });
+
+test("MONEY-4: the first stock added by hand replaces 'No holdings yet' at once; adding it again says the merge", async ({ page, request }, info) => {
+  const u = as(6, info.project.name === "phone");
+  expect((await request.delete(`${API}/holdings`, { headers: auth(u) })).ok()).toBeTruthy();
+  const errors = await open(page, "/holdings", "No holdings yet", sessionAs(u.token, u.id, u.email));
+  await settle(page);
+  const add = async (qty: string, avg: string) => {
+    await page.getByRole("combobox", { name: "NSE symbol or BSE code" }).fill("TCS");
+    await page.getByRole("listbox", { name: "Suggestions" }).getByRole("option", { name: /TCS/ }).first().click();
+    await page.getByLabel("Quantity").fill(qty);
+    await page.getByLabel(/Average price/).fill(avg);
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+  };
+  await add("5", "3000");
+  await expect(page.getByText("TCS added.")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("No holdings yet")).toHaveCount(0);
+  const table = page.getByRole("table", { name: "Positions" });
+  await expect(table.getByText("TCS", { exact: true })).toBeVisible();
+  await add("10", "3300");
+  await expect(page.getByText("TCS was already held (5), so the 10 are added to it: 15 now.")).toBeVisible({ timeout: 30_000 });
+  await expect(table.getByRole("row", { name: /TCS/ })).toContainText("15");
+  await sane(page, errors);
+});
+
+test("MONEY-4: a stopped paper session is listed as a card, not a shut 'Stopped sessions (1)'", async ({ page, request }, info) => {
+  const u = as(7, info.project.name === "phone");
+  await request.delete(`${API}/live/sessions`, { headers: auth(u) });
+  const EMA = { name: "M4 trend", tf: "1d", entry: [{ l: { t: "ema", p: 10 }, op: "xa", r: { t: "ema", p: 30 } }], exit: [{ l: { t: "ema", p: 10 }, op: "xb", r: { t: "ema", p: 30 } }],
+    risk: { capital: 10000, riskPct: 2, sl: 4, tgt: 0, brokerage: 0, slippage: 0.05 } };
+  const nb = await (await request.post(`${API}/notebooks`, { headers: auth(u), data: { name: "M4 trend", question: "q", strategy: EMA, instrument: "CRYPTO:BTC-USD" } })).json();
+  const run = await request.post(`${API}/live/sessions`, { headers: auth(u), data: { notebook_id: nb.id, strategy: EMA, instrument: "CRYPTO:BTC-USD", name: "M4 trend", capital: 10000 } });
+  expect(run.ok()).toBeTruthy();
+  const sid = (await run.json()).id;
+  // open the running session's page, then stop it there
+  const errors = await open(page, `/paper/${sid}`, "M4 trend", sessionAs(u.token, u.id, u.email));
+  await settle(page);
+  expect((await request.post(`${API}/live/sessions/${sid}/stop`, { headers: auth(u) })).ok()).toBeTruthy();
+  await page.goto("/paper");
+  await expect(page.getByText(/None running/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".k-sess", { hasText: "M4 trend" })).toBeVisible();          // the fold is open, its card in it
+  expect(errors).toEqual([]);
+});

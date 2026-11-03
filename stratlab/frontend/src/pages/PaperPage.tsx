@@ -333,7 +333,7 @@ export function PaperPage() {
             <CardHead title="Your sessions" actions={<NewSessionButtons />} />
             {current.length ? <SessionCards rows={current} sid={sid} open={open} />
               : <p className="k-small k-muted">None running. {stopped.length === 1 ? "The stopped one is" : "Stopped ones are"} below.</p>}
-            <Earlier label="Stopped sessions" count={stopped.length} open={!!sid && stopped.some((r) => r.id === sid)}>
+            <Earlier label="Stopped sessions" count={stopped.length} open={!current.length || (!!sid && stopped.some((r) => r.id === sid))}>
               <SessionCards rows={stopped} sid={sid} open={open} />
               <button type="button" className="btn quiet sm k-btn-end" onClick={() => setClearing(true)}>Clear stopped sessions</button>
             </Earlier>

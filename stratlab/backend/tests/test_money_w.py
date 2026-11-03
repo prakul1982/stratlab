@@ -109,3 +109,13 @@ def test_the_journal_uses_the_same_check():
     assert why[4] == 'The quantity "notanumber" isn\'t a number.'
     assert why[5] == "The trade date (1 Jan 2099) is after today, so it's left out."
     assert len(got["fills"]) == 1
+
+
+def test_adding_a_stock_already_held_merges_and_says_so(w):
+    c = w["client"]
+    holdings.save("u-pro", [{"symbol": "TCS", "exchange": "NSE", "name": "TCS", "qty": 5.0, "avg": 3000.0}], "Manual")
+    r = c.put("/holdings", headers=PRO, json={"changes": [{"op": "add", "symbol": "TCS", "qty": 10, "avg": 3300, "market": "IN"}]})
+    assert r.status_code == 200, r.text
+    row = next(x for x in r.json()["holdings"]["rows"] if x["symbol"] == "TCS")
+    assert row["qty"] == 15 and abs(row["avg"] - 3200) < 1e-6                     # the merge stays: weighted by quantity
+    assert r.json()["notes"] == ["TCS was already held (5), so the 10 are added to it: 15 now."]
