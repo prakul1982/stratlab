@@ -3567,7 +3567,6 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
             # LIVE1B-065: the same file again would double every quantity; nothing is added, and the page says so
             out.update(duplicate=True, n=0, saved=False, over=[])
             return None
-        n_read = len(found) if req.mode == "replace" else None
         rows = found
         if req.mode == "add":
             rows = holdings.merge(before["items"] + rows)
@@ -3580,9 +3579,12 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
                            or ((holdings.market_of(i), i["symbol"]) not in have
                                and (i["symbol"].upper() in names or str(i.get("isin") or "").upper() in names))]
         rows, out["over"] = holdings.cap(rows, before["items"], limit)   # a downgrade deletes nothing
-        out["n"] = len(rows) if n_read is None else min(n_read, len(rows))
-        out["saved"] = bool(rows)
-        if not rows:                      # nothing matched: the saved holdings stay as they were
+        # MONEY-1: "N saved" is the file's stocks that were saved, in either mode (adding said the new total of every holding)
+        left = set(out["over"])
+        out["lines"] = [{"symbol": i["symbol"], "exchange": i.get("exchange"), "qty": i["qty"], "avg": i.get("avg")} for i in found if i["symbol"] not in left]
+        out["n"] = len(out["lines"])
+        out["saved"] = bool(rows) and out["n"] > 0
+        if not out["saved"]:              # nothing matched (or nothing had room): the saved holdings stay as they were
             return None
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
         # RC2B-009: Kite's holdings export is a file; "Zerodha Kite" as a stored source means the Kite login's read, and the
@@ -3593,7 +3595,8 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         holdings.file_remember(profile["id"], digest, req.mode == "replace")
         invite_rewards.safe_touch(profile, "holdings")
     over = out["over"]
-    return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "duplicate": bool(out.get("duplicate")), "unmatched": missed[:200],
+    return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "duplicate": bool(out.get("duplicate")),
+               "saved_lines": out.get("lines", [])[:500] if out["saved"] else [], "unmatched": missed[:200],
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
 

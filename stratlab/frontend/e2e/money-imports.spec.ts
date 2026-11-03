@@ -59,3 +59,40 @@ test("MONEY-2: a holdings file adds by default; Start again asks first, naming w
   await expect(table.getByText("BHARTIARTL", { exact: true })).toBeVisible();
   await sane(page, errors);
 });
+
+test("MONEY-6a/1: a file with good and bad lines says exactly what was saved and each line left out, never a failure", async ({ page, request }, info) => {
+  const u = as(1, info.project.name === "phone");
+  expect((await request.delete(`${API}/holdings`, { headers: auth(u) })).ok()).toBeTruthy();
+  const errors = await open(page, "/holdings", "No holdings yet", sessionAs(u.token, u.id, u.email));
+  await settle(page);
+  // Instinct's file: lower-case column names, one good line and each kind of bad one
+  const csv = "symbol,quantity,avg_price\nINFY,10,1500\nSBIN,notanumber,abc\n,7,500\nTATAMOTORS,-5,800\nFAKESYM123,3,100\n";
+  await page.getByLabel("Holdings file").setInputFiles({ name: "lower.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await expect(page.getByText("1 stock saved.")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("4 lines couldn't be matched (below).")).toBeVisible();
+  const missed = page.getByRole("table", { name: "Lines that couldn't be matched" });
+  for (const [line, why] of [["3", /"notanumber" isn't a number/], ["4", /No stock symbol/], ["5", /below 0/], ["6", /FAKESYM123|no listed company|isn't/i]] as const) {
+    await expect(missed.getByRole("row").filter({ has: page.getByRole("rowheader", { name: line, exact: true }) }).getByText(why).first()).toBeVisible();
+  }
+  await page.getByText("Show the 1 stock saved from this file").click();
+  const saved = page.getByRole("table", { name: "Stocks saved from this file" });
+  await expect(saved.getByText("INFY", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("upload-problem")).toHaveCount(0);
+  await expect(page.getByText(/couldn't be read|could not be read/)).toHaveCount(0);
+  await expect(page.getByRole("table", { name: "Positions" }).getByText("INFY", { exact: true })).toBeVisible();
+  await sane(page, errors);
+});
+
+test("MONEY-6a: a refused file shows the columns that are read and the broker files", async ({ page, request }, info) => {
+  const u = as(2, info.project.name === "phone");
+  expect((await request.delete(`${API}/holdings`, { headers: auth(u) })).ok()).toBeTruthy();
+  const errors = await open(page, "/holdings", "No holdings yet", sessionAs(u.token, u.id, u.email));
+  await settle(page);
+  await page.getByLabel("Holdings file").setInputFiles({ name: "notes.csv", mimeType: "text/csv", buffer: Buffer.from("these,are,not\nmy,holdings,at all\n") });
+  await expect(page.getByTestId("upload-problem")).toBeVisible({ timeout: 30_000 });
+  const how = page.getByTestId("holdings-format");
+  await expect(how).toContainText("Symbol (or ISIN), Quantity and Average price");
+  await expect(how).toContainText("Zerodha");
+  await expect(page.getByText("No holdings yet")).toBeVisible();
+  await sane(page, errors);
+});

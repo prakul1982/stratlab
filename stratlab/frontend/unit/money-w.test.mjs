@@ -13,3 +13,11 @@ test("MONEY-2: a holdings file adds by default, and Start again asks first, nami
   assert.match(p, /title="Start again with this file\?" confirmLabel="Replace my holdings"/);
   assert.match(p, /This replaces your \{held\}/);
 });
+
+test("MONEY-6a: the holdings upload names what it saved, shows the accepted columns on a refusal, and never says failure over a save", () => {
+  const p = read("src/pages/HoldingsPage.tsx");
+  assert.match(p, /label="Stocks saved from this file"/);
+  assert.match(p, /data-testid="holdings-format">A file of your own needs the columns <b>Symbol<\/b> \(or ISIN\), <b>Quantity<\/b> and <b>Average price<\/b>/);
+  assert.match(p, /couldn't be opened here, so nothing was sent and your holdings are unchanged/);
+  assert.match(p, /if \(!refused\(e\)\) \{ fail\(e\); load\(\); \}/);
+});

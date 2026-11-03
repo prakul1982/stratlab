@@ -157,27 +157,27 @@ def _lines(rows, header: list[str], cols: dict, start: int, label: str, out: lis
     total, parts, taxes = _charge_cols(header)
     listed = total is not None or bool(parts) or bool(taxes)
     line = start
+    today = hf.today_india()
     for row in rows:
         line += 1
         if line - start > hf.FNO_MAX_ROWS:
             raise FileError(f"{label} has more than {hf.FNO_MAX_ROWS:,} lines. Upload it a quarter at a time.")
         sym = clean_symbol(hf._cell(row, cols.get("symbol")) or hf._cell(row, cols.get("name")))
-        if not sym or re.match(r"(?i)^(total|grand total|sub ?total)\b", sym):
+        # the check every imported line goes through (MONEY-1): a line with no symbol or a quantity that isn't a number is said
+        qty, bad = hf.check_line(row, sym, hf._cell(row, cols.get("qty")), line, signed=True)
+        if bad:
+            problems.append({**bad, "text": f"{label} · {bad['text']}"[:120]})
+        if qty is None:
             continue
         text = f"{label} · {sym}"[:120]
-        qty = hf.number(hf._cell(row, cols.get("qty")))
-        qty = abs(qty) if qty else qty
-        if not qty:
-            if any(hf.number(c) is not None for c in row):
-                problems.append({"line": line, "text": text, "reason": "No quantity on this line."})
-            continue
         bcell, scell = hf._cell(row, cols.get("buy_date")), hf._cell(row, cols.get("sell_date"))
         bd, sd = hf.day(bcell), hf.day(scell)
         bp, sp = hf.number(hf._cell(row, cols.get("buy_price"))), hf.number(hf._cell(row, cols.get("sell_price")))
         bv = bp * qty if bp is not None else hf.number(hf._cell(row, cols.get("buy_value")))
         sv = sp * qty if sp is not None else hf.number(hf._cell(row, cols.get("sell_value")))
-        if not bd or not sd:
-            problems.append({"line": line, "text": text, "reason": "The entry or exit date couldn't be read."})
+        why = hf.date_problem([bd, sd], "entry or exit date", today)
+        if why:
+            problems.append({"line": line, "text": text, "reason": why})
             continue
         if bv is None or sv is None or bv < 0 or sv < 0 or max(bv, sv) > 1e12:
             problems.append({"line": line, "text": text, "reason": "The purchase or sale value couldn't be read."})
