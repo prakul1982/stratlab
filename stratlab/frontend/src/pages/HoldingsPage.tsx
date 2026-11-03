@@ -78,7 +78,9 @@ export function HoldingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [facts, setFacts] = useState<FactsReply | null>(null);
   const more = useMoreColumns("holdings", 4);     // sector, trend, filings and results: one click away, so the table fits a laptop
-  const [mode, setMode] = useState<"replace" | "add">("replace");
+  // MONEY-2: a file adds to what's held unless "Start again" is chosen, and that asks first, naming what it replaces
+  const [mode, setMode] = useState<"replace" | "add">("add");
+  const [replacing, setReplacing] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);        // a file is being read: only then does the upload button say "Reading…" (LIVE1B-047)
   const [result, setResult] = useState<(ImportReply & { replaced: boolean; usKept: number }) | null>(null);
@@ -143,16 +145,22 @@ export function HoldingsPage() {
     // LIVE1B-002: the last file's answer goes the moment another is picked, so a refusal never sits under an old "saved" line
     setResult(null); clearProblem();
     if (f.size > MAX_MB * 1024 * 1024) { reject(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); reset(); return; }
+    // nothing held yet: the file is the holdings either way. Held Indian stocks and "Start again": asked first (MONEY-2)
+    const how = rows.length ? mode : "replace";
+    if (how === "replace" && rows.some((r) => !isUS(r))) { setReplacing(f); reset(); return; }
+    await upload(f, how);
+    reset();
+  };
+  const upload = async (f: File, how: "replace" | "add") => {
     setBusy(true); setReading(true);
     try {
       const data = await dataUrl(f);
-      const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode } });
-      track("holdings imported", { rows: r.imported, method: mode });
-      setResult({ ...r, replaced: mode === "replace", usKept: r.holdings.us?.count ?? 0 });
+      const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode: how } });
+      track("holdings imported", { rows: r.imported, method: how });
+      setResult({ ...r, replaced: how === "replace", usKept: r.holdings.us?.count ?? 0 });
       show(r.holdings);
     } catch (e) { if (!refused(e)) fail(e); } finally {
       setBusy(false); setReading(false);
-      reset();
     }
   };
 
@@ -432,6 +440,13 @@ export function HoldingsPage() {
           }}
           onRemove={async () => { if (await save([{ op: "remove", symbol: edit.symbol, market: edit.market ?? "IN" }], `${edit.symbol} removed.`)) setEdit(null); }} />
       )}
+      {replacing && (() => {
+        const held = rows.filter((r) => !isUS(r)).length, us = rows.length - held;
+        return <ConfirmDialog title="Start again with this file?" confirmLabel="Replace my holdings" onClose={() => setReplacing(null)}
+          onConfirm={() => { const f = replacing; setReplacing(null); void upload(f, "replace"); }}>
+          This replaces your {held}{us ? " Indian" : ""} holding{held === 1 ? "" : "s"} with the stocks in {replacing.name}.{us ? ` Your ${us} US stock${us === 1 ? " is" : "s are"} kept.` : ""} To keep them and add this file's stocks, choose Add to my holdings.
+        </ConfirmDialog>;
+      })()}
       {asking && <ConfirmDialog title="Delete my holdings?" confirmLabel="Delete my holdings" busy={busy} onConfirm={() => void remove()} onClose={() => setAsking(false)}>Every saved position is removed from StratLab. Your broker account isn't touched.</ConfirmDialog>}
     </div>
   );
