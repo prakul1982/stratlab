@@ -5,6 +5,7 @@ import { useApp } from "../../lib/app";
 import { Download, Lock } from "../../components/Icons";
 import { lockWords } from "../../lib/lockText";
 import { track } from "../../lib/analytics";
+import { download as saveFile } from "../../lib/share";
 import { Card, CardHead, type Column, DataTable, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormGrid, Notes, Notice, PageHeader, PlanNote, Select, Skeleton } from "../../components/kit";
 import { movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
@@ -95,11 +96,9 @@ export function ItrExportPage() {
     setGetting(f);
     try {
       const r = await api<Response>(`/money/itr/export?fy=${v.fy}&format=${f}`, { raw: true });
-      const a = document.createElement("a");
       const base = `stratlab-ITR-FY-${v.fy}-${String(v.fy + 1).slice(2)}`;
-      a.href = URL.createObjectURL(await r.blob()); a.download = f === "pdf" ? `${base}-CA-pack.pdf` : f === "zip" ? `${base}-schedules.zip` : `${base}-schedules.xlsx`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      // MONEY-3: one save helper (lib/share download): in the page while clicked, its address kept, an empty file an error
+      saveFile(await r.blob(), f === "pdf" ? `${base}-CA-pack.pdf` : f === "zip" ? `${base}-schedules.zip` : `${base}-schedules.xlsx`);
       track("itr export", { format: f });
     } catch (e) { fail(e); } finally { setGetting(null); }
   };

@@ -13,6 +13,7 @@ import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, Error
 import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
 import { useAskedFy } from "../lib/useFy";
 import { gainLabel, usSharesNote } from "../lib/usGains";
+import { download as saveFile } from "../lib/share";
 
 /* /tax-report: capital gains on shares and funds from the tradebooks you upload, matched first in, first out, with the
  * exemption and set-off, F&O and intraday kept apart, and the year's total tax estimate. Estimates, never advice.
@@ -177,9 +178,7 @@ export function TaxReportPage() {
     setGetting(format);
     try {
       const r = await api<Response>(`/tax/export?fy=${fy}&format=${format}`, { raw: true });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob()); a.download = `stratlab-tax-FY-${fy}-${String(fy + 1).slice(2)}.${format}`; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      saveFile(await r.blob(), `stratlab-tax-FY-${fy}-${String(fy + 1).slice(2)}.${format}`);      // MONEY-3: the one save helper
     } catch (e) { fail(e); } finally { setGetting(null); }
   };
 

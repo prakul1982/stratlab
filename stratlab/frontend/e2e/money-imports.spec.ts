@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { sessionAs, open, sane, settle, API, HOLDINGS_FILES } from "./pages-kit";
+import { sessionAs, open, sane, settle, API, HOLDINGS_FILES, TRADEBOOKS } from "./pages-kit";
 
 // The MONEY lane (Instinct deep QA, 1–2 Nov): what a file upload does to what's saved, said plainly, and the first click
 // on a money form doing what it says. Each test signs in as its own fake Pro account per project (money-N in
@@ -127,5 +127,63 @@ test("MONEY-6b/6c: tax tools › dividends: a file over two years uploads, shows
   await expect(page.getByText("Your uploaded dividends are deleted.")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/ran into a problem/)).toHaveCount(0);
   await expect(page.getByLabel("Dividend file")).toBeAttached();
+  await sane(page, errors);
+});
+
+test("MONEY-3: the ITR PDF pack downloads on the first click of a fresh page, says Making it… meanwhile, and says a failure", async ({ page, request }, info) => {
+  const u = as(4, info.project.name === "phone");
+  expect((await request.delete(`${API}/tax`, { headers: auth(u) })).ok()).toBeTruthy();
+  expect((await request.post(`${API}/tax/import?filename=zerodha_console_tradebook.csv&mode=add`, {
+    headers: { ...auth(u), "Content-Type": "application/octet-stream" }, data: readFileSync(TRADEBOOKS + "zerodha_console_tradebook.csv") })).ok()).toBeTruthy();
+  // the pack takes a moment, as a first one does on the live server
+  await page.route("**/money/itr/export**", async (r) => { await new Promise((ok) => setTimeout(ok, 1200)); await r.fallback(); });
+  const errors = await open(page, "/money/itr", "Your year, laid out for the return", sessionAs(u.token, u.id, u.email));
+  await settle(page);
+  const pdf = page.getByRole("button", { name: /PDF pack for your CA/ });
+  await expect(pdf).toBeEnabled({ timeout: 30_000 });
+  const got = page.waitForEvent("download");
+  await pdf.click();                                                       // once
+  await expect(page.getByRole("button", { name: /Making it…/ })).toBeVisible();
+  const dl = await got;
+  expect(dl.suggestedFilename()).toMatch(/CA-pack\.pdf$/);
+  expect((await readFileSync(await dl.path()).subarray(0, 5)).toString()).toBe("%PDF-");
+  await expect(pdf).toBeEnabled();
+  // a failure is said, and the button is back
+  await page.unroute("**/money/itr/export**");
+  await page.route("**/money/itr/export**", (r) => r.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ detail: { message: "The pack couldn't be made just now." } }) }));
+  await pdf.click();
+  await expect(page.getByText("The pack couldn't be made just now.")).toBeVisible({ timeout: 15_000 });
+  await expect(pdf).toBeEnabled();
+  expect(errors).toEqual([]);
+});
+
+test("MONEY-3: a new alert is set on the first click, and Enter in the picked stock box sends it too", async ({ page, request }, info) => {
+  const u = as(5, info.project.name === "phone");
+  for (const a of (await (await request.get(`${API}/alerts`, { headers: auth(u) })).json()).alerts ?? []) await request.delete(`${API}/alerts/${a.id}`, { headers: auth(u) });
+  const errors = await open(page, "/alerts", "Your stock alerts", sessionAs(u.token, u.id, u.email));
+  await settle(page);
+  const made = counter(page, "/alerts");
+  await page.getByRole("button", { name: "New alert" }).click();
+  const dialog = page.getByRole("dialog", { name: "New alert" });
+  const stock = dialog.getByRole("combobox", { name: "Stock" });
+  await stock.fill("RELIANCE");
+  await dialog.getByRole("listbox", { name: "Suggestions" }).getByRole("option", { name: /RELIANCE/ }).first().click();
+  await dialog.getByLabel("Alert me when").selectOption("price_above");
+  await dialog.getByLabel(/Price level/).fill("99999");
+  await dialog.getByRole("button", { name: "Set alert" }).click();                 // once
+  await expect(dialog).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator(".alert-row", { hasText: "RELIANCE" })).toBeVisible();
+  expect(made(), "one click, one request").toBe(1);
+
+  // the keyboard: pick TCS, type a level, then Enter in the stock box sends the form at once
+  await page.getByRole("button", { name: "New alert" }).click();
+  await stock.fill("TCS");
+  await dialog.getByRole("listbox", { name: "Suggestions" }).getByRole("option", { name: /TCS/ }).first().click();
+  await dialog.getByLabel("Alert me when").selectOption("price_above");
+  await dialog.getByLabel(/Price level/).fill("99999");
+  await stock.press("Enter");
+  await expect(dialog).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator(".alert-row", { hasText: "TCS" })).toBeVisible();
+  expect(made()).toBe(2);
   await sane(page, errors);
 });

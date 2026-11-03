@@ -12,6 +12,7 @@ import { XYChart } from "../../components/Charts";
 import { Download, Plus, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, FactTable, Field, FormActions, FormGrid, Notice, Notes, PageHeader, PlanNote, Select, ShareTable, Skeleton, TilePicker, useRange, type Column, type TileGroup } from "../../components/kit";
+import { download as saveFile } from "../../lib/share";
 
 /* /money/net-worth: what you own minus what you owe: stocks from My Holdings, plus the deposits, provident funds, gold,
  * property and loans added here, each with how it is worked out and its date. Built from the kit (components/kit). */
@@ -361,9 +362,7 @@ export function NetWorthPage() {
   const download = async () => {
     try {
       const r = await api<Response>("/money/net-worth/export", { raw: true });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob()); a.download = `stratlab-net-worth-${istToday()}.csv`; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      saveFile(await r.blob(), `stratlab-net-worth-${istToday()}.csv`);      // MONEY-3: the one save helper
     } catch (e) { fail(e); }
   };
   // one snapshot out of the history (R7O-013: a test's holdings left a snapshot that only "Delete my net worth data"

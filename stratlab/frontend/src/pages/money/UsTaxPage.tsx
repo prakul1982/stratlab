@@ -9,6 +9,7 @@ import { fyLink, movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { tradeProblems } from "../../lib/validate";
 import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, UploadButton, useUploadProblem, Notes, FigureTable } from "../../components/kit";
+import { download as saveFile } from "../../lib/share";
 
 /* /money/us-tax: US share sales in rupees the way the Income-tax Rules convert them, long or short term under the
  * 24-month rule, US dividends with the tax withheld and the foreign tax credit, and the calendar-year Schedule FA table.
@@ -139,9 +140,7 @@ export function UsTaxPage() {
     setGetting(true);
     try {
       const r = await api<Response>(`/money/us-tax/schedule-fa.csv?cy=${v.fa.cy}`, { raw: true });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob()); a.download = `stratlab-schedule-FA-CY${v.fa.cy}.csv`; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      saveFile(await r.blob(), `stratlab-schedule-FA-CY${v.fa.cy}.csv`);      // MONEY-3: the one save helper
     } catch (e) { fail(e); } finally { setGetting(false); }
   };
 

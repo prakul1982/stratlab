@@ -30,3 +30,15 @@ test("MONEY-6b/6c: the dividends tab opens its year once per reply (no state set
   assert.match(p, /setNote\(`\$\{f\.name\}: \$\{r\.added\} dividend/);
   assert.match(p, /const savedFrom = `Saved from \$\{v\.files\.map\(\(f\) => f\.name\)\.join\(", "\)\}\.`/);
 });
+
+test("MONEY-3: files are saved by one helper (in the page while clicked, address kept, an empty file an error), and Enter on a picked stock sends its form", () => {
+  const s = read("src/lib/share.ts");
+  assert.match(s, /if \(!blob\.size\) throw new Error\("The file came back empty\. Try again\."\)/);
+  assert.match(s, /document\.body\.appendChild\(a\);\n  a\.click\(\);\n  a\.remove\(\);\n  setTimeout\(\(\) => URL\.revokeObjectURL\(a\.href\), 60_000\)/);
+  for (const p of ["src/pages/money/ItrExportPage.tsx", "src/pages/TaxReportPage.tsx", "src/pages/money/NetWorthPage.tsx", "src/pages/money/UsTaxPage.tsx"]) {
+    const src = read(p);
+    assert.match(src, /import \{ download as saveFile \} from "[./]+lib\/share";/, p);
+    assert.doesNotMatch(src, /URL\.createObjectURL\(await r\.blob\(\)\)/, p);
+  }
+  assert.match(read("src/components/kit/StockPicker.tsx"), /if \(!typed && !open && text\.trim\(\) && !clearOnPick\) return;\n      e\.preventDefault\(\);/);
+});
