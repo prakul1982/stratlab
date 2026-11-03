@@ -121,6 +121,39 @@ test("Net worth: one snapshot is removed from the history after a confirm; the e
   await request.delete(`${API}/money/net-worth`, { headers: auth });
 });
 
+// the same on a month's first day with the market shut (E2E_NOW_CLOSED, Sun 1 Nov): the entry's change is dated today, 1 Nov, and the
+// visit takes the month's snapshot dated by the last close, Fri 30 Oct, in October (the documented pair: "the 1st on a weekend is the
+// last close's"). This test failed when the real date was a 1st while it expected one snapshot (Instinct, 2 Nov); now it says so.
+test.describe("on a month's first day, the market shut", () => {
+  test.use({ moment: "closed" });
+
+  test("Net worth: the entry's change and the month's close are two snapshots; one removed leaves the other and the entries (R7O-013)", async ({ page, request, api }, info) => {
+    const n = info.project.name === "phone" ? 251 : 248;
+    const auth = { Authorization: `Bearer load-${n}` };
+    expect((await request.delete(`${api}/money/net-worth`, { headers: auth })).ok()).toBeTruthy();
+    const added = await request.post(`${api}/money/net-worth/items`, { headers: auth, data: { kind: "cash", name: "Savings account", value: 100000 } });
+    expect(added.ok(), await added.text()).toBeTruthy();
+    const errors = await open(page, "/money/net-worth", { token: `load-${n}`, id: `u-load-${n}`, email: `load${n}@example.com` });
+    const welcome = page.getByRole("dialog", { name: "What brings you here?" });
+    if (await welcome.waitFor({ timeout: 4000 }).then(() => true).catch(() => false)) {
+      await welcome.getByRole("button", { name: /^All of it/ }).click();
+      await page.goto("/money/net-worth");
+    }
+    const snaps = page.getByTestId("nw-snapshots");
+    await expect(snaps.locator("summary")).toHaveText("History: 2 snapshots", { timeout: 30_000 });
+    await snaps.locator("summary").click();
+    await expect(snaps.getByRole("row", { name: /1 Nov 2026/ })).toContainText("taken when an entry changed");
+    await expect(snaps.getByRole("row", { name: /30 Oct 2026/ })).toContainText("monthly");
+    await snaps.getByRole("button", { name: "Remove the snapshot of 30 Oct 2026" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Remove this snapshot" }).click();
+    await expect(page.getByText("Snapshot removed.")).toBeVisible();
+    await expect(page.getByTestId("nw-snapshots").locator("summary")).toHaveText("History: 1 snapshot");
+    await expect(page.locator("main")).toContainText("Savings account");
+    expect(errors).toEqual([]);
+    await request.delete(`${api}/money/net-worth`, { headers: auth });
+  });
+});
+
 test("A phone's breadth range row shows its chosen chip clear of the fade, and the custom unit's arrow clears its word (R92-003)", async ({ page }, info) => {
   test.skip(info.project.name !== "phone", "a phone's width");
   await page.setViewportSize({ width: 400, height: 860 });

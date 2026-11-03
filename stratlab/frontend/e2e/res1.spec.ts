@@ -1,9 +1,8 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { E2E_NOW, E2E_NOW_CLOSED, expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // RES-1: the results calendar as a table a day, narrowed by size, sector, index, F&O and the meeting's purpose. The fake world has twenty
 // companies reporting over this week and next (four today), each with earlier results days and a made-up price history, so the
 // "Past results-day moves" column fills in; the options-implied move comes from made-up option prices for the F&O stocks.
-const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 // each project signs in as its own Pro account of the fake world, set up here with RELIANCE as its one stock: the calendar puts a user's own stocks first,
 // and admin's list is changed by other specs (a holding or a starred ITC left there put ITC first in "by name" when the files ran side by side)
 const USERS: Record<string, number> = { desktop: 104, phone: 107 };
@@ -12,20 +11,20 @@ function sessionFor(n: number) {
   return { access_token: `load-${n}`, token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400,
     refresh_token: "r", user: { id: `u-load-${n}`, aud: "authenticated", email: `load${n}@example.com`, role: "authenticated", app_metadata: {}, user_metadata: {} } };
 }
-test.beforeEach(async ({ request }, info) => {
+test.beforeEach(async ({ request, api }, info) => {
   const n = USERS[info.project.name] ?? 104;
   session = sessionFor(n);
   const headers = { Authorization: `Bearer load-${n}` };
-  await request.put(`${API}/me/prefs`, { headers, data: { level: "some", focus: "both" } });
-  await request.put(`${API}/research/watchlist`, { headers, data: { items: [{ region: "IN", symbol: "RELIANCE" }] } });
+  await request.put(`${api}/me/prefs`, { headers, data: { level: "some", focus: "both" } });
+  await request.put(`${api}/research/watchlist`, { headers, data: { items: [{ region: "IN", symbol: "RELIANCE" }] } });
 });
 const SHOTS = process.env.E2E_SHOTS;
 
 // the day the calendar opens on, from the API: today on a trading day; on a weekend or a holiday the exchange is shut, the world's
-// "today" companies report on the next session and no day is marked today (these tests failed every Saturday while they assumed one)
-async function firstDay(request: APIRequestContext) {
+// "today" companies report on the next session and no day is marked today (the shut-market tests at the end, at E2E_NOW_CLOSED)
+async function firstDay(request: APIRequestContext, api: string) {
   const n = Number(session.access_token.slice(5));
-  const r = await request.get(`${API}/research/results?region=IN&scope=all`, { headers: { Authorization: `Bearer load-${n}` } });
+  const r = await request.get(`${api}/research/results?region=IN&scope=all`, { headers: { Authorization: `Bearer load-${n}` } });
   expect(r.ok()).toBeTruthy();
   const j = await r.json() as { today: string; weeks: { days?: { date: string }[] }[] };
   const first = j.weeks.flatMap((w) => w.days ?? []).map((d) => d.date.slice(0, 10)).filter((d) => d >= j.today).sort()[0];
@@ -62,20 +61,16 @@ async function shot(page: Page, name: string, info: { project: { name: string } 
   await page.screenshot({ path: `${SHOTS}/${name}-${phone ? "390" : "1440"}.png`, fullPage: true });
 }
 
-test("results calendar: a table a day with live prices, the latest quarter, earlier results-day moves and the options' implied move", async ({ page, request }, info) => {
+test("results calendar: a table a day with live prices, the latest quarter, earlier results-day moves and the options' implied move", async ({ page }, info) => {
   const phone = info.project.name === "phone";
-  const cal = await firstDay(request);
   const errors = await open(page, "/research/results?region=IN&scope=all", "Board meetings companies have called");
   await expect(page.getByTestId("results-count")).toHaveText("20 companies", { timeout: 30_000 });
   const today = page.getByRole("table", { name: /^Results on .*/ }).first();
   await expect(today).toBeVisible();
   const days = page.getByTestId("results-day");
-  // the first day has the world's four: marked today on a trading day; on a shut day it is the next session, after today
-  if (cal.open) await expect(days.first().locator(".k-eyebrow")).toContainText("today · 4 companies");
-  else {
-    expect(cal.first > cal.today, "a shut day's calendar opens on a later session").toBeTruthy();
-    await expect(days.first().locator(".k-eyebrow")).toHaveText(/^[A-Z][a-z]{2},? \d{1,2} [A-Z][a-z]{2} · 4 companies$/);
-  }
+  // the world's fixed moment is a trading day (E2E_NOW): the first day is today, with the world's four
+  await expect(days.first().locator(".k-eyebrow")).toContainText("today · 4 companies");
+  expect(await page.evaluate(() => new Date().toISOString().slice(0, 10)), "the page's clock is the world's").toBe(E2E_NOW.slice(0, 10));
   if (!phone) {
     for (const h of ["Company", "Market value", "Price now", "Day", "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply"])
       await expect(today.getByRole("columnheader").filter({ hasText: h }).first()).toBeVisible();
@@ -95,9 +90,8 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   await shot(page, "res1-india", info);
 });
 
-test("results calendar: size, sector, index, F&O and purpose narrow the table, the count says how many, and the choice is kept", async ({ page, request }, info) => {
+test("results calendar: size, sector, index, F&O and purpose narrow the table, the count says how many, and the choice is kept", async ({ page }, info) => {
   const phone = info.project.name === "phone";
-  const cal = await firstDay(request);
   const errors = await open(page, "/research/results?region=IN&scope=all", "Board meetings companies have called");
   const count = page.getByTestId("results-count");
   await expect(count).toHaveText("20 companies", { timeout: 30_000 });
@@ -125,7 +119,7 @@ test("results calendar: size, sector, index, F&O and purpose narrow the table, t
   await expect(page.getByTestId("results-count")).toHaveText("20 companies", { timeout: 30_000 });
   // the day and the meeting's purpose
   if (phone && (await page.getByRole("button", { name: /^Filters/ }).getAttribute("aria-expanded")) !== "true") await page.getByRole("button", { name: /^Filters/ }).click();
-  await filters.getByLabel("Day", { exact: true }).selectOption(cal.open ? "today" : cal.first);        // the first session's four
+  await filters.getByLabel("Day", { exact: true }).selectOption("today");        // today's four
   await expect(count).toHaveText("20 companies · 4 shown");
   await filters.getByLabel("Meeting", { exact: true }).selectOption("more");
   await expect(page.getByTestId("results-count")).toContainText("20 companies ·");
@@ -144,9 +138,8 @@ test("results calendar: the US has its own table without the options column", as
   await shot(page, "res1-us", info);
 });
 
-test("corporate actions: a table a day with the price now, the payment's yield and the market value, narrowed like the results", async ({ page, request }, info) => {
+test("corporate actions: a table a day with the price now, the payment's yield and the market value, narrowed like the results", async ({ page }, info) => {
   const phone = info.project.name === "phone";
-  const cal = await firstDay(request);
   const errors = await open(page, "/research/corporate-actions?region=IN&scope=all", "Dividends, bonuses and splits");
   const count = page.getByTestId("actions-count");
   await expect(count).toContainText(/\d+ actions?/, { timeout: 30_000 });
@@ -157,9 +150,6 @@ test("corporate actions: a table a day with the price now, the payment's yield a
     await expect(table.getByRole("columnheader").filter({ hasText: h }).first()).toBeVisible();
   // today: TCS's bonus 1:1 (the world's own row) and the dividends the world adds
   await expect(page.getByRole("table", { name: /^Corporate actions going ex on/ }).first()).toBeVisible();
-  // on a shut day the actions "going ex today" went ex on the last session (an ex-date is a trading day), so they are under the
-  // earlier weeks, folded until opened
-  if (!cal.open) await page.locator("details.earlier summary").filter({ hasText: /^Last (two|four) weeks/ }).first().click();
   const tcs = page.getByRole("row", { name: /TCS/ }).filter({ hasText: "Bonus 1:1" }).first();
   await expect(tcs).toContainText("Bonus 1:1");
   await expect(tcs).toContainText("1:1");
@@ -183,4 +173,36 @@ test("corporate actions: a table a day with the price now, the payment's yield a
   await expect(page.getByTestId("actions-day").first()).toBeVisible();
   await sane(page, errors);
   await shot(page, "res1-corp-india", info);
+});
+
+// the same two calendars with the exchange shut (E2E_NOW_CLOSED, a Sunday; they failed every weekend while they assumed a session
+// today): the results calendar opens on the next session, not marked today, with the world's four; the actions "going ex today"
+// went ex on the last session (an ex-date is a trading day), so they are under the earlier weeks, folded until opened
+test.describe("with the market shut", () => {
+  test.use({ moment: "closed" });
+
+  test("results calendar and corporate actions on a shut day: the next session first, the last session's actions under the earlier weeks", async ({ page, request, api }, info) => {
+    const phone = info.project.name === "phone";
+    const cal = await firstDay(request, api);
+    expect(cal.open, "the closed moment is not a trading day").toBeFalsy();
+    expect(cal.first > cal.today, "a shut day's calendar opens on a later session").toBeTruthy();
+    let errors = await open(page, "/research/results?region=IN&scope=all", "Board meetings companies have called");
+    const count = page.getByTestId("results-count");
+    await expect(count).toHaveText("20 companies", { timeout: 30_000 });
+    await expect(page.getByTestId("results-day").first().locator(".k-eyebrow")).toHaveText(/^[A-Z][a-z]{2},? \d{1,2} [A-Z][a-z]{2} · 4 companies$/);
+    await expect(page.getByText("today ·")).toHaveCount(0);
+    // the page's own clock is the closed world's (e2e/fixtures.ts), not the machine's
+    expect(await page.evaluate(() => new Date().toISOString().slice(0, 10))).toBe(E2E_NOW_CLOSED.slice(0, 10));
+    const filters = page.getByRole("region", { name: "Filters" });
+    if (phone && (await page.getByRole("button", { name: /^Filters/ }).getAttribute("aria-expanded")) !== "true") await page.getByRole("button", { name: /^Filters/ }).click();
+    await filters.getByLabel("Day", { exact: true }).selectOption(cal.first);        // the first session's four
+    await expect(count).toHaveText("20 companies · 4 shown");
+    await sane(page, errors);
+    errors = await open(page, "/research/corporate-actions?region=IN&scope=all", "Dividends, bonuses and splits");
+    await expect(page.getByTestId("actions-count")).toContainText(/\d+ actions?/, { timeout: 30_000 });
+    await page.locator("details.earlier summary").filter({ hasText: /^Last (two|four) weeks/ }).first().click();
+    await expect(page.getByRole("row", { name: /TCS/ }).filter({ hasText: "Bonus 1:1" }).first()).toBeVisible();
+    await expect(page.getByRole("row", { name: /ICICIBANK/ }).filter({ hasText: "₹11" }).first()).toContainText(/\d\.\d\d%/);
+    await sane(page, errors);
+  });
 });
