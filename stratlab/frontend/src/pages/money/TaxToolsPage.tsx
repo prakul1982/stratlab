@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -121,15 +121,18 @@ function DividendsTab() {
   const [note, setNote] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const asked = useAskedFy();             // a link's year ("?fy=2026", from My Holdings) is the year it opens on
-  const show = useCallback((d: Dividends) => {
+  const fyNow = useRef<number | null>(null);            // the year shown, read where a reply lands (no state set inside another's updater)
+  fyNow.current = fy;
+  const show = useCallback((d: Dividends, fresh = false) => {
     setV(d);
-    // the Money pages' one rule (lib/fy openFy): the year being filed, or the latest year with dividends when that has none
-    setFy((cur) => {
-      if (cur != null) return cur;
-      const o = openFy(d.years.map((y) => y.fy), d.current_fy, (fy) => d.years.some((y) => y.fy === fy && y.count > 0), undefined, asked);
-      setMovedFrom(o.from);
-      return o.fy;
-    });
+    // the Money pages' one rule (lib/fy openFy): the year being filed, or the latest year with dividends when that has none.
+    // MONEY-6b: worked out here, once, not inside setFy's updater (which set a second state from within it); a year no
+    // longer in the list (after a delete) is opened afresh
+    const keep = !fresh && fyNow.current != null && d.years.some((y) => y.fy === fyNow.current);
+    if (keep) return;
+    const o = openFy(d.years.map((y) => y.fy), d.current_fy, (fy) => d.years.some((y) => y.fy === fy && y.count > 0), undefined, asked);
+    setFy(o.fy);
+    setMovedFrom(o.from);
   }, [asked]);
   useEffect(() => {
     let live = true;
@@ -147,9 +150,9 @@ function DividendsTab() {
     try {
       const r = await api<{ read: number; added: number; duplicates: number; problems: { line: number; text: string; reason: string }[]; date_note?: string | null; dividends: Dividends }>(
         `/money/dividends/import?${new URLSearchParams({ filename: f.name.slice(0, 200) })}`, { method: "POST", file: f });
-      setNote(`${r.added} dividend${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.${r.date_note ? ` ${r.date_note}` : ""}`);
-      setFy(null);
-      show(r.dividends);
+      // MONEY-6c: the note names the file just read, so a file whose lines were all there already isn't taken for the one listed
+      setNote(`${f.name}: ${r.added} dividend${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there from an earlier file (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.${r.date_note ? ` ${r.date_note}` : ""}`);
+      show(r.dividends, true);
       track("dividends imported", { rows: r.added });
     } catch (e) { if (!refused(e)) fail(e); } finally { setBusy(false); reset(); }
   };
@@ -159,7 +162,7 @@ function DividendsTab() {
   };
   const remove = async () => {
     setBusy(true);
-    try { await api("/money/dividends", { method: "DELETE" }); setNote(null); setFy(null); show(await api<Dividends>("/money/dividends")); notify("Your uploaded dividends are deleted."); }
+    try { await api("/money/dividends", { method: "DELETE" }); setNote(null); show(await api<Dividends>("/money/dividends"), true); notify("Your uploaded dividends are deleted."); }
     catch (e) { fail(e); } finally { setBusy(false); setAsking(false); }
   };
 
@@ -180,6 +183,7 @@ function DividendsTab() {
     { key: "amt", header: "Amount", numeric: true, cell: (a) => money(a.amount, a.currency === "USD" ? "USD" : "INR", 0) },
   ];
   const uploadBtn = <UploadButton label="Upload dividends" busy={busy} accept=".csv,.xlsx,.txt,.zip,text/csv" ariaLabel="Dividend file" onFiles={pick} />;
+  const savedFrom = `Saved from ${v.files.map((f) => f.name).join(", ")}.`;
   const deleteBtn = v.files.length > 0 ? <button type="button" className="btn quiet sm" onClick={() => setAsking(true)}><Trash size={16} />Delete uploaded dividends</button> : null;
   return (
     <>
@@ -191,7 +195,7 @@ function DividendsTab() {
           <CardHead title="Your dividends" info={DIVIDEND_INFO} actions={uploadBtn} />
           {note && <p className="k-small" role="status">{note}</p>}
           <UploadProblem problem={problem} />
-          {v.files.length > 0 && <p className="k-note">From {v.files.map((f) => f.name).join(", ")}. {deleteBtn}</p>}
+          {v.files.length > 0 && <p className="k-note"><span>{savedFrom}</span> {deleteBtn}</p>}
         </Card>
       )}
 
@@ -207,7 +211,7 @@ function DividendsTab() {
             </>} />
             {note && <p className="k-small" role="status">{note}</p>}
             <UploadProblem problem={problem} />
-            {v.files.length > 0 && <p className="k-note">From {v.files.map((f) => f.name).join(", ")}. {deleteBtn}</p>}
+            {v.files.length > 0 && <p className="k-note"><span>{savedFrom}</span> {deleteBtn}</p>}
             {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="dividends-moved-year">{movedYearNote(movedFrom, y.fy, v.current_fy, "dividends")}</p>}
             {y.source !== "none" && y.taxed && (
               <FieldGroup label="In the total tax estimate" info="Whether this year's dividends are counted as income in the total tax estimate on the tax report.">
@@ -237,7 +241,7 @@ function DividendsTab() {
                 {y.ais_note && <p className="k-note">{y.ais_note}</p>}
                 {y.unpriced > 0 && <p className="k-note">{y.unpriced} US payment{y.unpriced === 1 ? " isn't" : "s aren't"} counted: the dollar rate isn't available right now.</p>}
                 {/* no "US tax withheld" column standing empty when every company is Indian (TABLE-SWEEP) */}
-                {!y.locked && y.companies.length > 0 && <DataTable label="Dividends by company" columns={companyCols.filter((c) => c.key !== "us" || y.companies.some((x) => x.country === "US"))} rows={y.companies} rowKey={(c) => `${c.country}${c.symbol}`} />}
+                {!y.locked && y.companies.length > 0 && <DataTable label="Dividends by company" columns={companyCols.filter((c) => c.key !== "us" || y.companies.some((x) => x.country === "US"))} rows={y.companies} rowKey={(c, i) => `${c.country}:${c.symbol}:${i}`} />}
               </>
             )}
           </Card>
@@ -248,7 +252,7 @@ function DividendsTab() {
         <Card>
           <CardHead title="Declared, ex-date still ahead" info="Not counted above until paid." />
           <p className="k-small k-muted">{inr(v.ahead_total)} at the shares you hold now.</p>
-          <DataTable label="Dividends declared, ex-date ahead" columns={aheadCols} rows={v.ahead} rowKey={(a) => `${a.symbol}${a.ex_date}${a.label}`} />
+          <DataTable label="Dividends declared, ex-date ahead" columns={aheadCols} rows={v.ahead} rowKey={(a, i) => `${a.symbol}:${a.ex_date}:${i}`} />
         </Card>
       )}
 

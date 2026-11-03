@@ -21,3 +21,12 @@ test("MONEY-6a: the holdings upload names what it saved, shows the accepted colu
   assert.match(p, /couldn't be opened here, so nothing was sent and your holdings are unchanged/);
   assert.match(p, /if \(!refused\(e\)\) \{ fail\(e\); load\(\); \}/);
 });
+
+test("MONEY-6b/6c: the dividends tab opens its year once per reply (no state set inside another's updater), keys rows uniquely and names the file read", () => {
+  const p = read("src/pages/money/TaxToolsPage.tsx");
+  assert.doesNotMatch(p, /setFy\(\(cur\) => \{[^}]*setMovedFrom/);
+  assert.match(p, /show\(r\.dividends, true\)/);
+  assert.match(p, /rowKey=\{\(c, i\) => `\$\{c\.country\}:\$\{c\.symbol\}:\$\{i\}`\}/);
+  assert.match(p, /setNote\(`\$\{f\.name\}: \$\{r\.added\} dividend/);
+  assert.match(p, /const savedFrom = `Saved from \$\{v\.files\.map\(\(f\) => f\.name\)\.join\(", "\)\}\.`/);
+});

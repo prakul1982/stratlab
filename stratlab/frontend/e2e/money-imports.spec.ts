@@ -96,3 +96,36 @@ test("MONEY-6a: a refused file shows the columns that are read and the broker fi
   await expect(page.getByText("No holdings yet")).toBeVisible();
   await sane(page, errors);
 });
+
+test("MONEY-6b/6c: tax tools › dividends: a file over two years uploads, shows its own name, and deletes, with no crash", async ({ page, request }, info) => {
+  const u = as(3, info.project.name === "phone");
+  expect((await request.delete(`${API}/money/dividends`, { headers: auth(u) })).ok()).toBeTruthy();
+  // held stocks too, Indian and US, as Instinct's account had: the year's estimate and the declared ones ahead are shown beside the file's
+  const held = "Symbol,Quantity,Average price\nINFY,10,1500\nTCS,5,3000\n";
+  expect((await request.post(`${API}/holdings/import`, { headers: auth(u), data: { filename: "h.csv", data: Buffer.from(held).toString("base64"), mode: "replace" } })).ok()).toBeTruthy();
+  expect((await request.put(`${API}/holdings`, { headers: auth(u), data: { changes: [{ op: "add", symbol: "AAPL", qty: 3, avg: 150, market: "US" }] } })).ok()).toBeTruthy();
+  const errors = await open(page, "/money/tax-tools", "Tax tools", sessionAs(u.token, u.id, u.email));
+  await settle(page);
+  // Instinct's file: INFY ₹250 this year (FY 2026-27) and TCS ₹55 last year (FY 2025-26)
+  const csv = "Date,Symbol,Amount\n2026-06-10,INFY,250\n2026-01-16,TCS,55\n";
+  await page.getByLabel("Dividend file").setInputFiles({ name: "dividends.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await expect(page.getByText("2 dividends added.")).toBeVisible({ timeout: 30_000 });
+  const year = page.getByRole("region", { name: "Dividends for the year" });
+  await expect(year).toBeVisible();
+  await expect(year.getByText("Saved from dividends.csv.")).toBeVisible();                 // the file's own name
+  await expect(page.getByText(/ran into a problem/)).toHaveCount(0);
+  // the same lines in a file of another name: the note names the file just read, and that its lines were there already
+  await page.getByLabel("Dividend file").setInputFiles({ name: "again.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await expect(page.getByText("again.csv: 0 dividends added, 2 already there from an earlier file (skipped).")).toBeVisible({ timeout: 30_000 });
+  await expect(year.getByText("Saved from dividends.csv.")).toBeVisible();
+  // another year and back, then the delete
+  await year.getByLabel("Financial year").selectOption({ label: "FY 2025-26" });
+  await expect(year.getByLabel("Dividend income")).toHaveText("₹55");
+  await expect(page.getByText(/ran into a problem/)).toHaveCount(0);
+  await year.getByRole("button", { name: "Delete uploaded dividends" }).click();
+  await page.getByRole("dialog", { name: "Delete the dividends you uploaded?" }).getByRole("button", { name: "Delete uploaded dividends" }).click();
+  await expect(page.getByText("Your uploaded dividends are deleted.")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/ran into a problem/)).toHaveCount(0);
+  await expect(page.getByLabel("Dividend file")).toBeAttached();
+  await sane(page, errors);
+});
