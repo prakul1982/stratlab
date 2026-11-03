@@ -71,11 +71,12 @@ test("a timeframe change keeps the moment on screen", async ({ page }, info) => 
   await page.waitForTimeout(600);
   const back = await legendClose();
   expect(back, "scrolled back").not.toBe(newest);
-  // 15m and 1m keep looking at that same time: the price there is the old price, not today's
+  // 15m and 1m keep looking at that same time: the price there is the old price, not today's (more than ₹20 away from it: the
+  // fake world's slow wave stood below today's close on the days this ran by luck, and above it at the fixed E2E_NOW)
   await pick("15m");
-  expect(await legendClose(), "15m after scrolling back").toBeLessThan(newest - 20);
+  expect(Math.abs(await legendClose() - newest), "15m after scrolling back").toBeGreaterThan(20);
   await pick("1m");
-  expect(await legendClose(), "1m after scrolling back").toBeLessThan(newest - 20);
+  expect(Math.abs(await legendClose() - newest), "1m after scrolling back").toBeGreaterThan(20);
   expect(errors).toEqual([]);
 });
 

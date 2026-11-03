@@ -36,7 +36,21 @@ export function worldDate(ms = 0): Date {
 
 async function setClock(context: BrowserContext, api: string) {
   const now = await serverNow(api);
-  if (now !== null) await context.clock.install({ time: now });
+  if (now === null) return;
+  await context.clock.install({ time: now });
+  // Playwright's clock swaps window.performance for a stand-in with only now(): its resource timings come back empty and
+  // mark/measure do nothing (public-pages counts the chart's one price read that way). Everything but the time is the
+  // page's own again; this script runs after the clock's in every document.
+  await context.addInitScript(() => {
+    const real = (globalThis as { __pwClock?: { builtins?: { performance?: Performance } } }).__pwClock?.builtins?.performance;
+    if (!real || real === performance) return;
+    for (const key of Object.keys(Object.getPrototypeOf(real))) {
+      if (key === "now" || key === "timeOrigin") continue;
+      const value = (real as unknown as Record<string, unknown>)[key];
+      Object.defineProperty(performance, key, typeof value === "function" ? { value: value.bind(real), configurable: true }
+        : { get: () => (real as unknown as Record<string, unknown>)[key], configurable: true });
+    }
+  });
 }
 
 // the closed world's address, once per worker: the first ask starts it (about a minute's build), later ones find it running

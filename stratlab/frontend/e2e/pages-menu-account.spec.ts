@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { worldDate, expect, test } from "@playwright/test";
 import { NAV, startOf } from "../src/lib/nav";
 import { sessionAs, open, sane, touchable, API, tab, menu, watchSharing, shared, copied } from "./pages-kit";
 
@@ -97,7 +97,7 @@ test("first steps on Home tick themselves from real data, and hide for good", as
 });
 
 test("the launch offer counts down on Home and Plans", async ({ page }, info) => {
-  const until = new Date(Date.now() + (2 * 24 + 5) * 3600_000 + 10 * 60_000).toISOString();
+  const until = worldDate((2 * 24 + 5) * 3600_000 + 10 * 60_000).toISOString();
   await page.route(`${API}/me`, async (r) => {
     const res = await r.fetch();
     await r.fulfill({ response: res, json: { ...(await res.json()), promo: { until } } });
