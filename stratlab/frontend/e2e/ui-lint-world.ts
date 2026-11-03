@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { APIRequestContext } from "@playwright/test";
+import { worldDate } from "@playwright/test";
 
 // UI-LINT: what the pages are filled with and which pages there are. The fake world (backend/tests/visual_server.py) already
 // holds the owner's holdings, a tradebook and tax P&L, IPOs, breadth, positioning and so on; this adds what a real Pro user has
@@ -82,7 +83,7 @@ export async function seedWorld(request: APIRequestContext): Promise<World> {
   await call("us trade buy", "post", "/money/us-tax/trades", { d: "2023-03-01", side: "B", sym: "AAPL", qty: 3, price: 150, fees: 1 });
   await call("us trade buy 2", "post", "/money/us-tax/trades", { d: "2024-02-01", side: "B", sym: "MSFT", qty: 2, price: 400, fees: 1 });
   await call("us trade sell", "post", "/money/us-tax/trades", { d: "2025-05-02", side: "S", sym: "AAPL", qty: 2, price: 190, fees: 1 });
-  const day = (n: number) => { const d = new Date(Date.now() + n * 864e5); return d.toISOString().slice(0, 10); };
+  const day = (n: number) => { const d = worldDate(n * 864e5); return d.toISOString().slice(0, 10); };
   await call("calendar 1", "post", "/money/calendar/events", { date: day(3), title: "Rent goes up", amount: 52000, repeat: "none" });
   await call("calendar 2", "post", "/money/calendar/events", { date: day(9), title: "Insurance premium", amount: 18000, repeat: "yearly" });
   await call("calendar 3", "post", "/money/calendar/events", { date: day(20), title: "School fees", amount: 40000, repeat: "none" });

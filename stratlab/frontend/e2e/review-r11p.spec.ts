@@ -1,6 +1,6 @@
 import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { worldDate, expect, test, type Page, type Route } from "@playwright/test";
 
 // Round 11 review of the live site (9 Oct 2026): what the app draws, on the reviewer's examples. Every answer a test depends on
 // is fixed here, so none waits on whether one of the fake world's jobs has run.
@@ -74,7 +74,7 @@ test("Admin: holidays that all came from the exchange are not 'added by you' (R1
 
 // ---------- R11P-007: System's AI lines ----------
 test("Admin System: a provider out of credit is marked and last in 'Who is asked', and a long link is cut (R11P-007)", async ({ page }) => {
-  const now = Date.now() / 1000;
+  const now = worldDate().getTime() / 1000;
   const url = "https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%3Fmodal%3Dadd-credit-card%26x%3D" + "a".repeat(140);
   const provider = (name: string, label: string, extra: Record<string, unknown> = {}) => ({
     name, label, configured: true, missing: [], key_url: `https://example.com/${name}`, free: "Free: plenty.", terms: "ok", note: "",

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { worldDate, expect, test, type Page } from "@playwright/test";
 
 // ETF price against NAV: the list (widest gap first, filters, one ETF's own view with its 30-day history) and the badge
 // on an ETF in My Holdings, on desktop and phone. The fake world's ETFs and numbers are made up (tests/fake_etf.py):
@@ -106,9 +106,9 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   await expect(panel.getByText("Indicative NAV", { exact: true })).toHaveCount(0);        // no figure: the note only says none is shown (DF-007)
   // the NAV is dated the latest trading day (the demo's list is stamped with the last close): a weekday, never a future day
   const navDay = (await panel.getByText(/NAV of \d{1,2} \w{3}/).innerText()).match(/NAV of (\d{1,2}) (\w{3})/)!;
-  const navDate = new Date(`${navDay[1]} ${navDay[2]} ${new Date().getFullYear()} 12:00 UTC`);
+  const navDate = new Date(`${navDay[1]} ${navDay[2]} ${worldDate().getFullYear()} 12:00 UTC`);
   expect([0, 6], "the NAV's day is a weekday").not.toContain(navDate.getUTCDay());
-  expect(navDate.getTime(), "the NAV's day is not in the future").toBeLessThanOrEqual(Date.now() + 14 * 3600_000);
+  expect(navDate.getTime(), "the NAV's day is not in the future").toBeLessThanOrEqual(worldDate(14 * 3600_000).getTime());
   await expect(panel.getByRole("img", { name: /SILVERBEES's gap to NAV at each close/ })).toBeVisible();
   await expect(panel.getByTestId("etf-gap-line")).toContainText(/\d+ trading days/);
   // the explanation is folded: one plain line stays, the rest opens from "How this is worked out" (O1)

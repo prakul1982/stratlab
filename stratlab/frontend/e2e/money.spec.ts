@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { worldDate, expect, test, type Page } from "@playwright/test";
 
 // The Money space: the money calendar (list, month, own dates, the private feed) and the instrument badges in My
 // Holdings, on desktop and phone. Each project signs in as its own fake user, so the two runs never share data.
@@ -53,7 +53,7 @@ async function touchable(page: Page) {
   expect(small, "controls too small to tap").toEqual([]);
 }
 
-const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const day = (n: number) => { const d = worldDate(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 test("money calendar: tax dates, an own date added, the month view and the private feed", async ({ page, request }, info) => {
   const n = info.project.name === "phone" ? 158 : 155;          // Pro users of the fake database, one per project

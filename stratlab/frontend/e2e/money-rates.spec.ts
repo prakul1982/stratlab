@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { worldDate, expect, test, type Page } from "@playwright/test";
 
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 
@@ -63,7 +63,7 @@ test("rates: the Reserve Bank's rates, small savings and a deposit after tax, at
   expect((await request.delete(`${API}/money/net-worth`, { headers: auth })).ok()).toBeTruthy();
   expect((await request.post(`${API}/money/net-worth/items`, { headers: auth, data: { kind: "fd", name: "Bank FD", principal: 100000, rate: 7, compounding: "quarterly",
     start: "2026-01-01", maturity: "2027-01-01" } })).ok()).toBeTruthy();
-  const now = new Date();
+  const now = worldDate();
   const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   expect((await request.put(`${API}/tax/inputs`, { headers: auth, data: { fy, regime: "new", other: 2000000, salary: 2000000 } })).ok()).toBeTruthy();
 

@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { worldDate, expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { CARDS } from "../src/lib/mineLayout";
 
 // "My space" (/mine, was "All"): a greeting with the date and one line on what is coming up, hero tiles (net worth, today's
@@ -52,7 +52,7 @@ test("my space: opens from / for 'all of it', with a greeting, six cards and a f
   const home = page.getByTestId("mine-home");
   await expect(home.getByRole("heading", { level: 1 })).toContainText(/^(Good (morning|afternoon|evening)|Hello)/);
   // the date is India's (the test browser runs in UTC, which the page treats as no real zone), so it is right after midnight IST too
-  const ist = (o: Intl.DateTimeFormatOptions) => new Date().toLocaleDateString("en-GB", { ...o, timeZone: "Asia/Kolkata" });
+  const ist = (o: Intl.DateTimeFormatOptions) => worldDate().toLocaleDateString("en-GB", { ...o, timeZone: "Asia/Kolkata" });
   await expect(home.locator(".k-eyebrow")).toContainText(new RegExp(`^${ist({ weekday: "long" })}, ${ist({ day: "numeric" })} ${ist({ month: "long" })}( in India)?$`));     // "in India" when the reader's clock is elsewhere (DI-011)
   await expect(home.locator(".k-lede")).not.toBeEmpty();
   expect(await order(page)).toEqual(CARDS.map((c) => c.id));

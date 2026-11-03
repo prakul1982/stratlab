@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { worldDate, expect, test, type Page } from "@playwright/test";
 
 // The Admin page's AI panel, on desktop and phone: each provider's state, the models in use with their numbers,
 // quota and its reset, the computed routing order, the missing keys with where to get them, and the buttons (test,
@@ -41,7 +41,7 @@ async function touchable(page: Page) {
   expect(small, "controls too small to tap").toEqual([]);
 }
 
-const now = () => Date.now() / 1000;
+const now = () => worldDate().getTime() / 1000;
 const BLOCKED_AT = Date.UTC(2026, 9, 9, 8, 35) / 1000;                       // 9 Oct 2026, 14:05 IST
 const model = (id: string, rank: number | null, extra: Record<string, unknown> = {}) => ({
   id, in_use: rank != null, rank, success: 96, tries: 25, median_ms: 1200, probe: { ok: 2, tries: 2, at: now() - 3600, error: null },

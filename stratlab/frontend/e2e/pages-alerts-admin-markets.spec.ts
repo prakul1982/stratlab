@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { worldDate, expect, test } from "@playwright/test";
 import { sessionAs, open, sane, touchable, answerLevel, ownUser, tab } from "./pages-kit";
 
 // Alerts set from each place, the admin pages for data, rules and the market audit, and the market pages (breadth,
@@ -199,7 +199,7 @@ test("admin: the whole-market audit tells facts and companies not checked yet ap
     by_area: { Documents: { mismatch: 0, gap: 0, error: 0, fact: 0, pending: 2 }, Numbers: { mismatch: 0, gap: 0, error: 0, fact: 1, pending: 0 } } };
   const state = (retrying: boolean, india: boolean) => ({ enabled: true, listed: 3, checked: 3, due: retrying ? 2 : 0, current: null, eta_hours: null,
     list_at: null, list_error: null, new_listings: [], pending: india ? 2 : 0, rows: india ? rows : [], summary: india ? summary : { ...summary, companies: 0 },
-    full: { running: retrying, since: retrying ? new Date().toISOString() : null, done_at: null, left: retrying ? 2 : 0, checked: null, pending_only: retrying } });
+    full: { running: retrying, since: retrying ? worldDate().toISOString() : null, done_at: null, left: retrying ? 2 : 0, checked: null, pending_only: retrying } });
   let retrying = false;
   await page.route((u) => u.pathname === "/admin/audit/market", async (r) => {
     const req = r.request();
@@ -230,10 +230,10 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   const summary = (n: number) => ({ companies: n, clean: 0, mismatches: 1, gaps: 1, errors: n ? 1 : 0, facts: 0, pending: 0, avg_seconds: 2, slowest: [],
     by_area: n ? { Numbers: { mismatch: 1, gap: 1, error: 1, fact: 0, pending: 0 } } : {} });
   let s = { enabled: false, paused: "off", listed: 5058, checked: 3844, due: 0, current: null, eta_hours: null, rate_per_hour: 0, list_at: null, list_error: null,
-    full: { running: true, since: new Date(Date.now() - 7 * 3600e3).toISOString(), done_at: null, left: 1214, checked: 3844, everything: true, pending_only: false },
+    full: { running: true, since: worldDate(-7 * 3600e3).toISOString(), done_at: null, left: 1214, checked: 3844, everything: true, pending_only: false },
     monthly: { on: true, last: "2026-10", next: "2026-11-01" },
     ages: { open: 40, today: 6, days_1_2: 4, days_3_7: 10, over_a_week: 20, oldest_days: 19 },
-    retry: { waiting: 1868, due: 0, next: new Date(Date.now() + 40 * 60e3).toISOString(), gap_hours: 1, batch: 20 },
+    retry: { waiting: 1868, due: 0, next: worldDate(40 * 60e3).toISOString(), gap_hours: 1, batch: 20 },
     bse: { refusing: true, waiting: 1868 }, pending: 1911, new_listings: [], rows: [err], summary: summary(1) } as Record<string, unknown>;
   await page.route((u) => u.pathname === "/admin/audit/market", async (r) => {
     const req = r.request();
@@ -243,7 +243,7 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
       sent.push(body);
       if ("on" in body) s = { ...s, enabled: body.on, paused: body.on ? null : "off" };
       if (body.reset) s = { ...s, enabled: true, paused: null, checked: 0, due: 5058, rate_per_hour: 0, rows: [], summary: summary(0),
-        full: { running: true, since: new Date().toISOString(), done_at: null, left: 5058, checked: 0, everything: true, pending_only: false } };
+        full: { running: true, since: worldDate().toISOString(), done_at: null, left: 5058, checked: 0, everything: true, pending_only: false } };
       if ("monthly" in body) s = { ...s, monthly: { on: body.monthly, last: "2026-10", next: body.monthly ? "2026-11-01" : null } };
     }
     await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(us ? { ...s, bse: undefined, rows: [], summary: summary(0), full: { ...(s.full as object), running: false } } : s) });

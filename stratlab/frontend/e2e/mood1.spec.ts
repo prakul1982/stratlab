@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { worldDate, expect, test, type Page } from "@playwright/test";
 
 // MOOD-1 (owner, 29 Oct): the Market pulse's mood as tables for both markets, in the fake world (backend/tests/visual_server.py):
 // a headline with a few lines whose figures are the tables', the sector count said once, the cards' levels not said again, every
@@ -159,7 +159,7 @@ for (const group of ["nifty500", "sp500"]) {
     expect(custom.n).toBeLessThanOrEqual(21);
     expect(custom.n).toBeGreaterThan(5);
     // the days read "2 Oct" (this year) or "30 Oct 2025": compared as dates, not as text ("2 Oct" sorted before "30 Oct 2025")
-    const dayOf = (s: string) => Date.parse(/\d{4}$/.test(s) ? s : `${s} ${new Date().getFullYear()}`);
+    const dayOf = (s: string) => Date.parse(/\d{4}$/.test(s) ? s : `${s} ${worldDate().getFullYear()}`);
     expect(Number.isFinite(dayOf(custom.day)), custom.day).toBe(true);
     expect(chips.length <= 2 || dayOf(custom.day) > dayOf(seen[chips[chips.length - 2]]), `20 days from ${custom.day}, ${chips[chips.length - 2]} from ${seen[chips[chips.length - 2]]}`).toBe(true);
     await page.reload();
