@@ -109,12 +109,16 @@ def test_a_comparison_needs_a_figure_on_the_page(sentence, kept):
 
 
 def test_a_comparison_read_is_held_to_both_pages(monkeypatch):
-    a = {"region": "IN", "symbol": "TCS", "name": "TCS", "metrics": [], "quote": {"price": 2076.0}}
-    b = {"region": "IN", "symbol": "INFY", "name": "Infosys", "metrics": [], "quote": {"price": 997.0}}
-    monkeypatch.setattr(A, "_ask", lambda *x, **k: {"verdict": "TCS trades at 2076 and Infosys at 997. TCS is cheaper than its peers at 12.5 times.",
-                                                     "differences": ["TCS at 2076 against Infosys at 997", "A historical premium of 40%"]})
+    # each page's own figure (its P/E) is in the facts; the live price is not (company_facts: the read is shared for
+    # hours), so the figures here are the pages' P/Es. The old 2076 / 997 prices only passed while the month was
+    # October: they sat within rounding of the facts' own date (2026, 10) and failed from 1 Nov
+    pe = lambda v: [{"title": "Valuation", "items": [{"label": "P/E", "value": v, "unit": "x"}]}]      # noqa: E731
+    a = {"region": "IN", "symbol": "TCS", "name": "TCS", "metrics": pe(28.4), "quote": {"price": 2076.0}}
+    b = {"region": "IN", "symbol": "INFY", "name": "Infosys", "metrics": pe(24.1), "quote": {"price": 997.0}}
+    monkeypatch.setattr(A, "_ask", lambda *x, **k: {"verdict": "TCS trades at 28.4 times earnings and Infosys at 24.1 times. TCS is cheaper than its peers at 12.5 times.",
+                                                     "differences": ["TCS at 28.4 times against Infosys at 24.1 times", "A historical premium of 40%"]})
     out = A.compare(a, b, (None, None))
-    assert out["verdict"] == "TCS trades at 2076 and Infosys at 997." and out["differences"] == ["TCS at 2076 against Infosys at 997"]
+    assert out["verdict"] == "TCS trades at 28.4 times earnings and Infosys at 24.1 times." and out["differences"] == ["TCS at 28.4 times against Infosys at 24.1 times"]
 
 
 # ---------- R7O-003: red flags under today's rules, stored rows too ----------
