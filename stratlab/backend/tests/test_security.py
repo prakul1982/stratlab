@@ -339,7 +339,7 @@ def test_a_strategy_answer_from_the_cache_is_not_charged(monkeypatch):
         out = '{"entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 1}}]}'
         monkeypatch.setattr(main.ai_writer, "complete", REAL_COMPLETE)
         monkeypatch.setattr(ai_providers, "_names", lambda task: (["gemini"], []))
-        monkeypatch.setattr(ai_providers, "plan", lambda task, need: [("gemini", "m")])
+        monkeypatch.setattr(ai_providers, "plan", lambda task, need, bulk=None: [("gemini", "m")])
         monkeypatch.setattr(ai_providers.R, "ready", lambda *a, **k: 0)
         monkeypatch.setattr(ai_providers.R, "ask_model", lambda *a, **k: calls.append(1) or out)
         ai_providers.cache.clear()

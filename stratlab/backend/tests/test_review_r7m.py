@@ -333,7 +333,7 @@ def _result(name):
 
 def test_a_provider_is_working_out_of_credit_failing_or_untried_by_its_last_real_result(ai_clean, monkeypatch):
     _keys(monkeypatch, "groq", "zai", "nvidia", "mistral")
-    assert [_result(n) for n in ("groq", "zai", "nvidia", "mistral", "cerebras")] == ["untested"] * 4 + [None]     # a key is not a result
+    assert [_result(n) for n in ("groq", "zai", "nvidia", "mistral", "sambanova")] == ["untested"] * 4 + [None]     # a key is not a result
     ok = httpx.MockTransport(lambda req: _chat())
     P.complete("s", "t", transport=ok)                                               # whichever answers first
     answered = next(n for n in ("groq", "zai", "nvidia", "mistral") if _result(n) == "working")

@@ -1213,6 +1213,17 @@ class Research:
         return {"news": c.get("news") or [], "wiki": (c.get("about") or {}).get("wiki"), "peers": c.get("peers") or [],
                 "sources": c.get("sources") or []}
 
+    def _fundamentals(self, sym: str, bse_code: str | None = None) -> dict:
+        """The company's numbers by its symbol; a page opened by a BSE code and shown as its NSE listing falls back to the code
+        the source may know it by only (DATA, 4 Nov: 532621 opened as MORARJEE-BZ, an NSE trade-to-trade listing, with no
+        financials, though the audit read them under 532621)."""
+        try:
+            return self.screener.company(sym)
+        except SourceError:
+            if not bse_code:
+                raise
+            return self.screener.company(bse_code)
+
     def _listing_or_none(self, sym: str) -> dict | None:
         try:
             return self.yahoo.meta(sym)
@@ -1389,6 +1400,7 @@ class Research:
         # a BSE code of a company NSE lists too is that company's NSE page (DD-003: 500325 opened a page "on 500325" with no
         # prices and the fundamentals source's rounded 52-week range, while the search found nothing for it)
         twin = self.nse_twin(sym) if callable(self.nse_twin) and sym.isdigit() and len(sym) == 6 else None
+        asked_code = sym if twin else None
         if twin:
             sym = twin
         kite_ok = self._kite()
@@ -1407,7 +1419,7 @@ class Research:
         if inst and code:
             sym = inst["symbol"]
         exchange = "BSE" if code else "NSE"
-        tasks = {"scr": ("Screener.in", lambda: self.screener.company(code or sym))}
+        tasks = {"scr": ("Screener.in", lambda: self._fundamentals(code or sym, asked_code))}
         if inst:
             # a page's quote never queues long behind the jobs' broker reads (R24-010: "live feed not answering", 27.7 s)
             tasks["kq"] = ("Kite", lambda: self._page_quote(sym))
@@ -1434,8 +1446,10 @@ class Research:
             if (listing or {}).get("first_trade") and listing["first_trade"] < listed_on:
                 # an older share that didn't trade early in the year, not a new one; when its trading on record began within
                 # the year (a share relisted or long without trades: BSE:539410, 539225 from 17 Jul), its range covers only
-                # the sessions since then, and the page says so rather than "52-week" (SECMEM 6)
-                traded_from = listing["first_trade"] if listing_day([{"t": listing["first_trade"]}]) else None
+                # the sessions since then, and the page says so rather than "52-week" (SECMEM 6). A first trade years back (a
+                # share suspended for years that trades again) still has its prices on record only from its first candle: that
+                # day, never no date at all (DATA, every such share: its range read as a full year's)
+                traded_from = listing["first_trade"] if listing_day([{"t": listing["first_trade"]}]) else listed_on
                 listed_on = None
         elif listing and listing.get("first_trade"):
             listed_on = listing["first_trade"] if listing_day([{"t": listing["first_trade"]}]) else None

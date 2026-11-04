@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from . import ai_spend
 from .ai_catalog import PROVIDERS, base_url, family, key_for, setting, thinks
 from .ai_reply import answer, is_daily, strip_thinking, too_big, wait_from
 
@@ -20,6 +21,7 @@ class Reply:
     finish: str | None
     ms: float
     headers: dict = field(default_factory=dict)
+    usage: dict | None = None          # what a paid provider billed for this reply (Anthropic's `usage`), for the spend meter
 
 
 class CallError(Exception):
@@ -30,7 +32,9 @@ class CallError(Exception):
     model     this model can't be used (unknown, retired, not on this plan): skip it for hours
     forbidden this key may not use this model (403): skip the model for hours
     context   the prompt is too long for this model: skip it for this request only
+    refusal   the model declined this request (Claude's stop_reason "refusal"): ask the next model, no breaker
     transient timeout, network or server error: count towards the circuit breaker
+    busy      this one model is overloaded right now ("high demand"): ask the provider's next model, breaker as transient
     """
 
     def __init__(self, kind: str, detail: str, wait: float | None = None, scope: str = "model", daily: bool = False):
@@ -95,6 +99,10 @@ def _short_raw(r: httpx.Response) -> str:
     return re.sub(r"\s+", " ", r.text or "")[:2000]
 
 
+# a model that's overloaded right now (its capacity, not this key's allowance)
+_BUSY = re.compile(r"high demand|overloaded|over capacity|at capacity|capacity (?:is )?(?:exhausted|reached)|model is busy", re.I)
+
+
 def classify(name: str, r: httpx.Response, model: str) -> CallError:
     """What an error status means for the router."""
     p, code, body = PROVIDERS[name], r.status_code, r.text or ""
@@ -106,12 +114,19 @@ def classify(name: str, r: httpx.Response, model: str) -> CallError:
         # an account setting, not a used-up allowance: nothing resets on its own (a gateway that wants a card on file)
         return CallError("auth", f"the account needs a payment method on file ({code}: {msg})", scope="provider")
     if code == 402 or re.search(r"credit balance|insufficient (credit|balance|quota)|out of credits|payment required", body, re.I):
-        return CallError("credit", "the free credit is used up", wait=6 * 3600, scope="provider", daily=True)
+        said = f" ({code}: {msg})" if msg else f" ({code})"
+        if p.mixed_catalog:
+            # a provider that lists paid models beside its free ones (Z.ai: glm-5.3-flash answers "Insufficient balance"
+            # while glm-4.7-flash is free): that model isn't free for this key, the provider's free ones still answer
+            return CallError("forbidden", f"{model} isn't free for this key{said}")
+        # the provider's own words go with it, so Admin tells a used-up trial from a daily cap (owner, 4 Nov)
+        return CallError("credit", "the free credit is used up" + said, wait=6 * 3600, scope="provider", daily=True)
     if code == 429:
         wait, daily = wait_from(r.headers, body), is_daily(body)
         # Groq's 429 always names the organization though the cap is the model's: only a plainly account-wide limit pauses all
         whole = re.search(r"free-models-per-day|(account|organi[sz]ation)\b[^.]{0,40}\b(restricted|suspended|disabled|blocked)", body, re.I)
-        scope = "provider" if p.limit_scope == "provider" or whole else "model"
+        # "<model> is currently experiencing high demand" (SambaNova's 429) is that model being busy, not the key's limit
+        scope = "provider" if (p.limit_scope == "provider" and not _BUSY.search(body)) or whole else "model"
         return CallError("rate", "rate limited" + (" (daily free quota)" if daily else "") + (f" (429: {msg})" if msg else " (429)"), wait=wait, scope=scope,
                          daily=daily or (wait or 0) > 600)
     if too_big(code, body):
@@ -125,6 +140,10 @@ def classify(name: str, r: httpx.Response, model: str) -> CallError:
             return CallError("auth", f"rejected the key (400: {msg})", scope="provider")
         return CallError("model", f"couldn't use {model} ({code}: {msg})")
     if code == 408 or code >= 500:
+        # "This model is currently experiencing high demand" (Gemini's 503, most of its failures on 4 Nov): that one model
+        # is overloaded, the provider's other models still answer, so only the model is skipped for this request
+        if _BUSY.search(body):
+            return CallError("busy", f"server error {code}" + (f" ({msg})" if msg else ""), scope="model")
         return CallError("transient", f"server error {code}" + (f" ({msg})" if msg else ""), scope="provider")
     return CallError("model", f"unexpected answer {code} ({msg})")
 
@@ -206,7 +225,8 @@ class OpenAIStyle:
         headers = {"Authorization": f"Bearer {key_for(self.name)}", **self.p.headers}
         return httpx.Client(base_url=base_url(self.name), headers=headers, timeout=_timeout(deadline), transport=self.transport)
 
-    def call(self, model: str, system: str, text: str, max_tokens: int, json_mode: bool, deadline: float) -> Reply:
+    def call(self, model: str, system: str, text: str, max_tokens: int, json_mode: bool, deadline: float,
+             task: str = "quick") -> Reply:
         body = body_for(self.name, model, system, text, max_tokens, json_mode)
         done: set = set()
         t0 = time.time()
@@ -292,6 +312,12 @@ def parse_aliases(data) -> dict[str, str]:
     return out
 
 
+# A model list's `type` that is never a chat model. Anything else counts as one: Mistral types every model "base" or
+# "fine-tuned" (a list that kept only "language"/"chat" types dropped all of them: "listed no models when asked", 4 Nov).
+_NOT_TEXT_TYPES = {"embedding", "embeddings", "image", "video", "audio", "speech", "transcription", "tts", "rerank",
+                   "reranking", "moderation", "classification", "ocr"}
+
+
 def parse_models(data) -> list[dict]:
     """[{"id", "ctx"}] from any provider's model list: OpenAI-style {"data": […]}, Cloudflare's {"result": […]},
     Google's {"models": […]} or a plain list."""
@@ -311,14 +337,28 @@ def parse_models(data) -> list[dict]:
         methods = it.get("supportedGenerationMethods")
         if methods is not None and "generateContent" not in methods:
             continue                                        # a Gemini model that can't write text
-        if it.get("type") not in (None, "language", "chat", "llm", "text"):
+        if str(it.get("type") or "").lower() in _NOT_TEXT_TYPES:
             continue                                        # Vercel: embedding and image models
+        caps = it.get("capabilities")
+        if isinstance(caps, dict) and caps.get("completion_chat") is False:
+            continue                                        # Mistral: a model that can't chat (OCR, embeddings, moderation)
+        if it.get("archived") is True:
+            continue                                        # Mistral: a retired model still listed
         if mid:
             out.append({"id": mid, "ctx": _ctx(it)})
     return out
 
 
 # ---------- Google's Gemini API ----------
+def gemini_thinking(model: str) -> dict:
+    """How little a Gemini model is asked to think. Gemini 3 and later take a level, not a token budget: sent
+    thinkingBudget 0 they either rejected the request (400 "invalid argument", gemini-3.5-flash-lite) or thought at
+    their default level, which ran past the time allowed ("timed out", gemini-3.8-flash; 4 Nov). "low" is the least
+    every Gemini 3 model takes ("minimal" isn't offered on 3.8 Flash). Older Gemini and Gemma keep the budget of 0."""
+    m = re.match(r"gemini-(\d+)", model or "")
+    return {"thinkingLevel": "low"} if m and int(m.group(1)) >= 3 else {"thinkingBudget": 0}
+
+
 class GeminiNative:
     """Gemini and Gemma through Google's own API, which (unlike its OpenAI-style one) lets thinking be switched off."""
 
@@ -329,10 +369,11 @@ class GeminiNative:
         return httpx.Client(base_url=base_url(self.name), headers={"x-goog-api-key": key_for(self.name)},
                             timeout=_timeout(deadline), transport=self.transport)
 
-    def call(self, model: str, system: str, text: str, max_tokens: int, json_mode: bool, deadline: float) -> Reply:
+    def call(self, model: str, system: str, text: str, max_tokens: int, json_mode: bool, deadline: float,
+             task: str = "quick") -> Reply:
         gen = {"temperature": 0.1, "maxOutputTokens": max(max_tokens, 8192),
                # these are extraction jobs: thinking only spends the reply budget (and the free quota)
-               "thinkingConfig": {"thinkingBudget": 0}}
+               "thinkingConfig": gemini_thinking(model)}
         if json_mode:
             gen["responseMimeType"] = "application/json"
         body = {"systemInstruction": {"parts": [{"text": system}]},
@@ -348,11 +389,12 @@ class GeminiNative:
             except httpx.HTTPError as e:
                 raise CallError("transient", f"couldn't be reached ({e.__class__.__name__})", scope="provider") from None
             low = (r.text or "").lower()
-            if r.status_code == 400 and "thinking" in low and "thinkingConfig" in gen and "think" not in done:
+            vague = "invalid argument" in low               # Google's 400 that names no field (gemini-3.5-flash-lite, 4 Nov)
+            if r.status_code == 400 and ("thinking" in low or vague) and "thinkingConfig" in gen and "think" not in done:
                 gen.pop("thinkingConfig")                   # a model that must think (or can't): let it decide
                 done.add("think")
                 continue
-            if r.status_code == 400 and ("json mode" in low or "mime" in low) and "responseMimeType" in gen and "json" not in done:
+            if r.status_code == 400 and ("json mode" in low or "mime" in low or vague) and "responseMimeType" in gen and "json" not in done:
                 gen.pop("responseMimeType")
                 done.add("json")
                 continue
@@ -395,15 +437,36 @@ class GeminiNative:
 
 
 # ---------- Anthropic ----------
+# How hard Claude thinks per job (output_config.effort). Thinking is on by default on the current models and can't be
+# switched off there (thinking "disabled" and budget_tokens answer 400), so effort is the only dial: quick jobs (the
+# idea builder, the ask bar) low; research reads and long documents medium.
+EFFORT = {"quick": "low", "research": "medium", "long": "medium"}
+
+
 class AnthropicHTTP:
-    """Claude through the Messages API. Paid, so always asked last."""
+    """Claude through the Messages API. Paid: which model a job may use, and whether this month's credit allows the
+    request at all, is decided by ai_spend; every reply's usage is priced and added to the month's spend here."""
 
     def __init__(self, name: str = "anthropic", transport: httpx.BaseTransport | None = None):
         self.name, self.transport = name, transport
 
-    def call(self, model: str, system: str, text: str, max_tokens: int, json_mode: bool, deadline: float) -> Reply:
-        body = {"model": model, "max_tokens": max_tokens, "temperature": 0.1, "system": system,
-                "messages": [{"role": "user", "content": text}]}
+    def call(self, model: str, system: str, text: str, max_tokens: int, json_mode: bool, deadline: float,
+             task: str = "quick") -> Reply:
+        # thinking shares max_tokens with the answer: leave it room, so a thought-out answer isn't cut off (only the
+        # tokens actually written are billed)
+        room = min(PROVIDERS[self.name].max_out, max(max_tokens * 2, max_tokens + 4000))
+        # no temperature/top_p/top_k (the current models answer 400 to sampling settings) and no assistant prefill.
+        # The system prompt is one cached block: a job that repeats its instructions reads them from the cache at a
+        # tenth of the price (a prompt under the model's minimum is simply not cached).
+        body = {"model": model, "max_tokens": room,
+                "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+                "messages": [{"role": "user", "content": text}],
+                "output_config": {"effort": EFFORT.get(task, "low")}}
+        held = ai_spend.reserve(ai_spend.estimate_micros(model, len(system) + len(text), room))
+        if held is None:
+            cap = ai_spend.cap_usd()
+            raise CallError("credit", f"this month's Claude budget (${cap:.0f}) is used up or can't be read; the free models "
+                            "answer until it resets", wait=max(60.0, ai_spend.month_end() - time.time()), scope="provider")
         t0 = time.time()
         try:
             with httpx.Client(base_url=base_url(self.name), timeout=_timeout(deadline), transport=self.transport,
@@ -413,15 +476,26 @@ class AnthropicHTTP:
             raise CallError("transient", "timed out") from None
         except httpx.HTTPError as e:
             raise CallError("transient", f"couldn't be reached ({e.__class__.__name__})", scope="provider") from None
+        finally:
+            ai_spend.release(held)
         ms = (time.time() - t0) * 1000
         if r.status_code != 200:
             raise classify(self.name, r, model)
         try:
             data = r.json()
-            out = "".join(b.get("text", "") for b in data.get("content") or [] if isinstance(b, dict) and b.get("type") == "text")
-        except (ValueError, TypeError, AttributeError):
-            return Reply("", None, ms, dict(r.headers))
-        return Reply(out, "length" if data.get("stop_reason") == "max_tokens" else data.get("stop_reason"), ms, dict(r.headers))
+        except ValueError:
+            data = None
+        if not isinstance(data, dict):
+            raise CallError("transient", f"answered {r.status_code} without a message ({not_a_reply(r)})", scope="provider")
+        usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+        stop = data.get("stop_reason")
+        ai_spend.record(model, usage, refusal=stop == "refusal")        # billed whatever the answer says
+        if stop == "refusal":
+            # Claude's safeguards declined this request: another model (or provider) may answer it; this one isn't broken
+            raise CallError("refusal", f"{model} declined this request")
+        # only "text" blocks are the answer: "thinking" blocks (empty by default) are the model's reasoning
+        out = "".join(b.get("text", "") for b in data.get("content") or [] if isinstance(b, dict) and b.get("type") == "text")
+        return Reply(out, "length" if stop == "max_tokens" else stop, ms, dict(r.headers), usage=usage)
 
     def models(self, deadline: float) -> list[dict]:
         return []

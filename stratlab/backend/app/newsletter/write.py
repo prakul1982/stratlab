@@ -386,7 +386,8 @@ def ai_summary(f: dict) -> str | None:
     if f.get("weekly") and f.get("day"):             # the week ends at its last close, not the Saturday it is sent (R90-004)
         facts["day"] = _week_end(f["day"], f.get("region") or "IN")
     try:
-        raw = complete(SYSTEM, "FACTS:\n" + json.dumps(facts, ensure_ascii=False, default=str), gemini=_gemini,
+        # a scheduled letter: Claude Haiku only, Sonnet is kept for the reads a person is waiting for (bulk)
+        raw = complete(SYSTEM, "FACTS:\n" + json.dumps(facts, ensure_ascii=False, default=str), bulk=True, gemini=_gemini,
                        anthropic=_anthropic, max_tokens=500, kind="research")
         text = str(extract_json(raw).get("summary") or "").strip()
     except (AIError, ValueError, AttributeError, TypeError):

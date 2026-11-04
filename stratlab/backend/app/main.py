@@ -2833,6 +2833,11 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
     month) or "error" (the price source didn't answer: try again later)."""
     if market == "US":                    # share classes and preferred series are written with a dash for prices: BRK-B, BAC-PL
         sym = sec.price_symbol(sym)
+    else:
+        # a BSE code of a company NSE lists too is its NSE listing's prices, as its company page shows (DD-003): the audit read
+        # BSE:532621's few recent BSE sessions as a share "listed recently", though it traded all year on NSE as MORARJEE-BZ (DATA)
+        code = sym.split(":", 1)[1] if sym.upper().startswith("BSE:") else sym
+        sym = (_quiet(nse_twin_of, code) or sym) if code.isdigit() and len(code) == 6 else sym
     try:
         ids, _ = universes.resolve(markets, market, [{"symbol": sym}])
     except Exception:
