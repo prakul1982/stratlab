@@ -59,16 +59,17 @@ test("DA-031: each run's line on the dates of both, read off its own points, not
   assert.match(read("src/components/chart/XYChart.tsx"), /const ta = T\[Math\.max\(0, Math\.min\(n - 1, in0\)\)\], tb = T\[Math\.max\(0, Math\.min\(n - 1, in1\)\)\];/);
 });
 
-test("DA-032: a notebook card is titled by its name, with its question under it and a pin that says Pin; the sidebar's dots are explained", () => {
+// TABLES EVERYWHERE (owner, 4 Nov): the notebooks are one table now, a row a notebook; each row keeps what DA-032 asked of a card
+test("DA-032: a notebook row is named by its name, with its question under it and a pin that says Pin; the sidebar's dots are explained", () => {
   const home = read("src/pages/Home.tsx");
-  assert.match(home, /title=\{<Link to=\{`\/n\/\$\{n\.id\}`\} className="k-title-link">\{n\.name\}<\/Link>\}/);
-  // the question line is on every card (full text in its hover title), two lines tall, with a plain note when there is none
-  assert.match(home, /className="k-small k-muted nb-question" title=\{question \|\| undefined\}>\{question \|\| "No question written yet"\}/);
-  assert.match(read("src/pages/trade/trade.css"), /\.nb-question \{[^}]*min-height: 2lh/);
+  assert.match(home, /<Link to=\{`\/n\/\$\{n\.id\}`\} className="k-title-link nb-name">\{n\.name\}<\/Link>/);
+  // the question under the name (full text in its hover title), two lines at most; a row with none has no empty line
+  assert.match(home, /\{question && <span className="k-note nb-question" title=\{question\}>\{question\}<\/span>\}/);
+  assert.match(read("src/pages/trade/trade.css"), /\.nb-question \{[^}]*-webkit-line-clamp: 2/);
   assert.match(home, /aria-label=\{n\.pinned \? `Unpin \$\{n\.name\}` : `Pin \$\{n\.name\} to the top`\}/);     // VR1-030: an icon at the card's top right; the words are its name and hover text
   assert.match(home, /title=\{n\.pinned \? "Unpin it" : "Keep it at the top of the list"\}/);
-  assert.match(home, /Tested on \$\{inst\}/);
-  assert.match(read("src/pages/trade/trade.css"), /\.k-cards\.nb-cards \{ align-items: stretch;/);
+  assert.match(home, /\{ key: "inst", header: "Tested on", cell: \(n\) => \(n\.instrument && "symbol" in n\.instrument \? n\.instrument\.symbol/);
+  assert.match(home, /<DataTable label="Your notebooks" rows=\{shown\} rowKey=\{\(n\) => n\.id\} stack/);
   const shell = read("src/components/Shell.tsx");
   assert.match(shell, /VERDICT_FACT\[n\.summary\.last_verdict\]/);
   assert.doesNotMatch(shell, /Dots: each notebook's last verdict/);                  // owner, 26 Oct: no caption in the menu

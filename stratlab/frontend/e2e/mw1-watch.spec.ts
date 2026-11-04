@@ -295,7 +295,7 @@ test.describe("on a wide window", () => {
 
 test("a visitor sees a read-only board of the main markets, with no account calls", async ({ page }, info) => {
   const { errors, asked } = await open(page, "/library", { who: null });
-  await expect(page.locator(".lib-card").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
   const phone = info.project.name === "phone";
   await launch(page).click();
   const mw = panel(page);

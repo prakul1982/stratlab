@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Card, CardHead, DataTable, LinkCard, PageHeader, type Column } from "../components/kit";
 import { ALL_PAGES, NAV, type Located } from "../lib/nav";
 import { openTour } from "../components/Onboarding";
+import { openFeedback } from "../components/FeedbackOpen";
 import { useDocTitle } from "../lib/title";
 import { HELP_GROUPS, HELP_TOPICS } from "../lib/helpTopics";
 
@@ -39,7 +40,8 @@ export function HelpPage() {
   return (
     // the page's own width, like every other page (LIVE1B-043: a 640px column pinned to the left with 40% of the screen empty)
     <div className="k-page">
-      <PageHeader title="Help" lede="Find your way around StratLab, read how each check and figure is worked out, or reach a person." />
+      <PageHeader title="Help" lede="Find your way around StratLab, read how each check and figure is worked out, or reach a person."
+        actions={<button type="button" className="btn" onClick={openFeedback}>Report a problem or an idea</button>} />
       <div className="gate-links">
         <LinkCard to="/contact" title="Contact us">Questions reach a person.</LinkCard>
         <LinkCard to="/settings#check" title="Connection check">If prices or the idea builder look stuck.</LinkCard>

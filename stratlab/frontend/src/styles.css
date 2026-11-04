@@ -2431,9 +2431,8 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 /* landing, build 3: no card looks picked, a tag is a plain label (not a link), long lists fold, the plans say what's on sale */
 .lp-sec.lp-spaces-sec { padding-top: clamp(32px, 4vw, 48px); }
 .lp-spaces-sec #about { scroll-margin-top: 76px; }
-/* LAND-2: the intro under the hero. The sentence is the lede's size; the three columns each list three things, with their link last;
+/* LAND-2: the intro under the hero (its sentence was cut, LIVE3-023). The three columns each list three things, with their link last;
  * the three steps are one row (one column on a phone, where the grid's own two-column rule would leave a third step alone). */
-.lp-intro-line { font-size: clamp(18px, 1.8vw, 22px); line-height: 1.45; color: var(--ink-2); max-width: 62ch; margin: 0; }
 .lp-space-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .lp-space-list li { display: flex; flex-direction: column; gap: 2px; }
 .lp-space-list b { font-size: 15px; }
@@ -2906,3 +2905,24 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .k-table tr[data-kind="median"] > * { border-top: 2px solid var(--line-2); font-weight: 600; }
 .k-table tr[data-kind="range"] > * { color: var(--muted); font-size: var(--t-note); }
 .k-table tr[data-kind="median"]:hover, .k-table tr[data-kind="range"]:hover { background: transparent; }
+
+/* Help & feedback (owner, 4 Nov): a labelled button at the menu's top on a laptop and in the phone's top bar; a button that reads as
+ * a link in the public footers and on the Help page. */
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.linklike.link { color: var(--accent-ink, inherit); text-decoration: underline; text-underline-offset: 2px; }
+.legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: none; }   /* the same tap size as the links beside it (A11Y-2) */
+.side-brand .side-feedback { margin-left: auto; margin-right: 6px; }
+.topbar .top-feedback { padding-inline: 10px; }
+/* with Feedback in it the phone's top bar ran past a 400px screen: there the logo is its mark alone (the link keeps its name) */
+@media (max-width: 440px) { .topbar .brand .logo-word { display: none; } }
+
+/* DataTable's row details (TABLES EVERYWHERE, owner 4 Nov): a quiet button after the row's name, and the details in a row of their
+ * own across the table; on a phone card, joined to the card above it */
+.k-detail-btn { display: block; margin-top: 4px; padding: 0; border: 0; background: none; font: inherit; font-size: var(--t-small, 13px); font-weight: 500; color: var(--accent-ink, var(--ink-2)); cursor: pointer; text-align: left; }
+.k-table tr.k-detail-row > td { background: var(--paper-2); white-space: normal; padding: var(--s3) var(--s4); }
+@media (max-width: 640px) {
+  .k-tbl-wrap.stack .k-table tr.k-open { border-bottom-left-radius: 0; border-bottom-right-radius: 0; margin-bottom: 0; }
+  .k-tbl-wrap.stack .k-table tr.k-detail-row { display: block; border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; padding: 0; }
+  .k-tbl-wrap.stack .k-table tr.k-detail-row > td { display: block; padding: var(--s3); }
+  .k-tbl-wrap.stack .k-table tr.k-detail-row > td::before { display: none; }
+}

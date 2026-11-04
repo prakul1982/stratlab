@@ -93,14 +93,15 @@ test("compare: a date axis, both runs drawn whole, the verdict's words and a cou
   expect(errors).toEqual([]);
 });
 
-test("notebooks: the name is the title, the question under it, and what it was tested on (DA-032)", async ({ page, request }, info) => {
+// TABLES EVERYWHERE (owner, 4 Nov): the notebooks are one table, a row a notebook (a card on a phone); the row says what the card did
+test("notebooks: the name names the row, the question under it, and what it was tested on (DA-032)", async ({ page, request }, info) => {
   const { nb } = await notebook(request, `DA2 list ${info.project.name}`);
   const errors = await open(page, "/notebooks");
-  const card = page.getByRole("region", { name: nb.name, exact: true });
+  const card = page.getByRole("table", { name: "Your notebooks" }).getByRole("row").filter({ has: page.getByRole("link", { name: nb.name, exact: true }) });
   await expect(card.getByRole("link", { name: nb.name, exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(card.locator(".nb-question")).toHaveAttribute("title", /five years of daily candles/);
-  await expect(card).toContainText("Tested on AAPL");
-  // an icon at the card's top right (VR1-030): its words are its name and its hover text
+  await expect(card).toContainText("AAPL");
+  // an icon in the row (VR1-030): its words are its name and its hover text
   await expect(card.getByRole("button", { name: `Pin ${nb.name} to the top` })).toHaveAttribute("title", "Keep it at the top of the list");
   expect(errors).toEqual([]);
 });

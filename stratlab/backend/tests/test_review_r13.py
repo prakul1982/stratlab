@@ -442,3 +442,55 @@ def test_an_early_close_day_settles_from_its_own_close():
     assert stock_pages.closed_bars(bars, "US", half) == bars[:1]                          # still settling
     from app.intel.company import market_open
     assert market_open("US", half.replace(hour=12, minute=59)) and not market_open("US", half)
+
+
+def test_a_stitched_currency_series_that_stopped_long_ago_gives_way_to_the_contracts_own_candles(monkeypatch):
+    # owner, 4 Nov: every rupee-pair library entry was tested only to 6 Jun 2023 while coins ran to 2 Nov 2026: the broker's
+    # stitched daily series for the currency segment stops there. Any segment read this way (CDS and MCX) takes the current
+    # contract's own candles, which reach the latest close, when the stitched one has stopped
+    from datetime import date
+    from app.data import mcx
+    from app.data.cds import CDSProvider
+    from app.data.mcx import MCXProvider, ended_early
+    monkeypatch.setattr(mcx, "ist_date", lambda: date(2026, 11, 4))
+    old = [{"t": f"2023-06-{d:02d}T00:00:00+05:30", "o": 82.1 + d / 100, "h": 82.3, "l": 82.0, "c": 82.2 + d / 100, "v": 900} for d in range(1, 7)]
+    recent = [{"t": f"2026-10-{d:02d}T00:00:00+05:30", "o": 88.1 + d / 100, "h": 88.4, "l": 88.0, "c": 88.2 + d / 100, "v": 900} for d in range(20, 31)]
+    assert ended_early(old) and not ended_early(recent) and not ended_early([]) and not ended_early(None)
+    assert not ended_early([{"t": "2026-10-26T00:00:00+05:30"}])          # a long holiday (Diwali week) is not a stop
+
+    for Prov in (CDSProvider, MCXProvider):
+        calls = []
+
+        class Kite:
+            def history(self, token, tf, days, continuous=None, **kw):
+                calls.append(continuous)
+                return old if continuous else recent
+        bars = Prov(Kite()).history({"token": 1, "symbol": "USDINR"}, "1d", 1825)
+        assert calls == [True, False] and bars == recent, Prov.__name__
+
+        # the contract's own candles end no later: the stitched series stands, and its end shows as the tested period's end
+        class Older:
+            def history(self, token, tf, days, continuous=None, **kw):
+                return old if continuous else old[:3]
+        assert Prov(Older()).history({"token": 1, "symbol": "USDINR"}, "1d", 1825) == old
+
+    # a series that reaches today is read once, as before
+    calls = []
+
+    class Fresh:
+        def history(self, token, tf, days, continuous=None, **kw):
+            calls.append(continuous)
+            return recent
+    assert CDSProvider(Fresh()).history({"token": 1, "symbol": "USDINR"}, "1d", 1825) == recent and calls == [True]
+
+
+def test_a_library_entry_says_when_it_was_tested_so_a_market_whose_prices_stop_shows_it():
+    # a StratLab entry keeps its first published_at through each weekly re-run: ran_at is this version's own test day, which the
+    # page compares with the tested period's end ("Prices stop on 6 Jun 2023, the latest this market's data has")
+    from datetime import datetime, timezone
+    from app import library
+    e = library.entry({"name": "x"}, {"tf": "1d", "range": {"from": "2021-06-01", "to": "2023-06-06"}, "strategy": {}, "verdict": {}, "stats": {}},
+                      "o", "StratLab", "d")
+    ran = datetime.fromisoformat(e["ran_at"])
+    assert ran.tzinfo is not None and abs((datetime.now(timezone.utc) - ran).total_seconds()) < 60
+    assert "ran_at" in library.public(e)

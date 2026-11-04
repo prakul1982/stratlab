@@ -106,7 +106,7 @@ test("LIVE1A-021/023/024/025/026/027/028: events, positioning, forward test, lib
   assert.ok(pos.indexOf('<Stat label="DII sold"') < pos.indexOf('<Source testId="cash-source">'));       // the figures, then where they come from
   const sig = read("src/pages/trade/SignalsPage.tsx");
   assert.match(sig, /<div className="k-field wide"><CheckField label="Allow short positions"/);
-  assert.match(read("src/components/LibraryBits.tsx"), /data-testid="lib-dates"/);
+  assert.match(read("src/components/LibraryBits.tsx"), /data-testid="lib-window">Tested \{testedRange\(e\.range\)\}/);   // the dates, in each row's details since the library is a table (owner, 4 Nov)
   const { SHARPE_MIN_DAYS, runDays } = await import("../src/lib/tradeUi.ts");
   assert.equal(SHARPE_MIN_DAYS, 180);
   assert.ok(Math.round(runDays({ range: { from: "2026-08-28", to: "2026-10-28" }, days: 730 })) === 61);

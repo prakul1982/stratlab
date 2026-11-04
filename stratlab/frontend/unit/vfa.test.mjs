@@ -72,13 +72,14 @@ test("owner, 29 Oct: More you can do shows every group of tools, with no button 
   assert.doesNotMatch(ex, /more tools|aria-expanded|explore\.open/);
 });
 
-test("VR1-030: two notebooks fill the row, a lone one is a card's width, the pin is an icon at the top right", () => {
+// TABLES EVERYWHERE (owner, 4 Nov): the notebook cards are one table; VR1-030's point (no part-empty row of cards, the pin an icon
+// that never wraps under the name) holds as a table row with the pin in its corner on a phone card
+test("VR1-030: the notebooks fill the width as one table, the pin is an icon in the row's corner", () => {
   const tcss = read("src/pages/trade/trade.css");
-  assert.match(tcss, /\.k-cards\.nb-cards \{[^}]*repeat\(auto-fit, minmax\(min\(100%, 320px\), 1fr\)\)/);
-  assert.match(tcss, /\.nb-cards > \.k-card:only-child \{ max-width: 520px; \}/);
-  assert.match(tcss, /\.nb-cards \.k-card-head \{ flex-wrap: nowrap;/);
+  assert.doesNotMatch(tcss, /\.nb-cards/);
   const home = read("src/pages/Home.tsx");
-  assert.match(home, /<TileGrid className="k-cards nb-cards">/);
+  assert.match(home, /\{ key: "pin", header: "", action: true, corner: true, cell: \(n\) => \(/);
+  assert.doesNotMatch(home, /<TileGrid className="k-cards nb-cards">/);
   assert.doesNotMatch(home, /\{n\.pinned \? "Pinned" : "Pin"\}<\/span>/);
 });
 

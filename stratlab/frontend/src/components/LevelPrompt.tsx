@@ -6,7 +6,7 @@ import type { Focus, Level } from "../lib/types";
 import { homeOf, SPACE_HOMES, SPACE_IDS, SPACES, viewForFocus } from "../lib/spaces";
 import { Modal } from "./ui";
 import { track } from "../lib/analytics";
-import { INTRO_LINE } from "../content/intro";
+import { INTRO_LINE } from "../content/welcome";
 
 export const LEVELS: [Level, string, string][] = [
   ["new", "New to this", "Guided start: examples to try, explanations up front, advanced settings folded away."],
@@ -47,8 +47,8 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answere
     // Esc and × close it for good, as an answer does, but start no tour: closing it is "not now" (DP2-032, DP1-028)
     <Modal title="What brings you here?" startOnClose onClose={() => onDone(savePrefs({ focus: focus ?? "both", level: lvl }), false)}>
       <div className="k-stack welcome">
-        {/* what StratLab is, before where things are: the landing page's own sentence (content/intro.ts), so a new account
-            reads the same promise it signed up on */}
+        {/* what StratLab is, before where things are, in one sentence (content/intro.ts). The landing page used to open with it
+            too; it was cut there as a restatement of the hero (LIVE3-023), but a new account still needs it once, here */}
         <p className="welcome-what">{INTRO_LINE}</p>
         {/* not "StratLab has four spaces...": the tour's first step says that straight after this, so a new account read it twice in a row (VR4-008) */}
         <p className="k-muted welcome-note">{here ? `You're on ${SPACES[here].label} now: pick ${SPACES[here].label} to stay, or another to open its home.` : "We'll open the one you pick."} The others stay one tap away, and you can change this any time in Settings.</p>

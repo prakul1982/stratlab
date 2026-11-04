@@ -193,5 +193,6 @@ test("answering a holdings notice puts focus on the next thing, not the top of t
 test("lot tables key each row by its place too, so equal lots don't share a key", () => {
   assert.equal((read("src/pages/money/TaxToolsPage.tsx").match(/rowKey=\{\(r, i\) => `\$\{r\.key\}\$\{r\.bought\}\$\{r\.qty\}-\$\{i\}`\}/g) ?? []).length, 3);
   assert.match(read("src/pages/money/UsTaxPage.tsx"), /rowKey=\{\(l, i\) => `\$\{l\.symbol\}\$\{l\.bought\}\$\{l\.qty\}-\$\{i\}`\}/);
-  assert.match(read("src/components/kit/DataTable.tsx"), /key=\{rowKey\(r, ri\)\}/);
+  // the row and its details row (TABLES EVERYWHERE, owner 4 Nov) share one keyed Fragment, keyed by rowKey(row, index)
+  assert.match(read("src/components/kit/DataTable.tsx"), /const k = rowKey\(r, ri\)[^]*<Fragment key=\{k\}>/);
 });

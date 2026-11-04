@@ -46,15 +46,16 @@ async function shot(page: Page, name: string, info: { project: { name: string } 
   await page.screenshot({ path: `${SHOTS}/${name}-${phone ? "400-light" : "1300-dark"}.png`, fullPage: true });
 }
 
-const SECTIONS = ["Overview", "Users and growth", "Money", "Data and jobs", "Quality", "System", "Email previews"];
+// Feedback added (owner, 4 Nov: the Help & feedback inbox)
+const SECTIONS = ["Overview", "Users and growth", "Money", "Data and jobs", "Quality", "System", "Feedback", "Email previews"];
 
-test("admin: a left menu with seven sections, each its own address, and the old tab links still land", async ({ page }) => {
+test("admin: a left menu with eight sections, each its own address, and the old tab links still land", async ({ page }) => {
   const errors = await open(page, "/admin", "Needs your attention");
   const menu = page.getByRole("navigation", { name: "Admin sections" });
   await expect(menu.getByRole("link")).toHaveText(SECTIONS.map((s) => new RegExp(`^${s}`)));
   await expect(menu.getByRole("link", { name: /^Overview/ })).toHaveAttribute("aria-current", "page");
   for (const [name, path, heading] of [["Users and growth", "/admin/users", "Paper trading now"], ["Money", "/admin/money", "Prices outside India"], ["Data and jobs", "/admin/data", "Background jobs"],
-    ["Quality", "/admin/quality", "Rates and rules"], ["System", "/admin/system", "Check every feature"], ["Email previews", "/admin/emails", "Confirm your email"]] as const) {
+    ["Quality", "/admin/quality", "Rates and rules"], ["System", "/admin/system", "Check every feature"], ["Feedback", "/admin/feedback", "Feedback ("], ["Email previews", "/admin/emails", "Confirm your email"]] as const) {
     await menu.getByRole("link", { name }).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
@@ -297,6 +298,19 @@ test("admin emails: 29 kinds listed, each shown in a frame with no scripts at a 
   await expect(page.getByLabel("Plain text of the email")).not.toBeEmpty();
   await page.getByRole("link", { name: "All emails" }).click();
   await expect(page).toHaveURL(/\/admin\/emails$/);
+  await sane(page, errors);
+});
+
+test("admin system: 'Error alerts (Sentry)' says on or off, and 'Send a test error' answers on the card (owner, 4 Nov)", async ({ page }) => {
+  const errors = await open(page, "/admin/system", "Server errors");
+  const row = page.getByRole("list", { name: "Other services" }).getByRole("listitem").filter({ hasText: "Error alerts (Sentry)" });
+  // the test world sets no SENTRY_DSN, so the server's SDK is off and the row says so in a word
+  await expect(row.locator(".k-light")).toHaveText("Off", { timeout: 30_000 });
+  await expect(row).toContainText("SENTRY_DSN isn't set");
+  await row.getByRole("button", { name: "Send a test error" }).click();
+  // nothing to send to with Sentry off; the line stays on the card with the time. The throttle (3 an hour, the same admin on both
+  // projects and on a retry) answers on the same line, so either answer is the card telling the press what happened
+  await expect(page.getByTestId("sentry-sent")).toHaveText(/^Not sent \(\d\d:\d\d:\d\d\): (Sentry is off on the server\. Add SENTRY_DSN|You've sent 3 test errors this hour)/, { timeout: 30_000 });
   await sane(page, errors);
 });
 

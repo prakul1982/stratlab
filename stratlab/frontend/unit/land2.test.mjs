@@ -1,22 +1,29 @@
-// LAND-2: the landing page's "What StratLab is" intro: one sentence, the three spaces with three things each, three steps and what
-// sets it apart, drawn under the hero and written, in the same words, into the home page's own HTML for crawlers.
+// LAND-2: the landing page's intro: the three spaces with three things each and three steps, drawn under the hero and written, in the
+// same words, into the home page's own HTML for crawlers. LIVE3-023 / LIVE2-011 (owner, 4 Nov): its "What StratLab is" heading and
+// sentence are cut (they restated the hero); the sentence lives on in the welcome pop-up only.
 // Run: npm run test:unit
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { HOW_MONEY, HOW_STEPS, INTRO_LINE, INTRO_SPACES } from "../src/content/intro.ts";
+import { HOW_MONEY, HOW_STEPS, INTRO_SPACES } from "../src/content/intro.ts";
+import { INTRO_LINE } from "../src/content/welcome.ts";
 import { PAGES } from "../src/content/seo.ts";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const home = PAGES.find((p) => p.path === "/");
 const words = JSON.stringify([INTRO_LINE, INTRO_SPACES, HOW_STEPS, HOW_MONEY, home.summary]);
 
-test("LAND-2: the intro says what StratLab is in one sentence, and the home page's own HTML opens with the same sentence", () => {
+test("LAND-2 / LIVE3-023: the welcome sentence is one sentence; the landing page and its own HTML no longer open with it under 'What StratLab is'", () => {
   assert.equal(INTRO_LINE.match(/\.\s/g), null, "one sentence");
   for (const part of ["testing trading ideas", "understanding your own money", "ten markets", "paper trading only", "never real orders", "facts, not tips"])
     assert.ok(INTRO_LINE.includes(part), part);
-  assert.equal(home.summary[0], `What StratLab is: ${INTRO_LINE}`);
-  assert.equal(home.updated, "2026-10-29", "the page's words changed on this day (and backend/app/site_pages.py says so)");
+  // owner, 4 Nov: cut from the page (it restated the hero), so cut from the page's server-rendered copy too: that copy opens with Trade
+  assert.ok(!home.summary.join(" ").includes(INTRO_LINE) && !home.summary.join(" ").includes("What StratLab is"));
+  assert.match(home.summary[0], /^Trade, the strategy lab: /);
+  const login = read("src/pages/Login.tsx");
+  assert.doesNotMatch(login, /INTRO_TITLE|INTRO_LINE|intro-h|lp-intro-line/);
+  assert.doesNotMatch(read("src/styles.css"), /lp-intro-line/);
+  assert.equal(home.updated, "2026-11-04", "the page's words changed on this day (and backend/app/site_pages.py says so)");
 });
 
 test("LAND-2: three columns, Trade then Invest then Money, each with a one-line summary and three real things", () => {
@@ -61,21 +68,26 @@ test("LAND-2: no advice wording, no data-vendor names and no made-up amounts in 
 
 test("LAND-2: the page draws the intro right under the hero, in heading order, with the three columns stacking on a phone", () => {
   const login = read("src/pages/Login.tsx");
-  const hero = login.indexOf('<section id="top" className="lp-hero ruled">'), intro = login.indexOf('aria-labelledby="intro-h"'), trade = login.indexOf('<section id="trade"');
+  const hero = login.indexOf('<section id="top" className="lp-hero ruled">'), intro = login.indexOf('className="lp-sec lp-spaces-sec"'), trade = login.indexOf('<section id="trade"');
   assert.ok(hero > 0 && hero < intro && intro < trade, "hero, then the intro, then Trade");
-  assert.match(login, /<h2 id="intro-h" className="serif lp-h2">\{INTRO_TITLE\}<\/h2>/);
+  // LIVE3-023: no section heading of its own any more: the space names and "How it works" are h2s straight under the page's h1
+  assert.match(login, /<section className="lp-sec lp-spaces-sec" aria-label="Trade, Invest and Money">/);
   assert.match(login, /\{INTRO_SPACES\.map\(\(sp\) => \(/);
-  assert.match(login, /<h3 className="serif lp-h3">\{HOW_TITLE\}<\/h3>/);
+  assert.match(login, /<h2 className="serif lp-space-name">\{sp\.name\}<\/h2>/);
+  assert.match(login, /<h2 className="serif lp-h3">\{HOW_TITLE\}<\/h2>/);
   // what the intro replaced: the three picture cards, and Trade's own four steps (the same steps, less plainly)
   assert.doesNotMatch(login, /Three spaces, one place|function SpaceArt|Check the rules|Paper trade it/);
   const css = read("src/styles.css");
   assert.match(css, /@media \(max-width: 760px\) \{ \.lp-spaces \{ grid-template-columns: minmax\(0, 1fr\); \} \}/);
   assert.match(css, /@media \(max-width: 760px\) \{ \.lp-steps\.lp-steps-3 \{ grid-template-columns: minmax\(0, 1fr\)/);
-  // one h1 for the page: the intro and its parts are h2 and h3
-  assert.doesNotMatch(login.slice(intro, trade), /<h1|<h4/);
+  // one h1 for the page: the intro's parts are h2s (no h3 with no h2 above it)
+  assert.doesNotMatch(login.slice(intro, trade), /<h1|<h3|<h4/);
 });
 
-test("VR5-owner-2: the landing page says 'ten markets', 'paper trading only / never real orders' and 'facts, not tips' once each, in the intro's sentence", () => {
+// LIVE3-023 (owner, 4 Nov): the intro's sentence is cut from the page, so these claims are now said nowhere on the landing page or in its
+// server-rendered copy (the hero's lede and the sections below cover the product; the meta description keeps "Facts, not tips"); the rule
+// that they are never said twice still holds
+test("VR5-owner-2: the landing page never says 'ten markets', 'paper trading only / never real orders' or 'facts, not tips' twice", () => {
   const login = read("src/pages/Login.tsx");
   // the hero's eyebrow and line, the line under the button and Options' tag no longer carry them
   assert.match(login, /"Trade · Invest · Money"\}<\/span>/);
@@ -84,8 +96,8 @@ test("VR5-owner-2: the landing page says 'ten markets', 'paper trading only / ne
   const rest = JSON.stringify([INTRO_SPACES, HOW_STEPS, HOW_MONEY]).toLowerCase();
   for (const claim of ["ten markets", "facts, not tips", "never real orders", "no real orders", "paper trading only", "never buy, sell or hold"])
     assert.ok(!rest.includes(claim), `${claim} is said again`);
-  // and the page's own HTML says each once, in the same opening sentence
+  // and the page's own HTML says each at most once
   const html = home.summary.join(" ").toLowerCase();
-  for (const claim of ["ten markets", "facts, not tips", "never real orders"]) assert.equal(html.split(claim).length - 1, 1, `${claim} once in the home page's HTML`);
+  for (const claim of ["ten markets", "facts, not tips", "never real orders"]) assert.ok(html.split(claim).length - 1 <= 1, `${claim} at most once in the home page's HTML`);
   assert.doesNotMatch(html, /no real orders|never says buy, sell or hold/);
 });

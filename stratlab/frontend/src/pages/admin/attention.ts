@@ -265,6 +265,8 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   // only the errors since this server started are "since the last restart"; ones kept from before it aren't news (R7O-006)
   const errs = errorCounts(sv);
   if (errs.since) out.push({ text: `${plural(errs.since, "server error")} since the last restart.`, to: "/admin/system", label: "System", bad: false });
+  // Help & feedback reports nobody has looked at yet (owner, 4 Nov)
+  if (sv.feedback_new) out.push({ text: `${plural(sv.feedback_new, "new feedback report")} from users.`, to: "/admin/feedback", label: "Feedback", bad: false });
   const pending = (reported?.entries ?? []).filter((r) => r.hidden_by !== "admin").length;
   if (pending) out.push({ text: `${pending} library entr${pending > 1 ? "ies were" : "y was"} reported by users.`, to: "/admin/quality", label: "Quality", bad: false });
   for (const j of jobs ?? []) {
