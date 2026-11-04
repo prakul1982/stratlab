@@ -65,7 +65,7 @@ def test_totals_notes_and_lines_without_a_quantity():
     assert [r["symbol"] for r in got["rows"]] == ["RELIANCE"]                            # INFY at 0 is sold: left out
     # ...and said, not dropped unseen (DG-004)
     assert got["problems"] == [{"line": 3, "text": "TCS", "reason": "No quantity on this line."},
-                               {"line": 7, "text": "INFY", "reason": "The quantity is 0 or less (sold, or listed only for its history), so it's left out."}]
+                               {"line": 7, "text": "INFY", "reason": "The quantity is 0, so it's left out: sold, or listed only for its history."}]
 
 
 def test_a_bare_list_and_other_separators():

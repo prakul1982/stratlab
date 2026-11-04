@@ -661,7 +661,8 @@ def check_line(row: list[str], text: str, qty_cell: str, line: int, *, signed: b
         if not qty:
             return None, {"line": line, "text": text, "reason": "No quantity on this line."}
     elif qty <= 0:                          # sold, or only listed for its history: said, never dropped unseen (DG-004)
-        return None, {"line": line, "text": text, "reason": "The quantity is 0 or less (sold, or listed only for its history), so it's left out."
+        # one rule, said one way for each case (LIVE3-021: "0 or less" for a quantity of exactly 0 beside "below 0" for a negative one)
+        return None, {"line": line, "text": text, "reason": "The quantity is 0, so it's left out: sold, or listed only for its history."
                       if qty == 0 else "The quantity is below 0, so it's left out: a holding can't be negative."}
     return qty, None
 

@@ -58,7 +58,8 @@ test("TABLE-SWEEP: no half-empty column: a note column only when a row has a not
   assert.match(fig, /\.\.\.\(withNote && !under \? \[/);                       // on a phone the note sits under the name
   const fact = read("src/components/kit/FactTable.tsx");
   assert.match(fact, /\.\.\.\(notes && !under \? \[/);
-  assert.match(fact, /const under = noteUnder && phone && notes;/);                 // the fund's fold asks for it; elsewhere a phone shows cards
+  // the fund's fold asks for it; elsewhere a phone shows cards. LIVE3-015/021: a note only some rows have goes under on every screen
+  assert.match(fact, /const under = notes && \(\(noteUnder && phone\) \|\| sparseNotes\(/);
   assert.match(read("src/pages/money/FundBehaviour.tsx"), /rows=\{facts\} noteUnder \/>/);
   assert.match(read("src/components/kit/DataTable.tsx"), /data-blank=\{blank \? "" : undefined\}/);
   assert.match(css, /\.k-tbl-wrap\.stack \.k-table td\[data-blank\] \{ display: none; \}/);
