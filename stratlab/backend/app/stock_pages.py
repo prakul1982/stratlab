@@ -2363,6 +2363,8 @@ def _foot() -> str:
     policies = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                    ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us")))
     policies += f'<a href="{INSTAGRAM}" rel="me noopener">Instagram</a>'
+    # Help & feedback from the server's own pages too: the site's Help opens the dialog at #feedback (owner, 4 Nov)
+    policies += f'<a href="{site}/help#feedback">Feedback</a>'
     return (f'<footer class="site"><div class="in"><p>Research and paper trading only. No real orders are placed. StratLab shows '
             "facts from reported data for research and education; nothing here is investment advice or a recommendation, and "
             f"past prices don't predict future returns. © {datetime.now(timezone.utc).year} StratLab.</p>"

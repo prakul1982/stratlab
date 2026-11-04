@@ -299,7 +299,7 @@ def test_the_header_and_footer_are_the_apps(w):
     assert 'class="btn ghost sm"' in t and "main{flex:1 0 auto;width:100%;max-width:960px" in css and "min-height:100vh" in css       # a short page keeps its footer at the bottom
     foot = re.search(r"<footer class=\"site\">.*?</footer>", t, re.S).group(0)
     assert foot.count("<nav") == 2 and 'aria-label="Explore"' in foot and 'aria-label="Policies"' in foot
-    for label in ("Strategy library", "Plans", "Companies", "Blog", "Terms of service", "Privacy policy", "Cancellation and refunds", "Contact us", "Instagram"):
+    for label in ("Strategy library", "Plans", "Companies", "Blog", "Terms of service", "Privacy policy", "Cancellation and refunds", "Contact us", "Instagram", "Feedback"):
         assert f">{label}</a>" in foot, label
     assert foot.index("Explore") < foot.index("Policies")
 
