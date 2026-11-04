@@ -1,6 +1,7 @@
 """The data audit: every company in a set run through the deep dive's numbers, checks and documents on the live server,
 with each number compared against its source and every gap written down. Run from the admin page; nothing here uses
 AI, so a full run costs no AI allowance. The aim is that nothing StratLab shows needs checking anywhere else."""
+import math
 import threading
 import re
 import time
@@ -225,8 +226,13 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
         explained = any("P/E is based on" in n for n in nums.get("notes") or [])
         # the table gives the profit to the paisa or the cent (two decimals) below 10 and to the whole unit above it: a trailing
         # profit of 0.05 cr is anything from 0.045 to 0.055, a tenth either way of the P/E
-        slack = PE_TOLERANCE + (0.005 if abs(ttm) < 10 else 0.5) / abs(ttm)
-        if off is not None and off > slack and abs(ours - snap["pe"]) > PE_ROUNDING and not explained:
+        step = 0.005 if abs(ttm) < 10 else 0.5
+        slack = PE_TOLERANCE + step / abs(ttm)
+        # ...and a profit that small makes the P/E's own range lopsided: 0.02 cr is 0.015 to 0.025, a P/E of 784 to 1,307 on
+        # a 19.6 cr market value (BSE:531572, 1 Nov: 912.5 on the page was within it, though 70% from 1,555)
+        lo, hi = snap["market_cap_cr"] / ((ttm + step) * fx), snap["market_cap_cr"] / ((ttm - step) * fx) if ttm > step else math.inf
+        within = lo * (1 - PE_TOLERANCE) <= snap["pe"] <= hi * (1 + PE_TOLERANCE)
+        if off is not None and off > slack and abs(ours - snap["pe"]) > PE_ROUNDING and not explained and not within:
             out.append(_issue("mismatch", "Valuation", f"P/E {pe_text(snap['pe'])} on the company page, {pe_text(ours)} from market cap ÷ trailing profit"))
     if snap.get("pe_why"):
         # LIVE2-025: the page holds the figure back itself, so there is nothing wrong on show; a fact, not a mismatch

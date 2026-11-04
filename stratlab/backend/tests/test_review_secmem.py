@@ -313,3 +313,42 @@ def test_a_new_listing_checked_before_its_first_session_is_a_fact():
     assert [(i["level"], i["detail"]) for i in got] == [("fact", audit.NOT_TRADED_YET)]
     got = audit.check_listing({"range52": {"low": 1.0, "high": 2.0}, "quote": {"price": 1.5}}, p, {"years": []}, {})
     assert [i["level"] for i in got] == ["gap"]                              # trading, and still not marked: the gap stands
+
+
+def _scr(np, eps, equity, cap, price, own, cols=("Mar 2025", "Mar 2026", "TTM")):
+    """A company page's tables as the source gives them (the numbers read from its page on 4 Nov)."""
+    return {"region": "IN", "pl": {"cols": list(cols), "rows": {"Sales": [10.0] * len(cols), "Net Profit": list(np), "EPS in Rs": list(eps)}},
+            "balance": {"cols": ["Mar 2025", "Mar 2026"], "rows": {"Equity Capital": list(equity), "Reserves": [5.0, 5.0]}},
+            "ratios": {"Market Cap": f"₹ {cap} Cr.", "Current Price": f"₹ {price}", "Stock P/E": str(own), "Face Value": "₹ 10.0"}}
+
+
+def test_a_share_capital_bigger_than_the_shares_the_eps_counts_doesnt_set_the_market_value():
+    """BSE:531572 and BSE:512477 (1 Nov): their market value came from share capital ÷ face value (42.6 and 20 lakh shares)
+    though profit ÷ EPS counts 26.9 and 15.1 lakh, as the source does; the P/E check then failed (912.5 vs 1,555)."""
+    from app.intel import screener as S
+    ranjit = _scr([0.52, 0.07, 0.02], [1.93, 0.26, 0.08], [4.26, 4.26], 19.6, 73.0, 982)
+    betex = _scr([2.0, 6.0, 6.0], [13.0, 37.8, 39.66], [2.0, 2.0], 77.1, 514.0, 13.0)
+    assert S.summary(ranjit)["market_cap_cr"] == 19.6 and S.summary(ranjit)["pe"] == 912.5
+    assert S.summary(betex)["market_cap_cr"] == 77.1 and S.summary(betex)["pe"] == 13.0
+    # without an EPS row to say which count is right, a share capital that drifts from the source's count still sets it
+    no_eps = _scr([0.52, 0.07, 0.02], [None, None, None], [4.26, 4.26], 19.6, 73.0, 982)
+    assert S.summary(no_eps)["market_cap_cr"] == round(73.0 * 0.426, 2)
+
+
+def test_a_source_pe_under_one_never_settles_the_pe():
+    """SADBHIN (1 Nov): P/E 0.96 shown, the source's own, which agrees with market value ÷ a net profit that includes the
+    minority holders' share; on the earnings per share its own shareholders have it is 2.8."""
+    from app.intel import screener as S
+    sadbhav = _scr([-34.0, 45.0, 115.0], [-2.13, -0.56, 1.07], [352.2, 352.2], 104, 2.95, 0.86)
+    got = S.summary(sadbhav)
+    assert got["pe"] is None and "2.8" in got["pe_why"] and "0.9" in got["pe_why"]      # held back, with both figures said
+
+
+def test_the_audit_holds_a_tiny_profits_pe_to_the_range_its_rounding_allows():
+    """BSE:531572: a trailing profit of 0.02 cr is 0.015 to 0.025, so on a 31.1 cr value any P/E from about 1,244 to 2,073."""
+    from app import audit
+    p = {"region": "IN", "pl": {"cols": ["Mar 2026", "TTM"], "rows": {"Net Profit": [0.07, 0.02]}}}
+    nums = {"years": [{"year": "Mar 2026", "sales": 10.0, "profit": 0.07}]}
+    mism = lambda pe: [i for i in audit.check_numbers(p, nums, {"pe": pe, "market_cap_cr": 31.1}, None) if i["level"] == "mismatch"]  # noqa: E731
+    assert mism(1000.0) == []                                                # 56% from 1,555, yet within what 0.015-0.025 cr allows
+    assert mism(400.0) and "P/E 400.0 on the company page" in mism(400.0)[0]["detail"]   # far outside it: still a mismatch
