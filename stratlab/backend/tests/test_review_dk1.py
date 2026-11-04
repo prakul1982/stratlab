@@ -219,7 +219,15 @@ def test_search_puts_the_exact_symbol_then_the_larger_names_first(w):
 
 # ---------- DK-033: HEAD answers as GET does, with no body ----------
 def test_head_on_public_pages_has_the_headers_of_get_and_no_body(w):
-    c = w["client"]
+    # a page's edge lifetime counts down to its market's next settle point (s-maxage in seconds): a GET and a HEAD a second
+    # apart would differ by that second, so the clock stands still while each pair is asked
+    import time
+    from tests import e2e_clock
+    with e2e_clock._time_machine().travel(time.time(), tick=False):
+        _head_matches_get(w["client"])
+
+
+def _head_matches_get(c):
     for url in ("/stocks/in/RELIANCE", "/stocks/us/AAPL", "/stocks", "/stocks/in", "/stocks/in/NOPE", "/sitemap.xml", "/robots.txt",
                 "/sitemaps/stocks-in-1.xml"):
         g, h = c.get(url, follow_redirects=False), c.head(url, follow_redirects=False)
