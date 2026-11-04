@@ -60,8 +60,19 @@ test("a timeframe change keeps the moment on screen", async ({ page }, info) => 
     const b = (await stage.boundingBox())!;
     await page.mouse.move(b.x + b.width * 0.4, b.y + b.height * 0.3);
     await page.mouse.move(b.x + b.width * 0.4 + 1, b.y + b.height * 0.3 + 1);
-    await expect(chart).toHaveAttribute("data-at", /^\d+$/);
-    return Number(await chart.getAttribute("data-at"));
+    // the pointer's candle, not the newest one shown before the hover is drawn (data-at names the newest bar while nothing
+    // is hovered, and a read right after a move or a timeframe switch can catch that frame): wait for the hover, then for
+    // the value to hold still across two frames
+    await expect(chart).toHaveAttribute("data-hovering", "1");
+    let at = -1;
+    await expect.poll(async () => {
+      const a = Number(await chart.getAttribute("data-at"));
+      await page.waitForTimeout(150);
+      const b2 = Number(await chart.getAttribute("data-at"));
+      at = b2;
+      return a === b2 && Number.isFinite(b2) && b2 > 0;
+    }).toBe(true);
+    return at;
   };
   await pick("5m");
   const newest = await hoverAt();
