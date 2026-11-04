@@ -123,3 +123,15 @@ test("an empty state's second way to start is a quiet button beside the first, n
       assert.doesNotMatch(m[1], /<Link className="link" to="\/(options|notebooks|research\/watchlist)"/, `${f}: ${m[1].slice(0, 80)}`);
   }
 });
+
+test("the whole-market check says 'every company checked' only when every listed company is (LIVE3-024)", () => {
+  const src = read("src/pages/admin/AuditPanel.tsx");
+  assert.match(src, /const left = Math\.max\(0, m\.listed - m\.checked\);\n  return left \? `Running · \$\{left\.toLocaleString\("en-IN"\)\} not checked yet` : "Running · every company checked";/);
+  assert.match(src, /<b>\{m\.paused \? PAUSED\[m\.paused\] : runningLine\(m\)\}<\/b>/);
+  // the function itself, lifted out of the page (it needs nothing else)
+  const body = src.match(/export function runningLine\(m: [^)]*\): string \{([^]*?)\n\}/)[1];
+  const runningLine = new Function("m", body);
+  assert.equal(runningLine({ due: 0, listed: 4970, checked: 4967 }), "Running · 3 not checked yet");
+  assert.equal(runningLine({ due: 0, listed: 4970, checked: 4970 }), "Running · every company checked");
+  assert.equal(runningLine({ due: 12, listed: 4970, checked: 4900 }), "Running · 12 to check");
+});
