@@ -8,6 +8,7 @@ import { Card, CardHead, DataTable, FigureTable, Light, Skeleton, StatusList, St
 import { useAdmin, type JobRow } from "./AdminContext";
 import { plainError, services } from "./attention";
 import { BizCoveragePanel } from "./BizCoveragePanel";
+import { IpoQueuePanel } from "./IpoQueuePanel";
 import { BlogPanel } from "./BlogPanel";
 import { HolidaysPanel } from "./HolidaysPanel";
 import { StoragePanel } from "./StoragePanel";
@@ -146,6 +147,7 @@ export function DataSection() {
       {sv?.calendar && <HolidaysPanel status={sv.calendar} onSaved={(c) => setOv((o) => o && { ...o, server: { ...o.server, calendar: c } })} />}
       <BlogPanel />
       <BizCoveragePanel />
+      <IpoQueuePanel />
       <StoragePanel />
       {open && <JobLog job={open} mine={mine[open.id] ?? []} onClose={() => setLog(null)} />}
     </>

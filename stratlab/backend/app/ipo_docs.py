@@ -98,16 +98,10 @@ def pdf_from(data: bytes) -> bytes:
 
 
 def pdf_pages(data: bytes, max_pages: int = MAX_PAGES) -> list[str]:
-    """The text of each page (the first `max_pages`), one string per page."""
-    from pypdf import PdfReader
-    reader = PdfReader(io.BytesIO(data))
-    out = []
-    for page in reader.pages[:max_pages]:
-        try:
-            out.append(docs.fix_rupee(page.extract_text() or ""))
-        except Exception:              # one bad page mustn't lose the document
-            out.append("")
-    return out
+    """The text of each page (the first `max_pages`), one string per page; a page that can't be read is "" (one bad page
+    mustn't lose the document). Read in a short-lived process: these run to 40 MB (pdf_proc, SECMEM item 2)."""
+    from . import pdf_proc
+    return [docs.fix_rupee(t or "") for t in pdf_proc.page_texts(data, max_pages)[0]]
 
 
 def html_text(raw: bytes) -> str:

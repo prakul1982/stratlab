@@ -1,6 +1,7 @@
 """The data audit: every company in a set run through the deep dive's numbers, checks and documents on the live server,
 with each number compared against its source and every gap written down. Run from the admin page; nothing here uses
 AI, so a full run costs no AI allowance. The aim is that nothing StratLab shows needs checking anywhere else."""
+import math
 import threading
 import re
 import time
@@ -212,6 +213,7 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
         out += _margins(p, years)
         if len(years) >= 3 and all(y.get("capex") is None for y in years[-3:]):
             out.append(_issue("fact", "Capex", NO_PLANT) if p.get("region") == "US" and not _plant(p, 3)
+                       else _issue("fact", "Capex", tiny_plant(p)) if p.get("region") == "US" and tiny_plant(p)
                        else _issue("fact", "Capex", NO_CAPEX_LINE) if p.get("capex_untagged")
                        else _issue("fact", "Capex", CAPEX_SHRUNK) if all(y.get("capex_cut") for y in years[-3:])
                        else _issue("fact", "Capex", CAPEX_SHRUNK_OR_NEW) if (any(y.get("capex_cut") for y in years[-3:])
@@ -225,8 +227,13 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
         explained = any("P/E is based on" in n for n in nums.get("notes") or [])
         # the table gives the profit to the paisa or the cent (two decimals) below 10 and to the whole unit above it: a trailing
         # profit of 0.05 cr is anything from 0.045 to 0.055, a tenth either way of the P/E
-        slack = PE_TOLERANCE + (0.005 if abs(ttm) < 10 else 0.5) / abs(ttm)
-        if off is not None and off > slack and abs(ours - snap["pe"]) > PE_ROUNDING and not explained:
+        step = 0.005 if abs(ttm) < 10 else 0.5
+        slack = PE_TOLERANCE + step / abs(ttm)
+        # ...and a profit that small makes the P/E's own range lopsided: 0.02 cr is 0.015 to 0.025, a P/E of 784 to 1,307 on
+        # a 19.6 cr market value (BSE:531572, 1 Nov: 912.5 on the page was within it, though 70% from 1,555)
+        lo, hi = snap["market_cap_cr"] / ((ttm + step) * fx), snap["market_cap_cr"] / ((ttm - step) * fx) if ttm > step else math.inf
+        within = lo * (1 - PE_TOLERANCE) <= snap["pe"] <= hi * (1 + PE_TOLERANCE)
+        if off is not None and off > slack and abs(ours - snap["pe"]) > PE_ROUNDING and not explained and not within:
             out.append(_issue("mismatch", "Valuation", f"P/E {pe_text(snap['pe'])} on the company page, {pe_text(ours)} from market cap ÷ trailing profit"))
     if snap.get("pe_why"):
         # LIVE2-025: the page holds the figure back itself, so there is nothing wrong on show; a fact, not a mismatch
@@ -258,6 +265,12 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
     return out
 
 
+NOT_TRADED_YET = "Not traded yet: no session since it listed, so there is no range or price to check"
+# a ticker on the SEC's list that no market quotes yet (registered, not trading: ADVI, GPOD, KBGHF, TPTI, TEGO on 1 Nov):
+# no price and no profile anywhere, so there is no company page to check, which is a fact about it, not a broken page
+NO_US_COMPANY = "No US company found"
+NOT_QUOTED = "Not trading yet: it files with the SEC, but no market quotes it, so there is no company page to check"
+
 SUSPECT_PE = 1.0               # a P/E under 1 (the price under one year's profit) is almost never real: a units slip (DJ-027)
 
 
@@ -283,6 +296,20 @@ def _quarterly(cols: list) -> bool:
             return True
         at.append(int(m[2]) * 12 + months[m[1].lower()])
     return all(b - a == 3 for a, b in zip(at, at[1:]))
+
+
+TINY_PLANT = 0.5               # plant under half a million (in the filings' millions) and no purchases of it tagged: nothing to estimate
+
+
+def tiny_plant(p: dict) -> str | None:
+    """The capex fact for a company whose plant is a few desks (EOCN, RWAX on 1 Nov: $0.08 m and $0.01 m, no purchases filed in
+    three years): what there is, as filed, rather than an open gap. None when its plant is bigger than that."""
+    vals = [v for v in (((p.get("balance") or {}).get("rows") or {}).get("Fixed Assets") or [])[-3:] if v is not None]
+    if not vals or max(abs(v) for v in vals) >= TINY_PLANT:
+        return None
+    unit = (p.get("unit") or "$ million").replace(" million", " m")
+    return (f"No capex estimate: its plant, property and equipment is at most {unit.split()[0]}{max(vals):,.2f} m in the last three years "
+            "and the filings tag no purchases of it, so there is nothing to estimate")
 
 
 def _plant(p: dict, n: int) -> bool:
@@ -410,7 +437,15 @@ def check_listing(page: dict | None, p: dict, nums: dict, snap: dict) -> list[di
     rng, q = page.get("range52") or {}, page.get("quote") or {}
     since = rng.get("since")
     if p.get("region") != "US":
-        if not since:
+        if not since and rng.get("low") is None and rng.get("high") is None and not q.get("price"):
+            # checked before its first session (SFCTECH, BLSPOLY, BSE:545010 on 3 Nov at 08:08 IST, listing that morning)
+            out.append(_issue("fact", LISTING, NOT_TRADED_YET))
+        elif not since and rng.get("traded_from"):
+            # the prices can't tell a relisting from a new listing: the page says its range covers the trading on record (SECMEM 6)
+            out.append(_issue("fact", LISTING, f"Prices on record only from {rng['traded_from']}: a share relisted or long without trades, "
+                                               "not told apart from a new listing by its prices; the page gives its range as the range "
+                                               "since then"))
+        elif not since:
             out.append(_issue("gap", LISTING, "Its 52-week range isn't marked as the range since listing, though it listed within the last weeks"))
         elif q and session_day(q.get("at"), "IN") == since:         # the first session: the change is against the issue price
             if q.get("ref") == "issue" and q.get("change_pct") is not None:
@@ -440,6 +475,9 @@ def _no_sales(rows: list[dict]) -> bool:
     return any(r.get("sales") is not None and r["sales"] <= 0 for r in rows)
 
 
+PART_YEAR = re.compile(r"\b\d{1,2}\s?m$", re.I)
+
+
 def _why_na(label: str, years: list[dict], quarters: list[dict]) -> str | None:
     """Why a check couldn't be judged when it is a fact about the company, not a missing number: "history" (too few
     years or quarters of results to measure growth over, losses to grow from or turn into cash, no insider trades
@@ -449,6 +487,9 @@ def _why_na(label: str, years: list[dict], quarters: list[dict]) -> str | None:
         return "history"
     if label.startswith("Price in Stage"):
         return "history"                          # the stage needs 170 trading days of prices: a young listing has none yet
+    # a column of part of a year ("Mar 2023 4m", "May 2023 5m": a company that began or moved its year end) isn't a year of
+    # history to measure growth or a margin's trend from (SECMEM 6, every company: BSE:544011's three "couldn't be judged")
+    years = [y for y in years if not PART_YEAR.search(str(y.get("year") or ""))]
     sold = [y for y in years if y.get("sales") is not None]          # the years the checklist measures over
     last3, last4 = years[-3:], years[-4:]
     if label.startswith(("Sales growth", "EBITDA margin holding up", "Operating margin holding up")):
@@ -771,6 +812,8 @@ def audit_company(sym: str, base_fn, view_fn, exchange_price=None, read=None, li
             except Exception as e:
                 why = _plain(getattr(e, "detail", None) if isinstance(getattr(e, "detail", None), str) else e)[:120] or e.__class__.__name__
                 issues.append(_later(LISTING, f"its company page couldn't be read ({why})") if RETRY_LATER.search(why)
+                              else _issue("fact", LISTING, NOT_QUOTED) if p.get("region") == "US" and NO_US_COMPANY in why
+                              and not (base.get("quote") or {}).get("price")
                               else _issue("error", LISTING, f"Company page unavailable: {why}"))
         if read and view.get("documents"):
             issues += check_documents(view["documents"], lambda c, pr: read(c, pr, p))
@@ -1428,6 +1471,9 @@ class MarketAudit:
                     "retry": {"waiting": waiting, "due": len(self.waiting(now)), "next": r.get("next"),
                               "gap_hours": r.get("gap") or RETRY_GAP, "batch": RETRY_BATCH, "last": r.get("last")},
                     "pending": waiting,
-                    "listed": len(self.listing), "checked": len(self.rows), "due": len(due), "current": self.current,
+                    # the companies on the list with a result: a delisted one's row isn't one of them (SECMEM 6: a finished
+                    # run read "4,965 listed, 4,964 checked" beside "every company checked")
+                    "listed": len(self.listing), "checked": sum(1 for s in self.listing if (self.rows.get(s) or {}).get("at")),
+                    "due": len(due), "current": self.current,
                     "rate_per_hour": rate, "eta_hours": eta, "new_listings": new[:30],
                     "summary": summarise(rows), "rows": [x for x in rows if x.get("issues")]}

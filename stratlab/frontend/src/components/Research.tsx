@@ -112,10 +112,13 @@ export function PriceChart({ region, symbol, currency, price: shown, asOf: shown
 }
 
 /* ---------- 52-week rail ---------- */
-export function Rail52({ q, low, high, currency, compact, since }: { q: Quote | null; low: number | null; high: number | null; currency: string; compact?: boolean;
-  /** a share listed within the year: its first day of trading, and the range is since then, not 52 weeks (DD-011) */ since?: string | null }) {
+export function Rail52({ q, low, high, currency, compact, since, tradedFrom }: { q: Quote | null; low: number | null; high: number | null; currency: string; compact?: boolean;
+  /** a share listed within the year: its first day of trading, and the range is since then, not 52 weeks (DD-011) */ since?: string | null;
+  /** an older share whose prices on record begin within the year (relisted, or long without trades): the range is since then (SECMEM 6) */
+  tradedFrom?: string | null }) {
   const px = q?.price;
-  const span = since ? "range since listing" : "52-week range";
+  const from = since ?? tradedFrom ?? null;
+  const span = since ? "range since listing" : tradedFrom ? "range since its first price on record" : "52-week range";
   // a range that can't be this share's (another class's, another listing's) is never drawn under its price (R7T-001)
   if (px == null || low == null || high == null || high <= low || !plausibleRange(px, low, high)) return null;
   const at = (v: number) => Math.max(0, Math.min(100, ((v - low) / (high - low)) * 100));
@@ -124,12 +127,12 @@ export function Rail52({ q, low, high, currency, compact, since }: { q: Quote | 
   // in a company's header: the rail and its two ends, under the price (the percentile is in the rail's label)
   if (compact) return (
     <div className="inv-rail52" title={`${ordinal(Math.round(p))} percentile of its ${span}${band ? "; the shaded band is today's range" : ""}`}>
-      <svg className="inv-rail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`${since ? "Range since listing" : "52-week range"} ${price(low, currency)} to ${price(high, currency)}; today's price sits at the ${ordinal(Math.round(p))} percentile`}>
+      <svg className="inv-rail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`${since ? "Range since listing" : tradedFrom ? "Range since its first price on record" : "52-week range"} ${price(low, currency)} to ${price(high, currency)}; today's price sits at the ${ordinal(Math.round(p))} percentile`}>
         <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
         {band && <rect className="band" x={band[0]} y="1" width={Math.max(band[1] - band[0], 0.8)} height="8" />}
         <rect className="mark" x={Math.min(98.8, Math.max(0, p - 0.6))} y="0" width="1.2" height="10" />
       </svg>
-      <div className="k-spread k-note"><span>{since ? `Since listing (${fmtDate(since, { year: false })}): low` : "52-wk low"} {price(low, currency)}</span><span>high {price(high, currency)}</span></div>
+      <div className="k-spread k-note"><span>{since ? `Since listing (${fmtDate(since, { year: false })}): low` : from ? `Prices on record from ${fmtDate(from, { year: false })}: low` : "52-wk low"} {price(low, currency)}</span><span>high {price(high, currency)}</span></div>
     </div>
   );
   return (

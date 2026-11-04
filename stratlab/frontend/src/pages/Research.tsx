@@ -342,7 +342,7 @@ function CompanyView() {
             {c.market_cap == null && c.cap_note && <p className="k-small k-muted" data-cap-check>{c.cap_note}</p>}
           </div>
           <div className="k-stack inv-head-price">
-            <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} since={c.range52.since} currency={ccy} compact />
+            <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} since={c.range52.since} tradedFrom={c.range52.traded_from} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
             {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
             {filedNow && (results?.next?.out?.url

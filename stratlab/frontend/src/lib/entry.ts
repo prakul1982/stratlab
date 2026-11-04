@@ -10,10 +10,28 @@ export function sessionKeyFor(supabaseUrl: string | undefined): string {
   return `sb-${host.split(".")[0]}-auth-token`;
 }
 
-/** The address carries a sign-in coming back from Google (the tokens are in the part after the #). */
+/** The address carries a sign-in coming back: Google's one-time code (PKCE), an emailed link's hashed token, or an older
+ * link's tokens after the #. */
 export function hasAuthInUrl(search: string, hash: string): boolean {
   const parts = `${search.replace(/^\?/, "")}&${hash.replace(/^#/, "")}`;
-  return /(^|&)(access_token|refresh_token|provider_token|code)=/.test(parts);
+  return /(^|&)(access_token|refresh_token|provider_token|code|token_hash)=/.test(parts);
+}
+
+/** An emailed one-time sign-in link (the reviewer and test-account links Admin sends): the site's own address with the
+ * link's hashed token, which the app trades for a session (SECMEM 1b: with PKCE no session token is ever in the address).
+ * Null for any other address. */
+export function emailLinkIn(search: string): { token_hash: string; type: "magiclink" } | null {
+  const q = new URLSearchParams(search);
+  const token = q.get("token_hash");
+  return token && q.get("type") === "magiclink" && /^[\w-]{8,200}$/.test(token) ? { token_hash: token, type: "magiclink" } : null;
+}
+
+/** The address with the emailed link's token taken out, so a reload or the history never holds it. */
+export function withoutEmailLink(href: string): string {
+  const u = new URL(href);
+  u.searchParams.delete("token_hash");
+  u.searchParams.delete("type");
+  return u.pathname + (u.search === "?" ? "" : u.search) + u.hash;
 }
 
 /** True when this page load needs the app (a saved sign-in, or one arriving now); false for a plain visitor. */
