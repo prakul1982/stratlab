@@ -133,3 +133,21 @@ test("Instinct #3 as a class: every file the app saves goes through the one save
     "src/charts/price/PriceChart.tsx", "src/components/shareImage.ts", "src/pages/admin/AuditPanel.tsx", "src/pages/admin/InvoiceAdminPanel.tsx", "src/pages/admin/SystemSection.tsx"])
     assert.match(read(f), /import \{[^}]*\bdownload\b[^}]*\} from "[./]+lib\/share"/, f);
 });
+
+test("LIVE1B-085: a page's later cards start once the first screen's calls are back, not after the whole fixed pause", async () => {
+  const { afterPaint, QUIET_MS } = await import("../src/lib/defer.ts");
+  const { callStarted, callEnded, callsInFlight } = await import("../src/lib/inflight.ts");
+  const ran = [];
+  callStarted(); callStarted();                                    // the first screen's two calls are out
+  const t0 = Date.now();
+  afterPaint(() => ran.push(Date.now() - t0), 2000);                 // no requestAnimationFrame in node: it starts at once
+  await new Promise((r) => setTimeout(r, 150));
+  assert.deepEqual(ran, []);                                         // still waiting: a call is out
+  callEnded(); callEnded();
+  assert.equal(callsInFlight(), 0);
+  await new Promise((r) => setTimeout(r, QUIET_MS + 80));
+  assert.equal(ran.length, 1);
+  assert.ok(ran[0] < 600, `ran after ${ran[0]} ms`);                 // well before the 2 s cap
+  // every call is counted: api() goes through the counter
+  assert.match(read("src/lib/api.ts"), /callStarted\(\);\n  return send<T>\(path, opts\)\.finally\(callEnded\);/);
+});
