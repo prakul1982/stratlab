@@ -110,3 +110,16 @@ test("a note column only some rows fill goes under the items, on every screen (L
   assert.match(read("src/pages/SpaceHomes.tsx"), /<WatchTable region=\{r\}/);
   assert.doesNotMatch(read("src/components/Research.tsx"), /inv-tile/);
 });
+
+test("an empty state's second way to start is a quiet button beside the first, not a link in the sentence (LIVE3-022)", () => {
+  assert.match(read("src/components/kit/States.tsx"), /\{action && also \? <div className="k-row k-state-acts"><Action a=\{action\} \/><Action a=\{also\} quiet \/><\/div>/);
+  const paper = read("src/pages/PaperPage.tsx");
+  assert.match(paper, /action=\{\{ label: "Go to your notebooks", to: "\/notebooks" \}\} also=\{\{ label: "Build an options strategy", to: "\/options" \}\}/);
+  // no empty state in the app keeps a starting route as a link inside its sentence while it has a button
+  const fs2 = fs.readdirSync(new URL("../src/pages", import.meta.url), { recursive: true }).filter((f) => f.endsWith(".tsx"));
+  for (const f of fs2) {
+    const src = read(`src/pages/${f}`);
+    for (const m of src.matchAll(/<EmptyState [^>]*action=\{\{[^}]*\}\}[^>]*>([^]*?)<\/EmptyState>/g))
+      assert.doesNotMatch(m[1], /<Link className="link" to="\/(options|notebooks|research\/watchlist)"/, `${f}: ${m[1].slice(0, 80)}`);
+  }
+});

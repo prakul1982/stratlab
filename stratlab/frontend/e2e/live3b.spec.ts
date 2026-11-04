@@ -191,3 +191,25 @@ test("Invest's watchlist and Coming up are tables, Coming up agrees with My spac
     expect(await halfEmpty(), `/holdings ${w}`).toEqual([]);
   }
 });
+
+// LIVE3-022: Paper's empty state had one button, with the options route as a link inside its sentence.
+test("Paper's empty state offers both ways to start as buttons side by side (LIVE3-022)", async ({ page, request }, info) => {
+  const n = info.project.name === "phone" ? 5 : 4;
+  await request.put(`${API}/me/prefs`, { headers: { Authorization: `Bearer live3b-${n}` }, data: { focus: "both", level: "some", space: "all" } });
+  for (const w of [390, 1440]) {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await open(page, "/paper", session(`live3b-${n}`, `u-live3b-${n}`, `live3b${n}@example.com`), w);
+    const box = page.locator(".k-state", { hasText: "No paper trades yet" });
+    await expect(box).toBeVisible({ timeout: 30_000 });
+    const a = box.getByRole("link", { name: "Go to your notebooks" }), b = box.getByRole("link", { name: "Build an options strategy" });
+    await expect(a).toHaveClass(/\bbtn\b/);
+    await expect(b).toHaveClass(/\bbtn\b/);
+    await expect(box.locator("p a")).toHaveCount(0);
+    const [ra, rb] = [await a.boundingBox(), await b.boundingBox()];
+    // side by side on a wide screen; on a phone one under the other at one width (two answers of equal weight)
+    if (w > 640) expect(Math.abs(ra!.y - rb!.y), `${w}: one row`).toBeLessThanOrEqual(2);
+    else expect(Math.abs(ra!.width - rb!.width), `${w}: one width`).toBeLessThanOrEqual(1);
+    await b.click();
+    await expect(page).toHaveURL(/\/options/);
+  }
+});

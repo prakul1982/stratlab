@@ -4,16 +4,20 @@ import { Link } from "react-router-dom";
 
 export type StateAction = { label: string; onClick?: () => void; to?: string };
 
-const Action = ({ a }: { a: StateAction }) => (a.to ? <Link className="btn sm" to={a.to}>{a.label}</Link> : <button type="button" className="btn sm" onClick={a.onClick}>{a.label}</button>);
+const Action = ({ a, quiet = false }: { a: StateAction; quiet?: boolean }) => {
+  const cls = quiet ? "btn quiet sm" : "btn sm";
+  return a.to ? <Link className={cls} to={a.to}>{a.label}</Link> : <button type="button" className={cls} onClick={a.onClick}>{a.label}</button>;
+};
 
-/** Nothing here yet: a calm box that says what it is and what to do next (an optional button). */
-export function EmptyState({ title, children, action, icon }: { title: string; children?: ReactNode; action?: StateAction; icon?: ReactNode }) {
+/** Nothing here yet: a calm box that says what it is and what to do next (an optional button). `also`: a second way to start,
+ * as a quiet button beside the first, not a link inside the sentence (LIVE3-022: Paper's options route was a link in the text). */
+export function EmptyState({ title, children, action, also, icon }: { title: string; children?: ReactNode; action?: StateAction; also?: StateAction; icon?: ReactNode }) {
   return (
     <div className="k-state">
       <div className="ic" aria-hidden="true"><svg viewBox="0 0 24 24">{icon ?? <path d="M4 7h16M4 12h16M4 17h10" />}</svg></div>
       <b>{title}</b>
       {children && <p>{children}</p>}
-      {action && <Action a={action} />}
+      {action && also ? <div className="k-row k-state-acts"><Action a={action} /><Action a={also} quiet /></div> : action && <Action a={action} />}
     </div>
   );
 }

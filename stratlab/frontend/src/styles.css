@@ -1910,6 +1910,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-table th[aria-sort="ascending"], .k-table th[aria-sort="descending"] { color: var(--ink); }
 
 /* empty, error, loading */
+.k-state-acts { justify-content: center; gap: var(--s2); }      /* the two ways to start, side by side (LIVE3-022) */
+@media (max-width: 640px) { .k-row.k-state-acts { flex-direction: column; align-items: stretch; width: min(100%, 320px); } .k-state-acts .btn { justify-content: center; } }   /* one under the other on a phone, one width */
 .k-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 28px var(--s4); border-radius: 12px; border: 1px dashed var(--line-2); }
 .k-state.error { border-color: var(--orange); }
 .k-state .ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--paper-2); }
