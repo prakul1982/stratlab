@@ -1,6 +1,7 @@
 """What StratLab knows about each AI provider and model, kept in code so it can be read and reviewed.
 
-Every provider here has a genuinely free allowance (except Anthropic, which is paid and always asked last). Each one
+Every provider here has a genuinely free allowance, except Anthropic: paid from the owner's monthly credit, asked first
+for research reads and long documents while this month's spend allows it (ai_spend.py), and after Groq for quick jobs. Each one
 is used only when its key is set. The free limits, the terms and where to get a key are shown on the Admin page and
 in docs/ADMIN.md; keep the three in step when a provider changes its offer.
 
@@ -35,9 +36,11 @@ class Provider:
     max_out: int = 16000            # the most reply tokens the provider allows per request
     ctx: int = 32000                # context window (tokens) assumed when the model list doesn't say
     probe_max: int = 6              # models measured per re-rank (each costs two small requests of free quota)
-    probe_every_h: float = 6.0      # hours between automatic re-ranks; 0 = only when the Admin page asks (paid)
+    probe_every_h: float = 24.0     # hours between automatic re-ranks; 0 = only when the Admin page asks (paid, or so
+                                    # few free requests a day that measuring would spend them: owner, 4 Nov)
     prior: tuple[int, int, int] = (50, 50, 50)    # cold-start order for quick / research / long jobs (lower first)
-    tight_daily_tokens: bool = False    # few tokens a day free: keep it for short jobs
+    tight_daily_tokens: bool = False    # few tokens a day free: keep it for short jobs (and never measure it on a schedule)
+    mixed_catalog: bool = False     # lists paid models beside the free ones: "no balance" means that model, not the key
     note: str = ""                  # anything else the owner should know, shown in Admin
     headers: dict = field(default_factory=dict)
 
@@ -51,11 +54,6 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
              "Free: about 30 requests a minute and 1,000 a day per model; the big models have a daily token cap.", "ok",
              ("llama-3.3-70b-versatile", "openai/gpt-oss-120b", "meta-llama/llama-4-scout-17b-16e-instruct", "llama-3.1-8b-instant"),
              limit_scope="model", ctx=128000, prior=(1, 5, 4), tight_daily_tokens=True),
-    Provider("cerebras", "Cerebras", "openai", "https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", "https://cloud.cerebras.ai",
-             "Free tier: about 1 million tokens a day (new accounts may get trial credit instead).", "ok",
-             # item 45: llama-3.3-70b and qwen-3-235b-a22b-instruct-2507 answer 404 "Model does not exist" (retired by Cerebras, Oct 2026)
-             ("gpt-oss-120b", "llama3.1-8b"),
-             ctx=64000, prior=(2, 1, 3)),
     Provider("gemini", "Google Gemini", "gemini", "https://generativelanguage.googleapis.com/v1beta", "GEMINI_API_KEY",
              "https://aistudio.google.com/apikey",
              "Free tier: Flash models allow a few hundred to a thousand requests a day; Gemma models far more.", "ok",
@@ -71,9 +69,11 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
              ("mistral-small-latest", "mistral-medium-latest", "open-mistral-nemo"),
              ctx=128000, prior=(4, 2, 2), note="The Experiment plan may use prompts to train models."),
     Provider("sambanova", "SambaNova", "openai", "https://api.sambanova.ai/v1", "SAMBANOVA_API_KEY", "https://cloud.sambanova.ai/apis",
-             "Free tier: a few requests a minute on each model.", "ok",
+             "Free tier: about 20 requests a minute and 20 a day on each model.", "ok",
              ("Meta-Llama-3.3-70B-Instruct", "DeepSeek-V3.1", "gpt-oss-120b", "Llama-4-Maverick-17B-128E-Instruct"),
-             ctx=32000, prior=(5, 4, 5)),
+             # 20 requests a day per model on the free tier: two test questions per model would spend a tenth of it, so
+             # its models are measured only when the Admin page asks; real answers keep their numbers up to date
+             ctx=32000, probe_max=3, probe_every_h=0, prior=(5, 4, 5)),
     Provider("openrouter", "OpenRouter", "openai", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "https://openrouter.ai/settings/keys",
              "Free models (marked :free): 20 requests a minute; 50 a day, or 1,000 a day once $10 of credit was ever bought.", "ok",
              ("meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-120b:free", "deepseek/deepseek-chat-v3.1:free",
@@ -94,22 +94,40 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
              ("glm-4.7-flash", "glm-4.5-flash"),
              # only the Flash models are free; FlashX is the paid fast tier
              allow=r"flash$|flash-\d", deny=r"flashx|-v\b|v-flash|\dv-", ctx=128000, max_out=8000, probe_max=3, prior=(8, 8, 7),
+             mixed_catalog=True,     # glm-5.3-flash answers "Insufficient balance" while the 4.x Flash models are free (4 Nov)
              note="A China-based service: prompts are processed outside India and the US."),
     Provider("huggingface", "Hugging Face", "openai", "https://router.huggingface.co/v1", "HF_TOKEN", "https://huggingface.co/settings/tokens",
              "Free: $0.10 of credit a month (about a hundred short answers); $2 a month with a PRO account.", "ok",
              ("meta-llama/Llama-3.3-70B-Instruct", "openai/gpt-oss-120b", "Qwen/Qwen3-235B-A22B-Instruct-2507", "deepseek-ai/DeepSeek-V3.1"),
-             ctx=32000, probe_max=2, probe_every_h=72, prior=(10, 10, 10)),   # the credit is tiny: measure rarely
+             ctx=32000, probe_max=2, probe_every_h=0, prior=(10, 10, 10)),   # the credit is tiny: measured only when asked
     Provider("nvidia", "NVIDIA API catalog", "openai", "https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "https://build.nvidia.com/settings/api-keys",
              "Free for development: about 40 requests a minute.", "prototype",
              ("meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b", "deepseek-ai/deepseek-v3.1", "nvidia/llama-3.3-nemotron-super-49b-v1.5"),
              # listed in the catalog but not served to a free account ("Function ... Not found for account", 404)
              deny=r"palmyra|llama2-|chatqa", ctx=32000, probe_max=4, prior=(21, 21, 21),
              note="NVIDIA's terms allow the free API for development and testing only, so StratLab asks it last among the free ones."),
+    Provider("ollama", "Ollama Cloud", "openai", "https://ollama.com/v1", "OLLAMA_API_KEY", "https://ollama.com/settings/keys",
+             "Free plan: light use (Ollama doesn't publish the numbers; a session allowance that resets every few hours, and a weekly one).",
+             # its free-plan terms don't say production use is allowed: asked after the production-ready providers
+             "prototype", ("gpt-oss:120b", "deepseek-v3.1:671b", "qwen3-next:80b"),
+             ctx=128000, probe_max=3, prior=(15, 15, 15),
+             note="Added 4 Nov 2026. The free plan's limits aren't published; Admin shows when it stops answering."),
     Provider("anthropic", "Anthropic", "anthropic", "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys",
-             "Paid only: no free allowance.", "paid", (), models_url=None, ctx=200000, probe_max=1, probe_every_h=0, prior=(99, 99, 99)),
+             "Paid from the owner's $100 monthly credit; StratLab stops using it at $99 a month.", "paid",
+             ("claude-sonnet-5-5", "claude-haiku-5-5"), models_url=None, ctx=200000, probe_max=1, probe_every_h=0, prior=(99, 99, 99),
+             note="Research reads and long documents ask Claude Sonnet 5.5 first until $75 is spent this month, then Claude "
+                  "Haiku 5.5 until $99; quick jobs ask Haiku 5.5 after Groq. From $99 Claude is skipped until the month turns "
+                  "(ANTHROPIC_MONTHLY_CAP_USD, ANTHROPIC_SONNET_UNTIL_USD). ANTHROPIC_MODEL pins one model for every job."),
 ]}
 
-# Providers left out on purpose (checked October 2026), so nobody adds them back by mistake:
+# Providers left out on purpose (checked October and November 2026), so nobody adds them back by mistake:
+# - Cerebras (removed 4 Nov 2026): no standing free allowance any more, only one-time trial credit that needs a card and
+#   expires after 30 days; the key answered "the free credit is used up" on every model.
+# - OVHcloud AI Endpoints: free only without a key (2 requests a minute per IP and model); a key means pay-as-you-go.
+# - Kilo Code gateway, Requesty, AnyAPI, Gonka Broker: resellers of other providers' free pools (prompts pass through a
+#   third party and may be logged for training), nothing OpenRouter doesn't already give.
+# - Sarvam AI: a one-time ₹100 signup credit, and its free chat model (sarvam-m) was retired.
+# - ModelScope, SiliconFlow: need mainland-China identity verification.
 # - GitHub Models: GitHub retired it on 30 July 2026; its inference API now answers every request with a bare 200 "OK".
 # - Chutes: its free API tier ended on 30 September 2026 (subscriptions from $3 a month).
 # - Cohere: the free trial key is for non-commercial use only.
@@ -144,8 +162,7 @@ def model_setting(name: str) -> str:
     """A model pinned in Railway (<NAME>_MODEL), or "" for automatic."""
     p = PROVIDERS.get(name)
     raw = setting(p.model_env) if p else ""
-    if name == "anthropic":
-        return raw or "claude-sonnet-5"
+    # Anthropic too: unset (or "auto") lets this month's spend choose between Sonnet 5.5 and Haiku 5.5 (ai_spend)
     return "" if raw.lower() in ("", "auto") else raw
 
 
@@ -163,7 +180,7 @@ NOT_CHAT = re.compile(
     r"guard|moderation|safety|shield|prompt-?guard|"                    # safety classifiers, not answerers
     r"rerank|retriev|ocr|\bbge-|\be5-|\bgte-|nomic|minilm|colbert|"      # search and document tools (embedders)
     r"compound|search|deep-?research|"                                 # agent systems with their own tools and quotas
-    r"realtime|-live\b|computer-use|robotics|"
+    r"realtime|-live\b|computer-use|robotics|\bising-|calibration|"
     r"lyria|music|antigravity|nano-banana|genie", re.I)                  # music, coding-agent and world models (R47-019)
 
 # Specialists that write poor English prose or JSON for our jobs.

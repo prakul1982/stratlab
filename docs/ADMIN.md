@@ -284,26 +284,38 @@ adding a key in **Railway → Variables**, redeploy, then press **Re-rank models
 | Groq | About 30 requests a minute and 1,000 a day per model; the big models also have a daily token cap | Yes | [console.groq.com/keys](https://console.groq.com/keys) | `GROQ_API_KEY` (`GROQ_MODEL`) |
 | Google Gemini | Flash models: a few hundred to a thousand requests a day each; Gemma models many more | Yes. Free-tier prompts may be used by Google to improve its products | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | `GEMINI_API_KEY` (`GEMINI_MODEL`) |
 | Mistral | "Experiment" plan: about 1 request a second and a large monthly token allowance (phone check at sign-up) | Allowed, but prompts may be used to train Mistral's models | [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys) | `MISTRAL_API_KEY` (`MISTRAL_MODEL`) |
-| Cerebras | About 1 million tokens a day (some new accounts get trial credit instead) | Yes | [cloud.cerebras.ai](https://cloud.cerebras.ai) | `CEREBRAS_API_KEY` (`CEREBRAS_MODEL`) |
-| SambaNova | A few requests a minute per model | Yes | [cloud.sambanova.ai/apis](https://cloud.sambanova.ai/apis) | `SAMBANOVA_API_KEY` (`SAMBANOVA_MODEL`) |
+| SambaNova | About 20 requests a minute and 20 a day per model (measured only when you press Re-rank) | Yes | [cloud.sambanova.ai/apis](https://cloud.sambanova.ai/apis) | `SAMBANOVA_API_KEY` (`SAMBANOVA_MODEL`) |
 | OpenRouter | Models marked `:free` only: 20 a minute, 50 a day (1,000 a day once $10 of credit was ever bought) | Yes; some free models' hosts log prompts | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) | `OPENROUTER_API_KEY` (`OPENROUTER_MODEL`) |
 | Cloudflare Workers AI | 10,000 "neurons" a day (a few hundred short answers), reset at 00:00 UTC | Yes | [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens): use the "Workers AI" token template; the account id is on the dashboard's overview | `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (`CLOUDFLARE_MODEL`) |
 | Z.ai (GLM Flash) | The GLM Flash models cost nothing; about one request at a time | No clear statement either way: check z.ai's terms before relying on it. China-based | [z.ai/manage-apikey/apikey-list](https://z.ai/manage-apikey/apikey-list) | `ZAI_API_KEY` (`ZAI_MODEL`) |
 | Hugging Face | $0.10 of credit a month (about a hundred short answers); $2 with a PRO account | Yes (it's their paid service with a small free credit) | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens): a fine-grained token with "Make calls to Inference Providers" | `HF_TOKEN` (`HUGGINGFACE_MODEL`) |
 | NVIDIA API catalog | About 40 requests a minute | **Flagged: development and testing only** under NVIDIA's terms. Asked only after every other free provider | [build.nvidia.com/settings/api-keys](https://build.nvidia.com/settings/api-keys) | `NVIDIA_API_KEY` (`NVIDIA_MODEL`) |
-| Anthropic | None (paid) | Yes | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) | `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL`) |
+| Ollama Cloud (added 4 Nov 2026) | A light free plan; Ollama doesn't publish the numbers | Not stated, so asked after the production-ready ones | [ollama.com/settings/keys](https://ollama.com/settings/keys) | `OLLAMA_API_KEY` (`OLLAMA_MODEL`) |
+| Anthropic | Paid from the owner's $100 monthly credit; StratLab stops at $99 a month | Yes | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) | `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL`, `ANTHROPIC_MONTHLY_CAP_USD`, `ANTHROPIC_SONNET_UNTIL_USD`) |
 
-Left out on purpose: **GitHub Models** (GitHub retired it on 30 July 2026), **Chutes** (its free API tier ended on
+**Claude and the monthly credit (4 Nov 2026).** Research reads and long documents ask Claude Sonnet 5.5 first while
+this month's Claude spend is under $75, then Claude Haiku 5.5 until $99; the free providers answer when Claude can't.
+Quick jobs ask Groq first, then Claude Haiku 5.5, then the other free providers (`AI_QUICK_BEFORE_CLAUDE`). From $99
+Claude is skipped until the month (UTC) turns. Every Claude reply's token usage is priced (cache writes at 1.25x input,
+cache reads at 0.1x, rounded up) and kept per month in `app_settings` (`ai:spend:YYYY-MM`); before each request the most
+it could cost is held back, so a request that could pass the cap isn't sent. The panel shows "Claude this month".
+`ANTHROPIC_MODEL` (unset or `auto` by default) pins one Claude model for every job, still under the cap.
+
+Left out on purpose: **Cerebras** (removed 4 Nov 2026: no standing free allowance any more, only trial credit that
+needs a card and expires; the key answered "free credit used up"), **OVHcloud AI Endpoints** (free only without a key),
+resellers of other providers' free pools (Kilo Code, Requesty, AnyAPI, Gonka), **Sarvam AI** (one-time signup credit),
+**GitHub Models** (GitHub retired it on 30 July 2026), **Chutes** (its free API tier ended on
 30 September 2026), **Cohere** (the free trial key is for non-commercial use only) and anonymous gateways such as LLM7
 and Pollinations (no account, no terms to rely on, and prompts pass through a third party). Free limits change often:
 the **Test** and **Re-rank** buttons show what actually works today.
 
-**Suggested set-up:** Groq, Google Gemini and Mistral first (production-ready, generous), then Cloudflare and Cerebras.
+**Suggested set-up:** Groq, Google Gemini and Mistral first (production-ready, generous), then Cloudflare and OpenRouter.
 The flagged ones add resilience but are asked last.
 
 ### How it picks models
 
-- **Measured, not listed.** Every 6 hours (every 12 on Cloudflare and 72 on Hugging Face, where measuring spends scarce credit; Anthropic only on demand), when you press **Re-rank models**, and
+- **Measured, not listed.** Once a day (owner, 4 Nov: measuring every 6 hours spent the free daily quotas), when you
+  press **Re-rank models**, and
   when every model a provider was using stops working, each provider's model list is read and filtered
   (`backend/app/ai_catalog.py`, with a comment per rule): no speech, image, embedding, safety-filter or search models,
   no code or maths specialists, no models built for another language (such as ALLaM, which is Arabic-first), nothing
@@ -312,10 +324,14 @@ The flagged ones add resilience but are asked last.
   revenue plus a one-word finance term. The ones that answer correctly are ranked by success rate, then speed, and the
   best three per provider are used. Results are stored in `app_settings` (`ai:rank:<provider>`), so a restart keeps
   them; before the first measurement each provider's known-good models (`defaults` in `ai_catalog.py`) are used.
+  The daily measuring skips a provider whose free quota is used up or running low (it would spend the last requests),
+  one with a tight daily allowance (Groq's token cap, SambaNova, Hugging Face: their real answers keep the numbers
+  current), and models that real requests already measured that day. Anthropic is never measured on a schedule (paid):
+  only when you press **Test**, which asks Claude Haiku 5.5 one tiny question.
 - **Every real request counts too:** each model's recent successes, failures and times feed the same score.
 - **By job:** quick jobs (idea builder, ask bar) put fast models first; research reads and long documents put strong
   ones first and skip models whose context window the document wouldn't fit. The prototyping-tier providers come after
-  every production-ready one, and Anthropic (paid) is always last. The order each job uses right now is shown in the
+  every production-ready one; where Claude goes is set by the monthly credit (above). The order each job uses right now is shown in the
   panel. `AI_PROVIDERS` (and `AI_PROVIDERS_RESEARCH` for research and long reads) can still fix the order of providers
   by hand; measurement then only orders each provider's own models.
 - **Reasoning models** (gpt-oss, Qwen 3, GLM, MiniMax, Gemma 4, o-series…) are asked to think little or not at all in

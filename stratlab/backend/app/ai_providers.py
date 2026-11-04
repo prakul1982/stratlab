@@ -27,6 +27,7 @@ from .connect.redact import redact_ids
 from .ai_reply import (AIBusy, AIConfig, AIError, BadReply, RateLimited, check, extract_json, salvage_items)  # noqa: F401
 from .ai_reply import answer as _message_answer
 from . import ai_rank as R
+from . import ai_spend
 from .ai_rank import _status, status  # noqa: F401  (status: the provider state other modules read)
 from .config import settings
 
@@ -92,6 +93,7 @@ def reset():
     _status.clear()
     cache.clear()
     last_failure.clear()
+    ai_spend.reset()
 
 
 # ---------- which providers ----------
@@ -113,9 +115,29 @@ def plan(task: str = "quick", need_tokens: int = 0) -> list[tuple[str, str]]:
     """(provider, model) in the order a request for this job would ask them right now."""
     names, fixed = _names(task)
     pairs = R.route(task, names, need_tokens, fixed)
-    if not fixed and (getattr(settings, "AI_PROVIDER", "") or "").lower() == "anthropic":   # older setting: Claude first
-        pairs = [x for x in pairs if x[0] == "anthropic"] + [x for x in pairs if x[0] != "anthropic"]
-    return pairs
+    if fixed:
+        return pairs                                    # AI_PROVIDERS names the order by hand: Claude goes where it says
+    if (getattr(settings, "AI_PROVIDER", "") or "").lower() == "anthropic":   # older setting: Claude first for every job
+        return [x for x in pairs if x[0] == "anthropic"] + [x for x in pairs if x[0] != "anthropic"]
+    return claude_place(task, pairs)
+
+
+def claude_place(task: str, pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Where Claude goes in a job's chain (owner, 4 Nov: spend the monthly credit where quality shows). Research reads
+    and long documents: Claude first (its models come from this month's spend, ai_spend), the free models after it as
+    the fallback. Quick jobs: the reliable free providers named in AI_QUICK_BEFORE_CLAUDE (Groq) first, then Claude
+    Haiku, then the other free ones. A Claude model paused right now (rate limited, out of budget) stays where the
+    measured order put it: at the end."""
+    now = time.time()
+    claude = [x for x in pairs if x[0] == "anthropic" and R.ready(x[0], x[1], now) == 0]
+    if not claude:
+        return pairs
+    rest = [x for x in pairs if x not in claude]
+    if task != "quick":
+        return claude + rest
+    first = {n.strip().lower() for n in (getattr(settings, "AI_QUICK_BEFORE_CLAUDE", "groq") or "").split(",") if n.strip()}
+    before = [x for x in rest if x[0] in first and R.ready(x[0], x[1], now) == 0]
+    return before + claude + [x for x in rest if x not in before]
 
 
 def order(kind: str = "quick") -> list[str]:
@@ -219,7 +241,8 @@ def complete(system: str, text: str, gemini=None, anthropic=None, transport=None
                 if name in overrides:
                     out = _override(overrides[name], name, system, text, max_tokens, want_json)
                 else:
-                    out = R.ask_model(name, model, system, text, max_tokens, want_json, min(deadline, now + PER_CALL[task]), transport)
+                    out = R.ask_model(name, model, system, text, max_tokens, want_json, min(deadline, now + PER_CALL[task]), transport,
+                                      task=task)
             except CallError as e:
                 errors.append(f"{LABELS[name]} · {model}: {e.detail}")
                 if e.scope == "provider" or e.kind in ("auth", "credit", "transient"):
@@ -308,7 +331,11 @@ def test_all(gemini=None, anthropic=None, transport=None) -> list[dict]:
     out = []
     for name in names:
         t0, error, model, quota = time.time(), None, None, False
-        models = ["default"] if name in overrides else R.in_use(name)[:2]
+        # Claude (paid) is asked only here, when the owner presses Test: one tiny question to the cheapest model it may use
+        models = ["default"] if name in overrides else R.models_for(name, "quick")[:1] if name == "anthropic" else R.in_use(name)[:2]
+        if not models:
+            error = "this month's Claude budget is used up; the free models answer until the month turns" \
+                if name == "anthropic" else "no model to ask"
         for m in models:
             try:
                 if name in overrides:
@@ -521,6 +548,7 @@ def admin_view() -> dict:
         routes[task] = {"label": TASK_LABELS[task], "budget_s": BUDGET[task], "steps": steps[:10]}
     return {"providers": views, "routes": routes,
             "cache": {"entries": len(cache.items), "hits": cache.hits, "misses": cache.misses},
+            "claude": ai_spend.view(),
             "rerank_every_hours": R.RERANK_EVERY / 3600, "last_failure": dict(last_failure) or None}
 
 
