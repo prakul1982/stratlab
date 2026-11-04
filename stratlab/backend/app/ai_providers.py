@@ -449,7 +449,7 @@ def _provider_view(name: str, now: float) -> dict:
     is_on = configured(name)
     use = R.in_use(name) if is_on else []
     pin_admin = R.pins().get(name)
-    pin_env = model_setting(name) if name != "anthropic" else ""
+    pin_env = model_setting(name)          # Anthropic too: ANTHROPIC_MODEL is a pin now ("auto" by default), not the only model
     listed = list(dict.fromkeys(use + list(st.order) + [m for m, s in st.models.items() if s.probe_tries or s.live]))
     # a model no job can use (a music or agent model measured before the filter knew it) isn't listed, unless it is in
     # use, pinned or blocked (DJ-036: "lyria-3-clip-preview" among the chat models)
