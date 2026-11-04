@@ -36,7 +36,9 @@ test("Admin: a running job says Running on Overview too, and only errors since t
     auto_login: { at: null, ok: true, message: "ok" }, auto_login_configured: true, billing_enabled: true, ai: [], research: { finnhub: true },
     recent_errors: [{ ref: "a", at: "2026-09-25T10:00:00+05:30" }, { ref: "b", at: "2026-10-09T09:00:00+05:30" }],
     server_started_at: "2026-10-09T01:00:00+05:30" }, stats: {} };
-  assert.match(lights(sv, [job]).feeds[0].detail, /^Running · Last run/);
+  // (LIVE3-006: the run's own length when the server sends its start, and the time beside it is the last finished run's)
+  assert.match(lights(sv, [job]).feeds[0].detail, /^Running · Last finished run/);
+  assert.match(lights(sv, [{ ...job, running_since: new Date(Date.now() - 12 * 60_000).toISOString() }]).feeds[0].detail, /^Running for 12 min · Last finished run 21 min ago$/);
   assert.deepEqual(errorCounts(sv.server), { since: 1, before: 1 });
   assert.deepEqual(errorCounts({ recent_errors: [{ at: "2026-09-25T10:00:00+05:30" }] }), { since: 0, before: 1 });   // an older server: never "since the restart"
   assert.ok(attention(sv, null, [job]).some((a) => a.text === "1 server error since the last restart."));

@@ -232,6 +232,7 @@ def _forget_company_lists():
         with sc._mem_lock:
             sc._mem.clear()
             sc._built.clear()
+            sc._priced.clear()      # the newer closes the price job noted (LIVE3-003)
 
 
 @pytest.fixture(autouse=True)

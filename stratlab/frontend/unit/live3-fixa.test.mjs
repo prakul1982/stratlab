@@ -61,3 +61,26 @@ test("LIVE3-018: one rule for a ratio and one for big money, on every page", asy
   assert.match(read("src/pages/Screens.tsx"), /label: "Debt to equity", cell: \(r\) => ratio\(r\.debt_equity\)/);
   assert.match(read("src/components/ThemeDive.tsx"), /med\(bal\.debt_equity, \(v\) => `\$\{ratio\(v\)\}x`\)/);
 });
+
+test("LIVE3-006/007: every job stuck or failing is under Needs your attention, with how long it has run", async () => {
+  const { attention, runningFor } = await import("../src/pages/admin/attention.ts");
+  const sv = { server: { kite_ready: true, kite_token_day: null, feed_connected: false, live_sessions: 0, india_sessions: 0,
+    auto_login: { at: null, ok: true, message: "ok" }, auto_login_configured: true, billing_enabled: true, ai: [], research: { finnhub: true },
+    recent_errors: [], server_started_at: "2026-10-09T01:00:00+05:30" }, stats: {} };
+  const ago = (min) => new Date(Date.now() - min * 60_000).toISOString();
+  // the server marks a job stuck (bad, with why) or stalled (warn, with why): whatever the job, it is listed
+  const jobs = [
+    { id: "breadth", name: "Market breadth", schedule: "x", last_run: ago(900), running: true, running_since: ago(900), state: "bad",
+      error: "Stuck: running for 15 h (since 04 Nov 03:35 IST), longer than any run takes.", log: [], run: [] },
+    { id: "ipo", name: "IPOs", schedule: "x", last_run: ago(5), running: false, state: "warn",
+      error: "Offer documents: no summary written today (67 waiting). The last pass failed: the AI couldn't answer.", log: [], run: [] },
+    { id: "anything", name: "Any other job", schedule: "x", last_run: ago(5), running: false, state: "bad", error: "It failed.", log: [], run: [] },
+  ];
+  const said = attention(sv, null, jobs).map((a) => a.text).join("\n");
+  assert.match(said, /Market breadth: Stuck: running for 15 h/);
+  assert.match(said, /IPOs \(Offer documents: no summary written today/);
+  assert.match(said, /Any other job: It failed\./);
+  assert.equal(runningFor({ running: true, running_since: ago(12) }), "Running for 12 min");
+  assert.equal(runningFor({ running: true, running_since: null }), "Running");
+  assert.equal(runningFor({ running: false, running_since: ago(12) }), "");
+});

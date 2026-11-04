@@ -198,3 +198,146 @@ def test_the_name_uses_the_instrument_and_the_rules_never_a_fuzzy_word():
     # every way a name can be untrue: another indicator, another length, another instrument, a made-up word
     for wrong in ("NIFTY 50 SMA 50/200", "NIFTY 50 EMA 20/50", "BANKNIFTY EMA Cross", "Niftee EMA Cross", "MACD Momentum"):
         assert ai_writer.check_against_text(_ai_answer(name=wrong, instrument="NIFTY 50", tf="1d"), cross)["name"] == "NIFTY 50 EMA 50/200", wrong
+
+
+# ---------- LIVE3-006 / LIVE3-007: a stuck job times out and runs again; Admin lists every job stuck or stalled ----------
+from app import admin_jobs, breadth, job_status  # noqa: E402
+from tests.test_breadth import mem, runner  # noqa: E402,F401
+
+
+def test_every_job_row_running_past_the_limit_is_a_problem_with_how_long_whatever_the_job():
+    import time
+    job_status._seen_running.clear()
+    for jid in ("breadth", "redflags", "positioning", "any-job"):
+        fresh = admin_jobs._row(jid, "A job", "daily", "2026-11-04T00:00:00+00:00", running=True, started=time.time() - 600)
+        assert fresh["state"] == "ok" and fresh["running_since"] and not fresh["error"]
+        stuck = admin_jobs._row(jid, "A job", "daily", "2026-11-04T00:00:00+00:00", running=True, started=time.time() - 15 * 3600)
+        assert stuck["state"] == "bad" and stuck["error"].startswith("Stuck: running for 15 h"), stuck
+        done = admin_jobs._row(jid, "A job", "daily", "2026-11-04T00:00:00+00:00", running=False)
+        assert done["state"] == "ok" and done["running_since"] is None
+    # a runner that keeps no start time: timed from when Admin first saw it running
+    first = admin_jobs._row("no-start", "A job", "daily", None, running=True)
+    assert first["running_since"] and admin_jobs._row("no-start", "A job", "daily", None, running=True)["running_since"] == first["running_since"]
+
+
+def test_a_breadth_run_whose_source_never_answers_is_stopped_and_the_next_run_takes_over(mem, monkeypatch):  # noqa: F811
+    import threading
+    import time
+    from tests.test_breadth import IST_OPEN
+    hang, entered = threading.Event(), threading.Event()
+    r = runner()
+    real_load = r.load
+
+    def stuck_load(region, sym, days):
+        if not hang.is_set():
+            entered.set()
+            hang.wait(20)                       # the source that never answered
+            raise RuntimeError("gone")
+        return real_load(region, sym, days)
+    r.load = stuck_load
+    first = threading.Thread(target=lambda: r.run("IN", IST_OPEN), daemon=True)
+    first.start()
+    assert entered.wait(5)
+    assert r.run("IN", IST_OPEN) == {"ok": False, "error": "A breadth run is already going."}       # not yet past RUN_MAX
+    r.started_at = time.time() - breadth.RUN_MAX - 1                                                 # ...and now it is
+    hang.set()                                    # from here the source answers the new run (the old one's read still fails)
+    got = r.run("IN", IST_OPEN)
+    assert got["ok"] is True and breadth.view("nifty500")["today"]["adv"]["value"] == 2
+    first.join(5)
+    assert r.running is None and r.started_at is None
+
+
+def test_the_breadth_job_gives_up_on_a_hung_run_and_tries_again_later(mem, monkeypatch):  # noqa: F811
+    import threading
+    from datetime import datetime, timezone
+    monkeypatch.setattr(breadth, "RUN_MAX", -299.5)                       # bounded at RUN_MAX + 300 s: half a second here
+    gate = threading.Event()
+
+    class Hung:
+        running, started_at = None, None
+
+        def run(self, region, now):
+            gate.wait(10)
+            return {"ok": True}
+    job = breadth.Job(Hung(), ready=lambda r: r == "IN")
+    assert job.tick(datetime(2026, 9, 30, 13, 30, tzinfo=timezone.utc)) == 0
+    gate.set()
+    assert "ran longer than" in job.status["last_error"] and job.retry["breadth-IN"] > 0
+    assert mem.get("newsjob:breadth-IN") is None                           # not marked done: the next turn runs it
+
+
+def test_the_ipo_documents_catch_up_stalled_is_a_check_with_why():
+    from datetime import datetime, timezone
+    eve = datetime(2026, 11, 4, 13, 25, tzinfo=timezone.utc)              # 18:55 IST
+    ai = {"scheduled": 0, "cap": 120, "asked": 0, "waiting": 67, "days": 1, "to_read": 73}
+    failed = {"at": "2026-11-04T12:00:00+00:00", "read": 0, "summaries": 0, "waiting": 2, "error": "Acme Ltd: The AI couldn't answer."}
+    assert admin_jobs.ipo_docs_check(failed, ai, eve) == ("Offer documents: no summary written today (67 waiting). The last pass failed: "
+                                                         "Acme Ltd: The AI couldn't answer.")
+    assert "hasn't run today" in admin_jobs.ipo_docs_check({"at": "2026-11-03T12:00:00+00:00"}, ai, eve)
+    assert "hasn't run today" in admin_jobs.ipo_docs_check(None, ai, eve)
+    assert admin_jobs.ipo_docs_check(None, ai, datetime(2026, 11, 4, 2, 0, tzinfo=timezone.utc)) is None     # 07:30 IST: early yet
+    assert admin_jobs.ipo_docs_check(failed, {**ai, "scheduled": 4}, eve) is None                          # it is writing today
+    assert admin_jobs.ipo_docs_check(failed, {**ai, "waiting": 0}, eve) is None
+    row = admin_jobs._row("ipo", "IPOs", "daily", "2026-11-04T13:00:00+00:00", check=admin_jobs.ipo_docs_check(failed, ai, eve))
+    assert row["state"] == "warn" and "no summary written today" in row["error"]
+
+
+# ---------- LIVE3-025: an index's "final" level is the exchange's close once it is in ----------
+INDEX_FILE = ("Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,Closing Index Value,Points Change,Change(%)\n"
+              "Nifty 50,04-11-2026,24100.00,24300.00,24050.00,24210.55,110.2,0.46\n"
+              "Nifty 500,04-11-2026,22520.35,22800.00,22500.00,22769.20,248.85,1.11\n"
+              "Nifty Midcap 150,04-11-2026,1.0,1.0,1.0,20111.05,1,1\n")
+
+
+def test_the_exchanges_index_file_is_read_once_kept_and_each_index_takes_its_close(mem, monkeypatch):  # noqa: F811
+    from datetime import datetime, timezone
+    from app import official_close
+    asked = []
+
+    class Files:
+        def text(self, url, want=".csv"):
+            asked.append(url)
+            return INDEX_FILE
+    monkeypatch.setitem(official_close._src, "files", lambda: Files())
+    official_close._asked.clear(), official_close._mem.clear()
+    eve = datetime(2026, 11, 4, 13, 30, tzinfo=timezone.utc)
+    assert official_close.index_close("NIFTY 500", "2026-11-04", now=eve) is None                    # a page never reads the file
+    assert official_close.index_close("NIFTY 500", "2026-11-04", fetch=True, now=datetime(2026, 11, 4, 9, 0, tzinfo=timezone.utc)) is None  # 14:30 IST: not out
+    assert official_close.index_close("NIFTY 500", "2026-11-04", fetch=True, now=eve) == 22769.2
+    assert asked == ["https://nsearchives.nseindia.com/content/indices/ind_close_all_04112026.csv"]
+    official_close._mem.clear()
+    for name, close in (("NIFTY 50", 24210.55), ("NIFTY 500", 22769.2), ("NIFTY MIDCAP 150", 20111.05)):
+        assert official_close.index_close(name, "2026-11-04") == close                               # kept: every index, no second read
+    assert len(asked) == 1
+
+
+def test_the_live_final_level_is_the_official_close_for_every_group_once_it_is_in(mem, monkeypatch):  # noqa: F811
+    from datetime import datetime, timezone
+    from app import breadth_live, official_close
+    after = datetime(2026, 11, 4, 13, 20, tzinfo=timezone.utc)          # 18:50 IST
+    official_close._mem.clear()
+    for g, v in breadth.GROUPS.items():
+        if v["region"] != "IN":
+            continue
+        point = ["15:30", 300, 180, 20, 250, 500, 240, 500, 230, 500, 22770.80, 500, 0]
+        monkeypatch.setattr(breadth_live, "load", lambda group, day, p=point: {"points": [["15:15"] + p[1:10] + [22700.0, 500, 0], p]})
+        mem.pop(official_close.INDEX_KEY + "2026-11-04", None)
+        official_close._mem.clear()
+        before = breadth_live.view(g, after)
+        assert before["state"] == "final" and before["latest"]["idx"] == 22770.80 and not before.get("official")
+        mem[official_close.INDEX_KEY + "2026-11-04"] = json.dumps({v["index"].upper(): 22769.2})
+        official_close._mem.clear()
+        got = breadth_live.view(g, after)
+        assert got["latest"]["idx"] == 22769.2 and got["points"][-1][1 + breadth_live.FIELDS.index("idx")] == 22769.2 and got["official"], g
+        assert got["points"][-1][1:10] == point[1:10] and got["points"][0][-3] == 22700.0                      # the counts and earlier rounds as they were
+
+
+def test_the_daily_run_stores_each_recent_days_official_index_close(mem, monkeypatch):  # noqa: F811
+    from app import official_close
+    from tests.test_breadth import IST_OPEN, LAST
+    official_close._mem.clear()
+    mem[official_close.INDEX_KEY + LAST] = json.dumps({"NIFTY 500": 12345.65, "NIFTY 50": 23456.75})
+    r = runner()
+    r.run("IN", IST_OPEN)
+    v = breadth.view("nifty500")
+    assert v["history"]["index"][-1] == 12345.65                         # the candle's own close was 20,000-something

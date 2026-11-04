@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from . import db, memguard, official_close, rotation, scan_presets, sector_members, universes
+from . import db, job_status, memguard, official_close, rotation, scan_presets, sector_members, universes
 from .engine.indicators import stage
 from .data import calendar
 from . import deals  # noqa: F401  (before the newsletter job, which imports it back while loading)
@@ -48,6 +48,8 @@ LOOKBACK_DAYS = 380                   # calendar days before a count is complete
 KEEP_ROWS = 1300                      # about five years of stored days
 SECTOR_KEEP = 70                      # sessions of sector counts kept (three months and a bit)
 MIN_SECTOR = 5                        # sectors with fewer stocks with data are left out of the table
+RUN_MAX = 90 * 60               # a breadth run going longer than this is stopped (or taken over); India's longest, the first, takes 25 min (LIVE3-006)
+OFFICIAL_INDEX_DAYS = 10            # recent days whose index close is taken from the exchange's file (one read a day, kept)
 GAP = 0.25                            # seconds between stocks, on top of each source's own pacing
 GIVE_UP = 25                          # this many failures in a row: the source is down, the run stops and keeps the old
 MIN_LOADED, MAX_FAILED = 0.5, 0.25    # a run that read under half the stocks, or lost over a quarter to errors, is thin: it keeps the old
@@ -474,20 +476,43 @@ class Runner:
         self.sectors, self.gap, self.sleep, self.after = sectors, gap, sleep, after
         self.lock = threading.Lock()
         self.running: str | None = None
+        self.started_at: float | None = None     # when the current run began (Admin: how long it has been going, LIVE3-006)
+        self.gen = 0                             # the current run's number: an older run that a newer one took over from stores nothing
+        self._swap = threading.Lock()
 
     def run(self, region: str, now: datetime | None = None, full: bool | None = None) -> dict:
-        """Work out and store every group of a market. `full`: read the whole two years (the first run does)."""
-        if not self.lock.acquire(blocking=False):
-            return {"ok": False, "error": "A breadth run is already going."}
+        """Work out and store every group of a market. `full`: read the whole two years (the first run does). A run still going
+        after RUN_MAX is taken over (LIVE3-006): a source that never answered held the lock, and every later run said "already going"."""
+        with self._swap:
+            lock = self.lock
+            if not lock.acquire(blocking=False):
+                if not (self.started_at and time.time() - self.started_at > RUN_MAX):
+                    return {"ok": False, "error": "A breadth run is already going."}
+                print(f"breadth: the {self.running} run started {round((time.time() - self.started_at) / 60)} min ago is taken over")
+                self.lock = lock = threading.Lock()
+                lock.acquire()
+            self.gen += 1
+            mine = self.gen
+            self.running, self.started_at = region, time.time()
         try:
-            self.running = region
-            return self._run(region, now or datetime.now(ZoneInfo("UTC")), full)
+            return self._run(region, now or datetime.now(ZoneInfo("UTC")), full, mine)
         finally:
-            self.running = None
-            self.lock.release()
+            with self._swap:
+                if self.gen == mine:
+                    self.running, self.started_at = None, None
+            lock.release()
             memguard.release_memory(force=True)      # the run's candles and counts are done with
 
-    def _run(self, region: str, now: datetime, full: bool | None) -> dict:
+    def _still_mine(self, run_no: int | None, began: float) -> None:
+        """Stops a run that a newer one took over from, or that has gone on past RUN_MAX (each stock's read is checked)."""
+        if run_no is not None and run_no != self.gen:
+            raise RuntimeError("A newer breadth run took over from this one; nothing of it was stored.")
+        if time.monotonic() - began > RUN_MAX:
+            raise RuntimeError(f"The run went on for more than {RUN_MAX // 60} minutes and was stopped; the stored history is kept "
+                               "and it runs again at its next turn.")
+
+    def _run(self, region: str, now: datetime, full: bool | None, run_no: int | None = None) -> dict:
+        began = time.monotonic()
         groups = [g for g, v in GROUPS.items() if v["region"] == region]
         stored = {g: load_hist(g) for g in groups}
         through = last_complete(region, now)
@@ -517,6 +542,7 @@ class Runner:
         scans: dict[str, dict[str, dict | None]] = {}            # group -> {symbol: scan_presets.evaluate answer}
         scan_secs, scan_groups = 0.0, set(scan_presets.STORED.values())
         for i, (sym, gs) in enumerate(sorted(by_stock.items())):
+            self._still_mine(run_no, began)
             if i and self.gap:
                 self.sleep(self.gap)                     # leave the source room for people using the app
             try:
@@ -560,6 +586,7 @@ class Runner:
             # and the job tries again (Admin shows why)
             raise RuntimeError(f"Only {loaded} of {total} stocks could be read, {failed} failed ({last_error or 'no data'}); "
                                "the stored history is kept.")
+        self._still_mine(run_no, began)       # a run taken over stores nothing over the newer one's days
         out = {}
         for g in groups:
             if not who[g]:              # nothing to count: the stored history stays as it is
@@ -613,7 +640,14 @@ class Runner:
         except Exception as e:          # the chart goes without the index, the counts still stand
             print("breadth index:", symbol, str(e)[:120])
             return {}
-        return {} if df is None else {d: round(float(c), 2) for d, c in df["c"].items()}
+        got = {} if df is None else {d: round(float(c), 2) for d, c in df["c"].items()}
+        if region == "IN":
+            # LIVE3-025: each recent day's close the exchange's own closing value (its daily index file), not the candle's last tick
+            for d in sorted(got)[-OFFICIAL_INDEX_DAYS:]:
+                off = official_close.index_close(symbol, d, fetch=True)
+                if off is not None:
+                    got[d] = off
+        return got
 
 
 # ---------- what the page shows ----------
@@ -896,7 +930,8 @@ class Job(news_job.Job):
             if not day and (self.last.get(f"{name}-filled") or self._has_history(region, now)):
                 continue
             try:
-                result = self.runner.run(region, now)
+                # bounded: a run whose source never answers no longer holds this thread, and so every market's later runs (LIVE3-006)
+                result = job_status.bounded(lambda: self.runner.run(region, now), RUN_MAX + 300, f"The {region} breadth run")
             except Exception as e:
                 self.retry[name] = time.time() + 1800
                 self.status["last_error"] = f"{region}: {str(e)[:200]}"

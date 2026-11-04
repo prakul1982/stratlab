@@ -1439,6 +1439,10 @@ class Job:
         if done or made or problems:
             self.status.update(docs=self.status["docs"] + done, summaries=self.status["summaries"] + made, last_run=now.isoformat(timespec="seconds"),
                                **({"problems": problems[:5], "last_error": problems[0][:200]} if problems else {}))
+        # LIVE3-007: this pass's own outcome, kept apart from the job's last_error (the next bids read, every quarter of an hour, wrote
+        # that back to none, so a catch-up that wrote 0 of 120 all day said nothing on Admin)
+        self.status["docs_pass"] = {"at": now.isoformat(timespec="seconds"), "read": done, "summaries": made, "waiting": len(waiting),
+                                    "error": problems[0][:200] if problems else None}
         return done + made
 
 
