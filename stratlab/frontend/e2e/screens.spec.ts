@@ -106,12 +106,17 @@ async function sweep(browser: Browser, vp: (typeof VIEWPORTS)[number]) {
     // the sweep's own sign-in script also runs inside Admin's sandboxed email frame, which rightly refuses it localStorage
     page.on("pageerror", (e) => { if (!/allow-same-origin/.test(e.message)) errors.push(e.message); });
     // a refused request the page answers in words (an AI read that couldn't be written) is the page working; a crash isn't
-    page.on("console", (m) => { if (m.type() === "error" && !/status of 4\d\d/.test(m.text())) errors.push(m.text()); });
+    // the same for the scripts the harness itself injects into every frame (the sign-in above, the fixed clock of e2e/fixtures.ts):
+    // a sandboxed frame without allow-scripts rightly blocks them. A script in the frame's OWN document is still caught below
+    page.on("console", (m) => { if (m.type() === "error" && !/status of 4\d\d/.test(m.text()) && !/^Blocked script execution in 'about:srcdoc'/.test(m.text())) errors.push(m.text()); });
     for (const r of routes.filter((x) => x.signedIn === signedIn)) {
       errors = [];
       await page.goto(r.url);
       await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);     // paper pages keep polling
       await expect(page.locator(".spinner")).toHaveCount(0, { timeout: 15_000 }).catch(() => found.push(`${r.label} @ ${vp.name}: still loading after 15s`));
+      // every inline frame's own document (Admin's email previews and any other srcdoc frame) carries no script of its own
+      const scripted = await page.locator("iframe[srcdoc]").evaluateAll((fs) => fs.filter((f) => /<script\b/i.test(f.getAttribute("srcdoc") ?? "")).length);
+      if (scripted) errors.push(`${scripted} inline frame(s) carry a script of their own`);
       for (const p of [...await problems(page, vp.touch), ...errors.map((e) => `error: ${e.slice(0, 160)}`)]) found.push(`${r.label} @ ${vp.name} (${vp.theme}): ${p}`);
     }
     await ctx.close();
