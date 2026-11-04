@@ -10,7 +10,7 @@ import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts"
 import { pctTick, moneyCompact } from "../lib/chartFormat";
 import { instrumentLoader, PriceChart, strategyStudies, type Tf } from "../charts/price/lazy";
 import { Info, Modal, STATUS_NAME } from "../components/ui";
-import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, Seg, Signed, Skeleton, Stat, StatRow, usePhone, type Column } from "../components/kit";
+import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, FactTable, Field, FormActions, FormGrid, Notice, PageHeader, Seg, Signed, Skeleton, Stat, StatRow, usePhone, type Column } from "../components/kit";
 import { usePersisted } from "../lib/persist";
 import { HELP, testFills } from "../lib/help";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
@@ -487,13 +487,15 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
         <Card label="What you'd keep">
           <CardHead title="What you'd keep" info={HELP.keep} infoLabel="About costs" actions={<span className="k-note">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span>} />
-          <div className="k-rows two" role="list" aria-label="Profit and costs">
-            <div role="listitem"><span>Profit before costs</span><b>{money(e.costs.gross_pnl, cur)}</b></div>
-            {/* the flat brokerage the rules assume is said beside its total, so a person can see what it rests on (LIVE1A-010) */}
-            {e.costs.items.map((i) => <div role="listitem" key={i.label}><span>{i.label === "Brokerage" && e.strategy.risk.brokerage > 0 ? `Brokerage (${money(e.strategy.risk.brokerage, cur)} an order, from the rules)` : i.label}</span><b>{charge(i.amount, cur)}</b></div>)}
-            {e.costs.tax.amount != null && <div role="listitem"><span>Tax estimate</span><b>{charge(e.costs.tax.amount, cur)}</b></div>}
-            <div role="listitem" className="hl wide"><span>{e.costs.tax.amount != null ? "In your pocket" : "After costs"}</span><b className={upDown(e.costs.kept)}>{money(e.costs.kept, cur)}</b></div>
-          </div>
+          {/* TABLE-SWEEP (owner, 29 Oct: "wherever you can, just make a table"): what the profit was before costs, each cost and what is
+              left, as rows of one table, not label-and-figure pairs in two columns */}
+          <FactTable label="Profit and costs" itemHead="Item" figureHead="Amount" numeric rows={[
+            { id: "gross", k: "Profit before costs", v: money(e.costs.gross_pnl, cur) },
+            // the flat brokerage the rules assume is said beside its total, so a person can see what it rests on (LIVE1A-010)
+            ...e.costs.items.map((i) => ({ id: i.label, k: i.label === "Brokerage" && e.strategy.risk.brokerage > 0 ? `Brokerage (${money(e.strategy.risk.brokerage, cur)} an order, from the rules)` : i.label, v: charge(i.amount, cur) })),
+            ...(e.costs.tax.amount != null ? [{ id: "tax", k: "Tax estimate", v: charge(e.costs.tax.amount, cur) }] : []),
+            { id: "kept", k: <b>{e.costs.tax.amount != null ? "In your pocket" : "After costs"}</b>, v: <b className={upDown(e.costs.kept)}>{money(e.costs.kept, cur)}</b> },
+          ]} />
           <p className="k-note">{e.costs.tax.note}</p>
         </Card>
       </section>

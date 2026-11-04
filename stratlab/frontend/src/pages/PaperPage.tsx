@@ -11,7 +11,7 @@ import { ChartEmpty, LineChart } from "../components/Charts";
 import { PriceChart, strategyStudies, type Tf } from "../charts/price/lazy";
 import type { PriceLevel } from "../charts/price/engine";
 import { Info } from "../components/ui";
-import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, EmptyState, ErrorState, Notice, PageHeader, Skeleton } from "../components/kit";
+import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, EmptyState, ErrorState, FactTable, Notice, PageHeader, Skeleton } from "../components/kit";
 import { HELP } from "../lib/help";
 import { marketState, optionsMarket, sessionFeed } from "../lib/marketHours";
 import { GroupSession, type GroupSnapshot } from "../components/GroupSession";
@@ -216,11 +216,9 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
         <div className="k-page">
           <Card label="Account">
             <CardHead level={3} title="Account" actions={<span className="k-note">Fake money</span>} />
-            <div className="k-rows" role="list" aria-label="Paper account">
-              {rows.map(([k, v, sign, help]) => (
-                <div key={k} role="listitem"><span>{k}{help && <Info label={`What is ${k}?`}>{help}</Info>}</span><b className={upDown(sign)}>{v}</b></div>
-              ))}
-            </div>
+            {/* TABLE-SWEEP: the account's figures as one table, item and figure (owner, 29 Oct) */}
+            <FactTable label="Paper account" itemHead="Item" figureHead="Figure" numeric
+              rows={rows.map(([k, v, sign, help]) => ({ id: k, k: <>{k}{help && <Info label={`What is ${k}?`}>{help}</Info>}</>, v: <span className={upDown(sign)}>{v}</span> }))} />
           </Card>
           {/* nothing to list until a trade has closed: the Account card above already says "Closed trades 0" (RC2A-033: a full-width card of "None yet") */}
           {closedTrades.length > 0 && <Card label="Closed trades">

@@ -113,7 +113,7 @@ test("paper: a session stopped with a position open keeps it, valued at the last
     [/\/live\/sessions\/p1$/, snap],
     [/\/live\/sessions$/, [{ id: "p1", name: snap.name, instrument: inst, status: "stopped", started_at: snap.started_at }]],
   ]);
-  const account = page.getByRole("list", { name: "Paper account" });
+  const account = page.getByRole("table", { name: "Paper account" });       // TABLE-SWEEP: a table, not a list of pairs
   await expect(account).toContainText("$10,016", { timeout: 30_000 });
   await expect(account).toContainText("+0.16%");
   await expect(account).toContainText("29 at $335.35");
