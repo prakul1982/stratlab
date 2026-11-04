@@ -211,13 +211,16 @@ test("landing: the sample cards are labelled illustrations of made-up companies,
   expect(errors).toEqual([]);
 });
 
-test("landing: the intro under the hero says what StratLab is, in three columns, three steps and what sets it apart (LAND-2)", async ({ page }, info) => {
+test("landing: the intro under the hero shows the three spaces and three steps, with no 'What StratLab is' sentence (LAND-2, LIVE3-023)", async ({ page }, info) => {
   const errors = await open(page);
   const intro = page.locator("section.lp-spaces-sec");
-  await expect(intro.getByRole("heading", { level: 2, name: "What StratLab is" })).toBeVisible();
-  await expect(intro).toContainText("a lab for testing trading ideas and understanding your own money, across ten markets, with paper trading only");
-  await expect(intro).toContainText("never real orders");
-  await expect(intro.getByRole("heading", { level: 3 })).toHaveText(["Trade", "Invest", "Money", "How it works"]);
+  // LIVE3-023 / LIVE2-011 (owner, 4 Nov): the "What StratLab is" heading and its sentence are cut (they restated the hero); the
+  // space names and "How it works" are the section's headings, straight under the page's one h1
+  await expect(intro).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What StratLab is" })).toHaveCount(0);
+  await expect(page.locator("main")).not.toContainText("a lab for testing trading ideas and understanding your own money");
+  await expect(intro.getByRole("heading", { level: 2 })).toHaveText(["Trade", "Invest", "Money", "How it works"]);
+  await expect(intro.getByRole("heading", { level: 3 })).toHaveCount(0);
   await expect(page.locator("h1")).toHaveCount(1);
   await expect(intro.locator(".lp-steps li")).toHaveCount(3);
   await expect(intro.locator(".lp-steps li").first()).toContainText("plain words");
@@ -324,13 +327,14 @@ test("/library: a result line, the checks and the figures on each card; one summ
   for (const v of have) expect(options, v).toContain(v);
 });
 
-test("landing: 'ten markets', 'facts, not tips' and 'never real orders' are said once, in the intro's sentence, not again in the hero, under the button or in a list (VR5-owner-2)", async ({ page }) => {
+test("landing: 'ten markets', 'facts, not tips' and 'never real orders' are never said twice, nor in the hero, under the button or in a list (VR5-owner-2)", async ({ page }) => {
   const errors = await open(page);
   const main = (await page.locator("main").innerText()).toLowerCase();
   const count = (t: string) => main.split(t).length - 1;
-  expect(count("ten markets"), "ten markets").toBe(1);
-  expect(count("facts, not tips"), "facts, not tips").toBe(1);
-  expect(count("never real orders"), "never real orders").toBe(1);
+  // LIVE3-023 (owner, 4 Nov): the intro's sentence that said all three was cut as a restatement of the hero, so each is now said at most once
+  expect(count("ten markets"), "ten markets").toBeLessThanOrEqual(1);
+  expect(count("facts, not tips"), "facts, not tips").toBeLessThanOrEqual(1);
+  expect(count("never real orders"), "never real orders").toBeLessThanOrEqual(1);
   const hero = (await page.locator(".lp-hero").innerText()).toLowerCase();
   expect(hero).not.toMatch(/ten markets|never tips|facts|real orders|paper trading only/);
   expect(hero).toContain("one place for trading ideas, company research and your own money.");

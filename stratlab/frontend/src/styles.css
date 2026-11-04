@@ -2429,9 +2429,8 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 /* landing, build 3: no card looks picked, a tag is a plain label (not a link), long lists fold, the plans say what's on sale */
 .lp-sec.lp-spaces-sec { padding-top: clamp(32px, 4vw, 48px); }
 .lp-spaces-sec #about { scroll-margin-top: 76px; }
-/* LAND-2: the intro under the hero. The sentence is the lede's size; the three columns each list three things, with their link last;
+/* LAND-2: the intro under the hero (its sentence was cut, LIVE3-023). The three columns each list three things, with their link last;
  * the three steps are one row (one column on a phone, where the grid's own two-column rule would leave a third step alone). */
-.lp-intro-line { font-size: clamp(18px, 1.8vw, 22px); line-height: 1.45; color: var(--ink-2); max-width: 62ch; margin: 0; }
 .lp-space-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .lp-space-list li { display: flex; flex-direction: column; gap: 2px; }
 .lp-space-list b { font-size: 15px; }
