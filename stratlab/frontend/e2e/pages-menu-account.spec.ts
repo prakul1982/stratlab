@@ -377,7 +377,7 @@ test("invite: your invite link, how many friends joined, and sharing it", async 
   const status = page.getByTestId("invite-status");
   for (const [k, v] of [["This year: friends who used StratLab", "2 of 2 months"], ["This year: friends who subscribed", "1 of 2 months"],
     ["Waiting to subscribe", "1 friend"], ["Kept for when your plan stops", /days of Basic|Nothing yet/]] as const) {
-    await expect(status.locator("div", { hasText: k })).toContainText(v);
+    await expect(status.locator("tr", { hasText: k })).toContainText(v);        // TABLE-SWEEP: each its own row of the table
   }
   await expect(status).not.toContainText(/Use:|Extra:|weeks/);
   for (const id of ["invite-reward-line", "invite-status"]) {      // nothing spills past the card

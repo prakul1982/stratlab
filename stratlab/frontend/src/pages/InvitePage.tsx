@@ -5,7 +5,7 @@ import { shareLink, siteUrl } from "../lib/share";
 import { track } from "../lib/analytics";
 import { FRIEND_GETS, inviteRows, plural, youGetLines, type Invites } from "../lib/invite";
 import { Share } from "../components/Icons";
-import { Badge, Card, CardHead, ErrorState, Field, FormActions, FormGrid, PageHeader, Skeleton } from "../components/kit";
+import { Badge, Card, CardHead, ErrorState, FactTable, Field, FormActions, FormGrid, PageHeader, Skeleton } from "../components/kit";
 
 /** /invite: your own link, what a friend gets and what you get on your plan, and this year's count. */
 export function InvitePage() {
@@ -51,8 +51,9 @@ function InviteCard() {
         <p className="k-small"><b>What you get:</b></p>
         <ul className="k-list">{youGetLines(v, paid).map((l) => <li key={l}>{l}</li>)}</ul>
       </div>
-      <div className="k-rows" data-testid="invite-status" aria-label="Your invites">
-        {inviteRows(v, paid).map(([k, val]) => <div key={k}><span>{k}</span><b>{val}</b></div>)}
+      {/* TABLE-SWEEP (owner, 29 Oct): what your invites have earned, as a table */}
+      <div data-testid="invite-status">
+        <FactTable label="Your invites" itemHead="Invites" figureHead="So far" rows={inviteRows(v, paid).map(([k, val]) => ({ id: k, k, v: val }))} />
       </div>
     </Card>
   );
