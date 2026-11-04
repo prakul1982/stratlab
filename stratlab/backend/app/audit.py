@@ -258,6 +258,7 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
     return out
 
 
+NOT_TRADED_YET = "Not traded yet: no session since it listed, so there is no range or price to check"
 # a ticker on the SEC's list that no market quotes yet (registered, not trading: ADVI, GPOD, KBGHF, TPTI, TEGO on 1 Nov):
 # no price and no profile anywhere, so there is no company page to check, which is a fact about it, not a broken page
 NO_US_COMPANY = "No US company found"
@@ -415,7 +416,10 @@ def check_listing(page: dict | None, p: dict, nums: dict, snap: dict) -> list[di
     rng, q = page.get("range52") or {}, page.get("quote") or {}
     since = rng.get("since")
     if p.get("region") != "US":
-        if not since:
+        if not since and rng.get("low") is None and rng.get("high") is None and not q.get("price"):
+            # checked before its first session (SFCTECH, BLSPOLY, BSE:545010 on 3 Nov at 08:08 IST, listing that morning)
+            out.append(_issue("fact", LISTING, NOT_TRADED_YET))
+        elif not since:
             out.append(_issue("gap", LISTING, "Its 52-week range isn't marked as the range since listing, though it listed within the last weeks"))
         elif q and session_day(q.get("at"), "IN") == since:         # the first session: the change is against the issue price
             if q.get("ref") == "issue" and q.get("change_pct") is not None:

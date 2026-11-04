@@ -1411,7 +1411,13 @@ class Research:
         # answer, whose reference for the first session is the issue price (DD-010, DD-011)
         listing = r.get("y")
         listed_on = listing_day(r.get("k1y"))
-        if listed_on and not listing:
+        if inst and not r.get("k1y") and not listing:
+            # no daily candles from the broker for a share days old (audit, 1 Nov: PARASHLTH, listed 26 Oct, had its range
+            # unmarked): the listing's own first day of trading says whether it is new
+            listing = self._listing_or_none(_yahoo_in(code or sym))
+            first = (listing or {}).get("first_trade")
+            listed_on = first if first and listing_day([{"t": first}]) else None
+        elif listed_on and not listing:
             listing = self._listing_or_none(_yahoo_in(code or sym))
             if (listing or {}).get("first_trade") and listing["first_trade"] < listed_on:
                 listed_on = None                     # an older share that didn't trade early in the year, not a new one

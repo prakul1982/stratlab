@@ -279,3 +279,37 @@ def test_a_us_ticker_no_market_quotes_yet_is_a_fact_not_a_broken_page(monkeypatc
                 if i["area"] == audit.LISTING]
     assert row(None) == [("fact", audit.NOT_QUOTED)]
     assert row({"price": 4.5})[0][0] == "error"                            # quoted somewhere, yet no page: still an error
+
+
+def test_a_share_days_old_with_no_broker_candles_takes_its_first_day_from_the_listing(monkeypatch):
+    """PARASHLTH (listed 26 Oct): its range wasn't marked as the range since listing on the company page."""
+    from datetime import timedelta
+
+    from app import main
+    from app.intel.company import ist_date
+    w = W.build(monkeypatch)
+    try:
+        hub = main.research_hub
+        first = (ist_date() - timedelta(days=6)).isoformat()
+        monkeypatch.setattr(hub.kite, "history", lambda *a, **k: [])
+        monkeypatch.setattr(hub.yahoo, "meta", lambda s: {"name": "Reliance", "currency": "INR", "first_trade": first})
+        asked = []
+        real = hub._listing_or_none
+        monkeypatch.setattr(hub, "_listing_or_none", lambda s: asked.append(s) or real(s))
+        assert hub._company_in("RELIANCE", lean=True)["range52"].get("since") == first
+        assert asked == ["RELIANCE.NS"]                                       # the broker's share, its candles empty: asked
+        old = (ist_date() - timedelta(days=900)).isoformat()                 # an older share: no mark
+        monkeypatch.setattr(hub.yahoo, "meta", lambda s: {"name": "Reliance", "currency": "INR", "first_trade": old})
+        assert "since" not in hub._company_in("RELIANCE", lean=True)["range52"]
+    finally:
+        w["close"]()
+
+
+def test_a_new_listing_checked_before_its_first_session_is_a_fact():
+    """SFCTECH, BLSPOLY, BSE:545010: checked at 08:08 IST on 3 Nov, listing that morning."""
+    from app import audit
+    p = {"region": "IN", "balance": {"cols": ["Mar 2026"]}, "ratios": {}}
+    got = audit.check_listing({"range52": {}, "quote": {}}, p, {"years": []}, {})
+    assert [(i["level"], i["detail"]) for i in got] == [("fact", audit.NOT_TRADED_YET)]
+    got = audit.check_listing({"range52": {"low": 1.0, "high": 2.0}, "quote": {"price": 1.5}}, p, {"years": []}, {})
+    assert [i["level"] for i in got] == ["gap"]                              # trading, and still not marked: the gap stands
