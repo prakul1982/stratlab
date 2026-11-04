@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { useLiveRefresh } from "./liveRefresh";
-import { happened, istHm, loadEvents, type EvKind } from "./marketEvents";
+import { comingMarketEvents, istHm, loadEvents } from "./marketEvents";
 import type { Region } from "./research";
 import { istToday } from "./format";
 import { resultsLine } from "./mineLayout";
@@ -145,7 +145,6 @@ type ResultsView = { today: string; weeks: { rows: ResultRow[] }[] };
 
 const CAT_TAG: Record<string, string> = { tax: "Tax", holdings: "Your stocks", money: "Money", custom: "Yours", market: "Market" };
 // exchange holidays too: the nearest market date that matters to anyone with a running paper session (R47-012)
-const KINDS: EvKind[] = ["holiday", "rbi", "india", "us", "budget", "index"];
 
 /** The dates ahead from every calendar the app has: the money calendar (tax, your stocks' results and dividends, your own
  * dates), the market events (RBI, data releases, the Fed, index changes) and results for your watchlist, in date order.
@@ -178,14 +177,9 @@ export function useComingUpAll(enabled = true): Up[] | null {
       // when the money calendar already carries the market events (its own switch), they are not listed twice
       // the nearest weekly expiry within a week too (R52-013: Monday's NIFTY expiry missing from "Next up"); later weeklies
       // come every week and would crowd the list
-      const weekEnd = addDaysIso(today, 7), nowHm = istHm();
-      // one for each index, NIFTY's and SENSEX's (R64-008: Thursday's SENSEX weekly was missing)
-      const weekly = new Set<unknown>();
-      const named = new Set<string>();
-      for (const e of [...(ev?.events ?? [])].sort((a, b) => a.date.localeCompare(b.date)))
-        if (e.kind === "expiry" && /weekly/i.test(e.title) && !happened(e, today, nowHm) && e.date <= weekEnd && !named.has(e.title)) { named.add(e.title); weekly.add(e); }
-      if (ev && !money?.market_on) for (const e of ev.events) {
-        if (happened(e, today, nowHm) || e.date > end || !(KINDS.includes(e.kind) || weekly.has(e))) continue;
+      // one for each index, NIFTY's and SENSEX's (R64-008: Thursday's SENSEX weekly was missing); the same rule as the Invest home's
+      // "Coming up" (LIVE3-015, lib/marketEvents comingMarketEvents)
+      if (ev && !money?.market_on) for (const e of comingMarketEvents(ev.events, { today, nowHm: istHm(), end, weekEnd: addDaysIso(today, 7) })) {
         out.push({ key: `${e.date}|market|${e.title.toLowerCase()}`, date: e.date, title: e.title, detail: e.detail, to: "/trade/events", tag: "Market", tone: "plain" });
       }
       for (const v of [inRes, usRes]) for (const w of v?.weeks ?? []) for (const r of w.rows) {

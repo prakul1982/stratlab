@@ -141,3 +141,53 @@ test("a result page says its result once: headline, one table of figures, the ex
     }
   }
 });
+
+// LIVE3-015 / LIVE3-021: the Invest home's watchlist was tiles two across (three stocks left an empty cell), its "Coming up" a text
+// list with other events than My space's, and figure tables kept a note column blank in most rows (the breadth card's "Day",
+// Holdings' "Change"). The watchlist and Coming up are tables now, Coming up follows My space's rule, and no figure table on these
+// pages has a column blank in half its rows or more, on a phone or a desktop.
+test("Invest's watchlist and Coming up are tables, Coming up agrees with My space, and no figure table has a half-empty column (LIVE3-015, LIVE3-021)", async ({ page, request }, info) => {
+  test.setTimeout(240_000);
+  const n = info.project.name === "phone" ? 3 : 2;
+  const who = session(`live3b-${n}`, `u-live3b-${n}`, `live3b${n}@example.com`);
+  const head = { Authorization: `Bearer live3b-${n}` };
+  await request.put(`${API}/me/prefs`, { headers: head, data: { focus: "both", level: "some", space: "all" } });
+  await request.put(`${API}/research/watchlist`, { headers: head, data: { items: ["RELIANCE", "TCS", "ITC"].map((symbol) => ({ region: "IN", symbol })) } });
+  const halfEmpty = () => page.locator("main table").evaluateAll((ts) => ts.flatMap((t) => {
+    const body = Array.from(t.querySelectorAll("tbody tr"));
+    const cols = t.querySelectorAll("thead th").length;
+    if (body.length < 2 || cols > 4 || (t as HTMLElement).offsetParent === null) return [];
+    const out: string[] = [];
+    for (let c = 1; c < cols; c++) {
+      const blank = body.filter((r) => !(r.children[c]?.textContent ?? "").replace(/[\s–-]/g, "")).length;
+      if (blank * 2 >= body.length) out.push(`${t.getAttribute("aria-label") ?? "table"}: column ${t.querySelectorAll("thead th")[c]?.textContent} blank in ${blank} of ${body.length}`);
+    }
+    return out;
+  }));
+  for (const w of [390, 1440]) {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await open(page, "/invest", who, w);
+    const watch = page.getByRole("table", { name: "Your watchlist" });
+    await expect(watch.locator("tbody tr")).toHaveCount(3, { timeout: 30_000 });
+    for (const h of ["Stock", "Price", "Change"]) await expect(watch.getByRole("columnheader", { name: h })).toBeVisible();
+    await expect(page.locator(".inv-tile")).toHaveCount(0);
+    const coming = page.getByTestId("invest-events").getByRole("table", { name: "Coming up" });
+    await expect(coming.locator("tbody tr").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("breadth-card")).toBeVisible({ timeout: 30_000 });
+    expect(await halfEmpty(), `/invest ${w}`).toEqual([]);
+    if (w === 1440) {
+      // every event the Invest home lists up to the last day My space's list reaches is in My space's list too
+      const inv = await coming.locator("tbody tr").evaluateAll((rs) => rs.map((r) => r.querySelector("th")?.textContent?.trim() ?? ""));
+      await page.goto("/mine");
+      const mine = page.getByTestId("mine-coming");
+      await expect(mine.locator(".mine-tl-i").first()).toBeVisible({ timeout: 30_000 });
+      const mineText = await mine.innerText();
+      const shared = inv.filter((t) => mineText.includes(t));
+      expect(shared.length, `Invest ${JSON.stringify(inv)} vs My space ${mineText}`).toBeGreaterThan(0);
+    }
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await open(page, "/holdings", ADMIN, w);
+    await expect(page.getByRole("table", { name: "Where your stocks stand" })).toBeVisible({ timeout: 30_000 });
+    expect(await halfEmpty(), `/holdings ${w}`).toEqual([]);
+  }
+});

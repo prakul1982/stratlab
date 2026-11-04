@@ -140,8 +140,10 @@ test("VR5-owner-1: the Invest home's watchlist card shows six of a longer list, 
     await request.put(`${API}/research/watchlist`, { headers: head, data: { items: eight } });
     await open(page, "/invest", who, info.project.name === "phone" ? 390 : 1440);
     const card = page.locator(".k-card", { has: page.getByRole("heading", { name: "Your watchlist" }) });
-    await expect(card.locator(".inv-tile").first()).toBeVisible({ timeout: 30_000 });
-    await expect(card.locator(".inv-tile")).toHaveCount(6);
+    // LIVE3-015: the six are rows of a table now (they were tiles)
+    const rows = card.getByRole("table", { name: "Your watchlist" }).locator("tbody tr");
+    await expect(rows.first()).toBeVisible({ timeout: 30_000 });
+    await expect(rows).toHaveCount(6);
     await expect(card.getByTestId("watch-see-all")).toHaveText("See all 8 →");
     await expect(card.getByTestId("watch-see-all")).toHaveAttribute("href", "/research/watchlist");
     await expect(card.getByText(/^India$/i)).toHaveCount(0);           // the market is the toggle above, not a label again over the stocks
@@ -167,7 +169,7 @@ test("VR5-owner-1: a list of six or fewer has no See all", async ({ page, reques
   try {
     await request.put(`${API}/research/watchlist`, { headers: head, data: { items: ["RELIANCE", "TCS", "INFY"].map((symbol) => ({ region: "IN", symbol })) } });
     await open(page, "/invest", who, 390);
-    await expect(page.locator(".inv-tile").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("table", { name: "Your watchlist" }).locator("tbody tr")).toHaveCount(3, { timeout: 30_000 });
     await expect(page.getByTestId("watch-see-all")).toHaveCount(0);
   } finally {
     await request.put(`${API}/research/watchlist`, { headers: head, data: { items: before.items ?? [] } });

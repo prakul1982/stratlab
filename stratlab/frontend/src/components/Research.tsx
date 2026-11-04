@@ -378,7 +378,10 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
 }
 
 /** Companies as small tiles that open them: the symbol, its name, the price and the day's change (a neutral pill). */
-export function QuoteGrid({ region, symbols, names, empty, fill }: { region: Region; symbols: string[]; names?: Record<string, string | null>; empty?: ReactNode; fill?: boolean }) {
+/** The Invest home's watchlist as a table (LIVE3-015: tiles two across left an empty cell beside an odd one, and "Tables
+ * everywhere"): the stock with its name and any exchange or F&O note under it, its price and the day's change; each opens the
+ * company. The prices are asked again each minute while they are live, each row kept until its new price comes (LIVE-1). */
+export function WatchTable({ region, symbols, names, label = "Your watchlist" }: { region: Region; symbols: string[]; names?: Record<string, string | null>; label?: string }) {
   const [q, setQ] = useState<Record<string, Quote | null> | null>(null);
   const key = symbols.join(",");
   useEffect(() => {
@@ -389,28 +392,23 @@ export function QuoteGrid({ region, symbols, names, empty, fill }: { region: Reg
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region, key]);
-  // the prices again each minute while they are live (a quote struck in the last quarter hour), each tile kept until its new price
-  // comes; a read that fails changes nothing (LIVE-1: the Invest home's watchlist and a company's similar companies)
   useLiveRefresh(!!q && Object.values(q).some((x) => liveQuote(x?.at)), () => {
     researchApi.quotes(region, symbols).then((r) => setQ((cur) => ({ ...cur, ...Object.fromEntries(Object.entries(r).filter(([, x]) => x?.price != null)) }))).catch(() => undefined);
   });
-  if (!symbols.length) return <>{empty}</>;
+  const ccy = region === "IN" ? "INR" : "USD";
   return (
-    <div className={`inv-tiles${fill ? " fill" : ""}`}>
-      {symbols.map((s) => {
-        const x = q?.[s];
-        return (
-          <Link key={s} to={`/research/${region}/${encodeURIComponent(s)}`} className="inv-tile">
-            <span className="inv-tile-top"><b>{s}</b><span className="inv-tile-px">{q == null ? <span className="skel" /> : x?.price != null ? price(x.price, region === "IN" ? "INR" : "USD") : "–"}</span></span>
-            {names?.[s] && <span className="k-note inv-clip">{names[s]}</span>}
-            <span className="inv-tile-chg">
-              {x?.change_pct != null && <Delta value={x.change_pct}>{pct(x.change_pct, 2)}</Delta>}
-              <SurvBadges region={region} symbol={s} />
-              <FoBadges region={region} symbol={s} plain />
-            </span>
-          </Link>
-        );
-      })}
+    <div className="watch-table">
+      <DataTable label={label} rows={symbols} rowKey={(s) => s} stack={false}
+        columns={[
+          { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (s) => (
+            <>
+              <Link className="link" to={`/research/${region}/${encodeURIComponent(s)}`}><b>{s}</b></Link>
+              {names?.[s] && <span className="k-sub-line">{names[s]}</span>}
+              <span className="watch-notes"><SurvBadges region={region} symbol={s} /><FoBadges region={region} symbol={s} plain /></span>
+            </>) },
+          { key: "p", header: "Price", numeric: true, cell: (s) => (q == null ? <span className="skel" /> : q[s]?.price != null ? price(q[s]!.price!, ccy) : "–") },
+          { key: "d", header: "Change", numeric: true, cell: (s) => (q?.[s]?.change_pct != null ? <Delta value={q[s]!.change_pct}>{pct(q[s]!.change_pct!, 2)}</Delta> : q == null ? "" : "–") },
+        ]} />
     </div>
   );
 }

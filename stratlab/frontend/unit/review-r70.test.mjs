@@ -19,7 +19,7 @@ test("R70-001: today's 15:30 expiry is no longer 'coming up' at 18:00, and a hol
   assert.equal(happened({ date: "2026-10-18", time: null }, "2026-10-19", "09:00"), true);
   assert.equal(happened({ date: "2026-10-19", time: "10:00", status: "released" }, "2026-10-19", "09:00"), true);
   assert.equal(istHm(new Date("2026-10-19T12:32:00Z")), "18:02");
-  assert.match(read("src/lib/mine.ts"), /happened\(e, today, nowHm\)/);
+  assert.match(read("src/lib/eventTime.ts"), /!happened\(e, o\.today, o\.nowHm\)/);          // the Coming up rule both homes use (LIVE3-015)
   assert.match(read("src/pages/trade/EventsPage.tsx"), /!happened\(e, v\.today, nowHm\) \|\| !!e\.figure/);
 });
 
