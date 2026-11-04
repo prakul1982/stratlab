@@ -62,7 +62,9 @@ test("DA-031: each run's line on the dates of both, read off its own points, not
 test("DA-032: a notebook card is titled by its name, with its question under it and a pin that says Pin; the sidebar's dots are explained", () => {
   const home = read("src/pages/Home.tsx");
   assert.match(home, /title=\{<Link to=\{`\/n\/\$\{n\.id\}`\} className="k-title-link">\{n\.name\}<\/Link>\}/);
-  assert.match(home, /className="k-small k-muted nb-question" title=\{question\}/);
+  // the question line is on every card (full text in its hover title), two lines tall, with a plain note when there is none
+  assert.match(home, /className="k-small k-muted nb-question" title=\{question \|\| undefined\}>\{question \|\| "No question written yet"\}/);
+  assert.match(read("src/pages/trade/trade.css"), /\.nb-question \{[^}]*min-height: 2lh/);
   assert.match(home, /aria-label=\{n\.pinned \? `Unpin \$\{n\.name\}` : `Pin \$\{n\.name\} to the top`\}/);     // VR1-030: an icon at the card's top right; the words are its name and hover text
   assert.match(home, /title=\{n\.pinned \? "Unpin it" : "Keep it at the top of the list"\}/);
   assert.match(home, /Tested on \$\{inst\}/);

@@ -87,7 +87,7 @@
 .nb-cards .k-pin { min-width: 34px; padding: 0; }
 /* the question box of a notebook: one or two lines of room, not 130px for a one-line question (VR1-054; it grows with what is typed) */
 .k-textarea.nb-q { min-height: 76px; }
-.nb-question { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nb-question { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2lh; }
 .k-card.lib-card { display: grid; grid-row: span 7; grid-template-rows: subgrid; row-gap: var(--s3); align-content: start; }
 .k-card.lib-card.lib-lean { grid-row: span 6; }
 .lib-card > * { min-width: 0; margin: 0; }
