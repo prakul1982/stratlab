@@ -124,6 +124,7 @@ If nothing can be expressed, return {"entry": [], "exit": [], "mentioned": [], "
 
 from .ai_providers import AIBusy, AIConfig, AIError, ask_provider, complete, extract_json  # noqa: E402,F401  (shared error types)
 from . import ai_rank  # noqa: E402
+from . import idea_read  # noqa: E402
 
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -433,6 +434,118 @@ def _year_rule(c: dict, price: dict, price_on_left: bool, text: str, tf: str | N
     return {"l": price, "op": op, "r": level, **({"w": c["w"]} if c.get("w") is not None else {})}
 
 
+# ---------- the AI's rules held to the words, for the phrasings read without it (57.1) ----------
+_NAME = {"price": "Price", "ema": "EMA", "sma": "SMA", "rsi": "RSI", "dc_upper": "the highest high of the last", "dc_lower": "the lowest low of the last"}
+_SAY = {"gt": "is above", "lt": "is below", "xa": "crosses above", "xb": "crosses below", "eq": "is"}
+
+
+def _ref_words(r: dict) -> str:
+    t = r.get("t")
+    if t == "num":
+        return f"{r.get('v'):g}"
+    if t in ("dc_upper", "dc_lower"):
+        return f"{_NAME[t]} {r.get('p', 20):g} candles"
+    return f"{_NAME.get(t, t)} {r['p']:g}" if r.get("p") else _NAME.get(t, str(t))
+
+
+def rule_words(c: dict) -> str:
+    """'EMA 20 crosses above EMA 50': a rule in the words the notes use."""
+    return f"{_ref_words(c['l'])} {_SAY.get(c['op'], c['op'])} {_ref_words(c['r'])}"
+
+
+_DIRECTION = {"gt": "up", "xa": "up", "lt": "down", "xb": "down", "eq": "eq"}
+
+
+def _same_rules(ai: list | None, words: list | None) -> bool:
+    """The AI's rules are the words' ones, in any order, 20 and 20.0 being one length. A rule the words give with a move verb
+    ("falls below 50", marked soft) matches a state on the same two lines the same way ("is below 50"): that is a reading of the
+    words, not a misreading."""
+    ref = lambda r: json.dumps({k: float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else v      # noqa: E731
+                                for k, v in (r or {}).items() if v is not None}, sort_keys=True)
+    ai, words = list(ai or []), list(words or [])
+    if len(ai) != len(words):
+        return False
+    left = [(ref(c.get("l")), c.get("op"), ref(c.get("r"))) for c in ai]
+    for c in words:
+        l, r = ref(c["l"]), ref(c["r"])
+        hit = next((k for k in left if k[0] == l and k[2] == r and (k[1] == c["op"] or c.get("soft") and _DIRECTION.get(k[1]) == _DIRECTION[c["op"]])), None)
+        if hit is None:
+            return False
+        left.remove(hit)
+    return True
+
+
+def _plain(rules: list[dict]) -> list[dict]:
+    return [{k: v for k, v in c.items() if k != "soft"} for c in rules]
+
+
+def _from_the_words(out: dict, text: str, notes: list[str]) -> None:
+    """The buy and sell rules, held to what the words plainly say (57.1: "sell when it crosses back below" came back as "EMA 50
+    crosses below Price", the lines the other way round, and with no instrument named the buy rule became two). For a long idea
+    whose buy (or sell) clauses idea_read understands word for word, those rules are the ones used, said in the notes when the
+    AI's differed; a sell clause that only points back ("it crosses back below") takes the buy rule's own two lines, in the
+    same order, and is left for the person to pick when it could mean more than one. Also sets "confirmed" (the sides read from
+    the words) and "assumed" (what the reading supplied that the words don't say), and leaves out an instrument the AI picked
+    when the words name none (nobody guesses it: the notebook asks)."""
+    out["confirmed"], out["assumed"] = [], []
+    got = idea_read.read(text)
+    if got is None or out.get("side", "long") != "long":
+        return
+    got = json.loads(json.dumps(got))
+    mentioned = set(out.get("mentioned") or [])
+    if got["entry"] is not None:
+        if not _same_rules(out.get("entry"), got["entry"]):
+            had = bool(out.get("entry"))
+            out.update(entry=_plain(got["entry"]), entryJoin="all", minScore=0)
+            notes.append(f"The buy rule was read from your words: {' and '.join(map(rule_words, got['entry']))}."
+                         + (" The AI had read it differently." if had else ""))
+        elif out.get("entryJoin") != "all" and len(got["entry"]) > 1:
+            out["entryJoin"] = "all"
+        out["confirmed"].append("entry")
+    if got["said_exit"] and got["exit"] is not None:
+        # the pronouns in the words, resolved against the buy rules that are used (the words' own, or the AI's)
+        got["exit"] = [{k: (idea_read.IT if v == idea_read.IT else v) for k, v in c.items()} for c in got["exit"]]
+        rules = idea_read.resolve_exit(got["exit"], out.get("entry") or [])
+        if rules is None:
+            out["exit"] = []
+            mentioned.discard("exit")
+            notes.append("Your sell rule points back to the buy rule (\"it\"), and the buy rule has more than one part, so which one "
+                         "it means isn't clear. Pick the sell rule below.")
+        else:
+            if not _same_rules(out.get("exit"), rules):
+                had = bool(out.get("exit"))
+                out["exit"] = rules = _plain(rules)
+                if rules:
+                    notes.append(f"The sell rule was read from your words: {' or '.join(map(rule_words, rules))}."
+                                 + (" The AI had read it differently." if had else ""))
+                elif had:
+                    notes.append("Your words sell only at the stop loss or target, so the sell rule the AI added was left out.")
+            mentioned.add("exit")           # a sell rule, or a stop or target as the way out ("exit if it falls 8%")
+            out["confirmed"].append("exit")
+    elif not got["said_exit"] and got["entry"] is not None and out.get("exit"):
+        # the words give no sell rule: one the AI wrote is its own, and the notebook asks instead (the AI is told never to)
+        out["exit"] = []
+        mentioned.discard("exit")
+        notes.append("Your words give no sell rule, so the one the AI added was left out. Pick one below.")
+    risk = dict(out.get("risk") or {})
+    for k, v in got["risk"].items():
+        if risk.get(k) != v and (k != "sl" or risk.get("stopType", "pct") == "pct") and (k != "tgt" or risk.get("tgtType", "pct") == "pct"):
+            if risk.get(k):
+                notes.append(f"Your words give a {'stop loss' if k == 'sl' else 'target'} of {v:g}%, so that is the one used.")
+            risk[k] = v
+        mentioned.add(k)
+    out["risk"] = risk
+    if got["entry"] is not None and got["exit"] is not None:
+        if not got["named"] and out.get("instrument") and not out.get("universe"):
+            # every word was read and none names a stock, index or coin: the AI's pick is a guess, and the notebook asks
+            out["instrument"] = None
+            out["market"] = None
+            mentioned.discard("instrument")
+            notes.append("Your words name no stock, index or coin, so none was picked for you. Choose one below.")
+    out["assumed"] = got["assumed"]
+    out["mentioned"] = sorted(mentioned)
+
+
 def check_against_text(out: dict, text: str) -> dict:
     """The AI builder's rules, checked against the person's own sentence before anyone sees them. Each change is said in
     the notes, so nothing is fixed silently:
@@ -534,6 +647,7 @@ def check_against_text(out: dict, text: str) -> dict:
         elif _BUY.search(text):
             out.update(side="long")
             notes.append('"Sell" was read as selling what was bought, not as a short sale. Say "sell short" to trade short.')
+    _from_the_words(out, text, notes)     # the phrasings people write most, read without the AI (57.1)
     risk = {**dict(out.get("risk") or {}), **{k: v for k, v in risk0.items() if k in ("tgt", "sl")}}
     mentioned = set(out.get("mentioned") or [])
     # a stop or target the sentence never asks for is the AI's own (DP1-005: a 2% stop nobody asked for, counted as said):

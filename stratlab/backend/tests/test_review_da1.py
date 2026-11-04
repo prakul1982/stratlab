@@ -55,7 +55,9 @@ def test_a_rule_that_lost_its_indicator_is_read_again_from_the_words():
 def test_a_price_rule_the_words_really_give_is_kept():
     text = "Buy when RSI 14 is below 30 and the price falls below 50"
     out = ai_writer.check_against_text(_out([{"l": {"t": "rsi", "p": 14}, "op": "lt", "r": num(30)}], [{"l": {"t": "price"}, "op": "lt", "r": num(50)}]), text)
-    assert out["exit"] == [{"l": {"t": "price"}, "op": "lt", "r": num(50)}]
+    # kept, and since 57.1 where the words put it: both are buy conditions ("buy when … and …"), and the sentence gives no
+    # sell rule, so the AI's one is left out and asked
+    assert {"l": {"t": "price"}, "op": "xb", "r": num(50.0)} in out["entry"] and out["exit"] == []
     both = ai_writer.check_against_text(_out([RSI60], [{"l": {"t": "price"}, "op": "lt", "r": num(50)}]), "Buy when RSI and ADX cross above 60, sell below 50")
     assert both["exit"][0]["l"] == {"t": "price"}                # two indicators named: which one the rule meant isn't clear, so it stays as it came
 
