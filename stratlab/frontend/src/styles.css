@@ -918,9 +918,11 @@ table.legs input[type=number] { width: 72px !important; }
    the width is the page's (--pub-w), the same as its main's */
 .pub { --pub-w: 960px; }
 .pub:has(.pub-main.legal) { --pub-w: 800px; }
-.pub:has(.lib-cards) { --pub-w: 1144px; }
+/* LIVE3-012: the library is wide from its first frame (its main carries .lib), not once the cards arrive: the whole page moved 92px
+   sideways and its note dropped out of view when the list replaced the placeholder (CLS 0.75 at 1440) */
+.pub:has(.pub-main.lib) { --pub-w: 1144px; }
 .pub-nav { display: flex; justify-content: space-between; align-items: center; padding: 18px max(clamp(16px, 4vw, 48px), calc((100% - var(--pub-w)) / 2 + clamp(16px, 4vw, 32px))); border-bottom: 1px solid var(--line); }
-.pub:has(.lib-cards) .pub-main { max-width: 1144px; }   /* VR1-171: the signed-out library is as wide as the app pages (1080 of content), not 896 */
+.pub:has(.pub-main.lib) .pub-main { max-width: 1144px; }   /* VR1-171: the signed-out library is as wide as the app pages (1080 of content), not 896 */
 .pub-main { max-width: 960px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 32px) 64px; }
 /* while a public page is still a loading placeholder, its main fills the screen, so the footer waits below it instead of
    showing under the placeholder and jumping down when the page arrives (R75-002: /library's layout shift on a phone) */
@@ -1908,6 +1910,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-state b { font-size: var(--t-body); }
 .k-state p { font-size: var(--t-label); color: var(--muted); max-width: 52ch; }
 .k-skel-box { display: flex; flex-direction: column; gap: 10px; }
+/* LIVE3-012: the placeholder standing in for a page's main list holds the screen, so what follows the list (its notes, the footer)
+   waits below the fold instead of showing under a short placeholder and dropping out of view when the list arrives */
+.k-skel-box.k-skel-page { min-height: 100vh; }
+/* the badge's place while a page's as-of time loads (PageHeader asOfPending) */
+.k-meta-wait { visibility: hidden; }
+/* Pulse's and Look up a company's index levels: the placeholder is about the table's height (three or four indices; stacked
+   cards on a phone), so the cards under it don't move when the levels arrive (LIVE3-012) */
+.k-skel-index { min-height: 190px; }
+@media (max-width: 640px) { .k-skel-index { min-height: 340px; } }
 .k-skel { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--chip), var(--paper-2), var(--chip)); background-size: 200% 100%; animation: k-shimmer 1.4s infinite linear; }
 @keyframes k-shimmer { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .k-skel { animation: none; } }
@@ -2389,10 +2400,12 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 
 /* a tour step pointed at one control (kit Coachmark.tsx): the rest of the page dimmed around a ring, the note beside it */
 .k-coach { position: fixed; inset: 0; z-index: 70; }
-.k-coach-ring { position: fixed; left: var(--cm-hx, 50%); top: var(--cm-hy, 50%); width: var(--cm-hw, 0); height: var(--cm-hh, 0);
+/* placed by transform, not left/top: the ring gliding from one step's control to the next moved the page's layout every frame of the
+   glide (LIVE3-012: /tour's layout shift 0.52 on a phone); a transform is not a layout move */
+.k-coach-ring { position: fixed; left: 0; top: 0; transform: translate(var(--cm-hx, 50vw), var(--cm-hy, 50vh)); width: var(--cm-hw, 0); height: var(--cm-hh, 0);
   border-radius: var(--r-ctl); box-shadow: 0 0 0 200vmax rgba(10, 10, 8, .45); outline: 2px solid var(--blue); outline-offset: 2px;
-  pointer-events: none; transition: left .2s ease, top .2s ease, width .2s ease, height .2s ease; }
-.k-coach-ring[data-off] { left: 50%; top: 50%; width: 0; height: 0; outline: none; }
+  pointer-events: none; transition: transform .2s ease, width .2s ease, height .2s ease; }
+.k-coach-ring[data-off] { transform: translate(50vw, 50vh); width: 0; height: 0; outline: none; }
 .k-coach-note { position: fixed; left: var(--cm-x, 16px); top: var(--cm-y, 16px); width: min(360px, calc(100vw - 32px));
   display: flex; flex-direction: column; gap: var(--s3); padding: var(--s5); background: var(--paper); color: var(--ink);
   border: 1px solid var(--line-2); border-radius: var(--r-card); box-shadow: var(--shadow); }

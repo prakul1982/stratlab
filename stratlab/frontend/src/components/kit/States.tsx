@@ -35,7 +35,9 @@ export function ErrorState({ title, children, action }: { title: string; childre
  * SLOW_LOAD_MS says so, whichever card it is (RC7-008: 112 of the 115 placeholders sat on the same shimmer for as long as the server
  * took, with nothing said after 10 s); with `onRetry` it also offers a Retry (R25-005: a first visit of the day waited 10 s with
  * nothing to do). */
-export function Skeleton({ label, lines = 4, onRetry, slowAfter = SLOW_LOAD_MS }: { label: string; lines?: number; onRetry?: () => void; slowAfter?: number }) {
+export function Skeleton({ label, lines = 4, onRetry, slowAfter = SLOW_LOAD_MS, page = false }: { label: string; lines?: number; onRetry?: () => void; slowAfter?: number;
+  /** It stands for the page's main list, with more of the page under it: it holds the screen so nothing below moves (LIVE3-012). */
+  page?: boolean }) {
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     setSlow(false);
@@ -44,7 +46,7 @@ export function Skeleton({ label, lines = 4, onRetry, slowAfter = SLOW_LOAD_MS }
   }, [slowAfter, label]);
 const widths = [40, 100, 85, 60, 92, 70];
   return (
-    <div className="k-skel-box" role="status" aria-busy="true" aria-label={label}>
+    <div className={page ? "k-skel-box k-skel-page" : "k-skel-box"} role="status" aria-busy="true" aria-label={label}>
       {Array.from({ length: lines }, (_, i) => <span key={i} className="k-skel" style={{ width: `${widths[i % widths.length]}%` }} />)}
       <span className="k-stat-d">{label}…</span>
       {slow && (onRetry

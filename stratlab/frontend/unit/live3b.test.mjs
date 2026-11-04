@@ -3,6 +3,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { register } from "node:module";
+
+// extensionless imports inside the app's modules resolve to their .ts files
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const { hasSignInCode, withoutSignInCode, wantsAccount } = await import("../src/lib/entry.ts");
@@ -43,4 +48,42 @@ test("the phone's slim consent bar asks the same question in one sentence, namin
   const css = read("src/styles.css");
   assert.match(css, /\.consent-title, \.consent-long \{ display: none; \}/);
   assert.match(css, /\.consent-short, \.consent-more \{ display: none; \}/);
+});
+
+test("the tour's hold on the phone menu survives the move to Home and a listener that starts late (LIVE3-014)", async () => {
+  const events = [];
+  globalThis.window = { dispatchEvent: (e) => events.push(e.detail.open) };
+  globalThis.CustomEvent = class { constructor(type, o) { this.type = type; this.detail = o.detail; } };
+  const T = await import("../src/lib/tourMenu.ts");
+  assert.equal(T.tourMenuHeld(), false);
+  T.holdTourMenu(true);
+  assert.equal(T.tourMenuHeld(), true);
+  T.holdTourMenu(false);
+  assert.deepEqual(events, [true, false]);
+  const shell = read("src/components/Shell.tsx");
+  assert.match(shell, /useEffect\(\(\) => \{ if \(!tourMenuHeld\(\)\) setOpen\(false\); \}, \[loc\.pathname\]\);/);
+  assert.match(shell, /if \(tourMenuHeld\(\)\) \{ setTourMenu\(true\); setOpen\(true\); \}/);
+  delete globalThis.window; delete globalThis.CustomEvent;
+});
+
+test("Pulse's opening line is two short sentences, the same whatever the AI read says (LIVE3-016)", async () => {
+  const { pulseLede } = await import("../src/lib/researchFormat.ts");
+  for (const line of [pulseLede(null), pulseLede("4 Nov"), pulseLede("4 Nov", true)]) {
+    assert.equal(line.split(". ").length, 2, line);
+    assert.ok(line.length < 140, line);
+  }
+  // a signed figure isn't read "Up +0.63%" as well
+  assert.match(read("src/components/kit/Stat.tsx"), /!\(dir !== "flat" && \/\^\\s\*\[\+\\u2212-\]\/\.test\(textOf\(children\)\)\)/);
+});
+
+test("loading placeholders hold the page still: the library is wide from its first frame, page lists hold the screen (LIVE3-012)", () => {
+  const css = read("src/styles.css");
+  assert.doesNotMatch(css, /:has\(\.lib-cards\)/, "the width doesn't wait for the cards");
+  assert.match(css, /\.pub:has\(\.pub-main\.lib\) \{ --pub-w: 1144px; \}/);
+  assert.match(css, /\.k-skel-box\.k-skel-page \{ min-height: 100vh; \}/);
+  assert.match(css, /transition: transform \.2s ease, width \.2s ease, height \.2s ease;/);
+  assert.match(read("src/pages/PublicLibrary.tsx"), /<PublicFrame className="lib"/);
+  for (const f of ["src/pages/PublicLibrary.tsx", "src/pages/LibraryPage.tsx"]) assert.match(read(f), /<Skeleton label="Opening the library" page \/>/);
+  assert.match(read("src/pages/Screens.tsx"), /!meta \? \(showFilters \? <div className="screens-filters-wait">/);
+  assert.match(read("src/components/kit/PageHeader.tsx"), /asOfPending && <span className="k-meta-wait" aria-hidden="true">/);
 });

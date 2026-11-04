@@ -87,7 +87,7 @@ export function PublicLibrary() {
   const markets = useMemo(() => marketChoices(counts, rows ?? [], market), [counts, rows, market]);
   const tally = useMemo(() => libraryTally(rows ?? []), [rows]);
   return (
-    <PublicFrame action={<GoogleCopy label="Continue with Google" small />}>
+    <PublicFrame className="lib" action={<GoogleCopy label="Continue with Google" small />}>
       <PageHeader eyebrow="Strategy library" title="StratLab's own strategies"
         lede="Well-known rule sets that StratLab ran through its own backtest and four checks, each shown with the verdict it earned, the ones that failed as plainly as the ones that held up. Open one to read its rules." />
       <Card label="Find a strategy">
@@ -97,7 +97,7 @@ export function PublicLibrary() {
         </div>
         {markets.length > 2 && <ChipBar label="Market" options={markets} value={market} onChange={setMarket} wrap />}
       </Card>
-      {rows === null ? <Card><Skeleton label="Opening the library" /></Card>
+      {rows === null ? <Card><Skeleton label="Opening the library" page /></Card>
         : failed ? <ErrorState title="The library couldn't be opened" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Your connection or ours dropped for a moment.</ErrorState>
         : shown.length === 0 ? <EmptyState title={rows.length ? "Nothing matches that." : "There are no strategies to show yet."}>{rows.length ? "Clear the search or the filters to see them all." : "Check back soon."}</EmptyState>
         : (
