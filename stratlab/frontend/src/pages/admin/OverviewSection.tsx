@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { analyticsDashboard } from "../../lib/analytics";
 import { IST, fmtDateTime, money, safeHref } from "../../lib/format";
-import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, FigureTable, HealthGrid, HealthTile, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, FigureTable, HealthGrid, HealthTile, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { ViewAsCard } from "../../components/ViewAs";
 import { useAdmin } from "./AdminContext";
 import { attention, errorCounts, fixRows, lights, paidUsers, quotaLine, revenueText, type FixRow } from "./attention";
@@ -122,9 +122,11 @@ export function OverviewSection() {
             <p className="k-small" data-testid="feeds-summary">{[okFeeds.length && `${okFeeds.length} OK`, lookFeeds.filter((l) => l.state === "warn").length && `${lookFeeds.filter((l) => l.state === "warn").length} Check`,
               lookFeeds.filter((l) => l.state === "bad").length && `${lookFeeds.filter((l) => l.state === "bad").length} Problem`].filter(Boolean).join(" · ")}</p>
             {lookFeeds.length > 0 && (
-              <HealthGrid label="Data feeds that need a look">
-                {lookFeeds.map((l) => <HealthTile key={l.key} state={l.state} label={l.label} detail={l.detail} to={l.to} />)}
-              </HealthGrid>
+              // one row each, as Data and jobs lists them: a grid of tiles left the last feed alone on its line whenever seven needed a look
+              // (no column count avoids 6 + 1 in a three-wide grid; ui-lint R9), and a list of records reads better as rows
+              <StatusList label="Data feeds that need a look">
+                {lookFeeds.map((l) => <StatusRow key={l.key} state={l.state} label={l.label} detail={l.detail} />)}
+              </StatusList>
             )}
             {okFeeds.length > 0 && (
               <Disclosure summary={`Show the ${okFeeds.length} feeds that are OK`} testId="feeds-ok">

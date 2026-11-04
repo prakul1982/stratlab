@@ -36,3 +36,9 @@ test("System: Telegram off with email set up is OK with a note, not a Check; the
   const audit = read("src/pages/admin/AuditPanel.tsx");
   assert.match(audit, /staleNote\(s\.finished_at\) && <Notice tone="info">/);
 });
+
+test("Overview: the data feeds that need a look are rows, never a grid that leaves the last one alone (ui-lint R9, 7 feeds in 3 columns)", () => {
+  const page = read("src/pages/admin/OverviewSection.tsx");
+  assert.match(page, /<StatusList label="Data feeds that need a look">/);
+  assert.match(page, /lookFeeds\.map\(\(l\) => <StatusRow key=\{l\.key\} state=\{l\.state\} label=\{l\.label\} detail=\{l\.detail\} \/>\)/);
+});
