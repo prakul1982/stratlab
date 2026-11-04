@@ -105,3 +105,39 @@ test("the phone tour's menu steps ring the thing they describe, on screen and cl
     await note.getByRole("button", { name: "Next" }).click();
   }
 });
+
+// LIVE3-013: a strategy's result page said its main figure four times (the headline, an 8-line paragraph, a green line, then tiles
+// with "Trades" alone on a row). Both kinds of result page, a library strategy and a shared verdict, now say it once in the headline,
+// then one table of the figures, then the explanation folded; no tiles, nothing before the figures but the headline.
+const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
+const EMA = { name: "Trend follower", tf: "1d", entry: [{ l: { t: "ema", p: 10 }, op: "xa", r: { t: "ema", p: 30 } }],
+  exit: [{ l: { t: "ema", p: 10 }, op: "xb", r: { t: "ema", p: 30 } }], risk: { capital: 10000, riskPct: 2, sl: 4, tgt: 0, brokerage: 0, slippage: 0.05 } };
+test("a result page says its result once: headline, one table of figures, the explanation folded (LIVE3-013)", async ({ page, request }, info) => {
+  test.setTimeout(240_000);
+  const auth = { Authorization: `Bearer live3b-${info.project.name === "phone" ? 1 : 0}` };
+  const post = async (path: string, data: object) => { const r = await request.post(API + path, { headers: auth, data }); expect(r.ok(), `${path}: ${await r.text()}`).toBeTruthy(); return r.json(); };
+  await request.put(`${API}/me/prefs`, { headers: auth, data: { level: "some", focus: "both" } });
+  const nb = await post("/notebooks", { name: "LIVE3 verdict", question: "Does the cross work?", strategy: EMA, instrument: "CRYPTO:BTC-USD" });
+  await post(`/notebooks/${nb.id}/experiments`, { days: 1500 });
+  const shared = await post(`/notebooks/${nb.id}/experiments/1/share`, {});
+  for (const [path, rows] of [["/library/seed-supertrend-us", 5], [`/verdict/${shared.token}`, 4]] as const) {
+    for (const w of [390, 1440]) {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await open(page, path, null, w);
+      const main = page.locator("main");
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
+      const table = main.getByRole("table", { name: "Results after costs" });
+      await expect(table, `${path} ${w}`).toBeVisible();
+      await expect(table.locator("tbody tr"), `${path} ${w}`).toHaveCount(rows);
+      await expect(main.locator(".k-stat"), `${path} ${w}: no tiles`).toHaveCount(0);
+      await expect(main.getByTestId("lib-hold"), `${path} ${w}: no second line restating it`).toHaveCount(0);
+      // nothing between the headline and the figures but the eyebrow, the dates and (on a verdict) the chart: no paragraph
+      await expect(main.locator(".k-lede"), `${path} ${w}`).toHaveCount(0);
+      const why = main.locator("details.pub-why");
+      await expect(why, `${path} ${w}`).toHaveCount(1);
+      await expect(why).not.toHaveAttribute("open", /.*/);
+      await why.locator("summary").click();
+      await expect(why.locator("p")).toBeVisible();
+    }
+  }
+});

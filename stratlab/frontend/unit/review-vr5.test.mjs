@@ -31,8 +31,9 @@ test("VR5-004: a chip or badge longer than the screen wraps in its own box on a 
   const css = read("src/styles.css");
   assert.match(css, /@media \(max-width: 380px\) \{\n  \.k-badge \{ max-width: 100%; white-space: normal;/);
   assert.match(css, /\.k-chip \{ max-width: 100%; height: auto; min-height: 44px;/);
-  assert.match(css, /\.consent \{ right: 12px; left: 12px; .* font-size: 13px;/);
-  assert.match(css, /\.consent-btns \.btn \{ flex: 1 1 0; min-width: 0; \}/);          // still one width for Allow and No thanks (VR4-012)
+  // LIVE3-010 changed this on purpose: on a phone the question is a slim bar along the foot (smaller still), the answers one width
+  assert.match(css, /\.consent \{ right: 0; left: 0; bottom: 0; width: auto; .* font-size: 13px;/);
+  assert.match(css, /\.consent-btns \.btn \{ flex: 0 0 96px; min-width: 0; \}/);          // still one width for Allow and No thanks (VR4-012)
 });
 
 test("VR5-005: the words of a notebook's rules and the Invest red flags' symbols are bigger to tap on a phone", () => {

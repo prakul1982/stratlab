@@ -180,7 +180,9 @@ test("library cards: facts about the checks, buy and hold beside the return, whi
   assert.match(bits, /\{num\(gap, 1\)\} points \{h\.gap < 0 \? "behind" : "ahead"\}/);
   const pub = read("src/pages/PublicLibrary.tsx");
   assert.match(pub, /<LibraryCard e=\{e\} details=\{false\}/);
-  assert.match(pub, /<HoldLine e=\{e\} \/>/);          // the strategy's own page keeps the full sentence
+  // LIVE3-013 changed this on purpose: the strategy's own page says the gap once, in its headline, and both totals in one table
+  // (the full sentence beside them repeated it); the cards keep their one line
+  assert.match(pub, /\{ id: "hold", k: "Buy and hold, same dates", v: figure\(sh\.buy_hold, tone\(sh\.buy_hold\)\) \}/);
   assert.match(lib, /lede=\{onlyOurs \?/);
   const ui = read("src/components/ui.tsx");
   assert.match(ui, /edge: "Passed the checks"/);
@@ -323,7 +325,7 @@ test("a library entry's unseen label matches its span, and a result behind buy a
   const pub = read("src/pages/PublicLibrary.tsx"), lib = read("src/pages/LibraryPage.tsx");
   assert.doesNotMatch(pub + lib, /"Unseen years"/);
   assert.match(pub, /verdict-head pub-head \$\{headTone\(e\)\}/);
-  assert.match(pub, /tone=\{trails\(e\) \? undefined : tone\(sh\.ret\)\}/);
+  assert.match(pub, /figure\(sh\.ret, trails\(e\) \? undefined : tone\(sh\.ret\)\)/);          // a table row since LIVE3-013
 });
 
 test("R39: library return figures say they are the total over the test, not per year", async () => {
@@ -333,7 +335,7 @@ test("R39: library return figures say they are the total over the test, not per 
   const bits = read("src/components/LibraryBits.tsx"), pub = read("src/pages/PublicLibrary.tsx"), lib = read("src/pages/LibraryPage.tsx");
   assert.match(bits, /\{TOTAL_NOTE\} against[^]*total for buying and holding over the same dates/);
   assert.match(bits, /\[TOTAL_AFTER_COSTS, sh\.ret, [^\]]*\],\s*\[TOTAL_HOLD, sh\.buy_hold, /);       // the card both libraries draw (MO-5a)
-  assert.match(pub, /label="Total buy and hold"/);
+  assert.match(pub, /figureHead="Total"/);          // LIVE3-013: one table whose figures column says they are totals
   assert.match(lib, /header: TOTAL_AFTER_COSTS/);
   assert.match(lib, /header: TOTAL_HOLD/);
 });

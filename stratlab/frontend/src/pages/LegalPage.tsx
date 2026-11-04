@@ -70,7 +70,7 @@ export function LegalPage() {
         {/* laid out from the first frame and shown once the seller's details are in, so the page's height never changes when it
             appears (LIVE3-012: "Loading…" swapped for the whole policy moved the footer, CLS 0.14) */}
         {!loaded && <p className="sr-only" role="status">Loading…</p>}
-        <div className="legal-text" style={{ display: "contents", visibility: loaded ? undefined : "hidden" }} aria-hidden={loaded ? undefined : true}><Policy path={page.path} /></div>
+        <div className={loaded ? "legal-text" : "legal-text legal-wait"} aria-hidden={loaded ? undefined : true}><Policy path={page.path} /></div>
         {loaded && page.path === "/privacy" && <ChoiceControl />}{/* ADS-1: the answer about ads and analytics, and a way to change it */}
       </article>
     </PublicFrame>

@@ -766,6 +766,9 @@ td.num, .num { font-family: var(--sans); }
 /* the policies (pages/LegalPage.tsx) sit in the public frame like every other public page: a readable column, a serif heading for each part, the other policies as tabs */
 .pub-main.legal { max-width: 800px; }
 .legal-body { gap: 12px; line-height: 1.65; }
+/* the policy's text in the page's own flow (its gaps the article's); laid out but hidden until the seller's details are in (LIVE3-012) */
+.legal-text { display: contents; }
+.legal-wait > * { visibility: hidden; }
 .legal-body .h3 { margin-top: 22px; font: 600 21px/1.25 var(--serif); letter-spacing: -.01em; }
 .legal-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .legal-tabs a[aria-current="page"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
@@ -927,6 +930,10 @@ table.legs input[type=number] { width: 72px !important; }
 /* while a public page is still a loading placeholder, its main fills the screen, so the footer waits below it instead of
    showing under the placeholder and jumping down when the page arrives (R75-002: /library's layout shift on a phone) */
 main.pub-main:has(.k-skel-box) { min-height: 100vh; }
+/* LIVE3-013: a result's long explanation, folded under its figures */
+.pub-why { margin-top: var(--s2); }
+.pub-why > summary { cursor: pointer; color: var(--blue); font-size: var(--t-label); font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.pub-why > p { margin: var(--s2) 0 0; color: var(--ink-2); }
 .pub-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 640px) { .pub-checks { grid-template-columns: 1fr; } }
 

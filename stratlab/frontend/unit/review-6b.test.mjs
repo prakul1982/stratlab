@@ -34,7 +34,9 @@ test("the comment on /about does not say search engines list /features", () => {
 
 test("the legal pages wait for the seller's details instead of showing the fallback first", () => {
   const src = read("src/pages/LegalPage.tsx");
-  assert.match(src, /loaded \? <Policy path=\{page\.path\} \/>/);
+  // LIVE3-012 changed this on purpose: the policy is laid out from the first frame but hidden until the details are in, so the page
+  // doesn't move when it appears; the fallback names are still never shown
+  assert.match(src, /<div className=\{loaded \? "legal-text" : "legal-text legal-wait"\} aria-hidden=\{loaded \? undefined : true\}><Policy path=\{page\.path\} \/><\/div>/);
   assert.match(src, /setLoaded\(true\)/);
   assert.match(src, /catch\(\(\) => \{ if \(live\) setLoaded\(true\)/);
 });
