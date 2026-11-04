@@ -130,13 +130,12 @@ def serve(port: int, ready):
         time.sleep(3600)
 
 
-def _client_proc(first: int, count: int, users: int, port: int, ctx: dict, until_wall: float, think, out):
+def _client_proc(first: int, count: int, users: int, port: int, ctx: dict, until: float, think, out):
     """One load-generating process: `count` of the simulated users. Several of these keep the generator itself from
     becoming the bottleneck (one Python process tops out well before the server does)."""
     global THINK
     THINK = think
     results, errors = defaultdict(list), defaultdict(list)
-    until = time.monotonic() + (until_wall - time.time())
 
     async def go():
         # idle connections are dropped before the server's keep-alive ends: reusing one the server is closing at that
@@ -183,10 +182,12 @@ def run(users: int, seconds: int, port: int = 8765, clients: int = 1, baseline: 
     results, errors = defaultdict(list), defaultdict(list)
     clients = max(1, min(clients, users))
     out = ctx_mp.Queue()
-    until_wall = time.time() + seconds
+    # the end in monotonic time, one clock for every process on the machine: the caller's wall clock may be a test's
+    # fixed moment (tests/conftest.py) while these fresh processes read the machine's
+    until = time.monotonic() + seconds
     per = [users // clients + (1 if i < users % clients else 0) for i in range(clients)]
     starts = [sum(per[:i]) for i in range(clients)]
-    gens = [ctx_mp.Process(target=_client_proc, args=(starts[i], per[i], users, port, ctx, until_wall, THINK, out))
+    gens = [ctx_mp.Process(target=_client_proc, args=(starts[i], per[i], users, port, ctx, until, THINK, out))
             for i in range(clients)]
     try:
         for g in gens:

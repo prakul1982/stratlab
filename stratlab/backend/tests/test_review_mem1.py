@@ -47,23 +47,28 @@ def test_a_job_holding_the_turn_can_start_another_inside_it():
     assert not memguard.TURNS.holds()
 
 
-def test_a_job_that_waits_too_long_runs_anyway(monkeypatch):
-    # a queue of its own, as above: another test's background job asking for a turn left waiting() at 1 in CI (28 Oct)
-    monkeypatch.setattr(memguard, "TURNS", memguard._Turns())
+def test_a_job_that_waits_too_long_runs_anyway():
+    # a queue no other thread can reach: patching memguard.TURNS still let another test's background job (a thread
+    # started earlier in the same worker, calling memguard.heavy) queue on it, leaving waiting() at 1 or 2 (CI 28 Oct;
+    # the full suite 4 Nov). heavy() is this same acquire with the wait from _wait(); without its turn it runs anyway
+    turns = memguard._Turns()            # not put in memguard.TURNS: that is what the background jobs reach
     done = []
     holder = threading.Event()
 
     def hold():
-        with memguard.heavy("stuck"):
+        assert turns.acquire("stuck", 5)
+        try:
             holder.wait(5)
+        finally:
+            turns.release()
     t = threading.Thread(target=hold)
     t.start()
     time.sleep(0.05)
-    assert memguard.TURNS.acquire("late", 0.05) is False        # the wait ran out: no turn, and no hang
+    assert turns.acquire("late", 0.05) is False        # the wait ran out: no turn, and no hang
     done.append(1)
     holder.set()
     t.join(5)
-    assert done and memguard.TURNS.name is None and memguard.TURNS.waiting() == 0
+    assert done and turns.name is None and turns.waiting() == 0
 
 
 def test_the_turn_is_given_up_when_the_work_fails():
