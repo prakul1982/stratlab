@@ -3035,7 +3035,8 @@ def bars_chart_html(f: dict, digits: int = 0) -> str:
     num = lambda x: f"{x:.2f}".rstrip("0").rstrip(".")           # noqa: E731  a style value: "0", "33.33"
     at = lambda v: num(pct(v))                                    # noqa: E731
     td = tick_digits(ticks)
-    grid = "".join(f'<i class="by-line" style="bottom:{at(t)}%"></i><span class="by-tick" style="bottom:{at(t)}%">{e(_amount(f, t, td) if t else "0")}</span>'
+    # a loss's axis below zero reads −2,500 as the page's other negatives do, not -2,500 (LIVE2-017, seen live on RPOWER and BRK-B)
+    grid = "".join(f'<i class="by-line" style="bottom:{at(t)}%"></i><span class="by-tick" style="bottom:{at(t)}%">{e(_true_minus(_amount(f, t, td)) if t else "0")}</span>'
                    for t in ticks)
     cols = []
     for y in ys:

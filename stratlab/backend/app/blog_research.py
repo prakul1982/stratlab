@@ -280,10 +280,13 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
                    {"t": "table", "caption": "Listing-day close against the issue price, by subscription",
                     "head": ["Subscribed", "Issues", "Median change", "Closed above issue price"], "rows": buckets,
                     "align": "lrrr"}]
-    blocks += [{"t": "h2", "text": "Every issue counted"},
-               {"t": "p", "text": f"Newest listing first{f'; the latest {IPO_ROWS_SHOWN} of {len(have)} are shown, and every figure above counts all {len(have)}' if len(have) > IPO_ROWS_SHOWN else ''}."},
-               {"t": "table", "caption": f"IPO listing day in India, {year}: Open and Close are the first day's price against the issue price",
-                "head": ["Issue", "Listed", "Issue price", "Open", "Close", "Subscribed"], "rows": table, "align": "lrrrrr", "widths": [38, 13, 12, 11, 11, 15]},
+    # LIVE2-005: the issue-by-issue list is a fold (as each market of the classic post is): open, its 50 rows were most of the
+    # post's 11,555 px on a phone, every row a card; the figures above stay in view
+    shown = min(IPO_ROWS_SHOWN, len(have))
+    blocks += [{"t": "fold", "title": "Every issue counted", "note": f"{shown} of {len(have)} issues" if len(have) > shown else f"{len(have)} issues", "blocks": [
+                   {"t": "p", "text": f"Newest listing first{f'; the latest {IPO_ROWS_SHOWN} of {len(have)} are shown, and every figure above counts all {len(have)}' if len(have) > IPO_ROWS_SHOWN else ''}."},
+                   {"t": "table", "caption": f"IPO listing day in India, {year}: Open and Close are the first day's price against the issue price",
+                    "head": ["Issue", "Listed", "Issue price", "Open", "Close", "Subscribed"], "rows": table, "align": "lrrrrr", "widths": [38, 13, 12, 11, 11, 15]}]},
                {"t": "details", "title": "The headline figures in words", "items": words, "words": True},
                {"t": "details", "title": "How this was worked out", "items": [
                    "Data: the exchanges' public-issue pages (issue price, dates, bids received) and the exchanges' daily prices after listing. The tracker is "
