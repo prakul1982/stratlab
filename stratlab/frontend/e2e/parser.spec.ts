@@ -74,3 +74,23 @@ test("parser: with NIFTY 50 named, 'sell when it crosses back below' keeps the b
   await expect(card.getByRole("heading", { name: "Which stock or index?" })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("parser: a 200-day average on 15-minute candles runs on daily closes, says so, and the name says what runs (LIVE3-004)", async ({ page }) => {
+  const errors = await open(page);
+  // the live AI made it a 200-candle SMA on 15-minute candles, named "BankNifty 200 EMA Long"
+  const card = await build(page, "go long when price closes above the 200 day moving average, exit when it closes back under it, 15 minute candles on BANKNIFTY");
+  await expect(line(card, "SMA 200 (daily)").first()).toHaveAttribute("data-mark", "stated");
+  await expect(card.getByTestId("read-as")).not.toContainText("EMA");
+  await expect(card.getByTestId("read-assumed")).toContainText("The 200-day SMA is worked out on daily candles (each completed day's close); the trades are on 15-minute candles.");
+  await expect(page.getByRole("heading", { level: 1, name: /^BANKNIFTY SMA 200 daily( \d+)?$/ })).toBeVisible();      // (" 2": the other project's copy, same account)
+  await expect(page.getByText("BankNifty 200 EMA Long")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("parser: the notebook's name is the instrument and the rules, never a fuzzy word (LIVE3-005)", async ({ page }) => {
+  const errors = await open(page);
+  await build(page, "Buy RELIANCE when RSI drops below 30 and sell when it goes back above 70");
+  await expect(page.getByRole("heading", { level: 1, name: /^RELIANCE RSI 30\/70( \d+)?$/ })).toBeVisible();
+  await expect(page.getByText("Relevance")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
