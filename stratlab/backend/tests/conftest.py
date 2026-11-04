@@ -30,6 +30,70 @@ _PINNED = _pin_the_clock()
 
 
 @pytest.fixture(autouse=True)
+def no_clock_left_moved():
+    """Every test leaves the clock as it found it (R2 integration: test_fix1b::test_live1b_008 failed only in a combined
+    run). time_machine keeps ONE stack of travels and its stop() pops the top one, whoever started it: a travel started
+    and never stopped (a fixture that raised after clock.start(), before its yield) leaves every later test in that worker
+    at its moment, frozen when tick=False; a travel stopped twice pops the suite's own pin and the world reads the
+    machine's clock. So after each test the stack is put back exactly as it was and the test that moved it errors with
+    its name, whichever test, fixture or travel kind it was (tests/test_clock_guard.py proves both directions)."""
+    tm = sys.modules.get("time_machine")
+    before = list(tm.traveller_stack) if tm else []
+    yield
+    moved = clock_moved(before)
+    if moved:
+        pytest.fail(f"the test {moved} time_machine travel(s) (started without a stop, or stopped twice); "
+                    "use `with time_machine.travel(...)` or request.addfinalizer(travel.stop) right after start()", pytrace=False)
+
+
+MOVED_AT_IMPORT: list[str] = []      # test modules whose import moved the clock (tests/test_clock_guard.py asserts none)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_make_collect_report(collector):
+    """The same for importing every test module (collection, before any test runs): a module that starts a travel as it
+    loads (tests/visual_server.py did) would move every later test in that worker. Put back and named."""
+    tm = sys.modules.get("time_machine")
+    before = list(tm.traveller_stack) if tm else []
+    yield
+    moved = clock_moved(before)
+    if moved:
+        MOVED_AT_IMPORT.append(f"{collector.nodeid}: {moved}")
+
+
+def clock_moved(before: list) -> str | None:
+    """None when time_machine's stack holds exactly the travels of `before`; else it is put back and what happened said."""
+    tm = sys.modules.get("time_machine")
+    if tm is None or [id(t) for t in tm.traveller_stack] == [id(t) for t in before]:
+        return None
+    return _restore_clock(tm, before)
+
+
+def _restore_clock(tm, before: list) -> str:
+    """Put time_machine's stack back to `before`: stop what was left on top, start again what was popped (each at its
+    own moment, ticking as it did). Returns what happened, for the failure message."""
+    after = tm.traveller_stack
+    keep = 0
+    while keep < min(len(after), len(before)) and after[keep] is before[keep]:
+        keep += 1
+    extra, lost = len(after) - keep, len(before) - keep
+    while len(tm.traveller_stack) > keep:
+        tm.travel(0).stop()                      # stop() pops the top of the shared stack (and unpatches when it empties)
+    for t in before[keep:]:
+        tm.travel(_moment_ns(tm, t) / 1e9, tick=t._tick).start()
+    return f"left {extra} and popped {lost}"
+
+
+def _moment_ns(tm, t) -> int:
+    """Where a stopped travel's clock stands now (Traveller.time_ns reads the real clock only while some travel runs)."""
+    if not t._tick or not t._requested:
+        return t._destination_timestamp_ns
+    import time
+    real = tm._time_machine.original_time_ns() if tm.traveller_stack else time.time_ns()
+    return t._destination_timestamp_ns + (real - t._real_start_timestamp_ns)
+
+
+@pytest.fixture(autouse=True)
 def fresh_rate_limit():
     """Every test client calls from the same address, so the server's per-minute request limit would carry over from
     one test to the next and fail whichever test happens to come after a busy one. Each test starts with it cleared."""
