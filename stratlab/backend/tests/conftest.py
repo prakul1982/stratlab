@@ -8,6 +8,27 @@ os.environ["OFFICIAL_CLOSE_FETCH"] = "0"               # no exchange file or bro
 import pytest
 
 
+def _pin_the_clock():
+    """Every test runs at one fixed moment, the browser tests' (tests/e2e_clock.py OPEN: Wed 28 Oct 2026, 11:00 IST), and
+    its clock runs on from there (CLOCK follow-up, owner 4 Nov: "fix things globally"). The fake world's prices, candles,
+    headlines and dates are drawn from "now", so a suite read at the machine's clock passed in October and failed in
+    November (a 31 Jan 2018 price looked up for grandfathering, a fixed end date that had passed, a figure that only
+    matched while the month was 10). Started as this file loads, before any test module imports the app, so even the
+    times modules read as they load are the moment's. A test that needs another moment travels there itself (nested
+    travels work); TESTS_NOW=closed / <ISO with zone> picks another moment, TESTS_NOW=real the machine's clock.
+    Its own travel, not e2e_clock.start's, so tests of e2e_clock can start and stop theirs."""
+    from tests import e2e_clock
+    at = e2e_clock.moment(os.environ.get("TESTS_NOW") or "open")
+    if at is None:
+        return None
+    travel = e2e_clock._time_machine().travel(at, tick=True)
+    travel.start()
+    return travel
+
+
+_PINNED = _pin_the_clock()
+
+
 @pytest.fixture(autouse=True)
 def fresh_rate_limit():
     """Every test client calls from the same address, so the server's per-minute request limit would carry over from
@@ -92,9 +113,9 @@ def still_market_clock():
     two sides of a minute."""
     from datetime import datetime, timezone
     from tests import fake_prices
-    fake_prices.FROZEN = datetime.now(timezone.utc)
+    fake_prices.FROZEN = fake_prices.SESSION_FROZEN = datetime.now(timezone.utc)
     yield
-    fake_prices.FROZEN = None
+    fake_prices.FROZEN = fake_prices.SESSION_FROZEN = None
 
 
 @pytest.fixture(autouse=True)
@@ -109,6 +130,7 @@ def market_clock_follows_the_day(monkeypatch):
     now = datetime.now(timezone.utc)
     if fake_prices.FROZEN is not None and fake_prices.FROZEN.astimezone(ist).date() != now.astimezone(ist).date():
         monkeypatch.setattr(fake_prices, "FROZEN", now)
+    monkeypatch.setattr(fake_prices, "_followed", None)     # a day an earlier test travelled to (fake_prices.clock_now)
     yield
 
 

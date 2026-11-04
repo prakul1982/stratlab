@@ -103,8 +103,12 @@ def test_live1b_008_prices_as_of_stops_at_the_india_close():
     assert holdings.at_close(t) == datetime(2026, 10, 28, 10, 0, tzinfo=timezone.utc)       # 15:30 IST
     early = datetime(2026, 10, 28, 8, 0, tzinfo=timezone.utc)                # 13:30 IST, the market is trading
     assert holdings.at_close(early) == early
-    assert main._prices_at([{"at": "2026-10-28T15:59:12+05:30"}], True).startswith("2026-10-28T15:30")
-    assert main._prices_at([{"at": "2026-10-29T01:30:00+05:30"}]).startswith("2026-10-29T01:30")           # the US close is left as it is
+    # read the morning after (a trade stamp later than "now" is never taken; the test read the machine's clock and
+    # failed on the day itself before 16:00 IST)
+    import time_machine
+    with time_machine.travel(datetime(2026, 10, 29, 3, 0, tzinfo=timezone.utc), tick=False):
+        assert main._prices_at([{"at": "2026-10-28T15:59:12+05:30"}], True).startswith("2026-10-28T15:30")
+        assert main._prices_at([{"at": "2026-10-29T01:30:00+05:30"}]).startswith("2026-10-29T01:30")       # the US close is left as it is
 
 
 def test_live1b_008_a_list_of_both_markets_has_a_stamp_for_each(w, monkeypatch):
