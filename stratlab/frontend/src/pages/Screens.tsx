@@ -317,7 +317,7 @@ export function ScreensPage() {
             )}
             {rows.length > 0 && (
               <div className="screens-table">
-                <DataTable label="Companies that match" rows={rows} rowKey={(r) => r.symbol} stack columns={shownCols} sort={{ key: sort, desc, onSort: sortBy }} />
+                <DataTable csv="screen results" label="Companies that match" rows={rows} rowKey={(r) => r.symbol} stack columns={shownCols} sort={{ key: sort, desc, onSort: sortBy }} />
               </div>
             )}
             {out && rows.length < out.total && <button className="btn quiet sm k-btn-end" disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString("en-IN")} left)</button>}

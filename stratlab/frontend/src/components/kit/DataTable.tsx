@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { isValidElement, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Info } from "../ui";
 import { textOf } from "./Card";
 import { istToday, minusNode } from "../../lib/format";
@@ -53,13 +53,34 @@ export function usePhone(): boolean {
   return on;
 }
 
+/** EXPORT: the words a cell shows, for its CSV: text and numbers as they are, an element's children, and a component that draws its own words
+ * from its props (a <Signed value> change, a badge) asked for them; one that needs to be drawn on the page (it uses hooks) gives nothing. Sub-lines
+ * under a name are kept apart with " · ". */
+export function cellText(node: ReactNode, depth = 0): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map((n) => cellText(n, depth)).filter((t) => t !== "").join("");
+  if (!isValidElement<{ children?: ReactNode; className?: string }>(node) || depth > 12) return "";
+  const { type, props } = node;
+  if (props.className?.split(" ").some((c) => c === "sr-only")) return "";
+  const sub = props.className?.split(" ").includes("k-sub-line");
+  let inner: string;
+  if (props.children !== undefined) inner = cellText(props.children, depth + 1);
+  else {
+    const t = type as unknown as { render?: (p: object, r: null) => ReactNode; type?: unknown } | ((p: object) => ReactNode);
+    const fn = typeof t === "function" ? t : typeof t === "object" && t && typeof t.render === "function" ? (p: object) => t.render!(p, null) : null;
+    try { inner = fn && !(fn as { prototype?: { isReactComponent?: unknown } }).prototype?.isReactComponent ? cellText(fn(props), depth + 1) : ""; } catch { inner = ""; }
+  }
+  return sub && inner ? ` · ${inner}` : inner;
+}
+
 /** EXPORT: a table as the header and rows of its CSV: every column but the buttons, by `csv` where the column gives it, else by what the
  * cell shows (columnOf: a column of "12.5%" is a column of numbers named "… (%)"). */
 export function tableCsv<R>(columns: Column<R>[], rows: R[]): { head: string[]; rows: CsvValue[][] } {
   const cols = columns.filter((c) => !c.action && c.csv !== null).map((c) => {
     const name = c.csvHeader ?? c.cardLabel ?? ((typeof c.header === "string" ? c.header : textOf(c.header).trim()) || c.key);
     if (c.csv) { const f = c.csv; return { name, values: rows.map((r) => f(r)) }; }
-    const { suffix, values } = columnOf(rows.map((r) => textOf(c.cell(r))));
+    const { suffix, values } = columnOf(rows.map((r) => cellText(c.cell(r))));
     return { name: name + suffix, values };
   });
   return { head: cols.map((c) => c.name), rows: rows.map((_, i) => cols.map((c) => c.values[i])) };

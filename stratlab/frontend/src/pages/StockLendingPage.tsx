@@ -94,7 +94,7 @@ function MarketDay({ m, onOpen }: { m: NonNullable<LendTable["market"]>; onOpen:
   return (
     <Card label="Lending across the market" testId="slb-market">
       <CardHead title={`Lending across the market on ${dayText(m.day)}`} actions={<Seg label="Order" value={order} onChange={setOrder} options={MARKET_ORDER} />} />
-      <DataTable stack label={`Lending on ${dayText(m.day)}`} rows={rows} rowKey={(r) => r.symbol} rowAttrs={(r) => ({ "data-stock": r.symbol })} columns={cols} />
+      <DataTable csv={`stock lending ${m.day}`} stack label={`Lending on ${dayText(m.day)}`} rows={rows} rowKey={(r) => r.symbol} rowAttrs={(r) => ({ "data-stock": r.symbol })} columns={cols} />
       <p className="k-note">{rows.length} of the {m.stocks} stocks with lending trades that day. A fee from a few trades can be far from what lending fetches on other days.</p>
     </Card>
   );

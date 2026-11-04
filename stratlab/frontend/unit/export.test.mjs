@@ -91,3 +91,27 @@ test("themes: Slides (PDF), Slides (PowerPoint) and the companies' CSV, the deck
   assert.match(read("src/pages/ThemesPage.tsx"), /<ThemeDownloads r=\{r\} dive=\{dive\} region=\{region\} theme=\{q\} \/>/);
   assert.match(read("src/lib/theme.ts"), /deck: \(r: Region, theme: string, format: "pptx" \| "pdf"\) => api<Response>\(`\/research\/theme-dive\/deck\?/);
 });
+
+test("the audit as a class: every page whose main content is a table offers its CSV (or a server file), through the one mechanism", () => {
+  // page → what it offers; a page added to the app with a main table belongs in this list
+  const CSV = {
+    "src/pages/Screens.tsx": 1, "src/pages/BreadthPage.tsx": 4, "src/pages/IposPage.tsx": 4, "src/pages/IpoPage.tsx": 3, "src/pages/PositioningPage.tsx": 3,
+    "src/pages/trade/StockFuturesPage.tsx": 1, "src/pages/CorpActionsPage.tsx": 1, "src/pages/ResultsPage.tsx": 1, "src/pages/CalendarPage.tsx": 1,
+    "src/pages/trade/EventsPage.tsx": 1, "src/pages/OptionsSession.tsx": 1, "src/components/GroupSession.tsx": 2, "src/pages/EtfGapsPage.tsx": 1,
+    "src/pages/FlowsPage.tsx": 1, "src/pages/HoldersPage.tsx": 2, "src/pages/BizUpdatesPage.tsx": 1, "src/pages/MarginFundingPage.tsx": 1,
+    "src/pages/StockLendingPage.tsx": 1, "src/pages/trade/ClosingAuctionPage.tsx": 1, "src/pages/ResearchScans.tsx": 4, "src/pages/CompareExperiments.tsx": 1,
+    "src/pages/trade/JournalPage.tsx": 1, "src/pages/money/MutualFundsPage.tsx": 3, "src/pages/money/TaxToolsPage.tsx": 2, "src/pages/HoldingsPage.tsx": 1,
+    "src/pages/PulseMood.tsx": 1, "src/pages/money/UsTaxPage.tsx": 1, "src/pages/DeepDive.tsx": 4, "src/pages/Research.tsx": 1, "src/components/Research.tsx": 2,
+    "src/components/watch/WatchPanel.tsx": 1, "src/components/ThemeDive.tsx": 1,
+  };
+  for (const [f, n] of Object.entries(CSV)) {
+    const s = read(f);
+    const got = (s.match(/<(DataTable|FoldTable) csv=/g) ?? []).length + (s.match(/<CsvButton /g) ?? []).length + (s.match(/downloadCsv\(/g) ?? []).length;
+    assert.ok(got >= n, `${f}: ${got} CSV downloads, expected ${n}`);
+  }
+  // the downloads that were there before keep their own server files, each saved through lib/share.ts
+  for (const [f, re] of [["src/pages/TaxReportPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-tax-FY-/], ["src/pages/money/NetWorthPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-net-worth-/],
+    ["src/pages/money/UsTaxPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-schedule-FA-CY/], ["src/pages/money/ItrExportPage.tsx", /saveFile\(await r\.blob\(\)/],
+    ["src/pages/ExperimentPage.tsx", /download\(await r\.blob\(\), `.*-trades\.csv`\)/], ["src/pages/DeepDive.tsx", /download\(await r\.blob\(\), `\$\{sym\}-deep-dive\.\$\{format\}`\)/]])
+    assert.match(read(f), re, f);
+});

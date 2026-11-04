@@ -136,7 +136,7 @@ export function CalendarPage() {
       {failed.length > 0 && <ErrorState title={`Some dates couldn't be read: ${failed.join(", ")}`} action={{ label: "Try again", onClick: () => setTries((x) => x + 1) }}>The rest are below.</ErrorState>}
       {loading && !rows.length ? <Card><Skeleton label="Reading the calendars" /></Card> : (
         <Card label="Dates" testId="cal-all">
-          <DataTable stack label="Every date, this week and next" columns={cols} rows={rows} rowKey={(r) => r.id}
+          <DataTable csv="money calendar" stack label="Every date, this week and next" columns={cols} rows={rows} rowKey={(r) => r.id}
             empty={types.length ? "Nothing dated in these two weeks for this choice." : "Pick at least one type above."} />
           {cut.length > 0 && (
             <div className="k-row cal-more">

@@ -266,7 +266,7 @@ export function ResultsPage() {
           return (
             <div key={d} className="inv-day" data-testid="results-day">
               <span className="k-eyebrow">{dayHeading(d, info.count, data.today)}</span>
-              <DataTable label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`} columns={columns} stack phonePage={10} />
+              <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`} columns={columns} stack phonePage={10} />
               {info.count > info.shown && (
                 <div className="k-row">
                   <span className="k-note">Showing {info.shown} of {info.count.toLocaleString("en-IN")} on {resultDay(d)}.</span>

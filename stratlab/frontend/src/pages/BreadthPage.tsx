@@ -198,7 +198,7 @@ function LiveCard({ live, group, today, lastLevel, help }: { live: LiveView; gro
         <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<span data-testid="breadth-live-tag"><Badge tone={tag.tone}>{tag.text}</Badge></span>} />
         {live.late && <Notice tone="warn" role="status">The newest live point is {live.age_minutes} minutes old. A point is added every {live.every_minutes} minutes while the market is open; the next one comes when live prices are read again.</Notice>}
         {rows.length > 0
-          ? <DataTable stack label="Breadth so far today against the last close" columns={cols} rows={rows} rowKey={(r) => r.key} />
+          ? <DataTable csv="breadth today" stack label="Breadth so far today against the last close" columns={cols} rows={rows} rowKey={(r) => r.key} />
           : <StatRow>
               <Stat label="Rose / fell" value={<><span className="k-up">{count(l.adv)}</span> <span className="k-muted">/</span> <span className="k-down">{count(l.dec)}</span></>} note={`${count(l.unch)} unchanged · against the previous close`} />
               <Stat label="Above 20-day average" value={share(l.pct20)} />
@@ -248,7 +248,7 @@ function Headline({ t, h, group, help, live, pending, revised, locked }: { t: To
   return (
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
       <CardHead title={latestDue(t.day, pending) ?? dailyTitle(shortDay(t.day), live)} />
-      <DataTable stack label={`Breadth on ${shortDay(t.day)} against the day before`} columns={cols} rows={rows} rowKey={(r) => r.key} />
+      <DataTable csv={`breadth ${t.day}`} stack label={`Breadth on ${shortDay(t.day)} against the day before`} columns={cols} rows={rows} rowKey={(r) => r.key} />
       <p className="k-note" data-testid="breadth-counted">{count(t.stocks.value)} stocks counted · {count(t.unch.value)} unchanged.</p>
       {/* DE-023: the correction is one short line with its details behind the (i), not a paragraph in the headline card */}
       {changed.length > 0 && <p className="k-note" data-testid="breadth-revised">{changed.length === 1 ? "An earlier day's count was revised" : `${changed.length} earlier counts were revised`}
@@ -351,7 +351,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
 function SectorHeat({ t }: { t: SectorTable }) {
   return (
     <div className="k-stack">
-      <DataTable stack label="Share of each sector's stocks above their 50-day average" rows={t.rows} rowKey={(r) => r.sector} sticky={t.rows.length > 14}
+      <DataTable csv="breadth sectors above 50-day average" stack label="Share of each sector's stocks above their 50-day average" rows={t.rows} rowKey={(r) => r.sector} sticky={t.rows.length > 14}
         columns={[{ key: "s", header: "Sector", rowHeader: true, cell: (r) => <span className="hyphens">{softHyphens(r.sector)}</span> /* "Telecommunica-tion", not "Telecommunicatio / n" on a phone (R54-012, R55-001) */ }, { key: "n", header: "Stocks", numeric: true, cell: (r) => r.stocks },
           ...t.columns.map((c, i) => ({ key: c.label, header: <span title={c.day}>{sectorColumnLabel(c, shortDay)}</span>, cardLabel: sectorColumnLabel(c, shortDay), numeric: true,
             cell: (r: SectorTable["rows"][number]) => {
@@ -372,7 +372,7 @@ function Recent({ h }: { h: History }) {
   const idx = Array.from({ length: Math.min(20, n) }, (_, k) => n - 1 - k);
   const num = (key: string, header: string, get: (i: number) => string): Column<number> => ({ key, header, numeric: true, cell: get });
   return (
-    <DataTable stack label="The last 20 trading days" rows={idx} rowKey={(i) => h.days[i]} empty="No days to show."
+    <DataTable csv="breadth last 20 trading days" stack label="The last 20 trading days" rows={idx} rowKey={(i) => h.days[i]} empty="No days to show."
       columns={[{ key: "d", header: "Day", rowHeader: true, cell: (i) => shortDay(h.days[i]) },
         num("adv", "Rose", (i) => count(h.adv[i])), num("dec", "Fell", (i) => count(h.dec[i])),
         num("p50", "Above 50-day", (i) => share(h.pct50[i])), num("p200", "Above 200-day", (i) => share(h.pct200[i])),

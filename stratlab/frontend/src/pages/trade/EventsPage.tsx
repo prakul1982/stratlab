@@ -89,7 +89,7 @@ function IndexChanges({ rows, failed }: { rows: IndexChange[]; failed: string | 
       <CardHead level={3} title={c.effective ? `From ${evDay(c.effective, true)}` : c.title}
         actions={<span className="k-note">Announced {asOf(c.announced)} · <a className="link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">Press release ↗</a></span>} />
       {/* each table names its own announcement: two changes on one date gave two landmarks with one name (R5O-030) */}
-      <DataTable label={`Index changes ${c.effective ? `from ${evDay(c.effective, true)}` : c.title}, announcement ${n + 1} of ${Math.min(4, shown.length)}`} columns={cols} rows={c.sections} rowKey={(s) => s.index} stack />
+      <DataTable csv="index changes" label={`Index changes ${c.effective ? `from ${evDay(c.effective, true)}` : c.title}, announcement ${n + 1} of ${Math.min(4, shown.length)}`} columns={cols} rows={c.sections} rowKey={(s) => s.index} stack />
     </Card>
   );
   return (

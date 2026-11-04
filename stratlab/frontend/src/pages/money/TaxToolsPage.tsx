@@ -241,7 +241,7 @@ function DividendsTab() {
                 {y.ais_note && <p className="k-note">{y.ais_note}</p>}
                 {y.unpriced > 0 && <p className="k-note">{y.unpriced} US payment{y.unpriced === 1 ? " isn't" : "s aren't"} counted: the dollar rate isn't available right now.</p>}
                 {/* no "US tax withheld" column standing empty when every company is Indian (TABLE-SWEEP) */}
-                {!y.locked && y.companies.length > 0 && <DataTable label="Dividends by company" columns={companyCols.filter((c) => c.key !== "us" || y.companies.some((x) => x.country === "US"))} rows={y.companies} rowKey={(c, i) => `${c.country}:${c.symbol}:${i}`} />}
+                {!y.locked && y.companies.length > 0 && <DataTable csv="dividends by company" label="Dividends by company" columns={companyCols.filter((c) => c.key !== "us" || y.companies.some((x) => x.country === "US"))} rows={y.companies} rowKey={(c, i) => `${c.country}:${c.symbol}:${i}`} />}
               </>
             )}
           </Card>
@@ -523,7 +523,7 @@ function LtcgTab() {
           <CardHead title="Turning long-term" info="A sale before the date shown is short-term (20% from 23 July 2024); from that date it is long-term (12.5% above the exemption)."
             actions={<Seg label="Within" options={[30, 60, 90].map((n) => ({ value: String(n), label: `${n} days` }))} value={String(within)} onChange={(n) => setWithin(Number(n))} />} />
           {soon.length === 0 ? <EmptyState title={`Nothing turns long-term in ${within} days`}>No open lot turns long-term in the next {within} days.</EmptyState>
-            : <DataTable label="Lots turning long-term" columns={soonCols} rows={soon} rowKey={(r, i) => `${r.key}${r.bought}${r.qty}-${i}`} rowAttrs={(r) => ({ title: r.text })} />}
+            : <DataTable csv="lots turning long-term" label="Lots turning long-term" columns={soonCols} rows={soon} rowKey={(r, i) => `${r.key}${r.bought}${r.qty}-${i}`} rowAttrs={(r) => ({ title: r.text })} />}
         </Card>
       )}
 

@@ -312,7 +312,7 @@ export function ScanPage() {
           {preset.rules && <p className="k-note" data-testid="custom-rules-said">Rules: {preset.rules.join("; ")}. {preset.within === 1 ? "A match is a stock where they held on the latest candle." : `A match is a stock where they held on any of the last ${preset.within} candles.`}</p>}
           {preset.basis === "whole_session" && <p className="k-note" data-testid="scan-whole-session">The session is still going. A volume rule holds a whole day's volume against an average, so it is judged on the last whole session; today's volume so far is not compared.</p>}
           {preset.live && !preset.basis && <p className="k-note" data-testid="scan-live-note">The session is still going: each price is the last price so far, not a close.</p>}
-          <DataTable stack phonePage={25} label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
+          <DataTable csv={`scan ${preset.name}`} stack phonePage={25} label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>
@@ -351,7 +351,7 @@ export function ScanPage() {
             <Stat label="Stocks checked" value={(st2.checked ?? (st2.rows.length + st2.problems.length + st2.missing.length)).toLocaleString("en-IN")}
               note={st2.stored ? "read after the close; matches only are kept" : st2.problems.length + st2.missing.length ? `${st2.problems.length + st2.missing.length} skipped, named below` : "read just now"} />
           </StatRow>
-          <DataTable stack phonePage={25} label={`${st2.name}: stage and Supertrend`} rows={rows} rowKey={(r) => r.id} sticky={rows.length > 12} empty="Nothing matches right now."
+          <DataTable csv={`scan ${st2.name}`} stack phonePage={25} label={`${st2.name}: stage and Supertrend`} rows={rows} rowKey={(r) => r.id} sticky={rows.length > 12} empty="Nothing matches right now."
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>
@@ -531,7 +531,7 @@ export function RotationPage() {
             <button className="btn quiet sm" onClick={() => setPicked(new Set())}>Clear the chart</button></>} />
           <ChipBar label="Show quadrant" value={quad} onChange={(v) => setQuad(v as Quadrant | "all")}
             options={[{ value: "all", label: `All ${all.length}` }, ...QUADRANTS.map((x) => ({ value: x.id, label: `${x.name} ${counts[x.id]}` }))]} />
-          <DataTable stack label="Where each one stands" rows={rowsShown} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
+          <DataTable csv="sector rotation" stack label="Where each one stands" rows={rowsShown} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
             sort={{ key: sort?.key ?? "", desc: sort?.desc ?? false, onSort }} empty="None in this quadrant."
             columns={[
               { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, sortable: true, cell: (r) => (isIndex
@@ -730,7 +730,7 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
           <Card>
             <CardHead title={`${data.total.toLocaleString("en-IN")} filing${data.total === 1 ? "" : "s"} ${noun}`}
               actions={<span className="k-small k-muted">{data.companies.toLocaleString("en-IN")} compan{data.companies === 1 ? "y" : "ies"} · {asOf(data.from)} to {asOf(data.to)}</span>} />
-            <DataTable stack label="Red-flag filings, newest first" rows={data.items} rowKey={(r) => r.id} empty="Nothing matches these filters."
+            <DataTable csv="red-flag filings" stack label="Red-flag filings, newest first" rows={data.items} rowKey={(r) => r.id} empty="Nothing matches these filters."
               columns={[
                 { key: "d", header: "Filed", cell: (r) => asOf(r.at.slice(0, 10)) ?? "–" },
                 { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => (

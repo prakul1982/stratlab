@@ -16,6 +16,8 @@ USERS = {
     **{f"review-{i}": (f"u-review-{i}", f"review{i}@example.com", "pro") for i in range(32)},
     # the FIXB lane's e2e (e2e/live3b.spec.ts): its own Pro accounts, one per test and project
     **{f"live3b-{i}": (f"u-live3b-{i}", f"live3b{i}@example.com", "pro") for i in range(8)},
+    # the EXPORT lane's e2e (e2e/export.spec.ts): its own accounts, one per test and project (Pro, then a Free pair for the deck limit)
+    **{f"export-{i}": (f"u-export-{i}", f"export{i}@example.com", "free" if i >= 20 else "pro") for i in range(24)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),

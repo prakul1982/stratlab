@@ -407,7 +407,7 @@ export function WatchTable({ region, symbols, names, label = "Your watchlist" }:
     <div className="watch-table">
       {/* on a phone a card a row (the app's phone pattern): beside a stock's name and its surveillance note the Change column ran off
           a 390px screen */}
-      <DataTable label={label} rows={symbols} rowKey={(s) => s} stack
+      <DataTable csv={`watchlist ${label}`} label={label} rows={symbols} rowKey={(s) => s} stack
         columns={[
           { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (s) => (
             <>
@@ -438,7 +438,7 @@ export function QuoteTable({ region, symbols, label }: { region: Region; symbols
   }, [region, key]);
   const ccy = region === "IN" ? "INR" : "USD";
   return (
-    <div className="dd-fit"><DataTable label={label} rows={symbols} rowKey={(s) => s} stack={false}
+    <div className="dd-fit"><DataTable csv={`watchlist ${label}`} label={label} rows={symbols} rowKey={(s) => s} stack={false}
       columns={[{ key: "c", header: "Company", rowHeader: true, cell: (s) => <Link className="link" to={`/research/${region}/${encodeURIComponent(s)}`}><b>{s}</b></Link> },
         { key: "p", header: "Price", numeric: true, cell: (s) => (q == null ? <span className="skel" /> : q[s]?.price != null ? price(q[s]!.price!, ccy) : "–") },
         { key: "d", header: "Change", numeric: true, cell: (s) => (q?.[s]?.change_pct != null ? <Delta value={q[s]!.change_pct}>{pct(q[s]!.change_pct!, 2)}</Delta> : "–") }]} /></div>
