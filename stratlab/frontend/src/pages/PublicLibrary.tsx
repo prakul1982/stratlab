@@ -10,7 +10,7 @@ import { Search } from "../components/Icons";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
 import { adsLive } from "../lib/ads";
 import { CONFIG } from "../lib/adsConfig";
-import { CHECK_RESULT, CHECKS_NOT_HOLD, checksOf, headTone, LibraryCard, libraryTally, liveOptions, marketChoices, Rules, shownStats, strategyName, libMeta, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
+import { CHECK_RESULT, CHECKS_NOT_HOLD, pricesStop, checksOf, headTone, LibraryCard, libraryTally, liveOptions, marketChoices, Rules, shownStats, strategyName, libMeta, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
 import { libraryDescription, libraryTitle } from "../lib/libraryText";
 import { Badge } from "../components/kit/Badge";
 import { Card, CardHead } from "../components/kit/Card";
@@ -174,6 +174,7 @@ export function PublicLibraryEntry({ id }: { id: string }) {
             {/* the result in the checks' own words, with buy and hold beside it, the same words as the library card (R6V-005) */}
             <h1 className={`verdict-head pub-head ${headTone(e)}`} data-testid="lib-headline">{e.verdict.fact_headline ?? e.verdict.headline}</h1>
             <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span data-testid="lib-tested">{e.range ? `Tested ${testedRange(e.range)}` : "Tested on past prices"}</span></span>
+            {pricesStop(e.range, e.ran_at ?? e.published_at) && <p className="k-note k-warn-text" data-testid="lib-stops">{pricesStop(e.range, e.ran_at ?? e.published_at)}</p>}
           </div>
           <Card label="Results">
             <CardHead title="Results after costs, total over the test" actions={<span className="k-note">{checksOf(e)}</span>} />

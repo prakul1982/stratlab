@@ -21,6 +21,23 @@ def frozen_series(bars: list[dict] | None, n: int = 5) -> bool:
     from ..options.data import frozen_series as frozen
     return frozen(bars, n)
 
+# a stitched daily series whose last candle is this many days before today has stopped: the source's continuous series
+# for that segment ends there (the currency futures' one stopped on 6 Jun 2023, so every rupee-pair library entry was
+# tested only to that day while the others ran to the latest close)
+STOPPED_AFTER_DAYS = 10
+
+
+def ended_early(bars: list[dict] | None, today: date | None = None) -> bool:
+    """Whether a daily series stops well before today (more than STOPPED_AFTER_DAYS days, so a long holiday isn't one)."""
+    if not bars:
+        return False
+    try:
+        last = date.fromisoformat(str(bars[-1]["t"])[:10])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return ((today or ist_date()) - last).days > STOPPED_AFTER_DAYS
+
+
 # commodity: (name, price units in one lot, what one price unit is)
 CONTRACTS = {
     "GOLD": ("Gold", 100, "10 g"), "GOLDM": ("Gold mini", 10, "10 g"), "GOLDPETAL": ("Gold petal", 1, "1 g"),
@@ -135,13 +152,17 @@ class MCXProvider:
                 mark(int(inst["token"]), self.day_close())
         try:
             bars = self.kite.history(int(inst["token"]), tf, days, continuous=(tf == "1d"))
-            if tf == "1d" and (not bars or frozen_series(bars)):
+            frozen, stopped = tf == "1d" and frozen_series(bars), tf == "1d" and ended_early(bars)
+            if tf == "1d" and (not bars or frozen or stopped):
                 # the broker keeps no stitched series for some segments (currency futures): the current contract's own
                 # daily prices instead, which go back to its listing (about a year for monthly currency contracts). A
                 # stitched series that is one standing price with no volume (R13-002: USDINR o=h=l=c=96.135, volume 0,
-                # every day for a month) is no series either: the contract's own candles are read, and kept when they move
+                # every day for a month) is no series either: the contract's own candles are read, and kept when they move.
+                # Nor is one that stopped long ago (the rupee pairs' ended on 6 Jun 2023): the contract's own candles, which
+                # reach the latest close, are kept when they run later than it, so a test runs to today over a shorter span
                 own = self.kite.history(int(inst["token"]), tf, days, continuous=False)
-                if own and (not bars or not frozen_series(own)):
+                if own and (not bars or not frozen_series(own)) and \
+                        (not bars or frozen or str(own[-1]["t"])[:10] > str(bars[-1]["t"])[:10]):
                     bars = own
             return bars
         except Exception as e:

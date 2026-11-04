@@ -4,7 +4,7 @@ import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { plainTerms } from "../lib/plainTerms";
 import { holdResult, libMeta, strategyName } from "../lib/libraryList";
-import { TOTAL_AFTER_COSTS, TOTAL_HOLD, testedRange } from "../lib/libraryText";
+import { TOTAL_AFTER_COSTS, TOTAL_HOLD, pricesStop, testedRange } from "../lib/libraryText";
 import { headTone, trails, unseenLabel } from "../lib/tradeUi";
 import { VERDICT_FACT, VerdictBadge } from "./ui";
 import { Signed } from "./kit/Signed";
@@ -27,7 +27,9 @@ export interface LibEntry {
   /** the return after costs beside buy and hold over the same period, in percent (gap < 0: behind buy and hold) */
   vs_hold?: { ret: number; hold: number; gap: number } | null;
   stats: { ret: number | null; buy_hold: number | null; mdd: number | null; trades: number | null; unseen: number | null };
-  published_at: string; copies: number; mine?: boolean; reported?: boolean; hidden?: boolean;
+  published_at: string; copies: number;
+  /** when this version was tested (a StratLab entry keeps its first published_at through its weekly re-runs) */
+  ran_at?: string; mine?: boolean; reported?: boolean; hidden?: boolean;
   /** StratLab's own entries: run by StratLab through its own backtest and verdict. */
   official?: boolean; badge?: string;
   /** false when the experiment never traded: its return, fall and unseen result are "not run", not 0.0% */
@@ -43,7 +45,7 @@ export const shownStats = (e: LibEntry) => {
 };
 
 import { TOTAL_NOTE } from "../lib/libraryText";
-export { CHECK_RESULT, testedRange, TOTAL_AFTER_COSTS, TOTAL_HOLD, TOTAL_NOTE, whereShown } from "../lib/libraryText";
+export { CHECK_RESULT, pricesStop, testedRange, TOTAL_AFTER_COSTS, TOTAL_HOLD, TOTAL_NOTE, whereShown } from "../lib/libraryText";
 
 /** The verdict filter, in the words of the checks rather than a judgement of the strategy (R5O-014). */
 // the filter says what "passed" is about: the checks test whether a result holds up, not whether it beat buying and
@@ -135,6 +137,8 @@ export function LibraryCard({ e, details = true, actions }: { e: LibEntry; detai
       <p className="k-small lib-vs" data-testid="lib-hold">{hold ? <b>{hold}</b> : null}
         {/* the dates the figures are for, on the card's face: they were only behind "Rules and details" (LIVE1A-027) */}
         {e.range && <span className="k-note lib-dates" data-testid="lib-dates">{testedRange(e.range)}</span>}</p>
+      {/* a market whose prices stop long before the test was run says so, not a silently old date (owner, 4 Nov) */}
+      {pricesStop(e.range, e.ran_at ?? e.published_at) && <p className="k-note k-warn-text" data-testid="lib-stops">{pricesStop(e.range, e.ran_at ?? e.published_at)}</p>}
       <div className="k-row lib-status">
         <VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />
         {sh.ran ? (sh.unseen != null && <span className="k-note">{unseenLabel(e)} <Signed value={sh.unseen} fmt={(v) => pct(v)} /></span>)

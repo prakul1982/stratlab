@@ -9,6 +9,19 @@ export { libraryDescription, libraryTitle, whereShown } from "../content/seo";
 export const testedRange = (r: { from: string; to: string } | null | undefined) =>
   r ? `${fmtDate(String(r.from).slice(0, 10))} to ${fmtDate(String(r.to).slice(0, 10))}` : null;
 
+/** Days a test may end before it was run and still count as "to the latest prices" (a weekend, a holiday week). */
+export const STOPS_AFTER_DAYS = 30;
+
+/** "Prices stop on 6 Jun 2023, the latest this market's data has": said when a test ends long before the day it was run, so a
+ * market whose price source ends shows that plainly instead of a silently old date (owner, 4 Nov: the rupee currency
+ * futures entries ran to 6 Jun 2023 while coins ran to the latest close). Null when the test ran to the latest prices. */
+export function pricesStop(r: { from: string; to: string } | null | undefined, ranAt: string | null | undefined): string | null {
+  if (!r?.to || !ranAt) return null;
+  const to = Date.parse(String(r.to).slice(0, 10)), ran = Date.parse(String(ranAt).slice(0, 10));
+  if (!Number.isFinite(to) || !Number.isFinite(ran) || (ran - to) / 86_400_000 <= STOPS_AFTER_DAYS) return null;
+  return `Prices stop on ${fmtDate(String(r.to).slice(0, 10))}, the latest this market's data has.`;
+}
+
 /** Why a copy's figures can differ from its card: each card is its own test's dates, and a copy is tested again up to the
  * latest prices (DA-038: a re-test gave +46.2% beside the card's +52.7%, tested to a date 11 days earlier, and nothing said why). */
 export const LIBRARY_DATES = "Each card's figures are for the dates under it. A copy is tested again up to the latest prices, so its figures can differ.";
