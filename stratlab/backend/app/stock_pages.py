@@ -3062,14 +3062,29 @@ def bars_chart_html(f: dict, digits: int = 0) -> str:
             f'<div class="by-plot">{grid}<div class="by-cols">{"".join(cols)}</div></div></figure>')
 
 
-def growth_words(what: str, v) -> str | None:
-    """"revenue grew 6.4% a year", "revenue fell 14.7% a year", "revenue was flat"; None without a figure."""
+BASE_EFFECT_PCT = 50.0          # a three-year rate this steep says the first year was small: the words name that year's figure (RC4-015)
+
+
+def growth_words(what: str, v, base: str | None = None) -> str | None:
+    """"revenue grew 6.4% a year", "revenue fell 14.7% a year", "revenue was flat"; None without a figure. A rate of 50% a year or
+    more names where it started ("net profit grew 213.2% a year, from ₹1,105 cr in Mar 2023"), so a small or one-off first year
+    reads as the base it is (RC4-015: a merger year, a one-off profit)."""
     v = _num(v)
     if v is None:
         return None
     if abs(v) < 0.05:
         return f"{what} was flat"
-    return f"{what} {'grew' if v > 0 else 'fell'} {abs(v):,.1f}% a year"
+    start = f", from {base}" if base and abs(v) >= BASE_EFFECT_PCT else ""
+    return f"{what} {'grew' if v > 0 else 'fell'} {abs(v):,.1f}% a year{start}"
+
+
+def _base_year(f: dict, ys: list[dict], key: str, digits: int) -> str | None:
+    """The figure three years before the newest (the start of a three-year rate), "₹1,105 cr in Mar 2023"; None without one."""
+    if len(ys) < 4:
+        return None
+    y = ys[-4]
+    v = _num(y.get(key))
+    return None if v is None else f"{_amount(f, v, digits)} in {y.get('year')}"
 
 
 def _table(f: dict) -> str:
@@ -3086,7 +3101,8 @@ def _table(f: dict) -> str:
     head = "".join(f"<th>{e(str(y.get('year') or ''))}</th>" for y in ys)
     body = "".join(f"<tr><td>{label}</td>" + "".join(f"<td>{fmt(y.get(k))}</td>" for y in ys) + "</tr>"
                    for label, k, fmt in rows if any(_num(y.get(k)) is not None for y in ys))
-    growth = [w for w in (growth_words("revenue", g.get("sales_cagr_3y")), growth_words("net profit", g.get("profit_cagr_3y"))) if w]
+    growth = [w for w in (growth_words("revenue", g.get("sales_cagr_3y"), _base_year(f, ys, "sales", digits)),
+                          growth_words("net profit", g.get("profit_cagr_3y"), _base_year(f, ys, "profit", digits))) if w]
     note = f'<p class="small muted">{e(f.get("unit") or "")}{". Over three years, compounded: " + ", ".join(growth) if growth else ""}.</p>'
     cue = '<p class="scroll-cue" aria-hidden="true">Newest year on the right. Swipe for earlier years →</p>' if len(ys) > 2 else ""
     return (f'<h2>Revenue and profit</h2><div class="card">{bars_chart_html(f, digits)}{cue}<div class="tbl fin" tabindex="0" role="region" aria-label="Revenue and profit by year">'
