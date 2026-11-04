@@ -33,7 +33,7 @@ test("MO-5a (as a table): a row says each fact once: one author line, the figure
   assert.match(table, /By \{e\.author\}/);
   assert.doesNotMatch(table, /<Badge tone="ok"|e\.badge/, "no StratLab badge beside a \"by StratLab\" line");
   assert.doesNotMatch(table, /<BehindHold|<HoldLine|k-eyebrow/);
-  for (const [key, header] of [["ret", "TOTAL_AFTER_COSTS"], ["bh", "TOTAL_HOLD"], ["gap", '"vs hold \\(pts\\)"'], ["mdd", '"Worst fall"'], ["unseen", '"Unseen period"']])
+  for (const [key, header] of [["ret", '"After costs"'], ["bh", '"Buy and hold"'], ["gap", '"vs hold \\(pts\\)"'], ["mdd", '"Worst fall"'], ["unseen", '"Unseen period"']])
     assert.match(table, new RegExp(`\\{ key: "${key}", header: ${header}, numeric: true, sortable: true`), key);
   assert.match(table, /\{ key: "checks", header: "Checks", wrap: true, sortable: true/);
   // the dates, the reason, the words and the rules are in the row's details, one tap away
@@ -48,7 +48,7 @@ test("MO-5a (as a table): a row says each fact once: one author line, the figure
 test("MO-5a (as a table): a phone gets compact rows, the other figures in the details as a small table", () => {
   const css = read("src/pages/trade/trade.css");
   assert.doesNotMatch(css, /\.lib-card\b|\.lib-figs/);
-  assert.match(css, /\.lib-table \.k-table td:is\(\[data-label="Total buy and hold"\], \[data-label="Worst fall"\], \[data-label="Unseen period"\]\) \{ display: none; \}/);
+  assert.match(css, /\.lib-table \.k-table td:is\(\[data-label="Buy and hold"\], \[data-label="Worst fall"\], \[data-label="Unseen period"\]\) \{ display: none; \}/);
   assert.match(css, /\.lib-mini \{ display: none; \}/);
   assert.match(css, /\.lib-mini \{ display: table; width: 100%; \}/);
 });

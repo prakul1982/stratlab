@@ -1,12 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from "react";
-import type { FeedbackSend } from "./Feedback";
+import { useEffect, useState } from "react";
 
-/* Help & feedback's opener, the labelled button and the host (owner, 4 Nov). Small, and in the shared "common" file every page
- * already downloads (vite.config.ts), so the button and the footer link cost a page nothing; the dialog (Feedback.tsx) is
- * downloaded only when someone opens it. */
+/* Help & feedback's opener, the labelled button and the open/closed state (owner, 4 Nov). Tiny, and in the shared "common" file
+ * every page already downloads (vite.config.ts), so the button and the footer link cost a page nothing. Each half's root draws
+ * the dialog (Feedback.tsx) with React.lazy only once it is asked for, so no page downloads it before that. */
 
 const OPEN = "stratlab:feedback";
-const Dialog = lazy(() => import("./Feedback"));
 
 /** Open the feedback dialog from anywhere (a button, a link in a footer, the Help page). */
 export function openFeedback() {
@@ -18,18 +16,16 @@ export function FeedbackButton({ className = "btn quiet sm" }: { className?: str
   return <button type="button" className={`${className} feedback-btn`} onClick={openFeedback} title="Report something broken, or suggest a feature">Feedback</button>;
 }
 
-/** Drawn once at each half's root: the dialog, when something asked for it. The signed-in app passes its own request (with the
- * sign-in) and its toast; the public half a plain request, so a visitor's page loads none of the app's account code. */
-export function FeedbackHost({ send, signedIn, onSent }: { send: FeedbackSend; signedIn: boolean; onSent?: (msg: string) => void }) {
+/** Whether the dialog is asked for: openFeedback() anywhere, or an address with #feedback (a reply email, the layout checker). */
+export function useFeedbackOpen(): [boolean, (v: boolean) => void] {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const on = () => setOpen(true);
-    // a link can open it too: any address with #feedback (a reply email, the layout checker)
     const hash = () => { if (location.hash === "#feedback") setOpen(true); };
     hash();
     window.addEventListener(OPEN, on);
     window.addEventListener("hashchange", hash);
     return () => { window.removeEventListener(OPEN, on); window.removeEventListener("hashchange", hash); };
   }, []);
-  return open ? <Suspense fallback={null}><Dialog onClose={() => setOpen(false)} send={send} me={signedIn} notify={onSent} /></Suspense> : null;
+  return [open, setOpen];
 }

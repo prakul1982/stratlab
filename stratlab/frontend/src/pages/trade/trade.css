@@ -81,19 +81,18 @@
 /* fixed column widths on a wide screen, so the columns don't move as the fonts and the figures arrive (LIVE3-012: layout shift) */
 @media (min-width: 641px) {
   .lib-table .k-table { table-layout: fixed; width: 100%; }
-  .lib-table .k-table th:nth-child(1) { width: 18%; }
-  .lib-table .k-table th:nth-child(2) { width: 14%; }
-  .lib-table .k-table th:nth-child(n+3):nth-child(-n+7) { width: 8.4%; }
-  .lib-table .k-table th:nth-child(8) { width: 14%; }
-  .lib-table .k-table th:nth-child(9) { width: 12%; }
+  .lib-table .k-table th:nth-child(1) { width: 16%; }
+  .lib-table .k-table th:nth-child(2) { width: 12%; }
+  .lib-table .k-table th:nth-child(n+3):nth-child(-n+7) { width: 10.6%; }
+  .lib-table .k-table th:nth-child(8) { width: 12%; }
+  .lib-table .k-table th:nth-child(9) { width: 7%; }
   .lib-table .k-table td, .lib-table .k-table th { overflow-wrap: break-word; }
-  .lib-table .k-table thead th { white-space: normal; vertical-align: bottom; }
-  .lib-table .k-table .k-th-sort { white-space: normal; text-align: inherit; }   /* a long column name wraps inside its own column, never over the next one */
+  .lib-table .k-table thead th { vertical-align: bottom; }
 }
 @media (max-width: 640px) {
   .lib-table .k-table tr.lib-extra { display: none; }
   .k-row.lib-more { display: flex; }
-  .lib-table .k-table td:is([data-label="Total buy and hold"], [data-label="Worst fall"], [data-label="Unseen period"]) { display: none; }
+  .lib-table .k-table td:is([data-label="Buy and hold"], [data-label="Worst fall"], [data-label="Unseen period"]) { display: none; }
   .lib-mini { display: table; width: 100%; }
   .lib-mini th { font-weight: 400; color: var(--muted); text-align: left; }
 }

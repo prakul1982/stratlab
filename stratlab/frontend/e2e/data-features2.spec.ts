@@ -196,7 +196,7 @@ test("strategy library: one table, the same facts once, sortable columns, and a 
   for (const t of await cards.locator('td[data-label="Market"]').allTextContents()) expect(t).toMatch(/^Japan · .* candles/);
   // the columns, each figure once; the gap to buy and hold in points, once
   const table = page.getByRole("table", { name: "Strategies" });
-  await expect(table.getByRole("columnheader")).toHaveText(["Strategy", "Market", /Total after costs/, /Total buy and hold/, /vs hold \(pts\)/, /Worst fall/, /Unseen period/, /Checks/, "Actions"]);
+  await expect(table.getByRole("columnheader")).toHaveText(["Strategy", "Market", /After costs/, /Buy and hold/, /vs hold \(pts\)/, /Worst fall/, /Unseen period/, /Checks/, "Actions"]);
   const card = cards.first();
   await expect(card.locator("th b")).not.toContainText(" · ");
   const text = await card.innerText();
@@ -211,14 +211,14 @@ test("strategy library: one table, the same facts once, sortable columns, and a 
   if (!phone) {
     await filter.getByRole("button", { name: "All markets" }).click();
     await expect(cards.nth(2)).toBeVisible();
-    const sortBtn = table.getByRole("columnheader", { name: /Total after costs/ }).locator("button.k-th-sort");
+    const sortBtn = table.getByRole("columnheader", { name: /^After costs/ }).locator("button.k-th-sort");
     await sortBtn.click();
-    await expect(table.getByRole("columnheader", { name: /Total after costs/ })).toHaveAttribute("aria-sort", "descending");
+    await expect(table.getByRole("columnheader", { name: /^After costs/ })).toHaveAttribute("aria-sort", "descending");
     const num = (s: string) => Number(s.replace(/[−–]/g, "-").replace(/[^\d.-]/g, ""));
-    const vals = (await cards.locator('td[data-label="Total after costs"]').allTextContents()).filter((t) => /\d/.test(t)).map(num);
+    const vals = (await cards.locator('td[data-label="After costs"]').allTextContents()).filter((t) => /\d/.test(t)).map(num);
     expect(vals).toEqual([...vals].sort((a, b) => b - a));
     await sortBtn.click();
-    await expect(table.getByRole("columnheader", { name: /Total after costs/ })).toHaveAttribute("aria-sort", "ascending");
+    await expect(table.getByRole("columnheader", { name: /^After costs/ })).toHaveAttribute("aria-sort", "ascending");
   }
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/library-card-${info.project.name}.png`, fullPage: false });
   await sane(page, errors);

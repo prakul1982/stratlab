@@ -335,9 +335,12 @@ test("R39: library return figures say they are the total over the test, not per 
   const bits = read("src/components/LibraryBits.tsx"), pub = read("src/pages/PublicLibrary.tsx"), lib = read("src/pages/LibraryPage.tsx");
   assert.match(bits, /\{TOTAL_NOTE\} against[^]*total for buying and holding over the same dates/);
   assert.match(pub, /figureHead="Total"/);          // LIVE3-013: one table whose figures column says they are totals
-  // the table both libraries draw (TABLES EVERYWHERE, owner 4 Nov): its columns say they are totals
-  assert.match(bits, /header: TOTAL_AFTER_COSTS/);
-  assert.match(bits, /header: TOTAL_HOLD/);
+  // the table both libraries draw (TABLES EVERYWHERE, owner 4 Nov) has the owner's short column names ("After costs", "Buy and
+  // hold") so they sit on one line; each list's note says the figures are totals over the test, after costs
+  assert.match(bits, /header: "After costs"/);
+  const L = await import("../src/lib/libraryText.ts");
+  assert.match(L.LIBRARY_DATES, /totals after costs over the dates in its details \(not yearly rates\)/);
+  assert.match(pub, /Points are the gap in total return after costs, over the same dates\./);
 });
 
 test("round 39: the company page states figures and the checklist reads against a stated threshold, with no pass or fail words", async () => {

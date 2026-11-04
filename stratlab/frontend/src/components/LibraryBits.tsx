@@ -4,7 +4,7 @@ import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { plainTerms } from "../lib/plainTerms";
 import { libMeta, strategyName } from "../lib/libraryList";
-import { TOTAL_AFTER_COSTS, TOTAL_HOLD, pricesStop, testedRange } from "../lib/libraryText";
+import { pricesStop, testedRange } from "../lib/libraryText";
 import { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";
 import { VERDICT_FACT, VerdictBadge } from "./ui";
 import { Signed } from "./kit/Signed";
@@ -117,7 +117,8 @@ const sortValue: Record<SortKey, (e: LibEntry) => number | null> = {
   checks: (e) => (e.verdict.total ? e.verdict.passed / e.verdict.total + e.verdict.passed / 100 : null),
 };
 
-/** The library as a table (TABLES EVERYWHERE, owner 4 Nov: "make tables?" on /library's cards): one row a strategy, the figures
+/** The library as a table (TABLES EVERYWHERE, owner 4 Nov: "make tables?" on /library's cards; the owner's column names, short
+ * enough to sit on one line in their columns: the list's note says they are totals after costs over each row's dates, R39): one row a strategy, the figures
  * in columns that line up and sort by a click on their name, its rules and details one tap away under its row. On a phone each
  * row is a compact card (the name, where it was tested, the return after costs, the gap to buy and hold, the checks), the rest in its details. Drawn
  * by the signed-in library and the public one alike; `actions` is each page's own buttons, `extra` what goes at the end of the
@@ -145,8 +146,8 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
         <span className="k-note">By {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span>
         {pricesStop(e.range, e.ran_at ?? e.published_at) && <span className="k-note k-warn-text" data-testid="lib-stops">{pricesStop(e.range, e.ran_at ?? e.published_at)}</span>}</span>) },
     { key: "market", header: "Market", wrap: true, cell: (e) => <span className="k-small">{libMeta(e)}</span> },
-    { key: "ret", header: TOTAL_AFTER_COSTS, numeric: true, sortable: true, up: true, cell: (e) => fig(shownStats(e).ret, !trails(e)) },
-    { key: "bh", header: TOTAL_HOLD, numeric: true, sortable: true, cell: (e) => fig(e.stats.buy_hold) },
+    { key: "ret", header: "After costs", numeric: true, sortable: true, up: true, cell: (e) => fig(shownStats(e).ret, !trails(e)) },
+    { key: "bh", header: "Buy and hold", numeric: true, sortable: true, cell: (e) => fig(e.stats.buy_hold) },
     { key: "gap", header: "vs hold (pts)", numeric: true, sortable: true, cell: (e) => (e.vs_hold ? <span data-testid="lib-gap"><Signed value={e.vs_hold.gap} fmt={(v) => `${v > 0 ? "+" : ""}${num(v, 1)}`} /></span> : "–") },
     { key: "mdd", header: "Worst fall", numeric: true, sortable: true, cell: (e) => fig(shownStats(e).mdd) },
     { key: "unseen", header: "Unseen period", numeric: true, sortable: true, cell: (e) => fig(shownStats(e).unseen) },
@@ -160,7 +161,7 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
       {/* on a phone the figures the compact row leaves out are here, as a table */}
       <table className="k-table lib-mini" aria-label={`More figures for ${strategyName(e)}`}>
         <tbody>
-          <tr><th scope="row">{TOTAL_HOLD}</th><td className="k-num">{fig(e.stats.buy_hold)}</td></tr>
+          <tr><th scope="row">Buy and hold</th><td className="k-num">{fig(e.stats.buy_hold)}</td></tr>
           <tr><th scope="row">Worst fall</th><td className="k-num">{fig(shownStats(e).mdd)}</td></tr>
           <tr><th scope="row">{unseenLabel(e)}</th><td className="k-num">{fig(shownStats(e).unseen)}</td></tr>
         </tbody>

@@ -1,4 +1,4 @@
-import { StrictMode, useEffect } from "react";
+import { lazy, StrictMode, Suspense, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, useLocation } from "react-router-dom";
 import { LoadGuard } from "../components/LoadGuard";
@@ -6,7 +6,7 @@ import { Tracking } from "../components/Tracking";
 import { pageview } from "../lib/analytics";
 import { isPublicForAll, wantsAccount } from "../lib/entry";
 import { VisitorApp } from "./VisitorApp";
-import { FeedbackHost } from "../components/FeedbackOpen";
+import { useFeedbackOpen } from "../components/FeedbackOpen";
 import { publicPost } from "../lib/http";
 
 /* The public half of the site, on its own: no sign-in library, no account state, no menu. A page load for someone with no
@@ -30,6 +30,13 @@ function Watch() {
   return null;
 }
 
+const FeedbackDialog = lazy(() => import("../components/Feedback"));
+/** Help & feedback for a visitor: the dialog downloads only once asked for, and sends with a plain request. */
+function VisitorFeedback() {
+  const [open, setOpen] = useFeedbackOpen();
+  return open ? <Suspense fallback={null}><FeedbackDialog onClose={() => setOpen(false)} me={false} send={(body) => publicPost("/feedback", body)} /></Suspense> : null;
+}
+
 export function startVisitor(root: HTMLElement) {
   createRoot(root).render(
     <StrictMode>
@@ -39,7 +46,7 @@ export function startVisitor(root: HTMLElement) {
           <Tracking />{/* before the page in its order, so the keyboard meets the question first (A11Y-2) */}
           <VisitorApp />
           {/* Help & feedback for a visitor: a plain request, none of the app's account code (owner, 4 Nov) */}
-          <FeedbackHost signedIn={false} send={(body) => publicPost("/feedback", body)} />
+          <VisitorFeedback />
         </BrowserRouter>
       </LoadGuard>
     </StrictMode>,

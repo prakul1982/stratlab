@@ -118,7 +118,7 @@ export function LibraryPage() {
             <LibraryTable key={`${q}|${market}|${verdict}|${sort}|${official}`} rows={rows}
               actions={(e) => (
                 <div className="k-row lib-buttons">
-                  <button type="button" className="btn sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${strategyName(e)}, ${libMeta(e)}`}>{busy === e.id ? "Copying…" : "Copy and re-test"}</button>
+                  <button type="button" className="btn sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${strategyName(e)}, ${libMeta(e)}`}>{busy === e.id ? "Copying…" : "Copy"}</button>
                 </div>)}
               extra={(e) => (
                 <>

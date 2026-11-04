@@ -43,13 +43,14 @@ test("the labelled Feedback button: the menu's top, the phone's top bar, Help, t
   assert.ok(shell.indexOf('<FeedbackButton className="btn quiet sm top-feedback" />') > bar, "in the phone's top bar");
   assert.match(read("src/components/FeedbackOpen.tsx"), />Feedback<\/button>/);
   // the opener, the button and the host ride in the shared file every page downloads; the dialog comes only when opened
-  assert.match(read("src/components/FeedbackOpen.tsx"), /const Dialog = lazy\(\(\) => import\("\.\/Feedback"\)\);/);
   assert.match(read("vite.config.ts"), /\{ name: "common", test: [^\n]*FeedbackOpen/);
-  for (const f of ["src/components/LegalLinks.tsx", "src/pages/Login.tsx", "src/pages/AppGates.tsx", "src/components/Shell.tsx", "src/main.tsx", "src/visitor/visitorMain.tsx"])
-    assert.doesNotMatch(read(f), /from "(\.\.?\/)+(components\/)?Feedback"/, `${f} imports the dialog itself`);
+  for (const f of ["src/components/LegalLinks.tsx", "src/pages/Login.tsx", "src/pages/AppGates.tsx", "src/components/Shell.tsx", "src/main.tsx", "src/visitor/visitorMain.tsx", "src/components/FeedbackOpen.tsx"])
+    assert.doesNotMatch(read(f), /from "(\.\.?\/)+(components\/)?Feedback"/, `${f} imports the dialog itself (not lazily)`);
   // one dialog in each half: the app's with its signed-in request, the public half's with a plain one (no account code for a visitor)
-  assert.match(read("src/main.tsx"), /<FeedbackHost signedIn=\{!!me\} send=\{\(body\) => api\("\/feedback", \{ method: "POST", body \}\)\} onSent=\{notify\} \/>/);
-  assert.match(read("src/visitor/visitorMain.tsx"), /<FeedbackHost signedIn=\{false\} send=\{\(body\) => publicPost\("\/feedback", body\)\} \/>/);
+  assert.match(read("src/main.tsx"), /<FeedbackDialog onClose=\{\(\) => setOpen\(false\)\} me=\{!!me\} send=\{\(body\) => api\("\/feedback", \{ method: "POST", body \}\)\} notify=\{notify\} \/>/);
+  assert.match(read("src/visitor/visitorMain.tsx"), /<FeedbackDialog onClose=\{\(\) => setOpen\(false\)\} me=\{false\} send=\{\(body\) => publicPost\("\/feedback", body\)\} \/>/);
+  // the dialog itself is a lazy download in both halves, drawn only once asked for
+  for (const f of ["src/main.tsx", "src/visitor/visitorMain.tsx"]) assert.match(read(f), /const FeedbackDialog = lazy\(/, f);
   assert.doesNotMatch(read("src/components/Feedback.tsx"), /from "\.\.\/lib\/(api|app|supabase)"/);
   assert.doesNotMatch(read("src/components/Feedback.tsx"), /from "\.\/kit"/, "the kit's index pulls the account pieces into a visitor's page");
   assert.match(read("src/components/FeedbackOpen.tsx"), /if \(location\.hash === "#feedback"\) setOpen\(true\);/);      // a link opens it too

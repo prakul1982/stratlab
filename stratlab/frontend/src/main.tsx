@@ -1,7 +1,7 @@
 import { lazy, StrictMode, Suspense, useCallback, useEffect, useLayoutEffect, useState, type ComponentType, type ReactNode } from "react";
 import { titleFor } from "./lib/title";
 import { createRoot } from "react-dom/client";
-import { FeedbackHost } from "./components/FeedbackOpen";
+import { useFeedbackOpen } from "./components/FeedbackOpen";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AppProvider, sessionUnconfirmed, useApp } from "./lib/app";
 import { api } from "./lib/api";
@@ -351,9 +351,11 @@ function Routed() {
 }
 
 /** Help & feedback in the signed-in app: its own request (with the sign-in) and its toast. */
+const FeedbackDialog = lazy(() => importWithRetry(() => import("./components/Feedback")));
 function AppFeedback() {
   const { me, notify } = useApp();
-  return <FeedbackHost signedIn={!!me} send={(body) => api("/feedback", { method: "POST", body })} onSent={notify} />;
+  const [open, setOpen] = useFeedbackOpen();
+  return open ? <Suspense fallback={null}><FeedbackDialog onClose={() => setOpen(false)} me={!!me} send={(body) => api("/feedback", { method: "POST", body })} notify={notify} /></Suspense> : null;
 }
 
 function App() {
