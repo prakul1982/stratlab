@@ -3,8 +3,9 @@ import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { useApp } from "../lib/app";
 import { INDIA_FEED, reconnectAt, type DataNote } from "../lib/dataBack";
-import { defaultExit, opSay, refName, statedIn } from "../lib/rules";
-import type { Instrument, Strategy } from "../lib/types";
+import { defaultExit, opSay, READ_MARK, readAs, refName, statedIn } from "../lib/rules";
+import type { Instrument, Market, Strategy } from "../lib/types";
+import { InstrumentSearch } from "./InstrumentSearch";
 import { Badge, Card, CardHead, Notice } from "./kit";
 import "../pages/trade/trade.css";
 
@@ -16,14 +17,17 @@ export interface GapInfo {
   instMarket?: string | null;
   /** What didn't come out of the words as written: a rule left out, a number not in the rules (R11C-004). */
   warnings?: string[];
+  /** The sides the server read from the words themselves, and what its reading supplied that the words don't say (57.1). */
+  confirmed?: string[];
+  assumed?: string[];
 }
 
 interface Opt { label: string; explain: string; rec?: boolean; apply: (s: Strategy) => Strategy | "pick-market" | { instrument: Instrument } }
-interface Q { id: string; short: string; title: string; why: string; options: Opt[] }
+interface Q { id: string; short: string; title: string; why: string; options: Opt[]; search?: Market }
 
 const plain = (r: Strategy["entry"][number]["l"]) => refName(r);
 
-function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults: Instrument[], currency: string, dataNote?: DataNote | null): Q[] {
+function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults: Instrument[], currency: string, dataNote?: DataNote | null, markets: Market[] = []): Q[] {
   // what the idea said, at the build or in the words the rules were last rebuilt from, is never asked again (R11C-005: a
   // 3% stop given in "Edit in words" was asked again, and "Use the default answers" put 2% over it)
   const m = new Set([...gaps.mentioned, ...statedIn(s.text)]), qs: Q[] = [], r = s.risk;
@@ -33,9 +37,11 @@ function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults:
     // India's data is offline (the banner says so): an Indian name is known, just not searchable until the login, at the time the banner gives (DA-004)
     const india = !!gaps.instName && !!dataNote && (INDIA_FEED.has(gaps.instMarket ?? "") || /\b(nifty|sensex)\b/i.test(gaps.instName));
     const back = reconnectAt(dataNote);
-    qs.push({ id: "inst", short: "Instrument", title: "What do you want to test it on?",
+    // nothing is guessed: the rules wait for a pick, searched right here in the market the idea points to (57.1)
+    const where = markets.find((x) => x.id === (gaps.instMarket || "IN") && x.status === "live") ?? markets.find((x) => x.status === "live");
+    qs.push({ id: "inst", short: "Instrument", title: "Which stock or index?", search: india ? undefined : where,
       why: india ? `"${gaps.instName}" is an Indian listing, and Indian price data is offline right now, so it can't be looked up yet. ${back ? `It reconnects on ${back}.` : "It reconnects with the next daily data login."} Pick another market now, or come back then.`
-        : gaps.instName ? `We couldn't find "${gaps.instName}". Pick one, or search every market.` : "The same rules can behave very differently on different markets.",
+        : gaps.instName ? `We couldn't find "${gaps.instName}". Pick one, or search every market.` : "Your idea doesn't name one, so none was picked for you. The same rules can behave very differently on different markets.",
       options: [
         ...defaults.slice(0, 5).map((i, k) => ({ label: i.symbol, rec: k === 0, explain: i.market === "CRYPTO" ? "Crypto, trades 24/7" : i.type === "INDEX" ? "Indian index" : i.exchange || "",
           apply: () => ({ instrument: i }) })),
@@ -130,8 +136,9 @@ export function GapsCard({ s, gaps, hasInstrument, currency, onStrategy, onInstr
   };
   const [defaults, setDefaults] = useState<Instrument[]>([]);
   useEffect(() => { api<Instrument[]>("/instruments/defaults").then(setDefaults).catch(() => {}); }, []);
-  const { me } = useApp();
-  const all = questions(s, gaps, hasInstrument, defaults, currency, me?.data_note);
+  const { me, markets } = useApp();
+  const all = questions(s, gaps, hasInstrument, defaults, currency, me?.data_note, markets);
+  const read = readAs(s, { ...gaps, answered }, hasInstrument);
   const open = all.filter((q) => !answered[q.id]);
   const now = open[0];
 
@@ -148,6 +155,15 @@ export function GapsCard({ s, gaps, hasInstrument, currency, onStrategy, onInstr
       <div aria-live="polite" className="k-stack">
         {!gaps.usedAI && gaps.fallback && <Notice tone="warn">{gaps.fallback}</Notice>}
         {(gaps.warnings ?? []).map((w) => <Notice key={w} tone="warn" role="status">{w}</Notice>)}
+        {/* what the words were read as, each line marked by how sure it is: a rule the words state is shown plain, a default or
+            the AI's own reading never with the same confidence (57.1) */}
+        <div className="k-stack k-tight" data-testid="read-as">
+          <b>We read this as</b>
+          <ul className="k-list">{read.lines.map((l) => (
+            <li key={l.text} data-mark={l.mark ?? "stated"}>{l.text}{l.mark && <> <Badge tone={l.mark === "ai" ? "plain" : "warn"} dot={false}>{READ_MARK[l.mark]}</Badge></>}</li>
+          ))}</ul>
+          {read.assumed.length > 0 && <p className="k-small k-muted" data-testid="read-assumed"><b>We assumed:</b> {read.assumed.join(" ")}</p>}
+        </div>
         {gaps.notes.length > 0 && <ul className="k-list muted">{gaps.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
         {Object.entries(answered).map(([id, label]) => (
           <div key={id} className="k-row k-small"><Badge tone="ok" dot={false}>✓</Badge>{all.find((q) => q.id === id)?.short ?? "Answer"}: <b>{label}</b></div>
@@ -156,6 +172,10 @@ export function GapsCard({ s, gaps, hasInstrument, currency, onStrategy, onInstr
           <>
             <CardHead title={now.title} actions={<span className="k-note">Question {Object.keys(answered).length + 1} of {Object.keys(answered).length + open.length}</span>} />
             <p className="k-small k-muted">{now.why}</p>
+            {now.search && (
+              <InstrumentSearch market={now.search} compact label="Search a stock or index" noNote
+                onPick={(i) => { onInstrument(i); setAnswered((a) => ({ ...a, inst: i.symbol })); }} />
+            )}
             <div className="k-starters">
               {now.options.map((o) => (
                 <button type="button" key={o.label} className="k-starter" onClick={() => onStrategy(choose(now, o, s))}>

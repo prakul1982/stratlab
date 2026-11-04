@@ -166,6 +166,10 @@ class GapsReq(BaseModel):
     answered: dict[Annotated[str, Field(max_length=20)], Annotated[str, Field(max_length=120)]] = Field(default_factory=dict, max_length=20)
     # what didn't come out of the words as written: a rule left out, a number not in the rules (R11C-004)
     warnings: list[Annotated[str, Field(max_length=300)]] = Field(default_factory=list, max_length=10)
+    # the sides the rules were read from the words themselves, and what the reading supplied that the words don't say
+    # ("RSI is read over 14 candles…"): shown under "We read this as", so an assumption never looks as sure as a stated rule (57.1)
+    confirmed: list[Literal["entry", "exit"]] = Field(default_factory=list, max_length=2)
+    assumed: list[Annotated[str, Field(max_length=300)]] = Field(default_factory=list, max_length=10)
 
 
 class NotebookReq(BaseModel):

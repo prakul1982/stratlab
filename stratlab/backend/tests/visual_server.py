@@ -125,6 +125,10 @@ def build():
     fx_rates.seed()
     blog_posts()
     theme_pages(mp)
+    # the AI builder's answers Instinct saw for two sentences, for the parser's browser test (57.1); any other finds no AI
+    from app import ai_writer
+    from tests import fake_ai_writer
+    mp.setattr(ai_writer, "complete", fake_ai_writer.complete)
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     connect_once(mp)

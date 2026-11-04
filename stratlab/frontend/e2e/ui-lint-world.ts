@@ -48,6 +48,11 @@ export async function seedWorld(request: APIRequestContext): Promise<World> {
   } catch { /* nothing to clear */ }
   const nb = await call("notebook", "post", "/notebooks", { name: "Trend follower on Bitcoin", question: "Does the 10/30 EMA cross work?", strategy: EMA, instrument: "CRYPTO:BTC-USD" });
   const nb2 = await call("notebook 2", "post", "/notebooks", { name: "RSI dip on Reliance", question: "Does buying an oversold dip pay?", strategy: RSI, instrument: "IN:1206" });
+  // a new notebook with no instrument yet, still asking about its idea: its questions card ("We read this as", "Which stock or
+  // index?" with a search) is measured too (57.1)
+  const nb3 = await call("notebook 3", "post", "/notebooks", { name: "EMA cross, still asking", strategy: { ...EMA, text: "Buy when the 10 EMA crosses above the 30 EMA" } });
+  if (nb3?.id) await call("notebook 3 questions", "put", `/notebooks/${nb3.id}`, { gaps: { mentioned: [], notes: [], instName: null, usedAI: true, fallback: "",
+    confirmed: ["entry"], assumed: [] } });
   for (const [id, days] of [[nb?.id, 1500], [nb?.id, 800], [nb2?.id, 900]] as const) if (id) await call("experiment", "post", `/notebooks/${id}/experiments`, { days });
   try {            // earlier runs' sessions would fill the plan's limit of running sessions
     const live = await (await request.get(`${API}/live/sessions`, { headers: admin })).json();
@@ -111,6 +116,7 @@ export async function seedWorld(request: APIRequestContext): Promise<World> {
     "/admin", "/admin/users", "/admin/money", "/admin/data", "/admin/quality", "/admin/system", "/admin/emails"];
   if (nb?.id) app.push(`/n/${nb.id}`, `/n/${nb.id}/market`, `/n/${nb.id}/compare`, `/n/${nb.id}/e/1`);
   if (nb2?.id) app.push(`/n/${nb2.id}`);
+  if (nb3?.id) app.push(`/n/${nb3.id}`);
   if (paper?.id) app.push(`/paper/${paper.id}`);
   const spaceFor = (p: string): string | undefined => {
     const bare = p.split(/[?#]/)[0];
