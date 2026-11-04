@@ -373,3 +373,26 @@ def test_a_finished_market_check_counts_only_listed_companies_as_checked(monkeyp
         assert (s["listed"], s["checked"], s["due"]) == (2, 2, 0)
     finally:
         w["close"]()
+
+
+# ---------- item 4: Admin's IPO queue ----------
+def test_admin_reads_the_ipo_queue_with_the_documents_still_to_read(monkeypatch):
+    from app import db, ipo as I
+    w = W.build(monkeypatch)
+    try:
+        day = I._ai_day()
+        db.set_setting("ipo:ai:" + day, "37")
+        db.set_setting("ipo:ai:asked:" + day, "4")
+        rows = [{"name": "Acme", "docs": [{"url": "https://x/a.pdf"}]}, {"name": "Beta", "docs": [{"url": "https://x/b.pdf"}]}]
+        monkeypatch.setattr(I, "load", lambda m: {"rows": rows if m == "IN" else []})
+        monkeypatch.setattr(I, "doc_to_read", lambda r: r["docs"][0])
+        monkeypatch.setattr(I, "stage_of", lambda r, now=None: "upcoming")
+        monkeypatch.setattr(I, "summary_of", lambda d: None)
+        kept = {"https://x/a.pdf": {"reader": I.D.READER, "excerpt": "read"}, "https://x/b.pdf": {"reader": I.D.READER - 1, "excerpt": "old"}}
+        monkeypatch.setattr(I, "facts_of", lambda d: kept.get(d["url"]))
+        r = w["client"].get("/admin/ipos/queue", headers=W.headers("admin-token"))
+        assert r.status_code == 200, r.text
+        assert r.json() == {"scheduled": 37, "cap": 120, "asked": 4, "waiting": 2, "days": 1, "to_read": 1, "per_pass": I.SMALL}
+        assert w["client"].get("/admin/ipos/queue", headers=W.headers("pro-token")).status_code == 403
+    finally:
+        w["close"]()

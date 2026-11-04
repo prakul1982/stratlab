@@ -41,3 +41,10 @@ test("SECMEM 6: a finished whole-market check refreshes every 5 min, not every 3
   assert.match(src, /window\.setInterval\(load, moving \? 30000 : 300000\)/);
   assert.match(src, /m\.pending === \(sum\?\.pending \?\? 0\) \? "not checked yet" : "a source turned away"/);
 });
+
+test("SECMEM 4: Admin › Data shows the IPO offer documents' queue as a table, read from /admin/ipos/queue", () => {
+  const panel = read("src/pages/admin/IpoQueuePanel.tsx");
+  assert.match(panel, /api<IpoQueue>\("\/admin\/ipos\/queue"\)/);
+  for (const row of ["Summaries today, catch-up", "Summaries today, asked for", "Waiting for a summary", "Still to read"]) assert.ok(panel.includes(row), row);
+  assert.match(read("src/pages/admin/DataSection.tsx"), /<IpoQueuePanel \/>/);
+});

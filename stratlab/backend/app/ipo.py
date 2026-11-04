@@ -1037,18 +1037,22 @@ def _catch_up_rank(r: dict, now: datetime) -> int:
 
 
 def ai_counts(now: datetime | None = None) -> dict:
-    """Admin's line: today's catch-up summaries against its cap, the ones people asked for, and the documents still waiting with the
-    days they take at the cap."""
+    """Admin's line and its IPO queue table: today's catch-up summaries against its cap, the ones people asked for, the
+    documents still waiting for a summary with the days they take at the cap, and the offer documents the background job
+    still has to read (never read, or read by an older reader: SECMEM 4), SMALL at a time between its other reads, uncapped."""
     day = _ai_day()
-    waiting = 0
+    now = now or _now()
+    waiting = to_read = 0
     for m in ("IN", "US"):
         for r in load(m)["rows"]:
             d = doc_to_read(r)
             facts = facts_of(d) if d else None
             if d and not summary_of(d) and (facts is None or facts.get("excerpt")):
                 waiting += 1
+            if d and (facts is None or facts_stale(facts)) and stage_of(r, now) in ("open", "upcoming", "closed", "listed", "filed"):
+                to_read += 1
     return {"scheduled": int(db.get_setting("ipo:ai:" + day) or 0), "cap": AI_PER_DAY, "asked": int(db.get_setting("ipo:ai:asked:" + day) or 0),
-            "waiting": waiting, "days": -(-waiting // AI_PER_DAY)}
+            "waiting": waiting, "days": -(-waiting // AI_PER_DAY), "to_read": to_read, "per_pass": SMALL}
 
 
 def make_summary(row: dict, d: dict, facts: dict, ai) -> dict:
@@ -1667,6 +1671,13 @@ def ipo_summary(rid: str, profile=Depends(current_profile)):
         finally:
             _reading.release()
     return ok({"facts": facts_view(row), "summary": summary_view(row, profile)})
+
+
+@router.get("/admin/ipos/queue")
+def ipos_queue(_=Depends(admin.admin_profile)):
+    """Admin's IPO queue (SECMEM 4, item 40c): today's summaries, the background backlog and the days it takes to clear.
+    Reads only what is stored; a person's own summary is never held by it (item 41)."""
+    return ok(ai_counts())
 
 
 @router.post("/admin/ipos/refresh")

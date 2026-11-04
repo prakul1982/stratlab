@@ -78,6 +78,12 @@ test("admin: the breadcrumb says Mine > Admin, and only an admin gets in", async
   await expect(page.getByRole("navigation", { name: /breadcrumb/i }).getByText("Admin")).toBeVisible();
   // the NIFTY 100's business updates coverage line, from what is stored (LO1-3)
   await expect(page.getByTestId("adm-biz-coverage")).toContainText(/NIFTY 100(: \d+ of \d+ have a business update read in the last 120 days|'s list of stocks)/, { timeout: 30_000 });
+  // the IPO offer documents' queue as a table, in sight (SECMEM 4): today's summaries against the cap, the backlog and its days
+  const ipo = page.getByRole("table", { name: "IPO offer documents: today and the backlog" });
+  await expect(ipo.getByRole("row", { name: /Summaries today, catch-up \d+ of 120/ })).toBeVisible({ timeout: 30_000 });
+  await expect(ipo.getByRole("row", { name: /Summaries today, asked for \d+/ })).toBeVisible();
+  await expect(ipo.getByRole("row", { name: /Waiting for a summary \d+ (About \d+ days? at 120 a day|None waiting)/ })).toBeVisible();
+  await expect(ipo.getByRole("row", { name: /Still to read \d+/ })).toBeVisible();
   await sane(page, errors);
 });
 
