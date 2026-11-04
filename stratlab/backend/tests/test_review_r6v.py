@@ -264,7 +264,7 @@ def test_same_industry_is_ranked_by_checked_value_and_says_which_industry(w):
 
 # ---------- R6V-011, R6V-014, R6V-015: odd values, the range's name, search counts ----------
 def test_tiny_numbers_never_read_minus_zero_and_tiny_values_read_under_a_million():
-    assert stock_pages._fmt(-0.04, 0) == "-0.04" and stock_pages._fmt(-0.0001, 2) == "-0.0001" and stock_pages._fmt(0.0, 0) == "0"
+    assert stock_pages._fmt(-0.04, 0) == "−0.04" and stock_pages._fmt(-0.0001, 2) == "−0.0001"     # the true minus (LIVE2-017) and stock_pages._fmt(0.0, 0) == "0"
     assert stock_pages._fmt(-0.00001, 2) == "0.00"
     assert stock_pages._fmt(-0.0, 1) == "0.0"
     assert stock_pages.cap_text(us(market_cap=0.3, sales_usd=0.1)) == "<$1M"

@@ -73,3 +73,39 @@ test("Instinct (2 Nov): the execution model as the engine has it, in Help and on
   assert.match(read("src/lib/paperText.ts"), /Orders fill at the close of the candle your rules act on/);
   assert.match(read("../backend/app/sip_test.py"), /Each instalment is invested at that day's close/);
 });
+
+// ---------- the classes, swept (owner, 4 Nov: "all fixes should fix things globally, not for a specific set of examples") ----------
+import { readdirSync, statSync } from "node:fs";
+const walk = (d) => readdirSync(new URL(`../${d}`, import.meta.url)).flatMap((n) => {
+  const p = `${d}/${n}`;
+  return statSync(new URL(`../${p}`, import.meta.url)).isDirectory() ? walk(p) : /\.(tsx?|css)$/.test(n) ? [p] : [];
+});
+const SRC = walk("src");
+
+test("Instinct #11 as a class: every dialog is the kit's (drawn at the end of the page), and nothing that floats is above it but the toast and the tour", () => {
+  // the dimmed page is drawn only by the kit's Dialog (portalled) and the search palette (the Shell's own, outside every container)
+  assert.deepEqual(SRC.filter((f) => /className="modal-back/.test(read(f))).sort(), ["src/components/SearchPalette.tsx", "src/components/kit/Dialog.tsx"]);
+  // a modal of its own (aria-modal true) is only one of the known full-window layers, never a page's own dialog box
+  const own = SRC.filter((f) => /aria-modal"?[=:]\s*("true"|true|\{true\})/.test(read(f))).sort();
+  assert.deepEqual(own, ["src/components/SearchPalette.tsx", "src/components/Shell.tsx", "src/components/kit/Coachmark.tsx", "src/components/kit/Dialog.tsx",
+    "src/components/watch/PublicBoard.tsx", "src/components/watch/WatchPanel.tsx"]);
+  // every fixed layer's z-index in every stylesheet is under the dialog's, except the toast and the tour's note (70)
+  const css = SRC.filter((f) => f.endsWith(".css")).map((f) => [f, read(f)]);
+  const dialogZ = Number(read("src/styles.css").match(/\.modal-back \{[^}]*z-index: (\d+)/)[1]);
+  for (const [f, text] of css) for (const m of text.matchAll(/([^{}\n]+)\{[^}]*position: fixed;[^}]*z-index: (\d+)/g)) {
+    const sel = m[1].trim(), z = Number(m[2]);
+    // the skip link shows only while it has focus, which a dialog keeps inside itself
+    if (/\.modal-back|\.toast|\.k-coach\b|\.skip-link/.test(sel)) continue;
+    assert.ok(z < dialogZ, `${f}: ${sel} (z ${z}) would sit over a dialog (z ${dialogZ})`);
+  }
+});
+
+test("Fill rules as a class: only paper trading and chart replay say an order fills at a candle's close; a backtest says next open", () => {
+  const CLOSE = /fills? at (the|that|a) (candle's )?close|filled at the close|fill at the last close|fills? at the close of the candle/i;
+  const says = SRC.filter((f) => !f.endsWith(".css") && CLOSE.test(read(f).replace(/A time exit fills at the candle's close/g, ""))).sort();
+  assert.deepEqual(says, ["src/components/OrderList.tsx", "src/lib/paperText.ts", "src/lib/replay.ts", "src/pages/trade/ReplayPage.tsx"]);
+});
+
+test("Table sweep as a rule: no page lays figures out as label/value pairs (k-rows) but the Account page's plan block (the owner's own layout, VR6/VR7)", () => {
+  assert.deepEqual(SRC.filter((f) => f.endsWith(".tsx") && /className=(\{`|")k-rows/.test(read(f))).sort(), ["src/pages/AccountPage.tsx"]);
+});

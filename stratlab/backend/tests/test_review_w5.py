@@ -12,3 +12,12 @@ def test_a_loss_year_axis_uses_the_true_minus():
     ticks = re.findall(r'class="by-tick"[^>]*>([^<]+)<', html)
     assert ticks and any(t.startswith("−") for t in ticks), ticks
     assert not any(t.startswith("-") for t in ticks), ticks
+
+
+def test_every_figure_the_company_page_writes_takes_the_true_minus():
+    # LIVE2-017 as a class: _fmt is where every reported figure on a company page and its cards is written (tables, tiles, the
+    # chart's ticks and tips), so a negative is "−" everywhere, never "-"
+    assert stock_pages._fmt(-1234.5, 1) == "−1,234.5" and stock_pages._fmt(-0.04, 0) == "−0.04" and stock_pages._fmt(5, 0, "%") == "5%"
+    f = {"region": "IN", "years": [{"year": "Mar 2025", "sales": 800.0, "profit": -210.0}, {"year": "Mar 2026", "sales": 900.0, "profit": 40.0}]}
+    html = stock_pages.bars_chart_html(f) + stock_pages._table({**f, "currency": "INR"})
+    assert "−210" in html and not re.search(r">-\d", html) and not re.search(r"[ (]-\d", re.sub(r"<[^>]+>", " ", html))

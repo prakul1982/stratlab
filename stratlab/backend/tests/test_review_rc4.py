@@ -60,7 +60,7 @@ def test_a_big_companys_axis_is_unchanged():
 def test_a_small_companys_figures_are_shown_at_the_precision_its_table_uses():
     f = small()
     table = stock_pages._table(f)
-    assert ">0.19<" in table and ">-0.03<" in table
+    assert ">0.19<" in table and ">−0.03<" in table     # the true minus (LIVE2-017)
     assert not hasattr(stock_pages, "about_text")
 
 

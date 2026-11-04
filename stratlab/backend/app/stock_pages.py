@@ -1915,7 +1915,9 @@ def _fmt(v, digits: int = 1, suffix: str = "") -> str:
             digits += 2
     if v == 0:
         v = 0.0                                   # never "-0"
-    return f"{v:,.{digits}f}{suffix}"
+    # LIVE2-017, for every figure this writes (tables, tiles, the chart's ticks and tips, the company cards): a negative takes
+    # the true minus, as the price changes on the same page do, never a hyphen
+    return f"{v:,.{digits}f}{suffix}".replace("-", "−", 1)
 
 
 def small_digits(*values) -> int:
