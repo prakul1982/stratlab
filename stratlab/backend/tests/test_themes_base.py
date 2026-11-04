@@ -2,7 +2,9 @@
 is the screener's stored index (each company's own classification), the theme -> industries map a curated table or the AI's pick from
 the official list, and the AI can't remove an indexed company; a check stuck on one company is served as it stands after a while."""
 import json
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from app.intel import theme_base as B
 from app.intel import theme_check as C
@@ -89,7 +91,7 @@ def test_a_free_text_theme_takes_only_names_on_the_official_list_kept_a_month():
         return {"industries": ["digital  entertainment", "Quantum Widgets"]}          # one on the list (spacing aside), one made up
     now = datetime(2026, 11, 4, tzinfo=timezone.utc)
     got = B.industries_for("IN", "online gaming", ROWS, ask, store.get, store.__setitem__, now=now)
-    assert got == {"industries": ["Digital Entertainment"], "how": "ai"} and len(asked) == 1
+    assert got == {"industries": ["Digital Entertainment"], "how": "ai", "named": [], "except": []} and len(asked) == 1
     assert B.industries_for("IN", "online gaming", ROWS, ask, store.get, store.__setitem__, now=now + timedelta(days=29))["industries"] == ["Digital Entertainment"]
     assert len(asked) == 1                            # kept: not asked again within the month
     B.industries_for("IN", "online gaming", ROWS, ask, store.get, store.__setitem__, now=now + timedelta(days=31))
@@ -101,9 +103,12 @@ def test_an_ai_that_cannot_pick_leaves_the_base_pending_and_keeps_nothing():
 
     def ask(system, text):
         raise RuntimeError("busy")
-    assert B.industries_for("IN", "online gaming", ROWS, ask, store.get, store.__setitem__) == {"industries": [], "how": "pending"}
+    # no industry's name shares a word with "online gaming" here: nothing to fall back on, asked again next time
+    assert B.industries_for("IN", "online gaming", ROWS, ask, store.get, store.__setitem__) == {"industries": [], "how": "pending", "named": [], "except": []}
     assert store == {}
-    assert B.industries_for("IN", "anything", [], ask, store.get, store.__setitem__) == {"industries": [], "how": "none"}
+    assert B.industries_for("IN", "anything", [], ask, store.get, store.__setitem__)["how"] == "none"
+    # ...but one whose words name an industry has it at once, by the words rule (THEMES, 4 Nov)
+    assert B.industries_for("IN", "online digital entertainment", ROWS, ask, store.get, store.__setitem__)["industries"] == ["Digital Entertainment"]
 
 
 # ---------- membership: the AI can't remove an indexed company ----------
@@ -260,3 +265,110 @@ def test_the_evidence_reader_adds_the_filings_and_reads_a_company_with_only_fili
     theme_routes.EVIDENCE_CACHE.clear()
     got, pending = theme_routes.evidence_reader("IN", {})(["OLECTRA"])
     assert got["OLECTRA"]["about"] == "From its own filings: Electric bus orders from state transport units." and not pending
+
+
+
+# ---------- the whole class (owner, 4 Nov: "all fixes should fix things globally") ----------
+# every official industry and listed symbol of both markets, from the live index of 4 Nov 2026
+INDEX = json.loads((Path(__file__).parent / "fixtures" / "theme_index_2026_11_04.json").read_text())
+SYMBOLS = {m: set(INDEX[m]["symbols"].split()) for m in ("IN", "US")}
+
+
+def world(region):
+    """One company in every official industry of the market, and every listed symbol as a company of its own."""
+    rows = [{"symbol": f"CO{i}", "name": f"Company {i}", "industry": ind, "market_cap": 100.0} for i, ind in enumerate(INDEX[region]["industries"])]
+    return rows + [{"symbol": s, "name": s, "industry": "", "market_cap": 1.0} for s in SYMBOLS[region]]
+
+
+def none_picked(system, text):
+    return {"industries": []}
+
+
+def busy(system, text):
+    raise RuntimeError("busy")
+
+
+def test_every_curated_industry_and_named_company_is_on_the_live_official_list():
+    for c in B.CONCEPTS:
+        for m in ("IN", "US"):
+            known = {B.key(i) for i in INDEX[m]["industries"]}
+            assert all(B.key(n) in known for n in c.get(m, [])), (m, [n for n in c.get(m, []) if B.key(n) not in known])
+            for k in (f"{m}_named", f"{m}_except"):
+                assert set(c.get(k, [])) <= SYMBOLS[m], (k, set(c.get(k, [])) - SYMBOLS[m])
+
+
+def test_every_curated_theme_has_a_base_in_each_market_it_covers():
+    for c in B.CONCEPTS:
+        word = sorted(c["words"])[0] if c["words"] else c["phrases"][0]
+        for m in ("IN", "US"):
+            if m not in c:
+                continue
+            inds = B.industries_for(m, word, world(m), busy, lambda k: None, lambda k, v: None)
+            assert inds["how"] == "list" and (inds["industries"] or inds["named"]), (m, word)
+
+
+def test_every_suggested_theme_on_the_page_is_curated_with_a_base():
+    src = (Path(__file__).parents[2] / "frontend" / "src" / "lib" / "research.ts").read_text()
+    ideas = re.search(r"THEME_IDEAS[^=]*=\s*\{(.*?)\};", src, re.S).group(1)
+    for m, body in re.findall(r"(IN|US): \[([^\]]*)\]", ideas):
+        for theme in re.findall(r'"([^"]+)"', body):
+            inds = B.industries_for(m, theme, world(m), busy, lambda k: None, lambda k, v: None)
+            assert inds["how"] == "list" and (inds["industries"] or inds["named"]), (m, theme)
+
+
+def test_every_official_industry_typed_as_a_theme_gets_its_own_companies():
+    for m in ("IN", "US"):
+        rows = world(m)
+        for i, ind in enumerate(INDEX[m]["industries"]):
+            for ask in (none_picked, busy):
+                inds = B.industries_for(m, ind, rows, ask, lambda k: None, lambda k, v: None)
+                assert ind in inds["industries"], (m, ind, inds)
+                out = B.with_base({"value_chain": [], "sub_themes": []}, {"value_chain": [], "sub_themes": [], "placements": {}}, rows,
+                                  inds["industries"], named=inds["named"], exclude=inds["except"])
+                assert f"CO{i}" in {c["ticker"] for v in out["value_chain"] for c in v["companies"]}, (m, ind)
+
+
+def test_typed_themes_fall_back_on_the_industries_their_words_name_in_both_markets():
+    store = {}
+    for theme in ("cement", "hotels", "ports", "fertilisers", "paints", "data centres", "cloud software", "airlines", "steel", "EV batteries",
+                  "tyres", "sugar", "breweries", "insurance brokers", "trucking"):
+        for m in ("IN", "US"):
+            inds = B.industries_for(m, theme, world(m), none_picked, store.get, store.__setitem__)
+            base = inds["industries"] or inds["named"]
+            if theme in ("tyres", "sugar", "breweries", "trucking") and m == "US" or theme == "trucking":
+                continue                                   # samples one market names and the other doesn't
+            assert base, (m, theme, inds)
+    assert B.words_pick("paints", {B.key("Paints"): "Paints"}) == ["Paints"]
+    assert B.words_pick("fertilisers", {B.key("Fertilizers"): "Fertilizers"}) == ["Fertilizers"]
+    assert B.words_pick("the india sector", {B.key("Diversified"): "Diversified"}) == []           # words that name nothing match nothing
+
+
+def test_every_us_company_without_an_industry_gets_one_from_its_sec_record_a_few_at_a_time():
+    rows = [{"symbol": s, "industry": "", "market_cap": None} for s in sorted(SYMBOLS["US"])[:300]] + LIVE_US
+    codes = {s: (["Manufacturing", "Semiconductors & Related Devices"] if i % 3 else []) for i, s in enumerate(sorted(SYMBOLS["US"])[:300])}
+    reads = []
+
+    def read(sym):
+        reads.append(sym)
+        if sym == "A":
+            raise RuntimeError("SEC busy")
+        return codes[sym]
+    stored, runs = {}, 0
+    now = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    while runs < 20:
+        stored, n = B.fill_sic(rows, stored, read, now=now, limit=40)
+        assert n <= 40
+        runs += 1
+        if n == 0:
+            break
+    filled = B.with_sic(rows, stored)
+    left = B.unclassified(filled)
+    expected = sum(1 for s, p in codes.items() if not p)            # (A, the busy one, has no code either)
+    assert left == expected                           # every company with a code has it; the rest are counted, none skipped
+    assert all(r["industry"] == "Semiconductors & Related Devices" for r in filled if codes.get(r["symbol"]))
+    n_reads = len(reads)
+    B.fill_sic(rows, stored, read, now=now + timedelta(days=5))
+    assert len(reads) - n_reads == 1                  # a company with no code isn't asked again within the month; a busy one is
+    n_reads = len(reads)
+    B.fill_sic(rows, stored, read, now=now + timedelta(days=31))
+    assert len(reads) - n_reads == 40                 # a month on, the companies with no code are asked again, 40 at a time

@@ -65,7 +65,9 @@ CONCEPTS = [
      "IN": ["Non Banking Financial Company (NBFC)", "Housing Finance Company", "Microfinance Institutions", "Financial Institution"],
      "US": ["Personal Credit Institutions", "Short-Term Business Credit Institutions", "Miscellaneous Business Credit Institution",
             "Mortgage Bankers & Loan Correspondents"]},
-    {"words": {"payment", "fintech", "upi"}, "IN": ["Financial Technology (Fintech)"]},
+    # the US files card networks and payment processors under wide service codes: named
+    {"words": {"payment", "fintech", "upi"}, "IN": ["Financial Technology (Fintech)"],
+     "US": [], "US_named": ["V", "MA", "PYPL", "AXP", "FIS", "GPN", "XYZ", "AFRM", "TOST", "FOUR", "COIN"]},
     {"words": {"insurance", "insurer"}, "IN": ["Life Insurance", "General Insurance", "Insurance Distributors"],
      "US": ["Life Insurance", "Fire, Marine & Casualty Insurance", "Accident & Health Insurance", "Insurance Agents, Brokers & Service",
             "Surety Insurance", "Title Insurance", "Insurance Carriers, Nec"]},
@@ -78,7 +80,11 @@ CONCEPTS = [
      "IN": ["Pharmaceuticals", "Biotechnology"],
      "US": ["Pharmaceutical Preparations", "Biological Products, (No Diagnostic Substances)", "Medicinal Chemicals & Botanical Products",
             "In Vitro & In Vivo Diagnostic Substances"]},
-    {"words": {"glp"}, "phrases": ("glp 1", "obesity drugs", "weight loss drugs"), "IN": [], "US": []},
+    # a narrow theme inside a wide industry (no official industry is its core): the theme's own companies, named, so it never rests on the
+    # AI alone (THEMES, 4 Nov: "every curated theme has a base")
+    {"words": {"glp"}, "phrases": ("glp 1", "obesity drugs", "weight loss drugs"),
+     "IN": [], "IN_named": ["SUNPHARMA", "DRREDDY", "BIOCON", "ZYDUSLIFE", "LUPIN", "MANKIND", "CIPLA", "GLENMARK", "DIVISLAB"],
+     "US": [], "US_named": ["LLY", "NVO", "AMGN", "VKTX", "PFE", "BDX", "WST", "TMO", "STVN", "HIMS", "ALT", "GPCR"]},
     {"words": {"hospital", "healthcare", "diagnostic", "medtech"}, "phrases": ("medical devices",),
      "IN": ["Hospital", "Healthcare Service Provider", "Medical Equipment & Supplies", "Healthcare Research, Analytics & Technology"],
      "US": ["Services-General Medical & Surgical Hospitals, Nec", "Services-Hospitals", "Services-Medical Laboratories",
@@ -89,11 +95,16 @@ CONCEPTS = [
             "Services-Computer Processing & Data Preparation", "Services-Computer Programming, Data Processing, Etc."]},
     # the SEC files solar-cell and inverter makers under semiconductors (SIC 3674): they are renewables' named list, not the chip base;
     # the chip-equipment makers and Qualcomm file under other codes
-    {"words": {"semiconductor", "chip", "chipmaker", "foundry"}, "US": ["Semiconductors & Related Devices"],
+    {"words": {"semiconductor", "chip", "chipmaker", "foundry"}, "IN": [], "IN_named": ["CGPOWER", "KAYNES", "MOSCHIP", "ASMTEC", "RIR", "TATAELXSI"],
+     "US": ["Semiconductors & Related Devices"],
      "US_named": ["ASML", "LRCX", "KLAC", "QCOM", "TER", "ENTG"], "US_except": ["FSLR", "ENPH", "NXT", "SEDG", "SHLS", "ARRY", "CSIQ", "JKS"]},
-    {"words": {"cybersecurity"}, "phrases": ("cyber security", "data center", "data centers", "data centre", "data centres", "smr", "smrs"),
-     "US": []},
-    {"words": {"nuclear", "uranium"}, "US": []},
+    {"words": {"cybersecurity"}, "phrases": ("cyber security",), "IN": [], "IN_named": ["QUICKHEAL"],
+     "US": [], "US_named": ["CRWD", "PANW", "FTNT", "ZS", "OKTA", "S", "CHKP", "NET", "TENB", "RPD", "QLYS", "VRNS", "GEN", "AKAM"]},
+    {"words": {"datacenter", "datacentre"}, "phrases": ("data center", "data centers", "data centre", "data centres"),
+     "IN": [], "IN_named": ["ANANTRAJ", "NETWEB", "TECHNOE", "TATACOMM", "BLUESTARCO", "BHARTIARTL"],
+     "US": [], "US_named": ["EQIX", "DLR", "IRM", "NVDA", "AMD", "AVGO", "ANET", "VRT", "ETN", "SMCI", "DELL", "APLD", "CORZ", "CRWV", "NBIS"]},
+    {"words": {"nuclear", "uranium", "smr"}, "IN": [], "IN_named": ["NTPC", "LT", "BHEL", "WALCHANNAG", "MTARTECH", "HCC"],
+     "US": [], "US_named": ["CEG", "VST", "TLN", "CCJ", "OKLO", "SMR", "NNE", "BWXT", "LEU", "UEC", "GEV", "NXE", "DNN"]},
     {"words": {"telecom", "telecommunication", "5g"},
      "IN": ["Telecom - Cellular & Fixed line services", "Telecom - Infrastructure", "Telecom - Equipment & Accessories", "Other Telecom Services"],
      "US": ["Radiotelephone Communications", "Telephone Communications (No Radiotelephone)", "Communications Services, Nec", "Telephone & Telegraph Apparatus"]},
@@ -110,7 +121,8 @@ CONCEPTS = [
             "Oil Equipment & Services", "Offshore Support Solution Drilling", "Oil Storage & Transportation"],
      "US": ["Crude Petroleum & Natural Gas", "Petroleum Refining", "Drilling Oil & Gas Wells", "Oil & Gas Field Services, Nec",
             "Oil & Gas Field Machinery & Equipment", "Natural Gas Transmission", "Natural Gas Distribution", "Pipe Lines (No Natural Gas)"]},
-    {"words": set(), "phrases": ("specialty chemicals", "speciality chemicals"), "IN": ["Specialty Chemicals"]},
+    {"words": set(), "phrases": ("specialty chemicals", "speciality chemicals"), "IN": ["Specialty Chemicals"],
+     "US": ["Industrial Organic Chemicals", "Miscellaneous Chemical Products", "Chemicals & Allied Products"]},
     {"words": {"chemical", "agrochemical", "petrochemical"}, "unless": ("specialty chemicals", "speciality chemicals"),
      "IN": ["Specialty Chemicals", "Commodity Chemicals", "Petrochemicals", "Dyes And Pigments", "Pesticides & Agrochemicals", "Industrial Gases"],
      "US": ["Industrial Organic Chemicals", "Industrial Inorganic Chemicals", "Chemicals & Allied Products",
@@ -221,18 +233,59 @@ def _slug(theme: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(theme or "").lower()).strip("-")[:60]
 
 
+# words every industry or theme shares, which say nothing about which industry: never matched on their own
+_PLAIN = {"and", "the", "for", "with", "other", "others", "service", "services", "product", "products", "diversified", "industries", "industry",
+          "misc", "miscellaneous", "general", "goods", "related", "allied", "india", "indian", "usa", "american", "stock", "stocks", "company",
+          "companies", "sector", "sectors", "theme", "themes", "supply", "chain", "nec", "except", "including", "equipment", "equipments",
+          "trading", "wholesale", "new", "based", "listed", "business", "businesses", "ltd", "inc"}
+
+
+def _stem(w: str) -> str:
+    """A word's start as industry names are matched on: plural and British/American endings aside ("fertilisers" and "Fertilizers",
+    "ports" and "Port", "centres" and "Center" all meet on their first five letters)."""
+    w = w.lower()
+    if w.endswith("s") and len(w) > 4:
+        w = w[:-1]
+    return w[:5]
+
+
+def _stems(text: str) -> set[str]:
+    return {_stem(w) for w in re.findall(r"[a-z0-9]+", str(text or "").lower()) if len(w) >= 3 and w not in _PLAIN}
+
+
+def words_pick(theme: str, known: dict[str, str]) -> list[str]:
+    """The official industries whose names share a word with the theme ("paints" -> Paints; "cloud software" -> the software industries):
+    the rule a typed theme falls back on when the AI picks none or can't answer. Deterministic, both markets."""
+    tw = _stems(theme)
+    return [name for k, name in sorted(known.items()) if tw & _stems(k)] if tw else []
+
+
 def industries_for(region: str, theme: str, rows: list[dict], ask, get_setting, set_setting, now=None) -> dict:
-    """{"industries": [...], "how": "list" | "ai" | "pending" | "none"}: the official industries at the theme's core. "list": the curated
-    table; "ai": the AI's pick from the market's list, kept INDUSTRIES_DAYS; "pending": the AI couldn't answer now (asked again on the next
-    request); "none": the market's index has no industries yet. `ask(system, text)` is the AI's JSON answer (raises when it can't)."""
+    """{"industries", "how", "named", "except"}: the official industries at the theme's core. "how":
+    - "list": the curated table (with its named members and exclusions);
+    - "ai": the AI's pick from the market's official list, kept INDUSTRIES_DAYS;
+    - "words": the industries whose names share a word with the theme, when the AI picks none or can't answer now (THEMES, 4 Nov: a
+      typed theme never rests on the AI alone), or the theme is an industry's own name;
+    - "pending": the AI couldn't answer and no industry shares a word (asked again on the next request); "none": no index yet.
+    A theme that is an official industry's own name always has that industry. `ask(system, text)` is the AI's JSON answer."""
     known = known_industries(rows)
     if not known:
-        return {"industries": [], "how": "none"}
+        return {"industries": [], "how": "none", "named": [], "except": []}
+    exact = known.get(key(theme))
     cur = curated(region, theme, known)
     if cur is not None:
         named, out = named_lists(region, theme)
         listed = {r.get("symbol") for r in rows or []}
-        return {"industries": cur, "how": "list", "named": [s for s in named if s in listed], "except": out}
+        return {"industries": cur + ([exact] if exact and exact not in cur else []), "how": "list",
+                "named": [s for s in named if s in listed], "except": out}
+    if exact:
+        return {"industries": [exact], "how": "words", "named": [], "except": []}
+
+    def answer(picked, how):
+        if picked:
+            return {"industries": picked, "how": how, "named": [], "except": []}
+        words = words_pick(theme, known)
+        return {"industries": words, "how": "words" if words else ("pending" if how == "pending" else how), "named": [], "except": []}
     now = now or datetime.now(timezone.utc)
     skey = f"theme:industries:{region}:{_slug(theme)}"
     try:
@@ -245,17 +298,17 @@ def industries_for(region: str, theme: str, rows: list[dict], ask, get_setting, 
         except ValueError:
             fresh = False
         if fresh:
-            return {"industries": [known[key(i)] for i in hit.get("industries") or [] if key(i) in known], "how": "ai"}
+            return answer([known[key(i)] for i in hit.get("industries") or [] if key(i) in known], "ai")
     try:
         picked = ai_pick(theme, known, ask)
-    except Exception as e:                      # the AI busy: no base yet, asked again next time
+    except Exception as e:                      # the AI busy: the words rule for now, the AI asked again next time
         print("theme base: industries not picked:", theme[:40], type(e).__name__, str(e)[:100])
-        return {"industries": [], "how": "pending"}
+        return answer([], "pending")
     try:
         set_setting(skey, json.dumps({"at": now.isoformat(timespec="seconds"), "industries": picked}, ensure_ascii=False))
     except Exception as e:
         print("theme base: industries not kept:", str(e)[:100])
-    return {"industries": picked, "how": "ai"}
+    return answer(picked, "ai")
 
 
 # ---------- membership ----------
@@ -357,3 +410,61 @@ def described(m: dict, about_of) -> dict:
         vc.append(v)
     out["value_chain"] = vc
     return out
+
+
+# ---------- US companies with no industry on file ----------
+# A US company whose page isn't built has no SIC code in the index (967 of 7,021 on 4 Nov). Each theme check reads a few of their SEC
+# records (the submissions JSON the company pages read) and keeps the code, so they join a theme by industry; no job of its own.
+SIC_KEY = "theme:sic:US"
+SIC_DAYS = 30                   # a company the SEC gave no code for is asked again after this long
+SIC_PER_RUN = 40                # records read in one theme check, at most
+SIC_BUDGET = 20.0               # ...and seconds spent on them
+
+
+def with_sic(rows: list[dict], stored: dict) -> list[dict]:
+    """The index rows with the industry kept from the SEC's record filled in where the index has none."""
+    paths = (stored or {}).get("paths") or {}
+    out = []
+    for r in rows or []:
+        p = paths.get(r.get("symbol")) if not r.get("industry") else None
+        out.append({**r, "sector": r.get("sector") or p[0], "industry": p[-1]} if p else r)
+    return out
+
+
+def unclassified(rows: list[dict]) -> int:
+    return sum(1 for r in rows or [] if r.get("symbol") and not r.get("industry"))
+
+
+def fill_sic(rows: list[dict], stored: dict, read, now=None, limit: int = SIC_PER_RUN, budget: float = SIC_BUDGET) -> tuple[dict, int]:
+    """(the kept codes with up to `limit` more read, how many were read). `read(symbol)` -> the SIC path ([division, industry]), [] when
+    the SEC has none, or raises when it can't answer now (tried again next time). Largest first, then A to Z; a company tried within
+    SIC_DAYS with no code is skipped."""
+    import time as _t
+    now = now or datetime.now(timezone.utc)
+    stored = {"paths": dict((stored or {}).get("paths") or {}), "tried": dict((stored or {}).get("tried") or {})}
+    cut = (now.date().toordinal() - SIC_DAYS)
+    todo = []
+    for r in sorted(rows or [], key=lambda r: (-(r.get("market_cap") or 0), str(r.get("symbol")))):
+        s = r.get("symbol")
+        if not s or r.get("industry") or s in stored["paths"]:
+            continue
+        t = stored["tried"].get(s)
+        if t and datetime.fromisoformat(t).date().toordinal() > cut:
+            continue
+        todo.append(s)
+    started, n = _t.monotonic(), 0
+    for s in todo[:limit]:
+        if _t.monotonic() - started > budget:
+            break
+        try:
+            path = read(s)
+        except Exception as e:
+            print("theme base: SEC record not read:", s, type(e).__name__, str(e)[:80])
+            continue
+        n += 1
+        if path:
+            stored["paths"][s] = list(path)[:2]
+            stored["tried"].pop(s, None)
+        else:
+            stored["tried"][s] = now.date().isoformat()
+    return stored, n
