@@ -469,3 +469,37 @@ def test_a_us_company_with_a_few_desks_of_plant_has_a_capex_fact_not_a_gap():
     assert [lv for lv, _ in got] == ["fact"] and "at most $0.08 m" in got[0][1]
     p["balance"]["rows"]["Fixed Assets"] = [40.0, 38.0, 36.0, 35.0]             # real plant, no capex read: the gap stands
     assert [lv for lv, _ in capex(p)] == ["gap"]
+
+
+# ---------- call transcripts: a notice of a call to come isn't a call held ----------
+NSE_MEET = "Analysts/Institutional Investor Meet/Con. Call Updates"
+
+
+def _filing(at, text, url, subject=NSE_MEET, category="concall"):
+    return {"at": at, "subject": subject, "text": text, "url": url, "category": category}
+
+
+def test_a_transcript_is_due_only_once_the_call_is_held(monkeypatch):
+    """ANTELOPUS, PANACHE, BSE:544937 (checked 31 Oct-1 Nov): their notices of calls to come were counted as calls whose
+    transcript was overdue; the transcripts were filed on 2 Nov, and NSE's call was on 3 Nov."""
+    from datetime import datetime
+
+    from app import deepdive
+    from app.intel.filings import IST
+    monkeypatch.setattr(deepdive, "ist_now", lambda: datetime(2026, 11, 1, 9, 0, tzinfo=IST))
+    antelopus = [
+        _filing("2026-10-22T18:00", "Antelopus Selan Energy Limited has informed the Exchange about Schedule of meet",
+                "https://nsearchives.nseindia.com/corporate/SELAN_22102026_Intimation_of_schedule_of_Earning_call.pdf"),
+        _filing("2026-10-26T21:09", "Antelopus Selan Energy Limited has informed the Exchange about Link of Recording",
+                "https://nsearchives.nseindia.com/corporate/SELAN_26102026210939_Audio_Recording_letter.pdf")]
+    nse = [_filing("2026-10-08T10:00", "Announcement under Regulation 30 (LODR)-Analyst / Investor Meet - Intimation. Schedule of conference call",
+                   "https://www.bseindia.com/xml-data/corpfiling/AttachLive/37b84fd4.pdf", subject="Analyst / Investor Meet")]
+    for items in (antelopus, nse):
+        got = deepdive.meetings(items, "2024-11-01T00:00")
+        assert got["calls"] >= 1 and got["calls_due"] == 0, got
+    # a recording past the grace days with no transcript: due, as before
+    monkeypatch.setattr(deepdive, "ist_now", lambda: datetime(2026, 11, 10, 9, 0, tzinfo=IST))
+    assert deepdive.meetings(antelopus, "2024-11-01T00:00")["calls_due"] == 1
+    # and a notice whose call never brought a transcript, once older than any call is ahead of its notice
+    monkeypatch.setattr(deepdive, "ist_now", lambda: datetime(2026, 12, 20, 9, 0, tzinfo=IST))
+    assert deepdive.meetings(nse, "2024-11-01T00:00")["calls_due"] == 1

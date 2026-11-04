@@ -312,6 +312,16 @@ def _agm(text: str) -> bool:
     return bool(NOT_DECK.search(text) and not MEET.search(text))
 
 
+CALL_NOTICE = re.compile(r"\bschedule\b|\bintimation\b", re.I)
+CALL_HELD = re.compile(r"recording|transcript|outcome", re.I)
+
+
+def _call_notice(i: dict) -> bool:
+    """A filing that announces a call still to come, not one about a call held (its recording, transcript or outcome)."""
+    hay = f"{i.get('subject') or ''} {i.get('text') or ''} {_file_words(i.get('url') or '')}"
+    return bool(CALL_NOTICE.search(hay)) and not CALL_HELD.search(hay)
+
+
 def documents(items: list[dict], per_kind: int | None = None) -> list[dict]:
     """Investor presentations and earnings-call transcripts among a company's filings, newest first, with a PDF link;
     `per_kind`: at most that many of each kind, so a run of decks can't crowd out the transcripts."""
@@ -373,7 +383,11 @@ def meetings(items: list[dict], since: str) -> dict:
     # has no transcript to find yet
     fresh = (ist_now() - timedelta(days=CALL_GRACE_DAYS)).strftime("%Y-%m-%dT%H:%M")
     stale = (ist_now() - timedelta(days=CALL_STALE_DAYS)).strftime("%Y-%m-%dT%H:%M")
-    return {"meets": len(meets), "calls": len(calls), "calls_due": sum(i["at"] < fresh for i in calls),
+    # a notice of a call to come is filed days or weeks before it (the audit, 1 Nov: ANTELOPUS's notice of 22 Oct for a call
+    # on 26 Oct, NSE's of 8 Oct for one on 3 Nov), so its transcript is due only once the call has been held: a recording or
+    # outcome filed past the grace days, or a notice older than a call can be ahead of it
+    due = sum(i["at"] < (stale if _call_notice(i) else fresh) for i in calls)
+    return {"meets": len(meets), "calls": len(calls), "calls_due": due,
             "calls_old": sum(i["at"] < stale for i in calls),
             "shareholder": shareholder_meetings(recent), "filed": len(recent)}
 
