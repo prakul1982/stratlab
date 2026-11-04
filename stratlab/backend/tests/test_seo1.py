@@ -196,7 +196,9 @@ def edge_kept(cc: str, regions=("IN", "US")) -> bool:
     """LIVE3-002: kept by the edge as LONG says, but never past the next settle point of the page's market(s) (a day at most)."""
     want = int(re.search(r"s-maxage=(\d+)", stock_pages.edge_cache(list(regions))).group(1))
     got = re.search(r"s-maxage=(\d+)", cc or "")
-    return bool(got) and want - 5 <= int(got.group(1)) <= want <= 86400 and cc.endswith("stale-while-revalidate=604800") and cc.startswith("public, max-age=")
+    # `want` is worked out a moment after the page's own header, so it counts down from a later second: a few seconds either way
+    return bool(got) and abs(int(got.group(1)) - want) <= 5 and want <= 86400 and cc.endswith("stale-while-revalidate=604800") \
+        and cc.startswith("public, max-age=")
 
 
 def test_company_directory_and_list_pages_are_kept_a_day_by_the_edge_and_feeds_minutes(w):
