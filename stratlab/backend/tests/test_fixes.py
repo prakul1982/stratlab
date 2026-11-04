@@ -61,7 +61,8 @@ def test_unconfigured_channel_is_an_error_not_a_silent_success(monkeypatch):
 
 
 def only_gemini(monkeypatch):
-    for k in ("GROQ_API_KEY", "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"):
+    from app.ai_catalog import PROVIDERS
+    for k in [p.key_env for p in PROVIDERS.values()]:      # every provider's key, from the catalog (Cerebras left it, 4 Nov)
         monkeypatch.setattr(settings, k, "")
     monkeypatch.setattr(settings, "GEMINI_API_KEY", "test")
     monkeypatch.setattr(settings, "AI_PROVIDERS", "auto")
