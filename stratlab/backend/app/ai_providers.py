@@ -38,7 +38,10 @@ BUDGET = {"quick": 30.0, "research": 60.0, "long": 120.0}       # seconds a whol
 PER_CALL = {"quick": 18.0, "research": 40.0, "long": 80.0}      # seconds one model may take
 MAX_TRIES = 8                                                   # models asked per request, at most
 WAIT_FOR_COOLDOWN = 10.0        # when every model is briefly rate limited, wait this long at most for the first
-CACHE_TTL = {"quick": 6 * 3600, "research": 3600, "long": 12 * 3600}
+# The key is the whole question (job, instructions, facts, reply size), so an answer kept longer is still the answer
+# to exactly those facts; research reads were kept only an hour, now as long as long documents (4 Nov: every repeat
+# answered here is a Claude request not paid for)
+CACHE_TTL = {"quick": 6 * 3600, "research": 12 * 3600, "long": 24 * 3600}
 CACHE_MAX = 400
 
 

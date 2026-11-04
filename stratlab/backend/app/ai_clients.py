@@ -34,6 +34,7 @@ class CallError(Exception):
     context   the prompt is too long for this model: skip it for this request only
     refusal   the model declined this request (Claude's stop_reason "refusal"): ask the next model, no breaker
     transient timeout, network or server error: count towards the circuit breaker
+    busy      this one model is overloaded right now ("high demand"): ask the provider's next model, breaker as transient
     """
 
     def __init__(self, kind: str, detail: str, wait: float | None = None, scope: str = "model", daily: bool = False):
@@ -141,8 +142,9 @@ def classify(name: str, r: httpx.Response, model: str) -> CallError:
     if code == 408 or code >= 500:
         # "This model is currently experiencing high demand" (Gemini's 503, most of its failures on 4 Nov): that one model
         # is overloaded, the provider's other models still answer, so only the model is skipped for this request
-        return CallError("transient", f"server error {code}" + (f" ({msg})" if msg else ""),
-                         scope="model" if _BUSY.search(body) else "provider")
+        if _BUSY.search(body):
+            return CallError("busy", f"server error {code}" + (f" ({msg})" if msg else ""), scope="model")
+        return CallError("transient", f"server error {code}" + (f" ({msg})" if msg else ""), scope="provider")
     return CallError("model", f"unexpected answer {code} ({msg})")
 
 
