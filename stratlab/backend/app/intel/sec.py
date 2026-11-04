@@ -53,7 +53,13 @@ REVENUE_ELSE = ("RevenuesNetOfInterestExpense",      # a bank's or broker's tota
                 # home building: the only revenue line some companies tag (MS1-011)
                 "RoyaltyRevenue", "HealthCareOrganizationRevenueNetOfPatientServiceRevenueProvisions", "SalesRevenueGoodsGross",
                 "RevenueFromRenderingOfDataServices", "RevenueFromRenderingOfInformationTechnologyConsultingServices",
-                "RevenueFromGovernmentGrants", "HomeBuildingRevenue", "ReimbursementRevenue")
+                "RevenueFromGovernmentGrants", "HomeBuildingRevenue", "ReimbursementRevenue",
+                # the monthly audit's gaps (1 Nov, SECMEM 6): an oil and gas producer's sales (CRK, EP), a clinic's patient
+                # fees (EHSI), advertising (GWAV), an IFRS tanker owner's freight (TRMD), milestone and grant income (JSPR,
+                # MRKR) and revenue outside customer contracts (CATX)
+                "OilAndGasSalesRevenue", "HealthCareOrganizationPatientServiceRevenue", "AdvertisingRevenue",
+                "RevenueFromRenderingOfCargoAndMailTransportServices", "RevenueRecognitionMilestoneMethodRevenueRecognized",
+                "RevenueFromGrants", "RevenueNotFromContractWithCustomer")
 # ...and when no revenue line is tagged at all, the income statement's own arithmetic: gross profit plus the cost of
 # sales, or operating profit plus total costs (each pair from the same period)
 COST_OF_SALES = ("CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold", "CostOfSales")

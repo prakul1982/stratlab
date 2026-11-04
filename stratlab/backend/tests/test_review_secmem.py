@@ -396,3 +396,25 @@ def test_admin_reads_the_ipo_queue_with_the_documents_still_to_read(monkeypatch)
         assert w["client"].get("/admin/ipos/queue", headers=W.headers("pro-token")).status_code == 403
     finally:
         w["close"]()
+
+
+def _facts(tax: str, concept: str, val: float, form: str = "10-K", unit: str = "USD") -> dict:
+    """A company's SEC facts as filed (the companyfacts shape): one year's revenue line under `concept` and its net income."""
+    row = lambda v: {"start": "2016-01-01", "end": "2016-12-31", "val": v, "fy": 2016, "fp": "FY", "form": form,  # noqa: E731
+                     "filed": "2017-03-01", "accn": "0000000000-17-000001", "frame": "CY2016"}
+    income = "ProfitLoss" if tax == "ifrs-full" else "NetIncomeLoss"
+    return {"cik": 1, "entityName": "X", "facts": {tax: {concept: {"units": {unit: [row(val)]}}, income: {"units": {unit: [row(-5e6)]}}}}}
+
+
+@pytest.mark.parametrize("tax,concept,sym", [
+    ("us-gaap", "OilAndGasSalesRevenue", "CRK"), ("us-gaap", "HealthCareOrganizationPatientServiceRevenue", "EHSI"),
+    ("us-gaap", "AdvertisingRevenue", "GWAV"), ("ifrs-full", "RevenueFromRenderingOfCargoAndMailTransportServices", "TRMD"),
+    ("us-gaap", "RevenueRecognitionMilestoneMethodRevenueRecognized", "JSPR"), ("us-gaap", "RevenueNotFromContractWithCustomer", "CATX"),
+])
+def test_a_us_companys_only_revenue_line_is_read(tax, concept, sym):
+    """The monthly audit's "Revenue or profit missing" (1 Nov): each of these filed its revenue only under this line."""
+    from app.intel import sec
+    p = sec.build(_facts(tax, concept, 175_706_000, "20-F" if tax == "ifrs-full" else "10-K"), None, symbol=sym)
+    i = p["pl"]["cols"].index("Dec 2016")
+    sales = (p["pl"]["rows"].get("Sales") or p["pl"]["rows"].get("Revenue"))[i]
+    assert sales == pytest.approx(175.71, abs=0.01) and p["pl"]["rows"]["Net Profit"][i] == pytest.approx(-5.0)
