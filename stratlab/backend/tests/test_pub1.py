@@ -113,18 +113,23 @@ def test_prices_are_kept_by_the_edge_and_the_series_by_the_server(w):
 
 
 def test_reads_of_the_sources_are_held_to_a_few_a_minute(w, monkeypatch):
-    c = w["client"]
-    monkeypatch.setattr(main, "CHART_BUILDS_PER_MINUTE", 2)
-    assert c.get("/stocks/in/TCS/prices.json").status_code == 200
-    assert c.get("/stocks/in/INFY/prices.json").status_code == 200
-    busy = c.get("/stocks/in/SBIN/prices.json")
-    assert busy.status_code == 503 and busy.headers["retry-after"] == "60" and busy.headers["cache-control"] == "no-store"
-    assert c.get("/stocks/in/TCS/prices.json").status_code == 200                 # one already read costs no ration
-    monkeypatch.setattr(main, "CHART_BUILDS_PER_MINUTE", 30)
-    monkeypatch.setattr(main, "CHART_BUILDS_PER_ADDRESS", 1)
-    main.chart_reads._d.clear()
-    assert c.get("/stocks/in/ITC/prices.json").status_code == 200
-    assert c.get("/stocks/in/WIPRO/prices.json").status_code == 503              # one address: one read of its own a minute
+    # the ration is a fixed window per calendar minute (app/guard.py Window): on a busy machine the reads below can straddle
+    # a minute's turn and get a fresh ration, so the clock stands still just after the start of a minute for the whole test
+    import time
+    from tests import e2e_clock
+    with e2e_clock._time_machine().travel(int(time.time() // 60) * 60 + 5, tick=False):
+        c = w["client"]
+        monkeypatch.setattr(main, "CHART_BUILDS_PER_MINUTE", 2)
+        assert c.get("/stocks/in/TCS/prices.json").status_code == 200
+        assert c.get("/stocks/in/INFY/prices.json").status_code == 200
+        busy = c.get("/stocks/in/SBIN/prices.json")
+        assert busy.status_code == 503 and busy.headers["retry-after"] == "60" and busy.headers["cache-control"] == "no-store"
+        assert c.get("/stocks/in/TCS/prices.json").status_code == 200                 # one already read costs no ration
+        monkeypatch.setattr(main, "CHART_BUILDS_PER_MINUTE", 30)
+        monkeypatch.setattr(main, "CHART_BUILDS_PER_ADDRESS", 1)
+        main.chart_reads._d.clear()
+        assert c.get("/stocks/in/ITC/prices.json").status_code == 200
+        assert c.get("/stocks/in/WIPRO/prices.json").status_code == 503              # one address: one read of its own a minute
 
 
 def test_a_company_with_no_page_or_no_prices_is_a_cached_404(w, monkeypatch):
