@@ -36,7 +36,8 @@ def test_heavy_jobs_run_one_at_a_time_in_the_order_they_asked(monkeypatch):
         t.join(5)
     assert order == ["a", "b", "c"]
     assert worst[0] == 1
-    assert memguard.TURNS.name is None
+    # given up by all of ours (a background job of another test may hold it by now, so not "nobody")
+    assert memguard.TURNS.name not in ("first", "a", "b", "c") and not memguard.TURNS.holds()
 
 
 def test_a_job_holding_the_turn_can_start_another_inside_it():
@@ -75,7 +76,7 @@ def test_the_turn_is_given_up_when_the_work_fails():
     with pytest.raises(ValueError):
         with memguard.heavy("boom"):
             raise ValueError("x")
-    assert memguard.TURNS.name is None
+    assert not memguard.TURNS.holds() and memguard.TURNS.name != "boom"      # given up (whoever else may hold it now)
     with memguard.heavy("after") as got:
         assert got
 
