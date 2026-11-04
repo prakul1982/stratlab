@@ -54,29 +54,34 @@ test("a timeframe change keeps the moment on screen", async ({ page }, info) => 
   const chart = page.getByTestId("price-chart").first();
   await expect(chart).toHaveAttribute("data-bars", /^[1-9]\d*$/, { timeout: 30_000 });
   const pick = async (t: string) => { await chart.getByRole("group", { name: "Timeframe" }).getByRole("button", { name: t, exact: true }).click(); await expect(chart).toHaveAttribute("data-loaded", t.toLowerCase(), { timeout: 30_000 }); await page.waitForTimeout(500); };
-  const legendClose = async () => {
+  // the candle under the pointer: its start (data-at, ms) once the pointer has moved there
+  const hoverAt = async () => {
     const stage = chart.locator(".pc-stage");
     const b = (await stage.boundingBox())!;
     await page.mouse.move(b.x + b.width * 0.4, b.y + b.height * 0.3);
     await page.mouse.move(b.x + b.width * 0.4 + 1, b.y + b.height * 0.3 + 1);
-    const text = await chart.locator(".pc-legend").first().innerText();
-    return Number((/C\s*([\d,]+\.\d+)/.exec(text) ?? [])[1]?.replace(/,/g, ""));
+    await expect(chart).toHaveAttribute("data-at", /^\d+$/);
+    return Number(await chart.getAttribute("data-at"));
   };
   await pick("5m");
-  const newest = await legendClose();
+  const newest = await hoverAt();
   // scrolled back by dragging the chart: the candles under the pointer are not the newest ones any more
   const b = (await chart.locator(".pc-stage").boundingBox())!;
   await page.mouse.move(b.x + b.width / 2, b.y + 150);
   await page.mouse.down(); await page.mouse.move(b.x + b.width / 2 + 700, b.y + 150, { steps: 12 }); await page.mouse.up();
   await page.waitForTimeout(600);
-  const back = await legendClose();
-  expect(back, "scrolled back").not.toBe(newest);
-  // 15m and 1m keep looking at that same time: the price there is the old price, not today's (more than ₹20 away from it: the
-  // fake world's slow wave stood below today's close on the days this ran by luck, and above it at the fixed E2E_NOW)
+  const back = await hoverAt();
+  expect(newest - back, "scrolled back").toBeGreaterThan(30 * 60_000);
+  // 15m and 1m keep looking at that same moment: the candle under the pointer is near the one scrolled back to, not the newest.
+  // (It was measured by the price there being over ₹20 from today's: that rested on the fake world's price wave, which at the fixed
+  // E2E_NOW stands 12 away; the candle's own time is what "the moment" is.)
+  const near = (t: number, tf: number) => Math.abs(t - back) <= Math.max(2 * tf, (newest - back) / 3);
   await pick("15m");
-  expect(Math.abs(await legendClose() - newest), "15m after scrolling back").toBeGreaterThan(20);
+  const at15 = await hoverAt();
+  expect(near(at15, 15 * 60_000), `15m after scrolling back: ${new Date(at15).toISOString()} vs ${new Date(back).toISOString()}`).toBe(true);
   await pick("1m");
-  expect(Math.abs(await legendClose() - newest), "1m after scrolling back").toBeGreaterThan(20);
+  const at1 = await hoverAt();
+  expect(near(at1, 60_000), `1m after scrolling back: ${new Date(at1).toISOString()} vs ${new Date(back).toISOString()}`).toBe(true);
   expect(errors).toEqual([]);
 });
 
