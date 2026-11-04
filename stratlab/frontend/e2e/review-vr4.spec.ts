@@ -46,8 +46,9 @@ test("VR4-011: the Invest breadth card does not date each of its three figures w
   await open(page, "/invest", ADMIN);
   const card = page.getByTestId("breadth-card");
   await expect(card).toBeVisible({ timeout: 30_000 });
-  const notes = await card.locator(".k-stat-n, .k-stat-note").allInnerTexts();
-  expect(notes.filter((n) => /^Today, \d/.test(n.trim())).length, `notes ${notes}`).toBeLessThan(2);
+  // the day is said once (now the figures' column header, since the tiles became a table), never under each figure
+  const text = await card.innerText();
+  expect((text.match(/Today, \d/g) ?? []).length, text).toBeLessThan(2);
 });
 
 test("VR4-008: the welcome question does not say the four spaces, which the tour's first step says next", async ({ page }) => {

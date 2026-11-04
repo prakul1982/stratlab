@@ -1,3 +1,4 @@
+import { download } from "../../lib/share";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
@@ -274,9 +275,7 @@ function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: 
     // formula when the file is opened, so such a cell is written as text
     const cell = (x: unknown) => { const s = String(x ?? ""); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; };
     for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, r.at ?? "", i.level, i.area, i.detail, i.level === "fact" ? "" : i.since ?? ""].map(cell).join(","));
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })); a.download = file; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    download(new Blob([lines.join("\n")], { type: "text/csv" }), file);
   };
   const areas = Object.entries(sum.by_area).sort((a, b) => weight(b[1]) - weight(a[1]));
   const cols: Column<[string, Partial<Record<Level, number>>]>[] = [

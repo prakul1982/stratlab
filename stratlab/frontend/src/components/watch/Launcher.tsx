@@ -5,7 +5,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { usePersisted } from "../../lib/persist";
 import { importWithRetry } from "../../lib/lazyRetry";
-import { clampLayout, dockWidth, DEFAULT_LAYOUT, isSheet, LAYOUT_KEY, shapeOf, type PanelLayout } from "../../lib/watchLayout";
+import { clampLayout, cornerCover, dockWidth, DEFAULT_LAYOUT, isSheet, LAYOUT_KEY, shapeOf, type PanelLayout } from "../../lib/watchLayout";
 import { useConsentLift } from "../../lib/consentLift";
 import { Markets } from "../Icons";
 import "./launcher.css";
@@ -78,6 +78,14 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
     document.body.classList.toggle("mw-docked", dock > 0);
     return () => { document.body.classList.remove("mw-docked"); root.style.removeProperty("--mw-dock"); };
   }, [dock]);
+  // ...and a panel floating in its corner leaves room after the page's end, so nothing stays under it (Instinct #11)
+  const cover = shown ? cornerCover(layout, vw, vh) : 0;
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--mw-cover", `${cover}px`);
+    document.body.classList.toggle("mw-cover", cover > 0);
+    return () => { document.body.classList.remove("mw-cover"); root.style.removeProperty("--mw-cover"); };
+  }, [cover]);
   useConsentLift(true);          // the button, and a floating panel, rise above the question
   // focus goes back to the button when the panel closes with focus inside it
   useEffect(() => {

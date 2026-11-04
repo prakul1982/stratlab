@@ -4,6 +4,7 @@ import { CFG, sessionKey } from "./config";
 import { ApiError, NO_BACKEND_MESSAGE } from "./http";
 import { viewAsHeaders } from "./viewAs";
 import { hasSavedSession } from "./entry";
+import { callEnded, callStarted } from "./inflight";
 
 export { CFG } from "./config";
 export { ApiError } from "./http";
@@ -37,7 +38,13 @@ export function setApiHandlers(h: { unauthorized: () => void; offline: () => voi
   onOffline = h.offline;
 }
 
-export async function api<T = any>(path: string, { method = "GET", body, raw = false, file, signal }: Opts = {}): Promise<T> {
+/** Every call to the server, counted while it is out (lib/inflight: a page's later cards start once the first screen's are back). */
+export function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
+  callStarted();
+  return send<T>(path, opts).finally(callEnded);
+}
+
+async function send<T = any>(path: string, { method = "GET", body, raw = false, file, signal }: Opts = {}): Promise<T> {
   if (!CFG.API_BASE) {
     const e = new ApiError(NO_BACKEND_MESSAGE);
     console.warn("StratLab: API_BASE is missing from config.js, so no request can be sent.");

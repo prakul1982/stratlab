@@ -1,3 +1,4 @@
+import { download } from "../lib/share";
 import { checksRun } from "../lib/shareText";
 import { LOST_CHECKS, lostMoney, summaryLines, unseenWord } from "../lib/tradeUi";
 import { asDate, monthShort, pct } from "../lib/format";
@@ -247,9 +248,7 @@ export async function shareVerdict(nb: Notebook, e: Experiment, theme: "light" |
     try { await navigator.share({ files: [file], title: "StratLab verdict", text }); return "shared"; }
     catch (x) { if ((x as Error).name === "AbortError") return "cancelled"; }
   }
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  download(blob, file.name);
   try { await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]); } catch { /* not allowed here; the download is enough */ }
   return "saved";
 }

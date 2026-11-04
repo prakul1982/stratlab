@@ -53,7 +53,7 @@ test("LIVE1A-029/030/031: bids say when they were read, the issue size shows its
 
 test("LIVE1A-005/007/008/036: the verdict page's numbers and costs are full-width cards, its header wraps whole, its menus fit and the next steps stack on a phone", () => {
   const e = read("src/pages/ExperimentPage.tsx"), t = read("src/pages/trade/trade.css"), s = read("src/styles.css");
-  assert.match(e, /className="k-rows two" role="list" aria-label="Profit and costs"/);
+  assert.match(e, /<FactTable label="Profit and costs" itemHead="Item" figureHead="Amount" numeric rows=\{\[/);       // TABLE-SWEEP: one table, not two columns of pairs
   assert.match(t, /\.k-money\.k-money-even \{ grid-template-columns: minmax\(0, 1fr\); \}/);
   assert.match(e, /className="k-toolbar next-steps"/);
   assert.match(t, /\.next-steps \{ flex-direction: column; align-items: stretch; \}/);

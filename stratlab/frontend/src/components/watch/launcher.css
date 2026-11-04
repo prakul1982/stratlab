@@ -26,3 +26,5 @@
 body.mw-docked .shell { padding-right: var(--mw-dock, 0px); }
 body.mw-docked .consent { right: calc(var(--mw-dock, 0px) + 16px); }
 @media (max-width: 900px) { body.mw-docked .shell { padding-right: 0; } }
+/* a panel floating in its corner: the page's end scrolls up clear of it (Instinct #11) */
+body.mw-cover .shell > .main { padding-bottom: calc(var(--mw-cover, 0px) + 24px); }

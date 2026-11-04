@@ -618,7 +618,10 @@ def refresh_india(feed, sebi, today: date, now: datetime | None = None, details:
     # allotment): its own page on the exchange, found by the company's name (IPO-002)
     rows = find_issue_pages(rows, feed, now, problems, sleep, pace)
     # each issue's own page: terms, the offer document and the bids, for the issues that are near or on their dates
-    todo = [r for r in rows if r.get("symbol") and r.get("series") and _wants_detail(r, now)][:details]
+    want = [r for r in rows if r.get("symbol") and r.get("series") and _wants_detail(r, now)]
+    # the issues being bid for or just listed first; the ones only tried again for missed final bids (RC4-020) after them
+    late = {id(r) for r in want if r.get("listing") and (now.astimezone(IST).date() - date.fromisoformat(r["listing"])).days > DETAIL_FOR_DAYS}
+    todo = ([r for r in want if id(r) not in late] + [r for r in want if id(r) in late])[:details]
     for r in todo:
         got = _try(problems, f"{r['symbol']}", lambda r=r: S.nse_detail(feed.nse.ipo_detail(r["symbol"], r.get("series") or "EQ")))
         if got:
@@ -712,8 +715,22 @@ def _wants_detail(r: dict, now: datetime) -> bool:
         return bool(r.get("open")) and (date.fromisoformat(r["open"]) - today).days <= 10 and (not r.get("detail_at") or r["detail_at"][:10] < today.isoformat())
     if st == "listed" and r.get("listing"):
         age = (today - date.fromisoformat(r["listing"])).days
-        return age <= DETAIL_FOR_DAYS and (not r.get("detail_at") or r["detail_at"][:10] <= r["listing"])
+        if age <= DETAIL_FOR_DAYS and (not r.get("detail_at") or r["detail_at"][:10] <= r["listing"]):
+            return True
+        return _backfill(r, today, age)
     return False
+
+
+BACKFILL_DAYS = 180                   # RC4-020: an issue listed this long ago with no final bids stored is still tried, once a week
+
+
+def _backfill(r: dict, today: date, age: int) -> bool:
+    """RC4-020: a listed issue whose final subscription the job missed in its first DETAIL_FOR_DAYS (its page read only then, and only
+    until the final figures were stored) is read again once a week for half a year, so the IPO post's subscription table stops
+    leaving it out. These come after the issues that are open, closed or newly listed (see the caller's order)."""
+    if age > BACKFILL_DAYS or ((r.get("sub") or {}).get("times") is not None):
+        return False
+    return not r.get("detail_at") or r["detail_at"][:10] <= (today - timedelta(days=7)).isoformat()
 
 
 def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookups: int = 10, check: list | None = None) -> tuple[list[dict], list[str]]:

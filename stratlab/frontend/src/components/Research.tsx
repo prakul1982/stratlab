@@ -8,7 +8,7 @@ import { stageMeaning } from "../lib/stageNote";
 import { writtenAt, fmtDate, marketTz, monthLong, num, pct, price, safeHref, signCls, signedMove } from "../lib/format";
 import {
   SETTLING, bandPosition, metricText, holderRowName, missingLine, monthsOld, newsWhen, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
-  type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
+  type Company, type CompanyAI, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { surpriseShown } from "../lib/surprise";
@@ -327,39 +327,33 @@ export function EarningsBars({ rows: raw, basis }: { rows: Company["earnings"]; 
   );
 }
 
-/** One area's figures, each on its own line with the label and the value in aligned columns (the same two columns in every row of the table). */
-function Figures({ items }: { items: FactRow["items"] }) {
-  return (
-    <dl className="ai-figs">
-      {items.map((i) => (
-        <div key={i.label} className="ai-fig">
-          <dt className="k-muted">{i.label}</dt>
-          <dd>{i.text}{stageMeaning(i.text) && <Info label={`About ${i.text}`}>{stageMeaning(i.text)}</Info>}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 /** What the AI read says, as one table (UI-CO item 3): the area on the left, its figures on the right: the worked-out numbers by area, the valuation
  * line, the notable figures, where the company sits and what to watch. No bars, grades or colours: the numbers are the whole story. */
 type ReadRow = { id: string; area: string; body: ReactNode };
 function ReadTable({ r }: { r: CompanyAI }) {
   const rows: ReadRow[] = [
-    ...(r.facts ?? []).map((f) => ({ id: f.id, area: f.label, body: <Figures items={f.items} /> })),
     ...(r.valuation_note ? [{ id: "valuation", area: "Valuation", body: <span className="k-small">{r.valuation_note}</span> }] : []),
     // facts only: one list of figures that stand out, not "strengths" and "risks" (round 39)
     ...(r.bull.length > 0 || r.bear.length > 0 ? [{ id: "notable", area: "Notable figures", body: <ul className="k-list" data-testid="notable-figures">{[...r.bull, ...r.bear].map((b) => <li key={b}>{b}</li>)}</ul> }] : []),
     ...(r.position ? [{ id: "position", area: "Where it sits", body: <span className="k-small">{r.position}</span> }] : []),
     ...(r.watch.length > 0 ? [{ id: "watch", area: "What to watch", body: <ul className="k-list">{r.watch.map((w) => <li key={w}>{w}</li>)}</ul> }] : []),
   ];
-  if (!rows.length) return null;
+  // TABLE-SWEEP (owner, 29 Oct): the worked-out figures are rows of their own table (area, figure, value), not a label/value list
+  // inside a cell of the table below (on a phone that was a list in a card)
+  const figs = (r.facts ?? []).flatMap((f) => f.items.map((i, n) => ({ id: `${f.id}-${n}`, area: f.label, label: i.label, text: i.text })));
+  if (!rows.length && !figs.length) return null;
   return (
-    <div className="ai-table">
-      <DataTable label="The AI read, by area" rows={rows} rowKey={(x) => x.id} stack={false}
-        columns={[{ key: "a", header: "The numbers", rowHeader: true, cell: (x) => <b className="k-small">{x.area}</b> },
-          { key: "f", header: "The figures", cell: (x) => x.body }]} />
-    </div>
+    <>
+      {figs.length > 0 && <DataTable label="The AI read's figures" rows={figs} rowKey={(x) => x.id}
+        columns={[{ key: "a", header: "Area", rowHeader: true, cell: (x) => x.area },
+          { key: "k", header: "Figure", wrap: true, cell: (x) => x.label },
+          { key: "v", header: "Value", wrap: true, cell: (x) => <>{x.text}{stageMeaning(x.text) && <Info label={`About ${x.text}`}>{stageMeaning(x.text)}</Info>}</> }]} />}
+      {rows.length > 0 && <div className="ai-table">
+        <DataTable label="The AI read, by area" rows={rows} rowKey={(x) => x.id} stack={false}
+          columns={[{ key: "a", header: "The numbers", rowHeader: true, cell: (x) => <b className="k-small">{x.area}</b> },
+            { key: "f", header: "The figures", cell: (x) => x.body }]} />
+      </div>}
+    </>
   );
 }
 

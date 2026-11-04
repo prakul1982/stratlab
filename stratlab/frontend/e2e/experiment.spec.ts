@@ -53,6 +53,10 @@ test("experiment page: one next-step block, counts that add up, forex decimals a
   const trades = page.getByRole("region", { name: "Every trade", exact: true });
   await expect(trades).toContainText(`${closed} closed${open_ ? ` + ${open_} still open` : ""} · P&L and Return after costs`);
 
+  // how the test filled its orders, with its own slippage, under the trades (Instinct, 2 Nov: the execution model said on the result)
+  await expect(trades.getByTestId("trades-fills")).toContainText(`fills at the next candle's open, ${exp.strategy?.risk?.slippage ?? 0.05}% worse for slippage`);
+  await expect(trades.getByTestId("trades-fills")).toContainText("at that candle's open when the price gapped past it");
+
   // the unseen-data parts add up to the closed trades
   const unseen = exp.verdict.checks.find((c: { id: string }) => c.id === "unseen").data;
   expect(unseen.built_trades + unseen.unseen_trades).toBe(closed);

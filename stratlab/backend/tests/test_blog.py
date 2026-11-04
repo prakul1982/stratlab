@@ -303,7 +303,10 @@ def test_the_ipo_post_counts_only_issues_with_data_and_says_how_many_lack_it(w):
     assert "median 2.5%" not in text and "closed +2.5% from its issue price; the lowest was −6.5% and the highest +8.0%" in text      # median of 8.0, -6.5, 5.0, 0.0
     assert "median +2.5%" in text                                                                 # opening: 10.0, -4.0, 5.0, 0.0 -> (0+5)/2
     assert "1 issue lacks price data" in post["summary"]
-    rows = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Issue")["rows"]
+    # LIVE2-005: the issue-by-issue list is folded, so the figures above stay in view on a phone
+    fold = next(b for b in post["blocks"] if b["t"] == "fold" and b["title"] == "Every issue counted")
+    assert fold["note"].endswith("issues")
+    rows = next(b for b in fold["blocks"] if b["t"] == "table" and b["head"][0] == "Issue")["rows"]
     assert len(rows) == 4 and "Delta Rail" not in json.dumps(rows) and rows[0][1] == "3 Oct 2026" and rows[-1][2] == "₹100.00"
     seg = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Segment")["rows"]
     assert seg == [["Main board", "3", "1", "1", "+0.0%".replace("+", "")], ["SME", "1", "1", "0", "+5.0%"]]
@@ -504,7 +507,9 @@ def test_generate_reads_the_apps_own_library_ipo_tracker_and_index_history(w, mo
     page_html = page(w["client"], "/blog/research")
     assert page_html.count('class="post"') == 3 and "Classic strategies across ten markets, after costs" in page_html
     assert all(urls(w["client"].get("/sitemaps/blog.xml").content).get(f"https://stratlab.studio/blog/{m['slug']}") for m in out["made"])
-    again = blog_research.generate(now, builders=blog_research.source_posts())
+    # at the same moment: the fake index history runs to the clock's today, so a run a day later (the real clock past 3 Nov) has a new close
+    with time_machine.travel(now, tick=False):
+        again = blog_research.generate(now, builders=blog_research.source_posts())
     assert [m["result"] for m in again["made"]] == ["same", "same", "same"]
 
 

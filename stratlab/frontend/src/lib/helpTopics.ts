@@ -7,7 +7,7 @@ export interface HelpTopic { key: keyof typeof HELP; title: string; words: strin
 /** Which group each explanation sits in on Help, in the order the groups read (LIVE1B-043: one flat list of 47). */
 export const HELP_GROUPS: [string, string[]][] = [
   ["Testing an idea", ["walkforward", "unseen", "nearby", "shuffle", "sample", "verdict", "strength", "basket", "buyHold", "totalReturn", "avgTrade", "winRate", "profitFactor", "worstFall", "sharpe", "equity", "period", "capital", "candles", "csv", "experimentsQuota"]],
-  ["Rules, costs and risk", ["keep", "stop", "target", "trail", "stopUnits", "risk", "short", "crosses", "maxBars", "session"]],
+  ["Rules, costs and risk", ["fills", "keep", "stop", "target", "trail", "stopUnits", "risk", "short", "crosses", "maxBars", "session"]],
   ["Notebooks and paper trading", ["notebook", "paper", "group"]],
   ["Options", ["optVix", "optStrikeRule", "optFreeze", "optBacktest"]],
   ["Company figures", ["pe", "research52", "researchMargins", "researchHolding", "researchEarnings"]],
@@ -30,6 +30,7 @@ const TOPICS: [keyof typeof HELP, string, string][] = [
   ["buyHold", "Buy and hold", "buy and hold benchmark holding"],
   ["totalReturn", "Total return", "total return profit loss"],
   ["avgTrade", "Average trade", "average trade per trade expectancy"],
+  ["fills", "How a test fills its orders", "fill fills filled execution next candle open slippage gap gapped stop fills price order"],
   ["keep", "Profit after costs", "costs charges brokerage stt stamp duty gst fees tax after costs"],
   ["stop", "Stop loss", "stop loss sl stoploss"],
   ["target", "Target", "target take profit tp"],

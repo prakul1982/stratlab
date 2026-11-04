@@ -85,6 +85,8 @@ test("R9R-008: the Invest home's United States tab shows the S&P 500 and US card
 test("R9R-010: My space reads the calendars after its first screen's figures, not all at once", async ({ page }) => {
   const seen: { path: string; at: number }[] = [];
   page.on("request", (r) => { const u = new URL(r.url()); if (["fetch", "xhr"].includes(r.resourceType())) seen.push({ path: u.pathname, at: Date.now() }); });
+  const back: { path: string; at: number }[] = [];
+  page.on("response", (r) => { const u = new URL(r.url()); if (["fetch", "xhr"].includes(r.request().resourceType())) back.push({ path: u.pathname, at: Date.now() }); });
   const errors = await open(page, "/mine");
   await expect(page.getByTestId("mine-home")).toBeVisible({ timeout: 30_000 });
   await page.waitForRequest(/\/money\/calendar\?/, { timeout: 15_000 });
@@ -92,8 +94,14 @@ test("R9R-010: My space reads the calendars after its first screen's figures, no
   const worth = first(/\/money\/net-worth$/), holdings = first(/\/holdings$/), calendar = first(/\/money\/calendar$/), results = first(/\/research\/results$/);
   expect(worth).toBeLessThan(Infinity);
   expect(holdings).toBeLessThan(Infinity);
-  expect(calendar - worth, "the calendar waits for the figures at the top").toBeGreaterThan(500);
-  expect(results - worth, "the results wait too").toBeGreaterThan(500);
+  // (changed on purpose, LIVE1B-085: the later cards no longer wait a fixed 1.2 s, they start once the top's figures are back; so
+  // "waits" is measured against those answers, not as 500 ms after the first request)
+  const answered = (re: RegExp) => back.find((s) => re.test(s.path))?.at ?? Infinity;
+  const top = Math.max(answered(/\/money\/net-worth$/), answered(/\/holdings$/));
+  expect(top).toBeLessThan(Infinity);
+  expect(calendar, "the calendar waits for the figures at the top").toBeGreaterThanOrEqual(top);
+  expect(results, "the results wait too").toBeGreaterThanOrEqual(top);
+  expect(calendar - worth, "and not all at once with them").toBeGreaterThan(0);
   // and they do arrive: the card fills in
   await expect(page.getByTestId("mine-coming")).toBeVisible();
   expect(errors).toEqual([]);

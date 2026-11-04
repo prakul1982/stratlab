@@ -37,6 +37,8 @@ export const HELP = {
   shuffle: "We reshuffle the order of your trades 1,000 times, each trade keeping its own day-by-day ups and downs. The same trades in a worse order can fall much deeper. Falls are measured day by day from the highest point, as Worst fall is, so yours is the backtest's Worst fall. A group's trades overlap, so for a group the account's day-by-day changes are reshuffled instead.",
   sample: "Under 15 trades, a couple of lucky trades can decide the whole result. 30 or more trades is a fair sample.",
   equity: "How the test account's value moved over time. The dashed line is what simply buying and holding would have done. The shaded part is the unseen data.",
+  // Instinct (2 Nov): the execution model, said where people look (Help and the test's result) as backend/app/engine/core.py does it
+  fills: testFills(),
   keep: "Profit after every cost of trading in this market: slippage (fills a little worse than the candle's price, as set in the rules; profit before costs is before it too), brokerage, taxes like STT and stamp duty, exchange fees and GST, the depository (DP) charge on Indian shares sold from delivery, plus an estimate of tax on the gains. Signals fill at the next candle's open.",
   priceChart: "The price over the test, with your indicators drawn on top. Blue triangles mark buys; orange ones mark sells.",
   totalReturn: "Profit or loss on your starting capital over the whole test, after costs.",
@@ -77,3 +79,15 @@ export const HELP = {
   researchHolding: "Who owns the shares: the founders or promoters, foreign funds (FIIs), Indian funds (DIIs) and the public. Promoters selling or funds piling in can be worth watching.",
   newsletters: "A short email after the market closes: what moved in India or the US, and what happened at the companies you follow. Weekly sends one summary a week instead. Every issue is also on the News page.",
 };
+
+/** How a test on past prices fills its orders (backend/app/engine/core.py): a rule's signal is seen when a candle closes and fills
+ * at the next candle's open, slippage worse; a stop or a target fills at its level, or at the open when the price gapped past it.
+ * `slippage` is the notebook's own setting (0.05% unless changed). Paper trading fills differently (lib/paperText.ts). */
+export function testFills(slippage = 0.05, intraday = false): string {
+  const slip = slippage > 0 ? `${+slippage.toFixed(3)}% worse for slippage (buys that much higher, sells that much lower)` : "with no slippage (your setting)";
+  return `A rule is checked when each candle closes, and its order fills at the next candle's open, ${slip}. `
+    + "A stop loss or a target fills at its level when a candle reaches it, or at that candle's open when the price gapped past it; when one candle reaches both, the stop counts. "
+    + `A time exit fills at the candle's close${intraday ? ", and so does the day's square-off" : ""}. `
+    + "The test sees each candle's open, high, low and close only (daily candles unless the notebook picks shorter ones), not the moves inside it.";
+}
+

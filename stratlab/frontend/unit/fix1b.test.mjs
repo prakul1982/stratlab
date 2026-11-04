@@ -103,7 +103,7 @@ test("LIVE1B-019: a figure never breaks inside its digits; ₹100 crore and more
 test("LIVE1B-009, 010, 011: one tax figure beside the total; the notes said once; the workings folded; no card for one link", () => {
   const t = read("src/pages/TaxReportPage.tsx");
   assert.doesNotMatch(t, /<Stat label=\{<>Tax on share gains/);                                      // 009: no second tax figure in the gains card
-  assert.match(t, /<Stat label=\{`Estimated tax for \$\{y\.label\}`\}/);                           // 010: the top figure is not the next card's heading again
+  assert.match(t, /\{ id: "est", k: `Estimated tax for \$\{y\.label\}`/);                            // 010: the top figure is not the next card's heading again (a table row since RC2B-042)
   assert.match(t, /<CardHead title=\{`Total tax estimate, \$\{y\.label\}`\}/);
   assert.doesNotMatch(t, /rep\?\.disclaimer/);                                                      // the long note was the "Covers only..." paragraph twice
   assert.match(t, /for an individual of the age band and residency you choose\. House property, foreign income[^"]*advance tax and TDS already paid aren't included\./);

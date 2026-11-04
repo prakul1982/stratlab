@@ -12,6 +12,8 @@ USERS = {
     **{f"money-{i}": (f"u-money-{i}", f"money{i}@example.com", "pro") for i in range(24)},
     # the SECMEM lane's e2e (e2e/auth-pkce.spec.ts, e2e/consent.spec.ts): its own accounts, one per test and project
     **{f"secmem-{i}": (f"u-secmem-{i}", f"secmem{i}@example.com", "pro") for i in range(12)},
+    # the REVIEW lane's e2e (e2e/review-w5.spec.ts): the same, its own Pro accounts
+    **{f"review-{i}": (f"u-review-{i}", f"review{i}@example.com", "pro") for i in range(32)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),
