@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "react-router-dom";
 import { APP_BUILD } from "../lib/buildInfo";
 import { Modal } from "./ui";
-import { Seg } from "./kit";
+import { Seg } from "./kit/Seg";
 import { FEEDBACK_MAX, FEEDBACK_TYPES, browserLine, type FeedbackType } from "../lib/feedback";
 
 /* Help & feedback (owner, 4 Nov: "a help button where people can report bugs and also new features or some feature not
