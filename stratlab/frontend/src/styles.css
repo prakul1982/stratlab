@@ -667,9 +667,6 @@ td.num, .num { font-family: var(--sans); }
 /* AI read */
 .ai-read { border-color: var(--ink); }
 
-.ai-figs { margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.ai-fig { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 2px 14px; font-size: 14px; }
-.ai-fig dt, .ai-fig dd { margin: 0; }
 .ai-table .k-table :is(th, td) { white-space: normal; vertical-align: top; max-width: none; }
 .ai-table .k-table tbody th, .ai-table .k-table thead th:first-child { width: 11rem; min-width: 0; }
 .ai-table .k-table .k-list { margin: 0; }
@@ -682,7 +679,6 @@ td.num, .num { font-family: var(--sans); }
   .ai-table .k-table td { padding-bottom: 12px; }
   .ai-table .k-table tbody tr { border-bottom: 1px solid var(--line); }
   .ai-table .k-table tbody tr:last-child { border-bottom: 0; }
-  .ai-fig { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 10px; }
 }
 
 /* themes */

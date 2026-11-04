@@ -46,7 +46,9 @@ test("item 3: the AI read's numbers are one table (area | figures) with the valu
   const r = read("src/components/Research.tsx");
   assert.match(r, /<DataTable label="The AI read, by area"/);
   for (const a of ['area: "Valuation"', 'area: "Notable figures"', 'area: "Where it sits"', 'area: "What to watch"']) assert.ok(r.includes(a), a);
-  assert.match(r, /<dl className="ai-figs">/);
+  // TABLE-SWEEP (changed on purpose): the worked-out figures are rows of their own table (area, figure, value), not a list inside a cell
+  assert.match(r, /<DataTable label="The AI read's figures"/);
+  assert.doesNotMatch(r, /className="ai-figs"/);
   assert.doesNotMatch(r, /className="inv-two"/);                                                                  // no more half-empty two-column blocks
   assert.match(r, /data-testid="notable-figures"/);
 });
