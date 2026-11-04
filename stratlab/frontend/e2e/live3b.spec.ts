@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, worldDate, type Page } from "@playwright/test";
 
 // LIVE3 (live review of production, Wed 4 Nov), the FIXB lane. Each test sets its own width, so it is the same on the desktop and
 // phone projects; signed-in tests only read.
@@ -212,4 +212,36 @@ test("Paper's empty state offers both ways to start as buttons side by side (LIV
     await b.click();
     await expect(page).toHaveURL(/\/options/);
   }
+});
+
+// LIVE3-026: pro-1's stored session met "Sign in to see …" on 22 pages in a row, and a minute later was signed in everywhere. A sign-in
+// wall needs the saved session to be gone from the browser (with one saved, a page that can't confirm it says it couldn't load), so
+// a session that comes back by itself was written back by another process using the profile. What a returning user meets: an expired
+// access token is renewed once and every page is signed in; a renewal the service can't answer is "couldn't load", never a wall.
+test("a returning user with an expired access token is renewed, never shown a sign-in wall (LIVE3-026)", async ({ page, request }, info) => {
+  const n = info.project.name === "phone" ? 7 : 6;
+  const token = `live3b-${n}`;
+  await request.put(`${API}/me/prefs`, { headers: { Authorization: `Bearer ${token}` }, data: { focus: "both", level: "some", space: "all" } });
+  const fresh = { ...session(token, `u-live3b-${n}`, `live3b${n}@example.com`), refresh_token: "r2" };
+  const worldNow = () => Math.floor(worldDate().getTime() / 1000);          // the page's clock is the fake world's, not this machine's
+  const expired = { ...fresh, access_token: "expired-token", refresh_token: "r1", expires_at: worldNow() - 3600 };
+  let renewals = 0, down = false;
+  await page.route("**/*", (r) => { const h = new URL(r.request().url()).hostname; return h === "127.0.0.1" || h === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" }); });
+  await page.route("https://demo.supabase.co/auth/v1/token?grant_type=refresh_token", (r) => {
+    renewals++;
+    return down ? r.fulfill({ status: 503, body: "upstream unavailable" }) : r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...fresh, expires_at: worldNow() + 3600 }) });
+  });
+  await page.addInitScript((s) => { if (!sessionStorage.getItem("seeded")) { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); sessionStorage.setItem("seeded", "1"); } }, expired);
+  for (const path of ["/mine", "/invest", "/holdings", "/research/IN/RELIANCE", "/account"]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 }), path).not.toHaveText(/^Sign in|You were signed out/, { timeout: 30_000 });
+    await expect(page.locator("main .gate"), path).toHaveCount(0);
+  }
+  expect(renewals, "renewed once, then the new session is used").toBe(1);
+  // the next visit's renewal can't be answered: the page says it couldn't load your account, not "Sign in to see"
+  down = true;
+  await page.evaluate((s) => localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)), expired);
+  await page.goto("/invest");
+  await expect(page.getByText(/couldn't load|Reload/i).first()).toBeVisible({ timeout: 40_000 });
+  await expect(page.getByRole("heading", { name: /^Sign in to see/ })).toHaveCount(0);
 });
