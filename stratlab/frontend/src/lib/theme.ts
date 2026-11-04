@@ -73,7 +73,12 @@ export const themeApi = {
   news: (r: Region, theme: string) => api<{ items: NewsRow[]; as_of: string }>(`/research/theme-dive/news?${q(r, theme)}`),
   listings: (r: Region, theme: string) => api<{ items: Listing[]; checked: boolean }>(`/research/theme-dive/listings?${q(r, theme)}`),
   business: (r: Region, theme: string) => api<Business>(`/research/theme-dive/business?${q(r, theme)}`),
+  /** EXPORT: the theme's deck, PowerPoint or PDF (counted against the plan's monthly decks, as a company's deck is) */
+  deck: (r: Region, theme: string, format: "pptx" | "pdf") => api<Response>(`/research/theme-dive/deck?${q(r, theme)}&format=${format}`, { raw: true }),
   draft: (r: Region, theme: string) => api<{ result: string; slug: string | null; problem?: string }>("/admin/blog/theme", { method: "POST", body: { q: theme, region: r } }),
 };
+
+/** The theme's words in a file name, as the server writes them (theme_data.slug): "India defence" is "india-defence". */
+export const themeSlug = (theme: string) => theme.split(/\s+/).filter(Boolean).join(" ").slice(0, 80).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 
 export { amount, pc, times, points, span, layerLines, type LayerLine } from "./themeFormat";

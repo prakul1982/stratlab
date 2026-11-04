@@ -466,6 +466,11 @@ def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depend
     R = _routes()
     r, theme, m, _ = R.sector_map(profile, region, q, False)
     m = with_descriptions(r, checked(r, theme, m))
+    return R.ok(dive_of(r, theme, m, refresh))
+
+
+def dive_of(r: str, theme: str, m: dict, refresh: bool = False) -> dict:
+    """The dive for a checked map with its descriptions (the page's tables and sections), from DIVE_CACHE while it is fresh."""
     fm, figures = theme_base.for_figures(m)
     said = sum(1 for v in fm["value_chain"] if v.get("official") for c in v["companies"] if c.get("what"))
     key = (r, theme.lower(), int(float(m.get("generated_at") or 0)), (m.get("placements") or {}).get("placed"), said)
@@ -475,7 +480,76 @@ def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depend
         hit["placements"], hit["figures"] = m.get("placements"), figures
         if (m.get("placements") or {}).get("checked"):
             DIVE_CACHE.set(key, hit, DIVE_TTL)
-    return R.ok(hit)
+    return hit
+
+
+# ---------- the theme's deck (EXPORT) ----------
+def by_of(c: dict) -> str:
+    """How a company is in the theme, in the words the page's "In the theme by" column uses."""
+    if c.get("base"):
+        return "Named in the theme's list" if c.get("basis") == "list" else "Official industry"
+    return "Added, confirmed by its own words" if c.get("verified") else "Added, not yet confirmed"
+
+
+def members_of(m: dict, dive: dict) -> list[dict]:
+    """Every company in the theme as the page lists it (each layer's companies, then those named in a sub-theme only), each with its market
+    value, and the revenue and margins the dive worked out for it where it has them."""
+    figs: dict = {}
+    for b in dive.get("layers") or []:
+        for c in b.get("companies") or []:
+            figs.setdefault(c["symbol"], c)
+    for sub in dive.get("subs") or []:
+        for c in sub.get("companies") or []:
+            figs.setdefault(c["symbol"], c)
+    in_layer = {c["ticker"] for v in m.get("value_chain") or [] for c in v.get("companies") or []}
+    groups = [(v.get("layer") or "", v.get("companies") or []) for v in m.get("value_chain") or []]
+    only = {}
+    for sub in m.get("sub_themes") or []:
+        for c in sub.get("companies") or []:
+            if c["ticker"] not in in_layer:
+                only.setdefault(c["ticker"], c)
+    if only:
+        groups.append(("Named in a sub-theme only", list(only.values())))
+    out = []
+    for layer, cos in groups:
+        for c in cos:
+            f = figs.get(c["ticker"]) or {}
+            out.append({"symbol": c["ticker"], "name": c.get("name") or f.get("name") or c["ticker"], "layer": layer,
+                        "cap": c.get("cap") if c.get("cap") is not None else f.get("cap"), "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
+                        "net": f.get("net"), "roce": f.get("roce"), "year": f.get("year"), "by": by_of(c)})
+    return out
+
+
+def deck_view(r: str, m: dict, dive: dict) -> dict:
+    """What theme deck slides are made of (deck.theme_plan): the map's words and checks, the dive's figures."""
+    med = ((dive.get("sections") or {}).get("medians") or {}).get("ebitda") or {}
+    return {"region": r, "sector": m.get("sector") or dive.get("sector"), "summary": m.get("summary") or "", "as_of": dive.get("as_of"),
+            "unit": dive.get("unit"), "basis": dive.get("basis"), "chain": dive.get("chain") or {}, "layers": dive.get("layers") or [],
+            "members": members_of(m, dive), "tailwinds": m.get("tailwinds") or [], "risks": m.get("risks") or [],
+            "placements": m.get("placements") or {}, "figures": dive.get("figures") or {}, "median_ebitda": med.get("median")}
+
+
+@router.get("/theme-dive/deck")
+def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=Depends(current_profile)):
+    """The theme deep dive as slides, PowerPoint or PDF (EXPORT): the cover, the value chain, every company with its figures, the
+    tailwinds and risks with their sources, and which placements are confirmed. Counted against the plan's monthly decks as a
+    company's deck is (Free 1, Basic 5, Pro unlimited); a theme's PDF and PowerPoint are one deck, once a month."""
+    from .. import deck, main
+    if format not in ("pptx", "pdf"):
+        err(400, "bad_format", "Pick PowerPoint or PDF.")
+    R = _routes()
+    r, theme, m, _ = R.sector_map(profile, region, q, False)
+    m = with_descriptions(r, checked(r, theme, m))
+    mark = main.check_deep(profile, "deck", "", r, mark=f"deck:theme:{r}:{theme_data.slug(theme)}")
+    view = deck_view(r, m, dive_of(r, theme, m))
+    body = deck.build_theme(view, pdf=format == "pdf")
+    if mark:                                   # counted once the file is made: a deck that failed to build uses nothing
+        db.add_usage(profile["id"], "deck")
+        db.add_usage(profile["id"], mark)
+    name = f"stratlab-theme-{theme_data.slug(theme) or 'theme'}-{r.lower()}"
+    from fastapi.responses import Response
+    return Response(body, media_type="application/pdf" if format == "pdf" else "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    headers={"Content-Disposition": f'attachment; filename="{name}.{format}"'})
 
 
 # ---------- business updates ----------

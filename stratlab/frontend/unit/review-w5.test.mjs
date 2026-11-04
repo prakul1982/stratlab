@@ -131,7 +131,7 @@ test("Instinct #3 as a class: every file the app saves goes through the one save
   assert.deepEqual(SRC.filter((f) => /URL\.createObjectURL/.test(read(f))).sort(), ["src/components/InvoicesCard.tsx", "src/lib/share.ts"]);
   for (const f of ["src/pages/DeepDive.tsx", "src/pages/NewsPage.tsx", "src/pages/NotebookPage.tsx", "src/pages/ExperimentPage.tsx", "src/pages/OptionsPage.tsx",
     "src/charts/price/PriceChart.tsx", "src/components/shareImage.ts", "src/pages/admin/AuditPanel.tsx", "src/pages/admin/InvoiceAdminPanel.tsx", "src/pages/admin/SystemSection.tsx"])
-    assert.match(read(f), /import \{[^}]*\bdownload\b[^}]*\} from "[./]+lib\/share"/, f);
+    assert.match(read(f), /import \{[^}]*\bdownload(Csv)?\b[^}]*\} from "[./]+lib\/share"/, f);      // downloadCsv: the CSV builder in front of the same save (EXPORT)
 });
 
 test("LIVE1B-085: a page's later cards start once the first screen's calls are back, not after the whole fixed pause", async () => {

@@ -31,7 +31,7 @@ test.describe("a visitor in India", () => {
 test("plans: short cards, the full comparison, and backtests (not experiments)", async ({ page }, info) => {
   const errors = await open(page, "/plans", "Side by side");
   for (const line of ["Everything in Free, plus:", "Everything in Basic, plus:", "10 backtests a month, each with a full verdict",
-    "2 company deep dives a month, each with the report card and checklist, and 1 company slide deck (its PDF and PowerPoint count as one)", "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan",
+    "2 company deep dives a month, each with the report card and checklist, and 1 slide deck of a company or a theme (its PDF and PowerPoint count as one)", "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan",
     "Options paper trading on your own rules' signals, strikes picked by delta or premium, and what-if sliders with a roll preview"]) {
     await expect(page.locator(".k-plans li", { hasText: line })).toBeVisible();
   }

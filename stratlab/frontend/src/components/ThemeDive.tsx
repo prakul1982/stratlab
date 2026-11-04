@@ -1,6 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Badge, Card, CardHead, DataTable, Select, Spark, Signed, Meter, usePhone, type Column } from "./kit";
+import { Badge, Card, CardHead, CsvButton, DataTable, Select, Spark, Signed, Meter, usePhone, type Column } from "./kit";
+import { Download } from "./Icons";
+import { useApp } from "../lib/app";
+import { download } from "../lib/share";
 import { LineChart } from "./Charts";
 import { bizChange, bizValue, periodName } from "../lib/biz";
 import { filedOn } from "./BizUpdates";
@@ -8,6 +11,7 @@ import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
   amount, layerLines, pc, points, span, times,
+  themeApi, themeSlug,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
 
@@ -95,6 +99,68 @@ function MemberGroup({ name, official, rows, cols }: { name: string; official: b
       <DataTable label={`${name}: companies in the theme`} columns={cols} rows={shown} rowKey={(c) => c.ticker} />
       {rows.length > MEMBERS_SHOWN && <button type="button" className="btn quiet sm" onClick={() => setAll(!all)}>{all ? `Show the first ${MEMBERS_SHOWN}` : `Show all ${rows.length} companies`}</button>}
     </section>
+  );
+}
+
+/** EXPORT: how a company is in the theme, in the words of the deck and the CSV (theme_routes.by_of says the same). */
+export const memberBy = (c: Co) => (c.base ? (c.basis === "list" ? "Named in the theme's list" : "Official industry")
+  : c.verified ? "Added, confirmed by its own words" : "Added, not yet confirmed");
+
+export type MemberRow = { co: Co; layer: string; fig: Partial<DiveRow> | null };
+/** EXPORT: every company in the theme as the page lists it (each layer's companies, then those named in a sub-theme only), with the
+ * figures the dive worked out for it where it has them: the rows of the members CSV and of the deck's company slides (theme_routes.members_of). */
+export function memberRows(r: SectorAI, dive: Dive | null): MemberRow[] {
+  const figs = new Map<string, Partial<DiveRow>>();
+  for (const l of dive?.layers ?? []) for (const c of l.companies) if (!figs.has(c.symbol)) figs.set(c.symbol, c);
+  for (const s of dive?.subs ?? []) for (const c of s.companies) if (!figs.has(c.symbol)) figs.set(c.symbol, c);
+  const inLayer = new Set(r.value_chain.flatMap((v) => v.companies.map((c) => c.ticker)));
+  const only = [...new Map(r.sub_themes.flatMap((s) => s.companies).filter((c) => !inLayer.has(c.ticker)).map((c) => [c.ticker, c])).values()];
+  const groups: [string, Co[]][] = [...r.value_chain.map((v) => [v.layer, v.companies] as [string, Co[]]), ...(only.length ? [["Named in a sub-theme only", only] as [string, Co[]]] : [])];
+  return groups.flatMap(([layer, cos]) => cos.map((co) => ({ co, layer, fig: figs.get(co.ticker) ?? null })));
+}
+
+/** EXPORT: the members CSV's columns: raw figures, each with its unit in the column's name. */
+export function memberColumns(region: Region, unit: string | null): Column<MemberRow>[] {
+  const u = unit ?? (region === "IN" ? "₹ crore" : "$ million");
+  const cap = region === "IN" ? "₹ crore" : "$ million";
+  const cell = () => null;
+  return [
+    { key: "c", header: "Company", cell, csv: (x) => x.co.name },
+    { key: "s", header: "Symbol", cell, csv: (x) => x.co.ticker },
+    { key: "l", header: "Layer", cell, csv: (x) => x.layer },
+    { key: "i", header: "Industry", cell, csv: (x) => x.co.industry || null },
+    { key: "m", header: `Market value (${cap})`, cell, csv: (x) => x.co.cap ?? x.fig?.cap ?? null },
+    { key: "rev", header: `Revenue (${u})`, cell, csv: (x) => x.fig?.revenue ?? null },
+    { key: "e", header: "EBITDA margin (%)", cell, csv: (x) => x.fig?.ebitda ?? null },
+    { key: "n", header: "Net margin (%)", cell, csv: (x) => x.fig?.net ?? null },
+    { key: "roce", header: "ROCE (%)", cell, csv: (x) => x.fig?.roce ?? null },
+    { key: "y", header: "Year of the figures", cell, csv: (x) => x.fig?.year ?? null },
+    { key: "b", header: "In the theme by", cell, csv: (x) => memberBy(x.co) },
+    { key: "w", header: "What it does, in its own words", cell, csv: (x) => x.co.what || null },
+  ];
+}
+
+/** EXPORT (owner, 4 Nov: "you forgot to put an export PDF or slides option in themes"): the theme as slides, PDF or PowerPoint, made by the
+ * deep dive's deck builder and counted against the same monthly decks; and every company as a CSV. Each file goes through lib/share.ts. */
+export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: Dive | null; region: Region; theme: string }) {
+  const { fail, refreshMe } = useApp();
+  const [making, setMaking] = useState<"pptx" | "pdf" | null>(null);
+  const rows = useMemo(() => memberRows(r, dive), [r, dive]);
+  const deck = async (format: "pptx" | "pdf") => {
+    setMaking(format);
+    try {
+      const res = await themeApi.deck(region, theme, format);
+      download(await res.blob(), `stratlab-theme-${themeSlug(theme) || "theme"}-${region.toLowerCase()}.${format}`);
+      void refreshMe();                               // the deck count in Account
+    } catch (e) { fail(e); } finally { setMaking(null); }
+  };
+  return (
+    <div className="k-row" role="group" aria-label="Download this theme" data-testid="theme-downloads">
+      <span className="k-small k-muted"><Download size={16} /> Download</span>
+      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The theme as slides in a PDF: the chain, every company with its figures, the tailwinds and risks with their sources">{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
+      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint">{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
+      {rows.length > 0 && <CsvButton name={`theme ${theme} ${region} companies`} label="every company in this theme" columns={memberColumns(region, dive?.unit ?? null)} rows={rows} text="CSV" />}
+    </div>
   );
 }
 
