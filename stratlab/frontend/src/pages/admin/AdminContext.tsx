@@ -58,6 +58,8 @@ export type BrevoQuota = { sent_today: number | null; left_today: number | null;
 
 export type JobRow = {
   id: string; name: string; schedule: string; /** the next time the schedule names, "Thu 29 Oct, 7:15 AM IST"; null when it is "every so often" */ next?: string | null; last_run: string | null; error: string | null; state: "ok" | "warn" | "bad"; running: boolean;
+  /** when the current run began (LIVE3-006: "Running · 15 h ago" read as a run going for 15 hours; the 15 h was the last finished run) */
+  running_since?: string | null;
   log: string[]; run: { label: string; path: string }[]; note: string | null;
 };
 export type ReportedRow = {

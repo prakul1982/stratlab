@@ -12,7 +12,7 @@ import { STATUS_NAME } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
 import { Card, CardHead } from "../components/kit/Card";
 import { DataTable, type Column } from "../components/kit/DataTable";
-import { Stat, StatRow } from "../components/kit/Stat";
+import { FactTable } from "../components/kit/FactTable";
 import { ErrorState, Skeleton } from "../components/kit/States";
 import "./trade/trade.css";
 
@@ -94,7 +94,6 @@ export function PublicVerdict({ token }: { token: string }) {
                 {snap.range ? ` · ${d(snap.range.from)} – ${d(snap.range.to)}` : ""}
               </span>
               <h1 className={`verdict-head pub-head ${v.verdict}`}>{readablePoints(v.headline)}</h1>
-              <p className="k-lede">{readablePoints(v.summary)}</p>
               {snap.question && <p className="k-small k-muted">The question: {snap.question}</p>}
             </div>
 
@@ -108,12 +107,20 @@ export function PublicVerdict({ token }: { token: string }) {
                   series={[{ id: "strategy", label: "Strategy", values: snap.series.equity, color: "var(--ink)", width: 2 },
                     { id: "hold", label: "Buy and hold", values: snap.series.buy_hold, color: "var(--muted)", width: 1.5, dash: "5 4" }]} />
               )}
-              <StatRow label="Results">
-                <Stat item label="Return after costs" value={pct(snap.stats.ret)} tone={snap.stats.ret > 0 ? "up" : snap.stats.ret < 0 ? "down" : undefined} />
-                <Stat item label="Buy and hold" value={pct(snap.stats.buy_hold_ret)} tone={snap.stats.buy_hold_ret > 0 ? "up" : snap.stats.buy_hold_ret < 0 ? "down" : undefined} />
-                <Stat item label="Worst fall" value={pct(snap.stats.mdd)} tone="down" />
-                <Stat item label="Trades" value={String(snap.stats.n)} />
-              </StatRow>
+              {/* LIVE3-013: the headline says the result, the chart shows it, the figures are one table, and the explanation is folded under it
+                  (it came as a paragraph before the chart, and the figures as tiles) */}
+              <FactTable label="Results after costs" itemHead="Measure" figureHead="Total" numeric rows={[
+                { id: "ret", k: "This strategy, after costs", v: <span className={upDown(snap.stats.ret)}>{pct(snap.stats.ret)}</span> },
+                { id: "hold", k: "Buy and hold, same dates", v: <span className={upDown(snap.stats.buy_hold_ret)}>{pct(snap.stats.buy_hold_ret)}</span> },
+                { id: "mdd", k: "Worst fall", v: <span className="k-down">{pct(snap.stats.mdd)}</span> },
+                { id: "trades", k: "Trades", v: String(snap.stats.n) },
+              ]} />
+              {v.summary && (
+                <details className="pub-why" data-testid="verdict-why">
+                  <summary>What the result means</summary>
+                  <p className="k-small">{readablePoints(v.summary)}</p>
+                </details>
+              )}
             </Card>
 
             <section className="pub-checks" aria-label="The honesty checks">

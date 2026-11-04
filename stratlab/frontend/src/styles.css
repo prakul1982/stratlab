@@ -766,6 +766,9 @@ td.num, .num { font-family: var(--sans); }
 /* the policies (pages/LegalPage.tsx) sit in the public frame like every other public page: a readable column, a serif heading for each part, the other policies as tabs */
 .pub-main.legal { max-width: 800px; }
 .legal-body { gap: 12px; line-height: 1.65; }
+/* the policy's text in the page's own flow (its gaps the article's); laid out but hidden until the seller's details are in (LIVE3-012) */
+.legal-text { display: contents; }
+.legal-wait > * { visibility: hidden; }
 .legal-body .h3 { margin-top: 22px; font: 600 21px/1.25 var(--serif); letter-spacing: -.01em; }
 .legal-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .legal-tabs a[aria-current="page"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
@@ -918,13 +921,19 @@ table.legs input[type=number] { width: 72px !important; }
    the width is the page's (--pub-w), the same as its main's */
 .pub { --pub-w: 960px; }
 .pub:has(.pub-main.legal) { --pub-w: 800px; }
-.pub:has(.lib-cards) { --pub-w: 1144px; }
+/* LIVE3-012: the library is wide from its first frame (its main carries .lib), not once the cards arrive: the whole page moved 92px
+   sideways and its note dropped out of view when the list replaced the placeholder (CLS 0.75 at 1440) */
+.pub:has(.pub-main.lib) { --pub-w: 1144px; }
 .pub-nav { display: flex; justify-content: space-between; align-items: center; padding: 18px max(clamp(16px, 4vw, 48px), calc((100% - var(--pub-w)) / 2 + clamp(16px, 4vw, 32px))); border-bottom: 1px solid var(--line); }
-.pub:has(.lib-cards) .pub-main { max-width: 1144px; }   /* VR1-171: the signed-out library is as wide as the app pages (1080 of content), not 896 */
+.pub:has(.pub-main.lib) .pub-main { max-width: 1144px; }   /* VR1-171: the signed-out library is as wide as the app pages (1080 of content), not 896 */
 .pub-main { max-width: 960px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 32px) 64px; }
 /* while a public page is still a loading placeholder, its main fills the screen, so the footer waits below it instead of
    showing under the placeholder and jumping down when the page arrives (R75-002: /library's layout shift on a phone) */
 main.pub-main:has(.k-skel-box) { min-height: 100vh; }
+/* LIVE3-013: a result's long explanation, folded under its figures */
+.pub-why { margin-top: var(--s2); }
+.pub-why > summary { cursor: pointer; color: var(--blue); font-size: var(--t-label); font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.pub-why > p { margin: var(--s2) 0 0; color: var(--ink-2); }
 .pub-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 640px) { .pub-checks { grid-template-columns: 1fr; } }
 
@@ -959,12 +968,19 @@ body:has(.k-coach) .consent { visibility: hidden; }
 /* LIVE1B-050: while the question is up the page's foot clears it: a visitor's page and the app's phone layout end above the bar, not under it */
 body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 @media (max-width: 900px) { .shell { padding-bottom: var(--consent-h, 0px); } }
-/* VR5: on a phone the question took 213px, over a quarter of a 360x800 screen: a size down and tighter, the two answers sharing the row */
+.consent-short, .consent-more { display: none; }
+/* VR5: on a phone the question took 213px, over a quarter of a 360x800 screen. LIVE3-010: even at 190px the card stood over a company
+   page's Test a strategy / Compare / Watch buttons and Invest's shortcut cards. On a phone it is a slim bar along the foot of the
+   window: the question in one sentence, then "What this means" and the two answers on one row, about 100px; the full wording is on
+   the privacy page, and the page's foot still clears it (--consent-h) */
 @media (max-width: 640px) {
-  .consent { right: 12px; left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; gap: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.4; }
-  .consent-title { font-size: 15px; }
-  .consent-btns { gap: 8px; }
-  .consent-btns .btn { flex: 1 1 0; min-width: 0; }
+  .consent { right: 0; left: 0; bottom: 0; width: auto; gap: 6px; padding: 10px 14px max(10px, env(safe-area-inset-bottom)); font-size: 13px; line-height: 1.4;
+    border-radius: var(--r-card) var(--r-card) 0 0; border-width: 1px 0 0; }
+  .consent-title, .consent-long { display: none; }
+  .consent-short { display: inline; }
+  .consent-btns { gap: 8px; align-items: center; flex-wrap: nowrap; }
+  .consent-more { display: inline; margin-right: auto; white-space: nowrap; }
+  .consent-btns .btn { flex: 0 0 96px; min-width: 0; }
 }
 
 /* search: one box for everything */
@@ -1894,6 +1910,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-table th[aria-sort="ascending"], .k-table th[aria-sort="descending"] { color: var(--ink); }
 
 /* empty, error, loading */
+.k-state-acts { justify-content: center; gap: var(--s2); }      /* the two ways to start, side by side (LIVE3-022) */
+@media (max-width: 640px) { .k-row.k-state-acts { flex-direction: column; align-items: stretch; width: min(100%, 320px); } .k-state-acts .btn { justify-content: center; } }   /* one under the other on a phone, one width */
 .k-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 28px var(--s4); border-radius: 12px; border: 1px dashed var(--line-2); }
 .k-state.error { border-color: var(--orange); }
 .k-state .ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--paper-2); }
@@ -1901,6 +1919,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-state b { font-size: var(--t-body); }
 .k-state p { font-size: var(--t-label); color: var(--muted); max-width: 52ch; }
 .k-skel-box { display: flex; flex-direction: column; gap: 10px; }
+/* LIVE3-012: the placeholder standing in for a page's main list holds the screen, so what follows the list (its notes, the footer)
+   waits below the fold instead of showing under a short placeholder and dropping out of view when the list arrives */
+.k-skel-box.k-skel-page { min-height: 100vh; }
+/* the badge's place while a page's as-of time loads (PageHeader asOfPending) */
+.k-meta-wait { visibility: hidden; }
+/* Pulse's and Look up a company's index levels: the placeholder is about the table's height (three or four indices; stacked
+   cards on a phone), so the cards under it don't move when the levels arrive (LIVE3-012) */
+.k-skel-index { min-height: 190px; }
+@media (max-width: 640px) { .k-skel-index { min-height: 340px; } }
 .k-skel { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--chip), var(--paper-2), var(--chip)); background-size: 200% 100%; animation: k-shimmer 1.4s infinite linear; }
 @keyframes k-shimmer { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .k-skel { animation: none; } }
@@ -2382,10 +2409,12 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 
 /* a tour step pointed at one control (kit Coachmark.tsx): the rest of the page dimmed around a ring, the note beside it */
 .k-coach { position: fixed; inset: 0; z-index: 70; }
-.k-coach-ring { position: fixed; left: var(--cm-hx, 50%); top: var(--cm-hy, 50%); width: var(--cm-hw, 0); height: var(--cm-hh, 0);
+/* placed by transform, not left/top: the ring gliding from one step's control to the next moved the page's layout every frame of the
+   glide (LIVE3-012: /tour's layout shift 0.52 on a phone); a transform is not a layout move */
+.k-coach-ring { position: fixed; left: 0; top: 0; transform: translate(var(--cm-hx, 50vw), var(--cm-hy, 50vh)); width: var(--cm-hw, 0); height: var(--cm-hh, 0);
   border-radius: var(--r-ctl); box-shadow: 0 0 0 200vmax rgba(10, 10, 8, .45); outline: 2px solid var(--blue); outline-offset: 2px;
-  pointer-events: none; transition: left .2s ease, top .2s ease, width .2s ease, height .2s ease; }
-.k-coach-ring[data-off] { left: 50%; top: 50%; width: 0; height: 0; outline: none; }
+  pointer-events: none; transition: transform .2s ease, width .2s ease, height .2s ease; }
+.k-coach-ring[data-off] { transform: translate(50vw, 50vh); width: 0; height: 0; outline: none; }
 .k-coach-note { position: fixed; left: var(--cm-x, 16px); top: var(--cm-y, 16px); width: min(360px, calc(100vw - 32px));
   display: flex; flex-direction: column; gap: var(--s3); padding: var(--s5); background: var(--paper); color: var(--ink);
   border: 1px solid var(--line-2); border-radius: var(--r-card); box-shadow: var(--shadow); }

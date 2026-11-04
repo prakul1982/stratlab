@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { asOf, fmtDate, latestDue, marketTz, pct, price } from "../lib/format";
+import { asOf, fmtDate, latestDue, marketTz, pct, price, ratio } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, marginText, screenCap, screenNum, useRegion, type Region } from "../lib/research";
 import {
@@ -35,7 +35,7 @@ const COLS: Col[] = [
   { id: "sales_cagr_3y", label: "Revenue growth, 3y", cell: (r) => (r.sales_cagr_3y == null ? "–" : <Signed value={r.sales_cagr_3y}>{pct(r.sales_cagr_3y)}</Signed>) },
   { id: "net_margin", label: "Net margin", cell: (r) => num(r.net_margin, 1, "%") },
   { id: "opm", label: "EBITDA margin", cell: (r) => marginText(r.opm) },
-  { id: "debt_equity", label: "Debt to equity", cell: (r) => num(r.debt_equity, 2) },
+  { id: "debt_equity", label: "Debt to equity", cell: (r) => ratio(r.debt_equity) },
   { id: "roe", label: "ROE", cell: (r) => num(r.roe, 1, "%") },
   { id: "roce", label: "ROCE", cell: (r) => num(r.roce, 1, "%") },
   { id: "div_yield", label: "Dividend yield", cell: (r) => num(r.div_yield, 2, "%") },
@@ -207,7 +207,7 @@ export function ScreensPage() {
   const unvalued = Object.entries(out?.no_value ?? {}).filter(([, k]) => k > 0);
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel={out?.as_of_newest && out.as_of && out.as_of_newest.slice(0, 10) !== out.as_of.slice(0, 10) ? "Oldest close" : "Prices as of"} asOfTz={marketTz(region)}
+      <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfPending={!out} asOfLabel={out?.as_of_newest && out.as_of && out.as_of_newest.slice(0, 10) !== out.as_of.slice(0, 10) ? "Oldest close" : "Prices as of"} asOfTz={marketTz(region)}
         info={out?.index_at ? <>List gathered as of {asOf(out.index_at) ?? out.index_at}. Facts from reported results, exchange filings and daily prices, not advice.</> : "Facts from reported results, exchange filings and daily prices, not advice."}
         lede="Pick the conditions; see every company that meets them. Nothing here scores companies: the list starts with the largest market value; sort by any column." />
       {latestDue(out?.as_of_newest ?? out?.as_of, out?.pending) && <p className="k-note" data-testid="screens-pending">{latestDue(out?.as_of_newest ?? out?.as_of, out?.pending)}</p>}
@@ -237,7 +237,9 @@ export function ScreensPage() {
               <button className="btn quiet sm inv-toggle" aria-expanded={showFilters} onClick={() => setShowFilters((s) => !s)}>{showFilters ? "Hide filters" : "Show filters"}</button>
               <button className="btn quiet sm" onClick={clear} disabled={!n && sort === "market_cap" && desc}>Clear</button></>} />
             {!meta && metaError ? <ErrorState title="The filters couldn't be loaded" action={{ label: "Try again", onClick: () => setMetaTries((t) => t + 1) }}>{metaError}</ErrorState>
-              : !meta ? <div className="screens-filters-wait"><Skeleton label="Loading the filters" lines={4} /></div> : showFilters && <>
+              // folded (narrower than 1361px) the card stays its folded size while the filters load: a 70vh placeholder that shrank to
+              // the folded card moved the results up 547px on a phone (LIVE3-012)
+              : !meta ? (showFilters ? <div className="screens-filters-wait"><Skeleton label="Loading the filters" lines={4} /></div> : null) : showFilters && <>
               <Group title={sectorName} help={help.sector}>
                 {meta.sectors.length === 0 ? <p className="k-small k-muted">No companies gathered yet.</p>
                   : <ChipSet label={sectorName} options={meta.sectors.map((s) => ({ value: s, label: s }))} on={filters.sector} onToggle={(v) => toggle("sector", v)} />}

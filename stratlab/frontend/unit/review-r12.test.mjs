@@ -52,15 +52,13 @@ test("R12-010: the Exchange holidays light and Needs your attention say the same
 
 test("R12-011: Pulse's opening line names only the sections the page shows", async () => {
   const { pulseLede } = await import("../src/lib/researchFormat.ts");
-  assert.equal(pulseLede(null), "Live index levels and headlines, with the figures behind today's mood.");
-  assert.equal(pulseLede({ hot: [], flows: [], themes: [] }), "Live index levels and headlines, with the figures behind today's mood.");
-  assert.equal(pulseLede({ hot: [1], flows: [], themes: [1] }),
-    "Live index levels and headlines, with the figures behind today's mood and what the headlines say of the companies in today's headlines and the themes in play.");
-  assert.equal(pulseLede({ hot: [1], flows: [1], themes: [1] }),
-    "Live index levels and headlines, with the figures behind today's mood and what the headlines say of the companies in today's headlines, money and markets in the headlines and the themes in play.");
+  // LIVE3-016 changed this on purpose: the line names only what the page always shows (the levels, the figures, the headlines
+  // card), in two short sentences, and no longer lists the AI's sections (a run-on sentence that grew when the read arrived)
+  assert.equal(pulseLede(null), "Live index levels and the figures behind the market's mood. Below them, what the headlines say.");
+  assert.doesNotMatch(pulseLede(null), /themes in play|companies in today's headlines/);
   const page = read("src/pages/Research.tsx");
   // R13-007 changed this on purpose: the lede also takes the day of the close once no index is live ("Last close, 9 Oct")
-  assert.match(page, /lede=\{pulseLede\(ai, /);
+  assert.match(page, /lede=\{pulseLede\(/);
   assert.doesNotMatch(page, /what's moving and where money is flowing/);
 });
 

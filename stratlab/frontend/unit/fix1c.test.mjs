@@ -208,9 +208,9 @@ test("LIVE1C-077: the foot of a page keeps the cookie question's height free", (
 test("LIVE1C-090, LIVE1C-091: few watched stocks stack the Invest cards and fill the row; Coming up is shorter beside a short watchlist and reads date and title together", () => {
   const inv = read("src/pages/SpaceHomes.tsx");
   assert.match(inv, /const fewWatched = watching !== null && watching\.filter\(\(w\) => w\.region === region\)\.length <= 2;/);
-  assert.match(inv, /fill=\{by\(r\)\.length <= 2\}/);
-  assert.match(read("src/styles-invest.css"), /\.inv-tiles\.fill \{ grid-template-columns: repeat\(auto-fit, minmax\(160px, 1fr\)\); \}/);
-  assert.match(read("src/styles-invest.css"), /\.inv-tile \.surv-badge\.fo-badge \{ white-space: normal;/);
+  // LIVE3-015: the watchlist is a table across the card's width (one or two stocks no longer leave tiles a third wide); its F&O note still wraps
+  // LIVE3-015 / LIVE2-015: the F&O note is left to the watchlist page (it was derivatives jargon here and wrapped off a phone's table)
+  assert.doesNotMatch(read("src/components/Research.tsx"), /<FoBadges/);
   const mine = read("src/pages/MineHome.tsx");
   assert.match(mine, /watchItems\.length <= 3 \? coming\.slice\(0, Math\.max\(3, watchItems\.length \+ 2\)\)/);
   assert.match(mine, /<span className="sr-only">\{d\.w\} \{d\.d\} \{d\.m\}: <\/span>/);

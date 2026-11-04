@@ -13,13 +13,14 @@ import { usTodayNote } from "../lib/marketHours";
 import { pnlLabel, priceNote, type Closes } from "../lib/holdingsEdit";
 import { NAV } from "../lib/nav";
 import { PageTags } from "../components/PageTags";
-import { evWhen, useEvents } from "../lib/marketEvents";
+import { comingMarketEvents, evWhen, istHm, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { AsOf, Loading, PanelSkel, VerdictBadge } from "../components/ui";
-import { Card, CardHead, Disclosure, FigureTable, PageHeader, Seg, Signed } from "../components/kit";
-import { Panel, QuoteGrid } from "../components/Research";
+import { Card, CardHead, DataTable, Disclosure, FigureTable, PageHeader, Seg, Signed } from "../components/kit";
+import { addDaysIso } from "../lib/mine";
+import { Panel, WatchTable } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
@@ -277,23 +278,20 @@ export function InvestHome() {
   );
 }
 
-/** The next few market events (RBI policy, data releases, the Fed, index changes) on one line each, from the Events page. */
-function NextEvents({ limit = 3, testId = "invest-events", region }: { limit?: number; testId?: string; region?: Region }) {
+/** The next market events (RBI policy, data releases, the Fed, index changes, holidays, each index's next weekly expiry), from the
+ * Events page, as a table. The rule is My space's (lib/marketEvents comingMarketEvents): the US tab lists the US's own (R71-004),
+ * India's holidays count (R72-005), each index's next weekly expiry (DF-023), and nothing is in one "Coming up" and missing from the
+ * other (LIVE3-015: this one kept a single expiry and dropped a holiday). */
+function NextEvents({ limit = 5, testId = "invest-events", region }: { limit?: number; testId?: string; region?: Region }) {
   const v = useEvents();
-  // the US tab lists the US's own (the Fed, US data), not India's RBI and IIP (R71-004); India's holidays count (R72-005: the
-  // evening before Tuesday's holiday, "Coming up" started at Wednesday's RBI minutes)
-  const rest = v ? v.events.filter((e) => e.date >= v.today && e.kind !== "expiry" && (region !== "US" || e.kind === "us")).slice(0, limit) : null;
-  // India's next F&O expiry too, one line among the rest (DF-023: "Coming up" left out the 27 Oct expiry); never every expiry
-  const expiry = v && region !== "US" ? v.events.find((e) => e.date >= v.today && e.kind === "expiry") : undefined;
-  const next = rest ? [...rest, ...(expiry ? [expiry] : [])].sort((a, b) => a.date.localeCompare(b.date)) : null;
+  const next = v ? comingMarketEvents(v.events, { today: v.today, nowHm: istHm(), end: addDaysIso(v.today, 30), weekEnd: addDaysIso(v.today, 7), region }).slice(0, limit) : null;
   if (next && !next.length) return null;
   return (
     <Card testId={testId} label="Coming up">
       <CardHead title="Coming up" actions={<Link to="/calendar" className="link small">Calendar →</Link>} />{/* IA-1: the one Calendar, every date */}
       {next === null ? <PanelSkel label="Reading the market events" lines={1} /> : (
-        <div className="space-events">
-          {next.map((e) => <span key={e.id} className="small"><span className="muted">{evWhen(e)}</span> {e.title}</span>)}
-        </div>
+        <DataTable label="Coming up" rows={next} rowKey={(e) => e.id} stack={false}
+          columns={[{ key: "d", header: "Date", cell: (e) => evWhen(e) }, { key: "e", header: "Event", rowHeader: true, wrap: true, cell: (e) => e.title }]} />
       )}
     </Card>
   );
@@ -320,7 +318,7 @@ function WatchPanel({ region }: { region: Region }) {
         : regions.map((r) => (
           <div key={r} className="k-stack snug">
             {/* no "INDIA" over the stocks: the market is the toggle at the top of the page (VR5-owner-1: one line less, so the card ends level with its neighbours) */}
-            <QuoteGrid region={r} fill={by(r).length <= 2} symbols={by(r).slice(0, WATCH_SHOWN).map((w) => w.symbol)} names={Object.fromEntries(by(r).map((w) => [w.symbol, w.name]))} />
+            <WatchTable region={r} symbols={by(r).slice(0, WATCH_SHOWN).map((w) => w.symbol)} names={Object.fromEntries(by(r).map((w) => [w.symbol, w.name]))} />
           </div>
         ))}
     </Panel>

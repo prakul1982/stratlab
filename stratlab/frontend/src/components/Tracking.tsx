@@ -60,12 +60,15 @@ function ConsentCard({ adsOnly }: { adsOnly: boolean }) {
     ro?.observe(el);
     return () => { ro?.disconnect(); root.style.removeProperty("scroll-padding-bottom"); root.style.removeProperty("--consent-h"); };
   }, []);
-  const { title, text: words } = consentWords(CONFIG, adsOnly);
+  const { title, text: words, short } = consentWords(CONFIG, adsOnly);
+  // on a phone the slim bar shows the one-sentence question with "What this means" beside the answers (LIVE3-010); the card's
+  // full wording is for wider screens (CSS shows one or the other)
   return (
     <div ref={card} className="consent" role="dialog" aria-modal="false" aria-label={`${title} on StratLab`} aria-describedby={text} data-testid="consent">
       <b className="consent-title">{title}</b>
-      <p id={text}>{words} <Link className="link" to="/privacy">What this means</Link></p>
+      <p id={text}><span className="consent-long">{words} <Link className="link" to="/privacy">What this means</Link></span><span className="consent-short">{short}</span></p>
       <div className="consent-btns">
+        <Link className="link consent-more" to="/privacy">What this means</Link>
         <button type="button" className="btn sm" onClick={() => writeChoice("yes")}>Allow</button>
         <button type="button" className="btn quiet sm" onClick={() => (adsOnly ? declineTrackers() : writeChoice("no"))}>No thanks</button>
       </div>

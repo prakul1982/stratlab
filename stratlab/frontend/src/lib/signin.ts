@@ -27,4 +27,12 @@ export async function signIn(next?: string | null) {
 const ENDED = "stratlab.signin-ended";
 export const noteSignInEnded = (): void => { try { sessionStorage.setItem(ENDED, "1"); } catch { /* storage off: the page just doesn't say it */ } };
 export const signInEnded = (): boolean => { try { return sessionStorage.getItem(ENDED) === "1"; } catch { return false; } };
-export const clearSignInEnded = (): void => { try { sessionStorage.removeItem(ENDED); } catch { /* storage off */ } };
+export const clearSignInEnded = (): void => { try { sessionStorage.removeItem(ENDED); sessionStorage.removeItem(UNFINISHED); } catch { /* storage off */ } };
+
+/* A sign-in that came back to the site but couldn't be completed: Google's one-time code the service wouldn't trade (sign-in
+ * started in one browser or app and ended in another, or the code was used already), or a spent emailed link. Remembered for
+ * this tab so whichever page opens says so, with Continue with Google beside it, instead of a silent sign-in wall
+ * (LIVE3-009). Cleared when sign-in starts again or succeeds. */
+const UNFINISHED = "stratlab.signin-unfinished";
+export const noteSignInUnfinished = (): void => { try { sessionStorage.setItem(UNFINISHED, "1"); } catch { /* storage off */ } };
+export const signInUnfinished = (): boolean => { try { return sessionStorage.getItem(UNFINISHED) === "1"; } catch { return false; } };

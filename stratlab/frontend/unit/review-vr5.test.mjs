@@ -31,8 +31,9 @@ test("VR5-004: a chip or badge longer than the screen wraps in its own box on a 
   const css = read("src/styles.css");
   assert.match(css, /@media \(max-width: 380px\) \{\n  \.k-badge \{ max-width: 100%; white-space: normal;/);
   assert.match(css, /\.k-chip \{ max-width: 100%; height: auto; min-height: 44px;/);
-  assert.match(css, /\.consent \{ right: 12px; left: 12px; .* font-size: 13px;/);
-  assert.match(css, /\.consent-btns \.btn \{ flex: 1 1 0; min-width: 0; \}/);          // still one width for Allow and No thanks (VR4-012)
+  // LIVE3-010 changed this on purpose: on a phone the question is a slim bar along the foot (smaller still), the answers one width
+  assert.match(css, /\.consent \{ right: 0; left: 0; bottom: 0; width: auto; .* font-size: 13px;/);
+  assert.match(css, /\.consent-btns \.btn \{ flex: 0 0 96px; min-width: 0; \}/);          // still one width for Allow and No thanks (VR4-012)
 });
 
 test("VR5-005: the words of a notebook's rules and the Invest red flags' symbols are bigger to tap on a phone", () => {
@@ -85,6 +86,7 @@ test("VR5-owner-1: the Invest home's watchlist shows six, with See all in its he
   assert.match(src, /export const WATCH_SHOWN = 6;/);
   assert.match(src, /symbols=\{by\(r\)\.slice\(0, WATCH_SHOWN\)\.map/);
   assert.match(src, /\(by\(region\)\.length > WATCH_SHOWN\) && <Link to="\/research\/watchlist" className="link" data-testid="watch-see-all">See all \{by\(region\)\.length\} →<\/Link>/);
-  assert.doesNotMatch(src, /<span className="eyebrow">\{REGION_NAME\[r\]\}<\/span>\n\s+<QuoteGrid/);
-  assert.match(read("src/styles-invest.css"), /\.inv-tile \{ display: flex; flex-direction: column; gap: 3px; padding: 10px 10px;/);
+  assert.doesNotMatch(src, /<span className="eyebrow">\{REGION_NAME\[r\]\}<\/span>\n\s+<WatchTable/);
+  // LIVE3-015 changed this on purpose: the six are rows of a table (they were tiles)
+  assert.match(src, /<WatchTable region=\{r\} symbols=\{by\(r\)\.slice\(0, WATCH_SHOWN\)/);
 });

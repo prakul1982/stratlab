@@ -445,7 +445,8 @@ def _ref_words(r: dict) -> str:
         return f"{r.get('v'):g}"
     if t in ("dc_upper", "dc_lower"):
         return f"{_NAME[t]} {r.get('p', 20):g} candles"
-    return f"{_NAME.get(t, t)} {r['p']:g}" if r.get("p") else _NAME.get(t, str(t))
+    on = f" on {idea_read.TF_WORDS.get(r['tf'], r['tf'])} candles" if r.get("tf") else ""        # LIVE3-004: what runs, said
+    return (f"{_NAME.get(t, t)} {r['p']:g}" if r.get("p") else _NAME.get(t, str(t))) + on
 
 
 def rule_words(c: dict) -> str:
@@ -493,6 +494,20 @@ def _from_the_words(out: dict, text: str, notes: list[str]) -> None:
         return
     got = json.loads(json.dumps(got))
     mentioned = set(out.get("mentioned") or [])
+    # LIVE3-004: the candles the words name are the ones used, and a length said in days or weeks is made what runs on them
+    if got.get("tf"):
+        if out.get("tf") and out["tf"] != got["tf"]:
+            notes.append(f"Your words say {idea_read.TF_WORDS[got['tf']]} candles, so those are used.")
+        out["tf"] = got["tf"]
+        mentioned.add("tf")
+    said = idea_read.on_timeframe(got, out.get("tf"))
+    if said is None:
+        notes.append(f"An average in your words is longer than {idea_read.MAX_LENGTH} trading days, the longest StratLab works out, so "
+                     "it couldn't be set up as written. Pick a shorter one below.")
+        out["entry"], out["exit"] = [], []
+        out["mentioned"] = sorted(mentioned - {"exit"})
+        return
+    got["assumed"] = got["assumed"] + said
     if got["entry"] is not None:
         if not _same_rules(out.get("entry"), got["entry"]):
             had = bool(out.get("entry"))
@@ -544,6 +559,82 @@ def _from_the_words(out: dict, text: str, notes: list[str]) -> None:
             notes.append("Your words name no stock, index or coin, so none was picked for you. Choose one below.")
     out["assumed"] = got["assumed"]
     out["mentioned"] = sorted(mentioned)
+
+
+# ---------- the notebook's name (LIVE3-004, LIVE3-005) ----------
+# The AI's name is kept only while every word of it is true of what runs: "BankNifty 200 EMA Long" over SMA rules, and "Relevance RSI
+# Reversal" for RELIANCE (a word that is neither the instrument nor a rule), were not. Otherwise the name is made from the instrument
+# and the rules: "RELIANCE RSI 30/70", "BANKNIFTY SMA 200 daily".
+_KIND_WORDS = {"ema": {"ema", "exponential"}, "sma": {"sma", "dma", "simple"}, "rsi": {"rsi"}, "macd": {"macd"}, "macd_signal": {"macd"},
+               "macd_hist": {"macd"}, "vwap": {"vwap"}, "supertrend": {"supertrend", "super"}, "adx": {"adx"}, "atr": {"atr"}, "atr_pct": {"atr"},
+               "bb_upper": {"bollinger", "bb", "band", "bands"}, "bb_mid": {"bollinger", "bb", "band", "bands"}, "bb_lower": {"bollinger", "bb", "band", "bands"},
+               "stoch_k": {"stochastic", "stoch"}, "dc_upper": {"donchian", "52", "week", "high", "highs", "breakout"},
+               "dc_lower": {"donchian", "52", "week", "low", "lows"}, "volume": {"volume", "vol"}, "vol_sma": {"volume", "vol"}, "stage": {"stage"}}
+_MA_WORDS = {"ma", "moving", "average", "averages", "dma", "crossover", "cross", "crossunder"}
+_ALL_KIND_WORDS = set().union(*_KIND_WORDS.values()) | _MA_WORDS
+_GENERIC_WORDS = {"long", "short", "strategy", "system", "idea", "trend", "trending", "following", "follower", "momentum", "reversal", "reversion",
+                  "mean", "breakdown", "pullback", "bounce", "dip", "dips", "swing", "intraday", "daily", "weekly", "hourly", "minute", "min",
+                  "golden", "death", "oversold", "overbought", "buy", "sell", "entry", "exit", "signal", "signals", "rider", "ride", "play", "setup",
+                  "scalp", "scalper", "scalping", "the", "and", "of", "on", "with", "a", "an", "plus", "filter", "filtered", "stop", "target",
+                  "trailing", "basic", "classic", "my", "new", "only", "candle", "candles", "bar", "bars", "close", "closes", "price", "above",
+                  "below", "level", "levels", "zone", "back", "recovery", "rebound", "x", "vs", "to", "m", "h", "d", "day", "days", "period"}
+
+
+def _refs(out: dict) -> list[dict]:
+    return [r for c in (out.get("entry") or []) + (out.get("exit") or []) + (out.get("shortEntry") or []) + (out.get("shortExit") or [])
+            for r in (c.get("l"), c.get("r")) if isinstance(r, dict)]
+
+
+def _symbol_words(out: dict) -> str:
+    inst = str(out.get("instrument") or "")
+    return re.sub(r"^[A-Z]+:", "", inst).strip()
+
+
+def name_fits(name: str | None, out: dict) -> bool:
+    """Whether every word of a name is true of the strategy: the instrument (or part of its symbol), an indicator its rules use,
+    a number they use, or a plain word for a kind of strategy."""
+    if not name:
+        return False
+    refs = _refs(out)
+    kinds = {r.get("t") for r in refs}
+    numbers = {float(x) for r in refs for x in (r.get("p"), r.get("v")) if isinstance(x, (int, float))} | \
+              {float(v) for v in (out.get("risk") or {}).values() if isinstance(v, (int, float))}
+    ok_words = set().union(*(_KIND_WORDS.get(k, set()) for k in kinds)) | (_MA_WORDS if kinds & {"ema", "sma"} else set())
+    sym = re.sub(r"[^a-z0-9]", "", _symbol_words(out).lower())
+    for tok in re.findall(r"[a-z]+|\d+(?:\.\d+)?", name.lower()):
+        if re.fullmatch(r"\d+(?:\.\d+)?", tok):
+            if float(tok) not in numbers and not (sym and tok in sym):
+                return False
+        elif tok in ok_words or tok in _GENERIC_WORDS - _ALL_KIND_WORDS or (sym and len(tok) >= 3 and tok in sym):
+            continue
+        else:
+            return False                    # an indicator the rules don't use, or a word that is neither the instrument nor a rule
+    return True
+
+
+def rule_name(out: dict) -> str | None:
+    """A name made from the instrument and the rules: "RELIANCE RSI 30/70", "NIFTY 50 EMA 20/50", "BANKNIFTY SMA 200 daily"."""
+    entry, exits = out.get("entry") or out.get("shortEntry") or [], out.get("exit") or out.get("shortExit") or []
+    parts, seen = [], set()
+    for kind in dict.fromkeys(r.get("t") for r in _refs(out)):
+        if kind in ("price", "num", None) or kind in seen:
+            continue
+        seen.add(kind)
+        refs = [r for r in _refs(out) if r.get("t") == kind]
+        if kind in ("dc_upper", "dc_lower"):
+            p = refs[0].get("p") or 20
+            parts.append(("52-week " if p == 252 else f"{p:g}-candle ") + ("high" if kind == "dc_upper" else "low"))
+            continue
+        word = TYPE_NAME.get(kind) if kind in TYPE_NAME and " " not in TYPE_NAME[kind] else kind.upper().split("_")[0]
+        lens = list(dict.fromkeys(f"{r['p']:g}" for r in refs if r.get("p")))
+        levels = list(dict.fromkeys(f"{c[side]['v']:g}" for c in entry + exits for side in ("l", "r")
+                                    if isinstance(c.get(side), dict) and c[side].get("t") == "num"
+                                    and any(isinstance(c.get(o), dict) and c[o].get("t") == kind for o in ("l", "r"))))
+        on = " daily" if any(r.get("tf") == "1d" for r in refs) and out.get("tf") not in (None, "1d") else ""
+        parts.append(f"{word} {'/'.join(levels) if kind in _OSC_NAME and levels else '/'.join(lens)}".strip() + on)
+    if not parts:
+        return None
+    return " ".join(x for x in [_symbol_words(out)] + parts if x)[:80]
 
 
 def check_against_text(out: dict, text: str) -> dict:
@@ -680,4 +771,6 @@ def check_against_text(out: dict, text: str) -> dict:
     out["risk"] = risk
     out["mentioned"] = sorted(mentioned)
     out["notes"] = list(dict.fromkeys(notes))[:10]
+    if (out.get("entry") or out.get("shortEntry")) and not name_fits(out.get("name"), out):
+        out["name"] = rule_name(out) or out.get("name")
     return out

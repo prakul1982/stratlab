@@ -430,6 +430,15 @@ export function minusNode<T>(n: T): T | string {
 }
 
 /** A plain number with fixed decimals, Indian grouping and the real minus: 1,234.50 / −0.21. */
+/** A ratio (debt to equity, times covered) the one way every page writes it, the public page's too (LIVE3-018: HAL's "0.0016" there,
+ * "0.00" here): `dp` decimals always, and one too small to show as anything but zero says so ("<0.01"), never a zero it isn't. */
+export function ratio(v: number | null | undefined, dp = 2): string {
+  if (!ok(v)) return "–";
+  const least = 10 ** -dp;
+  if (v !== 0 && Math.abs(v) < least / 2) return `${v < 0 ? "−" : ""}<${least.toFixed(dp)}`;
+  return num(v, dp);
+}
+
 export function num(v: number | null | undefined, dp = 2): string {
   if (!ok(v)) return "–";
   const s = Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: dp, minimumFractionDigits: dp });

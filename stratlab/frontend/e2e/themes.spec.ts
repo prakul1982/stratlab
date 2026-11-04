@@ -8,12 +8,14 @@ const PROVIDERS = /kite|zerodha|yahoo|screener\.in|finnhub|trendlyne|nseindia/i;
 const SHOTS = process.env.E2E_SHOTS;
 const THEME_URL = "/research/themes?region=IN&q=" + encodeURIComponent("India steel and mining");
 
+test.afterEach(async ({ page }) => { await page.unrouteAll({ behavior: "ignoreErrors" }); });
+
 function sessionFor(n: number) {
   return { access_token: `load-${n}`, token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r",
     user: { id: `u-load-${n}`, aud: "authenticated", email: `load${n}@example.com`, role: "authenticated", app_metadata: {}, user_metadata: {} } };
 }
 
-async function open(page: Page, n: number, scheme: "light" | "dark" = "light") {
+async function open(page: Page, n: number, scheme: "light" | "dark" = "light", url = THEME_URL) {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.emulateMedia({ colorScheme: scheme });
@@ -22,11 +24,11 @@ async function open(page: Page, n: number, scheme: "light" | "dark" = "light") {
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, sessionFor(n));
-  await page.goto(THEME_URL);
+  await page.goto(url);
   const welcome = page.getByRole("dialog", { name: "What brings you here?" });
   const answered = await welcome.waitFor({ timeout: 4000 }).then(async () => { await welcome.getByRole("button", { name: /^All of it/ }).click(); return true; }).catch(() => false);
-  if (answered) await page.goto(THEME_URL);
-  await expect(page.getByRole("heading", { name: "The whole chain in one table" })).toBeVisible({ timeout: 90_000 });
+  if (answered) await page.goto(url);
+  if (url === THEME_URL) await expect(page.getByRole("heading", { name: "The whole chain in one table" })).toBeVisible({ timeout: 90_000 });
   return errors;
 }
 
@@ -62,6 +64,7 @@ test("the theme page is a deep dive made of tables, with each company only where
   const claims = page.locator("#theme-claims");
   await expect(claims).toContainText("General background");
   await expect(claims).not.toContainText("old steel scheme");
+  await expect(claims.getByText(/no dated headline was found/)).toHaveCount(1);         // said once under the table (LIVE3-017)
   // the theme in numbers: sections that are tables
   for (const id of ["numbers-size", "numbers-growth", "numbers-valuation", "numbers-quarter", "numbers-balance", "numbers-price", "numbers-ownership", "numbers-events", "numbers-management", "numbers-leaders"]) {
     await expect(page.locator(`#${id}`)).toBeVisible();
@@ -90,4 +93,24 @@ test("the theme page in the dark theme", async ({ page }, info) => {
   const errors = await open(page, info.project.name === "phone" ? 280 : 277, "dark");
   expect(errors).toEqual([]);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/themes-dark-${info.project.name}.png`, fullPage: true });
+});
+
+test("a theme whose AI read is slow shows its official companies within seconds, and the AI's map fills in after", async ({ page }, info) => {
+  // LIVE3-001: live, every theme failed at 30 s with "Can't reach the StratLab server" while the AI took longer. The fake AI maps a theme
+  // with "slowly" in it after 35 s (tests/fake_theme.py); each project asks its own theme, so neither finds the other's map already written
+  test.setTimeout(150_000);
+  const phone = info.project.name === "phone";
+  const errors = await open(page, phone ? 280 : 277, "light", "/research/themes?region=IN&q=" + encodeURIComponent(`India steel and mining slowly ${info.project.name}`));
+  const started = Date.now();
+  const members = page.locator("#theme-members");
+  await expect(members).toContainText("Tata Steel", { timeout: 10_000 });          // the exchange's own classification, no AI needed
+  await expect(members).toContainText("Vedanta");
+  expect(Date.now() - started, "the base list waited on the AI").toBeLessThan(15_000);
+  await expect(page.getByText("The AI is still sorting these companies into layers")).toBeVisible();
+  await expect(page.getByText("The theme couldn't be mapped")).toHaveCount(0);
+  // the AI's map arrives behind the page, with no reload and no error on the way
+  await expect(page.getByText("Steel makers depend on ore and coal from miners")).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText("The theme couldn't be mapped")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "The whole chain in one table" })).toBeVisible({ timeout: 60_000 });
+  expect(errors).toEqual([]);
 });

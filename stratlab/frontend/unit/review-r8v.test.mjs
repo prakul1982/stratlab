@@ -168,7 +168,7 @@ test("the public pages' code leaves out the sign-in library and the account code
     }
   }
   // none of those pieces reads the account
-  for (const name of ["Badge", "Card", "ChipBar", "DataTable", "Disclosure", "Stat", "States", "Form", "PageHeader", "LinkCard", "Signed"]) {
+  for (const name of ["Badge", "Card", "ChipBar", "DataTable", "FactTable", "Disclosure", "Stat", "States", "Form", "PageHeader", "LinkCard", "Signed"]) {
     assert.doesNotMatch(read(`src/components/kit/${name}.tsx`), /lib\/(api|app|account)"|PlanInterest/, name);
   }
   const pwa = read("src/lib/pwa.ts");

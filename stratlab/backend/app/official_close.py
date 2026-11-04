@@ -609,3 +609,73 @@ def waiting(day, now: datetime | None = None) -> bool:
         return not settled(day, now)
     except Exception:                            # can't tell: nothing to wait for
         return False
+
+
+# ---------- the indices' official closes (LIVE3-025) ----------
+# Breadth's NIFTY 500 "final" level was the 15:30 round's last tick (22,770.80) and its previous close a daily candle's (22,518.85),
+# against the exchange's closing values 22,769.20 and 22,520.35. The exchange's daily file of every index's close
+# (ind_close_all_DDMMYYYY.csv) is read once it is out, kept, and used wherever an index's close of that day is shown.
+INDEX_KEY = "closes:INIDX:"         # closes:INIDX:<YYYY-MM-DD> = {INDEX NAME: close}
+INDEX_FILE = "/content/indices/ind_close_all_{dmy}.csv"
+INDEX_FROM = 16                     # India hour after which a day's index file is asked for
+
+
+def index_closes(day, fetch: bool = False, now: datetime | None = None) -> dict[str, float] | None:
+    """A day's official index closes ({"NIFTY 500": 22769.2, ...}): stored, else (with `fetch`, from a job, never a page) read from the
+    exchange's file once it is out, at most once per RETRY a day. None while it isn't known."""
+    d = _day(day)
+    hit = _mem.get(("idx", d))
+    if hit is not None:
+        return hit or None
+    try:
+        got = db.json_value(db.get_setting(INDEX_KEY + d), {})
+    except Exception:
+        got = {}
+    rows = {str(k): float(v) for k, v in (got or {}).items() if isinstance(v, (int, float)) and v > 0}
+    if rows:
+        _mem.set(("idx", d), rows, 6 * 3600)
+        return rows
+    files_fn = _src.get("files")
+    if not fetch or not files_fn or not d:
+        return None
+    local = (now or datetime.now(timezone.utc)).astimezone(IST)
+    if d > local.date().isoformat() or (d == local.date().isoformat() and local.hour < INDEX_FROM) or _was_asked("idx", d):
+        return None
+    _mark_asked("idx", d)
+    try:
+        from . import exchange_days
+        text = files_fn().text(exchange_days.ARCHIVE + INDEX_FILE.format(dmy=exchange_days.dmy(date.fromisoformat(d))))
+        rows = parse_index_closes(text or "")
+    except Exception as e:
+        print("official index closes:", d, str(e)[:120])
+        return None
+    if rows:
+        db.set_setting(INDEX_KEY + d, json.dumps(rows, separators=(",", ":")))
+        _mem.set(("idx", d), rows, 6 * 3600)
+        try:                                   # a month of days kept: the breadth run takes its last OFFICIAL_INDEX_DAYS
+            cut = (date.fromisoformat(d) - timedelta(days=31)).isoformat()
+            for k, _ in db.all_settings_with_prefix(INDEX_KEY):
+                if k[len(INDEX_KEY):] < cut:
+                    db.delete_setting(k)
+        except Exception as e:
+            print("official index closes: prune:", str(e)[:120])
+    return rows or None
+
+
+def parse_index_closes(text: str) -> dict[str, float]:
+    """{INDEX NAME: closing value} from the exchange's daily index file ("Index Name,Index Date,...,Closing Index Value,...")."""
+    from . import exchange_days
+    out = {}
+    for r in exchange_days.rows_of(text):
+        name = (r.get("Index Name") or "").strip().upper()
+        try:
+            v = float((r.get("Closing Index Value") or "").replace(",", ""))
+        except ValueError:
+            continue
+        if name and v > 0:
+            out[name] = round(v, 2)
+    return out
+
+
+def index_close(name: str, day, fetch: bool = False, now: datetime | None = None) -> float | None:
+    return (index_closes(day, fetch, now) or {}).get(str(name or "").upper())

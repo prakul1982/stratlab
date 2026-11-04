@@ -3,7 +3,7 @@ import type { Session } from "@supabase/auth-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
 import { clearLocalData } from "./localData";
 import { signOutHere } from "./signout";
-import { clearSignInEnded, noteSignInEnded } from "./signin";
+import { clearSignInEnded, noteSignInEnded, noteSignInUnfinished } from "./signin";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
 import { identify, resetAnalytics, track, trackSignup } from "./analytics";
@@ -12,7 +12,7 @@ import { planPriceFor } from "./currency";
 import { JOINED, JOIN_LABEL, joinInterest, resetInterest } from "./planInterest";
 import { readViewAs, writeViewAs, type ViewAs } from "./viewAs";
 import { CFG } from "./config";
-import { emailLinkIn, hasSavedSession, withoutEmailLink } from "./entry";
+import { emailLinkIn, hasSavedSession, hasSignInCode, withoutEmailLink, withoutSignInCode } from "./entry";
 import { useLiveRefresh } from "./liveRefresh";
 import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
 import { toastMs } from "./toastTime";
@@ -159,14 +159,23 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     // a saved sign-in that can't be renewed right now (no answer) comes back as "no session" with the saved one kept: ask
     // again a little later before anything is decided
     let live = true;
+    // a sign-in arriving in the address (Google's one-time code, an emailed link): by the time the session is read the library
+    // has tried it; the code comes out of the address either way, and one that brought no session is said in words on the
+    // page that opens, with Continue with Google, never a silent sign-in wall with ?code= left in the address (LIVE3-009)
+    const link = emailLinkIn(location.search);
+    let arriving = hasSignInCode(location.search) || !!link;
     const check = (tries: number) => supabase.auth.getSession().catch(() => ({ data: { session: null } })).then(({ data }) => {
       if (!live) return;
+      if (arriving) {
+        arriving = false;
+        if (hasSignInCode(location.search)) history.replaceState(history.state, "", withoutSignInCode(location.href));
+        if (!data.session) noteSignInUnfinished();
+      }
       if (data.session || tries >= SESSION_RETRY_MS.length || !sessionUnconfirmed(true, null)) { setSession(data.session); setReady(true); return; }
       window.setTimeout(() => check(tries + 1), SESSION_RETRY_MS[tries]);
     });
     // an emailed one-time sign-in link: its hashed token is traded for the session first, and taken out of the address
-    // whether it worked or not (used once, it can't sign in again); a link that failed leaves the page signed out (SECMEM 1b)
-    const link = emailLinkIn(location.search);
+    // whether it worked or not (used once, it can't sign in again); a link that failed leaves the page signed out, saying so (SECMEM 1b, LIVE3-009)
     if (link) {
       history.replaceState(history.state, "", withoutEmailLink(location.href));
       void supabase.auth.verifyOtp(link).catch(() => undefined).then(() => check(0));

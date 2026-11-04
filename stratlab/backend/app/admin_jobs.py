@@ -4,12 +4,15 @@ start it (empty for a job with no manual trigger). Facts only: the schedule text
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 
 from . import admin, job_status, leader
 from .connect.redact import redact_ids
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 router = APIRouter(tags=["admin"])
 
@@ -111,7 +114,7 @@ def next_run_label(schedule: str | None, now: datetime | None = None) -> str | N
 
 def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | None = None, log: list[str] | None = None,
          run: list[dict] | None = None, running: bool = False, note: str | None = None, parts: int | None = None,
-         effects: dict[str, str] | None = None, next_run: str | None = None, check: str | None = None) -> dict:
+         effects: dict[str, str] | None = None, next_run: str | None = None, check: str | None = None, started: float | None = None) -> dict:
     """One job. `parts`: how many sources the last run tried, for a job that reads several (each failed one is a line
     of `log`); when some were read and some weren't, the run is partial: Check, not Problem. `effects` says, per source,
     what is missing while it is unread (DJ-021), `next_run` when it is tried again. `check`: something to look at that is not a
@@ -127,9 +130,37 @@ def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | N
         error = plain_error(error)
     if not error and check and last_run:
         state, error = "warn", check
+    # LIVE3-006: how long the current run has been going (`started`: the runner's own start), and a run going for longer than any
+    # run takes is a Problem, so Needs your attention names it
+    since = job_status.running_since(id, bool(running), started)
+    if since is not None and time.time() - since > job_status.STUCK_AFTER:
+        state = "bad"
+        error = (f"Stuck: running for {_span(time.time() - since)} (since {datetime.fromtimestamp(since, IST):%d %b %H:%M} IST), longer than any "
+                 "run takes. A new run takes over from it at the job's next turn.")
     # a provider's own error text can carry an account identifier: Admin shows it hidden (R29B-022)
     return {"id": id, "name": name, "schedule": schedule, "next": next_run_label(schedule), "last_run": last_run, "error": redact_ids(error), "state": state,
-            "running": bool(running), "log": [redact_ids(str(x)[:240]) for x in (log or []) if x][:8], "run": run or [], "note": note}
+            "running": bool(running), "running_since": datetime.fromtimestamp(since, timezone.utc).isoformat(timespec="seconds") if since else None, "log": [redact_ids(str(x)[:240]) for x in (log or []) if x][:8], "run": run or [], "note": note}
+
+
+def ipo_docs_check(docs: dict | None, ai: dict, now: datetime | None = None) -> str | None:
+    """The IPO documents' catch-up written up as a Check when it is stalled (LIVE3-007: "0 of 120 today" with 67 waiting, and no word
+    of it under Needs your attention): its last pass failed, or no pass ran today while documents wait."""
+    if not ai.get("waiting") or ai.get("scheduled"):
+        return None
+    now = now or datetime.now(timezone.utc)
+    today = now.astimezone(IST).date().isoformat()
+    at = str((docs or {}).get("at") or "")
+    if (not at or datetime.fromisoformat(at).astimezone(IST).date().isoformat() != today) and now.astimezone(IST).hour >= 12:
+        return f"Offer documents: the summaries' catch-up hasn't run today, with {ai['waiting']} waiting."
+    if (docs or {}).get("error"):
+        return f"Offer documents: no summary written today ({ai['waiting']} waiting). The last pass failed: {docs['error']}"
+    return None
+
+
+def _span(seconds: float) -> str:
+    """"15 h", "2 h 10 min", "40 min"."""
+    m = int(seconds // 60)
+    return f"{m // 60} h" + (f" {m % 60} min" if m % 60 and m < 600 else "") if m >= 60 else f"{m} min"
 
 
 def _plain(job, key: str | None = None) -> dict:
@@ -291,7 +322,7 @@ def rows() -> list[dict]:
         return _row("breadth", "Market breadth", f"India about 6:30 PM IST, US about {m.breadth.due_label('US').replace(' ET', '')} New York time, on trading days",
                     max((v["ran_at"] for v in ok.values()), default=None), err, log,
                     [{"label": "Run India", "path": "/admin/breadth/run?region=IN&full=true"}, {"label": "Run US", "path": "/admin/breadth/run?region=US&full=true"}],
-                    running=m.breadth_runner.running,
+                    running=m.breadth_runner.running, started=m.breadth_runner.started_at,
                     note="The first run reads two years of prices: a few minutes for the US, 20 to 25 minutes for India (it needs the day's broker login).")
     add("Market breadth", breadth)
     add("Intraday breadth rounds", lambda: breadth_live_row(m.breadth_live.status(), m.breadth_live_job.status))
@@ -426,13 +457,14 @@ def rows() -> list[dict]:
         at, why = _ran(st, "last_run", data=lambda: max(filter(None, ((ipo.state().get(r) or {}).get("read") for r in ("IN", "US"))), default=None))
         return _row("ipo", "IPOs", "India 7:40 AM and 8:10 PM IST, US 8:30 AM and 9:30 PM IST; bids every 15 minutes from 9:55 AM to 5:30 PM IST while an issue is open; "
                     "alerts 8:00 AM (India) and 7:00 PM (US dates) IST", at, st.get("last_error"), _problems(st) + why,
-                    [{"label": "Run now", "path": "/admin/ipos/refresh"}], check=st.get("check"),
+                    [{"label": "Run now", "path": "/admin/ipos/refresh"}], check=st.get("check") or ipo_docs_check(st.get("docs_pass"), ai),
                     note="Offer documents are read and summarised a few at a time between the reads. After each read the lists are checked against the exchanges' and the regulators' own: "
                          "an issue an exchange lists that ours does not is a Problem; a prospectus filed with the regulator that no exchange lists yet is a Check. "
                          # item 40: the AI summaries today, and the backlog the catch-up still has
                          f"AI summaries today: {ai['scheduled']} of {ai['cap']} by the catch-up, {ai['asked']} written when someone opened an IPO (never capped). "
                          f"{ai['waiting']} document{'' if ai['waiting'] == 1 else 's'} wait{'s' if ai['waiting'] == 1 else ''} for a summary"
-                         + (f": about {ai['days']} day{'' if ai['days'] == 1 else 's'} at the catch-up's {ai['cap']} a day." if ai["waiting"] else "."))
+                         + ((f": about {ai['days']} day{'' if ai['days'] == 1 else 's'} at the catch-up's {ai['cap']} a day." if ai["scheduled"]
+                             else ": none written today, so no time to clear them can be given.") if ai["waiting"] else "."))
     add("IPOs", ipos)
 
     def fo():

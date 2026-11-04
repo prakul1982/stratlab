@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { DataTable, usePhone, type Column } from "./DataTable";
+import { DataTable, sparseNotes, usePhone, type Column } from "./DataTable";
 
 /** One row of a fact table: what it is, its figure, and (optionally) a note beside it. */
 export type Fact = { id: string; k: ReactNode; v: ReactNode; n?: ReactNode };
@@ -14,7 +14,8 @@ export function FactTable({ label, rows, itemHead = "Item", figureHead = "Figure
 }) {
   const phone = usePhone();
   const notes = rows.some((r) => r.n);
-  const under = noteUnder && phone && notes;
+  // a note only some rows have goes under the item on every screen, not in a column blank in half its rows (LIVE3-015, LIVE3-021)
+  const under = notes && ((noteUnder && phone) || sparseNotes(rows.filter((r) => r.n).length, rows.length));
   const cols: Column<Fact>[] = [
     { key: "k", header: itemHead, rowHeader: true, wrap: true, cell: (r) => <>{r.k}{under && r.n && <span className="k-sub-line">{r.n}</span>}</> },
     // a figure column stays as wide as its figures (TABLE-SWEEP: the wrap's 160px floor pushed a two-column table off a 360px phone)

@@ -1215,12 +1215,15 @@ def run_marker(name: str) -> str | None:
 
 
 class Job:
-    """Reads the sources on a schedule: India's before the open and in the evening, the US calendar morning and evening (IST);
+    """Reads the sources on a schedule: India's before the open, at midday, after the close and in the evening, the US calendar morning and evening (IST);
     the US closes again at 03:30 IST (after the New York close, so the listed issues' latest close is the day's); every quarter hour through the bidding hours it reads the bids of the issues open; the exchange's final figures after
     19:20; then the offer documents and their summaries, a few each pass. IPO alerts go out at 08:00 IST (India's dates)
     and 19:00 IST (the US dates, the New York morning). One leader container runs it; a run marker per slot and day means a
     restart never sends twice."""
-    SLOTS = (("in-am", "07:40"), ("in-alert", "08:00"), ("us-am", "08:30"), ("us-alert", "19:00"), ("in-final", FINAL_AT), ("in-pm", "20:10"), ("us-pm", "21:30"), ("us-close", "03:30"))
+    # India's lists are read again at midday and after the close (LIVE3-020: from 07:40 to 20:10 nothing re-read them, so at 18:45 the
+    # list said "Read 07:40 IST" while the job had run an hour before); the read after the close takes the day's listing closes too
+    SLOTS = (("in-am", "07:40"), ("in-alert", "08:00"), ("us-am", "08:30"), ("in-mid", "13:40"), ("in-close", "16:10"), ("us-alert", "19:00"), ("in-final", FINAL_AT),
+             ("in-pm", "20:10"), ("us-pm", "21:30"), ("us-close", "03:30"))
 
     def __init__(self, sleep=time.sleep):
         self.sleep = sleep
@@ -1258,19 +1261,27 @@ class Job:
             return ran
         try:
             local = now.astimezone(IST)
+            read_now: set[str] = set()
+            # a market's one read this pass takes the listed issues' trading if any slot due for it wants that
+            due_now = [n for n, a in self.SLOTS if self.due(n, a, now)]
+            perf_for = {("IN" if n.startswith("in") else "US") for n in due_now if n.endswith(("-pm", "-close"))}
             for name, at in self.SLOTS:
                 day = self.due(name, at, now)
                 if not day:
                     continue
                 db.set_setting("ipo:ran:" + name, day)          # marked first: a crash mid-read is the next slot's to repair, never a second send
+                market = "IN" if name.startswith("in") else "US"
+                if not name.endswith("-alert") and name != "in-final" and market in read_now:
+                    ran.append(name)                             # several slots due at once (a server started late): one read of a market covers them
+                    continue
                 if name.endswith("-alert"):
-                    market = "IN" if name.startswith("in") else "US"
                     n = send_alerts(market, local.date() if market == "IN" else now.astimezone(NY).date(), now)
                     self.status.update(sent=self.status["sent"] + n)
                 elif name in ("in-final",):
                     self.read_open(now, final=True)
                 else:
-                    self.read(name[:2].upper(), now, perf=name.endswith(("-pm", "-close")))
+                    self.read(market, now, perf=market in perf_for)
+                    read_now.add(market)
                 ran.append(name)
             if self.live_due(now):
                 self.read_open(now)
@@ -1439,6 +1450,10 @@ class Job:
         if done or made or problems:
             self.status.update(docs=self.status["docs"] + done, summaries=self.status["summaries"] + made, last_run=now.isoformat(timespec="seconds"),
                                **({"problems": problems[:5], "last_error": problems[0][:200]} if problems else {}))
+        # LIVE3-007: this pass's own outcome, kept apart from the job's last_error (the next bids read, every quarter of an hour, wrote
+        # that back to none, so a catch-up that wrote 0 of 120 all day said nothing on Admin)
+        self.status["docs_pass"] = {"at": now.isoformat(timespec="seconds"), "read": done, "summaries": made, "waiting": len(waiting),
+                                    "error": problems[0][:200] if problems else None}
         return done + made
 
 

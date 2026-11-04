@@ -107,6 +107,8 @@ export interface SectorAI {
   } | null;
   /** the listed companies the exchange puts in the theme's industries, A to Z (DE-013); `named`: the map names it too */
   exchange?: { industries: string[]; total: number; companies: { ticker: string; name: string; industry: string; named: boolean }[] } | null;
+  /** LIVE3-001: the AI's map and checks are written behind the page; "working" while they are, "failed" (with why) when the map couldn't be */
+  ai?: { state: "working" | "failed"; message: string; code?: string } | null;
 }
 /** One index's tile. `day`: the session its level and change are of; `live`: today's while the market trades; `stale`: the
  * market trades today but this is still a previous session's level, so its change is never "today's" (R7T-003). */

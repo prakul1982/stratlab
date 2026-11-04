@@ -69,11 +69,13 @@ def test_a_stored_page_is_rebuilt_once_its_market_closes_again():
 
 
 def test_the_page_says_last_close_and_the_edge_keeps_it_a_day(w):
-    # SEO-1: browsers five minutes, the site's cache a day (the "As of" date says which close the copy is of)
+    # SEO-1: browsers five minutes, the site's cache up to a day (the "As of" date says which close the copy is of); LIVE3-002 (changed
+    # on purpose): never past the market's next settle point, and a quarter of an hour while the official close is awaited
+    from tests.test_seo1 import edge_kept
     r = w["client"].get("/stocks/in/RELIANCE")
     cc = r.headers["cache-control"]
-    assert int(re.search(r"max-age=(\d+)", cc).group(1)) <= 300 and int(re.search(r"s-maxage=(\d+)", cc).group(1)) == 86400
-    assert int(re.search(r"stale-while-revalidate=(\d+)", cc).group(1)) == 604800
+    assert int(re.search(r"max-age=(\d+)", cc).group(1)) <= 300
+    assert edge_kept(cc, ("IN",)) or cc == stock_pages.OFFICIAL_WAIT_CACHE, cc
     t = r.text
     assert "Last price" not in t and re.search(r"As of \d{1,2} \w{3} 20\d\d close", t) and re.search(r"<b data-price>₹[\d,.]+</b>", t)
 

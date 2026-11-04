@@ -81,7 +81,8 @@ test("the watchlist is never saved over a list that was not read", () => {
 test("Pulse and Themes ignore a late answer for the market or theme that was left", () => {
   const src = read("src/pages/Research.tsx");
   const themes = read("src/pages/ThemesPage.tsx");          // (the Themes page moved out of Research.tsx: THEME-1)
-  assert.match(themes, /const mine = \+\+seq\.current;\s*\n\s*setBusy\(true\); setError\(null\)/);
+  // (a quiet re-ask while the AI fills in leaves busy as it is: LIVE3-001)
+  assert.match(themes, /const mine = \+\+seq\.current;\s*\n\s*if \(!o\.keep\) setBusy\(true\);[^\n]*\n\s*setError\(null\)/);
   assert.match(themes, /if \(mine === seq\.current\) setR\(out\)/);
   assert.match(themes, /finally \{ if \(mine === seq\.current\) setBusy\(false\); \}/);
   assert.match(src, /try \{ const out = await researchApi\.pulseAI\(region, "", refresh\); if \(mine === seq\.current\) setAi\(out\); \}/);

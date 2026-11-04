@@ -130,6 +130,11 @@ def fresh_shared_quotes():
             qs.forget()
         if main is not None and hasattr(main, "_breadth_views"):
             main._breadth_views.clear()          # the breadth route's stored days, kept a few seconds (LIVE-1)
+        tr = sys.modules.get("app.intel.theme_routes")
+        if tr is not None:
+            for j in list(tr._jobs.values()):     # a theme's AI parts written in the background (LIVE3-001): finished before the next test
+                j["done"].wait(30)
+            tr._jobs.clear()
     clear()
     yield
     clear()
@@ -227,6 +232,7 @@ def _forget_company_lists():
         with sc._mem_lock:
             sc._mem.clear()
             sc._built.clear()
+            sc._priced.clear()      # the newer closes the price job noted (LIVE3-003)
 
 
 @pytest.fixture(autouse=True)

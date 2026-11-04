@@ -10,14 +10,14 @@ import { Search } from "../components/Icons";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
 import { adsLive } from "../lib/ads";
 import { CONFIG } from "../lib/adsConfig";
-import { CHECK_RESULT, CHECKS_NOT_HOLD, checksOf, headTone, HoldLine, LibraryCard, libraryTally, liveOptions, marketChoices, Rules, shownStats, strategyName, libMeta, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
+import { CHECK_RESULT, CHECKS_NOT_HOLD, checksOf, headTone, LibraryCard, libraryTally, liveOptions, marketChoices, Rules, shownStats, strategyName, libMeta, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
 import { libraryDescription, libraryTitle } from "../lib/libraryText";
 import { Badge } from "../components/kit/Badge";
 import { Card, CardHead } from "../components/kit/Card";
 import { ChipBar } from "../components/kit/ChipBar";
 import { Select } from "../components/kit/Form";
 import { PageHeader } from "../components/kit/PageHeader";
-import { Stat, StatRow } from "../components/kit/Stat";
+import { FactTable } from "../components/kit/FactTable";
 import { EmptyState, ErrorState, Skeleton } from "../components/kit/States";
 import "./trade/trade.css";
 
@@ -48,6 +48,8 @@ export const GROUP_BASIS = "Every stock in the group was tested as one pot of ca
 
 const where = (e: LibEntry) => e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market;
 const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? "up" as const : "down" as const);
+/** A percentage in a results table, coloured up or down where that means something. */
+const figure = (n: number | null, t?: "up" | "down") => (n == null ? "–" : <span className={t ? `k-${t}` : undefined}>{pct(n)}</span>);
 
 // VR5-003: in the header a small phone (360px) has no room for "Continue with Google" beside the logo and the Menu, so it shows "Sign in"
 // there (the name a screen reader hears stays the long one)
@@ -87,7 +89,7 @@ export function PublicLibrary() {
   const markets = useMemo(() => marketChoices(counts, rows ?? [], market), [counts, rows, market]);
   const tally = useMemo(() => libraryTally(rows ?? []), [rows]);
   return (
-    <PublicFrame action={<GoogleCopy label="Continue with Google" small />}>
+    <PublicFrame className="lib" action={<GoogleCopy label="Continue with Google" small />}>
       <PageHeader eyebrow="Strategy library" title="StratLab's own strategies"
         lede="Well-known rule sets that StratLab ran through its own backtest and four checks, each shown with the verdict it earned, the ones that failed as plainly as the ones that held up. Open one to read its rules." />
       <Card label="Find a strategy">
@@ -97,7 +99,7 @@ export function PublicLibrary() {
         </div>
         {markets.length > 2 && <ChipBar label="Market" options={markets} value={market} onChange={setMarket} wrap />}
       </Card>
-      {rows === null ? <Card><Skeleton label="Opening the library" /></Card>
+      {rows === null ? <Card><Skeleton label="Opening the library" page /></Card>
         : failed ? <ErrorState title="The library couldn't be opened" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Your connection or ours dropped for a moment.</ErrorState>
         : shown.length === 0 ? <EmptyState title={rows.length ? "Nothing matches that." : "There are no strategies to show yet."}>{rows.length ? "Clear the search or the filters to see them all." : "Check back soon."}</EmptyState>
         : (
@@ -171,20 +173,26 @@ export function PublicLibraryEntry({ id }: { id: string }) {
             <span className="k-eyebrow">{[plainTerms(e.name), whereShown(plainTerms(e.name), where(e), e.group?.name), `${TF_NAME[e.tf] ?? e.tf} candles`].filter(Boolean).join(" · ")}</span>
             {/* the result in the checks' own words, with buy and hold beside it, the same words as the library card (R6V-005) */}
             <h1 className={`verdict-head pub-head ${headTone(e)}`} data-testid="lib-headline">{e.verdict.fact_headline ?? e.verdict.headline}</h1>
-            <p className="k-lede">{e.verdict.fact_summary ?? e.verdict.summary}</p>
-            <HoldLine e={e} />
             <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span data-testid="lib-tested">{e.range ? `Tested ${testedRange(e.range)}` : "Tested on past prices"}</span></span>
           </div>
           <Card label="Results">
             <CardHead title="Results after costs, total over the test" actions={<span className="k-note">{checksOf(e)}</span>} />
-            <StatRow label="Results">
-              <Stat item label="Total return after costs" value={sh.ret == null ? "–" : pct(sh.ret)} tone={trails(e) ? undefined : tone(sh.ret)} />
-              <Stat item label="Total buy and hold" value={sh.buy_hold == null ? "–" : pct(sh.buy_hold)} tone={tone(sh.buy_hold)} />
-              <Stat item label={unseenLabel(e)} value={sh.unseen == null ? "–" : pct(sh.unseen)} tone={tone(sh.unseen)} />
-              <Stat item label="Worst fall" value={sh.mdd == null ? "–" : pct(sh.mdd)} tone={sh.mdd == null ? undefined : "down"} />
-              <Stat item label="Trades" value={e.stats.trades == null ? "–" : String(e.stats.trades)} />
-            </StatRow>
+            {/* LIVE3-013: the headline says the result once; the figures are one table under it (they were a paragraph, a green line
+                and five tiles saying it again), and the long explanation is folded under the table */}
+            <FactTable label="Results after costs" itemHead="Measure" figureHead="Total" numeric rows={[
+              { id: "ret", k: "This strategy, after costs", v: figure(sh.ret, trails(e) ? undefined : tone(sh.ret)) },
+              { id: "hold", k: "Buy and hold, same dates", v: figure(sh.buy_hold, tone(sh.buy_hold)) },
+              { id: "unseen", k: unseenLabel(e), v: figure(sh.unseen, tone(sh.unseen)) },
+              { id: "mdd", k: "Worst fall", v: figure(sh.mdd, sh.mdd == null ? undefined : "down") },
+              { id: "trades", k: "Trades", v: e.stats.trades == null ? "–" : String(e.stats.trades) },
+            ]} />
             {e.group && <p className="k-small k-muted" data-testid="lib-group-basis">{GROUP_BASIS}</p>}
+            {(e.verdict.fact_summary ?? e.verdict.summary) && (
+              <details className="pub-why" data-testid="lib-why">
+                <summary>What the result means</summary>
+                <p className="k-small">{e.verdict.fact_summary ?? e.verdict.summary}</p>
+              </details>
+            )}
           </Card>
           {!!e.verdict.checks?.length && (
             <section className="pub-checks" aria-label="The four checks">

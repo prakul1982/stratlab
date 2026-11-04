@@ -89,7 +89,9 @@ test("R9R-010: My space reads the calendars after its first screen's figures, no
   page.on("response", (r) => { const u = new URL(r.url()); if (["fetch", "xhr"].includes(r.request().resourceType())) back.push({ path: u.pathname, at: Date.now() }); });
   const errors = await open(page, "/mine");
   await expect(page.getByTestId("mine-home")).toBeVisible({ timeout: 30_000 });
-  await page.waitForRequest(/\/money\/calendar\?/, { timeout: 15_000 });
+  // the calendar's request is looked for in everything recorded from the start: it can go out before the page's first card shows
+  // (waiting for a new request from here missed one already sent, now that the later cards start as soon as the top is back)
+  await expect.poll(() => seen.some((s) => /\/money\/calendar$/.test(s.path)), { timeout: 15_000 }).toBe(true);
   const first = (re: RegExp) => seen.find((s) => re.test(s.path))?.at ?? Infinity;
   const worth = first(/\/money\/net-worth$/), holdings = first(/\/holdings$/), calendar = first(/\/money\/calendar$/), results = first(/\/research\/results$/);
   expect(worth).toBeLessThan(Infinity);

@@ -135,7 +135,7 @@ def classify(name: str, r: httpx.Response, model: str) -> CallError:
         if name == "gemini" and re.search(r"api key|permission", body, re.I):
             return CallError("auth", f"rejected the key (403: {msg})", scope="provider")
         return CallError("forbidden", f"this key can't use {model} (403: {msg})")
-    if code in (404, 400, 422, 405):
+    if code in (404, 400, 422, 405, 410):          # 410: "the requested model ... is no longer available" (SambaNova, 4 Nov)
         if name == "gemini" and code == 400 and re.search(r"api key not valid|api_key_invalid", body, re.I):
             return CallError("auth", f"rejected the key (400: {msg})", scope="provider")
         return CallError("model", f"couldn't use {model} ({code}: {msg})")

@@ -1,11 +1,13 @@
-import { CRORE, bigMoney, inrCompact, pctPlain } from "./format";
+import { CRORE, bigMoney, pctPlain } from "./format";
 import type { Region } from "./research";
 import type { DiveRow, Layer, Stat } from "./theme";
 
-/** An amount in the dive's unit ("₹ crore" or "$ million") as the app writes money: ₹1.51 lakh cr, $2.4B. */
+/** An amount in the dive's unit ("₹ crore" or "$ million") as the app writes money: ₹1.51 lakh cr, $2.4B. The one rule for big money
+ * (bigMoney), as the company page, its public page, the screens and Compare write a market value (LIVE3-018: "₹11.4 lakh cr" here
+ * beside "₹11.38 lakh cr" there). */
 export function amount(v: number | null | undefined, region: Region): string {
   if (v == null || !Number.isFinite(v)) return "–";
-  return region === "IN" ? inrCompact(v * CRORE) : bigMoney(v * 1e6, "USD");
+  return bigMoney(region === "IN" ? v * CRORE : v * 1e6, region === "IN" ? "INR" : "USD");
 }
 /** A margin or rate in percent, one decimal, the real minus. */
 export const pc = (v: number | null | undefined, dp = 1) => pctPlain(v, dp).replace("-", "−");

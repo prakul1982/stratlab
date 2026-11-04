@@ -43,3 +43,37 @@ def test_a_model_the_provider_says_does_not_exist_is_not_asked_again_until_its_l
     R.save("sambanova")
     saved = json.loads(R.STORE.get_all()["ai:rank:sambanova"])
     assert saved["retired"] == {"Meta-Llama-3.3-70B-Instruct": R.status("sambanova").list_sig} and saved["list_sig"] == R.status("sambanova").list_sig
+
+
+def test_a_model_the_provider_says_is_gone_410_is_retired_on_every_provider_and_the_next_model_answers(monkeypatch):
+    """Live, 4 Nov: SambaNova's test failed with "unexpected answer 410 (The requested model (DeepSeek-V3.1) is no longer available)",
+    and the model stayed in use. A 410, or a 404/400 that says the model is gone, retires that model (not asked again until the
+    provider's list changes) on every provider, and the request goes on to the provider's next model."""
+    from app.ai_clients import classify
+    req = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    for name in PROVIDERS:
+        model = f"{name}-old-model"
+        for code, body in ((410, {"error": {"message": f"The requested model ({model}) is no longer available"}}),
+                           (404, {"error": {"message": "model not found"}}), (410, {})):
+            e = classify(name, httpx.Response(code, json=body, request=req), model)
+            assert e.kind == "model" and e.scope != "provider", (name, code, e.kind, e.detail)
+            R.status(name).retired.pop(model, None)
+            R.record_fail(name, model, e, live=False)
+            assert R.retired(name, model), (name, code, e.detail)
+    # SambaNova end to end: the gone model is asked once, the next one answers, and the gone one isn't asked again
+    keys(monkeypatch, "sambanova")
+    asked = []
+    first = R.in_use("sambanova")[0]
+
+    def handler(req: httpx.Request):
+        model = json.loads(req.content)["model"]
+        asked.append(model)
+        if model == first:
+            return httpx.Response(410, json={"error": {"message": f"The requested model ({first}) is no longer available"}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": GOOD}, "finish_reason": "stop"}]})
+    assert "entry" in P.complete("s", "t410", transport=httpx.MockTransport(handler))
+    assert asked[0] == first and len(asked) == 2 and R.retired("sambanova", first) and first not in R.in_use("sambanova")
+    asked.clear()
+    R.stats("sambanova", first).open_until = 0
+    assert "entry" in P.complete("s", "t410-again", transport=httpx.MockTransport(handler))
+    assert first not in asked

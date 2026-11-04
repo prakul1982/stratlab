@@ -76,7 +76,7 @@ export function indexLevel(name: string, price: number): string {
 }
 
 export function IndexStrip({ indices, missing }: { indices: IndexLevel[] | null; missing?: string[] }) {
-  if (!indices) return <Skeleton label="Loading the market" lines={2} />;
+  if (!indices) return <div className="k-skel-index"><Skeleton label="Loading the market" lines={2} /></div>;          // the table's height while it loads (LIVE3-012)
   if (!indices.length) return <EmptyState title="Index levels are unavailable right now">They come back on their own; this page checks again when you open it.</EmptyState>;
   // a table, not tiles each with its own small line (MOOD-1, the owner's "wherever you can, just make a table")
   return <IndexTable indices={indices} missing={missing} dayText={(d) => fmtDate(d, { year: false })} whenOf={(i) => indexWhen(i, (d) => fmtDate(d, { year: false }))} />;
@@ -511,8 +511,8 @@ export function PulsePage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={pulseClosedDay(data?.indices) ? "How the market felt at the last close" : "How the market feels today"}
-        lede={pulseLede(ai, (() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })(), !!data?.indices.some((i) => i.settling))}
-        asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
+        lede={pulseLede((() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })(), !!data?.indices.some((i) => i.settling))}
+        asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfPending={!data} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><PulseLevels p={levels} /></Card>
       {/* the mood and every table under it come from one read of the figures (mood.py): a line and its table cannot disagree (MOOD-1) */}
