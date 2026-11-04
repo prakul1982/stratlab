@@ -9,6 +9,7 @@ import { fyLink, movedYearNote } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { tradeProblems } from "../../lib/validate";
 import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, UploadButton, useUploadProblem, Notes, FigureTable } from "../../components/kit";
+import { download as saveFile } from "../../lib/share";
 
 /* /money/us-tax: US share sales in rupees the way the Income-tax Rules convert them, long or short term under the
  * 24-month rule, US dividends with the tax withheld and the foreign tax credit, and the calendar-year Schedule FA table.
@@ -25,7 +26,7 @@ type Dividends = { fy: number; stocks: DivStock[]; usd: number; inr: number; tax
 type Year = { fy: number; label: string; count: number; unpriced: number; st: number; lt: number; sale: number; fallback: boolean; rows?: Sale[]; dividends?: Dividends };
 type FaRow = {
   symbol: string; name: string; lot: number; acquired: string; country: string; nature: string; initial: number | null; initial_usd: number;
-  peak: number | null; peak_day: string | null; closing: number | null; closing_qty: number; income: number; proceeds: number | null;
+  peak: number | null; peak_day: string | null; closing: number | null; closing_qty: number; income: number; proceeds: number | null; income_from?: "file" | "declared" | "both" | null;
 };
 type Fa = { cy: number; label: string; rows: FaRow[]; totals: Record<string, number>; missing_prices: string[]; missing_rates: number; fallback: boolean };
 type Trade = { id: string; d: string; side: "B" | "S"; sym: string; qty: number; price: number; fees?: number; src?: string };
@@ -139,9 +140,7 @@ export function UsTaxPage() {
     setGetting(true);
     try {
       const r = await api<Response>(`/money/us-tax/schedule-fa.csv?cy=${v.fa.cy}`, { raw: true });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob()); a.download = `stratlab-schedule-FA-CY${v.fa.cy}.csv`; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      saveFile(await r.blob(), `stratlab-schedule-FA-CY${v.fa.cy}.csv`);      // MONEY-3: the one save helper
     } catch (e) { fail(e); } finally { setGetting(false); }
   };
 
@@ -188,13 +187,15 @@ export function UsTaxPage() {
     { key: "cost", header: "Cost", numeric: true, cell: (l) => usd(l.cost_usd) },
     { key: "term", header: "Term today", cell: (l) => (l.term === "LT" ? "Long-term" : <>Short-term<span className="k-sub-line">long-term from {dateOnly(l.long_from)}</span></>) },
   ];
+  const FA_INCOME_FROM = { file: "your dividend file", declared: "declared dividends", both: "file and declared" } as const;
   const faCols: Column<FaRow>[] = [
     { key: "entity", header: "Entity", rowHeader: true, wrap: true, cell: (r) => <><b>{r.name}</b><span className="k-sub-line">{r.symbol} · lot {r.lot}</span></> },
     { key: "acq", header: "Acquired", numeric: true, cell: (r) => dateOnly(r.acquired) },
     { key: "init", header: "Initial value", numeric: true, cell: (r) => inr(r.initial) },
     { key: "peak", header: "Peak value", numeric: true, cell: (r) => <>{inr(r.peak)}{r.peak_day && <span className="k-sub-line">{dateOnly(r.peak_day)}</span>}</> },
     { key: "close", header: "Closing balance", numeric: true, cell: (r) => inr(r.closing) },
-    { key: "inc", header: "Income credited", numeric: true, cell: (r) => inr(r.income) },
+    // MONEY-5: each line says where its dividends come from (Instinct: the FA dividend rows were unexplained)
+    { key: "inc", header: "Income credited", numeric: true, cell: (r) => <>{inr(r.income)}{r.income_from && <span className="k-sub-line">{FA_INCOME_FROM[r.income_from]}</span>}</> },
     { key: "proc", header: "Sale proceeds", numeric: true, cell: (r) => (r.proceeds == null ? "–" : inr(r.proceeds)) },
   ];
 
@@ -315,7 +316,7 @@ export function UsTaxPage() {
 
           {!v.locked && v.fa && (
             <Card label="Schedule FA">
-              <CardHead title="Schedule FA, Table A3" info="Residents list every foreign asset held at any time in the calendar year (1 January to 31 December) in Schedule FA of ITR-2 or ITR-3. Table A3 takes one line per purchase lot of foreign shares, with the initial, peak and closing value and the income, each at SBI's TT buying rate on its own date." infoLabel="What Schedule FA is"
+              <CardHead title="Schedule FA, Table A3" info="Residents list every foreign asset held at any time in the calendar year (1 January to 31 December) in Schedule FA of ITR-2 or ITR-3. Table A3 takes one line per purchase lot of foreign shares, with the initial, peak and closing value and the income. The initial value is the lot's cost at Rule 115's rate (SBI's TT buying rate on the last day of the month before the purchase), as in the gains table; the peak, closing value and income are at SBI's TT buying rate on their own dates. The income is the dividends: from your dividend file where you uploaded one, else the company's declared payouts times the lot's shares on each payment's date, not the trades entered here." infoLabel="What Schedule FA is"
                 actions={<>
                   <Select small label="Calendar year" value={v.fa.cy} onChange={(c) => load(v.fy, Number(c))} options={v.cys.map((c) => ({ value: c, label: String(c) }))} />
                   <button type="button" className="btn quiet sm" disabled={getting} onClick={faCsv}><Download size={16} />{getting ? "Making the CSV…" : "Download CSV"}</button>

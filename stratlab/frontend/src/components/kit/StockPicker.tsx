@@ -64,10 +64,13 @@ export function StockPicker({ value = "", onPick, onText, market = "IN", id, pla
     if (e.key === "ArrowDown") { e.preventDefault(); if (!open && rows.length) setOpen(true); setOn((a) => (rows.length ? (a + 1) % rows.length : -1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setOn((a) => (rows.length ? (a <= 0 ? rows.length - 1 : a - 1) : -1)); }
     else if (e.key === "Enter") {
+      // MONEY-3: a symbol already picked (nothing typed since, no list open) leaves Enter to the form, so Enter sends it the
+      // first time; before, every Enter was kept here and the form's first submit did nothing
+      if (!typed && !open && text.trim() && !clearOnPick) return;
       e.preventDefault();
       // the marked suggestion; else the one whose symbol is exactly what was typed; else the typed symbol itself
-      const typed = text.trim().toUpperCase();
-      const same = rows.find((r) => r.symbol.toUpperCase() === typed || r.id.toUpperCase() === typed);
+      const want = text.trim().toUpperCase();
+      const same = rows.find((r) => r.symbol.toUpperCase() === want || r.id.toUpperCase() === want);
       if (open && rows[on]) pick(rows[on]); else if (same) pick(same); else if (!listedOnly) exact();
     }
     else if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); }

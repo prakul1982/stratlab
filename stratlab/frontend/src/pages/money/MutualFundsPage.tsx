@@ -39,7 +39,7 @@ type Year = {
 type Gains = { years: Year[]; current_fy: number; notes: string[]; gf_missing: string[]; unknown_units: Record<string, number>; flags: string[] };
 type View = {
   schemes: Scheme[]; allocation: { broad: string; value: number; pct: number | null; schemes: number; subs: { sub: string; value: number; pct: number | null }[] }[];
-  total: { value: number; invested: number; gain: number; xirr: number | null; held: number; schemes: number; unknown_cost: number; no_nav?: number; nav_dates: [string, string] | null };
+  total: { value: number; invested: number; invested_priced?: number; gain: number; xirr: number | null; held: number; schemes: number; unknown_cost: number; no_nav?: number; nav_dates: [string, string] | null };
   gains: Gains | null; gains_allowed: boolean; gains_plan: string; limit: number | null; files: { name: string; kind: string; txns: number; at: string }[];
   updated_at: string | null; txns: number; charge_lines?: number; kinds: Record<Kind, string>; nav_date: string | null; assumptions: string[]; disclaimer: string; as_of: string;
 };
@@ -137,6 +137,7 @@ export function MutualFundsPage() {
   const held = schemes.filter((s) => s.units > 0);
   const y = useMemo(() => view?.gains?.years.find((x) => x.fy === fy) ?? null, [view, fy]);
   const t = view?.total;
+  const base = t ? t.invested_priced ?? t.invested : 0;     // the cost the gain is measured on: the priced schemes (MONEY-5)
   const navWhen = t?.nav_dates ? (t.nav_dates[0] === t.nav_dates[1] ? dateOnly(t.nav_dates[0]) : `${dateOnly(t.nav_dates[0])} to ${dateOnly(t.nav_dates[1])}`) : null;
   // the costs and the habits are read once for the whole page; each scheme's row and the totals both take from them (MF-1)
   const version = view ? `${view.updated_at}|${view.txns}` : "";
@@ -266,9 +267,11 @@ export function MutualFundsPage() {
             <FigureTable label="Where your funds stand" header="Total" valueHeader="Amount" rows={[
               { key: "value", label: "Current value", value: inr(t.value), note: `${t.held} scheme${t.held === 1 ? "" : "s"} held` },
               { key: "invested", label: <>Invested <Info label="What invested means">The cost of the units you still hold, matched first in, first out, including stamp duty. Units sold or switched out are not in it.</Info></>,
-                value: inr(t.invested), note: t.unknown_cost > 0 ? `${t.unknown_cost} scheme${t.unknown_cost === 1 ? "" : "s"} without a known cost left out` : undefined },
+                value: inr(t.invested), note: [t.unknown_cost > 0 ? `${t.unknown_cost} scheme${t.unknown_cost === 1 ? "" : "s"} without a known cost left out` : "",
+                  // MONEY-5: a scheme with no NAV yet is at its cost from the statement, and says its value waits for a NAV
+                  t.no_nav ? `with ${t.no_nav === 1 ? "a scheme" : `${t.no_nav} schemes`} at cost from your statement: ${t.no_nav === 1 ? "its value waits" : "their values wait"} for a NAV` : ""].filter(Boolean).join(" · ") || undefined },
               { key: "gain", label: "Unrealised gain", value: inr(t.gain), tone: signTone(t.gain),
-                note: <>{t.invested > 0 && <Delta value={t.gain}>{pct((t.gain / t.invested) * 100)}</Delta>}{t.no_nav ? `${t.invested > 0 ? " · " : ""}${t.no_nav} scheme${t.no_nav === 1 ? "" : "s"} without a NAV left out` : ""}</> },
+                note: <>{base > 0 && <Delta value={t.gain}>{pct((t.gain / base) * 100)}</Delta>}{t.no_nav ? `${base > 0 ? " · " : ""}${t.no_nav} scheme${t.no_nav === 1 ? "" : "s"} without a NAV left out` : ""}</> },
               { key: "xirr", label: <>XIRR, all schemes <Info label="What XIRR is">The yearly rate of return that accounts for when each rupee went in and came out: every purchase, redemption and dividend paid out, with today's value as the last amount.</Info></>,
                 value: xirrText(t.xirr), tone: signTone(t.xirr) },
             ]} />

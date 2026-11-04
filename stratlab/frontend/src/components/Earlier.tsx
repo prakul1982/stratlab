@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 /* Finished things (closed trades, old orders, fired alerts, past dates) folded under one line, closed until asked:
  * "Earlier trades (12) · ₹4,200 after costs". What is current goes above it; nothing is deleted, only tucked away. */
@@ -25,6 +25,9 @@ export function Earlier({ label, count, note, open = false, className = "", chil
   label: string; count: number; note?: ReactNode; open?: boolean; className?: string; children: ReactNode;
 }) {
   const [shown, setShown] = useState(open);
+  // MONEY-4: asked open later (a session just stopped while its page is open, so the fold appears with it in it): it opens.
+  // useState alone kept the first answer, so a list that was empty then (count 0) stayed shut as "Stopped sessions (1)"
+  useEffect(() => { if (open) setShown(true); }, [open]);
   if (!count) return null;
   return (
     <details className={`earlier ${className}`.trim()} open={shown} onToggle={(e) => setShown(e.currentTarget.open)}>

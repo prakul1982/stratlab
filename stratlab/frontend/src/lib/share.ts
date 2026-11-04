@@ -17,11 +17,18 @@ export async function shareLink(o: { url: string; title: string; text: string; f
   try { await navigator.clipboard.writeText(o.url); return "copied"; } catch { return "shown"; }
 }
 
-/** Save a picture to the device. */
+/** Save a file (a picture, a PDF, a workbook) to the device. MONEY-3: the link is in the page while it's clicked and its
+ * address is kept for a minute, so a save that waits on a "Save as" box or a slow first download still finds the file (a
+ * detached link whose address went after 3–5 s gave no file on the first PDF pack click, and no error); an empty file is
+ * an error the caller says, never a silent nothing. */
 export function download(blob: Blob, name: string) {
+  if (!blob.size) throw new Error("The file came back empty. Try again.");
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = name; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  a.href = URL.createObjectURL(blob); a.download = name; a.rel = "noopener"; a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
 }
 
 /** The site's address for links people share (the local app in development and tests). */

@@ -15,10 +15,15 @@ def _free_port() -> int:
 
 def test_forty_busy_users_get_quick_pages_and_no_errors():
     from tests import load_test
-    rows, errors = load_test.run(40, 20, port=_free_port())
+    alone = {}
+    rows, errors = load_test.run(40, 20, port=_free_port(), baseline=alone)
     assert not any(errors.values()), {k: v[:2] for k, v in errors.items() if v}
     quick = [r for k, r in rows.items() if k in load_test.QUICK]
-    assert quick and max(r["p95"] for r in quick) < 3, rows
+    # 3 s on a quiet machine, where a quick page alone takes about 0.08 s; a machine busy with other work (several test
+    # suites at once) is slower for every request, so the budget grows with the quick pages' own time measured alone in
+    # the same run: 36 times it, never under 3 s. The forty users still may not slow a page past that budget
+    budget = max(3.0, 36 * alone["quick"])
+    assert quick and max(r["p95"] for r in quick) < budget, (budget, alone, rows)
 
 
 def test_heavy_work_takes_turns_and_ordinary_pages_dont_wait():

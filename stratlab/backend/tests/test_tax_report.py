@@ -549,8 +549,24 @@ def test_the_report_names_the_newest_trade_date_apart_from_the_upload_time(w):
     assert rep["last_trade"] == newest and rep["last_trade"] != (rep["updated_at"] or "")[:10]
 
 
-def test_every_broker_combined_into_one_report(w):
-    c = w["client"]
+@pytest.fixture
+def w_day(monkeypatch):
+    """The world on a fixed day, Tuesday 27 Oct 2026 10:30 IST: the fake price history is drawn back from the market's
+    "now", so a 31 Jan 2018 price looked up for grandfathering (SBIN's) moves with the day the tests run, and with it
+    FY 2019-20's long-term loss. Pinned, the report's figures are the same whenever the suite runs."""
+    import time_machine
+    from datetime import datetime, timezone
+    from tests import fake_prices
+    day = datetime(2026, 10, 27, 5, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(fake_prices, "FROZEN", day)
+    with time_machine.travel(day, tick=True):
+        built = world.build(monkeypatch)
+        yield built
+        built["close"]()
+
+
+def test_every_broker_combined_into_one_report(w_day):
+    c = w_day["client"]
     for p in sorted(FIX.iterdir()):
         r = upload(c, p.name)
         assert r.status_code == 200, (p.name, r.text)

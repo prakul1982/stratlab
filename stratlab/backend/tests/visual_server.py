@@ -5,9 +5,13 @@ can be checked.
 
     python -m tests.visual_server            # serves on 127.0.0.1:8765
 """
+import atexit
 import base64
 import os
+import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -16,10 +20,14 @@ import uvicorn
 sys.path.insert(0, ".")
 _web = os.environ.get("E2E_WEB_PORT", "5599")
 os.environ.setdefault("FRONTEND_ORIGIN", f"http://127.0.0.1:{_web},http://localhost:{_web}")   # the browser tests' page
+from tests import e2e_clock  # noqa: E402
+AT = e2e_clock.start()          # the world's fixed moment (tests/e2e_clock.py), set before the app reads any time
 from app import main  # noqa: E402
 from tests import world  # noqa: E402
 
 PORT = int(os.environ.get("E2E_API_PORT", "8765"))     # another port lets two test runs share a machine
+# the shut-market world's port (closed_world below): beside this one, clear of the other lanes' 8811-8816
+CLOSED_PORT = int(os.environ.get("E2E_API_PORT_CLOSED", str(PORT + 100)))
 LOSS = "ORIONPOLY"      # the made-up company with loss years (tests/fake_fundamentals.py)
 
 
@@ -117,6 +125,10 @@ def build():
     fx_rates.seed()
     blog_posts()
     theme_pages(mp)
+    # the AI builder's answers Instinct saw for two sentences, for the parser's browser test (57.1); any other finds no AI
+    from app import ai_writer
+    from tests import fake_ai_writer
+    mp.setattr(ai_writer, "complete", fake_ai_writer.complete)
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     connect_once(mp)
@@ -326,6 +338,10 @@ def theme_pages(mp):
     build them, so the theme page's deep dive (e2e/themes.spec.ts) has the stored figures it reads."""
     from app import stock_pages
     mp.setattr(main.stock_page_store, "per_minute", 10**6)       # a page is built at most a few a minute; the demo's seven are built at once
+    from app.intel import routes as research_routes
+    from tests import fake_theme
+    index_rows = research_routes.index_rows                     # the theme's base reads the companies' basic industry (THEMES)
+    mp.setattr(research_routes, "index_rows", lambda region: fake_theme.with_industries(index_rows(region)) if region == "IN" else index_rows(region))
     for sym in ("COALINDIA", "VEDL", "TATASTEEL", "JSWSTEEL", "SAIL", "NTPC", "ONGC"):
         hit = stock_pages.find("IN", sym)
         if hit:
@@ -615,8 +631,60 @@ def results_calendar(mp):
     main.corp_job.refresh("IN")
 
 
+_closed: dict = {"proc": None}
+_closed_lock = threading.Lock()
+
+
+def closed_world() -> int:
+    """The port of the world at the shut-market moment (e2e_clock.CLOSED), started the first time a test asks for it:
+    a second server built at that moment, so its calendars, briefs and snapshots are a Sunday's from the start, not a
+    Wednesday's looked at later. Only the runs whose tests need it pay for the second build."""
+    if AT is not None and AT == e2e_clock.moment("closed"):
+        return PORT                                         # this server is the closed world
+    with _closed_lock:
+        p = _closed["proc"]
+        if p is None or p.poll() is not None:
+            env = {**os.environ, "E2E_NOW": "closed", "E2E_API_PORT": str(CLOSED_PORT), "E2E_PARENT": str(os.getpid())}
+            _closed["proc"] = subprocess.Popen([sys.executable, "-m", "tests.visual_server"], cwd=Path(__file__).parent.parent, env=env)
+            atexit.register(_closed["proc"].terminate)
+    return CLOSED_PORT
+
+
+def e2e_routes():
+    """Two routes only the browser tests have: the world's time now (the browser's clock is set to it, so a page and
+    the API agree to the second) and the shut-market world's address (started on first use)."""
+    from datetime import datetime, timezone
+    from fastapi import APIRouter
+    r = APIRouter()
+
+    @r.get("/e2e/now")
+    def e2e_now():
+        return {"now": datetime.now(timezone.utc).isoformat(), "fixed": AT is not None}
+
+    @r.post("/e2e/closed")
+    def e2e_closed():
+        return {"api": f"http://127.0.0.1:{closed_world()}"}
+
+    main.app.include_router(r)
+
+
+def follow_parent():
+    """The closed world goes when the server that started it does (however that one was stopped)."""
+    parent = int(os.environ.get("E2E_PARENT") or 0)
+    if not parent:
+        return
+
+    def watch():
+        while os.getppid() == parent:
+            time.sleep(2)
+        os._exit(0)
+    threading.Thread(target=watch, daemon=True).start()
+
+
 if __name__ == "__main__":
+    follow_parent()
     build()
+    e2e_routes()
     # idle connections kept well past uvicorn's 5 s: a test's request client reusing one just as the server closed it got
     # "read ECONNRESET" mid-test (the price chart's drawings check, PR 292)
     uvicorn.run(main.app, host="127.0.0.1", port=PORT, log_level="warning", timeout_keep_alive=120)

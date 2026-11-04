@@ -6,15 +6,18 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/research";
 import { themeApi, type Business, type Dive, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { RegionSwitch } from "../components/Research";
-import { ChainCard, ClaimsCard, LayerCard, ListingsCard, NewsCard, NumbersCards, SubThemesCard } from "../components/ThemeDive";
+import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard } from "../components/ThemeDive";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton } from "../components/kit";
 
 /* ================= Themes: a theme deep dive =================
- * The map (who is in the theme, written by AI and checked company by company), then the numbers worked out from the figures the app already
+ * Who is in the theme: every company the exchange classifies in its official industries, sorted into layers by AI, with the AI's additions
+ * from other industries checked company by company (THEMES); then the numbers worked out from the figures the app already
  * holds: the whole chain in one table, margins by layer, the sub-themes' companies, the latest news and the theme as a whole. The AI writes
  * no figure; a company is shown only where its own description says it does the work. */
 const PRICE_TRIES = 6;
 const PRICE_EVERY_MS = 8000;
+const CHECK_TRIES = 4;          // a map still being checked is asked again on its own; the server stops waiting after 90 s (THEMES item 6)
+const CHECK_EVERY_MS = 30000;
 
 export function ThemesPage() {
   const [region, setRegion] = useRegion();
@@ -81,20 +84,29 @@ export function ThemesPage() {
   }, [dive]);
 
   const go = (t: string) => { if (!t.trim()) return; const p = new URLSearchParams(params); p.set("q", t); p.set("region", region); setParams(p); };
-  const pending = (r?.placements?.pending ?? 0) > 0;
+  const pl = r?.placements;
+  const pending = !!pl && !pl.checked && (pl.pending > 0 || pl.industries_by === "pending");
+  const tries = useRef(0);
+  useEffect(() => { tries.current = 0; }, [q, region]);
+  useEffect(() => {
+    if (!pending || tries.current >= CHECK_TRIES) return;
+    const t = setTimeout(() => { tries.current++; run(q, { keep: true }); }, CHECK_EVERY_MS);
+    return () => clearTimeout(t);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [pending, r]);
   const draftIt = async () => {
     setDraft("Drafting…");
     try { const d = await themeApi.draft(region, q); setDraft(d.result === "nothing notable" ? "The figures show nothing notable enough for a post yet." : d.slug ? `Draft saved (${d.result}). It is hidden: read it under Admin, Blog, and publish it there if it is right.` : `Not drafted: ${d.problem ?? d.result}.`); }
     catch (e) { setDraft((e as Error).message); }
   };
   const nav = dive ? [
-    { id: "theme-chain", label: "The chain" }, ...(dive.layers.length ? [{ id: "layer-0", label: "Layers" }] : []), ...(dive.subs.length ? [{ id: "theme-subs", label: "Sub-themes" }] : []),
+    { id: "theme-members", label: "Companies" }, { id: "theme-chain", label: "The chain" }, ...(dive.layers.length ? [{ id: "layer-0", label: "Layers" }] : []), ...(dive.subs.length ? [{ id: "theme-subs", label: "Sub-themes" }] : []),
     { id: "theme-claims", label: "Tailwinds and risks" }, { id: "theme-news", label: "Latest" }, { id: "numbers-size", label: "The theme in numbers" }, { id: "numbers-leaders", label: "Every company" },
   ] : [];
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/themes")} title="Map a theme, find the companies in it"
-        lede="Type a sector or trend. The AI maps who's involved along the chain; each company is kept only where its own description shows it does that work, and the margins, growth and prices beside it are worked out from reported figures." />
+        lede="Type a sector or trend. Every listed company the exchange classifies in its industries is in it; the AI maps them along the chain and adds companies from other industries, each checked against its own description. The margins, growth and prices beside them are worked out from reported figures." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card>
         <FormGrid label="Map a theme" onSubmit={(e) => { e.preventDefault(); go(text); }}>
@@ -123,9 +135,15 @@ export function ThemesPage() {
           </Card>
           {pending && (
             <Notice tone="warn" action={{ label: "Check again", onClick: () => run(q, { keep: true }) }}>
-              {r.placements!.pending} compan{r.placements!.pending === 1 ? "y is" : "ies are"} still being checked against their own descriptions; until then {r.placements!.pending === 1 ? "it shows" : "they show"} as not yet confirmed.
+              {pl!.pending > 0
+                ? `${pl!.pending} compan${pl!.pending === 1 ? "y is" : "ies are"} still being checked against ${pl!.pending === 1 ? "its" : "their"} own description; until then ${pl!.pending === 1 ? "it shows" : "they show"} as not yet confirmed.`
+                : "The theme's official industries are still being picked."}
             </Notice>
           )}
+          {!pending && (pl?.timed_out ?? 0) > 0 && (
+            <p className="k-note">{pl!.timed_out} compan{pl!.timed_out === 1 ? "y" : "ies"} couldn't be checked against {pl!.timed_out === 1 ? "its" : "their"} own description just now, so {pl!.timed_out === 1 ? "it shows" : "they show"} as not yet confirmed; the check runs again later.</p>
+          )}
+          <MembersCard r={r} region={region} />
           {diveError && <ErrorState title="The theme's numbers couldn't be loaded" action={{ label: "Try again", onClick: () => run(q, { keep: true }) }}>{diveError}</ErrorState>}
           {!dive && !diveError && <Card><Skeleton label="Working out the theme's figures" lines={5} /></Card>}
           {dive && (
@@ -135,8 +153,9 @@ export function ThemesPage() {
                 <Notice action={{ label: "Draft a blog post", onClick: draftIt }}>{draft ?? "The figures show something notable. A draft post can be made from them; it stays hidden until you publish it."}</Notice>
               )}
               {dive.members === 0 ? (
-                <Card><p className="k-small">No listed company could be placed in this theme: none of the companies the map named has a description that shows it does the work. Try a more specific theme.</p></Card>
+                <Card><p className="k-small">No company in this theme has stored figures yet: none is in an official industry of the theme, and none the map named has a description that shows it does the work. Try a more specific theme.</p></Card>
               ) : <ChainCard dive={dive} />}
+              {dive.figures && dive.figures.of > dive.figures.shown && <p className="k-note">The figures below are for {dive.figures.shown} of the theme's {dive.figures.of.toLocaleString("en-IN")} companies: every one the map names, then the largest of the rest by market value.</p>}
               {biz && !biz.allowed && dive.region === "IN" && <p className="k-note">Operating figures that companies file between results (monthly sales, output, traffic) are on the Basic plan.</p>}
               {dive.layers.map((l, i) => <LayerCard key={l.layer} layer={l} i={i} region={dive.region} business={biz?.layers[i]?.rows} />)}
               <SubThemesCard dive={dive} business={biz} />
@@ -152,17 +171,7 @@ export function ThemesPage() {
               <ListingsCard items={ipos && ipos.checked ? ipos.items : null} checked={ipos?.checked ?? true} region={dive.region} />
             </>
           )}
-          {r.exchange && r.exchange.companies.length > 0 && (
-            <Card>
-              <CardHead title="On the exchange's list for these industries" info="Every listed company the exchange classifies under the same industries as the checked companies, A to Z. It is a list by industry, not a claim that each does the work of a layer." />
-              <p className="k-small k-muted">{r.exchange.industries.join(" · ")}: {r.exchange.total.toLocaleString("en-IN")} compan{r.exchange.total === 1 ? "y" : "ies"}{r.exchange.total > r.exchange.companies.length ? `, the first ${r.exchange.companies.length} A to Z` : ""}.</p>
-              <DataTable label="Listed companies in the same industries" columns={[
-                { key: "n", header: "Company", rowHeader: true, wrap: true, cell: (c: NonNullable<SectorAI["exchange"]>["companies"][number]) => <Link className="link" to={`/research/${region}/${encodeURIComponent(c.ticker)}`}><b>{c.name}</b></Link> },
-                { key: "t", header: "Symbol", cell: (c) => c.ticker }, { key: "i", header: "Industry", wrap: true, cell: (c) => c.industry },
-                { key: "m", header: "Shown above", cell: (c) => (c.named ? "Yes" : "No") }]} rows={r.exchange.companies} rowKey={(c) => c.ticker} />
-            </Card>
-          )}
-          <p className="k-note">The text on this page that describes how a layer or sub-theme works is written by AI from general knowledge, with no figures. Every company sits only where its own description shows it does that work, with the words from it shown. Every figure is from the companies' reported numbers or stored pages, with its year and basis.</p>
+          <p className="k-note">The text on this page that describes how a layer or sub-theme works is written by AI from general knowledge, with no figures. Every company of the theme's official industries is listed, whatever the AI says; a company the AI added from another industry is kept only while its own description doesn't show otherwise, with its words shown where they confirm the work. Every figure is from the companies' reported numbers or stored pages, with its year and basis.</p>
         </>
       )}
     </div>

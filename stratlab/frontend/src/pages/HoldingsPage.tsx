@@ -50,7 +50,8 @@ type Facts = {
 };
 type FactsReply = { rows: Record<string, Facts>; filings: boolean; filings_plan: string; checked: number; count: number };
 type Unmatched = { line: number | null; text: string; reason: string };
-type ImportReply = { broker: string; imported: number; saved: boolean; duplicate?: boolean; unmatched: Unmatched[]; unmatched_count: number; over_limit: string[]; limit: number; holdings: View };
+type Saved = { symbol: string; exchange?: string | null; qty: number; avg: number | null };
+type ImportReply = { broker: string; imported: number; saved: boolean; duplicate?: boolean; saved_lines?: Saved[]; unmatched: Unmatched[]; unmatched_count: number; over_limit: string[]; limit: number; holdings: View };
 
 const MAX_MB = 2;
 const BROKERS = "Zerodha (Console or Kite), Groww, Upstox, Angel One, ICICI Direct and HDFC Securities";
@@ -78,7 +79,9 @@ export function HoldingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [facts, setFacts] = useState<FactsReply | null>(null);
   const more = useMoreColumns("holdings", 4);     // sector, trend, filings and results: one click away, so the table fits a laptop
-  const [mode, setMode] = useState<"replace" | "add">("replace");
+  // MONEY-2: a file adds to what's held unless "Start again" is chosen, and that asks first, naming what it replaces
+  const [mode, setMode] = useState<"replace" | "add">("add");
+  const [replacing, setReplacing] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);        // a file is being read: only then does the upload button say "Reading…" (LIVE1B-047)
   const [result, setResult] = useState<(ImportReply & { replaced: boolean; usKept: number }) | null>(null);
@@ -143,16 +146,31 @@ export function HoldingsPage() {
     // LIVE1B-002: the last file's answer goes the moment another is picked, so a refusal never sits under an old "saved" line
     setResult(null); clearProblem();
     if (f.size > MAX_MB * 1024 * 1024) { reject(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); reset(); return; }
+    // nothing held yet: the file is the holdings either way. Held Indian stocks and "Start again": asked first (MONEY-2)
+    const how = rows.length ? mode : "replace";
+    if (how === "replace" && rows.some((r) => !isUS(r))) { setReplacing(f); reset(); return; }
+    await upload(f, how);
+    reset();
+  };
+  const upload = async (f: File, how: "replace" | "add") => {
     setBusy(true); setReading(true);
     try {
-      const data = await dataUrl(f);
-      const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode } });
-      track("holdings imported", { rows: r.imported, method: mode });
-      setResult({ ...r, replaced: mode === "replace", usKept: r.holdings.us?.count ?? 0 });
+      let data: string;
+      // MONEY-6a: the browser failing to open the file is said as that: nothing was sent, so nothing changed
+      try { data = await dataUrl(f); } catch {
+        reject(`${f.name} couldn't be opened here, so nothing was sent and your holdings are unchanged. Pick the file again (if it was changed after you picked it, pick the saved copy).`);
+        return;
+      }
+      const r = await api<ImportReply>("/holdings/import", { method: "POST", body: { filename: f.name, data, mode: how } });
+      track("holdings imported", { rows: r.imported, method: how });
+      setResult({ ...r, replaced: how === "replace", usKept: r.holdings.us?.count ?? 0 });
       show(r.holdings);
-    } catch (e) { if (!refused(e)) fail(e); } finally {
+    } catch (e) {
+      // a failure after the file was sent may have come after it was saved: the holdings are read again, so the page
+      // shows what is saved rather than an error over a list that has quietly changed (MONEY-6a)
+      if (!refused(e)) { fail(e); load(); }
+    } finally {
       setBusy(false); setReading(false);
-      reset();
     }
   };
 
@@ -237,6 +255,11 @@ export function HoldingsPage() {
     ] : []),
     { key: "edit", header: "", action: true, corner: true, cell: (r) => <button type="button" className="btn quiet sm" data-row-edit onClick={() => { editAt.current = rows.indexOf(r); setEdit(r); }} aria-label={`Edit ${r.symbol}`}>Edit</button> },
   ];
+  const savedCols: Column<Saved>[] = [
+    { key: "stock", header: "Stock", rowHeader: true, cell: (x) => <>{x.symbol}{x.exchange === "BSE" && <span className="k-note"> BSE</span>}</> },
+    { key: "qty", header: "Quantity", numeric: true, cell: (x) => qtyText(x.qty) },
+    { key: "avg", header: "Average price", numeric: true, cell: (x) => (x.avg == null ? "–" : price(x.avg, x.exchange === "US" ? "USD" : "INR")) },
+  ];
   const unmatchedCols: Column<Unmatched & { i: number }>[] = [
     { key: "line", header: "Line", rowHeader: true, cell: (u) => u.line ?? "–" },
     { key: "text", header: "What the file says", cell: (u) => u.text || "–" },
@@ -259,6 +282,10 @@ export function HoldingsPage() {
           <span className="k-note">Excel or CSV, up to {MAX_MB} MB.</span>
         </div>
         <UploadProblem problem={problem} />
+        {(problem || (result && !result.saved && !result.duplicate)) && (
+          // MONEY-6a: a refused file says what is read, not only why this one wasn't
+          <p className="k-note" data-testid="holdings-format">A file of your own needs the columns <b>Symbol</b> (or ISIN), <b>Quantity</b> and <b>Average price</b>, one stock a line (e.g. INFY, 10, 1500); the names may be in any case. Files read as they are: {BROKERS}.</p>
+        )}
         {view?.zerodha && rows.length === 0 && zerodhaEmpty(view.zerodha)
           ? null      // the empty state below already says Zerodha is connected and returned nothing (R35: said twice)
           : view?.zerodha
@@ -276,6 +303,11 @@ export function HoldingsPage() {
                 : "nothing matched, so your saved holdings are unchanged."}
               {result.unmatched_count > 0 && ` ${result.unmatched_count} line${result.unmatched_count === 1 ? "" : "s"} couldn't be matched (below).`}
             </p>
+            {(result.saved_lines?.length ?? 0) > 0 && (
+              <Disclosure summary={`Show the ${result.saved_lines!.length} stock${result.saved_lines!.length === 1 ? "" : "s"} saved from this file`}>
+                <DataTable label="Stocks saved from this file" columns={savedCols} rows={result.saved_lines!} rowKey={(x) => `${x.exchange ?? ""}:${x.symbol}`} />
+              </Disclosure>
+            )}
             {result.over_limit.length > 0 && (
               <p className="k-small">Your plan keeps {result.limit} stocks, so {result.over_limit.length} were left out: {result.over_limit.join(", ")}. <PlanInline /></p>
             )}
@@ -432,6 +464,13 @@ export function HoldingsPage() {
           }}
           onRemove={async () => { if (await save([{ op: "remove", symbol: edit.symbol, market: edit.market ?? "IN" }], `${edit.symbol} removed.`)) setEdit(null); }} />
       )}
+      {replacing && (() => {
+        const held = rows.filter((r) => !isUS(r)).length, us = rows.length - held;
+        return <ConfirmDialog title="Start again with this file?" confirmLabel="Replace my holdings" onClose={() => setReplacing(null)}
+          onConfirm={() => { const f = replacing; setReplacing(null); void upload(f, "replace"); }}>
+          This replaces your {held}{us ? " Indian" : ""} holding{held === 1 ? "" : "s"} with the stocks in {replacing.name}.{us ? ` Your ${us} US stock${us === 1 ? " is" : "s are"} kept.` : ""} To keep them and add this file's stocks, choose Add to my holdings.
+        </ConfirmDialog>;
+      })()}
       {asking && <ConfirmDialog title="Delete my holdings?" confirmLabel="Delete my holdings" busy={busy} onConfirm={() => void remove()} onClose={() => setAsking(false)}>Every saved position is removed from StratLab. Your broker account isn't touched.</ConfirmDialog>}
     </div>
   );

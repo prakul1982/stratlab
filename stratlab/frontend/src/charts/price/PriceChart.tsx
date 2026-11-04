@@ -750,7 +750,7 @@ const [saveNote, setSaveNote] = useState("");
     </span>
   );
   return (
-    <div ref={rootRef} className={`pc${full ? " pc-full" : ""}${narrow ? " pc-narrow" : ""}`} data-testid="price-chart" data-height={stageH} style={{ ["--pc-h" as string]: `${stageH}px` }}>
+    <div ref={rootRef} className={`pc${full ? " pc-full" : ""}${narrow ? " pc-narrow" : ""}`} data-testid="price-chart" data-height={stageH} data-at={h && status !== "loading" ? h.bar.t : undefined} style={{ ["--pc-h" as string]: `${stageH}px` }}>
       <div className="pc-bar" role="toolbar" aria-label="Chart tools">
         <select className="pc-sel" aria-label="Chart type" value={shownType} onChange={(ev) => { touched.current = true; setType(ev.target.value as ChartType); }}>
           {CHART_TYPES.filter((c) => !props.closesOnly || ["line", "area", "baseline"].includes(c.type)).map((c) => <option key={c.type} value={c.type}>{c.name}</option>)}

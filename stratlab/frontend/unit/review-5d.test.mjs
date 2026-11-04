@@ -71,7 +71,10 @@ test("B6: the Users list says ends, not renews, for a cancelled subscription", (
   const u = { plan: "basic", plan_until: "2026-11-04T06:20:24+00:00", paying: true };
   assert.equal(planNote(u), "Razorpay · renews 4 Nov 2026");
   assert.equal(planNote({ ...u, cancel_at_period_end: true }), "Razorpay · ends 4 Nov 2026");
-  assert.equal(planNote({ ...u, paying: false, cancel_at_period_end: true }), "Given · until 4 Nov 2026");
+  // a given plan's words depend on the day it is read: pinned to before and after its end, not the machine's clock
+  const before = new Date("2026-10-20T06:00:00Z"), after = new Date("2026-11-05T06:00:00Z");
+  assert.equal(planNote({ ...u, paying: false, cancel_at_period_end: true }, before), "Given · until 4 Nov 2026");
+  assert.equal(planNote({ ...u, paying: false, cancel_at_period_end: true }, after), "Given · ended 4 Nov 2026");
 });
 
 test("B7: a price is a number or empty (Automatic); anything else is refused", () => {

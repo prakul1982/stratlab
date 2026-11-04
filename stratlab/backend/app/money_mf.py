@@ -830,7 +830,10 @@ def holdings(data: dict, w: dict, today: str) -> dict:
                   for a in sorted(alloc.values(), key=lambda a: -a["value"])]
     dates = sorted({r["nav_date"] for r in held if r["nav_date"]})
     return {"schemes": rows, "allocation": allocation,
-            "total": {"value": _r(value), "invested": _r(invested), "gain": _r(sum((r["value"] or 0) for r in known) - invested),
+            # MONEY-5: "invested" is the cost of every held scheme whose cost is known, one still waiting for its NAV too (a
+            # scheme with no NAV showed "Invested ₹0"); the gain is on the priced ones (invested_priced), as before
+            "total": {"value": _r(value), "invested": _r(sum(r["invested"] for r in held if r["invested"] is not None)),
+                      "invested_priced": _r(invested), "gain": _r(sum((r["value"] or 0) for r in known) - invested),
                       "xirr": x, "held": len(held), "schemes": len(rows), "unknown_cost": sum(1 for r in held if r["invested"] is None),
                       "no_nav": sum(1 for r in held if r["value"] is None),
                       "nav_dates": [dates[0], dates[-1]] if dates else None}}

@@ -130,13 +130,12 @@ def serve(port: int, ready):
         time.sleep(3600)
 
 
-def _client_proc(first: int, count: int, users: int, port: int, ctx: dict, until_wall: float, think, out):
+def _client_proc(first: int, count: int, users: int, port: int, ctx: dict, until: float, think, out):
     """One load-generating process: `count` of the simulated users. Several of these keep the generator itself from
     becoming the bottleneck (one Python process tops out well before the server does)."""
     global THINK
     THINK = think
     results, errors = defaultdict(list), defaultdict(list)
-    until = time.monotonic() + (until_wall - time.time())
 
     async def go():
         # idle connections are dropped before the server's keep-alive ends: reusing one the server is closing at that
@@ -150,20 +149,45 @@ def _client_proc(first: int, count: int, users: int, port: int, ctx: dict, until
     out.put((dict(results), dict(errors), [(t + t_off, d, lbl) for t, d, lbl in TIMELINE]))
 
 
-def run(users: int, seconds: int, port: int = 8765, clients: int = 1) -> dict:
+def alone(port: int, ctx: dict, rounds: int = 5) -> float:
+    """The quick pages' median time with nobody else on the server: how fast this machine is at this moment (other work
+    on it slows every request, not only the load test's), so a budget can be held relative to it."""
+    times = []
+    hdr = {"Authorization": "Bearer load-0", "X-Real-IP": "10.9.0.1"}
+    with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=60) as c:
+        for _ in range(rounds):
+            for _, label, method, path, body in mix(ctx):
+                if label in QUICK:
+                    t = time.monotonic()
+                    c.request(method, path, json=body, headers=hdr)
+                    times.append(time.monotonic() - t)
+    return statistics.median(times)
+
+
+def run(users: int, seconds: int, port: int = 8765, clients: int = 1, baseline: dict | None = None) -> dict:
+    """`baseline`, when given, gets "quick": the quick pages' median time alone (alone()), measured before the users
+    arrive and again after they leave, the slower of the two (other work on the machine may start mid-run)."""
     import multiprocessing as mpr
     ctx_mp = mpr.get_context("spawn")      # a fresh process, like a real server: nothing inherited from the caller
     q = ctx_mp.Queue()
     proc = ctx_mp.Process(target=serve, args=(port, q), daemon=True)
     proc.start()
     ctx = q.get(timeout=120)
+    if baseline is not None:
+        try:
+            baseline["quick"] = alone(port, ctx)
+        except BaseException:
+            proc.terminate()
+            raise
     results, errors = defaultdict(list), defaultdict(list)
     clients = max(1, min(clients, users))
     out = ctx_mp.Queue()
-    until_wall = time.time() + seconds
+    # the end in monotonic time, one clock for every process on the machine: the caller's wall clock may be a test's
+    # fixed moment (tests/conftest.py) while these fresh processes read the machine's
+    until = time.monotonic() + seconds
     per = [users // clients + (1 if i < users % clients else 0) for i in range(clients)]
     starts = [sum(per[:i]) for i in range(clients)]
-    gens = [ctx_mp.Process(target=_client_proc, args=(starts[i], per[i], users, port, ctx, until_wall, THINK, out))
+    gens = [ctx_mp.Process(target=_client_proc, args=(starts[i], per[i], users, port, ctx, until, THINK, out))
             for i in range(clients)]
     try:
         for g in gens:
@@ -177,6 +201,8 @@ def run(users: int, seconds: int, port: int = 8765, clients: int = 1) -> dict:
             TIMELINE.extend(tl)
         for g in gens:
             g.join(timeout=10)
+        if baseline is not None:
+            baseline["quick"] = max(baseline["quick"], alone(port, ctx))
     finally:
         proc.terminate()
     return report(results, errors, seconds, users), errors

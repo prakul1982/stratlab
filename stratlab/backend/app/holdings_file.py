@@ -32,10 +32,12 @@ COLUMNS = {
     "name": {"stockname", "companyname", "scripname", "scriptname", "securityname", "security", "name", "company",
              "stock", "instrumentname", "securitydescription", "description", "shortname"},
     "qty": {"quantity", "qty", "totalquantity", "totalqty", "netqty", "netquantity", "holdingquantity", "holdingqty",
-            "freeqty", "availableqty", "currentqty", "noofshares", "shares", "balanceqty", "quantityavailable", "units"},
+            "freeqty", "availableqty", "currentqty", "noofshares", "shares", "balanceqty", "quantityavailable", "units",
+            "quantityheld", "qtyheld", "sharesheld"},
     "avg": {"averageprice", "avgprice", "avgcost", "averagecost", "averagecostprice", "averagebuyprice", "avgbuyprice",
             "buyavg", "buyaverage", "buyavgprice", "buyprice", "purchaseprice", "costprice", "avgrate", "averagerate",
-            "avgtradingprice", "avgcostprice", "averagepurchaseprice", "buyavgrate", "avgbuyrate"},
+            "avgtradingprice", "avgcostprice", "averagepurchaseprice", "buyavgrate", "avgbuyrate",
+            "avg", "average", "avgbuycost", "averagebuycost"},
     "exchange": {"exchange", "exch", "exchg"},
     # the close a broker's export carries (Zerodha Console's "Previous Closing Price"): the price a holding is valued at
     # while live prices are off and the exchange's own close isn't stored (DG-002). A live "LTP" isn't read: its time is unknown
@@ -491,18 +493,13 @@ def parse(data: bytes, filename: str = "") -> dict:
     for n, row in enumerate(body, start=first):
         sym, isin, nm = _cell(row, cols.get("symbol")), _cell(row, cols.get("isin")).upper(), _cell(row, cols.get("name"))
         text = " · ".join(c for c in (sym, isin, nm) if c)[:80]
-        if not text or re.match(r"(?i)^(total|grand total|net total|sub ?total)\b", sym or nm or ""):
-            continue                        # blank lines, totals and notes under the table
-        qty = number(_cell(row, cols.get("qty")))
-        if qty is not None:
-            qty += sum(number(_cell(row, i)) or 0 for i in extra)
+        cell = _cell(row, cols.get("qty"))
+        if extra and number(cell) is not None:          # Zerodha Console's pledged and unsettled shares are held too
+            cell = str(number(cell) + sum(number(_cell(row, i)) or 0 for i in extra))
+        qty, bad = check_line(row, text, cell, n)
+        if bad:
+            problems.append(bad)
         if qty is None:
-            if any(number(c) is not None for c in row):
-                problems.append({"line": n, "text": text, "reason": "No quantity on this line."})
-            continue                        # a heading or a note between the rows
-        if qty <= 0:                        # sold, or only listed for its history: said, never dropped unseen (DG-004)
-            problems.append({"line": n, "text": text, "reason": "The quantity is 0 or less (sold, or listed only for its history), so it's left out."
-                             if qty == 0 else "The quantity is below 0, so it's left out: a holding can't be negative."})
             continue
         avg = number(_cell(row, cols.get("avg")))
         close = number(_cell(row, cols.get("close")))
@@ -632,6 +629,64 @@ def day(v) -> str | None:
     return None
 
 
+# ---------- one check for every imported line: holdings, the tax report's trades and the trade journal (MONEY-1) ----------
+TOTAL_LINE = re.compile(r"(?i)^(total|grand total|net total|sub ?total)\b")
+
+
+def check_line(row: list[str], text: str, qty_cell: str, line: int, *, signed: bool = False) -> tuple[float | None, dict | None]:
+    """(quantity, problem) for one line of an imported table. A blank line, a total, a heading or a note between the rows
+    is (None, None): skipped unseen. A line that looks like a holding or a trade but can't be used is (None, {line, text,
+    reason}), so every rejected line is reported with its line number and why, never dropped unseen (Instinct: a line with
+    no symbol and one whose quantity was "notanumber" vanished, while a negative one was reported). `signed`: a sale's
+    quantity written as negative is fine (tradebooks); a holding's must be above 0."""
+    filled = [c.strip() for c in row if c and c.strip()]
+    if not filled or TOTAL_LINE.match(text.split(" · ")[0] if text else filled[0]):
+        return None, None
+    cell = (qty_cell or "").strip()
+    if key(cell) in COLUMNS["qty"]:
+        return None, None                   # the column names again, as some exports repeat them on each page
+    qty = number(cell)
+    if not text:
+        if qty is None:
+            return None, None               # a note under the table
+        return None, {"line": line, "text": " · ".join(filled)[:80], "reason": "No stock symbol, ISIN or name on this line."}
+    if qty is None:
+        if cell:
+            return None, {"line": line, "text": text, "reason": f"The quantity \"{cell[:20]}\" isn't a number."}
+        if any(number(c) is not None for c in row):
+            return None, {"line": line, "text": text, "reason": "No quantity on this line."}
+        return None, None                   # a heading between the rows
+    if signed:
+        qty = abs(qty)                      # some brokers write a sale's quantity as negative
+        if not qty:
+            return None, {"line": line, "text": text, "reason": "No quantity on this line."}
+    elif qty <= 0:                          # sold, or only listed for its history: said, never dropped unseen (DG-004)
+        return None, {"line": line, "text": text, "reason": "The quantity is 0 or less (sold, or listed only for its history), so it's left out."
+                      if qty == 0 else "The quantity is below 0, so it's left out: a holding can't be negative."}
+    return qty, None
+
+
+def today_india() -> str:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
+
+
+def date_problem(days: list[str | None], what: str, today: str | None = None) -> str | None:
+    """Why a line's dates can't be used: one that couldn't be read, or one after today (Instinct: a trade on 1 Jan 2099
+    was saved and shown as "Held -26,359 days") (MONEY-1). None when they're fine."""
+    if not all(days):
+        return f"The {what} couldn't be read."
+    late = max(days)
+    if late > (today or today_india()):
+        y, m, d = late.split("-")
+        return f"The {what} ({int(d)} {_MON[int(m) - 1]} {y}) is after today, so it's left out."
+    return None
+
+
+_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
 def side(v) -> str | None:
     """"B" for a buy, "S" for a sale, however the broker words it."""
     s = re.sub(r"[^a-z]", "", str(v or "").lower())
@@ -745,11 +800,13 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
     header = rows[at]
     name = trade_broker(header, rows[:at], filename)
     out, problems, gross, taxable = [], [], 0.0, 0.0
+    today = today_india()
     for n, row in enumerate(rows[at + 1:], start=at + 2):
         sym, isin, nm = _cell(row, cols.get("symbol")), _cell(row, cols.get("isin")).upper(), _cell(row, cols.get("name"))
         text = " · ".join(c for c in (sym, isin, nm) if c)[:80]
-        if not text or re.match(r"(?i)^(total|grand total|net total|sub ?total)\b", sym or nm or ""):
-            continue
+        qty, bad = check_line(row, text, _cell(row, cols.get("qty")), n, signed=True)
+        if qty is None and not bad:
+            continue                         # blank lines, totals and notes
         seg = _cell(row, cols.get("segment"))
         if not derivatives and ((seg and NOT_EQUITY.match(seg)) or (not ISIN.match(isin) and DERIVATIVE.search(sym.upper()))):
             problems.append({"line": n, "text": text, "reason": "Futures, options and other non-equity trades are left out of a tradebook (F&O is "
@@ -758,11 +815,8 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
         status = _cell(row, cols.get("status"))
         if status and not DONE.match(status):
             continue                         # a cancelled or rejected order: nothing traded
-        qty = number(_cell(row, cols.get("qty")))
-        qty = abs(qty) if qty else qty       # some brokers write a sale's quantity as negative
-        if not qty:
-            if any(number(c) is not None for c in row):
-                problems.append({"line": n, "text": text, "reason": "No quantity on this line."})
+        if bad:
+            problems.append(bad)
             continue
         if len(out) >= MAX_TRADES:
             raise too_many(MAX_TRADES // 2 if kind == "pnl" else MAX_TRADES)
@@ -776,8 +830,9 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
             bp = bp if bp is not None else (number(_cell(row, cols.get("buy_value"))) or 0) / qty
             sp = number(_cell(row, cols.get("sell_price")))
             sp = sp if sp is not None else (number(_cell(row, cols.get("sell_value"))) or 0) / qty
-            if not bd or not sd:
-                problems.append({"line": n, "text": text, "reason": "The buy or sale date couldn't be read."})
+            why = date_problem([bd, sd], "buy or sale date", today)
+            if why:
+                problems.append({"line": n, "text": text, "reason": why})
                 continue
             if sd < bd or bp < 0 or sp <= 0:
                 problems.append({"line": n, "text": text, "reason": "The dates or prices on this line don't add up."})
@@ -792,8 +847,9 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
             out.append({**base, "d": sd, "t": "", "side": "S", "qty": qty, "price": round(sp, 6), "charges": charges, "stt": stt, "tid": pid + ":s", "fmv": None, "src": "pnl"})
         else:
             d, sd_ = day(_cell(row, cols.get("date"))), side(_cell(row, cols.get("side")))
-            if not d:
-                problems.append({"line": n, "text": text, "reason": "The trade date couldn't be read."})
+            why = date_problem([d], "trade date", today)
+            if why:
+                problems.append({"line": n, "text": text, "reason": why})
                 continue
             if not sd_:
                 problems.append({"line": n, "text": text, "reason": "It doesn't say whether this was a buy or a sale."})

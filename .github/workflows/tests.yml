@@ -77,7 +77,7 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: stratlab/frontend/package-lock.json
-      - run: pip install -r requirements.txt pytest
+      - run: pip install -r requirements.txt pytest time-machine
         working-directory: stratlab/backend
       - run: npm ci && npm run build && npx playwright install --with-deps chromium
         working-directory: stratlab/frontend
@@ -112,7 +112,7 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: stratlab/frontend/package-lock.json
-      - run: pip install -r requirements.txt pytest
+      - run: pip install -r requirements.txt pytest time-machine
         working-directory: stratlab/backend
       - run: npm ci && npm run build && npx playwright install --with-deps chromium
         working-directory: stratlab/frontend

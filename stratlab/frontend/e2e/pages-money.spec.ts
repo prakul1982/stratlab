@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { worldDate, expect, test } from "@playwright/test";
 import { sessionAs, open, sane, touchable, openWorking, API, HOLDINGS_FILES, settle, TRADEBOOKS, TAXPNL, MF } from "./pages-kit";
 
 // My Holdings, the tax report, mutual funds and Tax tools, each driven from a file to its figures and back out.
@@ -369,7 +369,7 @@ test("money tax tools: dividends from a file into the estimate, advance tax by d
   expect((await request.delete(`${API}/tax`, { headers: auth })).ok()).toBeTruthy();
   expect((await request.post(`${API}/tax/import?filename=zerodha_console_tradebook.csv&mode=add`, {
     headers: { ...auth, "Content-Type": "application/octet-stream" }, data: readFileSync(TRADEBOOKS + "zerodha_console_tradebook.csv") })).ok()).toBeTruthy();
-  const now = new Date();
+  const now = worldDate();
   const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   expect((await request.put(`${API}/tax/inputs`, { headers: auth, data: { fy, regime: "new", other: 2000000, salary: 2000000, deductions: 0 } })).ok()).toBeTruthy();
 

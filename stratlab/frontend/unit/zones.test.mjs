@@ -20,7 +20,11 @@ test("zones have the short names people read", () => {
   assert.equal(tzLabel("UTC"), "UTC");
   assert.match(tzLabel("Europe/Berlin", new Date(AT)), /^(CEST|GMT\+2)$/);
   assert.equal(localTz(), "America/Los_Angeles");
-  assert.match(tzLabel(), /^(PDT|GMT-7)$/);         // no zone: the reader's own
+  // no zone: the reader's own, at the moment asked (summer time in October, standard time from November), so the
+  // check doesn't depend on the day the suite runs; with no moment, now's
+  assert.match(tzLabel(undefined, new Date(AT)), /^(PDT|GMT-7)$/);
+  assert.match(tzLabel(undefined, new Date("2026-12-07T07:56:00Z")), /^(PST|GMT-8)$/);
+  assert.equal(tzLabel(), tzLabel(undefined, new Date()));
   assert.equal(marketTz("IN"), IST);
   assert.equal(marketTz("US"), ET);
   assert.equal(marketTz(undefined), IST);
@@ -41,7 +45,7 @@ test("fmtDateTime and fmtTime: 24-hour, the zone named only when asked, the old 
   assert.equal(fmtDateTime(AT, { tz: IST, year: false, zone: true, seconds: true }), "7 Oct, 13:26:00 IST");
   assert.equal(fmtDateTime(AT, { tz: IST }), "7 Oct 2026, 13:26");           // as before: no name unless asked
   assert.equal(fmtDateTime("2026-10-07T18:30:00Z", { tz: IST, zone: true }), "8 Oct 2026, 00:00 IST");   // midnight is 00, never 24
-  assert.equal(fmtDateTime(AT, { zone: true }), "7 Oct 2026, 00:56 PDT".replace("PDT", tzLabel()));      // the reader's own, labelled
+  assert.equal(fmtDateTime(AT, { zone: true }), "7 Oct 2026, 00:56 PDT".replace("PDT", tzLabel(undefined, new Date(AT))));   // the reader's own, labelled as at that moment
   assert.equal(fmtTime(AT, { tz: IST, zone: true }), "13:26 IST");
   assert.equal(fmtTime("2026-10-07T13:30:00Z", { tz: ET, zone: true }), "09:30 ET");
   assert.equal(fmtTime(AT, { tz: IST }), "13:26");

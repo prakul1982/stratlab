@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { worldDate, expect, test, type Page, type Route } from "@playwright/test";
 
 // Round 8 owner review of the live site (9 Oct 2026, India open): what the app draws, on the reviewer's examples. Every
 // answer a test depends on is fixed here, so none waits on whether one of the fake world's background jobs has run.
@@ -92,7 +92,7 @@ test("R8O-002: Plans lists the fresh AI reads a day, Pro with no cap", async ({ 
 test("R8O-007: a company page shows its numbers at once and its AI read when it has been written behind it", async ({ page }) => {
   let asked = 0;
   const read = { summary: "Runs refineries, a telecom network and retail stores.", facts: [], valuation_note: "", bull: ["Jio has 470 million users."], bear: [],
-    segments: [], position: "", watch: [], ideas: [], generated_at: Date.now() / 1000 };
+    segments: [], position: "", watch: [], ideas: [], generated_at: worldDate().getTime() / 1000 };
   await page.route("**/research/company/IN/RELIANCE/ai*", (r) => {
     asked += 1;
     expect(new URL(r.request().url()).searchParams.get("background")).toBe("true");

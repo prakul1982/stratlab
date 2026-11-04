@@ -624,5 +624,6 @@ def test_a_fund_without_a_nav_is_left_out_of_the_gain_and_the_xirr():
     flows = {"A": [("2025-10-01", -10000.0)], "B": [("2025-10-01", -50000.0)]}
     w = {"info": inf, "gf": {}, "c": {"lots": lots, "flows": flows, "unknown": {}, "short": {}, "realised": []}}
     t = M.holdings(data, w, "2026-10-01")["total"]
-    assert t["gain"] == 2000 and t["invested"] == 10000 and t["no_nav"] == 1
+    # MONEY-5: "invested" counts the no-NAV fund at its cost (it said ₹0 for one alone); the gain stays on the priced one
+    assert t["gain"] == 2000 and t["invested_priced"] == 10000 and t["invested"] == 60000 and t["no_nav"] == 1
     assert t["xirr"] == pytest.approx(0.2, abs=0.01)

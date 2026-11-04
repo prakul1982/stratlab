@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { worldDate, expect, test } from "@playwright/test";
 import { session, open, focusIn, staysIn, API, viewFor, MY_ADS, FREE } from "./a11y-kit";
 
 // Accessibility: axe-core on the main pages (fails on serious or critical problems), and the keyboard behaviour axe
@@ -341,7 +341,7 @@ test("the cookie banner is named and described, comes first for the keyboard, an
   test.setTimeout(240_000);
   // a Free account on a company page with ads switched on (a fake config): the question is asked, and a StratLab card holds the place of the ad
   await page.route(/googlesyndication/, (r) => r.fulfill({ status: 200, contentType: "text/javascript", body: "" }));
-  await page.route("**/research/company/IN/RELIANCE/ai*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summary: "Runs refineries.", valuation_note: "", facts: [], bull: [], bear: [], segments: [], position: "", watch: [], ideas: [], generated_at: Date.now() / 1000 }) }));
+  await page.route("**/research/company/IN/RELIANCE/ai*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summary: "Runs refineries.", valuation_note: "", facts: [], bull: [], bear: [], segments: [], position: "", watch: [], ideas: [], generated_at: worldDate().getTime() / 1000 }) }));
   await page.route(/\/config\.js(\?|$)/, async (r) => r.fulfill({ status: 200, contentType: "text/javascript", body: `${await (await r.fetch()).text()}\nObject.assign(window.STRATLAB_CONFIG, ${JSON.stringify(MY_ADS)});\n` }));
   const errors = await open(page, "/research/IN/RELIANCE", { tour: true, as: true });
   await page.addInitScript((s) => localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)), FREE);

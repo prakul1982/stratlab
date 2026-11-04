@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { worldDate, expect, test, type Page } from "@playwright/test";
 
 // ADS-1: ads (and the Meta Pixel and Microsoft Clarity) are ready to switch on and change nothing until they are. With ads off (the shipped state) a Free account sees a StratLab
 // card under a company's AI read, Basic and Pro see nothing, and no public page has a slot. With a fake ads-on config (the settings the
@@ -10,7 +10,7 @@ const WHO = { free: session("free-token", "u-free", "free@example.com"), basic: 
 
 const READ = { summary: "Runs refineries, a telecom network and retail stores.", valuation_note: "P/E 24 against 20-28 over five years.",
   facts: [{ id: "growth", label: "Growth", items: [{ label: "Sales, 3 years", text: "11.6% a year" }] }],
-  bull: ["Jio has 470 million users."], bear: ["Refining margins move with crude."], segments: [], position: "", watch: [], ideas: [], generated_at: Date.now() / 1000 };
+  bull: ["Jio has 470 million users."], bear: ["Refining margins move with crude."], segments: [], position: "", watch: [], ideas: [], get generated_at() { return worldDate().getTime() / 1000; } };
 
 /** Google's script, stood in for: it draws a grey 250px box into the next unfilled slot, as a filled ad would. */
 const FAKE_ADS = `(function(){var q=window.adsbygoogle||[];function fill(){var i=document.querySelector("ins.adsbygoogle:not([data-adsbygoogle-status])");if(!i)return;

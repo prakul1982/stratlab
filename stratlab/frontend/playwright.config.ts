@@ -10,6 +10,8 @@ process.env.E2E_API ??= `http://127.0.0.1:${apiPort}`;
 
 export default defineConfig({
   testDir: "e2e",
+  // maps "@playwright/test" to e2e/fixtures.ts, so every spec's pages start at the fake world's fixed moment (E2E_NOW)
+  tsconfig: "./e2e/tsconfig.json",
   timeout: 60_000,
   retries: 0,
   workers: process.env.CI ? 2 : undefined,     // GitHub's runner has 2 cores: one worker each (the default is one in all)

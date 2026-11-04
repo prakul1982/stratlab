@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { worldDate, expect, test, type Page } from "@playwright/test";
 
 // Net worth (Money): add entries of each sort, see the totals, the allocation and the as-of dates, work out a loan
 // prepayment, download the CSV and delete it all. Each project signs in as its own empty account.
@@ -72,7 +72,7 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   const totals = page.getByLabel("Totals");
   await expect(totals.getByText("₹2,50,000").first()).toBeVisible();
 
-  const year = new Date();
+  const year = worldDate();
   await kind("Fixed deposit");
   await page.getByLabel(/^Name/).fill("Bank FD");
   await page.getByLabel("Amount deposited (₹)").fill("100000");
@@ -98,7 +98,7 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   await kind("Insurance policy");
   await page.getByLabel("Insurer").fill("Some Insurer");
   await page.getByLabel("Premium (₹)").fill("15000");
-  const due = new Date(); due.setDate(due.getDate() + 20);
+  const due = worldDate(); due.setDate(due.getDate() + 20);
   await page.getByLabel("Next premium due").fill(iso(due));
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("table", { name: "Insurance policies" }).getByText(/due in (19|20|21) days/)).toBeVisible();

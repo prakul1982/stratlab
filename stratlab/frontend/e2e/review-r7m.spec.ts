@@ -1,5 +1,5 @@
 import path from "node:path";
-import { expect, test, type Page } from "@playwright/test";
+import { worldDate, expect, test, type Page } from "@playwright/test";
 
 // Round 7, mail, payments, broker and reliability (9 Oct 2026): the Plans page that says nothing of GST while the invoice
 // carries none, buy buttons that are off under View as, the invoice warning on Admin, the AI providers tile, the
@@ -203,7 +203,7 @@ test("Admin: the email previews say the briefs are real, and Data and jobs has a
 test("Holdings says Zerodha is connected and returned nothing, and the Zerodha card says when it was read (R7M-009)", async ({ page }) => {
   await page.route(`${API}/holdings`, (r) => r.fulfill({ json: {
     rows: [], allocation: [], totals: { value: 0, invested: 0, pnl: null, pnl_pct: null, day: null, day_pct: null, count: 0, priced: 0 }, source: null,
-    updated_at: null, prices: true, limit: 50, facts_max: 40, zerodha: { live: true, count: 0, read_at: new Date(Date.now() - 600_000).toISOString() } } }));
+    updated_at: null, prices: true, limit: 50, facts_max: 40, zerodha: { live: true, count: 0, read_at: worldDate(-600_000).toISOString() } } }));
   let errors = await open(page, "/holdings", load(297));
   const empty = page.getByText(/^Zerodha is connected; it returned 0 holdings (today )?at (\d{1,2} \w{3}, )?\d\d:\d\d IST\./);
   await expect(empty).toBeVisible({ timeout: 30_000 });

@@ -64,13 +64,29 @@ def reader(uid, email, plan="pro", confirmed=True, **choices):
 
 
 # ---------- facts ----------
-def test_market_facts_from_the_world(w, monkeypatch):
+@pytest.fixture
+def w_wed(monkeypatch):
+    # the world built on the pinned day itself: its candles, index levels and headlines are of that day's session, so a
+    # test pinned to 14 Oct doesn't read a world made at the machine's real date (whose last session may be weeks later);
+    # the fake market's frozen clock too (tests/conftest.py sets it to the real start of the run), as nw_w does
+    from tests import fake_prices
+    day = datetime(2026, 10, 14, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(fake_prices, "FROZEN", day)
+    with time_machine.travel(day, tick=False):
+        world = W.build(monkeypatch)
+        content._cache.clear()
+        write._cache.clear()
+        yield world
+        world["close"]()
+
+
+def test_market_facts_from_the_world(w_wed, monkeypatch):
     # the brief's day is India's date, not UTC's: the day the world's market headline (a couple of hours old) falls on. The
-    # clock is pinned to a Wednesday after the close: the world's index levels are of the last session, which an issue
-    # dated an earlier or later day no longer takes as its own (review 3m)
-    with time_machine.travel(datetime(2026, 10, 14, 12, 0, tzinfo=timezone.utc), tick=False):
-        day = (datetime.now(timezone.utc) - timedelta(hours=2)).astimezone(content.ZoneInfo("Asia/Kolkata")).date()
-        f = content.market_facts("IN", day)
+    # clock is pinned to a Wednesday after the close (w_wed): the world's index levels are of the last session, which an
+    # issue dated an earlier or later day no longer takes as its own (review 3m)
+    day = (datetime.now(timezone.utc) - timedelta(hours=2)).astimezone(content.ZoneInfo("Asia/Kolkata")).date()
+    assert day == date(2026, 10, 14)
+    f = content.market_facts("IN", day)
     assert f["kind"] == "market" and f["region"] == "IN"
     assert f["indices"] and all("change_pct" in i for i in f["indices"])
     assert f["headlines"] and len(f["headlines"]) <= content.HEADLINES and all(h["headline"] for h in f["headlines"])

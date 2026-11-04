@@ -3567,7 +3567,6 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
             # LIVE1B-065: the same file again would double every quantity; nothing is added, and the page says so
             out.update(duplicate=True, n=0, saved=False, over=[])
             return None
-        n_read = len(found) if req.mode == "replace" else None
         rows = found
         if req.mode == "add":
             rows = holdings.merge(before["items"] + rows)
@@ -3580,9 +3579,12 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
                            or ((holdings.market_of(i), i["symbol"]) not in have
                                and (i["symbol"].upper() in names or str(i.get("isin") or "").upper() in names))]
         rows, out["over"] = holdings.cap(rows, before["items"], limit)   # a downgrade deletes nothing
-        out["n"] = len(rows) if n_read is None else min(n_read, len(rows))
-        out["saved"] = bool(rows)
-        if not rows:                      # nothing matched: the saved holdings stay as they were
+        # MONEY-1: "N saved" is the file's stocks that were saved, in either mode (adding said the new total of every holding)
+        left = set(out["over"])
+        out["lines"] = [{"symbol": i["symbol"], "exchange": i.get("exchange"), "qty": i["qty"], "avg": i.get("avg")} for i in found if i["symbol"] not in left]
+        out["n"] = len(out["lines"])
+        out["saved"] = bool(rows) and out["n"] > 0
+        if not out["saved"]:              # nothing matched (or nothing had room): the saved holdings stay as they were
             return None
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
         # RC2B-009: Kite's holdings export is a file; "Zerodha Kite" as a stored source means the Kite login's read, and the
@@ -3593,7 +3595,8 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         holdings.file_remember(profile["id"], digest, req.mode == "replace")
         invite_rewards.safe_touch(profile, "holdings")
     over = out["over"]
-    return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "duplicate": bool(out.get("duplicate")), "unmatched": missed[:200],
+    return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "duplicate": bool(out.get("duplicate")),
+               "saved_lines": out.get("lines", [])[:500] if out["saved"] else [], "unmatched": missed[:200],
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
 
@@ -3661,6 +3664,10 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             elif old and c.op == "add":
                 rows[k] = holdings.merge([old, {"exchange": old.get("exchange"), "symbol": old["symbol"], "qty": c.qty,
                                                 "avg": c.avg or None}])[0]
+                # MONEY-4: a stock already held is added to, and the page says so (it said only "X added.")
+                q = lambda v: f"{v:,.4f}".rstrip("0").rstrip(".")
+                out["notes"].append(f"{old['symbol']} was already held ({q(old['qty'])}), so the {q(c.qty)} are added to it: "
+                                    f"{q(rows[k]['qty'])} now" + ("." if rows[k].get("avg") else ", without an average price (one of the two has none)."))
             elif old:                      # "set": only the fields sent change
                 new = {**old, **({"qty": c.qty} if c.qty is not None else {})}
                 if "avg" in c.model_fields_set and not _same_avg(old, c.avg):

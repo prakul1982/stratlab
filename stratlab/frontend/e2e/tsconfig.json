@@ -1,0 +1,7 @@
+{
+  "//": "For the browser tests only (playwright.config.ts names it): each spec's \"@playwright/test\" is e2e/fixtures.ts, Playwright with the fake world's fixed clock",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": { "@playwright/test": ["./fixtures.ts"] }
+  }
+}

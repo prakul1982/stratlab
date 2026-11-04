@@ -120,10 +120,28 @@ def on_trading_day(d: date, market: str = "IN", back: bool = False) -> date:
 # The fake market's "now" while the tests run: tests/conftest.py sets it once as the run starts, so a test that reads a
 # price, then a page, then the price again in India's session sees one price throughout, whatever minute it ticks over.
 FROZEN: datetime | None = None
+SESSION_FROZEN: datetime | None = None      # the run's own value of FROZEN (conftest), as against one a test set itself
+_followed: datetime | None = None
 
 
 def clock_now() -> datetime:
-    return FROZEN or datetime.now(timezone.utc)
+    """The frozen moment; but when the run's own frozen moment is on another India day than the clock (a test that
+    travels to 14 Oct, or a world built inside such a travel), the market follows the clock, frozen again within that
+    day, so the app's "today" and the fake market's never disagree (CLOCK follow-up: test_newsletter's world read 4 Nov
+    prices under a 14 Oct clock). A FROZEN a test set itself always stands."""
+    global _followed
+    now = datetime.now(timezone.utc)
+    if FROZEN is None:
+        return now
+    if FROZEN is not SESSION_FROZEN or _ist_day(FROZEN) == _ist_day(now):
+        return FROZEN
+    if _followed is None or _ist_day(_followed) != _ist_day(now):
+        _followed = now
+    return _followed
+
+
+def _ist_day(t: datetime) -> date:
+    return t.astimezone(timezone(timedelta(hours=5, minutes=30))).date()
 
 
 def session_clock(now: datetime | None = None, market: str = "IN") -> datetime:

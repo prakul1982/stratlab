@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { worldDate, expect, test } from "@playwright/test";
 import { sessionAs, open, sane, touchable, seeUnfolded, barsAroundZero, API, settle, answerLevel, watchSharing, sharedLink } from "./pages-kit";
 
 // The company pages, the deep dive, the public company pages, fact cards, screens, deals, surveillance flags and corporate
@@ -43,7 +43,7 @@ test("the company AI read shows plain numbers, never 0-100 scores", async ({ pag
       { id: "margins", label: "Margins and returns", items: [{ label: "Operating margin, 5 years", text: "17% → 16% → 18% (Mar 2023 to Mar 2025)" }, { label: "ROCE", text: "9.7%" }] },
     ],
     bull: ["Jio has 470 million users."], bear: ["Refining margins move with crude."], segments: [], position: "", watch: [], ideas: [],
-    generated_at: Date.now() / 1000,
+    generated_at: worldDate().getTime() / 1000,
   };
   await page.route("**/research/company/IN/RELIANCE/ai*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(read) }));
   const errors = await open(page, "/research/IN/RELIANCE", "The numbers");
