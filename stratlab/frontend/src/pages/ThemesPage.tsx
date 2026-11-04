@@ -16,8 +16,10 @@ import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, No
  * no figure; a company is shown only where its own description says it does the work. */
 const PRICE_TRIES = 6;
 const PRICE_EVERY_MS = 8000;
-const CHECK_TRIES = 4;          // a map still being checked is asked again on its own; the server stops waiting after 90 s (THEMES item 6)
-const CHECK_EVERY_MS = 30000;
+// a map whose AI parts are still being written behind it is asked again on its own, every 5 s for 90 s, then the page stops asking
+// (THEMES item 6; LIVE3-001: the base shows at once, the AI's layers, explanations and checks fill in after)
+const CHECK_TRIES = 18;
+const CHECK_EVERY_MS = 5000;
 
 export function ThemesPage() {
   const [region, setRegion] = useRegion();
@@ -41,7 +43,8 @@ export function ThemesPage() {
   const run = async (theme: string, o: { refresh?: boolean; keep?: boolean } = {}) => {
     if (!theme.trim()) return;
     const mine = ++seq.current;
-    setBusy(true); setError(null); if (!o.refresh && !o.keep) { setR(null); setDive(null); setPrices(null); setNews(null); setBiz(null); setIpos(null); }
+    if (!o.keep) setBusy(true);           // a quiet re-ask while the AI fills in doesn't turn the buttons to "Mapping…" every 5 s
+    setError(null); if (!o.refresh && !o.keep) { setR(null); setDive(null); setPrices(null); setNews(null); setBiz(null); setIpos(null); }
     try { const out = await researchApi.sector(region, theme, !!o.refresh); if (mine === seq.current) setR(out); }
     catch (e) { if (mine === seq.current) setError((e as Error).message); }
     finally { if (mine === seq.current) setBusy(false); }
@@ -85,7 +88,8 @@ export function ThemesPage() {
 
   const go = (t: string) => { if (!t.trim()) return; const p = new URLSearchParams(params); p.set("q", t); p.set("region", region); setParams(p); };
   const pl = r?.placements;
-  const pending = !!pl && !pl.checked && (pl.pending > 0 || pl.industries_by === "pending");
+  const working = r?.ai?.state === "working";
+  const pending = working || (!!pl && !pl.checked && (pl.pending > 0 || pl.industries_by === "pending"));
   const tries = useRef(0);
   useEffect(() => { tries.current = 0; }, [q, region]);
   useEffect(() => {
@@ -119,13 +123,13 @@ export function ThemesPage() {
         </FormGrid>
       </Card>
       {error && <ErrorState title="The theme couldn't be mapped" action={{ label: "Try again", onClick: () => run(q, { refresh: true }) }}>{error}</ErrorState>}
-      {busy && !r && <Card><Skeleton label={`Mapping "${q}" and checking each company (takes about a minute the first time)`} lines={4} /></Card>}
+      {busy && !r && <Card><Skeleton label={`Mapping "${q}"`} lines={4} /></Card>}
       {r && (
         <>
           <Card>
-            <CardHead title={r.sector} actions={<><span className="k-note">Written {writtenAt(r.generated_at, marketTz(region))}</span>
+            <CardHead title={r.sector} actions={<>{r.generated_at > 0 && <span className="k-note">Written {writtenAt(r.generated_at, marketTz(region))}</span>}
               <button className="btn quiet sm" disabled={busy} onClick={() => run(q, { refresh: true })}>{busy ? "Mapping…" : "Refresh"}</button></>} />
-            <p className="k-lede">{r.summary}</p>
+            {r.summary && <p className="k-lede">{r.summary}</p>}
             {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
             {r.etfs.length > 0 && (
               <DataTable label="Funds that track the theme" columns={[
@@ -135,9 +139,17 @@ export function ThemesPage() {
           </Card>
           {pending && (
             <Notice tone="warn" action={{ label: "Check again", onClick: () => run(q, { keep: true }) }}>
-              {pl!.pending > 0
+              {working && !r.generated_at
+                ? "The AI is still sorting these companies into layers and writing what each layer does. The companies below are the exchange's own classification; the rest fills in on its own."
+                : pl && pl.pending > 0
                 ? `${pl!.pending} compan${pl!.pending === 1 ? "y is" : "ies are"} still being checked against ${pl!.pending === 1 ? "its" : "their"} own description; until then ${pl!.pending === 1 ? "it shows" : "they show"} as not yet confirmed.`
+                : working ? "The AI's checks of each company and of the tailwinds and risks are still being written; they fill in on their own."
                 : "The theme's official industries are still being picked."}
+            </Notice>
+          )}
+          {r.ai?.state === "failed" && (
+            <Notice tone="warn" action={{ label: "Try again", onClick: () => run(q, { keep: true }) }}>
+              {`The AI's layers and explanations couldn't be written just now${r.ai.message ? ` (${r.ai.message.replace(/\.$/, "")})` : ""}. The companies below are the exchange's own classification.`}
             </Notice>
           )}
           {!pending && (pl?.timed_out ?? 0) > 0 && (

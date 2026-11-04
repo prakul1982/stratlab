@@ -838,11 +838,24 @@ def sector_map(profile, region: str, q: str, refresh: bool = False):
     if not grounding.looks_like_theme(theme, grounding.vocabulary(rows)):
         err(400, "bad_theme", f"\"{theme}\" doesn't read as a sector or theme. Try words like \"India defence\" or \"AI data centers\".")
     # every ticker the AI wrote is checked against the market's list before the map is kept (R5O-008)
-    got = ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh,
-                  lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r)))
+    key = (r, theme.lower())
+    build = lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r))  # noqa: E731
+    if not refresh and A.peek("sector", key):
+        got = ai_call(profile, "sector", key, 24 * 3600, False, build)
+    else:
+        # LIVE3-001: the AI's map is written in the background, never while the request waits; until it is in, the page has the theme's
+        # official-industry base (theme_routes.quick) and the map kept from before, if any
+        theme_routes.later(("map",) + key, lambda: ai_call(profile, "sector", key, 24 * 3600, refresh, build))
+        got = A.get("sector", key) or blank_map(theme)
     # no unsourced market size or growth rate, even on a map kept from before (R7O-012); no figure in the text and no
     # company that isn't listed, and the exchange's own list of the theme's industries beside the map (DE-013)
     return r, theme, grounding.listed_only(A.theme_served(got)), rows
+
+
+def blank_map(theme: str) -> dict:
+    """A theme map with nothing from the AI yet (LIVE3-001): the page lists the official-industry base under it."""
+    return {"sector": theme[:1].upper() + theme[1:], "summary": "", "core": "", "market_size": "", "cagr": None, "cagr_note": "", "etfs": [],
+            "sub_themes": [], "clusters": [], "screen": [], "value_chain": [], "tailwinds": [], "risks": [], "generated_at": 0}
 
 
 @router.get("/sector")
@@ -852,7 +865,8 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
     # risk is shown beside the dated headline that supports it (theme_routes.checked); THEMES: every company of the theme's official
     # industries is in it, each with its own one-line description where it is known
     got = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, got))
-    return ok({**got, "market_size": "", "cagr": None, "cagr_note": "", "exchange": grounding.exchange_list(got, rows) or None})
+    return ok({**got, "market_size": "", "cagr": None, "cagr_note": "", "exchange": grounding.exchange_list(got, rows) or None,
+               "ai": theme_routes.ai_state(r, theme, got)})
 
 
 def index_rows(region: str) -> list[dict]:

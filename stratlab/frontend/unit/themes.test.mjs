@@ -74,7 +74,8 @@ test("THEMES: every company of the theme's official industries is listed by laye
   assert.match(dive, /US-listed companies have no industry on file yet/);
   assert.match(dive, /Show all \$\{rows\.length\} companies/);                       // a long group is listed in full a press away, never "and N more"
   // a check still waiting is asked again on its own, and once the server stops waiting the page says so plainly, with no warning box
-  assert.match(page, /const CHECK_TRIES = 4;/);
+  assert.match(page, /const CHECK_TRIES = 18;/);                                  // 18 x 5 s: the 90 s give-up (LIVE3-001)
+  assert.match(page, /r\?\.ai\?\.state === "working"/);
   assert.match(page, /pl\?\.timed_out/);
   assert.doesNotMatch(page, /On the exchange's list for these industries/);
 });

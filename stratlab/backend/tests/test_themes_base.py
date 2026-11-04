@@ -372,3 +372,75 @@ def test_every_us_company_without_an_industry_gets_one_from_its_sec_record_a_few
     n_reads = len(reads)
     B.fill_sic(rows, stored, read, now=now + timedelta(days=31))
     assert len(reads) - n_reads == 40                 # a month on, the companies with no code are asked again, 40 at a time
+
+
+# ---------- LIVE3-001: no theme request waits on the AI ----------
+def _slow_ai(monkeypatch, gate):
+    """The AI's map held until `gate` is set (a provider taking a minute); every other AI call answers as the fake world does."""
+    from app.intel import routes
+    real = routes.A.sector
+
+    def slow(theme, region, ai):
+        gate.wait(60)
+        return real(theme, region, ai)
+    monkeypatch.setattr(routes.A, "sector", slow)
+
+
+def test_a_theme_answers_with_its_official_base_at_once_while_the_ai_is_slow_and_fills_in_after(api, monkeypatch):
+    import threading
+    import time
+    from app.intel import routes, theme_routes
+    monkeypatch.setattr(routes, "public_facts", lambda region, sym: None)
+    monkeypatch.setattr(routes, "index_rows", lambda region: ROWS if region == "IN" else LIVE_US)
+    gate = threading.Event()
+    _slow_ai(monkeypatch, gate)
+    try:
+        t0 = time.monotonic()
+        s = api.get("/research/sector?q=India%20defence&region=IN").json()
+        assert time.monotonic() - t0 < theme_routes.THEME_WAIT + 2                # never the AI's minute (the live cut was at 30 s)
+        listed = {c["ticker"] for v in s["value_chain"] for c in v["companies"]}
+        assert {"HAL", "BEL", "BDL", "MAZDOCK", "GRSE", "COCHINSHIP", "DATAPATTNS", "SOLARINDS", "BEML", "ASTRAMICRO", "PARAS"} <= listed
+        assert s["ai"] == {"state": "working", "message": ""} and s["generated_at"] == 0 and s["summary"] == ""
+        # the dive and its parts answer from the same base, also without waiting
+        t0 = time.monotonic()
+        assert api.get("/research/theme-dive?q=India%20defence&region=IN").status_code == 200
+        assert time.monotonic() - t0 < theme_routes.THEME_WAIT + 4
+    finally:
+        gate.set()
+    theme_routes.job_of(("map", "IN", "india defence"))["done"].wait(30)
+    later = api.get("/research/sector?q=India%20defence&region=IN").json()
+    assert later["generated_at"] > 0 and later["summary"]                       # the AI's map is in on the next ask
+    theme_routes.job_of(("check", "IN", "india defence", int(later["generated_at"])))["done"].wait(30)
+    done = api.get("/research/sector?q=India%20defence&region=IN").json()
+    assert done["ai"] is None and done["placements"]["checked"] is True
+
+
+def test_every_suggested_and_curated_theme_in_both_markets_answers_without_waiting_on_the_ai(api, monkeypatch):
+    """The whole class: every theme the page suggests and every curated concept's words, India and the US."""
+    import threading
+    import time
+    from app.intel import routes, theme_routes
+    monkeypatch.setattr(routes, "public_facts", lambda region, sym: None)
+    monkeypatch.setattr(routes, "index_rows", lambda region: ROWS if region == "IN" else LIVE_US)
+    monkeypatch.setattr(theme_routes, "fill_us_industries", lambda read=None: 0)
+    monkeypatch.setattr(routes, "ai_cap", lambda profile: None)                # the daily cap is its own test (test_daily_ai_allowance)
+    monkeypatch.setattr(theme_routes, "THEME_WAIT", 0.3)                         # the sweep's own pace; the bound is the same rule
+    ideas = re.search(r"THEME_IDEAS[^=]*=\s*\{(.*?)\};", (Path(__file__).parents[2] / "frontend/src/lib/research.ts").read_text(), re.S).group(1)
+    themes = {m: re.findall(r'"([^"]+)"', re.search(m + r":\s*\[(.*?)\]", ideas).group(1)) for m in ("IN", "US")}
+    for c in B.CONCEPTS:
+        for m in ("IN", "US"):
+            themes[m].append(max(sorted(c["words"]), key=len) if c.get("words") else c["phrases"][0])
+    assert len(themes["IN"]) >= 6 + len(B.CONCEPTS) and len(themes["US"]) >= 6 + len(B.CONCEPTS)
+    gate = threading.Event()
+    _slow_ai(monkeypatch, gate)
+    try:
+        for m, qs in themes.items():
+            for q in qs:
+                t0 = time.monotonic()
+                r = api.get(f"/research/sector?q={q}&region={m}")
+                took = time.monotonic() - t0
+                assert r.status_code == 200, (m, q, r.text[:200])
+                assert took < theme_routes.THEME_WAIT + 2, (m, q, took)
+                assert r.json()["ai"]["state"] == "working", (m, q)
+    finally:
+        gate.set()

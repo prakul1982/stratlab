@@ -154,8 +154,10 @@ def test_daily_ai_allowance(api, monkeypatch):
     monkeypatch.setattr(routes, "datetime", Fixed)
     for sym in ("NVDA", "AAPL", "MSFT"):
         assert api.get(f"/research/company/US/{sym}/ai").status_code == 200
+    # LIVE3-001: a theme answers with its official-industry base whatever the AI does; past the limit the AI's part says why it is missing
     r = api.get("/research/sector?q=AI data centers&region=US")
-    assert r.status_code == 429 and r.json()["detail"]["code"] == "research_ai_limit"
+    assert r.status_code == 200 and r.json()["ai"]["state"] == "failed" and r.json()["ai"]["code"] == "research_ai_limit"
+    assert "fresh AI reads" in r.json()["ai"]["message"] and r.json()["generated_at"] == 0
     assert api.get("/research/company/US/NVDA/ai").status_code == 200     # cached reads still work
 
 

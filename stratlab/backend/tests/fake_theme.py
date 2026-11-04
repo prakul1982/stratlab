@@ -3,6 +3,7 @@ work and for the check that a claim is still current, so the theme page (e2e/the
 
 Everything the AI says here is made up; every figure on the page is worked out from the demo companies' own stored pages."""
 import json
+import time
 
 THEME = "India steel and mining"
 MAP = {
@@ -37,9 +38,15 @@ def with_industries(rows: list[dict]) -> list[dict]:
     return [{**r, "industry": INDUSTRY[r["symbol"]]} if r.get("symbol") in INDUSTRY else r for r in rows]
 
 
+SLOW_WORD = "slowly"           # a theme with this word is mapped as a busy provider would map it: after SLOW_SECONDS (LIVE3-001)
+SLOW_SECONDS = 35              # past the 30 s at which a connection closed live
+
+
 def answer(system: str, text: str) -> str | None:
     """The AI's reply to a theme prompt, or None when the prompt is not one of them."""
     if "mapping a sector or theme" in system:
+        if SLOW_WORD in text.lower():
+            time.sleep(SLOW_SECONDS)
         return json.dumps(MAP)
     if "where listed companies belong" in system:
         body = json.loads(text.split("CHECKS:\n", 1)[1])
