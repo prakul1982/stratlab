@@ -23,7 +23,7 @@ test("the library (both) and the notebooks are DataTables; the library's figures
   assert.match(bits, /<DataTable label=\{label\} rows=\{sorted\} rowKey=\{\(e\) => e\.id\} columns=\{cols\} stack/);
   assert.equal((bits.match(/numeric: true, sortable: true/g) ?? []).length, 5, "after costs, buy and hold, vs hold, worst fall, unseen period");
   assert.match(bits, /detail=\{\{ label: "Rules and details", render: details \}\}/);
-  for (const f of ["src/pages/LibraryPage.tsx", "src/pages/PublicLibrary.tsx"]) assert.match(read(f), /<LibraryTable rows=/, f);
+  for (const f of ["src/pages/LibraryPage.tsx", "src/pages/PublicLibrary.tsx"]) assert.match(read(f), /<LibraryTable key=\{`[^`]*`\} rows=/, f);
   assert.match(read("src/pages/Home.tsx"), /<DataTable label="Your notebooks"/);
   // the table's details row: a button with aria-expanded after the row's name, the details in a row of their own across the table
   const dt = read("src/components/kit/DataTable.tsx");

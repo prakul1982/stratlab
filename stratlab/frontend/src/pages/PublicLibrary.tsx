@@ -108,7 +108,7 @@ export function PublicLibrary() {
             </div>
             {/* one table on every screen (TABLES EVERYWHERE, owner 4 Nov), every row in the page; the rules and the checks one by one
                 are on each strategy's own page */}
-            <LibraryTable rows={shown} rules={false}
+            <LibraryTable key={`${q}|${verdict}|${market}`} rows={shown} rules={false}
               actions={(e) => <Link className="btn sm" to={`/library/${encodeURIComponent(e.id)}`} aria-label={`Open the verdict and rules of ${strategyName(e)}, ${libMeta(e)}`}>Open</Link>} />
           </>
         )}

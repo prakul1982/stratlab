@@ -115,7 +115,7 @@ export function LibraryPage() {
               {rows.some(trails) && <>{CHECKS_NOT_HOLD} </>}{LIBRARY_DATES}{rows.some((e) => needs(e)) && <> {COPY_ANY_PLAN}</>}
             </p>
             {/* one table on every screen (TABLES EVERYWHERE, owner 4 Nov): the figures in sortable columns, the rules under each row */}
-            <LibraryTable rows={rows}
+            <LibraryTable key={`${q}|${market}|${verdict}|${sort}|${official}`} rows={rows}
               actions={(e) => (
                 <div className="k-row lib-buttons">
                   <button type="button" className="btn sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${strategyName(e)}, ${libMeta(e)}`}>{busy === e.id ? "Copying…" : "Copy and re-test"}</button>

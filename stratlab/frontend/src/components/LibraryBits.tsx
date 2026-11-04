@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { num, pct } from "../lib/format";
 import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
@@ -128,8 +128,9 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
   rules?: boolean;
 }) {
   const [by, setBy] = useState<{ key: SortKey; desc: boolean } | null>(null);
+  // back to the first twelve when the page's filters change: the page gives the table a new key then (not when the same list
+  // arrives again, which would undo a "Show 12 more" pressed while it loaded)
   const [pages, setPages] = useState(1);
-  useEffect(() => { setPages(1); }, [rows]);
   const sorted = useMemo(() => {
     if (!by) return rows;
     const v = sortValue[by.key];

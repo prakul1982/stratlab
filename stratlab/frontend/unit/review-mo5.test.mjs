@@ -40,8 +40,8 @@ test("MO-5a (as a table): a row says each fact once: one author line, the figure
   assert.match(table, /data-testid="lib-window"[^]*e\.reason[^]*<Rules s=\{e\.strategy\} \/>/);
   assert.match(table, /detail=\{\{ label: "Rules and details", render: details \}\}/);
   // both libraries draw it; the public one has no rules in it (its own page has the rules and the checks)
-  assert.match(read("src/pages/LibraryPage.tsx"), /<LibraryTable rows=\{rows\}/);
-  assert.match(read("src/pages/PublicLibrary.tsx"), /<LibraryTable rows=\{shown\} rules=\{false\}/);
+  assert.match(read("src/pages/LibraryPage.tsx"), /<LibraryTable key=\{`[^`]*`\} rows=\{rows\}/);
+  assert.match(read("src/pages/PublicLibrary.tsx"), /<LibraryTable key=\{`[^`]*`\} rows=\{shown\} rules=\{false\}/);
   for (const f of ["src/pages/LibraryPage.tsx", "src/pages/PublicLibrary.tsx"]) assert.doesNotMatch(read(f), /LibraryCard|lib-cards|Rules and all figures|lib-oneline|k-mini-stats/, f);
 });
 

@@ -175,11 +175,11 @@ test("library cards: facts about the checks, buy and hold beside the return, whi
   // the card pieces live in components/LibraryBits.tsx since the public library shares them; it says the same
   const bits = read("src/components/LibraryBits.tsx");
   assert.match(bits, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} tone=\{headTone\(e\)\} \/>/);   // one face for both (MO-5a)
-  assert.match(lib, /<LibraryTable rows=\{rows\}/);        // one table for both since TABLES EVERYWHERE (owner, 4 Nov)
+  assert.match(lib, /<LibraryTable key=\{`[^`]*`\} rows=\{rows\}/);        // one table for both since TABLES EVERYWHERE (owner, 4 Nov)
   assert.match(bits, /\{num\(gap, 1\)\} points \{h\.gap < 0 \? "behind" : "ahead"\}/);
   assert.match(bits, /\{ key: "gap", header: "vs hold \(pts\)"/);    // buy and hold beside the return: its own column, and the gap in points
   const pub = read("src/pages/PublicLibrary.tsx");
-  assert.match(pub, /<LibraryTable rows=\{shown\} rules=\{false\}/);
+  assert.match(pub, /<LibraryTable key=\{`[^`]*`\} rows=\{shown\} rules=\{false\}/);
   // LIVE3-013 changed this on purpose: the strategy's own page says the gap once, in its headline, and both totals in one table
   // (the full sentence beside them repeated it); the cards keep their one line
   assert.match(pub, /\{ id: "hold", k: "Buy and hold, same dates", v: figure\(sh\.buy_hold, tone\(sh\.buy_hold\)\) \}/);

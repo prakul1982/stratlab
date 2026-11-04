@@ -17,7 +17,7 @@ test("VR7-001: on a phone the chart's range buttons are two rows of four and the
 test("VR7-004: the signed-out library keeps every card in the page and a phone shows twelve, then Show 12 more", () => {
   // a table now (TABLES EVERYWHERE, owner 4 Nov): every row is rendered; the rows past the first twelve carry a class a phone hides
   const src = read("src/pages/PublicLibrary.tsx");
-  assert.match(src, /<LibraryTable rows=\{shown\}/);
+  assert.match(src, /<LibraryTable key=\{`[^`]*`\} rows=\{shown\}/);
   assert.doesNotMatch(src, /shown\.slice\(/);
   const bits = read("src/components/LibraryBits.tsx");
   assert.match(bits, /export const PHONE_ROWS = 12;/);
