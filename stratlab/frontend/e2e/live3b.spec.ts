@@ -169,7 +169,9 @@ test("Invest's watchlist and Coming up are tables, Coming up agrees with My spac
     await open(page, "/invest", who, w);
     const watch = page.getByRole("table", { name: "Your watchlist" });
     await expect(watch.locator("tbody tr")).toHaveCount(3, { timeout: 30_000 });
-    for (const h of ["Stock", "Price", "Change"]) await expect(watch.getByRole("columnheader", { name: h })).toBeVisible();
+    if (w > 640) for (const h of ["Stock", "Price", "Change"]) await expect(watch.getByRole("columnheader", { name: h })).toBeVisible();      // a card a row on a phone
+    const fits = await watch.evaluate((t) => { const box = t.closest(".k-tbl-wrap") as HTMLElement; return box.scrollWidth <= box.clientWidth + 1; });
+    expect(fits, `${w}: every column on screen`).toBe(true);
     await expect(page.locator(".inv-tile")).toHaveCount(0);
     const coming = page.getByTestId("invest-events").getByRole("table", { name: "Coming up" });
     await expect(coming.locator("tbody tr").first()).toBeVisible({ timeout: 30_000 });

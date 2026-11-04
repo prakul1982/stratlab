@@ -17,7 +17,6 @@ import { Star } from "./Icons";
 import { Info } from "./ui";
 import { Card, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signed, Skeleton } from "./kit";
 import { SurvBadges } from "./Surveillance";
-import { FoBadges } from "./FoBadges";
 import { AiAd } from "./AiAd";
 import { track } from "../lib/analytics";
 
@@ -380,7 +379,7 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
 /** Companies as small tiles that open them: the symbol, its name, the price and the day's change (a neutral pill). */
 /** The Invest home's watchlist as a table (LIVE3-015: tiles two across left an empty cell beside an odd one, and "Tables
  * everywhere"): the stock with its name and any exchange or F&O note under it, its price and the day's change; each opens the
- * company. The prices are asked again each minute while they are live, each row kept until its new price comes (LIVE-1). */
+ * company (its F&O lot changes are on the watchlist page). The prices are asked again each minute while they are live, each row kept until its new price comes (LIVE-1). */
 export function WatchTable({ region, symbols, names, label = "Your watchlist" }: { region: Region; symbols: string[]; names?: Record<string, string | null>; label?: string }) {
   const [q, setQ] = useState<Record<string, Quote | null> | null>(null);
   const key = symbols.join(",");
@@ -398,13 +397,17 @@ export function WatchTable({ region, symbols, names, label = "Your watchlist" }:
   const ccy = region === "IN" ? "INR" : "USD";
   return (
     <div className="watch-table">
-      <DataTable label={label} rows={symbols} rowKey={(s) => s} stack={false}
+      {/* on a phone a card a row (the app's phone pattern): beside a stock's name and its surveillance note the Change column ran off
+          a 390px screen */}
+      <DataTable label={label} rows={symbols} rowKey={(s) => s} stack
         columns={[
           { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (s) => (
             <>
               <Link className="link" to={`/research/${region}/${encodeURIComponent(s)}`}><b>{s}</b></Link>
               {names?.[s] && <span className="k-sub-line">{names[s]}</span>}
-              <span className="watch-notes"><SurvBadges region={region} symbol={s} /><FoBadges region={region} symbol={s} plain /></span>
+              {/* the exchange's surveillance note only: an F&O lot change is the watchlist page's and the company's (LIVE2-015: derivatives
+                  jargon on the home's summary, and a two-line pill that pushed the Change column off a phone) */}
+              <span className="watch-notes"><SurvBadges region={region} symbol={s} /></span>
             </>) },
           { key: "p", header: "Price", numeric: true, cell: (s) => (q == null ? <span className="skel" /> : q[s]?.price != null ? price(q[s]!.price!, ccy) : "–") },
           { key: "d", header: "Change", numeric: true, cell: (s) => (q?.[s]?.change_pct != null ? <Delta value={q[s]!.change_pct}>{pct(q[s]!.change_pct!, 2)}</Delta> : q == null ? "" : "–") },
