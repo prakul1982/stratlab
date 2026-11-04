@@ -51,3 +51,25 @@ test("Instinct #11: a docked panel floating on a laptop is at most half the wind
   assert.equal(cornerCover({ ...open, mode: "float", x: 10, y: 10 }, 1280, 720), 0);   // moved off the corner
   assert.match(read("src/components/watch/launcher.css"), /body\.mw-cover \.shell > \.main \{ padding-bottom: calc\(var\(--mw-cover, 0px\) \+ 24px\); \}/);
 });
+
+test("Instinct (2 Nov): the execution model as the engine has it, in Help and on the test's result", async () => {
+  const { HELP, testFills } = await import("../src/lib/help.ts");
+  const { HELP_TOPICS } = await import("../src/lib/helpTopics.ts");
+  assert.equal(HELP.fills, testFills());
+  assert.match(testFills(), /fills at the next candle's open, 0\.05% worse for slippage \(buys that much higher, sells that much lower\)/);
+  assert.match(testFills(0.1, true), /0\.1% worse[\s\S]*gapped past it[\s\S]*the stop counts[\s\S]*square-off/);
+  assert.match(testFills(0), /no slippage/);
+  const t = HELP_TOPICS.find((x) => x.key === "fills");
+  assert.equal(t.group, "Rules, costs and risk");
+  // the engine says the same: next open for a backtest, the stop at the open on a gap, sells lower
+  const core = read("../backend/app/engine/core.py");
+  assert.match(core, /self\.next_open = True/);
+  assert.match(core, /px = min\(b\["o"\], self\.sl\) if long else max\(b\["o"\], self\.sl\)/);
+  assert.match(core, /fill = px \* \(1 - self\.r\.slippage \/ 100 \* d\)/);
+  const exp = read("src/pages/ExperimentPage.tsx");
+  assert.match(exp, /data-testid="trades-fills">\{testFills\(e\.strategy\.risk\.slippage, intraday\)\}/);
+  assert.doesNotMatch(exp, /a rule's order fills at the candle's close/);
+  // paper trading and the SIP test say their own (true) rules: the closed candle's close, the day's close
+  assert.match(read("src/lib/paperText.ts"), /Orders fill at the close of the candle your rules act on/);
+  assert.match(read("../backend/app/sip_test.py"), /Each instalment is invested at that day's close/);
+});

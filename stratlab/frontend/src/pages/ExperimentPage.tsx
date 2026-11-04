@@ -12,7 +12,7 @@ import { instrumentLoader, PriceChart, strategyStudies, type Tf } from "../chart
 import { Info, Modal, STATUS_NAME } from "../components/ui";
 import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, Seg, Signed, Skeleton, Stat, StatRow, usePhone, type Column } from "../components/kit";
 import { usePersisted } from "../lib/persist";
-import { HELP } from "../lib/help";
+import { HELP, testFills } from "../lib/help";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
 import { libraryDraft } from "../lib/shareText";
@@ -348,7 +348,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   // the closed trades kept as rows are the newest ones: how many more there were and their P&L, so the caption agrees with
   // the header and the rows plus that line add up to the total (R11C-003)
   const list = tradeListFacts(e);
-  // an intraday trade's times are its candles, start to close: the order fills at the close (R11C-011)
+  // an intraday trade's times are its candles, start to close (R11C-011): a rule's order fills at the open, a stop or target inside it
   const close = markets.find((m) => m.id === e.instrument.market)?.hours?.close ?? null;
   const at = (iso: string | null | undefined) => (intraday ? candleSpan(iso, e.tf, tz, close) : when(iso, tz, false));
   const twoWay = e.strategy.side === "both" || e.strategy.side === "short" || e.trades.some((t) => t.side === "short");
@@ -526,7 +526,9 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         {/* a few shares and a flat charge per order: the return can go the other way from the price (R50-015: 2 ITC shares
             up 4.5% shown at −4.97%) */}
         {allTrades.some((t) => Math.abs(t.qty) <= 5) && <p className="k-note" data-testid="trades-small-qty">On a trade of a few shares, the charges per order can be larger than the price move, so its return after costs can go the other way from the price.</p>}
-        {intraday && allTrades.length > 0 && <p className="k-note">Each time is the candle the order filled in: a rule's order fills at the candle's close, the end of the span; a stop or a target fills inside it.</p>}
+        {/* Instinct (2 Nov): how this test filled, with its own slippage; an intraday time is the candle the order filled in, a
+            rule's at its start (the open), not at its close as this note said */}
+        {allTrades.length > 0 && <p className="k-note" data-testid="trades-fills">{testFills(e.strategy.risk.slippage, intraday)}{intraday ? " Each time is the candle the order filled in: a rule's order at its start, a stop or a target inside it." : ""}</p>}
       </Card>
 
       <WalkForwardCheck key={`wf${e.v}`} nb={nb} e={e} />

@@ -215,7 +215,7 @@ The logo's shapes and colours live in one place, `frontend/src/lib/brand.ts`, wh
 
 ## How it works
 
-- **Engine** (`backend/app/engine/core.py`): candle-based, long, short or both ways. Each candle it checks the stop loss first (a trailing stop once it has moved), then the target, then the time limit, then the exit rules; entries fill at the candle's close.
+- **Engine** (`backend/app/engine/core.py`): candle-based, long, short or both ways. Each candle it checks the stop loss first (a trailing stop once it has moved), then the target, then the time limit, then the exit rules. A rule's signal is seen at a candle's close and fills at the next candle's open, slippage worse (sells lower, buys higher); a stop or target fills at its level, or at the open when the price gapped past it. Paper trading fills at the close of the candle the rules act on.
   - Short strategies sell first and buy back later: stops sit above the entry, targets below, and costs are charged on each side as the market charges them.
   - A trailing stop follows the best price since entry by the set percentage and never moves back. A time limit closes a trade after N candles.
   - Position size by risk = (capital × risk %) ÷ stop distance, capped by max capital per trade; or fixed capital per trade × leverage (the margin can't exceed current equity).
