@@ -77,9 +77,10 @@ export function MembersCard({ r, region }: { r: SectorAI; region: Region }) {
         {added > 0 && ` (${p?.confirmed ?? 0} confirmed from ${added === 1 ? "its" : "their"} own description)`}.
       </p>
       {inds.length > 0
-        ? <p className="k-small k-muted">Official industries: {inds.join(" · ")}.</p>
+        ? <p className="k-small k-muted">Official industries{p?.industries_by === "words" ? ", matched by the theme's own words" : p?.industries_by === "ai" ? ", picked by AI from the exchange's own list" : ""}: {inds.join(" · ")}.</p>
         : named > 0 ? <p className="k-small k-muted">No official industry is this theme's core on its own, so its companies are the theme's named list and the ones the map names.</p>
         : <p className="k-small k-muted">{p?.industries_by === "pending" ? "The theme's official industries are still being picked; until then the companies are the ones the map names." : "No official industry is this theme's core, so every company here is one the map names, checked against its own description."}</p>}
+      {(p?.unclassified ?? 0) > 0 && <p className="k-note">{p!.unclassified!.toLocaleString("en-IN")} US-listed companies have no industry on file yet, so they can't join a theme by industry until their SEC record is read; a few are read each time a theme is checked.</p>}
       {groups.map((g) => <MemberGroup key={g.name} name={g.name} official={g.official} rows={g.rows} cols={cols} />)}
     </Card>
   );

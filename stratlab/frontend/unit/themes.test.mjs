@@ -70,6 +70,8 @@ test("THEMES: every company of the theme's official industries is listed by laye
   assert.match(dive, /Not yet confirmed from its own description/);
   assert.match(dive, /c\.base \? \(c\.basis === "list" \? "Named in the theme's list" : "Official industry"\)/);
   assert.match(dive, /named in the theme's list, /);
+  assert.match(dive, /matched by the theme's own words/);                       // the page says which industries a typed theme used, and how
+  assert.match(dive, /US-listed companies have no industry on file yet/);
   assert.match(dive, /Show all \$\{rows\.length\} companies/);                       // a long group is listed in full a press away, never "and N more"
   // a check still waiting is asked again on its own, and once the server stops waiting the page says so plainly, with no warning box
   assert.match(page, /const CHECK_TRIES = 4;/);
