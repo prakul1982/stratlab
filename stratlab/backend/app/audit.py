@@ -213,6 +213,7 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
         out += _margins(p, years)
         if len(years) >= 3 and all(y.get("capex") is None for y in years[-3:]):
             out.append(_issue("fact", "Capex", NO_PLANT) if p.get("region") == "US" and not _plant(p, 3)
+                       else _issue("fact", "Capex", tiny_plant(p)) if p.get("region") == "US" and tiny_plant(p)
                        else _issue("fact", "Capex", NO_CAPEX_LINE) if p.get("capex_untagged")
                        else _issue("fact", "Capex", CAPEX_SHRUNK) if all(y.get("capex_cut") for y in years[-3:])
                        else _issue("fact", "Capex", CAPEX_SHRUNK_OR_NEW) if (any(y.get("capex_cut") for y in years[-3:])
@@ -295,6 +296,20 @@ def _quarterly(cols: list) -> bool:
             return True
         at.append(int(m[2]) * 12 + months[m[1].lower()])
     return all(b - a == 3 for a, b in zip(at, at[1:]))
+
+
+TINY_PLANT = 0.5               # plant under half a million (in the filings' millions) and no purchases of it tagged: nothing to estimate
+
+
+def tiny_plant(p: dict) -> str | None:
+    """The capex fact for a company whose plant is a few desks (EOCN, RWAX on 1 Nov: $0.08 m and $0.01 m, no purchases filed in
+    three years): what there is, as filed, rather than an open gap. None when its plant is bigger than that."""
+    vals = [v for v in (((p.get("balance") or {}).get("rows") or {}).get("Fixed Assets") or [])[-3:] if v is not None]
+    if not vals or max(abs(v) for v in vals) >= TINY_PLANT:
+        return None
+    unit = (p.get("unit") or "$ million").replace(" million", " m")
+    return (f"No capex estimate: its plant, property and equipment is at most {unit.split()[0]}{max(vals):,.2f} m in the last three years "
+            "and the filings tag no purchases of it, so there is nothing to estimate")
 
 
 def _plant(p: dict, n: int) -> bool:

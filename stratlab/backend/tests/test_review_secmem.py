@@ -456,3 +456,16 @@ def test_a_quote_inside_its_own_session_or_after_the_last_candle_stands():
     assert Y._session_close(meta, [_bar("2026-10-16", 9.23, 33941, 9.75, 9.065)]) is None          # within the day's range
     assert Y._session_close({**meta, "regularMarketTime": _ts("2026-10-19")}, [_bar("2026-10-16", 9.23, 33941)]) is None   # a later session
     assert Y._session_close(meta, [_bar("2026-10-16", 9.23, 0)]) is None                            # nothing traded: nothing to go by
+
+
+def test_a_us_company_with_a_few_desks_of_plant_has_a_capex_fact_not_a_gap():
+    """EOCN, RWAX (1 Nov): plant of $0.08 m and $0.01 m, no purchases filed in three years."""
+    from app import audit
+    years = [{"year": y, "sales": 1.0, "profit": -1.0, "capex": None} for y in ("Dec 2023", "Dec 2024", "Dec 2025")]
+    p = {"region": "US", "unit": "$ million", "balance": {"cols": ["Dec 2022", "Dec 2023", "Dec 2024", "Dec 2025"],
+                                                          "rows": {"Fixed Assets": [0.11, 0.08, None, None]}}}
+    capex = lambda p: [(i["level"], i["detail"]) for i in audit.check_numbers(p, {"years": years}, {}, None) if i["area"] == "Capex"]  # noqa: E731
+    got = capex(p)
+    assert [lv for lv, _ in got] == ["fact"] and "at most $0.08 m" in got[0][1]
+    p["balance"]["rows"]["Fixed Assets"] = [40.0, 38.0, 36.0, 35.0]             # real plant, no capex read: the gap stands
+    assert [lv for lv, _ in capex(p)] == ["gap"]
