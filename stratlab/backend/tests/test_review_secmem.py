@@ -503,3 +503,38 @@ def test_a_transcript_is_due_only_once_the_call_is_held(monkeypatch):
     # and a notice whose call never brought a transcript, once older than any call is ahead of its notice
     monkeypatch.setattr(deepdive, "ist_now", lambda: datetime(2026, 11, 14, 9, 0, tzinfo=IST))
     assert deepdive.meetings(nse, "2024-11-01T00:00")["calls_due"] == 1
+
+
+def _year(concepts: dict, tax: str = "us-gaap", end: str = "2022-12-31", form: str = "10-K") -> dict:
+    """A year's facts as filed: {concept: value}, each a full-year figure in that year's annual report."""
+    row = lambda v: {"start": end[:4] + "-01-01", "end": end, "val": v, "fy": int(end[:4]), "fp": "FY", "form": form,  # noqa: E731
+                     "filed": f"{int(end[:4]) + 1}-03-01", "accn": f"0000000000-{end[2:4]}-000001"}
+    return {"cik": 1, "entityName": "X", "facts": {tax: {c: {"units": {"USD": [row(v)]}} for c, v in concepts.items()}}}
+
+
+@pytest.mark.parametrize("other", [
+    {"RevenueFromDividends": 16555},                                   # CMND: dividends on its cash
+    {"ReceiptsFromSalesOfGoodsAndRenderingOfServices": 40000},         # GELS: cash received, from the cash flow statement
+    {"InterestRevenueExpense": 416703},                                # NEXM: interest
+    {"FairValueMeasurementWithUnobservableInputsReconciliationRecurringBasisAssetSales": 165087},   # MDBH, HRZN
+])
+def test_a_year_with_only_income_that_isnt_sales_is_a_year_without_sales(other):
+    """Every US company (SECMEM 6): dividends, interest, cash receipts and fair-value reconciliations named like revenue made
+    years without sales read as years whose sales we missed."""
+    from app.intel import sec
+    tax = "ifrs-full" if any(k.startswith(("Revenue", "Receipts", "Interest")) for k in other) else "us-gaap"
+    p = sec.build(_year({"ProfitLoss" if tax == "ifrs-full" else "NetIncomeLoss": -8.6e6, **other}, tax,
+                        form="20-F" if tax == "ifrs-full" else "10-K"), None, symbol="X")
+    assert "Dec 2022" in p["no_revenue"] or "Dec 2022" in p["sales_untagged"], p["no_revenue"]
+
+
+def test_an_investment_companys_revenue_is_its_total_investment_income():
+    """Every business development company and closed-end fund (SECMEM 6: HRZN had no revenue read for four years)."""
+    from app.intel import sec
+    p = sec.build(_year({"NetIncomeLoss": 21151000, "InvestmentIncomeInterest": 77366000, "InvestmentIncomeDividend": 0,
+                         "NoninterestIncome": 1825000, "InvestmentCompanyInvestmentIncomeLossRatioAfterIncentiveAllocation": 0.121}), None, symbol="HRZN")
+    i = p["pl"]["cols"].index("Dec 2022")
+    assert (p["pl"]["rows"].get("Sales") or p["pl"]["rows"]["Revenue"])[i] == pytest.approx(79.19, abs=0.01)
+    # an operating company's interest on its cash is not revenue
+    q = sec.build(_year({"NetIncomeLoss": -71269000, "InvestmentIncomeInterest": 5058000}), None, symbol="JSPR")
+    assert (q["pl"]["rows"].get("Sales") or q["pl"]["rows"].get("Revenue") or [None])[q["pl"]["cols"].index("Dec 2022")] is None

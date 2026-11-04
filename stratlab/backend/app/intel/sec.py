@@ -371,6 +371,15 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     interest, other = read(BANK_INTEREST), read(BANK_OTHER)
     for end, v in interest.items():           # a bank: interest income plus fees and other income
         out.setdefault(end, v + other.get(end, 0))
+    if any(c.startswith("InvestmentCompany") for c in facts.get("us-gaap") or {}):
+        # an investment company (a business development company, a closed-end fund: it files the investment-company tags): its
+        # revenue is its total investment income, interest and dividends from what it holds plus fees (SECMEM 6: HRZN had none
+        # read for four years, though it files $77 m of interest income a year)
+        both, intr, divs = read(("InvestmentIncomeInterestAndDividend",)), read(("InvestmentIncomeInterest",)), read(("InvestmentIncomeDividend",))
+        fees = read(BANK_OTHER + ("FeeIncome",))
+        for end in sorted(set(both) | set(intr)):
+            base = both[end] if end in both else intr[end] + divs.get(end, 0)
+            out.setdefault(end, base + fees.get(end, 0))
     gross, cost = read(GROSS_PROFIT), read(COST_OF_SALES)
     for end, v in gross.items():
         if end in cost and v + cost[end] > 0:        # a total of nothing or less is costs the line doesn't cover, not sales
@@ -453,7 +462,10 @@ def _accns_ending(facts: dict, concepts: tuple, end: str, unit: str = "USD") -> 
 REVENUE_NAME = re.compile(r"Revenue|Sales|Turnover", re.I)
 NOT_REVENUE_NAME = re.compile(r"Cost|Deferred|Receivable|Payable|Liabilit|Tax|ProForma|Percent|Concentration|Unearned|Proceeds|"
                               r"Payments|Increase|Decrease|Contract(Asset|Liab)|Allowance|Unbilled|Reserve|Gain|Loss|Expense|"
-                              r"Marketing|Commission|Rebate|Return|Discount|Impair|Repurchase|Related|Segment|Geograph|EquityMethod|Disposal|Sublease", re.I)
+                              r"Marketing|Commission|Rebate|Return|Discount|Impair|Repurchase|Related|Segment|Geograph|EquityMethod|Disposal|Sublease|"
+                              # cash received, dividends and interest earned on cash: not sales (SECMEM 6: CMND's dividend income,
+                              # GELS's cash receipts, NEXM's interest made years without sales look like years with them)
+                              r"Receipts|ClassifiedAs|Dividend|InterestRevenue|InterestIncomeOn|FairValue", re.I)
 
 
 def _revenue_like_accns(facts: dict, end: str, unit: str = "USD") -> set[str]:
