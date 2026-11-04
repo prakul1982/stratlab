@@ -253,7 +253,11 @@ def check_options(options, today: date) -> dict:
 
 # How old the newest item of a feed may be before a pass is a Check (DJ-033: "Insider trades … newest 13 Feb" passed
 # eight months on): Reliance files with the exchange every few days and discloses insider trades every few weeks.
-FRESH_DAYS = {"Exchange filings": 21, "Insider trades": 120}
+FRESH_DAYS = {"Exchange filings": 21, "Insider trades": 10}
+# Insider trades are judged across the whole market, not one company: Reliance's own insiders may file nothing for most of a year (its
+# newest was 13 Feb on 4 Nov, a Check every day though the feed was fine), while across the market disclosures come in every trading
+# day, so ten days without one (a long holiday week at most) means the feed stopped.
+INSIDER_WINDOW_DAYS = 14
 
 
 def _newest(items: list, key: str) -> date | None:
@@ -266,13 +270,13 @@ def _newest(items: list, key: str) -> date | None:
     return max(days) if days else None
 
 
-def _fresh(name: str, count_text: str, newest: date | None, today: date | None = None) -> dict:
+def _fresh(name: str, count_text: str, newest: date | None, today: date | None = None, who: str = "Reliance") -> dict:
     """A feed's pass, or a Check when its newest item is older than FRESH_DAYS: old data isn't passed as OK."""
     today = today or date.today()
     when = _day(newest) if newest else "not dated"
     if newest and (today - newest).days > FRESH_DAYS[name]:
         return _result(name, "Filings", "warn", f"{count_text}; but the newest is {when}, {(today - newest).days} days old, which is "
-                       "unusual for Reliance: the feed may be serving old data.")
+                       f"unusual for {who}: the feed may be serving old data.")
     return _result(name, "Filings", "pass", f"{count_text}; newest {when}.")
 
 
@@ -286,10 +290,12 @@ def check_filings(feed) -> dict:
 def check_insider_trades(feed) -> dict:
     """The exchange's insider-trading disclosures (one call), which the deals table, the checklist, the screens and the
     deal alerts read. A big company with none in a year would mean the feed changed shape."""
-    items = feed.insider_trades("RELIANCE")
+    items = feed.insider_trades(None, INSIDER_WINDOW_DAYS)
     if not items:
-        return _result("Insider trades", "Filings", "warn", "Reliance has no insider-trading disclosures in the last year, which is unusual.")
-    return _fresh("Insider trades", f"{len(items)} Reliance insider-trading disclosures", _newest(items, "date"))
+        return _result("Insider trades", "Filings", "warn", f"No insider-trading disclosures anywhere in the market in the last {INSIDER_WINDOW_DAYS} days: "
+                       "the exchange's feed may have changed shape.")
+    return _fresh("Insider trades", f"{len(items):,} insider-trading disclosures across the market in the last {INSIDER_WINDOW_DAYS} days",
+                  _newest(items, "date"), who="the whole market")
 
 
 def check_surveillance(feed) -> dict:

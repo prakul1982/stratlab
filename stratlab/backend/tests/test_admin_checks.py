@@ -50,3 +50,22 @@ def test_calendar_status_gives_one_season_aware_light(w, monkeypatch):
             return datetime(2026, 12, 22, 9, 0, tzinfo=main.IST)
     monkeypatch.setattr(main, "datetime", Late)
     assert main.calendar_status()["state"] == "warn" and main.calendar_status()["note"] is None
+
+
+# ---------- insider trades: the whole market's freshness, not one company's ----------
+def test_insider_trades_are_judged_across_the_whole_market():
+    today = date.today()
+
+    class Feed:
+        def __init__(self, items):
+            self.items, self.asked = items, None
+
+        def insider_trades(self, symbol=None, days=365, to=None):
+            self.asked = (symbol, days)
+            return self.items
+    f = Feed([{"date": (today - timedelta(days=1)).isoformat()}, {"date": (today - timedelta(days=3)).isoformat()}])
+    r = platform_check.check_insider_trades(f)
+    assert f.asked == (None, platform_check.INSIDER_WINDOW_DAYS) and r["state"] == "pass" and "across the market" in r["detail"]
+    stale = platform_check.check_insider_trades(Feed([{"date": (today - timedelta(days=12)).isoformat()}]))
+    assert stale["state"] == "warn" and "unusual for the whole market" in stale["detail"] and "Reliance" not in stale["detail"]
+    assert platform_check.check_insider_trades(Feed([]))["state"] == "warn"
