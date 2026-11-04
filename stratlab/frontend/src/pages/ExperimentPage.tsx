@@ -18,7 +18,7 @@ import { cardFromExperiment, renderCard, shareVerdict } from "../components/shar
 import { libraryDraft } from "../lib/shareText";
 import { MoreMenu } from "../components/MoreMenu";
 import { track } from "../lib/analytics";
-import { siteUrl } from "../lib/share";
+import { siteUrl, download } from "../lib/share";
 import { Book, Download, Globe, Layers, Pencil, Pulse, Share, Trash } from "../components/Icons";
 import { usePlansToast } from "../components/PlanInterest";
 import "./trade/trade.css";
@@ -326,11 +326,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     if (!canExport) { plansToast("Trade export is on the Pro plan."); return; }
     try {
       const r = await api<Response>(`/notebooks/${nb.id}/experiments/${e.v}/trades.csv`, { raw: true });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob());
-      a.download = `${nb.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "trades"}-v${e.v}-trades.csv`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      download(await r.blob(), `${nb.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "trades"}-v${e.v}-trades.csv`);
     } catch (x) { fail(x); }
   };
   const cur = e.instrument.currency || "";

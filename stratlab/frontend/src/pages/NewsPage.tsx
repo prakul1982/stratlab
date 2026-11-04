@@ -1,3 +1,4 @@
+import { download as save } from "../lib/share";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
@@ -124,9 +125,7 @@ function IssueView({ id }: { id: string }) {
     setGetting(true);
     try {
       const r = await api<Response>(`/news/${encodeURIComponent(id)}/pdf`, { raw: true });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob()); a.download = `stratlab-${id.replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}.pdf`; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      save(await r.blob(), `stratlab-${id.replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}.pdf`);
     } catch (e) { fail(e); } finally { setGetting(false); }
   };
 

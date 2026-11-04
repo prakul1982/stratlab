@@ -1,3 +1,4 @@
+import { download } from "../../lib/share";
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -75,9 +76,7 @@ export function SystemSection() {
     setNote("Collecting about two years of prices. This takes a minute or two…");
     const r = await api<Response>("/admin/fixture/prices", { method: "POST", raw: true });
     const blob = await r.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob); a.download = "real_prices.json.gz"; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    download(blob, "real_prices.json.gz");
     setNote(`Saved real_prices.json.gz: ${r.headers.get("X-Instruments") ?? "?"} instruments, ${Math.round(blob.size / 1024)} KB${Number(r.headers.get("X-Problems")) ? `, ${r.headers.get("X-Problems")} skipped` : ""}. Upload it to GitHub at stratlab/backend/tests/fixtures/real_prices.json.gz.`);
   });
   const errors = groupErrors(sv?.recent_errors ?? []);

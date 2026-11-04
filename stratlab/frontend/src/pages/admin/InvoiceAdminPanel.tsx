@@ -1,3 +1,4 @@
+import { download } from "../../lib/share";
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -29,9 +30,7 @@ export function InvoiceAdminPanel() {
   const csv = () => {
     const lines = [["number", "date", "email", "supply", "currency", "total", "tax"].join(",")];
     for (const r of rows) lines.push([r.number, r.date, r.email, r.supply, r.currency, r.total, r.tax].map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(","));
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })); a.download = `stratlab-invoices-${year}.csv`; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    download(new Blob([lines.join("\n")], { type: "text/csv" }), `stratlab-invoices-${year}.csv`);
   };
   const text = (k: keyof Seller, label: string, info?: string) => s && (
     <Field label={label} info={info} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} />);

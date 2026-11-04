@@ -125,3 +125,11 @@ test("/tour as a class: every app address is sent to the app by the site, kept f
     if (!PUBLIC.has(r)) assert.ok(noindex.test(p), `${r}: open to search engines`);
   }
 });
+
+test("Instinct #3 as a class: every file the app saves goes through the one save helper (one address a click, kept a minute, an empty file an error)", () => {
+  // the only blob address made outside lib/share.ts is the invoice, opened in a tab rather than saved
+  assert.deepEqual(SRC.filter((f) => /URL\.createObjectURL/.test(read(f))).sort(), ["src/components/InvoicesCard.tsx", "src/lib/share.ts"]);
+  for (const f of ["src/pages/DeepDive.tsx", "src/pages/NewsPage.tsx", "src/pages/NotebookPage.tsx", "src/pages/ExperimentPage.tsx", "src/pages/OptionsPage.tsx",
+    "src/charts/price/PriceChart.tsx", "src/components/shareImage.ts", "src/pages/admin/AuditPanel.tsx", "src/pages/admin/InvoiceAdminPanel.tsx", "src/pages/admin/SystemSection.tsx"])
+    assert.match(read(f), /import \{[^}]*\bdownload\b[^}]*\} from "[./]+lib\/share"/, f);
+});

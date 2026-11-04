@@ -1,6 +1,7 @@
 /* The price chart every page with OHLC prices uses: company pages, backtests and paper trading. Chart types,
  * timeframes and ranges, volume, indicators (the engine's own maths), drawings saved per symbol, compare, log and %
  * scales, fullscreen and a PNG download. Loaded as its own chunk (see lazy.tsx). Facts only: no signals. */
+import { download } from "../../lib/share";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { CHART_TYPES, PriceChartEngine, type ChartMarker, type ChartType, type Hover, type PriceLevel, type Theme } from "./engine";
@@ -619,11 +620,7 @@ const [saveNote, setSaveNote] = useState("");
     const canvas = e.snapshot(`${symbol} · ${TF_LONG[tf]}${cmp ? ` vs ${cmp.symbol}` : ""}`);
     canvas.toBlob((b) => {
       if (!b) return;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(b);
-      a.download = `${symbol.replace(/[^A-Za-z0-9_-]+/g, "-")}-${TF_LABEL[tf]}.png`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      download(b, `${symbol.replace(/[^A-Za-z0-9_-]+/g, "-")}-${TF_LABEL[tf]}.png`);
     }, "image/png");
   };
   const toggleFull = () => {
