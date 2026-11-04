@@ -84,6 +84,9 @@ NET_INCOME = ("NetIncomeLoss", "ProfitLossAttributableToOwnersOfParent", "NetInc
               "NetIncomeLossAvailableToCommonStockholdersDiluted", "IncomeLossFromContinuingOperationsAttributableToParent",
               "ProfitLossFromContinuingOperations", "NetIncomeLossAllocatedToLimitedPartners")
 OPERATING = ("OperatingIncomeLoss", "ProfitLossFromOperatingActivities")
+# the total of the operating costs: an operating result of exactly this much (a loss of every cost, nothing earned against
+# it) is an income statement without sales, whatever line named like revenue the filing also tags (DATA: JSPR, NCEL, SCNI)
+OPERATING_COSTS = ("OperatingExpenses", "CostsAndExpenses", "OperatingCostsAndExpenses")
 DEPRECIATION = ("DepreciationDepletionAndAmortization", "DepreciationAmortizationAndAccretionNet",
                 "DepreciationAndAmortization", "CostDepreciationAmortizationAndDepletion", "Depreciation",
                 "DepreciationAndAmortisationExpense", "AdjustmentsForDepreciationAndAmortisationExpense",
@@ -366,8 +369,10 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
         for end, v in read((c,)).items():
             if end not in out or v > out[end]:
                 out[end] = v
-    for end, v in read(REVENUE_ELSE).items():
-        out.setdefault(end, v)
+    for c in REVENUE_ELSE:
+        for end, v in read((c,)).items():
+            if v >= 0:              # a narrower line below nil is a deduction (grants netted off research costs), not sales
+                out.setdefault(end, v)
     interest, other = read(BANK_INTEREST), read(BANK_OTHER)
     for end, v in interest.items():           # a bank: interest income plus fees and other income
         out.setdefault(end, v + other.get(end, 0))
@@ -388,7 +393,20 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     for end, v in op.items():
         if end in costs and v + costs[end] > 0:
             out.setdefault(end, v + costs[end])
+    # an income statement whose operating result is its operating costs to the dollar has no sales in it: a line named like
+    # revenue for that period is a note's figure, not the top line (DATA, every company: JSPR's $9 m milestone and $8.3 m
+    # lease "revenue", tagged beside a loss of exactly its $36.8 m and $76.2 m of costs)
+    op_costs = read(OPERATING_COSTS)
+    for end in [e for e in out if out[e] and no_sales_in_statement(op, op_costs, e)]:      # a nil stays: it is the right figure
+        del out[end]
     return out
+
+
+def no_sales_in_statement(op: dict[str, float], costs: dict[str, float], end: str) -> bool:
+    """Whether the period's operating result is its operating costs to the dollar (a loss of all of them; or the same figure
+    filed without its minus sign: SCNI's 2023 20-F), so its income statement earned nothing against them: no sales."""
+    c = costs.get(end) or 0
+    return end in op and c > 0 and abs(abs(op[end]) - c) < 0.5
 
 
 CURRENCY_NAMES = {"CAD": "Canadian dollars", "EUR": "euros", "GBP": "British pounds", "BRL": "Brazilian reais",
@@ -859,9 +877,17 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
 
     _merge_year_ends(rev_a, [ni_a, op_a, eb_a, dep_a, eps_a, cfo_a, cfi_a, capex_a, div_a], [ppe, debt, equity, cash])
 
+    op_costs_a = flows(facts, OPERATING_COSTS, "annual", cur)
+
     def no_revenue_line(e: str) -> bool:      # the year's annual report has no revenue line at all
+        if e not in ni_a or e in rev_a:
+            return False
+        # an operating result of exactly the operating costs: nothing earned in the income statement, though a note may tag
+        # a line named like revenue (a milestone, a lease) or a cost of revenue (DATA: JSPR, NCEL, SCNI)
+        if no_sales_in_statement(op_a, op_costs_a, e):
+            return True
         # (an operating profit with no revenue behind it is a revenue we didn't read, not a year without sales)
-        if e not in ni_a or e in rev_a or (op_a.get(e) or 0) > 0:
+        if (op_a.get(e) or 0) > 0:
             return False
         if (_not_in_report(facts, NET_INCOME, ALL_REVENUE, e, cur, that_year=True)
                 and not _accns_for(facts, NET_INCOME, e, cur) & _revenue_like_accns(facts, e, cur)):
