@@ -2903,3 +2903,11 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .k-table tr[data-kind="median"] > * { border-top: 2px solid var(--line-2); font-weight: 600; }
 .k-table tr[data-kind="range"] > * { color: var(--muted); font-size: var(--t-note); }
 .k-table tr[data-kind="median"]:hover, .k-table tr[data-kind="range"]:hover { background: transparent; }
+/* Help & feedback (owner, 4 Nov): a labelled button at the menu's top on a laptop and in the phone's top bar; a button that reads as
+ * a link in the public footers and on the Help page. */
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.linklike.link { color: var(--accent-ink, inherit); text-decoration: underline; text-underline-offset: 2px; }
+.legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: none; }   /* the same tap size as the links beside it (A11Y-2) */
+.side-brand .side-feedback { margin-left: auto; margin-right: 6px; }
+.topbar .top-feedback { padding-inline: 10px; }
+

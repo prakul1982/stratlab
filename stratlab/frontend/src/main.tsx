@@ -1,6 +1,7 @@
 import { lazy, StrictMode, Suspense, useCallback, useEffect, useLayoutEffect, useState, type ComponentType, type ReactNode } from "react";
 import { titleFor } from "./lib/title";
 import { createRoot } from "react-dom/client";
+import { FeedbackHost } from "./components/Feedback";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AppProvider, sessionUnconfirmed, useApp } from "./lib/app";
 import { takeNext } from "./lib/returnTo";
@@ -357,6 +358,8 @@ function App() {
           over the corner of the page either way; A11Y-2: it was the 127th Tab stop) */}
       <Tracking />
       <Routed />
+      {/* Help & feedback: one dialog for every page, signed in or not (owner, 4 Nov) */}
+      <FeedbackHost />
       <Toast />
     </AppProvider>
   );

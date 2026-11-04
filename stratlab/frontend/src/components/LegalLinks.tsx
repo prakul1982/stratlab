@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { INSTAGRAM } from "../content/seo";
+import { openFeedback } from "./Feedback";
 
 // kept apart from the policy texts, so the app shell and footers don't download them
 export const LEGAL_PAGES: { path: string; title: string }[] = [
@@ -17,6 +18,8 @@ export function LegalLinks({ blog = false }: { blog?: boolean }) {
       {LEGAL_PAGES.map((p) => <Link key={p.path} className="muted" to={p.path}>{p.title}</Link>)}
       {blog && <a className="muted" href="/blog">Blog</a>}
       <a className="muted" href={INSTAGRAM} rel="me noopener">Instagram</a>
+      {/* Help & feedback from the public pages too (owner, 4 Nov) */}
+      <button type="button" className="linklike muted legal-feedback" onClick={openFeedback}>Feedback</button>
     </nav>
   );
 }

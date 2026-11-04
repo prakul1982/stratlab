@@ -120,6 +120,10 @@ class Settings:
                       else "http://localhost:8000")).rstrip("/")
     ADMIN_EMAILS = _env("ADMIN_EMAILS")                           # comma-separated Google emails that can open /admin
     ADMIN_TELEGRAM_CHAT_ID = _env("ADMIN_TELEGRAM_CHAT_ID")      # gets a message if the auto-login fails
+    # Help & feedback (owner, 4 Nov): each new report is emailed to the ADMIN_EMAILS addresses ("0" turns it off; the inbox in
+    # Admin → Feedback always has them), at most this many a day so the mail service's free daily allowance isn't eaten
+    FEEDBACK_EMAILS = (_env("FEEDBACK_EMAILS", "1") or "1") != "0"
+    FEEDBACK_EMAILS_PER_DAY = int(_env("FEEDBACK_EMAILS_PER_DAY", "30") or 30)
     # option chains recorded every few minutes in market hours, for options backtesting later and the Positioning page's
     # history ("" turns it off); FINNIFTY and MIDCPNIFTY have monthly expiries only, so they add less than the others
     OPTION_SNAPSHOTS = _env("OPTION_SNAPSHOTS", "NFO:NIFTY,NFO:BANKNIFTY,NFO:FINNIFTY,NFO:MIDCPNIFTY,BFO:SENSEX") or ""

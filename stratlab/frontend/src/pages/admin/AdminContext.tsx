@@ -34,7 +34,8 @@ export interface Overview {
     /** when the whole-market audit's mismatched rows were checked (DJ-026) */
     audit_checked?: Partial<Record<"IN" | "US", { oldest: string; newest: string }>>;
     admin_alerts?: { email_ready: boolean; via?: string | null; to: string[]; quota?: BrevoQuota | null };
-    sentry?: boolean;            // whether server errors reach Sentry (sentry_sdk.is_initialized() on the server)
+    sentry?: boolean;
+    feedback_new?: number;       // Help & feedback reports not looked at yet            // whether server errors reach Sentry (sentry_sdk.is_initialized() on the server)
     /** while Indian data is offline: whether India is shut today anyway, and when the data login runs (DJ-003) */
     data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null;
     /** which build the server is (R24-009; older servers don't send it) */
@@ -129,5 +130,6 @@ export const SECTIONS: { path: string; label: string; title: string; lede: strin
   { path: "data", label: "Data and jobs", title: "Data and jobs", tabs: ["checks"], lede: "Every background job: when it last ran, when it runs next, and a button to run it now." },
   { path: "quality", label: "Quality", title: "Quality", tabs: [], lede: "Audits of the company data, strategies users reported, and the rates and rules StratLab uses." },
   { path: "system", label: "System", title: "System", tabs: ["services"], lede: "Server errors, other services, AI providers, platform checks and real prices for testing." },
+  { path: "feedback", label: "Feedback", title: "Feedback", tabs: [], lede: "What people reported from the Feedback button: something broken, a feature not working, or an idea. Each new one is also emailed to you." },
   { path: "emails", label: "Email previews", title: "Email previews", tabs: [], lede: "Every email StratLab sends, as a reader gets it. The market briefs are the newest real issues; the rest use made-up details. Nothing here is sent." },
 ];

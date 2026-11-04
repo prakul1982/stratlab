@@ -17,6 +17,7 @@ import { PageBreadcrumb } from "./PageBreadcrumb";
 import { HubTabs } from "./HubTabs";
 import { Onboarding, openTour } from "./Onboarding";
 import { MarketsLauncher, openMarkets } from "./watch/Launcher";
+import { FeedbackButton } from "./Feedback";
 import { gateFor, gatePlan } from "../lib/gates";
 import { PLAN_NAME } from "../lib/plans";
 import { watchSize } from "../lib/resize";
@@ -263,6 +264,8 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="side-top">
         <div className="side-brand">
           <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
+          {/* Help & feedback, labelled and at the menu's top so it is found, not buried in the footer (owner, 4 Nov) */}
+          <FeedbackButton className="btn quiet sm side-feedback" />
           <button className="side-close" aria-label="Close menu" onClick={() => setOpen(false)}><Close size={18} /></button>
           <button className="side-hide" aria-label="Hide the menu" title="Hide the menu (more room for the page)" onClick={() => setSlim(true)}><Chevron size={14} /></button>
         </div>
@@ -314,6 +317,8 @@ export function Shell({ children }: { children: ReactNode }) {
         <button className="icon-btn" aria-label="Open menu" aria-expanded={open} aria-controls="side-menu" onClick={() => setOpen(true)}><Menu /></button>
         <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
         <span className="row tight">
+          {/* on a phone, in the top bar itself, not only inside the menu (owner, 4 Nov) */}
+          <FeedbackButton className="btn quiet sm top-feedback" />
           <button className="icon-btn" aria-label="Search or ask anything" onClick={() => setSearch(true)}><Search /></button>
           <button className="icon-btn" aria-label="Markets" onClick={() => openMarkets({ open: "toggle" })}><Markets /></button>
           <button className="icon-btn" aria-label={main.label} title={main.label} onClick={() => nav(main.to)}>{main.to === "/new" ? <Plus /> : main.icon}</button>

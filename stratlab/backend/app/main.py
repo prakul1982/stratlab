@@ -67,6 +67,7 @@ from .config import api_docs_enabled, settings
 from .branding import public_text
 from .errors import report
 from . import errors as error_alerts           # Admin → System: is Sentry on, and its test message
+from . import feedback                          # Help & feedback: the reports and Admin's inbox
 from .responses import err, ok
 from .guard import Guard, HeavyGate, Window, address as caller_address
 from . import research
@@ -437,6 +438,7 @@ research_routes.setup(research_hub, _gemini, _anthropic)
 research_routes.corp_sources = corp_job.sources          # a US company page's dividend yield from its listed payments
 app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
+app.include_router(feedback.router)          # /feedback from anyone, /admin/feedback the inbox (owner, 4 Nov)
 app.include_router(money_mf_ter.router)      # /money/mutual-funds/costs
 app.include_router(money_mf_ter.admin_router)  # /admin/ter
 app.include_router(money_mf_behaviour.router)  # /money/mutual-funds/behaviour
@@ -6269,7 +6271,9 @@ def server_status() -> dict:
             "data_note": data_note(),
             "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())},
             # whether server errors reach Sentry (SENTRY_DSN set and the SDK started), for Admin → System's "Error alerts" line
-            "sentry": error_alerts.enabled()}
+            "sentry": error_alerts.enabled(),
+            # new Help & feedback reports, for "Needs your attention"
+            "feedback_new": feedback.new_count()}
 
 
 def calendar_status() -> dict:
