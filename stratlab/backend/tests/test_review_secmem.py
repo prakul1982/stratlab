@@ -241,3 +241,41 @@ def test_the_restart_waits_for_the_running_heavy_step_and_starts_none_after_it(m
     assert memguard.TURNS.acquire("a later job", 0.05) is False
     memguard.TURNS._owner = memguard.TURNS.name = memguard.TURNS.since = None   # (this test's process goes on)
     memguard.TURNS._depth = 0
+
+
+# ---------- item 6: the monthly audit's findings, fixed where they come from ----------
+def test_a_new_us_listing_the_profile_source_doesnt_know_stands_on_its_listing(monkeypatch):
+    """APXC, CHWM, DAVI, VNYR (1 Nov): "No US company found", though the market quotes each under its name."""
+    from app import main
+    hub = main.research_hub
+    fh = hub.finnhub
+    monkeypatch.setattr(fh, "profile", lambda s: {})
+    for name in ("quote", "metrics", "peers", "recommendation", "earnings", "financials", "insider", "earnings_calendar", "news"):
+        monkeypatch.setattr(fh, name, lambda *a, **k: None)
+    monkeypatch.setattr(hub.yahoo, "meta", lambda s: {"name": "Apex Critical Metals Corp.", "currency": "USD", "exchange": "NCM", "price": 4.57})
+    monkeypatch.setattr(hub, "_quiet_candles", lambda s: [])
+    out = hub._company_us("APXC", lean=True)
+    assert out["name"] == "Apex Critical Metals Corp." and out["currency"] == "USD"
+    monkeypatch.setattr(hub.yahoo, "meta", lambda s: {})                  # nothing quotes it anywhere: still no page
+    with pytest.raises(Exception, match="No US company found"):
+        hub._company_us("ADVI", lean=True)
+
+
+def test_a_us_ticker_no_market_quotes_yet_is_a_fact_not_a_broken_page(monkeypatch):
+    """ADVI, GPOD, KBGHF, TPTI, TEGO (1 Nov): on the SEC's list, no price anywhere."""
+    from app import audit, deepdive, main, report_card
+    from app.intel.net import NotFound
+    from tests.test_deepdive import company
+    monkeypatch.setattr(deepdive, "stored", lambda s: None)
+    monkeypatch.setattr(report_card, "stored", lambda s: None)
+    p = {**company(), "region": "US"}
+
+    def page(s):
+        raise NotFound("Finnhub", f"No US company found for {s}. Use the exact ticker, like NVDA or AAPL.")
+
+    def row(quote):
+        base = lambda s: {"p": p, "docs": [], "doc_note": None, "filings": None, "trend": None, "trend_why": "new", "quote": quote}
+        return [(i["level"], i["detail"]) for i in audit.audit_company("ADVI", base, main.deep_view, listing_fn=page)["issues"]
+                if i["area"] == audit.LISTING]
+    assert row(None) == [("fact", audit.NOT_QUOTED)]
+    assert row({"price": 4.5})[0][0] == "error"                            # quoted somewhere, yet no page: still an error

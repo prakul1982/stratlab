@@ -258,6 +258,11 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
     return out
 
 
+# a ticker on the SEC's list that no market quotes yet (registered, not trading: ADVI, GPOD, KBGHF, TPTI, TEGO on 1 Nov):
+# no price and no profile anywhere, so there is no company page to check, which is a fact about it, not a broken page
+NO_US_COMPANY = "No US company found"
+NOT_QUOTED = "Not trading yet: it files with the SEC, but no market quotes it, so there is no company page to check"
+
 SUSPECT_PE = 1.0               # a P/E under 1 (the price under one year's profit) is almost never real: a units slip (DJ-027)
 
 
@@ -771,6 +776,8 @@ def audit_company(sym: str, base_fn, view_fn, exchange_price=None, read=None, li
             except Exception as e:
                 why = _plain(getattr(e, "detail", None) if isinstance(getattr(e, "detail", None), str) else e)[:120] or e.__class__.__name__
                 issues.append(_later(LISTING, f"its company page couldn't be read ({why})") if RETRY_LATER.search(why)
+                              else _issue("fact", LISTING, NOT_QUOTED) if p.get("region") == "US" and NO_US_COMPANY in why
+                              and not (base.get("quote") or {}).get("price")
                               else _issue("error", LISTING, f"Company page unavailable: {why}"))
         if read and view.get("documents"):
             issues += check_documents(view["documents"], lambda c, pr: read(c, pr, p))

@@ -1255,7 +1255,12 @@ class Research:
                 raise
             p = {"name": lst["name"], "currency": lst.get("currency"), "exchange": lst.get("exchange"), "from_listing": True}
         if not p.get("name"):
-            raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
+            # a new listing the profile source doesn't know yet (audit, 1 Nov: APXC, CHWM, DAVI, VNYR had no page, though the
+            # market quotes each under its name): the page stands on the listing, as it does when that source is busy
+            lst = self._listing_or_none(sym)
+            if not (lst and lst.get("name")):
+                raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
+            p = {"name": lst["name"], "currency": lst.get("currency"), "exchange": lst.get("exchange"), "from_listing": True}
         if not lean:
             k1y = started.pop("k1y")             # kept last, the order the tasks always had (the sources list follows it)
             started.update(self._start({"wiki": ("Wikipedia", lambda: self.wiki.company(p["name"]))}))
