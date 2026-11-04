@@ -67,6 +67,10 @@ def api(monkeypatch):
     own = suggest.Suggester({"US": lambda: suggest.us_rows(US_LIST), "IN": lambda: []}, {"US": dict, "IN": dict})
     hub.local_search = lambda q, region: own.search_ranked(q, region, 10)
     routes.setup(hub, None, None)
+    # the watchlist's "is it a listed company" check answers from this test's own lists, not from whatever list of
+    # companies the app kept from an earlier test file (PR 326 CI: after test_mw1_watch, NVDA was "unknown" and the
+    # round trip was refused); the refusal itself is tested in test_review_dd1 and test_mw1_watch
+    monkeypatch.setattr(routes, "known_symbol", lambda region, sym: True if own.find(sym, region) or region == "IN" else None)
     A._cache.clear()
     calls, usage, settings_store = [], [], {}
 
