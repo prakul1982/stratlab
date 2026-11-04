@@ -9,7 +9,7 @@ import { track } from "../lib/analytics";
 import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, FactTable, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
 import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
 import { useAskedFy } from "../lib/useFy";
 import { gainLabel, usSharesNote } from "../lib/usGains";
@@ -487,17 +487,17 @@ function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
   const toolsLink = <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link>;
   return (
     <Card compact label="The year's tax">
-      <StatRow>
-        <Stat label={`Estimated tax for ${y.label}`} value={<span aria-label="Total tax estimate">{inr(t.total)}</span>}
-          note={<>{rounds && t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B). ` : ""}<a className="link" href="#tax-total">How it is worked out</a></>} />
-        {payable && !payable.locked && payable.total != null && (
-          <Stat label="Payable now, with interest" value={<span aria-label="Payable now">{inr(payable.total)}</span>}
-            note={payable.return_needed === false
-              ? <>No return is needed for {y.label}: total income {inr(payable.income ?? 0)} is within the {inr(payable.exempt ?? 0)} basic exemption limit, so there is no late fee. {toolsLink}</>
-              // RC2B-003: the late fee is named beside the interest when the figure holds one
-              : <>less TDS and tax paid, plus 234A, 234B and 234C{payable.fee_234f ? " and the 234F late fee" : ""}{payable.due ? `, as if paid by ${payable.past_due ? "today" : dateOnly(payable.due)}` : ""}. {toolsLink}</>} />
-        )}
-      </StatRow>
+      {/* RC2B-042 and TABLE-SWEEP: the year's two figures as rows of one table, each with its note beside it, not two tiles across a
+          full-width card */}
+      <FactTable label="The year's tax" itemHead="Figure" figureHead="Amount" noteHead="What it is" numeric rows={[
+        { id: "est", k: `Estimated tax for ${y.label}`, v: <span aria-label="Total tax estimate">{inr(t.total)}</span>,
+          n: <>{rounds && t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B). ` : ""}<a className="link" href="#tax-total">How it is worked out</a></> },
+        ...(payable && !payable.locked && payable.total != null ? [{ id: "pay", k: "Payable now, with interest", v: <span aria-label="Payable now">{inr(payable.total)}</span>,
+          n: payable.return_needed === false
+            ? <>No return is needed for {y.label}: total income {inr(payable.income ?? 0)} is within the {inr(payable.exempt ?? 0)} basic exemption limit, so there is no late fee. {toolsLink}</>
+            // RC2B-003: the late fee is named beside the interest when the figure holds one
+            : <>less TDS and tax paid, plus 234A, 234B and 234C{payable.fee_234f ? " and the 234F late fee" : ""}{payable.due ? `, as if paid by ${payable.past_due ? "today" : dateOnly(payable.due)}` : ""}. {toolsLink}</> }] : []),
+      ]} />
       {payable?.locked && <p className="k-small k-muted" data-testid="tax-payable-locked">What is still payable, with your TDS and payments taken off and the interest under sections 234A, 234B and 234C added, is in <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link> on the {payable.plan ?? "Pro"} plan.</p>}
     </Card>
   );

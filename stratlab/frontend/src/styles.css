@@ -2042,7 +2042,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-dl.prose dt { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
 .k-dl.prose dd { font-weight: 400; color: var(--muted); line-height: 1.5; }
 /* MO-3c: the downloads are equal columns across the card (three buttons of three widths left a gap at the right), one a row on a phone */
-.k-downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: var(--s2); }
+.k-downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); grid-auto-rows: 1fr; gap: var(--s2); }   /* every download the same height, whatever its note (VR3-024) */
 .k-downloads .btn { height: auto; min-height: 52px; padding-block: var(--s2); text-align: left; justify-content: flex-start; white-space: normal; min-width: 0; }
 .k-downloads .btn small { display: block; font-weight: 400; opacity: .75; font-size: var(--t-note); }
 .k-fold { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; display: flex; justify-content: space-between; align-items: center; gap: var(--s3); text-align: left; flex-wrap: wrap; }

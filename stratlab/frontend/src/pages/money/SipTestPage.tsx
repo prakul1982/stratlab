@@ -180,7 +180,8 @@ export function SipTestPage() {
         {picks.length > 1 && Math.abs(total - 100) >= 0.5 && <p className="k-small k-down" role="status">The shares add up to {total}%; make them 100%.</p>}
 
         <FormGrid label="SIP settings" onSubmit={(e) => { e.preventDefault(); if (ready && !busy) void run(); }}>
-          <FieldGroup label="Each time" wide>
+          {/* one cell of the grid like the fields beside it, not the whole row for a two-way switch (VR3-021: 200px empty beside it) */}
+          <FieldGroup label="Each time">
             <Seg label="Each time" options={[{ value: "amount", label: "An amount" }, { value: "qty", label: "Shares" }]} value={mode} onChange={(v) => { setMode(v as typeof mode); if (v === "qty") setRule("plain"); }} />
           </FieldGroup>
           {mode === "amount"

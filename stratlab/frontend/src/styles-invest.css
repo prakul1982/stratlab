@@ -4,6 +4,10 @@
 /* side-by-side cards keep their own height (R5O-036): stretched to the taller one, the other was a big empty box */
 .k-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: start; }
 .k-cols > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* VR3-023, for every pair of chart cards side by side: the two are one height and their charts sit level at the foot, so a two-line
+   caption or a third legend key on one doesn't leave the other 20-35px short */
+.k-cols > .k-card:has(> .k-chart-body) { align-self: stretch; }
+.k-cols > .k-card > .k-chart-body { margin-top: auto; }
 /* the results calendar's filters: one compact grid, the size chips across the top, the choices in as many columns as fit (RES-1) */
 .res-filters { gap: var(--s3); }
 .res-count { justify-content: space-between; }
