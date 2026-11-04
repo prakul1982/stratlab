@@ -28,3 +28,11 @@ test("Holidays known to 31 Dec are fine in November: the server's season-aware l
   assert.equal(services(ov({ calendar: { days_left: 57 } })).find((s) => s.key === "cal").state, "warn");
   assert.match(read("src/pages/admin/HolidaysPanel.tsx"), /const low = status\.state \? status\.state !== "ok" :/);
 });
+
+test("System: Telegram off with email set up is OK with a note, not a Check; the sampled audit's age is a plain note", () => {
+  const sys = read("src/pages/admin/SystemSection.tsx");
+  assert.match(sys, /<StatusRow state=\{chans\.email \? "ok" : "warn"\} label="Alert channels"/);
+  assert.match(sys, /Telegram is optional and off, so it is left out of users' Settings; to offer it, add TELEGRAM_BOT_TOKEN/);
+  const audit = read("src/pages/admin/AuditPanel.tsx");
+  assert.match(audit, /staleNote\(s\.finished_at\) && <Notice tone="info">/);
+});

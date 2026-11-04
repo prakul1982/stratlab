@@ -28,7 +28,6 @@ const SHOWN = 300;
 const PAGE_ROWS = 30;          // companies shown at a time, then "Show more" (DJ-030: a 10,880px page on a phone)
 const STALE_DAYS = 7;          // an audit older than this says so above its results (DJ-028)
 
-/** "These results are 23 days old" for a finished audit more than STALE_DAYS old, else "" (DJ-028). */
 /** The whole-market check's state while it runs, from its own counts: "every company checked" only when every listed company has a
  * result (LIVE3-024: it said so with 4,970 listed and 4,967 checked, the day's three new listings not yet reached). */
 export function runningLine(m: { due: number; listed: number; checked: number }): string {
@@ -37,11 +36,14 @@ export function runningLine(m: { due: number; listed: number; checked: number })
   return left ? `Running · ${left.toLocaleString("en-IN")} not checked yet` : "Running · every company checked";
 }
 
+/** "These results are 23 days old" for a finished audit more than STALE_DAYS old, else "" (DJ-028). Said as a plain note, not a warning:
+ * this sampled audit only runs when pressed, and the whole-market check above re-checks every company each day (owner, 4 Nov: an amber
+ * "32 days old" on Quality every day with nothing that needed doing). */
 export function staleNote(finishedAt: string | null | undefined, now = Date.now()): string {
   const t = finishedAt ? Date.parse(finishedAt) : NaN;
   if (!Number.isFinite(t)) return "";
   const days = Math.floor((now - t) / 86400000);
-  return days > STALE_DAYS ? `These results are ${days} days old: the companies' data has moved on since. Run the audit again for today's.` : "";
+  return days > STALE_DAYS ? `These results are ${days} days old, from an audit run by hand. The whole-market check above re-checks every company each day, so nothing needs doing; run this again only for a fresh sample.` : "";
 }
 const LEVEL: Record<Level, [string, "warn" | "plain"]> = { mismatch: ["Mismatch", "warn"], error: ["Error", "warn"], gap: ["Gap", "plain"], fact: ["Fact", "plain"], pending: ["Not checked yet", "plain"] };
 /** Which areas need a look first: mismatches, then errors, then gaps. */
@@ -95,7 +97,7 @@ export function AuditPanel({ region }: { region: Region }) {
               <p className="k-small"><b>{s.label}</b>{s.docs ? " with documents" : ""} · {s.running ? `started ${ago(s.started_at!)}` : s.finished_at ? `${s.cancelled ? "stopped" : "finished"} ${ago(s.finished_at)}` : ""}
                 {" · "}{sum.companies} checked, {sum.clean} clean · <span className="k-down">{count(sum.mismatches, "mismatch", "mismatches")}</span> · {tally(sum)}
                 {sum.avg_seconds != null && ` · ${sum.avg_seconds}s a company`}</p>
-              {!s.running && staleNote(s.finished_at) && <Notice tone="warn">{staleNote(s.finished_at)}</Notice>}
+              {!s.running && staleNote(s.finished_at) && <Notice tone="info">{staleNote(s.finished_at)}</Notice>}
               <Findings rows={s.rows ?? []} sum={sum} running={s.running} file="stratlab-audit.csv" region={s.region ?? region} />
             </>
           )}
