@@ -41,7 +41,7 @@ test("the labelled Feedback button: the menu's top, the phone's top bar, Help, t
   assert.ok(top > 0 && side > top && side < groups, "in the menu's top, above the menu's entries (not the footer)");
   const bar = shell.indexOf('<header className="topbar">');
   assert.ok(shell.indexOf('<FeedbackButton className="btn quiet sm top-feedback" />') > bar, "in the phone's top bar");
-  assert.match(read("src/components/FeedbackOpen.tsx"), />Feedback<\/button>/);
+  assert.match(read("src/components/Shell.tsx"), /onClick=\{openFeedback\} title="Report something broken, or suggest a feature">Feedback<\/button>/);
   // the opener, the button and the host ride in the shared file every page downloads; the dialog comes only when opened
   assert.match(read("vite.config.ts"), /\{ name: "common", test: [^\n]*FeedbackOpen/);
   for (const f of ["src/components/LegalLinks.tsx", "src/pages/Login.tsx", "src/pages/AppGates.tsx", "src/components/Shell.tsx", "src/main.tsx", "src/visitor/visitorMain.tsx", "src/components/FeedbackOpen.tsx"])
@@ -57,7 +57,7 @@ test("the labelled Feedback button: the menu's top, the phone's top bar, Help, t
   assert.match(read("e2e/ui-lint-world.ts"), /"\/admin\/feedback", "\/admin\/emails", "\/help#feedback"\]/);           // the inbox and the dialog are laid out by the checker
   assert.match(read("src/components/LegalLinks.tsx"), /onClick=\{openFeedback\}>Feedback<\/button>/);
   assert.match(read("src/pages/AppGates.tsx"), /onClick=\{openFeedback\}>Report a problem or an idea<\/button>/);
-  assert.match(read("src/pages/Login.tsx"), /onClick=\{openFeedback\}>Report a problem or an idea<\/button>/);
+  // the public Help page's footer has the Feedback link (LegalLinks), so the landing page's download carries no second one
   // sent with the words: the path (no query), version, browser line, screen; nothing else from the page
   const dlg = read("src/components/Feedback.tsx");
   assert.match(dlg, /path: loc\.pathname, version: \(APP_BUILD\.sha \?\? ""\)\.slice\(0, 12\), browser: browserLine\(navigator\.userAgent\), screen: `\$\{innerWidth\}×\$\{innerHeight\}`/);

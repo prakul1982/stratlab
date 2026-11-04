@@ -17,7 +17,7 @@ import { PageBreadcrumb } from "./PageBreadcrumb";
 import { HubTabs } from "./HubTabs";
 import { Onboarding, openTour } from "./Onboarding";
 import { MarketsLauncher, openMarkets } from "./watch/Launcher";
-import { FeedbackButton } from "./FeedbackOpen";
+import { openFeedback } from "./FeedbackOpen";
 import { gateFor, gatePlan } from "../lib/gates";
 import { PLAN_NAME } from "../lib/plans";
 import { watchSize } from "../lib/resize";
@@ -339,6 +339,11 @@ export function Shell({ children }: { children: ReactNode }) {
 
 
 /** Each space's main button: what the space is for, in one action. My space's follows what the person came for. */
+/** Help & feedback's labelled button (owner, 4 Nov): the menu's top on a laptop, the top bar on a phone. */
+function FeedbackButton({ className }: { className: string }) {
+  return <button type="button" className={`${className} feedback-btn`} onClick={openFeedback} title="Report something broken, or suggest a feature">Feedback</button>;
+}
+
 export function mainAction(space: SpaceView, focus: string | null | undefined, hasHoldings = false): { to: string; icon: ReactNode; label: string } {
   return space === "invest" || (space === "mine" && focus === "invest") ? { to: "/research", icon: <Lens size={16} />, label: "Look up a company" }
     // the next real step: add them when there are none, update them when there are (LIVE1C-055: "Add your holdings" beside three holdings)

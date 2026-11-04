@@ -30,31 +30,8 @@ export function prefetchPublic(path: string): void {
 
 /** The server's answer to a public address, no sign-in. A failure is an `ApiError` with the server's own words. */
 /** A plain POST with no sign-in, for a visitor (Help & feedback): the same answers and errors as publicGet. */
-export async function publicPost<T = any>(path: string, body: unknown): Promise<T> {
-  if (!CFG.API_BASE) {
-    const e = new ApiError(NO_BACKEND_MESSAGE);
-    e.code = "no_backend";
-    throw e;
-  }
-  let r: Response;
-  try {
-    r = await fetch(CFG.API_BASE + path, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body) });
-  } catch {
-    const e = new ApiError("Can't reach the StratLab server. Check your connection and try again.");
-    e.code = "network";
-    throw e;
-  }
-  let payload: any = null;
-  try { payload = await r.json(); } catch { /* empty body */ }
-  if (!r.ok) {
-    const d = payload?.detail;
-    const e = new ApiError((d && (d.message || (typeof d === "string" ? d : ""))) || `Something went wrong (${r.status}). Try again.`);
-    e.status = r.status;
-    e.code = d?.code;
-    throw e;
-  }
-  return payload as T;
-}
+export const publicPost = <T = any>(path: string, body: unknown): Promise<T> =>
+  readPublic<T>(path, undefined, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body) });
 
 export async function publicGet<T = any>(path: string, signal?: AbortSignal): Promise<T> {
   const ahead = early.get(path);
@@ -65,7 +42,7 @@ export async function publicGet<T = any>(path: string, signal?: AbortSignal): Pr
   return readPublic<T>(path, signal);
 }
 
-async function readPublic<T = any>(path: string, signal?: AbortSignal): Promise<T> {
+async function readPublic<T = any>(path: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
   if (!CFG.API_BASE) {
     const e = new ApiError(NO_BACKEND_MESSAGE);
     console.warn("StratLab: API_BASE is missing from config.js, so no request can be sent.");
@@ -74,7 +51,7 @@ async function readPublic<T = any>(path: string, signal?: AbortSignal): Promise<
   }
   let r: Response;
   try {
-    r = await fetch(CFG.API_BASE + path, { headers: { Accept: "application/json" }, signal });
+    r = await fetch(CFG.API_BASE + path, init ?? { headers: { Accept: "application/json" }, signal });
   } catch (x) {
     if ((x as Error)?.name === "AbortError") throw x;
     const e = new ApiError("Can't reach the StratLab server. Check your connection and try again.");

@@ -6,7 +6,7 @@ import type { Focus, Level } from "../lib/types";
 import { homeOf, SPACE_HOMES, SPACE_IDS, SPACES, viewForFocus } from "../lib/spaces";
 import { Modal } from "./ui";
 import { track } from "../lib/analytics";
-import { INTRO_LINE } from "../content/intro";
+import { INTRO_LINE } from "../content/welcome";
 
 export const LEVELS: [Level, string, string][] = [
   ["new", "New to this", "Guided start: examples to try, explanations up front, advanced settings folded away."],

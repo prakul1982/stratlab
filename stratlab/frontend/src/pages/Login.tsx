@@ -8,7 +8,6 @@ import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
 import { HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_SPACES } from "../content/intro";
-import { openFeedback } from "../components/FeedbackOpen";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
@@ -448,7 +447,6 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
                 </Head>
                 <ul className="lp-help-links" aria-label="Where to find help">
                   {HELP_LINKS.map(([to, label]) => <li key={to}><Link className="link" to={to}>{label}</Link></li>)}
-                  <li><button type="button" className="linklike link" onClick={openFeedback}>Report a problem or an idea</button></li>
                 </ul>
               </>
             ) : (

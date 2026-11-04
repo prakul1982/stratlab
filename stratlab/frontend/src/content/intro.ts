@@ -3,10 +3,6 @@
  * time) say the same things (LAND-2).
  * Plain data: no React. Facts about the product only: nothing here says what to buy or sell, rates a company or names a data source. */
 
-/** The one sentence a first-time visitor needs: the welcome pop-up opens with it (components/LevelPrompt.tsx). LIVE3-023 / LIVE2-011
- *  (owner, 4 Nov): the landing page no longer draws it under a "What StratLab is" heading: it restated the hero. */
-export const INTRO_LINE = "StratLab is a lab for testing trading ideas and understanding your own money, across ten markets, with paper trading only (never real orders) and facts, not tips.";
-
 export type IntroSpace = { id: "trade" | "invest" | "money"; name: string; sub: string; line: string; things: [string, string][] };
 
 /** The three spaces: what you do there in one line, and three concrete things it does (each one a real feature). */

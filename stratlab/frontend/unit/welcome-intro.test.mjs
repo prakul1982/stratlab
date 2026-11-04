@@ -8,10 +8,10 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 test("the welcome pop-up opens with the one 'what StratLab is' sentence", () => {
   const src = read("src/components/LevelPrompt.tsx");
-  assert.match(src, /import \{ INTRO_LINE \} from "\.\.\/content\/intro";/);
+  assert.match(src, /import \{ INTRO_LINE \} from "\.\.\/content\/welcome";/);      // not in the landing page's download since it cut the sentence (LIVE3-023)
   const what = src.indexOf('<p className="welcome-what">{INTRO_LINE}</p>');
   assert.ok(what > 0 && what < src.indexOf("The others stay one tap away"));       // first, before the line about where things are
-  assert.match(read("src/content/intro.ts"), /paper trading only \(never real orders\) and facts, not tips/);
+  assert.match(read("src/content/welcome.ts"), /paper trading only \(never real orders\) and facts, not tips/);
   assert.match(read("src/styles.css"), /\.welcome-what \{ margin: 0;/);
 });
 

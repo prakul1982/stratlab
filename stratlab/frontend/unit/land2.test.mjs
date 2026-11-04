@@ -5,7 +5,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { HOW_MONEY, HOW_STEPS, INTRO_LINE, INTRO_SPACES } from "../src/content/intro.ts";
+import { HOW_MONEY, HOW_STEPS, INTRO_SPACES } from "../src/content/intro.ts";
+import { INTRO_LINE } from "../src/content/welcome.ts";
 import { PAGES } from "../src/content/seo.ts";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
