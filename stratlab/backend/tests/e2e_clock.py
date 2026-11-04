@@ -41,8 +41,8 @@ def _time_machine():
     try:
         import time_machine
     except ImportError:
-        # the backend's CI job installs it for the unit tests; the browser jobs install requirements.txt only, and
-        # production must not carry a test library, so the e2e server fetches it once for itself
+        # every CI job installs it beside requirements.txt (tests.yml: backend, browser, ui-lint); production must not
+        # carry a test library, so this is only the fallback for a local machine without it: fetch it once
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "time-machine>=2.16,<4"], check=True)
         import time_machine
     return time_machine
