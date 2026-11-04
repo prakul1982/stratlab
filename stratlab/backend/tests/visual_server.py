@@ -334,6 +334,10 @@ def theme_pages(mp):
     build them, so the theme page's deep dive (e2e/themes.spec.ts) has the stored figures it reads."""
     from app import stock_pages
     mp.setattr(main.stock_page_store, "per_minute", 10**6)       # a page is built at most a few a minute; the demo's seven are built at once
+    from app.intel import routes as research_routes
+    from tests import fake_theme
+    index_rows = research_routes.index_rows                     # the theme's base reads the companies' basic industry (THEMES)
+    mp.setattr(research_routes, "index_rows", lambda region: fake_theme.with_industries(index_rows(region)) if region == "IN" else index_rows(region))
     for sym in ("COALINDIA", "VEDL", "TATASTEEL", "JSWSTEEL", "SAIL", "NTPC", "ONGC"):
         hit = stock_pages.find("IN", sym)
         if hit:

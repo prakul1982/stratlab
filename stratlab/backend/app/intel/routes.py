@@ -848,9 +848,10 @@ def sector_map(profile, region: str, q: str, refresh: bool = False):
 @router.get("/sector")
 def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
     r, theme, got, rows = sector_map(profile, region, q, refresh)
-    # THEME-1: a company stays in a layer or sub-theme only when its own description shows it does that work, and a tailwind or
-    # risk is shown beside the dated headline that supports it (theme_routes.checked)
-    got = theme_routes.checked(r, theme, got)
+    # THEME-1: a company sits in an AI layer or sub-theme only when its own description shows it does that work, and a tailwind or
+    # risk is shown beside the dated headline that supports it (theme_routes.checked); THEMES: every company of the theme's official
+    # industries is in it, each with its own one-line description where it is known
+    got = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, got))
     return ok({**got, "market_size": "", "cagr": None, "cagr_note": "", "exchange": grounding.exchange_list(got, rows) or None})
 
 

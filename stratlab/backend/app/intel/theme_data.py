@@ -488,6 +488,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b = layer_block(v.get("layer") or "", [{**r, "what": what.get(r["symbol"]), "company_wide": r["symbol"] in wide} for r in mine], wide)
         b["description"] = v.get("description") or ""
         b["policy"] = v.get("policy")
+        b["official"] = bool(v.get("official"))     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
         blocks.append(b)
         histories[b["layer"]] = layer_history([r for r in mine if r["symbol"] not in wide] or mine)
     chain = chain_table(blocks)

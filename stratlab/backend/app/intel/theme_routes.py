@@ -23,7 +23,7 @@ from ..auth import current_profile
 from ..guard import Window
 from ..responses import err
 from . import ai as A
-from . import theme_check, theme_data, theme_prices
+from . import grounding, theme_base, theme_check, theme_data, theme_prices
 from .net import SourceError, TTLCache
 from .news import aggregator_url, company_headline, plain_headline, publisher_url
 
@@ -38,6 +38,7 @@ EVIDENCE_DAYS = 30                                                        # a de
 NO_DESCRIPTION_DAYS = 3                                                   # ...a company with none, after this long
 VERDICTS: dict = {}                                                       # placement answers (a few hundred bytes each), cleared past VERDICT_KEEP
 VERDICT_KEEP = 3000
+DESCRIBE_READS = 6                                                        # descriptions read from the companies' own pages a request
 PRICE_READS_PER_MINUTE = 20                                               # companies' candles read from the sources a minute, across every theme
 PRICE_BUDGET = 45.0                                                       # seconds a request may spend reading candles
 price_reads = Window()
@@ -119,20 +120,35 @@ def _plain_claims(m: dict) -> dict:
     return m
 
 
+PENDING_GIVE_UP = 90.0                                                    # seconds a map may wait on companies still being checked
+_pending_since: dict = {}                                                 # (market, theme, map time) -> when it was first served unchecked
+
+
+def _industries(region: str, theme: str) -> dict:
+    """The theme's official industries (theme_base.industries_for), on the market's stored index."""
+    R = _routes()
+    return theme_base.industries_for(region, theme, R.index_rows(region), _ask, db.get_setting, db.set_setting)
+
+
 def checked(region: str, theme: str, m: dict) -> dict:
-    """The map as the page shows it: placements checked against the companies' own descriptions, claims against dated headlines. A part
-    that can't be checked right now (a source or the AI is busy) is left to the next request, never shown unchecked."""
+    """The map as the page shows it: every company of the theme's official industries (theme_base.py), the AI's placements checked
+    against the companies' own descriptions (a "no" moves a base company out of that layer, never out of the theme; an addition from
+    another industry is left out), claims against dated headlines. A part that can't be checked right now (a source or the AI is busy) is
+    left to the next request; after PENDING_GIVE_UP it is served as it stands, its companies not yet confirmed, and checked again two hours
+    on, so the page never waits on one company for minutes (THEMES item 6: "1 company is still being checked" for over two minutes)."""
     key = (region, theme.lower(), int(float(m.get("generated_at") or 0)))
-    hit = A.get("sector_checked2", key)
+    hit = A.get("sector_checked3", key)
     if hit is not None:
         return hit
     with _ai_gate:                                  # one check at a time: the sources and the AI are shared
-        hit = A.get("sector_checked2", key)
+        hit = A.get("sector_checked3", key)
         if hit is not None:
             return hit
         if len(VERDICTS) > VERDICT_KEEP:
             VERDICTS.clear()
         out = theme_check.check_placements(m, evidence_reader(region, _map_names(m)), _ask, theme, VERDICTS)
+        inds = _industries(region, theme)
+        out = theme_base.with_base(m, out, _routes().index_rows(region), inds["industries"], grounding.listed_name)
         claims = A.get("sector_claims", key)
         if claims is None:
             try:
@@ -141,9 +157,58 @@ def checked(region: str, theme: str, m: dict) -> dict:
             except AIError:
                 claims = _plain_claims(m)
         out["tailwinds"], out["risks"] = claims["tailwinds"], claims["risks"]
-        if out["placements"]["checked"]:
-            A.keep("sector_checked2", key, out, 24 * 3600)   # 2: placements re-checked after the 31 Oct fix (a paraphrased or unreadable answer no longer drops a company)
+        p = out["placements"]
+        p["industries_by"] = inds["how"]
+        done = p["checked"] and inds["how"] != "pending"
+        if len(_pending_since) > VERDICT_KEEP:
+            _pending_since.clear()
+        if done:
+            _pending_since.pop(key, None)
+            # 3: the official-industry base (THEMES, 4 Nov); 2: placements re-checked after the 31 Oct fix
+            A.keep("sector_checked3", key, out, 24 * 3600)
+        elif time.time() - _pending_since.setdefault(key, time.time()) > PENDING_GIVE_UP:
+            p["checked"], p["timed_out"] = True, p.get("pending") or 0
+            _pending_since.pop(key, None)
+            A.keep("sector_checked3", key, out, 2 * 3600)
+        p["checked"] = p["checked"] and inds["how"] != "pending" or bool(p.get("timed_out"))
     return out
+
+
+def _about_reader(region: str, names: dict):
+    """symbol -> its stored description, or None: from memory or storage, and at most DESCRIBE_READS read from the company's own page per
+    request (largest first), so a theme of hundreds fills in over a few views without a burst of reads."""
+    reads = {"n": 0}
+    lock = threading.Lock()
+
+    def about_of(sym):
+        k = f"theme:evidence:{region}:{sym}"
+        hit = EVIDENCE_CACHE.get(k)
+        if hit is None:
+            try:
+                got = db.json_value(db.get_setting(k), {})
+            except Exception:
+                got = {}
+            if got.get("at"):
+                hit = got
+                EVIDENCE_CACHE.set(k, hit, 6 * 3600)
+        if hit is None:
+            with lock:
+                if reads["n"] >= DESCRIBE_READS:
+                    return None
+                reads["n"] += 1
+            try:
+                return (evidence_reader(region, names)([sym])[0].get(sym) or {}).get("about")
+            except Exception:
+                return None
+        return hit.get("about") or None
+    return about_of
+
+
+def with_descriptions(region: str, m: dict) -> dict:
+    """The map with each official-industry company's own one-line description where it is known (theme_base.described)."""
+    want = set(theme_base.to_describe(m))
+    read = _about_reader(region, {c["ticker"]: c.get("name") for v in m.get("value_chain") or [] for c in v.get("companies") or []})
+    return theme_base.described(m, lambda s: read(s) if s in want else None)
 
 
 # ---------- the dive ----------
@@ -190,12 +255,14 @@ def sources(region: str, theme: str):
 def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
     R = _routes()
     r, theme, m, _ = R.sector_map(profile, region, q, False)
-    m = checked(r, theme, m)
-    key = (r, theme.lower(), int(float(m.get("generated_at") or 0)), (m.get("placements") or {}).get("placed"))
+    m = with_descriptions(r, checked(r, theme, m))
+    fm, figures = theme_base.for_figures(m)
+    said = sum(1 for v in fm["value_chain"] if v.get("official") for c in v["companies"] if c.get("what"))
+    key = (r, theme.lower(), int(float(m.get("generated_at") or 0)), (m.get("placements") or {}).get("placed"), said)
     hit = None if refresh else DIVE_CACHE.get(key)
     if hit is None:
-        hit = theme_data.build(r, theme, m, sources(r, theme))
-        hit["placements"] = m.get("placements")
+        hit = theme_data.build(r, theme, fm, sources(r, theme))
+        hit["placements"], hit["figures"] = m.get("placements"), figures
         if (m.get("placements") or {}).get("checked"):
             DIVE_CACHE.set(key, hit, DIVE_TTL)
     return R.ok(hit)
@@ -231,7 +298,7 @@ def theme_dive_business(q: str, region: str = "IN", profile=Depends(current_prof
     if not biz_updates._allowed(profile):
         return R.ok({"allowed": False, "layers": [], "subs": [], "companies": 0, "of": 0})
     r, theme, m, _ = R.sector_map(profile, region, q, False)
-    m = checked(r, theme, m)
+    m = theme_base.for_figures(checked(r, theme, m))[0]
     names = _map_names(m)
     blocks = [{"layer": v.get("layer") or "", "companies": [{"symbol": c["ticker"]} for c in v.get("companies") or []]} for v in m.get("value_chain") or []]
     subs = [{"name": v.get("name") or "", "companies": [{"symbol": c["ticker"]} for c in v.get("companies") or []]} for v in m.get("sub_themes") or []]
@@ -266,6 +333,7 @@ def theme_dive_listings(q: str, region: str = "IN", profile=Depends(current_prof
     R = _routes()
     r, theme, m, _ = R.sector_map(profile, region, q, False)
     m = checked(r, theme, m)
+    m = {**m, "value_chain": [v for v in m.get("value_chain") or [] if not v.get("official")]}     # an official industry's layer has no work to match an offer on
     key = (r, theme.lower(), int(float(m.get("generated_at") or 0)))
     hit = IPO_CACHE.get(key)
     if hit is None:
@@ -368,7 +436,7 @@ def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budg
 def theme_dive_prices(q: str, region: str = "IN", profile=Depends(current_profile)):
     R = _routes()
     r, theme, m, _ = R.sector_map(profile, region, q, False)
-    m = checked(r, theme, m)
+    m = theme_base.for_figures(checked(r, theme, m))[0]
     names = _map_names(m)
     placed = {c["ticker"]: names.get(c["ticker"]) for grp in (m.get("value_chain") or []) + (m.get("sub_themes") or []) for c in grp.get("companies") or []}
     members = sorted(placed.items())
@@ -429,7 +497,7 @@ def theme_news(region: str, theme: str, members: list[dict], search, today: date
 def theme_dive_news(q: str, region: str = "IN", profile=Depends(current_profile)):
     R = _routes()
     r, theme, m, _ = R.sector_map(profile, region, q, False)
-    m = checked(r, theme, m)
+    m = theme_base.for_figures(checked(r, theme, m))[0]
     key = (r, theme.lower(), int(float(m.get("generated_at") or 0)))
     hit = NEWS_CACHE.get(key)
     if hit is None:
