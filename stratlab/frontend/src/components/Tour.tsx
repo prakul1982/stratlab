@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Coachmark } from "./kit";
+import { holdTourMenu } from "../lib/tourMenu";
 
 /** One step: a short title and line, pointed at the real control it is about (the desktop menu's, then the phone's
  * top bar's). Five steps, the ones a newcomer needs; every page is also one search away. `menu`: on a phone the thing is
@@ -37,7 +38,7 @@ export const STEPS = tourSteps();
 const phoneNow = () => { try { return window.matchMedia("(max-width: 900px)").matches; } catch { return false; } };
 /** Open or close the phone's menu for a step (Shell listens). While the tour holds it open it is not a modal of its own,
  * so the tour's note keeps the keyboard. */
-const holdMenu = (open: boolean) => { window.dispatchEvent(new CustomEvent("stratlab:tour-menu", { detail: { open } })); };
+const holdMenu = holdTourMenu;
 
 /** The short tour. `paused` hides it while a dialog is open. `onClose(done)`: true when the last step's Done was pressed, false when it was closed early. */
 export function Tour({ onClose, paused = false, main }: { onClose: (done: boolean) => void; paused?: boolean; main?: string }) {
