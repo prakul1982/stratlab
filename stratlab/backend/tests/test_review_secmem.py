@@ -501,5 +501,5 @@ def test_a_transcript_is_due_only_once_the_call_is_held(monkeypatch):
     monkeypatch.setattr(deepdive, "ist_now", lambda: datetime(2026, 11, 10, 9, 0, tzinfo=IST))
     assert deepdive.meetings(antelopus, "2024-11-01T00:00")["calls_due"] == 1
     # and a notice whose call never brought a transcript, once older than any call is ahead of its notice
-    monkeypatch.setattr(deepdive, "ist_now", lambda: datetime(2026, 12, 20, 9, 0, tzinfo=IST))
+    monkeypatch.setattr(deepdive, "ist_now", lambda: datetime(2026, 11, 14, 9, 0, tzinfo=IST))
     assert deepdive.meetings(nse, "2024-11-01T00:00")["calls_due"] == 1

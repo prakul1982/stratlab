@@ -302,6 +302,7 @@ MEET = re.compile(r"analysts?/institutional investor meet|con\.? ?call|earnings 
 MEET_CATEGORIES = ("concall", "investor_meet")     # filing classes: earnings calls, and meetings with analysts or investors
 CALL_GRACE_DAYS = 7      # an earnings call this recent may not have its transcript filed yet
 CALL_STALE_DAYS = 45     # ...and one this old that still has none was never given one (the rule is five working days) (MS1-008)
+NOTICE_DUE_DAYS = 35     # a notice of a call to come: up to four weeks ahead of it, then the five working days (SECMEM 6)
 
 # a deck or transcript for shareholders' resolutions (an AGM, a postal ballot) isn't the business presentation or a call
 NOT_DECK = re.compile(r"postal ballot|general meeting|\b[ae]gm\b|shareholders?'*s? approval", re.I)
@@ -386,7 +387,8 @@ def meetings(items: list[dict], since: str) -> dict:
     # a notice of a call to come is filed days or weeks before it (the audit, 1 Nov: ANTELOPUS's notice of 22 Oct for a call
     # on 26 Oct, NSE's of 8 Oct for one on 3 Nov), so its transcript is due only once the call has been held: a recording or
     # outcome filed past the grace days, or a notice older than a call can be ahead of it
-    due = sum(i["at"] < (stale if _call_notice(i) else fresh) for i in calls)
+    ahead = (ist_now() - timedelta(days=NOTICE_DUE_DAYS)).strftime("%Y-%m-%dT%H:%M")
+    due = sum(i["at"] < (ahead if _call_notice(i) else fresh) for i in calls)
     return {"meets": len(meets), "calls": len(calls), "calls_due": due,
             "calls_old": sum(i["at"] < stale for i in calls),
             "shareholder": shareholder_meetings(recent), "filed": len(recent)}

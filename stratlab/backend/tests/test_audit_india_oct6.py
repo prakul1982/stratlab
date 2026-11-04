@@ -58,9 +58,12 @@ def test_a_bse_feed_refusal_leaves_the_nse_answer():
 
 
 # ---------- calls from the last week ----------
-def _call(at):
+def _call(at, held=True):
+    # SECMEM 6: a call held (its recording) is due a transcript after the grace days; a notice of one to come only once older
+    # than a call can be ahead of it (NOTICE_DUE_DAYS)
     return {"at": at, "category": "concall", "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
-            "text": "XYZ Ltd has informed the Exchange about Intimation of earnings call", "url": "https://nsearchives.nseindia.com/a.pdf"}
+            "text": "XYZ Ltd has informed the Exchange about " + ("Link of Recording of the earnings call" if held else "Intimation of earnings call"),
+            "url": "https://nsearchives.nseindia.com/a.pdf"}
 
 
 def test_a_call_from_the_last_week_has_no_transcript_due_yet():
@@ -75,6 +78,9 @@ def test_a_call_from_the_last_week_has_no_transcript_due_yet():
     assert got[0]["level"] == "gap" and "though 2 of its filings" in got[0]["detail"]
     older = deepdive.meetings([_call(stamp(2)), _call(stamp(60))], stamp(700))           # over six weeks with none filed: the company's (MS1-008)
     assert older["calls_old"] == 1 and audit._india_documents(["presentation"], older, None)[0]["level"] == "fact"
+    notice = deepdive.meetings([_call(stamp(20), held=False)], stamp(700))                 # a notice 20 days old: the call may be ahead
+    assert notice["calls"] == 1 and notice["calls_due"] == 0
+    assert deepdive.meetings([_call(stamp(40), held=False)], stamp(700))["calls_due"] == 1
     legacy = {"meets": 1, "calls": 1, "filed": 5}                                        # a stored read without the new count
     assert audit._india_documents(["presentation"], legacy, None)[0]["level"] == "gap"
 
