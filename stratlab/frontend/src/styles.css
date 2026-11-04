@@ -959,12 +959,19 @@ body:has(.k-coach) .consent { visibility: hidden; }
 /* LIVE1B-050: while the question is up the page's foot clears it: a visitor's page and the app's phone layout end above the bar, not under it */
 body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 @media (max-width: 900px) { .shell { padding-bottom: var(--consent-h, 0px); } }
-/* VR5: on a phone the question took 213px, over a quarter of a 360x800 screen: a size down and tighter, the two answers sharing the row */
+.consent-short, .consent-more { display: none; }
+/* VR5: on a phone the question took 213px, over a quarter of a 360x800 screen. LIVE3-010: even at 190px the card stood over a company
+   page's Test a strategy / Compare / Watch buttons and Invest's shortcut cards. On a phone it is a slim bar along the foot of the
+   window: the question in one sentence, then "What this means" and the two answers on one row, about 100px; the full wording is on
+   the privacy page, and the page's foot still clears it (--consent-h) */
 @media (max-width: 640px) {
-  .consent { right: 12px; left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; gap: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.4; }
-  .consent-title { font-size: 15px; }
-  .consent-btns { gap: 8px; }
-  .consent-btns .btn { flex: 1 1 0; min-width: 0; }
+  .consent { right: 0; left: 0; bottom: 0; width: auto; gap: 6px; padding: 10px 14px max(10px, env(safe-area-inset-bottom)); font-size: 13px; line-height: 1.4;
+    border-radius: var(--r-card) var(--r-card) 0 0; border-width: 1px 0 0; }
+  .consent-title, .consent-long { display: none; }
+  .consent-short { display: inline; }
+  .consent-btns { gap: 8px; align-items: center; flex-wrap: nowrap; }
+  .consent-more { display: inline; margin-right: auto; white-space: nowrap; }
+  .consent-btns .btn { flex: 0 0 96px; min-width: 0; }
 }
 
 /* search: one box for everything */

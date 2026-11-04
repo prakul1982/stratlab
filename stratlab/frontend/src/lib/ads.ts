@@ -83,12 +83,16 @@ export const askNow = (o: { cfg: AdsConfig; choice: Choice; path: string; adsOnl
   !o.dnt && trackAllowedOn(o.path) && (o.choice === null ? askNeeded(o.cfg) : o.choice === "yes" && !!o.adsOnly && !o.declined && !!(o.cfg.pixel || o.cfg.clarity));
 
 /** The question's words, naming only what is switched on. */
-export function consentWords(cfg: AdsConfig, adsOnly = false): { title: string; text: string } {
+/** `short`: the same question in one sentence, for the phone's slim bar (LIVE3-010: the full card stood over a company page's main
+ * buttons); the whole wording is a tap away on the privacy page. */
+export function consentWords(cfg: AdsConfig, adsOnly = false): { title: string; text: string; short: string } {
   const ads = !adsOnly && (adsLive(cfg, "public") || adsLive(cfg, "ai"));         // already answered, for ads alone
+  const and = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] ?? "");
   const parts = [ads && "Google ads", cfg.pixel && "Meta's ad measurement", cfg.clarity && "Microsoft Clarity, which records how pages are used with all text hidden"].filter(Boolean) as string[];
-  const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? "";
+  const brief = [ads && "Google ads", cfg.pixel && "Meta's ad measurement", cfg.clarity && "Microsoft Clarity"].filter(Boolean) as string[];
   const title = ads && (cfg.pixel || cfg.clarity) ? "Ads and analytics" : ads ? "Ads" : "Analytics";
-  return { title, text: `With your OK, StratLab uses ${list}. They set cookies. Say no and none of them load. Never on money, tax, holdings, net worth or account pages.` };
+  return { title, text: `With your OK, StratLab uses ${and(parts)}. They set cookies. Say no and none of them load. Never on money, tax, holdings, net worth or account pages.`,
+    short: `${title}: with your OK, StratLab uses ${and(brief)}, which set cookies.` };
 }
 
 /** A sign-up: the account was made in the last 15 minutes (as lib/analytics trackSignup counts it). */

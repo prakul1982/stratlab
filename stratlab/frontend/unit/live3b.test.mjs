@@ -34,3 +34,13 @@ test("an unfinished sign-in is said in words on the landing page and on every si
   // starting sign-in again or signing in clears it (clearSignInEnded is called by both)
   assert.match(read("src/lib/signin.ts"), /clearSignInEnded = \(\): void => \{ try \{ sessionStorage\.removeItem\(ENDED\); sessionStorage\.removeItem\(UNFINISHED\);/);
 });
+
+test("the phone's slim consent bar asks the same question in one sentence, naming only what is on (LIVE3-010)", async () => {
+  const A = await import("../src/lib/ads.ts");
+  const w = A.consentWords(A.adsConfig({}));
+  assert.equal(w.short, "Analytics: with your OK, StratLab uses Meta's ad measurement and Microsoft Clarity, which set cookies.");
+  assert.doesNotMatch(A.consentWords(A.adsConfig({}, { META_PIXEL_ID: "" })).short, /Meta/);
+  const css = read("src/styles.css");
+  assert.match(css, /\.consent-title, \.consent-long \{ display: none; \}/);
+  assert.match(css, /\.consent-short, \.consent-more \{ display: none; \}/);
+});
