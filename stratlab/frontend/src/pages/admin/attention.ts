@@ -289,9 +289,16 @@ export function paidUsers(st: Overview["stats"]): { label: string; value: number
 /** A job's line on Overview: its problem, or when it last ran; "Running" first while it runs, as Data and jobs says it
  * (R7O-006: "Running" on one page and "OK" on the other for the same breadth run). */
 const jobDetail = (j: JobRow): string => {
-  const base = j.error ? plainError(j.error).text : j.last_run ? `Last run ${ago(j.last_run)}` : j.schedule === "Off" ? "Off" : "Not run yet";
-  return j.running ? `Running · ${base}` : base;
+  const base = j.error ? plainError(j.error).text : j.last_run ? `Last finished run ${ago(j.last_run)}` : j.schedule === "Off" ? "Off" : "Not run yet";
+  return j.running ? `${runningFor(j)} · ${base}` : base;
 };
+
+/** "Running for 12 min", from when the run began: never the last finished run's time beside the word (LIVE3-006). */
+export function runningFor(j: Pick<JobRow, "running" | "running_since">): string {
+  if (!j.running) return "";
+  const since = j.running_since ? ago(j.running_since).replace(/ ago$/, "") : "";
+  return since && since !== "just now" ? `Running for ${since}` : "Running";
+}
 
 /** The server errors listed: those since this server started, and those kept from before it (the list survives a
  * restart). A server that doesn't say when it started has every one counted as kept, never as "since the restart". */

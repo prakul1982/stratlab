@@ -150,7 +150,7 @@ test("open the chart, change the timeframe, add an indicator, draw a trend line,
   await tf.selectOption({ label: "5 min" });
   await expect(chart).toHaveAttribute("data-loaded", "5m", { timeout: 30_000 });
   // the pill says how current the prices are (the test world's broker is on: live)
-  await expect(chart.locator(".pc-pill")).toHaveText(/Live|Market closed/);
+  await expect(chart.locator(".pc-pill")).toHaveText(/^(Live|Closed · last close .+)$/);                        // never "Live" with the market shut (LIVE3-011)
   // an indicator
   await chart.getByRole("button", { name: "Indicators" }).click();
   await page.getByRole("menuitem", { name: /^Moving average/i }).first().click();

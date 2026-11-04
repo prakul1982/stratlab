@@ -15,7 +15,7 @@ import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import breadth, db, leader, memguard
+from . import breadth, db, leader, memguard, official_close
 
 LIVE_KEY = "breadth:live:"           # breadth:live:<group> = {"day", "fields", "points": [[HH:MM, ...], ...]}
 LIVE_STATUS_KEY = "breadth:livestatus"
@@ -269,6 +269,12 @@ class LiveJob:
         for region in LIVE_REGIONS:
             slot = self.due(region, now)
             if slot is None:
+                if region == "IN" and not is_open(region, now):
+                    # LIVE3-025: the day's official index closes, once the exchange's file is out (one read, asked again at most
+                    # every 20 minutes until it is, and only on a day the rounds ran): the "final" level is then the close
+                    day = now.astimezone(IST).date().isoformat()
+                    if load("nifty500", day)["points"]:
+                        official_close.index_closes(day, fetch=True, now=now)
                 continue
             with memguard.heavy("breadth-live", force_release=True):      # every stock's quote and the day's base: one heavy job at a time (MEM-001)
                 res = self.live.round(region, now)
@@ -325,6 +331,12 @@ def view(group: str, now: datetime | None = None, ready: bool = True) -> dict | 
             return None
         out = {"state": "final", "day": day, "fields": list(FIELDS), "points": pts, "as_of": pts[-1][0], "latest": dict(zip(FIELDS, pts[-1][1:])),
                "message": None, "every_minutes": EVERY // 60, "age_minutes": None, "late": False}
+        # LIVE3-025: the final level is the exchange's closing value once it is in, never the last round's tick
+        off = official_close.index_close(g["index"], day)
+        if off is not None:
+            out["latest"]["idx"] = off
+            out["points"] = pts[:-1] + [pts[-1][:1 + FIELDS.index("idx")] + [off] + pts[-1][2 + FIELDS.index("idx"):]]
+            out["official"] = True
         for k, n in (("pct20", ("a20", "n20")), ("pct50", ("a50", "n50")), ("pct200", ("a200", "n200"))):
             out["latest"][k] = breadth._pct(out["latest"][n[0]], out["latest"][n[1]])
         return out

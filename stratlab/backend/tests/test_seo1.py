@@ -191,12 +191,23 @@ def test_the_directory_sitemap_lists_every_letter_page_and_index_and_is_in_the_i
 LONG = "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800"
 
 
+
+def edge_kept(cc: str, regions=("IN", "US")) -> bool:
+    """LIVE3-002: kept by the edge as LONG says, but never past the next settle point of the page's market(s) (a day at most)."""
+    want = int(re.search(r"s-maxage=(\d+)", stock_pages.edge_cache(list(regions))).group(1))
+    got = re.search(r"s-maxage=(\d+)", cc or "")
+    return bool(got) and want - 5 <= int(got.group(1)) <= want <= 86400 and cc.endswith("stale-while-revalidate=604800") and cc.startswith("public, max-age=")
+
+
 def test_company_directory_and_list_pages_are_kept_a_day_by_the_edge_and_feeds_minutes(w):
     c = w["client"]
     for u in ("/stocks/in/RELIANCE", "/stocks/us/AAPL", "/stocks", "/stocks/in", "/stocks/us", "/stocks/in/browse/r", "/stocks/in/index/nifty-50",
               "/stocks/us/index/sp-500"):
         r = c.get(u)
-        assert r.status_code == 200 and r.headers["cache-control"] == LONG, (u, r.headers.get("cache-control"))
+        regions = ("IN",) if re.match(r"/stocks/in(/|$)", u) else ("US",) if re.match(r"/stocks/us(/|$)", u) else ("IN", "US")
+        cc = r.headers["cache-control"]
+        # an India company page at the close whose official close isn't in yet is kept a quarter of an hour (LIVE3-002)
+        assert r.status_code == 200 and (edge_kept(cc, regions) or (u == "/stocks/in/RELIANCE" and cc == stock_pages.OFFICIAL_WAIT_CACHE)), (u, cc)
     # browsers still ask again after five minutes
     assert int(re.search(r"(?<!s-)max-age=(\d+)", LONG).group(1)) == 300
     short = stock_pages.FEED_CACHE
@@ -209,7 +220,8 @@ def test_company_directory_and_list_pages_are_kept_a_day_by_the_edge_and_feeds_m
 
 def test_a_page_still_waiting_for_its_new_close_is_kept_a_minute_and_a_busy_one_not_at_all(w, monkeypatch):
     c = w["client"]
-    assert c.get("/stocks/in/RELIANCE").headers["cache-control"] == LONG
+    cc = c.get("/stocks/in/RELIANCE").headers["cache-control"]
+    assert edge_kept(cc, ("IN",)) or cc == stock_pages.OFFICIAL_WAIT_CACHE
     main.stock_page_store.mem.clear()
     monkeypatch.setattr(stock_pages, "behind", lambda f, now=None: True)          # its price is a close older than the market's
     assert c.get("/stocks/in/RELIANCE").headers["cache-control"] == stock_pages.BEHIND_CACHE

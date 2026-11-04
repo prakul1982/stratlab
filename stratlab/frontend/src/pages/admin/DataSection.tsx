@@ -6,7 +6,7 @@ import { useApp } from "../../lib/app";
 import { ago, dateOnly, istToday, plainDates } from "../../lib/format";
 import { Card, CardHead, DataTable, FigureTable, Light, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type JobRow } from "./AdminContext";
-import { plainError, services } from "./attention";
+import { plainError, runningFor, services } from "./attention";
 import { BizCoveragePanel } from "./BizCoveragePanel";
 import { IpoQueuePanel } from "./IpoQueuePanel";
 import { BlogPanel } from "./BlogPanel";
@@ -108,8 +108,8 @@ export function DataSection() {
       <span className="k-stack"><b>{j.name}</b>
         <span className="k-note k-muted">{j.next ? <>Next run: {j.next}{j.schedule && <Info label={`Schedule of ${j.name}`}>{j.schedule}</Info>}</> : <>Next run: {j.schedule || "–"}</>}</span>
         {j.error && <span className={`k-note ${j.state === "bad" ? "k-down" : "k-muted"}`} title={plainError(j.error).full}>{plainError(j.error).text}</span>}</span>) },
-    { key: "state", header: "Status", cardLabel: "", cell: (j) => <Light state={j.state} word={j.running ? "Running" : undefined} /> },
-    { key: "last", header: "Last run", cell: (j) => (j.last_run ? ago(j.last_run) : <span className="k-muted">Not yet</span>) },
+    { key: "state", header: "Status", cardLabel: "", cell: (j) => <Light state={j.state} word={j.running ? runningFor(j) : undefined} /> },
+    { key: "last", header: "Last finished run", cell: (j) => (j.last_run ? ago(j.last_run) : <span className="k-muted">Not yet</span>) },
     { key: "do", header: <span className="sr-only">Run now and log</span>, action: true, cell: (j) => (
       <span className="k-row">
         {j.run.map((r) => (

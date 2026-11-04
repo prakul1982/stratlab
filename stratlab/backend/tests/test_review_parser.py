@@ -225,7 +225,8 @@ def test_the_reader_covers_the_examples_the_app_offers_without_misreading_them()
     got = idea_read.read("Buy when RSI drops below 30, sell when it goes back above 55")
     assert plain(got["entry"]) == [rule(RSI, "xb", num(30))] and plain(idea_read.resolve_exit(got["exit"], got["entry"])) == [rule(RSI, "xa", num(55))]
     got = idea_read.read("Buy when price is above the 200-day average and RSI crosses above 50")
-    assert got["entry"] == [rule(P, "gt", sma(200)), rule(RSI, "xa", num(50))] and not got["said_exit"]
+    # (LIVE3-004: the reader keeps a length's unit, "u": "day", for on_timeframe to turn into what runs on the strategy's candles)
+    assert got["entry"] == [rule(P, "gt", {**sma(200), "u": "day"}), rule(RSI, "xa", num(50))] and not got["said_exit"]
     assert idea_read.read("Short when the price falls below the lowest low of the last 20 days, with a 5% trailing stop") is None
     assert idea_read.read("Buy when it's in Stage 2 and the price is above the Supertrend, sell when it crosses back below")["entry"] is None
     got = idea_read.read("Buy when 20 EMA crosses above 50 EMA. Sell when 20 EMA crosses below 50 EMA. Stop loss 2%, target 6%, risk 1% of capital.")

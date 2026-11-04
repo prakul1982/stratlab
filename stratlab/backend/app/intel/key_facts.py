@@ -186,12 +186,13 @@ def debt_and_cash(c: dict, reported: dict | None, nums: dict | None, s: dict) ->
     de, what = (total, "Total debt / equity") if total is not None else (_metric(c, "Financial health", "Long-term debt / equity"), "Long-term debt / equity")
     if de is None:
         de = _metric(c, "Financial health", "LT debt / equity")
+    from ..stock_pages import ratio_text
     cover = _interest_cover((reported or {}).get("pl"))
     if cover is None:
         ic = _metric(c, "Financial health", "Interest coverage")
         cover = f"{ic:.1f}x" if ic is not None else None
     return _row("debt", "Debt and cash",
-                _item(what, f"{de:.2f}" if de is not None else None),
+                _item(what, ratio_text(de) if de is not None else None),          # one rule with the public page (LIVE3-018)
                 _item("Interest cover", cover), _item("Cash from operations", _cash_vs_profit(nums)))
 
 

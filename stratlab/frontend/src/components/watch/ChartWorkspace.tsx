@@ -40,7 +40,7 @@ export function ChartWorkspace({ item, height = 420 }: { item: WatchItem; height
   }, [src.storageKey]);
   return (
     <PriceChart key={src.storageKey} symbol={labelOf(item)} storageKey={src.storageKey} currency={currency} load={load}
-      timeframes={WORKSPACE_TFS as unknown as Tf[]} tf={saved.tf} range={saved.range} feed={feed} rememberView marketOpen={open} height={height}
+      timeframes={WORKSPACE_TFS as unknown as Tf[]} tf={saved.tf} range={saved.range} feed={feed} rememberView marketOpen={open} market={item.market} height={height}
       decimals={priceDp({ market: item.market, symbol: item.symbol, currency })} noVolume={item.market === "FX"} />
   );
 }

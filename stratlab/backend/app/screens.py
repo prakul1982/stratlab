@@ -231,6 +231,43 @@ def note_page(region: str, symbol: str, facts: dict | None) -> None:
             _mem[region] = (hit[0], _with_built(region, hit[1]))
 
 
+# LIVE3-003: the theme table showed BDL at ₹37,205 cr (the 3 Nov close) beside ₹39,327 cr on its own page (4 Nov). The price job moves
+# every stored page to the newest close in the evening, but the index (the themes, the screens, the peers, the watchlist's facts) took
+# the new prices only at its next gathering. Now each page the job moves tells the index, which takes the page's own price, market value,
+# P/E, yield and distance from the high at once: one small entry a company, dropped once a gathering has them.
+PRICE_FIELDS = ("price", "price_at", "market_cap", "pe", "div_yield", "from_high")
+_priced: dict[str, dict[str, tuple[float, dict]]] = {}
+
+
+def note_price(region: str, symbol: str, facts: dict | None) -> None:
+    """A stored page's price was moved to a newer close (Pages.refresh_prices): its index row shows the page's figures now."""
+    try:
+        r = row(region, symbol, facts or {})
+    except Exception as e:
+        print("screens: row for a new close failed:", region, symbol, str(e)[:120])
+        return
+    if not r or not r.get("price_at"):
+        return
+    fields = {k: r.get(k) for k in PRICE_FIELDS}
+    with _mem_lock:
+        _priced.setdefault(region, {})[symbol] = (time.time(), fields)
+        hit = _mem.get(region)
+        if hit:
+            _with_prices(region, hit[1], {symbol})
+
+
+def _with_prices(region: str, index: dict, only: set | None = None) -> dict:
+    """The index's rows with the newer closes the price job has noted since it was gathered (in place: the rows are this index's own)."""
+    got = _priced.get(region) or {}
+    if not got:
+        return index
+    for r in index.get("rows") or []:
+        hit = got.get(r.get("symbol")) if only is None or r.get("symbol") in only else None
+        if hit and str(hit[1].get("price_at") or "") >= str(r.get("price_at") or ""):
+            r.update(hit[1])
+    return index
+
+
 def _with_built(region: str, index: dict) -> dict:
     """The index with the rows of pages built since it was gathered in place of the rows it has for them."""
     fresh = _built.get(region) or {}
@@ -298,6 +335,7 @@ def build_index(region: str, store: bool = True) -> dict:
             _mem.pop(region, None)
             # the pages built before this gathering began are in it now; those built while it ran stay on top of it
             _built[region] = {s: v for s, v in (_built.get(region) or {}).items() if v[0] >= started}
+            _priced[region] = {s: v for s, v in (_priced.get(region) or {}).items() if v[0] >= started}
         # which stored pages have something to show, for the sitemaps: a page with no price and no numbers is noindex,
         # so it isn't listed (R7V-007)
         try:
@@ -329,7 +367,7 @@ def load_index(region: str) -> dict:
     else:                                        # an index stored before: each company once, ranked by size
         index["rows"] = with_ranks(one_per_company(index["rows"], stock_pages.nse_twins()))
     with _mem_lock:
-        index = _with_built(region, index)
+        index = _with_prices(region, _with_built(region, index))
         _mem[region] = (time.time(), index)
     return index
 

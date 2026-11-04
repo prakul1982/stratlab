@@ -127,7 +127,7 @@ test("admin data and jobs: last run, next run, Run now and a log for each job; t
   const errors = await open(page, "/admin/data", "Background jobs");
   const table = page.getByRole("table", { name: "Background jobs" });
   await allJobs(page);
-  await expect(table.getByRole("columnheader", { name: "Last run" })).toBeVisible();
+  await expect(table.getByRole("columnheader", { name: "Last finished run" })).toBeVisible();      // (LIVE3-006: not the running run's time)
   await expect(table.getByText(/Next run: Every 12 hours/)).toBeVisible();
   for (const job of ["Market breadth", "Positioning", "ETF price against NAV", "Fund costs (TER)", "Exchange holidays", "Results calendar", "Corporate actions", "F&O contract changes"])
     await expect(table.getByRole("rowheader", { name: new RegExp(`^${job.replace(/[()&]/g, "\\$&")}`) })).toBeVisible();

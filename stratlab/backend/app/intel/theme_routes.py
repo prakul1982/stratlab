@@ -209,11 +209,123 @@ def _industries(region: str, theme: str) -> dict:
     return theme_base.industries_for(region, theme, _rows(region), _ask, db.get_setting, db.set_setting)
 
 
-def checked(region: str, theme: str, m: dict) -> dict:
-    """The map as the page shows it: every company of the theme's official industries (theme_base.py), the AI's placements checked
+# ---------- the AI parts, worked out behind the page (LIVE3-001) ----------
+# Live, every theme failed at 30 s with "Can't reach the StratLab server": GET /research/sector held the request open while the AI wrote the
+# map (up to 60 s), then checked each company and the claims, and a connection on the way closed it at 30 s (Railway logged 499, "client has
+# closed the request"). The official-industry base needs no AI, so a request now answers with it at once and the AI parts are written in a
+# background thread, one per theme; the page asks again until they are in.
+THEME_WAIT = 2.5            # seconds a request waits for an AI part that is quick (a cached answer); a slower one fills in after
+FAIL_WAIT = 60.0            # a failed AI part is tried again by a request after this long, not on every poll
+JOBS_MAX = 6                # AI parts being written at once, across every theme; past this a request serves what it has
+_jobs: dict = {}            # (part, market, theme, ...) -> {"state": "running" | "done" | "failed", "message", "code", "at", "done": Event}
+_jobs_lock = threading.Lock()
+
+
+def _job_run(j: dict, work) -> None:
+    from fastapi import HTTPException
+    try:
+        work()
+        j["state"] = "done"
+    except HTTPException as e:                    # the person's daily AI limit, every provider busy, an answer that failed
+        d = e.detail if isinstance(e.detail, dict) else {"message": str(e.detail)}
+        j.update(state="failed", message=str(d.get("message") or ""), code=str(d.get("code") or ""))
+    except Exception as e:
+        print("theme: AI part failed:", type(e).__name__, str(e)[:160])
+        j.update(state="failed", message="The AI couldn't write this part just now.", code="ai_failed")
+    finally:
+        j["at"] = time.time()
+        j["done"].set()
+
+
+def later(key: tuple, work, wait: float | None = None) -> dict:
+    """Run `work` once for `key` in a background thread (a second request for the same key joins the one running) and wait at most
+    THEME_WAIT for it; returns the job ({"state", "message", "code"}). A finished job is started again when asked (the caller asks only
+    when what it stores isn't there); a failed one only FAIL_WAIT after it failed."""
+    now = time.time()
+    with _jobs_lock:
+        j = _jobs.get(key)
+        again = j is None or j["state"] == "done" or (j["state"] == "failed" and now - j["at"] >= FAIL_WAIT)
+        if again and sum(1 for x in _jobs.values() if x["state"] == "running") >= JOBS_MAX:
+            return j or {"state": "running", "message": "", "code": "", "at": now, "done": threading.Event()}
+        if again:
+            j = {"state": "running", "message": "", "code": "", "at": now, "done": threading.Event()}
+            _jobs[key] = j
+            threading.Thread(target=_job_run, args=(j, work), daemon=True, name="theme-ai").start()
+        if len(_jobs) > VERDICT_KEEP:
+            for k in [k for k, x in _jobs.items() if x["state"] != "running"]:
+                del _jobs[k]
+    j["done"].wait(THEME_WAIT if wait is None else wait)
+    return j
+
+
+def job_of(key: tuple) -> dict | None:
+    return _jobs.get(key)
+
+
+def ai_state(region: str, theme: str, m: dict) -> dict | None:
+    """What the page says about the AI parts: {"state": "working"} while the map or its checks are being written, {"state": "failed",
+    "message"} when the map couldn't be written (the base is shown without it), None when everything is in."""
+    t = theme.lower()
+    mj = job_of(("map", region, t))
+    cj = job_of(("check", region, t, int(float(m.get("generated_at") or 0))))
+    if (mj and mj["state"] == "running") or (cj and cj["state"] == "running"):
+        return {"state": "working", "message": ""}
+    if not float(m.get("generated_at") or 0):
+        if mj and mj["state"] == "failed":
+            return {"state": "failed", "message": mj["message"], "code": mj.get("code") or ""}
+        return {"state": "working", "message": ""}         # not started yet (JOBS_MAX were running): the page's next ask starts it
+    return None
+
+
+def _no_ai(system: str, text: str) -> dict:
+    raise AIError("Not asked while a page waits.")
+
+
+def quick(region: str, theme: str, m: dict) -> dict:
+    """The map before its checks are in, worked out with no AI call: every company of the theme's official industries (the curated table,
+    the AI's pick kept from before, or the industries named like the theme), the AI's own placements shown as not yet confirmed, and the
+    tailwinds and risks as general background until they are checked against dated headlines."""
+    inds = theme_base.industries_for(region, theme, _rows(region), _no_ai, db.get_setting, db.set_setting)
+    unconfirmed = lambda cos: [{**c, "verified": False} for c in cos or []]      # noqa: E731
+    out = {**m, "value_chain": [{**v, "companies": unconfirmed(v.get("companies"))} for v in m.get("value_chain") or []],
+           "sub_themes": [{**x, "companies": unconfirmed(x.get("companies"))} for x in m.get("sub_themes") or []]}
+    out["placements"] = {"checked": False, "pending": len(_map_names(m)), "left_out": 0}
+    out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, inds.get("named") or (), inds.get("except") or ())
+    key = (region, theme.lower(), int(float(m.get("generated_at") or 0)))
+    claims = A.get("sector_claims", key) or _plain_claims(m)
+    out["tailwinds"], out["risks"] = claims["tailwinds"], claims["risks"]
+    out["placements"]["industries_by"] = inds["how"]
+    return out
+
+
+def checked(region: str, theme: str, m: dict, wait: bool = False) -> dict:
+    """The map as the page shows it, never waiting on the AI (LIVE3-001): the checked map when it is in; otherwise the checks are started
+    in the background (`_check`) and the request gets the latest partly checked map, or the base with nothing checked yet (`quick`).
+    `wait`: work the checks out here (an admin's blog draft)."""
+    key = (region, theme.lower(), int(float(m.get("generated_at") or 0)))
+    hit = A.get("sector_checked3", key)
+    if hit is None and wait:
+        hit = _check(region, theme, m)
+    if hit is None:
+        later(("check",) + key, lambda: _check(region, theme, m))
+        hit = A.get("sector_checked3", key) or A.get("sector_checking", key) or quick(region, theme, m)
+    return with_caps(hit, _rows(region))
+
+
+def with_caps(m: dict, rows: list[dict]) -> dict:
+    """The map's market values as the index has them now (LIVE3-003: a map kept for a day showed BDL at the 3 Nov close beside its own
+    page's 4 Nov one): the index takes each page's newest close as the price job moves it (screens.note_price)."""
+    caps = {r["symbol"]: r.get("market_cap") for r in rows or [] if r.get("symbol")}
+    fix = lambda cos: [{**c, "cap": caps[c["ticker"]]} if c.get("ticker") in caps else c for c in cos or []]      # noqa: E731
+    return {**m, "value_chain": [{**v, "companies": fix(v.get("companies"))} for v in m.get("value_chain") or []],
+            "sub_themes": [{**x, "companies": fix(x.get("companies"))} for x in m.get("sub_themes") or []]}
+
+
+def _check(region: str, theme: str, m: dict) -> dict:
+    """The checks themselves: every company of the theme's official industries (theme_base.py), the AI's placements checked
     against the companies' own descriptions (a "no" moves a base company out of that layer, never out of the theme; an addition from
     another industry is left out), claims against dated headlines. A part that can't be checked right now (a source or the AI is busy) is
-    left to the next request; after PENDING_GIVE_UP it is served as it stands, its companies not yet confirmed, and checked again two hours
+    left to the next run; after PENDING_GIVE_UP it is served as it stands, its companies not yet confirmed, and checked again two hours
     on, so the page never waits on one company for minutes (THEMES item 6: "1 company is still being checked" for over two minutes)."""
     key = (region, theme.lower(), int(float(m.get("generated_at") or 0)))
     hit = A.get("sector_checked3", key)
@@ -259,13 +371,16 @@ def checked(region: str, theme: str, m: dict) -> dict:
             _pending_since.pop(key, None)
             A.keep("sector_checked3", key, out, 2 * 3600)
         p["checked"] = p["checked"] and inds["how"] != "pending" or bool(p.get("timed_out"))
+        if not p["checked"]:
+            A.keep("sector_checking", key, out, 30 * 60)       # served while the next run goes on (LIVE3-001)
+    with_descriptions(region, out, DESCRIBE_READS)             # a few more companies' own descriptions read for the next view
     return out
 
 
-def _about_reader(region: str, names: dict):
-    """symbol -> its stored description, or None: from memory or storage, and at most DESCRIBE_READS read from the company's own page per
-    request (largest first), so a theme of hundreds fills in over a few views without a burst of reads."""
-    reads = {"n": 0}
+def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
+    """symbol -> its stored description, or None: from memory or storage, and at most `limit` read from the company's own page per
+    run (largest first), so a theme of hundreds fills in over a few views without a burst of reads."""
+    reads = {"n": 0, "missed": 0}
     lock = threading.Lock()
 
     def about_of(sym):
@@ -281,7 +396,8 @@ def _about_reader(region: str, names: dict):
                 EVIDENCE_CACHE.set(k, hit, 6 * 3600)
         if hit is None:
             with lock:
-                if reads["n"] >= DESCRIBE_READS:
+                if reads["n"] >= limit:
+                    reads["missed"] += 1
                     return None
                 reads["n"] += 1
             try:
@@ -289,14 +405,20 @@ def _about_reader(region: str, names: dict):
             except Exception:
                 return None
         return hit.get("about") or own_filings(region, sym) or None         # no description: the lines of its own filings
+    about_of.reads = reads
     return about_of
 
 
-def with_descriptions(region: str, m: dict) -> dict:
-    """The map with each official-industry company's own one-line description where it is known (theme_base.described)."""
+def with_descriptions(region: str, m: dict, reads: int = 0) -> dict:
+    """The map with each official-industry company's own one-line description where it is known (theme_base.described). A request reads
+    none itself (`reads` 0: a company page can be slow, LIVE3-001): the ones not stored yet are read in the background, DESCRIBE_READS a
+    run, for the next view."""
     want = set(theme_base.to_describe(m))
-    read = _about_reader(region, {c["ticker"]: c.get("name") for v in m.get("value_chain") or [] for c in v.get("companies") or []})
-    return theme_base.described(m, lambda s: read(s) if s in want else None)
+    read = _about_reader(region, {c["ticker"]: c.get("name") for v in m.get("value_chain") or [] for c in v.get("companies") or []}, reads)
+    out = theme_base.described(m, lambda s: read(s) if s in want else None)
+    if not reads and read.reads["missed"]:
+        later(("describe", region, hash(tuple(sorted(want)))), lambda: with_descriptions(region, m, DESCRIBE_READS), wait=0)
+    return out
 
 
 # ---------- the dive ----------

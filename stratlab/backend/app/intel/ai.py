@@ -47,7 +47,7 @@ def cached(kind: str, key_parts: tuple, ttl: float, refresh: bool, build) -> tup
 
 def keep(kind: str, key_parts: tuple, out: dict, ttl: float) -> dict:
     """Store a read built elsewhere (a checked theme map) as `cached` would."""
-    out = {**out, "generated_at": out.get("generated_at") or time.time()}
+    out = {**out, "generated_at": out["generated_at"] if out.get("generated_at") is not None else time.time()}   # 0: no AI map yet (LIVE3-001)
     _cache.set(_key(kind, *key_parts), out, ttl)
     return out
 

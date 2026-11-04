@@ -24,6 +24,16 @@ REPLIES = {
         "name": "NIFTY 50 EMA crossover", "instrument": "NIFTY 50", "market": "IN", "tf": "1d", "side": "long", "entryJoin": "all",
         "entry": [{"l": _ema(20), "op": "xa", "r": _ema(50)}], "exit": [{"l": _ema(50), "op": "xb", "r": P}],
         "risk": {}, "mentioned": ["exit", "instrument", "tf"], "notes": []},
+    # LIVE3-004: the live answer: a 200-candle SMA on 15-minute candles for "200 day", named EMA
+    "go long when price closes above the 200 day moving average, exit when it closes back under it, 15 minute candles on BANKNIFTY": {
+        "name": "BankNifty 200 EMA Long", "instrument": "BANKNIFTY", "market": "IN", "tf": "15m", "side": "long", "entryJoin": "all",
+        "entry": [{"l": P, "op": "gt", "r": {"t": "sma", "p": 200}}], "exit": [{"l": P, "op": "lt", "r": {"t": "sma", "p": 200}}],
+        "risk": {}, "mentioned": ["exit", "instrument", "tf"], "notes": []},
+    # LIVE3-005: the live name, a word that is neither the instrument nor a rule
+    "Buy RELIANCE when RSI drops below 30 and sell when it goes back above 70": {
+        "name": "Relevance RSI Reversal", "instrument": "RELIANCE", "market": "IN", "tf": "1d", "side": "long", "entryJoin": "all",
+        "entry": [{"l": {"t": "rsi", "p": 14}, "op": "xb", "r": {"t": "num", "v": 30}}], "exit": [{"l": {"t": "rsi", "p": 14}, "op": "xa", "r": {"t": "num", "v": 70}}],
+        "risk": {}, "mentioned": ["exit", "instrument", "tf"], "notes": []},
 }
 
 

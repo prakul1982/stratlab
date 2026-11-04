@@ -2,6 +2,7 @@ import { DENSE_BARS, compactValue, labelledBar, shortYear } from "../lib/phoneFi
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
+import { marketState } from "../lib/marketHours";
 import { liveQuote, useLiveRefresh } from "../lib/liveRefresh";
 import { aiLimited, aiReason } from "../lib/aiReason";
 import { stageMeaning } from "../lib/stageNote";
@@ -104,8 +105,15 @@ export function PriceChart({ region, symbol, currency, price: shown, asOf: shown
   // the header's price and the title's are this page's one reading; the newest candle is it too (see settleLast)
   const load = useMemo(() => companyLoader(region, symbol, { price: shown, asOf: shownAt, tz: marketTz(region) }), [region, symbol, shown, shownAt]);
   const compare = useCallback((other: string) => companyLoader(region, other)("1d", { range: "max" }).then((r) => r.candles), [region]);
+  // LIVE3-011: the chart is told whether its market trades now (from the market's hours, checked each minute), so it never says "Live"
+  // after the close
+  const { markets } = useApp();
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick((n) => n + 1), 60_000); return () => clearInterval(t); }, []);
+  const market = markets.find((m) => m.id === region);
+  const open = useMemo(() => (market ? marketState(market).open : null), [market, tick]);
   return (
-    <PriceChartView symbol={symbol} storageKey={`${region}:${symbol}`} currency={currency} load={load}
+    <PriceChartView symbol={symbol} storageKey={`${region}:${symbol}`} currency={currency} load={load} marketOpen={open} market={region}
       timeframes={["5m", "15m", "1h", "1d", "1w", "1mo"]} compareLoad={compare} compareHint={region === "IN" ? "e.g. TCS" : "e.g. MSFT"} compareWith={compareWith}
       note="Prices adjusted for splits and bonus issues, not for regular dividends. Intraday candles cover recent weeks." />
   );

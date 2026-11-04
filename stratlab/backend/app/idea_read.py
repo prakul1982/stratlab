@@ -54,7 +54,7 @@ _KIND = (("ema", r"ema|exponential moving average|exponential average"),
          ("sma", r"sma|dma|simple moving average|simple average"),
          ("avg", r"moving average|day moving average|average|avg|ma"))
 _KINDS = "|".join(p for _, p in _KIND)
-_MA_N_FIRST = re.compile(rf"^(?P<n>\d{{1,3}})\s*[- ]?\s*(?:(?:day|period|bar|candle)s?|d(?![a-z]))?\s*[- ]?\s*(?P<k>{_KINDS})$")
+_MA_N_FIRST = re.compile(rf"^(?P<n>\d{{1,3}})\s*[- ]?\s*(?P<u>(?:day|week|period|bar|candle)s?|d(?![a-z])|w(?![a-z]))?\s*[- ]?\s*(?P<k>{_KINDS})$")
 _MA_N_AFTER = re.compile(rf"^(?P<k>ema|sma|dma|ma)\s*\(?\s*(?P<n>\d{{1,3}})\s*\)?$")
 _RSI = re.compile(r"^(?:(?P<a>\d{1,3})\s*[- ]?\s*(?:day|period|bar|candle)?s?\s*[- ]?\s*)?rsi(?:\s*\(?\s*(?P<b>\d{1,3})\s*\)?)?$")
 _W52 = re.compile(r"^(?:52|fifty[- ]?two)\s*[- ]?\s*(?:weeks?|wks?|w)\s*[- ]?\s*(?P<w>high|low)s?$|^(?:one|1)[- ]?year\s*[- ]?\s*(?P<y>high|low)s?$")
@@ -78,14 +78,19 @@ def _ref(s: str, assumed: list[str]) -> dict | None:
         kind, n = _kind(m["k"]), int(m["n"])
         if not 1 <= n <= 500:
             return None
+        # LIVE3-004: a length said in days or weeks is kept in its unit (`u`), and turned into what runs once the candles are known
+        # (on_timeframe): "200 day moving average" on 15-minute candles had become a 200-candle average while this line said 200-day
+        u = (m.groupdict().get("u") or "").rstrip("s")
+        unit = "day" if m["k"] == "dma" or u in ("day", "d") else "week" if u in ("week", "w") else None
+        length = f"{n}-{unit}" if unit else f"{n}-candle"
         if m["k"] == "dma":
             # "DMA" in Indian usage is the plain (simple) daily average; said, as it is a reading
             assumed.append(f"\"{n} DMA\" is read as the {n}-day simple moving average (SMA).")
         if kind == "avg":
             # "the 20-day average" names no kind: the simple one, said under "We assumed"
-            assumed.append(f"\"{s}\" is read as the {n}-day simple moving average (SMA): your words don't say simple or exponential.")
+            assumed.append(f"\"{s}\" is read as the {length} simple moving average (SMA): your words don't say simple or exponential.")
             kind = "sma"
-        return {"t": kind, "p": n}
+        return {"t": kind, "p": n, **({"u": unit} if unit else {})}
     if m := _RSI.match(s):
         n = m["a"] or m["b"]
         if n:
@@ -149,6 +154,7 @@ def read(text: str) -> dict | None:
     if _SHORT.search(t):
         return None
     named = bool(_INDEX.search(t))
+    tf = words_tf(_INDEX.sub(" ", t))
     t = _TF.sub(" ", _INDEX.sub(" ", t))
     risk: dict = {}
     for k, pat in _RISK:
@@ -207,7 +213,49 @@ def read(text: str) -> dict | None:
             return None
         subject = c["l"]
     return {"entry": sides["entry"], "exit": sides["exit"], "risk": risk, "assumed": list(dict.fromkeys(assumed)),
-            "named": named, "said_exit": said_exit}
+            "named": named, "said_exit": said_exit, "tf": tf}
+
+
+_TF_OF = (("1d", r"daily|1[- ]?day"), ("1h", r"hourly|1[- ]?hour|60[- ]?min(?:ute)?s?"), ("15m", r"15[- ]?min(?:ute)?s?"), ("5m", r"5[- ]?min(?:ute)?s?"))
+TF_WORDS = {"1d": "daily", "1h": "1-hour", "15m": "15-minute", "5m": "5-minute"}
+WEEK_DAYS = 5                 # trading days in a week, for a length said in weeks
+MAX_LENGTH = 500              # the longest average the app works out (models.Ref.p)
+
+
+def words_tf(t: str) -> str | None:
+    """The candles the words name ("15 minute candles", "on the daily chart"), one the app runs, else None."""
+    m = _TF.search(t or "")
+    if not m:
+        return None
+    return next((tf for tf, p in _TF_OF if re.search(rf"\b(?:{p})\b", m.group(0))), None)
+
+
+def on_timeframe(got: dict, tf: str | None) -> list[str] | None:
+    """The rules' lengths said in days or weeks made what runs on the strategy's candles (LIVE3-004), in place; the lines that say
+    so for "We assumed". A day length on intraday candles is worked out on daily candles (the rule's own "tf": "1d"); a week length
+    is that many trading days (x5), on daily candles. None when a length can't be run as said (more than MAX_LENGTH days): the side
+    is then not read from the words, and the app asks."""
+    said = []
+    intraday = tf in ("1h", "15m", "5m")
+    for side in ("entry", "exit"):
+        for c in got.get(side) or []:
+            for key in ("l", "r"):
+                ref = c.get(key)
+                if not isinstance(ref, dict) or "u" not in ref:
+                    continue
+                unit, n = ref.pop("u"), int(ref["p"])
+                days = n * WEEK_DAYS if unit == "week" else n
+                if days > MAX_LENGTH:
+                    return None
+                name = f"{n}-{unit} {ref['t'].upper()}"
+                if unit == "week":
+                    ref["p"] = days
+                    said.append(f"The {name} is worked out as the {days}-day {ref['t'].upper()} ({n} weeks of {WEEK_DAYS} trading days).")
+                if intraday:
+                    ref["tf"] = "1d"
+                    said.append(f"The {days}-day {ref['t'].upper()} is worked out on daily candles (each completed day's close); "
+                                f"the trades are on {TF_WORDS[tf]} candles.")
+    return list(dict.fromkeys(said))
 
 
 def resolve_exit(exit_rules: list[dict], entry: list[dict]) -> list[dict] | None:

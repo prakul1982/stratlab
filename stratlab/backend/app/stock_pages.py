@@ -413,15 +413,48 @@ def next_settle(region: str, now: datetime | None = None) -> datetime | None:
     return None
 
 
+OFFICIAL_WAIT_CACHE = "public, max-age=300, s-maxage=900, stale-while-revalidate=300"   # an India page at the close, before the official close
+OFFICIAL_BY_HOUR = 9           # India hour of the next morning after which a day's official close is no longer waited for (official_close.settled)
+
+
+def edge_cache(regions, now: datetime | None = None) -> str:
+    """CACHE_CONTROL with the edge's copy ending at the next settle point of the page's market(s), at most a day (LIVE3-002: a page
+    stored at the 3 Nov close and cached that evening was served with "the market has closed since" until the evening of 4 Nov, as
+    s-maxage was a day whatever the clock). Past that point the edge serves its copy once while it reads the page again
+    (stale-while-revalidate), so a crawler still never waits on a cold build. No job: the header alone does it."""
+    now = now or datetime.now(timezone.utc)
+    left = [int((n - now).total_seconds()) for n in (next_settle(r, now) for r in regions if r) if n]
+    if not left or min(left) >= 86400:
+        return CACHE_CONTROL
+    s = max(MIN_CACHE, min(left))
+    return f"public, max-age={min(300, s)}, s-maxage={s}, stale-while-revalidate=604800"
+
+
+def official_due(f: dict, now: datetime | None = None) -> bool:
+    """An India page at its market's latest close whose price isn't the exchange's official close yet (it comes in the evening)."""
+    if f.get("region") != "IN" or f.get("price_official") or not is_close(f):
+        return False
+    try:
+        day = last_close("IN", now)[0]
+    except Exception:
+        return False
+    if str(f.get("price_at") or "")[:10] != day.isoformat():
+        return False
+    by = datetime.combine(day + timedelta(days=1), dtime(OFFICIAL_BY_HOUR, 0), ZoneInfo("Asia/Kolkata"))
+    return (now or datetime.now(timezone.utc)) < by
+
+
 def cache_control(region: str | None, f: dict | None = None, now: datetime | None = None) -> str:
-    """A company page's Cache-Control: the day-long CACHE_CONTROL, or a minute (BEHIND_CACHE) for a page whose price is from
-    before its market's latest close, so that page follows its refresh within a minute or two and never says "the market
-    has closed since" for long after it has caught up (R13-006). A page that is up to date says "As of <the close>" and stays
-    true of that close whenever it is read (SEO-1: this used to end every copy at the market's next settle point, so a crawler
-    met a cold build on most requests)."""
+    """A company page's Cache-Control: a minute (BEHIND_CACHE) for a page whose price is from before its market's latest close, so
+    that page follows its refresh within a minute or two and never says "the market has closed since" for long after it has caught up
+    (R13-006); a quarter of an hour for an India page at the close whose official close isn't in yet (LIVE3-002); otherwise kept until
+    the market's next settle point, at most a day (edge_cache). A page that is up to date says "As of <the close>" and stays true of
+    that close until the next one (SEO-1: the day-long copy that ends then still spares a crawler most cold builds)."""
     if f and region and behind(f, now):
         return BEHIND_CACHE
-    return CACHE_CONTROL
+    if f and region == "IN" and official_due(f, now):
+        return OFFICIAL_WAIT_CACHE
+    return edge_cache([region], now) if region else CACHE_CONTROL
 
 
 def html_ttl(region: str | None, now: datetime | None = None) -> int:
@@ -1459,6 +1492,7 @@ class Pages:
         # brought in line where that's cheap (see main.stock_page_older_facts)
         self.gather, self.per_minute, self.older = gather, per_minute, older
         self.on_built = None           # (region, symbol, facts) after a page is built and stored: screens.note_page
+        self.on_priced = None          # (region, symbol, facts) after a stored page is moved to a newer close: screens.note_price (LIVE3-003)
         self.mem = TTLCache(max_items=3000)
         self.recent: deque = deque()
         self.lock = threading.Lock()
@@ -1600,6 +1634,7 @@ class Pages:
                     c = official(symbol, day.isoformat())
                     if c is not None:
                         _put(key, {**stored, "facts": with_official_close(f, c)})
+                        self._priced(region, symbol, with_official_close(f, c))
                         self.mem.pop(key)
                         self.mem.pop(f"html:{region}:{symbol}")
                         swapped += 1
@@ -1638,7 +1673,8 @@ class Pages:
                     stopped = len(due[:limit]) - i - 1
                     break
                 continue
-            facts_now = with_new_close(stored["facts"], bars, analyse)
+            stored_before = stored["facts"]
+            facts_now = with_new_close(stored_before, bars, analyse)
             stored = {**stored, "facts": facts_now}
             if str(facts_now.get("price_at") or "") >= day.isoformat():
                 stored["price_ts"] = time.time()      # read at this close: not read again until the next one
@@ -1653,6 +1689,8 @@ class Pages:
                 if len(behind) < 5:
                     behind.append(f"{symbol} (last candle {str(bars[-1].get('t') or '')[:10] if bars else 'none'})")
             _put(prefix + symbol, stored)
+            if facts_now is not stored_before:
+                self._priced(region, symbol, facts_now)
             self.mem.pop(prefix + symbol)
             self.mem.pop(f"html:{region}:{symbol}")
         retry = sum(1 for _, s, _raw in due[:limit] if s not in ok and 0 < tries.get(s, 0) < self.MAX_TRIES)
@@ -1663,13 +1701,29 @@ class Pages:
                 **({"source_down": True} if stopped else {}), **({"retry": retry} if retry else {}),
                 **({"official": swapped} if official else {})}
 
+    def _priced(self, region: str, symbol: str, facts: dict) -> None:
+        if self.on_priced:
+            try:
+                self.on_priced(region, symbol, facts)
+            except Exception as ex:
+                print("stock pages: index not told of a new close", region, symbol, str(ex)[:120])
+
+    PRICE_KEYS = ("region", "price_at", "price_basis", "price_official", "not_company")
+
     def html(self, region: str, symbol: str, co: dict) -> str:
         """The rendered page, kept in memory for ten minutes (the sector links read the screens' index)."""
+        return self.served(region, symbol, co)[0]
+
+    def served(self, region: str, symbol: str, co: dict) -> tuple[str, dict]:
+        """(the rendered page, the price facts it was rendered from), kept together: the page's Cache-Control is worked out from the
+        same facts as its words (LIVE3-002: the rendered copy outlived the facts kept beside it, so a page saying "the market has closed
+        since" was sent with no facts to go on, and so with the day-long header instead of a minute's)."""
         key = f"html:{region}:{symbol}"
         hit = self.mem.get(key)
-        if hit is None:
+        if not isinstance(hit, tuple):
             f = self.get(region, symbol, co)
-            hit = render(f, region, symbol, co["name"], faq_extras(region, symbol) if has_content(f) else None)
+            hit = (render(f, region, symbol, co["name"], faq_extras(region, symbol) if has_content(f) else None),
+                   {k: (f or {}).get(k) for k in self.PRICE_KEYS if (f or {}).get(k) is not None})
             self.mem.set(key, hit, html_ttl(region))      # never served past the next close's settle point (R13-006)
         return hit
 
@@ -1902,6 +1956,19 @@ def search(region: str, q: str, n: int = 30) -> list[tuple[str, str]]:
 
 
 # ---------- the page ----------
+def ratio_text(v, digits: int = 2) -> str:
+    """A ratio (debt to equity, times covered) the one way every page writes it (LIVE3-018: HAL's "0.0016" here, "0.00" in the app,
+    "0.21" for others): `digits` decimals always, and one too small to show as anything but zero says so ("<0.01"), never more
+    decimals and never a zero it isn't."""
+    v = _num(v)
+    if v is None:
+        return "–"
+    least = 10 ** -digits
+    if v != 0 and abs(v) < least / 2:
+        return f"<{least:.{digits}f}" if v > 0 else f"−<{least:.{digits}f}"
+    return f"{v:,.{digits}f}".replace("-", "−", 1) if round(v, digits) != 0 else f"{0:.{digits}f}"
+
+
 def _fmt(v, digits: int = 1, suffix: str = "") -> str:
     """A number with `digits` decimals. One that would round to zero shows two more decimals (a $40,000 loss in a
     $ million column is -0.04, not "-0"), and only a real zero is 0 (R6V-011)."""
@@ -2603,7 +2670,7 @@ def _stats(f: dict) -> list[tuple[str, str]]:
         out.append((f"Net profit, last 12 months ({unit})", _amount(f, ttm, digits)))
     out.append((f"Return on equity{of_year}", year(_pct(f.get("roe")))))
     if not f.get("bank"):
-        out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
+        out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(ratio_text(f.get("debt_equity"))))]
     out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
             ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of {'$' if f.get('currency') == 'USD' else '₹'}{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy else "none" if dy == 0 else "n/a")]
     return [(k, _true_minus(v)) for k, v in out if v != "–"]
