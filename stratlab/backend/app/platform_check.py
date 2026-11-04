@@ -19,6 +19,14 @@ TIMEOUTS = {"Scans": 150}
 SCAN_BUDGET = 120     # a scan check stops reading here, inside its limit, and reports what it got
 
 
+
+def candle_sane(b: dict) -> bool:
+    """A daily candle whose low is under (or at) its open and close and whose high over (or at) them. A difference of float noise is
+    not a fault (LIVE3-008: a EUR/USD candle printed "o 1.12 h 1.12 l 1.12 c 1.12" was failed two days running)."""
+    eps = 1e-9 * max(abs(b["h"]), 1.0)
+    return 0 < b["l"] <= min(b["o"], b["c"]) + eps and max(b["o"], b["c"]) <= b["h"] + eps
+
+
 def _day(d) -> str:
     """A date as the site writes it, "12 Oct"; text that is not a date is left as it is (R13S-010)."""
     try:
@@ -93,13 +101,14 @@ def check_market(registry, market: str, today: date | None = None, now: datetime
     bars = prov.history(inst, "1d", 30)
     if not bars:
         return _result(f"Prices: {market}", "Prices", "fail", f"No daily prices for {inst['symbol']}.")
-    bad = [b for b in bars if not (0 < b["l"] <= min(b["o"], b["c"]) and max(b["o"], b["c"]) <= b["h"])]
+    bad = [b for b in bars if not candle_sane(b)]
     last = datetime.fromisoformat(bars[-1]["t"]).date()
     expected = last_session(market, today)
     if bad:
         # which candles, and whether the only one is the session still trading (the source's live candle)
         live = len(bad) == 1 and bad[0] is bars[-1] and datetime.fromisoformat(bars[-1]["t"]).date() == today
-        shown = ", ".join(f"{_day(b['t'])} (o {b['o']:,.2f} h {b['h']:,.2f} l {b['l']:,.2f} c {b['c']:,.2f})" for b in bad[-3:])
+        # each price with the decimals it needs (_px): four equal "1.12"s could not show which side was out (LIVE3-008)
+        shown = ", ".join(f"{_day(b['t'])} (o {_px(b['o'])} h {_px(b['h'])} l {_px(b['l'])} c {_px(b['c'])})" for b in bad[-3:])
         return _result(f"Prices: {market}", "Prices", "fail",
                        f"{len(bad)} candles of {inst['symbol']} have high/low outside open/close: {shown}"
                        + (", today's candle while the session is still trading" if live else "") + "." + _why_stale(prov, inst))
