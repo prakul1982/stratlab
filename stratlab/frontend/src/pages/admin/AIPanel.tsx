@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, safeHref, fmtDate } from "../../lib/format";
-import { Badge, Card, CardHead, ConfirmDialog, Disclosure, Light, Skeleton } from "../../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, Light, Skeleton } from "../../components/kit";
 import { blockedLine, providerWord } from "./aiBlocks";
 import { aiCountText } from "../../lib/connection";
 import { shortLinks } from "./attention";
@@ -29,10 +29,51 @@ type Step = { provider: string; label: string; model: string; ready: boolean; ou
 type Route = { label: string; budget_s: number; steps: Step[] };
 /** One link of "Who is asked": the provider and model, and why it won't answer now (out of free credit, or paused). */
 const stepText = (s: Step) => `${s.label} · ${s.model}${s.out_of_credit ? " (out of credit)" : s.ready ? "" : " (paused)"}`;
+/** This month's Claude spend against the owner's monthly credit (owner, 4 Nov): `known` false while it can't be read. */
+export type ClaudeSpend = {
+  month: string; known: boolean; usd: number | null; cap_usd: number; sonnet_until_usd: number; requests?: number;
+  input_tokens?: number; output_tokens?: number; cache_write_tokens?: number; cache_read_tokens?: number;
+  cache_hit_share?: number | null; refusals?: number; models?: Record<string, { usd: number; requests: number }>;
+  tier?: "sonnet" | "haiku" | "off"; resets_at?: number;
+};
 export type AIView = {
   providers: Provider[]; routes: Record<string, Route>; cache: { entries: number; hits: number; misses: number };
+  claude?: ClaudeSpend;
   rerank_every_hours: number; last_failure: { at: number; task: string; detail: string } | null;
 };
+
+const usd = (n: number) => `$${n < 10 ? n.toFixed(2) : n.toFixed(0)}`;
+const usdFine = (n: number) => `$${n < 1 ? n.toFixed(4) : n.toFixed(2)}`;
+const count = (n: number | undefined) => (n ?? 0).toLocaleString("en-IN");
+const TIER: Record<string, string> = {
+  sonnet: "Research reads and long documents use Claude Sonnet 5.5 first",
+  haiku: "Past the Sonnet limit: research reads and long documents use Claude Haiku 5.5 first",
+  off: "The cap is reached: Claude is skipped and the free providers answer until the month turns",
+};
+
+/** "Claude this month: $X of $99 cap (Sonnet until $75)", with what was asked and how much came from the prompt cache. */
+export function ClaudeMonth({ c }: { c: ClaudeSpend }) {
+  if (!c.known || c.usd == null) {
+    return <p className="k-small adm-warn-t" role="status">Claude this month: the spend can't be read right now, so Claude isn't asked until it can.</p>;
+  }
+  const rows = Object.entries(c.models ?? {}).sort((a, b) => b[1].usd - a[1].usd);
+  return (
+    <div className="k-stack k-small" aria-label="Claude this month">
+      <span><b>Claude this month: {usd(c.usd)} of {usd(c.cap_usd)} cap (Sonnet until {usd(c.sonnet_until_usd)})</b>
+        <span className="k-muted"> · {TIER[c.tier ?? "sonnet"]}{c.resets_at ? `; resets ${until(c.resets_at)}` : ""}.</span></span>
+      <span className="k-muted">
+        {count(c.requests)} requests · {count((c.input_tokens ?? 0) + (c.cache_write_tokens ?? 0) + (c.cache_read_tokens ?? 0))} prompt tokens
+        {" "}({c.cache_hit_share != null ? `${Math.round(c.cache_hit_share * 100)}% read from the cache` : "none read from the cache yet"}) · {count(c.output_tokens)} reply tokens
+        {c.refusals ? ` · ${c.refusals} declined` : ""}
+      </span>
+      {rows.length > 0 && <DataTable label="Claude spend by model this month" rows={rows} rowKey={([m]) => m} columns={[
+        { key: "model", header: "Model", rowHeader: true, cell: ([m]) => <span className="adm-mono">{m}</span> },
+        { key: "requests", header: "Requests", numeric: true, cell: ([, r]) => count(r.requests) },
+        { key: "usd", header: "Spent", numeric: true, cell: ([, r]) => usdFine(r.usd) },
+      ]} />}
+    </div>
+  );
+}
 /** What is waiting for a yes: Block, Unblock, Pin and Re-rank change how every user's AI questions are routed (R13S-004). */
 type Ask = { kind: "rerank"; provider?: Provider } | { kind: "block"; p: Provider; model: string; blocked: boolean }
   | { kind: "pin"; p: Provider; model: string | null };
@@ -145,6 +186,8 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
           {!on.length && <p className="k-small"><b>No AI keys yet</b>, so the idea builder and research reads are off. Groq and Google Gemini are the quickest to set up (below).</p>}
           {v.last_failure && <p className="k-small adm-warn-t" role="status">
             Last time nothing could answer ({ago(iso(v.last_failure.at))}, {v.routes[v.last_failure.task]?.label.toLowerCase() ?? v.last_failure.task}): <Said text={v.last_failure.detail} /></p>}
+
+          {v.claude && (on.some((p) => p.name === "anthropic") || (v.claude.usd ?? 0) > 0) && <ClaudeMonth c={v.claude} />}
 
           {on.length > 0 && (
             <div className="k-stack k-small" aria-label="Routing order">
