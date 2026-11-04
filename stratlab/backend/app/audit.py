@@ -470,6 +470,9 @@ def _no_sales(rows: list[dict]) -> bool:
     return any(r.get("sales") is not None and r["sales"] <= 0 for r in rows)
 
 
+PART_YEAR = re.compile(r"\b\d{1,2}\s?m$", re.I)
+
+
 def _why_na(label: str, years: list[dict], quarters: list[dict]) -> str | None:
     """Why a check couldn't be judged when it is a fact about the company, not a missing number: "history" (too few
     years or quarters of results to measure growth over, losses to grow from or turn into cash, no insider trades
@@ -479,6 +482,9 @@ def _why_na(label: str, years: list[dict], quarters: list[dict]) -> str | None:
         return "history"
     if label.startswith("Price in Stage"):
         return "history"                          # the stage needs 170 trading days of prices: a young listing has none yet
+    # a column of part of a year ("Mar 2023 4m", "May 2023 5m": a company that began or moved its year end) isn't a year of
+    # history to measure growth or a margin's trend from (SECMEM 6, every company: BSE:544011's three "couldn't be judged")
+    years = [y for y in years if not PART_YEAR.search(str(y.get("year") or ""))]
     sold = [y for y in years if y.get("sales") is not None]          # the years the checklist measures over
     last3, last4 = years[-3:], years[-4:]
     if label.startswith(("Sales growth", "EBITDA margin holding up", "Operating margin holding up")):

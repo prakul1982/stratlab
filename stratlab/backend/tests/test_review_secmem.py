@@ -538,3 +538,16 @@ def test_an_investment_companys_revenue_is_its_total_investment_income():
     # an operating company's interest on its cash is not revenue
     q = sec.build(_year({"NetIncomeLoss": -71269000, "InvestmentIncomeInterest": 5058000}), None, symbol="JSPR")
     assert (q["pl"]["rows"].get("Sales") or q["pl"]["rows"].get("Revenue") or [None])[q["pl"]["cols"].index("Dec 2022")] is None
+
+
+def test_part_year_columns_are_not_years_of_history_for_the_checklist():
+    """BSE:544011 (Vrundavan Plantation): "Mar 2023 4m" and "May 2023 5m" before three full years; every company with a
+    column of part of a year is judged on its full years."""
+    from app import audit
+    years = [{"year": y, "sales": s, "profit": n, "opm": o} for y, s, n, o in (
+        ("Mar 2023 4m", 0.0, 0.0, None), ("May 2023 5m", 1.81, 0.17, 16.02), ("Mar 2024", 18.83, 1.69, 9.93),
+        ("Mar 2025", 25.51, 1.76, 10.04), ("Mar 2026", 41.95, 1.77, 8.15))]
+    for label in ("Sales growth, 3 years", "Profit growth, 3 years", "EBITDA margin holding up"):
+        assert audit._why_na(label, years, []) == "history", label
+    full = years[2:] + [{"year": "Mar 2027", "sales": 50.0, "profit": 2.0, "opm": 9.0}]
+    assert audit._why_na("Sales growth, 3 years", full, []) is None           # four full years: judged as before
