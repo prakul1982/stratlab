@@ -176,15 +176,17 @@ def record(model: str, usage: dict | None, refusal: bool = False) -> int:
     return micros
 
 
-def claude_models(task: str, pinned: str = "") -> list[str]:
+def claude_models(task: str, pinned: str = "", bulk: bool = False) -> list[str]:
     """The Claude models this job may ask now, best first; [] once this month's spend reached the cap (or can't be
-    read). A model pinned in Railway (ANTHROPIC_MODEL) or on the Admin page is used alone, still under the cap."""
+    read). A model pinned in Railway (ANTHROPIC_MODEL) or on the Admin page is used alone, still under the cap.
+    `bulk`: a background or batch job (the daily filing reader, the IPO catch-up, the newsletter) asks Haiku only, so
+    the Sonnet share goes to the reads a person is waiting for (owner, 4 Nov)."""
     spent = spent_usd()
     if spent is None or spent >= cap_usd():
         return []
     if pinned:
         return [pinned]
-    if task == "quick":
+    if task == "quick" or bulk:
         return [HAIKU]
     return [SONNET, HAIKU] if spent < sonnet_until_usd() else [HAIKU]
 

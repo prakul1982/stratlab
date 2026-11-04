@@ -340,14 +340,15 @@ def pinned(name: str) -> str:
 
 
 # ---------- which models, in which order ----------
-def models_for(name: str, task: str) -> list[str]:
+def models_for(name: str, task: str, bulk: bool = False) -> list[str]:
     """The models this job asks at this provider. Claude's come from this month's spend (ai_spend: Sonnet 5.5, then
-    Haiku 5.5, none at the cap), a pin still winning; every other provider's are its measured ones (in_use)."""
+    Haiku 5.5, none at the cap; Haiku only for a background job), a pin still winning; every other provider's are its
+    measured ones (in_use)."""
     if name != "anthropic":
         return in_use(name)
     p = pinned(name)
     p = p if p and not blocked(name, p) and not pin_gone(name, p) else ""
-    return [m for m in ai_spend.claude_models(task, p) if not blocked(name, m)]
+    return [m for m in ai_spend.claude_models(task, p, bulk) if not blocked(name, m)]
 
 
 def in_use(name: str) -> list[str]:
@@ -420,12 +421,12 @@ def score(name: str, model: str, task: str) -> float:
     return round(out, 2)
 
 
-def route(task: str, names: list[str], need_tokens: int = 0, fixed: bool = False) -> list[tuple[str, str]]:
+def route(task: str, names: list[str], need_tokens: int = 0, fixed: bool = False, bulk: bool = False) -> list[tuple[str, str]]:
     """(provider, model) pairs to try for this job, best first. With `fixed`, providers keep the given order (the
     AI_PROVIDERS setting) and only their models are sorted."""
     rows = []
     for name in names:
-        for m in models_for(name, task):
+        for m in models_for(name, task, bulk):
             ctx = stats(name, m).ctx or PROVIDERS[name].ctx
             if need_tokens and ctx and need_tokens > ctx * 0.9:
                 continue                                              # the document wouldn't fit

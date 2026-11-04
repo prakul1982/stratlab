@@ -114,18 +114,20 @@ def _names(task: str) -> tuple[list[str], bool]:
     return [n for n in names if configured(n)], fixed
 
 
-def plan(task: str = "quick", need_tokens: int = 0) -> list[tuple[str, str]]:
-    """(provider, model) in the order a request for this job would ask them right now."""
+def plan(task: str = "quick", need_tokens: int = 0, bulk: bool | None = None) -> list[tuple[str, str]]:
+    """(provider, model) in the order a request for this job would ask them right now. `bulk` (default: inside a
+    bulk() block) is a background job: Claude Haiku only, never Sonnet."""
     names, fixed = _names(task)
-    pairs = R.route(task, names, need_tokens, fixed)
+    bulk = _bulk.get() if bulk is None else bulk
+    pairs = R.route(task, names, need_tokens, fixed, bulk)
     if fixed:
         return pairs                                    # AI_PROVIDERS names the order by hand: Claude goes where it says
     if (getattr(settings, "AI_PROVIDER", "") or "").lower() == "anthropic":   # older setting: Claude first for every job
         return [x for x in pairs if x[0] == "anthropic"] + [x for x in pairs if x[0] != "anthropic"]
-    return claude_place(task, pairs)
+    return claude_place(task, pairs, bulk)
 
 
-def claude_place(task: str, pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
+def claude_place(task: str, pairs: list[tuple[str, str]], bulk: bool = False) -> list[tuple[str, str]]:
     """Where Claude goes in a job's chain (owner, 4 Nov: spend the monthly credit where quality shows). Research reads
     and long documents: Claude first (its models come from this month's spend, ai_spend), the free models after it as
     the fallback. Quick jobs: the reliable free providers named in AI_QUICK_BEFORE_CLAUDE (Groq) first, then Claude
@@ -135,6 +137,10 @@ def claude_place(task: str, pairs: list[tuple[str, str]]) -> list[tuple[str, str
     claude = [x for x in pairs if x[0] == "anthropic" and R.ready(x[0], x[1], now) == 0]
     if not claude:
         return pairs
+    # in the spend's order (Sonnet, then Haiku), not by measured score: Haiku's quick answers mustn't put it ahead of
+    # Sonnet for a research read
+    tier = R.models_for("anthropic", task, bulk)
+    claude.sort(key=lambda x: tier.index(x[1]) if x[1] in tier else len(tier))
     rest = [x for x in pairs if x not in claude]
     if task != "quick":
         return claude + rest
@@ -178,6 +184,19 @@ _asking_again: contextvars.ContextVar[bool] = contextvars.ContextVar("asking_aga
 
 
 _from_cache: contextvars.ContextVar[bool] = contextvars.ContextVar("answer_from_cache", default=False)
+_bulk: contextvars.ContextVar[bool] = contextvars.ContextVar("ai_bulk", default=False)
+
+
+@contextlib.contextmanager
+def bulk():
+    """Inside the block every complete() is a background or batch job (the daily filing reader, the IPO catch-up): it
+    asks Claude Haiku 5.5 only, never Sonnet, so this month's Sonnet share goes to the reads a person is waiting for
+    (owner, 4 Nov). A user's own request for the same read keeps Sonnet first."""
+    tok = _bulk.set(True)
+    try:
+        yield
+    finally:
+        _bulk.reset(tok)
 
 
 def last_from_cache() -> bool:
@@ -196,7 +215,7 @@ def ask_again():
 
 
 def complete(system: str, text: str, gemini=None, anthropic=None, transport=None, max_tokens: int = 1500,
-             kind: str = "quick", want_json: bool = True, use_cache: bool = True) -> str:
+             kind: str = "quick", want_json: bool = True, use_cache: bool = True, bulk: bool | None = None) -> str:
     """Ask the best available models in turn and return the first checked reply (a JSON object, unless
     want_json=False). `kind` is the job: "quick", "research" or "long". `gemini`/`anthropic` replace those
     providers with a plain function (tests); the app's own wrappers are marked `_builtin` and ignored."""
@@ -216,7 +235,7 @@ def complete(system: str, text: str, gemini=None, anthropic=None, transport=None
     overrides = {n: f for n, f in (("gemini", gemini), ("anthropic", anthropic)) if callable(f) and not getattr(f, "_builtin", False)}
     need = int((len(system) + len(text)) / 3.5) + max_tokens
     pairs, seen = [], set()
-    for name, model in plan(task, need):
+    for name, model in plan(task, need, bulk):
         if name in overrides:
             if name in seen:
                 continue

@@ -334,3 +334,34 @@ def test_research_answers_are_kept_as_long_as_their_facts_are_the_same():
     assert P.CACHE_TTL["research"] >= 12 * 3600 and P.CACHE_MAX == 400
     k = P.AnswerCache.key("research", "sys", "FACTS: x", 2500, True)
     assert k == P.AnswerCache.key("research", "sys", "FACTS: x", 2500, True)      # nothing per call in the key
+
+
+# ---------- background jobs ask Haiku only (coordinator, 4 Nov) ----------
+def test_a_background_job_asks_claude_haiku_only_and_a_persons_read_keeps_sonnet(monkeypatch):
+    keys(monkeypatch, "anthropic", "mistral")
+    assert P.plan("long")[:2] == [("anthropic", "claude-sonnet-5-5"), ("anthropic", "claude-haiku-5-5")]
+    for plan in (P.plan("long", bulk=True), P.plan("research", bulk=True)):
+        assert plan[0] == ("anthropic", "claude-haiku-5-5") and ("anthropic", "claude-sonnet-5-5") not in plan
+    seen = []
+    with P.bulk():
+        assert ("anthropic", "claude-sonnet-5-5") not in P.plan("long")
+        P.complete("s", "t", kind="long", transport=claude(seen))
+    P.complete("s", "t2", kind="long", transport=claude(seen))               # outside the block: a person's read again
+    assert [b["model"] for b in seen] == ["claude-haiku-5-5", "claude-sonnet-5-5"]
+    P.complete("s", "t3", kind="research", bulk=True, transport=claude(seen))
+    assert seen[-1]["model"] == "claude-haiku-5-5"
+    spent(99.0)
+    assert all(n != "anthropic" for n, _ in P.plan("long", bulk=True))      # the cap still holds
+
+
+def test_the_scheduled_callers_run_as_background_jobs():
+    # one mechanism (bulk), used where a job reads, not where a person asked: biz updates' daily job, the IPO catch-up
+    # pass and the newsletter; the user-triggered reads (business-updates read, opening an IPO, deep dive) keep Sonnet
+    import inspect
+    from app import biz_updates, ipo
+    from app.newsletter import write
+    assert "with AI.bulk():" in inspect.getsource(biz_updates.Job.run)
+    assert inspect.getsource(biz_updates.business_updates_read).count("bulk") == 0
+    src = inspect.getsource(ipo)
+    assert src.count("with AI.bulk():") == 1 and "Today's catch-up limit" in src[:src.index("with AI.bulk():")][-1200:]
+    assert "bulk=True" in inspect.getsource(write.ai_summary)
