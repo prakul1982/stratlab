@@ -31,12 +31,14 @@ test("VR5-006: Holdings' four totals are one table on a phone, and the breadth c
   await page.goto("/invest");
   const card = page.getByTestId("breadth-card");
   await expect(card).toBeVisible({ timeout: 30_000 });
-  const rows = await card.locator(".k-stat").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-  expect([...new Set(rows)].length, `breadth tops ${rows}`).toBe(2);
-  // each figure on one line, at the smallest phone too
+  // TABLE-SWEEP: the three figures are rows of one table (they were tiles, two rows of them on a phone)
+  await expect(card.getByRole("table").locator("tbody tr")).toHaveCount(3);
+  // each figure whole and on one line, at the smallest phone too
   await page.setViewportSize({ width: 360, height: 780 });
-  const lines = await card.locator(".k-stat-v").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)));
-  expect(Math.max(...lines)).toBeLessThan(1.5);
+  const figs = card.getByRole("table").locator("tbody td.k-num");
+  await expect(figs).toHaveCount(3);
+  const cut = await figs.evaluateAll((els) => els.map((e) => [...e.childNodes].some((n) => n.nodeType === 3) ? (() => { const r = document.createRange(); r.selectNodeContents(e); return r.getClientRects().length; })() : 1));
+  expect(Math.max(...cut), "a figure wraps").toBeLessThan(2);
   await noSideways(page);
 });
 

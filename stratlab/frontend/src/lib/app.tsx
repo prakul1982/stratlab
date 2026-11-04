@@ -12,7 +12,7 @@ import { planPriceFor } from "./currency";
 import { JOINED, JOIN_LABEL, joinInterest, resetInterest } from "./planInterest";
 import { readViewAs, writeViewAs, type ViewAs } from "./viewAs";
 import { CFG } from "./config";
-import { hasSavedSession } from "./entry";
+import { emailLinkIn, hasSavedSession, withoutEmailLink } from "./entry";
 import { useLiveRefresh } from "./liveRefresh";
 import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
 import { toastMs } from "./toastTime";
@@ -164,7 +164,13 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
       if (data.session || tries >= SESSION_RETRY_MS.length || !sessionUnconfirmed(true, null)) { setSession(data.session); setReady(true); return; }
       window.setTimeout(() => check(tries + 1), SESSION_RETRY_MS[tries]);
     });
-    check(0);
+    // an emailed one-time sign-in link: its hashed token is traded for the session first, and taken out of the address
+    // whether it worked or not (used once, it can't sign in again); a link that failed leaves the page signed out (SECMEM 1b)
+    const link = emailLinkIn(location.search);
+    if (link) {
+      history.replaceState(history.state, "", withoutEmailLink(location.href));
+      void supabase.auth.verifyOtp(link).catch(() => undefined).then(() => check(0));
+    } else check(0);
     const { data } = supabase.auth.onAuthStateChange((e, s) => {
       if (e === "SIGNED_OUT") { writeViewAs(null); clearLocalData(); }          // "View as" is the owner's, on this device: it doesn't outlive the sign-in
       setSession(s);

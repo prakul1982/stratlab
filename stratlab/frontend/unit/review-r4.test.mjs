@@ -160,6 +160,6 @@ test("round 39: the stock-lending counts say what they count, and a stage says w
   assert.equal(Object.keys(STAGE_MEANING).length, 4);
   assert.match(STAGES_EXPLAINED, /Stage 2 \(advancing\)[\s\S]*Stage 3 \(topping\)/);
   assert.match(read("pages/ResearchScans.tsx"), /header: "Stage", info: STAGES_EXPLAINED/);
-  assert.match(read("components/Research.tsx"), /stageMeaning\(i\.text\) && <Info label=/);
+  assert.match(read("components/Research.tsx"), /stageMeaning\(x\.text\) && <Info label=/);       // the AI figures are a table since the table sweep
   assert.match(read("charts/price/PriceChart.tsx"), /<span title=\{STAGE_MEANING\[s\.stage\[i\]\]\}>/);
 });

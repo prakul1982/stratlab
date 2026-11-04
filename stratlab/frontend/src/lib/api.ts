@@ -4,6 +4,7 @@ import { CFG, sessionKey } from "./config";
 import { ApiError, NO_BACKEND_MESSAGE } from "./http";
 import { viewAsHeaders } from "./viewAs";
 import { hasSavedSession } from "./entry";
+import { callEnded, callStarted } from "./inflight";
 
 export { CFG } from "./config";
 export { ApiError } from "./http";
@@ -19,7 +20,10 @@ export const supabase = {
     url: new URL("auth/v1", sbBase).href,
     headers: { Authorization: `Bearer ${sbKey}`, apikey: sbKey },
     storageKey: SESSION_KEY,
-    autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, flowType: "implicit",
+    // PKCE (SECMEM 1b): Google comes back with a one-time code in the query, which the library trades for the session and
+    // then takes out of the address; the implicit flow put the session's tokens themselves in the address after a #, where
+    // the browser's history and anything reading the address could see them. The emailed reviewer links follow (entry.ts).
+    autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, flowType: "pkce",
   }),
 };
 
@@ -34,7 +38,13 @@ export function setApiHandlers(h: { unauthorized: () => void; offline: () => voi
   onOffline = h.offline;
 }
 
-export async function api<T = any>(path: string, { method = "GET", body, raw = false, file, signal }: Opts = {}): Promise<T> {
+/** Every call to the server, counted while it is out (lib/inflight: a page's later cards start once the first screen's are back). */
+export function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
+  callStarted();
+  return send<T>(path, opts).finally(callEnded);
+}
+
+async function send<T = any>(path: string, { method = "GET", body, raw = false, file, signal }: Opts = {}): Promise<T> {
   if (!CFG.API_BASE) {
     const e = new ApiError(NO_BACKEND_MESSAGE);
     console.warn("StratLab: API_BASE is missing from config.js, so no request can be sent.");

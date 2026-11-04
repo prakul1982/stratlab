@@ -1,3 +1,4 @@
+import { download } from "../lib/share";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notebookTitle, useDocTitle } from "../lib/title";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -333,11 +334,7 @@ function NotebookView() {
       // the group a notebook tests on goes with its rules, so an import sets up the same group (R11C-013)
       const r = await api<Response>("/export/strategy", { method: "POST", raw: true,
         body: { strategy: { ...s, name: nb.name }, instrument: group ? null : inst?.id ?? null, ...(group ? { group } : {}) } });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob());
-      a.download = (nb.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "strategy") + ".json";
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      download(await r.blob(), (nb.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "strategy") + ".json");
     } catch (e) { fail(e); }
   };
 

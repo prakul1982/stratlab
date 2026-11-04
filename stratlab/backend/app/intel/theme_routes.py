@@ -160,10 +160,53 @@ PENDING_GIVE_UP = 90.0                                                    # seco
 _pending_since: dict = {}                                                 # (market, theme, map time) -> when it was first served unchecked
 
 
+_sic = {"at": 0.0, "stored": None}
+
+
+def _sic_stored() -> dict:
+    if _sic["stored"] is None or time.time() - _sic["at"] > 3600:
+        try:
+            _sic["stored"] = db.json_value(db.get_setting(theme_base.SIC_KEY), {})
+        except Exception:
+            _sic["stored"] = {}
+        _sic["at"] = time.time()
+    return _sic["stored"]
+
+
+def _sic_read(sym: str) -> list[str]:
+    """A US company's SIC path from its SEC record (the submissions JSON its page reads), [] when it has none."""
+    from .. import main
+    from .net import NotFound
+    from .sec import sic_path
+    try:
+        subs = main.sec_feed.submissions(main.sec_feed.cik(sym))
+    except (NotFound, KeyError):
+        return []
+    return sic_path(str(subs.get("sic") or ""), subs.get("sicDescription"))
+
+
+def fill_us_industries(read=None) -> int:
+    """A few more US companies' SIC codes read and kept (theme_base.fill_sic); how many are still without one."""
+    rows = _routes().index_rows("US")
+    stored, n = theme_base.fill_sic(rows, _sic_stored(), read or _sic_read)
+    if n:
+        try:
+            db.set_setting(theme_base.SIC_KEY, json.dumps(stored, separators=(",", ":")))
+        except Exception as e:
+            print("theme: SEC codes not kept:", str(e)[:100])
+        _sic.update(stored=stored, at=time.time())
+    return theme_base.unclassified(theme_base.with_sic(rows, stored))
+
+
+def _rows(region: str) -> list[dict]:
+    """The market's index rows, a US company's industry filled from its SEC record where the index has none."""
+    rows = _routes().index_rows(region)
+    return theme_base.with_sic(rows, _sic_stored()) if region == "US" else rows
+
+
 def _industries(region: str, theme: str) -> dict:
     """The theme's official industries (theme_base.industries_for), on the market's stored index."""
-    R = _routes()
-    return theme_base.industries_for(region, theme, R.index_rows(region), _ask, db.get_setting, db.set_setting)
+    return theme_base.industries_for(region, theme, _rows(region), _ask, db.get_setting, db.set_setting)
 
 
 def checked(region: str, theme: str, m: dict) -> dict:
@@ -183,8 +226,14 @@ def checked(region: str, theme: str, m: dict) -> dict:
         if len(VERDICTS) > VERDICT_KEEP:
             VERDICTS.clear()
         out = theme_check.check_placements(m, evidence_reader(region, _map_names(m)), _ask, theme, VERDICTS)
+        missing = None
+        if region == "US":
+            try:
+                missing = fill_us_industries()
+            except Exception as e:
+                print("theme: SEC codes not filled:", type(e).__name__, str(e)[:100])
         inds = _industries(region, theme)
-        out = theme_base.with_base(m, out, _routes().index_rows(region), inds["industries"], grounding.listed_name,
+        out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name,
                                    inds.get("named") or (), inds.get("except") or ())
         claims = A.get("sector_claims", key)
         if claims is None:
@@ -196,6 +245,8 @@ def checked(region: str, theme: str, m: dict) -> dict:
         out["tailwinds"], out["risks"] = claims["tailwinds"], claims["risks"]
         p = out["placements"]
         p["industries_by"] = inds["how"]
+        if missing is not None:
+            p["unclassified"] = missing              # US companies still without an industry on file (none of their SEC records read yet)
         done = p["checked"] and inds["how"] != "pending"
         if len(_pending_since) > VERDICT_KEEP:
             _pending_since.clear()

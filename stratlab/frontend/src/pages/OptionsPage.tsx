@@ -1,3 +1,4 @@
+import { download } from "../lib/share";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
@@ -491,11 +492,10 @@ export function OptionsPage() {
   };
   const exportIt = () => {
     const blob = new Blob([JSON.stringify({ stratlab: "options", version: 1, strategy: s }, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob); a.download = `${s.name.replace(/[^\w-]+/g, "-").toLowerCase()}.json`; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    const file = `${s.name.replace(/[^\w-]+/g, "-").toLowerCase()}.json`;
+    download(blob, file);
     // said, with what the file keeps relative (DB-009: it downloaded silently, "expiry": "current" unexplained)
-    notify(`Saved ${a.download}. It keeps the expiry as a choice (${({ current: "Nearest", next: "Next", month: "Monthly" } as Record<string, string>)[s.expiry] ?? s.expiry}), not a date, so importing it later uses the expiry of that day.`);
+    notify(`Saved ${file}. It keeps the expiry as a choice (${({ current: "Nearest", next: "Next", month: "Monthly" } as Record<string, string>)[s.expiry] ?? s.expiry}), not a date, so importing it later uses the expiry of that day.`);
   };
 
   const [sigBusy, setSigBusy] = useState(false);

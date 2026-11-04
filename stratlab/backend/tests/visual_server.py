@@ -21,7 +21,11 @@ sys.path.insert(0, ".")
 _web = os.environ.get("E2E_WEB_PORT", "5599")
 os.environ.setdefault("FRONTEND_ORIGIN", f"http://127.0.0.1:{_web},http://localhost:{_web}")   # the browser tests' page
 from tests import e2e_clock  # noqa: E402
-AT = e2e_clock.start()          # the world's fixed moment (tests/e2e_clock.py), set before the app reads any time
+# the world's fixed moment (tests/e2e_clock.py), set before the app reads any time. Only when run as the server: a test
+# module importing this one (test_demo_world, test_mood1) runs under the suite's own pin (conftest), and a travel started
+# here at collection sat on time_machine's one stack for every later test in that worker, where the next test to stop
+# "its" travel popped this one instead (R2: the clock leak behind test_fix1b::test_live1b_008; conftest no_clock_left_moved)
+AT = e2e_clock.start() if __name__ == "__main__" else e2e_clock.moment()
 from app import main  # noqa: E402
 from tests import world  # noqa: E402
 

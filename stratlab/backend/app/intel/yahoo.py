@@ -60,6 +60,36 @@ def _from_quote(meta: dict, tz, day: datetime, ohl: tuple, prev_close: float | N
     return o, max(h, o, c), min(l, o, c), c
 
 
+def _meta_day(meta: dict) -> str | None:
+    """The exchange day of the quote's last trade."""
+    last = meta.get("regularMarketTime")
+    try:
+        return datetime.fromtimestamp(last, ZoneInfo(meta.get("exchangeTimezoneName") or "UTC")).date().isoformat() \
+            if isinstance(last, (int, float)) else None
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _session_close(meta: dict, candles: list[dict]) -> dict | None:
+    """The newest traded session's close when the quote is not that session's (the monthly audit, 1 Nov: thin OTC stocks).
+    The quote can lag the daily candles by days (MVNC's said 0.18 from 16 Oct, though it traded at 0.12 on 29 Oct; NGTF's
+    3.30 from 26 Oct beside 5.70 on 2 Nov), or be a print outside its own session's range (WSKEF: 12.50 on 16 Oct, a day
+    that traded 9.06 to 9.75 and closed 9.23). None when the quote stands: a later session (one in progress), or the same
+    session at a price inside its range."""
+    traded = [c for c in candles if c.get("c") is not None and (c.get("v") or 0) > 0]
+    if not traded:
+        return None
+    last, day, price = traded[-1], _meta_day(meta), meta.get("regularMarketPrice")
+    cday = last["t"][:10]
+    if day and day > cday:
+        return None
+    if day == cday and price is not None and last.get("l") is not None and last.get("h") is not None \
+            and last["l"] * 0.999 <= price <= last["h"] * 1.001:
+        return None
+    before = [c["c"] for c in candles if c.get("c") is not None and c["t"][:10] < cday]
+    return {"price": last["c"], "prev": before[-1] if before else None, "high": last.get("h"), "low": last.get("l"), "at": cday}
+
+
 def _previous_close(meta: dict, candles: list[dict]) -> float | None:
     """The close of the session before the last trade's. The meta's chartPreviousClose is the close before the chart's
     window (about a week back for a 7-day window), so a "day's change" read from it is really the week's."""
@@ -287,7 +317,21 @@ class Yahoo(Source):
         # exact: a fresh short window, never cut from a long download, so the last sessions are today's
         got = self.chart(symbol, "1d", 7, ttl=60, exact=True)
         m = got["meta"]
+        day = _meta_day(m)
+        if day and not any(c["t"][:10] >= day for c in got["candles"]):
+            # a thin stock's last trade before this window: the session it is of, from a longer window (WSKEF, 1 Nov)
+            try:
+                got = {**got, "candles": self.chart(symbol, "1d", 40, ttl=3600)["candles"]}
+            except SourceError:
+                pass
         price, prev = m.get("regularMarketPrice"), _previous_close(m, got["candles"])
+        fix = _session_close(m, got["candles"])
+        if fix:
+            return {**self._meta_out(m, symbol, fix["price"], fix["prev"]), "high": fix["high"], "low": fix["low"], "at": fix["at"]}
+        return self._meta_out(m, symbol, price, prev)
+
+    @staticmethod
+    def _meta_out(m: dict, symbol: str, price, prev) -> dict:
         return {
             "symbol": m.get("symbol", symbol), "name": m.get("longName") or m.get("shortName"),
             "currency": m.get("currency"), "exchange": m.get("fullExchangeName") or m.get("exchangeName"),

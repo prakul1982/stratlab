@@ -3,7 +3,6 @@ into text, and cut down to the passages that matter, so a free AI model can read
 
 Only the exchanges' own document hosts are fetched (the links come from a third-party feed), with a size and page
 cap, and the text is cached for a week."""
-import io
 import re
 from urllib.parse import urlparse
 
@@ -150,16 +149,11 @@ def scanned(text: str, pages: int) -> bool:
 
 
 def pdf_text_pages(data: bytes, max_pages: int = MAX_PAGES) -> tuple[str, int]:
-    """The PDF's text and its page count."""
-    from pypdf import PdfReader               # imported here: only these reads need it
-    reader = PdfReader(io.BytesIO(data))
-    parts = []
-    for page in reader.pages[:max_pages]:
-        try:
-            parts.append(page.extract_text() or "")
-        except Exception:                     # one bad page mustn't lose the document
-            continue
-    return _tidy("\n".join(parts)), len(reader.pages)
+    """The PDF's text and its page count; a page that can't be read is left out (one bad page mustn't lose the document).
+    A large file is read in a short-lived process (pdf_proc, SECMEM item 2)."""
+    from . import pdf_proc
+    pages, count = pdf_proc.page_texts(data, max_pages)
+    return _tidy("\n".join(t for t in pages if t is not None)), count
 
 
 def _tidy(text: str) -> str:

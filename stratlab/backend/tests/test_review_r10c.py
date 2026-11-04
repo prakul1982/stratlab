@@ -144,7 +144,7 @@ def test_public_page_crore_in_indian_grouping():
          "years": [{"year": "Mar 2026", "sales": 267021, "profit": 49454, "opm": 24, "debt": 9000},
                    {"year": "Mar 2025", "sales": 2570.4, "profit": -0.3, "opm": 24, "debt": None}]}
     table = re.sub(r"<[^>]+>", " ", sp._table(f))
-    assert "2,67,021" in table and "267,021" not in table and "-0.30" in table
+    assert "2,67,021" in table and "267,021" not in table and "−0.30" in table     # a negative with the true minus (LIVE2-017)
     stats = dict(sp._stats(f))
     assert stats["Net profit, last 12 months (₹ crore)"] == "49,45,400"
     us = {**f, "region": "US", "currency": "USD", "unit": "$ million"}

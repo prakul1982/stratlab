@@ -10,15 +10,15 @@ import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts"
 import { pctTick, moneyCompact } from "../lib/chartFormat";
 import { instrumentLoader, PriceChart, strategyStudies, type Tf } from "../charts/price/lazy";
 import { Info, Modal, STATUS_NAME } from "../components/ui";
-import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, Seg, Signed, Skeleton, Stat, StatRow, usePhone, type Column } from "../components/kit";
+import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, FactTable, Field, FormActions, FormGrid, Notice, PageHeader, Seg, Signed, Skeleton, Stat, StatRow, usePhone, type Column } from "../components/kit";
 import { usePersisted } from "../lib/persist";
-import { HELP } from "../lib/help";
+import { HELP, testFills } from "../lib/help";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
 import { libraryDraft } from "../lib/shareText";
 import { MoreMenu } from "../components/MoreMenu";
 import { track } from "../lib/analytics";
-import { siteUrl } from "../lib/share";
+import { siteUrl, download } from "../lib/share";
 import { Book, Download, Globe, Layers, Pencil, Pulse, Share, Trash } from "../components/Icons";
 import { usePlansToast } from "../components/PlanInterest";
 import "./trade/trade.css";
@@ -326,11 +326,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     if (!canExport) { plansToast("Trade export is on the Pro plan."); return; }
     try {
       const r = await api<Response>(`/notebooks/${nb.id}/experiments/${e.v}/trades.csv`, { raw: true });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob());
-      a.download = `${nb.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "trades"}-v${e.v}-trades.csv`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      download(await r.blob(), `${nb.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "trades"}-v${e.v}-trades.csv`);
     } catch (x) { fail(x); }
   };
   const cur = e.instrument.currency || "";
@@ -348,7 +344,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   // the closed trades kept as rows are the newest ones: how many more there were and their P&L, so the caption agrees with
   // the header and the rows plus that line add up to the total (R11C-003)
   const list = tradeListFacts(e);
-  // an intraday trade's times are its candles, start to close: the order fills at the close (R11C-011)
+  // an intraday trade's times are its candles, start to close (R11C-011): a rule's order fills at the open, a stop or target inside it
   const close = markets.find((m) => m.id === e.instrument.market)?.hours?.close ?? null;
   const at = (iso: string | null | undefined) => (intraday ? candleSpan(iso, e.tf, tz, close) : when(iso, tz, false));
   const twoWay = e.strategy.side === "both" || e.strategy.side === "short" || e.trades.some((t) => t.side === "short");
@@ -487,13 +483,15 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
         <Card label="What you'd keep">
           <CardHead title="What you'd keep" info={HELP.keep} infoLabel="About costs" actions={<span className="k-note">{e.instrument.market === "IN" ? "India costs" : "Costs"}</span>} />
-          <div className="k-rows two" role="list" aria-label="Profit and costs">
-            <div role="listitem"><span>Profit before costs</span><b>{money(e.costs.gross_pnl, cur)}</b></div>
-            {/* the flat brokerage the rules assume is said beside its total, so a person can see what it rests on (LIVE1A-010) */}
-            {e.costs.items.map((i) => <div role="listitem" key={i.label}><span>{i.label === "Brokerage" && e.strategy.risk.brokerage > 0 ? `Brokerage (${money(e.strategy.risk.brokerage, cur)} an order, from the rules)` : i.label}</span><b>{charge(i.amount, cur)}</b></div>)}
-            {e.costs.tax.amount != null && <div role="listitem"><span>Tax estimate</span><b>{charge(e.costs.tax.amount, cur)}</b></div>}
-            <div role="listitem" className="hl wide"><span>{e.costs.tax.amount != null ? "In your pocket" : "After costs"}</span><b className={upDown(e.costs.kept)}>{money(e.costs.kept, cur)}</b></div>
-          </div>
+          {/* TABLE-SWEEP (owner, 29 Oct: "wherever you can, just make a table"): what the profit was before costs, each cost and what is
+              left, as rows of one table, not label-and-figure pairs in two columns */}
+          <FactTable label="Profit and costs" itemHead="Item" figureHead="Amount" numeric rows={[
+            { id: "gross", k: "Profit before costs", v: money(e.costs.gross_pnl, cur) },
+            // the flat brokerage the rules assume is said beside its total, so a person can see what it rests on (LIVE1A-010)
+            ...e.costs.items.map((i) => ({ id: i.label, k: i.label === "Brokerage" && e.strategy.risk.brokerage > 0 ? `Brokerage (${money(e.strategy.risk.brokerage, cur)} an order, from the rules)` : i.label, v: charge(i.amount, cur) })),
+            ...(e.costs.tax.amount != null ? [{ id: "tax", k: "Tax estimate", v: charge(e.costs.tax.amount, cur) }] : []),
+            { id: "kept", k: <b>{e.costs.tax.amount != null ? "In your pocket" : "After costs"}</b>, v: <b className={upDown(e.costs.kept)}>{money(e.costs.kept, cur)}</b> },
+          ]} />
           <p className="k-note">{e.costs.tax.note}</p>
         </Card>
       </section>
@@ -526,7 +524,9 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         {/* a few shares and a flat charge per order: the return can go the other way from the price (R50-015: 2 ITC shares
             up 4.5% shown at −4.97%) */}
         {allTrades.some((t) => Math.abs(t.qty) <= 5) && <p className="k-note" data-testid="trades-small-qty">On a trade of a few shares, the charges per order can be larger than the price move, so its return after costs can go the other way from the price.</p>}
-        {intraday && allTrades.length > 0 && <p className="k-note">Each time is the candle the order filled in: a rule's order fills at the candle's close, the end of the span; a stop or a target fills inside it.</p>}
+        {/* Instinct (2 Nov): how this test filled, with its own slippage; an intraday time is the candle the order filled in, a
+            rule's at its start (the open), not at its close as this note said */}
+        {allTrades.length > 0 && <p className="k-note" data-testid="trades-fills">{testFills(e.strategy.risk.slippage, intraday)}{intraday ? " Each time is the candle the order filled in: a rule's order at its start, a stop or a target inside it." : ""}</p>}
       </Card>
 
       <WalkForwardCheck key={`wf${e.v}`} nb={nb} e={e} />

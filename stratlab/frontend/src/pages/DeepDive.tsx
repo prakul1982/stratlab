@@ -1,3 +1,4 @@
+import { download } from "../lib/share";
 import { unsettledNote, saidOn } from "../lib/reportCard";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
@@ -194,9 +195,7 @@ export function DeepDivePage() {
     setDecking(format);
     try {
       const r = await api<Response>(`/research/deep/${encodeURIComponent(sym)}/deck${q(`format=${format}`)}`, { raw: true });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob()); a.download = `${sym}-deep-dive.${format}`; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      download(await r.blob(), `${sym}-deep-dive.${format}`);
       void refreshMe();                               // the deck count in Account
     } catch (e) { fail(e); } finally { setDecking(null); }
   };

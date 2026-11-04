@@ -12,7 +12,6 @@ lists and for stocks with a "new business update" alert, and fires those alerts.
 
 Facts and arithmetic only: the company's filed figures with their source, never brokers' estimates, and no "beat" or
 "miss" against anything."""
-import io
 import json
 import re
 import threading
@@ -354,16 +353,10 @@ def settled(period: str | None, filed: str, span: str | None = "month") -> str |
 
 
 def pdf_pages(data: bytes, max_pages: int = 12) -> list[str]:
-    """Each page's text (the rupee sign put back), for finding the page a quote is on."""
-    from pypdf import PdfReader
-    out = []
-    for page in PdfReader(io.BytesIO(data)).pages[:max_pages]:
-        try:
-            t = page.extract_text() or ""
-        except Exception:
-            t = ""
-        out.append(docs.fix_rupee(re.sub(r"[ \t]+", " ", t).strip()))
-    return out
+    """Each page's text (the rupee sign put back), for finding the page a quote is on. A large deck is read in a
+    short-lived process (pdf_proc, SECMEM item 2)."""
+    from . import pdf_proc
+    return [docs.fix_rupee(re.sub(r"[ \t]+", " ", t or "").strip()) for t in pdf_proc.page_texts(data, max_pages)[0]]
 
 
 def pages_of(docs_api, url: str) -> list[str]:

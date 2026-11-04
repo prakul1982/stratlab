@@ -479,7 +479,10 @@ td.num, .num { font-family: var(--sans); }
 .neg { color: var(--orange-ink); }
 
 /* ---------- overlays ---------- */
-.modal-back { position: fixed; inset: 0; z-index: 60; background: rgba(10, 10, 8, .45); display: grid; place-items: center; padding: 16px; }
+/* The layers, bottom to top: the Markets button 55, Market Watch's panel and the account menu 60, the cookie question 65, a dialog
+   66 (Instinct #11: at 60 the open panel, drawn later, sat over the dimmed page and caught the dialog's clicks), the toast and the
+   tour's note 70 */
+.modal-back { position: fixed; inset: 0; z-index: 66; background: rgba(10, 10, 8, .45); display: grid; place-items: center; padding: 16px; }
 .modal.wide { width: min(920px, 100%); }
 .modal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
 .modal { background: var(--paper); border: 1px solid var(--line-2); border-radius: 18px; width: min(720px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; padding: 28px; box-shadow: var(--shadow); }
@@ -664,9 +667,6 @@ td.num, .num { font-family: var(--sans); }
 /* AI read */
 .ai-read { border-color: var(--ink); }
 
-.ai-figs { margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.ai-fig { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 2px 14px; font-size: 14px; }
-.ai-fig dt, .ai-fig dd { margin: 0; }
 .ai-table .k-table :is(th, td) { white-space: normal; vertical-align: top; max-width: none; }
 .ai-table .k-table tbody th, .ai-table .k-table thead th:first-child { width: 11rem; min-width: 0; }
 .ai-table .k-table .k-list { margin: 0; }
@@ -679,7 +679,6 @@ td.num, .num { font-family: var(--sans); }
   .ai-table .k-table td { padding-bottom: 12px; }
   .ai-table .k-table tbody tr { border-bottom: 1px solid var(--line); }
   .ai-table .k-table tbody tr:last-child { border-bottom: 0; }
-  .ai-fig { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 10px; }
 }
 
 /* themes */
@@ -2043,7 +2042,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-dl.prose dt { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
 .k-dl.prose dd { font-weight: 400; color: var(--muted); line-height: 1.5; }
 /* MO-3c: the downloads are equal columns across the card (three buttons of three widths left a gap at the right), one a row on a phone */
-.k-downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: var(--s2); }
+.k-downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); grid-auto-rows: 1fr; gap: var(--s2); }   /* every download the same height, whatever its note (VR3-024) */
 .k-downloads .btn { height: auto; min-height: 52px; padding-block: var(--s2); text-align: left; justify-content: flex-start; white-space: normal; min-width: 0; }
 .k-downloads .btn small { display: block; font-weight: 400; opacity: .75; font-size: var(--t-note); }
 .k-fold { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; display: flex; justify-content: space-between; align-items: center; gap: var(--s3); text-align: left; flex-wrap: wrap; }

@@ -15,6 +15,7 @@ import threading
 import time
 import traceback
 import uuid
+import urllib.parse
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
@@ -7324,6 +7325,17 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
     return {"sent_to": to}
 
 
+def sign_in_link(props) -> str:
+    """The emailed one-time sign-in link: the site itself with the link's hashed token in the query, which the site trades for
+    a session (lib/entry.ts emailLinkIn). The sign-in service's own link answers with the session's tokens in the address
+    after a #, the implicit flow the site no longer takes since sign-in moved to PKCE (SECMEM 1b); a reply without the
+    hashed token (an older service) keeps that link."""
+    hashed = getattr(props, "hashed_token", None)
+    if not hashed:
+        return props.action_link
+    return f"{settings.PUBLIC_SITE_URL.rstrip('/')}/?{urllib.parse.urlencode({'token_hash': hashed, 'type': 'magiclink'})}"
+
+
 @app.post("/admin/review-link")
 def admin_review_link(profile=Depends(admin.admin_profile)):
     """A one-time sign-in link for the owner's own account, emailed to the owner's own address, for the automated
@@ -7336,7 +7348,7 @@ def admin_review_link(profile=Depends(admin.admin_profile)):
     try:
         res = db.sb().auth.admin.generate_link({"type": "magiclink", "email": to,
                                                 "options": {"redirect_to": settings.PUBLIC_SITE_URL.rstrip("/") + "/"}})
-        link = res.properties.action_link
+        link = sign_in_link(res.properties)
     except Exception as e:
         err(502, "link_failed", f"The sign-in service couldn't make a link: {public_text(str(e))[:200]}")
     text = ("A one-time sign-in link for your StratLab account, for the automated reviewer. It works once and expires "
@@ -7400,7 +7412,7 @@ def admin_test_account(req: TestAccountReq, profile=Depends(admin.admin_profile)
     try:
         res = auth.generate_link({"type": "magiclink", "email": email,
                                   "options": {"redirect_to": settings.PUBLIC_SITE_URL.rstrip("/") + "/"}})
-        link, uid = res.properties.action_link, res.user.id
+        link, uid = sign_in_link(res.properties), res.user.id
     except Exception as e:
         err(502, "link_failed", f"The sign-in service couldn't make a link: {public_text(str(e))[:200]}")
     db.get_profile(uid, email)                  # the profile row, as a first sign-in makes it

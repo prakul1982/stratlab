@@ -10,7 +10,7 @@ export const APP_ROUTES = [
   "/notebooks", "/new", "/n/:id", "/n/:id/market", "/n/:id/compare", "/n/:id/e/:v", "/import", "/library", "/options",
   "/trade/positioning", "/trade/positioning/stocks", "/options/s/:sid", "/paper", "/paper/:sid", "/trade/journal",
   "/trade/fo-changes", "/trade/closing-auction", "/trade/replay", "/trade/signals", "/trade/signals/:sid", "/trade/events",
-  "/plans", "/pricing", "/upgrade", "/help", "/faq", "/account", "/settings", "/assistant", "/app", "/invite", "/admin/*", "/news",
+  "/plans", "/pricing", "/upgrade", "/help", "/faq", "/tour", "/account", "/settings", "/assistant", "/app", "/invite", "/admin/*", "/news",
   "/holdings", "/tax-report", "/money/net-worth", "/money/mutual-funds", "/money/tax-tools", "/money/calendar",
   "/money/us-tax", "/money/itr", "/money/sip-test", "/money/rates", "/alerts", "/research", "/research/themes",
   "/research/pulse", "/research/compare", "/research/watchlist", "/research/scan", "/research/scans", "/scans",
@@ -81,7 +81,7 @@ export function describePath(path: string): Described | null {
     "/": "your StratLab", "/mine": "My space", "/all": "My space", "/trade": "your Trade home", "/invest": "your Invest home",
     "/money": "your Money home", "/notebooks": "your notebooks", "/new": "the idea builder", "/plans": "the plans",
     "/account": "your account", "/settings": "your settings", "/assistant": "your AI assistant keys", "/app": "the app",
-    "/invite": "your invite link", "/news": "your briefs", "/features": "everything StratLab does", "/dev/kit": "the design kit",
+    "/invite": "your invite link", "/tour": "the tour", "/news": "your briefs", "/features": "everything StratLab does", "/dev/kit": "the design kit",
   };
   if (named[p]) return { what: named[p] };
   const g = locateGroup(p);

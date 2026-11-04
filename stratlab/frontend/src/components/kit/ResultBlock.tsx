@@ -1,12 +1,15 @@
 import type { ReactNode } from "react";
+import { FactTable } from "./FactTable";
 
 /** The answer under a calculator: a line saying what it is, the big result, one line of context, an optional split bar
  * (your part and the other part) and rows of the working. The `highlight` row is the one to read last. Put it right
  * below the form's button; `testId` and `live` let tests and screen readers find it when it appears. */
-export function ResultBlock({ label, big, note, split, rows, testId }: {
+export function ResultBlock({ label, big, note, split, rows, rowsLabel = "How it is worked out", testId }: {
   label: ReactNode; big: ReactNode; note?: ReactNode;
   split?: { aLabel: string; aValue: string; aPct: number; bLabel: string; bValue: string };
   rows?: { label: ReactNode; value: ReactNode; highlight?: boolean }[]; testId?: string;
+  /** The working table's name for screen readers. */
+  rowsLabel?: string;
 }) {
   const a = split ? Math.max(0, Math.min(100, split.aPct)) : 0;
   return (
@@ -22,8 +25,11 @@ export function ResultBlock({ label, big, note, split, rows, testId }: {
           <div className="k-legend"><span><i className="me" />{split.aLabel} <b>{split.aValue}</b></span><span><i className="br" />{split.bLabel} <b>{split.bValue}</b></span></div>
         </>
       )}
+      {/* the working as a table, item and amount (TABLE-SWEEP, owner 29 Oct: "wherever you can, just make a table"); the row to read
+          last in bold */}
       {rows && rows.length > 0 && (
-        <div className="k-rows">{rows.map((r, i) => <div key={i} className={r.highlight ? "hl" : undefined}><span>{r.label}</span><b>{r.value}</b></div>)}</div>
+        <FactTable label={rowsLabel} itemHead="Item" figureHead="Amount" numeric
+          rows={rows.map((r, i) => ({ id: String(i), k: r.highlight ? <b>{r.label}</b> : r.label, v: r.highlight ? <b>{r.value}</b> : r.value }))} />
       )}
     </div>
   );

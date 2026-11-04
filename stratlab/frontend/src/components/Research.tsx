@@ -8,7 +8,7 @@ import { stageMeaning } from "../lib/stageNote";
 import { writtenAt, fmtDate, marketTz, monthLong, num, pct, price, safeHref, signCls, signedMove } from "../lib/format";
 import {
   SETTLING, bandPosition, metricText, holderRowName, missingLine, monthsOld, newsWhen, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
-  type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
+  type Company, type CompanyAI, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { surpriseShown } from "../lib/surprise";
@@ -112,10 +112,13 @@ export function PriceChart({ region, symbol, currency, price: shown, asOf: shown
 }
 
 /* ---------- 52-week rail ---------- */
-export function Rail52({ q, low, high, currency, compact, since }: { q: Quote | null; low: number | null; high: number | null; currency: string; compact?: boolean;
-  /** a share listed within the year: its first day of trading, and the range is since then, not 52 weeks (DD-011) */ since?: string | null }) {
+export function Rail52({ q, low, high, currency, compact, since, tradedFrom }: { q: Quote | null; low: number | null; high: number | null; currency: string; compact?: boolean;
+  /** a share listed within the year: its first day of trading, and the range is since then, not 52 weeks (DD-011) */ since?: string | null;
+  /** an older share whose prices on record begin within the year (relisted, or long without trades): the range is since then (SECMEM 6) */
+  tradedFrom?: string | null }) {
   const px = q?.price;
-  const span = since ? "range since listing" : "52-week range";
+  const from = since ?? tradedFrom ?? null;
+  const span = since ? "range since listing" : tradedFrom ? "range since its first price on record" : "52-week range";
   // a range that can't be this share's (another class's, another listing's) is never drawn under its price (R7T-001)
   if (px == null || low == null || high == null || high <= low || !plausibleRange(px, low, high)) return null;
   const at = (v: number) => Math.max(0, Math.min(100, ((v - low) / (high - low)) * 100));
@@ -124,12 +127,12 @@ export function Rail52({ q, low, high, currency, compact, since }: { q: Quote | 
   // in a company's header: the rail and its two ends, under the price (the percentile is in the rail's label)
   if (compact) return (
     <div className="inv-rail52" title={`${ordinal(Math.round(p))} percentile of its ${span}${band ? "; the shaded band is today's range" : ""}`}>
-      <svg className="inv-rail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`${since ? "Range since listing" : "52-week range"} ${price(low, currency)} to ${price(high, currency)}; today's price sits at the ${ordinal(Math.round(p))} percentile`}>
+      <svg className="inv-rail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`${since ? "Range since listing" : tradedFrom ? "Range since its first price on record" : "52-week range"} ${price(low, currency)} to ${price(high, currency)}; today's price sits at the ${ordinal(Math.round(p))} percentile`}>
         <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
         {band && <rect className="band" x={band[0]} y="1" width={Math.max(band[1] - band[0], 0.8)} height="8" />}
         <rect className="mark" x={Math.min(98.8, Math.max(0, p - 0.6))} y="0" width="1.2" height="10" />
       </svg>
-      <div className="k-spread k-note"><span>{since ? `Since listing (${fmtDate(since, { year: false })}): low` : "52-wk low"} {price(low, currency)}</span><span>high {price(high, currency)}</span></div>
+      <div className="k-spread k-note"><span>{since ? `Since listing (${fmtDate(since, { year: false })}): low` : from ? `Prices on record from ${fmtDate(from, { year: false })}: low` : "52-wk low"} {price(low, currency)}</span><span>high {price(high, currency)}</span></div>
     </div>
   );
   return (
@@ -324,39 +327,33 @@ export function EarningsBars({ rows: raw, basis }: { rows: Company["earnings"]; 
   );
 }
 
-/** One area's figures, each on its own line with the label and the value in aligned columns (the same two columns in every row of the table). */
-function Figures({ items }: { items: FactRow["items"] }) {
-  return (
-    <dl className="ai-figs">
-      {items.map((i) => (
-        <div key={i.label} className="ai-fig">
-          <dt className="k-muted">{i.label}</dt>
-          <dd>{i.text}{stageMeaning(i.text) && <Info label={`About ${i.text}`}>{stageMeaning(i.text)}</Info>}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 /** What the AI read says, as one table (UI-CO item 3): the area on the left, its figures on the right: the worked-out numbers by area, the valuation
  * line, the notable figures, where the company sits and what to watch. No bars, grades or colours: the numbers are the whole story. */
 type ReadRow = { id: string; area: string; body: ReactNode };
 function ReadTable({ r }: { r: CompanyAI }) {
   const rows: ReadRow[] = [
-    ...(r.facts ?? []).map((f) => ({ id: f.id, area: f.label, body: <Figures items={f.items} /> })),
     ...(r.valuation_note ? [{ id: "valuation", area: "Valuation", body: <span className="k-small">{r.valuation_note}</span> }] : []),
     // facts only: one list of figures that stand out, not "strengths" and "risks" (round 39)
     ...(r.bull.length > 0 || r.bear.length > 0 ? [{ id: "notable", area: "Notable figures", body: <ul className="k-list" data-testid="notable-figures">{[...r.bull, ...r.bear].map((b) => <li key={b}>{b}</li>)}</ul> }] : []),
     ...(r.position ? [{ id: "position", area: "Where it sits", body: <span className="k-small">{r.position}</span> }] : []),
     ...(r.watch.length > 0 ? [{ id: "watch", area: "What to watch", body: <ul className="k-list">{r.watch.map((w) => <li key={w}>{w}</li>)}</ul> }] : []),
   ];
-  if (!rows.length) return null;
+  // TABLE-SWEEP (owner, 29 Oct): the worked-out figures are rows of their own table (area, figure, value), not a label/value list
+  // inside a cell of the table below (on a phone that was a list in a card)
+  const figs = (r.facts ?? []).flatMap((f) => f.items.map((i, n) => ({ id: `${f.id}-${n}`, area: f.label, label: i.label, text: i.text })));
+  if (!rows.length && !figs.length) return null;
   return (
-    <div className="ai-table">
-      <DataTable label="The AI read, by area" rows={rows} rowKey={(x) => x.id} stack={false}
-        columns={[{ key: "a", header: "The numbers", rowHeader: true, cell: (x) => <b className="k-small">{x.area}</b> },
-          { key: "f", header: "The figures", cell: (x) => x.body }]} />
-    </div>
+    <>
+      {figs.length > 0 && <DataTable label="The AI read's figures" rows={figs} rowKey={(x) => x.id}
+        columns={[{ key: "a", header: "Area", rowHeader: true, cell: (x) => x.area },
+          { key: "k", header: "Figure", wrap: true, cell: (x) => x.label },
+          { key: "v", header: "Value", wrap: true, cell: (x) => <>{x.text}{stageMeaning(x.text) && <Info label={`About ${x.text}`}>{stageMeaning(x.text)}</Info>}</> }]} />}
+      {rows.length > 0 && <div className="ai-table">
+        <DataTable label="The AI read, by area" rows={rows} rowKey={(x) => x.id} stack={false}
+          columns={[{ key: "a", header: "The numbers", rowHeader: true, cell: (x) => <b className="k-small">{x.area}</b> },
+            { key: "f", header: "The figures", cell: (x) => x.body }]} />
+      </div>}
+    </>
   );
 }
 

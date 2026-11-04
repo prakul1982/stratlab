@@ -4,7 +4,7 @@ import { BROAD_GROUP, breadthApi, cardDates, cardFigures, count, savedPick, shar
 import { homeRegion } from "../lib/homeMarket";
 import { Panel } from "./Research";
 import { AsOf, PanelSkel } from "./ui";
-import { Stat, StatRow } from "./kit";
+import { FactTable } from "./kit";
 import { marketTz } from "../lib/format";
 import { useMarketRefresh } from "../lib/marketLive";
 
@@ -42,14 +42,15 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
           <div className="k-stack" data-testid="breadth-card" data-live={f.live ? "1" : "0"}>
             {/* VR5-002: "Live as of 15:30 IST" says it is live: no second "Live" pill beside it */}
             <span className="eyebrow">{d.group.name} · <span data-testid="breadth-card-when">{f.when}</span></span>
-            <StatRow>
-              <Stat label="Rose / fell" value={`${count(f.adv)} / ${count(f.dec)}`} note={dates?.counts} />
-              <Stat label="Above 50-day average" value={share(f.pct50)} note={dates?.counts} />
-              {/* the live count has no new highs and lows: those stay the last close's, said so */}
-              {f.live
-                ? (d.today ? <Stat label="52-week highs / lows" value={`${count(d.today.highs.value)} / ${count(d.today.lows.value)}`} note={dates?.highs} /> : null)
-                : <Stat label="52-week highs / lows" value={`${count(f.highs)} / ${count(f.lows)}`} />}
-            </StatRow>
+            {/* TABLE-SWEEP (owner, 29 Oct: "stat tiles with 'vs yesterday' lines" are a table): the three counts as rows, the day once in
+                the figures' header; the year's highs and lows keep the close's day beside them while the counts are live (R38) */}
+            <FactTable label={`Market breadth, ${d.group.name}`} itemHead="Measure" figureHead={dates?.counts ?? "Latest"} noteHead="Day" numeric noteUnder rows={[
+              { id: "adv", k: "Rose / fell", v: `${count(f.adv)} / ${count(f.dec)}` },
+              { id: "pct50", k: "Above 50-day average", v: share(f.pct50) },
+              ...(f.live
+                ? (d.today ? [{ id: "hl", k: "52-week highs / lows", v: `${count(d.today.highs.value)} / ${count(d.today.lows.value)}`, n: dates?.highs }] : [])
+                : [{ id: "hl", k: "52-week highs / lows", v: `${count(f.highs)} / ${count(f.lows)}` }]),
+            ]} />
             {!f.live && <AsOf parts={[["Prices", d.as_of]]} tz={marketTz(d.group.region)} />}
           </div>
         )}

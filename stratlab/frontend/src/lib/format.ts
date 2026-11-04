@@ -225,9 +225,9 @@ export function when(iso: string | null | undefined, tz: string, intraday: boole
 
 const TF_MINUTES: Record<string, number> = { "5m": 5, "15m": 15, "1h": 60 };
 
-/** An intraday candle by the time it covers, "8 Oct, 09:30–09:45": a backtest's or a paper session's order fills at the
+/** An intraday candle by the time it covers, "8 Oct, 09:30–09:45": a paper session's rule order fills at the
  * candle's close, the end of that span, while the candle is named by its start (R11C-011: "Opened 8 Oct 09:30" at the 09:45
- * close). The span stops at the market's close (`close`, "15:30"): an hour candle from 15:15 ends at 15:30. A daily candle
+ * close); a backtest's fills at the open of the candle after the signal, the start of its span. The span stops at the market's close (`close`, "15:30"): an hour candle from 15:15 ends at 15:30. A daily candle
  * is its day. */
 export function candleSpan(iso: string | null | undefined, tf: string, tz: string, close?: string | null): string {
   const mins = TF_MINUTES[tf];

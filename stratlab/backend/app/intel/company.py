@@ -1219,6 +1219,17 @@ class Research:
         except Exception:
             return None
 
+    def _us_listing(self, sym: str) -> dict | None:
+        """The quote site's listing of `sym` when it is a US one (a name, and not another currency or another market's
+        clock), for a US page standing on the listing alone. A bare Indian code (HDFCBANK) or any other market's listing is
+        no US company (R2 integration: a two-company link with no market opened HDFC Bank as a US company instead of
+        trying India, LIVE2-021)."""
+        lst = self._listing_or_none(sym)
+        tz = lst.get("tz") if lst else None
+        if not (lst and lst.get("name")) or lst.get("currency") not in (None, "USD") or (tz and not str(tz).startswith("America/")):
+            return None
+        return lst
+
     def _quiet_candles(self, sym: str) -> list[dict]:
         try:
             return self.yahoo.chart(sym, "1d", 400)["candles"]
@@ -1250,12 +1261,17 @@ class Research:
             # each other part saying what couldn't be read, instead of "Couldn't open AAPL" (R88-001: 2 of 3 loads failed)
             if not e.busy:
                 raise
-            lst = self._listing_or_none(sym)
-            if not (lst and lst.get("name")):
+            lst = self._us_listing(sym)
+            if not lst:
                 raise
             p = {"name": lst["name"], "currency": lst.get("currency"), "exchange": lst.get("exchange"), "from_listing": True}
         if not p.get("name"):
-            raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
+            # a new listing the profile source doesn't know yet (audit, 1 Nov: APXC, CHWM, DAVI, VNYR had no page, though the
+            # market quotes each under its name): the page stands on the listing, as it does when that source is busy
+            lst = self._us_listing(sym)
+            if not lst:
+                raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
+            p = {"name": lst["name"], "currency": lst.get("currency"), "exchange": lst.get("exchange"), "from_listing": True}
         if not lean:
             k1y = started.pop("k1y")             # kept last, the order the tasks always had (the sources list follows it)
             started.update(self._start({"wiki": ("Wikipedia", lambda: self.wiki.company(p["name"]))}))
@@ -1406,10 +1422,21 @@ class Research:
         # answer, whose reference for the first session is the issue price (DD-010, DD-011)
         listing = r.get("y")
         listed_on = listing_day(r.get("k1y"))
-        if listed_on and not listing:
+        traded_from = None
+        if inst and not r.get("k1y") and not listing:
+            # no daily candles from the broker for a share days old (audit, 1 Nov: PARASHLTH, listed 26 Oct, had its range
+            # unmarked): the listing's own first day of trading says whether it is new
+            listing = self._listing_or_none(_yahoo_in(code or sym))
+            first = (listing or {}).get("first_trade")
+            listed_on = first if first and listing_day([{"t": first}]) else None
+        elif listed_on and not listing:
             listing = self._listing_or_none(_yahoo_in(code or sym))
             if (listing or {}).get("first_trade") and listing["first_trade"] < listed_on:
-                listed_on = None                     # an older share that didn't trade early in the year, not a new one
+                # an older share that didn't trade early in the year, not a new one; when its trading on record began within
+                # the year (a share relisted or long without trades: BSE:539410, 539225 from 17 Jul), its range covers only
+                # the sessions since then, and the page says so rather than "52-week" (SECMEM 6)
+                traded_from = listing["first_trade"] if listing_day([{"t": listing["first_trade"]}]) else None
+                listed_on = None
         elif listing and listing.get("first_trade"):
             listed_on = listing["first_trade"] if listing_day([{"t": listing["first_trade"]}]) else None
         s = scr_summary(scr, listed_on) if scr else {}
@@ -1529,7 +1556,8 @@ class Research:
             "cap_note": stock_pages.CAP_UNAVAILABLE if s.get("cap_problem") else None,
             "market_cap": s["market_cap_cr"] * 1e7 if s.get("market_cap_cr") else None,
             # a share listed within the year: its range is since its first day of trading, said so (DD-011)
-            "quote": quote, "range52": {"low": lo52, "high": hi52, **({"since": listed_on} if listed_on else {})},
+            "quote": quote, "range52": {"low": lo52, "high": hi52, **({"since": listed_on} if listed_on else {}),
+                                     **({"traded_from": traded_from} if traded_from and not listed_on else {})},
             "margins": None,
             "metrics": _groups(
                 ("Valuation", [_pe_item(_of(_item("P/E", s.get("pe")), pe_of, lifted), s.get("pe_why")), _of(_item("P/B", s.get("pb")), f"Book value as of {s['book_as_of']}" if s.get("book_as_of") else None),

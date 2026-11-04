@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { Close } from "../Icons";
 import { firstFocus, tabbables, trapTab } from "../../lib/focusTrap";
 
@@ -125,7 +126,10 @@ export function Dialog({ title, onClose, children, wide, fallback, label, startO
 }) {
   const box = useRef<HTMLDivElement>(null);
   useDialogFocus(box, true, { onEscape: onClose, fallback, initial: startOnClose ? () => box.current?.querySelector<HTMLElement>("[data-close]") : undefined });
-  return (
+  // drawn at the end of the page, not inside whatever opened it (Instinct #11, 2 Nov: a delete-confirm under the dark backdrop, the
+  // open side panel catching the confirm's clicks): an opener inside Market Watch's panel or Home (each a CSS container, which
+  // holds a fixed box inside it) kept the dimmed page and the box inside that part of the page, under the panel's own layer
+  return createPortal(
     <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={label ?? title} ref={box}>
         <div className="modal-head">
@@ -134,7 +138,8 @@ export function Dialog({ title, onClose, children, wide, fallback, label, startO
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

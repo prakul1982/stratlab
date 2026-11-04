@@ -618,7 +618,10 @@ def refresh_india(feed, sebi, today: date, now: datetime | None = None, details:
     # allotment): its own page on the exchange, found by the company's name (IPO-002)
     rows = find_issue_pages(rows, feed, now, problems, sleep, pace)
     # each issue's own page: terms, the offer document and the bids, for the issues that are near or on their dates
-    todo = [r for r in rows if r.get("symbol") and r.get("series") and _wants_detail(r, now)][:details]
+    want = [r for r in rows if r.get("symbol") and r.get("series") and _wants_detail(r, now)]
+    # the issues being bid for or just listed first; the ones only tried again for missed final bids (RC4-020) after them
+    late = {id(r) for r in want if r.get("listing") and (now.astimezone(IST).date() - date.fromisoformat(r["listing"])).days > DETAIL_FOR_DAYS}
+    todo = ([r for r in want if id(r) not in late] + [r for r in want if id(r) in late])[:details]
     for r in todo:
         got = _try(problems, f"{r['symbol']}", lambda r=r: S.nse_detail(feed.nse.ipo_detail(r["symbol"], r.get("series") or "EQ")))
         if got:
@@ -712,8 +715,22 @@ def _wants_detail(r: dict, now: datetime) -> bool:
         return bool(r.get("open")) and (date.fromisoformat(r["open"]) - today).days <= 10 and (not r.get("detail_at") or r["detail_at"][:10] < today.isoformat())
     if st == "listed" and r.get("listing"):
         age = (today - date.fromisoformat(r["listing"])).days
-        return age <= DETAIL_FOR_DAYS and (not r.get("detail_at") or r["detail_at"][:10] <= r["listing"])
+        if age <= DETAIL_FOR_DAYS and (not r.get("detail_at") or r["detail_at"][:10] <= r["listing"]):
+            return True
+        return _backfill(r, today, age)
     return False
+
+
+BACKFILL_DAYS = 180                   # RC4-020: an issue listed this long ago with no final bids stored is still tried, once a week
+
+
+def _backfill(r: dict, today: date, age: int) -> bool:
+    """RC4-020: a listed issue whose final subscription the job missed in its first DETAIL_FOR_DAYS (its page read only then, and only
+    until the final figures were stored) is read again once a week for half a year, so the IPO post's subscription table stops
+    leaving it out. These come after the issues that are open, closed or newly listed (see the caller's order)."""
+    if age > BACKFILL_DAYS or ((r.get("sub") or {}).get("times") is not None):
+        return False
+    return not r.get("detail_at") or r["detail_at"][:10] <= (today - timedelta(days=7)).isoformat()
 
 
 def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookups: int = 10, check: list | None = None) -> tuple[list[dict], list[str]]:
@@ -1037,18 +1054,22 @@ def _catch_up_rank(r: dict, now: datetime) -> int:
 
 
 def ai_counts(now: datetime | None = None) -> dict:
-    """Admin's line: today's catch-up summaries against its cap, the ones people asked for, and the documents still waiting with the
-    days they take at the cap."""
+    """Admin's line and its IPO queue table: today's catch-up summaries against its cap, the ones people asked for, the
+    documents still waiting for a summary with the days they take at the cap, and the offer documents the background job
+    still has to read (never read, or read by an older reader: SECMEM 4), SMALL at a time between its other reads, uncapped."""
     day = _ai_day()
-    waiting = 0
+    now = now or _now()
+    waiting = to_read = 0
     for m in ("IN", "US"):
         for r in load(m)["rows"]:
             d = doc_to_read(r)
             facts = facts_of(d) if d else None
             if d and not summary_of(d) and (facts is None or facts.get("excerpt")):
                 waiting += 1
+            if d and (facts is None or facts_stale(facts)) and stage_of(r, now) in ("open", "upcoming", "closed", "listed", "filed"):
+                to_read += 1
     return {"scheduled": int(db.get_setting("ipo:ai:" + day) or 0), "cap": AI_PER_DAY, "asked": int(db.get_setting("ipo:ai:asked:" + day) or 0),
-            "waiting": waiting, "days": -(-waiting // AI_PER_DAY)}
+            "waiting": waiting, "days": -(-waiting // AI_PER_DAY), "to_read": to_read, "per_pass": SMALL}
 
 
 def make_summary(row: dict, d: dict, facts: dict, ai) -> dict:
@@ -1667,6 +1688,13 @@ def ipo_summary(rid: str, profile=Depends(current_profile)):
         finally:
             _reading.release()
     return ok({"facts": facts_view(row), "summary": summary_view(row, profile)})
+
+
+@router.get("/admin/ipos/queue")
+def ipos_queue(_=Depends(admin.admin_profile)):
+    """Admin's IPO queue (SECMEM 4, item 40c): today's summaries, the background backlog and the days it takes to clear.
+    Reads only what is stored; a person's own summary is never held by it (item 41)."""
+    return ok(ai_counts())
 
 
 @router.post("/admin/ipos/refresh")

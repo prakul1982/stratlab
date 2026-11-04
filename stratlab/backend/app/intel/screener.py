@@ -275,7 +275,10 @@ def checked_pe(p: dict, price: float | None, cap_cr: float | None) -> tuple[floa
     if pe_agrees(pe, implied, ttm):
         return pe, None
     own = num((p.get("ratios") or {}).get("Stock P/E"))
-    if own is not None and own > 0:
+    # a source P/E under one can't settle it, even when it agrees with market value ÷ the net profit row: that row is then
+    # more than the whole market value, the minority holders' share in it (audit, 1 Nov: SADBHIN showed 0.96 against 2.8 on
+    # the earnings per share its own shareholders have)
+    if own is not None and own >= MIN_PE:
         if pe_agrees(own, implied, ttm):
             return own, None
         if pe_agrees(pe, own, ttm):
@@ -325,7 +328,23 @@ def balance_ends_before(p: dict | None, day: str | None) -> bool:
     return bool(day) and d.isoformat()[:7] < str(day)[:7]
 
 
-def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | None, face: float | None, issued_since: bool = False) -> float | None:
+EPS_AGREE = 0.05              # a share count and net profit ÷ earnings per share this close are the same count
+
+
+def eps_shares(p: dict) -> tuple[float, float] | None:
+    """(the shares, in crore, the latest earnings per share were worked out on: net profit ÷ EPS in the annual table's last
+    column that has both; how far off that count can be from the profit's rounding, as a share of it). None without them."""
+    pl = p.get("pl") or {}
+    eps, profit = _row(pl, "EPS"), _row(pl, "Net Profit")
+    pairs = [(n, e) for n, e in zip(profit, eps) if n and e and n / e > 0]
+    if not pairs:
+        return None
+    n, e = pairs[-1]
+    return n / e, EPS_AGREE + (0.005 if abs(n) < 10 else 0.5) / abs(n)
+
+
+def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | None, face: float | None, issued_since: bool = False,
+               eps_count: tuple[float, float] | None = None) -> float | None:
     """Market value in crore: price times the shares in issue. The source's own figure is price times its share count at
     the moment it was read, which can lag (TCS, 8 Oct 2026: the screener said 370.3 crore shares, the company page
     361.7, from two reads). The share capital over the face value counts the shares from the balance sheet; when the
@@ -345,6 +364,11 @@ def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | Non
         # short, so ₹12.67 lakh crore beside ₹13.05; TONBO ₹6,707 crore beside ₹6,986): the source's count is the shares in issue now
         return cap_cr
     source = cap_cr / price
+    if eps_count and abs(source / eps_count[0] - 1) <= eps_count[1] and abs(shares / eps_count[0] - 1) > eps_count[1]:
+        # the source's count is the one its earnings per share were worked out on, and the share capital's isn't: that capital
+        # holds more than the equity shares in issue (audit, 1 Nov: BSE:531572's 4.26 cr of capital is 42.6 lakh ₹10 shares, its
+        # profit ÷ EPS 26.9 lakh, as the source counts; the value came out 31.1 cr against 19.6 and the P/E check failed)
+        return cap_cr
     if abs(source / shares - 1) > SHARES_DRIFT and shares >= source * (1 - TRUST_GAP):
         return round(price * shares, 2)
     return cap_cr
@@ -407,8 +431,16 @@ def summary(p: dict, listed_on: str | None = None) -> dict:
         y_now, y_prev = year_name(latest), year_name(before)
         latest_yoy = {"sales": grow(s_now, s_prev), "profit": grow(p_now, p_prev), "basis": "year",
                       "of": f"Year to {y_now} vs year to {y_prev}" if y_now and y_prev else None}
-    cap = market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face, balance_ends_before(p, listed_on))
+    cap = market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face, balance_ends_before(p, listed_on),
+                     eps_shares(p))
     pe, pe_why = checked_pe(p, price, cap)
+    src_cap = num(r.get("Market Cap"))
+    if pe is not None and pe_basis(p) is None and src_cap and cap and price and equity and face and abs(cap / src_cap - 1) > SHARES_DRIFT:
+        # no earnings per share filed to say which count of shares is right, and the share capital's differs from the source's: the
+        # source's P/E is on its count, the market value here on the capital's, so the two can't stand side by side (SECMEM 6, every
+        # such company: BSE:524548's 23.4 beside 35.4 cr, which is 29.7 times its profit)
+        pe, pe_why = None, (f"The shares in issue aren't settled: the share capital gives {equity[-1] / face * 100:,.1f} lakh, the exchange's "
+                            f"value counts {src_cap / price * 100:,.1f} lakh, and no earnings per share are filed to tell which is right")
     return {
         "latest_yoy": latest_yoy,
         # the periods the ratios are of, so each says it (DD-015: P/E on the last 12 months beside margins of the last year)

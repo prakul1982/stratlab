@@ -163,11 +163,12 @@ def test_the_consolidated_and_standalone_pages_are_read_at_once():
 
 # ---------- the lean India page in the evening, with every slow source hanging ----------
 @pytest.fixture
-def evening_page(monkeypatch, mem):
+def evening_page(monkeypatch, mem, request):
     day = EVENING.astimezone(timezone.utc)
     monkeypatch.setattr(fake_prices, "FROZEN", day)
     clock = time_machine.travel(day, tick=True)
     clock.start()
+    request.addfinalizer(clock.stop)            # stopped even when the set-up below fails (a travel left running moves every later test's clock)
     kite = fake_kite.online()
     hang = {"files": Hang(20), "all": Hang(20, answer={}), "bse": Hang(20)}
     official_close.setup(lambda: hang["files"](), lambda syms, max_wait=None: kite.quote(syms, max_wait=max_wait),
@@ -186,7 +187,6 @@ def evening_page(monkeypatch, mem):
         h.gate.set()
     main.app.dependency_overrides.clear()
     routes.hub = old
-    clock.stop()
 
 
 def test_the_lean_india_page_is_quick_while_the_exchange_files_quotes_and_bse_hang(evening_page):
