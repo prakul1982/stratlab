@@ -138,6 +138,45 @@ export function ruleLines(s: Strategy, mentioned: string[] = []): string[] {
   return out;
 }
 
+/** How sure a line under "We read this as" is (57.1: the chips looked equally confident whether the words said it or not):
+ * none = the words state it (read word for word); "ai" = the AI's reading, not checked word for word; "assumed" = not in the
+ * words at all, a default the notebook runs until it is changed; "asked" = not in the words, and nothing is assumed: a
+ * question below asks it. */
+export type ReadMark = "ai" | "assumed" | "asked";
+export const READ_MARK: Record<ReadMark, string> = { ai: "AI's reading", assumed: "Assumed", asked: "Asked below" };
+const CANDLES: Record<string, string> = { "1d": "Daily", "1h": "1-hour", "15m": "15-minute", "5m": "5-minute" };
+
+/** "We read this as …" and "We assumed: …" for a built idea: each line of the rules in plain words with how sure it is, and
+ * every assumption in a sentence (the reading's own, from the server, then the notebook's defaults). */
+export function readAs(s: Strategy, g: { mentioned: string[]; usedAI: boolean; confirmed?: string[]; assumed?: string[]; answered?: Record<string, string> },
+  hasInstrument: boolean): { lines: { text: string; mark?: ReadMark }[]; assumed: string[] } {
+  const say = (c: Cond) => `${refName(c.l)} ${opSay(c.op)} ${c.r.t === "num" ? c.r.v : refName(c.r)}`;
+  const said = (k: string, q = k) => g.mentioned.includes(k) || !!g.answered?.[q];
+  const sure = (side: "entry" | "exit"): ReadMark | undefined => (g.confirmed ?? []).includes(side) || !g.usedAI ? undefined : "ai";
+  const short = s.side === "short", join = s.entryJoin === "any" ? " or " : " and ";
+  const lines: { text: string; mark?: ReadMark }[] = [], assumed = [...(g.assumed ?? [])];
+  if (!hasInstrument && !g.answered?.inst) lines.push({ text: "Which stock or index: your words name none", mark: "asked" });
+  if (s.entry.length) lines.push({ text: `${short ? "Sell short" : "Buy"} when ${s.entry.map(say).join(join)}`, mark: sure("entry") });
+  if (s.side === "both" && (s.shortEntry ?? []).length) lines.push({ text: `Sell short when ${(s.shortEntry ?? []).map(say).join(join)}`, mark: sure("entry") });
+  const out = short ? "Buy back" : "Sell";
+  if (s.exit.length) {
+    const stated = said("exit");
+    lines.push({ text: `${out} when ${s.exit.map(say).join(" or ")}`, mark: stated ? sure("exit") : "assumed" });
+    if (!stated) assumed.push(`The ${short ? "buy-back" : "sell"} rule: your words say when to ${short ? "sell short" : "buy"}, not when to ${short ? "buy back" : "sell"}, so it is the ${short ? "short" : "buy"} rule turning back.`);
+  } else if (!said("exit")) lines.push({ text: `${out}: your words give no rule`, mark: "asked" });
+  const tfSaid = said("tf");
+  lines.push({ text: `${CANDLES[s.tf] ?? s.tf} candles`, mark: tfSaid ? undefined : "assumed" });
+  if (!tfSaid) assumed.push(`${CANDLES[s.tf] ?? s.tf} candles: your words give no candle length.`);
+  const pct = (k: "stopType" | "tgtType") => ((s.risk[k] ?? "pct") === "pct" ? "%" : "");
+  if (s.risk.sl > 0) {
+    lines.push({ text: `Stop loss ${s.risk.sl}${pct("stopType")}`, mark: said("sl") ? undefined : "assumed" });
+    if (!said("sl")) assumed.push(`A ${s.risk.sl}${pct("stopType")} stop loss: your words set none.`);
+  } else if (said("sl")) lines.push({ text: "No stop loss" });
+  if (s.risk.tgt > 0) lines.push({ text: `Target ${s.risk.tgt}${pct("tgtType")}` });
+  if ((s.risk.trail ?? 0) > 0) lines.push({ text: `Trailing stop ${s.risk.trail}%` });
+  return { lines, assumed: [...new Set(assumed)] };
+}
+
 export const NO_SESSION = { start: "", end: "", squareoff: "", maxTradesDay: 0, cooldown: 0, dailyLossPct: 0 };
 // no target unless the person asks for one (R5O-010): "Stop loss 2%" must not come back as "2% stop or a 6% target"
 const DEFAULT_RISK: Risk = { capital: 500000, riskPct: 1, maxAlloc: 100, sl: 2, tgt: 0, brokerage: 20, slippage: 0.05 };
@@ -210,8 +249,9 @@ function parseRef(s: string, pronoun = true): Ref | null {
     const n = /^\d/.test(m[1]) ? +m[1] : +m[2];
     return { t: /low/.test(word) ? "dc_lower" : "dc_upper", p: n };
   }
-  if ((m = s.match(/(\d+)\s*[- ]?\s*(?:day|period|bar|candle)?s?\s*(ema|sma|rsi|moving average|average|avg|ma\b)/))) return { t: normInd(m[2]), p: +m[1] };
-  if ((m = s.match(/\b(ema|sma|rsi|ma)\s*\(?\s*(\d+)/))) return { t: normInd(m[1]), p: +m[2] };
+  // "200 DMA": the 200-day simple average (57.1: it came back as "Price is above 200")
+  if ((m = s.match(/(\d+)\s*[- ]?\s*(?:day|period|bar|candle)?s?\s*(ema|sma|dma|rsi|moving average|average|avg|ma\b)/))) return { t: normInd(m[2]), p: +m[1] };
+  if ((m = s.match(/\b(ema|sma|dma|rsi|ma)\s*\(?\s*(\d+)/))) return { t: normInd(m[1]), p: +m[2] };
   if (/\brsi\b/.test(s)) return { t: "rsi", p: 14 };
   if (/\bstage\b/.test(s)) return { t: "stage", p: 150, m: 20 };
   if (pronoun ? /\b(price|close|ltp|it)\b/.test(s) : /\b(price|close|ltp)\b/.test(s)) return { t: "price" };

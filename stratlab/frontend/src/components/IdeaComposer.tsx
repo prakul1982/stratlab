@@ -16,7 +16,9 @@ export interface Built {
   strategy: Strategy;
   instrument: Instrument | null;
   question: string;
-  gaps: { mentioned: string[]; notes: string[]; instName: string | null; instMarket?: string | null; usedAI: boolean; fallback: string; warnings?: string[] };
+  gaps: { mentioned: string[]; notes: string[]; instName: string | null; instMarket?: string | null; usedAI: boolean; fallback: string; warnings?: string[];
+    /** the sides read from the words themselves, and what the reading assumed (57.1) */
+    confirmed?: string[]; assumed?: string[] };
   group?: Group | null;   // a strategy that trades a list of instruments together
 }
 
@@ -25,6 +27,7 @@ interface AIOut {
   market?: string | null; risk: Partial<Risk>; mentioned: string[]; notes: string[]; usage?: { ai_used: number; ai_limit: number | null };
   side?: "long" | "short" | "both"; shortEntry?: Cond[]; shortExit?: Cond[];
   minScore?: number; session?: Session; product?: Strategy["product"];
+  confirmed?: string[]; assumed?: string[];
 }
 
 /** Well-known names per market, used in the examples until you pick an instrument. */
@@ -170,6 +173,7 @@ export async function buildIdea(idea: string, market?: string, opts: { allIndica
     // the sell rule the questions offer as the default is the one the notebook runs until the person picks another
     built: { strategy: built, instrument, question: questionFrom(idea, instrument?.symbol),
       gaps: { mentioned, notes: out.notes || [], instName: out.instrument, instMarket: out.market ?? (market && market !== "CSV" ? market : null), usedAI, fallback,
+        confirmed: usedAI ? out.confirmed ?? [] : [], assumed: usedAI ? out.assumed ?? [] : [],
         warnings: [...ruleWarnings(idea, built, [...Object.values(checked).flatMap((x) => x.dropped), ...parsedDropped], [out.instrument, instrument?.symbol, instrument?.name]),
           ...(unreadNote ? [unreadNote] : [])].slice(0, 10) } },
   };

@@ -54,7 +54,7 @@ export function makeSaver(put: (body: Record<string, unknown>) => Promise<unknow
  * of each): sent in one save with a pick of the instrument, a note that was too long would have refused the whole save and
  * lost the pick (DA-003). */
 export function fitGaps<G extends { mentioned: string[]; notes: string[]; instName: string | null; instMarket?: string | null; fallback: string;
-  answered?: Record<string, string>; warnings?: string[] }>(g: G): G {
+  answered?: Record<string, string>; warnings?: string[]; confirmed?: string[]; assumed?: string[] }>(g: G): G {
   const cut = (x: string, n: number) => (x.length > n ? x.slice(0, n - 1) + "…" : x);
   return {
     ...g,
@@ -65,5 +65,7 @@ export function fitGaps<G extends { mentioned: string[]; notes: string[]; instNa
     fallback: cut(g.fallback ?? "", 400),
     answered: g.answered ? Object.fromEntries(Object.entries(g.answered).slice(0, 20).map(([k, v]) => [k.slice(0, 20), cut(String(v), 120)])) : undefined,
     warnings: (g.warnings ?? []).map((x) => cut(x, 300)).slice(0, 10),
+    ...(g.confirmed ? { confirmed: g.confirmed.filter((x) => x === "entry" || x === "exit").slice(0, 2) } : {}),
+    ...(g.assumed ? { assumed: g.assumed.map((x) => cut(x, 300)).slice(0, 10) } : {}),
   };
 }

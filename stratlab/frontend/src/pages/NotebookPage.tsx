@@ -480,7 +480,7 @@ function NotebookView() {
       )}
 
       <RulesCard s={s} currency={currency} onChange={setStrategy} defaultStop={!!gaps && experiments.length === 0 && !gaps.mentioned.includes("sl") && !gaps.answered?.sl && !statedIn(s.text).includes("sl")}
-        onRebuilt={(g) => { if (gaps) saveGaps({ ...gaps, mentioned: [...new Set([...gaps.mentioned, ...g.mentioned])], notes: g.notes, warnings: g.warnings }); }} />
+        onRebuilt={(g) => { if (gaps) saveGaps({ ...gaps, mentioned: [...new Set([...gaps.mentioned, ...g.mentioned])], notes: g.notes, warnings: g.warnings, confirmed: g.confirmed, assumed: g.assumed }); }} />
 
       <Card id="exp-h" label="Experiments">
         <CardHead title="Experiments" info={HELP.experiments} infoLabel="About experiments"
