@@ -30,8 +30,12 @@ export function FeedbackHost() {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const on = () => setOpen(true);
+    // a link can open it too: any address with #feedback (a reply email, the layout checker)
+    const hash = () => { if (location.hash === "#feedback") setOpen(true); };
+    hash();
     window.addEventListener(OPEN, on);
-    return () => window.removeEventListener(OPEN, on);
+    window.addEventListener("hashchange", hash);
+    return () => { window.removeEventListener(OPEN, on); window.removeEventListener("hashchange", hash); };
   }, []);
   return open ? <FeedbackDialog onClose={() => setOpen(false)} /> : null;
 }

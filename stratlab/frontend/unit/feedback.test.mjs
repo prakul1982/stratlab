@@ -43,6 +43,8 @@ test("the labelled Feedback button: the menu's top, the phone's top bar, Help, t
   assert.ok(shell.indexOf('<FeedbackButton className="btn quiet sm top-feedback" />') > bar, "in the phone's top bar");
   assert.match(read("src/components/Feedback.tsx"), />Feedback<\/button>/);
   assert.match(read("src/main.tsx"), /<FeedbackHost \/>/);
+  assert.match(read("src/components/Feedback.tsx"), /if \(location\.hash === "#feedback"\) setOpen\(true\);/);      // a link opens it too
+  assert.match(read("e2e/ui-lint-world.ts"), /"\/admin\/feedback", "\/admin\/emails", "\/help#feedback"\]/);           // the inbox and the dialog are laid out by the checker
   assert.match(read("src/components/LegalLinks.tsx"), /onClick=\{openFeedback\}>Feedback<\/button>/);
   assert.match(read("src/pages/AppGates.tsx"), /onClick=\{openFeedback\}>Report a problem or an idea<\/button>/);
   assert.match(read("src/pages/Login.tsx"), /onClick=\{openFeedback\}>Report a problem or an idea<\/button>/);
