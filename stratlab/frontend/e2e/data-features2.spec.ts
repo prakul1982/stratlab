@@ -211,7 +211,7 @@ test("strategy library: one table, the same facts once, sortable columns, and a 
   if (!phone) {
     await filter.getByRole("button", { name: "All markets" }).click();
     await expect(cards.nth(2)).toBeVisible();
-    const sortBtn = table.getByRole("columnheader", { name: /Total after costs/ }).getByRole("button");
+    const sortBtn = table.getByRole("columnheader", { name: /Total after costs/ }).locator("button.k-th-sort");
     await sortBtn.click();
     await expect(table.getByRole("columnheader", { name: /Total after costs/ })).toHaveAttribute("aria-sort", "descending");
     const num = (s: string) => Number(s.replace(/[−–]/g, "-").replace(/[^\d.-]/g, ""));
