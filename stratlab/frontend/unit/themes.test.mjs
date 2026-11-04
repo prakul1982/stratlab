@@ -79,3 +79,11 @@ test("THEMES: every company of the theme's official industries is listed by laye
   assert.match(page, /pl\?\.timed_out/);
   assert.doesNotMatch(page, /On the exchange's list for these industries/);
 });
+
+test("tailwinds and risks say 'no dated source' once under the table, not under every row (LIVE3-017)", () => {
+  const dive = readFileSync(new URL("../src/components/ThemeDive.tsx", import.meta.url), "utf8");
+  const card = dive.slice(dive.indexOf("export function ClaimsCard"), dive.indexOf("export function NewsCard"));
+  assert.doesNotMatch(card, /k-sub-line">No dated source/);
+  assert.equal((card.match(/no dated headline was found/g) || []).length, 1);
+  assert.match(card, /rows\.some\(\(x\) => !\(x\.status === "current" && x\.source\)\) && <p className="k-note">General background:/);
+});

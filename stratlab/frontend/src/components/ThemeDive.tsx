@@ -200,12 +200,14 @@ export function ClaimsCard({ tailwinds, risks }: { tailwinds: Claim[]; risks: Cl
     { key: "t", header: "What", wrap: true, cell: (x) => x.text },
     { key: "s", header: "Checked against", wrap: true, cell: (x) => (x.status === "current" && x.source
       ? <><Badge tone="ok" dot={false}>Checked</Badge> <a className="link" href={safeHref(x.source.url)} target="_blank" rel="noopener noreferrer">{x.source.headline}</a><span className="k-sub-line">{fmtDate(x.source.at)} · {x.source.outlet}</span></>
-      : <><Badge tone="plain" dot={false}>General background</Badge><span className="k-sub-line">No dated source found for it.</span></>) },
+      : <Badge tone="plain" dot={false}>General background</Badge>) },
   ];
   return (
     <Card id="theme-claims" label="Tailwinds and risks">
       <CardHead title="Tailwinds and risks" info="Checked: a headline dated within the last 18 months shows the programme or event is still current. A claim a dated headline showed had ended or been replaced is left out. General background: written by AI from general knowledge, with no figures, and no dated source was found for it." />
       <DataTable label="Tailwinds and risks, with the dated headline that supports each" columns={cols} rows={rows} rowKey={(x) => x.key} />
+      {/* said once under the table, not under every row (LIVE3-017) */}
+      {rows.some((x) => !(x.status === "current" && x.source)) && <p className="k-note">General background: no dated headline was found that shows it is still current.</p>}
     </Card>
   );
 }

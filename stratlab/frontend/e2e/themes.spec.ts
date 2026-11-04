@@ -64,6 +64,7 @@ test("the theme page is a deep dive made of tables, with each company only where
   const claims = page.locator("#theme-claims");
   await expect(claims).toContainText("General background");
   await expect(claims).not.toContainText("old steel scheme");
+  await expect(claims.getByText(/no dated headline was found/)).toHaveCount(1);         // said once under the table (LIVE3-017)
   // the theme in numbers: sections that are tables
   for (const id of ["numbers-size", "numbers-growth", "numbers-valuation", "numbers-quarter", "numbers-balance", "numbers-price", "numbers-ownership", "numbers-events", "numbers-management", "numbers-leaders"]) {
     await expect(page.locator(`#${id}`)).toBeVisible();
