@@ -8,6 +8,7 @@ import { useAdmin } from "./AdminContext";
 import { AIPanel } from "./AIPanel";
 import { errorCounts, groupErrors, mailFix, service, type ErrorGroup } from "./attention";
 import { PlatformPanel } from "./PlatformPanel";
+import { sendErrorLine, sentryTestLine } from "./testSend";
 import { APP_BUILD, buildLine } from "../../lib/buildInfo";
 import { IST, ago, when } from "../../lib/format";
 
@@ -45,6 +46,7 @@ export function SystemSection() {
   const [filing, setFiling] = useState<FilingCheck | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const [sentryNote, setSentryNote] = useState<string | null>(null);
   // the last automatic check's own filings result, so the row isn't "Not checked" beside a Pass made hours before (DJ-033)
   const [auto, setAuto] = useState<{ at: string; check: AutoCheck } | null>(null);
   useEffect(() => {
@@ -70,6 +72,13 @@ export function SystemSection() {
     const r = await api<{ subject: string; reached: number }>("/admin/weekly/test", { method: "POST" });
     const msg = r.reached ? `"${r.subject}" sent at ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Check your inbox (and spam).` : "The summary couldn't reach you: set up email or a phone in Account.";
     notify(msg); setSent(msg);
+  });
+  // one harmless message to Sentry, so the owner can see an error alert arrive (owner, 4 Nov); the line stays under the row
+  const testError = () => run("sentry", async () => {
+    try {
+      const r = await api<{ sentry_on: boolean; message: string }>("/admin/sentry/test", { method: "POST" });
+      setSentryNote(sentryTestLine(r, new Date()));
+    } catch (e) { setSentryNote(sendErrorLine(e, new Date(), "The test error couldn't be sent. Try again.")); }
   });
   const checkFilings = () => run("filings", async () => { setFiling(await api<FilingCheck>("/admin/filings/check", { method: "POST" })); });
   const saveFixture = () => run("fixture", async () => {
@@ -107,6 +116,11 @@ export function SystemSection() {
                 <button type="button" className="btn quiet sm" disabled={busy === "weekly"} onClick={sendWeekly} title={`The summary that goes out every Monday at 9:00 IST, sent now to ${sv.admin_alerts.to.length ? `${sv.admin_alerts.to.length} admin address${sv.admin_alerts.to.length === 1 ? "" : "es"}` : "all admins"}`}>{busy === "weekly" ? "Sending…" : "Send this week's summary now"}</button>
               </>} />}
             {sent && <p className="k-small k-muted" role="status" data-testid="alert-sent">{sent}</p>}
+            {/* whether server errors reach Sentry, from the SDK itself, and a test that proves an alert arrives (owner, 4 Nov) */}
+            {sv.sentry !== undefined && <StatusRow state={sv.sentry ? "ok" : "warn"} word={sv.sentry ? "On" : "Off"} label="Error alerts (Sentry)"
+              detail={sv.sentry ? "Server errors are sent to Sentry, which can email or page you." : "Server errors are only listed here: SENTRY_DSN isn't set on the server, so nothing alerts you."}
+              actions={<button type="button" className="btn quiet sm" disabled={busy === "sentry"} onClick={testError} title="Sends one harmless message to Sentry (at most 3 an hour)">{busy === "sentry" ? "Sending…" : "Send a test error"}</button>} />}
+            {sentryNote && <p className="k-small k-muted" role="status" data-testid="sentry-sent">{sentryNote}</p>}
             <StatusRow state={!filing ? (auto ? (auto.check.state === "pass" ? "ok" : auto.check.state === "warn" ? "warn" : "bad") : "warn") : filing.ok ? "ok" : "bad"}
               word={filing ? undefined : auto ? (auto.check.state === "pass" ? "Pass" : auto.check.state === "warn" ? "Check" : "Fail") : "Not checked"} label={`Exchange filings${filing ? ` (${filing.symbol})` : ""}`}
               detail={!filing ? (auto ? `In the check ${ago(auto.at)}: ${auto.check.detail} Press the button to ask again now.` : "Press the button to ask the exchange for a company's filings.") : filing.ok

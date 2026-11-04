@@ -300,6 +300,19 @@ test("admin emails: 29 kinds listed, each shown in a frame with no scripts at a 
   await sane(page, errors);
 });
 
+test("admin system: 'Error alerts (Sentry)' says on or off, and 'Send a test error' answers on the card (owner, 4 Nov)", async ({ page }) => {
+  const errors = await open(page, "/admin/system", "Server errors");
+  const row = page.getByRole("list", { name: "Other services" }).getByRole("listitem").filter({ hasText: "Error alerts (Sentry)" });
+  // the test world sets no SENTRY_DSN, so the server's SDK is off and the row says so in a word
+  await expect(row.locator(".k-light")).toHaveText("Off", { timeout: 30_000 });
+  await expect(row).toContainText("SENTRY_DSN isn't set");
+  await row.getByRole("button", { name: "Send a test error" }).click();
+  // nothing to send to with Sentry off; the line stays on the card with the time. The throttle (3 an hour, the same admin on both
+  // projects and on a retry) answers on the same line, so either answer is the card telling the press what happened
+  await expect(page.getByTestId("sentry-sent")).toHaveText(/^Not sent \(\d\d:\d\d:\d\d\): (Sentry is off on the server\. Add SENTRY_DSN|You've sent 3 test errors this hour)/, { timeout: 30_000 });
+  await sane(page, errors);
+});
+
 test("admin quality and system open with their cards", async ({ page }, info) => {
   let errors = await open(page, "/admin/quality", "Reported strategies");
   await expect(page.getByRole("radio", { name: "US" })).toBeVisible();

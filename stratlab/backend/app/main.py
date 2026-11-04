@@ -66,6 +66,7 @@ from .auth import current_profile
 from .config import api_docs_enabled, settings
 from .branding import public_text
 from .errors import report
+from . import errors as error_alerts           # Admin → System: is Sentry on, and its test message
 from .responses import err, ok
 from .guard import Guard, HeavyGate, Window, address as caller_address
 from . import research
@@ -6266,7 +6267,9 @@ def server_status() -> dict:
             "rules_watch": rules_watch_summary(), "audit_mismatches": mismatches, "audit_checked": checked,
             # whether India is shut today anyway, so a weekend's logged-out broker is OK, not Check (DJ-003)
             "data_note": data_note(),
-            "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
+            "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())},
+            # whether server errors reach Sentry (SENTRY_DSN set and the SDK started), for Admin → System's "Error alerts" line
+            "sentry": error_alerts.enabled()}
 
 
 def calendar_status() -> dict:
@@ -7334,6 +7337,20 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
             why += ". The host blocks outgoing mail ports: add BREVO_API_KEY or RESEND_API_KEY in Railway to send over HTTPS instead"
         err(502, "email_failed", f"The email couldn't be sent: {why}")
     return {"sent_to": to}
+
+
+# the owner's test errors an hour: enough to check an alert arrives, not enough to flood Sentry's quota
+TEST_ERRORS_HOUR = 3
+
+
+@app.post("/admin/sentry/test")
+def admin_sentry_test(profile=Depends(admin.admin_profile)):
+    """One harmless message to Sentry ("StratLab test error from Admin, <time>"), so the owner can check error alerts arrive.
+    Says whether Sentry was on: with it off nothing is sent."""
+    throttle(profile, "admin_sentry_test", TEST_ERRORS_HOUR, 3600, f"You've sent {TEST_ERRORS_HOUR} test errors this hour. Try again later.")
+    at = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y %H:%M:%S IST")
+    text = f"StratLab test error from Admin, {at}"
+    return {"sentry_on": error_alerts.test_message(text), "message": text}
 
 
 def sign_in_link(props) -> str:

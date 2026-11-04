@@ -34,6 +34,7 @@ export interface Overview {
     /** when the whole-market audit's mismatched rows were checked (DJ-026) */
     audit_checked?: Partial<Record<"IN" | "US", { oldest: string; newest: string }>>;
     admin_alerts?: { email_ready: boolean; via?: string | null; to: string[]; quota?: BrevoQuota | null };
+    sentry?: boolean;            // whether server errors reach Sentry (sentry_sdk.is_initialized() on the server)
     /** while Indian data is offline: whether India is shut today anyway, and when the data login runs (DJ-003) */
     data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null;
     /** which build the server is (R24-009; older servers don't send it) */
