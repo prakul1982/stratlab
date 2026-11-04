@@ -1,7 +1,7 @@
 import { lazy, StrictMode, Suspense, useCallback, useEffect, useLayoutEffect, useState, type ComponentType, type ReactNode } from "react";
 import { titleFor } from "./lib/title";
 import { createRoot } from "react-dom/client";
-import { FeedbackHost } from "./components/Feedback";
+import { FeedbackHost } from "./components/FeedbackOpen";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AppProvider, sessionUnconfirmed, useApp } from "./lib/app";
 import { api } from "./lib/api";

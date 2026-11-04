@@ -24,7 +24,7 @@ export function pricesStop(r: { from: string; to: string } | null | undefined, r
 
 /** Why a copy's figures can differ from its card: each card is its own test's dates, and a copy is tested again up to the
  * latest prices (DA-038: a re-test gave +46.2% beside the card's +52.7%, tested to a date 11 days earlier, and nothing said why). */
-export const LIBRARY_DATES = "Each card's figures are for the dates under it. A copy is tested again up to the latest prices, so its figures can differ.";
+export const LIBRARY_DATES = "Each row's figures are totals after costs over the dates in its details (not yearly rates). A copy is tested again up to the latest prices, so its figures can differ.";
 
 /** A check's result in words: "Passed", "Warning", "Failed", "Didn't pass" (an older entry that kept only how many
  * passed), "Not run". */

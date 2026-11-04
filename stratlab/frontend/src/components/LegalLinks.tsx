@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { INSTAGRAM } from "../content/seo";
-import { openFeedback } from "./Feedback";
+import { openFeedback } from "./FeedbackOpen";
 
 // kept apart from the policy texts, so the app shell and footers don't download them
 export const LEGAL_PAGES: { path: string; title: string }[] = [

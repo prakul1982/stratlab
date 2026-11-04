@@ -17,7 +17,7 @@ import { PageBreadcrumb } from "./PageBreadcrumb";
 import { HubTabs } from "./HubTabs";
 import { Onboarding, openTour } from "./Onboarding";
 import { MarketsLauncher, openMarkets } from "./watch/Launcher";
-import { FeedbackButton } from "./Feedback";
+import { FeedbackButton } from "./FeedbackOpen";
 import { gateFor, gatePlan } from "../lib/gates";
 import { PLAN_NAME } from "../lib/plans";
 import { watchSize } from "../lib/resize";

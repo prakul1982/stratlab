@@ -6,7 +6,7 @@ import { Tracking } from "../components/Tracking";
 import { pageview } from "../lib/analytics";
 import { isPublicForAll, wantsAccount } from "../lib/entry";
 import { VisitorApp } from "./VisitorApp";
-import { FeedbackHost } from "../components/Feedback";
+import { FeedbackHost } from "../components/FeedbackOpen";
 import { publicPost } from "../lib/http";
 
 /* The public half of the site, on its own: no sign-in library, no account state, no menu. A page load for someone with no

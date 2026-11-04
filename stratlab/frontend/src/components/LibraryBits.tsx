@@ -145,11 +145,11 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
         <span className="k-note">By {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span>
         {pricesStop(e.range, e.ran_at ?? e.published_at) && <span className="k-note k-warn-text" data-testid="lib-stops">{pricesStop(e.range, e.ran_at ?? e.published_at)}</span>}</span>) },
     { key: "market", header: "Market", wrap: true, cell: (e) => <span className="k-small">{libMeta(e)}</span> },
-    { key: "ret", header: TOTAL_AFTER_COSTS, numeric: true, sortable: true, up: true, info: TOTAL_NOTE_INFO, cell: (e) => fig(shownStats(e).ret, !trails(e)) },
-    { key: "bh", header: TOTAL_HOLD, numeric: true, sortable: true, info: "The total return of simply buying at the start and holding to the end, over the same dates.", cell: (e) => fig(e.stats.buy_hold) },
+    { key: "ret", header: TOTAL_AFTER_COSTS, numeric: true, sortable: true, up: true, cell: (e) => fig(shownStats(e).ret, !trails(e)) },
+    { key: "bh", header: TOTAL_HOLD, numeric: true, sortable: true, cell: (e) => fig(e.stats.buy_hold) },
     { key: "gap", header: "vs hold (pts)", numeric: true, sortable: true, cell: (e) => (e.vs_hold ? <span data-testid="lib-gap"><Signed value={e.vs_hold.gap} fmt={(v) => `${v > 0 ? "+" : ""}${num(v, 1)}`} /></span> : "–") },
     { key: "mdd", header: "Worst fall", numeric: true, sortable: true, cell: (e) => fig(shownStats(e).mdd) },
-    { key: "unseen", header: "Unseen period", numeric: true, sortable: true, info: "The total return over the last 30% of the test, the part the strategy wasn't tuned on.", cell: (e) => fig(shownStats(e).unseen) },
+    { key: "unseen", header: "Unseen period", numeric: true, sortable: true, cell: (e) => fig(shownStats(e).unseen) },
     { key: "checks", header: "Checks", wrap: true, sortable: true, cell: (e) => (
       <span className="k-stack k-tight"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />
         {!shownStats(e).ran ? <span className="k-note">Not run</span> : checksBeyond(checksOf(e), e.verdict.label) && <span className="k-note">{checksBeyond(checksOf(e), e.verdict.label)}</span>}</span>) },
@@ -190,4 +190,3 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
   );
 }
 
-const TOTAL_NOTE_INFO = "The total return over the whole test, after brokerage, taxes and slippage: not a yearly rate.";

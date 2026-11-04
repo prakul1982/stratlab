@@ -8,7 +8,7 @@ import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
 import { HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_SPACES } from "../content/intro";
-import { openFeedback } from "../components/Feedback";
+import { openFeedback } from "../components/FeedbackOpen";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";

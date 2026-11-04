@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Card, CardHead, DataTable, LinkCard, PageHeader, type Column } from "../components/kit";
 import { ALL_PAGES, NAV, type Located } from "../lib/nav";
 import { openTour } from "../components/Onboarding";
-import { openFeedback } from "../components/Feedback";
+import { openFeedback } from "../components/FeedbackOpen";
 import { useDocTitle } from "../lib/title";
 import { HELP_GROUPS, HELP_TOPICS } from "../lib/helpTopics";
 

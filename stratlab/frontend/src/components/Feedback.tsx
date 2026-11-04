@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useLocation } from "react-router-dom";
 import { APP_BUILD } from "../lib/buildInfo";
 import { Modal } from "./ui";
@@ -11,37 +11,10 @@ import { FEEDBACK_MAX, FEEDBACK_TYPES, browserLine, type FeedbackType } from "..
  * helps find the problem: the page's path, the app's version, the browser and system in a few words and the screen size; the
  * server adds the plan. Never the page's other fields, a token or anything else about the person. */
 
-const OPEN = "stratlab:feedback";
-
-/** Open the feedback dialog from anywhere (a button, a link in a footer, the Help page). */
-export function openFeedback() {
-  window.dispatchEvent(new Event(OPEN));
-}
-
-/** The labelled button that opens it: the menu's top on a laptop, the top bar on a phone. */
-export function FeedbackButton({ className = "btn quiet sm" }: { className?: string }) {
-  return <button type="button" className={`${className} feedback-btn`} onClick={openFeedback} title="Report something broken, or suggest a feature">Feedback</button>;
-}
-
+/** The dialog itself, downloaded only when someone opens it (FeedbackOpen.tsx's host), so no page carries it before that. */
 export type FeedbackSend = (body: Record<string, unknown>) => Promise<unknown>;
 
-/** Drawn once at each half's root: the dialog, when something asked for it. The signed-in app passes its own request (with the
- * sign-in) and its toast; the public half a plain request, so a visitor's page loads none of the app's account code. */
-export function FeedbackHost({ send, signedIn, onSent }: { send: FeedbackSend; signedIn: boolean; onSent?: (msg: string) => void }) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const on = () => setOpen(true);
-    // a link can open it too: any address with #feedback (a reply email, the layout checker)
-    const hash = () => { if (location.hash === "#feedback") setOpen(true); };
-    hash();
-    window.addEventListener(OPEN, on);
-    window.addEventListener("hashchange", hash);
-    return () => { window.removeEventListener(OPEN, on); window.removeEventListener("hashchange", hash); };
-  }, []);
-  return open ? <FeedbackDialog onClose={() => setOpen(false)} send={send} me={signedIn} notify={onSent} /> : null;
-}
-
-function FeedbackDialog({ onClose, send: post, me, notify }: { onClose: () => void; send: FeedbackSend; me: boolean; notify?: (msg: string) => void }) {
+export default function FeedbackDialog({ onClose, send: post, me, notify }: { onClose: () => void; send: FeedbackSend; me: boolean; notify?: (msg: string) => void }) {
   const loc = useLocation();
   const [type, setType] = useState<FeedbackType>("broken");
   const [text, setText] = useState("");
