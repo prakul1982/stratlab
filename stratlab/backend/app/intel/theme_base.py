@@ -28,12 +28,13 @@ DESCRIBE_MAX = 120              # base companies whose own one-line description 
 # the AI's pick; an empty list says no official industry is the theme's core (a narrow theme inside a wide industry).
 CONCEPTS = [
     {"words": {"defence", "defense", "military", "missile", "warship", "armament", "ammunition", "munition", "drone", "aerospace"},
-     "IN": ["Aerospace & Defense", "Ship Building & Allied Services", "Explosives"],
+     "IN": ["Aerospace & Defense", "Ship Building & Allied Services", "Explosives"], "IN_named": ["BEML"],
      "US": ["Guided Missiles & Space Vehicles & Parts", "Ordnance & Accessories, (No Vehicles/Guided Missiles)",
             "Search, Detection, Navigation, Guidance, Aeronautical Sys", "Aircraft Engines & Engine Parts",
             "Aircraft Parts & Auxiliary Equipment, Nec", "Ship & Boat Building & Repairing", "Aircraft"]},
     {"words": {"shipbuilding", "shipyard", "shipbuilder"}, "IN": ["Ship Building & Allied Services"], "US": ["Ship & Boat Building & Repairing"]},
     {"words": {"railway", "rail", "railroad", "train", "metro"}, "IN": ["Railway Wagons"],
+     "IN_named": ["RVNL", "IRCON", "IRFC", "RITES", "IRCTC", "RAILTEL", "BEML", "CONCOR", "KERNEX"],
      "US": ["Railroads, Line-Haul Operating", "Railroad Equipment"]},
     {"words": {"ev", "evs"}, "phrases": ("electric vehicle", "electric vehicles", "electric mobility", "e mobility", "electric cars",
                                         "electric two wheelers", "electric scooters"),
@@ -44,8 +45,14 @@ CONCEPTS = [
      "IN": ["Passenger Cars & Utility Vehicles", "2/3 Wheelers", "Commercial Vehicles", "Tractors", "Auto Components & Equipments",
             "Tyres & Rubber Products"],
      "US": ["Motor Vehicles & Passenger Car Bodies", "Motor Vehicle Parts & Accessories", "Tires & Inner Tubes", "Truck & Bus Bodies"]},
+    # India's "Power Generation" mixes coal and gas plants with solar and wind ones, and the module and turbine makers sit in wide electrical
+    # industries: India's renewables are a named list only, so a thermal-only company is out unless the AI names it (THEMES, 4 Nov)
     {"words": {"renewable", "solar", "wind"}, "phrases": ("clean energy", "green energy", "green power"),
-     "IN": ["Power Generation"], "US": ["Cogeneration Services & Small Power Producers"]},
+     "IN": [], "IN_named": ["WAAREEENER", "PREMIERENE", "SUZLON", "INOXWIND", "KPIGREEN", "NTPCGREEN", "ADANIGREEN", "TATAPOWER", "ACMESOLAR",
+                            "SJVN", "NHPC", "JSWENERGY", "EMMVEE", "VIKRAMSOLR", "SAATVIKGL", "WAAREERTL", "WEBELSOLAR", "BORORENEW", "INOXGREEN",
+                            "SWSOLAR", "CLEANMAX", "IREDA"],
+     "US": ["Cogeneration Services & Small Power Producers"],
+     "US_named": ["NEE", "FSLR", "ENPH", "NXT", "BEP", "BEPC", "CWEN", "ORA", "SEDG", "RUN", "SHLS", "FLNC", "ARRY", "CSIQ", "JKS"]},
     {"words": {"electricity", "grid", "electrification", "utility", "utilities"}, "phrases": ("power sector", "power utilities", "power transmission"),
      "IN": ["Power Generation", "Integrated Power Utilities", "Power - Transmission", "Power Distribution", "Power Trading",
             "Heavy Electrical Equipment", "Cables - Electricals"],
@@ -80,7 +87,10 @@ CONCEPTS = [
      "IN": ["Computers - Software & Consulting", "Software Products", "IT Enabled Services"],
      "US": ["Services-Prepackaged Software", "Services-Computer Programming Services", "Services-Computer Integrated Systems Design",
             "Services-Computer Processing & Data Preparation", "Services-Computer Programming, Data Processing, Etc."]},
-    {"words": {"semiconductor", "chip", "chipmaker", "foundry"}, "US": ["Semiconductors & Related Devices"]},
+    # the SEC files solar-cell and inverter makers under semiconductors (SIC 3674): they are renewables' named list, not the chip base;
+    # the chip-equipment makers and Qualcomm file under other codes
+    {"words": {"semiconductor", "chip", "chipmaker", "foundry"}, "US": ["Semiconductors & Related Devices"],
+     "US_named": ["ASML", "LRCX", "KLAC", "QCOM", "TER", "ENTG"], "US_except": ["FSLR", "ENPH", "NXT", "SEDG", "SHLS", "ARRY", "CSIQ", "JKS"]},
     {"words": {"cybersecurity"}, "phrases": ("cyber security", "data center", "data centers", "data centre", "data centres", "smr", "smrs"),
      "US": []},
     {"words": {"nuclear", "uranium"}, "US": []},
@@ -166,6 +176,15 @@ def known_industries(rows: list[dict]) -> dict[str, str]:
     return out
 
 
+def named_lists(region: str, theme: str) -> tuple[list[str], list[str]]:
+    """(symbols the curated table names as the theme's own, symbols it keeps out of the industry base unless the AI names them)."""
+    named, out = [], []
+    for c in concepts_of(theme):
+        named += [s for s in c.get(f"{region}_named", []) if s not in named]
+        out += [s for s in c.get(f"{region}_except", []) if s not in out]
+    return named, [s for s in out if s not in named]
+
+
 def curated(region: str, theme: str, known: dict[str, str]) -> list[str] | None:
     """The curated industries for a theme in a market (as the index writes them), or None when the table has no entry for it there."""
     lists = [c[region] for c in concepts_of(theme) if region in c]
@@ -211,7 +230,9 @@ def industries_for(region: str, theme: str, rows: list[dict], ask, get_setting, 
         return {"industries": [], "how": "none"}
     cur = curated(region, theme, known)
     if cur is not None:
-        return {"industries": cur, "how": "list"}
+        named, out = named_lists(region, theme)
+        listed = {r.get("symbol") for r in rows or []}
+        return {"industries": cur, "how": "list", "named": [s for s in named if s in listed], "except": out}
     now = now or datetime.now(timezone.utc)
     skey = f"theme:industries:{region}:{_slug(theme)}"
     try:
@@ -242,36 +263,44 @@ def _named(m: dict) -> set[str]:
     return {c.get("ticker") for g in (m.get("value_chain") or []) + (m.get("sub_themes") or []) for c in g.get("companies") or [] if c.get("ticker")}
 
 
-def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str], name_of=lambda n, s: n or s) -> dict:
+def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str], name_of=lambda n, s: n or s, named=(), exclude=()) -> dict:
     """The checked map (`out`, from theme_check.check_placements on `m_before`) with every company of the theme's industries in it. Each
     company carries `base` (it is in an official industry of the theme), its `industry` and `cap` (the index's market value). A base company
     the AI put in a layer stays there when its words show it or weren't checked yet; one the check moved out of every layer, or the AI never
     named, is listed under its own industry as a layer of its own ("official": true), largest first. `placements` gets the honest counts:
     `total`, `base`, `added` (companies from other industries the AI named that are kept), `confirmed` (of those, shown in their own words),
-    `left_out` (named additions whose own words said no) and the `industries`."""
+    `left_out` (named additions whose own words said no) and the `industries`. `named`: the curated table's own members of the theme, base too
+    (`basis` "list", listed under "Named in the theme's list" when the AI didn't place them); `exclude`: companies of the industries that are
+    another theme's (solar-cell makers filed as semiconductors), out of the base unless the AI names them."""
     idx = {r["symbol"]: r for r in rows or [] if r.get("symbol")}
     inset = {key(i) for i in industries}
-    base = {s: r for s, r in idx.items() if key(r.get("industry")) in inset}
+    skip = set(exclude)
+    by_industry = {s: r for s, r in idx.items() if key(r.get("industry")) in inset and s not in skip}
+    by_list = {s: idx[s] for s in named if s in idx and s not in by_industry}
+    base = {**by_industry, **by_list}
 
     def tag(c):
         r = idx.get(c.get("ticker")) or {}
-        return {**c, "base": c.get("ticker") in base, "industry": r.get("industry") or "", "cap": r.get("market_cap")}
+        sym = c.get("ticker")
+        return {**c, "base": sym in base, "basis": "industry" if sym in by_industry else "list" if sym in by_list else "added",
+                "industry": r.get("industry") or "", "cap": r.get("market_cap")}
     out = dict(out)
     out["value_chain"] = [{**v, "companies": [tag(c) for c in v.get("companies") or []]} for v in out.get("value_chain") or []]
     out["sub_themes"] = [{**s, "companies": [tag(c) for c in s.get("companies") or []]} for s in out.get("sub_themes") or []]
     in_layer = {c["ticker"] for v in out["value_chain"] for c in v["companies"]}
-    for ind in industries:
-        cos = sorted((r for s, r in base.items() if s not in in_layer and key(r.get("industry")) == key(ind)),
-                     key=lambda r: (-(r.get("market_cap") or 0), r["symbol"]))
+    groups = [(ind, "industry", [r for s, r in by_industry.items() if key(r.get("industry")) == key(ind)]) for ind in industries]
+    groups.append(("Named in the theme's list", "list", list(by_list.values())))
+    for name, basis, members in groups:
+        cos = sorted((r for r in members if r["symbol"] not in in_layer), key=lambda r: (-(r.get("market_cap") or 0), r["symbol"]))
         if cos:
-            out["value_chain"].append({"layer": ind, "description": "", "official": True,
+            out["value_chain"].append({"layer": name, "description": "", "official": True, "basis": basis,
                                        "companies": [{"ticker": r["symbol"], "name": name_of(r.get("name"), r["symbol"]), "what": "", "verified": False,
-                                                      "base": True, "industry": r.get("industry") or "", "cap": r.get("market_cap")} for r in cos]})
+                                                      "base": True, "basis": basis, "industry": r.get("industry") or "", "cap": r.get("market_cap")} for r in cos]})
     placed = _named(out)
     added = {c["ticker"]: c for g in out["value_chain"] + out["sub_themes"] for c in g["companies"] if not c["base"]}
     confirmed = {s for s in added if any(c["ticker"] == s and c.get("verified") for g in out["value_chain"] + out["sub_themes"] for c in g["companies"])}
     out["screen"] = [x for x in out.get("screen") or [] if x.get("ticker") in placed]
-    out["placements"] = {**(out.get("placements") or {}), "placed": len(placed), "total": len(placed), "base": len(base),
+    out["placements"] = {**(out.get("placements") or {}), "placed": len(placed), "total": len(placed), "base": len(base), "named": len(by_list),
                          "added": len(added), "confirmed": len(confirmed), "unconfirmed": len(added) - len(confirmed),
                          "left_out": len({s for s in _named(m_before) if s not in placed and s not in base}), "industries": list(industries)}
     return out

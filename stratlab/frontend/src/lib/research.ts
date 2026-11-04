@@ -81,7 +81,9 @@ export interface CompanyAI {
 /** `what`: the words from the company's own description that show it does the work of the layer or sub-theme it sits in (THEME-1) */
 /** A theme map's company. `base`: in one of the theme's official industries (the exchange's own classification), so it is in the theme
  * whatever the AI says; otherwise the AI added it, `verified` when its own description shows the work (THEMES). `cap`: the index's market value. */
-export interface Co { name: string; ticker: string; what?: string | null; base?: boolean; verified?: boolean; industry?: string; cap?: number | null }
+export interface Co { name: string; ticker: string; what?: string | null; base?: boolean; verified?: boolean; industry?: string; cap?: number | null;
+  /** how a base company is in: its official industry, or the curated list of the theme's own companies */
+  basis?: "industry" | "list" | "added" }
 export interface SectorClaim { text: string; status: "current" | "general"; source: { headline: string; at: string; outlet: string; url: string } | null }
 export interface SectorAI {
   sector: string; summary: string; market_size: string; cagr: number | null; cagr_note: string;
@@ -89,13 +91,13 @@ export interface SectorAI {
   clusters: { name: string; companies: Co[] }[];
   screen: { name: string; ticker: string; layer: string; one_line: string }[];
   /** `official`: one official industry's companies that the AI didn't place in a layer of its own */
-  value_chain: { layer: string; description: string; companies: Co[]; official?: boolean }[];
+  value_chain: { layer: string; description: string; companies: Co[]; official?: boolean; basis?: "industry" | "list" }[];
   tailwinds: SectorClaim[]; risks: SectorClaim[]; generated_at: number;
   /** the placement check: `checked` false while some companies' descriptions are still being read (they are not shown until checked) */
   placements?: {
     checked: boolean; pending: number; left_out: number; placed: number;
     /** THEMES: every company shown, those from the official industries, those the AI added and how many of these its own words confirm */
-    total?: number; base?: number; added?: number; confirmed?: number; unconfirmed?: number; industries?: string[];
+    total?: number; base?: number; named?: number; added?: number; confirmed?: number; unconfirmed?: number; industries?: string[];
     /** how the industries were found: the curated list, the AI's pick from the official list, still being picked, or no index yet */
     industries_by?: "list" | "ai" | "pending" | "none";
     /** companies still unchecked when the check stopped waiting: shown as not yet confirmed, checked again later */

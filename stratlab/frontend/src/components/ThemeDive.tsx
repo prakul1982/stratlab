@@ -56,28 +56,29 @@ export function MembersCard({ r, region }: { r: SectorAI; region: Region }) {
   const p = r.placements;
   const inLayer = new Set(r.value_chain.flatMap((v) => v.companies.map((c) => c.ticker)));
   const subOnly = [...new Map(r.sub_themes.flatMap((s) => s.companies).filter((c) => !inLayer.has(c.ticker)).map((c) => [c.ticker, c])).values()];
-  const groups = [...r.value_chain.map((v) => ({ name: v.layer, official: !!v.official, rows: v.companies })),
+  const groups = [...r.value_chain.map((v) => ({ name: v.layer, official: !!v.official && v.basis !== "list", rows: v.companies })),
     ...(subOnly.length ? [{ name: "Named in a sub-theme only", official: false, rows: subOnly }] : [])].filter((g) => g.rows.length > 0);
   if (groups.length === 0) return null;
   const total = p?.total ?? new Set(groups.flatMap((g) => g.rows.map((c) => c.ticker))).size;
-  const base = p?.base ?? 0, added = p?.added ?? 0, inds = p?.industries ?? [];
+  const named = p?.named ?? 0, base = (p?.base ?? 0) - named, added = p?.added ?? 0, inds = p?.industries ?? [];
   const cols: Column<Co>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
     { key: "i", header: "Industry", wrap: true, cell: (c) => c.industry || dash },
     { key: "m", header: "Market value", numeric: true, cell: (c) => amount(c.cap ?? null, region) },
     { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => (c.what ? <>“{c.what}”</> : <span className="k-muted">Not yet confirmed from its own description</span>) },
-    { key: "f", header: "In the theme by", cell: (c) => (c.base ? "Official industry"
+    { key: "f", header: "In the theme by", cell: (c) => (c.base ? (c.basis === "list" ? "Named in the theme's list" : "Official industry")
       : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Confirmed by its own words" : "Not yet confirmed"}</span></>) },
   ];
   return (
     <Card id="theme-members" label="Every company in this theme">
       <CardHead title="Every company in this theme" info="The base is every listed company the exchange's own industry classification puts in the theme's industries: it is in the theme whatever the AI says. The AI sorts companies into layers and adds companies from other industries; an added company stays only while its own description doesn't show otherwise, marked confirmed when its words show the work." />
       <p className="k-small" data-testid="theme-counts">
-        <b>{total.toLocaleString("en-IN")} compan{total === 1 ? "y" : "ies"}</b>: {base.toLocaleString("en-IN")} from the official industry list, {added.toLocaleString("en-IN")} added
+        <b>{total.toLocaleString("en-IN")} compan{total === 1 ? "y" : "ies"}</b>: {base.toLocaleString("en-IN")} from the official industry list, {named > 0 && `${named.toLocaleString("en-IN")} named in the theme's list, `}{added.toLocaleString("en-IN")} added
         {added > 0 && ` (${p?.confirmed ?? 0} confirmed from ${added === 1 ? "its" : "their"} own description)`}.
       </p>
       {inds.length > 0
         ? <p className="k-small k-muted">Official industries: {inds.join(" · ")}.</p>
+        : named > 0 ? <p className="k-small k-muted">No official industry is this theme's core on its own, so its companies are the theme's named list and the ones the map names.</p>
         : <p className="k-small k-muted">{p?.industries_by === "pending" ? "The theme's official industries are still being picked; until then the companies are the ones the map names." : "No official industry is this theme's core, so every company here is one the map names, checked against its own description."}</p>}
       {groups.map((g) => <MemberGroup key={g.name} name={g.name} official={g.official} rows={g.rows} cols={cols} />)}
     </Card>
@@ -134,7 +135,7 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
     <Card id={`layer-${i}`} label={`Layer ${i + 1}: ${layer.layer}`}>
       <CardHead title={<><span className="k-muted">Layer {i + 1} · </span>{layer.layer}</>} />
       {layer.description && <p className="k-small">{layer.description} <span className="k-muted">(Written by AI from general knowledge, with no figures.)</span></p>}
-      {layer.official && <p className="k-small k-muted">Companies the exchange classifies under this industry that the layers above don't place.</p>}
+      {layer.official && <p className="k-small k-muted">{layer.basis === "list" ? "The theme's own named companies that the layers above don't place." : "Companies the exchange classifies under this industry that the layers above don't place."}</p>}
       {lines.length === 0
         ? <p className="k-small">No listed company is shown for this layer: none of the companies the map named has a description that shows it does this work.</p>
         : <>

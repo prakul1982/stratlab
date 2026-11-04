@@ -148,7 +148,8 @@ def checked(region: str, theme: str, m: dict) -> dict:
             VERDICTS.clear()
         out = theme_check.check_placements(m, evidence_reader(region, _map_names(m)), _ask, theme, VERDICTS)
         inds = _industries(region, theme)
-        out = theme_base.with_base(m, out, _routes().index_rows(region), inds["industries"], grounding.listed_name)
+        out = theme_base.with_base(m, out, _routes().index_rows(region), inds["industries"], grounding.listed_name,
+                                   inds.get("named") or (), inds.get("except") or ())
         claims = A.get("sector_claims", key)
         if claims is None:
             try:

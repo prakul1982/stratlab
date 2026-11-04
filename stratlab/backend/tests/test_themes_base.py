@@ -38,15 +38,17 @@ LIVE_US = [{"symbol": "NVDA", "name": "NVIDIA CORP", "sector": "Manufacturing", 
 
 def base_of(region, theme, rows):
     inds = B.industries_for(region, theme, rows, ask=None, get_setting=lambda k: None, set_setting=lambda k, v: None)
-    return {r["symbol"] for r in rows if B.key(r["industry"]) in {B.key(i) for i in inds["industries"]}}, inds
+    ks = {B.key(i) for i in inds["industries"]}
+    got = {r["symbol"] for r in rows if B.key(r["industry"]) in ks and r["symbol"] not in inds.get("except", [])} | set(inds.get("named", []))
+    return got, inds
 
 
 # ---------- the theme -> industries map ----------
 def test_india_defence_is_every_company_of_the_defence_industries_from_the_exchanges_own_list():
     got, inds = base_of("IN", "India defence", ROWS)
-    assert inds == {"industries": ["Aerospace & Defense", "Ship Building & Allied Services", "Explosives"], "how": "list"}
-    assert got == {"HAL", "BEL", "BDL", "MAZDOCK", "GRSE", "COCHINSHIP", "DATAPATTNS", "SOLARINDS", "ASTRAMICRO", "PARAS"}
-    assert "BEML" not in got                         # the exchange puts it under construction vehicles: an AI addition when the map names it
+    assert inds == {"industries": ["Aerospace & Defense", "Ship Building & Allied Services", "Explosives"], "how": "list", "named": ["BEML"], "except": []}
+    # BEML: the exchange puts it under construction vehicles; it is in by the theme's own named list (THEMES, 4 Nov)
+    assert got == {"HAL", "BEL", "BDL", "MAZDOCK", "GRSE", "COCHINSHIP", "DATAPATTNS", "SOLARINDS", "ASTRAMICRO", "PARAS", "BEML"}
 
 
 def test_ev_puts_the_carmakers_two_wheelers_and_battery_makers_in_the_chain_without_any_description():
@@ -60,12 +62,13 @@ def test_ev_puts_the_carmakers_two_wheelers_and_battery_makers_in_the_chain_with
 def test_banks_pharma_renewables_and_us_semiconductors_have_their_industries():
     assert base_of("IN", "Indian banks", ROWS)[0] == {"HDFCBANK", "SBIN", "AUBANK"}
     assert base_of("IN", "pharma", ROWS)[0] == {"SUNPHARMA"}
-    assert base_of("IN", "Renewables and solar", ROWS)[0] == {"ADANIGREEN"}
-    assert base_of("US", "semiconductors", LIVE_US)[0] == {"NVDA", "AMD"}
+    # India's renewables: the named list only (its power-generation industry mixes in coal and gas plants)
+    assert base_of("IN", "Renewables and solar", ROWS)[0] == {"ADANIGREEN", "TATAPOWER"}
+    assert base_of("US", "semiconductors", LIVE_US)[0] == {"NVDA", "AMD", "LRCX"}           # Lam Research files under machinery: named
     assert base_of("US", "Defense drones", LIVE_US)[0] == {"LMT"}
     assert base_of("US", "US banks", LIVE_US)[0] == {"JPM"}
     # a narrow theme inside a wide industry has no official base (500 drug makers aren't the GLP-1 chain)
-    assert base_of("US", "GLP-1 supply chain", LIVE_US) == (set(), {"industries": [], "how": "list"})
+    assert base_of("US", "GLP-1 supply chain", LIVE_US) == (set(), {"industries": [], "how": "list", "named": [], "except": []})
     assert B.curated("IN", "specialty chemicals", {B.key("Specialty Chemicals"): "Specialty Chemicals", B.key("Commodity Chemicals"): "Commodity Chemicals"}) == ["Specialty Chemicals"]
 
 
@@ -192,9 +195,10 @@ def test_the_sector_route_lists_every_company_of_the_industries_and_marks_the_ai
     official = s["value_chain"][1]
     assert official["layer"] == "Semiconductors & Related Devices" and official["official"] and [c["ticker"] for c in official["companies"]] == ["AMD"]
     p = s["placements"]
-    assert (p["total"], p["base"], p["added"], p["industries"], p["industries_by"]) == (3, 2, 1, ["Semiconductors & Related Devices"], "list")
+    assert [c["ticker"] for c in s["value_chain"][2]["companies"]] == ["LRCX"]              # the named list: Lam Research files as machinery
+    assert (p["total"], p["base"], p["named"], p["added"], p["industries"], p["industries_by"]) == (4, 3, 1, 1, ["Semiconductors & Related Devices"], "list")
     d = api.get("/research/theme-dive?q=semiconductors&region=US").json()
-    assert d["figures"] == {"shown": 3, "of": 3} and [b["official"] for b in d["layers"]] == [False, True]
+    assert d["figures"] == {"shown": 4, "of": 4} and [b["official"] for b in d["layers"]] == [False, True, True]
 
 
 def test_a_check_stuck_on_a_company_is_served_as_it_stands_after_a_while(api, monkeypatch):
@@ -214,3 +218,17 @@ def test_a_check_stuck_on_a_company_is_served_as_it_stands_after_a_while(api, mo
     assert later["checked"] is True and later["timed_out"] == 1                 # a clear state: VRT shown, not yet confirmed
     again = api.get("/research/sector?q=semiconductors&region=US").json()["placements"]
     assert again["timed_out"] == 1                                              # kept as it stands (checked again two hours on)
+
+
+def test_a_named_member_is_base_and_a_solar_maker_filed_as_a_chipmaker_is_not_in_the_chip_base():
+    rows = LIVE_US + [{"symbol": "FSLR", "name": "FIRST SOLAR, INC.", "industry": "Semiconductors & Related Devices", "market_cap": 20000}]
+    inds = B.industries_for("US", "semiconductors", rows, None, lambda k: None, lambda k, v: None)
+    assert inds["named"] == ["LRCX"] and "FSLR" in inds["except"]                           # only symbols that are in the index are named
+    out = B.with_base({"value_chain": [], "sub_themes": []}, {"value_chain": [], "sub_themes": [], "placements": {}}, rows, inds["industries"],
+                      named=inds["named"], exclude=inds["except"])
+    layers = {v["layer"]: v for v in out["value_chain"]}
+    assert [c["ticker"] for c in layers["Semiconductors & Related Devices"]["companies"]] == ["NVDA", "AMD"]
+    assert [(c["ticker"], c["basis"]) for c in layers["Named in the theme's list"]["companies"]] == [("LRCX", "list")]
+    assert (out["placements"]["base"], out["placements"]["named"]) == (3, 1)
+    # the solar maker is in renewables' named list instead
+    assert "FSLR" in B.industries_for("US", "renewable energy", rows, None, lambda k: None, lambda k, v: None)["named"]

@@ -23,7 +23,7 @@ export interface Layer {
   layer: string; description: string; companies: DiveRow[]; n: number; revenue: number | null; line: string | null; history: History | null;
   stats: { ebitda: Stat | null; net: Stat | null; roce: Stat | null }; company_wide: string[]; left_out: number; stats_over: "own" | "all";
   /** one official industry's companies the AI didn't place in a layer (THEMES) */
-  official?: boolean;
+  official?: boolean; basis?: "industry" | "list";
 }
 export interface ChainRow { layer: string; n: number; revenue: number | null; ebitda: number | null; net: number | null; roce: number | null; ebitda_n: number }
 export interface SubCompany { symbol: string; name: string; what: string | null; cap: number | null; sales_1y: number | null; ebitda: number | null; company_wide: boolean; year: string | null }

@@ -66,9 +66,10 @@ test("THEMES: every company of the theme's official industries is listed by laye
   const dive = read("src/components/ThemeDive.tsx"), page = read("src/pages/ThemesPage.tsx");
   assert.match(dive, /export function MembersCard/);
   for (const h of ["Company", "Industry", "Market value", "What it does, in its own words", "In the theme by"]) assert.match(dive, new RegExp(`header: "${h}"`));
-  assert.match(dive, /from the official industry list, \{added\.toLocaleString\("en-IN"\)\} added/);
+  assert.match(dive, /from the official industry list, \{named > 0 && `\$\{named\.toLocaleString\("en-IN"\)\} named in the theme's list, `\}\{added\.toLocaleString\("en-IN"\)\} added/);
   assert.match(dive, /Not yet confirmed from its own description/);
-  assert.match(dive, /c\.base \? "Official industry"/);
+  assert.match(dive, /c\.base \? \(c\.basis === "list" \? "Named in the theme's list" : "Official industry"\)/);
+  assert.match(dive, /named in the theme's list, /);
   assert.match(dive, /Show all \$\{rows\.length\} companies/);                       // a long group is listed in full a press away, never "and N more"
   // a check still waiting is asked again on its own, and once the server stops waiting the page says so plainly, with no warning box
   assert.match(page, /const CHECK_TRIES = 4;/);
