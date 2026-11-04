@@ -6,6 +6,8 @@ import { Tracking } from "../components/Tracking";
 import { pageview } from "../lib/analytics";
 import { isPublicForAll, wantsAccount } from "../lib/entry";
 import { VisitorApp } from "./VisitorApp";
+import { FeedbackHost } from "../components/Feedback";
+import { publicPost } from "../lib/http";
 
 /* The public half of the site, on its own: no sign-in library, no account state, no menu. A page load for someone with no
  * saved sign-in runs this. If the person signs in meanwhile (in another tab) or follows a link into the app, the page
@@ -36,6 +38,8 @@ export function startVisitor(root: HTMLElement) {
           <Watch />
           <Tracking />{/* before the page in its order, so the keyboard meets the question first (A11Y-2) */}
           <VisitorApp />
+          {/* Help & feedback for a visitor: a plain request, none of the app's account code (owner, 4 Nov) */}
+          <FeedbackHost signedIn={false} send={(body) => publicPost("/feedback", body)} />
         </BrowserRouter>
       </LoadGuard>
     </StrictMode>,

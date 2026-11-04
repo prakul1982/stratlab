@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { FeedbackHost } from "./components/Feedback";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AppProvider, sessionUnconfirmed, useApp } from "./lib/app";
+import { api } from "./lib/api";
 import { takeNext } from "./lib/returnTo";
 import { isPublicForAll } from "./lib/entry";
 import { applySeo, seoFor } from "./lib/seo";
@@ -349,6 +350,12 @@ function Routed() {
   );
 }
 
+/** Help & feedback in the signed-in app: its own request (with the sign-in) and its toast. */
+function AppFeedback() {
+  const { me, notify } = useApp();
+  return <FeedbackHost signedIn={!!me} send={(body) => api("/feedback", { method: "POST", body })} onSent={notify} />;
+}
+
 function App() {
   const nav = useNavigate();
   const goToPlans = useCallback(() => nav("/plans"), [nav]);
@@ -359,7 +366,7 @@ function App() {
       <Tracking />
       <Routed />
       {/* Help & feedback: one dialog for every page, signed in or not (owner, 4 Nov) */}
-      <FeedbackHost />
+      <AppFeedback />
       <Toast />
     </AppProvider>
   );

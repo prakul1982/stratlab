@@ -1,7 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "react-router-dom";
-import { api } from "../lib/api";
-import { useApp } from "../lib/app";
 import { APP_BUILD } from "../lib/buildInfo";
 import { Modal } from "./ui";
 import { Seg } from "./kit";
@@ -25,8 +23,11 @@ export function FeedbackButton({ className = "btn quiet sm" }: { className?: str
   return <button type="button" className={`${className} feedback-btn`} onClick={openFeedback} title="Report something broken, or suggest a feature">Feedback</button>;
 }
 
-/** Drawn once at the app's root: the dialog, when something asked for it. */
-export function FeedbackHost() {
+export type FeedbackSend = (body: Record<string, unknown>) => Promise<unknown>;
+
+/** Drawn once at each half's root: the dialog, when something asked for it. The signed-in app passes its own request (with the
+ * sign-in) and its toast; the public half a plain request, so a visitor's page loads none of the app's account code. */
+export function FeedbackHost({ send, signedIn, onSent }: { send: FeedbackSend; signedIn: boolean; onSent?: (msg: string) => void }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const on = () => setOpen(true);
@@ -37,11 +38,10 @@ export function FeedbackHost() {
     window.addEventListener("hashchange", hash);
     return () => { window.removeEventListener(OPEN, on); window.removeEventListener("hashchange", hash); };
   }, []);
-  return open ? <FeedbackDialog onClose={() => setOpen(false)} /> : null;
+  return open ? <FeedbackDialog onClose={() => setOpen(false)} send={send} me={signedIn} notify={onSent} /> : null;
 }
 
-function FeedbackDialog({ onClose }: { onClose: () => void }) {
-  const { me, notify } = useApp();
+function FeedbackDialog({ onClose, send: post, me, notify }: { onClose: () => void; send: FeedbackSend; me: boolean; notify?: (msg: string) => void }) {
   const loc = useLocation();
   const [type, setType] = useState<FeedbackType>("broken");
   const [text, setText] = useState("");
@@ -55,11 +55,11 @@ function FeedbackDialog({ onClose }: { onClose: () => void }) {
     if (text.trim().length < 5) { setError("Say a few words about what happened, so it can be found."); return; }
     setBusy(true); setError(null);
     try {
-      await api("/feedback", { method: "POST", body: {
+      await post({
         type, text: text.trim(), reply, ...(me ? {} : { email: reply ? email.trim() : null }),
-        path: loc.pathname, version: (APP_BUILD.sha ?? "").slice(0, 12), browser: browserLine(navigator.userAgent), screen: `${innerWidth}×${innerHeight}` } });
+        path: loc.pathname, version: (APP_BUILD.sha ?? "").slice(0, 12), browser: browserLine(navigator.userAgent), screen: `${innerWidth}×${innerHeight}` });
       setDone(true);
-      notify("Thanks: your report was sent.");
+      notify?.("Thanks: your report was sent.");
     } catch (x) {
       setError((x as { message?: string })?.message || "It couldn't be sent. Try again in a moment.");
     } finally { setBusy(false); }

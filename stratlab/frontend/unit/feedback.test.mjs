@@ -42,7 +42,10 @@ test("the labelled Feedback button: the menu's top, the phone's top bar, Help, t
   const bar = shell.indexOf('<header className="topbar">');
   assert.ok(shell.indexOf('<FeedbackButton className="btn quiet sm top-feedback" />') > bar, "in the phone's top bar");
   assert.match(read("src/components/Feedback.tsx"), />Feedback<\/button>/);
-  assert.match(read("src/main.tsx"), /<FeedbackHost \/>/);
+  // one dialog in each half: the app's with its signed-in request, the public half's with a plain one (no account code for a visitor)
+  assert.match(read("src/main.tsx"), /<FeedbackHost signedIn=\{!!me\} send=\{\(body\) => api\("\/feedback", \{ method: "POST", body \}\)\} onSent=\{notify\} \/>/);
+  assert.match(read("src/visitor/visitorMain.tsx"), /<FeedbackHost signedIn=\{false\} send=\{\(body\) => publicPost\("\/feedback", body\)\} \/>/);
+  assert.doesNotMatch(read("src/components/Feedback.tsx"), /from "\.\.\/lib\/(api|app|supabase)"/);
   assert.match(read("src/components/Feedback.tsx"), /if \(location\.hash === "#feedback"\) setOpen\(true\);/);      // a link opens it too
   assert.match(read("e2e/ui-lint-world.ts"), /"\/admin\/feedback", "\/admin\/emails", "\/help#feedback"\]/);           // the inbox and the dialog are laid out by the checker
   assert.match(read("src/components/LegalLinks.tsx"), /onClick=\{openFeedback\}>Feedback<\/button>/);

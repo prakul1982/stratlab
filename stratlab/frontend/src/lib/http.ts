@@ -29,6 +29,33 @@ export function prefetchPublic(path: string): void {
 }
 
 /** The server's answer to a public address, no sign-in. A failure is an `ApiError` with the server's own words. */
+/** A plain POST with no sign-in, for a visitor (Help & feedback): the same answers and errors as publicGet. */
+export async function publicPost<T = any>(path: string, body: unknown): Promise<T> {
+  if (!CFG.API_BASE) {
+    const e = new ApiError(NO_BACKEND_MESSAGE);
+    e.code = "no_backend";
+    throw e;
+  }
+  let r: Response;
+  try {
+    r = await fetch(CFG.API_BASE + path, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body) });
+  } catch {
+    const e = new ApiError("Can't reach the StratLab server. Check your connection and try again.");
+    e.code = "network";
+    throw e;
+  }
+  let payload: any = null;
+  try { payload = await r.json(); } catch { /* empty body */ }
+  if (!r.ok) {
+    const d = payload?.detail;
+    const e = new ApiError((d && (d.message || (typeof d === "string" ? d : ""))) || `Something went wrong (${r.status}). Try again.`);
+    e.status = r.status;
+    e.code = d?.code;
+    throw e;
+  }
+  return payload as T;
+}
+
 export async function publicGet<T = any>(path: string, signal?: AbortSignal): Promise<T> {
   const ahead = early.get(path);
   if (ahead) {
