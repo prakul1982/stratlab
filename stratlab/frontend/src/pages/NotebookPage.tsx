@@ -505,7 +505,10 @@ function NotebookView() {
         </FormGrid>
         {!inst && !group && (
           <div data-testid="run-needs-market">
-            <Notice tone="warn" role="status" action={{ label: "Choose market", to: `/n/${nb.id}/market` }}>Choose what to test it on before you run it: the rules need a market and an instrument, or a group.</Notice>
+            {/* the link follows the sentence: at the far end of a wide row it sat 260px from the words it acts on (ui-lint R20,
+                first measured on a notebook still asking "Which stock or index?", 57.1) */}
+            <Notice tone="warn" role="status">Choose what to test it on before you run it: the rules need a market and an instrument, or a group.{" "}
+              <Link className="btn sm" to={`/n/${nb.id}/market`}>Choose market</Link></Notice>
           </div>
         )}
         {/* the one lock wording (DP2-022, DP1-018): the plan note, with the price and its button, not an emoji and a bare link */}
