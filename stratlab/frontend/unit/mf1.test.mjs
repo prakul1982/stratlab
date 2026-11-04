@@ -13,14 +13,14 @@ const css = read("src/styles.css");
 
 test("RC2B-047: one list of schemes, no second, third or fourth table of them", () => {
   // the schemes are one fold list (held, and the ones no longer held under it); the old tables of them are gone
-  assert.equal((page.match(/<FoldTable label="Schemes"/g) ?? []).length, 1);
-  assert.match(page, /<FoldTable label="Schemes you no longer hold"/);
+  assert.equal((page.match(/<FoldTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Schemes"/g) ?? []).length, 1);
+  assert.match(page, /<FoldTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Schemes you no longer hold"/);
   assert.doesNotMatch(page, /<DataTable label="Schemes"/);
   assert.doesNotMatch(costs, /<DataTable label="Fund costs"/);
   assert.doesNotMatch(behaviour, /<DataTable label="Your return against each fund's"/);
   assert.doesNotMatch(behaviour, /<DataTable label="Redemptions after a fall"/);
   // the year's card keeps its totals and the rates table; the sales are under each scheme, not a table of every scheme again
-  assert.match(page, /<DataTable label="Gains by rate"/);
+  assert.match(page, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Gains by rate"/);
   assert.equal((page.match(/<DataTable label=\{`Redemptions matched to purchases, \$\{name\}`\}/g) ?? []).length, 1);   // named after its scheme: open folds sit side by side (A11Y-2)
   assert.match(page, /function SchemeSales/);
   assert.match(page, /salesOf\.get\(s\.key\)/);

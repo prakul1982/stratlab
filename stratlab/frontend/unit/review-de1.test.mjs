@@ -28,8 +28,8 @@ test("DE-004/DE-035: on a phone the scan's and the red flags' rows are cards tha
   const s = read("src/pages/ResearchScans.tsx");
   assert.match(s, /\{ key: "sg", header: "Signal", lead: true,/);
   assert.match(s, /\{ key: "f", header: "Flag", wrap: true, lead: true,/);
-  assert.match(s, /<DataTable stack label="Red-flag filings, newest first"/);
-  assert.match(s, /<DataTable stack phonePage=\{25\} label=\{`\$\{st2\.name\}: stage and Supertrend`\}/);
+  assert.match(s, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?stack label="Red-flag filings, newest first"/);
+  assert.match(s, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?stack phonePage=\{25\} label=\{`\$\{st2\.name\}: stage and Supertrend`\}/);
   const css = read("src/styles.css");
   assert.match(css, /\.k-tbl-wrap\.stack\.has-lead \.k-table td\.k-lead \{ order: -1; grid-column: 1 \/ -1; \}/);
   assert.match(read("src/components/kit/DataTable.tsx"), /c\.lead && "k-lead"/);

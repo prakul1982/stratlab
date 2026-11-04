@@ -50,7 +50,7 @@ test("DF-005/006/007/008: the last trade's own day, a closed day's NAV, no iNAV 
 test("DF-014/015: business-update tables are cards on a phone, and an empty My stocks is one line with real links", () => {
   const page = read("src/pages/BizUpdatesPage.tsx");
   assert.match(page, /<DataTable stack label="My stocks' latest business updates"/);
-  assert.match(page, /<DataTable stack label=\{d\.label\}/);
+  assert.match(page, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?stack label=\{d\.label\}/);
   assert.match(page, /k-swipe-hint/);
   assert.doesNotMatch(page, /star companies in Research/);                // there's no "Research" in the menu
   assert.match(page, /to="\/holdings">My Holdings<\/Link> or your <Link className="link" to="\/research\/watchlist">watchlist/);
