@@ -1,5 +1,4 @@
 import { Explore } from "../components/Explore";
-import { TileGrid } from "../components/TileGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
@@ -15,7 +14,7 @@ import { IdeaComposer, type Built } from "../components/IdeaComposer";
 import { ImportStrategy } from "../components/ImportStrategy";
 import { Pin, Search, Upload } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
-import { Badge, Card, CardHead, ChipBar, EmptyState, ErrorState, Notice, PageHeader, Seg, Skeleton } from "../components/kit";
+import { Badge, Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, Notice, PageHeader, Seg, Skeleton, type Column } from "../components/kit";
 import "./trade/trade.css";
 import { scrollBehavior } from "../lib/motion";
 
@@ -261,31 +260,26 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
         </div>
       )}
       {shown.length === 0 && <EmptyState title={`No notebooks match "${q}"`}>Try a stock symbol or a word from the question.</EmptyState>}
-      {/* each card: the notebook's name as its title, its question in two lines under it (whole in its tooltip), what it was
-          last tested on, a pin that says what it does, and one height per row (DA-032: the long question in large serif was cut
-          mid-quote, the name was tiny caps below, the pin had no words and the cards' heights differed) */}
-      <TileGrid className="k-cards nb-cards">
-        {shown.map((n) => {
-          const inst = n.instrument && "symbol" in n.instrument ? n.instrument.symbol : null;
-          const count = n.summary?.experiments ?? 0;
-          const question = n.question && n.question.trim() !== n.name.trim() ? n.question : "";
-          return (
-            <Card key={n.id} label={n.name}>
-              <CardHead title={<Link to={`/n/${n.id}`} className="k-title-link">{n.name}</Link>}
-                actions={<button type="button" className={`k-pin${n.pinned ? " on" : ""}`} aria-pressed={!!n.pinned} aria-label={n.pinned ? `Unpin ${n.name}` : `Pin ${n.name} to the top`}
-                  title={n.pinned ? "Unpin it" : "Keep it at the top of the list"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /></button>} />
-              {/* every card has its question line, two lines tall, so a card without one doesn't leave an empty band above its
-                  footer in a row of taller cards (ui-lint R13 on a new notebook still asking about its idea) */}
-              <p className="k-small k-muted nb-question" title={question || undefined}>{question || "No question written yet"}</p>
-              <span className="k-note">{inst ? `Tested on ${inst}` : "No instrument picked yet"}</span>
-              <div className="k-spread k-push">
-                <VerdictBadge v={n.summary?.last_verdict} />
-                <span className="k-note">{count} experiment{count === 1 ? "" : "s"} · {ago(n.updated_at)}</span>
-              </div>
-            </Card>
-          );
-        })}
-      </TileGrid>
+      {/* one table, a row a notebook (TABLES EVERYWHERE, owner 4 Nov: the notebooks were a grid of cards): its name and question,
+          what it was last tested on, its last verdict, how many experiments and when, and the pin; a phone stacks each row as a card */}
+      {shown.length > 0 && (
+        <Card label="Notebooks">
+          <DataTable label="Your notebooks" rows={shown} rowKey={(n) => n.id} stack columns={([
+            { key: "name", header: "Notebook", rowHeader: true, wrap: true, cell: (n) => {
+              const question = n.question && n.question.trim() !== n.name.trim() ? n.question : "";
+              return <span className="k-stack k-tight"><Link to={`/n/${n.id}`} className="k-title-link nb-name">{n.name}</Link>
+                {question && <span className="k-note nb-question" title={question}>{question}</span>}</span>;
+            } },
+            { key: "inst", header: "Tested on", cell: (n) => (n.instrument && "symbol" in n.instrument ? n.instrument.symbol : <span className="k-muted">Not picked yet</span>) },
+            { key: "verdict", header: "Last verdict", wrap: true, cell: (n) => <VerdictBadge v={n.summary?.last_verdict} /> },
+            { key: "exp", header: "Experiments", numeric: true, cell: (n) => n.summary?.experiments ?? 0 },
+            { key: "upd", header: "Updated", cell: (n) => ago(n.updated_at) },
+            { key: "pin", header: "", action: true, corner: true, cell: (n) => (
+              <button type="button" className={`k-pin${n.pinned ? " on" : ""}`} aria-pressed={!!n.pinned} aria-label={n.pinned ? `Unpin ${n.name}` : `Pin ${n.name} to the top`}
+                title={n.pinned ? "Unpin it" : "Keep it at the top of the list"} onClick={() => togglePin(n.id, !n.pinned)}><Pin size={16} filled={!!n.pinned} /></button>) },
+          ] as Column<(typeof shown)[number]>[])} />
+        </Card>
+      )}
       <Explore hide={hide} space="trade" />
     </div>
   );

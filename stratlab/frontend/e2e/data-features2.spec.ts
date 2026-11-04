@@ -141,29 +141,31 @@ test("business updates: my stocks first, more sectors, month by month with the c
   await sane(page, errors);
 });
 
-// on a phone the library pages its cards (VR6-024: "Show 12 more"); open every page so a check reads the whole library
+// on a phone the library pages its rows (VR6-024: "Show 12 more"); open every page so a check reads the whole library
 async function showAllCards(page: import("@playwright/test").Page) {
   const more = page.getByTestId("lib-show-more").getByRole("button", { name: /^Show \d+ more$/ });
   for (let i = 0; i < 20 && await more.isVisible(); i++) await more.click();
 }
+// TABLES EVERYWHERE (owner, 4 Nov: "make tables?"): the library is one table, a row a strategy (a compact card on a phone)
+const libRows = (page: import("@playwright/test").Page) => page.getByRole("table", { name: "Strategies" }).locator("tbody tr:not(.k-detail-row)");
 
-test("strategy library: StratLab's own strategies, badged, each with the verdict it earned", async ({ page }, info) => {
+test("strategy library: StratLab's own strategies, each with the verdict it earned", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/library", "Strategy library", phone ? 292 : 289);
   await page.getByRole("radio", { name: "StratLab's own" }).click();
-  const cards = page.locator(".k-cards > section");
+  const cards = libRows(page);
   await expect(cards.first()).toBeVisible({ timeout: 20_000 });
   await showAllCards(page);
   expect(await cards.count()).toBeGreaterThanOrEqual(10);
   for (const name of ["Stage 2 + Supertrend", "20/50 EMA cross", "RSI(2) mean reversion", "52-week breakout with ATR stop", "Bollinger squeeze breakout",
     "Opening-range breakout (intraday)", "Golden cross", "Donchian 20/10 (turtle-style)"]) {
-    await expect(page.getByRole("heading", { name: new RegExp(`^${name.replace(/[()+/]/g, "\\$&")}`) }).first()).toBeVisible();
+    await expect(page.getByRole("rowheader", { name: new RegExp(`^${name.replace(/[()+/]/g, "\\$&")}`) }).first()).toBeVisible();
   }
   const first = cards.first();
   await expect(first.getByText("By StratLab", { exact: true })).toBeVisible();      // one author line: no badge beside "by" (MO-5a)
-  await expect(first.getByRole("heading").first()).not.toContainText(" · ");         // the strategy's name; where it was tested is on the line above
-  await expect(first.getByText(/checks passed|checks run|Lost money after costs · its checks are shown for reference/).first()).toBeVisible();
-  // honest results, whatever they are, as facts about the checks (R5O-014: no "Likely a real edge" on a card): one of the five
+  await expect(first.locator("th b")).not.toContainText(" · ");                      // the strategy's name; where it was tested is its own column
+  await expect(first.getByText(/checks passed|checks run|Lost money after costs · its checks are shown for reference|Not run/).first()).toBeVisible();
+  // honest results, whatever they are, as facts about the checks (R5O-014: no "Likely a real edge"): one of the five
   const verdicts = await cards.locator(".verdict-badge, [data-verdict]").count();
   expect(verdicts + (await page.getByText(/Passed the checks|Mixed check results|Failed a robustness check|Too few trades|Lost money after costs/).count())).toBeGreaterThan(0);
   await expect(first.getByRole("button", { name: /^Copy and re-test/ })).toBeVisible();
@@ -175,46 +177,48 @@ test("strategy library: StratLab's own strategies, badged, each with the verdict
   await expect(cards.first()).toBeVisible();
 });
 
-test("strategy library: one calm card, the same facts once, and a market filter with samples for every market (MO-5)", async ({ page }, info) => {
+test("strategy library: one table, the same facts once, sortable columns, and a market filter with samples for every market (MO-5)", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/library", "Strategy library", phone ? 296 : 295);
   await page.getByRole("radio", { name: "StratLab's own" }).click();
-  const cards = page.locator(".k-cards > section");
+  const cards = libRows(page);
   await expect(cards.first()).toBeVisible({ timeout: 20_000 });
   // the market filter lists only markets that have samples, each with its count, and every market the backtester reads has some
   const filter = page.getByRole("group", { name: "Market" });
   await expect(filter.getByRole("button", { name: "All markets" })).toHaveAttribute("aria-pressed", "true");
   for (const m of ["India", "United States", "United Kingdom", "Europe", "Japan", "Crypto", "Forex", "Indian commodities", "Indian currency futures", "Global commodities"])
     await expect(filter.getByRole("button", { name: new RegExp(`^${m} · \\d+$`) }), m).toBeVisible();
+  await showAllCards(page);
   const all = await cards.count();
   await filter.getByRole("button", { name: /^Japan · / }).click();
   await expect.poll(async () => cards.count(), { timeout: 20_000 }).toBeLessThan(all);
   await expect(filter.getByRole("button", { name: /^Japan · / })).toHaveAttribute("aria-pressed", "true");
-  for (const t of await cards.locator(".lib-meta").allInnerTexts()) expect(t).toMatch(/^Japan · /);
-  // each card: where it was tested once, a title that is only the name, one row of three figures, the gap said once, buttons at the bottom
+  for (const t of await cards.locator('td[data-label="Market"]').allTextContents()) expect(t).toMatch(/^Japan · .* candles/);
+  // the columns, each figure once; the gap to buy and hold in points, once
+  const table = page.getByRole("table", { name: "Strategies" });
+  await expect(table.getByRole("columnheader")).toHaveText(["Strategy", "Market", /Total after costs/, /Total buy and hold/, /vs hold \(pts\)/, /Worst fall/, /Unseen period/, /Checks/, "Actions"]);
   const card = cards.first();
-  await expect(card.locator(".lib-meta")).toHaveText(/^Japan · .* candles/);
-  await expect(card.getByRole("heading").first()).not.toContainText(" · ");
-  await expect(card.locator(".lib-figs .k-stat-v")).toHaveCount(3);
-  await expect(card.getByTestId("lib-hold")).toHaveText(/points (behind|ahead of) buy and hold|About the same as buy and hold/);
-  const labels = card.locator(".lib-figs .k-stat-k");
-  await expect(labels).toHaveText(["Total after costs", "Total buy and hold", "Worst fall"]);
+  await expect(card.locator("th b")).not.toContainText(" · ");
   const text = await card.innerText();
   expect(text.match(/Behind buy and hold by/g)).toBeNull();
-  expect(text.match(/Tested /g)).toBeNull();                     // the dates, the check results and the rules are behind "Rules and details"
-  await card.getByText("Rules and details").click();
-  await expect(card.getByTestId("lib-window")).toContainText(/^Tested \d+ \w+ \d{4} to \d+ \w+ \d{4}/);
-  await expect(card.getByText("Buy when").first()).toBeVisible();
-  // in a row the figures and the buttons line up from card to card (the card's rows are the list's)
+  expect(text.match(/Tested /g)).toBeNull();                     // the dates, the check results and the rules are in the row's details
+  await card.getByRole("button", { name: /Rules and details/ }).click();
+  const details = table.locator("tr.k-detail-row").first();
+  await expect(details.getByTestId("lib-window")).toContainText(/^Tested \d+ \w+ \d{4} to \d+ \w+ \d{4}/);
+  await expect(details.getByText("Buy when").first()).toBeVisible();
+  await expect(card.getByRole("button", { name: /Rules and details/ })).toHaveAttribute("aria-expanded", "true");
+  // a column's name sorts by it: highest first, again for lowest first
   if (!phone) {
     await filter.getByRole("button", { name: "All markets" }).click();
     await expect(cards.nth(2)).toBeVisible();
-    const tops = await cards.evaluateAll((els) => els.slice(0, 6).map((el) => ({ row: Math.round(el.getBoundingClientRect().top), fig: Math.round(el.querySelector(".lib-figs")!.getBoundingClientRect().top),
-      btn: Math.round(el.querySelector(".lib-buttons")!.getBoundingClientRect().top), h: Math.round(el.getBoundingClientRect().height) })));
-    for (const t of tops) {
-      const same = tops.filter((o) => o.row === t.row);
-      for (const o of same) { expect(o.fig, "figures at one height").toBe(t.fig); expect(o.btn, "buttons at one height").toBe(t.btn); expect(o.h, "cards of a row, one height").toBe(t.h); }
-    }
+    const sortBtn = table.getByRole("columnheader", { name: /Total after costs/ }).getByRole("button");
+    await sortBtn.click();
+    await expect(table.getByRole("columnheader", { name: /Total after costs/ })).toHaveAttribute("aria-sort", "descending");
+    const num = (s: string) => Number(s.replace(/[−–]/g, "-").replace(/[^\d.-]/g, ""));
+    const vals = (await cards.locator('td[data-label="Total after costs"]').allTextContents()).filter((t) => /\d/.test(t)).map(num);
+    expect(vals).toEqual([...vals].sort((a, b) => b - a));
+    await sortBtn.click();
+    await expect(table.getByRole("columnheader", { name: /Total after costs/ })).toHaveAttribute("aria-sort", "ascending");
   }
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/library-card-${info.project.name}.png`, fullPage: false });
   await sane(page, errors);

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Info } from "../ui";
 import { textOf } from "./Card";
 import { minusNode } from "../../lib/format";
@@ -46,7 +46,7 @@ export function usePhone(): boolean {
   return on;
 }
 
-export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, scrollEnd }: {
+export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, scrollEnd, detail }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** No longer used: a long table scrolls with the page, never in a box of its own. Kept so callers need not change. */
   sticky?: boolean;
@@ -68,6 +68,9 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   rowAttrs?: (row: R) => Record<string, string>; rowNote?: (row: R) => ReactNode | undefined;
   /** With `stack`: on a phone, this many cards at a time, then "Show more" (R6O-018: 352 ETF cards made one 13,000 px page). */
   phonePage?: number;
+  /** A row's details one tap away: a button at the end of the row's name opens them in a row of their own right under it, across the
+   * whole table (a phone card: under the card). TABLES EVERYWHERE (owner, 4 Nov): the library's "Rules and details" under its row. */
+  detail?: { label: string; render: (row: R) => ReactNode };
 }) {
   const phone = usePhone();
   // a table that does not fit the phone is read as cards, however few its columns (a watchlist's Actions column sat off the edge); `spill` is set after
@@ -83,6 +86,9 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
     if (stackProp === undefined && !grid && !scrollEnd && !pinHead && !spill && b && b.scrollWidth > b.clientWidth + 2) setSpill(true);
   }, [phone, spill, stackProp, grid, scrollEnd, pinHead, allRows.length, columns.length]);
   useLayoutEffect(() => { if (scrollEnd) scrollToEnd(box.current); }, [scrollEnd, columns.length, allRows.length]);
+  const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
+  const toggle = (k: string) => setOpenRows((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const uid = useId();
   const cap = stack && phonePage && phone ? phonePage * pages : Infinity;
   const rows = allRows.length > cap ? allRows.slice(0, cap) : allRows;
   const left = allRows.length - rows.length;
@@ -109,18 +115,30 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
           {rows.length === 0 && <tr><td className="k-empty-row" colSpan={columns.length}>{empty}</td></tr>}
           {rows.map((r, ri) => {
             const note = rowNote?.(r);
+            const k = rowKey(r, ri), isOpen = !!detail && openRows.has(k), did = `${uid}-d-${ri}`;
+            const attrs = rowAttrs?.(r) ?? {};
+            const more = detail && (
+              <button type="button" className="k-detail-btn" aria-expanded={isOpen} aria-controls={isOpen ? did : undefined} onClick={() => toggle(k)}>
+                {detail.label}<span aria-hidden="true">{isOpen ? " ▴" : " ▾"}</span></button>);
             return (
-              <tr key={rowKey(r, ri)} role={stack ? "row" : undefined} {...rowAttrs?.(r)}>
+              <Fragment key={k}>
+              <tr role={stack ? "row" : undefined} {...attrs} className={[attrs.className, isOpen && "k-open"].filter(Boolean).join(" ") || undefined}>
                 {columns.map((c, i) => {
                   if (note !== undefined && i > 0) return i === 1 ? <td key={c.key} colSpan={columns.length - 1} className="k-row-note">{note}</td> : null;
                   const label = c.cardLabel ?? (typeof c.header === "string" ? c.header : textOf(c.header).trim() || undefined);
                   const v = minusNode(c.cell(r));
                   // TABLE-SWEEP: an empty cell is marked, so a phone card leaves it out instead of a label over nothing
                   const blank = v == null || v === "" || v === false;
-                  return c.rowHeader ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined} className={cls(c)}>{v}</th>
+                  return c.rowHeader ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined} className={cls(c)}>{v}{more}</th>
                     : <td key={c.key} role={stack ? "cell" : undefined} data-label={label} data-blank={blank ? "" : undefined} className={cls(c)}>{v}</td>;
                 })}
               </tr>
+              {isOpen && (
+                <tr id={did} className={["k-detail-row", attrs.className].filter(Boolean).join(" ")} role={stack ? "row" : undefined}>
+                  <td colSpan={columns.length} role={stack ? "cell" : undefined}>{detail!.render(r)}</td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
         </tbody>

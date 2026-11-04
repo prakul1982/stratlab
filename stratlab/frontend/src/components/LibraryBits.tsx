@@ -1,17 +1,15 @@
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { num, pct } from "../lib/format";
 import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { plainTerms } from "../lib/plainTerms";
-import { holdResult, libMeta, strategyName } from "../lib/libraryList";
+import { libMeta, strategyName } from "../lib/libraryList";
 import { TOTAL_AFTER_COSTS, TOTAL_HOLD, pricesStop, testedRange } from "../lib/libraryText";
-import { headTone, trails, unseenLabel } from "../lib/tradeUi";
+import { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";
 import { VERDICT_FACT, VerdictBadge } from "./ui";
 import { Signed } from "./kit/Signed";
 import { Badge } from "./kit/Badge";
-import { CardHead } from "./kit/Card";
-import { Disclosure } from "./kit/Disclosure";
-import { Stat } from "./kit/Stat";
+import { DataTable, type Column } from "./kit/DataTable";
 
 /* The pieces of a library strategy that its page behind sign-in and its read-only public page both draw: what an entry
  * looks like, which of its figures exist, and its rules in words. Kept apart from pages/LibraryPage.tsx so the public
@@ -108,53 +106,88 @@ export function Rules({ s }: { s: Strategy }) {
   );
 }
 
-/** The one library card's face, drawn by the signed-in library and the public one (MO-5a): where it was tested (small, once),
- * the strategy's own name, who made it, two lines of what it does, then ONE row of figures that lines up from card to card,
- * the gap to buy and hold said once, and the checks with the unseen part on one line. Everything else (the dates, which
- * check did what, the rules, the full description) is behind "Rules and details". The pieces are the card's grid rows: the
- * cards of a row share each row's height (`.lib-card` takes its rows from the list), so the figures and the buttons sit
- * at one height whatever the title or the description. `actions` is the last row; without `details` the card has one row less. */
-export function LibraryCard({ e, details = true, actions }: { e: LibEntry; details?: boolean; actions: ReactNode }) {
-  const sh = shownStats(e);
-  const title = strategyName(e);
-  const hold = holdResult(e);
-  const figs: [string, number | null, "up" | "down" | undefined][] = [
-    [TOTAL_AFTER_COSTS, sh.ret, sh.ret == null || sh.ret === 0 || trails(e) ? undefined : sh.ret > 0 ? "up" : "down"],
-    [TOTAL_HOLD, sh.buy_hold, sh.buy_hold == null || sh.buy_hold === 0 ? undefined : sh.buy_hold > 0 ? "up" : "down"],
-    ["Worst fall", sh.mdd, sh.mdd == null || sh.mdd === 0 ? undefined : sh.mdd > 0 ? "up" : "down"],
+/** How many rows a phone shows before "Show 12 more" (VR6-024, VR7-004): every row stays in the page (a search engine's phone
+ * browser reads them all, and the search box finds them); the rest are hidden by CSS on a phone only. */
+export const PHONE_ROWS = 12;
+
+type SortKey = "ret" | "bh" | "gap" | "mdd" | "unseen" | "checks";
+const sortValue: Record<SortKey, (e: LibEntry) => number | null> = {
+  ret: (e) => shownStats(e).ret, bh: (e) => e.stats.buy_hold, gap: (e) => e.vs_hold?.gap ?? null,
+  mdd: (e) => shownStats(e).mdd, unseen: (e) => shownStats(e).unseen,
+  checks: (e) => (e.verdict.total ? e.verdict.passed / e.verdict.total + e.verdict.passed / 100 : null),
+};
+
+/** The library as a table (TABLES EVERYWHERE, owner 4 Nov: "make tables?" on /library's cards): one row a strategy, the figures
+ * in columns that line up and sort by a click on their name, its rules and details one tap away under its row. On a phone each
+ * row is a compact card (the name, the return after costs, the gap to buy and hold, the checks), the rest in its details. Drawn
+ * by the signed-in library and the public one alike; `actions` is each page's own buttons, `extra` what goes at the end of the
+ * details (the signed-in page's report form and plan notes). */
+export function LibraryTable({ rows, actions, extra, label = "Strategies", rules = true }: {
+  rows: LibEntry[]; actions: (e: LibEntry) => ReactNode; extra?: (e: LibEntry) => ReactNode; label?: string;
+  /** the rules in the details (the public list leaves them to the strategy's own page) */
+  rules?: boolean;
+}) {
+  const [by, setBy] = useState<{ key: SortKey; desc: boolean } | null>(null);
+  const [pages, setPages] = useState(1);
+  useEffect(() => { setPages(1); }, [rows]);
+  const sorted = useMemo(() => {
+    if (!by) return rows;
+    const v = sortValue[by.key];
+    // a strategy with no figure (never traded) goes last whichever way the column is sorted
+    return [...rows].sort((a, b) => { const x = v(a), y = v(b); return x == null ? (y == null ? 0 : 1) : y == null ? -1 : by.desc ? y - x : x - y; });
+  }, [rows, by]);
+  const extraRow = new Set(sorted.slice(PHONE_ROWS * pages).map((e) => e.id));
+  const fig = (n: number | null, tone = true) => (n == null ? "–" : tone ? <Signed value={n} fmt={(v) => pct(v)} /> : pct(n));
+  const cols: Column<LibEntry>[] = [
+    { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => (
+      <span className="k-stack k-tight"><b>{strategyName(e)}</b>
+        <span className="k-note">By {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span>
+        {pricesStop(e.range, e.ran_at ?? e.published_at) && <span className="k-note k-warn-text" data-testid="lib-stops">{pricesStop(e.range, e.ran_at ?? e.published_at)}</span>}</span>) },
+    { key: "market", header: "Market", wrap: true, cell: (e) => <span className="k-small">{libMeta(e)}</span> },
+    { key: "ret", header: TOTAL_AFTER_COSTS, numeric: true, sortable: true, up: true, info: TOTAL_NOTE_INFO, cell: (e) => fig(shownStats(e).ret, !trails(e)) },
+    { key: "bh", header: TOTAL_HOLD, numeric: true, sortable: true, info: "The total return of simply buying at the start and holding to the end, over the same dates.", cell: (e) => fig(e.stats.buy_hold) },
+    { key: "gap", header: "vs hold (pts)", numeric: true, sortable: true, cell: (e) => (e.vs_hold ? <span data-testid="lib-gap"><Signed value={e.vs_hold.gap} fmt={(v) => `${v > 0 ? "+" : ""}${num(v, 1)}`} /></span> : "–") },
+    { key: "mdd", header: "Worst fall", numeric: true, sortable: true, cell: (e) => fig(shownStats(e).mdd) },
+    { key: "unseen", header: "Unseen period", numeric: true, sortable: true, info: "The total return over the last 30% of the test, the part the strategy wasn't tuned on.", cell: (e) => fig(shownStats(e).unseen) },
+    { key: "checks", header: "Checks", wrap: true, sortable: true, cell: (e) => (
+      <span className="k-stack k-tight"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />
+        {!shownStats(e).ran ? <span className="k-note">Not run</span> : checksBeyond(checksOf(e), e.verdict.label) && <span className="k-note">{checksBeyond(checksOf(e), e.verdict.label)}</span>}</span>) },
+    { key: "act", header: "", action: true, cell: actions },
   ];
+  const details = (e: LibEntry) => (
+    <div className="k-stack k-tight lib-details">
+      {/* on a phone the figures the compact row leaves out are here, as a table */}
+      <table className="k-table lib-mini" aria-label={`More figures for ${strategyName(e)}`}>
+        <tbody>
+          <tr><th scope="row">Market</th><td>{libMeta(e)}</td></tr>
+          <tr><th scope="row">{TOTAL_HOLD}</th><td className="k-num">{fig(e.stats.buy_hold)}</td></tr>
+          <tr><th scope="row">Worst fall</th><td className="k-num">{fig(shownStats(e).mdd)}</td></tr>
+          <tr><th scope="row">{unseenLabel(e)}</th><td className="k-num">{fig(shownStats(e).unseen)}</td></tr>
+        </tbody>
+      </table>
+      {e.range && <p className="k-note lib-line" data-testid="lib-window">Tested {testedRange(e.range)}{e.stats.trades != null ? ` · ${e.stats.trades} trades` : ""}</p>}
+      {e.reason && <p className="k-note lib-line lib-reason">{e.reason}</p>}
+      {e.description && <p className="k-small lib-about">{plainTerms(e.description)}</p>}
+      {rules && <Rules s={e.strategy} />}
+      {extra?.(e)}
+    </div>
+  );
   return (
     <>
-      <div className="k-stack k-tight lib-head">
-        <span className="k-note lib-meta" title={libMeta(e)}>{libMeta(e)}</span>
-        <CardHead title={title} />
-        <span className="k-note lib-by">By {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span>
+      <div className="lib-table">
+        <DataTable label={label} rows={sorted} rowKey={(e) => e.id} columns={cols} stack
+          rowAttrs={(e): Record<string, string> => (extraRow.has(e.id) ? { className: "lib-extra" } : {})}
+          sort={{ key: by?.key ?? "", desc: by?.desc ?? true, onSort: (k) => setBy((b) => (b?.key === k ? { key: k as SortKey, desc: !b.desc } : { key: k as SortKey, desc: true })) }}
+          detail={{ label: "Rules and details", render: details }} />
       </div>
-      <p className={`k-small lib-clamp lib-about${e.description ? "" : " lib-none"}`} title={plainTerms(e.description)}>{plainTerms(e.description)}</p>
-      <div className="lib-figs" role="list" aria-label="Totals over the whole test">
-        {figs.map(([k, n, tone]) => <Stat key={k} item label={k} value={n == null ? "–" : pct(n)} tone={tone} />)}
-      </div>
-      <p className="k-small lib-vs" data-testid="lib-hold">{hold ? <b>{hold}</b> : null}
-        {/* the dates the figures are for, on the card's face: they were only behind "Rules and details" (LIVE1A-027) */}
-        {e.range && <span className="k-note lib-dates" data-testid="lib-dates">{testedRange(e.range)}</span>}</p>
-      {/* a market whose prices stop long before the test was run says so, not a silently old date (owner, 4 Nov) */}
-      {pricesStop(e.range, e.ran_at ?? e.published_at) && <p className="k-note k-warn-text" data-testid="lib-stops">{pricesStop(e.range, e.ran_at ?? e.published_at)}</p>}
-      <div className="k-row lib-status">
-        <VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />
-        {sh.ran ? (sh.unseen != null && <span className="k-note">{unseenLabel(e)} <Signed value={sh.unseen} fmt={(v) => pct(v)} /></span>)
-          : <Badge tone="plain" dot={false}>Not run</Badge>}
-      </div>
-      {details && (
-        <Disclosure summary="Rules and details" className="lib-details">
-          <div className="k-stack k-tight">
-            {e.range && <p className="k-note lib-line" data-testid="lib-window">Tested {testedRange(e.range)}{e.stats.trades != null ? ` · ${e.stats.trades} trades` : ""}</p>}
-            {e.reason && <p className="k-note lib-line lib-reason">{e.reason}</p>}
-            {/* no second copy of the description here: it is the paragraph above (whole in its tooltip), and the rules below say it again in steps (UI-FIX-1, R8) */}
-            <Rules s={e.strategy} />
-          </div>
-        </Disclosure>
+      {sorted.length > PHONE_ROWS * pages && (
+        <div className="k-row lib-more" data-testid="lib-show-more">
+          <span className="k-note">Showing {PHONE_ROWS * pages} of {sorted.length}.</span>
+          <button type="button" className="btn quiet sm" onClick={() => setPages((n) => n + 1)}>Show {Math.min(PHONE_ROWS, sorted.length - PHONE_ROWS * pages)} more</button>
+        </div>
       )}
-      <div className="k-stack k-tight lib-actions">{actions}</div>
     </>
   );
 }
+
+const TOTAL_NOTE_INFO = "The total return over the whole test, after brokerage, taxes and slippage: not a yearly rate.";

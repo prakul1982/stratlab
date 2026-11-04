@@ -308,7 +308,7 @@ test("/library: a result line, the checks and the figures on each card; one summ
   await expect(page.getByTestId("lib-summary")).toHaveText(`${behind} of ${list.length} finished behind buy and hold · ${failed} failed a check`);
   // the explanation is on the page once, not on every card
   await expect(page.getByTestId("lib-checks-not-hold")).toHaveCount(1);
-  const cards = page.locator(".lib-card");
+  const cards = page.locator(".lib-table tbody tr:not(.k-detail-row)");        // one table, a row a strategy (TABLES EVERYWHERE, owner 4 Nov)
   await expect(cards).toHaveCount(list.length);
   await expect(page.locator("main")).not.toContainText(/Passed: .*Not run:|Behind buy and hold by/);
   // a market filter that offers only markets that have a strategy, each with how many (MO-5b)
@@ -317,9 +317,9 @@ test("/library: a result line, the checks and the figures on each card; one summ
   const chips = (await page.getByRole("group", { name: "Market" }).getByRole("button").allInnerTexts()).filter((t) => t !== "All markets");
   expect(chips.length, chips.join(" | ")).toBe(byMarket.size);
   for (const n of byMarket.values()) expect(chips.some((t) => t.endsWith(` · ${n}`)), chips.join(" | ")).toBe(true);
-  await expect(cards.first().getByTestId("lib-hold")).toContainText(/points (behind|ahead of) buy and hold|About the same as buy and hold/);
+  await expect(cards.first().getByTestId("lib-gap")).toHaveText(/^[+−]?[\d,]+\.\d$/);          // the gap to buy and hold, in points, its own column
   await expect(cards.first().locator(".badge").first()).toContainText(/checks run|Lost money|Too few|Mixed|Failed/);
-  await expect(cards.first().locator(".lib-figs .k-stat-v")).toHaveCount(3);
+  await expect(cards.first().locator("td.k-num")).toHaveCount(5);          // its five figures, each in its column
   // each verdict option is one some strategy has
   const have = new Set(list.map((e) => e.verdict.verdict));
   const options = await page.getByLabel("Verdict").locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value));

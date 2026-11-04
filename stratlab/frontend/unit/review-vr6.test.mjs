@@ -108,9 +108,12 @@ test("VR6-023: a figure too long for half a line (an eight-digit rupee total) is
 
 test("VR6-024: a phone shows twelve strategy cards, ten positions and eight dividends at a time, with Show more", () => {
   const lib = read("src/pages/LibraryPage.tsx");
-  assert.match(lib, /export const PHONE_CARDS = 12;/);
-  assert.match(lib, /\(phone \? rows\.slice\(0, PHONE_CARDS \* cardPages\) : rows\)\.map/);
-  assert.match(lib, /data-testid="lib-show-more"/);
+  // the library is one table (TABLES EVERYWHERE, owner 4 Nov): twelve rows at a time on a phone, then Show 12 more (LibraryTable)
+  assert.match(lib, /export \{ PHONE_ROWS as PHONE_CARDS \} from "\.\.\/components\/LibraryBits";/);
+  const bits = read("src/components/LibraryBits.tsx");
+  assert.match(bits, /export const PHONE_ROWS = 12;/);
+  assert.match(bits, /const extraRow = new Set\(sorted\.slice\(PHONE_ROWS \* pages\)\.map\(\(e\) => e\.id\)\);/);
+  assert.match(bits, /data-testid="lib-show-more"/);
   assert.match(read("src/pages/HoldingsPage.tsx"), /<DataTable label="Positions".*stack phonePage=\{10\} \/>/);
   const act = read("src/components/HoldingsActions.tsx");
   assert.match(act, /rows=\{data\.ahead\} rowKey=\{key\} stack phonePage=\{8\}/);

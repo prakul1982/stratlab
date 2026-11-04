@@ -84,10 +84,12 @@ test("library cards say the return beside buy and hold, in facts (R5O-014)", asy
   await signedIn(page, info.project.name === "phone" ? 143 : 134);
   await page.goto("/library");
   await dismissWelcome(page);
-  const cards = page.locator(".k-cards > section");
+  const cards = page.locator(".lib-table tbody tr:not(.k-detail-row)");
   await expect(cards.first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("lib-hold").first()).toContainText(/points (ahead of|behind) buy and hold/);          // said once on the card (MO-5a); the figures sit above it
-  await expect(page.locator(".k-cards")).not.toContainText("Likely a real edge");
+  // one table since TABLES EVERYWHERE (owner, 4 Nov): buy and hold beside the return in its own column, the gap in points once
+  await expect(page.getByRole("table", { name: "Strategies" }).getByRole("columnheader", { name: /vs hold \(pts\)/ })).toBeVisible();
+  await expect(page.getByTestId("lib-gap").first()).toHaveText(/^[+−]?[\d,]+\.\d$/);
+  await expect(page.locator(".lib-table")).not.toContainText("Likely a real edge");
 });
 
 test("Help has its own title (R5O-032)", async ({ page }, info) => {
