@@ -59,7 +59,11 @@ REVENUE_ELSE = ("RevenuesNetOfInterestExpense",      # a bank's or broker's tota
                 # MRKR) and revenue outside customer contracts (CATX)
                 "OilAndGasSalesRevenue", "HealthCareOrganizationPatientServiceRevenue", "AdvertisingRevenue",
                 "RevenueFromRenderingOfCargoAndMailTransportServices", "RevenueRecognitionMilestoneMethodRevenueRecognized",
-                "RevenueFromGrants", "RevenueNotFromContractWithCustomer")
+                "RevenueFromGrants", "RevenueNotFromContractWithCustomer",
+                # ...and miners' metal sales, an oil company's results-of-operations revenue, royalties, and IFRS "other revenue"
+                # as the only line (CRCUF, XTGRF, GRVE, QNC, KZIA, PLG)
+                "RevenueFromSaleOfSilver", "RevenueFromSaleOfGold", "GoldProductsAndServicesRevenue",
+                "ResultsOfOperationsRevenueFromOilAndGasProducingActivities", "RevenueFromRoyalties", "OtherRevenue")
 # ...and when no revenue line is tagged at all, the income statement's own arithmetic: gross profit plus the cost of
 # sales, or operating profit plus total costs (each pair from the same period)
 COST_OF_SALES = ("CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold", "CostOfSales")

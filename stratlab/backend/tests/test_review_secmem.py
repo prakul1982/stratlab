@@ -410,6 +410,8 @@ def _facts(tax: str, concept: str, val: float, form: str = "10-K", unit: str = "
     ("us-gaap", "OilAndGasSalesRevenue", "CRK"), ("us-gaap", "HealthCareOrganizationPatientServiceRevenue", "EHSI"),
     ("us-gaap", "AdvertisingRevenue", "GWAV"), ("ifrs-full", "RevenueFromRenderingOfCargoAndMailTransportServices", "TRMD"),
     ("us-gaap", "RevenueRecognitionMilestoneMethodRevenueRecognized", "JSPR"), ("us-gaap", "RevenueNotFromContractWithCustomer", "CATX"),
+    ("ifrs-full", "RevenueFromSaleOfSilver", "CRCUF"), ("us-gaap", "GoldProductsAndServicesRevenue", "XTGRF"),
+    ("us-gaap", "ResultsOfOperationsRevenueFromOilAndGasProducingActivities", "GRVE"), ("ifrs-full", "OtherRevenue", "KZIA"),
 ])
 def test_a_us_companys_only_revenue_line_is_read(tax, concept, sym):
     """The monthly audit's "Revenue or profit missing" (1 Nov): each of these filed its revenue only under this line."""
