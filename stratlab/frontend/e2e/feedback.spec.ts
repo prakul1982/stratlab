@@ -29,6 +29,11 @@ test("a signed-in report from the Feedback button lands in Admin → Feedback wi
   // labelled and in sight without opening the menu: the menu's top on a laptop, the top bar on a phone
   const button = (phone ? page.locator("header.topbar") : page.locator("aside.sidebar .side-top")).getByRole("button", { name: "Feedback", exact: true });
   await expect(button).toBeVisible({ timeout: 30_000 });
+  if (phone) {     // the top bar still fits the screen with it: every button whole, no sideways scroll
+    const vw = page.viewportSize()!.width;
+    for (const b of await page.locator("header.topbar button, header.topbar a").all()) { const r = (await b.boundingBox())!; expect(r.x + r.width, "a top-bar button past the edge").toBeLessThanOrEqual(vw); }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
   await button.click();
   const dlg = page.getByRole("dialog", { name: "Help & feedback" });
   await expect(dlg.getByRole("radiogroup", { name: "What is it?" }).getByRole("radio")).toHaveCount(3);

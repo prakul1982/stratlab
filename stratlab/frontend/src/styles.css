@@ -2911,6 +2911,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: none; }   /* the same tap size as the links beside it (A11Y-2) */
 .side-brand .side-feedback { margin-left: auto; margin-right: 6px; }
 .topbar .top-feedback { padding-inline: 10px; }
+/* with Feedback in it the phone's top bar ran past a 400px screen: there the logo is its mark alone (the link keeps its name) */
+@media (max-width: 440px) { .topbar .brand .logo-word { display: none; } }
 
 /* DataTable's row details (TABLES EVERYWHERE, owner 4 Nov): a quiet button after the row's name, and the details in a row of their
  * own across the table; on a phone card, joined to the card above it */
