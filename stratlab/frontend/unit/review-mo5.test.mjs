@@ -48,7 +48,7 @@ test("MO-5a (as a table): a row says each fact once: one author line, the figure
 test("MO-5a (as a table): a phone gets compact rows, the other figures in the details as a small table", () => {
   const css = read("src/pages/trade/trade.css");
   assert.doesNotMatch(css, /\.lib-card\b|\.lib-figs/);
-  assert.match(css, /\.lib-table \.k-table td:is\(\[data-label="Market"\], \[data-label="Total buy and hold"\], \[data-label="Worst fall"\], \[data-label="Unseen period"\]\) \{ display: none; \}/);
+  assert.match(css, /\.lib-table \.k-table td:is\(\[data-label="Total buy and hold"\], \[data-label="Worst fall"\], \[data-label="Unseen period"\]\) \{ display: none; \}/);
   assert.match(css, /\.lib-mini \{ display: none; \}/);
   assert.match(css, /\.lib-mini \{ display: table; width: 100%; \}/);
 });

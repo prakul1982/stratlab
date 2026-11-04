@@ -72,8 +72,8 @@
 .k-textarea.nb-q { min-height: 76px; }
 .nb-question { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .lib-buttons { align-items: center; flex-wrap: nowrap; }
-/* the library as a table (TABLES EVERYWHERE, owner 4 Nov): every row is in the page (VR7-004); a phone shows twelve compact rows at a time (the name, the return after
- * costs, the gap to buy and hold, the checks), the other figures in each row's details as a small table of their own */
+/* the library as a table (TABLES EVERYWHERE, owner 4 Nov): every row is in the page (VR7-004); a phone shows twelve compact rows at a time (the name, where it was
+ * tested, the return after costs, the gap to buy and hold, the checks), the other figures in each row's details as a small table of their own */
 .lib-line { margin: 0; }
 .lib-about { margin: 0; }
 .lib-mini { display: none; }
@@ -91,7 +91,7 @@
 @media (max-width: 640px) {
   .lib-table .k-table tr.lib-extra { display: none; }
   .k-row.lib-more { display: flex; }
-  .lib-table .k-table td:is([data-label="Market"], [data-label="Total buy and hold"], [data-label="Worst fall"], [data-label="Unseen period"]) { display: none; }
+  .lib-table .k-table td:is([data-label="Total buy and hold"], [data-label="Worst fall"], [data-label="Unseen period"]) { display: none; }
   .lib-mini { display: table; width: 100%; }
   .lib-mini th { font-weight: 400; color: var(--muted); text-align: left; }
 }
