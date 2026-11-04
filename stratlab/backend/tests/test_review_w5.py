@@ -1,7 +1,7 @@
 """The REVIEW lane (Wed 4 Nov): the LIVE2 re-check's open findings, fixed at the root."""
 import re
 
-from app import blog_research, stock_pages
+from app import stock_pages
 
 
 def test_a_loss_year_axis_uses_the_true_minus():

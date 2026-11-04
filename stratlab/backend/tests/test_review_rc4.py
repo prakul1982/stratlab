@@ -52,7 +52,7 @@ def test_tick_digits_are_the_decimals_that_write_every_tick_exactly(ticks, digit
 
 def test_a_big_companys_axis_is_unchanged():
     chart = stock_pages.bars_chart_html(facts(years=[{"year": "Mar 2025", "sales": 500.0, "profit": 60.0}, {"year": "Mar 2026", "sales": 450.0, "profit": -120.0}]))
-    assert re.findall(r'class="by-tick"[^>]*>([^<]+)<', chart) == ["-200", "0", "200", "400", "600"]
+    assert re.findall(r'class="by-tick"[^>]*>([^<]+)<', chart) == ["−200", "0", "200", "400", "600"]     # the loss tick with the true minus (LIVE2-017)
     assert not re.search(r'by-tick"[^>]*>[^<]*\.\d', chart)                         # whole numbers, no decimals
 
 
