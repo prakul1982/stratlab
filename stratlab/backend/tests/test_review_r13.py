@@ -2,6 +2,7 @@
 
 Every moment here is fixed (the 16:00 ET close of Fri 9 Oct 2026 is 20:00 UTC); nothing depends on today's date, the
 weekday the tests run on, or a background job having run. No network is read."""
+import re
 import json
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -329,10 +330,14 @@ def test_a_us_price_between_the_close_and_its_settle_point_is_still_settling():
 def test_a_page_that_is_a_close_behind_is_kept_a_minute_and_an_up_to_date_one_follows_the_edge_policy():
     # R13-006 ended every copy at the market's next settle point; SEO-1 keeps an up-to-date page a day at the edge (the page says
     # which close it is "As of"), and only a page already behind its market's close is kept a minute, so it follows its refresh
+    # LIVE3-002 (changed on purpose): the edge's copy ends at the market's next settle point, at most a day, so a page cached at one
+    # close is never served past the next one
     f = facts_page(at="2026-10-09", region="US")
-    for when in (datetime(2026, 10, 9, 13, 0, tzinfo=UTC), et(16, 40)):
-        assert stock_pages.cache_control("US", f, when) == stock_pages.CACHE_CONTROL
+    assert stock_pages.cache_control("US", f, et(16, 50)) == stock_pages.CACHE_CONTROL           # Friday after the settle: Monday's is days off
     assert "s-maxage=86400" in stock_pages.CACHE_CONTROL
+    thu = facts_page(at="2026-10-08", region="US")
+    cc = stock_pages.cache_control("US", thu, et(17, 0) - timedelta(days=1))                     # Thursday evening: until Friday's settle point
+    assert int(re.search(r"s-maxage=(\d+)", cc).group(1)) == 23 * 3600 + stock_pages.settle("US")
     assert stock_pages.html_ttl("US", et(16, 40)) == 300                                       # what the server keeps in memory still ends at the settle point
     behind = facts_page(at="2026-10-08", region="US")                                          # the page still on 8 Oct
     assert stock_pages.cache_control("US", behind, et(17, 28)) == stock_pages.BEHIND_CACHE

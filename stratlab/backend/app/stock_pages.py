@@ -413,15 +413,48 @@ def next_settle(region: str, now: datetime | None = None) -> datetime | None:
     return None
 
 
+OFFICIAL_WAIT_CACHE = "public, max-age=300, s-maxage=900, stale-while-revalidate=300"   # an India page at the close, before the official close
+OFFICIAL_BY_HOUR = 9           # India hour of the next morning after which a day's official close is no longer waited for (official_close.settled)
+
+
+def edge_cache(regions, now: datetime | None = None) -> str:
+    """CACHE_CONTROL with the edge's copy ending at the next settle point of the page's market(s), at most a day (LIVE3-002: a page
+    stored at the 3 Nov close and cached that evening was served with "the market has closed since" until the evening of 4 Nov, as
+    s-maxage was a day whatever the clock). Past that point the edge serves its copy once while it reads the page again
+    (stale-while-revalidate), so a crawler still never waits on a cold build. No job: the header alone does it."""
+    now = now or datetime.now(timezone.utc)
+    left = [int((n - now).total_seconds()) for n in (next_settle(r, now) for r in regions if r) if n]
+    if not left or min(left) >= 86400:
+        return CACHE_CONTROL
+    s = max(MIN_CACHE, min(left))
+    return f"public, max-age={min(300, s)}, s-maxage={s}, stale-while-revalidate=604800"
+
+
+def official_due(f: dict, now: datetime | None = None) -> bool:
+    """An India page at its market's latest close whose price isn't the exchange's official close yet (it comes in the evening)."""
+    if f.get("region") != "IN" or f.get("price_official") or not is_close(f):
+        return False
+    try:
+        day = last_close("IN", now)[0]
+    except Exception:
+        return False
+    if str(f.get("price_at") or "")[:10] != day.isoformat():
+        return False
+    by = datetime.combine(day + timedelta(days=1), dtime(OFFICIAL_BY_HOUR, 0), ZoneInfo("Asia/Kolkata"))
+    return (now or datetime.now(timezone.utc)) < by
+
+
 def cache_control(region: str | None, f: dict | None = None, now: datetime | None = None) -> str:
-    """A company page's Cache-Control: the day-long CACHE_CONTROL, or a minute (BEHIND_CACHE) for a page whose price is from
-    before its market's latest close, so that page follows its refresh within a minute or two and never says "the market
-    has closed since" for long after it has caught up (R13-006). A page that is up to date says "As of <the close>" and stays
-    true of that close whenever it is read (SEO-1: this used to end every copy at the market's next settle point, so a crawler
-    met a cold build on most requests)."""
+    """A company page's Cache-Control: a minute (BEHIND_CACHE) for a page whose price is from before its market's latest close, so
+    that page follows its refresh within a minute or two and never says "the market has closed since" for long after it has caught up
+    (R13-006); a quarter of an hour for an India page at the close whose official close isn't in yet (LIVE3-002); otherwise kept until
+    the market's next settle point, at most a day (edge_cache). A page that is up to date says "As of <the close>" and stays true of
+    that close until the next one (SEO-1: the day-long copy that ends then still spares a crawler most cold builds)."""
     if f and region and behind(f, now):
         return BEHIND_CACHE
-    return CACHE_CONTROL
+    if f and region == "IN" and official_due(f, now):
+        return OFFICIAL_WAIT_CACHE
+    return edge_cache([region], now) if region else CACHE_CONTROL
 
 
 def html_ttl(region: str | None, now: datetime | None = None) -> int:
@@ -1675,13 +1708,22 @@ class Pages:
             except Exception as ex:
                 print("stock pages: index not told of a new close", region, symbol, str(ex)[:120])
 
+    PRICE_KEYS = ("region", "price_at", "price_basis", "price_official", "not_company")
+
     def html(self, region: str, symbol: str, co: dict) -> str:
         """The rendered page, kept in memory for ten minutes (the sector links read the screens' index)."""
+        return self.served(region, symbol, co)[0]
+
+    def served(self, region: str, symbol: str, co: dict) -> tuple[str, dict]:
+        """(the rendered page, the price facts it was rendered from), kept together: the page's Cache-Control is worked out from the
+        same facts as its words (LIVE3-002: the rendered copy outlived the facts kept beside it, so a page saying "the market has closed
+        since" was sent with no facts to go on, and so with the day-long header instead of a minute's)."""
         key = f"html:{region}:{symbol}"
         hit = self.mem.get(key)
-        if hit is None:
+        if not isinstance(hit, tuple):
             f = self.get(region, symbol, co)
-            hit = render(f, region, symbol, co["name"], faq_extras(region, symbol) if has_content(f) else None)
+            hit = (render(f, region, symbol, co["name"], faq_extras(region, symbol) if has_content(f) else None),
+                   {k: (f or {}).get(k) for k in self.PRICE_KEYS if (f or {}).get(k) is not None})
             self.mem.set(key, hit, html_ttl(region))      # never served past the next close's settle point (R13-006)
         return hit
 

@@ -4832,6 +4832,12 @@ SEO_HEADERS = {"Cache-Control": stock_pages.FEED_CACHE}           # robots, the 
 PAGE_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}       # the lists of companies and the directories: kept a day by the site's cache (SEO-1)
 
 
+def page_headers(region: str | None = None) -> dict:
+    """A directory or list page's headers: kept by the site's cache until its market's next settle point, at most a day, as the market
+    values on it move with each close (LIVE3-002); a page of both markets, until the earlier one's."""
+    return {"Cache-Control": stock_pages.edge_cache([region] if region else list(stock_pages.REGIONS.values()))}
+
+
 def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str] | None:
     """One read of the lists of listed companies (India, NSE and BSE-only; the US), or just those regions in `only`;
     the regions whose read failed. None: another container leads, nothing was read."""
@@ -4984,7 +4990,7 @@ def stock_prices(region: str, symbol: str, request: Request):
 def stock_index(q: str = "", m: str = ""):
     """Every company page's way in: search by name or symbol (`m`: in or us), and each market's largest companies."""
     r = stock_pages.REGIONS.get((m or "").lower())
-    return HTMLResponse(stock_pages.index_page(r if q else None, q), headers=SEO_HEADERS if q.strip() else PAGE_HEADERS)
+    return HTMLResponse(stock_pages.index_page(r if q else None, q), headers=SEO_HEADERS if q.strip() else page_headers())
 
 
 @app.get("/stocks/{region}", response_class=HTMLResponse)
@@ -5005,7 +5011,7 @@ def stock_region_index(region: str, q: str = ""):
         return HTMLResponse(stock_pages.not_found(None, region), status_code=404)
     if region != region.lower():
         return RedirectResponse(f"/stocks/{region.lower()}", status_code=301)
-    return HTMLResponse(stock_pages.index_page(r, q), headers=SEO_HEADERS if q.strip() else PAGE_HEADERS)
+    return HTMLResponse(stock_pages.index_page(r, q), headers=SEO_HEADERS if q.strip() else page_headers(r))
 
 
 def _dir_page(request: Request, region: str, want: str, build):
@@ -5019,7 +5025,7 @@ def _dir_page(request: Request, region: str, want: str, build):
     body = build(r)
     if body is None:
         return HTMLResponse(stock_pages.dir_not_found(r), status_code=404)
-    return HTMLResponse(body, headers=PAGE_HEADERS)
+    return HTMLResponse(body, headers=page_headers(r))
 
 
 def _dir_number(page: str) -> int:
@@ -5072,22 +5078,21 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     if region != region.lower() or symbol != sym:          # one address per company
         return RedirectResponse(stock_pages.path(r, sym) + (f"?ref={ref}" if ref else ""), status_code=301)
     try:
-        page = stock_page_store.html(r, sym, co)
+        page, stored = stock_page_store.served(r, sym, co)
     except stock_pages.Busy:
         # a page a visitor can read, which loads itself again, never raw JSON (R7O-009); still 503 with Retry-After for
         # crawlers, and never cached
         return HTMLResponse(stock_pages.busy_page(r, sym, co.get("name")), status_code=503,
                             headers={"Retry-After": "600", "Cache-Control": "no-store"})
-    stored = stock_page_store.mem.get(f"stocks:page:{r}:{sym}") or {}
     if stored.get("not_company"):
         return HTMLResponse(page, status_code=404)             # a fund or a note: no company page (R6V-001)
     if r == "IN":                           # the surveillance lists change daily, so they're added as the page is sent
         page = stock_pages.with_surveillance(page, surveillance.flags_for(sym))
     # kept by the site's cache no longer than the next close's settle point, and a minute while it waits for its new close,
     # so no compressed copy outlives the refresh (R13-006)
-    # (`stored` is the page's facts themselves, as Pages keeps them in memory: reading ["facts"] off them found nothing, so a page a
-    # close behind was kept as long as any other)
-    headers = {"Cache-Control": stock_pages.cache_control(r, stored if isinstance(stored, dict) else None)}
+    # (`stored`: the price facts the page was rendered from, kept with it; LIVE3-002: they were read from a memory entry that could
+    # have gone while the rendered copy stayed, and a page a close behind then went out with the day-long header)
+    headers = {"Cache-Control": stock_pages.cache_control(r, stored or None)}
     page = ads.add_to_page(page, "company")        # ADS-1: as the page is sent, so the stored copy never holds an ad; "" while ads are off
     return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=headers)
 

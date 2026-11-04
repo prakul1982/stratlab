@@ -76,7 +76,7 @@ def test_company_page_has_no_ad_while_off_and_one_when_on(w, monkeypatch):
     assert t.count('class="ad"') == 1 and t.count("/ads.js") == 1
     assert t.index("Not investment advice") < t.index('class="ad"') < t.index("<footer")       # in the lower part, above the footer
     # the stored page never holds the ad, so switching it off shows on the next request
-    assert 'class="ad"' not in (main.stock_page_store.mem.get("html:IN:RELIANCE") or "")
+    assert 'class="ad"' not in (main.stock_page_store.mem.get("html:IN:RELIANCE") or ("",))[0]      # (the rendered copy, kept with its price facts: LIVE3-002)
     monkeypatch.setattr(settings, "ADS_ENABLED", False)
     assert 'class="ad"' not in c.get("/stocks/in/RELIANCE").text
     monkeypatch.setattr(settings, "ADS_ENABLED", True)
