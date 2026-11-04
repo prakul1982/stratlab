@@ -304,12 +304,21 @@ def checked(region: str, theme: str, m: dict, wait: bool = False) -> dict:
     `wait`: work the checks out here (an admin's blog draft)."""
     key = (region, theme.lower(), int(float(m.get("generated_at") or 0)))
     hit = A.get("sector_checked3", key)
-    if hit is not None:
-        return hit
-    if wait:
-        return _check(region, theme, m)
-    later(("check",) + key, lambda: _check(region, theme, m))
-    return A.get("sector_checked3", key) or A.get("sector_checking", key) or quick(region, theme, m)
+    if hit is None and wait:
+        hit = _check(region, theme, m)
+    if hit is None:
+        later(("check",) + key, lambda: _check(region, theme, m))
+        hit = A.get("sector_checked3", key) or A.get("sector_checking", key) or quick(region, theme, m)
+    return with_caps(hit, _rows(region))
+
+
+def with_caps(m: dict, rows: list[dict]) -> dict:
+    """The map's market values as the index has them now (LIVE3-003: a map kept for a day showed BDL at the 3 Nov close beside its own
+    page's 4 Nov one): the index takes each page's newest close as the price job moves it (screens.note_price)."""
+    caps = {r["symbol"]: r.get("market_cap") for r in rows or [] if r.get("symbol")}
+    fix = lambda cos: [{**c, "cap": caps[c["ticker"]]} if c.get("ticker") in caps else c for c in cos or []]      # noqa: E731
+    return {**m, "value_chain": [{**v, "companies": fix(v.get("companies"))} for v in m.get("value_chain") or []],
+            "sub_themes": [{**x, "companies": fix(x.get("companies"))} for x in m.get("sub_themes") or []]}
 
 
 def _check(region: str, theme: str, m: dict) -> dict:

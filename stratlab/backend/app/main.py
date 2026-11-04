@@ -5138,6 +5138,7 @@ def screen_warm(region: str, sym: str, co: dict):
 
 screen_indexer = screens.Indexer(lambda r, s, c: screen_warm(r, s, c))
 stock_page_store.on_built = screens.note_page       # a page built is in the screens and the largest list at once (R8O-005)
+stock_page_store.on_priced = screens.note_price     # ...and a page moved to a newer close, its price and market value (LIVE3-003)
 
 # after each close, how many stored pages' prices are re-read per run, and the pause between reads (seconds): India's
 # broker allows a few reads a second, the US prices fewer a minute, and people's own pages and backtests come first

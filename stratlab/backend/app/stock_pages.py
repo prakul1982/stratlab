@@ -1459,6 +1459,7 @@ class Pages:
         # brought in line where that's cheap (see main.stock_page_older_facts)
         self.gather, self.per_minute, self.older = gather, per_minute, older
         self.on_built = None           # (region, symbol, facts) after a page is built and stored: screens.note_page
+        self.on_priced = None          # (region, symbol, facts) after a stored page is moved to a newer close: screens.note_price (LIVE3-003)
         self.mem = TTLCache(max_items=3000)
         self.recent: deque = deque()
         self.lock = threading.Lock()
@@ -1600,6 +1601,7 @@ class Pages:
                     c = official(symbol, day.isoformat())
                     if c is not None:
                         _put(key, {**stored, "facts": with_official_close(f, c)})
+                        self._priced(region, symbol, with_official_close(f, c))
                         self.mem.pop(key)
                         self.mem.pop(f"html:{region}:{symbol}")
                         swapped += 1
@@ -1638,7 +1640,8 @@ class Pages:
                     stopped = len(due[:limit]) - i - 1
                     break
                 continue
-            facts_now = with_new_close(stored["facts"], bars, analyse)
+            stored_before = stored["facts"]
+            facts_now = with_new_close(stored_before, bars, analyse)
             stored = {**stored, "facts": facts_now}
             if str(facts_now.get("price_at") or "") >= day.isoformat():
                 stored["price_ts"] = time.time()      # read at this close: not read again until the next one
@@ -1653,6 +1656,8 @@ class Pages:
                 if len(behind) < 5:
                     behind.append(f"{symbol} (last candle {str(bars[-1].get('t') or '')[:10] if bars else 'none'})")
             _put(prefix + symbol, stored)
+            if facts_now is not stored_before:
+                self._priced(region, symbol, facts_now)
             self.mem.pop(prefix + symbol)
             self.mem.pop(f"html:{region}:{symbol}")
         retry = sum(1 for _, s, _raw in due[:limit] if s not in ok and 0 < tries.get(s, 0) < self.MAX_TRIES)
@@ -1662,6 +1667,13 @@ class Pages:
                 **({"behind": behind} if behind else {}),
                 **({"source_down": True} if stopped else {}), **({"retry": retry} if retry else {}),
                 **({"official": swapped} if official else {})}
+
+    def _priced(self, region: str, symbol: str, facts: dict) -> None:
+        if self.on_priced:
+            try:
+                self.on_priced(region, symbol, facts)
+            except Exception as ex:
+                print("stock pages: index not told of a new close", region, symbol, str(ex)[:120])
 
     def html(self, region: str, symbol: str, co: dict) -> str:
         """The rendered page, kept in memory for ten minutes (the sector links read the screens' index)."""
