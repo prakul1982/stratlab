@@ -25,7 +25,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 
-from . import leader
+from . import leader, memguard
 from .config import settings
 from .kite_service import IST, KiteService
 
@@ -33,6 +33,13 @@ BASE = "https://kite.zerodha.com"
 RETRY_MINUTES = 5
 MAX_ATTEMPTS = 6
 CAPTCHA_WAIT_S = 30
+# (SECMEM 5, 1 Nov: the server restarted 4 s after the 08:00 login with ~1.6 GB held while the monthly audit ran.) The login
+# is a few HTTPS requests, no browser; the restart after it is KITE_RESTART_AFTER_LOGIN's own, to reconnect the live feed.
+# Around both, the heavy background jobs hold back: the login takes the heavy jobs' turn (so no document read or audit step
+# starts while it saves the token) and the restart waits for the step that is running to finish and then keeps the turn,
+# so it never cuts one in the middle. Neither waits long: a stuck job can't keep the data offline.
+LOGIN_TURN_WAIT_S = 60
+RESTART_TURN_WAIT_S = 90
 # Admin -> Data and jobs, which opens Zerodha's login page at once when it is reached from this link
 LOGIN_LINK = "/admin/data?kite=login"
 # a browser's own headers: a login that names itself a script is the kind Zerodha meets with a CAPTCHA
@@ -203,14 +210,18 @@ class AutoLogin:
         with self._lock:  # never run two logins at once
             if only_if_due and not login_due(now or datetime.now(IST), self.kite.token_day):
                 return False
+            turn = memguard.TURNS.acquire("Kite login", LOGIN_TURN_WAIT_S)
             try:
                 request_token = fetch_request_token(self.kite.kite.login_url())
-                self.kite.accept_request_token(request_token)
+                self.kite.accept_request_token(request_token)        # saved in the database before anything else
             except Exception as e:
                 self._record(False, str(e))
                 if isinstance(e, AutoLoginError) and not e.retry:
                     self._gave_up = True
                 raise
+            finally:
+                if turn:
+                    memguard.TURNS.release()
             self._record(True, "Logged in to Kite.", "by the daily run" if only_if_due else "started from Admin")
         self.on_login()
         return True
@@ -313,6 +324,10 @@ def restart_process(delay: float = 2.0):
     """KiteTicker can't reconnect with a new token inside one process, so exit and let the host restart us.
     A non-zero code makes Railway's ON_FAILURE policy (and most hosts) start a fresh process."""
     def leave():
+        # the heavy job running now finishes its step, and none starts after it (the turn is never handed back)
+        memguard.TURNS.acquire("restart after the Kite login", RESTART_TURN_WAIT_S)
         leader.current.release()   # the next container takes over now, not when the lease runs out
         os._exit(3)
-    threading.Timer(delay, leave).start()
+    t = threading.Timer(delay, leave)
+    t.start()
+    return t

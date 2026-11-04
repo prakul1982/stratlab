@@ -152,3 +152,92 @@ def test_money_items_events_screens_scans_follows_keys_replays(c):
     assert ok(c.get(f"/trade/replay/{rid}", headers=A))["id"] == rid
     owner_can(c, [("DELETE", f"/trade/replay/{rid}", None), ("DELETE", f"/me/assistant/keys/{kid}", None),
                   ("DELETE", f"/invest/holders/follow/{fid}", None)])
+
+
+# ---------- item 2: large PDFs are read in a short-lived process ----------
+def test_a_large_pdf_is_read_in_a_child_process_with_the_same_text(monkeypatch):
+    from app import biz_updates, docs, ipo_docs, pdf_proc
+    from tests.pdfmaker import make_pdf_pages
+    data = make_pdf_pages([["OBJECTS OF THE OFFER", "Rs 120 crore"], ["Second page"], ["Third page"]])
+    here = pdf_proc.page_texts(data, 2)
+    ran = []
+    real = pdf_proc.subprocess.run
+    monkeypatch.setattr(pdf_proc.subprocess, "run", lambda *a, **k: ran.append(a[0][1]) or real(*a, **k))
+    monkeypatch.setattr(pdf_proc, "SUBPROCESS_BYTES", 0)                  # this small file counts as large
+    assert pdf_proc.page_texts(data, 2) == here and here[1] == 3 and "OBJECTS OF THE OFFER" in here[0][0]
+    assert ran == ["-I"]                                                  # in a child, isolated from the app's own files
+    assert ipo_docs.pdf_pages(data)[1].strip() == "Second page"
+    assert biz_updates.pdf_pages(data, 1) == ["OBJECTS OF THE OFFER\nRs 120 crore"]
+    assert docs.pdf_text_pages(data)[1] == 3
+    assert len(ran) == 4
+
+
+def test_a_large_pdf_that_cant_be_read_or_needs_too_much_memory_fails_the_read_not_the_server(monkeypatch):
+    from app import docs, pdf_proc
+    from tests.pdfmaker import make_pdf
+    monkeypatch.setattr(pdf_proc, "SUBPROCESS_BYTES", 0)
+    with pytest.raises(pdf_proc.PdfUnreadable):
+        pdf_proc.page_texts(b"%PDF-1.4 not really a pdf", 5)
+    with pytest.raises(pdf_proc.PdfUnreadable):                           # the callers turn it into their "couldn't be read"
+        docs.pdf_text_pages(b"%PDF-1.4 broken")
+    monkeypatch.setattr(pdf_proc, "CHILD_MEMORY_MB", 40)                 # the cap holds: the child gives up, not this process
+    with pytest.raises(pdf_proc.PdfUnreadable):
+        pdf_proc.page_texts(make_pdf(["fine"]), 5)
+    monkeypatch.setattr(pdf_proc.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("no processes left")))
+    assert pdf_proc.page_texts(make_pdf(["fine"]), 5)[0][0].strip() == "fine"   # no child possible: read here
+
+
+# ---------- item 5: the morning Kite login and the restart after it ----------
+def test_a_restart_right_after_the_kite_login_keeps_the_token(monkeypatch):
+    from types import SimpleNamespace as NS
+
+    from app import db, kite_auto, memguard
+    from app.kite_service import KiteService, today_ist
+    w = W.build(monkeypatch)
+    try:
+        svc = KiteService()
+        svc.kite._inner = NS(login_url=lambda: "https://kite.zerodha.com/connect/login?api_key=k",
+                             generate_session=lambda rt, api_secret=None: {"access_token": "ACCESS-" + rt}, set_access_token=lambda t: None)
+        monkeypatch.setattr(kite_auto, "configured", lambda: True)
+        during = []
+        monkeypatch.setattr(kite_auto, "fetch_request_token", lambda url: during.append(memguard.TURNS.name) or "RT1")
+        seen = []
+        # what after_login does with the live feed running: the process ends right here
+        al = kite_auto.AutoLogin(svc, lambda: seen.append((db.get_setting("kite_access_token"), db.get_setting("kite_token_day"))))
+        assert al.run_once(only_if_due=False)
+        assert during == ["Kite login"]                        # no heavy job starts while the login saves the token
+        assert seen == [("ACCESS-RT1", today_ist())]           # saved before the restart could happen
+        assert memguard.TURNS.name is None                     # and the turn handed back
+        fresh = KiteService()                                  # the process after the restart
+        fresh.load_saved_token()
+        assert (fresh.access_token, fresh.token_day) == ("ACCESS-RT1", today_ist())
+    finally:
+        w["close"]()
+
+
+def test_the_restart_waits_for_the_running_heavy_step_and_starts_none_after_it(monkeypatch):
+    import threading
+    import time
+
+    from app import kite_auto, leader, memguard
+    exits, order = [], []
+    monkeypatch.setattr(kite_auto.os, "_exit", lambda code: exits.append(code))
+    monkeypatch.setattr(leader.current, "release", lambda: order.append("lease"))
+    step_done = threading.Event()
+
+    def job():
+        with memguard.heavy("an offer document") as got:
+            assert got
+            time.sleep(0.4)
+            order.append("step done")
+        step_done.set()
+    t = threading.Thread(target=job)
+    t.start()
+    time.sleep(0.1)
+    kite_auto.restart_process(delay=0).join(5)
+    t.join(5)
+    assert order == ["step done", "lease"] and exits == [3]
+    assert memguard.TURNS.name == "restart after the Kite login"     # kept: nothing heavy starts before the exit
+    assert memguard.TURNS.acquire("a later job", 0.05) is False
+    memguard.TURNS._owner = memguard.TURNS.name = memguard.TURNS.since = None   # (this test's process goes on)
+    memguard.TURNS._depth = 0
