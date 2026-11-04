@@ -93,6 +93,30 @@ test("an emailed one-time link: its hashed token is traded for the session and t
   await expect.poll(() => verified.length, { timeout: 30_000 }).toBe(2);
   await expect.poll(() => page.url()).not.toMatch(/token_hash/);
   expect(await saved(page)).toBeNull();
+  await expect(page.getByRole("alert").filter({ hasText: "That sign-in didn't finish" })).toBeVisible({ timeout: 30_000 });     // said, not silent (LIVE3-009)
+  expect(errors).toEqual([]);
+});
+
+// LIVE3-009: a sign-in that comes back with a code that can't be traded (started in another browser or app, so this one kept no
+// verifier; or the service refuses it) drops the code from the address and says so in words with Continue with Google, on an
+// app address and on the landing page alike, never a silent sign-in wall with ?code= left in the address.
+test("a sign-in code that can't be traded: the address is cleaned and the page says it didn't finish, with a retry", async ({ page }) => {
+  const errors = await offline(page);
+  const traded: string[] = [];
+  await page.route(`${SB}/token?grant_type=pkce`, (r) => { traded.push(r.request().url()); return r.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "invalid_grant", error_description: "invalid flow state, no valid flow state found" }) }); });
+  // no verifier in this browser: the case of a sign-in begun elsewhere
+  await page.goto("/mine?code=0b1d2c3e-bogus");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("That sign-in didn't finish", { timeout: 30_000 });
+  await expect(page.locator("main")).toContainText("Choose Continue with Google to try again");
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/mine");
+  expect(page.url()).not.toMatch(/code=/);
+  // a verifier kept but the service refuses the code: the landing page says it in its alert line
+  await page.evaluate(() => { sessionStorage.clear(); localStorage.setItem("sb-demo-auth-token-code-verifier", JSON.stringify("v".repeat(56))); });
+  await page.goto("/?code=0b1d2c3e-refused");
+  await expect(page.getByRole("alert").filter({ hasText: "That sign-in didn't finish" })).toBeVisible({ timeout: 30_000 });
+  expect(traded.length).toBeGreaterThan(0);
+  expect(page.url()).not.toMatch(/code=/);
   expect(errors).toEqual([]);
 });
 

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { aboutUsd, usdNote, usePricing } from "../lib/currency";
 import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 import { FEATURES, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
-import { signIn } from "../lib/signin";
+import { signIn, signInUnfinished } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
@@ -225,7 +225,7 @@ export type Slim = "faq" | "about" | "login";
  * whole landing page scrolled down to them: a phone drew the page's top and then jumped about 8,900 px (R22-005). */
 export function Login({ section: asked = null, panel, heading, intro, plansOnly = false, slim }: { section?: string | null; panel?: "login" | "signup"; heading?: string; intro?: string; plansOnly?: boolean; slim?: Slim } = {}) {
   // Google sends a refused or failed sign-in back with ?error= or #error= in the address: say so at the top, in words
-  const [error, setError] = useState<string | null>(() => signInProblem(location.search, location.hash));
+  const [error, setError] = useState<string | null>(() => signInProblem(location.search, location.hash, signInUnfinished()));
   const section = plansOnly || slim ? null : asked;          // the plans page is only the prices: it starts at the top, nothing to scroll to (R22-005)
   const full = !plansOnly && !slim;                           // the whole landing page
   const helpOnly = !plansOnly && slim === "faq" && heading === "Help";       // /help: the questions, with no hero over them
