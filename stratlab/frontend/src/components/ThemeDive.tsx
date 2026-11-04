@@ -5,7 +5,7 @@ import { LineChart } from "./Charts";
 import { bizChange, bizValue, periodName } from "../lib/biz";
 import { filedOn } from "./BizUpdates";
 import { fmtDate, pct, safeHref } from "../lib/format";
-import type { Region } from "../lib/research";
+import type { Co, Region, SectorAI } from "../lib/research";
 import {
   amount, layerLines, pc, points, span, times,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
@@ -47,6 +47,55 @@ function Spk({ row }: { row: BizRow }) {
   return <Spark values={row.points.map((p) => p.value)} label={`${row.name}, ${row.metric}, by month`} tone="neutral" height={24} />;
 }
 
+const MEMBERS_SHOWN = 12;     // a group's first rows; the rest a press away (a theme of 500 drug makers is listed in full)
+
+/** Every company in the theme, by layer (THEMES): the base is every listed company the exchange classifies in the theme's industries,
+ * which the AI can sort into its layers but never removes; the AI's additions from other industries are marked, confirmed in their own
+ * words or not yet. Counts said once, honestly. */
+export function MembersCard({ r, region }: { r: SectorAI; region: Region }) {
+  const p = r.placements;
+  const inLayer = new Set(r.value_chain.flatMap((v) => v.companies.map((c) => c.ticker)));
+  const subOnly = [...new Map(r.sub_themes.flatMap((s) => s.companies).filter((c) => !inLayer.has(c.ticker)).map((c) => [c.ticker, c])).values()];
+  const groups = [...r.value_chain.map((v) => ({ name: v.layer, official: !!v.official, rows: v.companies })),
+    ...(subOnly.length ? [{ name: "Named in a sub-theme only", official: false, rows: subOnly }] : [])].filter((g) => g.rows.length > 0);
+  if (groups.length === 0) return null;
+  const total = p?.total ?? new Set(groups.flatMap((g) => g.rows.map((c) => c.ticker))).size;
+  const base = p?.base ?? 0, added = p?.added ?? 0, inds = p?.industries ?? [];
+  const cols: Column<Co>[] = [
+    { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
+    { key: "i", header: "Industry", wrap: true, cell: (c) => c.industry || dash },
+    { key: "m", header: "Market value", numeric: true, cell: (c) => amount(c.cap ?? null, region) },
+    { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => (c.what ? <>“{c.what}”</> : <span className="k-muted">Not yet confirmed from its own description</span>) },
+    { key: "f", header: "In the theme by", cell: (c) => (c.base ? "Official industry"
+      : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Confirmed by its own words" : "Not yet confirmed"}</span></>) },
+  ];
+  return (
+    <Card id="theme-members" label="Every company in this theme">
+      <CardHead title="Every company in this theme" info="The base is every listed company the exchange's own industry classification puts in the theme's industries: it is in the theme whatever the AI says. The AI sorts companies into layers and adds companies from other industries; an added company stays only while its own description doesn't show otherwise, marked confirmed when its words show the work." />
+      <p className="k-small" data-testid="theme-counts">
+        <b>{total.toLocaleString("en-IN")} compan{total === 1 ? "y" : "ies"}</b>: {base.toLocaleString("en-IN")} from the official industry list, {added.toLocaleString("en-IN")} added
+        {added > 0 && ` (${p?.confirmed ?? 0} confirmed from ${added === 1 ? "its" : "their"} own description)`}.
+      </p>
+      {inds.length > 0
+        ? <p className="k-small k-muted">Official industries: {inds.join(" · ")}.</p>
+        : <p className="k-small k-muted">{p?.industries_by === "pending" ? "The theme's official industries are still being picked; until then the companies are the ones the map names." : "No official industry is this theme's core, so every company here is one the map names, checked against its own description."}</p>}
+      {groups.map((g) => <MemberGroup key={g.name} name={g.name} official={g.official} rows={g.rows} cols={cols} />)}
+    </Card>
+  );
+}
+
+function MemberGroup({ name, official, rows, cols }: { name: string; official: boolean; rows: Co[]; cols: Column<Co>[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? rows : rows.slice(0, MEMBERS_SHOWN);
+  return (
+    <section className="k-stack">
+      <h3 className="k-sub">{name}{official && <span className="k-muted"> · official industry</span>}</h3>
+      <DataTable label={`${name}: companies in the theme`} columns={cols} rows={shown} rowKey={(c) => c.ticker} />
+      {rows.length > MEMBERS_SHOWN && <button type="button" className="btn quiet sm" onClick={() => setAll(!all)}>{all ? `Show the first ${MEMBERS_SHOWN}` : `Show all ${rows.length} companies`}</button>}
+    </section>
+  );
+}
+
 /** The operating figures companies file between results, as a table with a small trend in each row. */
 export function BusinessTable({ rows, label }: { rows: BizRow[]; label: string }) {
   const cols: Column<BizRow>[] = [
@@ -85,6 +134,7 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
     <Card id={`layer-${i}`} label={`Layer ${i + 1}: ${layer.layer}`}>
       <CardHead title={<><span className="k-muted">Layer {i + 1} · </span>{layer.layer}</>} />
       {layer.description && <p className="k-small">{layer.description} <span className="k-muted">(Written by AI from general knowledge, with no figures.)</span></p>}
+      {layer.official && <p className="k-small k-muted">Companies the exchange classifies under this industry that the layers above don't place.</p>}
       {lines.length === 0
         ? <p className="k-small">No listed company is shown for this layer: none of the companies the map named has a description that shows it does this work.</p>
         : <>

@@ -22,6 +22,8 @@ export interface History { years: string[]; ebitda: (number | null)[]; net: (num
 export interface Layer {
   layer: string; description: string; companies: DiveRow[]; n: number; revenue: number | null; line: string | null; history: History | null;
   stats: { ebitda: Stat | null; net: Stat | null; roce: Stat | null }; company_wide: string[]; left_out: number; stats_over: "own" | "all";
+  /** one official industry's companies the AI didn't place in a layer (THEMES) */
+  official?: boolean;
 }
 export interface ChainRow { layer: string; n: number; revenue: number | null; ebitda: number | null; net: number | null; roce: number | null; ebitda_n: number }
 export interface SubCompany { symbol: string; name: string; what: string | null; cap: number | null; sales_1y: number | null; ebitda: number | null; company_wide: boolean; year: string | null }
@@ -32,6 +34,8 @@ export interface Dive {
   layers: Layer[]; chain: { rows: ChainRow[]; line: string | null; highest: string | null; lowest: string | null };
   subs: { name: string; detail: string; companies: SubCompany[] }[];
   placements?: { checked: boolean; pending: number; left_out: number; placed: number; unconfirmed?: number } | null;
+  /** the figures are worked out on `shown` of the theme's `of` companies: every one the AI named, then the largest of the rest */
+  figures?: { shown: number; of: number };
   notable: { kind: "gap" | "move" }[];
   sections: {
     size: { companies: number; with_value: number; total_cap: number | null; biggest: { symbol: string; name: string; cap: number; share: number }[]; top3_share: number | null };
