@@ -384,7 +384,8 @@ def list_changed(name: str, ids: list[str]) -> bool:
 
 
 # a model the provider says doesn't exist (any more) for this key: retired, renamed, or never served to it
-_GONE = re.compile(r"\((?:404|400): .*(no longer available|not found|no such model|does not exist|is not supported|deprecated|retired)", re.I)
+# a model the provider says is gone is retired: a 410 Gone always, a 404 or 400 by its words (a 404 alone can be a wrong address)
+_GONE = re.compile(r"\(410: |\((?:404|400): .*(no longer available|not found|no such model|does not exist|is not supported|deprecated|retired)", re.I)
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)   # a stored Cloudflare id, not a model name
 
 
