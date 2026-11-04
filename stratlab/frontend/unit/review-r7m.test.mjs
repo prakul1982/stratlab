@@ -74,11 +74,16 @@ test("Admin: the AI tile counts what worked last, not what is configured: 5 of 1
     ...["Cerebras", "SambaNova", "Z.ai", "Vercel AI Gateway", "Hugging Face"].map((n) => row(n, "quota")), row("Mistral", "untested")];
   const t = aiTile(ai);
   assert.equal(t.detail, "5 of 11 working · 5 out of credit · 1 not tried yet");
-  assert.equal(t.state, "warn");
+  // out of credit and not tried yet clear by themselves: notes on an OK light, not a Check (owner, 4 Nov); a provider failing on
+  // something only the owner can clear (a key, a model) is the Check
+  assert.equal(t.state, "ok");
   assert.equal(aiTile([row("Groq", "working"), row("Gemini", "failed")]).detail, "1 of 2 working · 1 failing");
+  assert.equal(aiTile([row("Groq", "working"), row("Gemini", "failed", { state_text: "Failing: 401 invalid key" })]).state, "warn");
+  assert.equal(aiTile([row("Groq", "working"), row("Gemini", "failed", { state_text: "Failing: server error 503" })]).state, "ok");
   assert.equal(aiTile([row("Groq", "working"), row("HF", "paused", { answering: false })]).detail, "1 of 2 working · 1 paused");
   assert.equal(aiTile([row("Groq", "working"), row("Gemini", "working")]).state, "ok");
-  assert.equal(aiTile([row("Groq", "working", { paused_models: 1 })]).state, "warn");           // a paused model is never "all working"
+  assert.equal(aiTile([row("Groq", "working", { paused_models: 1 })]).detail, "1 of 1 working · 1 with a model paused");  // a paused model is said, never hidden
+  assert.equal(aiTile([row("Groq", "working", { paused_models: 1 })]).state, "ok");               // ...and it rests by itself
   assert.equal(aiTile([row("Mistral", "untested")]).detail, "0 of 1 working · 1 not tried yet");
   assert.equal(aiTile([row("Groq", "failed", { answering: false })]).state, "bad");
   // an older server sends no last result: the wording it had stays (unit/review-r6o.test.mjs)

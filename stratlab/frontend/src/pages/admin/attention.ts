@@ -2,7 +2,7 @@ import type { HealthState } from "../../components/kit";
 import { IST, ago, dateOnly, fmtDate, istToday, quoteAt } from "../../lib/format";
 import { aiCountText } from "../../lib/connection";
 import { reconnectAt } from "../../lib/dataBack";
-import type { AIRow, InvoiceSeller, JobRow, Overview, Reported } from "./AdminContext";
+import type { AIRow, AutofixStatus, InvoiceSeller, JobRow, Overview, Reported } from "./AdminContext";
 
 /* One reading of the server's status for all of Admin: Overview's lights and "Needs your attention", the rows on Data and
  * jobs and on System all come from services() below, so two pages can never tell the same fact two ways. */
@@ -87,7 +87,10 @@ export function aiTile(ai: AIRow[]): Service {
   const slow = keys.filter((a) => a.result === "working" && (a.paused_models ?? 0) > 0).length;
   const notes = [quota ? `${quota} out of credit` : "", failing ? `${failing} failing` : "", paused ? `${paused} paused` : "",
     untested ? `${untested} not tried yet` : "", slow ? `${slow} with a model paused` : ""].filter(Boolean);
-  const state: HealthState = !keys.length ? "bad" : up === 0 ? "bad" : working < keys.length || slow ? "warn" : "ok";
+  // amber only when a provider needs the owner (a rejected key, a model it can't use): out of free credit, paused, a passing fault on the
+  // provider's side or not measured yet all clear by themselves while the others answer, and are said as notes (owner, 4 Nov: "6 working
+  // of 10 · 2 out of credit · 2 not tried yet" sat on Check every day with nothing to do)
+  const state: HealthState = !keys.length ? "bad" : up === 0 ? "bad" : keys.some(needsOwner) ? "warn" : "ok";
   // the denominator is the providers with a key, said as System says it ("12 of 13 providers set up") when some have none (R8O-008); one denominator, not two ("12" beside "12 of 13"), R7M-008; Settings' Connection check words it the same way (aiCountText)
   return { key: "ai", label: "AI providers", state, to: "/admin/system",
     detail: [aiCountText(working, keys.length, ai.length), ...notes].join(" · ") };
@@ -213,6 +216,18 @@ export const passingFault = (text: string | null | undefined): boolean =>
   /\b(?:server error|5\d\d|timed out|time ?out|overloaded|busy|high demand|rate.?limit|try again|unavailable|temporar\w*)/i.test(String(text ?? ""))
   && !/\b(?:40[0-9]|invalid|rejected|unauthori[sz]ed|forbidden|key)\b/i.test(String(text ?? ""));
 
+/** A provider that can't answer for a reason only the owner can clear: not out of quota or paused (they reset), not a passing fault of
+ * its own (LIVE1C-003). */
+export function needsOwner(a: AIRow): boolean {
+  if (!a.configured || aiUp(a)) return false;
+  // out of free credit or paused resets by itself; not tried yet is measured by the self-healing, which escalates a key it lists nothing for
+  if (a.result === "quota" || a.result === "paused" || a.result === "untested" || (a.result === undefined && a.quota_used)) return false;
+  return !passingFault(a.state_text || a.last_error);
+}
+
+/** Where an Admin path is, in the menu's words. */
+const PAGE: Record<string, string> = { "/admin/data": "Data and jobs", "/admin/system": "System", "/admin/quality": "Quality", "/admin/money": "Money", "/admin/users": "Users and growth" };
+
 /** What needs a look, worst first. Each item says where it is fixed, in the same words as the service's own light. */
 export function attention(ov: Overview | null, reported: Reported | null, jobs: JobRow[] | null): Attention[] {
   if (!ov) return [];
@@ -229,16 +244,23 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   // key reads differently from a fault on our side (R5O-016)
   // a provider out of its free quota or paused resets on its own: one line for them all, nothing to do (DJ-002: four such
   // lines buried the items the owner must act on); a failing one keeps its own line, with its own reason
-  const waits = aiDown.filter((a) => a.result === "quota" || a.result === "paused" || (a.result === undefined && a.quota_used));
   // a provider that is out of quota, resting, or failed on a passing fault of its own (a 5xx, a timeout, a busy server) resets by itself:
   // the AI light on Services says so and System lists each; Needs your attention holds only what the owner must do (LIVE1C-003:
   // "paused … nothing to do" and "Gemini: server error 503" beside an invoice that did need a look)
-  const act = aiDown.filter((a) => !waits.includes(a) && !passingFault(a.state_text || a.last_error));
+  // the self-healing's escalations (owner, 4 Nov): what it couldn't fix, with what was tried and the exact action; a job's own Problem
+  // line already says it (with the retries), so only the others are added, each said once
+  const given = new Map((sv.autofix?.escalated ?? []).map((e) => [e.id, e]));
+  const act = aiDown.filter((a) => needsOwner(a) && !given.has(`ai:${a.name}`));
   for (const a of act) {
     const why = oneLine(a.state_text || a.last_error || "not answering");
     out.push({ text: `AI, ${a.label}: ${why.text}`, ...(why.full ? { full: `AI, ${a.label}: ${why.full}` } : {}), to: "/admin/system", label: "System", bad: false });
   }
-  if (aiDown.length && aiDown.length === aiKeys.length) out.push({ text: "No AI provider is answering, so the idea builder and research reads are off.", to: "/admin/system", label: "System", bad: true });
+  for (const e of given.values()) {
+    if (e.id.startsWith("job:")) continue;
+    out.push({ text: `${e.name}: ${e.problem ?? "not working"}. ${e.tries ? `Fixed automatically ${e.tries} time${e.tries === 1 ? "" : "s"} without luck` : "Only you can fix this"}`
+      + `${e.mailed ? "; you were emailed" : ""}. ${e.action ?? ""}`.trim(), to: e.to, label: PAGE[e.to] ?? "Overview", bad: true });
+  }
+  if (aiDown.length && aiDown.length === aiKeys.length && !given.has("ai:all")) out.push({ text: "No AI provider is answering, so the idea builder and research reads are off.", to: "/admin/system", label: "System", bad: true });
   if (s.mail?.state === "bad") out.push({ text: "Alert emails can't be sent yet: no email service (Resend, Brevo or SMTP) is set up on the server.", to: "/admin/system", label: "System", bad: true });
   // only the errors since this server started are "since the last restart"; ones kept from before it aren't news (R7O-006)
   const errs = errorCounts(sv);
@@ -350,4 +372,18 @@ export function plainServerError(text: string): string | null {
   if (/ReadTimeout|timed out/i.test(t)) return "An outside service (usually the database) didn't answer in time.";
   if (/PoolTimeout/i.test(t)) return "Every database connection was busy, so the request waited too long.";
   return null;
+}
+
+/** The self-healing's rows for Overview (owner, 4 Nov: "Admin shows each auto-fix in a short history"): what is being fixed now, then
+ * what happened in the last week, newest first, each as when · check · what happened ("IPOs · re-ran the job at 4 Nov 11:15 PM IST —
+ * fixed"). */
+export type FixRow = { key: string; at: string | null; name: string; to: string; what: string; tone: "ok" | "warn" | "plain" };
+export function fixRows(af: AutofixStatus | undefined): FixRow[] {
+  if (!af) return [];
+  const now = af.trying.map((t): FixRow => ({ key: `t-${t.id}`, at: t.since, name: t.name, to: t.to, tone: "plain",
+    what: `Being fixed: ${t.problem ?? "a problem"}.${t.tries ? ` Tried ${t.tries} of ${t.of} times.` : ""}${t.next && t.tries < t.of ? ` Next try ${quoteAt(t.next, IST)}.` : t.next ? "" : " Its next run retries it by itself."}` }));
+  const past = af.history.map((h, i): FixRow => ({ key: `h-${i}`, at: h.at, name: h.name, to: h.to,
+    tone: h.event === "fixed" ? "ok" : h.event === "escalated" ? "warn" : "plain",
+    what: h.event === "fixed" ? `${h.text[0].toUpperCase()}${h.text.slice(1)}` : h.event === "escalated" ? `Couldn't fix it; ${h.text}` : `${h.text[0].toUpperCase()}${h.text.slice(1)}` }));
+  return [...now, ...past];
 }
