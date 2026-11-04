@@ -27,6 +27,7 @@ from .connect.redact import redact_ids
 from .ai_reply import (AIBusy, AIConfig, AIError, BadReply, RateLimited, check, extract_json, salvage_items)  # noqa: F401
 from .ai_reply import answer as _message_answer
 from . import ai_rank as R
+from . import ai_spend
 from .ai_rank import _status, status  # noqa: F401  (status: the provider state other modules read)
 from .config import settings
 
@@ -37,7 +38,10 @@ BUDGET = {"quick": 30.0, "research": 60.0, "long": 120.0}       # seconds a whol
 PER_CALL = {"quick": 18.0, "research": 40.0, "long": 80.0}      # seconds one model may take
 MAX_TRIES = 8                                                   # models asked per request, at most
 WAIT_FOR_COOLDOWN = 10.0        # when every model is briefly rate limited, wait this long at most for the first
-CACHE_TTL = {"quick": 6 * 3600, "research": 3600, "long": 12 * 3600}
+# The key is the whole question (job, instructions, facts, reply size), so an answer kept longer is still the answer
+# to exactly those facts; research reads were kept only an hour, now as long as long documents (4 Nov: every repeat
+# answered here is a Claude request not paid for)
+CACHE_TTL = {"quick": 6 * 3600, "research": 12 * 3600, "long": 24 * 3600}
 CACHE_MAX = 400
 
 
@@ -92,6 +96,7 @@ def reset():
     _status.clear()
     cache.clear()
     last_failure.clear()
+    ai_spend.reset()
 
 
 # ---------- which providers ----------
@@ -109,13 +114,39 @@ def _names(task: str) -> tuple[list[str], bool]:
     return [n for n in names if configured(n)], fixed
 
 
-def plan(task: str = "quick", need_tokens: int = 0) -> list[tuple[str, str]]:
-    """(provider, model) in the order a request for this job would ask them right now."""
+def plan(task: str = "quick", need_tokens: int = 0, bulk: bool | None = None) -> list[tuple[str, str]]:
+    """(provider, model) in the order a request for this job would ask them right now. `bulk` (default: inside a
+    bulk() block) is a background job: Claude Haiku only, never Sonnet."""
     names, fixed = _names(task)
-    pairs = R.route(task, names, need_tokens, fixed)
-    if not fixed and (getattr(settings, "AI_PROVIDER", "") or "").lower() == "anthropic":   # older setting: Claude first
-        pairs = [x for x in pairs if x[0] == "anthropic"] + [x for x in pairs if x[0] != "anthropic"]
-    return pairs
+    bulk = _bulk.get() if bulk is None else bulk
+    pairs = R.route(task, names, need_tokens, fixed, bulk)
+    if fixed:
+        return pairs                                    # AI_PROVIDERS names the order by hand: Claude goes where it says
+    if (getattr(settings, "AI_PROVIDER", "") or "").lower() == "anthropic":   # older setting: Claude first for every job
+        return [x for x in pairs if x[0] == "anthropic"] + [x for x in pairs if x[0] != "anthropic"]
+    return claude_place(task, pairs, bulk)
+
+
+def claude_place(task: str, pairs: list[tuple[str, str]], bulk: bool = False) -> list[tuple[str, str]]:
+    """Where Claude goes in a job's chain (owner, 4 Nov: spend the monthly credit where quality shows). Research reads
+    and long documents: Claude first (its models come from this month's spend, ai_spend), the free models after it as
+    the fallback. Quick jobs: the reliable free providers named in AI_QUICK_BEFORE_CLAUDE (Groq) first, then Claude
+    Haiku, then the other free ones. A Claude model paused right now (rate limited, out of budget) stays where the
+    measured order put it: at the end."""
+    now = time.time()
+    claude = [x for x in pairs if x[0] == "anthropic" and R.ready(x[0], x[1], now) == 0]
+    if not claude:
+        return pairs
+    # in the spend's order (Sonnet, then Haiku), not by measured score: Haiku's quick answers mustn't put it ahead of
+    # Sonnet for a research read
+    tier = R.models_for("anthropic", task, bulk)
+    claude.sort(key=lambda x: tier.index(x[1]) if x[1] in tier else len(tier))
+    rest = [x for x in pairs if x not in claude]
+    if task != "quick":
+        return claude + rest
+    first = {n.strip().lower() for n in (getattr(settings, "AI_QUICK_BEFORE_CLAUDE", "groq") or "").split(",") if n.strip()}
+    before = [x for x in rest if x[0] in first and R.ready(x[0], x[1], now) == 0]
+    return before + claude + [x for x in rest if x not in before]
 
 
 def order(kind: str = "quick") -> list[str]:
@@ -153,6 +184,19 @@ _asking_again: contextvars.ContextVar[bool] = contextvars.ContextVar("asking_aga
 
 
 _from_cache: contextvars.ContextVar[bool] = contextvars.ContextVar("answer_from_cache", default=False)
+_bulk: contextvars.ContextVar[bool] = contextvars.ContextVar("ai_bulk", default=False)
+
+
+@contextlib.contextmanager
+def bulk():
+    """Inside the block every complete() is a background or batch job (the daily filing reader, the IPO catch-up): it
+    asks Claude Haiku 5.5 only, never Sonnet, so this month's Sonnet share goes to the reads a person is waiting for
+    (owner, 4 Nov). A user's own request for the same read keeps Sonnet first."""
+    tok = _bulk.set(True)
+    try:
+        yield
+    finally:
+        _bulk.reset(tok)
 
 
 def last_from_cache() -> bool:
@@ -171,7 +215,7 @@ def ask_again():
 
 
 def complete(system: str, text: str, gemini=None, anthropic=None, transport=None, max_tokens: int = 1500,
-             kind: str = "quick", want_json: bool = True, use_cache: bool = True) -> str:
+             kind: str = "quick", want_json: bool = True, use_cache: bool = True, bulk: bool | None = None) -> str:
     """Ask the best available models in turn and return the first checked reply (a JSON object, unless
     want_json=False). `kind` is the job: "quick", "research" or "long". `gemini`/`anthropic` replace those
     providers with a plain function (tests); the app's own wrappers are marked `_builtin` and ignored."""
@@ -191,7 +235,7 @@ def complete(system: str, text: str, gemini=None, anthropic=None, transport=None
     overrides = {n: f for n, f in (("gemini", gemini), ("anthropic", anthropic)) if callable(f) and not getattr(f, "_builtin", False)}
     need = int((len(system) + len(text)) / 3.5) + max_tokens
     pairs, seen = [], set()
-    for name, model in plan(task, need):
+    for name, model in plan(task, need, bulk):
         if name in overrides:
             if name in seen:
                 continue
@@ -219,7 +263,8 @@ def complete(system: str, text: str, gemini=None, anthropic=None, transport=None
                 if name in overrides:
                     out = _override(overrides[name], name, system, text, max_tokens, want_json)
                 else:
-                    out = R.ask_model(name, model, system, text, max_tokens, want_json, min(deadline, now + PER_CALL[task]), transport)
+                    out = R.ask_model(name, model, system, text, max_tokens, want_json, min(deadline, now + PER_CALL[task]), transport,
+                                      task=task)
             except CallError as e:
                 errors.append(f"{LABELS[name]} · {model}: {e.detail}")
                 if e.scope == "provider" or e.kind in ("auth", "credit", "transient"):
@@ -308,7 +353,11 @@ def test_all(gemini=None, anthropic=None, transport=None) -> list[dict]:
     out = []
     for name in names:
         t0, error, model, quota = time.time(), None, None, False
-        models = ["default"] if name in overrides else R.in_use(name)[:2]
+        # Claude (paid) is asked only here, when the owner presses Test: one tiny question to the cheapest model it may use
+        models = ["default"] if name in overrides else R.models_for(name, "quick")[:1] if name == "anthropic" else R.in_use(name)[:2]
+        if not models:
+            error = "this month's Claude budget is used up; the free models answer until the month turns" \
+                if name == "anthropic" else "no model to ask"
         for m in models:
             try:
                 if name in overrides:
@@ -419,7 +468,7 @@ def _provider_view(name: str, now: float) -> dict:
     is_on = configured(name)
     use = R.in_use(name) if is_on else []
     pin_admin = R.pins().get(name)
-    pin_env = model_setting(name) if name != "anthropic" else ""
+    pin_env = model_setting(name)          # Anthropic too: ANTHROPIC_MODEL is a pin now ("auto" by default), not the only model
     listed = list(dict.fromkeys(use + list(st.order) + [m for m, s in st.models.items() if s.probe_tries or s.live]))
     # a model no job can use (a music or agent model measured before the filter knew it) isn't listed, unless it is in
     # use, pinned or blocked (DJ-036: "lyria-3-clip-preview" among the chat models)
@@ -521,6 +570,7 @@ def admin_view() -> dict:
         routes[task] = {"label": TASK_LABELS[task], "budget_s": BUDGET[task], "steps": steps[:10]}
     return {"providers": views, "routes": routes,
             "cache": {"entries": len(cache.items), "hits": cache.hits, "misses": cache.misses},
+            "claude": ai_spend.view(),
             "rerank_every_hours": R.RERANK_EVERY / 3600, "last_failure": dict(last_failure) or None}
 
 

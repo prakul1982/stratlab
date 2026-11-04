@@ -79,6 +79,9 @@ function view(pinned: string | null, blocked: string[]) {
       long: { label: "Long documents", budget_s: 120, steps: [] },
     },
     cache: { entries: 12, hits: 30, misses: 70 }, rerank_every_hours: 6,
+    claude: { month: "2026-11", known: true, usd: 12.3456, cap_usd: 99, sonnet_until_usd: 75, requests: 140, input_tokens: 90000,
+      output_tokens: 61000, cache_write_tokens: 20000, cache_read_tokens: 90000, cache_hit_share: 0.45, refusals: 0, tier: "sonnet",
+      resets_at: now() + 26 * 86400, models: { "claude-sonnet-5-5": { usd: 12.1, requests: 90 }, "claude-haiku-5-5": { usd: 0.2456, requests: 50 } } },
     last_failure: { at: now() - 600, task: "research", detail: "No AI model could answer. Groq · openai/gpt-oss-120b: timed out" },
   };
 }
@@ -116,6 +119,12 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
   await expect(mistral.getByText(/Free quota resets in 3 h/)).toBeVisible();
   await expect(panel.getByText(/Groq · llama-3.3-70b-versatile → Mistral · mistral-small-latest \(paused\)/)).toBeVisible();
   await expect(panel.getByText(/30% of questions since the last restart were answered from the cache/)).toBeVisible();
+  // the Claude spend against the owner's monthly credit (AI lane, 4 Nov)
+  await expect(panel.getByText("Claude this month: $12 of $99 cap (Sonnet until $75)")).toBeVisible();
+  await expect(panel.getByText(/140 requests · 2,00,000 prompt tokens \(45% read from the cache\)/)).toBeVisible();
+  const spend = panel.getByRole("table", { name: "Claude spend by model this month" });
+  await expect(spend.getByRole("row")).toHaveCount(3);
+  await expect(spend.getByText("$12.10")).toBeVisible();
   await expect(panel.getByText(/Last time nothing could answer/)).toBeVisible();
   // the providers with no key are one click away, not 12 set-up guides on the page
   const more = panel.locator("[aria-label='More free providers']");

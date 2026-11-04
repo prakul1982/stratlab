@@ -386,7 +386,7 @@ def test_a_measuring_stopped_on_used_up_credit_is_out_of_credit_not_untested():
     st = SimpleNamespace(rank_error="stopped measuring: the free credit is used up", last_ok=None, last_error=None, last_error_at=None,
                          last_error_kind=None, quota=False, config_error=False)
     assert P.measured_result(st) == "quota"
-    assert P.last_result("cerebras", st, True, False, False, [], time.time()) == "quota"
+    assert P.last_result("sambanova", st, True, False, False, [], time.time()) == "quota"
     assert P.measured_result(SimpleNamespace(rank_error="stopped measuring: the key was rejected (401)")) == "failed"
     assert P.measured_result(SimpleNamespace(rank_error="stopped measuring: rate limited (429)")) is None
     assert P.measured_result(SimpleNamespace(rank_error=None)) is None

@@ -72,13 +72,16 @@ def test_order_uses_only_configured_providers(monkeypatch):
     assert P.order() == ["gemini", "groq"]
     monkeypatch.setattr(settings, "AI_PROVIDERS", "auto")
     keys(monkeypatch, "anthropic")
-    assert P.order()[-1] == "anthropic"                         # paid: always last
-    monkeypatch.setattr(settings, "AI_PROVIDER", "anthropic")   # the older setting puts Claude first
+    # owner, 4 Nov (was "paid: always last"): quick jobs ask Groq, then Claude Haiku, then the other free ones;
+    # research and long reads ask Claude first while the monthly credit lasts
+    assert P.order() == ["groq", "anthropic", "gemini"] and P.order("research")[0] == "anthropic"
+    assert next(x for x in P.plan("quick") if x[0] != "groq") == ("anthropic", "claude-haiku-5-5")
+    monkeypatch.setattr(settings, "AI_PROVIDER", "anthropic")   # the older setting puts Claude first for every job
     assert P.order()[0] == "anthropic"
 
 
 def test_research_uses_its_own_order(monkeypatch):
-    keys(monkeypatch, "groq", "cerebras", "mistral", "gemini")
+    keys(monkeypatch, "groq", "sambanova", "mistral", "gemini")
     assert P.order()[0] == "groq"                                 # quick jobs: fastest first
     assert P.order("research")[-1] == "groq"                      # long reads keep Groq's small daily token cap
     monkeypatch.setattr(settings, "AI_PROVIDERS", "gemini,groq")
@@ -92,7 +95,9 @@ def test_research_uses_its_own_order(monkeypatch):
 def test_prototype_only_providers_come_after_every_production_one(monkeypatch):
     keys(monkeypatch, "nvidia", "huggingface", "anthropic")
     o = P.order()
-    assert o[0] == "huggingface" and o[1] == "nvidia" and o[2] == "anthropic"
+    # the prototype-only provider still comes after the production-ready one; Claude Haiku now goes before both for a
+    # quick job with no Groq key (owner, 4 Nov: Haiku before the flaky free ones; was last)
+    assert o == ["anthropic", "huggingface", "nvidia"]
 
 
 def test_cloudflare_needs_its_account_id_too(monkeypatch):
@@ -125,7 +130,7 @@ def test_groq_answers_with_its_best_default_model(monkeypatch):
 
 
 def test_retries_without_json_mode(monkeypatch):
-    keys(monkeypatch, "cerebras")
+    keys(monkeypatch, "sambanova")
     assert "entry" in P.complete("s", "t", transport=fake(reject_json_mode=True))
 
 
@@ -144,11 +149,11 @@ def test_json_validation_failure_retries_without_json_mode(monkeypatch):
 
 
 def test_falls_through_to_next_provider_and_cools_down(monkeypatch):
-    keys(monkeypatch, "cerebras", "gemini")
-    monkeypatch.setattr(settings, "AI_PROVIDERS", "cerebras,gemini")
+    keys(monkeypatch, "sambanova", "gemini")
+    monkeypatch.setattr(settings, "AI_PROVIDERS", "sambanova,gemini")
     out = P.complete("s", "t", gemini=lambda s, t, **k: "```json\n" + GOOD + "\n```", transport=fake(status=429))
     assert "entry" in out
-    assert P.status("cerebras").cooldown_until > time.time() and "rate limited" in P.status("cerebras").last_error
+    assert P.status("sambanova").cooldown_until > time.time() and "rate limited" in P.status("sambanova").last_error
     seen = []                                                    # while cooling down, Cerebras isn't even asked
     P.complete("s", "t2", gemini=lambda s, t, **k: GOOD, transport=fake(seen=seen))
     assert seen == []
@@ -214,18 +219,20 @@ def test_long_documents_skip_models_whose_context_is_too_small(monkeypatch):
 
 # ---------- reasoning models ----------
 def test_empty_reply_gets_one_second_chance_with_more_room_then_the_next_model(monkeypatch):
-    keys(monkeypatch, "cerebras")
+    keys(monkeypatch, "sambanova")
     seen = []
 
     def handler(req: httpx.Request):
         body = json.loads(req.content)
         seen.append(body)
-        # IA-2 item 45: Cerebras retired llama-3.3-70b and qwen-3-235b-a22b-instruct-2507 (404), so its list starts at gpt-oss-120b
         if body["model"] == "gpt-oss-120b":
             return chat(None, "length")
         return chat()
+    # a reasoning model first (on Cerebras before it was removed, 4 Nov): SambaNova's list from gpt-oss-120b on
+    R.block("sambanova", "Meta-Llama-3.3-70B-Instruct")
+    R.block("sambanova", "DeepSeek-V3.1")
     out = P.complete("s", "t", transport=httpx.MockTransport(handler))
-    assert "entry" in out and [b["model"] for b in seen] == ["gpt-oss-120b", "gpt-oss-120b", "llama3.1-8b"]
+    assert "entry" in out and [b["model"] for b in seen] == ["gpt-oss-120b", "gpt-oss-120b", "Llama-4-Maverick-17B-128E-Instruct"]
     assert seen[1]["max_tokens"] >= 8000                          # it ran out of room while reasoning: more room
     thinker = seen[0]
     assert thinker["reasoning_effort"] == "low" and thinker["max_tokens"] >= 4000
@@ -260,14 +267,14 @@ def test_a_reasoning_model_that_json_mode_stops_is_asked_again_without_it(monkey
     {"content": None, "reasoning": "hmm <answer>" + GOOD + "</answer>"},
 ])
 def test_every_reply_shape_reasoning_models_send_is_read(monkeypatch, message):
-    keys(monkeypatch, "cerebras")
+    keys(monkeypatch, "sambanova")
     out = P.complete("s", "t", transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"choices": [{"message": message, "finish_reason": "stop"}]})))
     assert json.loads(out)["entry"]
 
 
 def test_raw_reasoning_without_a_marked_answer_is_never_used(monkeypatch):
     # an unmarked trace may hold a draft JSON object: it must not be passed off as the answer
-    keys(monkeypatch, "cerebras")
+    keys(monkeypatch, "sambanova")
     with pytest.raises(P.AIBusy) as e:
         P.complete("s", "t", transport=httpx.MockTransport(lambda r: chat(None, reasoning="Maybe " + GOOD + " or not.")))
     assert "empty reply" in e.value.detail
@@ -277,7 +284,7 @@ def test_raw_reasoning_without_a_marked_answer_is_never_used(monkeypatch):
 
 
 def test_reasoning_models_are_asked_to_think_little_with_room_to_answer():
-    cer = C.body_for("cerebras", "qwen-3.8-27b", "s", "t", 1500, True)
+    cer = C.body_for("groq", "qwen/qwen3.8-27b", "s", "t", 1500, True)   # Cerebras (removed 4 Nov) did the same
     assert cer["reasoning_effort"] == "none" and cer["max_tokens"] >= 3000 and cer["messages"][1]["content"].endswith("/no_think")
     assert C.body_for("groq", "openai/gpt-oss-120b", "s", "t", 1500, True)["reasoning_effort"] == "low"
     sam = C.body_for("sambanova", "gemma-4-31B-it", "s", "t", 1500, True)
@@ -395,7 +402,7 @@ def test_a_long_rate_limit_fails_fast(monkeypatch):
 
 # ---------- time budget, timeouts and circuit breakers ----------
 def test_timeouts_move_on_and_the_time_budget_caps_the_wait(monkeypatch):
-    keys(monkeypatch, "groq", "cerebras", "mistral", "sambanova")
+    keys(monkeypatch, "groq", "openrouter", "mistral", "sambanova")
     clock = [time.time()]
     monkeypatch.setattr(P.time, "time", lambda: clock[0])
     calls = []
@@ -624,10 +631,15 @@ def test_a_database_that_cant_be_read_means_defaults_now_and_another_read_later(
 
 
 def test_each_provider_is_re_ranked_on_its_own_schedule(monkeypatch):
-    keys(monkeypatch, "groq", "huggingface", "anthropic")
-    assert R.stale("groq") and R.stale("huggingface") and not R.stale("anthropic")    # the paid one: only when asked
-    P.status("groq").ranked_at = P.status("huggingface").ranked_at = time.time() - 7 * 3600
-    assert R.stale("groq") and not R.stale("huggingface")                  # its tiny credit: every 3 days
+    # owner, 4 Nov (was every 6 hours, Hugging Face every 3 days): once a day, and never on a schedule where measuring
+    # spends what real answers need: the paid one, a tiny credit (Hugging Face), a tight daily cap (Groq)
+    keys(monkeypatch, "mistral", "groq", "huggingface", "sambanova", "anthropic")
+    assert R.stale("mistral") and not R.stale("anthropic") and not R.stale("huggingface") and not R.stale("groq") \
+        and not R.stale("sambanova")
+    P.status("mistral").ranked_at = time.time() - 7 * 3600
+    assert not R.stale("mistral")                                          # measured 7 hours ago: not again yet
+    P.status("mistral").ranked_at = time.time() - 25 * 3600
+    assert R.stale("mistral")
     assert not R.stale("gemini")                                           # no key
 
 
@@ -653,7 +665,8 @@ def test_gemini_native_turns_thinking_off_and_reads_the_answer(monkeypatch):
     assert "entry" in P.complete("s", "t", transport=httpx.MockTransport(handler))
     path, body = seen[0]
     assert path.endswith("/models/gemini-3.5-flash:generateContent")
-    assert body["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0} and body["generationConfig"]["responseMimeType"] == "application/json"
+    # Gemini 3 takes a thinking level, not a budget (4 Nov: thinkingBudget 0 got "invalid argument" or timed out)
+    assert body["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"} and body["generationConfig"]["responseMimeType"] == "application/json"
 
 
 def test_gemma_through_gemini_gets_its_instructions_in_the_message(monkeypatch):
@@ -688,18 +701,19 @@ def test_gemini_cut_off_at_the_length_limit_is_retried_with_room(monkeypatch):
     assert calls[1] > calls[0]
 
 
-def test_anthropic_is_asked_last_and_read(monkeypatch):
-    keys(monkeypatch, "anthropic", "mistral")
+def test_anthropic_is_asked_after_groq_for_quick_jobs_and_read(monkeypatch):
+    # owner, 4 Nov (was "asked last"): a quick job asks Groq first, then Claude Haiku before the other free providers
+    keys(monkeypatch, "anthropic", "mistral", "groq")
     hosts = []
 
     def handler(req: httpx.Request):
         hosts.append(req.url.host)
-        if req.url.host == "api.mistral.ai":
-            return httpx.Response(529 if False else 503, json={"error": "overloaded"})
+        if req.url.host == "api.groq.com":
+            return httpx.Response(503, json={"error": "down"})
         assert req.headers["x-api-key"] == "k-anthropic" and req.headers["anthropic-version"]
         return httpx.Response(200, json={"content": [{"type": "text", "text": GOOD}], "stop_reason": "end_turn"})
     assert "entry" in P.complete("s", "t", transport=httpx.MockTransport(handler))
-    assert hosts[0] == "api.mistral.ai" and hosts[-1] == "api.anthropic.com"
+    assert hosts[0] == "api.groq.com" and hosts[-1] == "api.anthropic.com" and "api.mistral.ai" not in hosts
 
 
 def test_the_apps_wrappers_use_the_layer_itself(monkeypatch):
@@ -799,18 +813,19 @@ def test_a_refresh_asks_the_provider_again_instead_of_the_answer_cache(monkeypat
 
 
 def test_a_rejected_key_backs_the_automatic_rerank_off_and_it_grows_to_a_cap(monkeypatch):
-    keys(monkeypatch, "groq")
+    # on Mistral: Groq, which this used, isn't measured on a schedule any more (its tight daily cap, 4 Nov)
+    keys(monkeypatch, "mistral")
     R._auth_fails.clear()
     t = httpx.MockTransport(lambda r: httpx.Response(401, json={"error": {"message": "Invalid API Key"}}))
-    P.status("groq").ranked_at = 0.0
-    assert R.stale("groq")
-    P.rerank(["groq"], transport=t, wait=True)
-    assert not R.stale("groq") and 0 < R.auth_wait("groq") <= R.AUTH_BACKOFF_BASE
-    first = R.auth_wait("groq")
-    R._auth_fails["groq"] = (3, time.time())
-    assert R.auth_wait("groq") > first * 3
-    R._auth_fails["groq"] = (30, time.time())
-    assert R.auth_wait("groq") <= R.AUTH_BACKOFF_MAX
-    R._auth_fails["groq"] = (1, time.time() - R.AUTH_BACKOFF_BASE - 1)
-    assert R.auth_wait("groq") == 0 and R.stale("groq")
+    P.status("mistral").ranked_at = 0.0
+    assert R.stale("mistral")
+    P.rerank(["mistral"], transport=t, wait=True)
+    assert not R.stale("mistral") and 0 < R.auth_wait("mistral") <= R.AUTH_BACKOFF_BASE
+    first = R.auth_wait("mistral")
+    R._auth_fails["mistral"] = (3, time.time())
+    assert R.auth_wait("mistral") > first * 3
+    R._auth_fails["mistral"] = (30, time.time())
+    assert R.auth_wait("mistral") <= R.AUTH_BACKOFF_MAX
+    R._auth_fails["mistral"] = (1, time.time() - R.AUTH_BACKOFF_BASE - 1)
+    assert R.auth_wait("mistral") == 0 and R.stale("mistral")
     R._auth_fails.clear()

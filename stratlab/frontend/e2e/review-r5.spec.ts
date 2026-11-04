@@ -387,7 +387,7 @@ test.describe("what a visitor's browser loads and keeps (R5V-020, R5V-022)", () 
     await expect(main).toContainText("Before you sign in");
     await expect(main).toContainText("ph_");
     await expect(main).toContainText("not to any account");
-    await expect(main).toContainText("any of these eleven: Anthropic, Cerebras, Cloudflare Workers AI");
+    await expect(main).toContainText("any of these eleven: Anthropic, Cloudflare Workers AI, Google Gemini");
     await expect(main).not.toContainText("such as Groq");
     await open(page, "/contact");
     await expect(page.locator("main")).not.toContainText(/GSTIN|Address:/, { timeout: 30_000 });

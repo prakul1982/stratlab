@@ -65,8 +65,6 @@ class Settings:
     AI_PROVIDER = _env("AI_PROVIDER", "gemini")          # older setting: "anthropic" puts Claude first
     GROQ_API_KEY = _env("GROQ_API_KEY")
     GROQ_MODEL = _env("GROQ_MODEL", "auto")
-    CEREBRAS_API_KEY = _env("CEREBRAS_API_KEY")
-    CEREBRAS_MODEL = _env("CEREBRAS_MODEL", "auto")
     SAMBANOVA_API_KEY = _env("SAMBANOVA_API_KEY")
     SAMBANOVA_MODEL = _env("SAMBANOVA_MODEL", "auto")
     MISTRAL_API_KEY = _env("MISTRAL_API_KEY")
@@ -86,7 +84,12 @@ class Settings:
     NVIDIA_API_KEY = _env("NVIDIA_API_KEY")                         # NVIDIA API catalog: free for development (asked late)
     NVIDIA_MODEL = _env("NVIDIA_MODEL", "auto")
     ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
-    ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
+    ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "auto")               # "auto": this month's spend picks Sonnet 5.5 or Haiku 5.5
+    ANTHROPIC_MONTHLY_CAP_USD = float(_env("ANTHROPIC_MONTHLY_CAP_USD", "99") or 99)     # Claude is skipped from here until the month turns
+    ANTHROPIC_SONNET_UNTIL_USD = float(_env("ANTHROPIC_SONNET_UNTIL_USD", "75") or 75)   # research/long use Sonnet 5.5 below this, Haiku 5.5 above
+    AI_QUICK_BEFORE_CLAUDE = _env("AI_QUICK_BEFORE_CLAUDE", "groq")  # free providers quick jobs ask before Claude Haiku
+    OLLAMA_API_KEY = _env("OLLAMA_API_KEY")                         # Ollama Cloud: a light free plan
+    OLLAMA_MODEL = _env("OLLAMA_MODEL", "auto")
 
     # Research: US company data (free key at finnhub.io). India uses Screener.in, Yahoo and Kite, no key needed.
     FINNHUB_API_KEY = _env("FINNHUB_API_KEY")

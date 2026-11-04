@@ -2,8 +2,8 @@
 
 For every provider with a key: list its models, drop the ones that can't do the job (ai_catalog.unusable), ask each
 of the rest two small fixed questions (a JSON-shaped answer, and a short English finance question) and keep the few
-that answer correctly and fast. That is re-done every 6 hours, when the Admin page asks, and when a provider's models
-stop working. Results are stored in app_settings ("ai:rank:<provider>"), so a restart doesn't start from nothing,
+that answer correctly and fast. That is re-done once a day, when the Admin page asks, and when a provider's models
+stop working; the daily pass never spends a scarce or used-up free quota on measuring (owner, 4 Nov). Results are stored in app_settings ("ai:rank:<provider>"), so a restart doesn't start from nothing,
 and the curated defaults in ai_catalog cover the very first start.
 
 Every real request also counts: successes, failures and how long each took are kept per model, and a circuit
@@ -20,12 +20,14 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
-from . import leader
+from . import ai_spend, leader
 from .ai_catalog import PROVIDERS, TASKS, configured, model_setting, size_b, strength, thinks, unusable
 from .ai_clients import CallError, client
 from .ai_reply import BadReply, check, extract_json, remaining
 
-RERANK_EVERY = 6 * 3600         # seconds between automatic re-ranks
+RERANK_EVERY = 24 * 3600        # seconds between automatic re-ranks (4 Nov: every 6 hours spent the free daily quotas)
+LOW_REQUESTS = 20               # a provider saying fewer requests than this are left today isn't measured: keep them for answers
+LIVE_ENOUGH = 8                 # a model with this many real requests in the last day is measured by them, not by test questions
 IN_USE = 3                      # models kept per provider
 HEAL_GAP = 30 * 60              # a provider whose models all stopped working is re-ranked at most this often
 SAVE_GAP = 10 * 60              # live numbers are saved at most this often
@@ -61,12 +63,21 @@ class DbStore:
             pass
 
 
+    def get(self, key: str) -> str | None:
+        """One setting; raises when the database can't be read (the spend meter must not take that for nothing spent)."""
+        from . import db
+        return db.get_setting(key)
+
+
 class MemoryStore:
     def __init__(self):
         self.data: dict[str, str] = {}
 
     def get_all(self) -> dict:
         return dict(self.data)
+
+    def get(self, key: str) -> str | None:
+        return self.data.get(key)
 
     def set(self, key: str, value: str) -> None:
         self.data[key] = value
@@ -329,9 +340,22 @@ def pinned(name: str) -> str:
 
 
 # ---------- which models, in which order ----------
+def models_for(name: str, task: str, bulk: bool = False) -> list[str]:
+    """The models this job asks at this provider. Claude's come from this month's spend (ai_spend: Sonnet 5.5, then
+    Haiku 5.5, none at the cap; Haiku only for a background job), a pin still winning; every other provider's are its
+    measured ones (in_use)."""
+    if name != "anthropic":
+        return in_use(name)
+    p = pinned(name)
+    p = p if p and not blocked(name, p) and not pin_gone(name, p) else ""
+    return [m for m in ai_spend.claude_models(task, p, bulk) if not blocked(name, m)]
+
+
 def in_use(name: str) -> list[str]:
     """The provider's models to try, best first: the pinned one alone, else the measured top few, else (before any
     measurement) the curated defaults. Blocked models never."""
+    if name == "anthropic":
+        return models_for(name, "research")
     p = pinned(name)
     if p and not blocked(name, p) and not pin_gone(name, p):      # a blocked pin (Railway's too) holds nothing
         return [p]
@@ -397,12 +421,12 @@ def score(name: str, model: str, task: str) -> float:
     return round(out, 2)
 
 
-def route(task: str, names: list[str], need_tokens: int = 0, fixed: bool = False) -> list[tuple[str, str]]:
+def route(task: str, names: list[str], need_tokens: int = 0, fixed: bool = False, bulk: bool = False) -> list[tuple[str, str]]:
     """(provider, model) pairs to try for this job, best first. With `fixed`, providers keep the given order (the
     AI_PROVIDERS setting) and only their models are sorted."""
     rows = []
     for name in names:
-        for m in in_use(name):
+        for m in models_for(name, task, bulk):
             ctx = stats(name, m).ctx or PROVIDERS[name].ctx
             if need_tokens and ctx and need_tokens > ctx * 0.9:
                 continue                                              # the document wouldn't fit
@@ -475,8 +499,8 @@ def record_fail(name: str, model: str, err: Exception, live: bool = True) -> str
         "empty": f"empty reply ({model})", "not_json": f"reply wasn't the JSON asked for ({model})",
         "truncated": f"reply was cut off ({model})"}.get(getattr(err, "why", ""), f"unusable reply ({model})")
     with _lock:
-        if kind == "context":
-            return detail                                  # the wrong model for this prompt, not a fault
+        if kind in ("context", "refusal"):
+            return detail                                  # the wrong model for this prompt (or it declined it), not a fault
         if kind in ("rate", "credit"):
             wait = err.wait
             if kind == "credit":
@@ -519,14 +543,14 @@ def record_fail(name: str, model: str, err: Exception, live: bool = True) -> str
 
 # ---------- one request to one model ----------
 def ask_model(name: str, model: str, system: str, text: str, max_tokens: int, want_json: bool, deadline: float,
-              transport=None, live: bool = True) -> str:
+              transport=None, live: bool = True, task: str = "quick") -> str:
     """Ask, check the reply, and record the outcome. An empty or cut-off reply gets one second chance with more
     room (and without JSON mode, which stops some reasoning models before they start). Raises CallError or BadReply."""
     c = client(name, transport)
     room, json_mode, t0 = max_tokens, want_json, time.time()
     for second in (False, True):
         try:
-            reply = c.call(model, system, text, room, json_mode, deadline)
+            reply = c.call(model, system, text, room, json_mode, deadline, task=task)
             out = check(reply.text, reply.finish, want_json)
         except BadReply as e:
             if not second and e.why in ("empty", "truncated") and deadline - time.time() > 4:
@@ -640,10 +664,34 @@ def candidates(name: str, listed: list[dict] | None) -> tuple[list[str], dict, d
     return (known + rest)[:p.probe_max], skipped, ctx
 
 
-def rerank(name: str, transport=None) -> Status:
-    """Measure the provider's models now and keep the best few. Runs for up to a few minutes."""
+def _requests_low(st: Status, now: float | None = None) -> bool:
+    """The provider's last answer said fewer than LOW_REQUESTS requests are left before its reset (and that reset
+    hasn't come yet)."""
+    now = time.time() if now is None else now
+    left, at, reset = st.remaining.get("requests"), st.remaining.get("at"), st.remaining.get("requests_reset")
+    if not isinstance(left, (int, float)) or left >= LOW_REQUESTS or not at:
+        return False
+    return now < at + (reset if isinstance(reset, (int, float)) and reset > 0 else 24 * 3600)
+
+
+def _quota_limited(st: Status, now: float | None = None) -> bool:
+    """Its free quota is used up right now (it resets on its own)."""
+    now = time.time() if now is None else now
+    return bool(st.quota and max(st.cooldown_until, st.quota_reset or 0) > now)
+
+
+def _live_measured(s: ModelStats, now: float | None = None) -> bool:
+    """Real requests measured this model within the last day: the daily pass needn't ask it the test questions."""
+    now = time.time() if now is None else now
+    return len(s.live) >= LIVE_ENOUGH and max(s.last_ok_at or 0, s.last_error_at or 0) > now - 24 * 3600
+
+
+def rerank(name: str, transport=None, auto: bool = False) -> Status:
+    """Measure the provider's models now and keep the best few. Runs for up to a few minutes. `auto` (the daily
+    pass) spends as little free quota as it can: models real requests already measured today aren't asked, and it
+    stops when the provider says few requests are left. The paid provider is never measured (the Test button asks it)."""
     st = status(name)
-    if not configured(name):
+    if not configured(name) or PROVIDERS[name].terms == "paid":
         return st
     with _lock:
         if st.probing:
@@ -672,9 +720,16 @@ def rerank(name: str, transport=None) -> Status:
         if p and not blocked(name, p) and p not in cands:
             cands = [p] + cands[:PROVIDERS[name].probe_max - 1]
         st.discovered, st.skipped = (len(listed) if listed is not None else None), skipped
+        measured_live = set()
         for m in cands:
             s = stats(name, m)
             s.ctx = ctx.get(m) or s.ctx
+            if auto and _live_measured(s):
+                measured_live.add(m)
+                continue
+            if auto and _requests_low(st):
+                st.rank_error = "measured part of its models: the free requests left today are kept for real answers"
+                break
             res = probe(name, m, transport)
             with _lock:
                 s.probe_ok, s.probe_tries, s.probe_ms = res["ok"], res["tries"], res["ms"]
@@ -684,7 +739,8 @@ def rerank(name: str, transport=None) -> Status:
                 for later in cands[cands.index(m) + 1:]:
                     stats(name, later).probe_error = "not measured (provider unavailable)"
                 break
-        good = [m for m in cands if stats(name, m).probe_ok > 0]
+        good = [m for m in cands if stats(name, m).probe_ok > 0
+                or (m in measured_live and sum(ok for ok, _ in stats(name, m).live) * 2 >= len(stats(name, m).live))]
         neutral = lambda m: (score(name, m, "quick") + score(name, m, "research")) / 2   # noqa: E731
         with _lock:
             if st.keep_order:
@@ -702,12 +758,12 @@ def rerank(name: str, transport=None) -> Status:
         st.probing = False
 
 
-def rerank_many(names: list[str], transport=None, workers: int = 4):
+def rerank_many(names: list[str], transport=None, workers: int = 4, auto: bool = False):
     names = [n for n in names if configured(n)]
     if not names:
         return
     with ThreadPoolExecutor(max_workers=min(workers, len(names))) as ex:
-        list(ex.map(lambda n: rerank(n, transport), names))
+        list(ex.map(lambda n: rerank(n, transport, auto), names))
 
 
 def start_rerank(names: list[str], transport=None) -> list[str]:
@@ -741,14 +797,20 @@ def auth_wait(name: str) -> float:
 
 
 def stale(name: str) -> bool:
-    """Due for its automatic re-rank (every 6 hours; less often where measuring costs scarce credit; never for the
-    paid provider, which is measured only when the Admin page asks)."""
-    every = PROVIDERS[name].probe_every_h * 3600
-    return configured(name) and every > 0 and time.time() - status(name).ranked_at > every and not auth_wait(name)
+    """Due for its automatic re-rank: once a day, and never where measuring would spend what answers need (owner, 4 Nov:
+    Cerebras, Z.ai and Hugging Face showed "free credit used up when last measured"): not the paid provider, not one
+    measured only when the Admin page asks, not one with a tight daily allowance, not while its free quota is used up,
+    and not when it said few requests are left before its reset."""
+    p, now = PROVIDERS[name], time.time()
+    every = p.probe_every_h * 3600
+    if not configured(name) or every <= 0 or p.terms == "paid" or p.tight_daily_tokens or auth_wait(name):
+        return False
+    st = status(name)
+    return now - st.ranked_at > every and not _quota_limited(st, now) and not _requests_low(st, now)
 
 
 class RerankJob:
-    """Re-ranks every provider with a key every 6 hours (checked every 10 minutes), starting shortly after boot."""
+    """Re-ranks the providers that are due (stale: once a day) every 10 minutes' check, starting shortly after boot."""
 
     def __init__(self, first_wait: float = 90, every: float = 600):
         self.first_wait, self.every, self.started = first_wait, every, False
@@ -764,7 +826,7 @@ class RerankJob:
         while True:
             try:
                 if leader.leading():      # another container leads: it runs this pass
-                    rerank_many([n for n in PROVIDERS if stale(n)])
+                    rerank_many([n for n in PROVIDERS if stale(n)], auto=True)
             except Exception:  # noqa: BLE001  (a bug here must not end the loop)
                 pass
             time.sleep(self.every)

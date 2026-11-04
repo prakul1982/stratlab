@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from . import admin, alerts as alerts_mod, db, docs, ipo_docs as D, job_status, leader, memguard, official_close
+from . import ai_providers as AI
 from .ai_providers import AIError, complete, extract_json
 from .auth import current_profile
 from .data.calendar import is_trading_day
@@ -1429,7 +1430,8 @@ class Job:
                 problems.append("Today's catch-up limit is reached; the rest are written tomorrow (a person opening an IPO still gets its summary).")
                 break
             try:
-                make_summary(r, d, facts, _wire["ai"]() if _wire["ai"] else None)
+                with AI.bulk():                  # the catch-up pass: Claude Haiku only (a person opening an IPO keeps Sonnet)
+                    make_summary(r, d, facts, _wire["ai"]() if _wire["ai"] else None)
                 made += 1
             except AIError as e:
                 problems.append(f"{r['name'][:30]}: {str(e)[:100]}")
