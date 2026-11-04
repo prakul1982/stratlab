@@ -34,6 +34,7 @@ from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
 from . import holdings, holdings_file, instrument_kinds, money_calendar, quote_share, tax_export, tax_lots, tax_total
+from . import autofix
 from . import money_mf
 from . import money_mf_nav
 from . import money_mf_ter
@@ -420,6 +421,7 @@ def start_jobs():
     _start("ipo.job", ipo.job.start)                    # IPOs: the exchanges' and regulators' pages, the bids through the day, the alerts
     _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
     _start("memory-janitor", lambda: threading.Thread(target=memguard.janitor, daemon=True, name="memory-janitor").start())   # expired cache entries out, the heap trimmed (MEM-001)
+    _start("autofix", lambda: threading.Thread(target=autofix.loop, daemon=True, name="autofix").start())   # self-healing: retries what failed, emails the owner only when that fails (owner, 4 Nov)
 
 
 log = logging.getLogger("stratlab")
@@ -458,6 +460,7 @@ from . import email_previews as _email_previews  # noqa: E402
 app.include_router(_email_previews.router)       # /admin/email-previews
 from . import admin_jobs as _admin_jobs  # noqa: E402
 app.include_router(_admin_jobs.router)           # /admin/jobs: every background job, for Admin -> Data and jobs
+autofix.attach(app)                              # the self-healing sweep re-runs a failed job through its own Run now route
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(drawings_routes.router)    # /me/drawings/{region}/{symbol}: drawings and layout saved per user
 app.include_router(watch_routes.router)       # /watch: Market Watch lists, prices and the live stream (MW-1)
@@ -6268,7 +6271,9 @@ def server_status() -> dict:
             "rules_watch": rules_watch_summary(), "audit_mismatches": mismatches, "audit_checked": checked,
             # whether India is shut today anyway, so a weekend's logged-out broker is OK, not Check (DJ-003)
             "data_note": data_note(),
-            "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
+            "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())},
+            # what the self-healing is fixing, what it gave up on (with the owner's action), and its short history (owner, 4 Nov)
+            "autofix": autofix.status()}
 
 
 def calendar_status() -> dict:
@@ -6281,12 +6286,18 @@ def calendar_status() -> dict:
     covered = trading_calendar.covered_until("IN")
     last = covered.isoformat() if covered else None
     days_left = (covered - today).days if covered else None
+    markets = trading_calendar.all_coverage(today)
+    # one light for the exchange-listed markets, by the same season-aware rule as each row (data.calendar.awaiting_next_year): Admin
+    # pages follow it instead of a days-left threshold of their own, which turned amber every November (owner, 4 Nov)
+    listed = [r for r in markets if r["market"] in trading_calendar.LISTED]
     # "added": every saved holiday (the exchange's and the owner's); "by_hand": only the dates the owner pasted that the exchange's list lacks
     return {"known_until": until.isoformat() if until else None, "added": added, "by_hand": sorted(trading_calendar.hand_added("IN")),
             "covered_until": last, "days_left": days_left,
+            "state": "warn" if any(r["state"] == "warn" for r in listed) else "ok",
+            "note": trading_calendar.AWAITED if any(r.get("hint") == trading_calendar.AWAITED for r in listed) else None,
             "auto": {"at": auto.get("at"), "tried_at": auto.get("tried_at"), "error": public_text(auto.get("error")),
                      "count": len(auto.get("days") or [])},
-            "markets": trading_calendar.all_coverage(today)}
+            "markets": markets}
 
 
 RETRY_AFTER_FAIL = 3600           # a daily job whose read failed asks again in an hour, not tomorrow...
@@ -6348,6 +6359,18 @@ def admin_holidays_refresh(_=Depends(admin.admin_profile)):
     trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays(named=True), "IN")
     trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD", named=True), "CDS")
     return calendar_status()
+
+
+@autofix.source
+def holiday_checks() -> list:
+    """Self-healing: an exchange-listed market whose holidays run short (past the season-aware rule) has its list read again, twice a
+    day at first, then daily; still short after that, the owner is asked to paste it."""
+    short = [r for r in trading_calendar.all_coverage(datetime.now(IST).date()) if r["market"] in trading_calendar.LISTED and r["state"] == "warn"]
+    problem = ("holidays known only until " + ", ".join(f"{r['known_until'] or 'none'} for {r['name']}" for r in short)) if short else None
+    return [autofix.Check(id="holidays", name="Exchange holidays", problem=problem, fix=lambda: admin_holidays_refresh(None),
+                          fix_text="read the exchange's holiday list again", to="/admin/data", backoff=(6 * 3600, 12 * 3600, 24 * 3600),
+                          action="If the exchange has published next year's holidays (NSE's circular), paste them in Admin → Data and jobs → "
+                                 "Exchange holidays; if it hasn't yet, nothing to do: the daily read adds them when it does.")]
 
 
 @app.post("/admin/holidays")
@@ -7064,14 +7087,28 @@ def platform_job():
         time.sleep(max(1, min(3600, (at - now).total_seconds())))
 
 
+def platform_issue(out: dict | None) -> "autofix.Check":
+    """The feature check's failures as one self-healing issue: it has retried each failing check already, so what still fails goes to
+    the owner at once, and only once while it stays the same (it mailed the same EUR/USD candle two days running, 3-4 Nov)."""
+    bad = [r for r in (out or {}).get("checks") or [] if r.get("state") == "fail"]
+    problem = (f"{len(bad)} check{'s' if len(bad) > 1 else ''} failing after a retry: "
+               + "; ".join(f"{r['name']} ({str(r.get('detail') or '')[:140]})" for r in bad[:6])) if bad else None
+    return autofix.Check(id="platform", name="Feature check", problem=problem, owner_only=True, to="/admin/system",
+                         action="Open Admin → System → Check every feature: each failing line says what is wrong. A source's own fault "
+                                "clears by itself at the next daily check; anything else needs a developer's look.")
+
+
+@autofix.source
+def platform_checks_failing() -> list:
+    try:
+        return [platform_issue(json.loads(db.get_setting(PLATFORM_LAST) or "null"))]
+    except (ValueError, TypeError):
+        return []
+
+
 def daily_platform_check(retry_after: float = 120) -> dict:
     out = run_platform_check(retry_after=retry_after, auto=True)
-    bad = [r for r in out["checks"] if r["state"] == "fail"]
-    if bad:
-        lines = "\n".join(f"- {r['name']}: {r['detail'][:160]}" for r in bad[:10])
-        tell_admins(f"StratLab: {len(bad)} check{'s' if len(bad) > 1 else ''} failing",
-                    f"Today's automatic check found {len(bad)} feature{'s' if len(bad) > 1 else ''} still failing "
-                    f"after a retry:\n{lines}\nDetails on the Admin page.")
+    autofix.report(platform_issue(out), send=lambda subject, text: tell_admins(subject, text) > 0)
     return out
 
 

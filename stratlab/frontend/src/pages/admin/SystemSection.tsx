@@ -96,9 +96,12 @@ export function SystemSection() {
         <CardHead title="Other services" />
         {sv && (
           <StatusList label="Other services">
-            {chans && <StatusRow state={chans.telegram && chans.email ? "ok" : "warn"} label="Alert channels"
+            {/* Telegram is an optional extra: with email set up nothing is broken, so it is OK with a note, not a Check (owner, 4 Nov: "a lot of
+                warnings"); email missing is a Check, as users' alerts then reach only their phones */}
+            {chans && <StatusRow state={chans.email ? "ok" : "warn"} label="Alert channels"
               detail={chans.telegram && chans.email ? "Telegram and email are set up, so users can add them under Settings."
-                : `${[!chans.telegram && "Telegram", !chans.email && "Email"].filter(Boolean).join(" and ")} ${!chans.telegram && !chans.email ? "aren't" : "isn't"} set up on the server, so ${!chans.telegram && !chans.email ? "they're" : "it's"} hidden from users' Settings.`} />}
+                : chans.email ? "Email is set up. Telegram is optional and off, so it is left out of users' Settings; to offer it, add TELEGRAM_BOT_TOKEN in Railway → Variables."
+                : `${[!chans.telegram && "Telegram", "Email"].filter(Boolean).join(" and ")} ${!chans.telegram ? "aren't" : "isn't"} set up on the server, so users' alerts reach only their phones. Add an email service in Railway → Variables (BREVO_API_KEY, RESEND_API_KEY or SMTP_HOST).`} />}
             {co && <StatusRow state={co.state} label={co.label} detail={co.fix ?? co.detail} />}
             {sv.admin_alerts && mail && <StatusRow state={mail.state} label={mail.label} detail={mailFix(mail.fix, chans?.telegram) ?? mail.detail}
               actions={<>

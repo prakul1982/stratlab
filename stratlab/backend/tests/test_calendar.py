@@ -28,10 +28,14 @@ def test_every_market_says_where_its_holidays_come_from_and_how_far_ahead(monkey
     assert late["state"] == "warn" and late["days_left"] == 30 and "exchange_calendars" in late["hint"]
     ind = calendar.coverage("IN", calendar.known_until("IN") - timedelta(days=10))
     assert ind["state"] == "warn" and "paste" in ind["hint"]
-    # the platform check: one row, a warning naming the markets that run short
-    near = calendar.known_until("IN") - timedelta(days=20)
+    # the platform check: one row, a warning naming the markets that run short (from 20 Dec, when next year's list is due: owner,
+    # 4 Nov, the check moved from 20 days before the end of the year to 8, keeping its intent)
+    near = calendar.known_until("IN") - timedelta(days=8)
     res = platform_check.check_calendar(near)
-    assert res["state"] == "warn" and "India (NSE/BSE) (20 days)" in res["detail"] and "Crypto" not in res["detail"]
+    assert res["state"] == "warn" and "India (NSE/BSE) (8 days)" in res["detail"] and "Crypto" not in res["detail"]
+    # ...before then a list to the end of the year is all the exchange has published: a pass that says so
+    early = platform_check.check_calendar(calendar.known_until("IN") - timedelta(days=20))
+    assert early["state"] == "pass" and calendar.AWAITED in early["detail"]
     assert platform_check.check_calendar(calendar.known_until("IN") - timedelta(days=200))["state"] == "pass"
 
 

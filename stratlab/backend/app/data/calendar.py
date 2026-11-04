@@ -267,6 +267,16 @@ NAMES = {"IN": "India (NSE/BSE)", "MCX": "MCX", "CDS": "Currency F&O", "US": "US
 FIXED_IN_NAMES = {(1, 26): "Republic Day", (5, 1): "Maharashtra Day", (8, 15): "Independence Day",
                   (10, 2): "Gandhi Jayanti", (12, 25): "Christmas"}
 ENOUGH_DAYS = 60                              # fewer days of known holidays than this is worth a look
+# The exchanges publish next year's holidays in mid-December (NSE's circular came out 12-18 Dec in recent years): until then a list
+# that covers the whole of this year is all there is, and 57 days left on 4 Nov is expected, not a Check (owner, 4 Nov: "a lot of
+# warnings"; Admin showed India, MCX and Currency F&O amber from 2 Nov). From NEXT_YEAR_DUE on, a missing next year is worth a look.
+NEXT_YEAR_DUE = (12, 20)
+AWAITED = "Next year's list usually comes out in mid-December; the daily read adds it by itself. Nothing to do."
+
+
+def awaiting_next_year(market: str, until: date | None, today: date) -> bool:
+    """A listed market whose holidays are known to the end of this year, before next year's list is due."""
+    return market in LISTED and until == date(today.year, 12, 31) and (today.month, today.day) < NEXT_YEAR_DUE
 
 
 def covered_until(market: str) -> date | None:
@@ -314,9 +324,11 @@ def coverage(market: str, today: date) -> dict:
     left = (until - today).days
     ahead = holidays(market, today, max(0, min(left + 1, 400)))
     nxt = date.fromisoformat(ahead[0]) if ahead else None
-    ok = left >= ENOUGH_DAYS
-    hint = None if ok else ("Read the exchange's list now, or paste it below." if market in LISTED
-                            else "Update the exchange_calendars package.")
+    awaited = awaiting_next_year(market, until, today)
+    ok = left >= ENOUGH_DAYS or awaited
+    hint = (AWAITED if awaited and left < ENOUGH_DAYS else None) if ok else (
+        "Next year's list should be out by now: the daily read keeps trying. If it is still missing in a few days, paste it below "
+        "from the exchange's holiday circular." if market in LISTED else "Update the exchange_calendars package.")
     return {**row, "known_until": until.isoformat(), "days_left": left, "next": nxt.isoformat() if nxt else None,
             "next_name": holiday_name(market, nxt) if nxt else None, "state": "ok" if ok else "warn", "hint": hint}
 

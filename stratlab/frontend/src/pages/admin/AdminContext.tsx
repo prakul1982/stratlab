@@ -5,7 +5,7 @@ import { useApp } from "../../lib/app";
 import type { CalendarStatus } from "./HolidaysPanel";
 
 export type Plan = "free" | "basic" | "pro";
-export type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quota?: boolean; quick_rank?: number | null; research_rank?: number | null;
+export type AIRow = { /** the provider's id ("groq"); the server always sends it */ name?: string; label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quota?: boolean; quick_rank?: number | null; research_rank?: number | null;
   /** whether it can answer now (a short rate limit still counts; a used-up free quota or a paused provider does not), and why
    * not in the provider's own words; how many of its models in use are paused; whether its free quota is used up */
   answering?: boolean | null; state_text?: string | null; paused_models?: number; quota_used?: boolean;
@@ -39,6 +39,8 @@ export interface Overview {
     /** which build the server is (R24-009; older servers don't send it) */
     build?: ServerBuild;
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
+    /** the self-healing (owner, 4 Nov): what it is retrying, what it gave up on and emailed you about, and its short history */
+    autofix?: AutofixStatus;
   };
   stats: { users: number; plans: Record<Plan, number>; new_7d: number; signups_today: number; experiments_month: number; ai_month: number; ai_reads_month?: number;
     /** paid plans with a subscription behind them, and those the owner gave by hand (older servers send neither) */
@@ -52,6 +54,11 @@ export interface Overview {
     /** people who signed in or ran something in the last 7 days (DJ-004) */
     active_7d?: number | null };
 }
+
+export type AutofixIssue = { id: string; name: string; problem: string | null; since: string | null; to: string; tries: number; of: number; next: string | null;
+  action?: string | null; mailed?: string | null; held?: boolean };
+export type AutofixEvent = { at: string; id: string; name: string; event: "tried" | "fixed" | "escalated"; text: string; to: string };
+export type AutofixStatus = { trying: AutofixIssue[]; escalated: AutofixIssue[]; history: AutofixEvent[] };
 
 /** Brevo's own figures for today (DJ-034): sends made, and what the plan has left of its daily limit. */
 export type BrevoQuota = { sent_today: number | null; left_today: number | null; plan: string | null; limit_kind: string | null; error: string | null; dashboard: string };

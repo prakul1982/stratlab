@@ -19,6 +19,7 @@ import uvicorn
 
 sys.path.insert(0, ".")
 _web = os.environ.get("E2E_WEB_PORT", "5599")
+os.environ.setdefault("AUTOFIX", "0")      # no self-healing sweep re-running jobs under the browser tests
 os.environ.setdefault("FRONTEND_ORIGIN", f"http://127.0.0.1:{_web},http://localhost:{_web}")   # the browser tests' page
 from tests import e2e_clock  # noqa: E402
 # the world's fixed moment (tests/e2e_clock.py), set before the app reads any time. Only when run as the server: a test
