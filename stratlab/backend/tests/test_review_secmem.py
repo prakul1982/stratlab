@@ -418,3 +418,41 @@ def test_a_us_companys_only_revenue_line_is_read(tax, concept, sym):
     i = p["pl"]["cols"].index("Dec 2016")
     sales = (p["pl"]["rows"].get("Sales") or p["pl"]["rows"].get("Revenue"))[i]
     assert sales == pytest.approx(175.71, abs=0.01) and p["pl"]["rows"]["Net Profit"][i] == pytest.approx(-5.0)
+
+
+# ---------- the US last-close mismatches: a quote that lags its own daily candles ----------
+def _ts(day: str) -> int:
+    from datetime import datetime, timezone
+    return int(datetime.fromisoformat(day + "T20:00:00").replace(tzinfo=timezone.utc).timestamp())
+
+
+def _bar(day, c, v, h=None, l=None):  # noqa: E741
+    return {"t": f"{day}T00:00:00-04:00", "o": c, "h": h if h is not None else c, "l": l if l is not None else c, "c": c, "v": v}
+
+
+@pytest.mark.parametrize("sym,meta_day,meta_px,bars,want", [
+    # MVNC: the quote said 0.18 from 16 Oct; it traded at 0.12 on 29 Oct (the closes after carry it, with no volume)
+    ("MVNC", "2026-10-16", 0.18, [_bar("2026-10-28", 0.18, 0), _bar("2026-10-29", 0.12, 118522), _bar("2026-10-30", 0.12, 0)], (0.12, 0.18, "2026-10-29")),
+    # NGTF: 3.30 from 26 Oct beside sessions up to 5.70 on 2 Nov
+    ("NGTF", "2026-10-26", 3.30, [_bar("2026-10-30", 5.22, 22599), _bar("2026-11-02", 5.70, 27096)], (5.70, 5.22, "2026-11-02")),
+    # WSKEF: 12.50 on 16 Oct, a session that traded 9.06 to 9.75 and closed 9.23
+    ("WSKEF", "2026-10-16", 12.5, [_bar("2026-10-15", 9.83, 55151), _bar("2026-10-16", 9.23, 33941, 9.75, 9.065)], (9.23, 9.83, "2026-10-16")),
+])
+def test_a_quote_that_lags_its_own_sessions_gives_way_to_the_newest_traded_close(monkeypatch, sym, meta_day, meta_px, bars, want):
+    from app.intel import yahoo as Y
+    meta = {"symbol": sym, "regularMarketPrice": meta_px, "regularMarketTime": _ts(meta_day), "exchangeTimezoneName": "America/New_York",
+            "currency": "USD", "regularMarketDayHigh": meta_px, "regularMarketDayLow": meta_px}
+    yh = Y.Yahoo.__new__(Y.Yahoo)
+    asked = []
+    monkeypatch.setattr(Y.Yahoo, "chart", lambda self, s, tf, days, **k: asked.append(days) or {"meta": meta, "candles": bars if days > 7 or sym != "WSKEF" else []})
+    got = yh.meta(sym)
+    assert (got["price"], got["prev_close"], got["at"]) == want
+    assert asked == ([7, 40] if sym == "WSKEF" else [7])                    # a longer window only when the quote's session isn't in the short one
+
+
+def test_a_quote_inside_its_own_session_or_after_the_last_candle_stands():
+    from app.intel import yahoo as Y
+    meta = {"regularMarketPrice": 9.5, "regularMarketTime": _ts("2026-10-16"), "exchangeTimezoneName": "America/New_York"}
+    assert Y._session_close(meta, [_bar("2026-10-16", 9.23, 33941, 9.75, 9.065)]) is None          # within the day's range
+    assert Y._session_close({**meta, "regularMarketTime": _ts("2026-10-19")}, [_bar("2026-10-16", 9.23, 33941)]) is None   # a later session
+    assert Y._session_close(meta, [_bar("2026-10-16", 9.23, 0)]) is None                            # nothing traded: nothing to go by
