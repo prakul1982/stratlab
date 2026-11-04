@@ -40,6 +40,7 @@ CONCEPTS = [
      "IN": ["Passenger Cars & Utility Vehicles", "2/3 Wheelers", "Commercial Vehicles", "Auto Components & Equipments"],
      "US": ["Motor Vehicles & Passenger Car Bodies", "Motor Vehicle Parts & Accessories"]},
     {"words": {"auto", "automobile", "automotive", "car", "carmaker", "vehicle"}, "phrases": ("two wheelers",),
+     "unless": ("ev", "evs", "electric vehicle", "electric vehicles", "electric cars", "electric two wheelers", "electric scooters"),
      "IN": ["Passenger Cars & Utility Vehicles", "2/3 Wheelers", "Commercial Vehicles", "Tractors", "Auto Components & Equipments",
             "Tyres & Rubber Products"],
      "US": ["Motor Vehicles & Passenger Car Bodies", "Motor Vehicle Parts & Accessories", "Tires & Inner Tubes", "Truck & Bus Bodies"]},

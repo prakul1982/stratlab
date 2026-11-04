@@ -53,6 +53,7 @@ def test_ev_puts_the_carmakers_two_wheelers_and_battery_makers_in_the_chain_with
     got, _ = base_of("IN", "EV and battery supply chain", ROWS)
     assert {"TMPV", "M&M", "OLAELEC", "EXIDEIND", "ARE&M"} <= got
     assert base_of("IN", "electric vehicles", ROWS)[0] == got
+    assert base_of("IN", "electric vehicles", ROWS)[1] == base_of("IN", "EV and battery supply chain", ROWS)[1]     # not the tyre makers and tractors of "autos"
     assert "TATAPOWER" not in got                     # charging is the AI's to add, checked on its own words
 
 
