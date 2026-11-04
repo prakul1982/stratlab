@@ -53,6 +53,39 @@ def _routes():
 
 
 # ---------- the placement and claims checks ----------
+FILING_LINES = 8                                                          # lines of a company's own filings added to its description
+FILING_CHARS = 480
+
+
+def own_filings(region: str, sym: str) -> str:
+    """"From its own filings: …": the words the app already keeps from the company's own filings, for a description that doesn't name a
+    business line it has (THEMES item 6: Tata Motors' profile has no word of its electric cars; its monthly sales filings do). The quoted
+    lines of its business updates as read (biz_updates, India), then the exchange's or the SEC's titles of its latest filings on its stored
+    page. Nothing is read from a source here; "" when nothing is kept."""
+    lines: list[str] = []
+    if region == "IN":
+        try:
+            from .. import biz_updates
+            for m in biz_updates.series(biz_updates.stored(sym))[:FILING_LINES]:
+                q = ((m.get("latest") or {}).get("source") or {}).get("quote") or " ".join(x for x in (m.get("segment"), m.get("metric")) if x)
+                lines.append(str(q))
+        except Exception as e:
+            print("theme: business updates not read:", sym, type(e).__name__, str(e)[:100])
+    try:
+        R = _routes()
+        f = (R.public_facts(region, sym) if callable(R.public_facts) else None) or {}
+        lines += [str(x.get("name") or x.get("title") or "") for x in (f.get("filings") or [])[:FILING_LINES] if isinstance(x, dict)]
+    except Exception as e:
+        print("theme: filings not read:", sym, type(e).__name__, str(e)[:100])
+    seen, keep = set(), []
+    for x in lines:
+        x = " ".join(x.split()).rstrip(" .;")
+        if len(x.split()) >= 3 and x.lower() not in seen:
+            seen.add(x.lower())
+            keep.append(x)
+    return ("From its own filings: " + ". ".join(keep[:FILING_LINES]) + ".")[:FILING_CHARS] if keep else ""
+
+
 def evidence_reader(region: str, names: dict):
     """A function symbol-list -> ({symbol: {about, industry}}, pending) that reads each company's own description once (the company
     page's profile), keeps it for EVIDENCE_DAYS, and reads no more than the request's budget allows."""
@@ -84,7 +117,10 @@ def evidence_reader(region: str, names: dict):
             except Exception as e:
                 print("theme: description not kept:", sym, str(e)[:100])
         EVIDENCE_CACHE.set(key, hit, 6 * 3600)
-        return hit if hit.get("about") else None
+        filed = own_filings(region, sym)
+        if not hit.get("about") and not filed:
+            return None
+        return {**hit, "about": " ".join(x for x in (hit.get("about"), filed) if x)}
 
     def evidence_of(symbols):
         return theme_check.gather_evidence(symbols, read)
@@ -201,7 +237,7 @@ def _about_reader(region: str, names: dict):
                 return (evidence_reader(region, names)([sym])[0].get(sym) or {}).get("about")
             except Exception:
                 return None
-        return hit.get("about") or None
+        return hit.get("about") or own_filings(region, sym) or None         # no description: the lines of its own filings
     return about_of
 
 

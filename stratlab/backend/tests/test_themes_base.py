@@ -232,3 +232,31 @@ def test_a_named_member_is_base_and_a_solar_maker_filed_as_a_chipmaker_is_not_in
     assert (out["placements"]["base"], out["placements"]["named"]) == (3, 1)
     # the solar maker is in renewables' named list instead
     assert "FSLR" in B.industries_for("US", "renewable energy", rows, None, lambda k: None, lambda k, v: None)["named"]
+
+
+# ---------- item 6: a description that doesn't name a business line is backed by the company's own filings ----------
+def test_a_companys_own_filings_back_a_description_that_doesnt_name_the_work(monkeypatch):
+    from app import biz_updates
+    from app.intel import routes, theme_routes
+    monkeypatch.setattr(biz_updates, "stored", lambda sym: {"r1": {}} if sym == "TMPV" else {})
+    monkeypatch.setattr(biz_updates, "series", lambda reads: [{"metric": "EV sales", "segment": None,
+                                                               "latest": {"source": {"quote": "Electric vehicle sales of 7,012 units in October 2026"}}}] if reads else [])
+    monkeypatch.setattr(routes, "public_facts", lambda region, sym: {"filings": [{"name": "Tata Motors launches the Harrier.ev in India"}, {"name": "x"}]} if sym == "TMPV" else None)
+    got = theme_routes.own_filings("IN", "TMPV")
+    assert got == "From its own filings: Electric vehicle sales of 7,012 units in October 2026. Tata Motors launches the Harrier.ev in India."
+    assert theme_routes.own_filings("IN", "NONE") == ""
+    # the check reads the description and the filings together, so a quote from a filing places the company
+    about = "Tata Motors Passenger Vehicles makes passenger cars and utility vehicles. " + got
+    group = "Electric vehicles Makers of battery electric cars and their electric vehicle sales"
+    assert C.quote_in("Electric vehicle sales of 7,012 units", C.clean_description(about, C.EVIDENCE_MAX)) and C.supports("Electric vehicle sales of 7,012 units", group)
+    assert B.one_line(got) == "From its own filings: Electric vehicle sales of 7,012 units in October 2026"
+
+
+def test_the_evidence_reader_adds_the_filings_and_reads_a_company_with_only_filings(monkeypatch):
+    from app.intel import theme_routes
+    monkeypatch.setattr(theme_routes, "own_filings", lambda region, sym: "From its own filings: Electric bus orders from state transport units.")
+    store = {f"theme:evidence:IN:OLECTRA": json.dumps({"at": datetime.now(timezone.utc).isoformat(), "about": "", "industry": ""})}
+    monkeypatch.setattr(theme_routes.db, "get_setting", lambda k: store.get(k))
+    theme_routes.EVIDENCE_CACHE.clear()
+    got, pending = theme_routes.evidence_reader("IN", {})(["OLECTRA"])
+    assert got["OLECTRA"]["about"] == "From its own filings: Electric bus orders from state transport units." and not pending
