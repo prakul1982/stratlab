@@ -551,3 +551,23 @@ def test_part_year_columns_are_not_years_of_history_for_the_checklist():
         assert audit._why_na(label, years, []) == "history", label
     full = years[2:] + [{"year": "Mar 2027", "sales": 50.0, "profit": 2.0, "opm": 9.0}]
     assert audit._why_na("Sales growth, 3 years", full, []) is None           # four full years: judged as before
+
+
+def test_a_pe_whose_share_count_cant_be_settled_is_held_back_with_the_reason():
+    """BSE:524548 (1 Nov): no EPS row; the share capital counts 41.6 lakh shares, the exchange's value 32.8 lakh; the page set the
+    source's P/E (23.4, on 32.8 lakh) beside a market value on 41.6 lakh. Every company with no EPS and two counts apart."""
+    from app.intel import screener as S
+    sharma = _scr([1.24, 1.24, 1.19], [None, None, None], [4.16, 4.16], 27.9, 85.0, 23.4)
+    got = S.summary(sharma)
+    assert got["pe"] is None and "41.6 lakh" in got["pe_why"] and "32.8 lakh" in got["pe_why"]
+    agreed = _scr([1.24, 1.24, 1.19], [None, None, None], [3.28, 3.28], 27.9, 85.0, 23.4)          # the counts agree: shown
+    assert S.summary(agreed)["pe"] == 23.4
+
+
+def test_a_share_with_prices_on_record_only_from_this_year_is_a_fact_not_a_since_listing_gap():
+    """BSE:539410, 539225 (1 Nov): on the exchange's new list, prices on record from 17 Jul, the company years old."""
+    from app import audit
+    p = {"region": "IN", "balance": {"cols": ["Mar 2026"]}, "ratios": {}}
+    page = {"range52": {"low": 1.1, "high": 1.85, "traded_from": "2026-07-17"}, "quote": {"price": 1.5}}
+    got = audit.check_listing(page, p, {"years": []}, {})
+    assert [i["level"] for i in got] == ["fact"] and "Prices on record only from 2026-07-17" in got[0]["detail"]

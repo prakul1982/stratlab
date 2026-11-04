@@ -48,3 +48,9 @@ test("SECMEM 4: Admin › Data shows the IPO offer documents' queue as a table, 
   for (const row of ["Summaries today, catch-up", "Summaries today, asked for", "Waiting for a summary", "Still to read"]) assert.ok(panel.includes(row), row);
   assert.match(read("src/pages/admin/DataSection.tsx"), /<IpoQueuePanel \/>/);
 });
+
+test("SECMEM 6: a share whose prices on record begin within the year says so under its range, not '52-wk low'", () => {
+  const rail = read("src/components/Research.tsx");
+  assert.match(rail, /from \? `Prices on record from \$\{fmtDate\(from, \{ year: false \}\)\}: low`/);
+  assert.match(read("src/pages/Research.tsx"), /tradedFrom=\{c\.range52\.traded_from\}/);
+});

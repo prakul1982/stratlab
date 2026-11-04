@@ -434,6 +434,13 @@ def summary(p: dict, listed_on: str | None = None) -> dict:
     cap = market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face, balance_ends_before(p, listed_on),
                      eps_shares(p))
     pe, pe_why = checked_pe(p, price, cap)
+    src_cap = num(r.get("Market Cap"))
+    if pe is not None and pe_basis(p) is None and src_cap and cap and price and equity and face and abs(cap / src_cap - 1) > SHARES_DRIFT:
+        # no earnings per share filed to say which count of shares is right, and the share capital's differs from the source's: the
+        # source's P/E is on its count, the market value here on the capital's, so the two can't stand side by side (SECMEM 6, every
+        # such company: BSE:524548's 23.4 beside 35.4 cr, which is 29.7 times its profit)
+        pe, pe_why = None, (f"The shares in issue aren't settled: the share capital gives {equity[-1] / face * 100:,.1f} lakh, the exchange's "
+                            f"value counts {src_cap / price * 100:,.1f} lakh, and no earnings per share are filed to tell which is right")
     return {
         "latest_yoy": latest_yoy,
         # the periods the ratios are of, so each says it (DD-015: P/E on the last 12 months beside margins of the last year)

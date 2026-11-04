@@ -440,6 +440,11 @@ def check_listing(page: dict | None, p: dict, nums: dict, snap: dict) -> list[di
         if not since and rng.get("low") is None and rng.get("high") is None and not q.get("price"):
             # checked before its first session (SFCTECH, BLSPOLY, BSE:545010 on 3 Nov at 08:08 IST, listing that morning)
             out.append(_issue("fact", LISTING, NOT_TRADED_YET))
+        elif not since and rng.get("traded_from"):
+            # the prices can't tell a relisting from a new listing: the page says its range covers the trading on record (SECMEM 6)
+            out.append(_issue("fact", LISTING, f"Prices on record only from {rng['traded_from']}: a share relisted or long without trades, "
+                                               "not told apart from a new listing by its prices; the page gives its range as the range "
+                                               "since then"))
         elif not since:
             out.append(_issue("gap", LISTING, "Its 52-week range isn't marked as the range since listing, though it listed within the last weeks"))
         elif q and session_day(q.get("at"), "IN") == since:         # the first session: the change is against the issue price
