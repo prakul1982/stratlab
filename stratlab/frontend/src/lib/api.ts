@@ -19,7 +19,10 @@ export const supabase = {
     url: new URL("auth/v1", sbBase).href,
     headers: { Authorization: `Bearer ${sbKey}`, apikey: sbKey },
     storageKey: SESSION_KEY,
-    autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, flowType: "implicit",
+    // PKCE (SECMEM 1b): Google comes back with a one-time code in the query, which the library trades for the session and
+    // then takes out of the address; the implicit flow put the session's tokens themselves in the address after a #, where
+    // the browser's history and anything reading the address could see them. The emailed reviewer links follow (entry.ts).
+    autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, flowType: "pkce",
   }),
 };
 

@@ -112,7 +112,7 @@ def test_admin_can_email_themselves_a_reviewer_sign_in_link(monkeypatch):
 
         def generate_link(params):
             asked.append(params)
-            return NS(properties=NS(action_link="https://auth.example.com/verify?token=t1&type=magiclink"))
+            return NS(properties=NS(action_link="https://auth.example.com/verify?token=t1&type=magiclink", hashed_token="ht1"))
         real = db.sb()
         monkeypatch.setattr(db, "sb", lambda: NS(auth=NS(admin=NS(generate_link=generate_link), get_user=real.auth.get_user),
                                                  table=real.table))
@@ -120,7 +120,7 @@ def test_admin_can_email_themselves_a_reviewer_sign_in_link(monkeypatch):
         h = W.headers("admin-token")
         assert w["client"].post("/admin/review-link", headers=h).json() == {"sent_to": "owner@example.com"}
         assert asked[0]["type"] == "magiclink" and asked[0]["email"] == "owner@example.com"     # only ever the admin's own
-        assert sent[-1][0] == "owner@example.com" and "token=t1" in str(sent[-1])
+        assert sent[-1][0] == "owner@example.com" and "https://stratlab.studio/?token_hash=ht1&type=magiclink" in str(sent[-1]) and "token=t1" not in str(sent[-1])
         assert w["client"].post("/admin/review-link", headers=W.headers("pro-token")).status_code == 403
     finally:
         w["close"]()

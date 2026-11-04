@@ -20,7 +20,7 @@ def test_an_admin_makes_test_accounts_on_their_own_alias(monkeypatch):
 
         def generate_link(p):
             asked.append(p)
-            return NS(properties=NS(action_link="https://auth.example.com/verify?token=t9&type=magiclink"), user=NS(id=f"u-{p['email']}"))
+            return NS(properties=NS(action_link="https://auth.example.com/verify?token=t9&type=magiclink", hashed_token="ht9"), user=NS(id=f"u-{p['email']}"))
         monkeypatch.setattr(db, "sb", lambda: NS(auth=NS(admin=NS(create_user=create_user, generate_link=generate_link),
                                                          get_user=real.auth.get_user), table=real.table))
         monkeypatch.setattr(db, "get_profile", lambda uid, email=None: {"id": uid, "email": email})
@@ -33,7 +33,7 @@ def test_an_admin_makes_test_accounts_on_their_own_alias(monkeypatch):
         assert r["plan"] == "basic" and made == ["owner+sl-basic-1@example.com"]
         assert asked[0] == {"type": "magiclink", "email": "owner+sl-basic-1@example.com", "options": asked[0]["options"]}
         assert plans == [("u-owner+sl-basic-1@example.com", "basic", None)]
-        assert sent[-1][0] == "owner+sl-basic-1@example.com" and "token=t9" in str(sent[-1])
+        assert sent[-1][0] == "owner+sl-basic-1@example.com" and "https://stratlab.studio/?token_hash=ht9&type=magiclink" in str(sent[-1]) and "token=t9" not in str(sent[-1])
         # asked again: the account is reused, the link is new
         assert w["client"].post("/admin/test-account", headers=h, json={"label": "basic-1", "plan": "pro"}).status_code == 200
         assert made == ["owner+sl-basic-1@example.com"] and plans[-1][1] == "pro"
