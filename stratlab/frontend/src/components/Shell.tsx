@@ -9,7 +9,7 @@ import { VERDICT_FACT } from "./ui";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { useScrollMemory } from "../lib/scrollMemory";
 import { NAV, locate, locateGroup, startOf, type NavGroup, type NavPage } from "../lib/nav";
-import { MINE_HOME, MINE_NAME, SPACE_IDS, SPACES, homeOf, menuView, spaceOf, type SpaceView } from "../lib/spaces";
+import { MINE_HOME, MINE_NAME, SPACE_IDS, SPACES, homeOf, menuView, sharedPage, spaceOf, spaceParam, type SpaceView } from "../lib/spaces";
 import { titleFor } from "../lib/title";
 import { usePersisted } from "../lib/persist";
 import { usePins } from "../lib/pins";
@@ -91,7 +91,18 @@ export function Shell({ children }: { children: ReactNode }) {
   // pages it links to (pinned pages, Briefs, Connected accounts): that is what it is for.
   const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to) || MINE_GROUPS.includes(at.group.id));
   // the menu comes from the address itself (lib/spaces menuView), so it can't lag behind a saved choice that loads later
-  const space = menuView(path, saved, keepsMine);
+  // the space of the page before this one in this visit: a page in several spaces' menus (the Calendar's tabs) opens inside it
+  const lastSpace = useRef<SpaceView | null>(null);
+  const space = menuView(path, saved, keepsMine, { search: loc.search, from: lastSpace.current });
+  useEffect(() => {
+    lastSpace.current = space;
+    // ...and its address says so (?space=trade), so a bookmark, a shared link or a reload keeps it (owner, 4 Nov)
+    if (space !== "mine" && sharedPage(path) && space !== spaceOf(path) && spaceParam(loc.search) !== space) {
+      const q = new URLSearchParams(loc.search);
+      q.set("space", space);
+      nav({ pathname: path, search: `?${q}`, hash: loc.hash }, { replace: true, state: loc.state });
+    }
+  }, [space, path]);   // eslint-disable-line react-hooks/exhaustive-deps
   // remember it on this device, so the front door opens the space last used (only real spaces and Mine's own pages).
   // Runs when the page changes, not when the saved choice does: picking a space in the switcher saves it first and
   // navigates a moment later, and the page still showing must not save its own space over that choice.
