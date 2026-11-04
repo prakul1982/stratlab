@@ -6,7 +6,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/research";
 import { themeApi, type Business, type Dive, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { RegionSwitch } from "../components/Research";
-import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard } from "../components/ThemeDive";
+import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton } from "../components/kit";
 
 /* ================= Themes: a theme deep dive =================
@@ -131,6 +131,7 @@ export function ThemesPage() {
               <button className="btn quiet sm" disabled={busy} onClick={() => run(q, { refresh: true })}>{busy ? "Mapping…" : "Refresh"}</button></>} />
             {r.summary && <p className="k-lede">{r.summary}</p>}
             {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
+            <ThemeDownloads r={r} dive={dive} region={region} theme={q} />
             {r.etfs.length > 0 && (
               <DataTable label="Funds that track the theme" columns={[
                 { key: "t", header: "Fund", rowHeader: true, cell: (e: (typeof r.etfs)[number]) => <Link className="link" to={`/research/${region}/${encodeURIComponent(e.ticker)}`}><b>{e.ticker}</b></Link> },

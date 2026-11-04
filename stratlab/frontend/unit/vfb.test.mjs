@@ -16,7 +16,7 @@ const invest = read("src/styles-invest.css");
 
 test("VR1-147: the US tax tables are phone cards, with a sale's gain right under its name", () => {
   const p = read("src/pages/money/UsTaxPage.tsx");
-  for (const l of ["US trades", "US sales in rupees", "US dividends and credit", "Open US lots", "Schedule FA"]) assert.match(p, new RegExp(`<DataTable stack (phonePage=\\{10\\} )?label="${l}"`));
+  for (const l of ["US trades", "US sales in rupees", "US dividends and credit", "Open US lots", "Schedule FA"]) assert.match(p, new RegExp(`<DataTable (?:csv=(?:"[^"]*"|\\{[^\\n]*?\\}) )?stack (phonePage=\\{10\\} )?label="${l}"`));
   assert.match(p, /key: "gain", header: "Gain \(₹\)", numeric: true, up: true/);
   // the dollars and the rate used sit under each rupee figure, so the row fits (LIVE1B-027)
   assert.match(p, /\{usd\(r\.cost_usd\)\} at \{rateText\(r\.rate_buy\)\}/);
@@ -104,7 +104,7 @@ test("VR1-121, VR1-122, VR1-123, VR1-124, VR1-125: IPO badge, fold width, the is
   assert.doesNotMatch(p, /Offer for sale \(shares existing holders offer\)/);
   assert.match(p, /r\.hours\.replace\(\/\\\.\+\$\/, ""\)/);
   assert.match(read("src/pages/ipo.css"), /\.ipo-terms \.k-tbl-wrap \{ margin-bottom: var\(--s3\); \}/);          // (O7: the terms and the dates are two tables in one card)
-  assert.match(read("src/pages/ResultsPage.tsx"), /data\.weeks\.map\(\(w\) => \{[\s\S]*<DataTable label=\{`Results on \$\{resultDay\(d\)\}`\}/);       // one table a day (RES-1), where two columns of chips stood side by side (VR1-125)
+  assert.match(read("src/pages/ResultsPage.tsx"), /data\.weeks\.map\(\(w\) => \{[\s\S]*<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Results on \$\{resultDay\(d\)\}`\}/);       // one table a day (RES-1), where two columns of chips stood side by side (VR1-125)
 });
 
 test("VR1-130: the alerts summary is one sentence row with the settings link in it", () => {

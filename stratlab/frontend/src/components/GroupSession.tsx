@@ -96,7 +96,7 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
           <Card label="Open positions">
             <CardHead level={3} title="Open positions" />
             {holding.length === 0 ? <p className="k-small k-muted">{running ? "None right now. Positions open as the rules fire, up to " + a.max_open + " at once." : "None."}</p>
-              : <DataTable label="Open positions" columns={holdCols} rows={holding} rowKey={(m) => m.id} />}
+              : <DataTable csv="paper session open positions" label="Open positions" columns={holdCols} rows={holding} rowKey={(m) => m.id} />}
           </Card>
           <ChartFrame title="Paper equity">
             {snap.equity_curve.length > 1 ? (
@@ -108,7 +108,7 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
           {snap.members.length > 0 && (
             <Card label="Every member">
               <Disclosure summary={`Every member (${snap.members.length})`}>
-                <DataTable label="Every member" columns={allCols} rows={snap.members} rowKey={(m) => m.id} />
+                <DataTable csv="paper session members" label="Every member" columns={allCols} rows={snap.members} rowKey={(m) => m.id} />
               </Disclosure>
             </Card>
           )}

@@ -174,7 +174,7 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
             ans.groups.length === 0 ? <Card><EmptyState title="No holder found">No holder above 1% by that name in the filings read so far.</EmptyState></Card> : (
               <Card label="Names found">
                 <CardHead title="Names found" />
-                <DataTable stack label="Holders found" rows={ans.groups} rowKey={(g) => g.label} rowAttrs={(g) => ({ "data-holder-group": g.label })} columns={[
+                <DataTable csv="holders found" stack label="Holders found" rows={ans.groups} rowKey={(g) => g.label} rowAttrs={(g) => ({ "data-holder-group": g.label })} columns={[
                   { key: "h", header: "Holder", rowHeader: true, wrap: true, cell: (g) => <button className={`link-btn${group?.label === g.label ? " on" : ""}`} onClick={() => choose(g)}>{g.label}</button> },
                   { key: "n", header: "Companies", numeric: true, cell: (g) => g.companies.toLocaleString("en-IN") },
                   { key: "s", header: "Spellings", numeric: true, cell: (g) => g.names.length.toLocaleString("en-IN") },
@@ -206,7 +206,7 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
                       {!!hold.renamed && <> · filed under another name in {hold.renamed}</>}</span>
                     {hold.dropped > 0 && <Seg label="Which companies" value={show} onChange={setShow} options={SHOW} />}
                   </div>
-                  <DataTable stack label="Companies where the holder is named" rows={rows} rowKey={(r) => r.symbol} sticky={rows.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
+                  <DataTable csv="companies where the holder is named" stack label="Companies where the holder is named" rows={rows} rowKey={(r) => r.symbol} sticky={rows.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
                     columns={[
                       { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => (
                         <><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>

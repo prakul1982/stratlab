@@ -92,7 +92,7 @@ test("the pages are built from the kit and keep the product rules", () => {
     assert.doesNotMatch(src.replace(/Facts, not advice/g, ""), /\b(buy|sell|accumulate|undervalued|grey market|gmp|apply now|should you)\b/i, `${f} has advice words`);
   }
   const list = read("src/pages/IposPage.tsx");
-  assert.match(list, /DataTable stack/); assert.match(list, /<Seg label="Market"/); assert.match(list, /useLiveRefresh/);
+  assert.match(list, /DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?stack/); assert.match(list, /<Seg label="Market"/); assert.match(list, /useLiveRefresh/);
   assert.match(list, /no Open tab/);
   const one = read("src/pages/IpoPage.tsx");
   assert.match(one, /useLiveRefresh\(d\?\.ipo\.stage === "open"/);                                 // the bids move while the issue is open

@@ -1,4 +1,4 @@
-import { download } from "../../lib/share";
+import { downloadCsv } from "../../lib/share";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
@@ -278,12 +278,10 @@ function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: 
   const rows = useMemo(() => all.map((r) => ({ ...r, shown: r.issues.filter((i) => show === "all" || i.level === show) }))
     .filter((r) => r.shown.length), [all, show]);
   const csv = () => {
-    const lines = [["symbol", "name", "checked", "level", "area", "detail", "first_found"].join(",")];
-    // names and details come from the exchanges' feeds: a leading = + - @ (or tab/CR) would run as a spreadsheet
-    // formula when the file is opened, so such a cell is written as text
-    const cell = (x: unknown) => { const s = String(x ?? ""); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; };
-    for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, r.at ?? "", i.level, i.area, i.detail, i.level === "fact" ? "" : i.since ?? ""].map(cell).join(","));
-    download(new Blob([lines.join("\n")], { type: "text/csv" }), file);
+    // names and details come from the exchanges' feeds: the one CSV builder (EXPORT) writes a leading = + - @ (or tab/CR) as text, so
+    // nothing runs as a spreadsheet formula when the file is opened
+    downloadCsv(file, ["symbol", "name", "checked", "level", "area", "detail", "first_found"],
+      all.flatMap((r) => r.issues.map((i) => [r.symbol, r.name, r.at ?? "", i.level, i.area, i.detail, i.level === "fact" ? "" : i.since ?? ""])));
   };
   const areas = Object.entries(sum.by_area).sort((a, b) => weight(b[1]) - weight(a[1]));
   const cols: Column<[string, Partial<Record<Level, number>>]>[] = [

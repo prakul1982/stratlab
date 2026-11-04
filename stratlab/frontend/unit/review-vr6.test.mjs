@@ -111,7 +111,7 @@ test("VR6-024: a phone shows twelve strategy cards, ten positions and eight divi
   assert.match(lib, /export const PHONE_CARDS = 12;/);
   assert.match(lib, /\(phone \? rows\.slice\(0, PHONE_CARDS \* cardPages\) : rows\)\.map/);
   assert.match(lib, /data-testid="lib-show-more"/);
-  assert.match(read("src/pages/HoldingsPage.tsx"), /<DataTable label="Positions".*stack phonePage=\{10\} \/>/);
+  assert.match(read("src/pages/HoldingsPage.tsx"), /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Positions".*stack phonePage=\{10\} \/>/);
   const act = read("src/components/HoldingsActions.tsx");
   assert.match(act, /rows=\{data\.ahead\} rowKey=\{key\} stack phonePage=\{8\}/);
   assert.match(act, /rows=\{received\} rowKey=\{key\} stack phonePage=\{8\}/);

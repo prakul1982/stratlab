@@ -42,7 +42,7 @@ import { UsFilingsCards } from "../components/UsFilings";
 import { CompanyActions } from "../components/CorpActions";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import {
-  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StockPicker,
+  Badge, Card, CardHead, ChartFrame, CsvButton, DataTable, Delta, EmptyState, ErrorState, Field, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StockPicker,
 } from "../components/kit";
 import { resultDay, type ResultRow } from "./ResultsPage";
 import { pairKey, quotesInBatches } from "../lib/investUi";
@@ -695,7 +695,12 @@ export function ComparePage() {
           {/* the two prices on one % scale, from the start of the range shown (DD-060) */}
           <Card id="cmp-chart"><PriceChart region={region} symbol={res.a.symbol} currency={res.a.currency} price={res.a.quote?.price} compareWith={res.b.symbol} /></Card>
           <Card>
-            <CardHead title="The numbers side by side" />
+            {/* EXPORT: every section's measures for both companies in one CSV, as the tables show them */}
+            <CardHead title="The numbers side by side" actions={<CsvButton name={`compare ${res.a.symbol} ${res.b.symbol}`} label="the numbers side by side"
+              rows={sections.flatMap((sec) => sec.labels.map((l) => ({ sec, l })))}
+              columns={[{ key: "s", header: "Section", cell: (x) => x.sec.title }, { key: "m", header: "Measure", cell: (x) => x.l },
+                { key: "a", header: res.a.symbol, cell: (x) => show(ra[key(x.sec.title, x.l)], res.a, footsOf(x.sec)) },
+                { key: "b", header: res.b.symbol, cell: (x) => show(rb[key(x.sec.title, x.l)], res.b, footsOf(x.sec)) }]} />} />
             {/* every section's columns line up: the same widths in each table, so TCS and INFY never shift (DD-060) */}
             <div className="k-stack cmp-sections">
             {sections.map((sec) => {

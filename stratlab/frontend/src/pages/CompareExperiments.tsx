@@ -139,7 +139,7 @@ export function CompareExperiments() {
       </Card>
       <Card label="The numbers">
         <CardHead level={3} title="The numbers" info={BOLD_NOTE} infoLabel="About the numbers" />
-        <DataTable label="Compared numbers" columns={cols} rows={lines} rowKey={(l) => l.label} />
+        <DataTable csv="experiments compared" label="Compared numbers" columns={cols} rows={lines} rowKey={(l) => l.label} />
       </Card>
       {notShown}
     </div>

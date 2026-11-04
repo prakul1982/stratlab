@@ -64,8 +64,8 @@ export const FEATURES: Record<PlanId, string[]> = {
     `Paper trading trial: ${L.free.live_limit} strategy on 1 stock for 5 market days from your first start, then Basic or Pro`,
     "Options builder with Greeks and breakevens after charges",
     `Today's derivatives positioning and F&O contract changes, and a journal of your last ${L.free.journal_trades} trades`,
-    // a deep dive on Free has the report card and checklist too (DP1-021); a company's PDF and PowerPoint are one deck (DP1-026)
-    `${L.free.deepdives_per_month} company deep dives a month, each with the report card and checklist, and ${L.free.decks_per_month} company slide deck (its PDF and PowerPoint count as one)`,
+    // a deep dive on Free has the report card and checklist too (DP1-021); a company's PDF and PowerPoint are one deck (DP1-026); a theme's deck counts the same (EXPORT)
+    `${L.free.deepdives_per_month} company deep dives a month, each with the report card and checklist, and ${L.free.decks_per_month} slide deck of a company or a theme (its PDF and PowerPoint count as one)`,
     "Price charts, screens, sector rotation, today's market breadth, ETF prices against NAV and red flags on every company",
     `${L.free.stock_alerts} stock alerts and ${L.free.screens} saved screens; import up to ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds and ${L.free.networth_items} net worth entries; Market Watch with ${L.free.watchlists} list of ${L.free.watchlist_symbols} symbols and drawings kept on ${L.free.chart_saves} charts`,
     // the same words as the table's row (DP2-010: "a weekly My Stocks email" here, "Weekly Market Brief and My Stocks" there)
@@ -76,7 +76,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups on intraday candles and options at set times, with trade notifications and a daily report`,
     "Trading tools: full trade journal, positioning history, stock futures history, closing auction history, chart replay practice, an India VIX entry filter, SIP dip rules",
     "Alerts: F&O change alerts, ETF gap alerts, IPO alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email",
-    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} company slide decks a month, business updates in numbers, named-holder search and IPO offer document summaries`,
+    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} slide decks of companies or themes a month, business updates in numbers, named-holder search and IPO offer document summaries`,
     "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags (and each holding's filings and results date), Watchlist at a glance, market breadth charts, margin funding history",
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, deposit rates after your own tax, a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, ${L.basic.watchlists} Market Watch lists of ${L.basic.watchlist_symbols}, drawings kept on every chart`],
@@ -107,7 +107,7 @@ export const ADS: Record<PlanId, string> = { free: "After you allow them", basic
 
 export const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backtests a month, each with a verdict"], ["ai_builds_per_month", "AI strategy builds a month"],
   ["live_limit", "Paper trading sessions at a time"], ["group_size", "Instruments in a group test"], ["deepdives_per_month", "Company deep dives a month"],
-  ["decks_per_month", "Company slide decks a month (a company's PDF and PowerPoint are one deck)"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"],
+  ["decks_per_month", "Slide decks a month, of a company or a theme (its PDF and PowerPoint are one deck)"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"],
   ["mf_schemes", "Mutual fund schemes kept"], ["networth_items", "Net worth entries"], ["journal_trades", "Trades the journal keeps"],
   ["watchlists", "Market Watch lists (the first is your Research watchlist)"], ["watchlist_symbols", "Symbols in one Market Watch list"],
   ["chart_saves", "Charts that keep your drawings and indicators"], ["chart_indicators", "Indicators on one chart"],

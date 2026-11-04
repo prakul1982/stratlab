@@ -116,7 +116,7 @@ export function CorpActionsPage() {
     return (
       <div key={d} className="inv-day" data-testid="actions-day">
         <span className="k-eyebrow">Ex-date {exDay(d)}{d === data?.today ? " · today" : ""} · {on.length} {on.length === 1 ? "action" : "actions"}</span>
-        <DataTable label={`Corporate actions going ex on ${exDay(d)}`} rows={on} rowKey={(r) => r.id} columns={columns} stack phonePage={10} />
+        <DataTable csv={`corporate actions ${d}`} label={`Corporate actions going ex on ${exDay(d)}`} rows={on} rowKey={(r) => r.id} columns={columns} stack phonePage={10} />
       </div>
     );
   };

@@ -3003,10 +3003,11 @@ def use_deep(profile, kind: str, sym: str, region: str) -> None:
         db.add_usage(profile["id"], mark)
 
 
-def check_deep(profile, kind: str, sym: str, region: str) -> str | None:
-    """use_deep's check alone: the usage mark to record, None when this company already counted this month."""
+def check_deep(profile, kind: str, sym: str, region: str, mark: str | None = None) -> str | None:
+    """use_deep's check alone: the usage mark to record, None when this company already counted this month. `mark`: what is counted
+    when it isn't a company (a theme's deck, "deck:theme:IN:india-defence": EXPORT), from the same monthly decks."""
     key, limit_of = DEEP_KINDS[kind]
-    mark, since = f"{kind}:{region}:{sym}", month_start_iso()
+    mark, since = mark or f"{kind}:{region}:{sym}", month_start_iso()
     if db.count_usage(profile["id"], mark, since):
         return None
     limit = limit_of(profile["_plan"])
@@ -3015,10 +3016,11 @@ def check_deep(profile, kind: str, sym: str, region: str) -> str | None:
         if kind == "deepdive":
             upgrade(plan_limit_message(profile["_plan"], key, f"You've opened {limit} compan{'y' if limit == 1 else 'ies'} in the deep dive this month",
                                        "deep dives", monthly=True, after="Companies you've already opened this month still open."), "deepdive_limit")
-        # a deck is a company's: its PDF and its PowerPoint count as one, so those still download (DP1-026)
-        upgrade(plan_limit_message(profile["_plan"], key, f"You've made {limit} company deck{'' if limit == 1 else 's'} this month", "decks", monthly=True,
-                                   after="A company's PDF and PowerPoint count as one deck, so the deck of a company you've already made one "
-                                         "for still downloads in either format."), "deck_limit")
+        # a deck is a company's or a theme's: its PDF and its PowerPoint count as one, so those still download (DP1-026); a company's and
+        # a theme's decks share the month's count (EXPORT)
+        upgrade(plan_limit_message(profile["_plan"], key, f"You've made {limit} slide deck{'' if limit == 1 else 's'} this month", "decks", monthly=True,
+                                   after="A company's or a theme's PDF and PowerPoint count as one deck, so a deck you've already made this "
+                                         "month still downloads in either format."), "deck_limit")
     return mark
 
 

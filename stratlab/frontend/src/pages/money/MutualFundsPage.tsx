@@ -296,9 +296,9 @@ export function MutualFundsPage() {
           <Card label="Your schemes">
             <CardHead title="Your schemes" info={'Gain is the current value less the cost of the units held. "Taxed as" is read from the category; change it, under the scheme, where your fund\'s documents say otherwise. Open a scheme for its units, NAV, cost, taxes, SIP record and sales.'} />
             {/* each scheme is one row, said once; fully redeemed schemes apart, so the list is what you hold (DG-026) */}
-            {held.length > 0 && <FoldTable label="Schemes" columns={schemeCols} rows={held} rowKey={(s) => s.key} detail={detail} openWhen={open} />}
+            {held.length > 0 && <FoldTable csv="mutual fund schemes" label="Schemes" columns={schemeCols} rows={held} rowKey={(s) => s.key} detail={detail} openWhen={open} />}
             <Earlier label="Schemes you no longer hold" count={schemes.length - held.length} className="in-card">
-              <FoldTable label="Schemes you no longer hold" columns={schemeCols} rows={schemes.filter((s) => s.units <= 0)} rowKey={(s) => s.key} detail={detail} openWhen={open} />
+              <FoldTable csv="mutual fund schemes no longer held" label="Schemes you no longer hold" columns={schemeCols} rows={schemes.filter((s) => s.units <= 0)} rowKey={(s) => s.key} detail={detail} openWhen={open} />
             </Earlier>
             <Disclosure summary="What each tax kind means">
               <Notes label="What each tax kind means" items={(Object.keys(view.kinds) as Kind[]).map((k) => view.kinds[k])} />
@@ -323,7 +323,7 @@ export function MutualFundsPage() {
                     { key: "tax", label: "Tax at special rates", value: inr(y.tax), note: "Before cess; slab-rate gains are taxed with your income" },
                     { key: "div", label: "Dividends paid out", value: inr(y.dividends), note: "Income at your slab rate" },
                   ]} />
-                  {y.buckets.length > 0 && <DataTable label="Gains by rate" columns={bucketCols} rows={y.buckets} rowKey={(b) => b.key} />}
+                  {y.buckets.length > 0 && <DataTable csv="mutual fund gains by rate" label="Gains by rate" columns={bucketCols} rows={y.buckets} rowKey={(b) => b.key} />}
                   {y.steps.length > 0 && <Notes label={`How the gains of ${y.label} are worked out`} items={y.steps} />}
                   <p className="k-note">The long-term exemption here counts your funds alone. The <Link className="link" to="/tax-report">tax report</Link> adds these gains to your shares', shares the exemption and set-off between them, and includes them in the year's total tax estimate.</p>
                   {/* the split by scheme is under each scheme in the list, with all its years (it was a table of every scheme again) */}

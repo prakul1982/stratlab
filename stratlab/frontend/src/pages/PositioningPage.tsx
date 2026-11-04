@@ -83,7 +83,7 @@ function ParticipantTable({ rows, kind, seg, split }: { rows: PRow[]; kind: "oi"
   ];
   return (
     <div data-testid="part-table" data-segment={seg}>
-      <DataTable label={`${what[0].toUpperCase()}${what.slice(1)} by participant, in contracts`} columns={columns} rows={rows} rowKey={(r) => r.id} stack
+      <DataTable csv={`positioning ${what}`} label={`${what[0].toUpperCase()}${what.slice(1)} by participant, in contracts`} columns={columns} rows={rows} rowKey={(r) => r.id} stack
         rowAttrs={(r) => ({ "data-participant": r.id })} />
     </div>
   );
@@ -218,7 +218,7 @@ function PcrTable({ coverage }: { coverage?: Coverage }) {
       <>
       {/* a card per index on a phone: the fourth column sat past the right edge under the fade (R79-007) */}
       <div data-testid="pcr-table">
-        <DataTable label="Put-call ratio for each index's nearest expiry" columns={cols} rows={rows} rowKey={(r) => r.name} stack rowAttrs={(r) => ({ "data-pcr": r.name })}
+        <DataTable csv="put-call ratio" label="Put-call ratio for each index's nearest expiry" columns={cols} rows={rows} rowKey={(r) => r.name} stack rowAttrs={(r) => ({ "data-pcr": r.name })}
           rowNote={(r) => (r.source ? undefined : coverage?.chains[r.name]?.days ? `No live chain now; recorded since ${dayName(coverage.chains[r.name].first)}` : "No live chain now, and not recorded yet")} />
       </div>
       <p className="k-note" data-testid="pcr-note">{pcrNote(rows)}</p>
@@ -315,7 +315,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
             {oiBasis(c) && <p className="k-note" data-testid="chain-basis">{oiBasis(c)}</p>}
             {c.change_from && <p className="k-note">Change since the recording of {istTime(c.change_from)}.</p>}
             <Disclosure summary="Show the strikes as a table">
-              <DataTable grid label={`${name} open interest, change and volume by strike, in ${unit}`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
+              <DataTable csv={`option chain ${name}`} grid label={`${name} open interest, change and volume by strike, in ${unit}`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
                 rowAttrs={(r): Record<string, string> => (r.strike === c.atm ? { "data-atm": "1" } : {})} />
             </Disclosure>
             {/* the page's own note says the rest, once, at its foot (R66-006: the same sentence twice in a row) */}

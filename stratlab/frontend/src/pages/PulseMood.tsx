@@ -77,7 +77,7 @@ export function SectorsTable({ s }: { s: NonNullable<PulseMood["sectors"]> }) {
     <Card testId="pulse-sectors">
       <CardHead title="Sectors" info="Each sector index's move today, over the last 5 and 21 sessions (against today's level), and the two of its largest companies that moved most, from their market value and today's move." />
       <p className="k-small" data-testid="pulse-sector-count">{sectorCount(s)}.</p>
-      <DataTable stack label="Sector indices, best first" columns={cols} rows={s.rows} rowKey={(r) => r.name} />
+      <DataTable csv="sector indices" stack label="Sector indices, best first" columns={cols} rows={s.rows} rowKey={(r) => r.name} />
     </Card>
   );
 }

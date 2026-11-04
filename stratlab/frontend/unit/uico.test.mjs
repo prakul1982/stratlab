@@ -87,7 +87,7 @@ test("item 6: the documents read, the business model, the measures, the plans an
   assert.match(dd, /label="Operating measures, from the company"/);
   assert.doesNotMatch(dd, /className="rs-grid"/);
   assert.doesNotMatch(dd, /className="promises"/);
-  assert.match(dd, /<DataTable label="Growth a year"/);                                              // the growth tiles are a table too
+  assert.match(dd, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Growth a year"/);                                              // the growth tiles are a table too
   assert.match(dd, /<DataTable label="How it's valued"/);
 });
 

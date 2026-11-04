@@ -13,7 +13,7 @@ PLANS = {
         "stock_alerts": 5,            # active price and indicator alerts on stocks
         "screens": 2,                 # saved stock screens
         "deepdives_per_month": 2,     # companies opened in the deep dive (each counted once a month)
-        "decks_per_month": 1,         # company slide decks (PowerPoint or PDF)
+        "decks_per_month": 1,         # slide decks of a company or a theme (PowerPoint or PDF)
         "networth_items": 5,          # typed-in entries in Net worth (assets, loans and policies)
         "mf_schemes": 5,              # mutual fund schemes kept (Money: mutual funds)
         "journal_trades": 50,         # closed trades the trade journal keeps and counts (Trade: journal)
@@ -200,7 +200,7 @@ def deepdives(plan: str) -> int | None:
 
 
 def decks(plan: str) -> int | None:
-    """How many company decks a month (None: unlimited)."""
+    """How many slide decks (a company's or a theme's) a month (None: unlimited)."""
     return PLANS[plan]["decks_per_month"]
 
 

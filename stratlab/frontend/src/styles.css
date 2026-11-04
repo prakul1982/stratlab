@@ -1815,6 +1815,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 @media (prefers-reduced-motion: reduce) { .k-tile { transition: none; } .k-tile:hover { transform: none; } }
 
 /* table */
+/* EXPORT: a table's "Download CSV" sits over its top right edge, out of the way of the figures */
+.k-tbl-tools { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: -4px; }
 .k-tbl-wrap { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px;
   background: linear-gradient(to right, var(--card) 30%, transparent) 0 0 / 28px 100% no-repeat local, linear-gradient(to left, var(--card) 30%, transparent) 100% 0 / 28px 100% no-repeat local,
     radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 0 0 / 16px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 100% 0 / 16px 100% no-repeat scroll; }
