@@ -78,7 +78,16 @@
 .lib-about { margin: 0; }
 .lib-mini { display: none; }
 .k-row.lib-more { display: none; }
-.lib-table .k-table td[data-label="Checks"] { min-width: 150px; }
+/* fixed column widths on a wide screen, so the columns don't move as the fonts and the figures arrive (LIVE3-012: layout shift) */
+@media (min-width: 641px) {
+  .lib-table .k-table { table-layout: fixed; width: 100%; }
+  .lib-table .k-table th:nth-child(1) { width: 18%; }
+  .lib-table .k-table th:nth-child(2) { width: 14%; }
+  .lib-table .k-table th:nth-child(n+3):nth-child(-n+7) { width: 8.4%; }
+  .lib-table .k-table th:nth-child(8) { width: 14%; }
+  .lib-table .k-table th:nth-child(9) { width: 12%; }
+  .lib-table .k-table td, .lib-table .k-table th { overflow-wrap: anywhere; }
+}
 @media (max-width: 640px) {
   .lib-table .k-table tr.lib-extra { display: none; }
   .k-row.lib-more { display: flex; }
