@@ -69,3 +69,18 @@ def test_insider_trades_are_judged_across_the_whole_market():
     stale = platform_check.check_insider_trades(Feed([{"date": (today - timedelta(days=12)).isoformat()}]))
     assert stale["state"] == "warn" and "unusual for the whole market" in stale["detail"] and "Reliance" not in stale["detail"]
     assert platform_check.check_insider_trades(Feed([]))["state"] == "warn"
+
+
+# ---------- the whole-market audit: every mismatch is checked again after a day, not only prices ----------
+def test_a_mismatch_of_any_area_a_day_old_is_checked_again(w):
+    a = audit.MarketAudit(lambda: {}, lambda s: {"symbol": s, "issues": []})
+    a._load()
+    a.listing = {"BSE:512477": {"name": "Betex"}, "TBZ": {"name": "TBZ"}, "OK": {"name": "OK"}, "NEW": {"name": "New"}}
+    old = (datetime.now(timezone.utc) - timedelta(hours=audit.STALE_MISMATCH_HOURS + 1)).isoformat()
+    fresh = datetime.now(timezone.utc).isoformat()
+    a.rows["BSE:512477"] = {"symbol": "BSE:512477", "at": old, "issues": [{"level": "mismatch", "area": "Valuation", "text": "P/E"}]}
+    a.rows["TBZ"] = {"symbol": "TBZ", "at": old, "issues": [{"level": "mismatch", "area": "Prices", "text": "price"}]}
+    a.rows["OK"] = {"symbol": "OK", "at": old, "issues": [{"level": "gap", "area": "Documents", "text": "x"}]}
+    a.rows["NEW"] = {"symbol": "NEW", "at": fresh, "issues": [{"level": "mismatch", "area": "Numbers", "text": "x"}]}
+    # every area whose mismatch is a day old, oldest first; a gap or a mismatch found today is left alone
+    assert set(a.stale_mismatches()) == {"BSE:512477", "TBZ"}
