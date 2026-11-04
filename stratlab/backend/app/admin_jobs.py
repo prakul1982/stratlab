@@ -82,14 +82,24 @@ def next_run_label(schedule: str | None, now: datetime | None = None) -> str | N
     keeps the sentence. Days off (weekends, holidays) are not known here: the label says when the clock next strikes."""
     from datetime import timedelta
     from zoneinfo import ZoneInfo
-    text = re.sub(r"\bevery\b[^;]*", "", schedule or "", flags=re.I)
+    full = schedule or ""
+    text = re.sub(r"\bevery\b[^;]*", "", full, flags=re.I)
     if re.search(r"\b(?:off|never)\b", text, re.I) and not _CLOCK.search(text):
         return None
     ist, ny = ZoneInfo("Asia/Kolkata"), ZoneInfo("America/New_York")
     now = now or datetime.now(timezone.utc)
     best = None
-    for m in _CLOCK.finditer(text):
-        h, mi, ap = int(m.group(1)), int(m.group(2)), (m.group(3) or "").upper()
+    # a clock written without AM/PM after one with it is in the same half of the day ("from 3:14 to 3:40 PM IST; the day is stored
+    # after 3:40" is 3:40 PM: Admin said "Next run: Thu 5 Nov, 3:40 AM IST", owner 4 Nov): the meridiem carries over from the clock
+    # before it in the whole sentence, the "every" clause included
+    skip = [m.span() for m in re.finditer(r"\bevery\b[^;]*", full, flags=re.I)]
+    last_ap = ""
+    for m in _CLOCK.finditer(full):
+        last_ap = (m.group(3) or "").upper() or last_ap
+        if any(a <= m.start() < b for a, b in skip):
+            continue
+        h, mi = int(m.group(1)), int(m.group(2))
+        ap = (m.group(3) or "").upper() or (last_ap if h <= 12 and not m.group(1).startswith("0") else "")
         if ap == "PM" and h < 12:
             h += 12
         elif ap == "AM" and h == 12:
@@ -98,7 +108,7 @@ def next_run_label(schedule: str | None, now: datetime | None = None) -> str | N
             continue
         # the zone named after the time, else the market word before it ("US 8:30 AM"), else India's
         zone_word = (m.group(4) or "").lower()
-        before = text[max(0, m.start() - 24):m.start()]
+        before = full[max(0, m.start() - 24):m.start()]
         tz = ny if zone_word.startswith(("new york", "et")) else ist if zone_word == "ist" else ny if re.search(r"\bUS\b[^,;]*$", before) else ist
         local = now.astimezone(tz)
         t = local.replace(hour=h, minute=mi, second=0, microsecond=0)

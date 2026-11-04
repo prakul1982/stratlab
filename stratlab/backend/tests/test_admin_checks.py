@@ -84,3 +84,11 @@ def test_a_mismatch_of_any_area_a_day_old_is_checked_again(w):
     a.rows["NEW"] = {"symbol": "NEW", "at": fresh, "issues": [{"level": "mismatch", "area": "Numbers", "text": "x"}]}
     # every area whose mismatch is a day old, oldest first; a gap or a mismatch found today is left alone
     assert set(a.stale_mismatches()) == {"BSE:512477", "TBZ"}
+
+# ---------- a schedule's clock without AM/PM takes the one before it ----------
+def test_a_bare_clock_after_a_pm_one_is_pm():
+    now = datetime(2026, 11, 4, 17, 0, tzinfo=timezone.utc)
+    assert admin_jobs.next_run_label("Every 30 seconds from 3:14 to 3:40 PM IST; the day is stored after 3:40", now) == "Thu 5 Nov, 3:40 PM IST"
+    assert admin_jobs.next_run_label("8:15 AM and 7:50 PM IST on trading days", now) == "Thu 5 Nov, 8:15 AM IST"
+    assert admin_jobs.next_run_label("Every quarter hour (09:15 to 15:30 IST) while the Indian market is open", now) is None
+
