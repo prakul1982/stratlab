@@ -12,7 +12,7 @@ import type { ScaleMode } from "./scales";
 import { STAGE_MEANING } from "../../lib/stageNote";
 import { clampParam, newStudy, STAGE_NAMES, STUDIES, STUDY, studyLabel, type StudyConfig, type StudyType } from "./studies";
 import { aggregate, dropSpikes, indexAtOrBefore, merge, parseTime, toBars, type Bar, type RawCandle } from "./transforms";
-import { applyTick, closesIn, countdown, stepTf, TF_KEYS, WORKSPACE_TFS, type Tick, type VolState } from "./ticks";
+import { applyTick, closesIn, countdown, marketPill, stepTf, TF_KEYS, WORKSPACE_TFS, type Tick, type VolState } from "./ticks";
 import { useApp } from "../../lib/app";
 import { watchSize } from "../../lib/resize";
 import { api } from "../../lib/api";
@@ -66,6 +66,8 @@ export interface PriceChartProps {
   feed?: LiveFeed;
   /** Whether the market is open now, from its hours: a chart whose candles are live says "Market closed" when it isn't. */
   marketOpen?: boolean | null;
+  /** The market's id ("IN", "US"): the session's close and its zone name for the "last close" time once it is shut (LIVE3-011). */
+  market?: string;
   /** Keep this symbol's timeframe and range with its drawings and indicators, and open on them next time (the workspace). */
   rememberView?: boolean;
   /** While set, a click on the candles picks that price (chart replay's stop and target) instead of drawing. */
@@ -731,7 +733,8 @@ const [saveNote, setSaveNote] = useState("");
   const studyLimit = me ? indicatorsSaid({ indicators: me.plan_info.chart_indicators ?? null, next: { indicators: nextWith("chart_indicators") } }, mine.length, planName) : null;
   const keptSaid = kept && me && (list.length > 0 || mine.length > 0) ? chartsSaid(me.plan_info.chart_saves ?? null, kept.charts, kept.saved, nextWith("chart_saves"), planName) : null;
   const formingIn = flags.live ? closesIn(e?.bars[e.bars.length - 1], tf, now, props.feed?.market) : null;
-  const pill = marketPill(props.marketOpen, flags, streaming, formingIn != null);
+  const lastBar = e?.bars[e.bars.length - 1];
+  const pill = marketPill(props.marketOpen, flags, streaming, formingIn != null, lastBar, tf, props.market ?? props.feed?.market);
   const stageH = height + ownPanes * PANE_ADD;
 
   // VR6-018: the view buttons (zoom, reset, picture, full screen) sat alone on a second line at the right of the toolbar on a laptop;
@@ -950,11 +953,3 @@ function wallText(w: number, intraday: boolean): string {
 }
 
 
-/** The pill that says how current the prices are. A market that is shut says so (the last price is final, never "live"); a
- * delayed source says "Delayed"; the broker's and the crypto exchange's are "Live", and say whether they arrive tick by tick. */
-function marketPill(open: boolean | null | undefined, f: { live?: boolean; delayed?: boolean }, streaming: boolean, forming: boolean): { cls: string; text: string; title: string } | null {
-  if (open === false && (f.live || f.delayed)) return { cls: "closed", text: "Market closed", title: "The market isn't trading now: this is its last price." };
-  if (f.delayed) return { cls: "delayed", text: "Delayed", title: "These prices can be up to 15 minutes behind the market, or from the last session." };
-  if (f.live) return { cls: "live", text: "Live", title: streaming ? "Prices arrive tick by tick." : forming ? "Prices are read every few seconds." : "The newest candle is the market's own." };
-  return null;
-}

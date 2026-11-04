@@ -116,3 +116,33 @@ export const TF_KEYS: Record<string, string> = { "1": "1m", "2": "3m", "3": "5m"
 
 /** Every timeframe the chart workspace offers, shortest first (the sizes the server builds from what a source sends). */
 export const WORKSPACE_TFS = ["1m", "3m", "5m", "10m", "15m", "30m", "1h", "2h", "4h", "1d", "1w", "1mo"] as const;
+
+/** The pill that says how current the prices are (LIVE3-011: a green "Live" three hours after NSE's close). "Live" only while the
+ * market is open, or, where the chart isn't told whether it is, while the newest candle's window holds the present moment (fresh
+ * prices); a market that is shut says "Closed · last close <when>" (the last price is final); a delayed source says "Delayed". */
+export function marketPill(open: boolean | null | undefined, f: { live?: boolean; delayed?: boolean }, streaming: boolean, forming: boolean,
+  last?: { t: number; w: number } | null, tf?: string, market?: string): { cls: string; text: string; title: string } | null {
+  if (!f.live && !f.delayed) return null;
+  if (open === false) {
+    const when = last ? lastCloseText(last, tf ?? "1d", market) : "";
+    return { cls: "closed", text: when ? `Closed · last close ${when}` : "Market closed", title: "The market isn't trading now: this is its last price." };
+  }
+  if (f.delayed) return { cls: "delayed", text: "Delayed", title: "These prices can be up to 15 minutes behind the market, or from the last session." };
+  if (open !== true && !forming) return null;        // not told the market is open, and no candle forming now: nothing says the prices are live
+  return { cls: "live", text: "Live", title: streaming ? "Prices arrive tick by tick." : forming ? "Prices are read every few seconds." : "The newest candle is the market's own." };
+}
+
+/** When the newest candle closed, in the exchange's own time (a candle's `w` is its wall-clock time): "4 Nov, 15:30 IST" for an
+ * intraday candle (its end, never past the session's close), "4 Nov" for a daily or longer one. */
+const ZONE: Record<string, string> = { IN: "IST", MCX: "IST", CDS: "IST", US: "ET" };
+export function lastCloseText(last: { t: number; w: number }, tf: string, market?: string): string {
+  const ms = TF_MS[tf];
+  const day = (d: Date) => d.toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short" }).replace(/\bSept\b/, "Sep");
+  if (ms == null || ms >= 86_400_000) return day(new Date(last.w));
+  const session = market ? SESSION_MIN[market] : undefined;
+  const midnight = Math.floor(last.w / 86_400_000) * 86_400_000;
+  const end = Math.min(last.w + ms, session ? midnight + session[1] * 60_000 : midnight + 86_399_000);
+  const hm = new Date(end).toLocaleTimeString("en-GB", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false });
+  const zone = market ? ZONE[market] : undefined;
+  return `${day(new Date(last.w))}, ${hm}${zone ? ` ${zone}` : ""}`;
+}
