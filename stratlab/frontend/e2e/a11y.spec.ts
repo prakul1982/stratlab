@@ -429,6 +429,10 @@ test("a number that refreshes by itself is not in a live region, and what has fo
   await page.clock.install({ time: new Date(at) });
   await page.goto("/mine");
   await expect(page.getByTestId("mine-markets").locator(".mine-mkt")).toHaveCount(6, { timeout: 30_000 });
+  // the first load is over before listening: a lower card still reading when the faked clock jumps a minute shows its
+  // "Still loading…" note (rightly announced), which is the first load's, not the refresh's (R2: the cards now start as soon
+  // as the first screen's calls are back, LIVE1B-085, so the jump could land while the calendars were out)
+  await expect(page.locator("main [role=status][aria-busy=true]")).toHaveCount(0, { timeout: 30_000 });
   const control = page.getByTestId("mine-markets").locator("button, a").first();      // the strip that refreshes holds a control the keyboard can be on
   await expect(control).toBeVisible({ timeout: 30_000 });
   await control.focus();
