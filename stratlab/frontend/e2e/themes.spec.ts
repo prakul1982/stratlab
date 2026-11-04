@@ -34,10 +34,19 @@ test("the theme page is a deep dive made of tables, with each company only where
   const phone = info.project.name === "phone";
   const errors = await open(page, phone ? 280 : 277);
   const main = page.locator("main").first();
+  // THEMES: every company of the theme's official industries (Iron & Steel, the mining industries) is in it, by layer, whatever the AI
+  // said; the AI's additions from other industries are marked (NTPC kept in its own words, ONGC left out by its own); Vedanta, which the
+  // map doesn't name, is listed under its own industry
+  const members = page.locator("#theme-members");
+  await expect(members.getByTestId("theme-counts")).toHaveText(/^6 companies: 5 from the official industry list, 1 added \(1 confirmed from its own description\)\.$/);
+  await expect(members).toContainText("Official industries: Iron & Steel");
+  await expect(members.getByRole("heading", { name: /Diversified Metals · official industry/ })).toBeVisible();
+  await expect(members.getByRole("table", { name: /Diversified Metals: companies in the theme/ })).toContainText("Vedanta");
+  await expect(members.getByRole("table", { name: /Power generation: companies in the theme/ })).toContainText("Added");
   // the whole chain in one table, with the basis said
   const chain = page.getByRole("table", { name: /value chain by layer/i });
   await expect(chain.locator("thead th")).toHaveText([/^Layer$/, /^Companies$/, /^i?Revenue$/, /^i?EBITDA margin$/, /^Net margin$/, /^i?ROCE$/]);
-  await expect(chain.locator("tbody tr")).toHaveCount(3);
+  await expect(chain.locator("tbody tr")).toHaveCount(4);          // the map's three layers, and Diversified Metals for Vedanta (THEMES)
   await expect(main).toContainText("Consolidated accounts where the company files them");
   // a layer: its companies in their own words, the median and the range as rows; the wrong placement (ONGC under steel) isn't there
   const steel = page.locator("#layer-1");

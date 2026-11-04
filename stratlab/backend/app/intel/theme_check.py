@@ -38,6 +38,7 @@ _TOKEN = re.compile(r"[a-z0-9]+")
 MIN_QUOTE_WORDS = 4
 MAX_QUOTE_WORDS = 40
 EVIDENCE_CHARS = 700          # a company's description as sent to the AI (and kept): enough to say what it does
+EVIDENCE_MAX = 1200           # ...with the lines of its own filings after it (theme_routes.own_filings, THEMES item 6)
 BATCH = 6                     # companies per AI request: small enough for a free model to read each description carefully
 EVIDENCE_BUDGET = 40.0        # seconds a request may spend reading company descriptions before it answers with what it has
 
@@ -68,8 +69,8 @@ def supports(quote, group_text) -> bool:
     return bool(stems(quote) & stems(group_text))
 
 
-def clean_description(text) -> str:
-    return " ".join(str(text or "").split())[:EVIDENCE_CHARS]
+def clean_description(text, limit: int = EVIDENCE_CHARS) -> str:
+    return " ".join(str(text or "").split())[:limit]
 
 
 _SENTENCE = re.compile(r"[^.;!?]+")
@@ -157,8 +158,8 @@ def gather_evidence(symbols: list[str], read, budget: float = EVIDENCE_BUDGET, w
             sym, ev = f.result()
             if ev == "late":
                 pending.add(sym)
-            elif ev and clean_description(ev.get("about")):
-                got[sym] = {**ev, "about": clean_description(ev["about"])}
+            elif ev and clean_description(ev.get("about"), EVIDENCE_MAX):
+                got[sym] = {**ev, "about": clean_description(ev["about"], EVIDENCE_MAX)}
     return got, pending
 
 

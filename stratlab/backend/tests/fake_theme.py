@@ -15,7 +15,7 @@ MAP = {
     "clusters": [], "screen": [],
     "value_chain": [
         {"layer": "Coal and metal mining", "description": "Miners dig coal and metal ore out of the ground; their margin follows what the ore sells for and how much machinery and land they need.",
-         "companies": [{"name": "Coal India", "ticker": "COALINDIA"}, {"name": "Vedanta", "ticker": "VEDL"}]},
+         "companies": [{"name": "Coal India", "ticker": "COALINDIA"}]},          # Vedanta isn't named: it joins from its industry
         {"layer": "Steel making", "description": "Steel makers turn ore and coal into steel; capital needs are heavy and prices follow the world market.",
          "companies": [{"name": "Tata Steel", "ticker": "TATASTEEL"}, {"name": "JSW Steel", "ticker": "JSWSTEEL"}, {"name": "Steel Authority of India", "ticker": "SAIL"},
                        {"name": "Oil and Natural Gas Corporation", "ticker": "ONGC"}]},
@@ -24,6 +24,17 @@ MAP = {
                   {"text": "The old steel export scheme extension supports sales abroad.", "policy": "Old steel scheme", "search": "Old steel scheme"}],
     "risks": [{"text": "Imports from abroad can pull domestic prices down.", "policy": "", "search": ""}],
 }
+
+# the exchange's basic industry of the demo theme's companies (the demo pages carry only a sector), so the theme's base (app/intel/
+# theme_base.py: "India steel and mining" is Iron & Steel and the mining industries) is the companies of those industries; NTPC and
+# ONGC are the AI's additions from other industries (NTPC kept in its own words, ONGC left out by its own); Vedanta, which the map
+# doesn't name, is listed under its own industry
+INDUSTRY = {"TATASTEEL": "Iron & Steel", "JSWSTEEL": "Iron & Steel", "SAIL": "Iron & Steel", "COALINDIA": "Coal", "VEDL": "Diversified Metals",
+            "NTPC": "Power Generation", "ONGC": "Oil Exploration & Production"}
+
+
+def with_industries(rows: list[dict]) -> list[dict]:
+    return [{**r, "industry": INDUSTRY[r["symbol"]]} if r.get("symbol") in INDUSTRY else r for r in rows]
 
 
 def answer(system: str, text: str) -> str | None:

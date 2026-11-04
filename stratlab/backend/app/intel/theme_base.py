@@ -1,0 +1,359 @@
+"""A theme's companies start from the exchange's own classification; the AI only adds on top (THEMES, owner 31 Oct: "the whole purpose
+of themes is company discoverability and understanding of a sector"; "should we index every company with their own sector so no AI
+issue?"). Live before this, "India Defence" showed 4 companies and left out 9: the AI decided who was in.
+
+- The sector index: the screener's stored index (screens.load_index) already holds every listed company's official classification, from
+  its stored page: India, NSE's macro-economic sector and basic industry (the exchange's four-level list; "Aerospace & Defense",
+  "Ship Building & Allied Services", "Explosives"); the US, the SEC's SIC division and industry ("Semiconductors & Related Devices").
+  Nothing more is read for it: the index is rebuilt with the company pages, so a new listing joins when its page is built. (A US
+  company with no SIC code stored has no page built and no market value either, so it can't be shown in a theme yet.)
+- The theme's industries (`industries_for`): a curated table for the usual themes and the page's suggestions; any other theme, the AI
+  picks from the market's own list of industries (a name that isn't on it is dropped), kept a month in storage.
+- Membership (`with_base`): every company in those industries is the base. The AI's map can sort a base company into one of its
+  layers and show the words from its description, but a "no" from that check only moves it out of that layer, never out of the
+  theme. Companies the AI names from other industries are the additions, checked against their own descriptions as before
+  (theme_check.py): confirmed with the quote, or not yet confirmed; a clear "no" leaves an addition out.
+
+No source is called here; every name and industry is the stored index's."""
+import json
+import re
+from datetime import datetime, timezone
+
+INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
+FIGURES_MAX = 60                # companies the dive works figures out for: every one the AI named, then the largest of the base
+DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
+
+# The usual themes and the page's suggestions: the official industries at their core. `words`: a theme naming any of them (or a
+# phrase) has these industries; `unless`: a phrase that means a narrower theme with its own entry. A market with no list here is left to
+# the AI's pick; an empty list says no official industry is the theme's core (a narrow theme inside a wide industry).
+CONCEPTS = [
+    {"words": {"defence", "defense", "military", "missile", "warship", "armament", "ammunition", "munition", "drone", "aerospace"},
+     "IN": ["Aerospace & Defense", "Ship Building & Allied Services", "Explosives"], "IN_named": ["BEML"],
+     "US": ["Guided Missiles & Space Vehicles & Parts", "Ordnance & Accessories, (No Vehicles/Guided Missiles)",
+            "Search, Detection, Navigation, Guidance, Aeronautical Sys", "Aircraft Engines & Engine Parts",
+            "Aircraft Parts & Auxiliary Equipment, Nec", "Ship & Boat Building & Repairing", "Aircraft"]},
+    {"words": {"shipbuilding", "shipyard", "shipbuilder"}, "IN": ["Ship Building & Allied Services"], "US": ["Ship & Boat Building & Repairing"]},
+    {"words": {"railway", "rail", "railroad", "train", "metro"}, "IN": ["Railway Wagons"],
+     "IN_named": ["RVNL", "IRCON", "IRFC", "RITES", "IRCTC", "RAILTEL", "BEML", "CONCOR", "KERNEX"],
+     "US": ["Railroads, Line-Haul Operating", "Railroad Equipment"]},
+    {"words": {"ev", "evs"}, "phrases": ("electric vehicle", "electric vehicles", "electric mobility", "e mobility", "electric cars",
+                                        "electric two wheelers", "electric scooters"),
+     "IN": ["Passenger Cars & Utility Vehicles", "2/3 Wheelers", "Commercial Vehicles", "Auto Components & Equipments"],
+     "US": ["Motor Vehicles & Passenger Car Bodies", "Motor Vehicle Parts & Accessories"]},
+    {"words": {"auto", "automobile", "automotive", "car", "carmaker", "vehicle"}, "phrases": ("two wheelers",),
+     "unless": ("ev", "evs", "electric vehicle", "electric vehicles", "electric cars", "electric two wheelers", "electric scooters"),
+     "IN": ["Passenger Cars & Utility Vehicles", "2/3 Wheelers", "Commercial Vehicles", "Tractors", "Auto Components & Equipments",
+            "Tyres & Rubber Products"],
+     "US": ["Motor Vehicles & Passenger Car Bodies", "Motor Vehicle Parts & Accessories", "Tires & Inner Tubes", "Truck & Bus Bodies"]},
+    # India's "Power Generation" mixes coal and gas plants with solar and wind ones, and the module and turbine makers sit in wide electrical
+    # industries: India's renewables are a named list only, so a thermal-only company is out unless the AI names it (THEMES, 4 Nov)
+    {"words": {"renewable", "solar", "wind"}, "phrases": ("clean energy", "green energy", "green power"),
+     "IN": [], "IN_named": ["WAAREEENER", "PREMIERENE", "SUZLON", "INOXWIND", "KPIGREEN", "NTPCGREEN", "ADANIGREEN", "TATAPOWER", "ACMESOLAR",
+                            "SJVN", "NHPC", "JSWENERGY", "EMMVEE", "VIKRAMSOLR", "SAATVIKGL", "WAAREERTL", "WEBELSOLAR", "BORORENEW", "INOXGREEN",
+                            "SWSOLAR", "CLEANMAX", "IREDA"],
+     "US": ["Cogeneration Services & Small Power Producers"],
+     "US_named": ["NEE", "FSLR", "ENPH", "NXT", "BEP", "BEPC", "CWEN", "ORA", "SEDG", "RUN", "SHLS", "FLNC", "ARRY", "CSIQ", "JKS"]},
+    {"words": {"electricity", "grid", "electrification", "utility", "utilities"}, "phrases": ("power sector", "power utilities", "power transmission"),
+     "IN": ["Power Generation", "Integrated Power Utilities", "Power - Transmission", "Power Distribution", "Power Trading",
+            "Heavy Electrical Equipment", "Cables - Electricals"],
+     "US": ["Electric Services", "Electric & Other Services Combined", "Switchgear & Switchboard Apparatus", "Electrical Industrial Apparatus",
+            "Motors & Generators", "Drawing & Insulating Of Nonferrous Wire", "Water, Sewer, Pipeline, Comm & Power Line Construction"]},
+    {"words": {"bank", "banking"}, "IN": ["Private Sector Bank", "Public Sector Bank", "Other Bank"],
+     "US": ["National Commercial Banks", "State Commercial Banks", "Commercial Banks, Nec", "Savings Institution, Federally Chartered",
+            "Savings Institutions, Not Federally Chartered"]},
+    {"words": {"nbfc", "lending", "lender", "microfinance"}, "phrases": ("housing finance", "consumer finance"),
+     "IN": ["Non Banking Financial Company (NBFC)", "Housing Finance Company", "Microfinance Institutions", "Financial Institution"],
+     "US": ["Personal Credit Institutions", "Short-Term Business Credit Institutions", "Miscellaneous Business Credit Institution",
+            "Mortgage Bankers & Loan Correspondents"]},
+    {"words": {"payment", "fintech", "upi"}, "IN": ["Financial Technology (Fintech)"]},
+    {"words": {"insurance", "insurer"}, "IN": ["Life Insurance", "General Insurance", "Insurance Distributors"],
+     "US": ["Life Insurance", "Fire, Marine & Casualty Insurance", "Accident & Health Insurance", "Insurance Agents, Brokers & Service",
+            "Surety Insurance", "Title Insurance", "Insurance Carriers, Nec"]},
+    {"words": {"broking", "broker", "exchanges", "amc", "depository"}, "phrases": ("capital markets", "capital market", "asset management", "wealth management"),
+     "IN": ["Asset Management Company", "Stockbroking & Allied", "Exchange and Data Platform", "Depositories, Clearing Houses and Other Intermediaries",
+            "Other Capital Market related Services", "Ratings", "Financial Products Distributor"],
+     "US": ["Security Brokers, Dealers & Flotation Companies", "Security & Commodity Brokers, Dealers, Exchanges & Services", "Investment Advice"]},
+    {"words": {"pharma", "pharmaceutical", "drug", "drugmaker", "medicine", "generic", "biotech", "biotechnology"},
+     "unless": ("glp 1", "obesity"),
+     "IN": ["Pharmaceuticals", "Biotechnology"],
+     "US": ["Pharmaceutical Preparations", "Biological Products, (No Diagnostic Substances)", "Medicinal Chemicals & Botanical Products",
+            "In Vitro & In Vivo Diagnostic Substances"]},
+    {"words": {"glp"}, "phrases": ("glp 1", "obesity drugs", "weight loss drugs"), "IN": [], "US": []},
+    {"words": {"hospital", "healthcare", "diagnostic", "medtech"}, "phrases": ("medical devices",),
+     "IN": ["Hospital", "Healthcare Service Provider", "Medical Equipment & Supplies", "Healthcare Research, Analytics & Technology"],
+     "US": ["Services-General Medical & Surgical Hospitals, Nec", "Services-Hospitals", "Services-Medical Laboratories",
+            "Surgical & Medical Instruments & Apparatus", "Electromedical & Electrotherapeutic Apparatus"]},
+    {"words": {"software", "saas"}, "phrases": ("it services", "indian it", "information technology"),
+     "IN": ["Computers - Software & Consulting", "Software Products", "IT Enabled Services"],
+     "US": ["Services-Prepackaged Software", "Services-Computer Programming Services", "Services-Computer Integrated Systems Design",
+            "Services-Computer Processing & Data Preparation", "Services-Computer Programming, Data Processing, Etc."]},
+    # the SEC files solar-cell and inverter makers under semiconductors (SIC 3674): they are renewables' named list, not the chip base;
+    # the chip-equipment makers and Qualcomm file under other codes
+    {"words": {"semiconductor", "chip", "chipmaker", "foundry"}, "US": ["Semiconductors & Related Devices"],
+     "US_named": ["ASML", "LRCX", "KLAC", "QCOM", "TER", "ENTG"], "US_except": ["FSLR", "ENPH", "NXT", "SEDG", "SHLS", "ARRY", "CSIQ", "JKS"]},
+    {"words": {"cybersecurity"}, "phrases": ("cyber security", "data center", "data centers", "data centre", "data centres", "smr", "smrs"),
+     "US": []},
+    {"words": {"nuclear", "uranium"}, "US": []},
+    {"words": {"telecom", "telecommunication", "5g"},
+     "IN": ["Telecom - Cellular & Fixed line services", "Telecom - Infrastructure", "Telecom - Equipment & Accessories", "Other Telecom Services"],
+     "US": ["Radiotelephone Communications", "Telephone Communications (No Radiotelephone)", "Communications Services, Nec", "Telephone & Telegraph Apparatus"]},
+    {"words": {"cement"}, "IN": ["Cement & Cement Products"], "US": ["Cement, Hydraulic"]},
+    {"words": {"steel"}, "IN": ["Iron & Steel", "Iron & Steel Products", "Sponge Iron", "Pig Iron"],
+     "US": ["Steel Works, Blast Furnaces & Rolling Mills (Coke Ovens)", "Steel Works, Blast Furnaces & Rolling & Finishing Mills", "Steel Pipe & Tubes"]},
+    {"words": {"mining", "mine", "miner", "metal", "aluminium", "aluminum", "copper", "zinc", "coal"},
+     "IN": ["Coal", "Aluminium", "Copper", "Zinc", "Diversified Metals", "Industrial Minerals", "Ferro & Silica Manganese"],
+     "US": ["Metal Mining", "Miscellaneous Metal Ores", "Bituminous Coal & Lignite Surface Mining", "Primary Production Of Aluminum",
+            "Mining & Quarrying Of Nonmetallic Minerals (No Fuels)"]},
+    {"words": {"gold", "silver"}, "phrases": ("precious metals",), "IN": ["Precious Metals"], "US": ["Gold And Silver Ores", "Silver Ores"]},
+    {"words": {"oil", "petroleum", "refining", "refinery", "lng", "cng", "upstream"}, "phrases": ("oil and gas", "natural gas", "city gas"),
+     "IN": ["Oil Exploration & Production", "Refineries & Marketing", "LPG/CNG/PNG/LNG Supplier", "Gas Transmission/Marketing",
+            "Oil Equipment & Services", "Offshore Support Solution Drilling", "Oil Storage & Transportation"],
+     "US": ["Crude Petroleum & Natural Gas", "Petroleum Refining", "Drilling Oil & Gas Wells", "Oil & Gas Field Services, Nec",
+            "Oil & Gas Field Machinery & Equipment", "Natural Gas Transmission", "Natural Gas Distribution", "Pipe Lines (No Natural Gas)"]},
+    {"words": set(), "phrases": ("specialty chemicals", "speciality chemicals"), "IN": ["Specialty Chemicals"]},
+    {"words": {"chemical", "agrochemical", "petrochemical"}, "unless": ("specialty chemicals", "speciality chemicals"),
+     "IN": ["Specialty Chemicals", "Commodity Chemicals", "Petrochemicals", "Dyes And Pigments", "Pesticides & Agrochemicals", "Industrial Gases"],
+     "US": ["Industrial Organic Chemicals", "Industrial Inorganic Chemicals", "Chemicals & Allied Products",
+            "Plastic Materials, Synth Resins & Nonvulcan Elastomers", "Agricultural Chemicals"]},
+    {"words": {"fertiliser", "fertilizer"}, "IN": ["Fertilizers"], "US": ["Agricultural Chemicals"]},
+    {"words": {"fmcg", "staples"}, "phrases": ("consumer staples", "packaged food", "packaged foods"),
+     "IN": ["Diversified FMCG", "Personal Care", "Packaged Foods", "Household Products", "Dairy Products", "Other Food Products", "Edible Oil",
+            "Tea & Coffee", "Cigarettes & Tobacco Products", "Other Beverages"],
+     "US": ["Food And Kindred Products", "Perfumes, Cosmetics & Other Toilet Preparations", "Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics",
+            "Beverages", "Bottled & Canned Soft Drinks & Carbonated Waters", "Cigarettes"]},
+    {"words": {"realty", "reit", "property", "housing"}, "phrases": ("real estate",), "unless": ("housing finance",),
+     "IN": ["Residential, Commercial Projects", "Real Estate related services", "Real Estate Investment Trusts (REITs)"],
+     "US": ["Real Estate Investment Trusts", "Operative Builders", "Real Estate", "Real Estate Operators (No Developers) & Lessors"]},
+    {"words": {"infrastructure", "infra", "construction", "road", "highway"},
+     "IN": ["Civil Construction", "Road AssetsToll, Annuity, Hybrid-Annuity"],
+     "US": ["Heavy Construction Other Than Bldg Const - Contractors", "Water, Sewer, Pipeline, Comm & Power Line Construction",
+            "Construction - Special Trade Contractors"]},
+    {"words": {"hotel", "tourism", "travel", "hospitality"}, "IN": ["Hotels & Resorts", "Tour, Travel Related Services"],
+     "US": ["Hotels & Motels", "Hotels, Rooming Houses, Camps & Other Lodging Places"]},
+    {"words": {"aviation", "airline", "airport"}, "IN": ["Airline", "Airport & Airport services"],
+     "US": ["Air Transportation, Scheduled", "Airports, Flying Fields & Airport Terminal Services", "Air Transportation, Nonscheduled"]},
+    {"words": {"logistics", "shipping", "port", "freight"}, "IN": ["Logistics Solution Provider", "Shipping", "Port & Port services", "Road Transport"],
+     "US": ["Trucking (No Local)", "Arrangement Of Transportation Of Freight & Cargo", "Deep Sea Foreign Transportation Of Freight", "Air Courier Services"]},
+    {"words": {"media", "entertainment", "broadcasting", "film"},
+     "IN": ["Media & Entertainment", "TV Broadcasting & Software Production", "Film Production, Distribution & Exhibition", "Digital Entertainment",
+            "Electronic Media", "Print Media"],
+     "US": ["Cable & Other Pay Television Services", "Television Broadcasting Stations", "Services-Motion Picture & Video Tape Production"]},
+    {"words": {"water"}, "IN": ["Water Supply & Management"], "US": ["Water Supply"]},
+]
+
+
+def key(name) -> str:
+    """An industry name as compared: case and spacing aside (the SEC writes "Drawing & Insulating Of  Nonferrous Wire")."""
+    return " ".join(str(name or "").split()).lower()
+
+
+def _words(theme: str) -> tuple[str, set[str]]:
+    t = " " + " ".join(re.findall(r"[a-z0-9]+", str(theme or "").lower())) + " "
+    words = set(t.split())
+    words |= {w[:-1] for w in list(words) if w.endswith("s") and len(w) > 3}        # "banks", "railways", "chips"
+    return t, words
+
+
+def concepts_of(theme: str) -> list[dict]:
+    """The curated entries a theme names."""
+    t, words = _words(theme)
+    out = []
+    for c in CONCEPTS:
+        if any(f" {p} " in t for p in c.get("unless", ())):
+            continue
+        if words & c["words"] or any(f" {p} " in t for p in c.get("phrases", ())):
+            out.append(c)
+    return out
+
+
+def known_industries(rows: list[dict]) -> dict[str, str]:
+    """{key: the industry as the list writes it} for every industry in the market's index."""
+    out = {}
+    for r in rows or []:
+        i = str(r.get("industry") or "").strip()
+        if i:
+            out.setdefault(key(i), i)
+    return out
+
+
+def named_lists(region: str, theme: str) -> tuple[list[str], list[str]]:
+    """(symbols the curated table names as the theme's own, symbols it keeps out of the industry base unless the AI names them)."""
+    named, out = [], []
+    for c in concepts_of(theme):
+        named += [s for s in c.get(f"{region}_named", []) if s not in named]
+        out += [s for s in c.get(f"{region}_except", []) if s not in out]
+    return named, [s for s in out if s not in named]
+
+
+def curated(region: str, theme: str, known: dict[str, str]) -> list[str] | None:
+    """The curated industries for a theme in a market (as the index writes them), or None when the table has no entry for it there."""
+    lists = [c[region] for c in concepts_of(theme) if region in c]
+    if not lists:
+        return None
+    out = []
+    for names in lists:
+        for n in names:
+            got = known.get(key(n))
+            if got and got not in out:
+                out.append(got)
+    return out
+
+
+PICK_SYSTEM = """You map a market theme to the stock exchange's official industry classification. From the LIST of industries given (the
+exchange's own names), pick the industries whose listed companies, nearly all of them, do the theme's core work. Pick none when every
+industry on the list is much wider than the theme (a single product, a drug class, a technology inside a wider industry). Copy each
+name exactly as it is on the list. At most 6.
+Reply with ONLY this JSON: {"industries": ["<a name from the list>"]}"""
+
+
+def ai_pick(theme: str, known: dict[str, str], ask) -> list[str]:
+    """The industries the AI picks for a theme, only names on the market's list (anything else is dropped)."""
+    got = ask(PICK_SYSTEM, f"THEME: {theme}\nLIST:\n" + json.dumps(sorted(known.values()), ensure_ascii=False))
+    out = []
+    for x in (got.get("industries") if isinstance(got, dict) else None) or []:
+        n = known.get(key(x))
+        if n and n not in out:
+            out.append(n)
+    return out[:6]
+
+
+def _slug(theme: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(theme or "").lower()).strip("-")[:60]
+
+
+def industries_for(region: str, theme: str, rows: list[dict], ask, get_setting, set_setting, now=None) -> dict:
+    """{"industries": [...], "how": "list" | "ai" | "pending" | "none"}: the official industries at the theme's core. "list": the curated
+    table; "ai": the AI's pick from the market's list, kept INDUSTRIES_DAYS; "pending": the AI couldn't answer now (asked again on the next
+    request); "none": the market's index has no industries yet. `ask(system, text)` is the AI's JSON answer (raises when it can't)."""
+    known = known_industries(rows)
+    if not known:
+        return {"industries": [], "how": "none"}
+    cur = curated(region, theme, known)
+    if cur is not None:
+        named, out = named_lists(region, theme)
+        listed = {r.get("symbol") for r in rows or []}
+        return {"industries": cur, "how": "list", "named": [s for s in named if s in listed], "except": out}
+    now = now or datetime.now(timezone.utc)
+    skey = f"theme:industries:{region}:{_slug(theme)}"
+    try:
+        hit = json.loads(get_setting(skey) or "null")
+    except Exception:
+        hit = None
+    if isinstance(hit, dict) and hit.get("at"):
+        try:
+            fresh = (now - datetime.fromisoformat(hit["at"])).days < INDUSTRIES_DAYS
+        except ValueError:
+            fresh = False
+        if fresh:
+            return {"industries": [known[key(i)] for i in hit.get("industries") or [] if key(i) in known], "how": "ai"}
+    try:
+        picked = ai_pick(theme, known, ask)
+    except Exception as e:                      # the AI busy: no base yet, asked again next time
+        print("theme base: industries not picked:", theme[:40], type(e).__name__, str(e)[:100])
+        return {"industries": [], "how": "pending"}
+    try:
+        set_setting(skey, json.dumps({"at": now.isoformat(timespec="seconds"), "industries": picked}, ensure_ascii=False))
+    except Exception as e:
+        print("theme base: industries not kept:", str(e)[:100])
+    return {"industries": picked, "how": "ai"}
+
+
+# ---------- membership ----------
+def _named(m: dict) -> set[str]:
+    return {c.get("ticker") for g in (m.get("value_chain") or []) + (m.get("sub_themes") or []) for c in g.get("companies") or [] if c.get("ticker")}
+
+
+def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str], name_of=lambda n, s: n or s, named=(), exclude=()) -> dict:
+    """The checked map (`out`, from theme_check.check_placements on `m_before`) with every company of the theme's industries in it. Each
+    company carries `base` (it is in an official industry of the theme), its `industry` and `cap` (the index's market value). A base company
+    the AI put in a layer stays there when its words show it or weren't checked yet; one the check moved out of every layer, or the AI never
+    named, is listed under its own industry as a layer of its own ("official": true), largest first. `placements` gets the honest counts:
+    `total`, `base`, `added` (companies from other industries the AI named that are kept), `confirmed` (of those, shown in their own words),
+    `left_out` (named additions whose own words said no) and the `industries`. `named`: the curated table's own members of the theme, base too
+    (`basis` "list", listed under "Named in the theme's list" when the AI didn't place them); `exclude`: companies of the industries that are
+    another theme's (solar-cell makers filed as semiconductors), out of the base unless the AI names them."""
+    idx = {r["symbol"]: r for r in rows or [] if r.get("symbol")}
+    inset = {key(i) for i in industries}
+    skip = set(exclude)
+    by_industry = {s: r for s, r in idx.items() if key(r.get("industry")) in inset and s not in skip}
+    by_list = {s: idx[s] for s in named if s in idx and s not in by_industry}
+    base = {**by_industry, **by_list}
+
+    def tag(c):
+        r = idx.get(c.get("ticker")) or {}
+        sym = c.get("ticker")
+        return {**c, "base": sym in base, "basis": "industry" if sym in by_industry else "list" if sym in by_list else "added",
+                "industry": r.get("industry") or "", "cap": r.get("market_cap")}
+    out = dict(out)
+    out["value_chain"] = [{**v, "companies": [tag(c) for c in v.get("companies") or []]} for v in out.get("value_chain") or []]
+    out["sub_themes"] = [{**s, "companies": [tag(c) for c in s.get("companies") or []]} for s in out.get("sub_themes") or []]
+    in_layer = {c["ticker"] for v in out["value_chain"] for c in v["companies"]}
+    groups = [(ind, "industry", [r for s, r in by_industry.items() if key(r.get("industry")) == key(ind)]) for ind in industries]
+    groups.append(("Named in the theme's list", "list", list(by_list.values())))
+    for name, basis, members in groups:
+        cos = sorted((r for r in members if r["symbol"] not in in_layer), key=lambda r: (-(r.get("market_cap") or 0), r["symbol"]))
+        if cos:
+            out["value_chain"].append({"layer": name, "description": "", "official": True, "basis": basis,
+                                       "companies": [{"ticker": r["symbol"], "name": name_of(r.get("name"), r["symbol"]), "what": "", "verified": False,
+                                                      "base": True, "basis": basis, "industry": r.get("industry") or "", "cap": r.get("market_cap")} for r in cos]})
+    placed = _named(out)
+    added = {c["ticker"]: c for g in out["value_chain"] + out["sub_themes"] for c in g["companies"] if not c["base"]}
+    confirmed = {s for s in added if any(c["ticker"] == s and c.get("verified") for g in out["value_chain"] + out["sub_themes"] for c in g["companies"])}
+    out["screen"] = [x for x in out.get("screen") or [] if x.get("ticker") in placed]
+    out["placements"] = {**(out.get("placements") or {}), "placed": len(placed), "total": len(placed), "base": len(base), "named": len(by_list),
+                         "added": len(added), "confirmed": len(confirmed), "unconfirmed": len(added) - len(confirmed),
+                         "left_out": len({s for s in _named(m_before) if s not in placed and s not in base}), "industries": list(industries)}
+    return out
+
+
+def for_figures(m: dict, cap: int = FIGURES_MAX) -> tuple[dict, dict]:
+    """(the map the dive's figures, prices and news are worked out on, {"shown", "of"}): every company the AI named, then the largest of
+    the rest of the base, `cap` in all at most (a theme of 500 drug makers is listed in full, its figures on the largest). Official
+    layers left with no company are dropped."""
+    named = {c["ticker"] for v in m.get("value_chain") or [] if not v.get("official") for c in v.get("companies") or []}
+    named |= {c["ticker"] for s in m.get("sub_themes") or [] for c in s.get("companies") or []}
+    rest = sorted({(c.get("cap") or 0, c["ticker"]) for v in m.get("value_chain") or [] if v.get("official") for c in v.get("companies") or []
+                   if c["ticker"] not in named}, key=lambda x: (-x[0], x[1]))
+    keep = named | {s for _, s in rest[:max(0, cap - len(named))]}
+    total = len(named | {s for _, s in rest})
+    vc = []
+    for v in m.get("value_chain") or []:
+        cos = [c for c in v.get("companies") or [] if c["ticker"] in keep]
+        if cos or not v.get("official"):
+            vc.append({**v, "companies": cos})
+    return {**m, "value_chain": vc}, {"shown": len(keep), "of": total}
+
+
+def to_describe(m: dict, n: int = DESCRIBE_MAX) -> list[str]:
+    """The base companies whose own one-line description the page shows (official layers, largest first), at most `n`."""
+    rows = sorted({(c.get("cap") or 0, c["ticker"]) for v in m.get("value_chain") or [] if v.get("official") for c in v.get("companies") or []},
+                  key=lambda x: (-x[0], x[1]))
+    return [s for _, s in rows[:n]]
+
+
+_FIRST = re.compile(r"^(.{20,240}?[.;])(?:\s|$)")
+
+
+def one_line(about: str) -> str:
+    """The first sentence of a company's own description (its words, cut at a full stop), or ""."""
+    t = " ".join(str(about or "").split())
+    m = _FIRST.match(t)
+    return (m.group(1) if m else t[:200]).rstrip(" .;") if t else ""
+
+
+def described(m: dict, about_of) -> dict:
+    """The map with each official layer's company carrying `what`: the first sentence of its own description, from `about_of(symbol)`
+    (the description or None; it never reads more than the caller allows). A company with none keeps "", which the page shows as not yet
+    confirmed from its own description."""
+    out = dict(m)
+    vc = []
+    for v in m.get("value_chain") or []:
+        if v.get("official"):
+            cos = []
+            for c in v.get("companies") or []:
+                about = about_of(c["ticker"])
+                cos.append({**c, "what": one_line(about) if about else ""})
+            v = {**v, "companies": cos}
+        vc.append(v)
+    out["value_chain"] = vc
+    return out

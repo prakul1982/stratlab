@@ -56,7 +56,9 @@ test("DE-010/DE-011/DE-012: an impossible range is said, the filtered column sho
 test("DE-013: the theme page names no unlisted company and shows the exchange's list for the industries", () => {
   const s = read("src/pages/ThemesPage.tsx");          // (the page moved out of Research.tsx: THEME-1)
   assert.doesNotMatch(s, /\(not listed\)/);
-  assert.match(s, /On the exchange's list for these industries/);
+  // (THEMES, 4 Nov: the exchange's list for the theme's industries is the theme's base now, every company of it in the members card)
+  assert.match(read("src/components/ThemeDive.tsx"), /the exchange's own industry classification puts in the theme's industries/);
+  assert.match(s, /<MembersCard r=\{r\} region=\{region\} \/>/);
   assert.match(s, /written by AI from general knowledge, with no figures/);       // the AI's text carries no figure; every figure on the page is from reported numbers
 });
 
