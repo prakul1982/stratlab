@@ -4,7 +4,7 @@ import { Badge, Card, CardHead, DataTable, Select, Spark, Signed, Meter, usePhon
 import { LineChart } from "./Charts";
 import { bizChange, bizValue, periodName } from "../lib/biz";
 import { filedOn } from "./BizUpdates";
-import { fmtDate, pct, safeHref } from "../lib/format";
+import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
   amount, layerLines, pc, points, span, times,
@@ -323,7 +323,7 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
       <Card id="numbers-balance" label="Balance sheet and cash">
         <CardHead title="Balance sheet and cash" info="Debt to equity is borrowings over shareholders' equity (not for lenders). Cash from operations over profit is the latest year's." />
         <KVTable t={kv("Balance sheet and cash of the theme's companies", ["Median", "Range", "Companies"], [
-          { key: "de", measure: "Debt to equity", a: med(bal.debt_equity, (v) => times(v, 2)), b: span(bal.debt_equity, (v) => times(v, 2)), c: bal.with_debt_equity },
+          { key: "de", measure: "Debt to equity", a: med(bal.debt_equity, (v) => `${ratio(v)}x`), b: span(bal.debt_equity, (v) => `${ratio(v)}x`), c: bal.with_debt_equity },
           { key: "ic", measure: "Interest cover (profit before interest and tax over interest)", a: med(bal.interest_cover, (v) => times(v)), b: span(bal.interest_cover, (v) => times(v)), c: bal.interest_cover?.n ?? dash },
           { key: "cfo", measure: "Cash from operations as a multiple of net profit", a: med(bal.cfo_to_profit, (v) => times(v, 2)), b: span(bal.cfo_to_profit, (v) => times(v, 2)), c: bal.cfo_n || dash },
         ])} />

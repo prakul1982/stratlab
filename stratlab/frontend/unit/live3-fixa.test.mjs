@@ -37,3 +37,27 @@ test("LIVE3-011: every chart with live prices is told its market (the company pa
   assert.match(read("src/components/watch/ChartWorkspace.tsx"), /marketOpen=\{open\} market=\{item\.market\}/);
   assert.doesNotMatch(read("src/charts/price/PriceChart.tsx"), /text: "Market closed"/);
 });
+
+test("LIVE3-018: one rule for a ratio and one for big money, on every page", async () => {
+  const F = await import("../src/lib/format.ts");
+  assert.equal(F.ratio(0.0016), "<0.01");                  // HAL's debt to equity: never 0.0016, never a zero it isn't
+  assert.equal(F.ratio(0), "0.00");
+  assert.equal(F.ratio(0.21), "0.21");
+  assert.equal(F.ratio(1.4699), "1.47");
+  assert.equal(F.ratio(-0.002), "−<0.01");
+  assert.equal(F.ratio(null), "–");
+  const TF = await import("../src/lib/themeFormat.ts");
+  // a market value reads the same in a theme as on the company page, the screens and Compare
+  for (const crore of [1137500, 1137449, 37205, 39327.4, 999.6, 120000, 99999.6])
+    assert.equal(TF.amount(crore, "IN"), F.bigMoney(crore * 1e7, "INR"), String(crore));
+  assert.equal(TF.amount(1137449, "IN"), "₹11.37 lakh cr");
+  // every "Market value" column and tile goes through that rule
+  const files = ["src/pages/Research.tsx", "src/pages/Screens.tsx", "src/pages/ResultsPage.tsx", "src/pages/CorpActionsPage.tsx", "src/components/ThemeDive.tsx"];
+  for (const f of files) {
+    for (const line of read(f).split("\n").filter((l) => /"Market value"/.test(l) && /cell:|value=/.test(l)))
+      assert.match(line, /bigMoney\(|screenCap\(|amount\(|cap\(r\.market_cap/, `${f}: ${line.trim().slice(0, 120)}`);
+  }
+  // debt to equity: the ratio rule in the screens and the theme's balance sheet
+  assert.match(read("src/pages/Screens.tsx"), /label: "Debt to equity", cell: \(r\) => ratio\(r\.debt_equity\)/);
+  assert.match(read("src/components/ThemeDive.tsx"), /med\(bal\.debt_equity, \(v\) => `\$\{ratio\(v\)\}x`\)/);
+});

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { asOf, fmtDate, latestDue, marketTz, pct, price } from "../lib/format";
+import { asOf, fmtDate, latestDue, marketTz, pct, price, ratio } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, marginText, screenCap, screenNum, useRegion, type Region } from "../lib/research";
 import {
@@ -35,7 +35,7 @@ const COLS: Col[] = [
   { id: "sales_cagr_3y", label: "Revenue growth, 3y", cell: (r) => (r.sales_cagr_3y == null ? "–" : <Signed value={r.sales_cagr_3y}>{pct(r.sales_cagr_3y)}</Signed>) },
   { id: "net_margin", label: "Net margin", cell: (r) => num(r.net_margin, 1, "%") },
   { id: "opm", label: "EBITDA margin", cell: (r) => marginText(r.opm) },
-  { id: "debt_equity", label: "Debt to equity", cell: (r) => num(r.debt_equity, 2) },
+  { id: "debt_equity", label: "Debt to equity", cell: (r) => ratio(r.debt_equity) },
   { id: "roe", label: "ROE", cell: (r) => num(r.roe, 1, "%") },
   { id: "roce", label: "ROCE", cell: (r) => num(r.roce, 1, "%") },
   { id: "div_yield", label: "Dividend yield", cell: (r) => num(r.div_yield, 2, "%") },

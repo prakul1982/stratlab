@@ -1956,6 +1956,19 @@ def search(region: str, q: str, n: int = 30) -> list[tuple[str, str]]:
 
 
 # ---------- the page ----------
+def ratio_text(v, digits: int = 2) -> str:
+    """A ratio (debt to equity, times covered) the one way every page writes it (LIVE3-018: HAL's "0.0016" here, "0.00" in the app,
+    "0.21" for others): `digits` decimals always, and one too small to show as anything but zero says so ("<0.01"), never more
+    decimals and never a zero it isn't."""
+    v = _num(v)
+    if v is None:
+        return "–"
+    least = 10 ** -digits
+    if v != 0 and abs(v) < least / 2:
+        return f"<{least:.{digits}f}" if v > 0 else f"−<{least:.{digits}f}"
+    return f"{v:,.{digits}f}".replace("-", "−", 1) if round(v, digits) != 0 else f"{0:.{digits}f}"
+
+
 def _fmt(v, digits: int = 1, suffix: str = "") -> str:
     """A number with `digits` decimals. One that would round to zero shows two more decimals (a $40,000 loss in a
     $ million column is -0.04, not "-0"), and only a real zero is 0 (R6V-011)."""
@@ -2657,7 +2670,7 @@ def _stats(f: dict) -> list[tuple[str, str]]:
         out.append((f"Net profit, last 12 months ({unit})", _amount(f, ttm, digits)))
     out.append((f"Return on equity{of_year}", year(_pct(f.get("roe")))))
     if not f.get("bank"):
-        out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
+        out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(ratio_text(f.get("debt_equity"))))]
     out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
             ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of {'$' if f.get('currency') == 'USD' else '₹'}{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy else "none" if dy == 0 else "n/a")]
     return [(k, _true_minus(v)) for k, v in out if v != "–"]

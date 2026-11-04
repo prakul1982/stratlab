@@ -109,3 +109,15 @@ def test_a_page_rendered_a_close_behind_keeps_the_minute_header_after_its_facts_
     main.stock_page_store.mem.pop("stocks:page:IN:RELIANCE")                                     # the facts' own memory entry ends first
     again = c.get("/stocks/in/RELIANCE")
     assert "the market has closed since" in again.text and again.headers["cache-control"] == stock_pages.BEHIND_CACHE
+
+
+# ---------- LIVE3-018: one rule for a ratio ----------
+def test_debt_to_equity_reads_the_same_on_the_public_page_and_the_app_for_every_size():
+    from app.intel import key_facts
+    for v, want in ((0.0016, "<0.01"), (0.0, "0.00"), (0.21, "0.21"), (1.4699, "1.47"), (-0.002, "−<0.01"), (12.5, "12.50")):
+        assert stock_pages.ratio_text(v) == want
+        row = key_facts.debt_and_cash({}, None, {"years": []}, {"debt_equity": v})
+        assert row["items"][0]["text"] == want, (v, row)
+        # the public page's own table of figures
+        shown = dict(stock_pages._stats(dict(us(symbol="HAL", debt_equity=v))))
+        assert shown["Debt to equity"].startswith(want), (v, shown["Debt to equity"])
