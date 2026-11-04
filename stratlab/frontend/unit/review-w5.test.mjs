@@ -109,3 +109,19 @@ test("Fill rules as a class: only paper trading and chart replay say an order fi
 test("Table sweep as a rule: no page lays figures out as label/value pairs (k-rows) but the Account page's plan block (the owner's own layout, VR6/VR7)", () => {
   assert.deepEqual(SRC.filter((f) => f.endsWith(".tsx") && /className=(\{`|")k-rows/.test(read(f))).sort(), ["src/pages/AccountPage.tsx"]);
 });
+
+test("/tour as a class: every app address is sent to the app by the site, kept fresh and out of search engines (the public ones aside)", async () => {
+  const { APP_ROUTES } = await import("../src/lib/deepLinks.ts");
+  const v = JSON.parse(read("vercel.json"));
+  const rw = new RegExp(`^${v.rewrites.find((r) => r.destination === "/index.html").source}$`);
+  const [fresh, noindex] = v.headers.filter((x) => x.source.includes("|help|")).map((h) => new RegExp(`^${h.source}$`));
+  // public: the landing page and its sections, the library (served by its own page), and the plans/help a visitor reads
+  const PUBLIC = new Set(["/", "/library", "/plans", "/pricing", "/faq"]);
+  for (const r of APP_ROUTES) {
+    const p = r.replace(/:[a-z]+/gi, "x").replace(/\/\*$/, "/x");
+    if (r === "/" || r === "/library") continue;
+    assert.ok(rw.test(p), `${r}: not sent to the app`);
+    assert.ok(fresh.test(p), `${r}: could be served stale`);
+    if (!PUBLIC.has(r)) assert.ok(noindex.test(p), `${r}: open to search engines`);
+  }
+});
