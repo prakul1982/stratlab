@@ -1219,6 +1219,17 @@ class Research:
         except Exception:
             return None
 
+    def _us_listing(self, sym: str) -> dict | None:
+        """The quote site's listing of `sym` when it is a US one (a name, and not another currency or another market's
+        clock), for a US page standing on the listing alone. A bare Indian code (HDFCBANK) or any other market's listing is
+        no US company (R2 integration: a two-company link with no market opened HDFC Bank as a US company instead of
+        trying India, LIVE2-021)."""
+        lst = self._listing_or_none(sym)
+        tz = lst.get("tz") if lst else None
+        if not (lst and lst.get("name")) or lst.get("currency") not in (None, "USD") or (tz and not str(tz).startswith("America/")):
+            return None
+        return lst
+
     def _quiet_candles(self, sym: str) -> list[dict]:
         try:
             return self.yahoo.chart(sym, "1d", 400)["candles"]
@@ -1250,15 +1261,15 @@ class Research:
             # each other part saying what couldn't be read, instead of "Couldn't open AAPL" (R88-001: 2 of 3 loads failed)
             if not e.busy:
                 raise
-            lst = self._listing_or_none(sym)
-            if not (lst and lst.get("name")):
+            lst = self._us_listing(sym)
+            if not lst:
                 raise
             p = {"name": lst["name"], "currency": lst.get("currency"), "exchange": lst.get("exchange"), "from_listing": True}
         if not p.get("name"):
             # a new listing the profile source doesn't know yet (audit, 1 Nov: APXC, CHWM, DAVI, VNYR had no page, though the
             # market quotes each under its name): the page stands on the listing, as it does when that source is busy
-            lst = self._listing_or_none(sym)
-            if not (lst and lst.get("name")):
+            lst = self._us_listing(sym)
+            if not lst:
                 raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
             p = {"name": lst["name"], "currency": lst.get("currency"), "exchange": lst.get("exchange"), "from_listing": True}
         if not lean:
