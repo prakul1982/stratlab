@@ -221,7 +221,7 @@ def test_the_restart_waits_for_the_running_heavy_step_and_starts_none_after_it(m
 
     from app import kite_auto, leader, memguard
     exits, order = [], []
-    monkeypatch.setattr(kite_auto.os, "_exit", lambda code: exits.append(code))
+    monkeypatch.setattr(kite_auto.os, "_exit", lambda code: exits.append((code, memguard.TURNS.name)))
     monkeypatch.setattr(leader.current, "release", lambda: order.append("lease"))
     step_done = threading.Event()
 
@@ -236,11 +236,9 @@ def test_the_restart_waits_for_the_running_heavy_step_and_starts_none_after_it(m
     time.sleep(0.1)
     kite_auto.restart_process(delay=0).join(5)
     t.join(5)
-    assert order == ["step done", "lease"] and exits == [3]
-    assert memguard.TURNS.name == "restart after the Kite login"     # kept: nothing heavy starts before the exit
-    assert memguard.TURNS.acquire("a later job", 0.05) is False
-    memguard.TURNS._owner = memguard.TURNS.name = memguard.TURNS.since = None   # (this test's process goes on)
-    memguard.TURNS._depth = 0
+    assert order == ["step done", "lease"]
+    assert exits == [(3, "restart after the Kite login")]           # the turn held at the exit: no heavy job started before it
+    assert memguard.TURNS.name is None                               # (handed back only because this exit was stubbed out)
 
 
 # ---------- item 6: the monthly audit's findings, fixed where they come from ----------

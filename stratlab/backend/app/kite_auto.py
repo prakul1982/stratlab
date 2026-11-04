@@ -325,9 +325,13 @@ def restart_process(delay: float = 2.0):
     A non-zero code makes Railway's ON_FAILURE policy (and most hosts) start a fresh process."""
     def leave():
         # the heavy job running now finishes its step, and none starts after it (the turn is never handed back)
-        memguard.TURNS.acquire("restart after the Kite login", RESTART_TURN_WAIT_S)
+        got = memguard.TURNS.acquire("restart after the Kite login", RESTART_TURN_WAIT_S)
         leader.current.release()   # the next container takes over now, not when the lease runs out
-        os._exit(3)
+        try:
+            os._exit(3)
+        finally:                   # reached only where exiting is stubbed out (the tests): the turn goes back
+            if got:
+                memguard.TURNS.release()
     t = threading.Timer(delay, leave)
     t.start()
     return t
