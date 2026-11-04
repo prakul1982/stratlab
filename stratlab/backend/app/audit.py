@@ -1445,6 +1445,9 @@ class MarketAudit:
                     "retry": {"waiting": waiting, "due": len(self.waiting(now)), "next": r.get("next"),
                               "gap_hours": r.get("gap") or RETRY_GAP, "batch": RETRY_BATCH, "last": r.get("last")},
                     "pending": waiting,
-                    "listed": len(self.listing), "checked": len(self.rows), "due": len(due), "current": self.current,
+                    # the companies on the list with a result: a delisted one's row isn't one of them (SECMEM 6: a finished
+                    # run read "4,965 listed, 4,964 checked" beside "every company checked")
+                    "listed": len(self.listing), "checked": sum(1 for s in self.listing if (self.rows.get(s) or {}).get("at")),
+                    "due": len(due), "current": self.current,
                     "rate_per_hour": rate, "eta_hours": eta, "new_listings": new[:30],
                     "summary": summarise(rows), "rows": [x for x in rows if x.get("issues")]}

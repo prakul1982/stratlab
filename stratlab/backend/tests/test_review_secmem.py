@@ -352,3 +352,24 @@ def test_the_audit_holds_a_tiny_profits_pe_to_the_range_its_rounding_allows():
     mism = lambda pe: [i for i in audit.check_numbers(p, nums, {"pe": pe, "market_cap_cr": 31.1}, None) if i["level"] == "mismatch"]  # noqa: E731
     assert mism(1000.0) == []                                                # 56% from 1,555, yet within what 0.015-0.025 cr allows
     assert mism(400.0) and "P/E 400.0 on the company page" in mism(400.0)[0]["detail"]   # far outside it: still a mismatch
+
+
+def test_a_finished_market_check_counts_only_listed_companies_as_checked(monkeypatch):
+    """Admin › Quality (SECMEM 6): a row kept for a company no longer on the list isn't one of the listed companies checked."""
+    from datetime import date, timedelta
+
+    from app import audit
+    w = W.build(monkeypatch)
+    try:
+        day = lambda n: (date.today() - timedelta(days=n)).isoformat()  # noqa: E731
+        listing = [{"symbol": s, "name": s, "listed": day(n)} for s, n in (("AAA", 1), ("BBB", 2))]
+        clean = lambda sym, *a, **k: {"symbol": sym, "name": sym, "seconds": 0.1, "issues": []}  # noqa: E731
+        a = audit.MarketAudit(lambda: listing, clean, pause=0)
+        a.set_enabled(True)
+        while a.step():
+            pass
+        a.rows["GONE"] = {"symbol": "GONE", "name": "GONE", "seconds": 0.1, "at": "2026-10-01T00:00:00+00:00", "issues": []}   # kept from before
+        s = a.status()
+        assert (s["listed"], s["checked"], s["due"]) == (2, 2, 0)
+    finally:
+        w["close"]()

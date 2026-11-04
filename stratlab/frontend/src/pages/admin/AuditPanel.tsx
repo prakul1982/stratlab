@@ -143,11 +143,15 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
   const [asking, setAsking] = useState(false);
   const load = useCallback(async () => { try { setM(await api<MarketState>(`/admin/audit/market?region=${region}`)); } catch (e) { fail(e); } }, [fail, region]);
   useEffect(() => { setM(null); load(); }, [load]);
+  // every 30 s while companies are being checked; once the run is done (nothing due, no full check) every 5 min, which is
+  // enough for the day's new listings: the answer holds every finding (1-2 MB), so a finished run no longer re-reads and
+  // redraws it twice a minute (SECMEM 6)
+  const moving = !!(m?.due || m?.full?.running || m?.current);
   useEffect(() => {
     if (!m?.enabled) return;
-    const t = window.setInterval(load, 30000);
+    const t = window.setInterval(load, moving ? 30000 : 300000);
     return () => window.clearInterval(t);
-  }, [m?.enabled, load]);
+  }, [m?.enabled, moving, load]);
   const send = async (body: object) => {
     setBusy(true);
     try { setM(await api<MarketState>("/admin/audit/market", { method: "POST", body: { region, ...body } })); } catch (e) { fail(e); } finally { setBusy(false); }
@@ -210,7 +214,9 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
           <Disclosure summary="Manage this check" testId="market-manage">
             <div className="k-stack">
               <div className="k-row">
-                {!full?.running && !!m.pending && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => send({ retry: true })}>Re-check the {m.pending.toLocaleString("en-IN")} not checked yet</button>}
+                {!full?.running && !!m.pending && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => send({ retry: true })}>
+                  {/* a source's error is a check that was made, not one still to do (SECMEM 6: "9 not checked yet" beside a table of 0) */}
+                  Re-check the {m.pending.toLocaleString("en-IN")} {m.pending === (sum?.pending ?? 0) ? "not checked yet" : "a source turned away"}</button>}
                 <button type="button" className="btn quiet sm" disabled={busy} onClick={() => send({ read_list: true })}>Read the list now</button>
                 <button type="button" className="btn quiet sm danger" disabled={busy} onClick={() => setAsking(true)}>Reset and check everything again</button>
               </div>

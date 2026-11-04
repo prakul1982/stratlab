@@ -34,3 +34,10 @@ test("SECMEM 1b: an emailed link's hashed token is read, and the address is clea
   assert.equal(hasAuthInUrl("?code=abc", ""), true);                                   // Google's PKCE return
   assert.equal(wantsAccount({ search: "?token_hash=abcdefgh12&type=magiclink", storage: { getItem: () => null } }), true);
 });
+
+test("SECMEM 6: a finished whole-market check refreshes every 5 min, not every 30 s, and a source's error isn't 'not checked yet'", () => {
+  const src = read("src/pages/admin/AuditPanel.tsx");
+  assert.match(src, /const moving = !!\(m\?\.due \|\| m\?\.full\?\.running \|\| m\?\.current\);/);
+  assert.match(src, /window\.setInterval\(load, moving \? 30000 : 300000\)/);
+  assert.match(src, /m\.pending === \(sum\?\.pending \?\? 0\) \? "not checked yet" : "a source turned away"/);
+});
