@@ -631,3 +631,20 @@ def test_a_part_in_rupees_and_a_part_in_shares_is_not_the_size():
     assert I.public(_row(fresh_cr=500.0, ofs_cr=100.0), NOW)["size"] == 600.0
     assert I.public(_row(fresh_cr=500.0), NOW)["size"] == 500.0 and "size_parts" not in I.public(_row(fresh_cr=500.0), NOW)
     assert I.public(_row(size_shares=1_00_00_000), NOW)["size_basis"] == "shares at the top of the price band"
+
+
+def test_india_lists_are_read_through_the_day_and_one_read_covers_slots_due_together(w):
+    """LIVE3-020: at 18:45 IST the list said "Read 07:40 IST" (no read of India's lists between 07:40 and 20:10) while Admin showed the
+    job had run an hour before. India's lists are read at midday and after the close too, so the newest read is never older than about
+    four hours through the day; a server started late reads each market once for all the slots it finds due."""
+    names = dict(I.Job.SLOTS)
+    ins = sorted(t for n, t in I.Job.SLOTS if n.startswith("in-") and not n.endswith("-alert") and n != "in-final")
+    gaps = [(int(b[:2]) * 60 + int(b[3:])) - (int(a[:2]) * 60 + int(a[3:])) for a, b in zip(ins, ins[1:])]
+    assert max(gaps) <= 6 * 60, (ins, gaps)
+    assert "09:15" < names["in-mid"] < "15:30" and names["in-close"] > "15:30"
+    job = I.Job(sleep=lambda s: None)
+    evening = at(2026, 10, 26, 18, 45)
+    ran = job.tick(evening)
+    assert {"in-am", "in-mid", "in-close", "us-am"} <= set(ran)
+    assert w["feed"].nse.calls.count("upcoming") == 1                     # India's lists read once for its three due slots
+    assert I.load("IN")["as_of"] == evening.isoformat(timespec="seconds")   # and the list says when: now, not 07:40

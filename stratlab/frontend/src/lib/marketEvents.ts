@@ -5,7 +5,7 @@ import { eventWhen, fmtDate } from "./format";
 /** The market events calendar (RBI policy, India's data releases, the US Fed and data, index changes, expiries and
  * holidays): one answer for the Events page, the Invest home's next events and the index badges on company pages, read
  * once and kept for ten minutes. */
-export { happened, istHm } from "./eventTime";
+export { COMING_KINDS, comingMarketEvents, happened, istHm } from "./eventTime";
 
 export type EvKind = "rbi" | "india" | "us" | "budget" | "index" | "expiry" | "holiday";
 export interface MarketEvent {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { eyebrowOf } from "../lib/eyebrow";
 import { inr } from "../lib/format";
@@ -126,7 +126,7 @@ export function StockLendingPage() {
           <CardHead title="Your holdings and watchlist" />
           <p className="k-note" data-testid="slb-status">{statusText(t.status, "the exchange's daily lending file")}<Info label="Where the numbers come from">{t.note} Source: {t.source}.</Info></p>
           {!t.rows.length ? (
-            <EmptyState title="No Indian stocks to show yet">Add Indian stocks to <Link className="link" to="/holdings">My Holdings</Link> or your <Link className="link" to="/research/watchlist">watchlist</Link>, or look one up above.</EmptyState>
+            <EmptyState title="No Indian stocks to show yet" action={{ label: "Open My Holdings", to: "/holdings" }} also={{ label: "Open your watchlist", to: "/research/watchlist" }}>Add Indian stocks to My Holdings or your watchlist, or look one up above.</EmptyState>
           ) : (
             <DataTable label="Lending fees for your stocks" rows={t.rows} rowKey={(r) => r.symbol} sticky={t.rows.length > 14} rowAttrs={(r) => ({ "data-stock": r.symbol })}
               columns={[

@@ -1,4 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { TOUR_MENU, tourMenuHeld } from "../lib/tourMenu";
 import { useDialogFocus } from "./kit/Dialog";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
@@ -64,7 +65,8 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => { const t = window.setInterval(() => tick((x) => x + 1), 60000); return () => window.clearInterval(t); }, []);
   const loc = useLocation();
   const nav = useNavigate();
-  useEffect(() => setOpen(false), [loc.pathname]);
+  // a new page closes the drawer, unless the tour is holding it open to point into it (LIVE3-014)
+  useEffect(() => { if (!tourMenuHeld()) setOpen(false); }, [loc.pathname]);
   // on a phone (or zoomed in) the menu is a drawer: a modal while it's open. Focus moves in and stays in, Esc closes it
   // (a pop-up inside it closes first, on its own), and focus goes back to the menu button.
   const aside = useRef<HTMLElement>(null);
@@ -76,8 +78,10 @@ export function Shell({ children }: { children: ReactNode }) {
   const [tourMenu, setTourMenu] = useState(false);
   useEffect(() => {
     const hold = (e: Event) => { const on = !!(e as CustomEvent<{ open: boolean }>).detail?.open; setTourMenu(on); setOpen(on); };
-    window.addEventListener("stratlab:tour-menu", hold);
-    return () => window.removeEventListener("stratlab:tour-menu", hold);
+    window.addEventListener(TOUR_MENU, hold);
+    // a request made before this listened (a child's effect runs first) is followed now, not lost (LIVE3-014)
+    if (tourMenuHeld()) { setTourMenu(true); setOpen(true); }
+    return () => window.removeEventListener(TOUR_MENU, hold);
   }, []);
   useDialogFocus(aside, open && !tourMenu, { onEscape: () => setOpen(false), initial: () => aside.current?.querySelector<HTMLElement>(".side-close") });
   const path = loc.pathname;

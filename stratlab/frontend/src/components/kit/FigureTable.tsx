@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { DataTable, usePhone, type Column } from "./DataTable";
+import { DataTable, sparseNotes, usePhone, type Column } from "./DataTable";
 
 export interface Figure { key?: string; label: ReactNode; value: ReactNode; note?: ReactNode; /** "up", "down" or a sign class ("k-up", "pos", "neg"): the figure in the kit's green or red, its sign still in the text */ tone?: string }
 const toneClass = (t?: string) => (!t ? undefined : /\bup\b|\bpos\b|\bk-up\b/.test(t) ? "k-up" : /\bdown\b|\bneg\b|\bk-down\b/.test(t) ? "k-down" : undefined);
@@ -13,8 +13,10 @@ export function FigureTable({ label, rows, header = "Figure", valueHeader = "Now
   const phone = usePhone();
   const noted = (r: Figure) => r.note != null && r.note !== "";
   const withNote = noteHeader != null && rows.some(noted);
-  // TABLE-SWEEP: on a phone the note goes under the figure's name, so the table stays two columns across instead of a card a row
-  const under = phone && withNote;
+  // TABLE-SWEEP: on a phone the note goes under the figure's name, so the table stays two columns across instead of a card a row.
+  // LIVE3-021 / LIVE3-015: a note only some rows have goes there on every screen, never a column left blank in half its rows
+  // (Holdings' "Change" was empty for its value and cost; the breadth card's "Day" for two of its three rows)
+  const under = withNote && (phone || sparseNotes(rows.filter(noted).length, rows.length));
   const columns: Column<Figure>[] = [
     { key: "k", header, rowHeader: true, wrap: true, cell: (r) => <>{r.label}{under && noted(r) && <span className="k-sub-line">{r.note}</span>}</> },
     { key: "v", header: valueHeader, numeric: true, cell: (r) => <span className={toneClass(r.tone)}>{r.value}</span> },

@@ -12,6 +12,6 @@ const { pulseLede } = await import("../src/lib/researchFormat.ts");
 test("R16B-002: Pulse says the close is settling as the stock pages do", () => {
   const day = (d) => "14 Oct";
   assert.equal(indexWhen({ day: "2026-10-14", live: false, stale: false, settling: true }, day), "14 Oct · closing prints still settling");
-  assert.match(pulseLede(null, "14 Oct", true), new RegExp(`^${SETTLING} · 14 Oct: index levels`));
-  assert.match(pulseLede(null, "14 Oct", false), /^Last close, 14 Oct: index levels/);
+  assert.match(pulseLede("14 Oct", true), new RegExp(`^${SETTLING} · 14 Oct: index levels`));
+  assert.match(pulseLede("14 Oct", false), /^Last close, 14 Oct: index levels/);
 });

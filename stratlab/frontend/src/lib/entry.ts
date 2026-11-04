@@ -34,6 +34,20 @@ export function withoutEmailLink(href: string): string {
   return u.pathname + (u.search === "?" ? "" : u.search) + u.hash;
 }
 
+/** Google's one-time sign-in code (PKCE) is in the query. */
+export function hasSignInCode(search: string): boolean {
+  return new URLSearchParams(search).has("code");
+}
+
+/** The address with Google's one-time code (and its state) taken out: once the sign-in library has tried it, worked or
+ * not, it can't sign in again, so it never stays in the address, a reload or the history (LIVE3-009). */
+export function withoutSignInCode(href: string): string {
+  const u = new URL(href);
+  u.searchParams.delete("code");
+  u.searchParams.delete("state");
+  return u.pathname + (u.search === "?" ? "" : u.search) + u.hash;
+}
+
 /** True when this page load needs the app (a saved sign-in, or one arriving now); false for a plain visitor. */
 export function wantsAccount(o: { supabaseUrl?: string; search?: string; hash?: string; storage?: Pick<Storage, "getItem"> | null }): boolean {
   if (hasAuthInUrl(o.search ?? "", o.hash ?? "")) return true;

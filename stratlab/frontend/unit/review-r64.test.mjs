@@ -30,6 +30,6 @@ test("R64-003: a company chart's candles are kept 5 minutes between the minute's
 test("R64-005, R64-008, R64-010: retries, each index's weekly expiry, and no price stamp without open lots", () => {
   assert.match(read("src/pages/Login.tsx"), /lazy\(\(\) => importWithRetry\(\(\) => import\("\.\.\/components\/PlanCompare"\)\)/);
   assert.match(read("src/pages/trade/EventsPage.tsx"), /if \(isWeekly\(e\) && !seen\.has\(e\.title\)\)/);
-  assert.match(read("src/lib/mine.ts"), /!named\.has\(e\.title\)\) \{ named\.add\(e\.title\); weekly\.add\(e\); \}/);
+  assert.match(read("src/lib/eventTime.ts"), /!named\.has\(e\.title\)\) \{ named\.add\(e\.title\); weekly\.add\(e\); \}/);
   assert.match(read("src/pages/TaxReportPage.tsx"), /asOf=\{rep\?\.below_cost\.open \? rep\.prices_at : undefined\}/);
 });

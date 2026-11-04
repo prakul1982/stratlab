@@ -119,7 +119,7 @@ test("DF-022: lending across the market for anyone, and the lending facts as hea
 test("DF-023: Invest home's first steps in one line, the next expiry in Coming up, no short card beside a tall one", () => {
   const home = read("src/pages/SpaceHomes.tsx");
   assert.match(home, /<Top compact \/>/);
-  assert.match(home, /e\.kind === "expiry"/);
+  assert.match(read("src/lib/eventTime.ts"), /e\.kind === "expiry" && \/weekly\/i\.test\(e\.title\)/);          // each index's next weekly (LIVE3-015: one rule with My space)
   // VR1-010/011 replaced the two equal-height pairs: the watchlist beside Coming up and Results today stacked
   // (VR6-011: with nothing watched the three stack across the page instead; the pair stays as it was when there is a watchlist)
   assert.match(home, /<WatchPanel region=\{region\} \/>\s*\{fewWatched \? <><NextEvents region=\{region\} \/><ResultsToday region=\{region\} \/><\/> : \(\s*<div className="space-col">\s*<NextEvents region=\{region\} \/>\s*<ResultsToday region=\{region\} \/>/);

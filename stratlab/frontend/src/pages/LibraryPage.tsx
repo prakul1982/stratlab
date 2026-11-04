@@ -135,7 +135,7 @@ export function LibraryPage() {
         {/* only the markets that have strategies, each with how many; wrapped on a phone too, so none is cut off at the edge (MO-5b, VR1-181) */}
         {choices.length > 2 && <ChipBar label="Market" options={choices} value={market} onChange={setMarket} wrap />}
       </Card>
-      {rows === null ? <Card><Skeleton label="Opening the library" /></Card>
+      {rows === null ? <Card><Skeleton label="Opening the library" page /></Card>
         : failed ? <ErrorState title="The library couldn't be opened" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Your connection or ours dropped for a moment. Nothing was lost.</ErrorState>
         : rows.length === 0 ? (
           <EmptyState title={filtered ? "Nothing matches that yet." : "The library is empty so far."}>

@@ -43,7 +43,8 @@ export function Delta({ value, children }: { value: number | null | undefined; c
   return (
     <span className={`k-delta ${dir}`}>
       {dir !== "flat" && <span aria-hidden="true">{dir === "up" ? "▲" : "▼"}</span>}
-      <span className="sr-only">{dir === "up" ? "Up " : dir === "down" ? "Down " : "Unchanged "}</span>
+      {/* a figure that carries its own sign ("+0.63%") says the direction already: no "Up" before it as well (LIVE3-016) */}
+      {!(dir !== "flat" && /^\s*[+\u2212-]/.test(textOf(children))) && <span className="sr-only">{dir === "up" ? "Up " : dir === "down" ? "Down " : "Unchanged "}</span>}
       {children}
     </span>
   );

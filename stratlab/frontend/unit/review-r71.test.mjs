@@ -27,7 +27,8 @@ test("R71-006: a live price shows the close its move is from", () => {
 
 test("R71-004: the Invest home's US tab lists the US's own coming events", () => {
   const src = read("src/pages/SpaceHomes.tsx");
-  assert.match(src, /\(region !== "US" \|\| e\.kind === "us"\)/);
+  // since LIVE3-015 the rule is one function for both "Coming up" cards (lib/marketEvents comingMarketEvents); unit/live3b checks its output
+  assert.match(read("src/lib/eventTime.ts"), /\(o\.region !== "US" \|\| e\.kind === "us"\)/);
   assert.match(src, /<NextEvents region=\{region\} \/>/);
 });
 

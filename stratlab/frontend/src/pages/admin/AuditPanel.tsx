@@ -29,6 +29,14 @@ const PAGE_ROWS = 30;          // companies shown at a time, then "Show more" (D
 const STALE_DAYS = 7;          // an audit older than this says so above its results (DJ-028)
 
 /** "These results are 23 days old" for a finished audit more than STALE_DAYS old, else "" (DJ-028). */
+/** The whole-market check's state while it runs, from its own counts: "every company checked" only when every listed company has a
+ * result (LIVE3-024: it said so with 4,970 listed and 4,967 checked, the day's three new listings not yet reached). */
+export function runningLine(m: { due: number; listed: number; checked: number }): string {
+  if (m.due) return `Running · ${m.due.toLocaleString("en-IN")} to check`;
+  const left = Math.max(0, m.listed - m.checked);
+  return left ? `Running · ${left.toLocaleString("en-IN")} not checked yet` : "Running · every company checked";
+}
+
 export function staleNote(finishedAt: string | null | undefined, now = Date.now()): string {
   const t = finishedAt ? Date.parse(finishedAt) : NaN;
   if (!Number.isFinite(t)) return "";
@@ -181,7 +189,7 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
       ) : (
         <>
           <p className="k-small">
-            <b>{m.paused ? PAUSED[m.paused] : m.due ? `Running · ${m.due.toLocaleString("en-IN")} to check` : "Running · every company checked"}</b>
+            <b>{m.paused ? PAUSED[m.paused] : runningLine(m)}</b>
             {m.paused === "cooling" && !!m.cool_minutes && ` ${m.cool_minutes} min between companies now.`}
             {/* a pause reason is a full sentence, so the counts start a new one rather than hang off a "." with a "·" */}
             {m.paused ? " " : " · "}{m.listed ? `${m.listed.toLocaleString("en-IN")} companies listed` : m.paused ? "List not read yet" : "list not read yet"}, {m.checked.toLocaleString("en-IN")} checked

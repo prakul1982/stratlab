@@ -166,7 +166,7 @@ test("VR1-170: /help starts at the questions, with the page's one h1 on its own 
 });
 
 test("VR1-171, VR1-173, VR1-180, VR1-181: the library's width, count line, level titles and wrapped market chips; one admin row height", () => {
-  assert.match(css, /\.pub:has\(\.lib-cards\) \.pub-main \{ max-width: 1144px; \}/);
+  assert.match(css, /\.pub:has\(\.pub-main\.lib\) \.pub-main \{ max-width: 1144px; \}/);          // from the first frame (LIVE3-012)
   const p = read("src/pages/PublicLibrary.tsx");
   assert.match(p, /shown\.length !== rows\.length &&/);
   assert.match(p, /<ChipBar label="Market" options=\{markets\} value=\{market\} onChange=\{setMarket\} wrap \/>/);

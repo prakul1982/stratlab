@@ -27,6 +27,10 @@ const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: bo
 /** The one table: a header row, right-aligned numbers, a hover row, and its own horizontal scroll box so a wide table
  * never makes the page scroll sideways. `label` names the table for screen readers. `rowNote` turns a row into its
  * first cell plus one line of words across the rest (a stock with no data). An empty list shows `empty` in one row. */
+/** A note column is worth its place only when most rows fill it: at most half of them, and the notes go under the items instead
+ * ("no half-empty columns", TABLES EVERYWHERE). */
+export const sparseNotes = (withNote: number, rows: number): boolean => withNote * 2 <= rows;
+
 /** Whether the page is at phone width (where a `stack` table is a list of cards). A page offering a shorter card on a
  * phone reads it too (DA-027). */
 export function usePhone(): boolean {

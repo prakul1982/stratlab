@@ -259,7 +259,9 @@ def test_bad_candles_are_named_with_their_prices():
             return Prov()
     r = pc.check_market(Reg(), "UK", date(2026, 10, 14))
     assert r["state"] == "fail"
-    assert "14 Oct (o 8.10 h 8.15 l 8.00 c 8.30), today's candle while the session is still trading" in r["detail"]
+    # LIVE3-008 changed this on purpose: each price with the decimals it needs (four under 10, as the check's other lines), so a fault in
+    # a price near 1.12 shows which side is out
+    assert "14 Oct (o 8.1000 h 8.1500 l 8.0000 c 8.3000), today's candle while the session is still trading" in r["detail"]
 
 
 def test_r23_008_spy_and_usdinr_a_day_behind_were_the_check_time_not_the_feed(monkeypatch):

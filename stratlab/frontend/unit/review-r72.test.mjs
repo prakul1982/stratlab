@@ -24,5 +24,7 @@ test("R72-001: a just-closed US tile says its closing prints are settling, not '
 });
 
 test("R72-005: the Invest home's India 'Coming up' keeps the exchange holiday", () => {
-  assert.match(read("src/pages/SpaceHomes.tsx"), /e\.kind !== "expiry" && \(region !== "US" \|\| e\.kind === "us"\)/);
+  // since LIVE3-015 the one rule both "Coming up" cards use: holidays are among its kinds (unit/live3b checks its output)
+  assert.match(read("src/lib/eventTime.ts"), /export const COMING_KINDS: EvKind\[\] = \["holiday",/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /comingMarketEvents\(v\.events, /);
 });
