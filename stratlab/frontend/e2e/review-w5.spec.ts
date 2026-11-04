@@ -72,9 +72,10 @@ test("/tour signed out asks to sign in to see the tour, not Page not found", asy
 });
 
 /** Opens Market Watch's panel as this device keeps it: open, docked (a sheet on a phone, floating under 1600 px), on `list`. */
-const panelOpen = (page: Page, u: Who, list: string | null = null) => page.addInitScript(([id, l]) => {
-  localStorage.setItem(`stratlab.watch.layout.${id}`, JSON.stringify({ open: true, mode: "dock", w: 380, h: 560, x: null, y: null, list: l, sort: "custom", chart: null }));
-}, [u.id, list] as const);
+const panelOpen = (page: Page, u: Who, list: string | null = null) => page.addInitScript(([id, l, shut]) => {
+  // a phone's sheet is opened by its Markets button, which would shut a sheet kept open
+  localStorage.setItem(`stratlab.watch.layout.${id}`, JSON.stringify({ open: !shut, mode: "dock", w: 380, h: 560, x: null, y: null, list: l, sort: "custom", chart: null }));
+}, [u.id, list, page.viewportSize()!.width <= 900] as const);
 
 /** A dialog drawn over everything: at the end of the page (not inside what opened it), its dimmed page the whole window, and
  * its buttons the thing a click at their middle lands on, also where Market Watch's panel is. */
