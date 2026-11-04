@@ -6279,12 +6279,18 @@ def calendar_status() -> dict:
     covered = trading_calendar.covered_until("IN")
     last = covered.isoformat() if covered else None
     days_left = (covered - today).days if covered else None
+    markets = trading_calendar.all_coverage(today)
+    # one light for the exchange-listed markets, by the same season-aware rule as each row (data.calendar.awaiting_next_year): Admin
+    # pages follow it instead of a days-left threshold of their own, which turned amber every November (owner, 4 Nov)
+    listed = [r for r in markets if r["market"] in trading_calendar.LISTED]
     # "added": every saved holiday (the exchange's and the owner's); "by_hand": only the dates the owner pasted that the exchange's list lacks
     return {"known_until": until.isoformat() if until else None, "added": added, "by_hand": sorted(trading_calendar.hand_added("IN")),
             "covered_until": last, "days_left": days_left,
+            "state": "warn" if any(r["state"] == "warn" for r in listed) else "ok",
+            "note": trading_calendar.AWAITED if any(r.get("hint") == trading_calendar.AWAITED for r in listed) else None,
             "auto": {"at": auto.get("at"), "tried_at": auto.get("tried_at"), "error": public_text(auto.get("error")),
                      "count": len(auto.get("days") or [])},
-            "markets": trading_calendar.all_coverage(today)}
+            "markets": markets}
 
 
 RETRY_AFTER_FAIL = 3600           # a daily job whose read failed asks again in an hour, not tomorrow...

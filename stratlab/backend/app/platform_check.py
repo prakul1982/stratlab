@@ -365,6 +365,11 @@ def check_calendar(today: date) -> dict:
     if short:
         detail = "Fewer than 60 days of holidays known: " + ", ".join(
             f"{r['name']} ({r['days_left']} day{'' if r['days_left'] == 1 else 's'})" if r["days_left"] is not None else f"{r['name']} (none loaded)" for r in short) + "."
+    elif any(r.get("hint") == calendar.AWAITED for r in rows):
+        # this year known to its end and next year's lists not out yet: expected, a pass that says so (owner, 4 Nov)
+        waiting = [r for r in rows if r.get("hint") == calendar.AWAITED]
+        detail = (f"Holidays known to {waiting[0]['known_until']} for {', '.join(r['name'] for r in waiting)} ({waiting[0]['days_left']} days) "
+                  f"and at least 60 days ahead elsewhere. {calendar.AWAITED}")
     else:
         detail = (f"Holidays known at least 60 days ahead in all {len(rows)} markets"
                   + (f"; India's until {india['known_until']} ({india['days_left']} day{'' if india['days_left'] == 1 else 's'})." if india and india["known_until"] else "."))

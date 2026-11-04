@@ -183,9 +183,14 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
     // it never reads "OK" beside "The exchange feed isn't answering" in Needs your attention (R12-010)
     const left = sv.calendar.days_left;
     const down = (jobs ?? []).some(holidaysDown);
-    const state: HealthState = left < 30 ? "bad" : left < 60 || down ? "warn" : "ok";
+    // the server's season-aware light when it sends one: holidays to 31 Dec are all the exchange has published until mid-December, so
+    // 57 days left on 4 Nov is fine, said as such (owner, 4 Nov); an older server's days-left thresholds otherwise
+    const season = sv.calendar.state;
+    const state: HealthState = season ? (season !== "ok" ? (left < 14 ? "bad" : "warn") : down ? "warn" : "ok")
+      : left < 30 ? "bad" : left < 60 || down ? "warn" : "ok";
+    const awaited = season === "ok" && !!sv.calendar.note && left < 60;
     out.push({ key: "cal", label: "Exchange holidays", to: "/admin/data", state,
-      detail: down ? `Holidays on file for ${left} more days · live feed down` : `Known for ${left} more days` });
+      detail: down ? `Holidays on file for ${left} more days · live feed down` : `Known for ${left} more days${awaited ? " · next year's list comes out in mid-December" : ""}` });
   }
   return out;
 }
