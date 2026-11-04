@@ -99,7 +99,9 @@ export interface SectorAI {
     /** THEMES: every company shown, those from the official industries, those the AI added and how many of these its own words confirm */
     total?: number; base?: number; named?: number; added?: number; confirmed?: number; unconfirmed?: number; industries?: string[];
     /** how the industries were found: the curated list, the AI's pick from the official list, still being picked, or no index yet */
-    industries_by?: "list" | "ai" | "pending" | "none";
+    industries_by?: "list" | "ai" | "words" | "pending" | "none";
+    /** US companies still without an industry on file (their SEC record not read yet) */
+    unclassified?: number;
     /** companies still unchecked when the check stopped waiting: shown as not yet confirmed, checked again later */
     timed_out?: number;
   } | null;
