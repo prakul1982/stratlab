@@ -10,6 +10,8 @@ USERS = {
     **{f"load-{i}": (f"u-load-{i}", f"load{i}@example.com", ("free", "basic", "pro")[i % 3]) for i in range(300)},
     # the MONEY lane's e2e (e2e/money-imports.spec.ts): its own Pro accounts, one per test and project, so nothing it saves meets another spec
     **{f"money-{i}": (f"u-money-{i}", f"money{i}@example.com", "pro") for i in range(24)},
+    # the REVIEW lane's e2e (e2e/review-w5.spec.ts): the same, its own Pro accounts
+    **{f"review-{i}": (f"u-review-{i}", f"review{i}@example.com", "pro") for i in range(32)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),

@@ -8,6 +8,7 @@ import { isPublicForAll } from "./lib/entry";
 import { applySeo, seoFor } from "./lib/seo";
 import { pageview } from "./lib/analytics";
 import { Shell } from "./components/Shell";
+import { openTour } from "./components/Onboarding";
 import { PageLock } from "./components/PageLock";
 import { ViewAsBanner } from "./components/ViewAs";
 import { Toast } from "./components/Toast";
@@ -199,6 +200,18 @@ function Redirect({ to }: { to: string }) {
   return <Navigate to={{ pathname: to, search, hash }} replace />;
 }
 
+/** /tour (Instinct, 2 Nov: "/tour 404s but the tour starts from Help"): Home, with the short tour open over it. */
+function TourRoute() {
+  const nav = useNavigate();
+  useEffect(() => {
+    nav("/", { replace: true });
+    // after Home has drawn, so the tour points at its controls (Onboarding, in the Shell, is already listening)
+    const t = window.setTimeout(openTour, 0);
+    return () => window.clearTimeout(t);
+  }, [nav]);
+  return null;
+}
+
 function Routed() {
   const { session, ready, dataOffline, meError, me, markets } = useApp();
   const loc = useLocation();
@@ -275,6 +288,7 @@ function Routed() {
         <Route path="/pricing" element={<Redirect to="/plans" />} />
         <Route path="/upgrade" element={<Redirect to="/plans" />} />
         <Route path="/help" element={<HelpPage />} />
+        <Route path="/tour" element={<TourRoute />} />
         <Route path="/faq" element={<Redirect to="/help" />} />
         <Route path="/account" element={<AccountPage />} />
         {/* Account and Settings step 3a: new routes */}

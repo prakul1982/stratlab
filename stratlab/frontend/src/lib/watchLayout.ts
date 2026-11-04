@@ -52,6 +52,21 @@ export function dockWidth(l: PanelLayout, vw: number): number {
   return l.open && shapeOf(l, vw) === "dock" ? Math.min(l.w, vw - 320) : 0;
 }
 
+/** The panel's height as drawn. A "docked" panel on a window too narrow to dock floats in the corner over the page: there it is at
+ * most half the window high, so the page's top half (its heading and each card's buttons) stays clear (Instinct #11, 2 Nov: at 560px
+ * on a 720px laptop it stood over the alerts page's New alert button and took its clicks). A panel the person floated keeps the
+ * height they gave it. */
+export function drawnHeight(l: PanelLayout, vw: number, vh: number): number {
+  const h = Math.max(MIN_H, l.h);
+  return l.mode === "dock" && shapeOf(l, vw) === "float" ? Math.max(MIN_H, Math.min(h, Math.round(vh / 2))) : h;
+}
+
+/** How much of the window's foot a panel floating in its corner stands over (0 when shut, docked, a sheet or moved elsewhere): the
+ * page leaves that much room after its end, so its last lines scroll clear of the panel instead of staying under it. */
+export function cornerCover(l: PanelLayout, vw: number, vh: number): number {
+  return l.open && shapeOf(l, vw) === "float" && l.y == null ? drawnHeight(l, vw, vh) + 16 : 0;
+}
+
 /** A floating panel dragged by `dx`, `dy`, kept inside the window. */
 export function dragged(l: PanelLayout, dx: number, dy: number, vw: number, vh: number): PanelLayout {
   const x0 = l.x ?? vw - l.w - 16, y0 = l.y ?? vh - l.h - 16;

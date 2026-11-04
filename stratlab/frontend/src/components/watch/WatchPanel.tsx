@@ -22,7 +22,7 @@ import {
   changeOf, changeText, currencyOf, DEFAULT_ID, itemFromPath, labelOf, listsSaid, moveItem, POPULAR, priceText, SORTS, sortItems,
   subtitleOf, symbolsSaid, type SortMode, type WatchItem, type WatchQuote,
 } from "../../lib/watch";
-import { dragged, DOCK_FROM, isSheet, MAX_W, MIN_H, MIN_W, resized, shapeOf, type PanelLayout } from "../../lib/watchLayout";
+import { dragged, DOCK_FROM, drawnHeight, isSheet, MAX_W, MIN_H, MIN_W, resized, shapeOf, type PanelLayout } from "../../lib/watchLayout";
 import "./watch.css";
 
 export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout: PanelLayout; patch: (p: Partial<PanelLayout>) => void; vw: number; vh: number; onClose: () => void }) {
@@ -31,7 +31,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const sheet = isSheet(vw);
   const shape = shapeOf(layout, vw);
   // the layout as drawn: a "docked" panel on a window too narrow to dock in floats in the corner (watchLayout.DOCK_FROM)
-  const drawn: PanelLayout = shape === "dock" ? layout : { ...layout, mode: "float" };
+  const drawn: PanelLayout = shape === "dock" ? layout : { ...layout, mode: "float", h: drawnHeight(layout, vw, vh) };
   const box = useRef<HTMLDivElement>(null);
   const plan = me?.plan_info.name ?? "Free";
   const listId = w.lists?.some((l) => l.id === layout.list) ? layout.list! : DEFAULT_ID;
@@ -213,8 +213,8 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
     patch({ w: r.w, x: r.x });
   };
 
-  const chartH = Math.max(260, Math.min(640, (shape === "float" ? layout.h : vh) - 300));          // the header, the chart's toolbar and its range row take about 300px
-  const style = { ["--mw-w" as string]: `${layout.w}px`, ["--mw-h" as string]: `${Math.max(MIN_H, layout.h)}px`, ["--mw-x" as string]: layout.x == null ? "auto" : `${layout.x}px`, ["--mw-y" as string]: layout.y == null ? "auto" : `${layout.y}px` };
+  const chartH = Math.max(260, Math.min(640, (shape === "float" ? drawn.h : vh) - 300));          // the header, the chart's toolbar and its range row take about 300px
+  const style = { ["--mw-w" as string]: `${layout.w}px`, ["--mw-h" as string]: `${Math.max(MIN_H, drawn.h)}px`, ["--mw-x" as string]: layout.x == null ? "auto" : `${layout.x}px`, ["--mw-y" as string]: layout.y == null ? "auto" : `${layout.y}px` };
   const used = list?.items.length ?? 0;
   const said = list ? symbolsSaid(w.limits, used, plan) : null;
   const listsLine = listsSaid(w.limits, w.lists?.length ?? 0, plan);
