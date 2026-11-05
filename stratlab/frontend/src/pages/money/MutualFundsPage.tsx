@@ -15,6 +15,7 @@ import { movedYearNote, openFy } from "../../lib/fy";
 import { importLine } from "../../lib/mfImport";
 import { useAskedFy } from "../../lib/useFy";
 import { PlanInline } from "../../components/PlanInterest";
+import { InboxNote } from "../../components/InboxNote";
 
 /* /money/mutual-funds: the Consolidated Account Statement read into every scheme's value at the latest NAV, what went in,
  * the gain and XIRR, the mix by category, and capital gains for each financial year. Built from the kit (components/kit).
@@ -246,6 +247,8 @@ export function MutualFundsPage() {
         {view && view.files.length > 0 && (
           <p className="k-note">{(view.txns - (view.charge_lines ?? 0)).toLocaleString("en-IN")} transactions{view.charge_lines ? ` and ${view.charge_lines.toLocaleString("en-IN")} stamp duty or tax lines` : ""} from {view.files.length} file{view.files.length === 1 ? "" : "s"}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}</p>
         )}
+        {/* the statement can come by itself: the inbox of Settings → Connected accounts, offered where the upload is (owner, 5 Nov) */}
+        <InboxNote />
       </Card>
 
       {!view && (error

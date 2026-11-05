@@ -90,6 +90,17 @@ test("statement inbox: an address, the filter steps, a password, and a statement
   await sane(page, errors, phone);
   await shot(page, "connected-inbox", phone, !phone);
 
+  // the funds page offers the same inbox beside its statement upload, with this address, and links back here (owner, 5 Nov)
+  const mine = (await address.textContent())!;
+  await page.goto("/money/mutual-funds");
+  const note = main.getByTestId("inbox-note");
+  await expect(note).toContainText("Statement inbox is on", { timeout: 30_000 });
+  await expect(note).toContainText(mine);
+  await note.getByRole("link", { name: "Inbox settings" }).click();
+  await expect(page).toHaveURL(/\/settings#inbox$/);
+  await expect(inbox.getByTestId("inbox-address")).toHaveText(mine, { timeout: 30_000 });
+  await sane(page, errors, phone);
+
   // turning it off deletes the address and the password
   await inbox.getByRole("button", { name: "Turn off the inbox" }).click();
   await page.getByRole("button", { name: "Turn it off" }).click();
