@@ -61,7 +61,7 @@ test("VR1-010, VR1-011, VR1-012, VR1-013, VR1-014: Invest home's panels, tiles, 
 });
 
 test("VR1-021, VR1-022, VR1-031: the 'more you can do' tools keep one name and whole lines on a phone", () => {
-  // rows of a table since 5 Nov (owner): each tool's line wraps in full, never cut with "...", and a phone card says its menu entry
+  // rows of a table since 5 Nov (owner): each tool's line wraps in full, never cut with "...", and a phone card is the name and its line
   assert.match(css, /\.k-more-tools \.k-table td\.k-wrap \{ white-space: normal;/);
   assert.match(read("src/components/MoreTools.tsx"), /\{ key: "what", header: "What it is", wrap: true, lead: true,/);
   assert.match(read("src/components/Explore.tsx"), /title = "More you can do"/);

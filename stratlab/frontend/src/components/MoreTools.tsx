@@ -18,7 +18,6 @@ export type ToolRow = {
  * in groups. `children`: more under the table (Explore's "Elsewhere in StratLab"). */
 export function MoreTools({ title, rows, children, id }: { title: string; rows: ToolRow[]; children?: ReactNode; id?: string }) {
   const phone = usePhone();
-  // a phone shows each tool as a card of its own, so each says its entry
   const firstOf = new Set(rows.filter((r, i) => i === 0 || rows[i - 1].groupId !== r.groupId).map((r) => r.id));
   const cols: Column<ToolRow>[] = [
     { key: "tool", header: "Tool", rowHeader: true, cell: (r) => (
@@ -27,7 +26,8 @@ export function MoreTools({ title, rows, children, id }: { title: string; rows: 
         {r.tag}
       </span>) },
     { key: "what", header: "What it is", wrap: true, lead: true, cell: (r) => <span className="k-muted">{r.line}</span> },
-    { key: "in", header: "Menu entry", cell: (r) => (phone || firstOf.has(r.id) ? r.group : "") },
+    // a phone's cards are the name and its line only: a "Menu entry" row on each made the list twice as long
+    ...(phone ? [] : [{ key: "in", header: "Menu entry", cell: (r: ToolRow) => (firstOf.has(r.id) ? r.group : "") }]),
   ];
   return (
     <FoldCard id={id} className="k-more-tools" title={title} meta={`${rows.length} tool${rows.length === 1 ? "" : "s"}`} testId="more-tools">

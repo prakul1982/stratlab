@@ -16,7 +16,7 @@ test("MO-2: no page is tagged New (everything is new at launch)", () => {
 
 test("MO-2: Net worth: a full-size add button at the top and the usual kinds one tap away beside it", () => {
   const src = read("src/pages/money/NetWorthPage.tsx");
-  assert.match(src, /actions=\{view \? <>\n\s*<button type="button" className="btn" onClick=\{\(\) => openAdd\(\)\}><Plus size=\{16\} \/>Add an entry<\/button>/);
+  assert.match(src, /actions=\{view \? <span className="nw-add">\n\s*<button type="button" className="btn" onClick=\{\(\) => openAdd\(\)\}><Plus size=\{16\} \/>Add an entry<\/button>/);
   assert.doesNotMatch(src, /className="btn sm" onClick=\{\(\) => setAdding\(true\)\}>Add an entry/);
   assert.match(src, /const QUICK: Kind\[\] = \["cash", "fd", "epf", "ppf", "gold", "property", "loan"\]/);
   // owner, 5 Nov: the quick add is a menu beside "Add an entry", not a card of chips under the totals

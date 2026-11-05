@@ -469,13 +469,13 @@ export function NetWorthPage() {
         info="Each value shows how it's worked out and the date it's as of. Arithmetic on what you enter, not advice. Only you can see it, and you can delete it at any time." infoLabel="How this is worked out"
         // MO-2 (owner, 25 Oct): adding is the page's main action, so a full-size button at the top, not a small one in a card
         // owner, 5 Nov: the usual kinds (the quick add) beside that button, as one small menu, not a card of chips of their own
-        actions={view ? <>
+        actions={view ? <span className="nw-add">
           <button type="button" className="btn" onClick={() => openAdd()}><Plus size={16} />Add an entry</button>
           {!full && <MoreMenu label="Quick add" buttonClass="btn quiet" items={[
             ...QUICK.map((k) => ({ label: FORM[k].title, icon: <Plus size={14} />, run: () => openAdd(k) })),
             { label: "Something else…", run: () => openAdd() },
           ]} />}
-        </> : undefined} />
+        </span> : undefined} />
 
       {!view && (error
         ? <ErrorState title="Your net worth couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>{error}</ErrorState>

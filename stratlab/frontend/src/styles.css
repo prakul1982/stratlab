@@ -2123,6 +2123,9 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-linkcard .k-note { margin-top: var(--s1); }
 .k-line-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s2) 0; border-bottom: 1px solid var(--line); min-width: 0; }
 .k-line-row:last-child { border-bottom: 0; }
+/* Net worth: "Add an entry" and its Quick add menu stay side by side, one row across a phone */
+.nw-add { display: inline-flex; gap: var(--s2); align-items: center; }
+@media (max-width: 640px) { .nw-add { display: flex; width: 100%; } .nw-add > .btn { flex: 1 1 auto; justify-content: center; } .nw-add .more-pop { left: auto; right: 0; } }
 /* the statement inbox offered under a statement upload (Mutual funds): a ruled line at the card's foot, its address inline */
 .k-line-row.k-inbox-note { border-bottom: 0; border-top: 1px solid var(--line); padding-top: var(--s3); }
 .k-inbox-note .k-address { padding: 1px 6px; font-size: 12.5px; }
