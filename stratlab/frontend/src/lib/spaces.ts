@@ -44,8 +44,11 @@ export function menuView(path: string, showing: SpaceView, keepsMine = false, o:
   if (path === "/") return showing;          // the front door goes on to the home of the menu showing
   const here = spaceOf(path);
   if (!here) return "mine";
+  // a shared page reached from a space (or naming one) stays in it before Mine's own claim: Mine lists the Calendar too, and
+  // the account's saved choice ("My space") arriving after the click must not pull Trade's Calendar into it
+  const kept = sharedPage(path) ? spaceParam(o.search) ?? (o.from && o.from !== "mine" ? o.from : null) : null;
+  if (kept) return kept;
   if (showing === "mine" && keepsMine) return "mine";
-  if (sharedPage(path)) return spaceParam(o.search) ?? (o.from && o.from !== "mine" ? o.from : here);
   return here;
 }
 

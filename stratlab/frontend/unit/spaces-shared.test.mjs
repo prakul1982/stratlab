@@ -26,6 +26,9 @@ test("every shared page, reached from every space that lists it, keeps that spac
   for (const to of shared) for (const sp of menus[to]) {
     for (const saved of [...SPACE_IDS, "mine"]) {
       assert.equal(menuView(to, saved, false, { from: sp }), sp, `${to} from ${sp} (saved ${saved})`);
+      // Mine lists the Calendar too (keepsMine): the account's saved "My space", arriving after the click, still keeps the space
+      assert.equal(menuView(to, saved, true, { from: sp }), sp, `${to} from ${sp} (saved ${saved}, Mine links it)`);
+      assert.equal(menuView(to, saved, true, { search: `?space=${sp}` }), sp, `${to}?space=${sp} (Mine links it)`);
       assert.equal(menuView(to, saved, false, { search: `?space=${sp}` }), sp, `${to}?space=${sp}`);
       assert.equal(menuView(to, saved, false, { search: `?tab=x&space=${sp}`, from: SPACE_IDS.find((x) => x !== sp) }), sp, "the address wins");
     }

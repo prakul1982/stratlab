@@ -45,6 +45,9 @@ export default defineConfig({
             { name: "kit", includeDependenciesRecursively: false, test: /src[\\/](components[\\/]kit[\\/](?!index|Notice|StockPicker|Seg|Dialog)[^\\/]+\.tsx?|lib[\\/]dateInput\.ts)$/ },
             // Market Watch's launcher: the signed-in app has it in its first download, a visitor only when they press the button
             { name: "markets", includeDependenciesRecursively: false, test: /src[\\/](components[\\/]watch[\\/]Launcher\.tsx|lib[\\/]watchLayout\.ts)$/ },
+            // the CSV writer every Download CSV uses (EXPORT): on its own, or it rode in the share helper's file into the landing
+            // page's download (2 kB past the R5V-020 budget), where nothing exports
+            { name: "csv", includeDependenciesRecursively: false, test: /src[\\/]lib[\\/]csv\.ts$/ },
             { name: "kit-account", includeDependenciesRecursively: false, test: /src[\\/]components[\\/]kit[\\/](Notice|StockPicker)\.tsx$/ },
             { name: "account", includeDependenciesRecursively: false, test: /src[\\/](lib[\\/](api|app)|components[\\/]CompanySearch)\.tsx?$/ },
           ],

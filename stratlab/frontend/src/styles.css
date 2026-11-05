@@ -2811,7 +2811,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
    relied on (Item 4.02)") wraps inside its own rounded box on a small phone (380px and under; wider ones had room), instead of pushing the page sideways (376px on a 360px screen);
    short ones are unchanged */
 @media (max-width: 380px) {
-  .k-badge { max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; }
+  .k-badge, .badge { max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; }   /* .badge too: the library table's Checks badge ran 12px past a 360px screen */
   .k-chip { max-width: 100%; height: auto; min-height: 44px; padding-block: 6px; white-space: normal; text-align: left; line-height: 1.3; }
 }
 
@@ -2915,6 +2915,17 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .topbar .top-feedback { padding-inline: 10px; }
 /* with Feedback in it the phone's top bar ran past a 400px screen: there the logo is its mark alone (the link keeps its name) */
 @media (max-width: 440px) { .topbar .brand .logo-word { display: none; } }
+/* ...and the mark alone (16px wide) is still a full tap target: the link keeps 44px, the mark centred in it (R7O-010) */
+.topbar .brand { min-width: 44px; justify-content: center; flex: none; }
+.topbar .icon-btn { flex: none; }
+/* a 360px phone: the bar's gaps and the Feedback button's padding tighten so every button keeps its size and nothing runs off;
+ * at 320 the icon buttons are 40px (still past the 32px floor) */
+@media (max-width: 379px) {
+  .topbar { padding-inline: 10px; gap: 6px; }
+  .topbar .row.tight { gap: 2px; }
+  .topbar .top-feedback { padding-inline: 6px; }
+}
+@media (max-width: 339px) { .topbar .icon-btn { width: 40px; min-width: 40px; } .topbar .brand { min-width: 40px; } }
 
 /* DataTable's row details (TABLES EVERYWHERE, owner 4 Nov): a quiet button after the row's name, and the details in a row of their
  * own across the table; on a phone card, joined to the card above it */
