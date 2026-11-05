@@ -800,7 +800,9 @@ class Job:
 
 
 # ---------- the page ----------
-DAY_ROWS = 25          # rows a day shows at first on "All companies"; the rest of that day opens on request (DE-026)
+DAY_ROWS = 10          # rows a day shows at first on "All companies"; more of that day open on request (DE-026; owner, 5 Nov: 25 a day
+                       # made the page slow to open)
+DAY_MAX = 400          # the most rows one opened day sends
 INDEX_SETS = {         # the indices a table can be narrowed to: id -> name, per market (the members are read from what the app keeps)
     "IN": (("nifty50", "NIFTY 50"), ("banknifty", "NIFTY Bank"), ("nifty500", "NIFTY 500"), ("midcap150", "NIFTY Midcap 150"),
            ("smallcap250", "NIFTY Smallcap 250")),
@@ -923,11 +925,11 @@ def _today_dates(day: str | None, today: date) -> str | None:
 
 def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | None = None, limit: int = DAY_ROWS,
          day: str | None = None, *, size=(), sector: str = "", index: str = "", fo: bool = False, purpose: str = "", on: str = "",
-         sort: str = "cap", desc: bool | None = None) -> dict:
+         sort: str = "cap", desc: bool | None = None, day_rows: int | None = None) -> dict:
     """This week and next, Monday to Sunday: the user's own stocks, or every company in the calendar, day by day, narrowed by
     company size, sector, index, F&O and the meeting's purpose, and sorted. Every day is listed with how many companies it has;
     on "All companies" a day shows its first `limit` rows (the user's own first) and says how many more it has, and `day` (ISO)
-    asks for one day in full. DE-026: a cut at the 400th row of the week dropped all of Saturday 31 Oct (NTPC among them) under
+    asks for more of one day: its first `day_rows` (all of it, up to DAY_MAX, when not given). DE-026: a cut at the 400th row of the week dropped all of Saturday 31 Oct (NTPC among them) under
     "And 66 more". Each row carries what the app already keeps about the company (its market value, sector, last close, the
     latest quarter against a year before and its usual move on a results day) and whether it has futures and options."""
     today = today or local_today(region)
@@ -974,7 +976,12 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
         days, shown = [], []
         for d in sorted({r["date"] for r in rows}):
             on_day = [r for r in rows if r["date"] == d]
-            cap = len(on_day) if scope != "all" or d == day else max(1, limit)
+            if scope != "all":
+                cap = len(on_day)
+            elif d == day:
+                cap = min(len(on_day), max(limit, min(DAY_MAX, day_rows or DAY_MAX)))
+            else:
+                cap = max(1, limit)
             shown += on_day[:cap]
             days.append({"date": d, "count": len(on_day), "shown": min(cap, len(on_day))})
             more += max(0, len(on_day) - cap)

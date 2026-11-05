@@ -528,6 +528,23 @@ def index_moves_ok(s: str, indices: list[dict]) -> bool:
     return True
 
 
+def session_day(indices: list[dict], fallback):
+    """The day of the session the index levels are from (each level's own date, in its market's zone), at most `fallback`
+    (today in India). Headlines are judged by it, not by India's calendar day: between India's midnight and the next open,
+    and through the US session that runs past it, the levels are still the last session's and so are its headlines
+    (5 Nov, 02:30 IST: today had turned, every headline was dropped and the mood read came back empty)."""
+    days = [str(i.get("at") or "")[:10] for i in indices or [] if isinstance(i, dict) and len(str(i.get("at") or "")) >= 10]
+    iso = fallback.isoformat() if hasattr(fallback, "isoformat") else str(fallback)
+    if not days:
+        return fallback
+    last = max(days)
+    try:
+        from datetime import date as _d
+        return _d.fromisoformat(last) if last < iso else fallback
+    except ValueError:
+        return fallback
+
+
 def session_headlines(headlines: list[dict], day) -> list[dict]:
     """The headlines dated on `day` or later; an older story is not today's news (R28-004: a 14 Oct line in the 15 Oct
     read). A headline with no date is kept."""

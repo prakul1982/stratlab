@@ -42,6 +42,7 @@ interface MovesAnswer { moves: Moves | null; since: Since | null }
 interface Implied { pct: number; strike: number; expiry: string; straddle: number }
 
 const KEEP = "stratlab.results.filters.v1";
+const MORE_ROWS = 50;                // rows "Show more" adds to a day
 const READ_ROUNDS = 4;               // times a company answered "pending" is asked again before its cell shows a dash
 const READ_PAUSE_MS = 2500;
 export const NO_FILTERS: Filters = { ...NO_CAL, sort: "cap", purpose: "" };
@@ -81,9 +82,11 @@ export function ResultsPage() {
   const [filters, setFilters] = useState<Filters>(() => keptFilters(KEEP, NO_FILTERS));
   // the one day of "All companies" opened in full (DE-026: each day shows its first rows and says how many more it has)
   const [openDay, setOpenDay] = useState("");
+  // how many of that day's rows to show: 50 more at each press, never a 200-company day in one go (owner, 5 Nov: the page was slow to open)
+  const [dayRows, setDayRows] = useState(0);
   // another market or another set of companies is a different list: the find-a-company text and the old list don't carry over
   const [shownFor, setShownFor] = useState(`${region}|${scope}`);
-  if (shownFor !== `${region}|${scope}`) { setShownFor(`${region}|${scope}`); setQ(""); setData(null); setOpenDay(""); }
+  if (shownFor !== `${region}|${scope}`) { setShownFor(`${region}|${scope}`); setQ(""); setData(null); setOpenDay(""); setDayRows(0); }
   // a sector or an index of one market is not the other's
   const [filtersFor, setFiltersFor] = useState(region);
   if (filtersFor !== region) { setFiltersFor(region); setFilters((f) => ({ ...f, sector: "", index: "", fo: false })); }
@@ -96,12 +99,13 @@ export function ResultsPage() {
     setError(null);
     const t = setTimeout(() => {
       const qs = new URLSearchParams({ region, scope, q: scope === "all" ? q : "", day: scope === "all" ? openDay : "", size: filters.size.join(","),
-        sector: filters.sector, index: filters.index, fo: filters.fo ? "true" : "", purpose: filters.purpose, on: filters.on, sort: sortName });
+        sector: filters.sector, index: filters.index, fo: filters.fo ? "true" : "", purpose: filters.purpose, on: filters.on, sort: sortName,
+        day_rows: scope === "all" && openDay && dayRows ? String(dayRows) : "" });
       for (const [k, v] of [...qs]) if (v === "") qs.delete(k);
       api<ResultsView>(`/research/results?${qs}`).then((x) => live && setData(x)).catch((e) => live && setError((e as Error).message));
     }, q ? 300 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [region, scope, q, openDay, tries, filters]);
+  }, [region, scope, q, openDay, dayRows, tries, filters]);
 
   // ---- what is read for the rows in view (the first LIVE_ROWS), and nothing for the rest ----
   const inView = useMemo(() => (data?.weeks ?? []).flatMap((w) => w.rows).slice(0, LIVE_ROWS), [data]);
@@ -297,7 +301,8 @@ export function ResultsPage() {
               {info.count > info.shown && (
                 <div className="k-row">
                   <span className="k-note">Showing {info.shown} of {info.count.toLocaleString("en-IN")} on {resultDay(d)}.</span>
-                  <button type="button" className="btn quiet sm" onClick={() => setOpenDay(d)}>Show all {info.count.toLocaleString("en-IN")}</button>
+                  <button type="button" className="btn quiet sm" onClick={() => { setOpenDay(d); setDayRows(info.shown + MORE_ROWS); }}>
+                    Show {Math.min(MORE_ROWS, info.count - info.shown).toLocaleString("en-IN")} more</button>
                 </div>
               )}
             </div>
