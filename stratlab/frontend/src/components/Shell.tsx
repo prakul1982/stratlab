@@ -278,8 +278,9 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
         <SpaceSwitch space={space} onPick={goSpace} />
         {/* the space's main button, on every page (owner, 5 Nov: on My Holdings it vanished and left a gap); on the page it opens it
-            brings that page's own place for it into view instead of opening the page again */}
-        <button className="side-new" aria-current={path === main.to ? "page" : undefined} onClick={goMain}>{main.icon}{main.label}</button>
+            brings that page's own place for it into view instead of opening the page again. Not marked current: the menu's own entry
+            for the page is the one highlighted item (ui-lint R7) */}
+        <button className="side-new" onClick={goMain}>{main.icon}{main.label}</button>
         <button className="search-btn" onClick={() => setSearch(true)} aria-keyshortcuts={/Mac/.test(navigator.platform) ? "Meta+K" : "Control+K"}>
           <Sparkle size={16} /><span>Ask or do anything</span>{/* no keyboard shortcut on a touch screen (R50-016) */}
           {!window.matchMedia?.("(pointer: coarse)").matches && <kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>}

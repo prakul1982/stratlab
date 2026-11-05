@@ -57,9 +57,9 @@ test("VR1-101, VR1-103, VR1-104: the scan page says things once; the screener's 
 });
 
 test("VR1-102: the space's main button keeps its place on the page it points to", () => {
-  // owner, 5 Nov: the button itself stays there (it was an empty slot of its height), marked as the current page
+  // owner, 5 Nov: the button itself stays there (it was an empty slot of its height)
   const shell = read("src/components/Shell.tsx");
-  assert.match(shell, /<button className="side-new" aria-current=\{path === main\.to \? "page" : undefined\} onClick=\{goMain\}>/);
+  assert.match(shell, /<button className="side-new" onClick=\{goMain\}>/);
   assert.doesNotMatch(shell, /side-new-gap/);
   assert.doesNotMatch(css, /side-new-gap/);
 });
