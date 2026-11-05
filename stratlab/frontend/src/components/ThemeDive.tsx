@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Badge, Card, CardHead, CsvButton, DataTable, Select, Spark, Signed, Meter, usePhone, type Column } from "./kit";
+import { Badge, Card, CardHead, CsvButton, DataTable, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
 import { Download } from "./Icons";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
@@ -20,7 +20,8 @@ import {
 
 const co = (r: Region, sym: string) => `/research/${r}/${encodeURIComponent(sym)}`;
 const Name = ({ r, sym, name, wide }: { r: Region; sym: string; name: string; wide?: boolean }) => (
-  <><Link className="link" to={co(r, sym)}><b>{name}</b></Link>{wide && <><sup aria-hidden="true"> †</sup><span className="sr-only"> (company-wide figures)</span></>}</>
+  // a company that runs other businesses too says so in words under its name, not with a † to look up (owner, 5 Nov: "why is there a sign on it?")
+  <><Link className="link" to={co(r, sym)}><b>{name}</b></Link>{wide && <span className="k-sub-line">Whole-company figures</span>}</>
 );
 const dash = <span className="k-muted">–</span>;
 const chg = (v: number | null | undefined) => (v == null ? dash : <Signed value={v} fmt={(x) => pct(x, 1)} />);
@@ -83,7 +84,7 @@ export function MembersCard({ r, region }: { r: SectorAI; region: Region }) {
       {inds.length > 0
         ? <p className="k-small k-muted">Official industries{p?.industries_by === "words" ? ", matched by the theme's own words" : p?.industries_by === "ai" ? ", picked by AI from the exchange's own list" : ""}: {inds.join(" · ")}.</p>
         : named > 0 ? <p className="k-small k-muted">No official industry is this theme's core on its own, so its companies are the theme's named list and the ones the map names.</p>
-        : <p className="k-small k-muted">{p?.industries_by === "pending" ? "The theme's official industries are still being picked; until then the companies are the ones the map names." : "No official industry is this theme's core, so every company here is one the map names, checked against its own description."}</p>}
+        : <p className="k-small k-muted">{p?.industries_by === "pending" ? "Until the theme's official industries are picked, its companies are the ones the map names." : "No official industry is this theme's core, so every company here is one the map names, checked against its own description."}</p>}
       {(p?.unclassified ?? 0) > 0 && <p className="k-note">{p!.unclassified!.toLocaleString("en-IN")} US-listed companies have no industry on file yet, so they can't join a theme by industry until their SEC record is read; a few are read each time a theme is checked.</p>}
       {groups.map((g) => <MemberGroup key={g.name} name={g.name} official={g.official} rows={g.rows} cols={cols} />)}
     </Card>
@@ -156,9 +157,9 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
   };
   return (
     <div className="k-row" role="group" aria-label="Download this theme" data-testid="theme-downloads">
-      <span className="k-small k-muted"><Download size={16} /> Download</span>
-      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The theme as slides in a PDF: the chain, every company with its figures, the tailwinds and risks with their sources">{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
-      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint">{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
+      <span className="k-small k-muted">Download</span>
+      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The whole theme as slides in a PDF: the chain and each layer, every company with its figures, the tailwinds and risks with their sources, the news and the theme in numbers"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
+      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
       {rows.length > 0 && <CsvButton name={`theme ${theme} ${region} companies`} label="every company in this theme" columns={memberColumns(region, dive?.unit ?? null)} rows={rows} text="CSV" />}
     </div>
   );
@@ -208,7 +209,7 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
         : <>
           <DataTable label={`${layer.layer}: companies, revenue and margins`} columns={layerColumns(region, wide)} rows={lines} rowKey={(x) => x.key} rowAttrs={(x) => ({ "data-kind": x.kind })} />
           {layer.line && <p className="k-small">{layer.line}</p>}
-          {wide.size > 0 && <p className="k-note">† The company runs other businesses too, so its figures are the whole company's, not this layer's own business.</p>}
+          {wide.size > 0 && <p className="k-note">"Whole-company figures": the company runs other businesses too, so its figures are the whole company's, not this layer's own.</p>}
         </>}
       {hist && hist.years.length >= 2 && (
         <DataTable label={`${layer.layer}: margin by year`} columns={[
@@ -493,8 +494,7 @@ function PriceCards({ dive, prices, busy }: { dive: Dive; prices: Prices | null;
         { key: "b", header: "Theme, equal-weighted", numeric: true, cell: (x) => x.b }, { key: "c", header: prices?.benchmark || "Index", numeric: true, cell: (x) => x.c },
         { key: "d", header: "Companies", numeric: true, cell: (x) => x.d },
       ]} rows={retRows} rowKey={(x) => x.key} empty={busy ? "Reading prices…" : "No prices yet."} />
-      {busy && !prices && <p className="k-note">Reading the companies' prices (this takes a moment the first time)…</p>}
-      {prices && prices.pending > 0 && <p className="k-note">{prices.pending} companies' prices are still being read; the figures above cover the rest.</p>}
+      {(busy && !prices) || (prices && prices.pending > 0) ? <Working small label="Reading the companies' latest prices…" /> : null}
       {prices?.line && (
         <>
           <h3 className="k-sub">The theme against {prices.benchmark}, weekly, rebased to 100</h3>

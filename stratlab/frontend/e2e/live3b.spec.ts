@@ -238,6 +238,9 @@ test("a returning user with an expired access token is renewed, never shown a si
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 }), path).not.toHaveText(/^Sign in|You were signed out/, { timeout: 30_000 });
     await expect(page.locator("main .gate"), path).toHaveCount(0);
+    // the renewed session is in the browser before the next page opens: a reload in the moment between the renewal's answer and
+    // its being saved renews again (CI desktop counted 2 on a slow runner); what a later page uses is what this checks
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("sb-demo-auth-token") || "{}").access_token), { timeout: 15_000 }).not.toBe("expired-token");
   }
   expect(renewals, "renewed once, then the new session is used").toBe(1);
   // the next visit's renewal can't be answered: the page says it couldn't load your account, not "Sign in to see"

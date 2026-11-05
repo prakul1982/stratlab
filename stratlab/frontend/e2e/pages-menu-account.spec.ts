@@ -303,7 +303,7 @@ test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All
   const acct = page.getByRole("menu", { name: "Account" });
   await expect(acct).toBeVisible();
   // the plan is named once, on Plan; Help opens the help page and the tour is its own item (DI-014, DI-022)
-  await expect(acct.getByRole("menuitem")).toHaveText(["Account", "Settings", /^Plan\s*Pro$/, "Invite friends", "Get the app", "Admin", "All features", "Help", "Take the tour", "Sign out"]);
+  await expect(acct.getByRole("menuitem")).toHaveText(["Account", "Settings", /^Plan\s*Pro$/, "Invite friends", "Get the app", "Admin", "All features", "Help", "Feedback", "Take the tour", "Sign out"]);   // Feedback beside Help (owner, 5 Nov)
   for (const [name, href] of [["Account", "/account"], ["Settings", "/settings"], ["Plan", "/plans"], ["Invite friends", "/invite"], ["Get the app", "/app"], ["All features", "/features"], ["Help", "/help"]])
     await expect(acct.getByRole("menuitem", { name })).toHaveAttribute("href", href);
   if (phone) {

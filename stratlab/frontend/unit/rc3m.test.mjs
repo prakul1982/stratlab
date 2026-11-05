@@ -31,5 +31,6 @@ test("RC3M-006: Tax tools says how many held stocks' dividends are still being r
   const src = read("src/pages/money/TaxToolsPage.tsx");
   assert.match(src, /checking\?: number/);
   assert.match(src, /data-testid="dividends-checking"/);
-  assert.match(src, /Still reading the dividends of \{v\.checking\} stock/);
+  // (changed on purpose, owner 5 Nov: work in progress is a moving bar and one short line, no counts or "reload in a minute")
+  assert.match(src, /<div data-testid="dividends-checking"><Working small label="Collecting the rest of your stocks' dividends…" \/><\/div>/);
 });

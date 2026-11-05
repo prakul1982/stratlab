@@ -119,3 +119,17 @@ test("the audit as a class: every page whose main content is a table offers its 
     ["src/pages/ExperimentPage.tsx", /download\(await r\.blob\(\), `.*-trades\.csv`\)/], ["src/pages/DeepDive.tsx", /download\(await r\.blob\(\), `\$\{sym\}-deep-dive\.\$\{format\}`\)/]])
     assert.match(read(f), re, f);
 });
+
+test("DECK (5 Nov): the decks wear the app's own look: the mark's shapes and colours, the paper and ink, as the app has them", async () => {
+  const deck = read("../backend/app/deck.py");
+  const { MARK, MARK_COLORS, MARK_VIEWBOX } = await import("../src/lib/brand.ts");
+  for (const k of ["ribbon", "green", "red"]) assert.ok(deck.includes(`"${k}": "${MARK[k]}"`), `the deck's ${k} path is brand.ts's`);
+  for (const k of ["greenWick", "redWick"]) { const w = MARK[k]; assert.ok(deck.includes(`"${k}": (${w.x}, ${w.y}, ${w.width}, ${w.height})`), k); }
+  assert.ok(deck.includes(`MARK_BOX = (${MARK_VIEWBOX.split(" ").join(", ")})`));
+  assert.ok(deck.includes(`"greenWick": "${MARK_COLORS.greenWick.slice(1)}"`) && deck.includes(`"redWick": "${MARK_COLORS.redWick.slice(1)}"`));
+  const css = read("src/styles.css");
+  for (const [token, name] of [["paper", "PAPER"], ["ink", "INK"], ["muted", "MUTED"], ["card", "CARD"], ["up", "UP"], ["down", "DOWN"], ["blue", "BLUE"]]) {
+    const hex = css.match(new RegExp(`--${token}: #([0-9A-F]{6});`))[1];
+    assert.match(deck, new RegExp(`\\b${name}\\b[^\\n]*= [^\\n]*"${hex}"`), `${name} is --${token}`);
+  }
+});

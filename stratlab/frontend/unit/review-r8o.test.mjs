@@ -58,7 +58,7 @@ test("R8O-007: \"Opening…\" gives way to Reload after 15 s; Admin's reads go o
   assert.match(lg, /export const OPEN_TIMEOUT_MS = 15_000;/);
   assert.match(lg, /data-testid="opening-slow"[\s\S]*location\.reload\(\)[\s\S]*Reload/);
   const main = read("src/main.tsx");
-  assert.match(main, /<Suspense fallback=\{<><h1 className="sr-only">Opening the page<\/h1><Opening \/><\/>\}>/);
+  assert.match(main, /<Suspense fallback=\{<PageCodeWait><h1 className="sr-only">Opening the page<\/h1><Opening \/><\/PageCodeWait>\}>/);   // PageCodeWait: the top loading bar runs for it too (owner, 5 Nov)
   assert.match(main, /if \(!ready\) return <main><h1 className="sr-only">Opening StratLab<\/h1><Opening label="Opening StratLab" \/><\/main>;/);
   assert.match(read("src/visitor/VisitorApp.tsx"), /<Opening label="Opening StratLab" \/>/);
   assert.match(main, /void firstPage\(location\.pathname\)\?\.\(\)/);

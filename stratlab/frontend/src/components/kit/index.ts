@@ -27,7 +27,7 @@ export { FoldTable } from "./FoldTable";
 export { Pager } from "./Pager";
 export { UploadButton, UploadProblem, useUploadProblem } from "./UploadButton";
 export { ChipSet, CheckField } from "./Choices";
-export { EmptyState, ErrorState, Skeleton, type StateAction } from "./States";
+export { EmptyState, ErrorState, Skeleton, Working, type StateAction } from "./States";
 export { ChartFrame } from "./ChartFrame";
 export { ResultBlock } from "./ResultBlock";
 export { LinkCard } from "./LinkCard";

@@ -1,4 +1,4 @@
-// Help & feedback (owner, 4 Nov): the labelled Feedback button (the menu's top on a laptop, the top bar on a phone) and the public
+// Help & feedback (owner, 4 Nov; in the account menu since 5 Nov: "put this in accounts section") and the public
 // footer's link open one dialog; a report sent signed in and one sent signed out both land in Admin → Feedback, with the page and
 // the plan, and new ones are counted in "Needs your attention".
 import { expect, test, type Page } from "@playwright/test";
@@ -26,14 +26,12 @@ test("a signed-in report from the Feedback button lands in Admin → Feedback wi
   const phone = info.project.name === "phone";
   const words = `The chart froze after switching to 1h (${info.project.name} ${Date.now()})`;
   const errors = await signIn(page, "/trade");
-  // labelled and in sight without opening the menu: the menu's top on a laptop, the top bar on a phone
-  const button = (phone ? page.locator("header.topbar") : page.locator("aside.sidebar .side-top")).getByRole("button", { name: "Feedback", exact: true });
-  await expect(button).toBeVisible({ timeout: 30_000 });
-  if (phone) {     // the top bar still fits the screen with it: every button whole, no sideways scroll
-    const vw = page.viewportSize()!.width;
-    for (const b of await page.locator("header.topbar button, header.topbar a").all()) { const r = (await b.boundingBox())!; expect(r.x + r.width, "a top-bar button past the edge").toBeLessThanOrEqual(vw); }
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  }
+  // in the account menu beside Help (owner, 5 Nov): not crowding the logo's row or the phone's top bar
+  await expect(page.locator("aside.sidebar .side-top, header.topbar").getByRole("button", { name: "Feedback" })).toHaveCount(0);
+  if (phone) await page.getByRole("button", { name: "Open menu" }).click();
+  await page.locator("aside.sidebar").getByRole("button", { name: /account menu$/ }).click({ timeout: 30_000 });
+  const button = page.getByRole("menu", { name: "Account" }).getByRole("menuitem", { name: "Feedback", exact: true });
+  await expect(button).toBeVisible();
   await button.click();
   const dlg = page.getByRole("dialog", { name: "Help & feedback" });
   await expect(dlg.getByRole("radiogroup", { name: "What is it?" }).getByRole("radio")).toHaveCount(3);

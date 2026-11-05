@@ -1816,8 +1816,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 
 /* table */
 /* EXPORT: a table's "Download CSV" sits over its top right edge, out of the way of the figures */
-.k-tbl-tools { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: -4px; }
-.k-tbl-wrap { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px;
+.k-tbl-tools { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: var(--s2, 8px); }   /* its own row above the table: at -4px it sat on the table's top edge (owner, 5 Nov) */
+.k-tbl-wrap { position: relative; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 12px;   /* overflow-y: with overflow-x auto it computed to auto too, and a 1px spill drew a vertical scrollbar beside the screener's filters (owner, 5 Nov) */
   background: linear-gradient(to right, var(--card) 30%, transparent) 0 0 / 28px 100% no-repeat local, linear-gradient(to left, var(--card) 30%, transparent) 100% 0 / 28px 100% no-repeat local,
     radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 0 0 / 16px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 100% 0 / 16px 100% no-repeat scroll; }
 /* a table wider than its card fades out at the right edge until it is scrolled to the end (where the browser can tie it to the scroll; elsewhere the edge shadow above is the hint) */
@@ -2914,19 +2914,14 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .linklike.link { color: var(--accent-ink, inherit); text-decoration: underline; text-underline-offset: 2px; }
 .legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: none; }   /* the same tap size as the links beside it (A11Y-2) */
-.side-brand .side-feedback { margin-left: auto; margin-right: 6px; }
-.topbar .top-feedback { padding-inline: 10px; }
-/* with Feedback in it the phone's top bar ran past a 400px screen: there the logo is its mark alone (the link keeps its name) */
-@media (max-width: 440px) { .topbar .brand .logo-word { display: none; } }
-/* ...and the mark alone (16px wide) is still a full tap target: the link keeps 44px, the mark centred in it (R7O-010) */
+/* the phone top bar's logo link is a full tap target and never squeezed by the buttons beside it (R7O-010) */
 .topbar .brand { min-width: 44px; justify-content: center; flex: none; }
 .topbar .icon-btn { flex: none; }
-/* a 360px phone: the bar's gaps and the Feedback button's padding tighten so every button keeps its size and nothing runs off;
- * at 320 the icon buttons are 40px (still past the 32px floor) */
+/* a 360px phone: the bar's gaps tighten so every button keeps its size and nothing runs off; at 320 the icon buttons are 40px
+ * (still past the 32px floor) */
 @media (max-width: 379px) {
   .topbar { padding-inline: 10px; gap: 6px; }
   .topbar .row.tight { gap: 2px; }
-  .topbar .top-feedback { padding-inline: 6px; }
 }
 @media (max-width: 339px) { .topbar .icon-btn { width: 40px; min-width: 40px; } .topbar .brand { min-width: 40px; } }
 
@@ -2940,3 +2935,25 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-tbl-wrap.stack .k-table tr.k-detail-row > td { display: block; padding: var(--s3); }
   .k-tbl-wrap.stack .k-table tr.k-detail-row > td::before { display: none; }
 }
+
+/* Working (owner, 5 Nov): one animated bar wherever something is being prepared. A sliding band on a soft track; with reduced motion the band
+ * stays put and breathes instead */
+.k-working { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.k-working.sm { padding: 0; border: 0; background: none; gap: 6px; }
+.k-working-bar { position: relative; display: block; height: 4px; border-radius: 99px; background: var(--chip); overflow: hidden; }
+.k-working-bar > span { position: absolute; inset: 0 auto 0 0; width: 38%; border-radius: inherit; background: linear-gradient(90deg, transparent, var(--blue), transparent);
+  animation: k-working 1.4s cubic-bezier(.45, 0, .55, 1) infinite; }
+.k-working-text { color: var(--muted); font-size: var(--t-small, 14px); }
+@keyframes k-working { from { transform: translateX(-100%); } to { transform: translateX(265%); } }
+@keyframes k-working-calm { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .k-working-bar > span { width: 100%; animation: k-working-calm 2s ease-in-out infinite; } }
+
+/* the top loading bar (TopProgress): a band sliding along a 3px line at the top of the screen, filling out when the wait ends */
+.top-progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 65; overflow: hidden; pointer-events: none; background: color-mix(in srgb, var(--blue) 18%, transparent); }
+.top-progress > span { position: absolute; inset: 0 auto 0 0; width: 40%; background: var(--blue); border-radius: 0 3px 3px 0; animation: k-working 1.1s cubic-bezier(.45, 0, .55, 1) infinite; }
+.top-progress.done { animation: top-progress-out .45s ease forwards; }
+.top-progress.done > span { animation: none; width: 100%; transition: width .2s ease; }
+@keyframes top-progress-out { 60% { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .top-progress > span { width: 100%; animation: k-working-calm 2s ease-in-out infinite; } }
+/* a card's loading placeholder starts with the same moving bar, so a wait always looks like work going on */
+.k-skel-box > .k-working-bar { margin-bottom: 4px; }

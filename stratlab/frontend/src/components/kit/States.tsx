@@ -51,11 +51,24 @@ export function Skeleton({ label, lines = 4, onRetry, slowAfter = SLOW_LOAD_MS, 
 const widths = [40, 100, 85, 60, 92, 70];
   return (
     <div className={page ? "k-skel-box k-skel-page" : "k-skel-box"} role="status" aria-busy="true" aria-label={label}>
+      {/* the moving bar first: grey lines alone left people unsure whether anything was happening (owner, 5 Nov) */}
+      <span className="k-working-bar" aria-hidden="true"><span /></span>
       {Array.from({ length: lines }, (_, i) => <span key={i} className="k-skel" style={{ width: `${widths[i % widths.length]}%` }} />)}
       <span className="k-stat-d">{label}…</span>
       {slow && (onRetry
         ? <span className="k-row" data-testid="skel-slow"><span className="k-stat-d">{SLOW_LOAD_NOTE}</span><button type="button" className="btn sm" onClick={() => { setSlow(false); onRetry(); }}>Retry</button></span>
         : <span className="k-stat-d" data-testid="skel-slow">{SLOW_LOAD_NOTE}</span>)}
+    </div>
+  );
+}
+
+/** Something is being prepared and the page fills in on its own (owner, 5 Nov: "everywhere we need processing time just a nice animated
+ * loading bar, don't show exact warnings or issues"): a moving bar and one short line, never the internals of what is still running. */
+export function Working({ label, small = false }: { label: string; small?: boolean }) {
+  return (
+    <div className={`k-working${small ? " sm" : ""}`} role="status" aria-live="polite">
+      <span className="k-working-bar" aria-hidden="true"><span /></span>
+      <span className="k-working-text">{label}</span>
     </div>
   );
 }
