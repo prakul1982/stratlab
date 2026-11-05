@@ -1749,7 +1749,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-form.k-form-inline > .k-field.wide { flex: 1 1 100%; }
 .k-form.k-form-inline > .k-form-actions { flex: none; }
 /* MO-3a: three columns at most, whatever the card's width (a column is never narrower than a three-choice switch) */
-.k-form.k-form-trio { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); max-width: 1000px; }
+/* owner, 5 Nov ("fix ui", the tax report's inputs): three equal columns across the whole card (two on a tablet, one on a phone), each
+   switch as wide as the boxes under it, so every control lines up with its column; the button takes the next free cell, level with
+   the boxes (beside "Of which salary"), or the first cell of its own row when the row is full */
+.k-form.k-form-trio { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .k-form.k-form-trio { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .k-form.k-form-trio { grid-template-columns: minmax(0, 1fr); } }
+.k-form.k-form-trio > .k-field > .k-seg { width: 100%; }
+.k-form.k-form-trio > .k-form-actions { grid-column: auto; align-self: end; min-height: var(--ctl); }
+@media (max-width: 560px) { .k-form.k-form-trio > .k-form-actions { grid-column: 1 / -1; } }
 .k-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .k-field.wide { grid-column: 1 / -1; }
 .k-card > .k-field { max-width: 420px; }   /* a lone field in a card (a stock lookup) is not stretched across it */
