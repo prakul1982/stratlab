@@ -178,7 +178,9 @@ test("DI-017, DI-018, DI-019: two kinds of alerts named apart; My space's menu h
 
 test("DI-021, DI-023: the phone's top button and the tour follow the space; on a phone the tour opens the menu", () => {
   const shell = read("src/components/Shell.tsx");
-  assert.match(shell, /aria-label=\{main\.label\} title=\{main\.label\} onClick=\{\(\) => nav\(main\.to\)\}/);
+  // the top bar's button is the sidebar's main action (goMain: the space's page, or the place for it on that page, owner 5 Nov)
+  assert.match(shell, /aria-label=\{main\.label\} title=\{main\.label\} onClick=\{goMain\}/);
+  assert.match(shell, /if \(path !== main\.to\) \{ nav\(main\.to\); return; \}/);
   assert.match(shell, /useDialogFocus\(aside, open && !tourMenu,/);
   const tour = read("src/components/Tour.tsx");
   assert.match(tour, /`\.topbar \[aria-label='\$\{main\}'\]`/);

@@ -115,8 +115,10 @@ test("DP2-011: the ITR downloads look alike and say why they're off", () => {
 });
 
 test("DP2-014: Money's home cards carry their plan tags and read in full on a phone", () => {
-  assert.match(read("src/pages/SpaceHomes.tsx"), /<PageTags page=\{p\} \/><\/Link>\)\}/);          // IA-1: under the entry each is a tab of
-  assert.match(read("src/styles.css"), /\.money-cards \.explore-card \.small \{ display: block; -webkit-line-clamp: unset; overflow: visible; \}/);
+  // a row of the tools' table since 5 Nov, with its menu entry (IA-1); its line wraps, never cut with "..."
+  assert.match(read("src/pages/SpaceHomes.tsx"), /group: g\.label, groupId: g\.id, tag: <PageTags page=\{p\} \/>, attrs: \{ "data-money": p\.to \}/);
+  assert.match(read("src/styles.css"), /\.k-more-tools \.k-table td\.k-wrap \{ white-space: normal;/);
+  assert.doesNotMatch(read("src/styles.css"), /\.k-more-tools[^{]*\{[^}]*line-clamp/);
 });
 
 test("DP2-020, DP1-007: locked alert kinds and indicators are marked, and picking one says why with the price", () => {

@@ -152,8 +152,11 @@ test("IA-1: the space homes and 'More you can do' follow the menu's entries", ()
   const ex = read("src/components/Explore.tsx");
   assert.match(ex, /const sections = NAV\[own\]\.groups\.map\(\(g\) => \(\{ g, tiles: tilesOf\(g\) \}\)\)/);
   assert.match(ex, /<DataTable stack label="Menu entries in the other spaces"/);
-  assert.match(ex, /const ones = sections\.filter\(\(x\) => x\.tiles\.length === 1\)/);          // no heading over one card saying the same
+  // one table row a tool, each with its menu entry, said on the entry's first row only (owner, 5 Nov: a table in a fold, not cards
+  // under a heading per entry, so no heading sits over one card saying the same)
+  assert.match(ex, /const rows: ToolRow\[\] = sections\.flatMap\(\(\{ g, tiles \}\) => tiles\.map/);
+  assert.match(read("src/components/MoreTools.tsx"), /\(phone \|\| firstOf\.has\(r\.id\) \? r\.group : ""\)/);
   const homes = read("src/pages/SpaceHomes.tsx");
-  assert.match(homes, /const entries = NAV\.money\.groups\.map/);
+  assert.match(homes, /const tools: ToolRow\[\] = NAV\.money\.groups\.flatMap/);
   assert.match(homes, /<Link to="\/calendar" className="link small">Calendar →<\/Link>/);
 });

@@ -10,9 +10,13 @@ const css = read("src/styles.css");
 test("MO-3a: the tax inputs are a three-column form, its switches sized to their choices and as tall as the boxes", () => {
   assert.match(read("src/pages/TaxReportPage.tsx"), /<FormGrid trio onSubmit/);
   assert.match(read("src/components/kit/Form.tsx"), /k-form-trio/);
-  assert.match(css, /\.k-form\.k-form-trio \{ grid-template-columns: repeat\(auto-fit, minmax\(min\(260px, 100%\), 1fr\)\); max-width: 1000px; \}/);
+  // owner, 5 Nov ("fix ui"): three equal columns across the card, each switch as wide as its column, the button in the next free cell
+  assert.match(css, /\.k-form\.k-form-trio \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/);
+  assert.match(css, /@media \(max-width: 900px\) \{ \.k-form\.k-form-trio \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \} \}/);
+  assert.match(css, /\.k-form\.k-form-trio > \.k-field > \.k-seg \{ width: 100%; \}/);
+  assert.match(css, /\.k-form\.k-form-trio > \.k-form-actions \{ grid-column: auto; align-self: end;/);
   assert.match(css, /\.k-form\.k-form-trio > \.k-field:has\(> \.k-seg button:nth-child\(3\)\) \{ grid-column: auto; \}/);
-  // not stretched to the column, and "New (default)" is not squeezed into two lines by equal shares
+  // in other forms a switch is not stretched to its column, and "New (default)" is not squeezed into two lines by equal shares
   assert.match(css, /\.k-form > \.k-field > \.k-seg \{ width: max-content; max-width: 100%; min-height: var\(--ctl\); align-items: stretch;/);
   assert.doesNotMatch(css, /\.k-form > \.k-field > \.k-seg button \{ flex: 1 1 0;/);
   // (UI-FIX-1) a label never wraps in its button; the field takes two columns instead

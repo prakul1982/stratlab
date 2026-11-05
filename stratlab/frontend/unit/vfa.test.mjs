@@ -60,16 +60,22 @@ test("VR1-010, VR1-011, VR1-012, VR1-013, VR1-014: Invest home's panels, tiles, 
   assert.match(css, /\.trade-market \.space-card-line \{ min-height: 0; \}/);
 });
 
-test("VR1-021, VR1-022, VR1-031: the 'more you can do' tiles keep a card's width, one name, whole lines on a phone", () => {
-  assert.match(css, /\.k-explore \.explore-grid \{ grid-template-columns: repeat\(auto-fit, minmax\(230px, 1fr\)\);/);
-  assert.match(css, /\.k-explore \.explore-card \.small \{ display: block; -webkit-line-clamp: unset;/);
+test("VR1-021, VR1-022, VR1-031: the 'more you can do' tools keep one name and whole lines on a phone", () => {
+  // rows of a table since 5 Nov (owner): each tool's line wraps in full, never cut with "...", and a phone card says its menu entry
+  assert.match(css, /\.k-more-tools \.k-table td\.k-wrap \{ white-space: normal;/);
+  assert.match(read("src/components/MoreTools.tsx"), /\{ key: "what", header: "What it is", wrap: true, lead: true,/);
   assert.match(read("src/components/Explore.tsx"), /title = "More you can do"/);
 });
 
-test("owner, 29 Oct: More you can do shows every group of tools, with no button folding them away", () => {
+test("owner, 5 Nov: More you can do is one closed fold that says how many tools it holds, with every tool of every group inside", () => {
+  // (29 Oct the owner asked for no fold; 5 Nov: "make it like a dropdown everywhere", closed by default, a clear summary row)
   const ex = read("src/components/Explore.tsx");
-  assert.match(ex, /\{\[\.\.\.many, \.\.\.\(ones\.length \? \[/);          // IA-1: every menu entry of the space, in the menu's shape
-  assert.doesNotMatch(ex, /more tools|aria-expanded|explore\.open/);
+  assert.match(ex, /const rows: ToolRow\[\] = sections\.flatMap\(\(\{ g, tiles \}\) => tiles\.map/);          // IA-1: every menu entry of the space, in the menu's shape
+  const more = read("src/components/MoreTools.tsx");
+  assert.match(more, /meta=\{`\$\{rows\.length\} tool\$\{rows\.length === 1 \? "" : "s"\}`\}/);
+  const fold = read("src/components/kit/FoldCard.tsx");
+  assert.match(fold, /open: initial = false/);
+  assert.match(fold, /hidden=\{!open\}/);
 });
 
 // TABLES EVERYWHERE (owner, 4 Nov): the notebook cards are one table; VR1-030's point (no part-empty row of cards, the pin an icon
