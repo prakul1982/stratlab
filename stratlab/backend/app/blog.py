@@ -12,6 +12,7 @@ updated in place.
 A post's body is structured blocks (headings, paragraphs, lists, tables; a text can carry an internal link), written to
 the row already cleaned and escaped again when drawn, so nothing a source returns can put markup or an outside link on a
 page. Facts only, no advice wording, no data-vendor names. Nothing is held in memory: every page reads its rows."""
+import math
 import re
 from datetime import date, datetime, timedelta, timezone
 
@@ -32,6 +33,7 @@ HREF = re.compile(r"^/(?!/)[A-Za-z0-9_\-./?=&%#:+]{0,200}$")      # an address o
 MAX_TEXT = 3000
 MAX_BLOCKS = 80
 MAX_ROWS = 150
+MAX_BARS = 30
 
 MINUS = "−"
 BRIEF_GEN = 2                           # the version of the words and tables a brief post is written with (O5: tables); bump it and the stored posts are written again from their issues
@@ -160,7 +162,9 @@ def _row(post: dict) -> dict:
         raise ValueError("a post needs a title and a summary")
     at = str(post.get("published_at") or now_iso())
     return {"slug": slug, "kind": post["kind"], "market": post.get("market") if post.get("market") in MARKET_NAME else None,
-            "title": title, "summary": summary, "body": {"v": 1, "blocks": clean_blocks(post.get("blocks") or []), **({"gen": int(post["gen"])} if post.get("gen") else {})},
+            "title": title, "summary": summary, "body": {"v": 1, "blocks": clean_blocks(post.get("blocks") or []), **({"gen": int(post["gen"])} if post.get("gen") else {}),
+                     # a theme post's own figures (blog_research.theme_source), never drawn: a later version of its words is written from them
+                     **({"src": post["src"]} if isinstance(post.get("src"), dict) else {})},
             "published_at": at, "updated_at": str(post.get("updated_at") or at), "indexable": bool(post.get("indexable", True)),
             "published": bool(post.get("published", True)), "day": post.get("day")}
 
@@ -231,6 +235,8 @@ def clean_blocks(blocks: list) -> list[dict]:
                     tbl["align"] = align
                 if len(widths) == len(head) and 90 <= sum(widths) <= 110:
                     tbl["widths"] = widths
+                if b.get("wrap") is True:               # a table of names, not figures: its cells wrap and sit on the left (a theme's companies by layer)
+                    tbl["wrap"] = True
                 out.append(tbl)
         elif t == "stats":
             # the headline numbers as tiles: a big figure, what it counts, and an optional small line (PUB-2)
@@ -245,6 +251,20 @@ def clean_blocks(blocks: list) -> list[dict]:
                     for r in (b.get("rows") or [])[:MAX_ROWS] if isinstance(r, dict) and clean_text(r.get("label"), 40)]
             if len(series) >= 2 and rows:
                 out.append({"t": "bars", "caption": clean_text(b.get("caption"), 200), "series": series, "rows": rows})
+        elif t == "hbar":
+            # R11: a horizontal bar chart of one figure per row (a theme's margin by layer, an IPO's listing day by subscription), drawn on the
+            # server as plain HTML and CSS: no script, no outside file. A value is a finite number or None (the row says "no figure" and has
+            # no bar); `text` is the figure as the post writes it, and is the only thing printed beside the bar
+            rows = []
+            for r in (b.get("rows") or [])[:MAX_BARS]:
+                if not isinstance(r, dict):
+                    continue
+                label, v = clean_text(r.get("label"), 80), r.get("value")
+                v = float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
+                if label:
+                    rows.append({"label": label, "value": v, "text": clean_text(r.get("text"), 24) or ("no figure" if v is None else f"{v:,.1f}".replace("-", MINUS))})
+            if any(r["value"] is not None for r in rows):
+                out.append({"t": "hbar", "caption": clean_text(b.get("caption"), 200), "rows": rows, "note": clean_text(b.get("note"), 300)})
         elif t == "fold":
             # VR7-002: a section that a phone folds (the strategy post's ten market tables were 10,000px of cards on a phone): a heading, one
             # small note beside it ("10 tests") and the blocks inside; a desktop shows it open, as the plain heading and blocks it was
@@ -303,6 +323,7 @@ def blocks_html(blocks: list) -> str:
                                             for n, c in enumerate(r)) + "</tr>" for r in b["rows"])
             cols = "<colgroup>" + "".join(f'<col style="width:{w}%">' for w in b["widths"]) + "</colgroup>" if b.get("widths") else ""
             wide = (" wide" + (" w4" if len(b["head"]) == 5 else "")) if len(b["head"]) >= 5 else ""
+            wide += " wrap" if b.get("wrap") else ""
             out.append(f'<div class="btbl{" fx" if cols else ""}{wide}"><table>{cap}{cols}<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
         elif t == "stats":
             out.append('<ul class="kpis">' + "".join(
@@ -321,6 +342,8 @@ def blocks_html(blocks: list) -> str:
                 rows += f'<li><span class="k">{_esc(r["label"])}</span><span class="track" role="img" aria-label="{_esc(r["label"])}: {_esc(said)}">{segs}</span><span class="n">{nums}</span></li>'
             cap = f'<figcaption>{_esc(b["caption"])}</figcaption>' if b.get("caption") else ""
             out.append(f'<figure class="hbars">{cap}<p class="key">{legend}</p><ul>{rows}</ul></figure>')
+        elif t == "hbar":
+            out.append(hbar_html(b))
         elif t == "fold":
             note = f'<span class="n">{_esc(b["note"])}</span>' if b.get("note") else ""
             out.append(f'<details class="mk"><summary><h2>{_esc(b["title"])}</h2>{note}</summary>{blocks_html(b["blocks"])}</details>')
@@ -328,6 +351,31 @@ def blocks_html(blocks: list) -> str:
             out.append(f'<details class="how card" {"data-words" if b.get("words") else "data-method"}><summary>{_esc(b["title"])}</summary><ul class="small">'
                        + "".join(f"<li>{inline_html(i)}</li>" for i in b["items"]) + "</ul></details>")
     return "".join(out)
+
+
+def hbar_html(b: dict) -> str:
+    """An `hbar` block (already cleaned) as a figure: a row per label with its bar and its figure. Every bar is measured on one scale from
+    the lowest value (or zero) to the highest (or zero), so a negative figure is a bar to the left of a zero line and a positive one to its
+    right. Each row's track carries its label and figure as words for a screen reader."""
+    vals = [r["value"] for r in b["rows"] if r["value"] is not None]
+    lo, hi = min(0.0, *vals), max(0.0, *vals)
+    span = (hi - lo) or 1.0
+    zero = abs(lo) / span * 100
+    rows = []
+    for r in b["rows"]:
+        v = r["value"]
+        if v is None:
+            bar = ""
+        else:
+            w = max(abs(v) / span * 100, 0.6 if v else 0)
+            left = zero if v >= 0 else zero - w
+            bar = f'<i class="bar{" neg" if v < 0 else ""}" style="left:{left:.2f}%;width:{w:.2f}%"></i>'
+        line = f'<i class="zero" style="left:{zero:.2f}%"></i>' if lo < 0 else ""
+        rows.append(f'<li><span class="k">{_esc(r["label"])}</span><span class="track" role="img" aria-label="{_esc(r["label"])}: {_esc(r["text"])}">{bar}{line}</span>'
+                    f'<span class="n{" none" if v is None else ""}">{_esc(r["text"])}</span></li>')
+    cap = f'<figcaption>{_esc(b["caption"])}</figcaption>' if b.get("caption") else ""
+    note = f'<p class="hb-note">{_esc(b["note"])}</p>' if b.get("note") else ""
+    return f'<figure class="hb">{cap}<ul>{"".join(rows)}</ul>{note}</figure>'
 
 
 def plain_text(blocks: list) -> str:
@@ -348,7 +396,9 @@ def plain_text(blocks: list) -> str:
         parts += [flat(i) if not isinstance(i, dict) or "v" not in i else f"{i['v']} {i.get('l', '')} {i.get('s', '')}" for i in b.get("items") or []]
         parts += [str(h) for h in b.get("head") or []] + [b.get("title") or ""] + [str(x) for x in b.get("series") or []]
         parts += [flat(c) if isinstance(c, (list, str)) else str(c) for r in b.get("rows") or [] if isinstance(r, list) for c in r]
-        parts += [str(r.get("label") or "") for r in b.get("rows") or [] if isinstance(r, dict)]
+        parts += [f'{r.get("label") or ""} {r.get("text") or ""}' for r in b.get("rows") or [] if isinstance(r, dict)]
+        if b.get("note"):
+            parts.append(str(b["note"]))
     return " ".join(parts)
 
 

@@ -90,16 +90,25 @@ export const FEATURES: Record<PlanId, string[]> = {
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings, unlimited Market Watch lists and indicators`],
 };
 
-/** A plan card's lines split for its card (VR6-013): the lines of text are as long as they are, so a count of lines left Basic's card 200px taller than Free's
- * (five long lines against five short ones). A card shows lines until their words add up to about this many characters (the line that crosses it
- * included, never fewer than three); the rest are folded under "N more included" and stay in the page. */
-export const CARD_TEXT_BUDGET = 400;
-export function splitFeatures(lines: string[], budget = CARD_TEXT_BUDGET): { head: string[]; shown: string[]; more: string[] } {
-  const head = lines.filter((f) => f.endsWith(":")), items = lines.filter((f) => !f.endsWith(":"));
-  let total = 0, n = 0;
-  while (n < items.length && (n < 3 || total < budget)) total += items[n++].length;
-  return { head, shown: items.slice(0, n), more: items.slice(n) };
-}
+/** R11 (owner, 5 Nov: the Plans page was "bad UI"): each card on the Plans page shows five short lines, the plan's main points, and the full
+ * comparison is the table under the cards (PlanCompare): the cards are level, short, and say no number the table doesn't. Built from LIMITS. */
+export const KEY: Record<PlanId, string[]> = {
+  free: ["Every market, price charts, screens and the options builder",
+    `${L.free.backtests_per_month} backtests and ${L.free.ai_builds_per_month} AI strategy builds a month`,
+    `Paper trading trial: ${L.free.live_limit} strategy for 5 market days`,
+    `${L.free.deepdives_per_month} company deep dives and ${L.free.decks_per_month} slide deck a month`,
+    `${L.free.stock_alerts} stock alerts, ${L.free.screens} saved screens, ${L.free.holdings} holdings`],
+  basic: ["Everything in Free, with no ads",
+    `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month, all 20+ indicators`,
+    `Paper trade ${L.basic.live_limit} strategies at a time, with options and whole groups`,
+    "Full trade journal, alerts and the daily Market Brief by email",
+    `${L.basic.deepdives_per_month} deep dives and ${L.basic.decks_per_month} slide decks a month`],
+  pro: ["Everything in Basic",
+    `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`,
+    `Paper trade ${L.pro.live_limit} strategies at a time, groups of up to ${L.pro.group_size}`,
+    "Indian F&O in notebooks, and options on your own rules' signals",
+    "Tax tools, ITR-ready export and StratLab in your AI assistant"],
+};
 
 /** Ads (ADS-1), one row of the comparison table: Free accounts and signed-out pages may show Google ads, only after the visitor allows
  * them (lib/ads.ts); Basic and Pro never do. The cards say it once, on the plan that adds it (Basic; Pro includes Basic). */

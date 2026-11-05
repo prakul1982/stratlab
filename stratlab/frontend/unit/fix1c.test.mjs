@@ -216,9 +216,11 @@ test("LIVE1C-090, LIVE1C-091: few watched stocks stack the Invest cards and fill
   assert.match(mine, /<span className="sr-only">\{d\.w\} \{d\.d\} \{d\.m\}: <\/span>/);
 });
 
-test("LIVE1C-092: the full comparison is a closed fold in the app", () => {
-  assert.match(read("src/pages/PlansPage.tsx"), /<PlanCompare folded /);
-  assert.match(read("src/components/PlanCompare.tsx"), /testId="plans-compare-fold"/);
+test("LIVE1C-092, R11: the cards are short and the full comparison is the open table under them, not a lone folded card", () => {
+  // R11 (owner, 5 Nov: "bad UI", a lone "Side by side" card with one collapsed line): the cards carry five short lines, so the table is open
+  assert.match(read("src/pages/PlansPage.tsx"), /<PlanCompare plans=/);
+  assert.doesNotMatch(read("src/components/PlanCompare.tsx"), /plans-compare-fold|Compare every limit and feature side by side|folded\?:/);
+  assert.match(read("src/components/PlanCompare.tsx"), /<CardHead title="Compare the plans" \/>/);
 });
 
 test("LIVE1C-093: Account's AI builds line is shorter for an admin", async () => {

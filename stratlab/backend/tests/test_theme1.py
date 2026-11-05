@@ -349,7 +349,9 @@ def test_a_draft_post_is_made_only_when_the_data_is_notable_and_is_never_publish
     post = blog_research.theme_post(d, "Test theme", "IN", datetime(2026, 10, 5, tzinfo=timezone.utc))
     assert post["published"] is False and post["kind"] == "research" and post["slug"] == "theme-test-theme-margins-in"
     text = json.dumps(post["blocks"])
-    assert "49.0%" in text and "9.5%" in text and "gap of 39.5 points" in text and blog_research.advice_words(post) is None
+    # R11: the gap is said as "39.5 points apart", and the margins are drawn as a bar chart beside the table
+    assert "49.0%" in text and "9.5%" in text and "39.5 points apart" in text and blog_research.advice_words(post) is None
+    assert any(b["t"] == "hbar" for b in post["blocks"]) and post["src"]["rows"][0]["companies"]
     flat = {**d, "notable": []}
     assert blog_research.theme_post(flat, "Test theme", "IN") is None
     assert blog_research.draft_theme_post(flat, "Test theme", "IN") == {"result": "nothing notable", "slug": None}

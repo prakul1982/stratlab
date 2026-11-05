@@ -40,25 +40,18 @@ test("VR6-012: with fewer than three snapshots the list sits inside the totals c
   assert.match(src, /!r\.name\.endsWith\(r\.label\) && <span className="k-note"> · \{r\.label\}<\/span>/);
 });
 
-test("VR6-013: each plan card shows about 400 characters of its lines and folds the rest; every line is still on the page", async () => {
-  const { FEATURES, splitFeatures, CARD_TEXT_BUDGET } = await import("../src/lib/plans.ts");
-  assert.equal(CARD_TEXT_BUDGET, 400);
-  const visible = {};
+test("VR6-013, R11: each plan card shows five short lines and nothing folded; every line of the long lists is in the table below", async () => {
+  // R11 (owner, 5 Nov: "bad UI"): the cards' "3 more included in Free" folds are gone; a card is its plan's main points and one button
+  const { KEY, LIMITS } = await import("../src/lib/plans.ts");
   for (const p of ["free", "basic", "pro"]) {
-    const { head, shown, more } = splitFeatures(FEATURES[p]);
-    assert.deepEqual([...head, ...shown, ...more].sort(), [...FEATURES[p]].sort());                  // nothing lost
-    assert.ok(shown.length >= 3 && more.length >= 1, `${p}: ${shown.length} shown, ${more.length} folded`);
-    visible[p] = shown.reduce((n, l) => n + l.length, 0);
+    assert.equal(KEY[p].length, 5, p);
+    for (const l of KEY[p]) assert.ok(l.length <= 70, `${p}: "${l}" is ${l.length} characters`);
   }
-  // by words the three are about as long as each other (five lines each was 285, 405 and 325px of text)
-  assert.ok(Math.max(...Object.values(visible)) - Math.min(...Object.values(visible)) < 150, JSON.stringify(visible));
-  const long = ["x".repeat(200), "y".repeat(200), "z".repeat(200), "w".repeat(200), "v".repeat(200)];
-  assert.deepEqual([splitFeatures(long).shown.length, splitFeatures(long).more.length], [3, 2]);          // never fewer than three, though three pass the budget
-  assert.deepEqual([splitFeatures(["a", "b"]).shown.length, splitFeatures(["a", "b"]).more.length], [2, 0]);   // a short card folds nothing
+  assert.ok(KEY.free.some((l) => l.startsWith(`${LIMITS.free.backtests_per_month} backtests`)) && KEY.basic[0] === "Everything in Free, with no ads");
   const src = read("src/pages/PlansPage.tsx");
-  assert.match(src, /const \{ head, shown, more \} = splitFeatures\(FEATURES\[p\]\);/);
-  assert.match(src, /<details className="k-plan-more" data-testid=\{`plan-more-\$\{p\}`\}>/);
-  assert.match(read("src/styles.css"), /\.k-plan-more summary \{[^}]*min-height: 44px;/);
+  assert.match(src, /<ul className="k-plan-list">\{KEY\[p\]\.map\(/);
+  assert.doesNotMatch(src, /k-plan-more|more included in|splitFeatures/);
+  assert.doesNotMatch(read("src/styles.css"), /\.k-plan-more/);
 });
 
 test("VR6-014: the usage list on Account never leaves a row alone beside an empty cell", () => {

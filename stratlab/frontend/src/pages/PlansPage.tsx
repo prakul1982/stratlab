@@ -11,7 +11,7 @@ import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanCompare } from "../components/PlanCompare";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
-import { FEATURES, LIMITS, PRICE, splitFeatures, WHO, type Limits, type PlanId } from "../lib/plans";
+import { KEY, LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
 import { readViewAs } from "../lib/viewAs";
 import { canBuy, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 
@@ -89,6 +89,24 @@ export function PlansPage() {
   /** The amount charged, alone, for the dialog's button (LIVE1B-079: "Continue to payment" did not say what it would charge). */
   const chargeAmount = (p: "basic" | "pro") => rupeeCharge(rupees(p, period), gst);
 
+  /** A card's one button. A plan you have, or one a higher plan you have includes, says so on a quiet button that can't be pressed;
+   * the others buy it. */
+  const action = (p: PlanId, cur: boolean) => {
+    const has = paid && RANK[p] <= RANK[paid as PlanId];
+    if (cur) return <button className="btn outline k-plan-btn" disabled>Current plan</button>;
+    // the current plan isn't known until /me answers: no "Upgrade to Pro" for a Pro reader meanwhile
+    if (!me) return <button className="btn outline k-plan-btn" disabled>Checking your plan…</button>;
+    // Free is in every plan; a plan the owner gave already includes everything below it: nothing to buy there (R6V-009)
+    if (p === "free" || (given && has)) return <button className="btn outline k-plan-btn" disabled data-testid="plan-included">Included in your {planName((paid ?? "free") as PlanId)} plan</button>;
+    if (!billing) return <button className="btn outline k-plan-btn" disabled>Opens soon</button>;
+    return (
+      <button className={`btn k-plan-btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy || !!viewAs} onClick={() => ask(p as "basic" | "pro")}
+        title={viewAs ? viewingPlansNote(planName(viewAs)) : undefined} aria-describedby={viewAs ? "plans-viewas" : undefined}>
+        {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${planName(p)}`}
+        {viewAs && <span className="k-small"> (off while viewing as {planName(viewAs)})</span>}</button>
+    );
+  };
+
   // signed in: hold until the account has answered, so the signed-out page is never drawn for someone who is signed in
   if (!ready || (session && !me)) return <div className="k-page"><PageHeader eyebrow="Account · Plans" title="Plans" /><Card label="Loading plans"><AccountWait label="Loading plans" /></Card></div>;
   return (
@@ -128,54 +146,32 @@ export function PlansPage() {
                 {price.inr && gst && <span className="k-note">incl. GST</span>}
                 {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}
               </div>
-              {/* VR6-013: about 400 characters of each card's lines, the rest one tap away (lib/plans.ts splitFeatures): the three cards stood 984, 1,176 and
-                  1,015px tall, each a wall of small text that the Side by side tables below say again; every line is still in the page */}
-              {/* item 44: the list and the button are the card's third row, so the names, the prices and the lists start on one line in
-                  the three cards and the buttons sit on one line at their foot (styles.css .k-plans) */}
+              {/* R11 (owner, 5 Nov: "bad UI"): five short lines, the plan's main points, and one button at the foot; the cards are level (styles.css
+                  .k-plans), and every limit and feature is in the comparison table under them, so nothing is folded inside a card */}
               <div className="k-plan-body">
-              {(() => {
-                const line = (f: string) => f.endsWith(":") ? <li key={f} className="head">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>;
-                const { head, shown, more } = splitFeatures(FEATURES[p]);
-                return (
-                  <>
-                    <ul className="k-plan-list">{[...head, ...shown].map(line)}</ul>
-                    {more.length > 0 && (
-                      <details className="k-plan-more" data-testid={`plan-more-${p}`}>
-                        <summary>{more.length} more included in {planName(p)}</summary>
-                        <ul className="k-plan-list">{more.map(line)}</ul>
-                      </details>
-                    )}
-                  </>
-                );
-              })()}
-              {cur ? <button className="btn outline" disabled>Current plan</button>
-                : p === "free" ? <span className="k-small k-muted">Included whenever a paid plan ends</span>
-                  // the current plan isn't known until /me answers: no "Upgrade to Pro" for a Pro reader meanwhile
-                  : !me ? <button className="btn outline" disabled>Checking your plan…</button>
-                  : !billing ? <span className="lp-plan-note k-small k-muted">Opens soon</span>
-                    // a plan the owner gave already includes everything below it: nothing to buy there (R6V-009)
-                    : given && paid && RANK[p] <= RANK[paid as PlanId] ? <span className="k-small k-muted" data-testid="plan-included">Included in the {planName(paid as PlanId)} plan you were given</span>
-                    : <button className={`btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy || !!viewAs} onClick={() => ask(p)}
-                      title={viewAs ? viewingPlansNote(planName(viewAs)) : undefined} aria-describedby={viewAs ? "plans-viewas" : undefined}>
-                      {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${planName(p)}`}
-                      {viewAs && <span className="k-small"> (off while viewing as {planName(viewAs)})</span>}</button>}
+                <ul className="k-plan-list">{KEY[p].map((f) => <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}</ul>
+                {action(p, cur)}
               </div>
             </Card>
           );
         })}
       </div>
-      <PlanCompare folded plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}
-      {billing ? (
-        <p className="k-small k-muted k-measure">{gst ? "Rupee prices include 18% GST, and every payment gets a GST invoice in Account." : "The price shown is all you pay: no GST is added. Every payment gets an invoice in Account."} Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by our payment partner.</p>
-      ) : (
-        <p className="k-small k-muted k-measure">{finePrint(offer, { currency: "INR", inRupees: false, inRupeesYear: false,
-          charged: { basic: `₹${rupees("basic", "month").toLocaleString("en-IN")}`, pro: `₹${rupees("pro", "month").toLocaleString("en-IN")}` }, gst }).join(" ")}</p>
-      )}
-      <p className="k-small k-muted k-measure" data-testid="usd-note">{usdNote(rate, pricing?.usd_inr?.fallback)}</p>
-      <p className="k-small k-muted k-measure">StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past results don't predict future returns.</p>
+      <PlanCompare plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
+      {/* the small print, short and in one place (R11, owner 5 Nov: a wall of small print under the table) */}
+      <ul className="k-fineprint" aria-label="The small print">
+        {billing ? (
+          <>
+            <li>{gst ? "Rupee prices include 18% GST, and every payment gets a GST invoice in Account." : "The price shown is all you pay: no GST is added. Every payment gets an invoice in Account."}</li>
+            <li>Paid plans renew each month or year until you cancel, any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>.</li>
+          </>
+        ) : finePrint(offer, { currency: "INR", inRupees: false, inRupeesYear: false,
+          charged: { basic: `₹${rupees("basic", "month").toLocaleString("en-IN")}`, pro: `₹${rupees("pro", "month").toLocaleString("en-IN")}` }, gst }).map((t) => <li key={t}>{t}</li>)}
+        <li data-testid="usd-note">{usdNote(rate, pricing?.usd_inr?.fallback)}</li>
+        <li>StratLab is a research and paper trading tool: it places no real orders and gives no investment advice, and past results don't predict future returns.</li>
+      </ul>
       <LegalLinks blog />
       {switching && (
         <ConfirmDialog title={paid !== "free" && me ? `Switch to ${planName(switching)}?` : `Subscribe to ${planName(switching)}?`}

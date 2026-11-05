@@ -79,7 +79,7 @@ test("a purchase is confirmed with the plan, the period, GST and the renewal bef
   assert.match(plans, /incl\. 18% GST/);
   assert.match(plans, /renews automatically/);
   assert.match(plans, /name: `StratLab · \$\{planName\(plan\)\}, \$\{period === "year" \? "yearly" : "monthly"\}`/);
-  assert.match(plans, /Included in the \{planName\(paid as PlanId\)\} plan you were given/);
+  assert.match(plans, /if \(p === "free" \|\| \(given && has\)\) return <button className="btn outline k-plan-btn" disabled data-testid="plan-included">Included in your \{planName\(\(paid \?\? "free"\) as PlanId\)\} plan<\/button>;/);   // R11: one button a card
 });
 
 test("email links that the API answers go through the site's own domain (R6V-016)", () => {

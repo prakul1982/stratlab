@@ -123,11 +123,10 @@ test("DJ-026: the audit's mismatch count on Overview says when those rows were c
 
 test("DJ-028, DJ-030: an old audit says how old, and the findings come 30 companies at a time", () => {
   const panel = read("src/pages/admin/AuditPanel.tsx");
-  assert.match(panel, /const STALE_DAYS = 7;/);
-  assert.match(panel, /These results are \$\{days\} days old/);
-  // a plain note since 4 Nov: the whole-market check re-checks every company daily, so an old sampled audit needs nothing (owner)
-  assert.match(panel, /\{!s\.running && staleNote\(s\.finished_at\) && <Notice tone="info">/);
-  assert.match(panel, /so nothing needs doing; run this again only for a fresh sample/);
+  assert.match(read("src/pages/admin/auditAge.ts"), /export const STALE_DAYS = 7;/);
+  // R11 (owner, 5 Nov: "why is it still showing mismatches, errors etc"): an old sampled audit is one closed line of history that says how old
+  assert.match(panel, /const old = s\.running \? null : oldAudit\(s\.finished_at\);/);
+  assert.match(panel, /\{old\.days\} days old\. The whole-market check above re-checks every company each day; these results are kept as a record only\./);
   assert.match(panel, /const PAGE_ROWS = 30;/);
   assert.match(panel, /rows\.slice\(0, Math\.min\(SHOWN, upTo\)\)/);
 });

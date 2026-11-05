@@ -33,6 +33,8 @@
 /* small helpers */
 .adm-cell { max-width: 380px; overflow-wrap: anywhere; font-size: var(--t-note); }
 .adm-mono { font-family: var(--mono); font-size: var(--t-note); }
+/* an old hand-run audit (AuditPanel oldAudit): kept as a record, its figures greyed so none reads as a problem of today (owner, 5 Nov) */
+.adm-old .k-table td, .adm-old .k-table th, .adm-old .k-small b { color: var(--muted); }
 .adm-search { max-width: 340px; flex: 1 1 220px; }
 .adm-filters { margin-bottom: var(--s3); }
 

@@ -7,7 +7,7 @@ import { ADS, EVERYONE, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimit
 
 /** Every limit and feature side by side, from the server's plans when signed in; signed out, the
  * same tables from the app's own copy of the limits (R60-012: a visitor comparing plans saw less than a signed-in user). */
-export function PlanCompare({ plans, folded }: { plans?: Record<string, Partial<Limits>>; folded?: boolean }) {
+export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
   const lim = (p: PlanId): Limits => ({ ...LIMITS[p], ...(plans?.[p] ?? {}) });
   const num = (p: PlanId, k: keyof Limits) => {
     const v = lim(p)[k] as number | null;
@@ -46,18 +46,19 @@ export function PlanCompare({ plans, folded }: { plans?: Record<string, Partial<
           <DataTable label={`Plans side by side: ${g.sub ? `${g.sub.toLowerCase()}, ` : ""}${g.title.toLowerCase()}`} columns={columns(g.title)} rows={g.rows} rowKey={(r) => r.id} pinHead />
         </div>
       ))}
-      {/* the same on every plan: one line each, folded so the page stays short (DP1-022: three lists said the same facts) */}
+      {/* the same on every plan: a table like the others, folded so the page stays short (DP1-022: three lists said the same facts) */}
       <div className="k-stack" data-plans-group="all">
         <Disclosure summary={`On every plan (${everyone.length} tools)`}>
-          <ul className="k-list">{everyone.map((r) => <li key={r.id}>{r.label}</li>)}</ul>
+          <DataTable label="Plans side by side: on every plan" columns={columns("On every plan")} rows={everyone} rowKey={(r) => r.id} />
         </Disclosure>
       </div>
   </>);
-  // in the app the three cards above already list each plan: the full comparison is one fold, closed (LIVE1C-092: the same facts three times down a 10,000px page)
+  // R11 (owner, 5 Nov): the comparison is the page's table, open under the cards, not a lone card with one folded line; the cards above
+  // carry five short lines each, so the table is where every limit and feature is said (LIVE1C-092's 10,000px page had the long lists three times)
   return (
     <Card id="compare" className="k-compare">
-      <CardHead title="Side by side" />
-      {folded ? <Disclosure summary="Compare every limit and feature side by side" testId="plans-compare-fold"><div className="k-stack">{body}</div></Disclosure> : body}
+      <CardHead title="Compare the plans" />
+      {body}
     </Card>
   );
 }
