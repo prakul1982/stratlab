@@ -70,7 +70,7 @@ def test_the_theme_deck_carries_every_part_of_the_page():
         assert must in words, must
     members = [r for s in slides if s.title.startswith("Every company in this theme") for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
     assert sorted(r[0] for r in members) == sorted(f"{m['name']} ({m['symbol']})" for m in v["members"])        # every company, once
-    lead = [r[0].rstrip(" †") for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
+    lead = [r[0].removesuffix(" (whole company)") for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
     assert sorted(lead) == sorted(x["name"] for x in v["sections"]["leaders"])
     assert table_of(slides, "Every company's figures")["head"][-1] == "Price, 1 year"         # the page's price column, once prices are read
     notes = texts([s for s in slides if s.title == "How to read this deck"])

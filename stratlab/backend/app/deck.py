@@ -1467,7 +1467,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         slides.append(s)
 
     def name_of(sym, nm):
-        return f"{nm} †" if sym in wide else nm
+        return f"{nm} (whole company)" if sym in wide else nm
 
     # 1. cover: the overview the AI wrote, the core, and the figures that frame the theme
     s = Slide(sector, f"{'US' if us else 'India (NSE and BSE)'} · Theme deep dive", dark=True)
@@ -1569,7 +1569,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         rows, strong = [], []
         lwide = set(layer.get("company_wide") or []) | {c["symbol"] for c in cos if c.get("company_wide")}
         for c in cos:
-            rows.append([f"{c['name']} †" if c["symbol"] in lwide else c["name"], amt(c.get("revenue")), _pc(c.get("ebitda")), _pc(c.get("net")), _pc(c.get("roce")), c.get("year") or "–"])
+            rows.append([f"{c['name']} (whole company)" if c["symbol"] in lwide else c["name"], amt(c.get("revenue")), _pc(c.get("ebitda")), _pc(c.get("net")), _pc(c.get("roce")), c.get("year") or "–"])
         n_st = (st.get("ebitda") or st.get("net") or {}).get("n") or 0
         strong.append(len(rows))
         rows.append([f"Median of {_n(n_st, 'company', 'companies')}" + (" (company-wide figures)" if layer.get("stats_over") == "all" else ""), "",
@@ -1599,7 +1599,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                      "vals": [r["ebitda"] for r in ch_rows], "fmt": "pct", "colors": [BLUE if r["layer"] == layer["layer"] else LINE2 for r in ch_rows]}
         card = {"title": "What this layer does", "lines": [desc] + ([official] if official else []), "note": AI_NOTE} if desc else \
             {"title": "Who is here", "lines": [official]} if official else None
-        fnote = "† The company runs other businesses too, so its figures are the whole company's, not this layer's own business." \
+        fnote = "(whole company): the company runs other businesses too, so its figures are the whole company's, not this layer's own business." \
             if any(c["symbol"] in lwide for c in cos) else ""
         fh = 0.48 if fnote else 0
         # the layout: what the layer does across the top, its table and its chart side by side below (a long table runs on; the chart goes
@@ -1644,7 +1644,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             if not sub.get("companies"):
                 rows.append(["No listed company is shown for this sub-theme.", "", "", "", ""])
             for c in sub.get("companies") or []:
-                rows.append([name_of(c["symbol"], c["name"]) if not c.get("company_wide") else f"{c['name']} †", f"“{c['what']}”" if c.get("what") else "Not yet confirmed from its own description",
+                rows.append([name_of(c["symbol"], c["name"]) if not c.get("company_wide") else f"{c['name']} (whole company)", f"“{c['what']}”" if c.get("what") else "Not yet confirmed from its own description",
                              cap(c.get("cap")), _chg(c.get("sales_1y")), _pc(c.get("ebitda"))])
         head, widths = ["Company", "What it does here, in its own words", "Market value", "Revenue growth", "EBITDA margin"], [2.7, 4.8, 1.4, 1.4, 1.3]
         pages = table_pages(head, rows, widths, CW, BOT - TOP - 0.4, most=16)
@@ -1711,7 +1711,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s = Slide("Every company's figures" + (f" ({k + 1} of {len(pages[:MEMBER_SLIDES])})" if len(pages) > 1 else ""), msg, eyebrow=eb("The companies"))
             s.add("table", (M, TOP, CW, BOT - TOP - 0.35), head=head, rows=chunk, widths=widths)
             s.add("text", (M, BOT - 0.28, CW, 0.28), paras=[f"Largest first. Revenue growth and margins: each company's latest full year; P/E on the last four quarters' "
-                                                            f"earnings.{' † Company-wide figures.' if wide else ''}"], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+                                                            f"earnings.{' (whole company): whole-company figures.' if wide else ''}"], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
 
     # 7. tailwinds and risks with their checked sources, the latest headlines, the new listings
@@ -1797,7 +1797,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     if figs.get("of") and figs.get("shown") and figs["of"] > figs["shown"]:
         read.append(f"Figures are worked out for {figs['shown']:,} of the theme's {figs['of']:,} companies: every one the map names, then the largest of the rest.")
     if wide:
-        read.append("† A company that runs other businesses too: its figures are the whole company's.")
+        read.append("(whole company): a company that runs other businesses too; its figures are the whole company's.")
     none_ = [t for k, t in left_out if k == "none"]
     unread = [t for k, t in left_out if k == "unread"]
     lo_text = ([f"Nothing to show for this theme's companies yet: {'; '.join(none_)}."] if none_ else []) + \

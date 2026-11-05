@@ -158,7 +158,7 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
   return (
     <div className="k-row" role="group" aria-label="Download this theme" data-testid="theme-downloads">
       <span className="k-small k-muted">Download</span>
-      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The theme as slides in a PDF: the chain, every company with its figures, the tailwinds and risks with their sources"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
+      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The whole theme as slides in a PDF: the chain and each layer, every company with its figures, the tailwinds and risks with their sources, the news and the theme in numbers"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
       {rows.length > 0 && <CsvButton name={`theme ${theme} ${region} companies`} label="every company in this theme" columns={memberColumns(region, dive?.unit ?? null)} rows={rows} text="CSV" />}
     </div>
