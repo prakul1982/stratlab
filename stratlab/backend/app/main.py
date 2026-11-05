@@ -293,7 +293,21 @@ biz_updates.setup(lambda: filings_feed, lambda: deep_docs, lambda: (_gemini, _an
 biz_job = biz_updates.Job(lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit, kind_ok=_alert_kind_ok),
                           biz_updates.alert_symbols)
 # IPOs: India's from the exchanges' public-issue pages and SEBI's lists, the US's from the public IPO calendar and the SEC's filings
-ipo.setup(lambda: filings_feed, lambda: us_market_calendar, lambda: (_gemini, _anthropic), lambda: markets.providers["US"].yahoo)
+def ipo_listed(row: dict) -> dict | None:
+    """A closed Indian issue's stock in the broker's instrument list (NSE by symbol, else by company name on either exchange) with its
+    first trading day in the last 50 days (an older first day is another company of a like name): None while it isn't listed."""
+    if not kite.ready():
+        return None
+    inst = (kite.equity(row["symbol"]) if row.get("symbol") else None) or kite.equity_by_name(row.get("name") or "")
+    if not inst:
+        return None
+    bars = kite.history(inst["token"], "1d", 50, store=False)
+    return {"symbol": inst.get("symbol"), "exchange": inst.get("exchange"), "code": inst.get("bse_code"),
+            "first": str(bars[0]["t"])[:10] if bars else None}
+
+
+ipo.setup(lambda: filings_feed, lambda: us_market_calendar, lambda: (_gemini, _anthropic), lambda: markets.providers["US"].yahoo,
+          listed_fn=ipo_listed)
 shareholders.setup(lambda: filings_feed)
 holders_job = shareholders.Job(lambda: filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                can_alert=lambda p: allows(access_plan(p), "holders") and bool(alerts.jobs_for(p, "", "")))

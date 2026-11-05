@@ -106,6 +106,36 @@ def test_allotment_and_listing_are_sebis_timetable_until_the_exchange_publishes_
     assert I.timeline({"market": "US"}, NOW) == {"allotment": None, "allotment_expected": False, "listing": None, "listing_expected": False}
 
 
+def test_a_closed_bse_sme_issue_keeps_its_timetable_dates_and_moves_to_listed_once_its_stock_trades():
+    """Owner, 5 Nov: Core4 Engineers (closed 27 Oct), Wiscon Industries (29 Oct) and Carver Roboweld (30 Oct), BSE SME issues, showed
+    allotment and listing "Not published yet". BSE's issue list gives only the bidding days and drops an issue at its close, and no list the
+    job reads has BSE SME listings, so the timetable's days stay (marked expected) and the stock is looked for in the broker's list."""
+    now = at(2026, 11, 5, 20, 0)
+    core4 = {"id": "in-bse-4902", "market": "IN", "name": "Core4 Engineers Limited", "symbol": None, "segment": "sme", "exchanges": ["BSE"],
+             "bse_code": "4902", "nkey": "core4", "open": "2026-10-23", "close": "2026-10-27", "low": 88.0, "high": 93.0}
+    carver = {**core4, "id": "in-bse-4910", "name": "Carver Roboweld Limited", "bse_code": "4910", "nkey": "carverroboweld", "open": "2026-10-28", "close": "2026-10-30"}
+    t = I.timeline(core4, now)
+    assert (t["allotment"], t["listing"], t["allotment_expected"], t["listing_expected"]) == ("2026-10-28", "2026-10-30", True, True)
+    assert I.stage_of(core4, now) == "closed"
+    asked: list[str] = []
+
+    def lookup(row):
+        asked.append(row["name"])
+        return {"Core4 Engineers Limited": {"symbol": "CORE4", "exchange": "BSE", "code": "544990", "first": "2026-10-30"},
+                "Carver Roboweld Limited": {"symbol": "CARVER", "exchange": "BSE", "code": "544991", "first": "2026-09-14"}}.get(row["name"])
+    rows, problems = [dict(core4), dict(carver)], []
+    assert I.confirm_listings(rows, now, problems, lookup=lookup) == 1 and not problems
+    got = rows[0]
+    assert got["listing"] == "2026-10-30" and got["bse_scrip"] == "544990" and I.stage_of(got, now) == "listed"
+    assert I.yahoo_symbol(got) == "544990.BO"                                           # its prices under the stock's own code, not the offer's
+    assert "listing" not in rows[1] and I.stage_of(rows[1], now) == "closed"            # a first trading day before the close is another company
+    assert I.timeline(rows[1], now)["listing"] == "2026-11-04"                          # T+3 from 30 Oct: the timetable's day still shows
+    # before the timetable's listing day nothing is looked up; long past it, no date is asserted
+    asked.clear()
+    assert I.confirm_listings([dict(core4)], at(2026, 10, 29, 20, 0), [], lookup=lookup) == 0 and asked == []
+    assert I.timeline(core4, at(2026, 11, 30))["listing"] is None
+
+
 def test_size_and_minimum_investment_are_arithmetic_on_the_issue_terms():
     base = {"market": "IN", "lot": 91, "high": 162.0, "low": 153.0, "size_shares": 17000000}
     p = I.public({**base, "id": "x", "name": "x", "open": "2026-10-28", "close": "2026-10-30"}, NOW)
