@@ -68,6 +68,7 @@ test("fund behaviour: your return against the fund's, the SIP record and a redem
   // MF-1: the totals in one card, each fund's own return, SIP record and falls folded under its row
   const card = page.getByRole("region", { name: "Costs and how you invested" });
   await expect(card.getByText("Gap in rupees, all funds")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: /^Your schemes/ }).click();         // closed until asked for (owner, 5 Nov)
   const flexi = page.getByRole("list", { name: "Schemes" }).getByRole("listitem").filter({ hasText: "Example Flexi Cap Fund - Direct Plan - Growth" });
   await expect(flexi).toHaveCount(1);
   await flexi.locator("summary").click();
