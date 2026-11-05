@@ -68,10 +68,11 @@ test("themes: Slides (PDF), Slides (PowerPoint) and the companies' CSV each save
   const box = page.getByTestId("theme-downloads");
   await expect(box).toBeVisible();
   const [pdf] = await Promise.all([page.waitForEvent("download"), box.getByRole("button", { name: "Slides (PDF)" }).click()]);
-  expect(pdf.suggestedFilename()).toBe("stratlab-theme-india-steel-and-mining-in.pdf");
+  // a name people can read in their Downloads (owner, 5 Nov): StratLab - <theme> theme (<market>) - <day>
+  expect(pdf.suggestedFilename()).toMatch(/^StratLab - India steel and mining theme \(India\) - \d{1,2} [A-Z][a-z]{2} \d{4}\.pdf$/i);
   expect((await readFile((await pdf.path())!)).subarray(0, 5).toString()).toBe("%PDF-");
   const [deck] = await Promise.all([page.waitForEvent("download"), box.getByRole("button", { name: "Slides (PowerPoint)" }).click()]);
-  expect(deck.suggestedFilename()).toBe("stratlab-theme-india-steel-and-mining-in.pptx");
+  expect(deck.suggestedFilename()).toMatch(/^StratLab - India steel and mining theme \(India\) - \d{1,2} [A-Z][a-z]{2} \d{4}\.pptx$/i);
   expect((await readFile((await deck.path())!)).subarray(0, 2).toString()).toBe("PK");
   const [csv] = await Promise.all([page.waitForEvent("download"), box.getByRole("button", { name: /^CSV/ }).click()]);
   const { head, body } = await checkCsv(csv, "theme companies");

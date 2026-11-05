@@ -1,4 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { deckFileName } from "../lib/deckName";
+import { REGION_NAME } from "../lib/research";
 import { Link } from "react-router-dom";
 import { Badge, Card, CardHead, CsvButton, DataTable, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
 import { Download } from "./Icons";
@@ -11,7 +13,7 @@ import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
   amount, layerLines, pc, points, span, times,
-  themeApi, themeSlug,
+  themeApi,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
 
@@ -151,7 +153,7 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
     setMaking(format);
     try {
       const res = await themeApi.deck(region, theme, format);
-      download(await res.blob(), `stratlab-theme-${themeSlug(theme) || "theme"}-${region.toLowerCase()}.${format}`);
+      download(await res.blob(), deckFileName(`${theme} theme (${REGION_NAME[region]})`, format));
       void refreshMe();                               // the deck count in Account
     } catch (e) { fail(e); } finally { setMaking(null); }
   };
