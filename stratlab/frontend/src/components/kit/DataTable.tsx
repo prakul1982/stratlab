@@ -4,7 +4,7 @@ import { textOf } from "./Card";
 import { istToday, minusNode } from "../../lib/format";
 import { scrollToEnd } from "../../lib/phoneFit";
 import { columnOf, csvName, type CsvValue } from "../../lib/csv";
-import { downloadCsv } from "../../lib/share";
+import { downloadCsv } from "../../lib/csvDownload";
 import { Download } from "../Icons";
 
 export type Column<R> = {

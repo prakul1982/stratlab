@@ -69,7 +69,11 @@ test("a file name: stratlab-, the words in lower case with hyphens, the day", ()
 });
 
 test("every table download goes through the one builder and the one save (lib/share.ts download)", () => {
-  const share = read("src/lib/share.ts");
+  // the builder in a file of its own (lib/csvDownload.ts), saving through share's download; share itself never loads the CSV writer,
+  // since the landing page downloads share (R5V-020)
+  assert.doesNotMatch(read("src/lib/share.ts"), /csv/i);
+  const share = read("src/lib/csvDownload.ts");
+  assert.match(share, /import \{ download \} from "\.\/share";/);
   assert.match(share, /export function downloadCsv\(name: string, head: string\[\], rows: CsvValue\[\]\[\]\) \{\n  download\(new Blob\(\[toCsv\(head, rows\)\], \{ type: "text\/csv;charset=utf-8" \}\), name\);/);
   const table = read("src/components/kit/DataTable.tsx");
   assert.match(table, /downloadCsv\(csvName\(name, istToday\(\)\), t\.head, t\.rows\)/);

@@ -1,4 +1,4 @@
-import { downloadCsv } from "../../lib/share";
+import { downloadCsv } from "../../lib/csvDownload";
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";

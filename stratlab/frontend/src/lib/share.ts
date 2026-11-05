@@ -1,5 +1,4 @@
 /* Sharing a link: the phone's own share sheet where there is one, and the clipboard on a computer. */
-import { toCsv, type CsvValue } from "./csv";
 
 /** A touch phone or tablet with a share sheet (a desktop browser may have navigator.share too, but copying is
  *  what people expect there). */
@@ -30,11 +29,6 @@ export function download(blob: Blob, name: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
-}
-
-/** Save a table as a CSV file (lib/csv.ts writes it), through the one save above (EXPORT). */
-export function downloadCsv(name: string, head: string[], rows: CsvValue[][]) {
-  download(new Blob([toCsv(head, rows)], { type: "text/csv;charset=utf-8" }), name);
 }
 
 /** The site's address for links people share (the local app in development and tests). */

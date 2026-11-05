@@ -13,7 +13,7 @@ import { Select } from "../kit/Form";
 import { useDialogFocus, usePopover } from "../kit/Dialog";
 import { EmptyState, ErrorState, Skeleton } from "../kit/States";
 import { Chevron, Close, Download, Plus } from "../Icons";
-import { downloadCsv } from "../../lib/share";
+import { downloadCsv } from "../../lib/csvDownload";
 import { csvName } from "../../lib/csv";
 import { istToday } from "../../lib/format";
 import { useApp } from "../../lib/app";
