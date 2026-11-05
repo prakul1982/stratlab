@@ -51,6 +51,8 @@ export function Skeleton({ label, lines = 4, onRetry, slowAfter = SLOW_LOAD_MS, 
 const widths = [40, 100, 85, 60, 92, 70];
   return (
     <div className={page ? "k-skel-box k-skel-page" : "k-skel-box"} role="status" aria-busy="true" aria-label={label}>
+      {/* the moving bar first: grey lines alone left people unsure whether anything was happening (owner, 5 Nov) */}
+      <span className="k-working-bar" aria-hidden="true"><span /></span>
       {Array.from({ length: lines }, (_, i) => <span key={i} className="k-skel" style={{ width: `${widths[i % widths.length]}%` }} />)}
       <span className="k-stat-d">{label}…</span>
       {slow && (onRetry

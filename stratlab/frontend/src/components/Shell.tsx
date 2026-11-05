@@ -17,6 +17,7 @@ import { PageBreadcrumb } from "./PageBreadcrumb";
 import { HubTabs } from "./HubTabs";
 import { Onboarding, openTour } from "./Onboarding";
 import { MarketsLauncher, openMarkets } from "./watch/Launcher";
+import { TopProgress } from "./TopProgress";
 import { gateFor, gatePlan } from "../lib/gates";
 import { PLAN_NAME } from "../lib/plans";
 import { watchSize } from "../lib/resize";
@@ -300,6 +301,7 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className={`shell${slim ? " slim" : ""}`}>
       {/* skip links: past the 30-odd menu stops straight to the page, to its own sections when it lists them, or to the
           menu (R5O-030) */}
+      <TopProgress />
       <a className="skip-link sr-only" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById("main")?.focus(); }}>Skip to content</a>
       <a className="skip-link sr-only" href="#main" onClick={(e) => {
         e.preventDefault();

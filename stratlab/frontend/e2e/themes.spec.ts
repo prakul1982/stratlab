@@ -107,8 +107,9 @@ test("a theme whose AI read is slow shows its official companies within seconds,
   await expect(members).toContainText("Vedanta");
   expect(Date.now() - started, "the base list waited on the AI").toBeLessThan(15_000);
   // a moving bar with one line while the map is written (owner, 5 Nov), not a warning box
-  await expect(page.getByRole("status").filter({ hasText: "Mapping the theme: sorting its companies into layers" })).toBeVisible();
-  await expect(page.locator(".k-working-bar")).toBeVisible();
+  const working = page.getByRole("status").filter({ hasText: "Mapping the theme: sorting its companies into layers" });
+  await expect(working).toBeVisible();
+  await expect(working.locator(".k-working-bar")).toBeVisible();
   await expect(page.getByText("The theme couldn't be mapped")).toHaveCount(0);
   // the AI's map arrives behind the page, with no reload and no error on the way
   await expect(page.getByText("Steel makers depend on ore and coal from miners")).toBeVisible({ timeout: 90_000 });
