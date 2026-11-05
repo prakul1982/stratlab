@@ -352,14 +352,23 @@ function ResultsToday({ region }: { region: Region }) {
     <Panel title={`${region === "US" ? "US results" : "Results"} today${mine ? ": your stocks" : ""}`}
       right={<Link to={withRegion("/research/results", region)} className="link">Calendar →</Link>}>
       {rows === null ? <PanelSkel label="Checking results dates" />
-        : rows.today.length ? (
+        : rows.today.length && !mine ? (
+          // every company's: the largest first, in one short paragraph, so the card stays as short as it was with only your stocks beside the
+          // watchlist (ui-lint R1 at 1280: four lines of companies left the watchlist with 179px empty under it)
+          <p className="small" data-testid="invest-results-today">
+            <span className="muted">{rows.today.length} {rows.today.length === 1 ? "company has" : "companies have"} results today, largest first: </span>
+            {rows.today.slice(0, 6).map((r, i) => (
+              <span key={`${r.region}-${r.symbol}`}>{i > 0 && " · "}<Link className="link" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>{r.mine && <span className="muted"> (yours)</span>}</span>
+            ))}
+            {rows.today.length > 6 && <span className="muted"> and {rows.today.length - 6} more on the calendar</span>}
+          </p>
+        ) : rows.today.length ? (
           <div className="k-stack snug" data-testid="invest-results-today">
             {rows.today.slice(0, 6).map((r) => (
               <Link key={`${r.region}-${r.symbol}`} className="space-line" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}>
-                <b>{r.symbol}</b><span className="small muted">{!mine && r.mine ? "Yours · " : ""}{r.out ? "Results filed" : r.purpose}{r.when ? `, ${r.when}` : ""}</span>
+                <b>{r.symbol}</b><span className="small muted">{r.out ? "Results filed" : r.purpose}{r.when ? `, ${r.when}` : ""}</span>
               </Link>
             ))}
-            {rows.today.length > 6 && <span className="small muted">and {rows.today.length - 6} more on the calendar</span>}
           </div>
         ) : (
           <p className="small muted">{mine ? `None of your ${REGION_NAME[region]} stocks has results today.` : `No ${REGION_NAME[region]} company has results today.`}{rows.next ? ` Next: ${rows.next.symbol} on ${resultDay(rows.next.date)}.` : ""}</p>
