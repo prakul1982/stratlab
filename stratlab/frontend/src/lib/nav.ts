@@ -88,6 +88,10 @@ const CALENDAR: NavGroup = {
 export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGroup[] }> = {
   trade: {
     label: "Trade", home: "/trade", groups: [
+      // first, right under Trade home (owner, 5 Nov: "put it at top like below trade home"): a person's own trades before the tools
+      { id: "my-trades", label: "Trade journal", icon: "book", blurb: "Your real trades, looked at honestly.", pages: [
+        page("/trade/journal", "Trade journal", "book", "trade journal round trips tradebook import pnl charges notes real trades review mistakes win rate my trades"),
+      ] },
       { id: "strategies", label: "Strategies", icon: "book", was: ["build-and-test"],
         blurb: "Turn an idea into rules and test it on years of real prices after costs, start from a strategy someone published, or bring your own.", pages: [
         page("/notebooks", "Notebooks", "book", "notebook backtest test idea strategy rules describe plain english build new experiment verdict",
@@ -113,9 +117,6 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
           { also: /^\/trade\/positioning\/stocks$/ }),
         page("/trade/fo-changes", "F&O changes", "calendar", "f&o changes lot size lot revisions entering leaving fno list ban expiry day contract exchange circular"),
         page("/trade/closing-auction", "Closing auction", "pulse", "closing auction 15:15 15:35 reference price indicative price settlement expiry day"),
-      ] },
-      { id: "my-trades", label: "Trade journal", icon: "book", blurb: "Your real trades, looked at honestly.", pages: [
-        page("/trade/journal", "Trade journal", "book", "trade journal round trips tradebook import pnl charges notes real trades review mistakes win rate my trades"),
       ] },
       CALENDAR,
     ],
