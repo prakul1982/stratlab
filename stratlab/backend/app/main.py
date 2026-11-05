@@ -46,7 +46,7 @@ from . import loan_check
 from . import money_advance_tax, money_routes
 from . import journal_routes
 from . import user_data
-from .connect import routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
+from .connect import brokers as connect_brokers, routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
 from . import drawings_routes, watch_routes
 from . import maindb, market_store, memguard, storage, usage_slots
@@ -3533,7 +3533,16 @@ def zerodha_read(profile) -> dict | None:
 def my_holdings(profile=Depends(current_profile)):
     """The user's holdings at today's prices: value, gain or loss, the day's change and the mix by sector."""
     # `zerodha_open`: whether Zerodha login is open for this account, so the page doesn't offer a connection that isn't there (LIVE1B-042)
-    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile), "zerodha_open": bool(_quiet(connect_kite.allowed, profile))})
+    # `brokers`: the other connected brokers' last reads; `brokers_open`: the brokers this account may connect, so the page
+    # names only those
+    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile), "zerodha_open": bool(_quiet(connect_kite.allowed, profile)),
+               "brokers": _quiet(connect_brokers.read_summary, profile["id"]) or [], "brokers_open": brokers_open(profile)})
+
+
+def brokers_open(profile) -> list[str]:
+    """The names of the brokers this account may log in to from Settings, Zerodha first."""
+    names = ["Zerodha"] if _quiet(connect_kite.allowed, profile) else []
+    return names + [b.name for b in connect_brokers.ALL.values() if _quiet(b.allowed, profile)]
 
 
 @app.get("/holdings/facts")

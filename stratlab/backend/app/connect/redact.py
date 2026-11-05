@@ -6,7 +6,7 @@ import logging
 import re
 
 PATTERNS = [
-    (re.compile(r"(?i)([?&](?:t|token|access_token|request_token|api_key|apikey|key|k|password|pwd|secret)=)[^&\s'\"]+"), r"\1***"),
+    (re.compile(r"(?i)([?&](?:t|token|access_token|request_token|auth_token|feed_token|refresh_token|tokenid|code|api_key|apikey|key|k|password|pwd|secret)=)[^&\s'\"]+"), r"\1***"),
     (re.compile(r"(?i)((?:token|password|passwd|pwd|secret|authorization|api-key|x-api-key|access_token)['\"]?\s*[:=]\s*['\"]?)(?:Bearer\s+)?[^\s,'\"}&]+"), r"\1***"),
     (re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}"), "Bearer ***"),
     (re.compile(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b"), "[PAN]"),

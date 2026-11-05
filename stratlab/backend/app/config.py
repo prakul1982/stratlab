@@ -50,6 +50,22 @@ class Settings:
     KITE_MULTIUSER_APPROVED = _env("KITE_MULTIUSER_APPROVED", "false").lower() == "true"
     KITE_CONNECT_API_KEY = _env("KITE_CONNECT_API_KEY")
     KITE_CONNECT_API_SECRET = _env("KITE_CONNECT_API_SECRET")
+    # Upstox, Angel One and Dhan: read-only holdings logins like Zerodha's (app/connect/brokers.py). Each is admin-only
+    # until its *_FOR_ALL flag is "true"; without its keys its card says "Not set up yet"
+    UPSTOX_API_KEY = _env("UPSTOX_API_KEY")
+    UPSTOX_API_SECRET = _env("UPSTOX_API_SECRET")
+    UPSTOX_FOR_ALL = _env("UPSTOX_FOR_ALL", "false").lower() == "true"
+    ANGELONE_API_KEY = _env("ANGELONE_API_KEY")
+    ANGELONE_API_SECRET = _env("ANGELONE_API_SECRET")          # not needed by the publisher login; kept for SmartAPI's other flows
+    ANGELONE_FOR_ALL = _env("ANGELONE_FOR_ALL", "false").lower() == "true"
+    # Dhan: an individual app (app id + secret + the owner's Dhan client id) works only for that one account; the partner
+    # credentials (from Dhan) let other users connect, and only then does DHAN_FOR_ALL open it to everyone
+    DHAN_APP_ID = _env("DHAN_APP_ID")
+    DHAN_APP_SECRET = _env("DHAN_APP_SECRET")
+    DHAN_CLIENT_ID = _env("DHAN_CLIENT_ID")
+    DHAN_PARTNER_ID = _env("DHAN_PARTNER_ID")
+    DHAN_PARTNER_SECRET = _env("DHAN_PARTNER_SECRET")
+    DHAN_FOR_ALL = _env("DHAN_FOR_ALL", "false").lower() == "true"
 
     RAZORPAY_KEY_ID = _env("RAZORPAY_KEY_ID")
     RAZORPAY_KEY_SECRET = _env("RAZORPAY_KEY_SECRET")

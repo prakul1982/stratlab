@@ -53,10 +53,11 @@ def _rows(table: str, uid: str, cols: str = "*") -> list[dict]:
 
 def _connect(uid: str) -> int:
     """Sealed broker tokens, the statement-inbox address and the statement password: the whole connect/ record."""
-    from .connect import kite_user, state
+    from .connect import brokers, kite_user, state
     for key, raw in db.all_settings_with_prefix(kite_user.PENDING):    # a Zerodha login waiting to be confirmed
         if db.json_value(raw, {}).get("uid") == uid:
             db.delete_setting(key)
+    brokers.drop_pending(uid)                 # an Upstox / Angel One / Dhan login waiting to be confirmed, and Connect taps
     had = len(state.load(uid))
     try:
         if state.section(uid, "kite").get("token"):
