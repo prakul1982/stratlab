@@ -109,7 +109,9 @@ def test_the_us_calendar_has_this_week_and_next_from_the_calendar_and_the_secs_r
     assert tsla["out"]["title"] == "Earnings release (8-K)" and tsla["out"]["url"].startswith("https://www.sec.gov/Archives/")
     assert rows[("IBM", "2026-10-21")]["name"] == "IBM"                 # the SEC's capitals, as the company pages name it
     v = R.view("US", "u-pro", "all", today=today)
-    assert sum(len(wk["rows"]) for wk in v["weeks"]) >= 14
+    # each day shows its first DAY_ROWS (10 since 5 Nov: the page opened slowly at 25); every row counts in the day's total
+    assert sum(d["count"] for wk in v["weeks"] for d in wk["days"]) >= 14
+    assert all(d["shown"] == min(d["count"], R.DAY_ROWS) for wk in v["weeks"] for d in wk["days"])
     assert [d["date"] for d in v["weeks"][1]["days"]] == ["2026-10-28"]
 
 
