@@ -34,7 +34,6 @@
 .k-pin:hover { border-color: var(--line-2); color: var(--ink); background: var(--paper); }
 .k-pin.on { color: var(--ink); }
 .k-routes li > span { display: block; }
-.k-explore { gap: var(--s4); }
 .k-inline { display: inline-flex; align-items: center; gap: 0; }
 .k-more-what { flex: 1; min-width: 120px; font-weight: 400; }
 .k-pop-wrap { position: relative; display: inline-block; }

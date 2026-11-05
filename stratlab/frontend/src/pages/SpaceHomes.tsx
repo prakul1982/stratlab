@@ -26,7 +26,7 @@ import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { Explore } from "../components/Explore";
-import { TileGrid } from "../components/TileGrid";
+import { MoreTools, type ToolRow } from "../components/MoreTools";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
@@ -435,7 +435,8 @@ export function MoneyHome() {
   // the two summaries (holdings and tax) stand for their tools; every other Money tool is one card below, under the menu entry it
   // is a tab of (IA-1), so each feature shows once; of the shared Calendar, Money's own dates and the one list of every date
   const PANELS = ["/holdings", "/tax-report"];
-  const entries = NAV.money.groups.map((g) => ({ g, pages: g.pages.filter((p) => !PANELS.includes(p.to) && ((p.space ?? "money") === "money" || p.to === "/calendar")) })).filter((x) => x.pages.length);
+  const tools: ToolRow[] = NAV.money.groups.flatMap((g) => g.pages.filter((p) => !PANELS.includes(p.to) && ((p.space ?? "money") === "money" || p.to === "/calendar"))
+    .map((p) => ({ id: p.to, title: p.label, line: p.line, to: p.to, group: g.label, groupId: g.id, tag: <PageTags page={p} />, attrs: { "data-money": p.to } })));
   return (
     <div className="space-home">
       <Head eyebrow="Money · seen only by you" title="Your money">
@@ -449,20 +450,9 @@ export function MoneyHome() {
         <HoldingsSummary />
         <TaxSummary />
       </div>
-      {entries.length > 0 && (
-        <section className="k-stack" aria-labelledby="money-tools">
-          <h2 id="money-tools" className="k-card-title">More in Money</h2>
-          {entries.map(({ g, pages }) => (
-            <div key={g.id} className="k-stack" data-entry={g.id}>
-              <div className="k-stack k-tight"><b>{g.label}</b><span className="small muted">{g.blurb}</span></div>
-              {/* each card with its plan tag, as on the entry pages ("Basic for part"), and its line in full on a phone (DP2-014) */}
-              <TileGrid className="explore-grid money-cards">
-                {pages.map((p) => <Link key={p.to} to={p.to} className="k-linkcard explore-card" data-money={p.to}><b>{p.label}</b><span className="small muted">{p.blurb}</span><PageTags page={p} /></Link>)}
-              </TileGrid>
-            </div>
-          ))}
-        </section>
-      )}
+      {/* the rest of Money's tools: one closed row that says how many, opened a table (owner, 5 Nov: the cards were "very filled");
+          each tool with its plan tag, as on the entry pages ("Basic for part") */}
+      {tools.length > 0 && <MoreTools id="money-tools" title="More in Money" rows={tools} />}
     </div>
   );
 }
