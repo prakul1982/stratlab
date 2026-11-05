@@ -7,8 +7,16 @@ import { VIEW_AS_CHOICES, choiceToPlan, planToChoice } from "../lib/viewAs";
 import { inWords, marketState } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
 import type { Market, Me } from "../lib/types";
-import { Chat, Close, Compass, Download, Gear, Help, Layers, LogOut, Share, Shield, Updown, User, Wallet } from "./Icons";
+import { Close, Compass, Download, Gear, Help, Layers, LogOut, Share, Shield, Updown, User, Wallet } from "./Icons";
 import { openFeedback } from "./FeedbackOpen";
+
+/** Feedback's icon, here and not in Icons.tsx: Icons rides in the file every visitor downloads, and the landing page's budget
+ * (R5V-020, 450 kB) had no room for a drawing only the signed-in menu shows. */
+const Chat = ({ size }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" />
+  </svg>
+);
 
 // The two small menus at the foot of the sidebar: which markets are open, and the account. Each is one line until
 // opened; opened, it floats above the line (a sheet from the bottom on a phone) and closes with Esc or a click outside.
