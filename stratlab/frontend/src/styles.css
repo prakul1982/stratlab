@@ -1656,6 +1656,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* MO-3b: figures in a compact card spread over its width (they sat in its left two thirds, sized to their text), each in an equal column */
 .k-card.compact > .k-stats { flex: 1 1 100%; }
 .k-card.compact .k-card-title { font-size: 17px; }
+/* a table in a compact card (a strip of a few figures) fills the card's width, not the width of its words (owner, 5 Nov: the tax
+   report's two-figure table stopped two thirds of the way across its card) */
+.k-card.compact > :is(.k-facts, .k-tbl-wrap) { flex: 1 1 100%; min-width: 0; }
+/* a card that holds nothing but a table is the table's frame: no frame inside a frame (owner, 5 Nov: "odd double border"). A phone
+   keeps the padding: its tables are lists of cards. A table whose header row stays in view (pinhead) keeps its own look. */
+@media (min-width: 641px) {
+  .k-card:has(> .k-tbl-wrap:only-child:not(.pinhead)), .k-card:has(> .k-facts:only-child > .k-tbl-wrap:only-child:not(.pinhead)) { padding: 0; }
+  .k-card > .k-tbl-wrap:only-child:not(.pinhead), .k-card > .k-facts:only-child > .k-tbl-wrap:only-child:not(.pinhead) { border: 0; border-radius: calc(var(--r-card) - 1px); }
+}
 
 /* stats */
 /* a row of figures: each is label, number, note on a shared subgrid, so a label that wraps to two lines never pushes its
