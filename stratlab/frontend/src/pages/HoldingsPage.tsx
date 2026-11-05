@@ -277,7 +277,7 @@ export function HoldingsPage() {
       <Card>
         <CardHead title="Import from your broker" info={<>Download your holdings as Excel or CSV from {BROKERS} (usually Portfolio › Holdings › Download), then upload it here. Any other CSV works too with columns for Symbol (or ISIN), Quantity and Average price.</>}
           actions={rows.length > 0 ? <Seg label="What the file does" options={[{ value: "add", label: "Add to my holdings" }, { value: "replace", label: "Start again with this file" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} /> : undefined} />
-        <div className="k-row">
+        <div className="k-row" data-main-action="">
           <UploadButton label="Upload holdings file" busy={reading} accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Holdings file" onFiles={pick} />
           <span className="k-note">Excel or CSV, up to {MAX_MB} MB.</span>
         </div>

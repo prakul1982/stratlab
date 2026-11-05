@@ -215,7 +215,6 @@ a.link { margin-inline: -2px; }
 .side-new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px;
   border: 1px solid var(--ink); background: var(--ink); color: var(--on-ink); font: 600 13.5px var(--sans); cursor: pointer; }
 .side-new:hover { filter: brightness(1.15); }
-.side-new-gap { display: block; height: 34px; }   /* VR1-102: the main button's place on the page it points to */
 .search-btn { display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 10px; border: 1px solid var(--line-2);
   border-radius: 8px; background: var(--card); color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
 .search-btn:hover { color: var(--ink); border-color: var(--dash); }
@@ -331,7 +330,7 @@ a.link { margin-inline: -2px; }
 .acct-email { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* touch: rows a finger can hit */
 @media (pointer: coarse) {
-  .side-new, .side-new-gap, .search-btn { height: 40px; }
+  .side-new, .search-btn { height: 40px; }
   .space-switch button { height: 36px; }
   .side-list a, .side-list.side-sub a { height: 40px; }
   .side-toggle { height: 32px; width: 32px; }
