@@ -365,3 +365,14 @@ def test_the_scheduled_callers_run_as_background_jobs():
     src = inspect.getsource(ipo)
     assert src.count("with AI.bulk():") == 1 and "Today's catch-up limit" in src[:src.index("with AI.bulk():")][-1200:]
     assert "bulk=True" in inspect.getsource(write.ai_summary)
+
+
+def test_a_402_that_names_the_model_turns_off_that_model_not_the_provider():
+    # Ollama Cloud, 5 Nov: a new key answered gpt-oss:120b, then the ranking's probe of mistral-large-3:675b got "402: this model is
+    # not included in your free usage" and all of Ollama was paused six hours as out of credit
+    body = {"error": "this model is not included in your free usage, add usage credits to pay as you go: https://ollama.com/settings"}
+    e = C.classify("ollama", httpx.Response(402, json=body), "mistral-large-3:675b")
+    assert e.kind == "forbidden" and e.scope == "model" and "mistral-large-3:675b" in e.detail
+    # a 402 about the account itself still pauses the provider
+    e = C.classify("ollama", httpx.Response(402, json={"error": "you have used up your free credits"}), "gpt-oss:120b")
+    assert e.kind == "credit" and e.scope == "provider"

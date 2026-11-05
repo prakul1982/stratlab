@@ -103,6 +103,11 @@ def _short_raw(r: httpx.Response) -> str:
 _BUSY = re.compile(r"high demand|overloaded|over capacity|at capacity|capacity (?:is )?(?:exhausted|reached)|model is busy", re.I)
 
 
+# a refusal of this one model on this plan, said by the provider itself
+_MODEL_NOT_FREE = re.compile(r"(this |the )?model (is )?not (included|available|part of)[^.]{0,40}\b(free|plan|tier|usage)|"
+                             r"not included in your (free )?(plan|usage|tier)|model requires (a )?(paid|pro|premium)", re.I)
+
+
 def classify(name: str, r: httpx.Response, model: str) -> CallError:
     """What an error status means for the router."""
     p, code, body = PROVIDERS[name], r.status_code, r.text or ""
@@ -115,7 +120,9 @@ def classify(name: str, r: httpx.Response, model: str) -> CallError:
         return CallError("auth", f"the account needs a payment method on file ({code}: {msg})", scope="provider")
     if code == 402 or re.search(r"credit balance|insufficient (credit|balance|quota)|out of credits|payment required", body, re.I):
         said = f" ({code}: {msg})" if msg else f" ({code})"
-        if p.mixed_catalog:
+        # a 402 that names the model, not the account ("this model is not included in your free usage", Ollama Cloud, 5 Nov): only
+        # that model is off for this key; the provider's free models still answer (it paused all of Ollama for six hours)
+        if p.mixed_catalog or _MODEL_NOT_FREE.search(body):
             # a provider that lists paid models beside its free ones (Z.ai: glm-5.3-flash answers "Insufficient balance"
             # while glm-4.7-flash is free): that model isn't free for this key, the provider's free ones still answer
             return CallError("forbidden", f"{model} isn't free for this key{said}")

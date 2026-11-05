@@ -54,13 +54,13 @@ def mem(monkeypatch):
 # ---------- R7M-001: empty invoice seller details ----------
 def test_empty_seller_details_are_a_warning_and_the_pages_promise_no_gst(w):
     c = w["client"]
-    assert invoices.readiness() == {"complete": False, "missing": ["legal name", "address", "state", "GSTIN"], "gst": False}
+    assert invoices.readiness() == {"complete": False, "missing": ["legal name", "address", "state"], "gst": False}
     # what the first invoice would actually say: a plain one, no GST (the Plans page used to promise "incl. 18% GST")
     lines, supply, note = invoices.tax_lines(699.0, invoices.seller(), {"country": "IN"})
     assert lines == [] and supply == "Unregistered" and "not registered under GST" in note
     assert c.get("/pricing").json()["invoice"] == {"gst": False}                    # so the pages say nothing of GST
     server = c.get("/admin/overview", headers=ADMIN).json()["server"]
-    assert server["invoice_seller"]["missing"] == ["legal name", "address", "state", "GSTIN"]
+    assert server["invoice_seller"]["missing"] == ["legal name", "address", "state"]
     assert c.get("/admin/invoices", headers=ADMIN).json()["seller_status"]["complete"] is False
     # filled in: invoices carry GST, and the pages may say so
     saved = c.put("/admin/invoices/seller", headers=ADMIN, json={"legal_name": "Example Labs LLP", "address": "1 Example Road, Pune",
@@ -70,6 +70,14 @@ def test_empty_seller_details_are_a_warning_and_the_pages_promise_no_gst(w):
     lines, supply, _ = invoices.tax_lines(699.0, invoices.seller(), {"country": "IN", "state": "27"})
     assert [x["name"] for x in lines] == ["CGST 9%", "SGST 9%"] and supply == "Intra-state"
     assert c.get("/admin/overview", headers=ADMIN).json()["server"]["invoice_seller"]["complete"] is True
+
+
+def test_an_unregistered_seller_with_name_address_and_state_is_complete_and_plain(mem):
+    # a firm below GST's threshold (the owner's, 5 Nov): complete, invoices plain and saying it isn't registered, no Admin warning
+    invoices.save_seller({"legal_name": "Example AI (trade name: Example)", "address": "1 Example Road, Delhi 110092", "state": "07", "pan": "AAAFA0000A"})
+    assert invoices.readiness() == {"complete": True, "missing": [], "gst": False}
+    lines, supply, note = invoices.tax_lines(699.0, invoices.seller(), {"country": "IN", "state": "07"})
+    assert lines == [] and supply == "Unregistered" and "not registered under GST" in note
 
 
 def test_a_seller_with_a_gstin_but_no_address_is_incomplete_not_unregistered(mem):

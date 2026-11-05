@@ -402,6 +402,12 @@ def health() -> list[dict]:
     return out
 
 
+def _gone_never_answered(name: str, model: str) -> bool:
+    s = R.stats(name, model)
+    said = f"{s.probe_error or ''} {s.last_error or ''}"
+    return not s.counts()[0] and bool(R._GONE.search(said))
+
+
 def last_result(name: str, st, is_on: bool, cooling: bool, all_closed: bool, models: list, now: float) -> str | None:
     """What the provider's last real result says (R7M-008: "11 of 12 answering" over providers that were only configured
     or never tried): "working" (it answered and nothing newer failed, or only a short rate limit or one unavailable
@@ -475,6 +481,9 @@ def _provider_view(name: str, now: float) -> dict:
     from .ai_catalog import unusable
     keep = set(use) | {pin_admin, pin_env} | {b.split("/", 1)[1] for b in R.blocks() if b.startswith(name + "/")}
     listed = [m for m in listed if m in keep or unusable(name, m) != "not a chat model"]
+    # a model the provider says is gone (retired, "no such model", not served to this key) and that never answered isn't listed:
+    # it is not asked again, and a column of 0% rows read as a broken provider (owner, 5 Nov: "check all the AI properly")
+    listed = [m for m in listed if m in keep or not (R.retired(name, m) or _gone_never_answered(name, m))]
     models = []
     for m in listed[:12]:
         s = R.stats(name, m)

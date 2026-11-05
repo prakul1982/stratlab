@@ -829,3 +829,18 @@ def test_a_rejected_key_backs_the_automatic_rerank_off_and_it_grows_to_a_cap(mon
     R._auth_fails["mistral"] = (1, time.time() - R.AUTH_BACKOFF_BASE - 1)
     assert R.auth_wait("mistral") == 0 and R.stale("mistral")
     R._auth_fails.clear()
+
+
+def test_admin_lists_no_model_the_provider_says_is_gone_and_that_never_answered(monkeypatch):
+    # owner, 5 Nov ("check all the AI properly"): NVIDIA's "Not found for account", Cloudflare's "No such model" and Gemini 2.5's
+    # "no longer available" sat in Admin as rows of 0% though they are never asked; a model that answered before stays listed
+    import time
+    keys(monkeypatch, "nvidia")
+    R.stats("nvidia", "nvidia/nemotron-3-ultra-550b-a55b").live.append((True, 400.0))
+    gone = R.stats("nvidia", "writer/palmyra-fin-70b-32k")
+    gone.probe_tries, gone.probe_error = 1, "couldn't use writer/palmyra-fin-70b-32k (404: Function 'x': Not found for account [id])"
+    slow = R.stats("nvidia", "moonshotai/kimi-k3")
+    slow.probe_tries, slow.probe_error = 1, "timed out"                       # not gone: a timeout can pass, so it stays listed
+    ids = [m["id"] for m in P._provider_view("nvidia", time.time())["models"]]
+    assert "writer/palmyra-fin-70b-32k" not in ids
+    assert "moonshotai/kimi-k3" in ids and "nvidia/nemotron-3-ultra-550b-a55b" in ids
