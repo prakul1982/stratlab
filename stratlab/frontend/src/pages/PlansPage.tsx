@@ -11,7 +11,8 @@ import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanCompare } from "../components/PlanCompare";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
-import { KEY, LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
+import { LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
+import { KEY } from "../lib/planKeys";
 import { readViewAs } from "../lib/viewAs";
 import { canBuy, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 

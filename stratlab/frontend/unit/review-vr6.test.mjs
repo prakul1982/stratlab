@@ -42,7 +42,8 @@ test("VR6-012: with fewer than three snapshots the list sits inside the totals c
 
 test("VR6-013, R11: each plan card shows five short lines and nothing folded; every line of the long lists is in the table below", async () => {
   // R11 (owner, 5 Nov: "bad UI"): the cards' "3 more included in Free" folds are gone; a card is its plan's main points and one button
-  const { KEY, LIMITS } = await import("../src/lib/plans.ts");
+  const { LIMITS } = await import("../src/lib/plans.ts");
+  const { KEY } = await import("../src/lib/planKeys.ts");
   for (const p of ["free", "basic", "pro"]) {
     assert.equal(KEY[p].length, 5, p);
     for (const l of KEY[p]) assert.ok(l.length <= 70, `${p}: "${l}" is ${l.length} characters`);
