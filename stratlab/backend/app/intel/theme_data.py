@@ -141,7 +141,7 @@ def is_diversified(row: dict, layers_in: int) -> bool:
 
 def basis_text(rows: list[dict], region: str) -> str:
     unit = next((r.get("unit") for r in rows if r.get("unit")), None) or ("₹ crore" if region == "IN" else "$ million")
-    fy = "financial year ended March" if region == "IN" else "latest fiscal year"
+    fy = "financial year ended March" if region == "IN" else "fiscal year"
     return (f"Each company's latest full {fy}, in {unit}. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) "
             "and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. "
             "Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.")
@@ -185,7 +185,7 @@ def chain_table(blocks: list[dict]) -> dict:
     for b in blocks:
         e, n, c = (b["stats"].get(k) for k in ("ebitda", "net", "roce"))
         rows.append({"layer": b["layer"], "n": b["n"], "revenue": b["revenue"], "ebitda": e["median"] if e else None, "net": n["median"] if n else None,
-                     "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0})
+                     "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official"))})
     have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= 1]
     line = None
     if len(have) >= 2:
@@ -424,15 +424,21 @@ def management_section(symbols: list[str], names: dict, rows_by: dict, src) -> d
 # ---------- what a post could say ----------
 def notable_items(blocks: list[dict], chain: dict, histories: dict) -> list[dict]:
     """What the data shows that is worth a post, each with its figures: one layer's median EBITDA margin far above (or below) the others',
-    and a layer whose aggregate EBITDA margin moved a lot over three years. Empty when nothing is."""
+    and a layer whose aggregate EBITDA margin moved a lot over three years. Empty when nothing is. A group of the theme's companies that no
+    layer took (an official industry's, or "Named in the theme's list": "official" in theme_base.with_base) isn't a layer of the chain, so it
+    is never the high or the low end of a gap and its margin's move isn't a layer's (R11: the cybersecurity post set "Named in the theme's
+    list" against a layer)."""
     out = []
-    have = [r for r in chain["rows"] if r["ebitda"] is not None and r["ebitda_n"] >= MIN_LAYER]
+    apart = {b.get("layer") for b in blocks if b.get("official")} | {r["layer"] for r in chain["rows"] if r.get("official")}
+    have = [r for r in chain["rows"] if r["ebitda"] is not None and r["ebitda_n"] >= MIN_LAYER and r["layer"] not in apart]
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["ebitda"] - lo["ebitda"] >= NOTABLE_GAP:
             out.append({"kind": "gap", "high": hi["layer"], "high_value": hi["ebitda"], "low": lo["layer"], "low_value": lo["ebitda"],
                         "gap": round(hi["ebitda"] - lo["ebitda"], 1)})
     for layer, h in histories.items():
+        if layer in apart:
+            continue
         if h and len(h["years"]) >= 4 and h["ebitda"][-1] is not None and h["ebitda"][-4] is not None:
             move = h["ebitda"][-1] - h["ebitda"][-4]
             if abs(move) >= NOTABLE_MOVE:
