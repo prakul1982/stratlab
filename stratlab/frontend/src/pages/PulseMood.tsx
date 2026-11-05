@@ -51,7 +51,8 @@ export function BreadthTable({ b }: { b: NonNullable<PulseMood["breadth"]> }) {
   const when = b.live ? "so far today" : `on ${day(b.day)}`;
   const cols: Column<MoodBreadthRow>[] = [
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <><b>{r.label}</b><span className="k-sub-line">{r.means}</span></> },
-    { key: "now", header: b.live ? "Today" : day(b.day), numeric: true, cell: (r) => (r.now == null ? "–" : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
+    // live, the 52-week highs and lows are counted at the close: their cell says so rather than standing empty (owner, 5 Nov)
+    { key: "now", header: b.live ? "Today" : day(b.day), numeric: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted">At the close</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
     { key: "prev", header: day(b.prev_day) || "Day before", numeric: true, cell: (r) => (r.before == null ? "–" : r.kind === "share" ? `${r.before.toFixed(1)}%` : whole(r.before)) },
     { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
   ];

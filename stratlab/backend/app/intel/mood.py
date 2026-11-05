@@ -169,7 +169,9 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
         return num(((t or {}).get(k) or {}).get("prev"))
     adv, dec, unch = (num(lv["adv"]), num(lv["dec"]), num(lv.get("unch"))) if lv else (v("adv"), v("dec"), v("unch"))
     out = {"group": group_name, "live": bool(lv), "day": session_day if lv else (t or {}).get("day"), "close_day": (t or {}).get("day"),
-           "prev_day": (t or {}).get("prev_day"), "adv": adv, "dec": dec, "unch": unch,
+           # the column beside today's: while the market trades, the last close (5 Nov's live count against 4 Nov's close); after
+           # it, the close before (owner, 5 Nov: the live table compared with nothing under a "3 Nov" heading)
+           "prev_day": (t or {}).get("day") if lv else (t or {}).get("prev_day"), "adv": adv, "dec": dec, "unch": unch,
            "stocks": v("stocks") if not lv else (adv or 0) + (dec or 0) + (unch or 0),
            "highs": v("highs"), "lows": v("lows"),
            "pct20": num(lv.get("pct20")) if lv else v("pct20"), "pct50": num(lv.get("pct50")) if lv else v("pct50"),
@@ -180,14 +182,17 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
     def row(key, label, now, before, kind, means, unit=""):
         rows.append({"key": key, "label": label, "now": now, "before": before, "kind": kind, "means": means, "unit": unit,
                      "change": round(now - before, 1 if unit == "%" else 0) if now is not None and before is not None else None})
-    row("adv", "Stocks that rose", adv, prev("adv") if not lv else None, "count", "Stocks closing above the previous close.")
-    row("dec", "Stocks that fell", dec, prev("dec") if not lv else None, "count", "Stocks closing below the previous close.")
-    row("unch", "Unchanged", unch, prev("unch") if not lv else None, "count", "Stocks closing at the previous close.")
-    row("highs", "New 52-week highs", out["highs"], prev("highs"), "count", "Stocks at their highest price in a year.")
-    row("lows", "New 52-week lows", out["lows"], prev("lows"), "count", "Stocks at their lowest price in a year.")
-    row("pct50", "Above 50-day average", out["pct50"], prev("pct50") if not lv else None, "share", "Share of stocks priced above their 50-day average.", "%")
-    row("pct200", "Above 200-day average", out["pct200"], prev("pct200") if not lv else None, "share", "Share of stocks priced above their 200-day average.", "%")
-    out["rows"] = [r for r in rows if r["now"] is not None]
+    # live: each count against the last close's; the 52-week highs and lows are counted at the close only, so today's cell waits for
+    # it (now None, said in words on the page) and the last close's figure stands in its own column
+    before = v if lv else prev
+    row("adv", "Stocks that rose", adv, before("adv"), "count", "Stocks closing above the previous close.")
+    row("dec", "Stocks that fell", dec, before("dec"), "count", "Stocks closing below the previous close.")
+    row("unch", "Unchanged", unch, before("unch"), "count", "Stocks closing at the previous close.")
+    row("highs", "New 52-week highs", None if lv else out["highs"], before("highs"), "count", "Stocks at their highest price in a year.")
+    row("lows", "New 52-week lows", None if lv else out["lows"], before("lows"), "count", "Stocks at their lowest price in a year.")
+    row("pct50", "Above 50-day average", out["pct50"], before("pct50"), "share", "Share of stocks priced above their 50-day average.", "%")
+    row("pct200", "Above 200-day average", out["pct200"], before("pct200"), "share", "Share of stocks priced above their 200-day average.", "%")
+    out["rows"] = [r for r in rows if r["now"] is not None or (lv and r["before"] is not None)]
     return out
 
 
