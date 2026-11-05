@@ -15,6 +15,7 @@ export const Sun = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="12"
 export const Search = ({ size }: P) => <svg {...base(size)}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>;
 /** Settings (DI-022: a pencil read as "edit"). */
 export const Gear = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>;
+export const Chat = ({ size }: P) => <svg {...base(size)}><path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" /></svg>;
 export const Help = ({ size }: P) => <svg {...base(size)}><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.3M12 17h.01" /></svg>;
 export const Close = ({ size }: P) => <svg {...base(size)}><path d="M18 6 6 18M6 6l12 12" /></svg>;
 export const Share = ({ size }: P) => <svg {...base(size)}><path d="M12 3v12M7 8l5-5 5 5" /><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></svg>;

@@ -2914,19 +2914,14 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .linklike.link { color: var(--accent-ink, inherit); text-decoration: underline; text-underline-offset: 2px; }
 .legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: none; }   /* the same tap size as the links beside it (A11Y-2) */
-.side-brand .side-feedback { margin-left: auto; margin-right: 6px; }
-.topbar .top-feedback { padding-inline: 10px; }
-/* with Feedback in it the phone's top bar ran past a 400px screen: there the logo is its mark alone (the link keeps its name) */
-@media (max-width: 440px) { .topbar .brand .logo-word { display: none; } }
-/* ...and the mark alone (16px wide) is still a full tap target: the link keeps 44px, the mark centred in it (R7O-010) */
+/* the phone top bar's logo link is a full tap target and never squeezed by the buttons beside it (R7O-010) */
 .topbar .brand { min-width: 44px; justify-content: center; flex: none; }
 .topbar .icon-btn { flex: none; }
-/* a 360px phone: the bar's gaps and the Feedback button's padding tighten so every button keeps its size and nothing runs off;
- * at 320 the icon buttons are 40px (still past the 32px floor) */
+/* a 360px phone: the bar's gaps tighten so every button keeps its size and nothing runs off; at 320 the icon buttons are 40px
+ * (still past the 32px floor) */
 @media (max-width: 379px) {
   .topbar { padding-inline: 10px; gap: 6px; }
   .topbar .row.tight { gap: 2px; }
-  .topbar .top-feedback { padding-inline: 6px; }
 }
 @media (max-width: 339px) { .topbar .icon-btn { width: 40px; min-width: 40px; } .topbar .brand { min-width: 40px; } }
 

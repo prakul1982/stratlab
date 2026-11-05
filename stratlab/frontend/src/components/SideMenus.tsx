@@ -7,7 +7,8 @@ import { VIEW_AS_CHOICES, choiceToPlan, planToChoice } from "../lib/viewAs";
 import { inWords, marketState } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
 import type { Market, Me } from "../lib/types";
-import { Close, Compass, Download, Gear, Help, Layers, LogOut, Share, Shield, Updown, User, Wallet } from "./Icons";
+import { Chat, Close, Compass, Download, Gear, Help, Layers, LogOut, Share, Shield, Updown, User, Wallet } from "./Icons";
+import { openFeedback } from "./FeedbackOpen";
 
 // The two small menus at the foot of the sidebar: which markets are open, and the account. Each is one line until
 // opened; opened, it floats above the line (a sheet from the bottom on a phone) and closes with Esc or a click outside.
@@ -150,6 +151,8 @@ export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () =>
           )}
           <Link role="menuitem" to="/features" onClick={done(onGo)}><Layers size={16} />All features</Link>
           <Link role="menuitem" to="/help" onClick={done(onGo)}><Help size={16} />Help</Link>
+          {/* Help & feedback in the account menu, beside Help (owner, 5 Nov: "put this in accounts section"; it crowded the logo) */}
+          <button role="menuitem" title="Report something broken, or suggest a feature" onClick={done(openFeedback)}><Chat size={16} />Feedback</button>
           <button role="menuitem" onClick={done(onTour)}><Compass size={16} />Take the tour</button>
           <hr />
           <button role="menuitem" onClick={done(() => { void signOutHere(supabase.auth); })}><LogOut size={16} />Sign out</button>

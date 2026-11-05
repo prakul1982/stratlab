@@ -34,14 +34,12 @@ test("the browser goes as a few words: name, major version and system, whatever 
   }
 });
 
-test("the labelled Feedback button: the menu's top, the phone's top bar, Help, the public footer; one dialog at the root", () => {
-  const shell = read("src/components/Shell.tsx");
-  const top = shell.indexOf('<div className="side-top">'), groups = shell.indexOf('className="side-groups"');
-  const side = shell.indexOf('<FeedbackButton className="btn quiet sm side-feedback" />');
-  assert.ok(top > 0 && side > top && side < groups, "in the menu's top, above the menu's entries (not the footer)");
-  const bar = shell.indexOf('<header className="topbar">');
-  assert.ok(shell.indexOf('<FeedbackButton className="btn quiet sm top-feedback" />') > bar, "in the phone's top bar");
-  assert.match(read("src/components/Shell.tsx"), /onClick=\{openFeedback\} title="Report something broken, or suggest a feature">Feedback<\/button>/);
+test("Feedback in the account menu beside Help (owner, 5 Nov), Help, the public footer; one dialog at the root", () => {
+  // not in the logo's row or the phone's top bar any more ("put this in accounts section": it crowded the logo)
+  assert.doesNotMatch(read("src/components/Shell.tsx"), /FeedbackButton|openFeedback/);
+  const menu = read("src/components/SideMenus.tsx");
+  const help = menu.indexOf('to="/help"'), fb = menu.indexOf('onClick={done(openFeedback)}><Chat size={16} />Feedback</button>');
+  assert.ok(help > 0 && fb > help && fb < menu.indexOf("Take the tour"), "right after Help, before the tour");
   // the opener, the button and the host ride in the shared file every page downloads; the dialog comes only when opened
   assert.match(read("vite.config.ts"), /\{ name: "common", test: [^\n]*FeedbackOpen/);
   for (const f of ["src/components/LegalLinks.tsx", "src/pages/Login.tsx", "src/pages/AppGates.tsx", "src/components/Shell.tsx", "src/main.tsx", "src/visitor/visitorMain.tsx", "src/components/FeedbackOpen.tsx"])
