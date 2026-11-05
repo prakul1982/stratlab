@@ -12,7 +12,7 @@ from . import db, instrument_kinds
 
 KEY = "holdings:"
 SOURCES = ("Zerodha Console", "Zerodha Kite", "Zerodha Kite file", "Statement", "Interactive Brokers", "Groww", "Upstox", "Angel One", "ICICI Direct", "HDFC Securities", "CSV", "Manual",
-           "Upstox login", "Angel One login", "Dhan login")   # the last three: a broker login (connect/brokers.py), not its file
+           "Upstox login", "Dhan login")   # the last two: a broker login (connect/brokers.py), not its file
 # the sector indices' names, in the exchange's own broad sector names, so both kinds of label add up together
 SECTOR_OF_INDEX = {"NIFTY BANK": "Financial Services", "NIFTY PSU BANK": "Financial Services", "NIFTY PVT BANK": "Financial Services",
                    "NIFTY FIN SERVICE": "Financial Services", "NIFTY IT": "Information Technology",
@@ -302,8 +302,8 @@ def merge(rows: list[dict]) -> list[dict]:
     return drop_stale_accts(list(out.values()))
 
 
-VIA_NAMES = {"kite": "Kite", "ibkr": "IBKR", "upstox": "Upstox", "angelone": "Angel One", "dhan": "Dhan", "cas": "the statement"}
-SYNCED = ("kite", "ibkr", "upstox", "angelone", "dhan")      # a broker that syncs; a statement's quantity typed over is replaced by the next statement
+VIA_NAMES = {"kite": "Kite", "ibkr": "IBKR", "upstox": "Upstox", "dhan": "Dhan", "cas": "the statement"}
+SYNCED = ("kite", "ibkr", "upstox", "dhan")      # a broker that syncs; a statement's quantity typed over is replaced by the next statement
 
 
 def set_qty(old: dict, qty: float, avg: float | None) -> tuple[dict, str | None]:

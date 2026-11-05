@@ -1,4 +1,4 @@
-// R11 (owner, 5 Nov): Upstox, Angel One and Dhan beside Zerodha on Settings -> Connected accounts, said the same way for each.
+// R11 (owner, 5 Nov): Upstox and Dhan beside Zerodha on Settings -> Connected accounts, said the same way for each.
 // Run: npm run test:unit
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -47,7 +47,7 @@ test("Settings lists every broker in one table, a row each; Holdings reads them 
   assert.match(h, /`\/connect\/\$\{b\.key\}\/refresh`/);
   assert.match(h, /data-testid="connect-offer"/);
   const { syncedNote } = await import("../src/lib/holdingsEdit.ts");
-  assert.match(syncedNote("angelone"), /^Synced from Angel One\./);
+  assert.match(syncedNote("dhan"), /^Synced from Dhan\./);
   const { sourceWords } = await import("../src/lib/format.ts");
   assert.equal(sourceWords("Dhan login"), "your Dhan login");
   assert.equal(sourceWords("Upstox"), "your Upstox file");
@@ -60,9 +60,10 @@ test("Pick your broker: the list, Other last, and each broker's ways in order", 
   assert.equal(new Set(G.GUIDE_BROKERS.map((b) => b.id)).size, names.length);
   for (const b of G.GUIDE_BROKERS) assert.match(b.id, /^[a-z0-9]{2,20}$/);          // what the server keeps as the pick
   // a live connection only where StratLab has one; Groww has none (nothing said about one)
-  assert.deepEqual(G.GUIDE_BROKERS.filter((b) => b.connect).map((b) => [b.id, b.connect]), [["zerodha", "kite"], ["upstox", "upstox"], ["angelone", "angelone"], ["dhan", "dhan"]]);
+  assert.deepEqual(G.GUIDE_BROKERS.filter((b) => b.connect).map((b) => [b.id, b.connect]), [["zerodha", "kite"], ["upstox", "upstox"], ["dhan", "dhan"]]);
   assert.deepEqual(G.waysFor(G.guideFor("upstox")), ["connect", "file", "email"]);
   assert.deepEqual(G.waysFor(G.guideFor("groww")), ["file", "email"]);
+  assert.deepEqual(G.waysFor(G.guideFor("angelone")), ["file", "email"]);          // owner, 5 Nov: no Angel One connection
   assert.deepEqual(G.waysFor(G.guideFor("other")), ["file", "email"]);
   assert.equal(G.guideFor("nope"), null);
   assert.equal(G.guideFor(null), null);

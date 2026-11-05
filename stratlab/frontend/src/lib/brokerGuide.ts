@@ -11,7 +11,7 @@ export type GuideBroker = {
   id: string;
   name: string;
   /** the Settings connection (its route under /connect), when StratLab has a live one */
-  connect?: "kite" | "upstox" | "angelone" | "dhan";
+  connect?: "kite" | "upstox" | "dhan";
   file: {
     steps: string[];
     /** "known": the holdings import reads this broker's own file; "columns": read as any CSV/Excel with the columns below;
@@ -33,7 +33,7 @@ export const GUIDE_BROKERS: GuideBroker[] = [
     steps: ["In Groww, open your profile, then Reports.", "Choose the stocks holding statement and the date you want.", "Download it (Excel where it's offered) and upload the file here."] } },
   { id: "upstox", name: "Upstox", connect: "upstox", file: { read: "known", help: "https://upstox.com/help-center/248548/",
     steps: ["Log in at account.upstox.com.", "Open Reports, then Holdings.", "Pick the date, press Get Report, then Download as Excel.", "Upload the file here."] } },
-  { id: "angelone", name: "Angel One", connect: "angelone", file: { read: "known", help: "https://www.angelone.in/support/reports-and-statements/holding-statement",
+  { id: "angelone", name: "Angel One", file: { read: "known", help: "https://www.angelone.in/support/reports-and-statements/holding-statement",
     steps: ["In the Angel One app, open Portfolio.", "Pick Equity.", "Download the holdings as Excel.", "Upload the file here."] } },
   { id: "dhan", name: "Dhan", connect: "dhan", file: { read: "columns", help: "https://dhan.co/support/statements-and-ledger/my-statements/how-to-view-or-download-your-holding-summary/",
     steps: ["Log in at web.dhan.co and open your profile icon.", "Open Journal by Dhan, then Statement & Reports, then Holding Summary.", "Pick the date and download it as CSV or Excel.", "Upload the file here."] } },

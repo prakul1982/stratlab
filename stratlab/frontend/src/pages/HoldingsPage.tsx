@@ -45,7 +45,7 @@ type View = {
   zerodha?: ZerodhaRead | null;
   /** whether Zerodha login is open for this account (LIVE1B-042: "Connect Zerodha" was offered where it isn't there) */
   zerodha_open?: boolean;
-  /** the other connected brokers' last reads (Upstox, Angel One, Dhan), and the brokers this account may connect in Settings */
+  /** the other connected brokers' last reads (Upstox, Dhan), and the brokers this account may connect in Settings */
   brokers?: { key: string; name: string; live: boolean; count: number | null; read_at: string | null }[];
   brokers_open?: string[];
 };
@@ -149,7 +149,7 @@ export function HoldingsPage() {
     } finally { setBusy(false); }
   };
 
-  // Upstox, Angel One and Dhan, read again from here the same way
+  // Upstox and Dhan, read again from here the same way
   const refreshBroker = async (b: { key: string; name: string }) => {
     setBusy(true);
     try {

@@ -1,4 +1,4 @@
-"""Upstox, Angel One and Dhan logins (app/connect/brokers.py) against fake brokers (httpx.MockTransport): the login address,
+"""Upstox and Dhan logins (app/connect/brokers.py) against fake brokers (httpx.MockTransport): the login address,
 the callback's state check, swapping the login for a token, the holdings each broker returns (odd fields too), when a
 login ends, disconnecting, the admin-only gate and the *_FOR_ALL flags, "not set up yet", and that the server only ever
 calls the brokers' read-only addresses and never logs or returns a token. Every account and token here is made up."""
@@ -13,7 +13,7 @@ import httpx
 import pytest
 from cryptography.fernet import Fernet
 
-from app import db, holdings
+from app import db, holdings, mail_tokens
 from app.config import settings
 from app.connect import brokers, redact, state, vault
 from tests import world
@@ -31,7 +31,6 @@ def jwt(claims: dict) -> str:
 
 
 UPSTOX_TOKEN = jwt({"sub": "UP1234", "exp": int(time.time()) + 3 * 86400})        # ends later than Upstox's own 03:30 rule
-ANGEL_TOKEN = jwt({"username": "A123456", "exp": int(time.time()) + 3 * 86400})
 DHAN_TOKEN = jwt({"dhanClientId": "1000000001"})
 
 
@@ -47,14 +46,6 @@ class Fake:
              "tradingsymbol": "ITC", "average_price": "380.5", "exchange": "NSE"},
             {"isin": "", "company_name": "GONE", "quantity": 0, "trading_symbol": "GONE", "average_price": 10, "exchange": "NSE"}]
         self.upstox_status = 200
-        self.angel_holdings: list | None = [
-            {"tradingsymbol": "TATASTEEL-EQ", "exchange": "NSE", "isin": "INE081A01020", "t1quantity": 0, "realisedquantity": 2,
-             "quantity": 2, "product": "DELIVERY", "collateralquantity": None, "averageprice": 111.87},
-            {"tradingsymbol": "SBIN-BE", "exchange": "BSE", "isin": "INE062A01020", "t1quantity": 3, "realisedquantity": 5,
-             "quantity": None, "averageprice": "573.1"},
-            {"tradingsymbol": "SBIN-EQ", "exchange": "NSE", "isin": "INE062A01020", "t1quantity": 0, "realisedquantity": 0,
-             "quantity": 2, "averageprice": 600}]
-        self.angel_error = None
         self.dhan_holdings: list | dict = [
             {"exchange": "ALL", "tradingSymbol": "HDFCBANK", "securityId": "1333", "isin": "INE040A01034", "totalQty": 10, "dpQty": 10,
              "t1Qty": 0, "availableQty": 10, "collateralQty": 0, "avgCostPrice": 1500.0},
@@ -76,11 +67,6 @@ class Fake:
             if self.upstox_status == 401:
                 return httpx.Response(401, json={"status": "error", "errors": [{"errorCode": "UDAPI100050", "message": "Invalid token"}]})
             return httpx.Response(self.upstox_status, json={"status": "success", "data": self.upstox_holdings})
-        if u == brokers.ANGEL_HOLDINGS:
-            if self.angel_error:
-                return httpx.Response(200, json={"status": False, "message": "Invalid Token", "errorcode": self.angel_error, "data": None})
-            return httpx.Response(200, json={"status": True, "message": "SUCCESS", "errorcode": "",
-                                             "data": {"holdings": self.angel_holdings, "totalholding": {"totalholdingvalue": 1}}})
         if u in (brokers.DHAN_CONSENT, brokers.DHAN_PARTNER_CONSENT):
             return httpx.Response(200, json={"consentAppId": "940b0ca1-consent", "consentId": "partner-consent", "consentAppStatus": "GENERATED", "status": "success"})
         if u in (brokers.DHAN_CONSUME, brokers.DHAN_PARTNER_CONSUME):
@@ -105,10 +91,10 @@ def fake(monkeypatch):
     f = Fake()
     monkeypatch.setattr(brokers, "transport", httpx.MockTransport(f))
     monkeypatch.setattr(settings, "CONNECT_SECRET_KEY", Fernet.generate_key().decode())
-    for k, v in {"UPSTOX_API_KEY": "up-key", "UPSTOX_API_SECRET": "up-secret-value", "ANGELONE_API_KEY": "angel-key",
-                 "ANGELONE_API_SECRET": "angel-secret", "DHAN_APP_ID": "dhan-app", "DHAN_APP_SECRET": "dhan-secret-value",
+    for k, v in {"UPSTOX_API_KEY": "up-key", "UPSTOX_API_SECRET": "up-secret-value",
+                 "DHAN_APP_ID": "dhan-app", "DHAN_APP_SECRET": "dhan-secret-value",
                  "DHAN_CLIENT_ID": "1000000001", "DHAN_PARTNER_ID": "", "DHAN_PARTNER_SECRET": "", "UPSTOX_FOR_ALL": False,
-                 "ANGELONE_FOR_ALL": False, "DHAN_FOR_ALL": False, "ADMIN_EMAILS": "owner@example.com",
+                 "DHAN_FOR_ALL": False, "ADMIN_EMAILS": "owner@example.com",
                  "PUBLIC_SITE_URL": SITE, "PUBLIC_API_URL": API}.items():
         monkeypatch.setattr(settings, k, v)
     return f
@@ -133,7 +119,6 @@ def connect(c, key, headers=ADMIN, **extra):
     """The whole round trip as the Settings page does it: log in, come back, confirm."""
     _, q = login(c, key, headers)
     params = {"upstox": {"code": "good-code", "state": q.get("state", "")},
-              "angelone": {"auth_token": ANGEL_TOKEN, "feed_token": "feed", "refresh_token": "refresh", "state": q.get("state", "")},
               "dhan": {"tokenId": "good-token-id"}}[key]
     _, got = back(c, key, {**params, **extra})
     assert got["b"] == "confirm", got
@@ -146,7 +131,7 @@ def card(c, key, headers=ADMIN) -> dict:
 
 # ---------- set up, open, who ----------
 def test_without_keys_every_card_says_not_set_up(w, fake, monkeypatch):
-    for k in ("UPSTOX_API_KEY", "ANGELONE_API_KEY", "DHAN_APP_ID", "DHAN_PARTNER_ID"):
+    for k in ("UPSTOX_API_KEY", "DHAN_APP_ID", "DHAN_PARTNER_ID"):
         monkeypatch.setattr(settings, k, "")
     c = w["client"]
     for key in brokers.ALL:
@@ -170,16 +155,15 @@ def test_each_broker_is_admin_only_until_its_flag(w, fake, monkeypatch):
         assert c.get(f"/connect/{key}/login", headers=PRO).status_code == 403
         assert c.post(f"/connect/{key}/refresh", headers=PRO).status_code == 403
     monkeypatch.setattr(settings, "UPSTOX_FOR_ALL", True)
-    monkeypatch.setattr(settings, "ANGELONE_FOR_ALL", True)
     monkeypatch.setattr(settings, "DHAN_FOR_ALL", True)
     # owner, 5 Nov (late): the flag opens Dhan too, partner credentials or not (a login Dhan refuses is said plainly)
     assert all(card(c, k, PRO)["available"] for k in brokers.ALL)
 
 
 def test_a_flag_on_without_keys_still_says_not_set_up(w, fake, monkeypatch):
-    for k in ("UPSTOX_FOR_ALL", "ANGELONE_FOR_ALL", "DHAN_FOR_ALL"):
+    for k in ("UPSTOX_FOR_ALL", "DHAN_FOR_ALL"):
         monkeypatch.setattr(settings, k, True)
-    for k in ("UPSTOX_API_SECRET", "ANGELONE_API_KEY", "DHAN_APP_SECRET"):
+    for k in ("UPSTOX_API_SECRET", "DHAN_APP_SECRET"):
         monkeypatch.setattr(settings, k, "")
     c = w["client"]
     for key in brokers.ALL:
@@ -258,9 +242,9 @@ def test_upstox_round_trip_reads_holdings_and_keeps_the_token_sealed(w, fake):
 
 def test_upstox_callback_refuses_a_missing_forged_used_or_other_brokers_state(w, fake):
     c = w["client"]
-    _, angel = login(c, "angelone")
+    other = brokers.STATE_PREFIX + mail_tokens.make(ADMIN_ID, brokers.PURPOSE, "dhan")        # a good state, for another broker
     for params in ({"code": "good-code"}, {"code": "good-code", "state": "b1.forged.value"}, {"code": "good-code", "state": "plain"},
-                   {"code": "good-code", "state": angel["state"]}):
+                   {"code": "good-code", "state": other}):
         _, got = back(c, "upstox", params)
         assert got["b"] == "failed"
     _, got = back(c, "upstox", {"error": "access_denied"})
@@ -293,7 +277,7 @@ def test_a_staged_login_is_for_its_user_its_claim_once_and_expires(w, fake, monk
     assert c.post("/connect/upstox/confirm", headers=BASIC, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 400
     assert c.post("/connect/upstox/confirm", headers=PRO, json={"ref": got["bs"], "claim": "guessed"}).status_code == 400
     assert c.post("/connect/upstox/confirm", headers=PRO, json={"ref": got["bs"], "claim": ""}).status_code == 400
-    assert c.post("/connect/angelone/confirm", headers=ADMIN, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 400  # another broker's route
+    assert c.post("/connect/dhan/confirm", headers=ADMIN, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 400  # another broker's route
     assert db.get_setting(state.KEY + BASIC_ID) is None
     assert c.post("/connect/upstox/confirm", headers=PRO, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 200
     assert c.post("/connect/upstox/confirm", headers=PRO, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 400  # once
@@ -348,75 +332,27 @@ def test_a_sold_stock_leaves(w, fake):
     assert {i["symbol"] for i in holdings.load(ADMIN_ID)["items"]} == {"INFY"}
 
 
-# ---------- Angel One ----------
-def test_angelone_login_address(w, fake):
-    url, q = login(w["client"], "angelone")
-    assert url.startswith(brokers.ANGEL_LOGIN + "?") and q["api_key"] == "angel-key"
-    assert brokers.read_state(q["state"]) == (ADMIN_ID, "angelone")
-
-
-def test_angelone_round_trip_and_its_headers(w, fake):
+# ---------- Dhan ----------
+def test_dhan_with_no_state_back_needs_the_users_own_tap(w, fake, monkeypatch):
+    monkeypatch.setattr(settings, "DHAN_FOR_ALL", True)
+    monkeypatch.setattr(settings, "DHAN_PARTNER_ID", "partner")                  # any account, so only the tap decides
+    monkeypatch.setattr(settings, "DHAN_PARTNER_SECRET", "partner-secret")
     c = w["client"]
-    r = connect(c, "angelone")
-    assert r.status_code == 200, r.text
-    items = {i["symbol"]: i for i in holdings.load(ADMIN_ID)["items"]}
-    assert set(items) == {"TATASTEEL", "SBIN"}                                       # "-EQ" and "-BE" aren't part of the symbol
-    assert items["TATASTEEL"]["qty"] == 2 and items["TATASTEEL"]["avg"] == 111.87
-    # SBIN on BSE (no total: settled 5 + T+1 3) and NSE (2) is one holding
-    assert items["SBIN"]["qty"] == 10 and items["SBIN"]["avg"] == pytest.approx((573.1 * 8 + 600 * 2) / 10)
-    assert all(i["via"] == "angelone" for i in items.values()) and holdings.load(ADMIN_ID)["source"] == "Angel One login"
-    req = next(x for x in fake.seen if str(x.url) == brokers.ANGEL_HOLDINGS)
-    h = req.headers
-    assert req.method == "GET" and h["authorization"] == f"Bearer {ANGEL_TOKEN}" and h["x-privatekey"] == "angel-key"
-    assert h["x-usertype"] == "USER" and h["x-sourceid"] == "WEB" and h["x-clientlocalip"] and h["x-clientpublicip"] and h["x-macaddress"].count(":") == 5
-    v = card(c, "angelone")
-    assert v["live"] and v["account"] == "A123456"
-    ends = datetime.fromisoformat(v["ends_at"]).astimezone(IST)
-    assert (ends.hour, ends.minute) == (0, 0)                                        # SmartAPI logins last until midnight
-    raw = json.dumps(db.get_setting(state.KEY + ADMIN_ID))
-    box = state.section(ADMIN_ID, "angelone")
-    assert ANGEL_TOKEN not in raw and not {"feed_token", "refresh_token", "feed", "refresh"} & set(box)   # only the session token is kept
-
-
-def test_angelone_without_a_returned_state_needs_the_users_own_tap(w, fake, monkeypatch):
-    monkeypatch.setattr(settings, "ANGELONE_FOR_ALL", True)
-    c = w["client"]
-    login(c, "angelone", PRO)                                                        # PRO tapped Connect; BASIC didn't
-    _, got = back(c, "angelone", {"auth_token": ANGEL_TOKEN})
+    login(c, "dhan", PRO)                                                            # PRO tapped Connect; BASIC didn't
+    _, got = back(c, "dhan", {"tokenId": "good-token-id"})
     assert got["b"] == "confirm"
-    assert c.post("/connect/angelone/confirm", headers=BASIC, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 400
-    assert c.post("/connect/angelone/confirm", headers=PRO, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 200
-    # the tap works once
-    _, got = back(c, "angelone", {"auth_token": ANGEL_TOKEN})
-    assert c.post("/connect/angelone/confirm", headers=PRO, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 400
-    # an old tap doesn't count
-    login(c, "angelone", BASIC)
+    assert c.post("/connect/dhan/confirm", headers=BASIC, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 400
+    assert c.post("/connect/dhan/confirm", headers=PRO, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 200
+    _, got = back(c, "dhan", {"tokenId": "good-token-id"})                           # the tap works once
+    assert c.post("/connect/dhan/confirm", headers=PRO, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 400
+    login(c, "dhan", BASIC)                                                          # an old tap doesn't count
     real = time.time()
     monkeypatch.setattr(time, "time", lambda: real + brokers.START_TTL + 30)
-    _, got = back(c, "angelone", {"auth_token": ANGEL_TOKEN})
-    assert c.post("/connect/angelone/confirm", headers=BASIC, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 400
+    _, got = back(c, "dhan", {"tokenId": "good-token-id"})
+    assert c.post("/connect/dhan/confirm", headers=BASIC, json={"ref": got["bs"], "claim": got["bc"]}).status_code == 400
 
 
-def test_angelone_refuses_a_token_that_isnt_one_and_says_when_it_ended(w, fake):
-    c = w["client"]
-    _, q = login(c, "angelone")
-    assert back(c, "angelone", {"auth_token": "not-a-jwt", "state": q["state"]})[1]["b"] == "failed"
-    connect(c, "angelone")
-    fake.angel_error = "AG8001"
-    r = c.post("/connect/angelone/refresh", headers=ADMIN)
-    assert r.status_code == 409 and r.json()["detail"]["message"] == "Your Angel One login has ended. Log in again."
-    assert card(c, "angelone")["expired"]
 
-
-def test_angelone_empty_holdings_keep_the_last_read(w, fake):
-    c = w["client"]
-    connect(c, "angelone")
-    fake.angel_holdings = None
-    assert c.post("/connect/angelone/refresh", headers=ADMIN).status_code == 200
-    assert {i["symbol"] for i in holdings.load(ADMIN_ID)["items"]} == {"TATASTEEL", "SBIN"}
-
-
-# ---------- Dhan ----------
 def test_dhan_login_asks_for_a_consent_first(w, fake):
     url, q = login(w["client"], "dhan")
     assert url == f"{brokers.DHAN_LOGIN}?consentAppId=940b0ca1-consent"
@@ -494,19 +430,15 @@ def test_rows_from_odd_fields():
         {"trading_symbol": "NEG", "quantity": -4, "average_price": 10},
         {"trading_symbol": "INF", "quantity": float("inf")}])
     assert up == [{"symbol": "INFY", "isin": "INE009A01021", "name": "INFY", "qty": 4, "avg": None}]   # one cost unknown: no average
-    angel = brokers.ALL["angelone"].rows([{"tradingsymbol": "BAJAJ-AUTO-EQ", "isin": "INE917I01010", "quantity": 1, "averageprice": "0"},
-                                          {"tradingsymbol": "", "isin": "INE000X01010", "quantity": 2, "averageprice": 5}])
-    assert angel == [{"symbol": "BAJAJ-AUTO", "isin": "INE917I01010", "name": "BAJAJ-AUTO", "qty": 1, "avg": None},
-                     {"symbol": "INE000X01010", "isin": "INE000X01010", "name": "INE000X01010", "qty": 2, "avg": 5.0}]
     assert brokers.ALL["dhan"].rows([{"tradingSymbol": "X", "totalQty": 0, "dpQty": 0, "t1Qty": 0}]) == []
 
 
 def test_reply_shapes_that_arent_lists(w, fake):
-    up, angel, dhan = (brokers.ALL[k] for k in ("upstox", "angelone", "dhan"))
+    up, dhan = (brokers.ALL[k] for k in ("upstox", "dhan"))
     fake.upstox_holdings = {"odd": True}
     assert up.fetch("t") == []
-    fake.angel_holdings = [{"tradingsymbol": "A-EQ"}, "junk", 3]
-    assert angel.fetch("t") == [{"tradingsymbol": "A-EQ"}]
+    fake.dhan_holdings = [{"tradingSymbol": "A"}, "junk", 3]
+    assert dhan.fetch("t") == [{"tradingSymbol": "A"}]
     fake.dhan_holdings = {"errorCode": "DH-908", "errorMessage": "server"}
     with pytest.raises(brokers.BrokerError) as e:
         dhan.fetch("t")
@@ -534,11 +466,9 @@ def test_tokens_never_reach_the_logs(w, fake, caplog):
     c = w["client"]
     for key in brokers.ALL:
         connect(c, key)
-    for tok in (UPSTOX_TOKEN, ANGEL_TOKEN, DHAN_TOKEN, "good-code", "good-token-id"):
+    for tok in (UPSTOX_TOKEN, DHAN_TOKEN, "good-code", "good-token-id"):
         assert tok not in caplog.text
     # an access log line of a callback is masked too
-    line = redact.mask(f"GET /connect/angelone/callback?auth_token={ANGEL_TOKEN}&feed_token=feed1&refresh_token=ref1&state=b1.x")
-    assert ANGEL_TOKEN not in line and "feed1" not in line and "ref1" not in line
     assert "good-token-id" not in redact.mask("GET /connect/dhan/callback?tokenId=good-token-id")
     assert "good-code" not in redact.mask("GET /connect/upstox/callback?code=good-code&state=b1.x")
 
@@ -568,18 +498,18 @@ def test_my_holdings_names_the_brokers_that_can_connect(w, fake, monkeypatch):
     c = w["client"]
     connect(c, "upstox")
     h = c.get("/holdings", headers=ADMIN).json()
-    assert {"Upstox", "Angel One", "Dhan"} <= set(h["brokers_open"])
+    assert {"Upstox", "Dhan"} <= set(h["brokers_open"])
     assert h["brokers"] == [{"key": "upstox", "name": "Upstox", "live": True, "count": 2, "read_at": h["brokers"][0]["read_at"]}]
     p = c.get("/holdings", headers=PRO).json()
     assert p["brokers_open"] == [] and p["brokers"] == []
-    monkeypatch.setattr(settings, "ANGELONE_FOR_ALL", True)
-    assert c.get("/holdings", headers=PRO).json()["brokers_open"] == ["Angel One"]
+    monkeypatch.setattr(settings, "UPSTOX_FOR_ALL", True)
+    assert c.get("/holdings", headers=PRO).json()["brokers_open"] == ["Upstox"]
 
 
 def test_a_broker_read_outranks_a_statement_like_zerodha(w, fake):
     from app.connect import sync
     assert sync.PRIORITY["upstox"] == sync.PRIORITY["kite"] > sync.PRIORITY["cas"]
-    assert set(brokers.ALL) <= set(holdings.SYNCED) and holdings.VIA_NAMES["angelone"] == "Angel One"
+    assert set(brokers.ALL) <= set(holdings.SYNCED) and holdings.VIA_NAMES["dhan"] == "Dhan" and "angelone" not in brokers.ALL
 
 
 def test_the_broker_picked_is_kept_on_the_account(w):

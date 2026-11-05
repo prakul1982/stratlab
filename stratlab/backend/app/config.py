@@ -50,14 +50,11 @@ class Settings:
     KITE_MULTIUSER_APPROVED = _env("KITE_MULTIUSER_APPROVED", "false").lower() == "true"
     KITE_CONNECT_API_KEY = _env("KITE_CONNECT_API_KEY")
     KITE_CONNECT_API_SECRET = _env("KITE_CONNECT_API_SECRET")
-    # Upstox, Angel One and Dhan: read-only holdings logins like Zerodha's (app/connect/brokers.py). Each is admin-only
+    # Upstox and Dhan: read-only holdings logins like Zerodha's (app/connect/brokers.py). Each is admin-only
     # until its *_FOR_ALL flag is "true"; without its keys its card says "Not set up yet"
     UPSTOX_API_KEY = _env("UPSTOX_API_KEY")
     UPSTOX_API_SECRET = _env("UPSTOX_API_SECRET")
     UPSTOX_FOR_ALL = _env("UPSTOX_FOR_ALL", "false").lower() == "true"
-    ANGELONE_API_KEY = _env("ANGELONE_API_KEY")
-    ANGELONE_API_SECRET = _env("ANGELONE_API_SECRET")          # not needed by the publisher login; kept for SmartAPI's other flows
-    ANGELONE_FOR_ALL = _env("ANGELONE_FOR_ALL", "false").lower() == "true"
     # Dhan: an individual app (app id + secret + the owner's Dhan client id) works only for that one account; the partner
     # credentials (from Dhan) let other users connect. With DHAN_FOR_ALL on and no partner credentials, anyone may try, and
     # a login Dhan refuses ends on Settings in plain words

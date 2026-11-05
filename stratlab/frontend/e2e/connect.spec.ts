@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // Settings -> Connected accounts: the statement inbox (address, filter steps, statement password, last received, upload by
-// hand), the broker logins (Zerodha, Upstox, Angel One, Dhan: closed to users until each is opened; open to the owner), US stocks through Interactive Brokers,
+// hand), the broker logins (Zerodha, Upstox, Dhan: closed to users until each is opened; open to the owner), US stocks through Interactive Brokers,
 // and the EPF / NPS / AIS uploads. Statements here are made-up files in e2e/fixtures. Each run signs in as its own new user.
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 const SHOTS = process.env.E2E_SHOTS;
@@ -106,8 +106,9 @@ test("US stocks: a bad token says why, a good one reads positions, disconnecting
   const main = page.locator("main");
   await expect(main.locator("#zerodha")).toContainText("Not open yet", { timeout: 30_000 });
   await expect(main.locator("#zerodha").getByRole("button", { name: "Connect Zerodha" })).toHaveCount(0);
-  // Upstox, Angel One and Dhan are admin-only until their flags: one short row each, no button
-  for (const [id, name] of [["upstox", "Upstox"], ["angelone", "Angel One"], ["dhan", "Dhan"]]) {
+  // Upstox and Dhan are admin-only until their flags: one short row each, no button; Angel One has no connection
+  await expect(main.locator("#angelone")).toHaveCount(0);
+  for (const [id, name] of [["upstox", "Upstox"], ["dhan", "Dhan"]]) {
     await expect(main.locator(`#${id}`)).toContainText("Not open yet");
     await expect(main.locator(`#${id}`).getByRole("button", { name: `Connect ${name}` })).toHaveCount(0);
   }
@@ -172,7 +173,7 @@ test("Zerodha is open to the owner: log in, read holdings, refresh; and an EPF p
   await sane(page, errors, phone);
 });
 
-test("Upstox, Angel One and Dhan are open to the owner: log in to each, holdings read, refresh, My Holdings, disconnect", async ({ page, request }, info) => {
+test("Upstox and Dhan are open to the owner: log in to each, holdings read, refresh, My Holdings, disconnect", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
   if (!phone) await page.emulateMedia({ colorScheme: "dark" });
   const OWNER = who(258, phone);                       // an admin in the e2e world (load258 / load261)
@@ -180,7 +181,7 @@ test("Upstox, Angel One and Dhan are open to the owner: log in to each, holdings
   const back = async (key: string) => {
     const a = await (await request.get(`${API}/connect/${key}/login`, { headers: auth(OWNER) })).json();
     const st = new URL(a.url).searchParams.get("state") ?? "";
-    const params: Record<string, string> = key === "upstox" ? { code: "e2e-code", state: st } : key === "angelone" ? { auth_token: "e2e.jwt.token", state: st } : { tokenId: "e2e-token-id" };
+    const params: Record<string, string> = key === "upstox" ? { code: "e2e-code", state: st } : { tokenId: "e2e-token-id" };
     if (key === "dhan") expect(a.url).toContain("consentAppId=e2e-consent");
     const r = await request.get(`${API}/connect/${key}/callback`, { params, maxRedirects: 0 });
     expect(r.status()).toBe(303);
@@ -194,17 +195,14 @@ test("Upstox, Angel One and Dhan are open to the owner: log in to each, holdings
   expect(page.url(), "the reference and claim leave the address once used").not.toContain("bc=");
   const main = page.locator("main");
   await expect(main.locator("#upstox").getByTestId("upstox-line")).toHaveText(/^Connected · last read today \d\d:\d\d IST · 1 holding · this login ends (at|on) (\d{1,2} \w{3}, )?03:30 IST$/, { timeout: 30_000 });
-  await page.goto(await back("angelone"));
-  await expect(page.getByText("Angel One is connected and your holdings are read.")).toBeVisible({ timeout: 30_000 });
-  await expect(main.locator("#angelone").getByTestId("angelone-line")).toHaveText(/ · this login ends (at|on) (\d{1,2} \w{3}, )?00:00 IST$/, { timeout: 30_000 });
   await page.goto(await back("dhan"));
   await expect(page.getByText("Dhan is connected and your holdings are read.")).toBeVisible({ timeout: 30_000 });
   await expect(main.locator("#dhan").getByTestId("dhan-line")).toContainText(/^Connected · last read today .* · this login ends /, { timeout: 30_000 });
-  for (const id of ["upstox", "angelone", "dhan"]) await expect(main.locator(`#${id}`).getByText("Connected", { exact: true })).toBeVisible();
+  for (const id of ["upstox", "dhan"]) await expect(main.locator(`#${id}`).getByText("Connected", { exact: true })).toBeVisible();
   const raw = await (await request.get(`${API}/connect`, { headers: auth(OWNER) })).text();
   expect(raw, "no token reaches the page").not.toMatch(/eyJ|e2e\.jwt/);
   const held = await (await request.get(`${API}/holdings`, { headers: auth(OWNER) })).json();
-  expect(held.rows.map((r: { symbol: string }) => r.symbol)).toEqual(expect.arrayContaining(["TCS", "ITC", "HDFCBANK"]));
+  expect(held.rows.map((r: { symbol: string }) => r.symbol)).toEqual(expect.arrayContaining(["TCS", "HDFCBANK"]));
   await main.locator("#upstox").getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByText("Read 1 holdings.")).toBeVisible({ timeout: 30_000 });
   await sane(page, errors, phone);
@@ -223,9 +221,9 @@ test("Upstox, Angel One and Dhan are open to the owner: log in to each, holdings
   await up.getByRole("button", { name: "Disconnect" }).click();
   await page.getByRole("dialog", { name: "Disconnect Upstox?" }).getByRole("button", { name: "Disconnect" }).click();
   await expect(up.getByRole("button", { name: "Connect Upstox" })).toBeVisible({ timeout: 30_000 });
-  for (const key of ["angelone", "dhan"]) await request.delete(`${API}/connect/${key}`, { headers: auth(OWNER) });
+  for (const key of ["dhan"]) await request.delete(`${API}/connect/${key}`, { headers: auth(OWNER) });
   const after = await (await request.get(`${API}/holdings`, { headers: auth(OWNER) })).json();
-  expect(after.rows.map((r: { symbol: string }) => r.symbol)).toEqual(expect.arrayContaining(["TCS", "ITC", "HDFCBANK"]));
+  expect(after.rows.map((r: { symbol: string }) => r.symbol)).toEqual(expect.arrayContaining(["TCS", "HDFCBANK"]));
 });
 
 test("Pick your broker: each broker's ways (connect, file, email), the pick kept on the account, on Settings and My Holdings", async ({ page, request }, info) => {
@@ -251,6 +249,11 @@ test("Pick your broker: each broker's ways (connect, file, email), the pick kept
   await expect(guide.getByTestId("guide-file").getByRole("link", { name: "Upload in My Holdings" })).toBeVisible();
   await sane(page, errors, phone);
   await shot(page, "connected-pick-broker", phone, !phone);
+
+  // Angel One: no live connection here (owner, 5 Nov): its file and the email only
+  await chips.getByRole("button", { name: "Angel One" }).click();
+  await expect(guide.getByTestId("guide-connect")).toHaveCount(0);
+  await expect(guide.getByTestId("guide-file")).toContainText("open Portfolio");
 
   // Upstox: its connection in its real state (not open to this account), first
   await chips.getByRole("button", { name: "Upstox" }).click();

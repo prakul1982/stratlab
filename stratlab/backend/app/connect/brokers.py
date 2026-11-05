@@ -1,4 +1,4 @@
-"""Upstox, Angel One and Dhan: a read-only holdings login for one user, the same shape as Zerodha's (kite_user.py).
+"""Upstox and Dhan: a read-only holdings login for one user, the same shape as Zerodha's (kite_user.py).
 
 The user taps "Connect", logs in at the broker, and the broker sends the browser back to /connect/<broker>/callback. That
 address has no sign-in, so nothing is linked there: the login is swapped for a token (server side, with the app's secret),
@@ -15,18 +15,15 @@ else's login, and that ends on Settings in plain words.
 
 How each login is bound to the person who started it: the login address carries a signed, 15-minute state naming the user
 and the broker, and a start record (one per user and broker) holds its hash. Upstox returns the state and the callback
-refuses a missing or different one. Angel One documents a state on its login address, but not that it is returned, and
-Dhan has none: for those the callback stages the login without a user and the confirm needs the signed-in user's own
+refuses a missing or different one. Dhan has none: there the callback stages the login without a user and the confirm needs the signed-in user's own
 start record, made by their own Connect tap in the last 15 minutes (and used once)."""
 import base64
 import hashlib
 import hmac
 import json
 import secrets
-import socket
 import threading
 import time
-import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlencode
@@ -51,8 +48,6 @@ TIMEOUT = 20
 UPSTOX_DIALOG = "https://api.upstox.com/v2/login/authorization/dialog"
 UPSTOX_TOKEN = "https://api.upstox.com/v2/login/authorization/token"
 UPSTOX_HOLDINGS = "https://api.upstox.com/v2/portfolio/long-term-holdings"
-ANGEL_LOGIN = "https://smartapi.angelone.in/publisher-login"
-ANGEL_HOLDINGS = "https://apiconnect.angelone.in/rest/secure/angelbroking/portfolio/v1/getAllHolding"
 DHAN_CONSENT = "https://auth.dhan.co/app/generate-consent"
 DHAN_LOGIN = "https://auth.dhan.co/login/consentApp-login"
 DHAN_CONSUME = "https://auth.dhan.co/app/consumeApp-consent"
@@ -61,7 +56,7 @@ DHAN_PARTNER_LOGIN = "https://auth.dhan.co/consent-login"
 DHAN_PARTNER_CONSUME = "https://auth.dhan.co/partner/consume-consent"
 DHAN_HOLDINGS = "https://api.dhan.co/v2/holdings"
 # every broker address the server itself calls (the login pages are opened by the user's browser, not called here)
-READ_ONLY = frozenset({UPSTOX_TOKEN, UPSTOX_HOLDINGS, ANGEL_HOLDINGS, DHAN_CONSENT, DHAN_CONSUME, DHAN_PARTNER_CONSENT,
+READ_ONLY = frozenset({UPSTOX_TOKEN, UPSTOX_HOLDINGS, DHAN_CONSENT, DHAN_CONSUME, DHAN_PARTNER_CONSENT,
                        DHAN_PARTNER_CONSUME, DHAN_HOLDINGS})
 
 transport: httpx.BaseTransport | None = None        # tests and the e2e world swap in a fake broker
@@ -168,7 +163,7 @@ class Broker:
     key = ""
     name = ""
     source = ""
-    state_back = "yes"           # whether the broker returns our state: "yes", "maybe" (not documented) or "no"
+    state_back = "yes"           # whether the broker returns our state: "yes" or "no"
 
     def configured(self) -> bool:
         raise NotImplementedError
@@ -251,74 +246,6 @@ class Upstox(Broker):
             # as Kite's (Upstox uses the same fields): settled, T+1 and pledged shares are all held
             qty = _num(h.get("quantity")) + _num(h.get("t1_quantity")) + _num(h.get("collateral_quantity"))
             r = _row(h.get("trading_symbol") or h.get("tradingsymbol"), h.get("isin"), h.get("company_name"), qty, h.get("average_price"))
-            if r:
-                out.append(r)
-        return merge_rows(out)
-
-
-# ---------- Angel One (SmartAPI publisher login) ----------
-ANGEL_SERIES = ("-EQ", "-BE", "-BZ", "-BL", "-SM", "-ST", "-IL", "-GB", "-GS")
-
-
-def _local_ip() -> str:
-    try:
-        return socket.gethostbyname(socket.gethostname())
-    except OSError:
-        return "127.0.0.1"
-
-
-class AngelOne(Broker):
-    key, name, source = "angelone", "Angel One", "Angel One login"
-    state_back = "maybe"
-
-    def configured(self) -> bool:
-        return bool(settings.ANGELONE_API_KEY and vault.ready())
-
-    def for_all(self) -> bool:
-        return settings.ANGELONE_FOR_ALL
-
-    def login_url(self, st: str) -> tuple[str, dict]:
-        return f"{ANGEL_LOGIN}?{urlencode({'api_key': settings.ANGELONE_API_KEY, 'state': st})}", {}
-
-    def exchange(self, params: dict) -> dict:
-        # the publisher login hands the session token itself back on the address: there is nothing to swap
-        tok = str(params.get("auth_token") or "").strip()
-        if tok.lower().startswith("bearer "):
-            tok = tok[7:].strip()
-        if not tok or len(tok) > 4000 or tok.count(".") != 2:
-            raise BrokerError("Angel One didn't accept that login. Try again.")
-        claims = _jwt_claims(tok)
-        # SmartAPI's tokens last until midnight India time
-        return {"token": tok, "account": str(claims.get("username") or claims.get("sub") or "")[:20],
-                "expires_at": _earliest(_next_ist(_now(), 0, 0), _jwt_exp(tok))}
-
-    def headers(self, token: str) -> dict:
-        ip = _local_ip()
-        mac = ":".join(f"{(uuid.getnode() >> s) & 0xFF:02x}" for s in range(40, -1, -8))
-        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "X-UserType": "USER", "X-SourceID": "WEB",
-                "X-ClientLocalIP": ip, "X-ClientPublicIP": ip, "X-MACAddress": mac, "X-PrivateKey": settings.ANGELONE_API_KEY}
-
-    def fetch(self, token: str, account: str = "") -> list[dict]:
-        status, body = _http("GET", ANGEL_HOLDINGS, headers=self.headers(token))
-        code = str((body or {}).get("errorcode") or (body or {}).get("errorCode") or "") if isinstance(body, dict) else ""
-        if status in (401, 403) or code in ("AG8001", "AG8002", "AG8003"):
-            raise self.ended()
-        if status != 200 or not isinstance(body, dict) or body.get("status") is False:
-            raise self.failed()
-        data = body.get("data")
-        held = data.get("holdings") if isinstance(data, dict) else data        # getAllHolding: {"holdings", "totalholding"}
-        return [h for h in held if isinstance(h, dict)] if isinstance(held, list) else []
-
-    def rows(self, raw: list[dict]) -> list[dict]:
-        out = []
-        for h in raw:
-            qty = _num(h.get("quantity")) or (_num(h.get("realisedquantity")) + _num(h.get("t1quantity")))
-            sym = str(h.get("tradingsymbol") or "").strip().upper()
-            for tail in ANGEL_SERIES:                     # "TATASTEEL-EQ": the series isn't part of the symbol
-                if sym.endswith(tail):
-                    sym = sym[: -len(tail)]
-                    break
-            r = _row(sym, h.get("isin"), sym, qty, h.get("averageprice"))
             if r:
                 out.append(r)
         return merge_rows(out)
@@ -413,7 +340,7 @@ class Dhan(Broker):
         return merge_rows(out)
 
 
-ALL: dict[str, Broker] = {b.key: b for b in (Upstox(), AngelOne(), Dhan())}
+ALL: dict[str, Broker] = {b.key: b for b in (Upstox(), Dhan())}
 
 
 # ---------- the login round trip ----------

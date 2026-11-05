@@ -340,7 +340,7 @@ test("LIVE1B-066, 040, 042: a bad email is said in the app's words; the email bo
   assert.match(a, /<FormGrid label="Alerts" noValidate/);
   assert.match(a, /That email address doesn't look right\./);
   assert.match(a, /<Field label="Email" optional wide/);
-  // R11 (owner, 5 Nov: Upstox, Angel One and Dhan) changed this on purpose: the offer names the brokers the server says this
+  // R11 (owner, 5 Nov: Upstox and Dhan) changed this on purpose: the offer names the brokers the server says this
   // account may connect (brokers_open), and only the inbox when there are none
   const h = read("src/pages/HoldingsPage.tsx");
   assert.match(h, /const open = v\?\.brokers_open \?\? \(v\?\.zerodha_open === false \? \[\] : \["Zerodha"\]\);/);

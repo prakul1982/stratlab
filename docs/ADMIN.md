@@ -565,16 +565,17 @@ approval: ask through the Kite Connect forum (https://kite.trade) or Zerodha sup
 Zerodha ends every login at about 6 am, so users tap once a day ("Connected · refreshed today 09:12 · tap to refresh
 tomorrow"); there is no way around that daily step.
 
-### 3b. Upstox, Angel One and Dhan (read-only holdings logins)
+### 3b. Upstox and Dhan (read-only holdings logins)
 
-The same shape as Zerodha's: Settings → Connected accounts → Brokers lists Zerodha, Upstox, Angel One and Dhan in one table.
+The same shape as Zerodha's: Settings → Connected accounts → Brokers lists Zerodha, Upstox and Dhan in one table.
 A user taps **Connect**, logs in at the broker, comes back to `/connect/<broker>/callback` (which links nothing by itself),
 and the signed-in Settings page confirms the login with a one-time claim. The token is encrypted with `CONNECT_SECRET_KEY`,
 never logged or sent to the page, and deleted on **Disconnect**; holdings land in My Holdings tagged with the broker, as
 Zerodha's do. The server only ever calls each broker's token and holdings addresses (`backend/app/connect/brokers.py`,
 `READ_ONLY`): no order, funds or other write call exists. There is no background polling: **Refresh** reads again while the
 login lasts (on Settings and on My Holdings). "Pick your broker" (Settings and My Holdings) shows each broker's ways in:
-connect, its holdings file, or the monthly statement by email.
+connect (Zerodha, Upstox, Dhan), its holdings file, or the monthly statement by email. Angel One and the others
+have no live connection: their file and the email.
 
 Each card says "Not set up yet" until its keys and `CONNECT_SECRET_KEY` are set, even with its `*_FOR_ALL` flag on. Until
 the flag is `true`, only admins (`ADMIN_EMAILS`) can connect ("Not open yet" for everyone else).
@@ -582,13 +583,10 @@ the flag is `true`, only admins (`ADMIN_EMAILS`) can connect ("Not open yet" for
 | Broker | Railway variables | Redirect URL to register with the broker | Open to everyone | Login ends |
 |---|---|---|---|---|
 | Upstox | `UPSTOX_API_KEY`, `UPSTOX_API_SECRET` | `https://<your API host>/connect/upstox/callback` | `UPSTOX_FOR_ALL=true` | 03:30 IST next day |
-| Angel One | `ANGELONE_API_KEY` (`ANGELONE_API_SECRET` is not used by the publisher login) | `https://<your API host>/connect/angelone/callback` | `ANGELONE_FOR_ALL=true` | midnight IST |
 | Dhan | `DHAN_APP_ID`, `DHAN_APP_SECRET`, `DHAN_CLIENT_ID` (your own Dhan client id) | `https://<your API host>/connect/dhan/callback` | `DHAN_FOR_ALL=true` | the time Dhan gives (about 24 h) |
 
 - **Upstox:** make an app at https://account.upstox.com/developer/apps with that redirect URL; its API key and secret go in
   the two variables.
-- **Angel One:** make a SmartAPI app (publisher login) at https://smartapi.angelone.in with that redirect URL; its API key
-  goes in `ANGELONE_API_KEY`.
 - **Dhan:** on web.dhan.co → My Profile → Access DhanHQ APIs (DhanHQ Trading APIs), choose **API key**, give an app name and
   that redirect URL; the API key and secret go in `DHAN_APP_ID` and `DHAN_APP_SECRET` (valid 12 months), and your Dhan
   client id in `DHAN_CLIENT_ID` (Dhan's consent step needs it). An individual API-key app logs in only its owner's own

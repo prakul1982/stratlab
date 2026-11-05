@@ -11,8 +11,8 @@ sources name the same stock, the live broker wins over a statement and a stateme
 from .. import holdings, plans
 from . import state
 
-PRIORITY = {"kite": 3, "ibkr": 3, "upstox": 3, "angelone": 3, "dhan": 3, "cas": 2}
-LIVE_BROKERS = ("kite", "upstox", "angelone", "dhan")       # the logins whose last read can outrank a statement
+PRIORITY = {"kite": 3, "ibkr": 3, "upstox": 3, "dhan": 3, "cas": 2}
+LIVE_BROKERS = ("kite", "upstox", "dhan")       # the logins whose last read can outrank a statement
 
 
 class Deps:

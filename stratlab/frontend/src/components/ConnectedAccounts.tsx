@@ -7,7 +7,7 @@ import { useApp } from "../lib/app";
 import { ago, dateOnly } from "../lib/format";
 import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, DateField, Disclosure, Field, FormActions, FormGrid, Notice, Skeleton, UploadButton, UploadProblem, useUploadProblem, Working, type Column } from "./kit";
 
-/* Settings -> Connected accounts, the "connect once" cards: the statement inbox, the broker logins (Zerodha, Upstox, Angel One, Dhan),
+/* Settings -> Connected accounts, the "connect once" cards: the statement inbox, the broker logins (Zerodha, Upstox, Dhan),
  * Interactive Brokers, and the EPF, NPS and
  * AIS uploads. Every figure on them is a fact about the connection (a date, a count, a status); passwords and tokens are typed
  * in and never shown again. */
@@ -17,7 +17,7 @@ type Conn = {
   storage_ready: boolean;
   inbox: { ready: boolean; address: string | null; has_password: boolean; last: Last | null; forwarding_code: { code: string; at: string } | null; created_at: string | null };
   kite: { configured?: boolean; available: boolean; connected: boolean; live: boolean; expired: boolean; refreshed_at: string | null; refreshed_label: string | null; count: number | null; detail: string | null; ends_at?: string | null };
-  /** Upstox, Angel One and Dhan, the same shape as Zerodha's */
+  /** Upstox and Dhan, the same shape as Zerodha's */
   brokers?: (BrokerStatus & { refreshed_at: string | null; account: string | null })[];
   ibkr: { connected: boolean; synced_at: string | null; status: string | null; detail: string | null; positions: number | null; trades: number | null; expires: string | null };
   docs: Record<"epf" | "nps" | "ais", Record<string, unknown> | null>;
@@ -62,7 +62,7 @@ export function ConnectCards() {
       .then((r) => { set(r.connect); say("ok"); }).catch(() => { say("failed"); load(); });
   }, [notify, set, load]);
   useEffect(() => {
-    // back from Upstox, Angel One or Dhan: the same as Zerodha's, with the broker named in the address
+    // back from Upstox or Dhan: the same as Zerodha's, with the broker named in the address
     const q = new URLSearchParams(window.location.search);
     const [key, b, bs, bc] = [q.get("broker"), q.get("b"), q.get("bs"), q.get("bc")];
     if (!key || !b || !BROKER_NAMES[key]) return;
@@ -202,8 +202,8 @@ function InboxCard({ c, set, load }: P) {
   );
 }
 
-/* ---------- the broker logins: Zerodha, Upstox, Angel One, Dhan ---------- */
-const BROKER_NAMES: Record<string, string> = { upstox: "Upstox", angelone: "Angel One", dhan: "Dhan" };
+/* ---------- the broker logins: Zerodha, Upstox, Dhan ---------- */
+const BROKER_NAMES: Record<string, string> = { upstox: "Upstox", dhan: "Dhan" };
 
 type BrokerRow = BrokerStatus & { id: string; path: string; line: string; lineId?: string };
 
@@ -262,8 +262,8 @@ function BrokersCard({ c, set }: P) {
   return (
     <Card id="brokers" label="Brokers">
       <CardHead title="Brokers" info={<>Log in to your broker and your holdings are read into My Holdings. It is read-only: StratLab can't place orders or move money,
-        and never sees your broker password. Each broker ends its login by itself (Zerodha at about 06:00 IST, Upstox at 03:30 IST, Angel One at
-        midnight IST; Dhan says when), so after that you log in once more. Refresh reads the holdings again while the login lasts.</>} />
+        and never sees your broker password. Each broker ends its login by itself (Zerodha at about 06:00 IST, Upstox at 03:30 IST;
+        Dhan says when), so after that you log in once more. Refresh reads the holdings again while the login lasts.</>} />
       <DataTable label="Broker logins" columns={columns} rows={rows} rowKey={(b) => b.key} rowAttrs={(b) => ({ id: b.id, "data-testid": `broker-${b.key}` })} />
       {busy && <Working small label={`${busy.what}…`} />}
       {closed.length > 0 && <p className="k-small k-muted">{closed.length === rows.length ? "None of these is open for your account yet." : "A broker marked not open isn't available for your account yet."} Upload your broker's holdings file in My Holdings meanwhile.</p>}

@@ -1,5 +1,5 @@
 """The API for Settings -> Connected accounts: GET /connect (everything's state), the statement inbox, an upload that uses the
-same reader, Zerodha, Upstox, Angel One and Dhan logins, Interactive Brokers (Flex) and the EPF / NPS / AIS uploads, plus the mail service's webhook.
+same reader, Zerodha, Upstox and Dhan logins, Interactive Brokers (Flex) and the EPF / NPS / AIS uploads, plus the mail service's webhook.
 
 Nothing secret ever leaves here: an address, dates, counts and plain-words statuses. Every route is for the signed-in user's
 own data only (the user id comes from the sign-in, never from the request)."""
@@ -239,7 +239,7 @@ def kite_delete(profile=Depends(current_profile)):
     return ok(view(profile))
 
 
-# ---------- Upstox, Angel One and Dhan (brokers.py): the same round trip as Zerodha's ----------
+# ---------- Upstox and Dhan (brokers.py): the same round trip as Zerodha's ----------
 class BrokerConfirmReq(BaseModel):
     ref: str = Field(..., max_length=200)
     claim: str = Field(..., max_length=200)
@@ -248,7 +248,7 @@ class BrokerConfirmReq(BaseModel):
 def broker_done(b: brokers.Broker, params: dict) -> RedirectResponse:
     """The broker's return: only ever back to the app's own Connected accounts page."""
     where = settings.PUBLIC_SITE_URL + f"/settings?broker={b.key}&b={{}}#accounts"
-    if not any(params.get(k) for k in ("code", "auth_token", "tokenId", "tokenid")):
+    if not any(params.get(k) for k in ("code", "tokenId", "tokenid")):
         return RedirectResponse(where.format("cancelled"), status_code=303)
     try:
         ref, claim = brokers.stage(b, params)

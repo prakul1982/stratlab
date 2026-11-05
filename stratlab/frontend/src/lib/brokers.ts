@@ -1,4 +1,4 @@
-/* The broker logins on Settings -> Connected accounts (Zerodha, Upstox, Angel One, Dhan), said the same way for each: its status,
+/* The broker logins on Settings -> Connected accounts (Zerodha, Upstox, Dhan), said the same way for each: its status,
  * its line (last read, holdings, when the broker ends the login) and the list of names a page can offer. Facts only. */
 import { IST, quoteAt } from "./format";
 

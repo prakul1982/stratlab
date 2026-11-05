@@ -57,7 +57,7 @@ def _connect(uid: str) -> int:
     for key, raw in db.all_settings_with_prefix(kite_user.PENDING):    # a Zerodha login waiting to be confirmed
         if db.json_value(raw, {}).get("uid") == uid:
             db.delete_setting(key)
-    brokers.drop_pending(uid)                 # an Upstox / Angel One / Dhan login waiting to be confirmed, and Connect taps
+    brokers.drop_pending(uid)                 # an Upstox or Dhan login waiting to be confirmed, and Connect taps
     had = len(state.load(uid))
     try:
         if state.section(uid, "kite").get("token"):
