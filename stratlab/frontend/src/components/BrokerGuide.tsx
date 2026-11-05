@@ -103,7 +103,7 @@ export function BrokerGuide({ conn: given, where, onUpload }: { conn?: GuideConn
 
   const columns: Column<GuideWay>[] = sel ? [
     { key: "way", header: "Way", rowHeader: true, cell: (w) => <span className="k-line-text"><b>{TITLES[w].title}</b><span className="k-sub-line">{TITLES[w].sub}</span></span> },
-    { key: "how", header: "How", wrap: true, cell: (w) => how(sel, w) },
+    { key: "how", header: "How", wrap: true, lead: true, cell: (w) => how(sel, w) },
     { key: "act", header: "", action: true, cell: (w) => act(sel, w) },
   ] : [];
 
@@ -112,7 +112,7 @@ export function BrokerGuide({ conn: given, where, onUpload }: { conn?: GuideConn
       <CardHead title="Pick your broker" info="Each broker's ways to bring your holdings into StratLab: a live connection where there is one, the holdings file it lets you download, and the monthly statement by email, which lists your shares at every broker. Your pick is remembered." />
       <ChipBar label="Your broker" wrap options={GUIDE_BROKERS.map((b) => ({ value: b.id, label: b.name }))} value={sel?.id ?? ""} onChange={pick} />
       {sel
-        ? <DataTable label={`Ways to bring in your ${sel.id === "other" ? "" : `${sel.name} `}holdings`} columns={columns} rows={waysFor(sel)} rowKey={(w) => w}
+        ? <DataTable label={`Ways to bring in your ${sel.id === "other" ? "" : `${sel.name} `}holdings`} columns={columns} rows={waysFor(sel)} rowKey={(w) => w} stack
             rowAttrs={(w) => ({ "data-testid": `guide-${w}` })} />
         : <p className="k-small k-muted">Pick your broker to see the ways to bring its holdings in.</p>}
     </Card>
