@@ -160,6 +160,7 @@ test("a purchase is confirmed on the page with its plan, period, GST and renewal
     await r.fulfill({ response: res, json: j });
   });
   await open(other, "/plans", { token: "load-299", id: "u-load-299", email: "load299@example.com" });
-  await expect(other.getByTestId("plan-included")).toContainText("Included in the Pro plan you were given", { timeout: 30_000 });
+  await expect(other.getByTestId("plan-included").first()).toContainText("Included in your Pro plan", { timeout: 30_000 });      // R11: one quiet button a card
+  await expect(other.getByTestId("plan-included")).toHaveCount(2);                                                                // Free and Basic
   await expect(other.getByRole("button", { name: "Switch to Basic" })).toHaveCount(0);
 });

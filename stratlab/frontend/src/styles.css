@@ -2344,9 +2344,11 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-plan-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: var(--s2); align-items: start; }
 .k-plan-list li > span { color: var(--blue); font-weight: 700; }
 .k-plan-list li.head { display: block; color: var(--muted); font-weight: 600; }
-/* VR6-013: the card's remaining lines, folded; the summary is a full-width 44px row so it is easy to hit on a phone */
-.k-plan-more summary { cursor: pointer; display: flex; align-items: center; min-height: 44px; color: var(--blue); font-size: var(--t-label); font-weight: 600; }
-.k-plan-more[open] > summary { margin-bottom: var(--s2); }
+/* R11 (owner, 5 Nov: "bad UI"): one button a card, the card's full width, at its foot; a plan you have says so on the same button, quiet */
+.k-plan-btn { width: 100%; justify-content: center; }
+/* the small print under the plans: a few short lines, one rule above, no wall of paragraphs */
+.k-fineprint { list-style: none; margin: 0; padding: var(--s3) 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--s1);
+  font-size: var(--t-note); line-height: 1.5; color: var(--muted); max-width: 80ch; }
 
 /* the landing page's own small helpers */
 .stack.g1, .row.g1 { gap: 1px; } .stack.g2, .row.g2 { gap: 2px; } .stack.g4, .row.g4 { gap: 4px; } .stack.g6 { gap: 6px; } 

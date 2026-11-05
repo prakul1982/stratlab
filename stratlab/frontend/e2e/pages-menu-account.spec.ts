@@ -29,15 +29,14 @@ test.describe("a visitor in India", () => {
 });
 
 test("plans: short cards, the full comparison, and backtests (not experiments)", async ({ page }, info) => {
-  const errors = await open(page, "/plans", "Side by side");
-  for (const line of ["Everything in Free, plus:", "Everything in Basic, plus:", "10 backtests a month, each with a full verdict",
-    "2 company deep dives a month, each with the report card and checklist, and 1 slide deck of a company or a theme (its PDF and PowerPoint count as one)", "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan",
-    "Options paper trading on your own rules' signals, strikes picked by delta or premium, and what-if sliders with a roll preview"]) {
+  const errors = await open(page, "/plans", "Compare the plans");
+  // R11: five short lines a card (lib/plans.ts KEY), the long lists in the table below
+  for (const line of ["Everything in Free, with no ads", "Everything in Basic", "10 backtests and 10 AI strategy builds a month",
+    "2 company deep dives and 1 slide deck a month", "Indian F&O in notebooks, and options on your own rules' signals"]) {
     await expect(page.locator(".k-plans li", { hasText: line })).toBeVisible();
   }
-  for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
+  for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBe(5);
   expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
-  await page.getByTestId("plans-compare-fold").locator("summary").first().click();          // the comparison is one fold under the cards (LIVE1C-092)
   const table = page.locator("#compare");        // one table for each group (how much, what each plan adds, on every plan), each with the plan names on top
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
   await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
@@ -46,11 +45,11 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   await expect(row("All 20+ indicators in strategy rules")).toHaveText(["All 20+ indicators in strategy rules", "–", "✓", "✓"]);
   await expect(row("Trade notifications")).toHaveText(["Trade notifications", "–", "✓", "✓"]);
   await expect(row("Indian F&O in notebooks and backtests")).toHaveText(["Indian F&O in notebooks and backtests", "–", "–", "✓"]);   // Basic's options paper trading is its own row (R54-008)
-  // what every plan has is one folded list, and what each plan adds is under its own subheadings (DP1-022, DI-032)
+  // what every plan has is one folded table, and what each plan adds is under its own subheadings (DP1-022, DI-032)
   await expect(table.getByRole("heading", { name: "Trading" })).toBeVisible();
   await expect(table.getByRole("heading", { name: "Money and tax" })).toBeVisible();
   await table.getByText(/^On every plan \(\d+ tools\)$/).click();
-  await expect(table.locator("li", { hasText: "Red flags on every company page" })).toBeVisible();
+  await expect(row("Red flags on every company page")).toHaveText(["Red flags on every company page", "✓", "✓", "✓"]);
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
 });

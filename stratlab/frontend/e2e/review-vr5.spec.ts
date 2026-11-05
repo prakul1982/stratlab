@@ -88,8 +88,7 @@ test("VR5-004: a long chip or badge wraps at 360px instead of pushing the page s
 
 test("VR5-011: the Free column's trial note in the plan table stays two lines at 390px", async ({ page }) => {
   await open(page, "/plans", ADMIN, 390);
-  // (LIVE1C-092: in the app the side-by-side tables are one fold, closed: open it)
-  await page.getByText("Compare every limit and feature side by side").click();
+  // (R11: the comparison tables are open under the cards)
   const row = page.getByRole("row", { name: /Paper trading sessions at a time/ });
   await expect(row).toContainText("1 (5-market-day trial)", { timeout: 30_000 });
   const h = await row.locator(".k-sub-line").first().evaluate((e) => e.getBoundingClientRect().height);
