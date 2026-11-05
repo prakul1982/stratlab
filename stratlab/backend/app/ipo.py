@@ -75,7 +75,8 @@ AI_PER_DAY = 120                      # summaries the scheduled catch-up writes 
                                       # opening an IPO is never held to it: theirs is written on the spot (item 41, owner 30 Oct)
 NOTE = {"IN": ("Dates, price band, lot size and the bids received are from the exchanges' public-issue pages; the offer documents are the "
                "draft and red herring prospectuses filed with SEBI. An allotment or listing date marked expected is the one SEBI's timetable "
-               "gives (allotment the working day after the close, listing three working days after it) until the exchange publishes it. "
+               "gives (allotment the working day after the close, listing three working days after it) until the exchange publishes it; "
+               "once that day has passed without a confirmed date it is marked timetable. "
                "Facts, not advice."),
         "US": ("Expected, priced and filed offerings are from the public IPO calendar; the documents are the S-1, F-1 and final prospectus "
                "filed with the SEC. US offerings have no public bidding window: the price is set the evening before trading starts. "

@@ -154,6 +154,9 @@ a.inv-theme:hover { border-color: var(--ink); }
 .inv-row { display: grid; gap: 4px; padding: var(--s3) 0; border-top: 1px solid var(--line); min-width: 0; overflow-wrap: anywhere; }
 .inv-rows > .inv-row:first-child { border-top: 0; padding-top: 0; }
 .inv-day { display: flex; flex-direction: column; gap: var(--s2); }
+/* a day's table of results or corporate actions has eight columns: its headers may take two lines, so every column fits the card (owner, 5 Nov:
+   the options column sat past the card's edge) */
+.inv-day .k-table thead th { white-space: normal; }
 /* the days side by side where there is room, in the order they come (across, then down): one column of them left a wide card two-thirds empty (UI-FIX-1, R2) */
 /* VR1-105: rows two across where there is room (past corporate actions), each a block of its own, no rule between */
 .inv-alert { display: flex; justify-content: space-between; align-items: center; gap: var(--s3) var(--s4); flex-wrap: wrap; padding: var(--s3) 0; border-top: 1px solid var(--line); }
@@ -202,11 +205,11 @@ a.inv-theme:hover { border-color: var(--ink); }
 .res-moves { display: flex; flex-wrap: wrap; gap: 0 8px; }
 /* a results row is two lines (owner, 5 Nov): the symbol, its tags and the name, then the meeting and a small filing link; what is longer than
    the column ends in an ellipsis, the whole of it in the tooltip */
-.res-co { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: 19rem; max-width: 100%; }
+.res-co { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; min-width: 8rem; max-width: 14rem; line-height: 1.4; }
 .res-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .res-sub { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .res-filed { font-size: inherit; }
-.res-mv { display: grid; gap: 2px; }
+.res-mv { display: grid; gap: 0; line-height: 1.4; }
 .res-mv-top { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
-.res-mv .res-moves { flex-wrap: nowrap; white-space: nowrap; }
-@media (max-width: 640px) { .res-co { width: auto; } }
+.res-mv .res-moves { flex-wrap: nowrap; white-space: nowrap; gap: 0 6px; }
+@media (max-width: 640px) { .res-co { max-width: none; } }

@@ -62,8 +62,8 @@ export function resultDay(iso: string) {
 export const filterCount = (f: Filters) => calCount(f, "cap") + (f.purpose ? 1 : 0);
 
 /** A change as ▲4.0% or ▼5.0%, in the kit's colours: the arrow and the sign both say the direction. */
-function Move({ v }: { v: number }) {
-  return <Signed value={v}>{`${v > 0 ? "▲" : v < 0 ? "▼" : ""}${Math.abs(v).toFixed(1)}%`}</Signed>;
+function Move({ v, bare = false }: { v: number; /** without the % (a row of them under a heading that says percent) */ bare?: boolean }) {
+  return <Signed value={v}>{`${v > 0 ? "▲" : v < 0 ? "▼" : ""}${Math.abs(v).toFixed(1)}${bare ? "" : "%"}`}</Signed>;
 }
 
 function Growth({ v, of }: { v: number | null | undefined; of?: string | null }) {
@@ -214,7 +214,7 @@ export function ResultsPage() {
     } },
     { key: "rev", header: "Revenue YoY", numeric: true, info: "The latest reported quarter's revenue against the same quarter a year before (YoY), from the company's results as the app keeps them. Hover a figure for the quarters compared.", cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} /> },
     { key: "pat", header: "Profit YoY", numeric: true, info: "The latest reported quarter's net profit against the same quarter a year before. A quarter that came after a loss has no growth figure.", cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} /> },
-    { key: "mv", header: "Past results-day moves", wrap: true, info: "The change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first.", cell: (r) => {
+    { key: "mv", header: "Past results-day moves", wrap: true, info: "The change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
       const a = moves[r.symbol], m = a?.moves ?? r.moves;
       const since = a?.since;
       if (!m && !since) return a === undefined ? <Working inline label="Reading earlier results days" /> : <span className="k-muted">–</span>;
@@ -224,7 +224,7 @@ export function ResultsPage() {
             {m ? <b>±{m.avg.toFixed(1)}%</b> : <span className="k-muted">–</span>}
             {since && <span className="k-note k-muted" title={`Since the results of ${resultDay(since.date)}, close to latest close`}>since {resultDay(since.date)} <Move v={since.pct} /></span>}
           </span>
-          {m && <span className="k-note res-moves">{m.last.map((v, i) => <Move key={i} v={v} />)}</span>}
+          {m && <span className="k-note res-moves" title="The latest four, newest first, in %">{m.last.map((v, i) => <Move key={i} v={v} bare />)}</span>}
         </span>);
     } },
     ...(anyFo ? [{ key: "im", header: "Options imply", numeric: true, info: "For stocks with futures and options: the price of the at-the-money call and put together, as a share of the stock's price, for the first expiry on or after the results day. Read from the broker's option prices while it is connected.", cell: (r: ResultRow) => {

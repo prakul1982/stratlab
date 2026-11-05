@@ -1818,7 +1818,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* EXPORT: a table's "Download CSV" sits over its top right edge, out of the way of the figures */
 .k-tbl-tools { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: var(--s2, 8px); }
 /* a table's "select all" box (DataTable selectAll): in the first header cell, lined up with the rows' boxes under it; over a phone's cards, at the left */
-.k-th-check { margin: -9px 2px -9px -9px; vertical-align: middle; }
+.k-tap.k-th-check { margin: -9px -1px -9px -9px; vertical-align: middle; }   /* the header text then starts where the rows' names do (.rot-name: the box, then 8px) */
 .k-tbl-tools .k-select-all { margin-right: auto; min-height: 40px; }   /* its own row above the table: at -4px it sat on the table's top edge (owner, 5 Nov) */
 .k-tbl-wrap { position: relative; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 12px;   /* overflow-y: with overflow-x auto it computed to auto too, and a 1px spill drew a vertical scrollbar beside the screener's filters (owner, 5 Nov) */
   background: linear-gradient(to right, var(--card) 30%, transparent) 0 0 / 28px 100% no-repeat local, linear-gradient(to left, var(--card) 30%, transparent) 100% 0 / 28px 100% no-repeat local,

@@ -96,7 +96,7 @@ function ExperienceCards() {
           <p className="k-small k-muted k-hint-line">{COMPANIES_HINT[companies]}</p>
         </FieldGroup>
         <FieldGroup label="Theme">
-          <span id="theme" />
+          <span id="theme" className="sr-only" />
           <Seg label="Theme" options={[{ value: "system", label: "Same as my device" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]}
             value={theme} onChange={(t) => setTheme(t as "light" | "dark" | "system")} />
         </FieldGroup>
