@@ -29,8 +29,10 @@ def texts(slides):
         out += [s.title, s.subtitle or ""]
         for b in s.blocks:
             out += [str(x) for x in b.get("paras") or []]
-            out += [str(x) for r in b.get("rows") or [] for x in r]
-            out += [str(t) for it in b.get("items") or [] for t in (it if isinstance(it, tuple) else [it.get("title"), it.get("value"), *it.get("lines", [])])]
+            out += [str(x) for r in b.get("rows") or [] for x in ([r["group"]] if isinstance(r, dict) else r)]
+            out += [str(t) for it in b.get("items") or [] for t in (it if isinstance(it, tuple) else
+                                                                    [it.get("title"), it.get("value"), it.get("text"), it.get("sub"), it.get("note"), *it.get("lines", [])])]
+            out += [str(x) for x in b.get("cats") or []] + [b.get("title") or ""]
     return "\n".join(out)
 
 
@@ -45,21 +47,36 @@ def test_every_company_is_a_member_row_with_its_layer_figures_and_how_it_is_in()
     assert by["SCRAP"]["revenue"] is None and by["SCRAP"]["by"] == "Added, not yet confirmed"       # no stored page: listed, with no figures
 
 
+def table_of(slides, title):
+    return next(b for s in slides if s.title.startswith(title) for b in s.blocks if b["kind"] == "table")
+
+
+def plain(rows):
+    return [r for r in rows if not isinstance(r, dict)]
+
+
 def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
+    """DECK (5 Nov): the deck follows the page part by part: each part opens with a section slide, each layer has its own slide."""
     slides, footer = deck.theme_plan(view())
     titles = [s.title for s in slides]
-    assert titles == ["Test theme", "The value chain", "What each layer does", "Every company in the theme", "Tailwinds and risks",
-                      "Notes: confirmed and not yet confirmed"]
-    assert slides[0].dark and slides[0].subtitle == "India (NSE and BSE) · Theme deep dive" and "Theme deep dive" in footer
-    cover = dict(next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
+    assert titles == ["Test theme", "The theme at a glance", "The value chain", "The value chain by layer", "Layer 1 · Mining", "Layer 2 · Cells",
+                      "Sub-themes and the companies that do them", "The companies", "Every company in this theme", "Every company's figures",
+                      "Tailwinds, risks and news", "Tailwinds and risks", "The theme in numbers", "Size and shape", "Growth and profitability",
+                      "Margins over time", "Valuation", "Balance sheet and cash", "Price", "How to read this deck"]
+    assert slides[0].kind == "cover" and slides[0].subtitle == "India (NSE and BSE) · Theme deep dive" and "Theme deep dive" in footer
+    assert [s.part for s in slides if s.kind == "section"] == ["01", "02", "03", "04"]
+    assert slides[2].contents[:2] == [("The value chain by layer", 4), ("Layer 1 · Mining", 5)]          # a section lists its slides with their pages
+    cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["AI additions confirmed"] == "2 of 4"
     assert cover["Prices as of"] == "05 Oct 2026"                         # the stored pages' price day (the as-of date)
-    members = next(b for b in slides[3].blocks if b["kind"] == "table")
-    assert members["head"] == deck.MEMBER_HEAD
-    assert members["rows"][0] == ["Mine A", "Mining", "₹1,000 cr", "₹1,500 cr", "50.0%", "24.0%", "15.0%", "Official industry"]
-    claims = next(b for b in slides[4].blocks if b["kind"] == "table")
-    assert claims["rows"][0][:3] == ["Tailwind", "A battery subsidy", "Subsidy scheme extended (2026-09-01, A daily)"]
-    assert claims["rows"][0][3]["url"] == "https://example.com/news/subsidy" and claims["rows"][1][2] == "General background"
+    members = table_of(slides, "Every company in this theme")
+    assert members["head"] == deck.MEMBER_HEAD and members["rows"][0] == {"group": "Mining"}      # grouped by layer, as the page lists them
+    assert plain(members["rows"])[0] == ["Mine A (MINEA)", "–", "₹1,000 cr", "“mines ore”", "Official industry"]
+    assert table_of(slides, "Layer 1 · Mining")["rows"][0] == ["Mine A", "₹1,500 cr", "50.0%", "24.0%", "15.0%", "Mar 2026"]
+    claims = next(b for s in slides if s.title == "Tailwinds and risks" for b in s.blocks if b["kind"] == "flow")["items"]
+    assert claims[0]["text"] == "A battery subsidy" and [t[0] for t in claims[0]["tags"]] == ["Tailwind", "Checked"]
+    assert claims[0]["sub"] == "Subsidy scheme extended · 01 Sep 2026 · A daily" and claims[0]["url"] == "https://example.com/news/subsidy"
+    assert [t[0] for t in claims[1]["tags"]] == ["Risk", "General background"] and claims[1]["sub"] is None
     t = texts(slides)
     assert "2 of the 4 added are confirmed" in t and "2 not yet confirmed" in t and "1 couldn't be checked just now" in t
     assert "Not investment advice." in t
@@ -83,8 +100,8 @@ def test_the_theme_deck_is_a_real_powerpoint_and_a_real_pdf():
     prs = Presentation(io.BytesIO(pp))
     words = " ".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.has_text_frame)
     cells = " ".join(c.text for s in prs.slides for sh in s.shapes if sh.has_table for r in sh.table.rows for c in r.cells)
-    assert len(prs.slides) == 6 and prs.core_properties.title == "Test theme: theme deep dive"
-    assert "Test theme" in words and "Mine A" in cells and "Added, not yet confirmed" in cells
+    assert len(prs.slides) == len(deck.theme_plan(v)[0]) and prs.core_properties.title == "Test theme: theme deep dive"
+    assert "Test theme" in words and "Mine A (MINEA)" in cells and "Added, not yet confirmed" in cells
     pdf = deck.build_theme(v, pdf=True)
     assert pdf[:5] == b"%PDF-" and b"Test theme: theme deep dive" in pdf
 
@@ -93,8 +110,8 @@ def test_a_us_theme_deck_writes_dollars():
     v = {**view(), "region": "US", "unit": "$ million"}
     slides, _ = deck.theme_plan(v)
     assert slides[0].subtitle == "US · Theme deep dive"
-    row = next(b for b in slides[3].blocks if b["kind"] == "table")["rows"][0]
-    assert row[2] == "$1.00 bn" and row[3] == "$1.50 bn"
+    assert plain(table_of(slides, "Every company in this theme")["rows"])[0][2] == "$1.00 bn"
+    assert table_of(slides, "Layer 1 · Mining")["rows"][0][1] == "$1.50 bn"
 
 
 def test_the_deck_route_downloads_both_formats_as_one_deck_and_stops_at_the_plan_limit(api):
