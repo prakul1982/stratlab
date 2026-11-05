@@ -2021,12 +2021,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-disclosure-body:has(> .k-tbl-wrap) { padding-left: 0; }   /* VR1-122: a table in a fold lines up with the cards around it, not 16px in */
 /* FoldCard (owner, 5 Nov: "make it like a dropdown everywhere"): a card that is one row until opened; the title is the button and the
    whole row its target (the button's ::after covers it), the (i) above that layer; on the right what is inside and a chevron */
-.k-foldcard { gap: 0; padding-block: var(--s4); }
+.k-foldcard { gap: 0; padding-block: var(--s3); }
 .k-foldcard-head { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 36px; }
 .k-foldcard-head .k-card-titlerow { min-width: 0; }
 .k-foldcard-head .info { position: relative; z-index: 1; }
-.k-foldcard-btn { all: unset; cursor: pointer; font: inherit; color: inherit; border-radius: 6px; }
-.k-foldcard-btn::after { content: ""; position: absolute; inset: calc(-1 * var(--s4)) calc(-1 * var(--s5)); border-radius: var(--r-card); }
+.k-foldcard-btn { all: unset; display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; font: inherit; color: inherit; border-radius: 6px; }   /* a 44px target (the row around it is one too) */
+.k-foldcard-btn::after { content: ""; position: absolute; inset: calc(-1 * var(--s3)) calc(-1 * var(--s5)); border-radius: var(--r-card); }
 .k-foldcard-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 .k-foldcard:has(.k-foldcard-btn:hover) { border-color: var(--line-2); }
 .k-foldcard-meta { flex: none; display: inline-flex; align-items: center; gap: var(--s3); color: var(--muted); font-size: var(--t-label); white-space: nowrap; }
@@ -2034,7 +2034,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-foldcard.open .k-foldcard-chev { transform: translateY(2px) rotate(-135deg); }
 .k-foldcard-body { display: flex; flex-direction: column; gap: var(--s4); padding-top: var(--s4); min-width: 0; }
 .k-foldcard-body[hidden] { display: none; }
-@media (max-width: 640px) { .k-foldcard-btn::after { inset: calc(-1 * var(--s4)); } .k-foldcard-meta { gap: var(--s2); } }
+@media (max-width: 640px) { .k-foldcard-btn::after { inset: calc(-1 * var(--s3)) calc(-1 * var(--s4)); } .k-foldcard-meta { gap: var(--s2); } }
 @media (prefers-reduced-motion: reduce) { .k-foldcard-chev { transition: none; } }
 /* the tools of a space, in a FoldCard: a calm table of name, one line and where it lives in the menu */
 .k-more-tools .k-table td.k-wrap { white-space: normal; min-width: 16rem; }

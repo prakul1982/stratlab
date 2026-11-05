@@ -125,7 +125,7 @@ test("US stocks: a bad token says why, a good one reads positions, disconnecting
   await expect(page.getByText("doesn't recognise that token")).toBeVisible({ timeout: 30_000 });
   await card.getByLabel("Flex token").fill("good-token-1234567890");
   await card.getByRole("button", { name: "Connect" }).click();
-  await expect(card.getByTestId("ibkr-line")).toContainText("US positions", { timeout: 30_000 });
+  await expect(card.getByTestId("ibkr-line")).toContainText(/\d+ US positions?\b/, { timeout: 30_000 });   // "1 US position", in the singular for one
   await expect(card.getByText("Connected", { exact: true })).toBeVisible();
   const view = await (await request.get(`${API}/connect`, { headers: auth(u) })).text();
   expect(view).not.toContain("good-token-1234567890");
