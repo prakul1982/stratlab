@@ -50,15 +50,16 @@ _cover: dict = {}
 
 
 def _fonts():
-    """The PDF fonts, registered once: the app's Fraunces and IBM Plex Sans, with DejaVu (every script, the rupee sign) for text they
+    """The PDF fonts, registered once. Body, Body-Bold and Head are DejaVu (every script, the rupee sign), as the other PDFs (the brief, the
+    tax and ITR exports) use them; the decks draw in the app's Fraunces and IBM Plex Sans (Deck*), falling back to DejaVu for text those
     don't cover. Headings are measured with DejaVu Serif, wider than both Fraunces and PowerPoint's Georgia."""
     global _fonts_ready
     if _fonts_ready:
         return
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    for name, f in (("Body", "IBMPlexSans-Regular.ttf"), ("Body-Bold", "IBMPlexSans-SemiBold.ttf"), ("Head", "Fraunces-SemiBold.ttf"),
-                    ("BodyX", "DejaVuSans.ttf"), ("BodyX-Bold", "DejaVuSans-Bold.ttf"), ("HeadX", "DejaVuSerif.ttf")):
+    for name, f in (("Body", "DejaVuSans.ttf"), ("Body-Bold", "DejaVuSans-Bold.ttf"), ("Head", "DejaVuSerif.ttf"),
+                    ("Deck", "IBMPlexSans-Regular.ttf"), ("Deck-Bold", "IBMPlexSans-SemiBold.ttf"), ("DeckHead", "Fraunces-SemiBold.ttf")):
         pdfmetrics.registerFont(TTFont(name, os.path.join(FONT_DIR, f)))
         _cover[name] = set(pdfmetrics.getFont(name).face.charToGlyph)
     _fonts_ready = True
@@ -67,16 +68,16 @@ def _fonts():
 def _face(text: str, bold: bool = False, head: bool = False) -> str:
     """The font a line is drawn in: the app's, or DejaVu when the line has a character the app's font lacks."""
     _fonts()
-    name = "Head" if head else "Body-Bold" if bold else "Body"
+    name = "DeckHead" if head else "Deck-Bold" if bold else "Deck"
     if all(ord(ch) in _cover[name] for ch in str(text)):
         return name
-    return "HeadX" if head else "BodyX-Bold" if bold else "BodyX"
+    return "Head" if head else "Body-Bold" if bold else "Body"
 
 
 def _width(text: str, size: float, bold: bool = False, head: bool = False) -> float:
     """Width in inches of one line of text (headings in the widest serif, so a fitted heading fits in either file)."""
     from reportlab.pdfbase import pdfmetrics
-    return pdfmetrics.stringWidth(str(text), "HeadX" if head else _face(text, bold), size) / 72
+    return pdfmetrics.stringWidth(str(text), "Head" if head else _face(text, bold), size) / 72
 
 
 def wrap(text: str, size: float, width: float, bold: bool = False, head: bool = False) -> list[str]:
@@ -1247,10 +1248,10 @@ class PdfRenderer(Canvas):
 
     def _axes(self, chart, cats, size=11):
         chart.categoryAxis.categoryNames = cats
-        chart.categoryAxis.labels.fontName, chart.categoryAxis.labels.fontSize = "Body", size
+        chart.categoryAxis.labels.fontName, chart.categoryAxis.labels.fontSize = "Deck", size
         chart.categoryAxis.labels.fillColor = self.col(INK2)
         chart.categoryAxis.strokeColor = self.col(LINE2)
-        chart.valueAxis.labels.fontName, chart.valueAxis.labels.fontSize = "Body", 10
+        chart.valueAxis.labels.fontName, chart.valueAxis.labels.fontSize = "Deck", 10
         chart.valueAxis.labels.fillColor = self.col(MUTED)
         chart.valueAxis.strokeColor = self.col(CARD)
         chart.valueAxis.gridStrokeColor = self.col(LINE)
@@ -1294,7 +1295,7 @@ class PdfRenderer(Canvas):
             ch.bars[i].strokeColor = None
         bar_w = ch.width / max(1, len(b["cats"])) / max(1, len(b["series"]))
         ch.barLabelFormat = f
-        ch.barLabels.fontName = "Body"
+        ch.barLabels.fontName = "Deck"
         ch.barLabels.fontSize = 10 if bar_w >= 34 else 9 if bar_w >= 26 else 8
         ch.barLabels.fillColor = self.col(INK2)
         ch.barLabels.nudge = 8
@@ -1330,7 +1331,7 @@ class PdfRenderer(Canvas):
             ch.bars[(0, j)].fillColor = self.col(color)
         ch.barSpacing, ch.groupSpacing = 0, max(3, ch.height / max(1, len(cats)) * 0.3)
         ch.barLabelFormat = f
-        ch.barLabels.fontName, ch.barLabels.fontSize, ch.barLabels.fillColor = "Body", BODY_MIN, self.col(INK2)
+        ch.barLabels.fontName, ch.barLabels.fontSize, ch.barLabels.fillColor = "Deck", BODY_MIN, self.col(INK2)
         ch.barLabels.boxTarget = "normal"
         for j, v in enumerate(data):
             ch.barLabels[(0, j)].boxAnchor, ch.barLabels[(0, j)].dx = ("e", -4) if v is not None and v < 0 else ("w", 4)
@@ -1367,7 +1368,7 @@ class PdfRenderer(Canvas):
             for i, (_, _, color, *_) in enumerate(b["series"]):
                 ch.lines[i].symbol = makeMarker("FilledCircle", size=5, fillColor=self.col(color), strokeColor=self.col(color))
             ch.lineLabelFormat = f
-            ch.lineLabels.fontName, ch.lineLabels.fontSize, ch.lineLabels.fillColor = "Body", 10, self.col(INK2)
+            ch.lineLabels.fontName, ch.lineLabels.fontSize, ch.lineLabels.fillColor = "Deck", 10, self.col(INK2)
             ch.lineLabelNudge = 9
         d.add(ch)
         self._legend(d, b["series"], ch.x, h * 72 - 6)
