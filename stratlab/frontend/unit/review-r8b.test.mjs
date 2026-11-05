@@ -61,7 +61,7 @@ test("R8B-010: the closing auction's final price and gap come right after the st
 test("R8B-011: every 'Opening' state has the Reload after a wait, and the offline page has a Reload that needs no script", async () => {
   // the app's start, a page's code downloading, and a visitor's start all use the timed Opening
   const main = read("src/main.tsx");
-  assert.match(main, /<Suspense fallback=\{<PageCodeWait><h1 className="sr-only">Opening the page<\/h1><Opening \/><\/PageCodeWait>\}>/);   // PageCodeWait: the top loading bar runs for it too (owner, 5 Nov)
+  assert.match(main, /<Suspense fallback=\{<><h1 className="sr-only">Opening the page<\/h1><Opening \/><\/>\}>/);
   assert.match(main, /<Opening label="Opening StratLab" \/>/);
   assert.match(read("src/visitor/VisitorApp.tsx"), /<Opening label="Opening StratLab" \/>/);
   // the service worker's offline page, for a dropped connection and for a 5xx with no copy of the app kept

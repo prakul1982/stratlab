@@ -2948,12 +2948,5 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @keyframes k-working-calm { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .k-working-bar > span { width: 100%; animation: k-working-calm 2s ease-in-out infinite; } }
 
-/* the top loading bar (TopProgress): a band sliding along a 3px line at the top of the screen, filling out when the wait ends */
-.top-progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 65; overflow: hidden; pointer-events: none; background: color-mix(in srgb, var(--blue) 18%, transparent); }
-.top-progress > span { position: absolute; inset: 0 auto 0 0; width: 40%; background: var(--blue); border-radius: 0 3px 3px 0; animation: k-working 1.1s cubic-bezier(.45, 0, .55, 1) infinite; }
-.top-progress.done { animation: top-progress-out .45s ease forwards; }
-.top-progress.done > span { animation: none; width: 100%; transition: width .2s ease; }
-@keyframes top-progress-out { 60% { opacity: 1; } to { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .top-progress > span { width: 100%; animation: k-working-calm 2s ease-in-out infinite; } }
 /* a card's loading placeholder starts with the same moving bar, so a wait always looks like work going on */
 .k-skel-box > .k-working-bar { margin-bottom: 4px; }

@@ -17,7 +17,6 @@ import { Toast } from "./components/Toast";
 import { Tracking } from "./components/Tracking";
 import { VisitorApp } from "./visitor/VisitorApp";
 import { LoadFailed, LoadGuard, Opening, PageBoundary } from "./components/LoadGuard";
-import { PageCodeWait } from "./components/TopProgress";
 import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
 import { endsAt, endsAtShort } from "./lib/offer";
@@ -249,7 +248,7 @@ function Routed() {
       {/* a page whose code is still on its way still has its one heading (axe page-has-heading-one, R7O-010) */}
       {/* a page that fails while it runs says so in its own place; only a failed download is a download message (R7T-011) */}
       <PageBoundary at={loc.pathname}>
-      <Suspense fallback={<PageCodeWait><h1 className="sr-only">Opening the page</h1><Opening /></PageCodeWait>}>
+      <Suspense fallback={<><h1 className="sr-only">Opening the page</h1><Opening /></>}>
       <Routes>
         <Route path="/" element={<SpaceHome />} />
         <Route path="/mine" element={<MineHome />} />

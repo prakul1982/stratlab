@@ -89,7 +89,7 @@ test("every table download goes through the one builder and the one save (lib/sh
 test("themes: Slides (PDF), Slides (PowerPoint) and the companies' CSV, the deck from the server's deck builder", () => {
   const d = read("src/components/ThemeDive.tsx");
   assert.match(d, /themeApi\.deck\(region, theme, format\)/);
-  assert.match(d, /download\(await res\.blob\(\), `stratlab-theme-\$\{themeSlug\(theme\) \|\| "theme"\}-\$\{region\.toLowerCase\(\)\}\.\$\{format\}`\)/);
+  assert.match(d, /download\(await res\.blob\(\), deckFileName\(`\$\{theme\} theme \(\$\{REGION_NAME\[region\]\}\)`, format\)\)/);
   assert.match(d, />\{making === "pdf" \? "Making the PDF…" : "Slides \(PDF\)"\}</);
   assert.match(d, />\{making === "pptx" \? "Making the deck…" : "Slides \(PowerPoint\)"\}</);
   assert.match(read("src/pages/ThemesPage.tsx"), /<ThemeDownloads r=\{r\} dive=\{dive\} region=\{region\} theme=\{q\} \/>/);
@@ -116,7 +116,7 @@ test("the audit as a class: every page whose main content is a table offers its 
   // the downloads that were there before keep their own server files, each saved through lib/share.ts
   for (const [f, re] of [["src/pages/TaxReportPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-tax-FY-/], ["src/pages/money/NetWorthPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-net-worth-/],
     ["src/pages/money/UsTaxPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-schedule-FA-CY/], ["src/pages/money/ItrExportPage.tsx", /saveFile\(await r\.blob\(\)/],
-    ["src/pages/ExperimentPage.tsx", /download\(await r\.blob\(\), `.*-trades\.csv`\)/], ["src/pages/DeepDive.tsx", /download\(await r\.blob\(\), `\$\{sym\}-deep-dive\.\$\{format\}`\)/]])
+    ["src/pages/ExperimentPage.tsx", /download\(await r\.blob\(\), `.*-trades\.csv`\)/], ["src/pages/DeepDive.tsx", /download\(await r\.blob\(\), deckFileName\(/]])
     assert.match(read(f), re, f);
 });
 
@@ -132,4 +132,16 @@ test("DECK (5 Nov): the decks wear the app's own look: the mark's shapes and col
     const hex = css.match(new RegExp(`--${token}: #([0-9A-F]{6});`))[1];
     assert.match(deck, new RegExp(`\\b${name}\\b[^\\n]*= [^\\n]*"${hex}"`), `${name} is --${token}`);
   }
+});
+
+test("a deck's file name reads as words: StratLab - what it is - the day in India (owner, 5 Nov)", async () => {
+  const { deckFileName } = await import("../src/lib/deckName.ts");
+  const at = new Date("2026-11-05T20:00:00Z");                                   // 6 Nov in India
+  assert.equal(deckFileName("India Defence theme (India)", "pdf", at), "StratLab - India Defence theme (India) - 6 Nov 2026.pdf");
+  assert.equal(deckFileName("Reliance Industries deep dive", "pptx", at), "StratLab - Reliance Industries deep dive - 6 Nov 2026.pptx");
+  assert.equal(deckFileName('AI/ML: "chips"?', "pdf", at), "StratLab - AI ML chips - 6 Nov 2026.pdf");    // no character a file system refuses
+  // plain ASCII: Chrome saves a name with "–" as "download"
+  assert.equal(deckFileName("Société Générale – banks", "pdf", at), "StratLab - Societe Generale - banks - 6 Nov 2026.pdf");
+  assert.match(deckFileName("Danaher ₹ € 日本", "pdf", at), /^[\x20-\x7e]+$/);
+  assert.match(read("src/pages/DeepDive.tsx"), /download\(await r\.blob\(\), deckFileName\(`\$\{v\?\.name \?\? sym\} deep dive`, format\)\)/);
 });

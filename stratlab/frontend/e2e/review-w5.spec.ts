@@ -37,7 +37,7 @@ test("Instinct #3: one Slides (PDF) click makes one file, once (and PowerPoint o
 
   const pdf = page.getByRole("button", { name: "Slides (PDF)" });
   const [file] = await Promise.all([page.waitForEvent("download"), pdf.click()]);
-  expect(file.suggestedFilename()).toBe("TCS-deep-dive.pdf");
+  expect(file.suggestedFilename()).toMatch(/^StratLab - .*(TCS|Tata Consultancy).* deep dive - \d{1,2} [A-Z][a-z]{2} \d{4}\.pdf$/);   // readable name (owner, 5 Nov)
   await expect(pdf).toBeEnabled();
   await page.waitForTimeout(1500);              // a loop would go on making addresses after the first file
   const afterPdf = (await blobs()).slice(before);
@@ -47,7 +47,7 @@ test("Instinct #3: one Slides (PDF) click makes one file, once (and PowerPoint o
   expect(decks).toEqual(["pdf"]);
 
   const [deck] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Slides (PowerPoint)" }).click()]);
-  expect(deck.suggestedFilename()).toBe("TCS-deep-dive.pptx");
+  expect(deck.suggestedFilename()).toMatch(/^StratLab - .*(TCS|Tata Consultancy).* deep dive - \d{1,2} [A-Z][a-z]{2} \d{4}\.pptx$/);
   await page.waitForTimeout(1000);
   expect((await blobs()).length - before).toBe(2);
   expect(decks).toEqual(["pdf", "pptx"]);
