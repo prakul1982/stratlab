@@ -113,12 +113,15 @@ test("the launch offer counts down on Home and Plans", async ({ page }, info) =>
   await sane(page, errors);
 });
 
-test("the tools grid shows every group at once, and the menu reaches Account without scrolling", async ({ page }, info) => {
+test("the tools fold into one row that opens to every group at once, and the menu reaches Account without scrolling", async ({ page }, info) => {
   const errors = await open(page, "/new", "What trading idea do you want to test?");
   await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 4000 }).catch(() => undefined);   // the experience question
-  // every group of tools shows at once: no "Show N more tools" button folds them away
+  // owner, 5 Nov (R11): "make it like a dropdown everywhere": the tools are one closed row; opened, every group shows at once, with no
+  // second "Show N more tools" fold inside
+  const more = page.getByTestId("more-tools").getByRole("button", { expanded: false }).first();
+  await more.click();
   await expect(page.getByRole("button", { name: /Show \d+ more tools/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Options builder/ })).toBeVisible();          // IA-1: under Practise, by its menu name
+  await expect(page.getByTestId("more-tools").getByRole("link", { name: /^Options builder/ }).first()).toBeVisible();          // IA-1: under Practise, by its menu name
   if (info.project.name === "desktop") await expect(page.getByRole("button", { name: /account menu$/ })).toBeInViewport();
   await sane(page, errors);
 });

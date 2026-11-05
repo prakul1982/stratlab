@@ -118,7 +118,7 @@ test("a new user's first session, from the invite link to the plans", async ({ p
   await expect(page.getByTestId("friends-joined")).toHaveText(/^0 friends joined/);
   await check(page, errors, phone);
   await page.goto("/plans");
-  await expect(page.getByRole("heading", { name: "Plans" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Plans", exact: true })).toBeVisible({ timeout: 30_000 });      // R11: "Compare the plans" is a card under it
   await check(page, errors, phone);
 
   // the invite was counted for the friend, and the newcomer's reward waits for them to be active on 3 days

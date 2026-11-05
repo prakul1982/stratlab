@@ -166,7 +166,7 @@ test("Zerodha is open to the owner: log in, read holdings, refresh; and an EPF p
   // and when Zerodha ends that login by itself (R46-001)
   await expect(z.getByTestId("kite-line")).toContainText(/ · this login ends (at|on) (\d{1,2} \w{3}, )?06:00 IST$/);
   await z.getByRole("button", { name: "Refresh" }).click();
-  // one holding is "1 holding" (19.jpg had "Read 1 holdings."), and a read that found it says nothing about holdings kept from before
+  // one holding is "1 holding" (19.jpg had "Read 1 holding."), and a read that found it says nothing about holdings kept from before
   await expect(page.getByText("Read 1 holding.", { exact: true })).toBeVisible();
   await expect(z).not.toContainText("returned no holdings");
   await sane(page, errors, phone);
@@ -217,7 +217,7 @@ test("Upstox and Dhan are open to the owner: log in to each, holdings read, refr
   const held = await (await request.get(`${API}/holdings`, { headers: auth(OWNER) })).json();
   expect(held.rows.map((r: { symbol: string }) => r.symbol)).toEqual(expect.arrayContaining(["TCS", "HDFCBANK"]));
   await main.locator("#upstox").getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByText("Read 1 holdings.")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Read 1 holding.")).toBeVisible({ timeout: 30_000 });
   await sane(page, errors, phone);
   await shot(page, "connected-brokers", phone, !phone);
 

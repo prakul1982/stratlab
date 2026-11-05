@@ -48,7 +48,7 @@ test("company page: corporate actions, key numbers and the AI read are tables wi
   await expect(page.locator("#corporate-actions").getByText(/Dividends with an ex-date in the last 12 months/)).toBeVisible();      // the total stays a line above the table
   // Key numbers: a table a group, all of one width, each with Value and Basis columns
   const val = page.getByRole("table", { name: "Key numbers: Valuation" });
-  await expect(val.getByRole("columnheader")).toHaveText(["Valuation", "Value", "Basis", "Range"]);
+  await expect(val.getByRole("columnheader")).toHaveText(["Valuation", "Value", "Basis", "Usual range"]);
   const widths = await page.locator(".inv-metrics .inv-mt").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));
   expect(widths.length).toBeGreaterThanOrEqual(4);
   expect(new Set(widths).size, `Key numbers' tables: ${widths}`).toBe(1);

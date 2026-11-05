@@ -215,8 +215,8 @@ function RangeBar({ b, m, currency, industry }: { b: NonNullable<ReturnType<type
     <span className="inv-krange" title={says}>
       <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={says}>
         <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
-        <rect className="band" x={b.weak} y="3" width={Math.max(1, b.strong - b.weak)} height="4" />
-        <rect className="mark" x={Math.max(0, b.pos - 1.2)} y="0" width="2.4" height="10" />
+        <rect className="band" x={Math.min(99, b.weak)} y="3" width={Math.max(1, Math.min(100 - Math.min(99, b.weak), b.strong - b.weak))} height="4" />
+        <rect className="mark" x={Math.min(97.6, Math.max(0, b.pos - 1.2))} y="0" width="2.4" height="10" />
       </svg>
       <span className="inv-krange-txt" aria-hidden="true">{usual}</span>
     </span>

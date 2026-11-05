@@ -151,7 +151,8 @@ test("onboarding: asked once, on a home page only; the short tour once; the acco
   // home: the question, with no experience picked for them (the standard layout applies if they leave it)
   await page.goto("/");
   await expect(welcome).toBeVisible({ timeout: 30_000 });
-  await expect(welcome.getByRole("radio", { checked: true })).toHaveCount(0);
+  await expect(welcome.getByRole("radiogroup", { name: "Experience" }).getByRole("radio", { checked: true })).toHaveCount(0);
+  // (R11, owner 5 Nov: the companies question beside it starts on "All companies", the default everywhere)
   await expect(welcome.locator(":focus")).toHaveCount(1);
   await expect(page.getByText("Your first steps")).toHaveCount(0);                         // one guide at a time
   await welcome.getByRole("button", { name: /^Trade/ }).click();
