@@ -97,7 +97,7 @@ export function CsvButton<R>({ name, label, columns, rows, text = "Download CSV"
   );
 }
 
-export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, scrollEnd, csv, detail }: {
+export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, scrollEnd, csv, detail, selectAll }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** EXPORT: a "Download CSV" button over the table, the file named after this (stratlab-<name>-<today>.csv); `rows` when the file
    * holds more than the table shows now (a group showing its first 12). */
@@ -125,6 +125,10 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   /** A row's details one tap away: a button at the end of the row's name opens them in a row of their own right under it, across the
    * whole table (a phone card: under the card). TABLES EVERYWHERE (owner, 4 Nov): the library's "Rules and details" under its row. */
   detail?: { label: string; render: (row: R) => ReactNode };
+  /** Rows that each carry a tick box (in the first column's cell, the page's own): a box in the first column's header ticks or clears every
+   *  row given now (so a filter of the rows applies), mixed while some are ticked. On a phone's cards, where the header row is hidden, the same
+   *  box sits over the cards (owner, 5 Nov: sector rotation's "Every stock" had no select all). */
+  selectAll?: { on: boolean | "mixed"; set: (on: boolean) => void; label?: string };
 }) {
   const phone = usePhone();
   // a table that does not fit the phone is read as cards, however few its columns (a watchlist's Actions column sat off the edge); `spill` is set after
@@ -147,19 +151,29 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   const rows = allRows.length > cap ? allRows.slice(0, cap) : allRows;
   const left = allRows.length - rows.length;
   const file = typeof csv === "string" ? { name: csv, rows: allRows } : csv ? { name: csv.name, rows: csv.rows ?? allRows } : null;
+  const allBox = (withText: boolean) => selectAll && allRows.length > 0 && (
+    <label className={withText ? "k-check k-select-all" : "k-tap k-th-check"}>
+      <input type="checkbox" checked={selectAll.on === true} aria-checked={selectAll.on === "mixed" ? "mixed" : selectAll.on}
+        ref={(el) => { if (el) el.indeterminate = selectAll.on === "mixed"; }} onChange={() => selectAll.set(selectAll.on !== true)}
+        aria-label={withText ? undefined : selectAll.label ?? "Select all"} />
+      {withText && <span>{selectAll.label ?? "Select all"}</span>}
+    </label>);
+  const cardsNow = stack && phone;
   return (
     <>
-    {file && file.rows.length > 0 && <div className="k-tbl-tools"><CsvButton name={file.name} label={label} columns={columns} rows={file.rows} /></div>}
+    {((file && file.rows.length > 0) || (cardsNow && selectAll && allRows.length > 0)) && (
+      <div className="k-tbl-tools">{cardsNow && allBox(true)}{file && file.rows.length > 0 && <CsvButton name={file.name} label={label} columns={columns} rows={file.rows} />}</div>)}
     <div ref={box} data-grid={grid || scrollEnd ? "" : undefined} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
-          <tr role={stack ? "row" : undefined}>{columns.map((c) => {
+          <tr role={stack ? "row" : undefined}>{columns.map((c, ci) => {
             const by = sort && c.sortable ? sort : null;
             const on = by?.key === c.key;
             return (
               <th key={c.key} scope="col" role={stack ? "columnheader" : undefined} className={cls(c)} aria-sort={by ? (on ? (by.desc ? "descending" : "ascending") : "none") : undefined}>
                 {/* a number column's (i) goes before its words, so the words end where the figures do (RC2B-027: "Of shares issued") */}
                 {c.numeric && c.info && info(c)}
+                {ci === 0 && !cardsNow && allBox(false)}
                 {by ? <button type="button" className="k-th-sort" onClick={() => by.onSort(c.key)}>{c.header}<span aria-hidden="true">{on ? (by.desc ? " ↓" : " ↑") : ""}</span></button>
                   : c.header === "" || c.header == null ? <span className="sr-only">{c.action ? "Actions" : c.key}</span> : c.header}
                 {!c.numeric && c.info && info(c)}
