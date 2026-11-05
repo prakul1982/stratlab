@@ -9,14 +9,14 @@ import { stageMeaning } from "../lib/stageNote";
 import { writtenAt, fmtDate, marketTz, monthLong, num, pct, price, safeHref, signCls, signedMove } from "../lib/format";
 import {
   SETTLING, bandPosition, metricText, holderRowName, missingLine, monthsOld, newsWhen, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
-  type Company, type CompanyAI, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
+  type Company, type CompanyAI, type Idea, type MetricGroup, type MetricItem, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { surpriseShown } from "../lib/surprise";
 import { tinyBase } from "../lib/researchFormat";
 import { Star } from "./Icons";
 import { Info } from "./ui";
-import { Card, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signed, Skeleton } from "./kit";
+import { Card, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signed, Skeleton, type Column } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { AiAd } from "./AiAd";
 import { track } from "../lib/analytics";
@@ -199,15 +199,27 @@ const TERMS: Record<string, string> = {
  * lines beside a -24.6%, so its row was four times as tall as its neighbours, LIVE1A-062). A short one stays under its label. */
 const LONG_NOTE = 90;
 
-/** The range bar beside a figure: where it sits on a typical range for its measure. */
-function RangeBar({ b }: { b: { pos: number; weak: number; strong: number } }) {
+/** A figure of a range in the measure's own unit, short: "12", "0.5", "25%" (no ".0"). */
+function rangeFig(v: number, unit: string | null | undefined): string {
+  const n = Math.abs(v) >= 10 ? Math.round(v).toString() : (Math.round(v * 10) / 10).toString();
+  return `${n.replace("-", "−")}${unit === "%" || unit === "%±" ? "%" : ""}`;
+}
+
+/** The range bar beside a figure (owner, 5 Nov: "the ranges we have, where is the context of it? it's just a bar"): a scale for the measure
+ *  with the usual span for large listed companies shaded on it (StratLab's rule of thumb, adjusted for the company's industry where that
+ *  differs) and this company's figure as the dark mark; the usual span's two figures under it, and all of it said in the tooltip. */
+function RangeBar({ b, m, currency, industry }: { b: NonNullable<ReturnType<typeof bandPosition>>; m: MetricItem; currency: string; industry?: string | null }) {
+  const usual = `${rangeFig(b.from, m.unit)}–${rangeFig(b.to, m.unit)}`;
+  const says = `${m.label} ${metricText(m, currency)}. Usual for large listed companies${b.scaled && industry ? ` in ${industry.toLowerCase()}` : ""}: ${rangeFig(b.from, m.unit)} to ${rangeFig(b.to, m.unit)} (the shaded part). The bar runs from ${rangeFig(b.min, m.unit)} to ${rangeFig(b.max, m.unit)}; the dark mark is this company.`;
   return (
-    <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><title>Where this figure sits on a typical range</title>
-      <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
-      <rect className="tick" x={b.weak} y="1" width="0.8" height="8" />
-      <rect className="tick" x={b.strong} y="1" width="0.8" height="8" />
-      <rect className="mark" x={Math.max(0, b.pos - 1.2)} y="0" width="2.4" height="10" />
-    </svg>
+    <span className="inv-krange" title={says}>
+      <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={says}>
+        <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
+        <rect className="band" x={Math.min(99, b.weak)} y="3" width={Math.max(1, Math.min(100 - Math.min(99, b.weak), b.strong - b.weak))} height="4" />
+        <rect className="mark" x={Math.min(97.6, Math.max(0, b.pos - 1.2))} y="0" width="2.4" height="10" />
+      </svg>
+      <span className="inv-krange-txt" aria-hidden="true">{usual}</span>
+    </span>
   );
 }
 
@@ -228,12 +240,12 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                     { key: "m", header: g.title, rowHeader: true, cell: (m) => <span className="k-small">{m.label}</span> },
                     { key: "v", header: "Value", numeric: true, cell: (m) => <b className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}{mark(m) && <sup className="cmp-foot-mark" aria-label={`see note ${mark(m)!.n}`}>{mark(m)!.n}</sup>}</b> },
                     { key: "b", header: "Basis", cell: (m) => <span className="k-note">{m.note && !mark(m) ? m.note : ""}</span> },
-                    { key: "r", header: anyBar ? <span title="Where this figure sits on a typical range for that measure">Range</span> : "", cell: (m) => { const b = bandPosition(m.label, m.value, industry); return b ? <RangeBar b={b} /> : null; } },
+                    { key: "r", header: anyBar ? "Usual range" : "", cardLabel: "Usual range", cell: (m) => { const b = bandPosition(m.label, m.value, industry); return b ? <RangeBar b={b} m={m} currency={currency} industry={industry} /> : null; } },
                   ]} />
               </div>
         ))}
       </div>
-      {anyBar && <p className="k-note" data-testid="krail-legend">The small bar beside a figure shows where it sits on a typical range for that measure; the two ticks are the range's cut-off points.</p>}
+      {anyBar && <p className="k-note inv-krail-key" data-testid="krail-legend"><span className="inv-krail-demo" aria-hidden="true"><span /><b /></span>Usual range: the shaded part of each bar is the usual span of that measure for large listed companies, adjusted for the company's industry where it differs (StratLab's rule of thumb, not this company's own history); the dark mark is this company. The figures under a bar are the shaded part's ends; hover a bar for its whole scale.</p>}
       {foot.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">{foot.map((f) => <li key={f.n}><sup>{f.n}</sup> {f.label}: {f.text}</li>)}</ul>}
       {used.length > 0 && (
         <Disclosure summary="What these terms mean">
@@ -302,33 +314,30 @@ export function EarningsBars({ rows: raw, basis }: { rows: Company["earnings"]; 
   const max = Math.max(4, ...rows.map((r) => Math.abs(r.surprise_pct ?? 0)));
   const beat = (r: Company["earnings"][number]) => (r.surprise_pct != null ? r.surprise_pct >= 0 : r.actual >= r.estimate);
   const beats = rows.filter(beat).length;
-  const PLOT = 100;
-  // the zero line sits at the bottom when every quarter beat, at the top when every one missed, else in the middle
-  const zero = beats === rows.length ? PLOT : beats === 0 ? 0 : PLOT / 2;
+  const gaap = basis === "adjusted" && rows.some((r) => r.gaap != null);
+  type Row = (typeof rows)[number];
+  // owner, 5 Nov ("what is this UI"): a compact table, a row a quarter, with a small bar in the surprise cell (green right of the zero line for
+  // a beat, red left of it for a miss), where a tall bar chart left a hole under it beside the insider trades
+  const columns: Column<Row>[] = [
+    { key: "q", header: "Quarter", rowHeader: true, cell: (r) => <>{monthLong(r.period)}{r.fiscal && <span className="k-sub-line" data-testid="fiscal-quarter">{r.fiscal}</span>}</> },
+    { key: "a", header: "EPS", numeric: true, cell: (r) => num(r.actual, 2) },
+    { key: "e", header: "Estimate", numeric: true, cell: (r) => num(r.estimate, 2) },
+    { key: "s", header: "Against the estimate", numeric: true, cell: (r) => {
+      const up = beat(r), w = r.surprise_pct == null ? 0 : Math.max(3, (Math.abs(r.surprise_pct) / max) * 50);
+      return (
+        <span className="eps-surp">
+          <span className="eps-track" aria-hidden="true"><span className="eps-zero" />{r.surprise_pct != null && <span className={`eps-bar ${up ? "beat" : "neg"}`} data-v={r.surprise_pct} style={up ? { left: "50%", width: `${w}%` } : { right: "50%", width: `${w}%` }} />}</span>
+          {r.surprise_pct == null ? <span className="k-muted">–</span> : <Signed value={r.surprise_pct}>{pct(r.surprise_pct)}</Signed>}
+        </span>);
+    } },
+    ...(gaap ? [{ key: "g", header: "GAAP EPS", numeric: true, cell: (r: Row) => (r.gaap != null ? num(r.gaap, 2) : "–") }] : []),
+  ];
   return (
     <div className="k-stack">
-      <div className="tbars eq">
-        {rows.map((r) => {
-          const up = beat(r);
-          const h = r.surprise_pct == null ? 0 : Math.max(2, (Math.abs(r.surprise_pct) / max) * (up ? zero : PLOT - zero) * 0.95);
-          return (
-            <div key={r.period} className="tbar">
-              <span className={`tbar-num${up ? " up" : " neg"}`}>{r.surprise_pct == null ? "–" : pct(r.surprise_pct)}</span>
-              <svg className="tbar-plot" viewBox={`0 0 10 ${PLOT}`} preserveAspectRatio="none" aria-hidden="true">
-                <line className="tbar-zero" x1="0" x2="10" y1={zero} y2={zero} vectorEffect="non-scaling-stroke" />
-                {r.surprise_pct != null && <rect className={`tbar-bar ${up ? "beat" : "neg"}`} data-v={r.surprise_pct} x="1.5" width="7" y={up ? zero - h : zero} height={h} />}
-              </svg>
-              <span className="tbar-year">{monthLong(r.period)}</span>{/* "Sep 2025", as the page writes months (R54-010) */}
-              {r.fiscal && <span className="k-note tbar-sub" data-testid="fiscal-quarter">{r.fiscal}</span>}
-              <span className="k-note tbar-sub">{num(r.actual, 2)}<br />vs {num(r.estimate, 2)}</span>
-              {basis === "adjusted" && r.gaap != null && <span className="k-note tbar-sub">GAAP {num(r.gaap, 2)}</span>}
-            </div>
-          );
-        })}
-      </div>
+      <DataTable label="Results versus expectations" rows={rows} rowKey={(r) => r.period} columns={columns} />
       <p className="k-note">{beats} of {rows.length} quarters beat analysts' earnings-per-share estimate.{" "}
         {/* what the EPS counts, so an adjusted figure is never read as the filed one (DD-031) */}
-        {basis === "adjusted" ? "EPS as the estimates count it: adjusted (non-GAAP); the GAAP diluted EPS from the company's filings is under each quarter."
+        {basis === "adjusted" ? "EPS as the estimates count it: adjusted (non-GAAP); the GAAP diluted EPS from the company's filings is in its own column."
           : basis === "gaap" ? "EPS is the GAAP diluted figure from the company's filings, quarters dated by their filing." : ""}</p>
     </div>
   );

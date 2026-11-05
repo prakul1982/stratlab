@@ -63,15 +63,23 @@
 .inv-mt .k-table :is(th, td) { white-space: normal; min-width: 0; max-width: none; overflow-wrap: anywhere; padding: 9px 10px; vertical-align: middle; }
 .inv-mt .k-table :is(th, td):nth-child(2) { width: 24%; }
 .inv-mt .k-table :is(th, td):nth-child(3) { width: 32%; }
-.inv-mt .k-table :is(th, td):nth-child(4) { width: 76px; }
+.inv-mt .k-table :is(th, td):nth-child(4) { width: 92px; }
 .inv-mt .k-table thead th:first-child { color: var(--ink-2); font-weight: 600; }
-@media (max-width: 560px) { .inv-mt .k-table :is(th, td):nth-child(2) { width: 25%; } .inv-mt .k-table :is(th, td):nth-child(3) { width: 29%; } .inv-mt .k-table :is(th, td):nth-child(4) { width: 52px; } .inv-mt .k-table :is(th, td) { padding: 9px 6px; } }
+@media (max-width: 560px) { .inv-mt .k-table :is(th, td):nth-child(2) { width: 25%; } .inv-mt .k-table :is(th, td):nth-child(3) { width: 29%; } .inv-mt .k-table :is(th, td):nth-child(4) { width: 76px; } .inv-mt .k-table :is(th, td) { padding: 9px 6px; } .inv-krange-txt { font-size: 10.5px; } }
 .inv-metric-v { font-weight: 600; }
 .inv-krail, .inv-rail { display: block; width: 100%; height: 10px; overflow: visible; }
 .inv-rail { height: 12px; }
 .inv-krail .track, .inv-rail .track { fill: var(--chip); }
 .inv-krail .tick { fill: var(--dash); }
+.inv-krail .band { fill: var(--muted); opacity: .45; }
 .inv-krail .mark { fill: var(--ink-2); }
+/* Key numbers' usual range (owner, 5 Nov): the bar, and the usual span's two figures under it */
+.inv-krange { display: grid; gap: 3px; cursor: help; min-width: 0; }
+.inv-krange-txt { font-size: 11px; line-height: 1.2; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: center; }
+.inv-krail-key { display: flex; gap: 10px; align-items: flex-start; }
+.inv-krail-demo { position: relative; flex: none; width: 44px; height: 10px; margin-top: 5px; border-radius: 2px; background: var(--chip); }
+.inv-krail-demo > span { position: absolute; left: 30%; width: 35%; top: 3px; height: 4px; background: var(--muted); opacity: .45; }
+.inv-krail-demo > b { position: absolute; left: 55%; top: 0; width: 2px; height: 10px; background: var(--ink-2); }
 .inv-rail .band { fill: var(--dash); opacity: .55; }
 .inv-rail .mark { fill: var(--ink); }
 .inv-terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--s2) var(--s5); margin: 0; }
@@ -79,6 +87,15 @@
 .inv-terms dd { margin: 0; font-size: var(--t-label); color: var(--muted); }
 
 /* yearly bars and earnings bars: numbers above, the year under, losses hang below the zero line */
+/* results versus expectations (owner, 5 Nov): a small bar in the surprise cell, the zero line in the middle, a beat to its right, a miss to its left */
+.eps-surp { display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.eps-track { position: relative; display: inline-block; flex: none; width: 72px; height: 8px; border-radius: 4px; background: var(--chip); }
+.eps-zero { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--dash); }
+.eps-bar { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.eps-bar.beat { background: var(--up); }
+.eps-bar.neg { background: var(--down); }
+.eps-surp > :last-child { min-width: 4.2em; text-align: right; }
+@media (max-width: 560px) { .eps-track { width: 48px; } }
 .tbars { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--s2); align-items: end; }
 .tbar { display: flex; flex-direction: column; align-items: stretch; text-align: center; gap: var(--s1); min-width: 0; }
 .tbar-num { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -137,6 +154,9 @@ a.inv-theme:hover { border-color: var(--ink); }
 .inv-row { display: grid; gap: 4px; padding: var(--s3) 0; border-top: 1px solid var(--line); min-width: 0; overflow-wrap: anywhere; }
 .inv-rows > .inv-row:first-child { border-top: 0; padding-top: 0; }
 .inv-day { display: flex; flex-direction: column; gap: var(--s2); }
+/* a day's table of results or corporate actions has eight columns: its headers may take two lines, so every column fits the card (owner, 5 Nov:
+   the options column sat past the card's edge) */
+.inv-day .k-table thead th { white-space: normal; }
 /* the days side by side where there is room, in the order they come (across, then down): one column of them left a wide card two-thirds empty (UI-FIX-1, R2) */
 /* VR1-105: rows two across where there is room (past corporate actions), each a block of its own, no rule between */
 .inv-alert { display: flex; justify-content: space-between; align-items: center; gap: var(--s3) var(--s4); flex-wrap: wrap; padding: var(--s3) 0; border-top: 1px solid var(--line); }
@@ -181,5 +201,15 @@ a.inv-theme:hover { border-color: var(--ink); }
 }
 /* business updates: the small history chart in a company's row (RES-1 follow-up) */
 .biz-spark { display: block; width: 120px; max-width: 100%; }
-.res-sym { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; white-space: nowrap; }
+.res-sym { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
 .res-moves { display: flex; flex-wrap: wrap; gap: 0 8px; }
+/* a results row is two lines (owner, 5 Nov): the symbol, its tags and the name, then the meeting and a small filing link; what is longer than
+   the column ends in an ellipsis, the whole of it in the tooltip */
+.res-co { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; min-width: 8rem; max-width: 14rem; line-height: 1.4; }
+.res-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.res-sub { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.res-filed { font-size: inherit; }
+.res-mv { display: grid; gap: 0; line-height: 1.4; }
+.res-mv-top { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.res-mv .res-moves { flex-wrap: nowrap; white-space: nowrap; gap: 0 6px; }
+@media (max-width: 640px) { .res-co { max-width: none; } }

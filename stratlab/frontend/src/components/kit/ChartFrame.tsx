@@ -5,19 +5,23 @@ import { RangeChips } from "./RangeChips";
 import { DataTable, type Column } from "./DataTable";
 import { Pager } from "./Pager";
 import { Seg, type Choice } from "./Seg";
+import { Working } from "./States";
 
 const TABLE_PAGE = 100;
 
 /** A chart in its card: the title and (i) on the left, and in the same row the range switch (a Seg for up to four
  * ranges, a ChipBar for more) and a "Table" switch that swaps the chart for the same numbers as a table. Put a StatRow
  * in `stats` to show the headline figures above the chart; `actions` adds a card's own buttons after Table; `footer` is for one line under it. The chart inside should
- * be drawn with its own range buttons and table switch turned off (`ranges={false} table={false}`): this frame has them. */
-export function ChartFrame<R>({ title, info, infoLabel, id, label, ranges, range, onRange, rangeFor, table, actions, stats, footer, children }: {
+ * be drawn with its own range buttons and table switch turned off (`ranges={false} table={false}`): this frame has them. `busy` (true, or
+ * what is being read) lays the kit's loading bar over the chart and dims it while new data for it is on its way, so a change of what the
+ * chart shows never looks like nothing happened (owner, 5 Nov: sector rotation's "What to compare" changed with no loading animation). */
+export function ChartFrame<R>({ title, info, infoLabel, id, label, ranges, range, onRange, rangeFor, table, actions, stats, footer, busy, children }: {
   title: ReactNode; info?: ReactNode; infoLabel?: string; id?: string; label?: string; ranges?: Choice[]; range?: string; onRange?: (v: string) => void; actions?: ReactNode;
   /** The standard range control (O4): the chart's name and its points, so "+ Custom" and the remembered choice work; `ranges` come from useRange. */
   rangeFor?: { chart: string; times: (string | number)[] };
   table?: { label: string; columns: Column<R>[]; rows: R[]; rowKey: (r: R) => string; empty?: ReactNode };
   stats?: ReactNode; footer?: ReactNode; children: ReactNode;
+  busy?: boolean | string;
 }) {
   const [asTable, setAsTable] = useState(false);
   // a table of years of days comes a hundred rows at a time, newest first as given (never "and 900 more")
@@ -36,7 +40,9 @@ export function ChartFrame<R>({ title, info, infoLabel, id, label, ranges, range
         {actions}
       </>} />
       {stats}
-      <div className="k-chart-body">{asTable && table
+      <div className={`k-chart-body${busy ? " is-busy" : ""}`} aria-busy={busy ? true : undefined}>
+        {busy && <div className="k-chart-busy"><Working small label={typeof busy === "string" ? busy : "Loading"} /></div>}
+        {asTable && table
         ? <><DataTable {...table} rows={table.rows.slice((Math.min(page, pages) - 1) * TABLE_PAGE, Math.min(page, pages) * TABLE_PAGE)} />
           <Pager page={Math.min(page, pages)} pages={pages} total={total} noun="rows" onPage={setPage} /></>
         : children}</div>

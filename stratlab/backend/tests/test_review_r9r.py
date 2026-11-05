@@ -287,6 +287,106 @@ def test_currency_and_commodity_providers_tell_the_broker_when_their_segment_clo
             assert k.marks == [(55, close)]                                                     # intraday candles: nothing to mark
 
 
+# ---------- R11: the currency check at 22:55 IST still saw 4 Nov as USDINR's newest, six hours after the 5 Nov close ----------
+def _days(first: date, n: int, base: float = 95.0) -> list[dict]:
+    out, d = [], first
+    while len(out) < n:
+        if d.weekday() < 5:
+            k = len(out)
+            out.append({"t": f"{d.isoformat()}T00:00:00+05:30", "o": base + k / 20, "h": base + k / 20 + 0.2, "l": base + k / 20 - 0.1,
+                        "c": base + k / 20 + 0.05, "v": 5000.0 + k})
+        d += timedelta(days=1)
+    return out
+
+
+class _CdsKite:
+    """The broker: a stitched series and the contract's own candles, each ending where the test says, and a quote."""
+    def __init__(self, stitched_to: str, own_to: str, quote: dict | None):
+        allbars = _days(date(2026, 9, 1), 60)
+        self.stitched = [b for b in allbars if b["t"][:10] <= stitched_to]
+        self.own = [dict(b, c=b["c"] + 0.01) for b in allbars if b["t"][:10] <= own_to]
+        self.q, self.calls = quote, []
+
+    def set_session_close(self, token, hhmm):
+        pass
+
+    def history(self, token, tf, days, continuous=None, **kw):
+        self.calls.append("stitched" if continuous else "own")
+        return self.stitched if continuous else self.own
+
+    def quote_key(self, key):
+        self.calls.append(("quote", key))
+        return self.q
+
+
+USDINR = {"token": 7, "symbol": "USDINR", "contract": "USDINR26NOVFUT"}
+
+
+def test_a_currency_series_a_session_behind_after_the_close_is_topped_up_from_the_contract_then_the_quote():
+    import time_machine
+    from app.data.cds import CDSProvider
+    late = datetime(2026, 11, 5, 22, 55, tzinfo=IST)
+    with time_machine.travel(late, tick=False):
+        # the stitched series ends on 4 Nov, the contract's own candles have 5 Nov: the long series, with the contract's newer day
+        k = _CdsKite("2026-11-04", "2026-11-05", None)
+        bars = CDSProvider(k).history(USDINR, "1d", 400)
+        assert bars[-1]["t"][:10] == "2026-11-05" and bars[:-1] == k.stitched and k.calls == ["stitched", "own"]
+        # neither has 5 Nov yet: the session's candle from the contract's quote (its day's range, the last price as the close)
+        q = {"price": 95.99, "open": 95.70, "high": 96.05, "low": 95.61, "volume": 81234, "at": "2026-11-05T16:59:58+05:30"}
+        k = _CdsKite("2026-11-04", "2026-11-04", q)
+        prov = CDSProvider(k)
+        bars = prov.history(USDINR, "1d", 400)
+        assert bars[:-1] == k.stitched and bars[-1] == {"t": "2026-11-05T00:00:00+05:30", "o": 95.70, "h": 96.05, "l": 95.61, "c": 95.99, "v": 81234.0}
+        assert k.calls == ["stitched", "own", ("quote", "CDS:USDINR26NOVFUT")]
+        prov.history(USDINR, "1d", 400)
+        assert k.calls.count(("quote", "CDS:USDINR26NOVFUT")) == 1                     # the quote is kept a couple of minutes
+        # the platform check reads the topped-up series: a pass, not "its candle should be here by now"
+        reg = type("R", (), {"provider": lambda self, m: type("P", (), {"ready": lambda s: True, "defaults": lambda s: [USDINR],
+                                                                       "history": lambda s, i, tf, d: prov.history(i, tf, d)})()})()
+        got = pc.check_market(reg, "CDS", now=late)
+        assert got["state"] == "pass" and "latest 5 Nov" in got["detail"], got
+        # a quote from the session before (no trade on 5 Nov) makes no candle: the series stays as the broker has it
+        stale = _CdsKite("2026-11-04", "2026-11-04", {**q, "at": "2026-11-04T16:59:00+05:30"})
+        assert CDSProvider(stale).history(USDINR, "1d", 400) == stale.stitched
+    # before the close the session before is the latest there should be: one read, as before
+    with time_machine.travel(datetime(2026, 11, 5, 14, 0, tzinfo=IST), tick=False):
+        k = _CdsKite("2026-11-04", "2026-11-05", q)
+        assert CDSProvider(k).history(USDINR, "1d", 400) == k.stitched and k.calls == ["stitched"]
+
+
+def test_a_session_that_closed_within_the_grace_is_not_called_still_running():
+    """R11: "UK ISF.L ... price so far, the session is still running" at 17:52 UTC, an hour after London's 16:30 close."""
+    class P:
+        def ready(self):
+            return True
+
+        def defaults(self):
+            return [{"symbol": "ISF.L"}]
+
+        def history(self, inst, tf, days):
+            return [{"t": f"2026-11-0{d}T00:00:00+00:00", "o": 10.4, "h": 10.6, "l": 10.3, "c": 10.51, "v": 1} for d in (3, 4, 5)]
+    reg = type("R", (), {"provider": lambda self, m: P()})()
+    after = pc.check_market(reg, "UK", now=datetime(2026, 11, 5, 17, 52, tzinfo=timezone.utc))
+    assert after["state"] == "pass" and "close 10.51, the session closed at 16:30 UK time" in after["detail"] and "still running" not in after["detail"]
+    during = pc.check_market(reg, "UK", now=datetime(2026, 11, 5, 12, 0, tzinfo=timezone.utc))
+    assert during["state"] == "pass" and "price so far, the session is still running, 10.51" in during["detail"]
+
+
+def test_the_broker_quotes_any_contract_by_its_key_with_the_time_in_india():
+    from app.kite_service import KiteService
+    ks = KiteService()
+    ks.access_token, ks.token_day = "t", datetime.now(IST).date().isoformat()
+
+    class Inner:
+        def quote(self, keys):
+            return {"CDS:USDINR26NOVFUT": {"last_price": 95.99, "volume": 10, "last_trade_time": datetime(2026, 11, 5, 16, 59, 58),
+                                           "ohlc": {"open": 95.7, "high": 96.05, "low": 95.61, "close": 95.8}}}
+    ks.kite, ks._throttle = Inner(), lambda: None
+    assert ks.quote_key("CDS:USDINR26NOVFUT") == {"price": 95.99, "open": 95.7, "high": 96.05, "low": 95.61, "volume": 10,
+                                                   "at": "2026-11-05T16:59:58+05:30"}
+    assert ks.quote_key("CDS:NOPE") is None
+
+
 # ---------- R9R-006: the Positioning log is a sentence, and amber until the files arrive ----------
 def test_a_positioning_run_is_written_in_words():
     assert P.run_sentence({"participants": "missing", "cash": "ok", "chains": 5}) == (

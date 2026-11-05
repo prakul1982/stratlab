@@ -215,7 +215,6 @@ a.link { margin-inline: -2px; }
 .side-new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 8px;
   border: 1px solid var(--ink); background: var(--ink); color: var(--on-ink); font: 600 13.5px var(--sans); cursor: pointer; }
 .side-new:hover { filter: brightness(1.15); }
-.side-new-gap { display: block; height: 34px; }   /* VR1-102: the main button's place on the page it points to */
 .search-btn { display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 10px; border: 1px solid var(--line-2);
   border-radius: 8px; background: var(--card); color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
 .search-btn:hover { color: var(--ink); border-color: var(--dash); }
@@ -331,7 +330,7 @@ a.link { margin-inline: -2px; }
 .acct-email { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* touch: rows a finger can hit */
 @media (pointer: coarse) {
-  .side-new, .side-new-gap, .search-btn { height: 40px; }
+  .side-new, .search-btn { height: 40px; }
   .space-switch button { height: 36px; }
   .side-list a, .side-list.side-sub a { height: 40px; }
   .side-toggle { height: 32px; width: 32px; }
@@ -549,13 +548,13 @@ td.num, .num { font-family: var(--sans); }
 }
 .info-btn:hover, .info-btn[aria-expanded="true"] { --ring: var(--ink); color: var(--ink); }
 .info-btn:focus-visible { outline-offset: calc((var(--i) - var(--hit)) / 2 + 2px); }
+/* drawn in a portal, fixed beside its button (ui.tsx Info places it), so no scroll box or card edge cuts it: on the body over the page
+   and the full-screen chart (63) and under the consent box and dialogs, or inside the floating layer its button is in */
 .info-pop {
-  position: absolute; top: calc(100% + 8px); z-index: 55; width: min(300px, calc(100vw - 32px)); padding: 12px 14px;
+  position: fixed; z-index: 64; width: min(300px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 12px 14px;
   background: var(--ink); color: var(--on-ink); border-radius: 10px; box-shadow: var(--shadow);
   font: 400 13.5px/1.5 var(--sans); letter-spacing: 0; text-transform: none; text-align: left; white-space: normal;
 }
-.info-pop.left { left: -8px; }
-.info-pop.right { right: -8px; }
 .info-pop b { color: var(--on-ink); }
 .info-pop a, .info-pop a:hover { color: var(--on-ink); text-decoration: underline; }   /* (A11Y-008) the box is ink with light text: the page's blue link on it is 2:1 */
 
@@ -1002,10 +1001,6 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 .palette-foot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--line); }
 @media (max-width: 640px) { .palette-back { padding: 8px; place-items: start stretch; } .palette { max-height: calc(100vh - 16px); } .palette-foot { display: none; } }
 .explore-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }   /* auto-fit: a short list fills the row */
-/* VR1-021 kept a short list at four-to-a-row widths, which left the right half of the row empty (CK-2, R2): the tiles share the row */
-.k-explore .explore-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }   /* CK-2: a short list (two tiles) shares the whole row, so no half of it is empty (VR1-021 had kept four-to-a-row widths); VR2-001: the tiles of a row are the same height (align-items:start left ragged bottoms, two tiles side by side differing by 20-40px) */
-/* VR1-140: Money's eight cards are 4 + 4 on a laptop (230px made 3 + 3 + 2, a hole beside the last) */
-@media (min-width: 561px) { .explore-grid.money-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); } }
 /* VR1-140: the three figures of Money home's two summary cards in one row, not 2 + 1 with the lower left empty */
 /* up to four figures in one row (the tax card with intraday income had "Long-term gains" alone on a second row and stood 120px
    taller than My Holdings beside it); the year is in the card's heading, so the total's label doesn't repeat it */
@@ -1030,9 +1025,7 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
   .explore-card { padding: 12px; gap: 4px; }
   .explore-card b { font-size: 14px; line-height: 1.25; }
   .explore-card .small { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .k-explore .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* VR1-031: half of each description was hidden behind "..." on a phone */
   .modal .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* choices must be read in full */
-  .money-cards .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* Money's card lines are read in full, not cut mid-phrase (DP2-014) */
 }
 
 /* sector rotation chart */
@@ -1663,6 +1656,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* MO-3b: figures in a compact card spread over its width (they sat in its left two thirds, sized to their text), each in an equal column */
 .k-card.compact > .k-stats { flex: 1 1 100%; }
 .k-card.compact .k-card-title { font-size: 17px; }
+/* a table in a compact card (a strip of a few figures) fills the card's width, not the width of its words (owner, 5 Nov: the tax
+   report's two-figure table stopped two thirds of the way across its card) */
+.k-card.compact > :is(.k-facts, .k-tbl-wrap) { flex: 1 1 100%; min-width: 0; }
+/* a card that holds nothing but a table is the table's frame: no frame inside a frame (owner, 5 Nov: "odd double border"). A phone
+   keeps the padding: its tables are lists of cards. A table whose header row stays in view (pinhead) keeps its own look. */
+@media (min-width: 641px) {
+  .k-card:has(> .k-tbl-wrap:only-child:not(.pinhead)), .k-card:has(> .k-facts:only-child > .k-tbl-wrap:only-child:not(.pinhead)) { padding: 0; }
+  .k-card > .k-tbl-wrap:only-child:not(.pinhead), .k-card > .k-facts:only-child > .k-tbl-wrap:only-child:not(.pinhead) { border: 0; border-radius: calc(var(--r-card) - 1px); }
+}
 
 /* stats */
 /* a row of figures: each is label, number, note on a shared subgrid, so a label that wraps to two lines never pushes its
@@ -1747,7 +1749,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-form.k-form-inline > .k-field.wide { flex: 1 1 100%; }
 .k-form.k-form-inline > .k-form-actions { flex: none; }
 /* MO-3a: three columns at most, whatever the card's width (a column is never narrower than a three-choice switch) */
-.k-form.k-form-trio { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); max-width: 1000px; }
+/* owner, 5 Nov ("fix ui", the tax report's inputs): three equal columns across the whole card (two on a tablet, one on a phone), each
+   switch as wide as the boxes under it, so every control lines up with its column; the button takes the next free cell, level with
+   the boxes (beside "Of which salary"), or the first cell of its own row when the row is full */
+.k-form.k-form-trio { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .k-form.k-form-trio { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .k-form.k-form-trio { grid-template-columns: minmax(0, 1fr); } }
+.k-form.k-form-trio > .k-field > .k-seg { width: 100%; }
+.k-form.k-form-trio > .k-form-actions { grid-column: auto; align-self: end; min-height: var(--ctl); }
+@media (max-width: 560px) { .k-form.k-form-trio > .k-form-actions { grid-column: 1 / -1; } }
 .k-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .k-field.wide { grid-column: 1 / -1; }
 .k-card > .k-field { max-width: 420px; }   /* a lone field in a card (a stock lookup) is not stretched across it */
@@ -1816,7 +1826,11 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 
 /* table */
 /* EXPORT: a table's "Download CSV" sits over its top right edge, out of the way of the figures */
-.k-tbl-tools { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: var(--s2, 8px); }   /* its own row above the table: at -4px it sat on the table's top edge (owner, 5 Nov) */
+.k-tbl-tools { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: var(--s2, 8px); }
+/* a table's "select all" box (DataTable selectAll): in the first header cell, lined up with the rows' boxes under it; over a phone's cards, at the left */
+.k-tap.k-th-check { margin: -9px -1px -9px -9px; vertical-align: middle; }   /* the header text then starts where the rows' names do (.rot-name: the box, then 8px) */
+.k-tbl-tools .k-select-all { margin-right: auto; min-height: 40px; flex: 1 1 auto; min-width: 0; }
+.k-tbl-tools > :not(.k-select-all) { flex: none; white-space: nowrap; }   /* the CSV button keeps its one line beside a long "select all" */   /* its own row above the table: at -4px it sat on the table's top edge (owner, 5 Nov) */
 .k-tbl-wrap { position: relative; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 12px;   /* overflow-y: with overflow-x auto it computed to auto too, and a 1px spill drew a vertical scrollbar beside the screener's filters (owner, 5 Nov) */
   background: linear-gradient(to right, var(--card) 30%, transparent) 0 0 / 28px 100% no-repeat local, linear-gradient(to left, var(--card) 30%, transparent) 100% 0 / 28px 100% no-repeat local,
     radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 0 0 / 16px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 100% 0 / 16px 100% no-repeat scroll; }
@@ -1837,7 +1851,6 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-table .k-empty-row { text-align: center; color: var(--muted); padding: var(--s5) var(--s4); white-space: normal; }
 .k-table .k-row-note { color: var(--muted); font-size: var(--t-label); }
 .k-table .info { margin-left: 4px; }
-.k-table .info-pop { white-space: normal; font-weight: 400; text-transform: none; }
 /* Plans, "Side by side": the three tables share one set of column widths, so Free, Basic and Pro stand at the same x from table to
    table (DK-005: auto layout sized each table's columns by its own text). The plan columns wrap their words (a longer cell is two lines). */
 @media (min-width: 641px) {
@@ -2010,11 +2023,33 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-disclosure[open] > summary::before { transform: rotate(45deg); }
 .k-disclosure-body { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s1) 0 0 var(--s4); }
 .k-disclosure-body:has(> .k-tbl-wrap) { padding-left: 0; }   /* VR1-122: a table in a fold lines up with the cards around it, not 16px in */
+/* FoldCard (owner, 5 Nov: "make it like a dropdown everywhere"): a card that is one row until opened; the title is the button and the
+   whole row its target (the button's ::after covers it), the (i) above that layer; on the right what is inside and a chevron */
+.k-foldcard { gap: 0; padding-block: var(--s3); }
+.k-foldcard-head { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 36px; }
+.k-foldcard-head .k-card-titlerow { min-width: 0; }
+.k-foldcard-head .info { position: relative; z-index: 1; }
+.k-foldcard-btn { all: unset; display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; font: inherit; color: inherit; border-radius: 6px; }   /* a 44px target (the row around it is one too) */
+.k-foldcard-btn::after { content: ""; position: absolute; inset: calc(-1 * var(--s3)) calc(-1 * var(--s5)); border-radius: var(--r-card); }
+.k-foldcard-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.k-foldcard:has(.k-foldcard-btn:hover) { border-color: var(--line-2); }
+.k-foldcard-meta { flex: none; display: inline-flex; align-items: center; gap: var(--s3); color: var(--muted); font-size: var(--t-label); white-space: nowrap; }
+.k-foldcard-chev { width: 8px; height: 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform .15s; }
+.k-foldcard.open .k-foldcard-chev { transform: translateY(2px) rotate(-135deg); }
+.k-foldcard-body { display: flex; flex-direction: column; gap: var(--s4); padding-top: var(--s4); min-width: 0; }
+.k-foldcard-body[hidden] { display: none; }
+@media (max-width: 640px) { .k-foldcard-btn::after { inset: calc(-1 * var(--s3)) calc(-1 * var(--s4)); } .k-foldcard-meta { gap: var(--s2); } }
+@media (prefers-reduced-motion: reduce) { .k-foldcard-chev { transition: none; } }
+/* the tools of a space, in a FoldCard: a calm table of name, one line and where it lives in the menu */
+.k-more-tools .k-table td.k-wrap { white-space: normal; min-width: 16rem; }
+.k-more-tools .k-more-go { display: inline-flex; flex-direction: column; gap: 2px; }
+.k-more-tools .k-more-lock { font-size: var(--t-note); color: var(--muted); }
 .k-chipset { display: flex; flex-wrap: wrap; gap: 6px; }
 .k-check { display: inline-flex; align-items: center; gap: var(--s2); min-height: 32px; font-size: var(--t-label); cursor: pointer; }
 .k-check input { width: 18px; height: 18px; accent-color: var(--blue); }
 /* VR1-120: an unchecked box was a dark square with no edge on a dark card (1.6:1), so it looked disabled beside the blue checked ones: a 1.5px edge in the muted text colour */
 .k-check input[type="checkbox"]:not(:checked), .k-tap input[type="checkbox"]:not(:checked) { -webkit-appearance: none; appearance: none; border: 1.5px solid var(--muted); border-radius: 3px; background: transparent; }
+.k-check input[type="checkbox"]:indeterminate:not(:checked), .k-tap input[type="checkbox"]:indeterminate:not(:checked) { -webkit-appearance: checkbox; appearance: auto; }   /* a "select all" with some ticked shows its dash */
 .k-check input[type="checkbox"]:disabled:not(:checked) { opacity: .55; }
 /* a checkbox alone in a table cell: its label is a 40px tap area, the box stays 18px */
 .k-tap { display: inline-grid; place-items: center; min-width: 40px; min-height: 40px; margin: -9px; cursor: pointer; }
@@ -2093,6 +2128,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-linkcard .k-note { margin-top: var(--s1); }
 .k-line-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s2) 0; border-bottom: 1px solid var(--line); min-width: 0; }
 .k-line-row:last-child { border-bottom: 0; }
+/* Net worth: "Add an entry" and its Quick add menu stay side by side, one row across a phone */
+.nw-add { display: inline-flex; gap: var(--s2); align-items: center; }
+@media (max-width: 640px) { .nw-add { display: flex; width: 100%; } .nw-add > .btn { flex: 1 1 auto; justify-content: center; } .nw-add .more-pop { left: auto; right: 0; } }
+/* the statement inbox offered under a statement upload (Mutual funds): a ruled line at the card's foot, its address inline */
+.k-line-row.k-inbox-note { border-bottom: 0; border-top: 1px solid var(--line); padding-top: var(--s3); }
+.k-inbox-note .k-address { padding: 1px 6px; font-size: 12.5px; }
 .k-line-row > .k-line-text { display: flex; flex-direction: column; min-width: 0; }
 .k-line-row b { font-weight: 600; overflow-wrap: anywhere; }
 .k-callout { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s4); border: 1px solid var(--line-2); border-radius: var(--r-ctl); min-width: 0; }
@@ -2105,7 +2146,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-hint-line { margin: 0; }
 
 /* chart frame */
-.k-chart-body { min-width: 0; }
+.k-chart-body { min-width: 0; position: relative; }
+/* new data on its way (ChartFrame busy): the chart dims under the kit's loading bar, in a small box at its top */
+.k-chart-body.is-busy > :not(.k-chart-busy) { opacity: .4; transition: opacity .2s; pointer-events: none; }
+.is-stale { opacity: .45; transition: opacity .2s; pointer-events: none; }   /* a card whose figures are being read again */
+.k-chart-busy { position: absolute; z-index: 2; top: 12px; left: 50%; transform: translateX(-50%); width: min(300px, 80%); padding: 10px 14px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--card); box-shadow: 0 6px 24px rgba(0, 0, 0, .18); }
 
 /* result block (the calculator's answer) */
 .k-result { display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: var(--r-card); background: var(--paper-2); border: 1px solid var(--line); min-width: 0; }
@@ -2344,9 +2390,11 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-plan-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: var(--s2); align-items: start; }
 .k-plan-list li > span { color: var(--blue); font-weight: 700; }
 .k-plan-list li.head { display: block; color: var(--muted); font-weight: 600; }
-/* VR6-013: the card's remaining lines, folded; the summary is a full-width 44px row so it is easy to hit on a phone */
-.k-plan-more summary { cursor: pointer; display: flex; align-items: center; min-height: 44px; color: var(--blue); font-size: var(--t-label); font-weight: 600; }
-.k-plan-more[open] > summary { margin-bottom: var(--s2); }
+/* R11 (owner, 5 Nov: "bad UI"): one button a card, the card's full width, at its foot; a plan you have says so on the same button, quiet */
+.k-plan-btn { width: 100%; justify-content: center; }
+/* the small print under the plans: a few short lines, one rule above, no wall of paragraphs */
+.k-fineprint { list-style: none; margin: 0; padding: var(--s3) 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--s1);
+  font-size: var(--t-note); line-height: 1.5; color: var(--muted); max-width: 80ch; }
 
 /* the landing page's own small helpers */
 .stack.g1, .row.g1 { gap: 1px; } .stack.g2, .row.g2 { gap: 2px; } .stack.g4, .row.g4 { gap: 4px; } .stack.g6 { gap: 6px; } 
@@ -2618,8 +2666,6 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .nw-snaps ul { list-style: none; margin: 0; padding: 0; }
 .nw-snaps li { justify-content: flex-start; flex-wrap: wrap; gap: var(--s2); }   /* CK-2 (R20): the remove icon follows the snapshot's text, not 550px away at the card's edge */
 /* MO-2: the quick-add chips: every one shown (no scroll box), an icon beside each name */
-.nw-quick { max-height: none; overflow: visible; gap: var(--s2); }
-.nw-quick .chip { gap: 6px; }
 
 /* ---------- round 13, Safari (R13S) ---------- */
 /* R13S-005: iOS Safari zooms the page when a field under 16px takes focus and doesn't zoom back, so on a phone or a touch
@@ -2940,6 +2986,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
  * stays put and breathes instead */
 .k-working { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
 .k-working.sm { padding: 0; border: 0; background: none; gap: 6px; }
+.k-working.inline { display: inline-block; width: 48px; padding: 0; border: 0; background: none; vertical-align: middle; }
 .k-working-bar { position: relative; display: block; height: 4px; border-radius: 99px; background: var(--chip); overflow: hidden; }
 .k-working-bar > span { position: absolute; inset: 0 auto 0 0; width: 38%; border-radius: inherit; background: linear-gradient(90deg, transparent, var(--blue), transparent);
   animation: k-working 1.4s cubic-bezier(.45, 0, .55, 1) infinite; }

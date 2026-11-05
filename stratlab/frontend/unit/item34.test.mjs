@@ -46,7 +46,7 @@ test("no browser locale or saved choice picks the currency; checkout asks for th
   const plans = read("src/pages/PlansPage.tsx"), land = read("src/pages/Login.tsx");
   assert.match(plans, /body: \{ plan, period, currency: "INR" \}/);
   assert.match(plans, /\{price\.about && <span className="k-note" data-testid=\{`about-\$\{p\}`\}>\{price\.about\}<\/span>\}/);
-  assert.match(plans, /<p className="k-small k-muted k-measure" data-testid="usd-note">\{usdNote\(rate, pricing\?\.usd_inr\?\.fallback\)\}<\/p>/);
+  assert.match(plans, /<li data-testid="usd-note">\{usdNote\(rate, pricing\?\.usd_inr\?\.fallback\)\}<\/li>/);      // one line of the small print (R11)
   assert.match(land, /\{about && <span className="small muted" data-testid=\{`about-\$\{p\}`\}>\{about\}<\/span>\}/);
   for (const src of [plans, land]) assert.doesNotMatch(src, /aria-label="Prices in"|label="Prices in"|In India\? Show prices in ₹/);
   // the paywall sentences come from the same line (usePlanPrice / planPriceFor)

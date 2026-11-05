@@ -389,6 +389,21 @@ class KiteService:
         v = self.kite.ltp([key]).get(key)
         return v["last_price"] if v else None
 
+    def quote_key(self, key: str) -> dict | None:
+        """The day's quote for any "EXCHANGE:SYMBOL" key (a currency or commodity contract too): {"price", "open",
+        "high", "low", "volume", "at"}, the time aware in India's zone; None when the broker has none."""
+        self._require()
+        self._throttle()
+        v = (self.kite.quote([key]) or {}).get(key)
+        if not v:
+            return None
+        ohlc = v.get("ohlc") or {}
+        at = v.get("last_trade_time") or v.get("timestamp")
+        if hasattr(at, "tzinfo") and at.tzinfo is None:
+            at = at.replace(tzinfo=IST)
+        return {"price": v.get("last_price"), "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"),
+                "volume": v.get("volume"), "at": at.isoformat() if hasattr(at, "isoformat") else None}
+
     def instrument(self, token: int) -> dict | None:
         self._load_instruments()
         return self._by_token.get(int(token))
@@ -612,10 +627,11 @@ class KiteService:
 
     # ---------- historical candles ----------
     def history(self, token: int, tf: str, days: int, continuous: bool | None = None, ttl: float | None = None,
-                store: bool = True) -> list[dict]:
+                store: bool = True, max_wait: float | None = None) -> list[dict]:
         """Candles for a token. Futures on daily candles use Kite's continuous series unless told otherwise;
         `ttl` overrides how long a cached answer is reused (live polling wants fresh candles). `store=False` leaves
-        the answer out of the cache (a whole-market read would push everything else out of it)."""
+        the answer out of the cache (a whole-market read would push everything else out of it). `max_wait`: KiteBusy
+        when the next request turn is further off than that (see _slot), for a page's read that must not queue behind jobs."""
         self._require()
         interval, chunk, _ = INTERVALS[tf]
         now = datetime.now(IST)
@@ -649,7 +665,7 @@ class KiteService:
         out, frm = [], start
         while frm < now:
             to = min(frm + timedelta(days=chunk), now)
-            self._throttle()
+            self._slot(max_wait)
             rows = self.kite.historical_data(token, frm.replace(tzinfo=None), to.replace(tzinfo=None),
                                              interval, continuous=continuous)
             for r in rows:

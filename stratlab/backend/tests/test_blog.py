@@ -35,6 +35,14 @@ def issue_for(region="IN", day=THU, **more):
     return {**job.make_issue(market(region, False, day), region), **more}
 
 
+SAT = date(2026, 10, 3)
+
+
+def week_issue(region="IN", day=SAT, **more):
+    """The Saturday weekly Market Brief issue, as the newsletter job builds it."""
+    return {**job.make_issue(market(region, True, day), region), **more}
+
+
 def page(client, path):
     r = client.get(path)
     assert r.status_code == 200, (path, r.status_code)
@@ -76,10 +84,40 @@ def test_the_newsletter_job_saves_the_brief_once_even_when_it_runs_again(w, monk
     job.Job().tick(AFTER_IN_CLOSE)                                       # a restart, the same day
     got = db.sb().table("blog_posts").select("slug").execute().data
     assert [r["slug"] for r in got] == ["india-market-brief-2026-10-01"]
-    # the weekly digest is not a daily brief, and a failing blog never stops the send
-    assert job.Job().post_brief(issue_for(weekly=True) | {"weekly": True}, True) is False
+    # the weekly digest is not a daily brief: it becomes the week in review instead, and a failing blog never stops the send
+    assert blog.brief_post(issue_for() | {"weekly": True}) is None
+    assert job.Job().post_brief(week_issue(), True) is True
     monkeypatch.setattr(blog, "save_brief", lambda issue: 1 / 0)
+    monkeypatch.setattr(blog, "save_week", lambda issue: 1 / 0)
     assert job.Job().post_brief(issue_for(), False) is False
+    assert job.Job().post_brief(week_issue(), True) is False
+
+
+def test_the_saturday_weekly_brief_becomes_a_week_in_review_post_once(w, monkeypatch):
+    """Owner, 5 Nov: the blog had nothing new at the weekend. The Saturday weekly brief is posted as a week in review: the week's
+    index changes, its IPOs (listed that week, opening the next) and how it is made, with a way into the app, once per market."""
+    from app import ipo
+    rows = [{"market": "IN", "name": "Listed Co", "symbol": "LST", "segment": "Mainboard", "listing": "2026-09-30", "price": 120},
+            {"market": "IN", "name": "Opening Co", "symbol": "OPN", "segment": "SME", "open": "2026-10-06", "close": "2026-10-08"},
+            {"market": "IN", "name": "Old Co", "symbol": "OLD", "segment": "Mainboard", "listing": "2026-09-01", "price": 50},
+            {"market": "IN", "name": "Pulled Co", "open": "2026-10-06", "issue_status": "withdrawn"}]
+    monkeypatch.setattr(ipo, "load", lambda region: {"rows": rows})
+    assert blog.save_week(week_issue("IN")) is True and blog.save_week(week_issue("IN")) is False
+    assert blog.save_week(week_issue("US")) is True
+    assert blog.save_week(issue_for("IN")) is False                          # a daily issue is not a week
+    post = blog.get("india-week-in-review-2026-10-03")
+    assert post["kind"] == "brief" and post["indexable"] is True
+    assert post["title"].startswith("India week in review, ") and "NIFTY 50" in post["title"]
+    body = json.dumps(post["body"])
+    assert "Index closes on the week" in body and "Listed Co" in body and "Opening Co" in body
+    assert "Old Co" not in body and "Pulled Co" not in body                  # another week's listing; an issue that didn't go ahead
+    assert "/invest/ipos" in body and "backtest" in body
+    us = json.dumps(blog.get("us-week-in-review-2026-10-03")["body"])
+    assert "IPOs" not in us                                                  # the tracker's rows are India's
+    html = page(w["client"], "/blog/india-week-in-review-2026-10-03")
+    assert "India week in review" in html and "Listed Co" in html
+    assert not any(v in html.lower() for v in VENDORS)
+    assert "india-week-in-review-2026-10-03" in page(w["client"], "/blog/briefs")
 
 
 def test_a_holiday_or_a_day_without_a_figure_is_kept_out_of_search(w):
@@ -546,3 +584,113 @@ def test_live2_posts_fold_their_limits_say_what_they_hold_and_explain_the_sip_fa
     us = blog.brief_post(issue_for("US", sections=[]))                      # the US brief the live site had: the index closes alone
     how = next(b for b in us["blocks"] if b["t"] == "details" and b["title"] == "How this brief is made")["items"][0]
     assert "Sector rotation" not in how and "newly meets" not in how and "previous session's close" in how
+
+
+# ---------- R11: bar charts and the theme post ----------
+def test_a_bar_chart_is_plain_html_on_one_scale_with_its_words_escaped():
+    blocks = blog.clean_blocks([{"t": "hbar", "caption": "<b>Margin</b> by layer", "note": "Yahoo said <i>so</i>", "rows": [
+        {"label": "Up <script>alert(1)</script>", "value": 30, "text": "30.0%"}, {"label": "Down", "value": -10, "text": "−10.0%"},
+        {"label": "None", "value": None}, {"label": "Not a number", "value": float("nan")}, {"label": "Text", "value": "12"}, {"label": "", "value": 5},
+        {"label": "Bool", "value": True}, "not a row"]}])
+    assert [r["value"] for r in blocks[0]["rows"]] == [30.0, -10.0, None, None, None, None]          # a number or nothing: no NaN, text or bool
+    html = blog.blocks_html(blocks)
+    assert "<script" not in html and "&lt;script&gt;" in html and "<b>" not in html and "<i>" not in html and "Yahoo" not in html
+    assert "http" not in html and "<svg" not in html and "javascript" not in html                    # no outside file, no script
+    # the scale runs from −10 to 30: zero sits a quarter in, the bar of 30 fills the rest and the bar of −10 the quarter left of zero
+    assert '<i class="zero" style="left:25.00%">' in html
+    assert '<i class="bar" style="left:25.00%;width:75.00%">' in html and '<i class="bar neg" style="left:0.00%;width:25.00%">' in html
+    assert 'aria-label="Down: −10.0%"' in html and '<span class="n none">no figure</span>' in html
+    assert blog.clean_blocks([{"t": "hbar", "rows": [{"label": "A", "value": None}]}]) == []          # a chart with no figure isn't drawn
+    plain = blog.blocks_html(blog.clean_blocks([{"t": "hbar", "rows": [{"label": "A", "value": 2}, {"label": "B", "value": 1}]}]))
+    assert "zero" not in plain and 'style="left:0.00%;width:100.00%"' in plain and 'style="left:0.00%;width:50.00%"' in plain
+    assert ".hb .bar.neg{" in blog_pages.STYLE and "@media (max-width:640px){.hb{" in blog_pages.STYLE   # its look is the page's tokens, light and dark
+
+
+THEME_SRC = {"v": 1, "theme": "cybersecurity", "region": "US", "sector": "Cybersecurity", "members": 9, "unit": "$ million",
+             "basis": "Each company's latest full fiscal year, in $ million.", "notable": [
+                 {"kind": "move", "layer": "Data security", "n": 2, "from": -13.4, "to": -6.2, "from_year": "Dec 2022", "to_year": "Dec 2025", "move": 7.2},
+                 {"kind": "move", "layer": "Named in the theme's list", "n": 3, "from": 10.0, "to": 20.0, "from_year": "Dec 2022", "to_year": "Dec 2025", "move": 10.0}],
+             "rows": [
+                 {"layer": "Network security", "n": 3, "revenue": 21632, "ebitda": 13.5, "net": 2.7, "roce": 93.3, "ebitda_n": 3, "official": False,
+                  "companies": [{"symbol": "PANW", "name": "Palo Alto Networks"}, {"symbol": "FTNT", "name": "Fortinet"}, {"symbol": "CHKP", "name": "Check Point <b>Software</b>"}]},
+                 {"layer": "Identity", "n": 1, "revenue": 2919, "ebitda": 5.5, "net": 8.1, "roce": None, "ebitda_n": 1, "official": False, "companies": [{"symbol": "OKTA", "name": "Okta"}]},
+                 {"layer": "Data security", "n": 2, "revenue": 1623, "ebitda": -9.1, "net": -12.2, "roce": -24.5, "ebitda_n": 2, "official": False, "companies": []},
+                 {"layer": "Named in the theme's list", "n": 3, "revenue": 9254, "ebitda": 33.4, "net": 24.6, "roce": 28.8, "ebitda_n": 3, "official": True, "basis": "list",
+                  "companies": [{"symbol": "CRWD", "name": "CrowdStrike"}]}]}
+
+
+def test_a_theme_post_sets_layers_against_layers_and_draws_them(w):
+    post = blog_research.theme_post_from(THEME_SRC, datetime(2026, 11, 6, tzinfo=timezone.utc))
+    assert post["slug"] == "theme-cybersecurity-margins-us" and post["published"] is False and post["src"] == THEME_SRC
+    words = blog.plain_text([b for b in post["blocks"] if b["t"] in ("p", "ul", "stats")])
+    # the group no layer took is never the high end of the gap, nor a layer's move: the gap is Network security against Data security
+    assert post["summary"] == "Median EBITDA margin is highest in Network security (13.5%) and lowest in Data security (−9.1%), 22.6 points apart."
+    assert "Named in the theme's list" not in words and "10.0 points" not in words
+    assert "Data security: EBITDA margin up 7.2 points, from −13.4% in Dec 2022 to −6.2% in Dec 2025" in words
+    assert "Identity has one company, so its figures are that company's own." in words
+    assert "9 listed US companies in the cybersecurity theme, sorted into 3 layers" in words and "3 of them are part of the theme but in no layer" in words
+    charts = [b for b in post["blocks"] if b["t"] == "hbar"]
+    assert [r["label"] for r in charts[0]["rows"]] == ["Network security", "Identity", "Data security"]             # the chain's layers only
+    assert [r["text"] for r in charts[0]["rows"]] == ["13.5%", "5.5%", "−9.1%"] and charts[1]["rows"][0]["text"] == "21,632"
+    table = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Layer" and len(b["head"]) == 6)
+    assert table["rows"][-1][0] == "In the theme's list, in no layer" and table["rows"][0][3:] == ["13.5%", "2.7%", "93.3%"]     # no plus sign on a margin
+    assert table["head"][2] == "Revenue ($ million)"
+    blog.upsert_research({**post, "published": True})
+    html = page(w["client"], "/blog/theme-cybersecurity-margins-us")
+    assert html.count('<figure class="hb">') == 2 and 'class="bar neg"' in html and '<div class="btbl wrap">' in html
+    assert "Check Point &lt;b&gt;Software&lt;/b&gt;" in html and "latest full latest" not in html
+    assert blog_research.advice_words(post) is None and not any(v in html.lower() for v in VENDORS)
+
+
+LEGACY_THEME = {"slug": "theme-cybersecurity-margins-us", "kind": "research", "market": "US", "title": "Cybersecurity: where the margin sits along the chain",
+                "summary": "The median EBITDA margin is 33.4% in Named in the theme's list and −9.1% in Vulnerability and data security, a gap of 42.5 points.",
+                "published_at": "2026-11-05T10:00:00+00:00", "published": True, "indexable": True, "blocks": [
+    {"t": "p", "text": "14 listed companies placed in 6 layers of the Cybersecurity value chain, each one only where its own description shows it does that layer's work."},
+    {"t": "h2", "text": "What the figures show"},
+    {"t": "ul", "items": ["The median EBITDA margin is 33.4% in Named in the theme's list and −9.1% in Vulnerability and data security, a gap of 42.5 points.",
+                          "Vulnerability and data security: the EBITDA margin of its 2 companies together went from −13.4% in Dec 2022 to −6.2% in Dec 2025, a move of 7.2 points up."]},
+    {"t": "h2", "text": "The whole chain in one table"},
+    {"t": "table", "caption": "Median figures by layer (revenue in $ million, combined)", "head": ["Layer", "Companies", "Revenue", "EBITDA margin", "Net margin", "ROCE"],
+     "align": "lrrrrr", "rows": [["Network and perimeter security", "3", "21,632", "+13.5%", "+2.7%", "+93.3%"], ["Endpoint and detection", "2", "5,813", "–", "−3.4%", "−22.4%"],
+                                 ["Identity and access", "1", "2,919", "+5.5%", "+8.1%", "–"], ["Vulnerability and data security", "2", "1,623", "−9.1%", "−12.2%", "−24.5%"],
+                                 ["Edge delivery and application protection", "2", "6,376", "+14.8%", "+3.0%", "–"], ["Named in the theme's list", "4", "9,254", "+33.4%", "+24.6%", "+28.8%"]]},
+    {"t": "details", "title": "How these figures were worked out", "items": ["Each company's latest full latest fiscal year, in $ million. Consolidated accounts where the company files them."]}]}
+
+
+def test_the_live_theme_post_is_written_again_in_the_new_form_after_a_deploy(w, monkeypatch):
+    """The cybersecurity post went live before its figures were kept in its row: the next run after the deploy (GEN bumped) reads them back from
+    its own table and sentences and writes it again, at the same address, still published, with its first date."""
+    blog.upsert_research(LEGACY_THEME, datetime(2026, 11, 5, 10, tzinfo=timezone.utc))
+    monkeypatch.setattr(blog_research, "POSTS", ())                  # only the theme post here: the other builders read sources this test hasn't
+    out = blog_research.run_if_stale(datetime(2026, 11, 6, 10, tzinfo=timezone.utc))
+    assert out["made"] == [{"post": "theme", "slug": "theme-cybersecurity-margins-us", "result": "updated"}] and out["problems"] == []
+    got = blog.get("theme-cybersecurity-margins-us")
+    assert got["published"] is True and got["published_at"].startswith("2026-11-05") and got["body"]["src"]["rows"][-1]["official"] is True
+    assert got["summary"].startswith("Median EBITDA margin is highest in Edge delivery and application protection (14.8%) and lowest in Vulnerability and data security (−9.1%)")
+    html = page(w["client"], "/blog/theme-cybersecurity-margins-us")
+    assert '<figure class="hb">' in html and "latest full latest" not in html and "gap of 42.5" not in html
+    assert "Vulnerability and data security: EBITDA margin up 7.2 points" in html
+    assert blog_research.run_if_stale(datetime(2026, 11, 6, 11, tzinfo=timezone.utc)) is None        # once per version
+    assert blog_research.rewrite_theme_posts(datetime(2026, 11, 7, tzinfo=timezone.utc))[0][0]["result"] == "same"   # from its kept figures now: no change
+
+
+def test_the_ipo_and_sip_posts_draw_their_key_numbers_as_bars(w):
+    ipo = blog_research.ipo_listing_day(ipo_facts())
+    sub = next(b for b in ipo["blocks"] if b["t"] == "hbar")
+    assert len(sub["rows"]) == 3 and all(r["label"].split(" (")[0] in ("Under 10 times", "10 to 50 times", "Over 50 times") for r in sub["rows"])
+    sip = blog_research.sip_vs_lump(index_series())
+    bars = next(b for b in sip["blocks"] if b["t"] == "hbar")
+    assert [r["label"] for r in bars["rows"]] == ["Money put in (each)", "Monthly SIP: value at the end", "Lump sum: value at the end"]
+    assert all(r["text"].startswith("₹") for r in bars["rows"])
+    assert blog_research.GEN >= 4                                    # the stored posts are written again with them after the deploy
+
+
+def test_only_the_owner_can_draft_a_theme_post(w, monkeypatch):
+    """R11 item 15: the Themes page's "Draft a blog post" bar is drawn for an admin only (ThemesPage.tsx: me.is_admin), and the endpoint
+    behind it refuses everyone else before any work is done."""
+    from app.intel import routes
+    monkeypatch.setattr(routes, "sector_map", lambda *a, **k: 1 / 0)
+    c = w["client"]
+    assert c.post("/admin/blog/theme", json={"q": "cybersecurity", "region": "US"}).status_code in (401, 403)
+    r = c.post("/admin/blog/theme", json={"q": "cybersecurity", "region": "US"}, headers=headers("pro-token"))
+    assert r.status_code == 403 and "not_admin" in r.text

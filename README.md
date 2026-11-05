@@ -92,6 +92,8 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 - Market Watch on every page: named lists of any instrument the app covers (stocks, indices, crypto, forex, commodities), prices every 5 seconds and tick by tick where the broker's feed carries them, and a chart workspace with every timeframe from 1 minute to 1 month, drawings, indicators and the timeframe kept on your account per symbol (`/chart/<market>/<symbol>` as a page).
 - Company pages for every Indian (NSE, and BSE-only) and US company, with a price chart (candles, Heikin-Ashi, bars, line; 1 minute to 1 month; indicators; drawings kept on your account; compare on a % scale), plus public facts pages at `/stocks/in/SYMBOL` and `/stocks/us/SYMBOL` for search engines.
 - Deep dive: ten years of numbers, the business and its plans read from the company's own presentations, calls or 10-K, industry measures, valuation on the yardstick its industry uses, a management report card, an investor checklist, and the whole thing as PowerPoint or PDF slides.
+- Themes (`/research/themes`): name a theme (defence, EVs, AI, railways, anything) and StratLab maps the listed companies in it, India or US, with each company's figures and its link to the theme; the whole map downloads as a slide deck (PowerPoint or PDF), and so does any company's deep dive.
+- Market mood (`/research/pulse`): the day in one page, every figure from one source: breadth, sectors, the stocks that moved the index, flows, volatility, currencies, other markets and today's calendar.
 - IPOs (`/invest/ipos`): India's main-board and SME issues from NSE's and BSE's issue pages and SEBI's DRHP and RHP lists, and US IPOs from the IPO calendar and SEC filings, in tabs (upcoming, open, closed, listed, filed), with withdrawn issues kept apart. Each issue's page has its dates, price band, lot, size, bids by category while it is open, its documents and its trading since listing. A daily check compares the lists with the exchanges' and the regulator's own. The offer document's summary (each statement checked against a quote) and IPO alerts are on Basic.
 - Business updates and named holders: monthly sales of automakers and quarterly figures of lenders read into numbers, and every holder named above 1% in a company's shareholding, searchable across companies and followed on Basic.
 - Results calendar, corporate actions (dividends, bonuses, splits, buybacks, rights, demergers), deals and insider trades (including bulk and block deals), exchange surveillance lists (ASM, GSM, ESM, trade-to-trade, price bands, F&O ban), and filings with red flags.
@@ -143,7 +145,8 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 
 **Everyday**
 - Connected accounts: the broker holdings file and tradebooks, the funds statement, a private statements inbox (forward the email), and connections that update by themselves (Zerodha, IBKR, EPF, NPS and the tax statement).
-- Briefs after each market close for India, the US and the companies you follow; Ask (Ctrl+K) to find a page or do something in words.
+- Briefs after each market close for India, the US and the companies you follow, also posted on the public blog (`/blog`) with a week in review every Saturday and research posts made from StratLab's own data; Ask (Ctrl+K) to find a page or do something in words.
+- Feedback from the account menu, straight to the team; a loading bar wherever something takes a moment, never a raw error.
 - Connect an AI assistant (Pro): keys that let Claude or ChatGPT read your StratLab and place paper orders in your own paper sessions, each key revocable.
 
 **Getting started:** a first-steps checklist on each space's home (a backtest, a watchlist, a deep dive, paper trading, alerts), a short tour, share cards for a company's facts, and invite rewards (a free month of Basic for both once a friend is active).
@@ -284,9 +287,9 @@ Set on the backend (Railway, or `stratlab/backend/.env`). Names and purposes onl
 | `RAZORPAY_PLAN_BASIC`, `RAZORPAY_PLAN_PRO` | Monthly plan IDs; paid features lock to plans once these and the keys are set |
 | `RAZORPAY_PLAN_BASIC_YEAR`, `RAZORPAY_PLAN_PRO_YEAR` | Optional yearly plan IDs |
 | `AI_PROVIDERS`, `AI_PROVIDERS_RESEARCH`, `AI_PROVIDER` | The order AI providers are tried in, for quick jobs and long research reads |
-| `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `SAMBANOVA_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | AI provider keys; each is used only when set |
+| `GROQ_API_KEY`, `SAMBANOVA_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `OLLAMA_API_KEY`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY` | AI provider keys; each is used only when set (Mistral is paid only since November 2026) |
 | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`, `ZAI_API_KEY`, `HF_TOKEN`, `NVIDIA_API_KEY` | More optional free AI providers; free limits, terms and key links in [docs/ADMIN.md](docs/ADMIN.md#ai-providers) |
-| `GROQ_MODEL`, `CEREBRAS_MODEL`, `SAMBANOVA_MODEL`, `MISTRAL_MODEL`, `OPENROUTER_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL`, `CLOUDFLARE_MODEL`, `ZAI_MODEL`, `HUGGINGFACE_MODEL`, `NVIDIA_MODEL` | Pin a model per provider (`auto`, the default, uses the models the server measured) |
+| `GROQ_MODEL`, `OLLAMA_MODEL`, `SAMBANOVA_MODEL`, `MISTRAL_MODEL`, `OPENROUTER_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL`, `CLOUDFLARE_MODEL`, `ZAI_MODEL`, `HUGGINGFACE_MODEL`, `NVIDIA_MODEL` | Pin a model per provider (`auto`, the default, uses the models the server measured) |
 | `FINNHUB_API_KEY` | US company data for the research pages |
 | `RESEARCH_AI_PER_DAY` | Fresh AI research reads per user per day (default 60) |
 | `TELEGRAM_BOT_TOKEN` | Telegram alerts |

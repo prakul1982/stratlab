@@ -62,8 +62,14 @@ test("each space's Calendar entry opens the one Calendar pre-filtered for that s
   for (const t of ["Results", "Corporate actions", "Market events", "My money dates"]) await chips.getByRole("button", { name: t }).click();
   await expect(chips.getByRole("button", { name: "IPOs" })).toHaveAttribute("aria-pressed", "true");
   if (!phone) await expect.poll(async () => [...new Set(await all.locator("tbody tr td:nth-child(2)").allInnerTexts())]).toEqual(["IPO"]);
-  // every company: size and sector appear
-  await page.getByRole("radiogroup", { name: "Companies" }).getByRole("radio", { name: "Every company" }).click();
+  // every company, the default (owner, 5 Nov): size and sector are there; "My stocks" is a click, kept in the address
+  const companies = page.getByRole("radiogroup", { name: "Companies" });
+  await expect(companies.getByRole("radio", { name: "All companies" })).toBeChecked();
+  await expect(page.getByRole("group", { name: "Company size" })).toBeVisible({ timeout: 30_000 });
+  await companies.getByRole("radio", { name: "My stocks" }).click();
+  await expect(page).toHaveURL(/scope=mine/);
+  await expect(page.getByRole("group", { name: "Company size" })).toHaveCount(0);
+  await companies.getByRole("radio", { name: "All companies" }).click();
   await expect(page).toHaveURL(/scope=all/);
   await expect(page.getByRole("group", { name: "Company size" })).toBeVisible({ timeout: 30_000 });
   // a row opens its own page: an IPO's detail page

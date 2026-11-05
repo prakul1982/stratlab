@@ -98,3 +98,19 @@ def test_latest_session_with_a_blank_close_is_rebuilt_from_the_quote():
 def test_a_blank_day_the_quote_doesnt_cover_stays_out():
     bars = _london(None, 1).chart("ISF.L", "1d", 10)["candles"]      # quote is from an earlier day: nothing to fill with
     assert [b["t"][:10] for b in bars] == ["2026-09-30", "2026-10-01"]
+
+
+def test_a_candle_whose_high_or_low_misses_its_open_or_close_is_made_whole():
+    """5 Nov feature check: EUR/USD's 2 Nov low sat a hair above its open, and gold's forming candle had its low above its open
+    (o 3,940.80, l 4,067.00). Every candle read from the source is corrected, so charts, backtests and the check agree."""
+    import httpx
+    from app.platform_check import candle_sane
+    body = {"chart": {"result": [{
+        "meta": {"symbol": "GC=F", "currency": "USD", "exchangeTimezoneName": "America/New_York", "instrumentType": "FUTURE"},
+        "timestamp": [int(datetime(2026, 10, d, 14, tzinfo=timezone.utc).timestamp()) for d in (1, 2, 5)],
+        "indicators": {"quote": [{"open": [1.11570, 3940.8, 10.0], "high": [1.1237, 4155.8, 12.0], "low": [1.115702, 4067.0, 9.0],
+                                  "close": [1.11570, 4139.9, 11.0], "volume": [1, 2, 3]}]}}], "error": None}}
+    bars = Yahoo(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body))).chart("GC=F", "1d", 60)["candles"]
+    assert all(candle_sane(b) for b in bars)
+    assert bars[1]["l"] == 3940.8 and bars[1]["h"] == 4155.8 and bars[1]["o"] == 3940.8 and bars[1]["c"] == 4139.9
+    assert bars[2] == {**bars[2], "o": 10.0, "h": 12.0, "l": 9.0, "c": 11.0}          # a whole candle is left as it is

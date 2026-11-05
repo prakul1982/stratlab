@@ -34,7 +34,8 @@ test("System: Telegram off with email set up is OK with a note, not a Check; the
   assert.match(sys, /<StatusRow state=\{chans\.email \? "ok" : "warn"\} label="Alert channels"/);
   assert.match(sys, /Telegram is optional and off, so it is left out of users' Settings; to offer it, add TELEGRAM_BOT_TOKEN/);
   const audit = read("src/pages/admin/AuditPanel.tsx");
-  assert.match(audit, /staleNote\(s\.finished_at\) && <Notice tone="info">/);
+  // R11 (owner, 5 Nov): an old sampled audit is one closed line of history, not a note above live-looking results
+  assert.match(audit, /Last hand-run audit, \{old\.day\} \(old\)/);
 });
 
 test("Overview: the data feeds that need a look are rows, never a grid that leaves the last one alone (ui-lint R9, 7 feeds in 3 columns)", () => {

@@ -315,7 +315,12 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await expect(page.getByText("Costs are being read; check back shortly.")).toBeVisible();
   await expect(page.getByLabel("PDF password")).toHaveCount(0);              // the password field goes with the file
 
-  // MF-1 (RC2B-047): each scheme is one row of one list; its units, costs, return and sales are folded under it
+  // MF-1 (RC2B-047): each scheme is one row of one list; its units, costs, return and sales are folded under it. The card is closed
+  // until asked for, its row saying how many are held and their value (owner, 5 Nov)
+  const fold = page.getByRole("button", { name: /^Your schemes/ });
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByTestId("mf-schemes")).toContainText("2 held · ₹42,500");
+  await fold.click();
   const schemes = page.getByRole("list", { name: "Schemes" });
   const flexi = schemes.getByRole("listitem").filter({ hasText: "Example Flexi Cap Fund - Direct Plan - Growth" });
   await expect(flexi).toHaveCount(1);
@@ -354,6 +359,7 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await expect(page.getByRole("region", { name: "Mutual funds" }).getByText(/redemption/)).toBeVisible({ timeout: 30_000 });
 
   await page.goto("/money/mutual-funds");
+  await fold.click({ timeout: 30_000 });
   await expect(schemes.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Delete my mutual fund data" }).click();
   await page.getByRole("dialog", { name: "Delete my mutual fund data?" }).getByRole("button", { name: "Delete my mutual fund data" }).click();

@@ -215,7 +215,7 @@ for (const region of ["IN", "US"] as const) {
     await expect(page.getByTestId("rot-count")).toContainText(`All ${total} on the chart`);
     await page.getByRole("button", { name: "Clear the chart" }).click();
     await expect(page.getByText("Nothing is ticked")).toBeVisible();
-    await table.getByRole("checkbox").first().check();
+    await table.locator("tbody").getByRole("checkbox").first().check();
     await expect(page.getByTestId("rot-count")).toContainText(`1 of ${total} on the chart`);
     // the chart (the map) is above the table (owner, 31 Oct), and the page doesn't scroll sideways
     const [t, c] = await Promise.all([table.boundingBox(), page.getByTestId("rot-count").boundingBox()]);
@@ -224,3 +224,51 @@ for (const region of ["IN", "US"] as const) {
     expect(errors).toEqual([]);
   });
 }
+
+// ---------- owner, 5 Nov: "give a select all option", and a loading bar when "What to compare" changes ----------
+test("rotation: select all ticks every row the quadrant filter shows, and a new set dims the chart under the loading bar", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  let slow = false;
+  await page.route("**/*", async (r) => {
+    const url = new URL(r.request().url());
+    if (url.hostname !== "127.0.0.1" && url.hostname !== "localhost") return r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
+    if (slow && url.pathname.endsWith("/research/rotation")) await new Promise((ok) => setTimeout(ok, 2500));
+    return r.fallback();
+  });
+  await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, session);
+  await page.goto("/research/rotation?region=IN");
+  const table = page.getByRole("table", { name: "Where each one stands" });
+  await expect(table).toBeVisible({ timeout: 90_000 });
+  const total = await table.locator("tbody tr").count();
+  // the box: in the first header cell on a desktop, over the cards on a phone
+  const all = phone ? page.getByTestId("rot-table").locator(".k-select-all input") : table.locator("thead").getByRole("checkbox");
+  await expect(all).toHaveCount(1);
+  await all.check();
+  await expect(page.getByTestId("rot-count")).toContainText(`All ${total} on the chart`);
+  await all.uncheck();
+  await expect(page.getByText("Nothing is ticked")).toBeVisible();
+  // with a quadrant picked, it ticks that quadrant's rows only, and is mixed while some of them are ticked
+  const bar = page.getByRole("group", { name: "Show quadrant" });
+  const labels = await bar.getByRole("button").allInnerTexts();
+  const counts = labels.slice(1).map((l) => Number(l.match(/(\d+)$/)![1]));
+  const k = counts.findIndex((n) => n > 1);
+  await bar.getByRole("button").nth(k + 1).click();
+  await expect(table.locator("tbody tr")).toHaveCount(counts[k]);
+  await all.check();
+  await expect(page.getByTestId("rot-count")).toContainText(`${counts[k]} of ${total} on the chart`);
+  await table.locator("tbody").getByRole("checkbox").first().uncheck();
+  await expect.poll(() => all.evaluate((el) => (el as HTMLInputElement).indeterminate)).toBe(true);
+  await bar.getByRole("button").first().click();
+  // a new set: the chart dims under the loading bar until its answer comes
+  slow = true;
+  const pickSet = page.getByLabel("What to compare");
+  const other = await pickSet.locator("option").evaluateAll((os, cur) => os.map((o) => (o as HTMLOptionElement).value).find((v) => v !== cur), await pickSet.inputValue());
+  await pickSet.selectOption(other!);
+  await expect(page.locator(".k-chart-busy").getByRole("status")).toContainText("Comparing each one with the market");
+  await expect(page.getByTestId("rot-table")).toHaveClass(/is-stale/);
+  await expect(page.locator(".k-chart-busy")).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.getByTestId("rot-table")).not.toHaveClass(/is-stale/);
+  expect(errors).toEqual([]);
+});

@@ -66,7 +66,9 @@ test("DD-018: a growth rate off a tiny base is n/m, on the page and in its bars"
 
 test("DD-030, DD-031: results bars name the fiscal quarter and say what the EPS counts", () => {
   const c = read("src/components/Research.tsx");
-  assert.match(c, /r\.fiscal && <span className="k-note tbar-sub" data-testid="fiscal-quarter">/);
+  // a compact table since owner 5 Nov ("what is this UI"): the fiscal quarter under the month in the Quarter cell
+  assert.match(c, /r\.fiscal && <span className="k-sub-line" data-testid="fiscal-quarter">/);
+  assert.match(c, /<DataTable label="Results versus expectations"/);
   assert.match(c, /EPS as the estimates count it: adjusted \(non-GAAP\)/);
   assert.match(read("src/pages/Research.tsx"), /<EarningsBars rows=\{c\.earnings\} basis=\{c\.earnings_basis\} \/>/);
 });

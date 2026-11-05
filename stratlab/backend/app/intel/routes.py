@@ -23,7 +23,7 @@ from . import grounding, key_facts
 from . import mood as mood_mod
 from .company import INDICES, Research, with_dividend_yield
 from ..kite_service import ist_date
-from .net import NotFound, SourceError
+from .net import NotFound, SourceError, with_rate_wait
 
 router = APIRouter(prefix="/research", tags=["research"])
 hub: Research | None = None
@@ -546,6 +546,9 @@ def _refresh_history(region: str, symbol: str, sources: dict) -> None:
 MINUTE_READS = 45          # reads of 1-minute and 3-minute candles per person per minute (a scroll back is one a second or so)
 
 
+CHART_WAIT = 4.0                 # seconds a chart read may wait for the price source's rate limit (net.REQUEST_WAIT is 1)
+
+
 @router.get("/chart/{region}/{symbol}")
 def chart(region: str, symbol: str, range: str = "1y", tf: str = "1d", before: str | None = None,
           profile=Depends(current_profile)):
@@ -562,7 +565,10 @@ def chart(region: str, symbol: str, range: str = "1y", tf: str = "1d", before: s
         main.throttle(profile, "chart_minutes", MINUTE_READS, 60, "That's a lot of minute-chart reads in a minute. Wait a moment and try again.")
     r = region_of(region)
     s = symbol_of(symbol, r)
-    return ok(source_call(lambda: hub.chart(r, s, range[:5], tf, (before or "")[:40])))
+    # the chart is the page's main content: it waits a few seconds for the price source's rate limit rather than the
+    # second other reads get (R9 smoke: in the minutes after a deploy the start-up jobs emptied the bucket and the older
+    # page of AAPL's candles answered 503)
+    return ok(source_call(with_rate_wait(CHART_WAIT, lambda: hub.chart(r, s, range[:5], tf, (before or "")[:40]))))
 
 
 @router.get("/quotes")

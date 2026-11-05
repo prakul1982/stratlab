@@ -432,8 +432,10 @@ function CompanyView() {
         {c.margins && c.margins.gross != null && <Card><CardHead title="Where a sale goes" info={HELP.researchMargins} /><MarginCascade {...c.margins} /></Card>}
       </div>
 
+      {/* the results against the estimates are a compact table of their own across the page (owner, 5 Nov: a bar chart beside the insider trades
+          left a hole under it); who owns it and the insider trades side by side under it, or one across the page when there is one */}
+      {c.earnings.length > 1 && <Card><CardHead title="Results versus expectations" info={HELP.researchEarnings} /><EarningsBars rows={c.earnings} basis={c.earnings_basis} /></Card>}
       <div className="k-cols">
-        {c.earnings.length > 1 && <Card><CardHead title="Results versus expectations" info={HELP.researchEarnings} /><EarningsBars rows={c.earnings} basis={c.earnings_basis} /></Card>}
         {c.shareholding && c.shareholding.rows.length > 0 && <Card id="co-owners"><CardHead title="Who owns it" info={HELP.researchHolding} /><Shareholding s={c.shareholding} /></Card>}
         {c.insider && c.insider.rows.length > 0 && (
           <Card>

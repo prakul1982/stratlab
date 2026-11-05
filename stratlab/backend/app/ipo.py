@@ -66,6 +66,8 @@ def awaits(line: str) -> bool:
     return any(a in line for a in AWAITS)
 
 
+TIMETABLE_DAYS = 14                   # days after SEBI's timetable listing day that its dates still show for an issue not confirmed listed
+LISTING_CHECK_DAYS = 30               # days after its timetable listing day that a closed issue is looked for in the broker's list
 CATCH_LISTED_DAYS = 60                # an issue BSE's table says listed, that no issue list gave, becomes a row for this many days
 EVENTS = {"open": "Opens for bidding", "close": "Closes for bidding", "allotment": "Allotment", "listing": "Listing"}
 SMALL = 3                             # offer documents the job reads per pass (each is a download and a long read)
@@ -73,7 +75,8 @@ AI_PER_DAY = 120                      # summaries the scheduled catch-up writes 
                                       # opening an IPO is never held to it: theirs is written on the spot (item 41, owner 30 Oct)
 NOTE = {"IN": ("Dates, price band, lot size and the bids received are from the exchanges' public-issue pages; the offer documents are the "
                "draft and red herring prospectuses filed with SEBI. An allotment or listing date marked expected is the one SEBI's timetable "
-               "gives (allotment the working day after the close, listing three working days after it) until the exchange publishes it. "
+               "gives (allotment the working day after the close, listing three working days after it) until the exchange publishes it; "
+               "once that day has passed without a confirmed date it is marked timetable. "
                "Facts, not advice."),
         "US": ("Expected, priced and filed offerings are from the public IPO calendar; the documents are the S-1, F-1 and final prospectus "
                "filed with the SEC. US offerings have no public bidding window: the price is set the evening before trading starts. "
@@ -82,7 +85,7 @@ NOTE = {"IN": ("Dates, price band, lot size and the bids received are from the e
 router = APIRouter(tags=["ipo"])
 _cache = TTLCache(max_items=300)
 _lock = threading.RLock()
-_wire = {"feed": None, "calendar": None, "ai": None, "yahoo": None, "sebi": None, "edgar": None, "http": None}
+_wire = {"feed": None, "calendar": None, "ai": None, "yahoo": None, "sebi": None, "edgar": None, "http": None, "listed": None}
 
 
 def busy(problem: str) -> bool:
@@ -108,9 +111,11 @@ def live_window(row: dict) -> tuple[str, str]:
     return start, hm_add(close_at(row), LIVE_AFTER)
 
 
-def setup(feed_fn, calendar_fn, ai_fn, yahoo_fn, sebi_fn=None, edgar_fn=None):
-    """Where the sources come from: main.py's clients, or a test's fakes."""
-    _wire.update(feed=feed_fn, calendar=calendar_fn, ai=ai_fn, yahoo=yahoo_fn, sebi=sebi_fn or (lambda: S.Sebi()), edgar=edgar_fn or (lambda: S.Edgar()))
+def setup(feed_fn, calendar_fn, ai_fn, yahoo_fn, sebi_fn=None, edgar_fn=None, listed_fn=None):
+    """Where the sources come from: main.py's clients, or a test's fakes. `listed_fn(row)`: the listed stock of a closed Indian issue
+    from the broker's instrument list ({"symbol", "exchange", "code", "first": its first trading day}), or None while it isn't there."""
+    _wire.update(feed=feed_fn, calendar=calendar_fn, ai=ai_fn, yahoo=yahoo_fn, sebi=sebi_fn or (lambda: S.Sebi()), edgar=edgar_fn or (lambda: S.Edgar()),
+                 listed=listed_fn)
 
 
 def forget():
@@ -192,11 +197,17 @@ def timeline(row: dict, now: datetime | None = None) -> dict:
     except ValueError:
         return out
     today = (now or _now()).astimezone(IST).date()
-    # SEBI's timetable gives the day; once that day has passed without the exchange publishing one, no date is given (it may have moved)
-    if not out["allotment"] and (when := next_working(close, 1)) >= today:
-        out["allotment"], out["allotment_expected"] = when.isoformat(), True
-    if not out["listing"] and (when := next_working(close, 3)) >= today:
-        out["listing"], out["listing_expected"] = when.isoformat(), True
+    # SEBI's timetable gives the day (allotment T+1, listing T+3, the main board and both SME platforms alike). BSE's issue list gives only
+    # the bidding days and drops an issue once it closes, and its SME issues are on no listed-issues list the job reads, so for those the
+    # timetable is the only date there is: it stays (marked expected) for TIMETABLE_DAYS after the listing day it gives, until the listing
+    # is confirmed (confirm_listings), rather than turning into "not published" the day after it passed (owner, 5 Nov: Core4 Engineers,
+    # Wiscon Industries and Carver Roboweld). Longer ago than that, no date is asserted (the issue may have moved or not gone ahead).
+    listing_day = next_working(close, 3)
+    if (today - listing_day).days <= TIMETABLE_DAYS:
+        if not out["allotment"]:
+            out["allotment"], out["allotment_expected"] = next_working(close, 1).isoformat(), True
+        if not out["listing"]:
+            out["listing"], out["listing_expected"] = listing_day.isoformat(), True
     return out
 
 
@@ -618,6 +629,8 @@ def refresh_india(feed, sebi, today: date, now: datetime | None = None, details:
     # an issue only SEBI's red herring prospectus names (the exchanges' lists drop an issue when it closes and take it up again after its
     # allotment): its own page on the exchange, found by the company's name (IPO-002)
     rows = find_issue_pages(rows, feed, now, problems, sleep, pace)
+    # a closed issue past its timetable listing day that no list has said listed (a BSE SME issue: see timeline): its stock in the broker's list
+    confirm_listings(rows, now, problems)
     # each issue's own page: terms, the offer document and the bids, for the issues that are near or on their dates
     want = [r for r in rows if r.get("symbol") and r.get("series") and _wants_detail(r, now)]
     # the issues being bid for or just listed first; the ones only tried again for missed final bids (RC4-020) after them
@@ -631,6 +644,43 @@ def refresh_india(feed, sebi, today: date, now: datetime | None = None, details:
     if check is not None:
         check += india_gaps(rows, nse, bse, perf, red, today, now)
     return rows, problems
+
+
+def confirm_listings(rows: list[dict], now: datetime, problems: list[str], lookup=None, limit: int = 12) -> int:
+    """Closed Indian issues whose listing no exchange list has given, once SEBI's timetable listing day (T+3) has come: the stock is looked
+    for in the broker's instrument list (by symbol, else by company name) and taken as listed only when its first trading day is on or
+    after the day bidding closed, so an older company of a like name is never taken for it. Found, the row's listing day is that first
+    trading day and its BSE scrip code is kept for its prices; an issue moves to "recently listed" by itself from then on (owner, 5 Nov:
+    three BSE SME issues closed 27 to 30 Oct sat in "closed" with no dates, BSE's issue list having dropped them at the close and its
+    listed-issues table not covering its SME platform). Returns how many were confirmed."""
+    lookup = lookup or _wire.get("listed")
+    if lookup is None:
+        return 0
+    today, n, tried = now.astimezone(IST).date(), 0, 0
+    for r in rows:
+        if tried >= limit:
+            break
+        if r.get("market") != "IN" or r.get("listing") or not r.get("close") or stage_of(r, now) != "closed":
+            continue
+        try:
+            close = date.fromisoformat(r["close"])
+        except ValueError:
+            continue
+        due = next_working(close, 3)
+        if due > today or (today - due).days > LISTING_CHECK_DAYS:
+            continue
+        tried += 1
+        got = _try(problems, f"the listing of {r.get('name')}", lambda r=r: lookup(r))
+        first = (got or {}).get("first")
+        if not first or first <= r["close"] or first > today.isoformat():
+            continue
+        r["listing"] = first
+        if got.get("code") and not r.get("symbol"):
+            r["bse_scrip"] = str(got["code"])
+        if got.get("symbol"):
+            r["listed_as"] = got["symbol"]
+        n += 1
+    return n
 
 
 def find_issue_pages(rows: list[dict], feed, now: datetime, problems: list[str], sleep=time.sleep, pace: float = 0.6, limit: int = PROBE_ROWS) -> list[dict]:
@@ -821,7 +871,11 @@ def add_final_prospectuses(rows: list[dict], finals: list[dict], edgar, today: d
 def yahoo_symbol(row: dict) -> str | None:
     if row["market"] == "US":
         return (row.get("symbol") or "").replace(".", "-") or None
-    return f"{row['symbol']}.NS" if row.get("symbol") else (f"{row['bse_code']}.BO" if row.get("bse_code") else None)
+    if row.get("symbol"):
+        return f"{row['symbol']}.NS"
+    # a BSE-only issue: the scrip code it trades under once listed (the issue list's code is the offer's own number, not the stock's)
+    code = row.get("bse_scrip") or row.get("bse_code")
+    return f"{code}.BO" if code else None
 
 
 def _official(symbol: str, day: str, now: datetime, fetch: bool) -> float | None:

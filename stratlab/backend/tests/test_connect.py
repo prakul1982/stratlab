@@ -1574,6 +1574,27 @@ def test_a_zerodha_read_without_holdings_keeps_what_was_read_before(w, kite):
     assert "no holdings" in state.section("u-admin", "kite")["detail"]
 
 
+def test_a_zerodha_read_of_todays_buys_alone_warns_only_when_something_was_kept(w, kite):
+    """19.jpg: the toast said "Read 1 holding." and the card "Zerodha returned no holdings, so the holdings read from it before are
+    kept" when nothing had been read from Zerodha before. The line is there only when holdings from an earlier read are kept."""
+    c = w["client"]
+    FakeKite.holdings_rows = []                                                                    # nothing settled yet, one buy today
+    FakeKite.positions_rows = [{"tradingsymbol": "TCS", "exchange": "NSE", "product": "CNC", "quantity": 4, "average_price": 3400.0}]
+    kite_login(c)
+    assert c.post("/connect/kite/refresh", headers=ADMIN).json()["count"] == 1
+    assert not state.section("u-admin", "kite").get("detail")
+    assert not c.get("/connect", headers=ADMIN).json()["kite"]["detail"]
+    # with holdings read before and an empty list now, it says how many are kept, in the singular for one
+    FakeKite.holdings_rows = [{"tradingsymbol": "INFY", "exchange": "NSE", "isin": "INE009A01021", "quantity": 8, "t1_quantity": 0,
+                               "collateral_quantity": 0, "average_price": 1400.0}]
+    assert c.post("/connect/kite/refresh", headers=ADMIN).status_code == 200
+    FakeKite.holdings_rows = []
+    assert c.post("/connect/kite/refresh", headers=ADMIN).status_code == 200
+    assert state.section("u-admin", "kite")["detail"] == ("Zerodha returned no holdings, only today's buys, so the 1 holding read from it "
+                                                          "before is kept as it was.")
+    assert kite_user.kept_note(3) == "Zerodha returned no holdings, only today's buys, so the 3 holdings read from it before are kept as they were."
+
+
 def test_deleting_everything_deletes_a_waiting_zerodha_login_too(w, kite, monkeypatch):
     monkeypatch.setattr(settings, "KITE_MULTIUSER_APPROVED", True)
     c = w["client"]

@@ -72,19 +72,22 @@ test("VR6-005 (O5): a brief opens with one line and one table of the indices, no
   await noSideways(page);
 });
 
-test("VR6-013: each plan card shows about 400 characters of its lines and folds the rest, every line still in the page", async ({ page }) => {
+test("VR6-013, R11: the plan cards are level, five short lines and one button each; the comparison table is open below", async ({ page }) => {
   await open(page, "/plans", ADMIN, 1440);
   await expect(page.locator(".k-plans")).toBeVisible({ timeout: 30_000 });
-  for (const p of ["free", "basic", "pro"]) {
-    const more = page.getByTestId(`plan-more-${p}`);
-    await expect(more).toHaveCount(1);
-    expect(await more.locator("li").count(), `${p}: folded lines`).toBeGreaterThanOrEqual(2);
-    await expect(more).not.toHaveAttribute("open", "");
+  await expect(page.locator(".k-plans details")).toHaveCount(0);                                         // no "3 more included in Free" folds
+  for (const card of await page.locator(".k-plans > .k-card").all()) {
+    await expect(card.locator(".k-plan-list li")).toHaveCount(5);
+    await expect(card.locator("button")).toHaveCount(1);
   }
-  const heights = await page.locator(".k-plans > .k-card").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
-  expect(Math.max(...heights) - Math.min(...heights), `card heights ${heights}`).toBeLessThan(130);          // were 984, 1,176 and 1,015
-  await page.getByTestId("plan-more-basic").locator("summary").click();
-  await expect(page.getByTestId("plan-more-basic").locator("li").first()).toBeVisible();
+  const boxes = await page.locator(".k-plans > .k-card").evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height)]; }));
+  expect(new Set(boxes.map((b) => b[0])).size, `card tops ${boxes}`).toBe(1);
+  expect(Math.max(...boxes.map((b) => b[1])) - Math.min(...boxes.map((b) => b[1])), `card heights ${boxes}`).toBeLessThanOrEqual(2);     // level
+  const feet = await page.locator(".k-plans .k-plan-btn").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().bottom)));
+  expect(Math.max(...feet) - Math.min(...feet), `buttons' feet ${feet}`).toBeLessThanOrEqual(2);
+  await expect(page.locator("#compare table").first()).toBeVisible();                                    // open, not a lone folded card
+  await expect(page.getByText("Compare every limit and feature side by side")).toHaveCount(0);
+  expect(await page.locator("ul.k-fineprint li").count()).toBeLessThanOrEqual(5);
 });
 
 test("VR6-024: a phone shows twelve strategy rows and Show 12 more; a desktop shows them all", async ({ page }) => {

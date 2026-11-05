@@ -203,7 +203,8 @@ test("onboarding: one short step asks what brings you here, with the experience,
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page).toHaveURL(/\/money$/);
   await expect(page.getByRole("heading", { name: "Your money" })).toBeVisible();
-  await expect.poll(() => prefs(request, u)).toEqual({ level: "pro", focus: "money", space: "money" });
+  // the companies question (owner, 5 Nov) is answered with its default, every company, unless they picked their own stocks
+  await expect.poll(() => prefs(request, u)).toEqual({ level: "pro", focus: "money", space: "money", companies: "all" });
   const side = await menu(page, phone);
   await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Money" })).toHaveAttribute("aria-pressed", "true");
   await expect(side.getByRole("button", { name: "Add your holdings" })).toBeVisible();
@@ -330,10 +331,10 @@ test("space homes line up: one content width, four equal tool cards without hole
         // each tool once: the strip's card, not again as a card, a button or a "what you can do" entry
         await expect(page.locator('main a[href="/trade/positioning"]')).toHaveCount(1);
         expect(await page.locator("main").getByRole("button", { name: /Import a strategy/ }).count(), `${at}: Import offered at most once`).toBeLessThanOrEqual(1);
-        await expect(page.locator(".explore-card").filter({ hasText: /^(Strategy library|Options builder|Paper trading|Trade journal|Test an idea)/ })).toHaveCount(0);
+        await expect(page.locator(".k-more-link").filter({ hasText: /^(Strategy library|Options builder|Paper trading|Trade journal|Test an idea)/ })).toHaveCount(0);
       }
       if (path === "/invest") {
-        await expect(page.locator(".explore-card").filter({ hasText: /^(Filings|Stocks|Investor home|Breadth|Sectors|Chart rules|Figures)/ })).toHaveCount(0);
+        await expect(page.locator(".k-more-link").filter({ hasText: /^(Filings|Stocks|Investor home|Breadth|Sectors|Chart rules|Figures)/ })).toHaveCount(0);
       }
       await sane(page, errors, phone);
     }

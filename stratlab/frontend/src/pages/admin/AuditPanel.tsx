@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, fmtDate, openDays, openFor } from "../../lib/format";
+import { oldAudit } from "./auditAge";
 import { Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, Disclosure, EmptyState, Field, FormActions, Meter, Notice, Select, Skeleton, type Column } from "../../components/kit";
 
 /** fact: true of the company (a recent listing, no calls held), not a gap of ours; pending: a source turned the check away, so it runs again. */
@@ -26,7 +27,6 @@ interface AuditState {
 
 const SHOWN = 300;
 const PAGE_ROWS = 30;          // companies shown at a time, then "Show more" (DJ-030: a 10,880px page on a phone)
-const STALE_DAYS = 7;          // an audit older than this says so above its results (DJ-028)
 
 /** The whole-market check's state while it runs, from its own counts: "every company checked" only when every listed company has a
  * result (LIVE3-024: it said so with 4,970 listed and 4,967 checked, the day's three new listings not yet reached). */
@@ -36,15 +36,6 @@ export function runningLine(m: { due: number; listed: number; checked: number })
   return left ? `Running · ${left.toLocaleString("en-IN")} not checked yet` : "Running · every company checked";
 }
 
-/** "These results are 23 days old" for a finished audit more than STALE_DAYS old, else "" (DJ-028). Said as a plain note, not a warning:
- * this sampled audit only runs when pressed, and the whole-market check above re-checks every company each day (owner, 4 Nov: an amber
- * "32 days old" on Quality every day with nothing that needed doing). */
-export function staleNote(finishedAt: string | null | undefined, now = Date.now()): string {
-  const t = finishedAt ? Date.parse(finishedAt) : NaN;
-  if (!Number.isFinite(t)) return "";
-  const days = Math.floor((now - t) / 86400000);
-  return days > STALE_DAYS ? `These results are ${days} days old, from an audit run by hand. The whole-market check above re-checks every company each day, so nothing needs doing; run this again only for a fresh sample.` : "";
-}
 const LEVEL: Record<Level, [string, "warn" | "plain"]> = { mismatch: ["Mismatch", "warn"], error: ["Error", "warn"], gap: ["Gap", "plain"], fact: ["Fact", "plain"], pending: ["Not checked yet", "plain"] };
 /** Which areas need a look first: mismatches, then errors, then gaps. */
 const weight = (c: Partial<Record<Level, number>>) => (c.mismatch ?? 0) * 3 + (c.error ?? 0) * 2 + (c.gap ?? 0);
@@ -92,15 +83,25 @@ export function AuditPanel({ region }: { region: Region }) {
               </FormActions>
             </form>
           </Disclosure>
-          {sum && s.label && (
-            <>
-              <p className="k-small"><b>{s.label}</b>{s.docs ? " with documents" : ""} · {s.running ? `started ${ago(s.started_at!)}` : s.finished_at ? `${s.cancelled ? "stopped" : "finished"} ${ago(s.finished_at)}` : ""}
-                {" · "}{sum.companies} checked, {sum.clean} clean · <span className="k-down">{count(sum.mismatches, "mismatch", "mismatches")}</span> · {tally(sum)}
+          {sum && s.label && (() => {
+            const old = s.running ? null : oldAudit(s.finished_at);
+            const line = (
+              <p className={`k-small${old ? " k-muted" : ""}`} data-testid="audit-line"><b>{s.label}</b>{s.docs ? " with documents" : ""} · {s.running ? `started ${ago(s.started_at!)}` : s.finished_at ? `${s.cancelled ? "stopped" : "finished"} ${ago(s.finished_at)}` : ""}
+                {" · "}{sum.companies} checked, {sum.clean} clean · <span className={old ? undefined : "k-down"}>{count(sum.mismatches, "mismatch", "mismatches")}</span> · {tally(sum)}
                 {sum.avg_seconds != null && ` · ${sum.avg_seconds}s a company`}</p>
-              {!s.running && staleNote(s.finished_at) && <Notice tone="info">{staleNote(s.finished_at)}</Notice>}
-              <Findings rows={s.rows ?? []} sum={sum} running={s.running} file="stratlab-audit.csv" region={s.region ?? region} />
-            </>
-          )}
+            );
+            const findings = <Findings rows={s.rows ?? []} sum={sum} running={s.running} file="stratlab-audit.csv" region={s.region ?? region} old={!!old} />;
+            // an audit run by hand more than a week ago is history: one closed line, its counts greyed inside (owner, 5 Nov)
+            return old ? (
+              <Disclosure summary={<span className="k-muted">Last hand-run audit, {old.day} (old)</span>} testId="audit-old">
+                <div className="k-stack adm-old">
+                  {line}
+                  <p className="k-small k-muted">{old.days} days old. The whole-market check above re-checks every company each day; these results are kept as a record only.</p>
+                  {findings}
+                </div>
+              </Disclosure>
+            ) : <>{line}{findings}</>;
+          })()}
         </>
       )}
     </Card>
@@ -272,7 +273,8 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
 }
 
 /** The area table, the kind filter, each company's findings, and a CSV of every finding. */
-function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: Row[]; sum: Summary; running: boolean; file: string; region: Region;
+function Findings({ rows: all, sum, running, file, region, onRecheck, old }: { rows: Row[]; sum: Summary; running: boolean; file: string; region: Region;
+  /** results of an old hand-run audit: shown as a record, every finding's badge plain (not a warning) and no "open for" age */ old?: boolean;
   /** the whole-market audit: check one company again now */ onRecheck?: (symbol: string) => Promise<void> }) {
   const [show, setShow] = useState<Level | "all">("mismatch");
   const [again, setAgain] = useState<string | null>(null);
@@ -313,8 +315,8 @@ function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: 
                 {onRecheck && <button type="button" className="btn quiet sm" disabled={!!again} aria-label={`Re-check ${r.name}`}
                   onClick={async () => { setAgain(r.symbol); try { await onRecheck(r.symbol); } finally { setAgain(null); } }}>{again === r.symbol ? "Checking…" : "Re-check"}</button>}
               </span>
-              {r.shown.map((i, n) => <span key={n}><Badge tone={LEVEL[i.level][1]} dot={false}>{show === "all" && i.level !== "pending" ? `${LEVEL[i.level][0]}: ` : ""}{i.area}</Badge> {i.detail}
-                {i.level !== "fact" && openDays(i.since ?? r.at) != null && <span className="k-muted" data-testid="audit-age"> · {openFor(openDays(i.since ?? r.at)!)}</span>}</span>)}
+              {r.shown.map((i, n) => <span key={n}><Badge tone={old ? "plain" : LEVEL[i.level][1]} dot={false}>{show === "all" && i.level !== "pending" ? `${LEVEL[i.level][0]}: ` : ""}{i.area}</Badge> {i.detail}
+                {!old && i.level !== "fact" && openDays(i.since ?? r.at) != null && <span className="k-muted" data-testid="audit-age"> · {openFor(openDays(i.since ?? r.at)!)}</span>}</span>)}
             </div>
           ))}
           {rows.length > upTo && upTo < SHOWN && (

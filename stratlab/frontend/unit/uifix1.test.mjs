@@ -28,7 +28,8 @@ test("UI-FIX-1 (R9): the stat rows, form grids, health grids and tile grids use 
   assert.match(read("src/components/kit/Health.tsx"), /useNoOrphan/);
   assert.match(read("src/components/TileGrid.tsx"), /useNoOrphan/);
   assert.match(read("src/pages/NavPages.tsx"), /<TileGrid className="nav-cards" fill>/);
-  assert.match(read("src/components/Explore.tsx"), /<TileGrid className="explore-grid">/);
+  // More you can do is a table in a fold since 5 Nov (owner): rows, not tiles, so no tile is left alone on a line
+  assert.match(read("src/components/MoreTools.tsx"), /<DataTable stack label=\{title\}/);
 });
 
 test("UI-FIX-1 (R1): the Invest home pairs short cards with short cards, and the notebook's checks are two columns of their own", () => {

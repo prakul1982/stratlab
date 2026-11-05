@@ -115,7 +115,7 @@ about 3 to 10 seconds a company.
   and changing the rupee price doesn't change it. Any price can be overridden here, and cleared to go back to the set
   price. **Read today's rates** only refreshes the "about ₹…" notes. No Razorpay plan is needed to show a price: without
   one in that currency, visitors pay the rupee price and their card converts it.
-- **Invoices** (Money): the seller's legal name, address, state, GSTIN and LUT ARN. Every payment gets a GST invoice
+- **Invoices** (Money): the seller's legal name, address, state, GSTIN and LUT ARN (GSTIN and LUT ARN are optional: without a GSTIN the receipt says the seller isn't registered under GST, and Admin no longer warns). Every payment gets a GST invoice
   (CGST and SGST within the state, IGST across states, exports zero-rated under the LUT).
 - **Exchange holidays** (Data and jobs): a row per market with where its holidays come from (the calendar package or
   the exchange's own list), how far ahead they're known, the next holiday and a status with a hint. For India, add a
@@ -283,7 +283,7 @@ adding a key in **Railway → Variables**, redeploy, then press **Re-rank models
 | --- | --- | --- | --- | --- |
 | Groq | About 30 requests a minute and 1,000 a day per model; the big models also have a daily token cap | Yes | [console.groq.com/keys](https://console.groq.com/keys) | `GROQ_API_KEY` (`GROQ_MODEL`) |
 | Google Gemini | Flash models: a few hundred to a thousand requests a day each; Gemma models many more | Yes. Free-tier prompts may be used by Google to improve its products | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | `GEMINI_API_KEY` (`GEMINI_MODEL`) |
-| Mistral | "Experiment" plan: about 1 request a second and a large monthly token allowance (phone check at sign-up) | Allowed, but prompts may be used to train Mistral's models | [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys) | `MISTRAL_API_KEY` (`MISTRAL_MODEL`) |
+| Mistral | **No longer free for this use (5 Nov 2026):** the key started asking for payment, so it was removed. Still supported if you add a paid key | Yes on a paid plan | [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys) | `MISTRAL_API_KEY` (`MISTRAL_MODEL`) |
 | SambaNova | About 20 requests a minute and 20 a day per model (measured only when you press Re-rank) | Yes | [cloud.sambanova.ai/apis](https://cloud.sambanova.ai/apis) | `SAMBANOVA_API_KEY` (`SAMBANOVA_MODEL`) |
 | OpenRouter | Models marked `:free` only: 20 a minute, 50 a day (1,000 a day once $10 of credit was ever bought) | Yes; some free models' hosts log prompts | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) | `OPENROUTER_API_KEY` (`OPENROUTER_MODEL`) |
 | Cloudflare Workers AI | 10,000 "neurons" a day (a few hundred short answers), reset at 00:00 UTC | Yes | [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens): use the "Workers AI" token template; the account id is on the dashboard's overview | `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (`CLOUDFLARE_MODEL`) |
@@ -309,7 +309,7 @@ resellers of other providers' free pools (Kilo Code, Requesty, AnyAPI, Gonka), *
 and Pollinations (no account, no terms to rely on, and prompts pass through a third party). Free limits change often:
 the **Test** and **Re-rank** buttons show what actually works today.
 
-**Suggested set-up:** Groq, Google Gemini and Mistral first (production-ready, generous), then Cloudflare and OpenRouter.
+**Suggested set-up (5 Nov 2026):** Groq and Google Gemini first (production-ready, generous), then Cloudflare, OpenRouter and Ollama Cloud; Claude covers the long research reads within its monthly cap.
 The flagged ones add resilience but are asked last.
 
 ### How it picks models
@@ -489,7 +489,7 @@ subscribing, verifying and cancelling are refused while it is on.
 
 ## Connect once (Settings → Connected accounts)
 
-Four things a user connects once so their numbers keep updating. Each shows "Not set up yet" (or "Not open yet") until the
+The things a user connects once so their numbers keep updating. Each shows "Not set up yet" (or "Not open yet") until the
 settings below are in place; nothing here invents a value. Every password and token a user hands over is encrypted at
 rest with `CONNECT_SECRET_KEY`, never written to a log (`backend/app/connect/redact.py` masks them), never sent back to
 the page, and deleted when the user disconnects.
@@ -564,6 +564,36 @@ approval: ask through the Kite Connect forum (https://kite.trade) or Zerodha sup
 
 Zerodha ends every login at about 6 am, so users tap once a day ("Connected · refreshed today 09:12 · tap to refresh
 tomorrow"); there is no way around that daily step.
+
+### 3b. Upstox and Dhan (read-only holdings logins)
+
+The same shape as Zerodha's: Settings → Connected accounts → Brokers lists Zerodha, Upstox and Dhan in one table.
+A user taps **Connect**, logs in at the broker, comes back to `/connect/<broker>/callback` (which links nothing by itself),
+and the signed-in Settings page confirms the login with a one-time claim. The token is encrypted with `CONNECT_SECRET_KEY`,
+never logged or sent to the page, and deleted on **Disconnect**; holdings land in My Holdings tagged with the broker, as
+Zerodha's do. The server only ever calls each broker's token and holdings addresses (`backend/app/connect/brokers.py`,
+`READ_ONLY`): no order, funds or other write call exists. There is no background polling: **Refresh** reads again while the
+login lasts (on Settings and on My Holdings). "Pick your broker" (Settings and My Holdings) shows each broker's ways in:
+connect (Zerodha, Upstox, Dhan), its holdings file, or the monthly statement by email. Angel One and the others
+have no live connection: their file and the email.
+
+Each card says "Not set up yet" until its keys and `CONNECT_SECRET_KEY` are set, even with its `*_FOR_ALL` flag on. Until
+the flag is `true`, only admins (`ADMIN_EMAILS`) can connect ("Not open yet" for everyone else).
+
+| Broker | Railway variables | Redirect URL to register with the broker | Open to everyone | Login ends |
+|---|---|---|---|---|
+| Upstox | `UPSTOX_API_KEY`, `UPSTOX_API_SECRET` | `https://<your API host>/connect/upstox/callback` | `UPSTOX_FOR_ALL=true` | 03:30 IST next day |
+| Dhan | `DHAN_APP_ID`, `DHAN_APP_SECRET`, `DHAN_CLIENT_ID` (your own Dhan client id) | `https://<your API host>/connect/dhan/callback` | `DHAN_FOR_ALL=true` | the time Dhan gives (about 24 h) |
+
+- **Upstox:** make an app at https://account.upstox.com/developer/apps with that redirect URL; its API key and secret go in
+  the two variables.
+- **Dhan:** on web.dhan.co → My Profile → Access DhanHQ APIs (DhanHQ Trading APIs), choose **API key**, give an app name and
+  that redirect URL; the API key and secret go in `DHAN_APP_ID` and `DHAN_APP_SECRET` (valid 12 months), and your Dhan
+  client id in `DHAN_CLIENT_ID` (Dhan's consent step needs it). An individual API-key app logs in only its owner's own
+  account: with `DHAN_FOR_ALL=true` anyone may try, and a login Dhan refuses (someone else's account) ends on Settings with
+  "Dhan didn't allow this login yet. Upload your holdings file or forward your statement instead." (the reason is in the
+  server log). For every user, ask Dhan for partner credentials and set `DHAN_PARTNER_ID` and `DHAN_PARTNER_SECRET`: the
+  partner flow is used whenever they are set. Holdings reads need no static IP (Dhan asks for one only on order placement).
 
 ### 4. Interactive Brokers (US stocks)
 

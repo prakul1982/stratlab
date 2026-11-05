@@ -12,7 +12,7 @@ import time_machine
 from app import checklist, db, deals, main, screens, stock_alerts as sa
 from app.intel import filings as F
 from app.intel.net import SourceError
-from tests import world as W
+from tests import fake_pit, world as W
 from tests.fake_db import headers
 
 PROVIDERS = re.compile(r"kite|zerodha|yahoo|screener|finnhub|edgar|nseindia|bseindia", re.I)
@@ -64,6 +64,90 @@ def test_insider_disclosures_become_plain_rows():
     assert esop["mode"] == "esop" and esop["relation"] == "employee" and esop["value"] is None
 
 
+# the exchange's insider-trading list since May 2026: filings, with the trades in each filing's XBRL document (real samples)
+def test_the_exchanges_insider_documents_become_plain_rows():
+    filings = F.pit_filings(fake_pit.fixture_list())
+    assert [f["symbol"] for f in filings] == ["GERMAN", "RESPONIND", "WIPRO", "EMBDL", "DMART", "PARIN"]
+    by = {f["symbol"]: F.insider_rows(F.pit_xbrl_rows(fake_pit.fixture_doc(f["xml"]), f)) for f in filings}
+    sale = by["DMART"][0]
+    assert sale == {**sale, "kind": "insider", "symbol": "DMART", "who": "Person E", "relation": "employee", "side": "sold",
+                    "mode": "market", "qty": 1400.0, "value": 4452000.0, "price": 3180.0, "pct_after": 0.02,
+                    "date": "2026-10-29", "filed": "2026-11-02"}
+    assert sale["url"] == "https://nsearchives.nseindia.com/corporate/ixbrl/IT_14711_20261102_173300418_WEB.html"
+    assert [(d["who"], d["side"], d["mode"]) for d in by["DMART"][1:4]] == [
+        ("Person E", "pledged", "pledge"), ("Person F", "invoked", "pledge"), ("Person G", "invoked", "pledge")]
+    assert [(d["side"], d["mode"], d["pct_after"]) for d in by["RESPONIND"]] == [("released", "pledge", 9.25)]   # filed as 0.0925
+    assert [(d["who"], d["relation"], d["side"], d["mode"]) for d in by["EMBDL"]] == [("Person D", "promoter", "bought", "other")]  # the warrants left out
+    assert by["WIPRO"] == []                                       # ADRs aren't the company's shares
+    assert [(d["qty"], d["pct_after"], d["date"]) for d in by["PARIN"]] == [(500.0, 10.58, "2026-10-22"), (7511.0, 10.52, "2026-10-23")]
+    assert [(d["relation"], d["side"], d["mode"], d["qty"]) for d in by["GERMAN"]] == [("other", "bought", "market", 7500.0),
+                                                                                      ("other", "bought", "market", 3000.0)]
+
+
+@pytest.mark.parametrize("doc", [b"", b"not xml", b"<?xml version='1.0'?><!DOCTYPE x [<!ENTITY a 'b'>]><x>&a;</x>"])
+def test_an_unreadable_insider_document_is_refused(doc):
+    with pytest.raises(F.BadPitDoc):
+        F.pit_xbrl_rows(doc, {})
+
+
+def test_insider_filings_off_the_exchanges_archive_are_never_fetched():
+    rows = [{"symbol": "A", "xmlFileName": "https://evil.example/corporate/xbrl/x.xml"}, {"symbol": "B", "xmlFileName": "javascript:alert(1)"},
+            {"symbol": "C", "xmlFileName": "https://nsearchives.nseindia.com/corporate/x.pdf"}, {"symbol": "D"}, None, "x",
+            {"SYMBOL": "e", "XBRL": "https://nsearchives.nseindia.com/corporate/xbrl/e.xml", "BROADCASTDATE": "01-Nov-2026 10:00:00"}]
+    assert F.pit_filings(rows) == [{"symbol": "E", "filed": "01-Nov-2026 10:00:00", "xml": "https://nsearchives.nseindia.com/corporate/xbrl/e.xml",
+                                    "page": "https://nsearchives.nseindia.com/corporate/xbrl/e.xml"}]
+    assert F.pit_filings({"data": []}) == F.pit_filings(None) == []
+
+
+FIX_DAY = datetime(2026, 11, 5, 22, 0)
+
+
+def test_the_whole_markets_insider_trades_read_every_filings_document():
+    calls = []
+    feed = F.NSEFilings(transport=fake_pit.fixture_transport(calls))
+    got = feed.insider_trades(None, 14, FIX_DAY)
+    assert {d["symbol"] for d in got} == {"GERMAN", "RESPONIND", "EMBDL", "DMART", "PARIN"} and len(got) == 11
+    assert got[0]["date"] == "2026-11-03" and got[-1]["date"] == "2026-10-15"
+    assert [c for c in calls if c[1] == F.PIT_LIST][0][2] == {"index": "equities", "from_date": "22-10-2026", "to_date": "05-11-2026"}
+    assert not [c for c in calls if c[1] == F.PIT_OLD]             # the old list has nothing for the whole market
+    assert len([c for c in calls if c[1].startswith("/corporate/xbrl/")]) == 6
+
+
+def test_a_company_window_before_the_new_list_also_reads_the_old_one():
+    calls = []
+    feed = F.NSEFilings(transport=fake_pit.fixture_transport(calls))
+    assert {d["symbol"] for d in feed.insider_trades("DMART", 365, FIX_DAY)} == {"DMART"}
+    assert [c for c in calls if c[1] == F.PIT_OLD][0][2]["symbol"] == "DMART"
+    calls.clear()
+    feed.insider_trades("DMART", 90, FIX_DAY)                         # all after the new list began: the old one isn't asked
+    assert not [c for c in calls if c[1] == F.PIT_OLD]
+
+
+def test_a_busy_archive_leaves_a_gap_that_is_filled_soon_and_all_busy_is_an_error():
+    dmart = "IT_14711_WebXMLFile_20261102_173300365.xml"
+    feed = F.NSEFilings(transport=fake_pit.fixture_transport(refuse={dmart}))
+    got = feed.insider_trades(None, 14, FIX_DAY)
+    assert "DMART" not in {d["symbol"] for d in got} and len(got) == 6
+    names = {f["xml"].rsplit("/", 1)[-1] for f in F.pit_filings(fake_pit.fixture_list())}
+    feed = F.NSEFilings(transport=fake_pit.fixture_transport(refuse=names))
+    with pytest.raises(SourceError, match="archive") as e:
+        feed.insider_trades(None, 14, FIX_DAY)
+    assert e.value.busy and not PROVIDERS.search(str(e.value))
+
+
+def test_insider_documents_in_a_new_format_are_a_clear_error_not_an_empty_list():
+    def handler(req: httpx.Request):
+        if req.url.path == F.PIT_LIST:
+            return httpx.Response(200, json=fake_pit.fixture_list())
+        if req.url.path.startswith("/corporate/xbrl/"):
+            return httpx.Response(200, text="<?xml version='1.0'?><report><person>A</person></report>")
+        return httpx.Response(200, text="<html></html>")
+    feed = F.NSEFilings(transport=httpx.MockTransport(handler))
+    with pytest.raises(SourceError, match="format may have changed") as e:
+        feed.insider_trades(None, 14, FIX_DAY)
+    assert not e.value.busy and not PROVIDERS.search(str(e.value))
+
+
 def test_sast_bulk_and_block_rows():
     raw = W.deal_rows()
     s = F.sast_rows(raw["sast"])[0]
@@ -109,16 +193,45 @@ def transport(answers: dict, calls: list):
     return httpx.MockTransport(handler)
 
 
+def world_pit(calls: list) -> httpx.MockTransport:
+    """The exchange answering the world's insider disclosures: the list of filings and each filing's document."""
+    pit = W.deal_rows()["pit"]
+
+    def handler(req: httpx.Request):
+        calls.append((req.url.host, req.url.path, dict(req.url.params)))
+        if req.url.path == "/":
+            return httpx.Response(200, text="<html></html>", headers={"set-cookie": "nsit=abc; Path=/"})
+        return fake_pit.world_answer(req, pit) or httpx.Response(404, text="Not found")
+    return httpx.MockTransport(handler)
+
+
 def test_client_asks_per_company_and_caches():
+    """Insider trades come from the exchange's list of filings, then each filing's document on its archive."""
+    calls = []
+    feed = F.NSEFilings(transport=world_pit(calls))
+    got = feed.insider_trades("RELIANCE")
+    assert len(got) == 4 and got[0]["date"] >= got[-1]["date"]                # the warrants row is left out
+    lists = [c for c in calls if c[1] == F.PIT_LIST]
+    assert len(lists) == 1 and lists[0][2]["symbol"] == "RELIANCE" and lists[0][2]["index"] == "equities"
+    assert set(lists[0][2]) >= {"from_date", "to_date"}
+    docs = [c for c in calls if c[1].startswith("/corporate/xbrl/")]
+    assert len(docs) == 5 and {c[0] for c in docs} == {"nsearchives.nseindia.com"}
+    assert [c for c in calls if c[1] == F.PIT_OLD]                             # a year back reaches before the new list began
+    buy = next(d for d in got if d["side"] == "bought" and d["mode"] == "market")
+    assert (buy["who"], buy["qty"], buy["value"], buy["pct_after"], buy["date"], buy["filed"]) == \
+        ("Mukesh Shah Family Trust", 25000.0, 72500000.0, 50.12, ago(20), ago(18))
+    assert buy["url"].startswith("https://nsearchives.nseindia.com/corporate/ixbrl/")   # the filing's readable page
+    n = len(calls)
+    assert feed.insider_trades("RELIANCE") == got and len(calls) == n          # cached
+    feed.cache.clear()
+    assert feed.insider_trades("RELIANCE") == got
+    assert not [c for c in calls[n:] if c[1].startswith("/corporate/xbrl/")]   # documents never change: each read once
+
+
+def test_client_reads_bulk_deals_as_a_bare_list():
     calls = []
     raw = W.deal_rows()
-    feed = F.NSEFilings(transport=transport({"/api/corporates-pit": {"data": raw["pit"]}, "bulk_deals": raw["bulk_deals"]}, calls))
-    got = feed.insider_trades("RELIANCE")
-    assert len(got) == 4 and got[0]["date"] >= got[-1]["date"]
-    path, params = calls[-1]
-    assert path == "/api/corporates-pit" and params["symbol"] == "RELIANCE" and params["index"] == "equities"
-    assert set(params) >= {"from_date", "to_date"}
-    assert feed.insider_trades("RELIANCE") == got and len(calls) == 2           # cached
+    feed = F.NSEFilings(transport=transport({"bulk_deals": raw["bulk_deals"]}, calls))
     assert feed.bulk_deals("RELIANCE")[0]["who"] == "Index Fund One"            # a bare list is read too
     assert calls[-1][1]["optionType"] == "bulk_deals" and "from" in calls[-1][1]
 
@@ -134,7 +247,7 @@ def test_a_feed_that_is_down_or_changed_shape_is_a_clear_error(answer, busy):
 
 def test_a_broken_deal_feed_does_not_take_the_filings_down():
     calls = []
-    feed = F.NSEFilings(transport=transport({"/api/corporates-pit": [(200, "<html>blocked</html>")],
+    feed = F.NSEFilings(transport=transport({F.PIT_LIST: [(200, "<html>blocked</html>")],
                                              "/api/corporate-announcements": [{"data": []}]}, calls))
     for _ in range(4):
         with pytest.raises(SourceError):

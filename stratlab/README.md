@@ -108,11 +108,11 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 5. **Check it once for real:** buy Basic with your own account, confirm the Account page shows it and Admin → Money lists the subscription, then cancel from Account (you keep it until the period ends). Refund yourself from the Razorpay dashboard if you like.
 
 ### 4. AI builder (all plans) and alerts (Basic and Pro)
-- **AI strategy builder and research reads:** set a key for one or more providers. They're tried in order until one answers, so a rate limit or outage at one moves on to the next (the order for each kind of job is below). All but Anthropic have free tiers. Two or three free keys are plenty: Research answers are cached and shared between users, so a popular stock costs one AI call a day.
+- **AI strategy builder and research reads:** set a key for one or more providers. They're tried in order until one answers, so a rate limit or outage at one moves on to the next (the order for each kind of job is below). All but Anthropic and Mistral have free tiers (Cerebras was dropped in November 2026: trial credit only). Two or three free keys are plenty: Research answers are cached and shared between users, so a popular stock costs one AI call a day.
   - `GROQ_API_KEY` from console.groq.com: free and the fastest. A good first choice.
-  - `CEREBRAS_API_KEY` from cloud.cerebras.ai: free and very fast.
   - `SAMBANOVA_API_KEY` from cloud.sambanova.ai: free tier, fast Llama 70B.
-  - `MISTRAL_API_KEY` from console.mistral.ai: free "Experiment" plan.
+  - `OLLAMA_API_KEY` from ollama.com/settings/keys: a light free plan, open models such as gpt-oss.
+  - `MISTRAL_API_KEY` from console.mistral.ai: no longer free for this use (it asks for payment since November 2026); only with a paid plan.
   - `GEMINI_API_KEY` from aistudio.google.com: free tier.
   - `OPENROUTER_API_KEY` from openrouter.ai: with `OPENROUTER_MODEL=auto` only free models are used.
   - `ANTHROPIC_API_KEY`: paid. Set `AI_PROVIDER=anthropic` to try Claude first.
@@ -134,6 +134,7 @@ Weekends and exchange holidays come from the `exchange_calendars` package: BSE f
 - `CONNECT_SECRET_KEY`: a Fernet key that encrypts every stored broker token and statement password (make one with the one-line command in ADMIN.md, and keep a copy: without it stored logins can't be opened). Needed for everything below.
 - **Statement inbox:** `INBOUND_DOMAIN` (a receiving subdomain with its MX records), `INBOUND_PROVIDER` (`brevo`, the default, or `signed`) and `INBOUND_WEBHOOK_SECRET`. Each user gets a private address there; the monthly NSDL, CDSL, CAMS, KFintech and MF Central statements forwarded to it are read and thrown away.
 - **Zerodha for every user:** needs Zerodha's approval of a multi-user Kite app. Until `KITE_MULTIUSER_APPROVED=true` only admins can connect it; `KITE_CONNECT_API_KEY` and `KITE_CONNECT_API_SECRET` name a separate app, otherwise `KITE_API_KEY` and `KITE_API_SECRET` are used.
+- **Upstox and Dhan** (read-only holdings logins, like Zerodha's): `UPSTOX_API_KEY` + `UPSTOX_API_SECRET`, and `DHAN_APP_ID` + `DHAN_APP_SECRET` + `DHAN_CLIENT_ID` (a Dhan API-key app works only for its owner's account; `DHAN_PARTNER_ID` + `DHAN_PARTNER_SECRET` open it to everyone). Redirect URLs: `<PUBLIC_API_URL>/connect/upstox/callback` and `/connect/dhan/callback`. Each is admin-only until `UPSTOX_FOR_ALL` or `DHAN_FOR_ALL` is `true`, and says "Not set up yet" without its keys.
 - **Interactive Brokers** (a user's own read-only Flex token) and **EPF, NPS and AIS** uploads need only `CONNECT_SECRET_KEY`.
 
 ### Recording option chains (for options backtesting)

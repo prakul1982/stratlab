@@ -3,6 +3,7 @@
   {"inbox": {"local", "created_at", "pw" (sealed), "last": {at, status, kind, detail}, "confirm": {code, at}, "reminded_at"},
    "kite":  {"token" (sealed), "kite_user", "day", "refreshed_at", "status", "detail"},
    "ibkr":  {"token" (sealed), "query", "synced_at", "status", "detail", "positions", "trades"},
+   "upstox" / "dhan": {"token" (sealed), "account", "expires_at", "refreshed_at", "status", "detail", "count", "dead"},
    "docs":  {"epf": {...figures the user confirmed}, "nps": {...}, "ais": {...}}}
 
 An index row connect-inbox:<local> = uid finds the account a forwarding address belongs to. Secrets are sealed (vault.py)
@@ -15,7 +16,7 @@ from .. import db
 
 KEY = "connect:"
 INDEX = "connect-inbox:"
-SECTIONS = ("inbox", "kite", "ibkr", "docs")
+SECTIONS = ("inbox", "kite", "ibkr", "docs", "upstox", "dhan")
 _lock = threading.RLock()
 
 

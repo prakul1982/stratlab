@@ -179,3 +179,16 @@ if __name__ == "__main__":
     FIXTURE.parent.mkdir(parents=True, exist_ok=True)
     FIXTURE.write_text(json.dumps(build_fixture(), separators=(",", ":")))
     print("wrote", FIXTURE)
+
+
+def test_a_chart_read_waits_longer_for_the_price_sources_rate_limit(w, monkeypatch):
+    """R9 smoke: right after a deploy the start-up jobs used the price source's allowance, and the older page of a chart,
+    allowed the 1 s other reads get, answered 503. A chart read waits routes.CHART_WAIT for its turn instead."""
+    from app.intel import net, routes
+    seen = []
+    real = routes.hub.chart
+    monkeypatch.setattr(routes.hub, "chart", lambda *a, **k: (seen.append(net.rate_wait()), real(*a, **k))[1])
+    c = w["client"]
+    assert c.get("/research/chart/US/AAPL?tf=1d", headers=PRO).status_code == 200
+    assert seen == [routes.CHART_WAIT] and routes.CHART_WAIT > net.REQUEST_WAIT
+    assert net.rate_wait() == net.JOB_WAIT                 # set for that read only

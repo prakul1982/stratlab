@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // Settings -> Connected accounts: the statement inbox (address, filter steps, statement password, last received, upload by
-// hand), Zerodha (closed to users until Zerodha approves the app; open to the owner), US stocks through Interactive Brokers,
+// hand), the broker logins (Zerodha, Upstox, Dhan: closed to users until each is opened; open to the owner), US stocks through Interactive Brokers,
 // and the EPF / NPS / AIS uploads. Statements here are made-up files in e2e/fixtures. Each run signs in as its own new user.
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 const SHOTS = process.env.E2E_SHOTS;
@@ -90,6 +90,17 @@ test("statement inbox: an address, the filter steps, a password, and a statement
   await sane(page, errors, phone);
   await shot(page, "connected-inbox", phone, !phone);
 
+  // the funds page offers the same inbox beside its statement upload, with this address, and links back here (owner, 5 Nov)
+  const mine = (await address.textContent())!;
+  await page.goto("/money/mutual-funds");
+  const note = main.getByTestId("inbox-note");
+  await expect(note).toContainText("Statement inbox is on", { timeout: 30_000 });
+  await expect(note).toContainText(mine);
+  await note.getByRole("link", { name: "Inbox settings" }).click();
+  await expect(page).toHaveURL(/\/settings#inbox$/);
+  await expect(inbox.getByTestId("inbox-address")).toHaveText(mine, { timeout: 30_000 });
+  await sane(page, errors, phone);
+
   // turning it off deletes the address and the password
   await inbox.getByRole("button", { name: "Turn off the inbox" }).click();
   await page.getByRole("button", { name: "Turn it off" }).click();
@@ -106,6 +117,12 @@ test("US stocks: a bad token says why, a good one reads positions, disconnecting
   const main = page.locator("main");
   await expect(main.locator("#zerodha")).toContainText("Not open yet", { timeout: 30_000 });
   await expect(main.locator("#zerodha").getByRole("button", { name: "Connect Zerodha" })).toHaveCount(0);
+  // Upstox and Dhan are admin-only until their flags: one short row each, no button; Angel One has no connection
+  await expect(main.locator("#angelone")).toHaveCount(0);
+  for (const [id, name] of [["upstox", "Upstox"], ["dhan", "Dhan"]]) {
+    await expect(main.locator(`#${id}`)).toContainText("Not open yet");
+    await expect(main.locator(`#${id}`).getByRole("button", { name: `Connect ${name}` })).toHaveCount(0);
+  }
 
   const card = main.locator("#ibkr");
   await card.getByLabel("Flex token").fill("bad-token-0000000000");
@@ -114,7 +131,7 @@ test("US stocks: a bad token says why, a good one reads positions, disconnecting
   await expect(page.getByText("doesn't recognise that token")).toBeVisible({ timeout: 30_000 });
   await card.getByLabel("Flex token").fill("good-token-1234567890");
   await card.getByRole("button", { name: "Connect" }).click();
-  await expect(card.getByTestId("ibkr-line")).toContainText("US positions", { timeout: 30_000 });
+  await expect(card.getByTestId("ibkr-line")).toContainText(/\d+ US positions?\b/, { timeout: 30_000 });   // "1 US position", in the singular for one
   await expect(card.getByText("Connected", { exact: true })).toBeVisible();
   const view = await (await request.get(`${API}/connect`, { headers: auth(u) })).text();
   expect(view).not.toContain("good-token-1234567890");
@@ -149,7 +166,9 @@ test("Zerodha is open to the owner: log in, read holdings, refresh; and an EPF p
   // and when Zerodha ends that login by itself (R46-001)
   await expect(z.getByTestId("kite-line")).toContainText(/ · this login ends (at|on) (\d{1,2} \w{3}, )?06:00 IST$/);
   await z.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByText("Read 1 holdings.")).toBeVisible();
+  // one holding is "1 holding" (19.jpg had "Read 1 holding."), and a read that found it says nothing about holdings kept from before
+  await expect(page.getByText("Read 1 holding.", { exact: true })).toBeVisible();
+  await expect(z).not.toContainText("returned no holdings");
   await sane(page, errors, phone);
   await shot(page, "connected-zerodha", phone, !phone);
   await z.getByRole("button", { name: "Disconnect" }).click();
@@ -165,4 +184,110 @@ test("Zerodha is open to the owner: log in, read holdings, refresh; and an EPF p
   await docs.getByRole("button", { name: "Save these figures" }).click();
   await expect(docs.getByTestId("doc-epf")).toContainText("Saved as of", { timeout: 30_000 });
   await sane(page, errors, phone);
+});
+
+test("Upstox and Dhan are open to the owner: log in to each, holdings read, refresh, My Holdings, disconnect", async ({ page, request }, info) => {
+  const phone = info.project.name === "phone";
+  if (!phone) await page.emulateMedia({ colorScheme: "dark" });
+  const OWNER = who(258, phone);                       // an admin in the e2e world (load258 / load261)
+  // each broker's round trip the way the browser makes it: the login address, then the broker sending the browser back
+  const back = async (key: string) => {
+    const a = await (await request.get(`${API}/connect/${key}/login`, { headers: auth(OWNER) })).json();
+    const st = new URL(a.url).searchParams.get("state") ?? "";
+    const params: Record<string, string> = key === "upstox" ? { code: "e2e-code", state: st } : { tokenId: "e2e-token-id" };
+    if (key === "dhan") expect(a.url).toContain("consentAppId=e2e-consent");
+    const r = await request.get(`${API}/connect/${key}/callback`, { params, maxRedirects: 0 });
+    expect(r.status()).toBe(303);
+    const where = new URL(r.headers()["location"]);
+    expect(where.searchParams.get("b")).toBe("confirm");
+    expect(where.pathname + where.hash).toBe("/settings#accounts");         // only ever back to the app's own page
+    return where.pathname + where.search + where.hash;
+  };
+  const errors = await signIn(page, request, OWNER, await back("upstox"));
+  await expect(page.getByText("Upstox is connected and your holdings are read.")).toBeVisible({ timeout: 30_000 });
+  expect(page.url(), "the reference and claim leave the address once used").not.toContain("bc=");
+  const main = page.locator("main");
+  await expect(main.locator("#upstox").getByTestId("upstox-line")).toHaveText(/^Connected · last read today \d\d:\d\d IST · 1 holding · this login ends (at|on) (\d{1,2} \w{3}, )?03:30 IST$/, { timeout: 30_000 });
+  await page.goto(await back("dhan"));
+  await expect(page.getByText("Dhan is connected and your holdings are read.")).toBeVisible({ timeout: 30_000 });
+  await expect(main.locator("#dhan").getByTestId("dhan-line")).toContainText(/^Connected · last read today .* · this login ends /, { timeout: 30_000 });
+  for (const id of ["upstox", "dhan"]) await expect(main.locator(`#${id}`).getByText("Connected", { exact: true })).toBeVisible();
+  const raw = await (await request.get(`${API}/connect`, { headers: auth(OWNER) })).text();
+  expect(raw, "no token reaches the page").not.toMatch(/eyJ|e2e\.jwt/);
+  const held = await (await request.get(`${API}/holdings`, { headers: auth(OWNER) })).json();
+  expect(held.rows.map((r: { symbol: string }) => r.symbol)).toEqual(expect.arrayContaining(["TCS", "HDFCBANK"]));
+  await main.locator("#upstox").getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByText("Read 1 holding.")).toBeVisible({ timeout: 30_000 });
+  await sane(page, errors, phone);
+  await shot(page, "connected-brokers", phone, !phone);
+
+  // My Holdings reads each again from there
+  await page.goto("/holdings");
+  await expect(main.getByTestId("dhan-refresh")).toContainText("Dhan is connected", { timeout: 30_000 });
+  await main.getByTestId("upstox-refresh").getByRole("button", { name: "Read from Upstox now" }).click();
+  await expect(page.getByText("Read 1 holding from Upstox.")).toBeVisible({ timeout: 30_000 });
+  await sane(page, errors, phone);
+
+  // disconnecting asks first, deletes the login and keeps what was read
+  await page.goto("/settings#accounts");
+  const up = main.locator("#upstox");
+  await up.getByRole("button", { name: "Disconnect" }).click();
+  await page.getByRole("dialog", { name: "Disconnect Upstox?" }).getByRole("button", { name: "Disconnect" }).click();
+  await expect(up.getByRole("button", { name: "Connect Upstox" })).toBeVisible({ timeout: 30_000 });
+  for (const key of ["dhan"]) await request.delete(`${API}/connect/${key}`, { headers: auth(OWNER) });
+  const after = await (await request.get(`${API}/holdings`, { headers: auth(OWNER) })).json();
+  expect(after.rows.map((r: { symbol: string }) => r.symbol)).toEqual(expect.arrayContaining(["TCS", "HDFCBANK"]));
+});
+
+test("Pick your broker: each broker's ways (connect, file, email), the pick kept on the account, on Settings and My Holdings", async ({ page, request }, info) => {
+  const phone = info.project.name === "phone";
+  if (!phone) await page.emulateMedia({ colorScheme: "dark" });
+  const u = who(264, phone);                           // not an admin: the live connections aren't open to it
+  await request.put(`${API}/me/prefs`, { headers: auth(u), data: { broker: "zerodha" } });
+  const errors = await signIn(page, request, u, "/settings#accounts");
+  const main = page.locator("main");
+  const guide = main.locator("#pick-broker");
+  const chips = guide.getByRole("group", { name: "Your broker" });
+  await expect(chips.getByRole("button", { name: "Zerodha" })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });   // the account's pick
+  await expect(chips.getByRole("button")).toHaveText(["Zerodha", "Groww", "Upstox", "Angel One", "Dhan", "ICICI Direct", "HDFC Sky / HDFC Securities", "Kotak Neo", "Paytm Money", "Motilal Oswal", "Other"]);
+  await expect(guide.getByTestId("guide-connect")).toContainText("Not open yet");
+  await expect(guide.getByTestId("guide-file")).toContainText("Portfolio, then Holdings");
+
+  // Groww: the file and the email, no live connection
+  await chips.getByRole("button", { name: "Groww" }).click();
+  await expect(guide.getByTestId("guide-connect")).toHaveCount(0);
+  await expect(guide.getByTestId("guide-file")).toContainText("open your profile, then Reports");
+  await expect(guide.getByTestId("guide-file")).toContainText("recognises Groww's file");
+  await expect(guide.getByTestId("guide-email")).toContainText("NSDL or CDSL");
+  await expect(guide.getByTestId("guide-file").getByRole("link", { name: "Upload in My Holdings" })).toBeVisible();
+  await sane(page, errors, phone);
+  await shot(page, "connected-pick-broker", phone, !phone);
+
+  // Angel One: no live connection here (owner, 5 Nov): its file and the email only
+  await chips.getByRole("button", { name: "Angel One" }).click();
+  await expect(guide.getByTestId("guide-connect")).toHaveCount(0);
+  await expect(guide.getByTestId("guide-file")).toContainText("open Portfolio");
+
+  // Upstox: its connection in its real state (not open to this account), first
+  await chips.getByRole("button", { name: "Upstox" }).click();
+  await expect(guide.getByTestId("guide-connect")).toContainText("Not open yet");
+  await expect(guide.getByTestId("guide-connect").getByRole("button")).toHaveCount(0);
+  await expect.poll(async () => (await (await request.get(`${API}/me`, { headers: auth(u) })).json()).prefs?.broker, { timeout: 15_000 }).toBe("upstox");
+
+  // a login Dhan itself refused (its own app, someone else's account) lands here in plain words
+  await page.goto("/settings?broker=dhan&b=refused#accounts");
+  await expect(page.getByText("Dhan didn't allow this login yet. Upload your holdings file or forward your statement instead.")).toBeVisible({ timeout: 30_000 });
+  expect(page.url()).not.toContain("refused");
+
+  // My Holdings: the same guide opens on the pick; "Other" says what a file of one's own needs, and opens the upload
+  await page.goto("/holdings");
+  const g2 = main.locator("#pick-broker");
+  await expect(g2.getByRole("group", { name: "Your broker" }).getByRole("button", { name: "Upstox" })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+  await g2.getByRole("group", { name: "Your broker" }).getByRole("button", { name: "Other" }).click();
+  await expect(g2.getByTestId("guide-file")).toContainText("Symbol (or ISIN), Quantity and Average price");
+  const chooser = page.waitForEvent("filechooser");
+  await g2.getByTestId("guide-file").getByRole("button", { name: "Upload holdings file" }).click();
+  await chooser;
+  await sane(page, errors, phone);
+  await shot(page, "holdings-pick-broker", phone, !phone);
 });

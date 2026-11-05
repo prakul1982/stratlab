@@ -50,6 +50,20 @@ class Settings:
     KITE_MULTIUSER_APPROVED = _env("KITE_MULTIUSER_APPROVED", "false").lower() == "true"
     KITE_CONNECT_API_KEY = _env("KITE_CONNECT_API_KEY")
     KITE_CONNECT_API_SECRET = _env("KITE_CONNECT_API_SECRET")
+    # Upstox and Dhan: read-only holdings logins like Zerodha's (app/connect/brokers.py). Each is admin-only
+    # until its *_FOR_ALL flag is "true"; without its keys its card says "Not set up yet"
+    UPSTOX_API_KEY = _env("UPSTOX_API_KEY")
+    UPSTOX_API_SECRET = _env("UPSTOX_API_SECRET")
+    UPSTOX_FOR_ALL = _env("UPSTOX_FOR_ALL", "false").lower() == "true"
+    # Dhan: an individual app (app id + secret + the owner's Dhan client id) works only for that one account; the partner
+    # credentials (from Dhan) let other users connect. With DHAN_FOR_ALL on and no partner credentials, anyone may try, and
+    # a login Dhan refuses ends on Settings in plain words
+    DHAN_APP_ID = _env("DHAN_APP_ID")
+    DHAN_APP_SECRET = _env("DHAN_APP_SECRET")
+    DHAN_CLIENT_ID = _env("DHAN_CLIENT_ID")
+    DHAN_PARTNER_ID = _env("DHAN_PARTNER_ID")
+    DHAN_PARTNER_SECRET = _env("DHAN_PARTNER_SECRET")
+    DHAN_FOR_ALL = _env("DHAN_FOR_ALL", "false").lower() == "true"
 
     RAZORPAY_KEY_ID = _env("RAZORPAY_KEY_ID")
     RAZORPAY_KEY_SECRET = _env("RAZORPAY_KEY_SECRET")

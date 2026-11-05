@@ -124,6 +124,8 @@ test("DE-032/DE-036: red flags from the evening's read for a company that didn't
   const s = read("src/pages/ResearchScans.tsx");
   assert.match(s, /r\.stored && <Badge tone="plain">From the evening's read/);
   assert.match(s, /window\.setTimeout\(\(\) => setTries\(\(n\) => n \+ 1\), FILINGS_REREAD_MS\)/);
-  assert.match(s, /options=\{\[\{ value: "mine", label: "Your stocks" \}, \{ value: "all", label: "All companies" \}\]\}/);
+  // one switch for every page that picks companies (lib/companyScope, owner 5 Nov): every company first, then "My stocks"
+  assert.match(s, /<Seg label="Which companies" value=\{view\} onChange=\{pickView\} options=\{SCOPE_OPTIONS\} \/>/);
+  assert.match(read("src/lib/companyScope.ts"), /\[\{ value: "all", label: "All companies" \}, \{ value: "mine", label: "My stocks" \}\]/);
   assert.match(read("src/components/Filings.tsx"), /from the evening's read of every company's filings/);
 });

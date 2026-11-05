@@ -14,16 +14,18 @@ test("MO-2: no page is tagged New (everything is new at launch)", () => {
   assert.doesNotMatch(tags, /isNew/);
 });
 
-test("MO-2: Net worth: a full-size add button at the top and one-tap chips for the usual kinds", () => {
+test("MO-2: Net worth: a full-size add button at the top and the usual kinds one tap away beside it", () => {
   const src = read("src/pages/money/NetWorthPage.tsx");
-  assert.match(src, /actions=\{view \? <button type="button" className="btn" onClick=\{\(\) => openAdd\(\)\}><Plus size=\{16\} \/>Add an entry<\/button>/);
+  assert.match(src, /actions=\{view \? <span className="nw-add">\n\s*<button type="button" className="btn" onClick=\{\(\) => openAdd\(\)\}><Plus size=\{16\} \/>Add an entry<\/button>/);
   assert.doesNotMatch(src, /className="btn sm" onClick=\{\(\) => setAdding\(true\)\}>Add an entry/);
   assert.match(src, /const QUICK: Kind\[\] = \["cash", "fd", "epf", "ppf", "gold", "property", "loan"\]/);
-  assert.match(src, /QUICK\.map\(\(k\) => <button key=\{k\} type="button" className="chip" onClick=\{\(\) => openAdd\(k\)\}>/);
-  assert.match(src, /Something else…/);
-  // a chip opens that kind's boxes straight away
+  // owner, 5 Nov: the quick add is a menu beside "Add an entry", not a card of chips under the totals
+  assert.match(src, /\{!full && <MoreMenu label="Quick add" buttonClass="btn quiet" items=\{\[/);
+  assert.match(src, /\.\.\.QUICK\.map\(\(k\) => \(\{ label: FORM\[k\]\.title, icon: <Plus size=\{14\} \/>, run: \(\) => openAdd\(k\) \}\)\)/);
+  assert.match(src, /\{ label: "Something else…", run: \(\) => openAdd\(\) \}/);
+  assert.doesNotMatch(src, /<Card compact label="Add to your net worth">/);
+  // a kind picked there opens its boxes straight away
   assert.match(src, /if \(k\) \{ setKind\(k\); setAddStart\(fresh\(k\)\); setStep\("form"\); \} else setStep\("pick"\);/);
-  assert.match(read("src/styles.css"), /\.nw-quick \{ max-height: none; overflow: visible;/);
 });
 
 test("MO-2: recent filings line up: date, tag and title in fixed grid columns", () => {

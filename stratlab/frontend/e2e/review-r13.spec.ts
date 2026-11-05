@@ -97,6 +97,7 @@ test("breadth: an earlier day the latest run changed says so beside the numbers 
   const note = page.getByTestId("breadth-revised");
   await expect(note).toContainText("An earlier day's count was revised", { timeout: 30_000 });
   await note.getByRole("button", { name: "About the revision" }).click();
-  await expect(note).toContainText("revised: 338 rose, 163 fell, 1 unchanged (was 337, 163, 1)");
+  // the (i) box is drawn over the page (a portal), not inside the line, so no card edge cuts it (owner, 5 Nov)
+  await expect(page.getByRole("note")).toContainText("revised: 338 rose, 163 fell, 1 unchanged (was 337, 163, 1)");
   expect(errors).toEqual([]);
 });

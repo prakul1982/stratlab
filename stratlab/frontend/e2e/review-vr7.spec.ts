@@ -94,7 +94,14 @@ test("VR7-006 (UI-CO item 2): Key numbers' groups are tables of one width, in tw
   expect(new Set(boxes.map((b) => b[1])).size, `widths ${JSON.stringify(boxes)}`).toBe(1);        // one width: the second row's groups sit under the first row's
   expect(new Set(boxes.map((b) => b[0])).size).toBe(2);
   // each is a table with its header row and one row for every figure
-  await expect(page.getByRole("table", { name: "Key numbers: Valuation" }).getByRole("columnheader")).toHaveText(["Valuation", "Value", "Basis", "Range"]);
+  const valuation = page.getByRole("table", { name: "Key numbers: Valuation" });
+  await expect(valuation.getByRole("columnheader")).toHaveText(["Valuation", "Value", "Basis", "Usual range"]);
+  // the range says what it is (owner, 5 Nov: "where is the context of it? it's just a bar"): the usual span's figures under each bar,
+  // and the whole of it in words for a screen reader and on hover
+  const bar = valuation.locator(".inv-krange").first();
+  await expect(bar.locator(".inv-krange-txt")).toHaveText(/^−?[\d.]+%?–−?[\d.]+%?$/);
+  await expect(bar.getByRole("img")).toHaveAttribute("aria-label", /Usual for large listed companies.*the dark mark is this company/);
+  await expect(page.getByTestId("krail-legend")).toContainText("the shaded part of each bar is the usual span");
 });
 
 test("VR7-008, VR7-019: the Markets button fits the margin on a laptop, and a chart in the panel is as tall as its tool rail", async ({ page, request }, info) => {
@@ -129,8 +136,7 @@ test("VR7-009, VR7-011: the Market Watch sheet's controls are 44px on a phone", 
 test("VR7-013: the plans tables fit their cards at 390px and 360px", async ({ page }) => {
   for (const w of [390, 360]) {
     await open(page, "/plans", ADMIN, w);
-    // (LIVE1C-092: in the app the side-by-side tables are one fold, closed: opened here, so the tables are there to measure)
-    await page.getByText("Compare every limit and feature side by side").click({ timeout: 30_000 });
+    // (R11: the comparison tables are open under the cards)
     await expect(page.locator(".k-tbl-wrap table").first()).toBeVisible({ timeout: 30_000 });
     const over = await page.locator(".k-tbl-wrap table").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width - (e.parentElement as HTMLElement).clientWidth)).filter((d) => d > 1));
     expect(over, `${w}px: tables wider than their cards`).toEqual([]);

@@ -12,8 +12,9 @@ updated in place.
 A post's body is structured blocks (headings, paragraphs, lists, tables; a text can carry an internal link), written to
 the row already cleaned and escaped again when drawn, so nothing a source returns can put markup or an outside link on a
 page. Facts only, no advice wording, no data-vendor names. Nothing is held in memory: every page reads its rows."""
+import math
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from . import db
 from .branding import public_text
@@ -32,6 +33,7 @@ HREF = re.compile(r"^/(?!/)[A-Za-z0-9_\-./?=&%#:+]{0,200}$")      # an address o
 MAX_TEXT = 3000
 MAX_BLOCKS = 80
 MAX_ROWS = 150
+MAX_BARS = 30
 
 MINUS = "−"
 BRIEF_GEN = 2                           # the version of the words and tables a brief post is written with (O5: tables); bump it and the stored posts are written again from their issues
@@ -160,7 +162,9 @@ def _row(post: dict) -> dict:
         raise ValueError("a post needs a title and a summary")
     at = str(post.get("published_at") or now_iso())
     return {"slug": slug, "kind": post["kind"], "market": post.get("market") if post.get("market") in MARKET_NAME else None,
-            "title": title, "summary": summary, "body": {"v": 1, "blocks": clean_blocks(post.get("blocks") or []), **({"gen": int(post["gen"])} if post.get("gen") else {})},
+            "title": title, "summary": summary, "body": {"v": 1, "blocks": clean_blocks(post.get("blocks") or []), **({"gen": int(post["gen"])} if post.get("gen") else {}),
+                     # a theme post's own figures (blog_research.theme_source), never drawn: a later version of its words is written from them
+                     **({"src": post["src"]} if isinstance(post.get("src"), dict) else {})},
             "published_at": at, "updated_at": str(post.get("updated_at") or at), "indexable": bool(post.get("indexable", True)),
             "published": bool(post.get("published", True)), "day": post.get("day")}
 
@@ -231,6 +235,8 @@ def clean_blocks(blocks: list) -> list[dict]:
                     tbl["align"] = align
                 if len(widths) == len(head) and 90 <= sum(widths) <= 110:
                     tbl["widths"] = widths
+                if b.get("wrap") is True:               # a table of names, not figures: its cells wrap and sit on the left (a theme's companies by layer)
+                    tbl["wrap"] = True
                 out.append(tbl)
         elif t == "stats":
             # the headline numbers as tiles: a big figure, what it counts, and an optional small line (PUB-2)
@@ -245,6 +251,20 @@ def clean_blocks(blocks: list) -> list[dict]:
                     for r in (b.get("rows") or [])[:MAX_ROWS] if isinstance(r, dict) and clean_text(r.get("label"), 40)]
             if len(series) >= 2 and rows:
                 out.append({"t": "bars", "caption": clean_text(b.get("caption"), 200), "series": series, "rows": rows})
+        elif t == "hbar":
+            # R11: a horizontal bar chart of one figure per row (a theme's margin by layer, an IPO's listing day by subscription), drawn on the
+            # server as plain HTML and CSS: no script, no outside file. A value is a finite number or None (the row says "no figure" and has
+            # no bar); `text` is the figure as the post writes it, and is the only thing printed beside the bar
+            rows = []
+            for r in (b.get("rows") or [])[:MAX_BARS]:
+                if not isinstance(r, dict):
+                    continue
+                label, v = clean_text(r.get("label"), 80), r.get("value")
+                v = float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
+                if label:
+                    rows.append({"label": label, "value": v, "text": clean_text(r.get("text"), 24) or ("no figure" if v is None else f"{v:,.1f}".replace("-", MINUS))})
+            if any(r["value"] is not None for r in rows):
+                out.append({"t": "hbar", "caption": clean_text(b.get("caption"), 200), "rows": rows, "note": clean_text(b.get("note"), 300)})
         elif t == "fold":
             # VR7-002: a section that a phone folds (the strategy post's ten market tables were 10,000px of cards on a phone): a heading, one
             # small note beside it ("10 tests") and the blocks inside; a desktop shows it open, as the plain heading and blocks it was
@@ -303,6 +323,7 @@ def blocks_html(blocks: list) -> str:
                                             for n, c in enumerate(r)) + "</tr>" for r in b["rows"])
             cols = "<colgroup>" + "".join(f'<col style="width:{w}%">' for w in b["widths"]) + "</colgroup>" if b.get("widths") else ""
             wide = (" wide" + (" w4" if len(b["head"]) == 5 else "")) if len(b["head"]) >= 5 else ""
+            wide += " wrap" if b.get("wrap") else ""
             out.append(f'<div class="btbl{" fx" if cols else ""}{wide}"><table>{cap}{cols}<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
         elif t == "stats":
             out.append('<ul class="kpis">' + "".join(
@@ -321,6 +342,8 @@ def blocks_html(blocks: list) -> str:
                 rows += f'<li><span class="k">{_esc(r["label"])}</span><span class="track" role="img" aria-label="{_esc(r["label"])}: {_esc(said)}">{segs}</span><span class="n">{nums}</span></li>'
             cap = f'<figcaption>{_esc(b["caption"])}</figcaption>' if b.get("caption") else ""
             out.append(f'<figure class="hbars">{cap}<p class="key">{legend}</p><ul>{rows}</ul></figure>')
+        elif t == "hbar":
+            out.append(hbar_html(b))
         elif t == "fold":
             note = f'<span class="n">{_esc(b["note"])}</span>' if b.get("note") else ""
             out.append(f'<details class="mk"><summary><h2>{_esc(b["title"])}</h2>{note}</summary>{blocks_html(b["blocks"])}</details>')
@@ -328,6 +351,31 @@ def blocks_html(blocks: list) -> str:
             out.append(f'<details class="how card" {"data-words" if b.get("words") else "data-method"}><summary>{_esc(b["title"])}</summary><ul class="small">'
                        + "".join(f"<li>{inline_html(i)}</li>" for i in b["items"]) + "</ul></details>")
     return "".join(out)
+
+
+def hbar_html(b: dict) -> str:
+    """An `hbar` block (already cleaned) as a figure: a row per label with its bar and its figure. Every bar is measured on one scale from
+    the lowest value (or zero) to the highest (or zero), so a negative figure is a bar to the left of a zero line and a positive one to its
+    right. Each row's track carries its label and figure as words for a screen reader."""
+    vals = [r["value"] for r in b["rows"] if r["value"] is not None]
+    lo, hi = min(0.0, *vals), max(0.0, *vals)
+    span = (hi - lo) or 1.0
+    zero = abs(lo) / span * 100
+    rows = []
+    for r in b["rows"]:
+        v = r["value"]
+        if v is None:
+            bar = ""
+        else:
+            w = max(abs(v) / span * 100, 0.6 if v else 0)
+            left = zero if v >= 0 else zero - w
+            bar = f'<i class="bar{" neg" if v < 0 else ""}" style="left:{left:.2f}%;width:{w:.2f}%"></i>'
+        line = f'<i class="zero" style="left:{zero:.2f}%"></i>' if lo < 0 else ""
+        rows.append(f'<li><span class="k">{_esc(r["label"])}</span><span class="track" role="img" aria-label="{_esc(r["label"])}: {_esc(r["text"])}">{bar}{line}</span>'
+                    f'<span class="n{" none" if v is None else ""}">{_esc(r["text"])}</span></li>')
+    cap = f'<figcaption>{_esc(b["caption"])}</figcaption>' if b.get("caption") else ""
+    note = f'<p class="hb-note">{_esc(b["note"])}</p>' if b.get("note") else ""
+    return f'<figure class="hb">{cap}<ul>{"".join(rows)}</ul>{note}</figure>'
 
 
 def plain_text(blocks: list) -> str:
@@ -348,7 +396,9 @@ def plain_text(blocks: list) -> str:
         parts += [flat(i) if not isinstance(i, dict) or "v" not in i else f"{i['v']} {i.get('l', '')} {i.get('s', '')}" for i in b.get("items") or []]
         parts += [str(h) for h in b.get("head") or []] + [b.get("title") or ""] + [str(x) for x in b.get("series") or []]
         parts += [flat(c) if isinstance(c, (list, str)) else str(c) for r in b.get("rows") or [] if isinstance(r, list) for c in r]
-        parts += [str(r.get("label") or "") for r in b.get("rows") or [] if isinstance(r, dict)]
+        parts += [f'{r.get("label") or ""} {r.get("text") or ""}' for r in b.get("rows") or [] if isinstance(r, dict)]
+        if b.get("note"):
+            parts.append(str(b["note"]))
     return " ".join(parts)
 
 
@@ -579,6 +629,113 @@ def backfill(issues: list[dict]) -> dict:
         else:
             skipped += 1
     return {"added": added, "skipped": skipped}
+
+
+def week_slug(region: str, day: str) -> str:
+    return f"{'india' if region == 'IN' else 'us'}-week-in-review-{day}"
+
+
+def _ipo_weeks(region: str, start: str, end: str, now: datetime | None = None) -> tuple[list, list]:
+    """India's issues that listed between two days, and those that open in the week after `end`, from the IPO tracker's rows:
+    names, days and the issue price only (a weekend post is a record of the week, not a view on any issue)."""
+    if region != "IN":
+        return [], []
+    try:
+        from . import ipo
+        rows = ipo.load("IN")["rows"]
+    except Exception:
+        return [], []
+    nxt_end = (date.fromisoformat(end) + timedelta(days=9)).isoformat()
+    listed, opening = [], []
+    for r in rows:
+        if r.get("market") != "IN" or r.get("social") or r.get("issue_status"):
+            continue
+        name = clean_text(r.get("name") or r.get("symbol") or "", 120)
+        seg = "SME" if str(r.get("segment") or "").upper().startswith("SME") else "Main board"
+        lst, opn = str(r.get("listing") or "")[:10], str(r.get("open") or "")[:10]
+        if name and start <= lst <= end and not r.get("listing_expected"):
+            listed.append([name, seg, short_day(lst), level(r["price"], "IN") if isinstance(r.get("price"), (int, float)) else "–"])
+        elif name and end < opn <= nxt_end:
+            opening.append([name, seg, short_day(opn), short_day(str(r.get("close") or "")[:10]) if r.get("close") else "–"])
+    return sorted(listed, key=lambda x: x[0])[:30], sorted(opening, key=lambda x: x[0])[:30]
+
+
+def week_post(issue: dict, now: datetime | None = None) -> dict | None:
+    """The Saturday weekly Market Brief as a "week in review" post (the blog had nothing new on a weekend): the week's index
+    changes, the sectors that changed quadrant over the week, the stocks newly matching the price rule in the week's five
+    sessions, India's IPOs that listed that week and those opening the next, and the closures ahead. The same market-level
+    fields brief_post reads, never a reader's; None for anything but a weekly market issue."""
+    if not isinstance(issue, dict) or issue.get("kind") != "market" or not issue.get("weekly") or "uid" in issue:
+        return None
+    region = issue.get("region")
+    if region not in MARKET_NAME:
+        return None
+    try:
+        day = date.fromisoformat(str(issue.get("day") or "")[:10])
+    except ValueError:
+        return None
+    from .newsletter.content import week_window
+    try:
+        start, end = week_window(region, day)
+    except Exception:
+        start, end = (day - timedelta(days=5)).isoformat(), (day - timedelta(days=1)).isoformat()
+    iso, name = day.isoformat(), MARKET_NAME[region]
+    span = f"{short_day(start)} to {short_day(end)}"
+    indices = [i for i in issue.get("indices") or [] if isinstance(i, dict) and isinstance(i.get("price"), (int, float)) and i.get("name")]
+    moved = [i for i in indices if isinstance(i.get("change_pct"), (int, float))]
+    lead = next((i for i in moved if i["name"] == MAIN_INDEX[region]), moved[0] if moved else None)
+    title = f"{name} week in review, {span}" + (f": {lead['name']} {pct(lead['change_pct'])}" if lead else "")
+    summary = (f"The {name} market from {long_day(start)} to {long_day(end)}"
+               + (f": {lead['name']} closed the week at {level(lead['price'], region)} ({pct(lead['change_pct'])} on the week)" if lead else "")
+               + ". Facts, not advice.")
+    blocks: list[dict] = [{"t": "p", "text": f"The {name} market's week, {span}, from the week's closing figures. A change on the week is "
+                                             "measured from the close of the week before."}]
+    tabs = _brief_tables(issue)
+    idx = next((t for t in tabs if t["title"] == "Indices"), None)
+    if idx:
+        blocks += [{"t": "h2", "text": "Index closes on the week"}, _table_block(idx, region)]
+    rot = next((t for t in tabs if t["title"] == "Sector rotation"), None)
+    if rot:
+        blocks += [{"t": "h2", "text": "Sectors that changed quadrant this week"},
+                   {"t": "p", "text": "The rotation chart places each sector in one of four quadrants (leading, weakening, lagging, improving) "
+                                      "from its strength against the market and the direction it is moving, on weekly candles."},
+                   _table_block(rot, region),
+                   {"t": "p", "text": [{"a": "Open the rotation chart", "href": ROTATION_PATH[region]}, "."]}]
+    both, only = (next((t for t in tabs if t["title"].startswith(p)), None) for p in ("Newly matched Stage 2", "Newly in Stage 2"))
+    if both or only:
+        blocks += [{"t": "h2", "text": "Stocks newly matching a price rule this week"},
+                   {"t": "p", "text": "A stock is in Stage 2 when its price is above a rising 150-day average; the Supertrend (10, 3) is a trend "
+                                      "line built from the average true range. A screen of price history, not a view on any company."}]
+        if both:
+            blocks += [{"t": "h3", "text": "Stage 2 with the price above its Supertrend"}, _table_block(both, region)]
+        if only:
+            blocks += [{"t": "h3", "text": "Newly in Stage 2, Supertrend not up"}, _table_block(only, region)]
+    listed, opening = _ipo_weeks(region, start, end, now)
+    if listed or opening:
+        blocks.append({"t": "h2", "text": "IPOs"})
+        if listed:
+            blocks += [{"t": "h3", "text": "Listed this week"},
+                       {"t": "table", "caption": f"IPOs that listed in India, {span}", "head": ["Issue", "Segment", "Listed", "Issue price"], "rows": listed}]
+        if opening:
+            blocks += [{"t": "h3", "text": "Opening next week"},
+                       {"t": "table", "caption": "IPOs opening for bids in India in the coming week", "head": ["Issue", "Segment", "Opens", "Closes"], "rows": opening}]
+        blocks.append({"t": "p", "text": [{"a": "See every issue in the IPO tracker", "href": "/invest/ipos"}, "."]})
+    shut = _section(issue, "Market holiday")
+    if shut and shut.get("items"):
+        blocks += [{"t": "h2", "text": "Market holiday ahead"}, {"t": "p", "text": str(shut["items"][0].get("text") or "")}]
+    blocks.append({"t": "p", "text": ["Test an idea on these markets yourself: ", {"a": "build and backtest a strategy", "href": "/"},
+                                      ", or ", {"a": "read the daily briefs", "href": "/blog/briefs"}, "."]})
+    blocks.append({"t": "details", "title": "How this review is made",
+                   "items": [f"It is built by StratLab's own jobs on Saturday morning from the {name} exchange's closing figures for the week and "
+                             "StratLab's IPO tracker. Nothing here comes from any user's account, and nothing in it is a view on what prices will do."]})
+    return {"slug": week_slug(region, iso), "kind": "brief", "market": region, "title": title, "summary": summary, "blocks": blocks,
+            "day": iso, "published_at": now_iso(now), "indexable": bool(lead), "gen": BRIEF_GEN}
+
+
+def save_week(issue: dict, now: datetime | None = None) -> bool:
+    """Save the Saturday week in review as a post, once (see week_post)."""
+    post = week_post(issue, now)
+    return add_once(post) if post else False
 
 
 def save_brief(issue: dict, now: datetime | None = None) -> bool:

@@ -68,7 +68,8 @@ def test_insider_trades_are_judged_across_the_whole_market():
     assert f.asked == (None, platform_check.INSIDER_WINDOW_DAYS) and r["state"] == "pass" and "across the market" in r["detail"]
     stale = platform_check.check_insider_trades(Feed([{"date": (today - timedelta(days=12)).isoformat()}]))
     assert stale["state"] == "warn" and "unusual for the whole market" in stale["detail"] and "Reliance" not in stale["detail"]
-    assert platform_check.check_insider_trades(Feed([]))["state"] == "warn"
+    none = platform_check.check_insider_trades(Feed([]))
+    assert none["state"] == "warn" and "stopped updating" in none["detail"] and "may have changed shape" not in none["detail"]
 
 
 # ---------- the whole-market audit: every mismatch is checked again after a day, not only prices ----------

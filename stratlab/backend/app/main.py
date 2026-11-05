@@ -46,7 +46,7 @@ from . import loan_check
 from . import money_advance_tax, money_routes
 from . import journal_routes
 from . import user_data
-from .connect import routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
+from .connect import brokers as connect_brokers, routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
 from . import drawings_routes, watch_routes
 from . import maindb, market_store, memguard, storage, usage_slots
@@ -293,7 +293,21 @@ biz_updates.setup(lambda: filings_feed, lambda: deep_docs, lambda: (_gemini, _an
 biz_job = biz_updates.Job(lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit, kind_ok=_alert_kind_ok),
                           biz_updates.alert_symbols)
 # IPOs: India's from the exchanges' public-issue pages and SEBI's lists, the US's from the public IPO calendar and the SEC's filings
-ipo.setup(lambda: filings_feed, lambda: us_market_calendar, lambda: (_gemini, _anthropic), lambda: markets.providers["US"].yahoo)
+def ipo_listed(row: dict) -> dict | None:
+    """A closed Indian issue's stock in the broker's instrument list (NSE by symbol, else by company name on either exchange) with its
+    first trading day in the last 50 days (an older first day is another company of a like name): None while it isn't listed."""
+    if not kite.ready():
+        return None
+    inst = (kite.equity(row["symbol"]) if row.get("symbol") else None) or kite.equity_by_name(row.get("name") or "")
+    if not inst:
+        return None
+    bars = kite.history(inst["token"], "1d", 50, store=False)
+    return {"symbol": inst.get("symbol"), "exchange": inst.get("exchange"), "code": inst.get("bse_code"),
+            "first": str(bars[0]["t"])[:10] if bars else None}
+
+
+ipo.setup(lambda: filings_feed, lambda: us_market_calendar, lambda: (_gemini, _anthropic), lambda: markets.providers["US"].yahoo,
+          listed_fn=ipo_listed)
 shareholders.setup(lambda: filings_feed)
 holders_job = shareholders.Job(lambda: filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                can_alert=lambda p: allows(access_plan(p), "holders") and bool(alerts.jobs_for(p, "", "")))
@@ -1050,12 +1064,13 @@ def next_auto_login() -> str | None:
     return (auto_login.next_login(now) or auto_login_time(now + timedelta(days=1))).isoformat(timespec="minutes")
 
 
-PREF_KEYS = ("level", "focus", "space", "mine")
+PREF_KEYS = ("level", "focus", "space", "mine", "broker", "companies")
+SAVED_ONLY = ("mine", "broker", "companies")       # in the answer only once one was saved
 
 
 def prefs_out(prefs: dict) -> dict:
-    """The preferences the app reads; My space's layout only once one was saved."""
-    return {k: prefs.get(k) for k in PREF_KEYS if k != "mine" or prefs.get("mine")}
+    """The preferences the app reads; My space's layout, the broker picked and the companies choice only once one was saved."""
+    return {k: prefs.get(k) for k in PREF_KEYS if k not in SAVED_ONLY or prefs.get(k)}
 
 
 def prefs_of(uid: str) -> dict:
@@ -1123,7 +1138,8 @@ def delete_my_account(req: DeleteMyDataReq, profile=Depends(current_profile)):
 def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     """Experience level, what the user came for (trading, investing, their money or all of it) and the space last picked
     in the menu: they only change defaults (what's expanded, what's suggested first, which menu shows), never what's
-    allowed. `mine`: My space's cards in the person's order, kept on the account rather than one browser (DI-006)."""
+    allowed. `mine`: My space's cards in the person's order, kept on the account rather than one browser (DI-006). `companies`:
+    which companies the calendars and Invest home open on, every company ("all", the default) or only the person's stocks ("mine")."""
     given = {k: getattr(req, k) for k in PREF_KEYS}
     if req.mine is not None:
         given["mine"] = req.mine.model_dump()
@@ -2612,7 +2628,9 @@ def results_moves(region: str = "IN", symbols: str = Query("", max_length=400), 
     from its daily prices, kept once worked out. Up to 12 companies; the prices of 6 are read in one call, the rest on the next."""
     r = research_routes.region_of(region)
     throttle(profile, "results_moves", 30, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
-    return research_routes.ok({"moves": results_calendar.moves_for(r, _symbols_arg(symbols, r, 12))})
+    pending: list[str] = []
+    got = results_calendar.moves_for(r, _symbols_arg(symbols, r, 12), pending=pending)
+    return research_routes.ok({"moves": got, "pending": list(dict.fromkeys(pending))})
 
 
 @app.get("/research/results/implied")
@@ -2620,7 +2638,9 @@ def results_implied(symbols: str = Query("", max_length=200), day: str = "", pro
     """For stocks with futures and options (India): the move their options price in to the first expiry on or after the results
     day, from the at-the-money straddle. Up to 8 stocks; none without the broker's option prices."""
     throttle(profile, "results_implied", 20, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
-    return research_routes.ok({"implied": results_calendar.implied_for(_symbols_arg(symbols, "IN", 8), day[:10] or None)})
+    pending: list[str] = []
+    got = results_calendar.implied_for(_symbols_arg(symbols, "IN", 8), day[:10] or None, pending=pending)
+    return research_routes.ok({"implied": got, "pending": list(dict.fromkeys(pending))})
 
 
 @app.get("/research/results/{region}/{symbol}")
@@ -3533,7 +3553,16 @@ def zerodha_read(profile) -> dict | None:
 def my_holdings(profile=Depends(current_profile)):
     """The user's holdings at today's prices: value, gain or loss, the day's change and the mix by sector."""
     # `zerodha_open`: whether Zerodha login is open for this account, so the page doesn't offer a connection that isn't there (LIVE1B-042)
-    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile), "zerodha_open": bool(_quiet(connect_kite.allowed, profile))})
+    # `brokers`: the other connected brokers' last reads; `brokers_open`: the brokers this account may connect, so the page
+    # names only those
+    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile), "zerodha_open": bool(_quiet(connect_kite.allowed, profile)),
+               "brokers": _quiet(connect_brokers.read_summary, profile["id"]) or [], "brokers_open": brokers_open(profile)})
+
+
+def brokers_open(profile) -> list[str]:
+    """The names of the brokers this account may log in to from Settings, Zerodha first."""
+    names = ["Zerodha"] if _quiet(connect_kite.allowed, profile) else []
+    return names + [b.name for b in connect_brokers.ALL.values() if _quiet(b.allowed, profile)]
 
 
 @app.get("/holdings/facts")
@@ -5288,13 +5317,14 @@ def delete_screen(sid: str, profile=Depends(current_profile)):
 
 
 # ---------- market breadth: how many stocks take part in the market's moves ----------
-def breadth_load(region: str, symbol: str, days: int) -> list[dict]:
-    """A stock's daily candles for the breadth run, kept out of the price cache (a whole market would empty it)."""
+def breadth_load(region: str, symbol: str, days: int, max_wait: float | None = None) -> list[dict]:
+    """A stock's daily candles for the breadth run, kept out of the price cache (a whole market would empty it). `max_wait`: a page's
+    read gives up (KiteBusy) rather than queue longer than that behind the jobs' reads for the broker's request turns."""
     if region == "IN":
         inst = kite.equity(symbol)
         if not inst:
             raise LookupError("not listed")
-        return kite.history(inst["token"], "1d", days, store=False)
+        return kite.history(inst["token"], "1d", days, store=False, **({"max_wait": max_wait} if max_wait is not None else {}))
     return markets.provider(region).history({"token": symbol}, "1d", days)
 
 
@@ -5308,7 +5338,8 @@ def results_options(symbol: str, day: str | None) -> dict | None:
     return results_calendar.straddle_move(options_data.chain("NSE", symbol, expiries[0], around=1))
 
 
-results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d), options=results_options)
+# the results page's reads wait at most 3 s for a broker turn: behind a job's queue they come back "pending" and are asked again
+results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options)
 
 
 def breadth_index(region: str, symbol: str, days: int) -> list[dict]:

@@ -340,7 +340,11 @@ test("LIVE1B-066, 040, 042: a bad email is said in the app's words; the email bo
   assert.match(a, /<FormGrid label="Alerts" noValidate/);
   assert.match(a, /That email address doesn't look right\./);
   assert.match(a, /<Field label="Email" optional wide/);
-  assert.match(read("src/pages/HoldingsPage.tsx"), /view\?\.zerodha_open === false \? "Connect your statement inbox once"/);
+  // R11 (owner, 5 Nov: Upstox and Dhan) changed this on purpose: the offer names the brokers the server says this
+  // account may connect (brokers_open), and only the inbox when there are none
+  const h = read("src/pages/HoldingsPage.tsx");
+  assert.match(h, /const open = v\?\.brokers_open \?\? \(v\?\.zerodha_open === false \? \[\] : \["Zerodha"\]\);/);
+  assert.match(h, /: "Connect your statement inbox once";/);
 });
 
 test("LIVE1B-077, 079: plan cards keep their own height (no band inside one) and the payment button names its amount", () => {

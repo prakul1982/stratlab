@@ -4,6 +4,7 @@ import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { vixChange, type VixQuote } from "../lib/vix";
 import { useApp } from "../lib/app";
+import { companiesPref } from "../lib/companyScope";
 import { useMarketRefresh } from "../lib/marketLive";
 import { ago, fmtDate, istToday, money, pct, signCls } from "../lib/format";
 import { uploadedLine } from "../lib/journalTax";
@@ -26,7 +27,7 @@ import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { Explore } from "../components/Explore";
-import { TileGrid } from "../components/TileGrid";
+import { MoreTools, type ToolRow } from "../components/MoreTools";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
@@ -327,13 +328,16 @@ function WatchPanel({ region }: { region: Region }) {
 
 type ResultsView = { today: string; weeks: { rows: ResultRow[] }[] };
 
-/** Results days for your stocks in the market picked at the top: today's, else the next one. */
+/** Results days in the market picked at the top: today's, else the next one; every company's (the largest first, the person's own among
+ *  them first) or only the person's stocks, as the account chose (lib/companyScope; owner, 5 Nov: "in Invest home too it's an issue"). */
 function ResultsToday({ region }: { region: Region }) {
+  const { me } = useApp();
+  const scope = companiesPref(me);
   const [rows, setRows] = useState<{ today: ResultRow[]; next: ResultRow | null } | null>(null);
   useEffect(() => {
     let live = true;
     setRows(null);
-    Promise.all(([region] as Region[]).map((r) => api<ResultsView>(`/research/results?region=${r}&scope=mine`).catch(() => null)))
+    Promise.all(([region] as Region[]).map((r) => api<ResultsView>(`/research/results?region=${r}&scope=${scope}`).catch(() => null)))
       .then((views) => {
         if (!live) return;
         const all = views.flatMap((v) => (v ? v.weeks.flatMap((w) => w.rows).map((r) => ({ ...r, today: v.today })) : []));
@@ -342,12 +346,24 @@ function ResultsToday({ region }: { region: Region }) {
         setRows({ today, next });
       });
     return () => { live = false; };
-  }, [region]);
+  }, [region, scope]);
+  const mine = scope === "mine";
   return (
-    <Panel title={region === "US" ? "US results today" : "Results today"} right={<Link to={withRegion("/research/results", region)} className="link">Calendar →</Link>}>
+    <Panel title={`${region === "US" ? "US results" : "Results"} today${mine ? ": your stocks" : ""}`}
+      right={<Link to={withRegion("/research/results", region)} className="link">Calendar →</Link>}>
       {rows === null ? <PanelSkel label="Checking results dates" />
-        : rows.today.length ? (
-          <div className="k-stack snug">
+        : rows.today.length && !mine ? (
+          // every company's: the largest first, in one short paragraph, so the card stays as short as it was with only your stocks beside the
+          // watchlist (ui-lint R1 at 1280: four lines of companies left the watchlist with 179px empty under it)
+          <p className="small" data-testid="invest-results-today">
+            <span className="muted">{rows.today.length} {rows.today.length === 1 ? "company has" : "companies have"} results today, largest first: </span>
+            {rows.today.slice(0, 6).map((r, i) => (
+              <span key={`${r.region}-${r.symbol}`}>{i > 0 && " · "}<Link className="link" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>{r.mine && <span className="muted"> (yours)</span>}</span>
+            ))}
+            {rows.today.length > 6 && <span className="muted"> and {rows.today.length - 6} more on the calendar</span>}
+          </p>
+        ) : rows.today.length ? (
+          <div className="k-stack snug" data-testid="invest-results-today">
             {rows.today.slice(0, 6).map((r) => (
               <Link key={`${r.region}-${r.symbol}`} className="space-line" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}>
                 <b>{r.symbol}</b><span className="small muted">{r.out ? "Results filed" : r.purpose}{r.when ? `, ${r.when}` : ""}</span>
@@ -355,7 +371,7 @@ function ResultsToday({ region }: { region: Region }) {
             ))}
           </div>
         ) : (
-          <p className="small muted">None of your {REGION_NAME[region]} stocks has results today.{rows.next ? ` Next: ${rows.next.symbol} on ${resultDay(rows.next.date)}.` : ""}</p>
+          <p className="small muted">{mine ? `None of your ${REGION_NAME[region]} stocks has results today.` : `No ${REGION_NAME[region]} company has results today.`}{rows.next ? ` Next: ${rows.next.symbol} on ${resultDay(rows.next.date)}.` : ""}</p>
         )}
     </Panel>
   );
@@ -435,7 +451,8 @@ export function MoneyHome() {
   // the two summaries (holdings and tax) stand for their tools; every other Money tool is one card below, under the menu entry it
   // is a tab of (IA-1), so each feature shows once; of the shared Calendar, Money's own dates and the one list of every date
   const PANELS = ["/holdings", "/tax-report"];
-  const entries = NAV.money.groups.map((g) => ({ g, pages: g.pages.filter((p) => !PANELS.includes(p.to) && ((p.space ?? "money") === "money" || p.to === "/calendar")) })).filter((x) => x.pages.length);
+  const tools: ToolRow[] = NAV.money.groups.flatMap((g) => g.pages.filter((p) => !PANELS.includes(p.to) && ((p.space ?? "money") === "money" || p.to === "/calendar"))
+    .map((p) => ({ id: p.to, title: p.label, line: p.line, to: p.to, group: g.label, groupId: g.id, tag: <PageTags page={p} />, attrs: { "data-money": p.to } })));
   return (
     <div className="space-home">
       <Head eyebrow="Money · seen only by you" title="Your money">
@@ -449,20 +466,9 @@ export function MoneyHome() {
         <HoldingsSummary />
         <TaxSummary />
       </div>
-      {entries.length > 0 && (
-        <section className="k-stack" aria-labelledby="money-tools">
-          <h2 id="money-tools" className="k-card-title">More in Money</h2>
-          {entries.map(({ g, pages }) => (
-            <div key={g.id} className="k-stack" data-entry={g.id}>
-              <div className="k-stack k-tight"><b>{g.label}</b><span className="small muted">{g.blurb}</span></div>
-              {/* each card with its plan tag, as on the entry pages ("Basic for part"), and its line in full on a phone (DP2-014) */}
-              <TileGrid className="explore-grid money-cards">
-                {pages.map((p) => <Link key={p.to} to={p.to} className="k-linkcard explore-card" data-money={p.to}><b>{p.label}</b><span className="small muted">{p.blurb}</span><PageTags page={p} /></Link>)}
-              </TileGrid>
-            </div>
-          ))}
-        </section>
-      )}
+      {/* the rest of Money's tools: one closed row that says how many, opened a table (owner, 5 Nov: the cards were "very filled");
+          each tool with its plan tag, as on the entry pages ("Basic for part") */}
+      {tools.length > 0 && <MoreTools id="money-tools" title="More in Money" rows={tools} />}
     </div>
   );
 }

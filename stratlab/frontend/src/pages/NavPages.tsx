@@ -50,7 +50,7 @@ const MINE_PAGES: { to: string; label: string; line: string }[] = [
   { to: "/news", label: "Today's brief", line: "A short brief after each market close, for India, the US and the companies you follow." },
   { to: "/research/watchlist", label: "Watchlist", line: "The companies you follow, and the Alerts tab: a message when a stock or the market does what you asked about." },
   { to: "/calendar", label: "Calendar", line: "Results, corporate actions, IPO dates, market events and your own money dates, day by day." },
-  { to: "/settings#accounts", label: "Connected accounts", line: "Your broker's holdings file and tradebooks, your funds statement, the statements inbox, and the connections that update them by themselves: Zerodha, IBKR, EPF, NPS and the tax statement." },
+  { to: "/settings#accounts", label: "Connected accounts", line: "Your broker's holdings file and tradebooks, your funds statement, the statements inbox, and the connections that update them by themselves: Zerodha, Upstox, Dhan, IBKR, EPF, NPS and the tax statement." },
   { to: "/settings", label: "Settings", line: "Where alerts and emails go, what you see first, the theme and the connection check." },
   { to: "/account", label: "Account", line: "Your profile, plan, usage, invoices, how you sign in and your data." },
   { to: "/plans", label: "Plans", line: "What each plan includes, and the prices." },
