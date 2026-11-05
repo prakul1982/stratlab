@@ -12,7 +12,10 @@ import { ConfirmDialog } from "../kit/ConfirmDialog";
 import { Select } from "../kit/Form";
 import { useDialogFocus, usePopover } from "../kit/Dialog";
 import { EmptyState, ErrorState, Skeleton } from "../kit/States";
-import { Chevron, Close, Plus } from "../Icons";
+import { Chevron, Close, Download, Plus } from "../Icons";
+import { downloadCsv } from "../../lib/csvDownload";
+import { csvName } from "../../lib/csv";
+import { istToday } from "../../lib/format";
 import { useApp } from "../../lib/app";
 import { marketState } from "../../lib/marketHours";
 import { signCls, currencySymbol } from "../../lib/format";
@@ -276,6 +279,14 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
           <div className="mw-bar">
             <button type="button" className="btn sm mw-addbtn" aria-expanded={adding} onClick={() => setAdding(!adding)}>{adding ? "Done" : "+ Add symbol"}</button>
             <Select small label="Sort the list" value={sort} onChange={(v) => patch({ sort: v as SortMode })} options={SORTS} />
+            {/* EXPORT: the list as a CSV, in its order, with the prices it shows now */}
+            {list && list.items.length > 0 && (
+              <button type="button" className="mw-ic" data-csv={`watchlist ${list.name}`} aria-label={`Download CSV: the list ${list.name}`} title="Download this list as a CSV file"
+                onClick={() => downloadCsv(csvName(`watchlist ${list.name}`, istToday()), ["Symbol", "Name", "Market", "Kind", "Currency", "Price", "Change today (%)"],
+                  shown.map((it) => { const c = changeFor(it); return [it.symbol, it.name || null, it.market, it.kind, currencyOf(it), priceOf(it), c == null ? null : Math.round(c * 100) / 100]; }))}>
+                <Download size={16} />
+              </button>
+            )}
             {list && !list.default && (
               <span className="mw-listmenu">
                 <button ref={menuTrigger} type="button" className="mw-ic" aria-label={`Actions for the list ${list.name}`} aria-haspopup="menu" aria-expanded={listMenu} onClick={() => setListMenu(!listMenu)}><span aria-hidden="true">⋯</span></button>

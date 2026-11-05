@@ -34,6 +34,7 @@ from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
 from . import holdings, holdings_file, instrument_kinds, money_calendar, quote_share, tax_export, tax_lots, tax_total
+from . import autofix
 from . import money_mf
 from . import money_mf_nav
 from . import money_mf_ter
@@ -66,6 +67,8 @@ from .auth import current_profile
 from .config import api_docs_enabled, settings
 from .branding import public_text
 from .errors import report
+from . import errors as error_alerts           # Admin → System: is Sentry on, and its test message
+from . import feedback                          # Help & feedback: the reports and Admin's inbox
 from .responses import err, ok
 from .guard import Guard, HeavyGate, Window, address as caller_address
 from . import research
@@ -420,6 +423,7 @@ def start_jobs():
     _start("ipo.job", ipo.job.start)                    # IPOs: the exchanges' and regulators' pages, the bids through the day, the alerts
     _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
     _start("memory-janitor", lambda: threading.Thread(target=memguard.janitor, daemon=True, name="memory-janitor").start())   # expired cache entries out, the heap trimmed (MEM-001)
+    _start("autofix", lambda: threading.Thread(target=autofix.loop, daemon=True, name="autofix").start())   # self-healing: retries what failed, emails the owner only when that fails (owner, 4 Nov)
 
 
 log = logging.getLogger("stratlab")
@@ -436,6 +440,7 @@ research_routes.setup(research_hub, _gemini, _anthropic)
 research_routes.corp_sources = corp_job.sources          # a US company page's dividend yield from its listed payments
 app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
+app.include_router(feedback.router)          # /feedback from anyone, /admin/feedback the inbox (owner, 4 Nov)
 app.include_router(money_mf_ter.router)      # /money/mutual-funds/costs
 app.include_router(money_mf_ter.admin_router)  # /admin/ter
 app.include_router(money_mf_behaviour.router)  # /money/mutual-funds/behaviour
@@ -458,6 +463,7 @@ from . import email_previews as _email_previews  # noqa: E402
 app.include_router(_email_previews.router)       # /admin/email-previews
 from . import admin_jobs as _admin_jobs  # noqa: E402
 app.include_router(_admin_jobs.router)           # /admin/jobs: every background job, for Admin -> Data and jobs
+autofix.attach(app)                              # the self-healing sweep re-runs a failed job through its own Run now route
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(drawings_routes.router)    # /me/drawings/{region}/{symbol}: drawings and layout saved per user
 app.include_router(watch_routes.router)       # /watch: Market Watch lists, prices and the live stream (MW-1)
@@ -3003,10 +3009,11 @@ def use_deep(profile, kind: str, sym: str, region: str) -> None:
         db.add_usage(profile["id"], mark)
 
 
-def check_deep(profile, kind: str, sym: str, region: str) -> str | None:
-    """use_deep's check alone: the usage mark to record, None when this company already counted this month."""
+def check_deep(profile, kind: str, sym: str, region: str, mark: str | None = None) -> str | None:
+    """use_deep's check alone: the usage mark to record, None when this company already counted this month. `mark`: what is counted
+    when it isn't a company (a theme's deck, "deck:theme:IN:india-defence": EXPORT), from the same monthly decks."""
     key, limit_of = DEEP_KINDS[kind]
-    mark, since = f"{kind}:{region}:{sym}", month_start_iso()
+    mark, since = mark or f"{kind}:{region}:{sym}", month_start_iso()
     if db.count_usage(profile["id"], mark, since):
         return None
     limit = limit_of(profile["_plan"])
@@ -3015,10 +3022,11 @@ def check_deep(profile, kind: str, sym: str, region: str) -> str | None:
         if kind == "deepdive":
             upgrade(plan_limit_message(profile["_plan"], key, f"You've opened {limit} compan{'y' if limit == 1 else 'ies'} in the deep dive this month",
                                        "deep dives", monthly=True, after="Companies you've already opened this month still open."), "deepdive_limit")
-        # a deck is a company's: its PDF and its PowerPoint count as one, so those still download (DP1-026)
-        upgrade(plan_limit_message(profile["_plan"], key, f"You've made {limit} company deck{'' if limit == 1 else 's'} this month", "decks", monthly=True,
-                                   after="A company's PDF and PowerPoint count as one deck, so the deck of a company you've already made one "
-                                         "for still downloads in either format."), "deck_limit")
+        # a deck is a company's or a theme's: its PDF and its PowerPoint count as one, so those still download (DP1-026); a company's and
+        # a theme's decks share the month's count (EXPORT)
+        upgrade(plan_limit_message(profile["_plan"], key, f"You've made {limit} slide deck{'' if limit == 1 else 's'} this month", "decks", monthly=True,
+                                   after="A company's or a theme's PDF and PowerPoint count as one deck, so a deck you've already made this "
+                                         "month still downloads in either format."), "deck_limit")
     return mark
 
 
@@ -6266,7 +6274,13 @@ def server_status() -> dict:
             "rules_watch": rules_watch_summary(), "audit_mismatches": mismatches, "audit_checked": checked,
             # whether India is shut today anyway, so a weekend's logged-out broker is OK, not Check (DJ-003)
             "data_note": data_note(),
-            "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
+            "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())},
+            # what the self-healing is fixing, what it gave up on (with the owner's action), and its short history (owner, 4 Nov)
+            "autofix": autofix.status(),
+            # whether server errors reach Sentry (SENTRY_DSN set and the SDK started), for Admin → System's "Error alerts" line
+            "sentry": error_alerts.enabled(),
+            # new Help & feedback reports, for "Needs your attention"
+            "feedback_new": feedback.new_count()}
 
 
 def calendar_status() -> dict:
@@ -6279,12 +6293,18 @@ def calendar_status() -> dict:
     covered = trading_calendar.covered_until("IN")
     last = covered.isoformat() if covered else None
     days_left = (covered - today).days if covered else None
+    markets = trading_calendar.all_coverage(today)
+    # one light for the exchange-listed markets, by the same season-aware rule as each row (data.calendar.awaiting_next_year): Admin
+    # pages follow it instead of a days-left threshold of their own, which turned amber every November (owner, 4 Nov)
+    listed = [r for r in markets if r["market"] in trading_calendar.LISTED]
     # "added": every saved holiday (the exchange's and the owner's); "by_hand": only the dates the owner pasted that the exchange's list lacks
     return {"known_until": until.isoformat() if until else None, "added": added, "by_hand": sorted(trading_calendar.hand_added("IN")),
             "covered_until": last, "days_left": days_left,
+            "state": "warn" if any(r["state"] == "warn" for r in listed) else "ok",
+            "note": trading_calendar.AWAITED if any(r.get("hint") == trading_calendar.AWAITED for r in listed) else None,
             "auto": {"at": auto.get("at"), "tried_at": auto.get("tried_at"), "error": public_text(auto.get("error")),
                      "count": len(auto.get("days") or [])},
-            "markets": trading_calendar.all_coverage(today)}
+            "markets": markets}
 
 
 RETRY_AFTER_FAIL = 3600           # a daily job whose read failed asks again in an hour, not tomorrow...
@@ -6346,6 +6366,18 @@ def admin_holidays_refresh(_=Depends(admin.admin_profile)):
     trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays(named=True), "IN")
     trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD", named=True), "CDS")
     return calendar_status()
+
+
+@autofix.source
+def holiday_checks() -> list:
+    """Self-healing: an exchange-listed market whose holidays run short (past the season-aware rule) has its list read again, twice a
+    day at first, then daily; still short after that, the owner is asked to paste it."""
+    short = [r for r in trading_calendar.all_coverage(datetime.now(IST).date()) if r["market"] in trading_calendar.LISTED and r["state"] == "warn"]
+    problem = ("holidays known only until " + ", ".join(f"{r['known_until'] or 'none'} for {r['name']}" for r in short)) if short else None
+    return [autofix.Check(id="holidays", name="Exchange holidays", problem=problem, fix=lambda: admin_holidays_refresh(None),
+                          fix_text="read the exchange's holiday list again", to="/admin/data", backoff=(6 * 3600, 12 * 3600, 24 * 3600),
+                          action="If the exchange has published next year's holidays (NSE's circular), paste them in Admin → Data and jobs → "
+                                 "Exchange holidays; if it hasn't yet, nothing to do: the daily read adds them when it does.")]
 
 
 @app.post("/admin/holidays")
@@ -7062,14 +7094,28 @@ def platform_job():
         time.sleep(max(1, min(3600, (at - now).total_seconds())))
 
 
+def platform_issue(out: dict | None) -> "autofix.Check":
+    """The feature check's failures as one self-healing issue: it has retried each failing check already, so what still fails goes to
+    the owner at once, and only once while it stays the same (it mailed the same EUR/USD candle two days running, 3-4 Nov)."""
+    bad = [r for r in (out or {}).get("checks") or [] if r.get("state") == "fail"]
+    problem = (f"{len(bad)} check{'s' if len(bad) > 1 else ''} failing after a retry: "
+               + "; ".join(f"{r['name']} ({str(r.get('detail') or '')[:140]})" for r in bad[:6])) if bad else None
+    return autofix.Check(id="platform", name="Feature check", problem=problem, owner_only=True, to="/admin/system",
+                         action="Open Admin → System → Check every feature: each failing line says what is wrong. A source's own fault "
+                                "clears by itself at the next daily check; anything else needs a developer's look.")
+
+
+@autofix.source
+def platform_checks_failing() -> list:
+    try:
+        return [platform_issue(json.loads(db.get_setting(PLATFORM_LAST) or "null"))]
+    except (ValueError, TypeError):
+        return []
+
+
 def daily_platform_check(retry_after: float = 120) -> dict:
     out = run_platform_check(retry_after=retry_after, auto=True)
-    bad = [r for r in out["checks"] if r["state"] == "fail"]
-    if bad:
-        lines = "\n".join(f"- {r['name']}: {r['detail'][:160]}" for r in bad[:10])
-        tell_admins(f"StratLab: {len(bad)} check{'s' if len(bad) > 1 else ''} failing",
-                    f"Today's automatic check found {len(bad)} feature{'s' if len(bad) > 1 else ''} still failing "
-                    f"after a retry:\n{lines}\nDetails on the Admin page.")
+    autofix.report(platform_issue(out), send=lambda subject, text: tell_admins(subject, text) > 0)
     return out
 
 
@@ -7334,6 +7380,20 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
             why += ". The host blocks outgoing mail ports: add BREVO_API_KEY or RESEND_API_KEY in Railway to send over HTTPS instead"
         err(502, "email_failed", f"The email couldn't be sent: {why}")
     return {"sent_to": to}
+
+
+# the owner's test errors an hour: enough to check an alert arrives, not enough to flood Sentry's quota
+TEST_ERRORS_HOUR = 3
+
+
+@app.post("/admin/sentry/test")
+def admin_sentry_test(profile=Depends(admin.admin_profile)):
+    """One harmless message to Sentry ("StratLab test error from Admin, <time>"), so the owner can check error alerts arrive.
+    Says whether Sentry was on: with it off nothing is sent."""
+    throttle(profile, "admin_sentry_test", TEST_ERRORS_HOUR, 3600, f"You've sent {TEST_ERRORS_HOUR} test errors this hour. Try again later.")
+    at = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y %H:%M:%S IST")
+    text = f"StratLab test error from Admin, {at}"
+    return {"sentry_on": error_alerts.test_message(text), "message": text}
 
 
 def sign_in_link(props) -> str:

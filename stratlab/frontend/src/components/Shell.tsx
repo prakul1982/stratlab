@@ -9,7 +9,7 @@ import { VERDICT_FACT } from "./ui";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { useScrollMemory } from "../lib/scrollMemory";
 import { NAV, locate, locateGroup, startOf, type NavGroup, type NavPage } from "../lib/nav";
-import { MINE_HOME, MINE_NAME, SPACE_IDS, SPACES, homeOf, menuView, spaceOf, type SpaceView } from "../lib/spaces";
+import { MINE_HOME, MINE_NAME, SPACE_IDS, SPACES, homeOf, menuView, sharedPage, spaceOf, spaceParam, type SpaceView } from "../lib/spaces";
 import { titleFor } from "../lib/title";
 import { usePersisted } from "../lib/persist";
 import { usePins } from "../lib/pins";
@@ -17,6 +17,7 @@ import { PageBreadcrumb } from "./PageBreadcrumb";
 import { HubTabs } from "./HubTabs";
 import { Onboarding, openTour } from "./Onboarding";
 import { MarketsLauncher, openMarkets } from "./watch/Launcher";
+import { openFeedback } from "./FeedbackOpen";
 import { gateFor, gatePlan } from "../lib/gates";
 import { PLAN_NAME } from "../lib/plans";
 import { watchSize } from "../lib/resize";
@@ -91,7 +92,18 @@ export function Shell({ children }: { children: ReactNode }) {
   // pages it links to (pinned pages, Briefs, Connected accounts): that is what it is for.
   const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to) || MINE_GROUPS.includes(at.group.id));
   // the menu comes from the address itself (lib/spaces menuView), so it can't lag behind a saved choice that loads later
-  const space = menuView(path, saved, keepsMine);
+  // the space of the page before this one in this visit: a page in several spaces' menus (the Calendar's tabs) opens inside it
+  const lastSpace = useRef<SpaceView | null>(null);
+  const space = menuView(path, saved, keepsMine, { search: loc.search, from: lastSpace.current });
+  useEffect(() => {
+    lastSpace.current = space;
+    // ...and its address says so (?space=trade), so a bookmark, a shared link or a reload keeps it (owner, 4 Nov)
+    if (space !== "mine" && sharedPage(path) && space !== spaceOf(path) && spaceParam(loc.search) !== space) {
+      const q = new URLSearchParams(loc.search);
+      q.set("space", space);
+      nav({ pathname: path, search: `?${q}`, hash: loc.hash }, { replace: true, state: loc.state });
+    }
+  }, [space, path]);   // eslint-disable-line react-hooks/exhaustive-deps
   // remember it on this device, so the front door opens the space last used (only real spaces and Mine's own pages).
   // Runs when the page changes, not when the saved choice does: picking a space in the switcher saves it first and
   // navigates a moment later, and the page still showing must not save its own space over that choice.
@@ -252,6 +264,8 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="side-top">
         <div className="side-brand">
           <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
+          {/* Help & feedback, labelled and at the menu's top so it is found, not buried in the footer (owner, 4 Nov) */}
+          <FeedbackButton className="btn quiet sm side-feedback" />
           <button className="side-close" aria-label="Close menu" onClick={() => setOpen(false)}><Close size={18} /></button>
           <button className="side-hide" aria-label="Hide the menu" title="Hide the menu (more room for the page)" onClick={() => setSlim(true)}><Chevron size={14} /></button>
         </div>
@@ -303,6 +317,8 @@ export function Shell({ children }: { children: ReactNode }) {
         <button className="icon-btn" aria-label="Open menu" aria-expanded={open} aria-controls="side-menu" onClick={() => setOpen(true)}><Menu /></button>
         <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
         <span className="row tight">
+          {/* on a phone, in the top bar itself, not only inside the menu (owner, 4 Nov) */}
+          <FeedbackButton className="btn quiet sm top-feedback" />
           <button className="icon-btn" aria-label="Search or ask anything" onClick={() => setSearch(true)}><Search /></button>
           <button className="icon-btn" aria-label="Markets" onClick={() => openMarkets({ open: "toggle" })}><Markets /></button>
           <button className="icon-btn" aria-label={main.label} title={main.label} onClick={() => nav(main.to)}>{main.to === "/new" ? <Plus /> : main.icon}</button>
@@ -323,6 +339,11 @@ export function Shell({ children }: { children: ReactNode }) {
 
 
 /** Each space's main button: what the space is for, in one action. My space's follows what the person came for. */
+/** Help & feedback's labelled button (owner, 4 Nov): the menu's top on a laptop, the top bar on a phone. */
+function FeedbackButton({ className }: { className: string }) {
+  return <button type="button" className={`${className} feedback-btn`} onClick={openFeedback} title="Report something broken, or suggest a feature">Feedback</button>;
+}
+
 export function mainAction(space: SpaceView, focus: string | null | undefined, hasHoldings = false): { to: string; icon: ReactNode; label: string } {
   return space === "invest" || (space === "mine" && focus === "invest") ? { to: "/research", icon: <Lens size={16} />, label: "Look up a company" }
     // the next real step: add them when there are none, update them when there are (LIVE1C-055: "Add your holdings" beside three holdings)

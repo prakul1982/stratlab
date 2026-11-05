@@ -41,9 +41,10 @@ export const PAGES: PageMeta[] = [
   // track it" over a drawn "Test it, research it, track it.")
   // the home page's opening words for a crawler that doesn't run scripts, the landing page's intro and three spaces in its own order
   // (R43B-006: the served page had about 89 words)
-  // LAND-2: the page's "What StratLab is" intro first (content/intro.ts has the same words; unit/land2.test.mjs checks the two agree)
-  { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-29", heading: TAGLINE,
-    summary: ["What StratLab is: StratLab is a lab for testing trading ideas and understanding your own money, across ten markets, with paper trading only (never real orders) and facts, not tips.",
+  // LAND-2: the page's intro first, its three spaces and three steps (content/intro.ts has the same words; unit/land2.test.mjs checks the
+  // two agree). LIVE3-023 / LIVE2-011 (owner, 4 Nov): no "What StratLab is" sentence first any more: the page cut it as a restatement of the hero
+  { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-11-04", heading: TAGLINE,
+    summary: [
       "Trade, the strategy lab: test a trading idea on years of real prices, then paper trade it. Notebooks turn an idea written in plain words into a backtest after brokerage, taxes and slippage, with four checks for luck: the unseen years it wasn't tuned on, nearby settings, a bad-luck shuffle of its trades, and enough trades to tell skill from chance. The strategy library holds StratLab's own strategies with their checks, and paper trading, options and the F&O desk run on live prices with fake money.",
       "Invest, research: read any Indian or US company from its own numbers and filings. Company pages show prices, key numbers, results and owners; screens and IPOs filter companies and follow an issue from its dates to its listing; red flags link fund raises, pledges, resignations and defaults to the filing.",
       "Money, what you own: upload your broker's file or fund statement for value, gains and XIRR; a capital gains tax report, US stocks in Indian tax and an ITR-ready export; net worth and a Money calendar of tax dates, results and EMIs.",

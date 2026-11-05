@@ -1,11 +1,7 @@
-/* The landing page's "What StratLab is" intro, as data: the page draws it (pages/Login.tsx) and unit/land2.test.mjs checks that the
- * words search engines read in the home page's own HTML (content/seo.ts, written into it at build time) say the same things (LAND-2).
+/* The landing page's intro under the hero, as data: the three spaces and the three steps. The page draws it (pages/Login.tsx) and
+ * unit/land2.test.mjs checks that the words search engines read in the home page's own HTML (content/seo.ts, written into it at build
+ * time) say the same things (LAND-2).
  * Plain data: no React. Facts about the product only: nothing here says what to buy or sell, rates a company or names a data source. */
-
-export const INTRO_TITLE = "What StratLab is";
-
-/** The one sentence a first-time visitor needs. */
-export const INTRO_LINE = "StratLab is a lab for testing trading ideas and understanding your own money, across ten markets, with paper trading only (never real orders) and facts, not tips.";
 
 export type IntroSpace = { id: "trade" | "invest" | "money"; name: string; sub: string; line: string; things: [string, string][] };
 

@@ -217,7 +217,7 @@ export function MarginFundingPage() {
           ) : (
             <Card>
               <CardHead title="Your holdings and watchlist" />
-              <DataTable label="Margin funding for your stocks" rows={p.rows} rowKey={(r) => r.symbol} rowAttrs={(r) => ({ "data-stock": r.symbol })}
+              <DataTable csv="margin funding your stocks" label="Margin funding for your stocks" rows={p.rows} rowKey={(r) => r.symbol} rowAttrs={(r) => ({ "data-stock": r.symbol })}
                 rowNote={(r) => (r.funded ? undefined : "No margin funding in the newest disclosure")}
                 columns={[
                   { key: "stock", header: "Stock", rowHeader: true, cell: (r) => (

@@ -132,7 +132,7 @@ export function BizUpdatesPage() {
           <Card>
             <CardHead title={d.label} info="Each filing is read once: the figures are copied from the company's own document and kept only when the line they come from is found in it. Each company's page shows the line, the page and its 24-month chart." infoLabel="How the figures are read" />
             {filed.length === 0 ? <EmptyState title="Nothing read into numbers yet">No update in this list has been read into numbers yet. They are read each evening after they're filed.</EmptyState> : (
-              <DataTable stack label={d.label} rows={filed} rowKey={(r) => r.symbol} sticky={filed.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
+              <DataTable csv={`business updates ${d.label}`} stack label={d.label} rows={filed} rowKey={(r) => r.symbol} sticky={filed.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
                 columns={[...figureColumns(months), { key: "r", header: "Filings read", numeric: true, info: "How many of this company's update filings were read into figures that could be checked against the document.", cell: (r) => `${r.read_ok} of ${r.reads}` }]}
                 foot={d.total ? { c: `Total of ${d.total.companies} companies`, v: <>{bizValue(d.total.value, d.total.unit)}<span className="k-sub-line">{periodName(d.total.period, filed[0]?.span ?? "month")}</span></>,
                   p: "", y: bizChange(d.total.change_year, d.total.unit), h: "", f: "", r: "" } : undefined} />

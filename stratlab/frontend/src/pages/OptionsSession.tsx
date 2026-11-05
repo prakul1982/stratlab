@@ -167,7 +167,7 @@ export function OptionsSession() {
           <>
             <p className="k-small k-muted">Open since {when(p.opened, TZ, true, true)} with {snap.instrument.underlying} at {p.spot_in.toLocaleString("en-IN")} (centre {p.center}). {p.credit >= 0 ? "Premium collected" : "Premium paid"}{p.rolls ? " over every leg opened, re-centred ones included," : ""} {inr(Math.abs(p.credit))}.
               {" "}Best {inr(p.best)}, worst {inr(p.worst)} so far.{p.rolls ? ` Re-centred ${p.rolls} time${p.rolls === 1 ? "" : "s"}.` : ""} {costsLine(inr(p.costs), openOrders)}</p>
-            <DataTable label="Open legs" columns={legCols} rows={snap.legs} rowKey={(l, i) => `${i}:${l.sym}:${l.side}`} rowAttrs={(l): Record<string, string> => (l.open ? {} : { "data-closed": "1" })} />
+            <DataTable csv="options session open legs" label="Open legs" columns={legCols} rows={snap.legs} rowKey={(l, i) => `${i}:${l.sym}:${l.side}`} rowAttrs={(l): Record<string, string> => (l.open ? {} : { "data-closed": "1" })} />
             <Earlier label="Orders in this trade" count={openOrders.length} className="in-card">
               <OrderList events={openOrders} cur="INR" tz={TZ} />
             </Earlier>

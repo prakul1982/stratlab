@@ -600,3 +600,47 @@ def restore_rank(snap: dict) -> list[str]:
 
 
 job = R.RerankJob()
+
+
+# ---------- self-healing (owner, 4 Nov): a provider that can't answer is measured again; a rejected key goes to the owner ----------
+PASSING_KINDS = ("rate", "credit", "transient", "busy", "refusal", "context")     # clear by themselves; the others take over meanwhile
+
+
+def ai_checks() -> list:
+    """A check per provider with a key: a rejected key (only the owner can replace it: escalated at once), a provider that lists no
+    models for its key, or one failing on something that won't pass by itself (a model gone, a refused request shape): measured again
+    (never a provider measured only by hand or with a tight daily allowance, whose measuring would spend what answers need). A rate
+    limit, used-up free credit or a server fault on the provider's side is not an issue: it clears by itself and the others answer.
+    And one check that every provider is out: all measured again, then the owner."""
+    from . import autofix
+    out, rows = [], [r for r in health() if r["configured"]]
+    for r in rows:
+        name, p, st = r["name"], PROVIDERS[r["name"]], status(r["name"])
+        kind = st.last_error_kind if st.last_error and (st.last_error_at or 0) >= (st.last_ok or 0) else None
+        problem, owner = None, kind == "auth"
+        if owner:
+            problem = f"rejected its key ({redact_ids(st.last_error)})"
+        elif "listed no models" in (r.get("state_text") or ""):
+            problem = "lists no models for its key"
+        elif r.get("state") == "fail" and kind not in PASSING_KINDS:
+            problem = r.get("state_text") or "failing"
+        manual = p.probe_every_h <= 0 or p.tight_daily_tokens or p.terms == "paid"
+        out.append(autofix.Check(
+            id=f"ai:{name}", name=f"AI provider {p.label}", problem=problem, owner_only=owner, to="/admin/system",
+            fix=None if (owner or manual) else (lambda n=name: rerank([n], wait=True)), fix_text="measured its models again",
+            action=(f"Make a new key at {p.key_url}, put it in Railway → Variables as {p.key_env}, redeploy, then press Re-rank models in "
+                    "Admin → System. Until then the other providers answer.")))
+    down = bool(rows) and not any(r.get("answering") for r in rows)
+    out.append(autofix.Check(id="ai:all", name="AI providers", problem="no provider is answering, so the idea builder and research reads are off" if down else None,
+                             fix=lambda: rerank(None, wait=True), fix_text="measured every provider again", to="/admin/system",
+                             action="Open Admin → System → AI: each provider says why it isn't answering (a rejected key, used-up credit). "
+                                    "Adding credit or a new key to one of them brings the AI back."))
+    return out
+
+
+def _register():
+    from . import autofix
+    autofix.source(ai_checks)
+
+
+_register()

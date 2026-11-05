@@ -3,13 +3,20 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { analyticsDashboard } from "../../lib/analytics";
-import { money, safeHref } from "../../lib/format";
-import { Badge, Card, CardHead, Disclosure, EmptyState, ErrorState, FigureTable, HealthGrid, HealthTile, Skeleton } from "../../components/kit";
+import { IST, fmtDateTime, money, safeHref } from "../../lib/format";
+import { Badge, Card, CardHead, DataTable, Disclosure, EmptyState, ErrorState, FigureTable, HealthGrid, HealthTile, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { ViewAsCard } from "../../components/ViewAs";
 import { useAdmin } from "./AdminContext";
-import { attention, errorCounts, lights, paidUsers, quotaLine, revenueText } from "./attention";
+import { attention, errorCounts, fixRows, lights, paidUsers, quotaLine, revenueText, type FixRow } from "./attention";
 
 type InvoiceRow = { date: string; total: number; currency: string };
+
+// the self-healing's history: when, which check, what happened (owner, 4 Nov)
+const FIXES: Column<FixRow>[] = [
+  { key: "at", header: "When", cell: (r) => (r.at ? fmtDateTime(r.at, { tz: IST, zone: true }) : "–") },
+  { key: "name", header: "Check", rowHeader: true, cell: (r) => <Link className="link" to={r.to}>{r.name}</Link> },
+  { key: "what", header: "What happened", wrap: true, cell: (r) => (r.tone === "plain" ? r.what : <><Badge tone={r.tone}>{r.tone === "ok" ? "Fixed" : "Emailed you"}</Badge> {r.what}</>) },
+];
 
 const istDay = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
@@ -26,6 +33,7 @@ export function OverviewSection() {
     : <ErrorState title="The server's status couldn't be read" action={{ label: "Try again", onClick: () => void reload() }} />}</Card>;
   const sv = ov.server, st = ov.stats;
   const todo = attention(ov, reported, jobs);
+  const fixes = fixRows(sv.autofix);
   const { services, feeds } = lights(ov, jobs);
   const today = istDay(new Date());
   const todays = (invoices ?? []).filter((i) => i.date === today);
@@ -46,7 +54,7 @@ export function OverviewSection() {
       <Card label="Needs your attention">
         <CardHead title="Needs your attention" actions={todo.length ? <Badge tone="warn">{todo.length} need{todo.length === 1 ? "s" : ""} a look</Badge> : <Badge tone="ok">All clear</Badge>} />
         {!todo.length ? (
-          <EmptyState title="Nothing needs you">The broker is logged in, AI is answering, and there are no new errors or reports. Problems found by the daily check at 4:50 PM IST are emailed to you.</EmptyState>
+          <EmptyState title="Nothing needs you">The broker is logged in, AI is answering, and there are no new errors or reports. What fails is retried by itself first (Automatic fixes, below); only what that can't clear is emailed to you.</EmptyState>
         ) : (
           <div className="adm-todo">
             {todo.map((x, i) => (
@@ -56,6 +64,12 @@ export function OverviewSection() {
             ))}
           </div>
         )}
+      </Card>
+
+      <Card label="Automatic fixes">
+        <CardHead title="Automatic fixes" info="A failed or stuck job is re-run by itself (up to three times, 15 minutes, 45 minutes and 2 hours apart), the exchange holidays read again, an AI provider measured again. Only what that can't fix is emailed to you, once per issue, and listed under Needs your attention." />
+        {fixes.length ? <DataTable label="Automatic fixes" rows={fixes} rowKey={(r) => r.key} columns={FIXES} stack />
+          : <p className="k-small k-muted">Nothing needed fixing in the last 7 days.</p>}
       </Card>
 
       <Card label="Today's numbers">
@@ -108,9 +122,11 @@ export function OverviewSection() {
             <p className="k-small" data-testid="feeds-summary">{[okFeeds.length && `${okFeeds.length} OK`, lookFeeds.filter((l) => l.state === "warn").length && `${lookFeeds.filter((l) => l.state === "warn").length} Check`,
               lookFeeds.filter((l) => l.state === "bad").length && `${lookFeeds.filter((l) => l.state === "bad").length} Problem`].filter(Boolean).join(" · ")}</p>
             {lookFeeds.length > 0 && (
-              <HealthGrid label="Data feeds that need a look">
-                {lookFeeds.map((l) => <HealthTile key={l.key} state={l.state} label={l.label} detail={l.detail} to={l.to} />)}
-              </HealthGrid>
+              // one row each, as Data and jobs lists them: a grid of tiles left the last feed alone on its line whenever seven needed a look
+              // (no column count avoids 6 + 1 in a three-wide grid; ui-lint R9), and a list of records reads better as rows
+              <StatusList label="Data feeds that need a look">
+                {lookFeeds.map((l) => <StatusRow key={l.key} state={l.state} label={l.label} detail={l.detail} />)}
+              </StatusList>
             )}
             {okFeeds.length > 0 && (
               <Disclosure summary={`Show the ${okFeeds.length} feeds that are OK`} testId="feeds-ok">

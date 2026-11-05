@@ -2,34 +2,17 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { pct } from "../lib/format";
 import { COPY_ANY_PLAN, copyNeeds } from "../lib/rules";
 import { LIMITS } from "../lib/plans";
-import { TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksOf, headTone, LibraryCard, libMeta, marketChoices, shownStats, strategyName, trails, VERDICTS, type LibEntry, checksBeyond, CHECKS_NOT_HOLD } from "../components/LibraryBits";
+import { LibraryTable, libMeta, marketChoices, strategyName, trails, VERDICTS, type LibEntry, CHECKS_NOT_HOLD } from "../components/LibraryBits";
 import { Search } from "../components/Icons";
-import { VerdictBadge } from "../components/ui";
-import { Card, ChipBar, ConfirmDialog, DataTable, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, type Column } from "../components/kit";
-import { usePersisted } from "../lib/persist";
+import { Card, ChipBar, ConfirmDialog, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton } from "../components/kit";
 import { LIBRARY_DATES } from "../lib/libraryText";
 import "./trade/trade.css";
 
 
-/** True on a phone-width screen: the Cards/Table switch goes (a table is no use there). */
-function usePhone(): boolean {
-  const q = "(max-width: 640px)";
-  const [phone, setPhone] = useState(() => typeof matchMedia === "function" && matchMedia(q).matches);
-  useEffect(() => {
-    if (typeof matchMedia !== "function") return;
-    const m = matchMedia(q), on = () => setPhone(m.matches);
-    on();
-    m.addEventListener("change", on);
-    return () => m.removeEventListener("change", on);
-  }, []);
-  return phone;
-}
-
-/** How many strategy cards a phone shows before "Show 12 more". */
-export const PHONE_CARDS = 12;
+/** How many strategies a phone shows before "Show 12 more" (VR6-024): the table's own phone paging (LibraryBits PHONE_ROWS). */
+export { PHONE_ROWS as PHONE_CARDS } from "../components/LibraryBits";
 
 /* /library: rules people published with the verdict they earned, luck included. Copy any of them and re-test it
  * yourself. Built from the kit (components/kit). */
@@ -55,12 +38,6 @@ export function LibraryPage() {
   const [reporting, setReporting] = useState<{ id: string; reason: string } | null>(null);
   const [taking, setTaking] = useState<LibEntry | null>(null);
   const [again, setAgain] = useState(0);
-  const phone = usePhone();
-  // VR6-024: 43 cards one under another were 19,000px on a phone: the first twelve, and "Show 12 more" (a table on a desktop shows every row)
-  const [cardPages, setCardPages] = useState(1);
-  useEffect(() => { setCardPages(1); }, [q, market, verdict, sort, official]);
-  // a dense table to scan many at once, or the cards; remembered on this device (R1-026)
-  const [layout, setLayout] = usePersisted<"cards" | "table">("stratlab.library.view", "cards");
 
   useEffect(() => {
     let live = true;       // a slower answer for an earlier search must not replace the one for the search now on screen
@@ -100,16 +77,6 @@ export function LibraryPage() {
     } catch (x) { fail(x); } finally { setBusy(null); }
   };
   const choices = marketChoices(counts, rows ?? [], market);
-  const signedPct = (n: number | null) => (n == null ? "–" : <span className={n > 0 ? "k-up" : n < 0 ? "k-down" : undefined}>{pct(n)}</span>);
-  const tableCols: Column<LibEntry>[] = [
-    { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => <><b>{strategyName(e)}</b><span className="k-sub-line">{libMeta(e)} · by {e.author}</span></> },
-    { key: "verdict", header: "Checks", wrap: true, cell: (e) => <><BehindHold e={e} /><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />{checksBeyond(checksOf(e), e.verdict.label) && <span className="k-sub-line">{checksBeyond(checksOf(e), e.verdict.label)}</span>}{e.reason && <span className="k-sub-line">{e.reason}</span>}</> },
-    { key: "ret", header: TOTAL_AFTER_COSTS, numeric: true, cell: (e) => trails(e) && shownStats(e).ret != null ? pct(shownStats(e).ret as number) : signedPct(shownStats(e).ret) },
-    { key: "bh", header: TOTAL_HOLD, numeric: true, cell: (e) => signedPct(e.stats.buy_hold) },
-    { key: "unseen", header: "Unseen part", numeric: true, cell: (e) => signedPct(shownStats(e).unseen) },
-    { key: "mdd", header: "Worst fall", numeric: true, cell: (e) => signedPct(shownStats(e).mdd) },
-    { key: "copy", header: "", action: true, cell: (e) => <button type="button" className="btn quiet sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${strategyName(e)}, ${libMeta(e)}`}>{busy === e.id ? "Copying…" : "Copy"}</button> },
-  ];
   const filtered = !!(q || market || verdict || official);
   // the intro doesn't promise other people's rules while every entry is StratLab's own (R5O-014); read from the
   // unfiltered list, kept while a filter narrows it
@@ -130,7 +97,6 @@ export function LibraryPage() {
           <Seg label="Whose" options={[{ value: "all", label: "Everyone's" }, { value: "official", label: "StratLab's own" }]} value={official ? "official" : "all"} onChange={(v) => setOfficial(v === "official")} />
           <Seg label="Sort" options={[{ value: "hold", label: "Ahead of buy and hold", short: "Vs hold" }, { value: "best", label: "Most checks passed", short: "Checks" },
             { value: "new", label: "Newest" }, { value: "copied", label: "Most copied", short: "Copied" }]} value={sort} onChange={setSort} />
-          {!phone && <Seg label="View" options={[{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }]} value={layout} onChange={(v) => setLayout(v as "cards" | "table")} />}
         </div>
         {/* only the markets that have strategies, each with how many; wrapped on a phone too, so none is cut off at the edge (MO-5b, VR1-181) */}
         {choices.length > 2 && <ChipBar label="Market" options={choices} value={market} onChange={setMarket} wrap />}
@@ -148,43 +114,31 @@ export function LibraryPage() {
             <p className="k-note" data-testid="lib-list-notes">
               {rows.some(trails) && <>{CHECKS_NOT_HOLD} </>}{LIBRARY_DATES}{rows.some((e) => needs(e)) && <> {COPY_ANY_PLAN}</>}
             </p>
-            {layout === "table" && !phone ? (
-              <Card label="Strategies">
-                <DataTable label="Strategies" rows={rows} rowKey={(e) => e.id} columns={tableCols} />
-              </Card>
-            ) : (
-            <div className="k-cards lib-cards">
-              {(phone ? rows.slice(0, PHONE_CARDS * cardPages) : rows).map((e) => (
-                <Card key={e.id} label={`${strategyName(e)}, ${libMeta(e)}`} className={`lib-card${shownStats(e).ran ? "" : " lib-unrun"}`}>
-                  <LibraryCard e={e} actions={<>
-                    {e.mine && e.hidden && <p className="k-small k-down">Hidden from others after reports. The site owner will review it; editing and publishing again won't bring it back sooner.</p>}
-                    {reporting?.id === e.id ? (
-                      <div className="k-row">
-                        <Select label="Why are you reporting this?" small value={reporting.reason} onChange={(v) => setReporting({ id: e.id, reason: v })} options={Object.entries(reasons).map(([k, n]) => ({ value: k, label: n }))} />
-                        <button type="button" className="btn sm" disabled={busy === e.id} onClick={sendReport}>{busy === e.id ? "Sending…" : "Send report"}</button>
-                        <button type="button" className="btn quiet sm" onClick={() => setReporting(null)}>Cancel</button>
-                      </div>
-                    ) : (
-                      <div className="k-row lib-buttons">
-                        <button type="button" className="btn sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${strategyName(e)}, ${libMeta(e)}`}>{busy === e.id ? "Copying…" : "Copy and re-test"}</button>
-                        {e.mine && <button type="button" className="btn quiet sm danger" onClick={() => setTaking(e)}>Take down</button>}
-                        {!e.mine && (e.reported
-                          ? <span className="k-note k-end">Reported</span>
-                          : <button type="button" className="btn quiet sm k-end" onClick={() => setReporting({ id: e.id, reason: "spam" })}>Report</button>)}
-                      </div>
-                    )}
-                    {needs(e) && <span className="k-note" data-testid="lib-needs">{needs(e)}</span>}
-                  </>} />
-                </Card>
-              ))}
-            </div>
-            )}
-            {phone && layout !== "table" && rows.length > PHONE_CARDS * cardPages && (
-              <div className="k-row" data-testid="lib-show-more">
-                <span className="k-note">Showing {PHONE_CARDS * cardPages} of {rows.length}.</span>
-                <button type="button" className="btn quiet sm" onClick={() => setCardPages((n) => n + 1)}>Show {Math.min(PHONE_CARDS, rows.length - PHONE_CARDS * cardPages)} more</button>
-              </div>
-            )}
+            {/* one table on every screen (TABLES EVERYWHERE, owner 4 Nov): the figures in sortable columns, the rules under each row */}
+            <LibraryTable key={`${q}|${market}|${verdict}|${sort}|${official}`} rows={rows}
+              actions={(e) => (
+                <div className="k-row lib-buttons">
+                  <button type="button" className="btn sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${strategyName(e)}, ${libMeta(e)}`}>{busy === e.id ? "Copying…" : "Copy"}</button>
+                </div>)}
+              extra={(e) => (
+                <>
+                  {e.mine && e.hidden && <p className="k-small k-down">Hidden from others after reports. The site owner will review it; editing and publishing again won't bring it back sooner.</p>}
+                  {needs(e) && <span className="k-note" data-testid="lib-needs">{needs(e)}</span>}
+                  {reporting?.id === e.id ? (
+                    <div className="k-row">
+                      <Select label="Why are you reporting this?" small value={reporting.reason} onChange={(v) => setReporting({ id: e.id, reason: v })} options={Object.entries(reasons).map(([k, n]) => ({ value: k, label: n }))} />
+                      <button type="button" className="btn sm" disabled={busy === e.id} onClick={sendReport}>{busy === e.id ? "Sending…" : "Send report"}</button>
+                      <button type="button" className="btn quiet sm" onClick={() => setReporting(null)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="k-row">
+                      {e.mine && <button type="button" className="btn quiet sm danger" onClick={() => setTaking(e)}>Take down</button>}
+                      {!e.mine && (e.reported
+                        ? <span className="k-note">Reported</span>
+                        : <button type="button" className="btn quiet sm" onClick={() => setReporting({ id: e.id, reason: "spam" })}>Report</button>)}
+                    </div>
+                  )}
+                </>)} />
           </>
         )}
       <p className="k-note">Published by StratLab and its users for research and paper trading. Past results don't predict future returns, and nothing here is investment advice.</p>

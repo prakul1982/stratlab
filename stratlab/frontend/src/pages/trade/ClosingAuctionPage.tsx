@@ -206,7 +206,7 @@ function History({ v }: { v: CasView }) {
           <p className="k-note">Each day: the final prices against the reference prices (VWAP of 15:00–15:15).
             {/* DC-012: 13 days shown although the auctions began on 3 Aug: say from when they are kept */}
             {" "}Kept from {asOf(h.days[h.days.length - 1].day)}, when StratLab began saving each day's auction ({h.days.length} day{h.days.length === 1 ? "" : "s"} so far); the auctions before that weren't saved here.</p>
-          <DataTable stack label="Past auctions" columns={cols} rows={recent} rowKey={(d) => d.day} rowAttrs={attrs} />
+          <DataTable csv="closing auctions past" stack label="Past auctions" columns={cols} rows={recent} rowKey={(d) => d.day} rowAttrs={attrs} />
           <Earlier label="Earlier auctions" count={older.length}>
             <DataTable stack label="Earlier auctions" columns={cols} rows={older} rowKey={(d) => d.day} rowAttrs={attrs} />
           </Earlier>

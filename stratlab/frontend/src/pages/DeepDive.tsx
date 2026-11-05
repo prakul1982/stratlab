@@ -10,7 +10,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { marginText, millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
 import { BizUpdatesPanel } from "../components/BizUpdates";
-import { Badge, Card, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow } from "../components/kit";
+import { Badge, Card, CsvButton, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
 import { track } from "../lib/analytics";
@@ -172,6 +172,18 @@ function SourceLink({ s }: { s: Source }) {
   return s ? <a className="link tiny" href={safeHref(s.url)} target="_blank" rel="noopener noreferrer" title={s.title}>{KIND[s.kind] ?? "Filing"}, {day(s.at)} ↗</a> : null;
 }
 
+/** EXPORT: the reported years as the CSV's columns, each figure with its unit in the column's name. */
+const yearCsv = (unit: string): Column<Year>[] => {
+  const cell = () => null, u = ` (${unit})`;
+  return [
+    { key: "y", header: "Year", cell, csv: (y) => y.year }, { key: "s", header: `Sales${u}`, cell, csv: (y) => y.sales },
+    { key: "p", header: `Net profit${u}`, cell, csv: (y) => y.profit }, { key: "o", header: "EBITDA margin (%)", cell, csv: (y) => y.opm },
+    { key: "c", header: `Capex${u}`, cell, csv: (y) => y.capex }, { key: "cs", header: "Capex / sales (%)", cell, csv: (y) => y.capex_pct_sales },
+    { key: "cfo", header: `Cash from operations${u}`, cell, csv: (y) => y.cfo }, { key: "cfi", header: `Cash from investing${u}`, cell, csv: (y) => y.cfi },
+    { key: "f", header: `Free cash flow${u}`, cell, csv: (y) => y.fcf }, { key: "d", header: `Debt${u}`, cell, csv: (y) => y.debt },
+  ];
+};
+
 export function DeepDivePage() {
   const { symbol = "" } = useParams();
   const region: "IN" | "US" = useLocation().pathname.startsWith("/research/US/") ? "US" : "IN";
@@ -257,6 +269,9 @@ export function DeepDivePage() {
         {v && <>
           <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pptx")} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
           <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pdf")} title="The same slides as a PDF, to read or share anywhere">{decking === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
+          {/* EXPORT: every reported year's figures, as numbers in the reporting unit (the company page's 10 years) */}
+          {(n?.years.length ?? 0) > 0 && <CsvButton name={`${sym} figures by year`} label="every reported year's figures" text="Figures (CSV)" rows={n!.years}
+            columns={yearCsv(n!.unit)} />}
         </>}
         <AlertButton region={region} symbol={sym} />
         <ShareCompanyButton region={region} symbol={sym} />
@@ -281,7 +296,7 @@ export function DeepDivePage() {
               ];
               return (
                 <>
-                  <div className="dd-fit"><DataTable label="Growth a year" rows={rows} rowKey={(r) => r.k} stack={false}
+                  <div className="dd-fit"><DataTable csv={`${sym} growth a year`} label="Growth a year" rows={rows} rowKey={(r) => r.k} stack={false}
                     columns={[{ key: "n", header: "Growth a year", rowHeader: true, cell: (r) => r.name },
                       { key: "3", header: "Last 3 years", numeric: true, cell: (r) => r.y3 }, { key: "5", header: "Last 5 years", numeric: true, cell: (r) => r.y5 }]} /></div>
                   {notes.length > 0 && <ul className="k-note cmp-foots" data-testid="growth-notes">{notes.map((x) => <li key={x.n}><sup>{x.n}</sup> {x.text}</li>)}</ul>}
@@ -295,7 +310,7 @@ export function DeepDivePage() {
                 baseSales={(() => { const f = years.find((y) => y.profit != null); return f?.sales != null ? f.sales / profitS.k : null; })()} />
             </div>
             {n.quarters.length > 0 && (
-              <DataTable label="The last eight quarters" stack rows={n.quarters.slice(-8)} rowKey={(q) => q.quarter}
+              <DataTable csv={`${sym} last eight quarters`} label="The last eight quarters" stack rows={n.quarters.slice(-8)} rowKey={(q) => q.quarter}
                 columns={[{ key: "q", header: <>Quarter <span className="k-note">({qS.unit})</span></>, rowHeader: true, cell: (q) => q.quarter },
                   { key: "s", header: "Sales", numeric: true, cell: (q) => qS.fmt(q.sales) },
                   { key: "y", header: "vs a year ago", numeric: true, cell: (q) => (q.sales_yoy == null ? "–" : <Signed value={q.sales_yoy}>{pct(q.sales_yoy)}</Signed>) },
@@ -337,7 +352,7 @@ export function DeepDivePage() {
             ? `Capex as the company reports it in its cash flow statement (purchases of property, plant and equipment). Free cash flow is cash from operations minus capex. Figures in ${capS.unit}.`
             : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${capS.unit}.`}>
             {n.capex_3y_total != null && <p className="k-small">{n.capex_reported ? "" : "About "}<b>{us ? usdAmount(n.capex_3y_total, cur) : inrAmount(n.capex_3y_total)}</b> spent on capex over {(n.capex_years ?? 3) >= 3 ? "the last three years" : `${n.capex_years} of the last three years (no figure for the rest)`}. Figures in {capS.unit}.</p>}
-            <DataTable label="Capex and cash by year" stack rows={[...years].reverse().slice(0, 8)} rowKey={(y) => y.year}
+            <DataTable csv={`${sym} capex and cash by year`} label="Capex and cash by year" stack rows={[...years].reverse().slice(0, 8)} rowKey={(y) => y.year}
               columns={[{ key: "y", header: <>Year <span className="k-note">({capS.unit})</span></>, rowHeader: true, cell: (y) => y.year },
                 { key: "s", header: "Sales", numeric: true, cell: (y) => capS.fmt(y.sales) }, { key: "c", header: "Capex", numeric: true, cell: (y) => capS.fmt(y.capex) },
                 { key: "cs", header: "Capex / sales", numeric: true, cell: (y) => pc(y.capex_pct_sales) }, { key: "cfo", header: "Cash from operations", numeric: true, cell: (y) => capS.fmt(y.cfo) },

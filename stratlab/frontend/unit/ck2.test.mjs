@@ -106,7 +106,7 @@ test("CK-2 (R18): a table that would be cut on a phone is cards, a short chip ro
   assert.match(d, /b\.scrollWidth > b\.clientWidth \+ 2\) setSpill\(true\)/);
   assert.match(d, /data-grid=\{grid \|\| scrollEnd \? "" : undefined\}/);
   assert.match(read("src/pages/OptionsPage.tsx"), /<DataTable grid label=\{greeks \? "Option chain, IV and Greeks"/);
-  assert.match(read("src/pages/PositioningPage.tsx"), /<DataTable grid label=\{`\$\{name\} open interest, change and volume by strike/);
+  assert.match(read("src/pages/PositioningPage.tsx"), /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?grid label=\{`\$\{name\} open interest, change and volume by strike/);
   assert.match(read("src/components/kit/ChipBar.tsx"), /const wrapRow = wrap \|\| all\.length <= 12;/);
 });
 

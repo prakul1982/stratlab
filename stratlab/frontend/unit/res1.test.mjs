@@ -7,7 +7,7 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const page = read("src/pages/ResultsPage.tsx");
 
 test("RES-1: one table a day with the figures a person looks at on a results day", () => {
-  assert.match(page, /<DataTable label=\{`Results on \$\{resultDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => `\$\{r\.symbol\}-\$\{r\.date\}`\} columns=\{columns\} stack phonePage=\{10\} \/>/);
+  assert.match(page, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Results on \$\{resultDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => `\$\{r\.symbol\}-\$\{r\.date\}`\} columns=\{columns\} stack phonePage=\{10\} \/>/);
   for (const h of ["Company", "Market value", "Price now", '"Day"', "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply"])
     assert.ok(page.includes(`header: ${h.startsWith('"') ? h : `"${h}"`}`), h);
   assert.doesNotMatch(page, /className="inv-row"/);        // no chips and no two uneven columns
@@ -47,7 +47,7 @@ test("RES-1: live prices, earlier moves and implied moves are read for the rows 
 });
 
 test("RES-1: the corporate actions calendar is a table a day with the same filters and live prices", () => {
-  assert.match(corp, /<DataTable label=\{`Corporate actions going ex on \$\{exDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => r\.id\} columns=\{columns\} stack phonePage=\{10\} \/>/);
+  assert.match(corp, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Corporate actions going ex on \$\{exDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => r\.id\} columns=\{columns\} stack phonePage=\{10\} \/>/);
   for (const h of ["Company", "Action", "Amount or ratio", "Record date", "Price now", "Yield of this payment", "Market value"]) assert.ok(corp.includes(`header: "${h}"`), h);
   assert.match(corp, /<CalendarFilters region=\{region\}/);
   assert.match(corp, /useRowQuotes\(region, symbols\)/);

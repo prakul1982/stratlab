@@ -8,6 +8,9 @@ import { Card, CardHead, DataTable, FormActions, Light, Notice, type Column } fr
 export type MarketCoverage = { market: string; name: string; source: string; known_until: string | null; days_left: number | null;
   next: string | null; next_name: string | null; state: "ok" | "warn" | "none"; hint: string | null };
 export type CalendarStatus = { known_until: string | null; added: string[]; by_hand?: string[]; covered_until: string | null; days_left: number | null;
+  /** the exchange-listed markets' light by the server's season-aware rule, and its note while next year's list isn't out (owner, 4 Nov);
+   * older servers send neither */
+  state?: "ok" | "warn"; note?: string | null;
   auto?: { at: string | null; tried_at: string | null; error: string | null; count: number }; markets?: MarketCoverage[] };
 
 const COLUMNS: Column<MarketCoverage>[] = [
@@ -24,7 +27,8 @@ export function HolidaysPanel({ status, onSaved }: { status: CalendarStatus; onS
   const { fail, notify } = useApp();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const low = status.days_left != null && status.days_left < 60;
+  // the server's season-aware light when it sends one: a list to 31 Dec is all there is until mid-December (owner, 4 Nov: amber every November)
+  const low = status.state ? status.state !== "ok" : status.days_left != null && status.days_left < 60;
   const refresh = async () => {
     setBusy(true);
     try { onSaved(await api<CalendarStatus>("/admin/holidays/refresh", { method: "POST" })); } catch (e) { fail(e); } finally { setBusy(false); }

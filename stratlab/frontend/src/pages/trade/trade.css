@@ -66,47 +66,36 @@
 .k-idea { font-family: var(--serif); font-size: 20px; min-height: 130px; line-height: 1.5; padding: 16px 18px; }
 .k-gap-sm { gap: var(--s2); }
 
-/* The library card (MO-5a): where, the strategy's name, who made it, two lines of what it does, one row of three figures, the
-   gap to buy and hold, the checks, the details fold and the buttons. The card is a grid that takes its rows from the list
-   (subgrid), so in a row of cards each of those sits at one height, whatever a title or a description needs; one column
-   (a phone) gives each card its own rows. A card without the fold (the public list's) has one row less. */
-.lib-clamp { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .lib-reason { margin: 0; }
-.k-cards.lib-cards { align-items: stretch; }
-/* VR7-004: the signed-out library's cards past the first twelve are all in the page; a phone hides them until "Show more", a desktop shows them all and has no such button */
-.k-row.lib-more { display: none; }
-@media (max-width: 640px) { .k-cards.lib-cards > .k-card.lib-extra { display: none; } .k-row.lib-more { display: flex; } }
-/* the notebook list: one height per row, the verdict line along the bottom, the question in two lines (DA-032) */
-.k-cards.nb-cards { align-items: stretch; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
-/* VR1-030: two notebooks fill the row (auto-fit) instead of two thirds of a three-column grid, one alone stays a card's width, and the pin is an icon at the
-   card's top right that never wraps under the name (its words are the hover text and the screen-reader name) */
-.nb-cards > .k-card:only-child { max-width: 520px; }
-.nb-cards .k-card-head { flex-wrap: nowrap; align-items: flex-start; }
-.nb-cards .k-card-head .k-card-title { min-width: 0; overflow-wrap: anywhere; }
-.nb-cards .k-card-actions { flex: none; }
-.nb-cards .k-pin { min-width: 34px; padding: 0; }
+/* the notebook list is one table (TABLES EVERYWHERE, owner 4 Nov); the question under each name in two lines at most */
 /* the question box of a notebook: one or two lines of room, not 130px for a one-line question (VR1-054; it grows with what is typed) */
 .k-textarea.nb-q { min-height: 76px; }
-.nb-question { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2lh; }
-.k-card.lib-card { display: grid; grid-row: span 7; grid-template-rows: subgrid; row-gap: var(--s3); align-content: start; }
-.k-card.lib-card.lib-lean { grid-row: span 6; }
-.lib-card > * { min-width: 0; margin: 0; }
-.lib-head .k-card-head { margin: 0; }
-/* VR1-171, VR1-180: the card's name and "By ..." sit at the bottom of the head cell, so in a row of cards the titles are level whether the market line above takes one line or two (the empty strip is above the title, not under "By") */
-.lib-card .lib-head { display: flex; flex-direction: column; }
-.lib-card .lib-head > .k-card-head { margin-top: auto; }
-.lib-by { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lib-meta { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.lib-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--s3); align-items: stretch; }
-.lib-figs > .k-stat { display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 2px; }
-.lib-figs .k-stat-k { align-self: end; line-height: 1.3; }
-.lib-figs .k-stat-v { font-size: 20px; white-space: nowrap; }
-.lib-dates { display: block; }
-.lib-status { align-items: center; }
-.lib-details { align-self: start; }
+.nb-question { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lib-buttons { align-items: center; flex-wrap: nowrap; }
+/* the library as a table (TABLES EVERYWHERE, owner 4 Nov): every row is in the page (VR7-004); a phone shows twelve compact rows at a time (the name, where it was
+ * tested, the return after costs, the gap to buy and hold, the checks), the other figures in each row's details as a small table of their own */
 .lib-line { margin: 0; }
-.lib-actions { align-self: end; }
-.lib-buttons { align-items: center; }
+.lib-about { margin: 0; }
+.lib-mini { display: none; }
+.k-row.lib-more { display: none; }
+/* fixed column widths on a wide screen, so the columns don't move as the fonts and the figures arrive (LIVE3-012: layout shift) */
+@media (min-width: 641px) {
+  .lib-table .k-table { table-layout: fixed; width: 100%; }
+  .lib-table .k-table th:nth-child(1) { width: 16%; }
+  .lib-table .k-table th:nth-child(2) { width: 12%; }
+  .lib-table .k-table th:nth-child(n+3):nth-child(-n+7) { width: 10.6%; }
+  .lib-table .k-table th:nth-child(8) { width: 12%; }
+  .lib-table .k-table th:nth-child(9) { width: 7%; }
+  .lib-table .k-table td, .lib-table .k-table th { overflow-wrap: break-word; }
+  .lib-table .k-table thead th { vertical-align: bottom; }
+}
+@media (max-width: 640px) {
+  .lib-table .k-table tr.lib-extra { display: none; }
+  .k-row.lib-more { display: flex; }
+  .lib-table .k-table td:is([data-label="Buy and hold"], [data-label="Worst fall"], [data-label="Unseen period"]) { display: none; }
+  .lib-mini { display: table; width: 100%; }
+  .lib-mini th { font-weight: 400; color: var(--muted); text-align: left; }
+}
 .explore-go { color: var(--blue-ink); font-weight: 500; }
 /* the card's "Open →" sits at its foot, so a card with a shorter description beside longer ones has no empty band under it (ui-lint R1, 29 Oct: all groups now show at once) */
 .explore-card .explore-go { margin-top: auto; }

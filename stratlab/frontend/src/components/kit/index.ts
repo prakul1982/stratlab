@@ -14,7 +14,7 @@ export { Range } from "./Range";
 export { StockPicker } from "./StockPicker";
 export { Suggest, type SuggestItem } from "./Suggest";
 export { TilePicker, type Tile, type TileGroup } from "./TilePicker";
-export { DataTable, usePhone, type Column } from "./DataTable";
+export { DataTable, CsvButton, tableCsv, usePhone, type Column } from "./DataTable";
 export { FactTable, type Fact } from "./FactTable";
 export { FigureTable, type Figure } from "./FigureTable";
 export { Notes } from "./Notes";

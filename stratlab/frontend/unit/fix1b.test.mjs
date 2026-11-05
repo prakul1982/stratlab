@@ -144,7 +144,7 @@ test("LIVE1B-015: nothing held says so first; no empty tiles or table", () => {
   const p = read("src/pages/money/MutualFundsPage.tsx");
   assert.match(p, /<EmptyState title="Every scheme in your files has been fully redeemed">/);
   assert.match(p, /\{held\.length > 0 && <Card className="mf-stats">/);
-  assert.match(p, /\{held\.length > 0 && <FoldTable label="Schemes" columns=\{schemeCols\} rows=\{held\}/);
+  assert.match(p, /\{held\.length > 0 && <FoldTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Schemes" columns=\{schemeCols\} rows=\{held\}/);
   assert.doesNotMatch(p, /<p className="k-note">Every scheme in your files has been fully redeemed\.<\/p>/);
 });
 

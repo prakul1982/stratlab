@@ -120,7 +120,7 @@ export function EtfGapsPage() {
             <Field label="Find an ETF">{(id) => <StockPicker id={id} placeholder="e.g. NIFTYBEES" onText={setQ} onPick={(s) => { setQ(""); open(s); }} />}</Field>
           </FormGrid>
           {/* stack: on a phone each ETF is a card with every figure labelled, instead of columns cut off at the edge */}
-          <DataTable label="ETFs by gap to NAV" rows={all || q.trim() ? rows : rows.slice(0, TOP)} rowKey={(r) => r.symbol} stack phonePage={25} sticky={rows.length > 14} empty="No ETF matches that."
+          <DataTable csv={{ name: "ETF gaps to NAV", rows }} label="ETFs by gap to NAV" rows={all || q.trim() ? rows : rows.slice(0, TOP)} rowKey={(r) => r.symbol} stack phonePage={25} sticky={rows.length > 14} empty="No ETF matches that."
             rowAttrs={(r) => ({ "data-etf": r.symbol, className: pick === r.symbol ? "on" : "" })} columns={columns} />
           {!all && !q.trim() && rows.length > TOP && (
             <div className="k-row"><span className="k-note">Showing {TOP} of {rows.length} ETFs, in the order above.</span>

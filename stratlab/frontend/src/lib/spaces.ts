@@ -1,5 +1,5 @@
 import type { Focus } from "./types";
-import { NAV, SPACE_LIST, type SpaceId } from "./nav";
+import { NAV, SPACE_LIST, locate, type SpaceId } from "./nav";
 
 /** StratLab's spaces. Trade is the strategy lab StratLab started as; Invest is company research; Money is the person's
  * own finances; Mine is the person's own home (what they pinned, their money and what is coming up). A space only
@@ -21,15 +21,35 @@ export function spaceOf(path: string): Space | null {
   return SPACE_IDS.find((s) => SPACES[s].paths.test(path)) ?? null;
 }
 
+/** A page in more than one space's menu (the Calendar's tabs: its menu entry is in every space): it opens inside the space it
+ * was opened from, not its own address's space (owner, 4 Nov: "whenever we click on something in Calendar it redirects to
+ * Invest"). Worked out from the menu map itself (lib/nav.ts `start`), so any entry shared later is covered too. */
+export function sharedPage(path: string): boolean {
+  return !!locate(path)?.group.start;
+}
+
+/** The space a shared page's address carries (?space=trade), so a shared or bookmarked link keeps the space it was opened in. */
+export function spaceParam(search: string | null | undefined): Space | null {
+  const v = new URLSearchParams(search ?? "").get("space");
+  return v === "trade" || v === "invest" || v === "money" ? v : null;
+}
+
 /** The menu an address shows: its own space's, so where you are is always in the menu. Pages that belong to no space
  * (Account, Settings, Plans, Admin, My space) show Mine's menu, as their breadcrumb says. Mine keeps its own menu on a
- * page it links to (`keepsMine`: a pinned page, Briefs) while Mine is the menu showing. Worked out from the address on
- * every render, so it never lags behind a saved choice that loads later. */
-export function menuView(path: string, showing: SpaceView, keepsMine = false): SpaceView {
+ * page it links to (`keepsMine`: a pinned page, Briefs) while Mine is the menu showing. A page in several spaces' menus
+ * (`sharedPage`) stays in the space its address names (?space=), else in the space of the page it was reached from in
+ * this visit (`from`; none on a fresh load, which opens the address's own space). Worked out from the address on every
+ * render, so it never lags behind a saved choice that loads later. */
+export function menuView(path: string, showing: SpaceView, keepsMine = false, o: { search?: string; from?: SpaceView | null } = {}): SpaceView {
   if (path === "/") return showing;          // the front door goes on to the home of the menu showing
   const here = spaceOf(path);
   if (!here) return "mine";
-  return showing === "mine" && keepsMine ? "mine" : here;
+  // a shared page reached from a space (or naming one) stays in it before Mine's own claim: Mine lists the Calendar too, and
+  // the account's saved choice ("My space") arriving after the click must not pull Trade's Calendar into it
+  const kept = sharedPage(path) ? spaceParam(o.search) ?? (o.from && o.from !== "mine" ? o.from : null) : null;
+  if (kept) return kept;
+  if (showing === "mine" && keepsMine) return "mine";
+  return here;
 }
 
 /** The space someone's answer to "What brings you here?" starts them in. */

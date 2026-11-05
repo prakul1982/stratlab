@@ -476,8 +476,9 @@ def test_monthly_deep_dives_and_decks_count_each_company_once(api, monkeypatch):
     r = c.get("/research/deep/AAA/deck?region=US")
     assert r.status_code == 402 and r.json()["detail"]["code"] == "deck_limit"
     from app.plans import resets_on
-    assert r.json()["detail"]["message"] == (f"You've made 1 company deck this month. The count starts again on {resets_on()}. A company's PDF and "
-                                                "PowerPoint count as one deck, so the deck of a company you've already made one for still downloads in "
+    # a company's and a theme's decks share the month's count (EXPORT), so the words name both
+    assert r.json()["detail"]["message"] == (f"You've made 1 slide deck this month. The count starts again on {resets_on()}. A company's or a "
+                                                "theme's PDF and PowerPoint count as one deck, so a deck you've already made this month still downloads in "
                                                 "either format. Basic gives 5 a month.")
     assert usage.count("deepdive") == 2 and usage.count("deck") == 1
     who["p"] = {"id": "u1", "plan": "basic", "_plan": "basic"}

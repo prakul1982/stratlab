@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 
-from . import admin, job_status, leader
+from . import admin, autofix, job_status, leader
 from .connect.redact import redact_ids
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -82,14 +82,24 @@ def next_run_label(schedule: str | None, now: datetime | None = None) -> str | N
     keeps the sentence. Days off (weekends, holidays) are not known here: the label says when the clock next strikes."""
     from datetime import timedelta
     from zoneinfo import ZoneInfo
-    text = re.sub(r"\bevery\b[^;]*", "", schedule or "", flags=re.I)
+    full = schedule or ""
+    text = re.sub(r"\bevery\b[^;]*", "", full, flags=re.I)
     if re.search(r"\b(?:off|never)\b", text, re.I) and not _CLOCK.search(text):
         return None
     ist, ny = ZoneInfo("Asia/Kolkata"), ZoneInfo("America/New_York")
     now = now or datetime.now(timezone.utc)
     best = None
-    for m in _CLOCK.finditer(text):
-        h, mi, ap = int(m.group(1)), int(m.group(2)), (m.group(3) or "").upper()
+    # a clock written without AM/PM after one with it is in the same half of the day ("from 3:14 to 3:40 PM IST; the day is stored
+    # after 3:40" is 3:40 PM: Admin said "Next run: Thu 5 Nov, 3:40 AM IST", owner 4 Nov): the meridiem carries over from the clock
+    # before it in the whole sentence, the "every" clause included
+    skip = [m.span() for m in re.finditer(r"\bevery\b[^;]*", full, flags=re.I)]
+    last_ap = ""
+    for m in _CLOCK.finditer(full):
+        last_ap = (m.group(3) or "").upper() or last_ap
+        if any(a <= m.start() < b for a, b in skip):
+            continue
+        h, mi = int(m.group(1)), int(m.group(2))
+        ap = (m.group(3) or "").upper() or (last_ap if h <= 12 and not m.group(1).startswith("0") else "")
         if ap == "PM" and h < 12:
             h += 12
         elif ap == "AM" and h == 12:
@@ -98,7 +108,7 @@ def next_run_label(schedule: str | None, now: datetime | None = None) -> str | N
             continue
         # the zone named after the time, else the market word before it ("US 8:30 AM"), else India's
         zone_word = (m.group(4) or "").lower()
-        before = text[max(0, m.start() - 24):m.start()]
+        before = full[max(0, m.start() - 24):m.start()]
         tz = ny if zone_word.startswith(("new york", "et")) else ist if zone_word == "ist" else ny if re.search(r"\bUS\b[^,;]*$", before) else ist
         local = now.astimezone(tz)
         t = local.replace(hour=h, minute=mi, second=0, microsecond=0)
@@ -600,5 +610,50 @@ def rows() -> list[dict]:
 @router.get("/admin/jobs")
 def admin_jobs(_=Depends(admin.admin_profile)):
     """Every background job: when it last ran, its schedule, how the last run went, and the routes that run it now."""
-    # which container runs the jobs (a deploy overlaps two for a minute) and until when its lease holds
-    return {"jobs": rows(), "leader": leader.current.status()}
+    # which container runs the jobs (a deploy overlaps two for a minute) and until when its lease holds; each row with what the
+    # self-healing is doing about it (being retried: a Check; tries used up: a Problem)
+    return {"jobs": autofix.annotate(rows()), "leader": leader.current.status()}
+
+
+# ---------- self-healing: a failed or stuck job is re-run through its own Run now (owner, 4 Nov) ----------
+# never re-run by the sweep: jobs that mail users or read their connected accounts (a remedy must not touch users), and the exchange
+# holidays, which have a check of their own (data.calendar)
+NO_AUTO = frozenset({"newsletters", "statement-reminder", "ibkr-daily", "holidays"})
+_REGION_WORD = {"India": re.compile(r"\b(?:India|IN)\b"), "US": re.compile(r"\b(?:US|New York)\b")}
+
+
+def remedy_paths(row: dict) -> list[str]:
+    """The Run now routes that re-run what failed: a job with a run per market runs the one(s) its problem names (else the first),
+    any other its first."""
+    runs = [r for r in row.get("run") or [] if r.get("path")]
+    if not runs:
+        return []
+    by_region = [r for r in runs if any(w in r.get("label", "") for w in _REGION_WORD)]
+    if by_region:
+        named = [r for r in by_region if any(w in r["label"] and rx.search(row.get("error") or "") for w, rx in _REGION_WORD.items())]
+        return [r["path"] for r in (named or by_region[:1])]
+    return [runs[0]["path"]]
+
+
+def _job_action(row: dict) -> str:
+    err = row.get("error") or ""
+    if err.startswith("Stuck"):
+        return ("A run is stuck and the automatic re-runs couldn't take over. Restart the server in Railway (the service → Deployments → "
+                "the latest → Restart); the job runs again at its next turn.")
+    return (f"Open Admin → Data and jobs → {row['name']} and press Log: it says which source failed. When that source's own site is down "
+            "there is nothing to do (it is read again at the next run); when the site works, the reader needs a developer's look.")
+
+
+@autofix.source
+def job_checks() -> list[autofix.Check]:
+    """A check per job: its problem when it failed, is stuck, or read only some of its sources; the remedy re-runs it."""
+    out = []
+    for r in rows():
+        if r["id"] in NO_AUTO:
+            continue
+        failing = r["state"] == "bad" or (r["state"] == "warn" and bool(r.get("error")) and not r.get("running"))
+        paths = remedy_paths(r)
+        out.append(autofix.Check(id=f"job:{r['id']}", name=r["name"], problem=r.get("error") if failing else None,
+                                 fix=(lambda ps=tuple(paths): [autofix.call_route(x) for x in ps]) if paths else None,
+                                 fix_text="re-ran the job", action=_job_action(r), to="/admin/data"))
+    return out

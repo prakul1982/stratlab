@@ -7,7 +7,7 @@ import { signIn, signInUnfinished } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
-import { HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_LINE, INTRO_SPACES, INTRO_TITLE } from "../content/intro";
+import { HOW_MONEY, HOW_STEPS, HOW_TITLE, INTRO_SPACES } from "../content/intro";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
@@ -309,19 +309,16 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
         </div>
       </section>}
 
-      {/* LAND-2: what StratLab is, in the first screens under the hero: one sentence, the three spaces with three real things each, the
-          three steps, and what sets it apart. It replaced the three picture cards and Trade's own four steps, which said the same less
-          plainly. The same words are in the page's HTML for crawlers (content/seo.ts). */}
-      {(full || slim === "about") && <section className="lp-sec lp-spaces-sec" aria-labelledby="intro-h">
+      {/* LAND-2: in the first screens under the hero, the three spaces with three real things each, then the three steps. It replaced
+          the three picture cards and Trade's own four steps, which said the same less plainly. The same words are in the page's HTML for
+          crawlers (content/seo.ts). LIVE3-023 / LIVE2-011 (owner, 4 Nov): the "What StratLab is" heading and its one sentence are cut
+          (they restated the hero), so the space names and "How it works" are the section's h2s, straight under the page's h1. */}
+      {(full || slim === "about") && <section className="lp-sec lp-spaces-sec" aria-label="Trade, Invest and Money">
         <div id="about" className="lp-wrap stack g32">
-          <div className="lp-head">
-            <h2 id="intro-h" className="serif lp-h2">{INTRO_TITLE}</h2>
-            <p className="serif lp-intro-line">{INTRO_LINE}</p>
-          </div>
           <div className="lp-spaces">
             {INTRO_SPACES.map((sp) => (
               <div key={sp.id} className="lp-card lp-space" data-space={sp.id}>
-                <span className="eyebrow">{sp.sub}</span><h3 className="serif lp-space-name">{sp.name}</h3><p className="small muted">{sp.line}</p>
+                <span className="eyebrow">{sp.sub}</span><h2 className="serif lp-space-name">{sp.name}</h2><p className="small muted">{sp.line}</p>
                 <ul className="lp-space-list">
                   {sp.things.map(([t, b]) => <li key={t}><b>{t}</b><span className="small muted">{b}</span></li>)}
                 </ul>
@@ -330,7 +327,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             ))}
           </div>
           <div className="stack g14">
-            <h3 className="serif lp-h3">{HOW_TITLE}</h3>
+            <h2 className="serif lp-h3">{HOW_TITLE}</h2>
             <ol className="lp-steps lp-steps-3">
               {HOW_STEPS.map(([t, b], k) => <li key={t} className="lp-card"><span className="lp-num">{k + 1}</span><b>{t}</b><p className="small muted">{b}</p></li>)}
             </ol>

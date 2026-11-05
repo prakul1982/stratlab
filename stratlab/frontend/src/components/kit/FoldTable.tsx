@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Info } from "../ui";
 import { textOf } from "./Card";
 import { minusNode } from "../../lib/format";
-import type { Column } from "./DataTable";
+import { CsvButton, type Column } from "./DataTable";
 
 const head = (c: { header?: ReactNode; info?: ReactNode }) => <Info label={`About ${typeof c.header === "string" ? c.header.toLowerCase() : "this column"}`}>{c.info}</Info>;
 
@@ -10,13 +10,17 @@ const head = (c: { header?: ReactNode; info?: ReactNode }) => <Info label={`Abou
  * under that row (MF-1, RC2B-047). The first column names the row; the others are its figures, under a header row on a
  * wide screen and each under its own name on a phone (a card, never a sideways table). `detail` is drawn only once a row is
  * opened; `openWhen` opens the rows that need something done. The summary is the whole row's tap target (44 px). */
-export function FoldTable<R>({ label, columns, rows, rowKey, detail, openWhen, testId }: {
+export function FoldTable<R>({ label, columns, rows, rowKey, detail, openWhen, testId, csv }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R) => string; detail: (row: R) => ReactNode; openWhen?: (row: R) => boolean; testId?: string;
+  /** EXPORT: a "Download CSV" button over the list, as DataTable's (the row figures; the folded detail stays on the page) */
+  csv?: string;
 }) {
   const [name, ...figures] = columns;
   // the name takes the room; a column of words (`wrap`) a little more than a column of figures
   const cols = `minmax(0, 2.2fr) ${figures.map((c) => (c.wrap ? "minmax(0, 1.7fr)" : "minmax(0, 1fr)")).join(" ")}`;
   return (
+    <>
+    {csv && rows.length > 0 && <div className="k-tbl-tools"><CsvButton name={csv} label={label} columns={columns} rows={rows} /></div>}
     <div className="k-fold-list" data-testid={testId} style={{ ["--fold-cols" as string]: cols }}>
       <div className="k-fold-head">
         <span aria-hidden="true">{name.header}</span>
@@ -30,6 +34,7 @@ export function FoldTable<R>({ label, columns, rows, rowKey, detail, openWhen, t
         {rows.map((r) => <FoldRow key={rowKey(r)} row={r} name={name} figures={figures} detail={detail} open={openWhen?.(r) ?? false} />)}
       </ul>
     </div>
+    </>
   );
 }
 

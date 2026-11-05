@@ -15,13 +15,18 @@ test("VR7-001: on a phone the chart's range buttons are two rows of four and the
 });
 
 test("VR7-004: the signed-out library keeps every card in the page and a phone shows twelve, then Show 12 more", () => {
+  // a table now (TABLES EVERYWHERE, owner 4 Nov): every row is rendered; the rows past the first twelve carry a class a phone hides
   const src = read("src/pages/PublicLibrary.tsx");
-  assert.match(src, /const PHONE_CARDS = 12;/);
-  assert.match(src, /shown\.map\(\(e, i\) => \(\n\s*<Card key=\{e\.id\}[^\n]*lib-lean\$\{i >= PHONE_CARDS \* cardPages \? " lib-extra" : ""\}/);   // all cards are rendered; the rest carry a class
+  assert.match(src, /<LibraryTable key=\{`[^`]*`\} rows=\{shown\}/);
   assert.doesNotMatch(src, /shown\.slice\(/);
-  assert.match(src, /data-testid="lib-show-more"/);
+  const bits = read("src/components/LibraryBits.tsx");
+  assert.match(bits, /export const PHONE_ROWS = 12;/);
+  assert.match(bits, /rowAttrs=\{\(e\): Record<string, string> => \(extraRow\.has\(e\.id\) \? \{ className: "lib-extra" \} : \{\}\)\}/);
+  assert.match(bits, /data-testid="lib-show-more"/);
+  assert.doesNotMatch(bits, /<DataTable label=\{label\}[^>]*phonePage/, "no slicing: the rows stay in the page");
   const css = read("src/pages/trade/trade.css");
-  assert.match(css, /@media \(max-width: 640px\) \{ \.k-cards\.lib-cards > \.k-card\.lib-extra \{ display: none; \} \.k-row\.lib-more \{ display: flex; \} \}/);
+  assert.match(css, /\.lib-table \.k-table tr\.lib-extra \{ display: none; \}/);
+  assert.match(css, /  \.k-row\.lib-more \{ display: flex; \}/);
   assert.match(css, /\.k-row\.lib-more \{ display: none; \}/);                        // a desktop has no such button
 });
 

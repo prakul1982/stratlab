@@ -29,7 +29,7 @@ test("VR5-003: the public library's header button reads 'Sign in' on a small pho
 
 test("VR5-004: a chip or badge longer than the screen wraps in its own box on a phone instead of pushing the page sideways; the cookie question is smaller", () => {
   const css = read("src/styles.css");
-  assert.match(css, /@media \(max-width: 380px\) \{\n  \.k-badge \{ max-width: 100%; white-space: normal;/);
+  assert.match(css, /@media \(max-width: 380px\) \{\n  \.k-badge, \.badge \{ max-width: 100%; white-space: normal;/);     // .badge too (the library table's Checks badge)
   assert.match(css, /\.k-chip \{ max-width: 100%; height: auto; min-height: 44px;/);
   // LIVE3-010 changed this on purpose: on a phone the question is a slim bar along the foot (smaller still), the answers one width
   assert.match(css, /\.consent \{ right: 0; left: 0; bottom: 0; width: auto; .* font-size: 13px;/);

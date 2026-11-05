@@ -87,18 +87,19 @@ test("VR6-013: each plan card shows about 400 characters of its lines and folds 
   await expect(page.getByTestId("plan-more-basic").locator("li").first()).toBeVisible();
 });
 
-test("VR6-024: a phone shows twelve strategy cards and Show 12 more; a desktop shows them all", async ({ page }) => {
+test("VR6-024: a phone shows twelve strategy rows and Show 12 more; a desktop shows them all", async ({ page }) => {
   await open(page, "/library", ADMIN, 390);
-  await expect(page.locator(".lib-card").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
   const total = await page.getByText(/^\d+ strategies$/).innerText().then((t) => Number(t.split(" ")[0]));
   expect(total).toBeGreaterThan(12);
-  expect(await page.locator(".lib-card").count()).toBe(12);
+  // TABLES EVERYWHERE (owner, 4 Nov): one table; every row is in the page and a phone shows twelve of them at a time
+  expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(12);
   await expect(page.getByTestId("lib-show-more")).toContainText(`Showing 12 of ${total}.`);
   await page.getByTestId("lib-show-more").getByRole("button").click();
-  expect(await page.locator(".lib-card").count()).toBe(Math.min(24, total));
+  expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(Math.min(24, total));
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.getByTestId("lib-show-more")).toHaveCount(0);
-  expect(await page.locator(".lib-card").count()).toBe(total);
+  await expect(page.getByTestId("lib-show-more")).toBeHidden();
+  expect(await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").count()).toBe(total);
 });
 
 test("VR6-010 and VR6-011: with nothing on the watchlist, My space and the Invest home give it a row to itself, with no card left short beside a long one", async ({ page, request }, info) => {

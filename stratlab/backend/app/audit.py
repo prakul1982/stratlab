@@ -913,7 +913,7 @@ class Runner:
 
 MARKET = "audit:market"        # settings keys: the switch and list state, the list itself, and results in shards
 RETRY_HOURS = 1                # a check a source turned away is tried again no sooner than this
-STALE_MISMATCH_HOURS = 20      # a price mismatch is checked again after this long, so one that has resolved drops off
+STALE_MISMATCH_HOURS = 20      # a mismatch is checked again after this long, so one that has resolved drops off
                                # (DJ-026: a 5 Oct close shown on 25 Oct as today's mismatch)
 MAX_TRIES = 3                  # an error from an unreachable source is tried this many times in all; "not checked
                                # yet" (a source refusing us) is tried for as long as it takes, at the slow pace below
@@ -1269,14 +1269,16 @@ class MarketAudit:
         return self.waiting(now)[:max(0, int(r.get("left") or 0))]
 
     def stale_mismatches(self, now: datetime | None = None) -> list[str]:
-        """Companies whose price disagreed with a source when last checked, STALE_MISMATCH_HOURS or more ago, oldest
-        first: checked again each day, so a price that has caught up drops off the list (DJ-026)."""
+        """Companies with a number that disagreed with its source when last checked, STALE_MISMATCH_HOURS or more ago, oldest
+        first: checked again each day, so a price that has caught up drops off the list (DJ-026). Every area, not only prices
+        (owner, 4 Nov: three India P/E mismatches checked on 31 Oct and 1 Nov stood on Overview for days after the fix for them
+        went live, as nothing checked them again before next month's full pass)."""
         cut = ((now or datetime.now(timezone.utc)) - timedelta(hours=STALE_MISMATCH_HOURS)).isoformat()
         out = []
         for sym in self.listing:
             row = self.rows.get(sym) or {}
             at = row.get("at")
-            if at and at < cut and any(i.get("level") == "mismatch" and i.get("area") == "Prices" for i in row.get("issues") or []):
+            if at and at < cut and any(i.get("level") == "mismatch" for i in row.get("issues") or []):
                 out.append((at, sym))
         return [s for _, s in sorted(out)]
 

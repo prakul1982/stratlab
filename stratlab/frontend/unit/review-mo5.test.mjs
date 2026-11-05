@@ -25,46 +25,38 @@ test("MO-5a: a card's title is the strategy's name, and where it was tested is o
   assert.equal(libMeta({ market: "IN", tf: "15m", side: "long", group: null, instrument: { symbol: "TCS" } }), "India · TCS · 15-minute candles");
 });
 
-test("MO-5a: the card says each fact once: one author line, one figure row, the gap once, checks and unseen part on one line", () => {
+// TABLES EVERYWHERE (owner, 4 Nov: "make tables?" on /library's cards): the card became a table row; MO-5a's rules hold for the row:
+// each fact once, the figures in one line that lines up from strategy to strategy (now columns), colour on signed figures only
+test("MO-5a (as a table): a row says each fact once: one author line, the figures in columns, the gap once, the checks in one cell", () => {
   const bits = read("src/components/LibraryBits.tsx");
-  const card = bits.slice(bits.indexOf("export function LibraryCard"));
-  assert.match(card, /By \{e\.author\}/);
-  assert.doesNotMatch(card, /<Badge tone="ok"|e\.badge/, "no StratLab badge beside a \"by StratLab\" line");
-  assert.doesNotMatch(card, /<BehindHold|<HoldLine|k-eyebrow/);
-  // three figures: total after costs, total buy and hold, worst fall; the unseen part goes to the status line
-  assert.match(card, /\[TOTAL_AFTER_COSTS, sh\.ret,/);
-  assert.match(card, /\[TOTAL_HOLD, sh\.buy_hold,/);
-  assert.match(card, /\["Worst fall", sh\.mdd,/);
-  assert.equal((card.match(/<Stat /g) ?? []).length, 1, "one Stat, mapped over the three figures");
-  assert.match(card, /className="k-small lib-vs" data-testid="lib-hold"/);
-  assert.match(card, /\{unseenLabel\(e\)\} <Signed value=\{sh\.unseen\}/);
-  // the dates, the check results, the full words and the rules are behind one fold
-  assert.match(card, /<Disclosure summary="Rules and details" className="lib-details">[^]*data-testid="lib-window"[^]*e\.reason[^]*<Rules s=\{e\.strategy\} \/>/);
-  // both libraries draw it; the public one has no fold (its own page has the rules and the checks)
-  assert.match(read("src/pages/LibraryPage.tsx"), /<LibraryCard e=\{e\} actions=/);
-  assert.match(read("src/pages/PublicLibrary.tsx"), /<LibraryCard e=\{e\} details=\{false\} actions=/);
-  for (const f of ["src/pages/LibraryPage.tsx", "src/pages/PublicLibrary.tsx"]) assert.doesNotMatch(read(f), /Rules and all figures|lib-oneline|k-mini-stats/, f);
+  const table = bits.slice(bits.indexOf("export function LibraryTable"));
+  assert.match(table, /By \{e\.author\}/);
+  assert.doesNotMatch(table, /<Badge tone="ok"|e\.badge/, "no StratLab badge beside a \"by StratLab\" line");
+  assert.doesNotMatch(table, /<BehindHold|<HoldLine|k-eyebrow/);
+  for (const [key, header] of [["ret", '"After costs"'], ["bh", '"Buy and hold"'], ["gap", '"vs hold \\(pts\\)"'], ["mdd", '"Worst fall"'], ["unseen", '"Unseen period"']])
+    assert.match(table, new RegExp(`\\{ key: "${key}", header: ${header}, numeric: true, sortable: true`), key);
+  assert.match(table, /\{ key: "checks", header: "Checks", wrap: true, sortable: true/);
+  // the dates, the reason, the words and the rules are in the row's details, one tap away
+  assert.match(table, /data-testid="lib-window"[^]*e\.reason[^]*<Rules s=\{e\.strategy\} \/>/);
+  assert.match(table, /detail=\{\{ label: "Rules and details", render: details \}\}/);
+  // both libraries draw it; the public one has no rules in it (its own page has the rules and the checks)
+  assert.match(read("src/pages/LibraryPage.tsx"), /<LibraryTable key=\{`[^`]*`\} rows=\{rows\}/);
+  assert.match(read("src/pages/PublicLibrary.tsx"), /<LibraryTable key=\{`[^`]*`\} rows=\{shown\} rules=\{false\}/);
+  for (const f of ["src/pages/LibraryPage.tsx", "src/pages/PublicLibrary.tsx"]) assert.doesNotMatch(read(f), /LibraryCard|lib-cards|Rules and all figures|lib-oneline|k-mini-stats/, f);
 });
 
-test("MO-5a: the cards of a row share their rows, so figures and buttons line up (a subgrid), and a phone gets one column", () => {
+test("MO-5a (as a table): a phone gets compact rows, the other figures in the details as a small table", () => {
   const css = read("src/pages/trade/trade.css");
-  assert.match(css, /\.k-card\.lib-card \{ display: grid; grid-row: span 7; grid-template-rows: subgrid;/);
-  assert.match(css, /\.k-card\.lib-card\.lib-lean \{ grid-row: span 6; \}/);
-  assert.match(css, /\.lib-figs \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
-  assert.match(css, /\.lib-figs > \.k-stat \{ display: grid; grid-row: span 2; grid-template-rows: subgrid;/);
-  assert.match(css, /\.lib-by \{[^}]*white-space: nowrap;/, "who made it is one line");
-  assert.match(css, /\.lib-meta \{ display: -webkit-box; -webkit-line-clamp: 2;/, "where it was tested is two lines at most, so its last words (the candles) aren't cut");
-  // the card has as many children as its rows: head, description, figures, gap, checks, fold, buttons
-  const bits = read("src/components/LibraryBits.tsx");
-  const card = bits.slice(bits.indexOf("export function LibraryCard"));
-  for (const c of ["lib-head", "lib-about", "lib-figs", "lib-vs", "lib-status", "lib-details", "lib-actions"]) assert.ok(card.includes(c), c);
-  assert.match(card, /<div className="k-stack k-tight lib-actions">\{actions\}<\/div>/);
+  assert.doesNotMatch(css, /\.lib-card\b|\.lib-figs/);
+  assert.match(css, /\.lib-table \.k-table td:is\(\[data-label="Buy and hold"\], \[data-label="Worst fall"\], \[data-label="Unseen period"\]\) \{ display: none; \}/);
+  assert.match(css, /\.lib-mini \{ display: none; \}/);
+  assert.match(css, /\.lib-mini \{ display: table; width: 100%; \}/);
 });
 
-test("MO-5a: green and red stay on signed figures only, and a result that trails buy and hold isn't coloured as a win", () => {
+test("MO-5a (as a table): green and red stay on signed figures only, and a result that trails buy and hold isn't coloured as a win", () => {
   const bits = read("src/components/LibraryBits.tsx");
-  assert.match(bits, /sh\.ret == null \|\| sh\.ret === 0 \|\| trails\(e\) \? undefined : sh\.ret > 0 \? "up" : "down"/);
-  assert.doesNotMatch(bits.slice(bits.indexOf("export function LibraryCard")), /Behind buy and hold by|Passed: |Not run: /);
+  assert.match(bits, /cell: \(e\) => fig\(shownStats\(e\)\.ret, !trails\(e\)\)/);
+  assert.doesNotMatch(bits.slice(bits.indexOf("export function LibraryTable")), /Behind buy and hold by|Passed: |Not run: /);
 });
 
 test("MO-5b: the market filter offers only markets that have samples, each with its count, in the library's order", async () => {

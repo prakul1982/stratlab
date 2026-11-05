@@ -91,7 +91,7 @@ for (const who of ["basic", "pro"] as const) {
 
 test("ads off: the landing page and the library have no slot, and no empty gap where one would be", async ({ page }) => {
   const { google } = await open(page, "/library", "StratLab's own strategies");
-  await expect(page.locator(".lib-card").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".ad")).toHaveCount(0);
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
@@ -179,7 +179,7 @@ test("ads on: a Free account's money pages never have one", async ({ page }) => 
 
 test("ads on: the public library asks a visitor first; No thanks leaves no gap and is remembered", async ({ page }) => {
   const { google } = await open(page, "/library", "StratLab's own strategies", { ads: true });
-  await expect(page.locator(".lib-card").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
   const ask = page.getByTestId("consent");
   await expect(ask).toBeVisible();
   await expect(page.locator(".ad"), "no slot before the visitor says yes").toHaveCount(0);
@@ -187,7 +187,7 @@ test("ads on: the public library asks a visitor first; No thanks leaves no gap a
   await ask.getByRole("button", { name: "No thanks" }).click();
   await expect(page.locator(".ad")).toHaveCount(0);
   await page.reload();
-  await expect(page.locator(".lib-card").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(500);
   await expect(page.locator(".ad")).toHaveCount(0);
   expect(google).toEqual([]);
@@ -195,14 +195,14 @@ test("ads on: the public library asks a visitor first; No thanks leaves no gap a
 
 test("ads on: the public library shows one ad after Allow in the banner, below the strategies", async ({ page }) => {
   const { errors } = await open(page, "/library", "StratLab's own strategies", { ads: true, choice: "yes" });
-  await expect(page.locator(".lib-card").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
   const slot = page.getByTestId("ad-slot");
   await slot.scrollIntoViewIfNeeded();
   await expect(slot.locator("[data-fake-ad]")).toBeVisible();
   await expect(slot.locator("ins.adsbygoogle")).toHaveAttribute("data-ad-slot", "1111111111");
   await expect(page.locator(".ad")).toHaveCount(1);
   // (VR7-004: on a phone the cards past the first twelve are in the page but hidden until "Show more": the last one drawn)
-  const last = await page.locator(".lib-card:visible").last().boundingBox(), s = await slot.boundingBox();
+  const last = await page.locator(".lib-table tbody tr:not(.k-detail-row):visible").last().boundingBox(), s = await slot.boundingBox();
   expect(s!.y).toBeGreaterThan(last!.y + last!.height);
   await noSideways(page);
   expect(errors).toEqual([]);

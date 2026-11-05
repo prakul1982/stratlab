@@ -114,7 +114,7 @@ function Bids({ d }: { d: IpoDetail }) {
     <Card label="Bids received" testId="ipo-bids">
       <CardHead level={2} title="Bids received" info="By category, over both exchanges, as the exchange publishes them. While the issue is open the figures move through the day; the final ones are published after the close."
         infoLabel="About the bids" actions={d.subscription?.live ? <Badge tone="live">Live</Badge> : undefined} />
-      <DataTable stack label="Bids received by category" rows={rows} rowKey={(r) => r.sr} columns={cols} />
+      <DataTable csv="IPO bids by category" stack label="Bids received by category" rows={rows} rowKey={(r) => r.sr} columns={cols} />
       <p className="k-note" data-testid="ipo-bids-asof">Whole issue {timesText(s.times)}{at ? `, as of ${at}` : ""}.</p>
       {d.ipo.segment === "sme" && <p className="k-note">An SME issue's exchange page gives the bids per category without the shares reserved for each, so only the whole issue has a count of times.</p>}
     </Card>
@@ -138,7 +138,7 @@ function Listing({ d }: { d: IpoDetail }) {
       <CardHead level={2} title="After listing" info={p.basis === "exchange"
         ? "From the exchange's own table of how its listed issues have traded: the first day's close and the latest price against the issue price."
         : "The listing price is the first session's opening price; the latest is the latest daily close. Each against the issue price."} infoLabel="About these prices" />
-      <DataTable label="Trading against the issue price" rows={rows} rowKey={(x) => x.id} columns={[
+      <DataTable csv="IPO trading against the issue price" label="Trading against the issue price" rows={rows} rowKey={(x) => x.id} columns={[
         { key: "k", header: "Item", rowHeader: true, cell: (x) => x.k },
         { key: "v", header: "Price", numeric: true, cell: (x) => price(x.v, r.currency, 2) },
         { key: "c", header: "Against the issue price", numeric: true, cell: (x) => (x.id === "issue" ? "–" : chg(x.c)) },
@@ -264,7 +264,7 @@ function Financials({ f, kind }: { f: Facts; kind: string }) {
   return (
     <Card label="Revenue and profit" testId="ipo-financials">
       <CardHead level={2} title="Revenue and profit" info={`From the restated summary financial information of the ${kind}. The change is the latest year against the one before; none is given where the year before was a loss.`} infoLabel="About these figures" />
-      <DataTable stack label="Revenue and profit from the offer document" rows={rows} rowKey={(x) => x.key} columns={[
+      <DataTable csv="IPO revenue and profit" stack label="Revenue and profit from the offer document" rows={rows} rowKey={(x) => x.key} columns={[
         { key: "l", header: fin.unit, rowHeader: true, wrap: true, cell: (x) => x.label },
         ...fin.years.map((y, i): Column<(typeof rows)[number]> => ({ key: y, header: y, numeric: true, cell: (x) => (x.values[i] == null ? "–" : x.key === "profit" ? <Signed value={x.values[i]} fmt={croreText} /> : x.key === "eps" ? <Signed value={x.values[i]} fmt={(v) => figure(v)} /> : croreText(x.values[i])) })),
         { key: "g", header: "Latest year's change", numeric: true, cell: (x) => { const g = growthPct(x.values[0], x.values[1]); return g == null ? "–" : <Signed value={g} fmt={(v) => pct(v, 1)} />; } },

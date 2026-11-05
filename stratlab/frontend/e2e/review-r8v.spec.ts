@@ -60,7 +60,7 @@ test("a missing page names no canonical address (R8V-008)", async ({ page }) => 
 test("/library asks for its list once, alongside its code, and never downloads the sign-in library (R8V-013)", async ({ page }) => {
   const { errors, asked } = await open(page, "/library");
   await expect(h1(page)).toHaveText("StratLab's own strategies", { timeout: 30_000 });
-  await expect(page.getByTestId("lib-hold").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("lib-gap").first()).toBeVisible({ timeout: 30_000 });      // the list is one table (owner, 4 Nov): its gap column
   const lists = asked.filter((u) => new URL(u).pathname === "/public/library");
   expect(lists, lists.join("\n")).toHaveLength(1);
   const code = asked.filter((u) => /\/assets\/[^/]+\.js$/.test(new URL(u).pathname)).map((u) => new URL(u).pathname.split("/").pop()!);

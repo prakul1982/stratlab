@@ -866,21 +866,180 @@ class PdfRenderer:
         return self.buf.getvalue()
 
 
+def _render(slides: list[Slide], footer: str, title: str, pdf: bool) -> bytes:
+    """Slides as PowerPoint or as a PDF: the one renderer each deck goes through (a company's, a theme's)."""
+    r = PdfRenderer(title) if pdf else PptxRenderer()
+    for i, sl in enumerate(slides, 1):
+        r.slide(sl, i, len(slides), footer)
+    if not pdf:
+        r.prs.core_properties.title = title
+        r.prs.core_properties.author = "StratLab"
+    return r.bytes()
+
+
 def build(v: dict) -> bytes:
     """The deck as PowerPoint."""
     slides, footer = plan(v)
-    r = PptxRenderer()
-    for i, sl in enumerate(slides, 1):
-        r.slide(sl, i, len(slides), footer)
-    r.prs.core_properties.title = f"{v['name']} ({v['symbol']}): company deep dive"
-    r.prs.core_properties.author = "StratLab"
-    return r.bytes()
+    return _render(slides, footer, f"{v['name']} ({v['symbol']}): company deep dive", pdf=False)
 
 
 def build_pdf(v: dict) -> bytes:
     """The same deck as a PDF."""
     slides, footer = plan(v)
-    r = PdfRenderer(f"{v['name']} ({v['symbol']}): company deep dive")
-    for i, sl in enumerate(slides, 1):
-        r.slide(sl, i, len(slides), footer)
-    return r.bytes()
+    return _render(slides, footer, f"{v['name']} ({v['symbol']}): company deep dive", pdf=True)
+
+
+# ---------- a theme's deck (EXPORT, 4 Nov: "you forgot to put an export PDF or slides option in themes") ----------
+THEME_DISCLAIMER = "Reported figures, the companies' own words and dated headlines. Not investment advice."
+MEMBER_HEAD = ["Company", "Layer", "Market value", "Revenue", "EBITDA margin", "Net margin", "ROCE", "In the theme by"]
+MEMBER_WIDTHS = [2.9, 2.2, 1.6, 1.8, 1.1, 1.0, 0.8, 2.3]
+MEMBER_SLIDES = 20                        # at most this many slides of companies; the page's CSV has every one (the deck says so)
+
+
+def table_pages(head: list, rows: list, widths: list, w: float, h: float, most: int = 14) -> list[list]:
+    """`rows` cut into pages a table of `head` shows in full in a w x h box: as many rows a page as fit (at most `most`), so no row is
+    ever left off a slide (table_layout drops the rows that don't fit its box)."""
+    pages, i = [], 0
+    while i < len(rows):
+        n = min(most, len(rows) - i)
+        while n > 1 and len(table_layout({"head": head, "rows": rows[i:i + n], "widths": widths, "numeric": [False] * len(head)}, w, h)["rows"]) < n:
+            n -= 1
+        pages.append(rows[i:i + n])
+        i += n
+    return pages
+
+
+def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
+    """A theme deep dive's slides: the cover (the theme, the market, the date of its prices), the value chain by layer, what each layer
+    does, every company with its market value, revenue and margins as the page shows them, the tailwinds and risks with their dated
+    sources, and how sure each placement is (confirmed in a company's own words or not yet). `v`: see theme_routes.deck_view."""
+    us = v.get("region") == "US"
+    unit = v.get("unit") or ("$ million" if us else "₹ crore")
+    today = (now or datetime.now(timezone.utc)).astimezone(IST).strftime("%d %b %Y")
+    sector = v.get("sector") or "Theme"
+    footer = f"{sector} · Theme deep dive · {today}"
+    asof = v.get("as_of")
+    asof_text = date.fromisoformat(str(asof)[:10]).strftime("%d %b %Y") if asof else "–"
+    amt = lambda x: "–" if x is None else money(x, unit)      # noqa: E731
+    cap = lambda x: "–" if x is None else (money(x, "$ million") if us else cap_inr(x))      # noqa: E731
+    p = v.get("placements") or {}
+    members = v.get("members") or []
+    total = p.get("total") or len({m["symbol"] for m in members})
+    added, confirmed = p.get("added") or 0, p.get("confirmed") or 0
+    chain = v.get("chain") or {}
+    layers = v.get("layers") or []
+    med = v.get("median_ebitda")
+    slides: list[Slide] = []
+
+    # 1. cover
+    s = Slide(sector, f"{'US' if us else 'India (NSE and BSE)'} · Theme deep dive", dark=True)
+    s.add("text", (M, 2.55, 8.6, 2.1), paras=[sentences(v.get("summary") or "", 430) or "Every listed company in the theme, by layer, with the figures they report."],
+          size=15, floor=11, color=ICE)
+    s.add("stats", (M, 5.15, W_IN - 2 * M, 1.25), dark=True, items=[
+        ("Companies", f"{total:,}"), ("Layers", str(len(layers))), ("Median EBITDA margin", _pc(med)),
+        ("AI additions confirmed", f"{confirmed} of {added}" if added else "None added"), ("Prices as of", asof_text)])
+    s.add("text", (M, 6.62, W_IN - 2 * M, 0.3), paras=[f"Prepared {today} with StratLab. {THEME_DISCLAIMER}"], size=10, floor=9, color=ICE)
+    slides.append(s)
+
+    # 2. the value chain in one table
+    if chain.get("rows"):
+        head, widths = ["Layer", "Companies", "Revenue", "EBITDA margin", "Net margin", "ROCE"], [4.4, 1.4, 2, 1.6, 1.5, 1.2]
+        rows = [[r["layer"], str(r["n"]), amt(r.get("revenue")), _pc(r.get("ebitda")), _pc(r.get("net")), _pc(r.get("roce"))] for r in chain["rows"]]
+        mark = {chain.get("highest"): TEAL, chain.get("lowest"): AMBER}
+        note = " ".join(x for x in (chain.get("line"), "Highest median margin in teal, lowest in amber." if chain.get("highest") else None) if x)
+        pages = table_pages(head, rows, widths, W_IN - 2 * M, 4.3)
+        for k, chunk in enumerate(pages):
+            s = Slide("The value chain" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
+                      f"Each layer's companies, their revenue added together ({unit}), and the layer's median margins")
+            s.add("table", (M, 1.65, W_IN - 2 * M, 4.3), head=head, rows=chunk, widths=widths,
+                  colors={(i, 0): mark[r[0]] for i, r in enumerate(chunk) if r[0] in mark and r[0]})
+            if note:
+                s.add("text", (M, 6.1, W_IN - 2 * M, 0.7), paras=[note], size=12, floor=10, color=SLATE)
+            slides.append(s)
+
+    # 3. what each layer does (general knowledge, no figures)
+    told = [x for x in layers if x.get("description")]
+    for k in range(0, len(told), 6):
+        chunk = told[k:k + 6]
+        s = Slide("What each layer does" + (f" ({k // 6 + 1} of {(len(told) + 5) // 6})" if len(told) > 6 else ""),
+                  "Written by AI from general knowledge, with no figures")
+        s.add("cards", (M, 1.65, W_IN - 2 * M, 5.0), cols=3 if len(chunk) > 2 else len(chunk), items=[
+            {"title": x["layer"], "value": f"{x.get('n', 0)} compan{'y' if x.get('n') == 1 else 'ies'}", "lines": [sentences(x["description"], 260)]} for x in chunk])
+        slides.append(s)
+
+    # 4. every company
+    rows = [[m["name"], m.get("layer") or "–", cap(m.get("cap")), amt(m.get("revenue")), _pc(m.get("ebitda")), _pc(m.get("net")), _pc(m.get("roce")), m["by"]]
+            for m in members]
+    pages = table_pages(MEMBER_HEAD, rows, MEMBER_WIDTHS, W_IN - 2 * M, 4.85)
+    shown = pages[:MEMBER_SLIDES]
+    for k, chunk in enumerate(shown):
+        s = Slide("Every company in the theme" + (f" ({k + 1} of {len(shown)})" if len(shown) > 1 else ""),
+                  f"Revenue and margins: each company's latest full year, in {unit}; market value at the last close")
+        tint = {(i, 7): (TEAL if r[7].startswith("Added, confirmed") else AMBER) for i, r in enumerate(chunk) if r[7].startswith("Added")}
+        s.add("table", (M, 1.6, W_IN - 2 * M, 4.85), head=MEMBER_HEAD, rows=chunk, widths=MEMBER_WIDTHS, colors=tint,
+              numeric=[False, False, True, True, True, True, True, False])
+        left = sum(len(x) for x in pages[MEMBER_SLIDES:])
+        if k == len(shown) - 1 and left:
+            s.add("text", (M, 6.5, W_IN - 2 * M, 0.35), paras=[f"{left:,} more companies are in the CSV on the theme's page (Download, then CSV)."],
+                  size=11, floor=9, color=SLATE)
+        slides.append(s)
+    if not members:
+        s = Slide("Every company in the theme", "No company has been placed in this theme yet")
+        s.add("text", (M, 1.8, W_IN - 2 * M, 0.8), paras=["Try a more specific theme on the Themes page, then download the deck again."], size=14, floor=12, color=SLATE)
+        slides.append(s)
+
+    # 5. tailwinds and risks, each beside the dated headline that supports it
+    claims = [("Tailwind", c) for c in v.get("tailwinds") or []] + [("Risk", c) for c in v.get("risks") or []]
+    if claims:
+        head = ["Kind", "What", "Checked against", "Source"]
+        rows, tints = [], {}
+        for kind, c in claims:
+            src = c.get("source") if c.get("status") == "current" else None
+            rows.append([kind, c.get("text") or "", f"{src['headline']} ({str(src.get('at') or '')[:10]}, {src.get('outlet') or ''})" if src else "General background",
+                         {"text": _short_link(src["url"]), "url": src["url"]} if src and src.get("url") else "–"])
+        widths = [1.1, 4.6, 4.6, 2.3]
+        pages = table_pages(head, rows, widths, W_IN - 2 * M, 4.6, most=8)
+        for k, chunk in enumerate(pages):
+            base = sum(len(x) for x in pages[:k])
+            for i, r in enumerate(chunk):
+                tints[(base + i, 0)] = TEAL if r[0] == "Tailwind" else AMBER
+            s = Slide("Tailwinds and risks" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
+                      "Checked: a headline dated within the last 18 months shows it is still current")
+            s.add("table", (M, 1.6, W_IN - 2 * M, 4.6), head=head, rows=chunk, widths=widths, numeric=[False] * 4,
+                  colors={(i, 0): tints[(base + i, 0)] for i in range(len(chunk))})
+            s.add("text", (M, 6.35, W_IN - 2 * M, 0.45), paras=["General background: written by AI from general knowledge, with no figures; no dated "
+                                                              "headline was found that shows it is still current."], size=11, floor=9, color=SLATE)
+            slides.append(s)
+
+    # 6. how sure each placement is
+    base_n = max(0, (p.get("base") or 0) - (p.get("named") or 0))
+    who = [f"{total:,} compan{'y' if total == 1 else 'ies'} in all.",
+           f"{base_n:,} from the exchange's official industries: in the theme whatever the AI says."]
+    if p.get("named"):
+        who.append(f"{p['named']:,} named in the theme's own list.")
+    who.append(f"{added:,} added by the AI from other industries." if added else "None added by the AI from other industries.")
+    sure = [f"{confirmed:,} of the {added:,} added are confirmed: their own description shows they do the work." if added else
+            "Nothing to confirm: every company is from the official industries or the theme's list."]
+    if added - confirmed > 0:
+        sure.append(f"{added - confirmed:,} not yet confirmed: kept while their own description doesn't show otherwise.")
+    if p.get("pending"):
+        sure.append(f"{p['pending']:,} still being checked against their own description when this deck was made.")
+    if p.get("timed_out"):
+        sure.append(f"{p['timed_out']:,} couldn't be checked just now; the check runs again later.")
+    figs = v.get("figures") or {}
+    read = [v.get("basis") or ""]
+    if figs.get("of") and figs.get("shown") and figs["of"] > figs["shown"]:
+        read.append(f"Figures are worked out for {figs['shown']:,} of the theme's {figs['of']:,} companies: every one the map names, then the largest of the rest.")
+    s = Slide("Notes: confirmed and not yet confirmed", "Who is in the theme, and how each company got there")
+    s.add("cards", (M, 1.65, W_IN - 2 * M, 4.6), cols=3, bullets=True, items=[
+        {"title": "Who is in it", "lines": who}, {"title": "Confirmed or not yet", "lines": sure}, {"title": "Reading the figures", "lines": [x for x in read if x]}])
+    s.add("text", (M, 6.4, W_IN - 2 * M, 0.45), paras=[THEME_DISCLAIMER + " The AI's layers and its additions can be wrong: check a company's own "
+                                                      "description before relying on a placement."], size=11, floor=9, color=SLATE)
+    slides.append(s)
+    return slides, footer
+
+
+def build_theme(v: dict, pdf: bool = False) -> bytes:
+    """A theme's deck, PowerPoint or (`pdf`) the same slides as a PDF."""
+    slides, footer = theme_plan(v)
+    return _render(slides, footer, f"{v.get('sector') or 'Theme'}: theme deep dive", pdf=pdf)

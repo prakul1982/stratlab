@@ -46,9 +46,10 @@ test("a library strategy states its checks, buy and hold, its dates and its univ
   const checks = page.getByRole("region", { name: "The four checks" }).or(page.locator("section.pub-checks"));
   await expect(checks.locator("h3")).toHaveText([/^Unseen (years|months)$/, "Nearby settings", "Bad-luck drawdown", "Enough trades"]);   // months on a test under ~3 years (R38)
   await expect(checks.locator(".k-card", { hasText: "Nearby settings" })).toContainText("Not run");
-  // the library card for the same strategy: the same label as the page's headline starts with
+  // the library's row for the same strategy: the same label as the page's headline starts with (a table row since TABLES
+  // EVERYWHERE, owner 4 Nov; it was a card)
   await page.goto("/library");
-  const card = page.locator(".k-card", { hasText: entry.name.split(" · ")[0] }).filter({ hasText: "20 of the largest US companies" }).first();
+  const card = page.locator(".lib-table tbody tr:not(.k-detail-row)", { hasText: entry.name.split(" · ")[0] }).filter({ hasText: "20 of the largest US companies" }).first();
   await expect(card.locator(".badge").first()).toHaveText(v.label);
   // the shortfall against buy and hold leads when there is one (R6V-005, round 7); the label follows it
   expect(v.fact_headline.toLowerCase()).toContain(v.label.toLowerCase());

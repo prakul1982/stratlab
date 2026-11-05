@@ -171,15 +171,15 @@ test("library cards: facts about the checks, buy and hold beside the return, whi
   assert.equal(checksLine(3, 3), "3 of 4 checks run · all 3 passed");
   const lib = read("src/pages/LibraryPage.tsx");
   // the facts wording, with the server's own label for the entry when it has one (R6V-005: the card and the page agree)
-  assert.match(lib, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} tone=\{headTone\(e\)\} \/>/);
   assert.doesNotMatch(lib, /<VerdictBadge v=\{e\.verdict\.verdict\} \/>/);
   // the card pieces live in components/LibraryBits.tsx since the public library shares them; it says the same
   const bits = read("src/components/LibraryBits.tsx");
   assert.match(bits, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} tone=\{headTone\(e\)\} \/>/);   // one face for both (MO-5a)
-  assert.match(lib, /<LibraryCard e=\{e\}/);
+  assert.match(lib, /<LibraryTable key=\{`[^`]*`\} rows=\{rows\}/);        // one table for both since TABLES EVERYWHERE (owner, 4 Nov)
   assert.match(bits, /\{num\(gap, 1\)\} points \{h\.gap < 0 \? "behind" : "ahead"\}/);
+  assert.match(bits, /\{ key: "gap", header: "vs hold \(pts\)"/);    // buy and hold beside the return: its own column, and the gap in points
   const pub = read("src/pages/PublicLibrary.tsx");
-  assert.match(pub, /<LibraryCard e=\{e\} details=\{false\}/);
+  assert.match(pub, /<LibraryTable key=\{`[^`]*`\} rows=\{shown\} rules=\{false\}/);
   // LIVE3-013 changed this on purpose: the strategy's own page says the gap once, in its headline, and both totals in one table
   // (the full sentence beside them repeated it); the cards keep their one line
   assert.match(pub, /\{ id: "hold", k: "Buy and hold, same dates", v: figure\(sh\.buy_hold, tone\(sh\.buy_hold\)\) \}/);
@@ -334,10 +334,13 @@ test("R39: library return figures say they are the total over the test, not per 
   assert.deepEqual([TOTAL_AFTER_COSTS, TOTAL_HOLD], ["Total after costs", "Total buy and hold"]);
   const bits = read("src/components/LibraryBits.tsx"), pub = read("src/pages/PublicLibrary.tsx"), lib = read("src/pages/LibraryPage.tsx");
   assert.match(bits, /\{TOTAL_NOTE\} against[^]*total for buying and holding over the same dates/);
-  assert.match(bits, /\[TOTAL_AFTER_COSTS, sh\.ret, [^\]]*\],\s*\[TOTAL_HOLD, sh\.buy_hold, /);       // the card both libraries draw (MO-5a)
   assert.match(pub, /figureHead="Total"/);          // LIVE3-013: one table whose figures column says they are totals
-  assert.match(lib, /header: TOTAL_AFTER_COSTS/);
-  assert.match(lib, /header: TOTAL_HOLD/);
+  // the table both libraries draw (TABLES EVERYWHERE, owner 4 Nov) has the owner's short column names ("After costs", "Buy and
+  // hold") so they sit on one line; each list's note says the figures are totals over the test, after costs
+  assert.match(bits, /header: "After costs"/);
+  const L = await import("../src/lib/libraryText.ts");
+  assert.match(L.LIBRARY_DATES, /totals after costs over the dates in its details \(not yearly rates\)/);
+  assert.match(pub, /Points are the gap in total return after costs, over the same dates\./);
 });
 
 test("round 39: the company page states figures and the checklist reads against a stated threshold, with no pass or fail words", async () => {

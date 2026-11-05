@@ -36,7 +36,7 @@ function Aside({ rows, label, note, testId }: { rows: IpoRow[]; label: string; n
   if (!rows.length) return null;
   return (
     <Disclosure summary={`${label} (${rows.length})`} testId={testId}>
-      <DataTable stack label={label} rows={rows} rowKey={(r) => r.id} rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })}
+      <DataTable csv={`IPOs ${label}`} stack label={label} rows={rows} rowKey={(r) => r.id} rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })}
         columns={[{ key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Company r={r} /> },
           { key: "s", header: "Status", cell: (r) => <Badge tone={badgeOf(r).tone}>{badgeOf(r).word}</Badge> },
           { key: "d", header: "Bidding was to be", cell: (r) => (r.open || r.close ? spanText(r.open, r.close) : "–") },
@@ -103,7 +103,7 @@ function Filed({ rows, m }: { rows: IpoRow[]; m: Market }) {
   const label = m === "IN" ? "Offer documents filed with SEBI, no dates yet" : "Filed with the SEC, no pricing date yet";
   return (
     <Disclosure summary={`${label} (${rows.length})`} testId="ipo-filed">
-      <DataTable stack label={label} rows={rows} rowKey={(r) => r.id} rowAttrs={(r) => ({ "data-ipo": r.id })}
+      <DataTable csv={`IPOs ${label}`} stack label={label} rows={rows} rowKey={(r) => r.id} rowAttrs={(r) => ({ "data-ipo": r.id })}
         columns={[{ key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Company r={r} /> },
           { key: "f", header: "Filed", cell: (r) => fmtDate(r.filed) },
           { key: "d", header: "Offer document", cell: (r) => (r.docs?.length ? r.docs.join(", ") : "–") },
@@ -206,12 +206,12 @@ export function IposPage() {
                 {now === "open" ? "Nothing is open for bidding today. Upcoming issues are on the Upcoming tab." : now === "upcoming" ? "No dates have been announced yet." : "Nothing in the last few months."}
               </EmptyState>
             ) : (
-              <DataTable stack label={`${tabs.find((t) => t.value === now)?.label} IPOs, ${market === "IN" ? "India" : "US"}`} rows={rows} rowKey={(r) => r.id}
+              <DataTable csv={`IPOs ${now} ${market}`} stack label={`${tabs.find((t) => t.value === now)?.label} IPOs, ${market === "IN" ? "India" : "US"}`} rows={rows} rowKey={(r) => r.id}
                 rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })} columns={columns(market, now)} phonePage={25} />
             )}
             {unpricedShown.length > 0 && (
               <Disclosure summary={`Listed, no prices read yet (${unpricedShown.length})`} testId="ipo-unpriced">
-                <DataTable stack label="Listed issues without prices" rows={unpricedShown} rowKey={(r) => r.id} rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })}
+                <DataTable csv={{ name: `IPOs listed without prices ${market}`, rows: unpriced }} stack label="Listed issues without prices" rows={unpricedShown} rowKey={(r) => r.id} rowAttrs={(r) => ({ "data-ipo": r.id, "data-stage": r.stage })}
                   columns={[{ key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Company r={r} /> },
                     { key: "d", header: market === "US" ? "First trading day" : "Listed", cell: (r) => fmtDate(market === "US" ? r.priced : r.listing) },
                     { key: "p", header: market === "US" ? "Offer price" : "Issue price", numeric: true, cell: (r) => bandText(r) }]} />

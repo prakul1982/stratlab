@@ -81,6 +81,9 @@ def entry(nb: dict, exp: dict, owner: str, author: str, description: str, entry_
                     "checks": [{"id": c.get("id"), "status": c.get("status")} for c in v.get("checks") or [] if isinstance(c, dict)]},
         "stats": {"ret": st.get("ret"), "buy_hold": st.get("buy_hold_ret"), "mdd": st.get("mdd"), "trades": st.get("n"), "unseen": _unseen(exp)},
         "published_at": datetime.now(timezone.utc).isoformat(), "copies": 0,
+        # when this version was tested: a StratLab entry keeps its first published_at through each weekly re-run, so the page
+        # tells a test that ended long before it was run (a market whose prices stop) by this, not by published_at
+        "ran_at": datetime.now(timezone.utc).isoformat(),
         "owner": owner, "source": {"nid": nb.get("id"), "v": exp.get("v")},
     }
 

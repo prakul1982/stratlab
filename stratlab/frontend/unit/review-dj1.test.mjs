@@ -125,7 +125,9 @@ test("DJ-028, DJ-030: an old audit says how old, and the findings come 30 compan
   const panel = read("src/pages/admin/AuditPanel.tsx");
   assert.match(panel, /const STALE_DAYS = 7;/);
   assert.match(panel, /These results are \$\{days\} days old/);
-  assert.match(panel, /\{!s\.running && staleNote\(s\.finished_at\) && <Notice tone="warn">/);
+  // a plain note since 4 Nov: the whole-market check re-checks every company daily, so an old sampled audit needs nothing (owner)
+  assert.match(panel, /\{!s\.running && staleNote\(s\.finished_at\) && <Notice tone="info">/);
+  assert.match(panel, /so nothing needs doing; run this again only for a fresh sample/);
   assert.match(panel, /const PAGE_ROWS = 30;/);
   assert.match(panel, /rows\.slice\(0, Math\.min\(SHOWN, upTo\)\)/);
 });

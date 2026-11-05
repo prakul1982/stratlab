@@ -96,7 +96,7 @@ async function showAllCards(page: import("@playwright/test").Page) {
 test("Library: groups say what they hold and ST S2 is spelled out (R3-014)", async ({ page }) => {
   const errors = await open(page, "/library");
   await page.getByRole("radio", { name: "StratLab's own" }).click();
-  const cards = page.locator(".k-cards > section");
+  const cards = page.locator(".lib-table tbody tr:not(.k-detail-row)");        // one table since TABLES EVERYWHERE (owner, 4 Nov)
   await expect(cards.first()).toBeVisible({ timeout: 30_000 });
   await showAllCards(page);
   const text = await page.locator("main").innerText();

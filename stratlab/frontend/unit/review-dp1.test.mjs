@@ -140,7 +140,7 @@ test("DP1-021, DP1-022, DI-032, DP1-026: an honest Free line, decks one per comp
   const cmp = read("src/components/PlanCompare.tsx");
   assert.match(cmp, /<Disclosure summary=\{`On every plan \(\$\{everyone\.length\} tools\)`\}>/);
   assert.match(cmp, /import \{ Disclosure \} from "\.\/kit\/Disclosure";/);           // the landing page's small bundle
-  assert.equal(deepDiveLimitLine(1, 2, 1, 1), "Companies opened this month: 1 of 2. Decks: 1 of 1 (limit reached); a company's PDF and PowerPoint are one deck. Opening a company again this month doesn't count.");
+  assert.equal(deepDiveLimitLine(1, 2, 1, 1), "Companies opened this month: 1 of 2. Decks: 1 of 1 (limit reached); a company's or a theme's PDF and PowerPoint are one deck. Opening a company again this month doesn't count.");
 });
 
 test("DP1-025: the options page says pricing needs the live quotes when they're offline, with one info icon", () => {

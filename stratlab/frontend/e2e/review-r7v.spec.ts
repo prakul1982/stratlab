@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
+import { PAGES } from "../src/content/seo";
 
 // Round 7, a visitor's review of the live site: a library strategy's tab title and description lead with its result and
 // name its universe once (R7V-006); the library and policy pages carry their own heading and words in the HTML the host
@@ -72,7 +73,10 @@ test("with JavaScript off the page's own words show, and the note about JavaScri
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.getByText("Facts, not tips.").first()).toBeVisible();
+  // the home page's own opening words, from the list the build writes them from ("Facts, not tips." until the owner's cut of the
+  // landing's "What StratLab is" sentence, LIVE3-023, 4 Nov: it went from the drawn page and this block together)
+  const home = PAGES.find((p) => p.path === "/")!;
+  for (const line of home.summary!) await expect(page.getByText(line.slice(0, 70)).first()).toBeVisible();
   expect(await page.content()).toContain("StratLab needs JavaScript.");
   await ctx.close();
 });

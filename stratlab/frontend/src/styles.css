@@ -1815,6 +1815,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 @media (prefers-reduced-motion: reduce) { .k-tile { transition: none; } .k-tile:hover { transform: none; } }
 
 /* table */
+/* EXPORT: a table's "Download CSV" sits over its top right edge, out of the way of the figures */
+.k-tbl-tools { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: -4px; }
 .k-tbl-wrap { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px;
   background: linear-gradient(to right, var(--card) 30%, transparent) 0 0 / 28px 100% no-repeat local, linear-gradient(to left, var(--card) 30%, transparent) 100% 0 / 28px 100% no-repeat local,
     radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 0 0 / 16px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 100% 0 / 16px 100% no-repeat scroll; }
@@ -1874,6 +1876,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-tbl-wrap.stack .k-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) var(--s3); padding: var(--s3); margin-bottom: var(--s2);
     border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
   .k-tbl-wrap.stack .k-table tbody tr:hover { background: var(--card); }
+  /* a cell with a badge takes the card's whole width: a badge stays one line (ui-lint R19), and the library's "3 of 4 checks run · all
+     3 passed" in a half-width cell ran 6px past a 390px screen with CI's fonts (R10) */
+  .k-tbl-wrap.stack .k-table td:has(.badge, .k-badge) { grid-column: 1 / -1; }
   /* RC2B-049: each dividend on Holdings was a bordered card inside the Dividends card (a double border, 190px each): a line between them */
   #holdings-dividends .k-tbl-wrap.stack .k-table tr { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; padding: var(--s3) 0; margin-bottom: 0; }
   #holdings-dividends .k-tbl-wrap.stack .k-table tbody tr:last-child { border-bottom: 0; }
@@ -2429,9 +2434,8 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 /* landing, build 3: no card looks picked, a tag is a plain label (not a link), long lists fold, the plans say what's on sale */
 .lp-sec.lp-spaces-sec { padding-top: clamp(32px, 4vw, 48px); }
 .lp-spaces-sec #about { scroll-margin-top: 76px; }
-/* LAND-2: the intro under the hero. The sentence is the lede's size; the three columns each list three things, with their link last;
+/* LAND-2: the intro under the hero (its sentence was cut, LIVE3-023). The three columns each list three things, with their link last;
  * the three steps are one row (one column on a phone, where the grid's own two-column rule would leave a third step alone). */
-.lp-intro-line { font-size: clamp(18px, 1.8vw, 22px); line-height: 1.45; color: var(--ink-2); max-width: 62ch; margin: 0; }
 .lp-space-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .lp-space-list li { display: flex; flex-direction: column; gap: 2px; }
 .lp-space-list b { font-size: 15px; }
@@ -2810,7 +2814,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
    relied on (Item 4.02)") wraps inside its own rounded box on a small phone (380px and under; wider ones had room), instead of pushing the page sideways (376px on a 360px screen);
    short ones are unchanged */
 @media (max-width: 380px) {
-  .k-badge { max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; }
+  .k-badge, .badge { max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; }   /* .badge too: the library table's Checks badge ran 12px past a 360px screen */
   .k-chip { max-width: 100%; height: auto; min-height: 44px; padding-block: 6px; white-space: normal; text-align: left; line-height: 1.3; }
 }
 
@@ -2904,3 +2908,35 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .k-table tr[data-kind="median"] > * { border-top: 2px solid var(--line-2); font-weight: 600; }
 .k-table tr[data-kind="range"] > * { color: var(--muted); font-size: var(--t-note); }
 .k-table tr[data-kind="median"]:hover, .k-table tr[data-kind="range"]:hover { background: transparent; }
+
+/* Help & feedback (owner, 4 Nov): a labelled button at the menu's top on a laptop and in the phone's top bar; a button that reads as
+ * a link in the public footers and on the Help page. */
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.linklike.link { color: var(--accent-ink, inherit); text-decoration: underline; text-underline-offset: 2px; }
+.legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: none; }   /* the same tap size as the links beside it (A11Y-2) */
+.side-brand .side-feedback { margin-left: auto; margin-right: 6px; }
+.topbar .top-feedback { padding-inline: 10px; }
+/* with Feedback in it the phone's top bar ran past a 400px screen: there the logo is its mark alone (the link keeps its name) */
+@media (max-width: 440px) { .topbar .brand .logo-word { display: none; } }
+/* ...and the mark alone (16px wide) is still a full tap target: the link keeps 44px, the mark centred in it (R7O-010) */
+.topbar .brand { min-width: 44px; justify-content: center; flex: none; }
+.topbar .icon-btn { flex: none; }
+/* a 360px phone: the bar's gaps and the Feedback button's padding tighten so every button keeps its size and nothing runs off;
+ * at 320 the icon buttons are 40px (still past the 32px floor) */
+@media (max-width: 379px) {
+  .topbar { padding-inline: 10px; gap: 6px; }
+  .topbar .row.tight { gap: 2px; }
+  .topbar .top-feedback { padding-inline: 6px; }
+}
+@media (max-width: 339px) { .topbar .icon-btn { width: 40px; min-width: 40px; } .topbar .brand { min-width: 40px; } }
+
+/* DataTable's row details (TABLES EVERYWHERE, owner 4 Nov): a quiet button after the row's name, and the details in a row of their
+ * own across the table; on a phone card, joined to the card above it */
+.k-detail-btn { display: block; margin-top: 4px; padding: 0; border: 0; background: none; font: inherit; font-size: var(--t-small, 13px); font-weight: 500; color: var(--accent-ink, var(--ink-2)); cursor: pointer; text-align: left; }
+.k-table tr.k-detail-row > td { background: var(--paper-2); white-space: normal; padding: var(--s3) var(--s4); }
+@media (max-width: 640px) {
+  .k-tbl-wrap.stack .k-table tr.k-open { border-bottom-left-radius: 0; border-bottom-right-radius: 0; margin-bottom: 0; }
+  .k-tbl-wrap.stack .k-table tr.k-detail-row { display: block; border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; padding: 0; }
+  .k-tbl-wrap.stack .k-table tr.k-detail-row > td { display: block; padding: var(--s3); }
+  .k-tbl-wrap.stack .k-table tr.k-detail-row > td::before { display: none; }
+}

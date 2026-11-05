@@ -633,3 +633,33 @@ def test_a_quantity_typed_over_a_statements_holding_is_not_kept_as_an_added_part
                              "accts": {"IN300": 10.0}}], "Statement")
     assert w["client"].put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "INFY", "qty": 12}]}).status_code == 200
     assert stored()["INFY"]["qty"] == 12 and "accts" not in stored()["INFY"]
+
+
+# Kotak Securities (Neo), Dhan, 5paisa, Motilal Oswal and Paytm Money (owner, 4 Nov): no reliable published header list was found for
+# any of their holdings exports (searched 4 Nov 2026: the brokers' help pages, community forums, open-source parsers), so none is
+# named as a broker of its own: their files go through the generic path (a stock column + Quantity + an average price). These are
+# the shapes the public sources do describe, and each must read through that path with nothing dropped:
+#  - Dhan, an open-source parser's profile (github.com/hirawatt/finance-tools utils/brokers/dhan.py): Trading Symbol, Security Name,
+#    ISIN, Quantity, Avg. Cost Price, LTP
+#  - Dhan, the portfolio screen as a user lists it (madefortrade.in/t/add-age-of-holding-column-to-portfolio-view/56922): Name,
+#    Quantity, Avg Price, LTP, Investment, Current Value, P&L
+#  - 5paisa, its help page's description of the Holding Report (forum.5paisa.com/portal/en/kb/articles/how-to-get-a-holding-report):
+#    scrip code, scrip name, quantity, average buy price, last traded price, change, holding value
+#  - 5paisa, its holdings API's own field names (xstream.5paisa.com/dev-docs/portfolio-management-system/holdings): Symbol,
+#    Quantity, AvgRate, CurrentPrice
+GENERIC_SHAPES = {
+    "dhan_parser": b"Trading Symbol,Security Name,ISIN,Quantity,Avg. Cost Price,LTP\nRELIANCE,Reliance Industries Ltd,INE002A01018,10,2500.5,2900\n"
+                   b"TCS,Tata Consultancy Services Ltd,INE467B01029,3,3400,3900\n",
+    "dhan_screen": b"Name,Quantity,Avg Price,LTP,Investment,Current Value,P&L\nRELIANCE,10,2500.5,2900,25005,29000,3995\nTCS,3,3400,3900,10200,11700,1500\n",
+    "5paisa_help": b"Scrip Code,Scrip Name,Quantity,Average Buy Price,Last Traded Price,Change,Holding Value\n500325,RELIANCE,10,2500.5,2900,1.2,29000\n"
+                   b"532540,TCS,3,3400,3900,-0.4,11700\n",
+    "5paisa_api": b"Symbol,Quantity,AvgRate,CurrentPrice\nRELIANCE,10,2500.5,2900\nTCS,3,3400,3900\n",
+}
+
+
+@pytest.mark.parametrize("shape", sorted(GENERIC_SHAPES))
+def test_the_publicly_described_shapes_of_unnamed_brokers_read_through_the_generic_path(shape):
+    got = hf.parse(GENERIC_SHAPES[shape], f"{shape}.csv")
+    assert got["broker"] == "CSV" and got["problems"] == []
+    rows = got["rows"]
+    assert [r["qty"] for r in rows] == [10, 3] and [r["avg"] for r in rows] == [2500.5, 3400], shape

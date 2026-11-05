@@ -1,8 +1,10 @@
 import { lazy, StrictMode, Suspense, useCallback, useEffect, useLayoutEffect, useState, type ComponentType, type ReactNode } from "react";
 import { titleFor } from "./lib/title";
 import { createRoot } from "react-dom/client";
+import { useFeedbackOpen } from "./components/FeedbackOpen";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AppProvider, sessionUnconfirmed, useApp } from "./lib/app";
+import { api } from "./lib/api";
 import { takeNext } from "./lib/returnTo";
 import { isPublicForAll } from "./lib/entry";
 import { applySeo, seoFor } from "./lib/seo";
@@ -348,6 +350,14 @@ function Routed() {
   );
 }
 
+/** Help & feedback in the signed-in app: its own request (with the sign-in) and its toast. */
+const FeedbackDialog = lazy(() => importWithRetry(() => import("./components/Feedback")));
+function AppFeedback() {
+  const { me, notify } = useApp();
+  const [open, setOpen] = useFeedbackOpen();
+  return open ? <Suspense fallback={null}><FeedbackDialog onClose={() => setOpen(false)} me={!!me} send={(body) => api("/feedback", { method: "POST", body })} notify={notify} /></Suspense> : null;
+}
+
 function App() {
   const nav = useNavigate();
   const goToPlans = useCallback(() => nav("/plans"), [nav]);
@@ -357,6 +367,8 @@ function App() {
           over the corner of the page either way; A11Y-2: it was the 127th Tab stop) */}
       <Tracking />
       <Routed />
+      {/* Help & feedback: one dialog for every page, signed in or not (owner, 4 Nov) */}
+      <AppFeedback />
       <Toast />
     </AppProvider>
   );
