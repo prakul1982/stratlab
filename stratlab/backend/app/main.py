@@ -2606,16 +2606,18 @@ def results_ready(region: str):
 
 @app.get("/research/results")
 def results_page(region: str = "IN", scope: str = "mine", q: str = "", day: str = "", size: str = "", sector: str = "", index: str = "",
-                 fo: bool = False, purpose: str = "", on: str = "", sort: str = "cap", desc: bool | None = None, profile=Depends(current_profile)):
+                 fo: bool = False, purpose: str = "", on: str = "", sort: str = "cap", desc: bool | None = None, day_rows: int = 0,
+                 profile=Depends(current_profile)):
     """Results dates this week and next: the user's stocks (watchlist, notebooks, paper sessions) or every company,
     day by day, narrowed by company size (`size`: large, mid, small, micro, comma-separated), `sector`, `index`, `fo` (stocks with
     futures and options), `purpose` (results, or more than results) and `on` (today, tomorrow or a date), and sorted (`sort`).
-    `day` opens one day of "All companies" in full (DE-026)."""
+    `day` opens more of one day of "All companies" (DE-026): its first `day_rows`, or all of it."""
     r = research_routes.region_of(region)
     results_ready(r)
     return research_routes.ok(results_calendar.view(
         r, profile["id"], "all" if scope == "all" else "mine", q[:30], day=day[:10] or None, size=[x for x in size.split(",") if x][:4],
-        sector=sector[:80], index=index[:20], fo=fo, purpose=purpose[:10], on=on[:10], sort=sort[:10], desc=desc))
+        sector=sector[:80], index=index[:20], fo=fo, purpose=purpose[:10], on=on[:10], sort=sort[:10], desc=desc,
+        day_rows=max(0, min(day_rows, results_calendar.DAY_MAX)) or None))
 
 
 def _symbols_arg(symbols: str, region: str, most: int) -> list[str]:

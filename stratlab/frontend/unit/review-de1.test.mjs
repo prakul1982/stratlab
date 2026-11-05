@@ -102,10 +102,11 @@ test("DE-023/DE-024: the headline card's notes, the sector table's small sectors
   assert.match(s, /read its direction, not its level against another group's/);
 });
 
-test("DE-026/DE-027: results are listed day by day with each day's count, and a long day opens in full", () => {
+test("DE-026/DE-027: results are listed day by day with each day's count, and a long day opens 50 more at a time", () => {
   const s = read("src/pages/ResultsPage.tsx");
   assert.match(s, /export function dayHeading/);
-  assert.match(s, /onClick=\{\(\) => setOpenDay\(d\)\}>Show all/);
+  // owner, 5 Nov: never a 200-company day in one go; each press shows MORE_ROWS more of that day
+  assert.match(s, /setOpenDay\(d\); setDayRows\(info\.shown \+ MORE_ROWS\)/);
   assert.doesNotMatch(s, /And \{data\.more\} more\./);
 });
 

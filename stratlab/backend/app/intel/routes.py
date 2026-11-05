@@ -596,7 +596,7 @@ def pulse(region: str = "IN", focus: str = "", profile=Depends(current_profile))
     news = _news_now(r, 1.0) if not focus.strip() else _focused_news(r, focus[:60])
     if not focus.strip():
         # today's headlines only, the same list the main story is counted over, so "3 of 8" can be counted on the page (MOOD-1)
-        news = grounding.session_headlines(news, ist_date())[:14]
+        news = grounding.session_headlines(news, grounding.session_day(indices or [], ist_date()))[:14]
     if indices is None:
         return ok({"indices": [], "headlines": news, "missing": [], "pending": True})
     got = {i["name"] for i in indices}
