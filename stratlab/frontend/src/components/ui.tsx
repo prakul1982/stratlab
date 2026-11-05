@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { CheckStatus, VerdictKind } from "../lib/types";
 import { usePopover } from "./kit/Dialog";
 import { asOf } from "../lib/format";
@@ -55,25 +56,44 @@ export function AutoGrow(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
 
 /** A small (i) button that explains the thing next to it. Click or tap to open; Escape or a click outside closes, and
  * focus stays on the button. Name it after what it explains ("About Markets"); beside a heading it sits after the
- * heading element, never inside it. */
+ * heading element, never inside it. The box is drawn on the page's top layer (a portal to the body, fixed to the button),
+ * so a table's scroll box or a card's edge never cuts it (owner, 5 Nov: the box in a table was cut off at the card's edge);
+ * it opens under the button, or above when there is no room below, and stays inside the screen's sides. */
 export function Info({ children, label = "What does this mean?" }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
-  const [side, setSide] = useState<"left" | "right">("left");
-  const wrap = useRef<HTMLSpanElement>(null);
+  const [at, setAt] = useState<{ left: number; top: number; up: boolean } | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLSpanElement>(null);
   const id = useId();
-  usePopover(open, setOpen, btn, pop, { focusInto: false, outside: wrap });
-  useEffect(() => {
-    if (!open) return;
-    const r = wrap.current?.getBoundingClientRect();
-    if (r) setSide(r.left + 300 > window.innerWidth - 12 ? "right" : "left");
+  usePopover(open, setOpen, btn, pop, { focusInto: false });
+  useLayoutEffect(() => {
+    if (!open) { setAt(null); return; }
+    const place = () => {
+      const b = btn.current?.getBoundingClientRect(), p = pop.current;
+      if (!b || !p) return;
+      const vw = document.documentElement.clientWidth, vh = window.innerHeight, gap = 8, edge = 12;
+      const w = p.offsetWidth, h = p.offsetHeight;
+      // the circle is drawn inside a larger tap box: measure from the box's middle, where the circle is
+      const mid = b.left + b.width / 2;
+      const left = Math.max(edge, Math.min(mid - 22, vw - w - edge));
+      const below = b.bottom + gap, room = vh - below - edge;
+      const up = h > room && b.top - gap - h >= edge;
+      setAt({ left, top: up ? b.top - gap - h : below, up });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => { window.removeEventListener("scroll", place, true); window.removeEventListener("resize", place); };
   }, [open]);
   return (
-    <span ref={wrap} className="info">
+    <span className="info">
       <button ref={btn} type="button" className="info-btn" aria-label={label} aria-expanded={open} aria-controls={open ? id : undefined}
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open); }}>i</button>
-      {open && <span ref={pop} id={id} role="note" className={`info-pop ${side}`}>{children}</span>}
+      {open && createPortal(
+        // a click inside the box is not a click on whatever holds the button (a row, a card that opens)
+        <span ref={pop} id={id} role="note" className={`info-pop${at?.up ? " up" : ""}`} onClick={(e) => e.stopPropagation()}
+          style={at ? { left: at.left, top: at.top } : { left: 0, top: 0, visibility: "hidden" }}>{children}</span>,
+        document.body)}
     </span>
   );
 }

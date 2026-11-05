@@ -549,13 +549,12 @@ td.num, .num { font-family: var(--sans); }
 }
 .info-btn:hover, .info-btn[aria-expanded="true"] { --ring: var(--ink); color: var(--ink); }
 .info-btn:focus-visible { outline-offset: calc((var(--i) - var(--hit)) / 2 + 2px); }
+/* drawn in a portal on the body, fixed beside its button (ui.tsx Info places it), above dialogs, so no scroll box or card edge cuts it */
 .info-pop {
-  position: absolute; top: calc(100% + 8px); z-index: 55; width: min(300px, calc(100vw - 32px)); padding: 12px 14px;
+  position: fixed; z-index: 90; width: min(300px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 12px 14px;
   background: var(--ink); color: var(--on-ink); border-radius: 10px; box-shadow: var(--shadow);
   font: 400 13.5px/1.5 var(--sans); letter-spacing: 0; text-transform: none; text-align: left; white-space: normal;
 }
-.info-pop.left { left: -8px; }
-.info-pop.right { right: -8px; }
 .info-pop b { color: var(--on-ink); }
 .info-pop a, .info-pop a:hover { color: var(--on-ink); text-decoration: underline; }   /* (A11Y-008) the box is ink with light text: the page's blue link on it is 2:1 */
 
@@ -1831,7 +1830,6 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-table .k-empty-row { text-align: center; color: var(--muted); padding: var(--s5) var(--s4); white-space: normal; }
 .k-table .k-row-note { color: var(--muted); font-size: var(--t-label); }
 .k-table .info { margin-left: 4px; }
-.k-table .info-pop { white-space: normal; font-weight: 400; text-transform: none; }
 /* Plans, "Side by side": the three tables share one set of column widths, so Free, Basic and Pro stand at the same x from table to
    table (DK-005: auto layout sized each table's columns by its own text). The plan columns wrap their words (a longer cell is two lines). */
 @media (min-width: 641px) {
