@@ -33,7 +33,8 @@ test("item 1: corporate actions are one table with headers; the dividend total s
 
 test("item 2: Key numbers are small tables (name | Value | Basis | Range), one width, no long qualifier inside a row", () => {
   const r = read("src/components/Research.tsx");
-  for (const h of ['header: "Value"', 'header: "Basis"', 'header: anyBar ? <span title="Where this figure sits on a typical range for that measure">Range</span> : ""']) assert.ok(r.includes(h), h);
+  // the range column says what it is (owner, 5 Nov: "where is the context of it?"): "Usual range", the shaded span and its two figures under each bar
+  for (const h of ['header: "Value"', 'header: "Basis"', 'header: anyBar ? "Usual range" : ""', 'className="inv-krange-txt"']) assert.ok(r.includes(h), h);
   assert.match(r, /if \(m\.note && m\.note\.length > LONG_NOTE\) foot\.push/);                                  // a long qualifier is a numbered note under the tables
   assert.match(r, /\{mark\(m\) && <sup className="cmp-foot-mark"/);                                               // marked next to the value
   assert.match(r, /m\.note && !mark\(m\) \? m\.note : ""/);                                                      // and never inside the row

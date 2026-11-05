@@ -403,7 +403,10 @@ const SCALE: Record<string, Record<string, number>> = {
   automobiles: { "Gross margin": 0.5, "Net margin": 0.5, "P/S": 0.5 },
 };
 
-export function bandPosition(label: string, value: number | null, industry?: string | null): { pos: number; weak: number; strong: number; tone: "good" | "bad" | "mid" } | null {
+/** Where a figure sits on its measure's typical range: `pos`, `weak` and `strong` as 0-100 along the scale (the marker and the usual span's two
+ *  edges), and the figures themselves (`min` and `max` the scale's ends, `from` and `to` the usual span's), so the bar can say what it is. */
+export function bandPosition(label: string, value: number | null, industry?: string | null): { pos: number; weak: number; strong: number; tone: "good" | "bad" | "mid";
+  min: number; max: number; from: number; to: number; scaled: boolean } | null {
   const b = BANDS[label];
   if (!b || value == null) return null;
   let f = 1;
@@ -413,7 +416,8 @@ export function bandPosition(label: string, value: number | null, industry?: str
   const at = (v: number) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
   const good = higher ? value >= strong : value <= weak;
   const bad = higher ? value <= weak : value >= strong;
-  return { pos: Math.max(2.5, Math.min(97.5, at(value))), weak: at(weak), strong: at(strong), tone: good ? "good" : bad ? "bad" : "mid" };
+  return { pos: Math.max(2.5, Math.min(97.5, at(value))), weak: at(weak), strong: at(strong), tone: good ? "good" : bad ? "bad" : "mid",
+    min: lo, max: hi, from: weak, to: strong, scaled: f !== 1 };
 }
 
 export function ordinal(n: number): string {
