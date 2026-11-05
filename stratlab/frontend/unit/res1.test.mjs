@@ -38,8 +38,10 @@ test("RES-1: live prices, earlier moves and implied moves are read for the rows 
   assert.match(quotes, /useMarketRefresh\(\[region\], read, symbols\.length > 0\)/);          // each minute while the market trades, never otherwise
   assert.match(quotes, /researchApi\.quotes\(region, syms\)/);
   assert.match(page, /useRowQuotes\(region, symbols\)/);
-  assert.match(page, /i \+= 6\) \{/);
-  assert.match(page, /i \+= 8\) \{/);
+  assert.match(page, /readAll<MovesAnswer>\(symbols, 6,/);                      // six a call, eight for the options, asked at the same time
+  assert.match(page, /readAll<Implied>\(list, 8,/);
+  assert.match(page, /pending: r\.pending \?\? \[\]/);                          // what the server could not reach in time is asked again (owner, 5 Nov)
+  assert.doesNotMatch(page, /Reading…/);                                           // the kit's bar while a cell loads, a dash when there is nothing
   assert.match(page, /\/research\/results\/moves\?region=/);
   assert.match(page, /\/research\/results\/implied\?symbols=/);
   assert.match(page, /Prices as of \$\{fmtTime\(quoteAt!/);
@@ -60,7 +62,8 @@ test("RES-1: the corporate actions calendar is a table a day with the same filte
 
 test("RES-1: facts and arrows, never a view: no advice words on the page", () => {
   assert.doesNotMatch(page, /\b(buy|sell|should|accumulate|avoid|trade this)\b/i);
-  assert.match(page, /\$\{v > 0 \? "▲" : v < 0 \? "▼" : ""\}\$\{Math\.abs\(v\)\.toFixed\(1\)\}%/);
+  // the arrow and the sign; the latest moves in a row drop their % (the heading says percent, owner 5 Nov: rows fit the card)
+  assert.match(page, /\$\{v > 0 \? "▲" : v < 0 \? "▼" : ""\}\$\{Math\.abs\(v\)\.toFixed\(1\)\}\$\{bare \? "" : "%"\}/);
   assert.match(page, /Facts, not a forecast\./);
 });
 
@@ -76,4 +79,22 @@ test("RES-1 follow-up: business updates have a chart per company on one range, a
   assert.match(b, /data-testid="biz-none">No business update among their exchange filings:/);
   assert.match(b, /data-testid="biz-mine-none">No business update among their exchange filings:/);
   assert.doesNotMatch(b, /\b(buy|sell|beat|miss)\b/i);
+});
+
+test("owner 5 Nov: the calendars, the filings page and Invest home open on every company unless the account chose its own stocks", async () => {
+  const { companiesPref, SCOPE_OPTIONS } = await import("../src/lib/companyScope.ts");
+  assert.equal(companiesPref(null), "all");
+  assert.equal(companiesPref({ prefs: { level: null } }), "all");
+  assert.equal(companiesPref({ prefs: { level: null, companies: "mine" } }), "mine");
+  assert.deepEqual(SCOPE_OPTIONS.map((o) => o.value), ["all", "mine"]);                       // every company first
+  for (const f of ["src/pages/ResultsPage.tsx", "src/pages/CorpActionsPage.tsx", "src/pages/CalendarPage.tsx"]) {
+    const src = read(f);
+    assert.match(src, /= useCompanyScope\(\);/, f);
+    assert.match(src, /options=\{SCOPE_OPTIONS\}/, f);
+    assert.doesNotMatch(src, /params\.get\("scope"\) === "all" \? "all" : "mine"/, f);         // no page defaults to "My stocks" on its own
+  }
+  assert.match(read("src/pages/ResearchScans.tsx"), /useCompanyScope\("view"\)/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /const scope = companiesPref\(me\);[\s\S]*\/research\/results\?region=\$\{r\}&scope=\$\{scope\}/);
+  assert.match(read("src/pages/SettingsPage.tsx"), /savePrefs\(\{ companies: v as CompanyScope \}\)/);
+  assert.match(read("src/components/LevelPrompt.tsx"), /savePrefs\(\{ focus: f, level: lvl, space: view, companies \}\)/);
 });

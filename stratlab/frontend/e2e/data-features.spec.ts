@@ -171,10 +171,10 @@ test("red flags across every company: newest first, paged, filtered by type and 
 });
 
 test("red flags: your stocks in the US read the same stored list", async ({ page }, info) => {
-  const errors = await open(page, "/research/filings?region=US", "Filings and red flags", user(info));
+  const errors = await open(page, "/research/filings?region=US&view=mine", "Filings and red flags", user(info));
   await expect(page.getByText(/No United States stocks yet|filings? of your stocks/).first()).toBeVisible();
-  // one name for the tab in both markets (DE-036)
-  await expect(page.getByRole("radio", { name: "Your stocks" })).toBeChecked();
+  // one name for the tab in both markets (DE-036), the same words as every page's switch (owner, 5 Nov: every company is the default)
+  await expect(page.getByRole("radio", { name: "My stocks" })).toBeChecked();
   await sane(page, errors);
 });
 

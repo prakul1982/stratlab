@@ -4,6 +4,7 @@ import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { vixChange, type VixQuote } from "../lib/vix";
 import { useApp } from "../lib/app";
+import { companiesPref } from "../lib/companyScope";
 import { useMarketRefresh } from "../lib/marketLive";
 import { ago, fmtDate, istToday, money, pct, signCls } from "../lib/format";
 import { uploadedLine } from "../lib/journalTax";
@@ -327,13 +328,16 @@ function WatchPanel({ region }: { region: Region }) {
 
 type ResultsView = { today: string; weeks: { rows: ResultRow[] }[] };
 
-/** Results days for your stocks in the market picked at the top: today's, else the next one. */
+/** Results days in the market picked at the top: today's, else the next one; every company's (the largest first, the person's own among
+ *  them first) or only the person's stocks, as the account chose (lib/companyScope; owner, 5 Nov: "in Invest home too it's an issue"). */
 function ResultsToday({ region }: { region: Region }) {
+  const { me } = useApp();
+  const scope = companiesPref(me);
   const [rows, setRows] = useState<{ today: ResultRow[]; next: ResultRow | null } | null>(null);
   useEffect(() => {
     let live = true;
     setRows(null);
-    Promise.all(([region] as Region[]).map((r) => api<ResultsView>(`/research/results?region=${r}&scope=mine`).catch(() => null)))
+    Promise.all(([region] as Region[]).map((r) => api<ResultsView>(`/research/results?region=${r}&scope=${scope}`).catch(() => null)))
       .then((views) => {
         if (!live) return;
         const all = views.flatMap((v) => (v ? v.weeks.flatMap((w) => w.rows).map((r) => ({ ...r, today: v.today })) : []));
@@ -342,12 +346,24 @@ function ResultsToday({ region }: { region: Region }) {
         setRows({ today, next });
       });
     return () => { live = false; };
-  }, [region]);
+  }, [region, scope]);
+  const mine = scope === "mine";
   return (
-    <Panel title={region === "US" ? "US results today" : "Results today"} right={<Link to={withRegion("/research/results", region)} className="link">Calendar →</Link>}>
+    <Panel title={`${region === "US" ? "US results" : "Results"} today${mine ? ": your stocks" : ""}`}
+      right={<Link to={withRegion("/research/results", region)} className="link">Calendar →</Link>}>
       {rows === null ? <PanelSkel label="Checking results dates" />
-        : rows.today.length ? (
-          <div className="k-stack snug">
+        : rows.today.length && !mine ? (
+          // every company's: the largest first, in one short paragraph, so the card stays as short as it was with only your stocks beside the
+          // watchlist (ui-lint R1 at 1280: four lines of companies left the watchlist with 179px empty under it)
+          <p className="small" data-testid="invest-results-today">
+            <span className="muted">{rows.today.length} {rows.today.length === 1 ? "company has" : "companies have"} results today, largest first: </span>
+            {rows.today.slice(0, 6).map((r, i) => (
+              <span key={`${r.region}-${r.symbol}`}>{i > 0 && " · "}<Link className="link" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>{r.mine && <span className="muted"> (yours)</span>}</span>
+            ))}
+            {rows.today.length > 6 && <span className="muted"> and {rows.today.length - 6} more on the calendar</span>}
+          </p>
+        ) : rows.today.length ? (
+          <div className="k-stack snug" data-testid="invest-results-today">
             {rows.today.slice(0, 6).map((r) => (
               <Link key={`${r.region}-${r.symbol}`} className="space-line" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}>
                 <b>{r.symbol}</b><span className="small muted">{r.out ? "Results filed" : r.purpose}{r.when ? `, ${r.when}` : ""}</span>
@@ -355,7 +371,7 @@ function ResultsToday({ region }: { region: Region }) {
             ))}
           </div>
         ) : (
-          <p className="small muted">None of your {REGION_NAME[region]} stocks has results today.{rows.next ? ` Next: ${rows.next.symbol} on ${resultDay(rows.next.date)}.` : ""}</p>
+          <p className="small muted">{mine ? `None of your ${REGION_NAME[region]} stocks has results today.` : `No ${REGION_NAME[region]} company has results today.`}{rows.next ? ` Next: ${rows.next.symbol} on ${resultDay(rows.next.date)}.` : ""}</p>
         )}
     </Panel>
   );

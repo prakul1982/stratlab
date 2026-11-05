@@ -30,7 +30,9 @@ test("an issue's size is in rupees crore in India and in dollars in the US", () 
 test("dates: a span, an expected day and one not yet published", () => {
   assert.equal(ipo.spanText("2026-10-28", "2026-10-30"), "28 Oct to 30 Oct 2026");
   assert.equal(ipo.spanText("2026-10-28", "2026-10-28"), "28 Oct 2026");
-  assert.equal(ipo.expectedText("2026-11-04", true), "4 Nov 2026 (expected)");
+  assert.equal(ipo.expectedText("2026-11-04", true, "2026-11-01"), "4 Nov 2026 (expected)");
+  // past with no confirmation: the day SEBI's timetable gives, not one still to come (owner, 5 Nov)
+  assert.equal(ipo.expectedText("2026-10-30", true, "2026-11-05"), "30 Oct 2026 (timetable)");
   assert.equal(ipo.expectedText("2026-11-04", false), "4 Nov 2026");
   assert.equal(ipo.expectedText(null, false), "Not published yet");
 });

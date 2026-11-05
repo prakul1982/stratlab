@@ -1,6 +1,6 @@
 /* IPOs (Invest → IPOs): the small pure helpers the two pages use to write dates, prices, sizes and bids. Facts and arithmetic
  * only; where the exchange has not published a date, the one SEBI's timetable gives is marked "expected". */
-import { fmtDate, inr, inrCompact, money, pctPlain, price } from "./format";
+import { fmtDate, inr, inrCompact, istToday, money, pctPlain, price } from "./format";
 import type { IpoRow, Market, Stage } from "./ipo";
 
 /** The tabs of a market, in order: the open tab is India's only (a US offering has no public bidding window). */
@@ -55,8 +55,11 @@ export function spanText(a?: string | null, b?: string | null): string {
   return fmtDate(a ?? b ?? null);
 }
 
-/** A date with "expected" after it when it is the one SEBI's timetable gives, not the exchange's own. */
-export const expectedText = (d: string | null | undefined, expected?: boolean) => (d ? `${fmtDate(d)}${expected ? " (expected)" : ""}` : "Not published yet");
+/** A date with "expected" after it when it is the one SEBI's timetable gives, not the exchange's own; once that day has passed with no
+ *  confirmation it is "(timetable)", the day the rule gives, not a day still to come (owner, 5 Nov: closed BSE SME issues read "Not published
+ *  yet" for both). `today` is India's date (the list's own), else this device's reading of it. */
+export const expectedText = (d: string | null | undefined, expected?: boolean, today: string = istToday()) =>
+  (d ? `${fmtDate(d)}${expected ? (today && d < today ? " (timetable)" : " (expected)") : ""}` : "Not published yet");
 
 /** "46.06 times" / "5.9 times": how many times the shares offered the bids came to. */
 export function timesText(t: number | null | undefined): string {

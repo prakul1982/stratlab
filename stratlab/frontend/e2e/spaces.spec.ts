@@ -203,7 +203,8 @@ test("onboarding: one short step asks what brings you here, with the experience,
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page).toHaveURL(/\/money$/);
   await expect(page.getByRole("heading", { name: "Your money" })).toBeVisible();
-  await expect.poll(() => prefs(request, u)).toEqual({ level: "pro", focus: "money", space: "money" });
+  // the companies question (owner, 5 Nov) is answered with its default, every company, unless they picked their own stocks
+  await expect.poll(() => prefs(request, u)).toEqual({ level: "pro", focus: "money", space: "money", companies: "all" });
   const side = await menu(page, phone);
   await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Money" })).toHaveAttribute("aria-pressed", "true");
   await expect(side.getByRole("button", { name: "Add your holdings" })).toBeVisible();

@@ -1,6 +1,8 @@
 import { stageDaysText } from "../lib/stageDays";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { SCOPE_OPTIONS } from "../lib/companyScope";
+import { useCompanyScope } from "../lib/useCompanyScope";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { asOf, dayIn, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
@@ -477,6 +479,17 @@ export function RotationPage() {
     return (x < y ? -1 : x > y ? 1 : 0) * (sort.desc ? -1 : 1);
   });
   const onSort = (key: string) => setSort((cur) => (cur?.key === key ? (cur.desc ? null : { key, desc: true }) : { key, desc: key !== "n" && key !== "q" }));
+  // the table's "select all" (owner, 5 Nov): ticks or clears every row the quadrant filter shows, leaving the others as they are
+  const shownOn = listed.filter(isOn).length;
+  const tickShown = (on: boolean) => {
+    const next = new Set(all.filter(isOn).map((x) => x.id));
+    for (const r of listed) { if (on) next.add(r.id); else next.delete(r.id); }
+    if (!on && focus && !next.has(focus)) setFocus(null);
+    setPicked(next);
+  };
+  const quadName = quad === "all" ? "" : ` ${QUADRANTS.find((x) => x.id === quad)?.name ?? ""}`;
+  // a new set (or candle size or trail) on its way: the chart and the table dim under the kit's loading bar instead of standing as they were
+  const stale = busy && !!out;
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of}
@@ -510,7 +523,7 @@ export function RotationPage() {
       {busy && !out && !failed && <Card><Skeleton label="Comparing each one with the market" lines={4} />
         {slow && <p className="k-small k-muted" role="status" data-testid="rotation-slow">Still working: the first look after the close reads the day's closes for every member. It can take up to a minute, and the answer is kept for the next visit.</p>}</Card>}
       {out && (
-        <ChartFrame title={`${out.name} vs ${out.benchmark}`}
+        <ChartFrame title={`${out.name} vs ${out.benchmark}`} busy={stale ? "Comparing each one with the market" : undefined}
           // the four-box key under the title names the same four tags with their counts: the legend is only for a chart with no key (VR3-018)
           actions={rows.length > 0 ? undefined : <div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
           footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row below, to follow one. The ticks in the table choose what is drawn.</p> : undefined}>
@@ -524,14 +537,16 @@ export function RotationPage() {
       )}
       {/* the chart first (owner, 31 Oct: "the map should be up"), then the table of every one below it with the same ticks (MOOD-1: four run-on sentences with "and 7 more" became a table) */}
       {out && all.length > 0 && (
-        <Card testId="rot-table">
+        <Card testId="rot-table" className={stale ? "is-stale" : undefined}>
           <CardHead title={isIndex ? "Every index" : "Every stock"} info={QUADRANT_INFO} infoLabel="About the four quadrants" actions={<>
             <button className="btn quiet sm" onClick={() => setPicked(new Set(all.map((r) => r.id)))}>Show all {all.length} on the chart</button>
             {picked !== null && <button className="btn quiet sm" onClick={() => setPicked(null)}>{mainRows.length > 6 ? "The 5 furthest out" : "Main sectors only"}</button>}
             <button className="btn quiet sm" onClick={() => setPicked(new Set())}>Clear the chart</button></>} />
           <ChipBar label="Show quadrant" value={quad} onChange={(v) => setQuad(v as Quadrant | "all")}
             options={[{ value: "all", label: `All ${all.length}` }, ...QUADRANTS.map((x) => ({ value: x.id, label: `${x.name} ${counts[x.id]}` }))]} />
-          <DataTable csv="sector rotation" stack label="Where each one stands" rows={rowsShown} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
+          <DataTable csv="sector rotation" stack label="Where each one stands" rows={rowsShown}
+            selectAll={{ on: shownOn === 0 ? false : shownOn === listed.length ? true : "mixed", set: tickShown,
+              label: `Show all ${listed.length}${quadName} on the chart` }} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
             sort={{ key: sort?.key ?? "", desc: sort?.desc ?? false, onSort }} empty="None in this quadrant."
             columns={[
               { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, sortable: true, cell: (r) => (isIndex
@@ -755,8 +770,9 @@ export function FilingsPage() {
   // a market picked here stays in the address (R7O-003)
   const [region, setRegion] = useRegion(homeRegion());
   const [params, setParams] = useSearchParams();
-  const view = params.get("view") === "all" ? "all" : "mine";
-  const pickView = (v: string) => { const p = new URLSearchParams(params); if (v === "all") p.set("view", "all"); else p.delete("view"); p.delete("page"); setParams(p, { replace: true }); };
+  // which companies: the page's own choice in the address, else the account's (lib/companyScope: every company unless it said otherwise)
+  const [view, setView] = useCompanyScope("view");
+  const pickView = (v: string) => setView(v, (p) => p.delete("page"));
   const pickRegion = (r: Region) => { setRegion(r); const p = new URLSearchParams(params); p.set("region", r); for (const k of ["flag", "page", "q", "frm", "to", "range"]) p.delete(k); setParams(p, { replace: true }); };
 
   return (
@@ -768,7 +784,7 @@ export function FilingsPage() {
           : "Bankruptcy, a delisting notice, a change of auditor, financial statements that can no longer be relied on, and director or officer changes. Your stocks (watchlist, holdings, notebooks and paper sessions), or the latest from every S&P 500 company."} infoLabel="What counts" />
       <div className="k-toolbar">
         <RegionSwitch region={region} setRegion={pickRegion} />
-        <Seg label="Which companies" value={view} onChange={pickView} options={[{ value: "mine", label: "Your stocks" }, { value: "all", label: "All companies" }]} />
+        <Seg label="Which companies" value={view} onChange={pickView} options={SCOPE_OPTIONS} />
       </div>
       {!pro && me && <PlanNote>Red flags for your whole watchlist, with an evening alert, and the latest red flags across every company are on the Basic plan. Each company's own page shows its red flags on every plan.</PlanNote>}
       {view === "mine" && region === "IN" ? <WatchlistFilings pro={pro} /> : <AllFilings region={region} scope={view} pro={pro} />}

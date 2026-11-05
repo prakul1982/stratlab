@@ -64,7 +64,18 @@ const widths = [40, 100, 85, 60, 92, 70];
 
 /** Something is being prepared and the page fills in on its own (owner, 5 Nov: "everywhere we need processing time just a nice animated
  * loading bar, don't show exact warnings or issues"): a moving bar and one short line, never the internals of what is still running. */
-export function Working({ label, small = false }: { label: string; small?: boolean }) {
+export function Working({ label, small = false, inline = false }: { label: string; small?: boolean;
+  /** In a table cell or a line of text: the bar alone, short, with the label for screen readers and as its tooltip (owner, 5 Nov: a
+   *  results row's columns read "Reading" for minutes) */
+  inline?: boolean }) {
+  if (inline) {
+    return (
+      <span className="k-working inline" role="status" title={label} data-testid="cell-working">
+        <span className="k-working-bar" aria-hidden="true"><span /></span>
+        <span className="sr-only">{label}</span>
+      </span>
+    );
+  }
   return (
     <div className={`k-working${small ? " sm" : ""}`} role="status" aria-live="polite">
       <span className="k-working-bar" aria-hidden="true"><span /></span>

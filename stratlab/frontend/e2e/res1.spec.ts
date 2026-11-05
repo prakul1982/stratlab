@@ -82,7 +82,7 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   await expect(reliance).toContainText(/[+−]\d/);
   await expect(reliance).toContainText("F&O");
   await expect(reliance.getByText(/^±\d+\.\d%$/).first()).toBeVisible({ timeout: 30_000 });      // the usual move, once the prices were read
-    await expect(reliance.getByText(/^[▲▼]\d+\.\d%$/).first()).toBeVisible();
+    await expect(reliance.getByText(/^[▲▼]\d+\.\d$/).first()).toBeVisible();                   // the latest moves: arrow and figure (the heading says percent)
   await expect(reliance.getByText(/^±\d+\.\d%$/)).toHaveCount(2, { timeout: 30_000 });             // ...and the move the options price in
   // the price column says when it was read, or that it is the last close
   await expect(page.getByTestId("results-prices")).toContainText(/Prices as of \d|last close/);

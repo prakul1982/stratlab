@@ -94,7 +94,14 @@ test("VR7-006 (UI-CO item 2): Key numbers' groups are tables of one width, in tw
   expect(new Set(boxes.map((b) => b[1])).size, `widths ${JSON.stringify(boxes)}`).toBe(1);        // one width: the second row's groups sit under the first row's
   expect(new Set(boxes.map((b) => b[0])).size).toBe(2);
   // each is a table with its header row and one row for every figure
-  await expect(page.getByRole("table", { name: "Key numbers: Valuation" }).getByRole("columnheader")).toHaveText(["Valuation", "Value", "Basis", "Range"]);
+  const valuation = page.getByRole("table", { name: "Key numbers: Valuation" });
+  await expect(valuation.getByRole("columnheader")).toHaveText(["Valuation", "Value", "Basis", "Usual range"]);
+  // the range says what it is (owner, 5 Nov: "where is the context of it? it's just a bar"): the usual span's figures under each bar,
+  // and the whole of it in words for a screen reader and on hover
+  const bar = valuation.locator(".inv-krange").first();
+  await expect(bar.locator(".inv-krange-txt")).toHaveText(/^−?[\d.]+%?–−?[\d.]+%?$/);
+  await expect(bar.getByRole("img")).toHaveAttribute("aria-label", /Usual for large listed companies.*the dark mark is this company/);
+  await expect(page.getByTestId("krail-legend")).toContainText("the shaded part of each bar is the usual span");
 });
 
 test("VR7-008, VR7-019: the Markets button fits the margin on a laptop, and a chart in the panel is as tall as its tool rail", async ({ page, request }, info) => {

@@ -410,6 +410,8 @@ class PrefsReq(BaseModel):
     # the broker picked in "Pick your broker" (Settings, My Holdings), so a returning user sees theirs first; the list of
     # brokers lives in the frontend (lib/brokerGuide.ts), so a broker added there needs no change here
     broker: str | None = Field(None, pattern=r"^[a-z0-9]{2,20}$")
+    # which companies the calendars and Invest home open on: every company (the default) or only the person's own stocks (owner, 5 Nov)
+    companies: Literal["all", "mine"] | None = None
 
 
 class PlanInterestReq(BaseModel):

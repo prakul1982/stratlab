@@ -627,10 +627,11 @@ class KiteService:
 
     # ---------- historical candles ----------
     def history(self, token: int, tf: str, days: int, continuous: bool | None = None, ttl: float | None = None,
-                store: bool = True) -> list[dict]:
+                store: bool = True, max_wait: float | None = None) -> list[dict]:
         """Candles for a token. Futures on daily candles use Kite's continuous series unless told otherwise;
         `ttl` overrides how long a cached answer is reused (live polling wants fresh candles). `store=False` leaves
-        the answer out of the cache (a whole-market read would push everything else out of it)."""
+        the answer out of the cache (a whole-market read would push everything else out of it). `max_wait`: KiteBusy
+        when the next request turn is further off than that (see _slot), for a page's read that must not queue behind jobs."""
         self._require()
         interval, chunk, _ = INTERVALS[tf]
         now = datetime.now(IST)
@@ -664,7 +665,7 @@ class KiteService:
         out, frm = [], start
         while frm < now:
             to = min(frm + timedelta(days=chunk), now)
-            self._throttle()
+            self._slot(max_wait)
             rows = self.kite.historical_data(token, frm.replace(tzinfo=None), to.replace(tzinfo=None),
                                              interval, continuous=continuous)
             for r in rows:

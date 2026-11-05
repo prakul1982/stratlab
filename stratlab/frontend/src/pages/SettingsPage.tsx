@@ -7,6 +7,7 @@ import { aiCountText, aiMissingRow, serverRow } from "../lib/connection";
 import { HELP } from "../lib/help";
 import { planLabel } from "../lib/account";
 import { viewForFocus } from "../lib/spaces";
+import { COMPANIES_HINT, companiesPref, SCOPE_OPTIONS, type CompanyScope } from "../lib/companyScope";
 import type { Focus, Level } from "../lib/types";
 import { FOCUSES, LEVELS } from "../components/LevelPrompt";
 import { AlertSettingsCard } from "../components/AlertSettings";
@@ -70,12 +71,13 @@ export function SettingsPage() {
 }
 
 function ExperienceCards() {
-  const { focus, level, savePrefs, setLevel, theme, setTheme } = useApp();
+  const { me, focus, level, savePrefs, setLevel, theme, setTheme } = useApp();
+  const companies = companiesPref(me);
   return (
     <>
       <Card id="experience" label="What you see first">
-        <CardHead title="What you see first" info="Changes only which space the menu and home page open in, and which settings start open. Every tool stays available." />
-        {/* the two choices side by side: one under the other left a wide card holding two small switches in its left third (UI-FIX-1, R2) */}
+        <CardHead title="What you see first" info="Changes only which space the menu and home page open in, which settings start open, and which companies the calendars and Invest home open on. Every tool stays available." />
+        {/* the choices two by two: one under the other left a wide card holding small switches in its left third (UI-FIX-1, R2) */}
         <div className="k-two">
         <FieldGroup label="What you're here for">
           <Seg label="What you're here for" options={FOCUSES.map(([f, title]) => ({ value: f, label: title }))} value={focus ?? ""}
@@ -87,12 +89,18 @@ function ExperienceCards() {
           <Seg label="How experienced you are" options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} value={level ?? ""} onChange={(l) => void setLevel(l as Level)} />
           {level && <p className="k-small k-muted k-hint-line">{LEVELS.find(([l]) => l === level)?.[2]}</p>}
         </FieldGroup>
+        {/* owner, 5 Nov: "give a global option": which companies the results, corporate actions, all-dates and filings pages and Invest home open
+            on. Each page's own switch still changes that page only */}
+        <FieldGroup label="Companies in calendars and Invest home">
+          <Seg label="Companies in calendars and Invest home" options={SCOPE_OPTIONS} value={companies} onChange={(v) => void savePrefs({ companies: v as CompanyScope })} />
+          <p className="k-small k-muted k-hint-line">{COMPANIES_HINT[companies]}</p>
+        </FieldGroup>
+        <FieldGroup label="Theme">
+          <span id="theme" className="sr-only" />
+          <Seg label="Theme" options={[{ value: "system", label: "Same as my device" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]}
+            value={theme} onChange={(t) => setTheme(t as "light" | "dark" | "system")} />
+        </FieldGroup>
         </div>
-      </Card>
-      <Card id="theme" label="Theme">
-        <CardHead title="Theme" />
-        <Seg label="Theme" options={[{ value: "system", label: "Same as my device" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]}
-          value={theme} onChange={(t) => setTheme(t as "light" | "dark" | "system")} />
       </Card>
     </>
   );
