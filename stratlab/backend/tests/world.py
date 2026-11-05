@@ -200,9 +200,10 @@ def deal_rows(today=None) -> dict:
 
 
 def _deals_answer(r: httpx.Request):
-    """The exchange's deal feeds: one company's rows when a symbol is asked for, else the whole market's."""
+    """The exchange's deal feeds (insider trades are tests/fake_pit's): one company's rows when a symbol is asked for,
+    else the whole market's."""
     rows = deal_rows()
-    key = {"/api/corporates-pit": "pit", "/api/corporate-sast-reg29": "sast"}.get(r.url.path) or r.url.params.get("optionType", "")
+    key = {"/api/corporate-sast-reg29": "sast"}.get(r.url.path) or r.url.params.get("optionType", "")
     got = rows.get(key, [])
     sym = r.url.params.get("symbol")
     if sym:
@@ -274,7 +275,11 @@ def _nse(sw=None):
             if sym == "RELIANCE" or sym.isdigit():
                 return httpx.Response(200, json=rows)
             return httpx.Response(200, json=company_filings(sym))
-        if r.url.path in ("/api/corporates-pit", "/api/corporate-sast-reg29", "/api/historicalOR/bulk-block-short-deals"):
+        from tests import fake_pit
+        pit = fake_pit.world_answer(r, deal_rows()["pit"])
+        if pit is not None:            # insider trades: the list of filings and each filing's document
+            return pit
+        if r.url.path in ("/api/corporate-sast-reg29", "/api/historicalOR/bulk-block-short-deals"):
             return _deals_answer(r)
         surv = surveillance_answers().get(r.url.path)
         if surv is not None:

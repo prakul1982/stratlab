@@ -389,6 +389,21 @@ class KiteService:
         v = self.kite.ltp([key]).get(key)
         return v["last_price"] if v else None
 
+    def quote_key(self, key: str) -> dict | None:
+        """The day's quote for any "EXCHANGE:SYMBOL" key (a currency or commodity contract too): {"price", "open",
+        "high", "low", "volume", "at"}, the time aware in India's zone; None when the broker has none."""
+        self._require()
+        self._throttle()
+        v = (self.kite.quote([key]) or {}).get(key)
+        if not v:
+            return None
+        ohlc = v.get("ohlc") or {}
+        at = v.get("last_trade_time") or v.get("timestamp")
+        if hasattr(at, "tzinfo") and at.tzinfo is None:
+            at = at.replace(tzinfo=IST)
+        return {"price": v.get("last_price"), "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"),
+                "volume": v.get("volume"), "at": at.isoformat() if hasattr(at, "isoformat") else None}
+
     def instrument(self, token: int) -> dict | None:
         self._load_instruments()
         return self._by_token.get(int(token))
