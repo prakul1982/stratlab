@@ -163,6 +163,15 @@ def _partial(out: dict, now: float | None = None) -> bool:
         return False
 
 
+def _whole(b: dict) -> dict:
+    """A candle whose high and low hold its open and close. The source now and then sends one that doesn't (5 Nov: EUR/USD's
+    2 Nov low a hair above its open, gold's forming 5 Nov candle with its low above its open), which drew a broken bar and
+    failed the daily feature check; every chart, backtest and check reads the same corrected candle."""
+    o, h, l, c = b["o"], b["h"], b["l"], b["c"]
+    hi, lo = max(o, h, l, c), min(o, h, l, c)
+    return b if (h, l) == (hi, lo) else {**b, "h": hi, "l": lo}
+
+
 class Yahoo(Source):
     name = "Yahoo Finance"
 
@@ -258,7 +267,7 @@ class Yahoo(Source):
         if blank:
             for b in self._from_hours(symbol, blank, tz).values():
                 dedup.setdefault(b["t"], b)
-        out = {"meta": meta, "candles": sorted(dedup.values(), key=lambda b: b["t"])}
+        out = {"meta": meta, "candles": [_whole(b) for b in sorted(dedup.values(), key=lambda b: b["t"])]}
         return (out, at) if with_time else out
 
     BLANK_DAYS = 30          # how far back a blank daily candle is rebuilt from hourly ones
