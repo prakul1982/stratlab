@@ -11,7 +11,8 @@ sources name the same stock, the live broker wins over a statement and a stateme
 from .. import holdings, plans
 from . import state
 
-PRIORITY = {"kite": 3, "ibkr": 3, "cas": 2}
+PRIORITY = {"kite": 3, "ibkr": 3, "upstox": 3, "dhan": 3, "cas": 2}
+LIVE_BROKERS = ("kite", "upstox", "dhan")       # the logins whose last read can outrank a statement
 
 
 class Deps:
@@ -156,8 +157,9 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
         found, missed = found + us_found, missed + us_missed
     limit = plans.holdings_limit(profile["_plan"])
     out = {}
-    read = str(state.section(uid, "kite").get("refreshed_at") or "")[:10]
-    reads = {"kite": read} if read else {}
+    rec = state.load(uid)
+    reads = {k: str((rec.get(k) or {}).get("refreshed_at") or "")[:10] for k in LIVE_BROKERS}
+    reads = {k: v for k, v in reads.items() if v}
 
     def merged(before):                   # runs again on the newer holdings if the user saves one meanwhile
         had = {_key(i) for i in before["items"] if i.get("via") == via}

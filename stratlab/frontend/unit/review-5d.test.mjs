@@ -105,7 +105,9 @@ test("B8: the invoice form clears state and GSTIN when the country isn't India",
 test("smaller: Zerodha asks before disconnecting; plan interest can be retried; newsletter saves don't undo each other", () => {
   const z = src("components/ConnectedAccounts.tsx");
   assert.match(z, /onClick=\{\(\) => setAsking\(true\)\}>Disconnect<\/button>/);
-  assert.match(z, /title="Disconnect Zerodha\?"/);
+  // R11: Zerodha shares the Brokers table with Upstox and Dhan: every broker's Disconnect asks first, by its name
+  assert.match(z, /aria-label=\{`Disconnect \$\{b\.name\}`\} onClick=\{\(\) => setAsking\(b\)\}>Disconnect<\/button>/);
+  assert.match(z, /<ConfirmDialog title=\{`Disconnect \$\{asking\.name\}\?`\}/);
   const pi = src("lib/planInterest.ts");
   assert.match(pi, /if \(state && !state\.unread\)/);
   const n = src("components/NewslettersCard.tsx");

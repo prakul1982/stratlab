@@ -489,7 +489,7 @@ subscribing, verifying and cancelling are refused while it is on.
 
 ## Connect once (Settings → Connected accounts)
 
-Four things a user connects once so their numbers keep updating. Each shows "Not set up yet" (or "Not open yet") until the
+The things a user connects once so their numbers keep updating. Each shows "Not set up yet" (or "Not open yet") until the
 settings below are in place; nothing here invents a value. Every password and token a user hands over is encrypted at
 rest with `CONNECT_SECRET_KEY`, never written to a log (`backend/app/connect/redact.py` masks them), never sent back to
 the page, and deleted when the user disconnects.
@@ -564,6 +564,36 @@ approval: ask through the Kite Connect forum (https://kite.trade) or Zerodha sup
 
 Zerodha ends every login at about 6 am, so users tap once a day ("Connected · refreshed today 09:12 · tap to refresh
 tomorrow"); there is no way around that daily step.
+
+### 3b. Upstox and Dhan (read-only holdings logins)
+
+The same shape as Zerodha's: Settings → Connected accounts → Brokers lists Zerodha, Upstox and Dhan in one table.
+A user taps **Connect**, logs in at the broker, comes back to `/connect/<broker>/callback` (which links nothing by itself),
+and the signed-in Settings page confirms the login with a one-time claim. The token is encrypted with `CONNECT_SECRET_KEY`,
+never logged or sent to the page, and deleted on **Disconnect**; holdings land in My Holdings tagged with the broker, as
+Zerodha's do. The server only ever calls each broker's token and holdings addresses (`backend/app/connect/brokers.py`,
+`READ_ONLY`): no order, funds or other write call exists. There is no background polling: **Refresh** reads again while the
+login lasts (on Settings and on My Holdings). "Pick your broker" (Settings and My Holdings) shows each broker's ways in:
+connect (Zerodha, Upstox, Dhan), its holdings file, or the monthly statement by email. Angel One and the others
+have no live connection: their file and the email.
+
+Each card says "Not set up yet" until its keys and `CONNECT_SECRET_KEY` are set, even with its `*_FOR_ALL` flag on. Until
+the flag is `true`, only admins (`ADMIN_EMAILS`) can connect ("Not open yet" for everyone else).
+
+| Broker | Railway variables | Redirect URL to register with the broker | Open to everyone | Login ends |
+|---|---|---|---|---|
+| Upstox | `UPSTOX_API_KEY`, `UPSTOX_API_SECRET` | `https://<your API host>/connect/upstox/callback` | `UPSTOX_FOR_ALL=true` | 03:30 IST next day |
+| Dhan | `DHAN_APP_ID`, `DHAN_APP_SECRET`, `DHAN_CLIENT_ID` (your own Dhan client id) | `https://<your API host>/connect/dhan/callback` | `DHAN_FOR_ALL=true` | the time Dhan gives (about 24 h) |
+
+- **Upstox:** make an app at https://account.upstox.com/developer/apps with that redirect URL; its API key and secret go in
+  the two variables.
+- **Dhan:** on web.dhan.co → My Profile → Access DhanHQ APIs (DhanHQ Trading APIs), choose **API key**, give an app name and
+  that redirect URL; the API key and secret go in `DHAN_APP_ID` and `DHAN_APP_SECRET` (valid 12 months), and your Dhan
+  client id in `DHAN_CLIENT_ID` (Dhan's consent step needs it). An individual API-key app logs in only its owner's own
+  account: with `DHAN_FOR_ALL=true` anyone may try, and a login Dhan refuses (someone else's account) ends on Settings with
+  "Dhan didn't allow this login yet. Upload your holdings file or forward your statement instead." (the reason is in the
+  server log). For every user, ask Dhan for partner credentials and set `DHAN_PARTNER_ID` and `DHAN_PARTNER_SECRET`: the
+  partner flow is used whenever they are set. Holdings reads need no static IP (Dhan asks for one only on order placement).
 
 ### 4. Interactive Brokers (US stocks)
 

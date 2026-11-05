@@ -1,10 +1,11 @@
 """The API for Settings -> Connected accounts: GET /connect (everything's state), the statement inbox, an upload that uses the
-same reader, Zerodha login, Interactive Brokers (Flex) and the EPF / NPS / AIS uploads, plus the mail service's webhook.
+same reader, Zerodha, Upstox and Dhan logins, Interactive Brokers (Flex) and the EPF / NPS / AIS uploads, plus the mail service's webhook.
 
 Nothing secret ever leaves here: an address, dates, counts and plain-words statuses. Every route is for the signed-in user's
 own data only (the user id comes from the sign-in, never from the request)."""
 import base64
 import binascii
+import logging
 import re
 from urllib.parse import urlencode
 
@@ -16,8 +17,9 @@ from pydantic import BaseModel, Field, field_validator
 from ..auth import current_profile
 from ..config import settings
 from ..responses import err, ok
-from . import docs, ibkr, inbound, kite_user, state, statements, vault
+from . import brokers, docs, ibkr, inbound, kite_user, state, statements, vault
 
+log = logging.getLogger("stratlab.connect")
 router = APIRouter(prefix="/connect", tags=["connect"])
 hook_router = APIRouter(tags=["connect"])
 _throttle = None
@@ -60,6 +62,7 @@ def view(profile: dict) -> dict:
                   "forwarding_code": confirm if confirm and (state.now() < _plus_days(confirm.get("at"), 3)) else None,
                   "created_at": box.get("created_at")},
         "kite": k,
+        "brokers": brokers.statuses(uid, profile),
         "ibkr": ibkr.status(uid),
         "docs": {kd: (state.section(uid, "docs").get(kd) or None) for kd in docs.KINDS},
         "storage_ready": vault.ready(),
@@ -85,6 +88,7 @@ def connect_delete(profile=Depends(current_profile)):
     """Disconnect everything: the forwarding address, every stored password and token."""
     kite_user.disconnect(profile["id"])
     kite_user.drop_pending(profile["id"])
+    brokers.drop_pending(profile["id"])
     state.drop_all(profile["id"])
     return {"deleted": True}
 
@@ -233,6 +237,82 @@ def kite_delete(profile=Depends(current_profile)):
     """Disconnect Zerodha: the stored login is deleted. Holdings already read stay in My Holdings."""
     kite_user.disconnect(profile["id"])
     return ok(view(profile))
+
+
+# ---------- Upstox and Dhan (brokers.py): the same round trip as Zerodha's ----------
+class BrokerConfirmReq(BaseModel):
+    ref: str = Field(..., max_length=200)
+    claim: str = Field(..., max_length=200)
+
+
+def broker_done(b: brokers.Broker, params: dict) -> RedirectResponse:
+    """The broker's return: only ever back to the app's own Connected accounts page."""
+    where = settings.PUBLIC_SITE_URL + f"/settings?broker={b.key}&b={{}}#accounts"
+    if not any(params.get(k) for k in ("code", "tokenId", "tokenid")):
+        return RedirectResponse(where.format("cancelled"), status_code=303)
+    try:
+        ref, claim = brokers.stage(b, params)
+    except brokers.BrokerError as e:
+        if e.refused:                 # the broker itself said no (Dhan's individual app, someone else's account): why, in the log
+            log.warning("%s login refused: %s", b.name, e.reason)
+            return RedirectResponse(where.format("refused"), status_code=303)
+        return RedirectResponse(where.format("failed"), status_code=303)
+    except Exception as e:            # a broker's odd reply too: the person lands back on Settings, never on an error page
+        log.warning("%s login failed: %s", b.name, type(e).__name__)
+        return RedirectResponse(where.format("failed"), status_code=303)
+    # nothing is linked yet: the page this lands on, signed in, confirms it with the reference and the claim
+    return RedirectResponse(where.format("confirm&" + urlencode({"bs": ref, "bc": claim})), status_code=303)
+
+
+def _broker_routes(b: brokers.Broker) -> None:
+    def login(profile=Depends(current_profile)):
+        _limit(profile, f"connect_{b.key}", 10 if b.key == "dhan" else 30)
+        if not b.configured():
+            err(503, "not_set_up", "Not set up yet.")
+        if not b.allowed(profile):
+            err(403, "not_open", f"{b.name} login isn't open yet.")
+        try:
+            return ok({"url": brokers.start(b, profile)})
+        except brokers.BrokerError as e:
+            err(502, "broker_error", e.message)
+
+    def callback(request: Request):
+        params = {k: v[:4000] for k, v in request.query_params.items()}
+        return broker_done(b, params)
+
+    async def confirm(req: BrokerConfirmReq, profile=Depends(current_profile)):
+        _limit(profile, f"connect_{b.key}_confirm", 30)
+        try:
+            got = await run_in_threadpool(brokers.confirm, b, profile, req.ref, req.claim)
+        except brokers.BrokerError as e:
+            err(400, f"{b.key}_confirm_failed", e.message)
+        return ok({**got, "connect": await run_in_threadpool(view, profile)})
+
+    async def refresh(profile=Depends(current_profile)):
+        _limit(profile, f"connect_{b.key}_refresh", 30)
+        if not b.allowed(profile):
+            err(403, "not_open", f"{b.name} login isn't open yet.")
+        try:
+            got = await run_in_threadpool(brokers.refresh, b, profile["id"])
+        except brokers.BrokerError as e:
+            if e.expired:
+                err(409, "login_needed", e.message)
+            err(502, "broker_error", e.message)
+        return ok({**got, "connect": await run_in_threadpool(view, profile)})
+
+    def delete(profile=Depends(current_profile)):
+        brokers.disconnect(b, profile["id"])
+        return ok(view(profile))
+
+    router.add_api_route(f"/{b.key}/login", login, methods=["GET"], summary=f"The address to log in at {b.name} (admins only until {b.key.upper()}_FOR_ALL).")
+    router.add_api_route(f"/{b.key}/callback", callback, methods=["GET"], summary=f"Where {b.name} sends the user back; links nothing by itself.")
+    router.add_api_route(f"/{b.key}/confirm", confirm, methods=["POST"], summary=f"Finish a {b.name} login: only its own user, on the browser that came back.")
+    router.add_api_route(f"/{b.key}/refresh", refresh, methods=["POST"], summary=f"Read the {b.name} holdings again.")
+    router.add_api_route(f"/{b.key}", delete, methods=["DELETE"], summary=f"Disconnect {b.name}: the stored login is deleted; holdings already read stay.")
+
+
+for _b in brokers.ALL.values():
+    _broker_routes(_b)
 
 
 # ---------- Interactive Brokers ----------
