@@ -75,7 +75,7 @@ article .kpis small{font-size:12.5px;line-height:1.35;color:var(--muted)}
 .seg.one,.sw.one{background:var(--blue)}.seg.two,.sw.two{background:var(--orange)}.seg.none,.sw.none{background:repeating-linear-gradient(135deg,var(--line-2) 0 2px,var(--card) 2px 4px);box-shadow:inset 0 0 0 1px var(--line-2)}
 /* R11: a bar chart of one figure per row (blog.hbar_html): the label, the bar on one scale with a zero line when a figure is below zero, the figure */
 .hb{margin:14px 0 18px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:12px}.hb figcaption{font-size:13px;color:var(--muted);margin:0 0 10px}
-.hb ul{list-style:none;margin:0;padding:0}.hb li{display:grid;grid-template-columns:minmax(120px,32%) minmax(0,1fr) 76px;align-items:center;gap:12px;margin:0;padding:6px 0;font-size:14px;line-height:1.3}
+.hb ul{list-style:none;margin:0;padding:0}.hb li{display:grid;grid-template-columns:minmax(120px,32%) minmax(0,1fr) 92px;align-items:center;gap:12px;margin:0;padding:6px 0;font-size:14px;line-height:1.3}
 .hb .track{position:relative;display:block;height:16px;border-radius:4px;background:var(--chip)}.hb .bar{position:absolute;top:0;bottom:0;border-radius:4px;background:var(--blue)}
 .hb .bar.neg{background:var(--orange)}.hb .zero{position:absolute;top:-4px;bottom:-4px;width:0;border-left:2px solid var(--ink-2)}
 .hb .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}.hb .n.none{font-weight:400;color:var(--muted)}
@@ -118,7 +118,7 @@ ul.posts h2{font-size:19px;margin:0;color:var(--ink)}ul.posts p{margin:0;color:v
 .pager a{display:inline-flex;align-items:center;min-height:44px;padding:6px 14px;border:1px solid var(--line);border-radius:10px;text-decoration:none;background:var(--card)}
 .more{margin-top:28px}.more ul{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-wrap:wrap;gap:8px}
 .more a{display:inline-flex;align-items:center;min-height:44px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
-@media (max-width:640px){.hb{padding:12px}.hb li{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px}.hb .k{grid-column:1/-1}}
+@media (max-width:640px){.hb{padding:12px}.hb li{grid-template-columns:minmax(0,1fr) 92px;gap:4px 10px}.hb .k{grid-column:1/-1}}
 @media (max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis b{font-size:22px}.hbars li{grid-template-columns:1fr auto;gap:2px 10px}.hbars .k{grid-column:1/-1}.hbars{padding:12px}}
 """
 
