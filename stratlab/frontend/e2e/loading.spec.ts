@@ -6,13 +6,11 @@ const session = { access_token: "admin-token", token_type: "bearer", expires_in:
 
 test("a slow answer shows the top loading bar, and it goes when the answer is in", async ({ page }) => {
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, session);
-  await page.goto("/trade");
-  await expect(page.locator("aside.sidebar .acct-btn").or(page.getByRole("button", { name: "Open menu" })).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator(".top-progress")).toHaveCount(0, { timeout: 15_000 });
-  // the library's list answers 2 s late
+  // the library's list answers 5 s late from the first load on (installed before the page opens, so no earlier read can have
+  // answered it already): the bar runs while the page's code and its list are on their way, and goes once they are in
   await page.route(/\/library(\?|$)/, async (r) => { await new Promise((res) => setTimeout(res, 5000)); await r.fallback(); });
-  await page.evaluate(() => { history.pushState({}, "", "/library"); window.dispatchEvent(new PopStateEvent("popstate")); });
-  // the bar runs while the page's code downloads and while its list is asked for (2 s late): it is up well before the answer
+  await page.goto("/library");
   await expect(page.locator(".top-progress > span")).toBeVisible({ timeout: 4_000 });
+  await expect(page.getByTestId("lib-gap").first()).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".top-progress")).toHaveCount(0, { timeout: 15_000 });
 });
