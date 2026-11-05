@@ -21,7 +21,7 @@ export function dollarRate(rate: number, at: string | null | undefined, now: num
   return `₹${rate.toFixed(2)} a dollar${old ? ` (the rate of ${day})` : ""}`;
 }
 
-const VIA_NAMES: Record<string, string> = { kite: "Kite", ibkr: "IBKR" };
+const VIA_NAMES: Record<string, string> = { kite: "Kite", ibkr: "IBKR", upstox: "Upstox", angelone: "Angel One", dhan: "Dhan" };
 
 /** What an edit does to a row a broker or statement syncs (the server's holdings.set_qty and connect.sync). */
 export function syncedNote(via: string): string {

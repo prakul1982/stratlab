@@ -1,11 +1,13 @@
 import { zerodhaLine } from "../lib/zerodha";
+import { brokerBadge, brokerLine, type BrokerStatus } from "../lib/brokers";
 import { useCallback, useEffect, useState } from "react";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, dateOnly } from "../lib/format";
-import { Badge, Card, CardHead, CheckField, ConfirmDialog, DateField, Disclosure, Field, FormActions, FormGrid, Notice, Skeleton, UploadButton, UploadProblem, useUploadProblem } from "./kit";
+import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, DateField, Disclosure, Field, FormActions, FormGrid, Notice, Skeleton, UploadButton, UploadProblem, useUploadProblem, Working, type Column } from "./kit";
 
-/* Settings -> Connected accounts, the "connect once" cards: the statement inbox, Zerodha, Interactive Brokers, and the EPF, NPS and
+/* Settings -> Connected accounts, the "connect once" cards: the statement inbox, the broker logins (Zerodha, Upstox, Angel One, Dhan),
+ * Interactive Brokers, and the EPF, NPS and
  * AIS uploads. Every figure on them is a fact about the connection (a date, a count, a status); passwords and tokens are typed
  * in and never shown again. */
 
@@ -13,7 +15,9 @@ type Last = { at: string; status: string; kind: string | null; via: string; deta
 type Conn = {
   storage_ready: boolean;
   inbox: { ready: boolean; address: string | null; has_password: boolean; last: Last | null; forwarding_code: { code: string; at: string } | null; created_at: string | null };
-  kite: { available: boolean; connected: boolean; live: boolean; expired: boolean; refreshed_at: string | null; refreshed_label: string | null; count: number | null; detail: string | null; ends_at?: string | null };
+  kite: { configured?: boolean; available: boolean; connected: boolean; live: boolean; expired: boolean; refreshed_at: string | null; refreshed_label: string | null; count: number | null; detail: string | null; ends_at?: string | null };
+  /** Upstox, Angel One and Dhan, the same shape as Zerodha's */
+  brokers?: (BrokerStatus & { refreshed_at: string | null; account: string | null })[];
   ibkr: { connected: boolean; synced_at: string | null; status: string | null; detail: string | null; positions: number | null; trades: number | null; expires: string | null };
   docs: Record<"epf" | "nps" | "ais", Record<string, unknown> | null>;
 };
@@ -34,7 +38,7 @@ function useConnect() {
     // back from Zerodha with a login to confirm: the confirm answers with the connections, so a load started alongside it
     // can't land after it with a half-done view (connected, holdings not read yet)
     const q = new URLSearchParams(window.location.search);
-    if (!(q.get("kite") === "confirm" && q.get("ks") && q.get("kc"))) load();
+    if (!(q.get("kite") === "confirm" && q.get("ks") && q.get("kc")) && !(q.get("b") === "confirm" && q.get("broker") && q.get("bs") && q.get("bc"))) load();
   }, [load]);
   return { c, set: setC, load };
 }
@@ -56,12 +60,26 @@ export function ConnectCards() {
     api<{ connect: Conn }>("/connect/kite/confirm", { method: "POST", body: { state: ks, claim: kc } })
       .then((r) => { set(r.connect); say("ok"); }).catch(() => { say("failed"); load(); });
   }, [notify, set, load]);
+  useEffect(() => {
+    // back from Upstox, Angel One or Dhan: the same as Zerodha's, with the broker named in the address
+    const q = new URLSearchParams(window.location.search);
+    const [key, b, bs, bc] = [q.get("broker"), q.get("b"), q.get("bs"), q.get("bc")];
+    if (!key || !b || !BROKER_NAMES[key]) return;
+    for (const name of ["broker", "b", "bs", "bc"]) q.delete(name);
+    window.history.replaceState(null, "", window.location.pathname + (q.toString() ? `?${q}` : "") + window.location.hash);
+    const name = BROKER_NAMES[key];
+    const say = (r: string) => notify(r === "ok" ? `${name} is connected and your holdings are read.` : r === "cancelled" ? `The ${name} login was cancelled.` : `The ${name} login didn't work. Try again.`);
+    if (b !== "confirm") { say(b); return; }
+    if (!bs || !bc) { say("failed"); load(); return; }
+    api<{ connect: Conn }>(`/connect/${key}/confirm`, { method: "POST", body: { ref: bs, claim: bc } })
+      .then((r) => { set(r.connect); say("ok"); }).catch(() => { say("failed"); load(); });
+  }, [notify, set, load]);
   if (c === undefined) return <Card label="Connecting your accounts"><Skeleton label="Loading your connections" /></Card>;
   if (c === null) return null;
   return (
     <>
       <InboxCard c={c} set={set} load={load} />
-      <ZerodhaCard c={c} set={set} />
+      <BrokersCard c={c} set={set} />
       <IbkrCard c={c} set={set} />
       <DocsCard c={c} set={set} />
     </>
@@ -180,48 +198,73 @@ function InboxCard({ c, set, load }: P) {
   );
 }
 
-/* ---------- Zerodha ---------- */
-function ZerodhaCard({ c, set }: P) {
+/* ---------- the broker logins: Zerodha, Upstox, Angel One, Dhan ---------- */
+const BROKER_NAMES: Record<string, string> = { upstox: "Upstox", angelone: "Angel One", dhan: "Dhan" };
+
+type BrokerRow = BrokerStatus & { id: string; path: string; line: string; lineId?: string };
+
+/** One table, a row a broker, the same for each (LIVE1B-042 and TABLES EVERYWHERE): a broker that isn't open or set up is one short
+ * row, not a card with a pill and one sentence. Zerodha keeps its own line (it ends its login at about 06:00 IST every day). */
+function BrokersCard({ c, set }: P) {
   const { fail, notify } = useApp();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<{ key: string; what: string } | null>(null);
+  const [asking, setAsking] = useState<BrokerRow | null>(null);
   const k = c.kite;
-  const [asking, setAsking] = useState(false);
-  const login = async () => {
-    setBusy(true);
-    try { const r = await api<{ url: string }>("/connect/kite/login"); window.location.href = r.url; } catch (e) { fail(e); setBusy(false); }
+  const rows: BrokerRow[] = [
+    { ...k, key: "kite", name: "Zerodha", id: "zerodha", path: "kite", line: k.available && k.connected ? zerodhaLine(k) : "", lineId: "kite-line" },
+    ...(c.brokers ?? []).map((b) => ({ ...b, id: b.key, path: b.key, line: brokerLine(b), lineId: `${b.key}-line` })),
+  ];
+  const login = async (b: BrokerRow) => {
+    setBusy({ key: b.key, what: `Opening the ${b.name} login` });
+    try { const r = await api<{ url: string }>(`/connect/${b.path}/login`); window.location.href = r.url; } catch (e) { fail(e); setBusy(null); }
   };
-  const refresh = async () => {
-    setBusy(true);
+  const refresh = async (b: BrokerRow) => {
+    setBusy({ key: b.key, what: `Reading your ${b.name} holdings` });
     try {
-      const r = await api<{ count: number; connect: Conn }>("/connect/kite/refresh", { method: "POST" });
+      const r = await api<{ count: number; connect: Conn }>(`/connect/${b.path}/refresh`, { method: "POST" });
       set(r.connect);
       notify(`Read ${r.count} holdings.`);
+      setBusy(null);
     } catch (e) {
-      if ((e as { code?: string }).code === "login_needed") { await login(); return; }
-      fail(e);
-    } finally { setBusy(false); }
+      if ((e as { code?: string }).code === "login_needed") { await login(b); return; }
+      fail(e); setBusy(null);
+    }
   };
-  const drop = async () => {
-    setBusy(true);
-    try { set(await api<Conn>("/connect/kite", { method: "DELETE" })); setAsking(false); notify("Zerodha is disconnected and its stored login is deleted."); } catch (e) { fail(e); } finally { setBusy(false); }
+  const drop = async (b: BrokerRow) => {
+    setBusy({ key: b.key, what: `Disconnecting ${b.name}` });
+    try { set(await api<Conn>(`/connect/${b.path}`, { method: "DELETE" })); setAsking(null); notify(`${b.name} is disconnected and its stored login is deleted.`); }
+    catch (e) { fail(e); } finally { setBusy(null); }
   };
+  const closed = rows.filter((b) => !b.available);
+  const columns: Column<BrokerRow>[] = [
+    { key: "name", header: "Broker", rowHeader: true, cell: (b) => <b>{b.name}</b> },
+    { key: "status", header: "Status", wrap: true, cell: (b) => {
+      const badge = brokerBadge(b);
+      return (
+        <span className="k-line-text">
+          <Badge tone={badge.tone}>{badge.text}</Badge>
+          {b.line && <span className="k-sub-line" data-testid={b.lineId}>{b.line}</span>}
+          {b.available && b.detail && <span className="k-sub-line k-warn-text" role="status">{b.detail}</span>}
+        </span>
+      );
+    } },
+    { key: "act", header: "", action: true, cell: (b) => !b.available ? null : !b.connected
+      ? <button type="button" className="btn" disabled={!!busy} onClick={() => void login(b)}>Connect {b.name}</button>
+      : <span className="k-row">
+          <button type="button" className="btn" disabled={!!busy} aria-label={b.live ? `Refresh ${b.name}` : undefined} onClick={() => void (b.live ? refresh(b) : login(b))}>{b.live ? "Refresh" : `Log in to ${b.name}`}</button>
+          <button type="button" className="btn quiet" disabled={!!busy} aria-label={`Disconnect ${b.name}`} onClick={() => setAsking(b)}>Disconnect</button>
+        </span> },
+  ];
   return (
-    // LIVE1B-042: while Zerodha login isn't open the card is one short row, not a card with a pill and one sentence
-    <Card id="zerodha" label="Zerodha" compact={!k.available}>
-      <CardHead title="Zerodha" info="Log in to Zerodha once a day and your holdings and today's buys are read into My Holdings. Zerodha ends every login at about 06:00 IST, so tomorrow you tap once more. StratLab never sees your Zerodha password."
-        actions={<Badge tone={k.connected && k.live ? "ok" : k.connected ? "warn" : "plain"}>{!k.available ? "Not open yet" : k.connected ? (k.live ? "Connected" : "Log in again") : "Not connected"}</Badge>} />
-      {!k.available && <p className="k-small k-muted">Zerodha login isn't open yet. Upload your Zerodha holdings file in My Holdings meanwhile.</p>}
-      {k.available && !k.connected && <FormActions><button type="button" className="btn" disabled={busy} onClick={() => void login()}>Connect Zerodha</button></FormActions>}
-      {k.available && k.connected && <>
-        <p className="k-small" data-testid="kite-line">{zerodhaLine(k)}</p>
-        <FormActions>
-          <button type="button" className="btn" disabled={busy} onClick={() => void (k.live ? refresh() : login())}>{k.live ? "Refresh" : "Log in to Zerodha"}</button>
-          <button type="button" className="btn quiet" disabled={busy} onClick={() => setAsking(true)}>Disconnect</button>
-        </FormActions>
-      </>}
-      {k.detail && <Notice tone="warn" role="status">{k.detail}</Notice>}
-      {asking && <ConfirmDialog title="Disconnect Zerodha?" confirmLabel="Disconnect" busy={busy} onClose={() => setAsking(false)} onConfirm={() => void drop()}>
-        Its stored login is deleted. You can connect again any time.</ConfirmDialog>}
+    <Card id="brokers" label="Brokers">
+      <CardHead title="Brokers" info={<>Log in to your broker and your holdings are read into My Holdings. It is read-only: StratLab can't place orders or move money,
+        and never sees your broker password. Each broker ends its login by itself (Zerodha at about 06:00 IST, Upstox at 03:30 IST, Angel One at
+        midnight IST; Dhan says when), so after that you log in once more. Refresh reads the holdings again while the login lasts.</>} />
+      <DataTable label="Broker logins" columns={columns} rows={rows} rowKey={(b) => b.key} rowAttrs={(b) => ({ id: b.id, "data-testid": `broker-${b.key}` })} />
+      {busy && <Working small label={`${busy.what}…`} />}
+      {closed.length > 0 && <p className="k-small k-muted">{closed.length === rows.length ? "None of these is open for your account yet." : "A broker marked not open isn't available for your account yet."} Upload your broker's holdings file in My Holdings meanwhile.</p>}
+      {asking && <ConfirmDialog title={`Disconnect ${asking.name}?`} confirmLabel="Disconnect" busy={!!busy} onClose={() => setAsking(null)} onConfirm={() => void drop(asking)}>
+        Its stored login is deleted. Holdings already read stay in My Holdings. You can connect again any time.</ConfirmDialog>}
     </Card>
   );
 }

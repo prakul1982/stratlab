@@ -538,6 +538,7 @@ export function sourceWords(source: string): string {
   if (source === "Zerodha Kite") return "your Zerodha login";
   if (source === "Zerodha Kite file") return "your Zerodha Kite file";      // the Kite web export uploaded by hand (RC2B-009)
   if (source === "Interactive Brokers") return "your Interactive Brokers account";
+  if (source.endsWith(" login")) return `your ${source}`;      // "Upstox login", "Angel One login", "Dhan login"
   return `your ${source} file`;
 }
 

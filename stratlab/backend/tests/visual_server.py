@@ -153,7 +153,7 @@ def connect_once(mp):
     mp.setattr(settings, "KITE_API_KEY", "e2e-key")
     mp.setattr(settings, "KITE_API_SECRET", "e2e-secret")
     mp.setattr(settings, "KITE_MULTIUSER_APPROVED", False)
-    mp.setattr(settings, "ADMIN_EMAILS", "owner@example.com,load293@example.com,load296@example.com")   # the connect tests' owner accounts
+    mp.setattr(settings, "ADMIN_EMAILS", "owner@example.com,load293@example.com,load296@example.com,load258@example.com,load261@example.com")   # the connect tests' owner accounts
 
     class FakeKite:
         def __init__(self, key):
@@ -192,6 +192,45 @@ def connect_once(mp):
         return httpx.Response(200, text=flex)
     mp.setattr(ibkr, "transport", httpx.MockTransport(handler))
     mp.setattr(sync.deps, "us_find", lambda sym: {"symbol": sym, "name": sym})
+    broker_fakes(mp)
+
+
+def broker_fakes(mp):
+    """Upstox, Angel One and Dhan set up with made-up keys and answered by a fake broker, admin-only as the flags default
+    (so the cards can be connected end to end and screenshot): each login comes back with a made-up token and one holding."""
+    import base64
+    import json as _json
+    import time as _time
+    from datetime import datetime, timedelta, timezone
+    import httpx
+    from app.config import settings
+    from app.connect import brokers
+    for k, v in {"UPSTOX_API_KEY": "e2e-up-key", "UPSTOX_API_SECRET": "e2e-up-secret", "ANGELONE_API_KEY": "e2e-angel-key",
+                 "DHAN_APP_ID": "e2e-dhan-app", "DHAN_APP_SECRET": "e2e-dhan-secret", "DHAN_CLIENT_ID": "1000000001",
+                 "UPSTOX_FOR_ALL": False, "ANGELONE_FOR_ALL": False, "DHAN_FOR_ALL": False}.items():
+        mp.setattr(settings, k, v)
+    enc = lambda d: base64.urlsafe_b64encode(_json.dumps(d).encode()).rstrip(b"=").decode()
+    jwt = lambda who: f"{enc({'alg': 'HS256'})}.{enc({'username': who, 'exp': int(_time.time()) + 3 * 86400})}.c2ln"
+
+    def handler(req):
+        u = str(req.url.copy_with(query=None))
+        if u == brokers.UPSTOX_TOKEN:
+            return httpx.Response(200, json={"user_id": "UP1234", "access_token": jwt("UP1234")})
+        if u == brokers.UPSTOX_HOLDINGS:
+            return httpx.Response(200, json={"status": "success", "data": [{"isin": "INE467B01029", "trading_symbol": "TCS", "company_name": "TCS",
+                                                                             "quantity": 3, "t1_quantity": 0, "collateral_quantity": 0, "average_price": 3500.0}]})
+        if u == brokers.ANGEL_HOLDINGS:
+            return httpx.Response(200, json={"status": True, "message": "SUCCESS", "errorcode": "", "data": {"holdings": [
+                {"tradingsymbol": "ITC-EQ", "exchange": "NSE", "isin": "INE154A01025", "quantity": 20, "t1quantity": 0, "realisedquantity": 20, "averageprice": 410.0}]}})
+        if u == brokers.DHAN_CONSENT:
+            return httpx.Response(200, json={"consentAppId": "e2e-consent", "consentAppStatus": "GENERATED", "status": "success"})
+        if u == brokers.DHAN_CONSUME:
+            ends = (datetime.now(timezone.utc) + timedelta(hours=20)).astimezone(brokers.IST).replace(tzinfo=None, microsecond=0).isoformat()
+            return httpx.Response(200, json={"dhanClientId": "1000000001", "accessToken": jwt("1000000001"), "expiryTime": ends})
+        if u == brokers.DHAN_HOLDINGS:
+            return httpx.Response(200, json=[{"exchange": "ALL", "tradingSymbol": "HDFCBANK", "isin": "INE040A01034", "totalQty": 5, "avgCostPrice": 1600.0}])
+        return httpx.Response(404)
+    mp.setattr(brokers, "transport", httpx.MockTransport(handler))
 
 
 def all_company_filings(mp):

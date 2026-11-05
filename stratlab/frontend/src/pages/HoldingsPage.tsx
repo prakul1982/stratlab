@@ -17,6 +17,7 @@ import { useMoreColumns } from "../components/MoreColumns";
 import { Badge, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, ShareTable, Signed, Skeleton, StockPicker, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
+import { orList } from "../lib/brokers";
 import { dayLabel, dollarRate, editChange, pnlLabel, priceNote, syncedNote, type Change, type Closes, type Mkt } from "../lib/holdingsEdit";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
@@ -43,6 +44,9 @@ type View = {
   zerodha?: ZerodhaRead | null;
   /** whether Zerodha login is open for this account (LIVE1B-042: "Connect Zerodha" was offered where it isn't there) */
   zerodha_open?: boolean;
+  /** the other connected brokers' last reads (Upstox, Angel One, Dhan), and the brokers this account may connect in Settings */
+  brokers?: { key: string; name: string; live: boolean; count: number | null; read_at: string | null }[];
+  brokers_open?: string[];
 };
 type Facts = {
   stage: number | null; st_up: boolean | null; signal: string | null; red: number | null; amber: number | null; flags: string[];
@@ -56,6 +60,11 @@ type ImportReply = { broker: string; imported: number; saved: boolean; duplicate
 const MAX_MB = 2;
 const BROKERS = "Zerodha (Console or Kite), Groww, Upstox, Angel One, ICICI Direct and HDFC Securities";
 const usd = (v: number | null | undefined) => money(v, "USD", 0);
+/** "Connect Zerodha, Upstox or your statement inbox once": the brokers this account may log in to, else the inbox alone. */
+const connectOffer = (v: { zerodha_open?: boolean; brokers_open?: string[] } | null | undefined) => {
+  const open = v?.brokers_open ?? (v?.zerodha_open === false ? [] : ["Zerodha"]);
+  return open.length ? `Connect ${orList([...open, "your statement inbox"])} once` : "Connect your statement inbox once";
+};
 const isUS = (r: Row) => r.market === "US";
 const cur = (r: Row) => r.currency ?? "INR";
 const tone = (v: number | null | undefined) => { const t = signTone(v); return t ? `k-${t}` : undefined; };
@@ -135,6 +144,20 @@ export function HoldingsPage() {
     } catch (e) {
       if ((e as { code?: string }).code === "login_needed") {
         try { const r = await api<{ url: string }>("/connect/kite/login"); window.location.href = r.url; return; } catch (e2) { fail(e2); }
+      } else fail(e);
+    } finally { setBusy(false); }
+  };
+
+  // Upstox, Angel One and Dhan, read again from here the same way
+  const refreshBroker = async (b: { key: string; name: string }) => {
+    setBusy(true);
+    try {
+      const r = await api<{ count: number }>(`/connect/${b.key}/refresh`, { method: "POST" });
+      notify(`Read ${r.count} holding${r.count === 1 ? "" : "s"} from ${b.name}.`);
+      load();
+    } catch (e) {
+      if ((e as { code?: string }).code === "login_needed") {
+        try { const r = await api<{ url: string }>(`/connect/${b.key}/login`); window.location.href = r.url; return; } catch (e2) { fail(e2); }
       } else fail(e);
     } finally { setBusy(false); }
   };
@@ -293,7 +316,17 @@ export function HoldingsPage() {
               <span className="k-note">Zerodha is connected{view.zerodha.read_at ? `, last read ${ago(view.zerodha.read_at)}` : ""}. Zerodha ends its login each morning, so one tap a day keeps this current; <Link to="/settings#accounts">a statement inbox in Settings</Link> does it without a tap.</span>
               <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void refreshZerodha()}>{busy ? "Reading…" : "Read from Zerodha now"}</button>
             </div>
-          : <p className="k-note">Prefer not to upload each time? <Link to="/settings#accounts">{view?.zerodha_open === false ? "Connect your statement inbox once" : "Connect Zerodha or your statement inbox once"}</Link> and this stays up to date by itself.</p>}
+          : null}
+        {(view?.brokers ?? []).map((b) => (
+          <div className="k-row" key={b.key} data-testid={`${b.key}-refresh`}>
+            <span className="k-note">{b.name} is connected{b.read_at ? `, last read ${ago(b.read_at)}` : ""}{b.live ? "" : ". Its login has ended, so the next read asks you to log in again"}.</span>
+            <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void refreshBroker(b)}>{busy ? "Reading…" : `Read from ${b.name} now`}</button>
+          </div>
+        ))}
+        {!view?.zerodha && !(view?.brokers ?? []).length && (
+          // the brokers named are the ones this account may log in to (LIVE1B-042: none offered where it isn't there)
+          <p className="k-note" data-testid="connect-offer">Prefer not to upload each time? <Link to="/settings#accounts">{connectOffer(view)}</Link> and this stays up to date by itself.</p>
+        )}
         {result && (
           <div className="k-stack" role="status">
             <p className="k-small">

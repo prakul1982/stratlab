@@ -250,7 +250,7 @@ def broker_done(b: brokers.Broker, params: dict) -> RedirectResponse:
         return RedirectResponse(where.format("cancelled"), status_code=303)
     try:
         ref, claim = brokers.stage(b, params)
-    except brokers.BrokerError:
+    except Exception:                 # a broker's odd reply too: the person lands back on Settings, never on an error page
         return RedirectResponse(where.format("failed"), status_code=303)
     # nothing is linked yet: the page this lands on, signed in, confirms it with the reference and the claim
     return RedirectResponse(where.format("confirm&" + urlencode({"bs": ref, "bc": claim})), status_code=303)
