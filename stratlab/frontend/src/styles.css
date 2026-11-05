@@ -548,9 +548,10 @@ td.num, .num { font-family: var(--sans); }
 }
 .info-btn:hover, .info-btn[aria-expanded="true"] { --ring: var(--ink); color: var(--ink); }
 .info-btn:focus-visible { outline-offset: calc((var(--i) - var(--hit)) / 2 + 2px); }
-/* drawn in a portal on the body, fixed beside its button (ui.tsx Info places it), above dialogs, so no scroll box or card edge cuts it */
+/* drawn in a portal, fixed beside its button (ui.tsx Info places it), so no scroll box or card edge cuts it: on the body over the page
+   and the full-screen chart (63) and under the consent box and dialogs, or inside the floating layer its button is in */
 .info-pop {
-  position: fixed; z-index: 90; width: min(300px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 12px 14px;
+  position: fixed; z-index: 64; width: min(300px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 12px 14px;
   background: var(--ink); color: var(--on-ink); border-radius: 10px; box-shadow: var(--shadow);
   font: 400 13.5px/1.5 var(--sans); letter-spacing: 0; text-transform: none; text-align: left; white-space: normal;
 }

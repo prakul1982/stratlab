@@ -62,6 +62,7 @@ export function AutoGrow(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
 export function Info({ children, label = "What does this mean?" }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState<{ left: number; top: number; up: boolean } | null>(null);
+  const [host, setHost] = useState<HTMLElement | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLSpanElement>(null);
   const id = useId();
@@ -88,14 +89,21 @@ export function Info({ children, label = "What does this mean?" }: { children: R
   return (
     <span className="info">
       <button ref={btn} type="button" className="info-btn" aria-label={label} aria-expanded={open} aria-controls={open ? id : undefined}
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open); }}>i</button>
-      {open && createPortal(
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!open) setHost(layerOf(btn.current)); setOpen(!open); }}>i</button>
+      {open && host && createPortal(
         // a click inside the box is not a click on whatever holds the button (a row, a card that opens)
         <span ref={pop} id={id} role="note" className={`info-pop${at?.up ? " up" : ""}`} onClick={(e) => e.stopPropagation()}
           style={at ? { left: at.left, top: at.top } : { left: 0, top: 0, visibility: "hidden" }}>{children}</span>,
-        document.body)}
+        host)}
     </span>
   );
+}
+
+/** Where an (i) box is drawn: inside the floating layer the button is in (a dialog, the Market Watch panel, a full-screen chart), so it
+ * is over that layer and under whatever is over it; else on the body, over the page and under every floating layer. */
+function layerOf(el: HTMLElement | null): HTMLElement {
+  for (let p = el?.parentElement; p && p !== document.body; p = p.parentElement) if (getComputedStyle(p).position === "fixed") return p;
+  return document.body;
 }
 
 /** One labelled figure in a row of them (`.k-stats`): the label, the number, and a note under it. The row is one grid,
