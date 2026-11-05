@@ -362,3 +362,20 @@ def test_the_daily_closes_of_a_past_day_are_forgotten_so_the_cache_does_not_grow
         assert got["NIFTY 50"][-1] == 100.0 + min(int(day[-2:]) - 1, 13)           # the session still trading is left out
         assert [k for k in m.closes.keys() if k[:2] == ("IN", "index")] == [("IN", "index", day)]
     assert isinstance(m.closes, Snapshot) and len(m.closes.keys()) == 1
+
+
+def test_a_copy_from_before_the_close_is_not_served_as_live_after_it(monkeypatch):
+    # the first visit after a quiet spell got the market-hours copy ("is_open": true, live breadth) at 17:13 IST, 1 h 40 after the
+    # close (owner's live check, 5 Nov); a kept copy from the other side of the open or the close waits for the fresh read
+    from app.intel import company
+    m = mood.Mood(object())
+    builds = []
+    monkeypatch.setattr(m, "build", lambda region: builds.append(region) or {"is_open": company.market_open(region), "n": len(builds)})
+    monkeypatch.setattr(company, "market_open", lambda region, now=None: True)
+    first, _ = m.get("IN", 5.0)
+    assert first["is_open"] is True and builds == ["IN"]
+    monkeypatch.setattr(company, "market_open", lambda region, now=None: False)                  # the market has closed since
+    after, _ = m.get("IN", 5.0)
+    assert after["is_open"] is False and builds == ["IN", "IN"]
+    again, _ = m.get("IN", 5.0)                                    # and that fresh copy is kept as usual
+    assert again["n"] == 2 and len(builds) == 2
