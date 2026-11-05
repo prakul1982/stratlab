@@ -687,7 +687,19 @@ class Mood:
 
     def get(self, region: str, wait: float = 20.0) -> tuple[dict | None, float | None]:
         from .company import market_open
-        self.payloads.fresh_for = FRESH_OPEN if market_open(region) else FRESH_SHUT
+        open_now = market_open(region)
+        self.payloads.fresh_for = FRESH_OPEN if open_now else FRESH_SHUT
+        hit = self.payloads.kept(region)
+        if hit and bool((hit[1] or {}).get("is_open")) != open_now:
+            # a copy from the other side of the open or the close (the first visit after a quiet spell got a market-hours copy
+            # saying "live" at 17:13 IST): the fresh read is waited for, and the old copy is the answer only if it can't come
+            f = self.payloads._start(region, lambda: self.build(region))
+            try:
+                value = f.result(timeout=max(0.0, wait))
+                got = self.payloads.kept(region)
+                return value, (got[0] if got else None)
+            except Exception:
+                return hit[1], hit[0]
         return self.payloads.get(region, lambda: self.build(region), wait)
 
 
