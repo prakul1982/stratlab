@@ -1876,6 +1876,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-tbl-wrap.stack .k-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) var(--s3); padding: var(--s3); margin-bottom: var(--s2);
     border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
   .k-tbl-wrap.stack .k-table tbody tr:hover { background: var(--card); }
+  /* a badge in a card's half-width cell wraps inside its own box: the library's "3 of 4 checks run · all 3 passed" ran 6px past a
+     390px screen with CI's fonts (ui-lint R10), past the 380px rule below that covered only the narrowest phones */
+  .k-tbl-wrap.stack .k-table td .badge, .k-tbl-wrap.stack .k-table td .k-badge { max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; }
   /* RC2B-049: each dividend on Holdings was a bordered card inside the Dividends card (a double border, 190px each): a line between them */
   #holdings-dividends .k-tbl-wrap.stack .k-table tr { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; padding: var(--s3) 0; margin-bottom: 0; }
   #holdings-dividends .k-tbl-wrap.stack .k-table tbody tr:last-child { border-bottom: 0; }
