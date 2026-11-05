@@ -127,9 +127,29 @@ def check_market(registry, market: str, today: date | None = None, now: datetime
     # contract is called one (LIVE1C-021: "CMDTY close 4,058.10" at a price that moved, "FX close 1.11", "CDS USDINR close 96.21" against 95.19 spot)
     live = last > done and not explicit
     kind = FUTURES.get(market)
+    price = f"close {_px(bars[-1]['c'])}"
+    if live:
+        # today's candle before the source's final copy is due: the session may still be trading, or have closed within the
+        # grace (R11: "UK ... the session is still running" at 17:52 UTC, an hour after London's 16:30 close)
+        ended = _closed_today(market, now)
+        price = (f"close {_px(bars[-1]['c'])}, the session closed at {ended}" if ended else f"price so far, the session is still running, {_px(bars[-1]['c'])}")
     return _result(f"Prices: {market}", "Prices", "pass",
-                   f"{inst['symbol']}{f' ({kind})' if kind else ''}: {len(bars)} daily candles, latest {_day(last)}, "
-                   f"{'price so far, the session is still running,' if live else 'close'} {_px(bars[-1]['c'])}.")
+                   f"{inst['symbol']}{f' ({kind})' if kind else ''}: {len(bars)} daily candles, latest {_day(last)}, {price}.")
+
+
+def _closed_today(market: str, now: datetime | None = None) -> str | None:
+    """"16:30 UK time" when the market has a close and today's has passed (it trades today), else None: a market that never
+    shuts (crypto, currencies) or one still trading."""
+    meta = BY_ID.get(market) or {}
+    close = (meta.get("hours") or {}).get("close")
+    if not close:
+        return None
+    tz = ZoneInfo(meta.get("tz") or "UTC")
+    local = (now or datetime.now(tz)).astimezone(tz)
+    h, m = (int(x) for x in close.split(":"))
+    if not calendar.is_trading_day(market, local.date()) or local < local.replace(hour=h, minute=m, second=0, microsecond=0):
+        return None
+    return f"{close} {ZONES.get(meta.get('tz'), meta.get('tz') or 'UTC')}"
 
 
 # markets whose instruments are futures contracts, so their price is not the spot rate or the cash price
@@ -288,13 +308,14 @@ def check_filings(feed) -> dict:
 
 
 def check_insider_trades(feed) -> dict:
-    """The exchange's insider-trading disclosures (one call), which the deals table, the checklist, the screens and the
-    deal alerts read. A big company with none in a year would mean the feed changed shape."""
+    """The exchange's insider-trading disclosures across the market (its list of filings, then each filing's document),
+    which the deals table, the checklist, the screens and the deal alerts read. Companies file them every trading day,
+    so a fortnight with none means the exchange's list stopped updating."""
     items = feed.insider_trades(None, INSIDER_WINDOW_DAYS)
     if not items:
-        return _result("Insider trades", "Filings", "warn", f"No insider-trading disclosures anywhere in the market in the last {INSIDER_WINDOW_DAYS} days: "
-                       "the exchange's feed may have changed shape.")
-    return _fresh("Insider trades", f"{len(items):,} insider-trading disclosures across the market in the last {INSIDER_WINDOW_DAYS} days",
+        return _result("Insider trades", "Filings", "warn", f"No insider-trading disclosures anywhere in the market in the last {INSIDER_WINDOW_DAYS} days, "
+                       "though companies file them every trading day: the exchange's insider-trading list has stopped updating.")
+    return _fresh("Insider trades", f"{len(items):,} insider trades across the market in the last {INSIDER_WINDOW_DAYS} days",
                   _newest(items, "date"), who="the whole market")
 
 

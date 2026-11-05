@@ -10,7 +10,7 @@ import threading
 import time
 import weakref
 from concurrent.futures import ThreadPoolExecutor, wait as futures_wait
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -500,6 +500,103 @@ def insider_rows(raw) -> list[dict]:
     return out
 
 
+# Since May 2026 the exchange lists insider-trading disclosures (SEBI's PIT regulation 7) on a new list that carries
+# only each filing (company, regulation, time, links); the trades themselves are in each filing's XBRL document on the
+# exchange's archive. The old list (/api/corporates-pit) stopped taking filings then: it answers nothing for the whole
+# market and only older trades for one company, so it is read for those alone.
+PIT_LIST = "/api/corporates-pit-gg"
+PIT_OLD = "/api/corporates-pit"
+PIT_NEW_FROM = date(2026, 5, 3)      # the first filing on the new list: windows that start earlier also read the old one
+ARCHIVE_HOSTS = ("nsearchives.nseindia.com", "archives.nseindia.com")
+PIT_DOC_WORKERS = 6                  # documents read at once: the whole market's fortnight (~140) in about ten seconds
+MAX_PIT_DOC = 2_000_000              # bytes: a filing's document is a few KB, the biggest seen ~75 KB
+
+
+class BadPitDoc(ValueError):
+    """The document isn't an insider-trading XBRL we can read."""
+
+
+def _archive_url(v) -> str | None:
+    url = str(v or "").strip()
+    m = re.match(r"^https://([^/]+)/", url)
+    return url if m and m.group(1).lower() in ARCHIVE_HOSTS else None
+
+
+def pit_filings(raw) -> list[dict]:
+    """The exchange's insider-trading list as [{symbol, filed, xml, page}]: one per filing whose XBRL document is on
+    the exchange's archive. Field names are matched loosely, as the feeds rename them."""
+    out = []
+    for r in _rows(raw.get("data") if isinstance(raw, dict) else raw):
+        xml = _archive_url(_field(r, "xmlFileName", "xbrl", "xbrlFile", "xmlFile"))
+        if not xml or not xml.lower().endswith(".xml"):
+            continue
+        page = _archive_url(_field(r, "ixbrl", "ixbrlFile", "attachment"))
+        out.append({"symbol": str(_field(r, "symbol") or "").strip().upper()[:20],
+                    "filed": str(_field(r, "broadcastDateTime", "broadcastDate", "exchdisstime", "date") or "").strip(),
+                    "xml": xml, "page": page or xml})
+    return out
+
+
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _fact(f: dict, *names: str):
+    """The first of `names` among a context's facts: the exact name, else any fact whose name ends with it (the
+    taxonomy's names are long and have changed between versions)."""
+    for n in names:
+        if f.get(n):
+            return f[n]
+    for n in names:
+        for k, v in f.items():
+            if v and k.endswith(n):
+                return v
+    return None
+
+
+def pit_xbrl_rows(data: bytes | str, filing: dict | None = None) -> list[dict]:
+    """One insider-trading XBRL document as rows in the list's old shape (acqName, personCategory, secType,
+    tdpTransactionType, acqMode, secAcq, secVal, afterAcqSharesPer, acqfromDt, acqtoDt, intimDt, date, xbrl), one per
+    person and trade disclosed, so `insider_rows` reads both. Percentages are filed as fractions (0.6514 for 65.14%)."""
+    from xml.etree import ElementTree
+    filing = filing or {}
+    raw = data.encode() if isinstance(data, str) else bytes(data)
+    if b"<!DOCTYPE" in raw[:4000].upper() or b"<!ENTITY" in raw.upper():
+        raise BadPitDoc("an XBRL document never needs a DTD")       # rules out entity-expansion tricks
+    try:
+        root = ElementTree.fromstring(raw)   # nosec B314: a document with a DTD is refused above
+    except ElementTree.ParseError:
+        raise BadPitDoc("not XML") from None
+    facts: dict[str, dict[str, str]] = {}
+    for el in root:
+        ctx = el.get("contextRef")
+        if ctx:
+            facts.setdefault(ctx, {})[_local(el.tag)] = " ".join((el.text or "").split())
+    main = next((f for f in facts.values() if f.get("Symbol") or f.get("NameOfTheCompany")), {})
+    people = [f for f in facts.values() if _fact(f, "NameOfThePerson", "NameOfPerson")]
+    pct_key = ("SecuritiesHeldPostAcquistionOrDisposalPercentageOfShareholding",
+               "SecuritiesHeldPostAcquisitionOrDisposalPercentageOfShareholding", "PostPercentageOfShareholding")
+    pcts = [_amount(_fact(f, *pct_key)) for f in people]
+    scale = 1.0 if max([p for p in pcts if p is not None] or [0]) > 1.0 else 100.0
+    symbol = main.get("Symbol") or filing.get("symbol")      # exactly: "MSEISymbol" says NOTLISTED
+    out = []
+    for f, pct in zip(people, pcts):
+        kind = _fact(f, "TypeOfInstrument", "TypeOfSecurity") or ""
+        if "other" in kind.lower():
+            kind = _fact(f, "TypeOfInstrumentOthers") or kind     # "Any other instrument": ADRs and the like, by name
+        out.append({"symbol": symbol, "acqName": _fact(f, "NameOfThePerson", "NameOfPerson"),
+                    "personCategory": _fact(f, "CategoryOfPerson"), "secType": kind,
+                    "tdpTransactionType": _fact(f, "SecuritiesAcquiredOrDisposedTransactionType", "TransactionType"),
+                    "acqMode": _fact(f, "ModeOfAcquisitionOrDisposal", "ModeOfAcquisition"),
+                    "secAcq": _fact(f, "SecuritiesAcquiredOrDisposedNumberOfSecurity"),
+                    "secVal": _fact(f, "SecuritiesAcquiredOrDisposedValueOfSecurity"),
+                    "afterAcqSharesPer": round(pct * scale, 4) if pct is not None else None,
+                    "acqfromDt": _fact(f, "SpecifyFromDate", "FromDate"), "acqtoDt": _fact(f, "SpecifyToDate", "ToDate"),
+                    "intimDt": _fact(f, "DateOfIntimationToCompany"),
+                    "date": filing.get("filed") or _fact(main, "DateOfFiling"), "xbrl": filing.get("page") or filing.get("xml")})
+    return out
+
+
 def sast_rows(raw) -> list[dict]:
     """Substantial acquisitions and sales (the takeover code's regulation 29 disclosures) as deals."""
     out = []
@@ -690,8 +787,8 @@ def sec_list_rows(text: str) -> dict[str, dict]:
 
 
 # (path, referer, extra params, row reader) for each kind of deal; symbol and dates are added per call
+# (insider trades are read by NSEFilings._insider: a list of filings, then each filing's document)
 DEAL_FEEDS = {
-    "insider": ("/api/corporates-pit", DEAL_PAGES["insider"], {"index": "equities"}, insider_rows),
     "sast": ("/api/corporate-sast-reg29", DEAL_PAGES["sast"], {"index": "equities"}, sast_rows),
     "bulk": ("/api/historicalOR/bulk-block-short-deals", DEAL_PAGES["bulk"], {"optionType": "bulk_deals"},
              lambda raw: block_rows(raw, "bulk")),
@@ -717,6 +814,7 @@ class NSEFilings:
         self._lock = threading.Lock()
         self._fails, self._down_until = 0, 0.0
         self._circuits: dict[str, tuple[int, float]] = {}       # the deal feeds' own breakers: (fails, down until)
+        self.pit_docs = TTLCache(max_items=8000)                 # insider-trading documents' rows, by document address
 
     def _prime(self, force: bool = False):
         with self._lock:
@@ -1035,7 +1133,84 @@ class NSEFilings:
     def insider_trades(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
         """Trades by promoters, directors and key staff in the company's own shares (insider-trading disclosures),
         pledges made and released among them."""
-        return self._deals("insider", symbol, days, to)
+        return self._insider(symbol, days, to)
+
+    def _insider(self, symbol: str | None, days: int, to: datetime | None) -> list[dict]:
+        """The insider-trading list for one company (`symbol`) or the whole market (None) over the `days` up to `to`,
+        then each filing's document for the trades in it (documents never change, so each is read once). A list in a
+        shape we can't read, or filings none of whose documents can be read, is an error, not an empty list."""
+        to = to or ist_now()
+        frm = to - timedelta(days=days)
+        key = ("deals", "insider", symbol, frm.date().isoformat(), to.date().isoformat())
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        span = {"from_date": frm.strftime("%d-%m-%Y"), "to_date": to.strftime("%d-%m-%Y")}
+        who = {"symbol": symbol} if symbol else {}
+        data = self._get(PIT_LIST, {"index": "equities", **who, **span}, referer=DEAL_PAGES["insider"], circuit="insider")
+        listed = data.get("data") if isinstance(data, dict) else data
+        if not isinstance(listed, list):
+            raise SourceError(self.name, "The exchange's insider-trading list wasn't in the expected shape.")
+        filings = pit_filings(listed)
+        if symbol:                          # a company's own list may leave its symbol out of each row
+            filings = [{**f, "symbol": f["symbol"] or symbol.upper()} for f in filings if f["symbol"] in ("", symbol.upper())]
+        rows, read, busy = self._pit_docs(filings)
+        if filings and not read:
+            if busy:
+                raise SourceError(self.name, "The exchange's archive of insider-trading documents isn't answering. Try again later.", busy=True)
+            raise SourceError(self.name, f"The exchange listed {len(filings)} insider-trading filings, but none of their documents "
+                                         "could be read: the documents' format may have changed.")
+        if symbol and frm.date() < PIT_NEW_FROM:   # the trades filed before the new list began, from the old one
+            try:
+                old = self._get(PIT_OLD, {"index": "equities", "symbol": symbol, **span}, referer=DEAL_PAGES["insider"], circuit="insider_old")
+                old = old.get("data") if isinstance(old, dict) else old
+                rows += [r if _field(r, "symbol") else {**r, "symbol": symbol} for r in _rows(old)]
+            except SourceError:
+                pass                        # the newer trades stand on their own
+        out = sort_deals(insider_rows(rows))
+        if symbol:
+            out = [d for d in out if d["symbol"] == symbol.upper()]
+        self.cache.set(key, out, 300 if busy else (3600 if symbol else 1800))   # a gap from a busy archive is filled soon
+        return out
+
+    def _pit_docs(self, filings: list[dict]) -> tuple[list[dict], int, int]:
+        """The rows in each filing's document, a few documents at once: (rows, documents read, documents the archive
+        turned away or didn't answer for). A document that can't be read as a filing is skipped."""
+        rows, read, busy = [], 0, 0
+        todo = []
+        for f in filings:
+            got = self.pit_docs.get(f["xml"])
+            if got is None:
+                todo.append(f)
+            elif got:
+                rows += got
+                read += 1
+
+        def one(f):
+            try:
+                r = self.http.get(f["xml"], headers={"Accept": "application/xml,text/xml,*/*"})
+            except httpx.HTTPError:
+                return f, None
+            if r.status_code in (401, 403, 429) or r.status_code >= 500:
+                return f, None
+            if r.status_code >= 400 or len(r.content) > MAX_PIT_DOC:
+                return f, []
+            try:
+                return f, pit_xbrl_rows(r.content, f)
+            except BadPitDoc:
+                return f, []
+
+        if todo:
+            with ThreadPoolExecutor(max_workers=min(PIT_DOC_WORKERS, len(todo)), thread_name_prefix="pit") as pool:
+                for f, got in pool.map(one, todo):
+                    if got is None:
+                        busy += 1
+                        continue
+                    self.pit_docs.set(f["xml"], got, 7 * 86400 if got else 3600)
+                    if got:
+                        rows += got
+                        read += 1
+        return rows, read, busy
 
     def sast(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
         """Substantial acquisitions and sales: holders crossing 5% and moving 2% at a time (the takeover code)."""

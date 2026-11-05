@@ -150,6 +150,7 @@ class MCXProvider:
             mark = getattr(self.kite, "set_session_close", None)
             if mark:
                 mark(int(inst["token"]), self.day_close())
+        own_read = False
         try:
             bars = self.kite.history(int(inst["token"]), tf, days, continuous=(tf == "1d"))
             frozen, stopped = tf == "1d" and frozen_series(bars), tf == "1d" and ended_early(bars)
@@ -161,19 +162,62 @@ class MCXProvider:
                 # Nor is one that stopped long ago (the rupee pairs' ended on 6 Jun 2023): the contract's own candles, which
                 # reach the latest close, are kept when they run later than it, so a test runs to today over a shorter span
                 own = self.kite.history(int(inst["token"]), tf, days, continuous=False)
+                own_read = True
                 if own and (not bars or not frozen_series(own)) and \
                         (not bars or frozen or str(own[-1]["t"])[:10] > str(bars[-1]["t"])[:10]):
                     bars = own
-            return bars
+            return self._caught_up(inst, bars, days, own_read) if tf == "1d" else bars
         except Exception as e:
             if tf == "1d":
                 try:
                     bars = self.kite.history(int(inst["token"]), tf, days, continuous=False)
                     if bars:
-                        return bars
+                        return self._caught_up(inst, bars, days, True)
                 except Exception:
                     pass
             raise DataError(f"{self.noun} prices couldn't be loaded: {e}") from None
+
+    CATCH_UP_TTL = 120.0      # seconds a session's candle made from the quote is reused before the quote is asked again
+
+    def _caught_up(self, inst: dict, bars: list[dict], days: int, own_read: bool) -> list[dict]:
+        """Daily candles that end before this segment's latest completed session, topped up: first with the contract's
+        own newer candles (the broker's stitched series is built after the day, so for hours after the close it ends on
+        the session before), then, still short, with the session's candle from the contract's quote (its day's open,
+        high, low and last price, which after the close is the close), as the stock market's candles are (R11: the
+        currency check at 22:55 IST still saw 4 Nov as USDINR's newest, six hours after the 5 Nov close). The candles
+        given are never changed; when nothing is newer they are returned as they are."""
+        from .. import last_session
+        if not bars or not last_session.behind(bars, self.market):
+            return bars
+        token = int(inst["token"])
+        if not own_read:
+            try:
+                own = self.kite.history(token, "1d", days, continuous=False)
+            except Exception:
+                own = None
+            last = str(bars[-1]["t"])[:10]
+            if own and str(own[-1]["t"])[:10] > last:
+                bars = [*bars, *(b for b in own if str(b["t"])[:10] > last)]
+            if not last_session.behind(bars, self.market):
+                return bars
+        return last_session.with_quote_close(bars, self._session_quote(inst), self.market)
+
+    def _session_quote(self, inst: dict) -> dict | None:
+        """The contract's quote, kept CATCH_UP_TTL seconds; None when the broker has none or can't be asked."""
+        ask = getattr(self.kite, "quote_key", None)
+        if not inst.get("contract") or not callable(ask):
+            return None
+        key = f"{self.exchange}:{inst['contract']}"
+        kept = self.__dict__.setdefault("_quotes", {}).get(key)
+        if kept and time.time() - kept[0] < self.CATCH_UP_TTL:
+            return kept[1]
+        try:
+            q = ask(key)
+        except Exception as e:
+            print("session candle from the quote:", key, str(e)[:120])
+            q = None
+        self._quotes[key] = (time.time(), q)
+        return q
 
     def closed_candles(self, inst: dict, tf: str, since: str | None) -> list[dict]:
         """Candles that have fully closed after `since`, for live paper trading."""
