@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build && node scripts/keepAssets.mjs",
   "outputDirectory": "dist",
   "installCommand": "npm ci",
   "trailingSlash": false,
