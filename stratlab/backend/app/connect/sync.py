@@ -145,7 +145,7 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
     """Match a source's rows ({symbol, isin, name, qty, avg, market}) to listed companies and save them with My Holdings.
     `since` is the day the rows are as of (a statement's last day), else the day they're saved. A statement's rows also
     carry "acct" (its demat account) and `accounts` lists every account it covers.
-    {"saved", "count", "unmatched": [...], "over_limit": [...], "added", "changed", "kept", "empty"}."""
+    {"saved", "count", "unmatched": [...], "over_limit": [...], "added", "changed", "kept", "unnamed", "empty"}."""
     uid = profile["id"]
     in_rows = [r for r in rows if r.get("market") != "US"]
     us_rows = [r for r in rows if r.get("market") == "US"]
@@ -169,6 +169,9 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
         whole = bool(found) and not unsure        # only a whole read takes out what the source no longer names
         items, counts = merge_sync(before["items"], found, via, replace and whole, accounts, since, reads)
         out["kept"] = 0 if whole else len(had - {_key(f) for f in found})
+        # what this source gave before and doesn't name now, whether or not the read takes it out (a broker's empty holdings list
+        # with today's buys only: it is kept, and the card says so only when there is something kept)
+        out["unnamed"] = len(had - {_key(f) for f in found})
         items, out["over"] = holdings.cap(items, before["items"], limit)   # a downgrade deletes nothing
         out["counts"], out["had"] = counts, bool(had)
         out["saved"] = bool(found) or counts["added"] or counts["changed"] or len(items) != len(before["items"])
@@ -178,7 +181,7 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
         return deps.with_sectors(items, known), source, False, since
     holdings.update(uid, merged)
     return {"saved": bool(out["saved"]), "count": len(found), "unmatched": missed[:50], "unmatched_count": len(missed),
-            "over_limit": out["over"], "kept": out["kept"], "empty": not rows and out["had"], **out["counts"]}
+            "over_limit": out["over"], "kept": out["kept"], "unnamed": out.get("unnamed", 0), "empty": not rows and out["had"], **out["counts"]}
 
 
 def note(got: dict, name: str) -> str | None:

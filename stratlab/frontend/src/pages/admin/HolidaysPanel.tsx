@@ -38,7 +38,7 @@ export function HolidaysPanel({ status, onSaved }: { status: CalendarStatus; onS
     setBusy(true);
     try {
       const s = await api<CalendarStatus>("/admin/holidays", { method: "POST", body: { text } });
-      onSaved(s); setText(""); notify(`${s.added.length} holidays saved.`);
+      onSaved(s); setText(""); notify(`${s.added.length} ${s.added.length === 1 ? "holiday" : "holidays"} saved.`);
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   return (

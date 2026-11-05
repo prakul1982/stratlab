@@ -160,7 +160,9 @@ test("Zerodha is open to the owner: log in, read holdings, refresh; and an EPF p
   // and when Zerodha ends that login by itself (R46-001)
   await expect(z.getByTestId("kite-line")).toContainText(/ · this login ends (at|on) (\d{1,2} \w{3}, )?06:00 IST$/);
   await z.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByText("Read 1 holdings.")).toBeVisible();
+  // one holding is "1 holding" (19.jpg had "Read 1 holdings."), and a read that found it says nothing about holdings kept from before
+  await expect(page.getByText("Read 1 holding.", { exact: true })).toBeVisible();
+  await expect(z).not.toContainText("returned no holdings");
   await sane(page, errors, phone);
   await shot(page, "connected-zerodha", phone, !phone);
   await z.getByRole("button", { name: "Disconnect" }).click();
