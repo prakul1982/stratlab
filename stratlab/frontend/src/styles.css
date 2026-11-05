@@ -2633,8 +2633,6 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .nw-snaps ul { list-style: none; margin: 0; padding: 0; }
 .nw-snaps li { justify-content: flex-start; flex-wrap: wrap; gap: var(--s2); }   /* CK-2 (R20): the remove icon follows the snapshot's text, not 550px away at the card's edge */
 /* MO-2: the quick-add chips: every one shown (no scroll box), an icon beside each name */
-.nw-quick { max-height: none; overflow: visible; gap: var(--s2); }
-.nw-quick .chip { gap: 6px; }
 
 /* ---------- round 13, Safari (R13S) ---------- */
 /* R13S-005: iOS Safari zooms the page when a field under 16px takes focus and doesn't zoom back, so on a phone or a touch

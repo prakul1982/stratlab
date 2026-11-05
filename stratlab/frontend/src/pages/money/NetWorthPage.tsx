@@ -8,6 +8,7 @@ import { LoanCheck } from "./LoanCheck";
 import { asOf, axisInr, dateOnly, inr, inrCompact, istToday, signedInrCompact } from "../../lib/format";
 import { mergeLiveNetWorth, netWorthDelta, pricedMarkets, restatedNote, sinceNote } from "../../lib/networth";
 import { Modal } from "../../components/ui";
+import { MoreMenu } from "../../components/MoreMenu";
 import { XYChart } from "../../components/Charts";
 import { Download, Plus, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
@@ -128,7 +129,7 @@ const TILES: TileGroup[] = [
     { value: "loan", title: "Loan or card", sub: "Balance left", icon: ic.loan }, { value: "policy", title: "Insurance policy", sub: "Cover and premium", icon: ic.shield }] },
 ];
 
-/** The kinds most people add, as one-tap chips under the totals (MO-2); every other kind is behind "Something else". */
+/** The kinds most people add, in the Quick add menu beside "Add an entry" (MO-2); every other kind is behind "Something else". */
 const QUICK: Kind[] = ["cash", "fd", "epf", "ppf", "gold", "property", "loan"];
 
 function blank(kind: Kind): Record<string, string> {
@@ -467,7 +468,14 @@ export function NetWorthPage() {
         lede="What you own minus what you owe: your stocks from My Holdings and mutual funds from your statement (both added on their own), plus the deposits, provident funds, gold, property and loans you add here."
         info="Each value shows how it's worked out and the date it's as of. Arithmetic on what you enter, not advice. Only you can see it, and you can delete it at any time." infoLabel="How this is worked out"
         // MO-2 (owner, 25 Oct): adding is the page's main action, so a full-size button at the top, not a small one in a card
-        actions={view ? <button type="button" className="btn" onClick={() => openAdd()}><Plus size={16} />Add an entry</button> : undefined} />
+        // owner, 5 Nov: the usual kinds (the quick add) beside that button, as one small menu, not a card of chips of their own
+        actions={view ? <>
+          <button type="button" className="btn" onClick={() => openAdd()}><Plus size={16} />Add an entry</button>
+          {!full && <MoreMenu label="Quick add" buttonClass="btn quiet" items={[
+            ...QUICK.map((k) => ({ label: FORM[k].title, icon: <Plus size={14} />, run: () => openAdd(k) })),
+            { label: "Something else…", run: () => openAdd() },
+          ]} />}
+        </> : undefined} />
 
       {!view && (error
         ? <ErrorState title="Your net worth couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>{error}</ErrorState>
@@ -495,18 +503,6 @@ export function NetWorthPage() {
             {/* VR6-012: with no chart yet the snapshots list sits in this card under that line, not in a card of its own with one line in it (DP2-006's "empty-looking card" was still 97px of it) */}
             {view.history_allowed && hist.length > 0 && whole.length < 3 && snapsList("nw-snaps")}
           </Card>
-
-          {/* MO-2 (owner, 25 Oct): one tap to the usual kinds, so adding a deposit, EPF, gold or a loan is never hunted for */}
-          {!empty && !full && (
-            <Card compact label="Add to your net worth">
-              {/* VR1-141: the usual kinds as one strip beside the header's button, not a 140px card of its own with a repeated title */}
-              <span className="k-eyebrow">Quick add</span>
-              <div className="chip-row nw-quick" role="group" aria-label="Add to your net worth">
-                {QUICK.map((k) => <button key={k} type="button" className="chip" onClick={() => openAdd(k)}><Plus size={14} />{FORM[k].title}</button>)}
-                <button type="button" className="chip" onClick={() => openAdd()}>Something else…</button>
-              </div>
-            </Card>
-          )}
 
           {empty && (
             <EmptyState title="Nothing added yet" action={{ label: "Add an entry", onClick: () => openAdd() }}>
