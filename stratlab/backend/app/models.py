@@ -407,6 +407,8 @@ class PrefsReq(BaseModel):
     space: Literal["trade", "invest", "money", "all"] | None = None       # the menu's space last picked in the sidebar
     # My space's layout, kept on the account so a phone and a laptop show the same My space (DI-006)
     mine: MineLayoutReq | None = None
+    # which companies the calendars and Invest home open on: every company (the default) or only the person's own stocks (owner, 5 Nov)
+    companies: Literal["all", "mine"] | None = None
 
 
 class PlanInterestReq(BaseModel):

@@ -1,6 +1,8 @@
 import { stageDaysText } from "../lib/stageDays";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { SCOPE_OPTIONS } from "../lib/companyScope";
+import { useCompanyScope } from "../lib/useCompanyScope";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { asOf, dayIn, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
@@ -755,8 +757,9 @@ export function FilingsPage() {
   // a market picked here stays in the address (R7O-003)
   const [region, setRegion] = useRegion(homeRegion());
   const [params, setParams] = useSearchParams();
-  const view = params.get("view") === "all" ? "all" : "mine";
-  const pickView = (v: string) => { const p = new URLSearchParams(params); if (v === "all") p.set("view", "all"); else p.delete("view"); p.delete("page"); setParams(p, { replace: true }); };
+  // which companies: the page's own choice in the address, else the account's (lib/companyScope: every company unless it said otherwise)
+  const [view, setView] = useCompanyScope("view");
+  const pickView = (v: string) => setView(v, (p) => p.delete("page"));
   const pickRegion = (r: Region) => { setRegion(r); const p = new URLSearchParams(params); p.set("region", r); for (const k of ["flag", "page", "q", "frm", "to", "range"]) p.delete(k); setParams(p, { replace: true }); };
 
   return (
@@ -768,7 +771,7 @@ export function FilingsPage() {
           : "Bankruptcy, a delisting notice, a change of auditor, financial statements that can no longer be relied on, and director or officer changes. Your stocks (watchlist, holdings, notebooks and paper sessions), or the latest from every S&P 500 company."} infoLabel="What counts" />
       <div className="k-toolbar">
         <RegionSwitch region={region} setRegion={pickRegion} />
-        <Seg label="Which companies" value={view} onChange={pickView} options={[{ value: "mine", label: "Your stocks" }, { value: "all", label: "All companies" }]} />
+        <Seg label="Which companies" value={view} onChange={pickView} options={SCOPE_OPTIONS} />
       </div>
       {!pro && me && <PlanNote>Red flags for your whole watchlist, with an evening alert, and the latest red flags across every company are on the Basic plan. Each company's own page shows its red flags on every plan.</PlanNote>}
       {view === "mine" && region === "IN" ? <WatchlistFilings pro={pro} /> : <AllFilings region={region} scope={view} pro={pro} />}

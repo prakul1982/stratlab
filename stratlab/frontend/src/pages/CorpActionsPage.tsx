@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { SCOPE_OPTIONS } from "../lib/companyScope";
+import { useCompanyScope } from "../lib/useCompanyScope";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, fmtTime, marketTz, pctPlain, price } from "../lib/format";
@@ -32,7 +34,7 @@ export function CorpActionsPage() {
   const [params, setParams] = useSearchParams();
   const fromUrl = params.get("region")?.toUpperCase();
   const [region, setRegionState] = useState<Region>(fromUrl === "US" || fromUrl === "IN" ? fromUrl : savedRegion());
-  const scope = params.get("scope") === "all" ? "all" : "mine";
+  const [scope, setScope] = useCompanyScope();
   const kind = params.get("kind") ?? "";
   const { fail, notify } = useApp();
   const [q, setQ] = useState("");
@@ -133,7 +135,7 @@ export function CorpActionsPage() {
         infoLabel="About the US list" />
       <div className="k-toolbar">
         <RegionSwitch region={region} setRegion={setRegion} />
-        <Seg label="Which companies" value={scope} onChange={(v) => setParam("scope", v)} options={[{ value: "mine", label: "My stocks" }, { value: "all", label: "All" }]} />
+        <Seg label="Which companies" value={scope} onChange={setScope} options={SCOPE_OPTIONS} />
       </div>
       <CalendarFilters region={region} facets={data?.facets ?? null} filters={filters} set={set} firstSort="date" sorts={SORT_NAME} active={n}
         total={data?.total ?? null} matching={data?.matching ?? null} unknownSize={data?.unknown_size ?? 0} testId="actions-count" noun="action"
@@ -161,7 +163,7 @@ export function CorpActionsPage() {
       {data && empty && (
         <Card>
           <EmptyState title={n ? "No action matches these filters" : scope === "mine" ? (data.mine_count ? "None of your stocks has an ex-date in this window" : "No stocks to show ex-dates for yet") : "Nothing announced for this window"}
-            action={n ? { label: "Clear filters", onClick: () => { setFilters(NO_FILTERS); setParam("kind", ""); } } : scope === "mine" ? { label: "See all companies", onClick: () => setParam("scope", "all") } : undefined}>
+            action={n ? { label: "Clear filters", onClick: () => { setFilters(NO_FILTERS); setParam("kind", ""); } } : scope === "mine" ? { label: "See all companies", onClick: () => setScope("all") } : undefined}>
             {n ? `${data.total.toLocaleString("en-IN")} ${data.total === 1 ? "action is" : "actions are"} listed in this window; none meets every filter.`
               : scope === "mine"
               ? (data.mine_count ? `None of your ${REGION_NAME[region]} stocks has an ex-date in this window.` : `You have no ${REGION_NAME[region]} stocks yet: they come from your watchlist, holdings, notebooks and paper sessions.`)

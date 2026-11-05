@@ -188,7 +188,7 @@ test("DI-021, DI-023: the phone's top button and the tour follow the space; on a
 });
 
 test("DP2-032 / DP1-028: closing the welcome question starts no tour", () => {
-  assert.match(read("src/components/LevelPrompt.tsx"), /onClose=\{\(\) => onDone\(savePrefs\(\{ focus: focus \?\? "both", level: lvl \}\), false\)\}/);
+  assert.match(read("src/components/LevelPrompt.tsx"), /onClose=\{\(\) => onDone\(savePrefs\(\{ focus: focus \?\? "both", level: lvl, companies \}\), false\)\}/);
   assert.match(read("src/components/Onboarding.tsx"), /setWelcomed\(answered\)/);
 });
 

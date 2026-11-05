@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { SCOPE_OPTIONS } from "../lib/companyScope";
+import { useCompanyScope } from "../lib/useCompanyScope";
 import { api } from "../lib/api";
 import { eyebrowOf } from "../lib/eyebrow";
 import { fmtDate, istToday, price } from "../lib/format";
@@ -25,8 +27,8 @@ type MoneyView = { events: { id: string; date: string; title: string; cat: strin
 
 export function CalendarPage() {
   const [region, setRegion] = useRegion();
-  const [params, setParams] = useSearchParams();
-  const scope = params.get("scope") === "all" ? "all" : "mine";
+  const [params] = useSearchParams();
+  const [scope, setScope] = useCompanyScope();
   const typeParam = (params.get("type") ?? "").split(",").filter((t): t is CalType => (TYPES as string[]).includes(t));
   const [types, setTypes] = useState<CalType[]>(typeParam.length ? typeParam : TYPES);
   const [size, setSize] = useState<string[]>([]);
@@ -38,7 +40,6 @@ export function CalendarPage() {
   const [ev, setEv] = useState<EventsView | null | "error">(null);
   const [money, setMoney] = useState<MoneyView | null | "error">(null);
   const [tries, setTries] = useState(0);
-  const setParam = (k: string, v: string) => { const p = new URLSearchParams(params); if (v) p.set(k, v); else p.delete(k); setParams(p, { replace: true }); };
   // a sector of one market is not the other's
   const [sectorFor, setSectorFor] = useState(region);
   if (sectorFor !== region) { setSectorFor(region); setSector(""); setOpenDay(""); }
@@ -108,8 +109,7 @@ export function CalendarPage() {
       <Card label="What to show" className="cal-filters">
         <div className="k-toolbar">
           <RegionSwitch region={region} setRegion={(r: Region) => setRegion(r)} />
-          <Seg label="Companies" value={scope} onChange={(v) => { setOpenDay(""); setParam("scope", v === "all" ? "all" : ""); }}
-            options={[{ value: "mine", label: "My stocks" }, { value: "all", label: "Every company" }]} />
+          <Seg label="Companies" value={scope} onChange={(v) => { setOpenDay(""); setScope(v); }} options={SCOPE_OPTIONS} />
         </div>
         <div className="k-field wide">
           <span className="k-lbl">Type</span>

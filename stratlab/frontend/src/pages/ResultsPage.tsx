@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
+import { SCOPE_OPTIONS } from "../lib/companyScope";
+import { useCompanyScope } from "../lib/useCompanyScope";
 import { ago, fmtDate, fmtTime, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { LIVE_ROWS, useRowQuotes } from "../lib/rowQuotes";
@@ -70,8 +72,7 @@ function Growth({ v, of }: { v: number | null | undefined; of?: string | null })
 
 export function ResultsPage() {
   const [region, setRegion] = useRegion();
-  const [params, setParams] = useSearchParams();
-  const scope = params.get("scope") === "all" ? "all" : "mine";
+  const [scope, setScope] = useCompanyScope();
   const { fail, notify } = useApp();
     const [q, setQ] = useState("");
   const [data, setData] = useState<ResultsView | null>(null);
@@ -166,7 +167,6 @@ export function ResultsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbols.join(","), region]);
 
-  const setScope = (s: string) => { const p = new URLSearchParams(params); p.set("scope", s); setParams(p, { replace: true }); };
   const toggleAlerts = async () => {
     if (!data) return;
     try {
@@ -243,7 +243,7 @@ export function ResultsPage() {
         asOf={data?.updated_at} asOfLabel="Updated" asOfTz={marketTz(region)} />
       <div className="k-toolbar">
         <RegionSwitch region={region} setRegion={setRegion} />
-        <Seg label="Which companies" value={scope} onChange={setScope} options={[{ value: "mine", label: "My stocks" }, { value: "all", label: "All companies" }]} />
+        <Seg label="Which companies" value={scope} onChange={setScope} options={SCOPE_OPTIONS} />
       </div>
       {(scope === "all" || data) && (
         <CalendarFilters region={region} facets={data?.facets ?? null} filters={filters} set={set} firstSort="cap" sorts={SORT_NAME} active={n}

@@ -1064,12 +1064,13 @@ def next_auto_login() -> str | None:
     return (auto_login.next_login(now) or auto_login_time(now + timedelta(days=1))).isoformat(timespec="minutes")
 
 
-PREF_KEYS = ("level", "focus", "space", "mine")
+PREF_KEYS = ("level", "focus", "space", "mine", "companies")
+SAVED_ONLY = ("mine", "companies")       # in the answer only once one was saved
 
 
 def prefs_out(prefs: dict) -> dict:
-    """The preferences the app reads; My space's layout only once one was saved."""
-    return {k: prefs.get(k) for k in PREF_KEYS if k != "mine" or prefs.get("mine")}
+    """The preferences the app reads; My space's layout and the companies choice only once one was saved."""
+    return {k: prefs.get(k) for k in PREF_KEYS if k not in SAVED_ONLY or prefs.get(k)}
 
 
 def prefs_of(uid: str) -> dict:
@@ -1137,7 +1138,8 @@ def delete_my_account(req: DeleteMyDataReq, profile=Depends(current_profile)):
 def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     """Experience level, what the user came for (trading, investing, their money or all of it) and the space last picked
     in the menu: they only change defaults (what's expanded, what's suggested first, which menu shows), never what's
-    allowed. `mine`: My space's cards in the person's order, kept on the account rather than one browser (DI-006)."""
+    allowed. `mine`: My space's cards in the person's order, kept on the account rather than one browser (DI-006). `companies`:
+    which companies the calendars and Invest home open on, every company ("all", the default) or only the person's stocks ("mine")."""
     given = {k: getattr(req, k) for k in PREF_KEYS}
     if req.mine is not None:
         given["mine"] = req.mine.model_dump()

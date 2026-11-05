@@ -255,6 +255,11 @@ def test_experience_level_is_saved_with_other_prefs(monkeypatch):
         assert c.put("/me/prefs", json={"space": "bank"}).status_code == 422
         assert c.put("/me/prefs", json={"level": "expert"}).status_code == 422
         assert c.put("/me/prefs", json={"focus": "gamble"}).status_code == 422
+        # which companies the calendars and Invest home open on (owner, 5 Nov): in the answer once saved, nothing else touched
+        got = c.put("/me/prefs", json={"companies": "mine"}).json()["prefs"]
+        assert got["companies"] == "mine" and got["level"] == "pro" and got["space"] == "money"
+        assert c.put("/me/prefs", json={"companies": "all"}).json()["prefs"]["companies"] == "all"
+        assert c.put("/me/prefs", json={"companies": "some"}).status_code == 422
         assert main.prefs_of("nobody") == {}
     finally:
         main.app.dependency_overrides.clear()

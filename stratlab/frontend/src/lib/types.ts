@@ -167,7 +167,9 @@ export interface Me {
   /** The site owner is viewing the app as this plan (lib/viewAs.ts); the server sends it for the owner only, null when it is off. */
   view_as?: "free" | "basic" | "pro" | null;
   promo?: { until: string } | null; free_basic_until?: string | null;
-  prefs?: { level: Level | null; focus?: Focus | null; space?: "trade" | "invest" | "money" | "all" | null; mine?: { order: string[]; hidden: string[] } | null };
+  prefs?: { level: Level | null; focus?: Focus | null; space?: "trade" | "invest" | "money" | "all" | null; mine?: { order: string[]; hidden: string[] } | null;
+    /** Which companies the calendars and Invest home open on: every company (the default) or only the person's own stocks (owner, 5 Nov). */
+    companies?: "all" | "mine" | null };
   /** What anyone can buy and use today: the same answer /pricing gives the landing page (lib/offer.ts words it). */
   offer?: Offer;
   /** The first-run guide, kept on the account: shown once per person, not once per device. */

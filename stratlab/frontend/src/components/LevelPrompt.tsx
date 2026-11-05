@@ -7,6 +7,7 @@ import { homeOf, SPACE_HOMES, SPACE_IDS, SPACES, viewForFocus } from "../lib/spa
 import { Modal } from "./ui";
 import { track } from "../lib/analytics";
 import { INTRO_LINE } from "../content/welcome";
+import { companiesPref, SCOPE_OPTIONS, type CompanyScope } from "../lib/companyScope";
 
 export const LEVELS: [Level, string, string][] = [
   ["new", "New to this", "Guided start: examples to try, explanations up front, advanced settings folded away."],
@@ -24,11 +25,14 @@ export const FOCUSES: [Focus, string, string][] = [
 ];
 
 /** Asked once, after the first sign-in (and again to anyone who answered only one of the two old questions): one short
- * step. The experience level sits under the choices, left for them to pick (the standard layout if they do not); picking what you came for answers
- * both. Neither hides anything, and both can be changed in Settings. */
+ * step. The experience level sits under the choices, left for them to pick (the standard layout if they do not), and so does which companies the
+ * calendars and Invest home open on (every company unless they pick their own stocks); picking what you came for answers all of them. None
+ * hides anything, and all can be changed in Settings. */
 export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answered: boolean) => void }) {
-  const { level, focus, savePrefs } = useApp();
+  const { me, level, focus, savePrefs } = useApp();
   const [chosen, setChosen] = useState<Level | "">(level ?? "");        // nothing is picked for them
+  // which companies the calendars and Invest home open on (owner, 5 Nov: "ask while setting up a new user"): every company unless they say
+  const [companies, setCompanies] = useState<CompanyScope>(companiesPref(me));
   const lvl: Level = chosen || "some";                                 // left alone, the standard layout applies
   const nav = useNavigate();
   const loc = useLocation();
@@ -40,12 +44,12 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answere
     // on a home page (the only place this is asked), open the home of what they picked
     if (loc.pathname === "/" || SPACE_HOMES.includes(loc.pathname)) nav(homeOf(view, f), { replace: true });
     track("onboarding answered", { focus: f, level: lvl });
-    onDone(savePrefs({ focus: f, level: lvl, space: view }), true);     // closes this: the answers are in
+    onDone(savePrefs({ focus: f, level: lvl, space: view, companies }), true);     // closes this: the answers are in
   };
   return (
     // closing keeps the page as it is: the default answer is saved, so it isn't asked again
     // Esc and × close it for good, as an answer does, but start no tour: closing it is "not now" (DP2-032, DP1-028)
-    <Modal title="What brings you here?" startOnClose onClose={() => onDone(savePrefs({ focus: focus ?? "both", level: lvl }), false)}>
+    <Modal title="What brings you here?" startOnClose onClose={() => onDone(savePrefs({ focus: focus ?? "both", level: lvl, companies }), false)}>
       <div className="k-stack welcome">
         {/* what StratLab is, before where things are, in one sentence (content/intro.ts). The landing page used to open with it
             too; it was cut there as a restatement of the hero (LIVE3-023), but a new account still needs it once, here */}
@@ -63,6 +67,10 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answere
         <div className="k-stack snug welcome-level">
           <span className="k-small k-muted">How much have you done? · optional</span>
           <Seg label="Experience" value={chosen} onChange={(v) => setChosen(v as Level)} options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} />
+        </div>
+        <div className="k-stack snug welcome-level">
+          <span className="k-small k-muted">Calendars and Invest home show · optional</span>
+          <Seg label="Companies in calendars and Invest home" value={companies} onChange={(v) => setCompanies(v as CompanyScope)} options={SCOPE_OPTIONS} />
         </div>
       </div>
     </Modal>

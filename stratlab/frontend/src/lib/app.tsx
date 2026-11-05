@@ -67,7 +67,8 @@ interface AppState {
   setTheme: (t: "light" | "dark" | "system") => void;
 }
 
-type Prefs = { level?: Level; focus?: Focus; space?: SpaceView; /** My space's layout, on the account (DI-006) */ mine?: { order: string[]; hidden: string[] } };
+type Prefs = { level?: Level; focus?: Focus; space?: SpaceView; /** My space's layout, on the account (DI-006) */ mine?: { order: string[]; hidden: string[] };
+  /** Which companies the calendars and Invest home open on (lib/companyScope) */ companies?: "all" | "mine" };
 
 const Ctx = createContext<AppState | null>(null);
 export const useApp = () => useContext(Ctx)!;
