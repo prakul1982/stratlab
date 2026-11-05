@@ -6,7 +6,7 @@ import { asOf as asOfText, dateOnly, inr, money, qty as qtyText, signTone } from
 import { Info } from "../../components/ui";
 import { Lock, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, UploadButton, UploadProblem, useUploadProblem, Notes, FigureTable } from "../../components/kit";
+import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, UploadButton, UploadProblem, useUploadProblem, Notes, FigureTable, Working } from "../../components/kit";
 import { fyLink, movedYearNote, openFy } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { usSharesNote } from "../../lib/usGains";
@@ -201,7 +201,7 @@ function DividendsTab() {
 
       {y && (
         <>
-          {(v.checking ?? 0) > 0 && <p className="k-note" data-testid="dividends-checking">Still reading the dividends of {v.checking} stock{v.checking === 1 ? "" : "s"}; the estimate leaves {v.checking === 1 ? "it" : "them"} out until then. Reload in a minute.</p>}
+          {(v.checking ?? 0) > 0 && <div data-testid="dividends-checking"><Working small label="Collecting the rest of your stocks' dividends…" /></div>}
           <Card label="Dividends for the year">
             <CardHead title={`Dividends, ${y.label}`} info={DIVIDEND_INFO} infoLabel="About your dividends" actions={<>
               {y.source === "files" && <Badge>From your files</Badge>}

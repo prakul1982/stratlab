@@ -59,3 +59,14 @@ const widths = [40, 100, 85, 60, 92, 70];
     </div>
   );
 }
+
+/** Something is being prepared and the page fills in on its own (owner, 5 Nov: "everywhere we need processing time just a nice animated
+ * loading bar, don't show exact warnings or issues"): a moving bar and one short line, never the internals of what is still running. */
+export function Working({ label, small = false }: { label: string; small?: boolean }) {
+  return (
+    <div className={`k-working${small ? " sm" : ""}`} role="status" aria-live="polite">
+      <span className="k-working-bar" aria-hidden="true"><span /></span>
+      <span className="k-working-text">{label}</span>
+    </div>
+  );
+}

@@ -7,7 +7,7 @@ import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/resea
 import { themeApi, type Business, type Dive, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { RegionSwitch } from "../components/Research";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
-import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton } from "../components/kit";
+import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
 
 /* ================= Themes: a theme deep dive =================
  * Who is in the theme: every company the exchange classifies in its official industries, sorted into layers by AI, with the AI's additions
@@ -138,23 +138,17 @@ export function ThemesPage() {
                 { key: "n", header: "Name", wrap: true, cell: (e) => e.name }]} rows={r.etfs} rowKey={(e) => e.ticker} />
             )}
           </Card>
+          {/* still being prepared: a moving bar and one short line; the page asks again on its own (owner, 5 Nov: no warnings for work in progress) */}
           {pending && (
-            <Notice tone="warn" action={{ label: "Check again", onClick: () => run(q, { keep: true }) }}>
-              {working && !r.generated_at
-                ? "The AI is still sorting these companies into layers and writing what each layer does. The companies below are the exchange's own classification; the rest fills in on its own."
-                : pl && pl.pending > 0
-                ? `${pl!.pending} compan${pl!.pending === 1 ? "y is" : "ies are"} still being checked against ${pl!.pending === 1 ? "its" : "their"} own description; until then ${pl!.pending === 1 ? "it shows" : "they show"} as not yet confirmed.`
-                : working ? "The AI's checks of each company and of the tailwinds and risks are still being written; they fill in on their own."
-                : "The theme's official industries are still being picked."}
-            </Notice>
+            <Working label={working && !r.generated_at ? "Mapping the theme: sorting its companies into layers. It fills in here on its own, usually within a minute."
+              : pl && pl.pending > 0 ? "Checking each company against its own description…"
+              : working ? "Writing the tailwinds and risks…"
+              : "Picking the theme's industries…"} />
           )}
           {r.ai?.state === "failed" && (
             <Notice tone="warn" action={{ label: "Try again", onClick: () => run(q, { keep: true }) }}>
-              {`The AI's layers and explanations couldn't be written just now${r.ai.message ? ` (${r.ai.message.replace(/\.$/, "")})` : ""}. The companies below are the exchange's own classification.`}
+              The theme's layers couldn't be finished just now. The companies below are the exchange's own classification.
             </Notice>
-          )}
-          {!pending && (pl?.timed_out ?? 0) > 0 && (
-            <p className="k-note">{pl!.timed_out} compan{pl!.timed_out === 1 ? "y" : "ies"} couldn't be checked against {pl!.timed_out === 1 ? "its" : "their"} own description just now, so {pl!.timed_out === 1 ? "it shows" : "they show"} as not yet confirmed; the check runs again later.</p>
           )}
           <MembersCard r={r} region={region} />
           {diveError && <ErrorState title="The theme's numbers couldn't be loaded" action={{ label: "Try again", onClick: () => run(q, { keep: true }) }}>{diveError}</ErrorState>}

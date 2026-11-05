@@ -76,7 +76,10 @@ test("THEMES: every company of the theme's official industries is listed by laye
   // a check still waiting is asked again on its own, and once the server stops waiting the page says so plainly, with no warning box
   assert.match(page, /const CHECK_TRIES = 18;/);                                  // 18 x 5 s: the 90 s give-up (LIVE3-001)
   assert.match(page, /r\?\.ai\?\.state === "working"/);
-  assert.match(page, /pl\?\.timed_out/);
+  // work still running is the shared moving bar with one short line (owner, 5 Nov: "a nice animated loading bar, don't show exact warnings");
+  // a company whose check timed out keeps its "not yet confirmed" mark, without a note about the timeout
+  assert.match(page, /\{pending && \(\n\s+<Working label=/);
+  assert.doesNotMatch(page, /pl\?\.timed_out|tone="warn" action=\{\{ label: "Check again"/);
   assert.doesNotMatch(page, /On the exchange's list for these industries/);
 });
 

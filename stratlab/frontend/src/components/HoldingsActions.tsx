@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { inr, price, qty as qtyText } from "../lib/format";
 import { exDay } from "./CorpActions";
 import { fyLink } from "../lib/fy";
-import { Card, CardHead, DataTable, FactTable, Notice, type Column } from "./kit";
+import { Card, CardHead, DataTable, FactTable, Notice, Working, type Column } from "./kit";
 
 /* My Holdings: bonuses and splits since the holdings were saved (offered, never made silently), and dividend income. */
 interface IncomeLine { symbol: string; label: string; ex_date: string; record_date: string | null; amount: number; qty: number; total: number }
@@ -111,7 +111,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
           {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} stack phonePage={8} /></>}
           {received.length > 0 && <><h3 className="k-sub">Paid in the last 12 months, by company</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack phonePage={8} /></>}
           {data.received.length > 6 && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setShowAll(!showAll)}>{showAll ? "Show fewer" : `Show all ${data.received.length}`}</button>}
-          {data.checking > 0 && <p className="k-note" data-testid="ha-checking">The dividends of {data.checking} of your stocks are still being collected, so the totals above may leave some payments out for now. This list asks again by itself.</p>}
+          {data.checking > 0 && <div data-testid="ha-checking"><Working small label="Collecting the rest of your stocks' dividends…" /></div>}
         </Card>
       )}
     </>
