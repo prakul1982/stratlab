@@ -227,3 +227,51 @@ test("Upstox, Angel One and Dhan are open to the owner: log in to each, holdings
   const after = await (await request.get(`${API}/holdings`, { headers: auth(OWNER) })).json();
   expect(after.rows.map((r: { symbol: string }) => r.symbol)).toEqual(expect.arrayContaining(["TCS", "ITC", "HDFCBANK"]));
 });
+
+test("Pick your broker: each broker's ways (connect, file, email), the pick kept on the account, on Settings and My Holdings", async ({ page, request }, info) => {
+  const phone = info.project.name === "phone";
+  if (!phone) await page.emulateMedia({ colorScheme: "dark" });
+  const u = who(264, phone);                           // not an admin: the live connections aren't open to it
+  await request.put(`${API}/me/prefs`, { headers: auth(u), data: { broker: "zerodha" } });
+  const errors = await signIn(page, request, u, "/settings#accounts");
+  const main = page.locator("main");
+  const guide = main.locator("#pick-broker");
+  const chips = guide.getByRole("group", { name: "Your broker" });
+  await expect(chips.getByRole("button", { name: "Zerodha" })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });   // the account's pick
+  await expect(chips.getByRole("button")).toHaveText(["Zerodha", "Groww", "Upstox", "Angel One", "Dhan", "ICICI Direct", "HDFC Sky / HDFC Securities", "Kotak Neo", "Paytm Money", "Motilal Oswal", "Other"]);
+  await expect(guide.getByTestId("guide-connect")).toContainText("Not open yet");
+  await expect(guide.getByTestId("guide-file")).toContainText("Portfolio, then Holdings");
+
+  // Groww: the file and the email, no live connection
+  await chips.getByRole("button", { name: "Groww" }).click();
+  await expect(guide.getByTestId("guide-connect")).toHaveCount(0);
+  await expect(guide.getByTestId("guide-file")).toContainText("open your profile, then Reports");
+  await expect(guide.getByTestId("guide-file")).toContainText("recognises Groww's file");
+  await expect(guide.getByTestId("guide-email")).toContainText("NSDL or CDSL");
+  await expect(guide.getByTestId("guide-file").getByRole("link", { name: "Upload in My Holdings" })).toBeVisible();
+  await sane(page, errors, phone);
+  await shot(page, "connected-pick-broker", phone, !phone);
+
+  // Upstox: its connection in its real state (not open to this account), first
+  await chips.getByRole("button", { name: "Upstox" }).click();
+  await expect(guide.getByTestId("guide-connect")).toContainText("Not open yet");
+  await expect(guide.getByTestId("guide-connect").getByRole("button")).toHaveCount(0);
+  await expect.poll(async () => (await (await request.get(`${API}/me`, { headers: auth(u) })).json()).prefs?.broker, { timeout: 15_000 }).toBe("upstox");
+
+  // a login Dhan itself refused (its own app, someone else's account) lands here in plain words
+  await page.goto("/settings?broker=dhan&b=refused#accounts");
+  await expect(page.getByText("Dhan didn't allow this login yet. Upload your holdings file or forward your statement instead.")).toBeVisible({ timeout: 30_000 });
+  expect(page.url()).not.toContain("refused");
+
+  // My Holdings: the same guide opens on the pick; "Other" says what a file of one's own needs, and opens the upload
+  await page.goto("/holdings");
+  const g2 = main.locator("#pick-broker");
+  await expect(g2.getByRole("group", { name: "Your broker" }).getByRole("button", { name: "Upstox" })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+  await g2.getByRole("group", { name: "Your broker" }).getByRole("button", { name: "Other" }).click();
+  await expect(g2.getByTestId("guide-file")).toContainText("Symbol (or ISIN), Quantity and Average price");
+  const chooser = page.waitForEvent("filechooser");
+  await g2.getByTestId("guide-file").getByRole("button", { name: "Upload holdings file" }).click();
+  await chooser;
+  await sane(page, errors, phone);
+  await shot(page, "holdings-pick-broker", phone, !phone);
+});

@@ -5,6 +5,7 @@ Nothing secret ever leaves here: an address, dates, counts and plain-words statu
 own data only (the user id comes from the sign-in, never from the request)."""
 import base64
 import binascii
+import logging
 import re
 from urllib.parse import urlencode
 
@@ -18,6 +19,7 @@ from ..config import settings
 from ..responses import err, ok
 from . import brokers, docs, ibkr, inbound, kite_user, state, statements, vault
 
+log = logging.getLogger("stratlab.connect")
 router = APIRouter(prefix="/connect", tags=["connect"])
 hook_router = APIRouter(tags=["connect"])
 _throttle = None
@@ -250,7 +252,13 @@ def broker_done(b: brokers.Broker, params: dict) -> RedirectResponse:
         return RedirectResponse(where.format("cancelled"), status_code=303)
     try:
         ref, claim = brokers.stage(b, params)
-    except Exception:                 # a broker's odd reply too: the person lands back on Settings, never on an error page
+    except brokers.BrokerError as e:
+        if e.refused:                 # the broker itself said no (Dhan's individual app, someone else's account): why, in the log
+            log.warning("%s login refused: %s", b.name, e.reason)
+            return RedirectResponse(where.format("refused"), status_code=303)
+        return RedirectResponse(where.format("failed"), status_code=303)
+    except Exception as e:            # a broker's odd reply too: the person lands back on Settings, never on an error page
+        log.warning("%s login failed: %s", b.name, type(e).__name__)
         return RedirectResponse(where.format("failed"), status_code=303)
     # nothing is linked yet: the page this lands on, signed in, confirms it with the reference and the claim
     return RedirectResponse(where.format("confirm&" + urlencode({"bs": ref, "bc": claim})), status_code=303)

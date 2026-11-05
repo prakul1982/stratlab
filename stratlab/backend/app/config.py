@@ -59,7 +59,8 @@ class Settings:
     ANGELONE_API_SECRET = _env("ANGELONE_API_SECRET")          # not needed by the publisher login; kept for SmartAPI's other flows
     ANGELONE_FOR_ALL = _env("ANGELONE_FOR_ALL", "false").lower() == "true"
     # Dhan: an individual app (app id + secret + the owner's Dhan client id) works only for that one account; the partner
-    # credentials (from Dhan) let other users connect, and only then does DHAN_FOR_ALL open it to everyone
+    # credentials (from Dhan) let other users connect. With DHAN_FOR_ALL on and no partner credentials, anyone may try, and
+    # a login Dhan refuses ends on Settings in plain words
     DHAN_APP_ID = _env("DHAN_APP_ID")
     DHAN_APP_SECRET = _env("DHAN_APP_SECRET")
     DHAN_CLIENT_ID = _env("DHAN_CLIENT_ID")

@@ -407,6 +407,9 @@ class PrefsReq(BaseModel):
     space: Literal["trade", "invest", "money", "all"] | None = None       # the menu's space last picked in the sidebar
     # My space's layout, kept on the account so a phone and a laptop show the same My space (DI-006)
     mine: MineLayoutReq | None = None
+    # the broker picked in "Pick your broker" (Settings, My Holdings), so a returning user sees theirs first; the list of
+    # brokers lives in the frontend (lib/brokerGuide.ts), so a broker added there needs no change here
+    broker: str | None = Field(None, pattern=r"^[a-z0-9]{2,20}$")
 
 
 class PlanInterestReq(BaseModel):

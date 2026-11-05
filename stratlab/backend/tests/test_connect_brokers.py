@@ -172,12 +172,38 @@ def test_each_broker_is_admin_only_until_its_flag(w, fake, monkeypatch):
     monkeypatch.setattr(settings, "UPSTOX_FOR_ALL", True)
     monkeypatch.setattr(settings, "ANGELONE_FOR_ALL", True)
     monkeypatch.setattr(settings, "DHAN_FOR_ALL", True)
-    assert card(c, "upstox", PRO)["available"] and card(c, "angelone", PRO)["available"]
-    # an individual Dhan app logs in only its owner's own account: the flag alone doesn't open it
-    assert card(c, "dhan", PRO)["available"] is False
-    monkeypatch.setattr(settings, "DHAN_PARTNER_ID", "partner")
-    monkeypatch.setattr(settings, "DHAN_PARTNER_SECRET", "partner-secret")
-    assert card(c, "dhan", PRO)["available"] is True
+    # owner, 5 Nov (late): the flag opens Dhan too, partner credentials or not (a login Dhan refuses is said plainly)
+    assert all(card(c, k, PRO)["available"] for k in brokers.ALL)
+
+
+def test_a_flag_on_without_keys_still_says_not_set_up(w, fake, monkeypatch):
+    for k in ("UPSTOX_FOR_ALL", "ANGELONE_FOR_ALL", "DHAN_FOR_ALL"):
+        monkeypatch.setattr(settings, k, True)
+    for k in ("UPSTOX_API_SECRET", "ANGELONE_API_KEY", "DHAN_APP_SECRET"):
+        monkeypatch.setattr(settings, k, "")
+    c = w["client"]
+    for key in brokers.ALL:
+        v = card(c, key, PRO)
+        assert v["configured"] is False and v["available"] is False                  # never a Connect that can't work
+        assert c.get(f"/connect/{key}/login", headers=PRO).json()["detail"]["message"] == "Not set up yet."
+
+
+def test_dhan_refusing_someone_elses_login_ends_on_settings_in_plain_words(w, fake, monkeypatch, caplog):
+    monkeypatch.setattr(settings, "DHAN_FOR_ALL", True)
+    c = w["client"]
+    fake.dhan_client = "2000000002"                                                 # not the app owner's account
+    caplog.set_level(logging.WARNING)
+    login(c, "dhan", PRO)
+    r, got = back(c, "dhan", {"tokenId": "good-token-id"})
+    assert got["b"] == "refused" and "bs" not in got
+    assert "isn't the app owner's" in caplog.text and DHAN_TOKEN not in caplog.text
+    assert not card(c, "dhan", PRO)["connected"]
+    # Dhan refusing to make a token at all ends the same way
+    caplog.clear()
+    login(c, "dhan", PRO)
+    assert back(c, "dhan", {"tokenId": "refused-token-id"})[1]["b"] == "refused"
+    assert "consume answered 400" in caplog.text
+    assert brokers.REFUSED == "Dhan didn't allow this login yet. Upload your holdings file or forward your statement instead."
 
 
 def test_confirming_needs_signing_in_and_an_open_broker(w, fake):
@@ -421,7 +447,7 @@ def test_dhan_individual_app_is_for_its_owners_account_only(w, fake):
     fake.dhan_client = "2000000002"
     c = w["client"]
     login(c, "dhan")
-    assert back(c, "dhan", {"tokenId": "good-token-id"})[1]["b"] == "failed"
+    assert back(c, "dhan", {"tokenId": "good-token-id"})[1]["b"] == "refused"
     assert back(c, "dhan", {})[1]["b"] == "cancelled"
     assert not card(c, "dhan")["connected"]
 
@@ -554,3 +580,13 @@ def test_a_broker_read_outranks_a_statement_like_zerodha(w, fake):
     from app.connect import sync
     assert sync.PRIORITY["upstox"] == sync.PRIORITY["kite"] > sync.PRIORITY["cas"]
     assert set(brokers.ALL) <= set(holdings.SYNCED) and holdings.VIA_NAMES["angelone"] == "Angel One"
+
+
+def test_the_broker_picked_is_kept_on_the_account(w):
+    c = w["client"]
+    assert "broker" not in c.put("/me/prefs", headers=PRO, json={"level": "some"}).json()["prefs"]      # none picked yet
+    assert c.put("/me/prefs", headers=PRO, json={"broker": "groww"}).json()["prefs"]["broker"] == "groww"
+    assert c.put("/me/prefs", headers=PRO, json={"level": "pro"}).json()["prefs"]["broker"] == "groww"   # another change keeps it
+    assert c.get("/me", headers=PRO).json()["prefs"]["broker"] == "groww"
+    for bad in ("Groww!", "x", "a" * 30):
+        assert c.put("/me/prefs", headers=PRO, json={"broker": bad}).status_code == 422

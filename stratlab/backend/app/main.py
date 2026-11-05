@@ -1050,12 +1050,12 @@ def next_auto_login() -> str | None:
     return (auto_login.next_login(now) or auto_login_time(now + timedelta(days=1))).isoformat(timespec="minutes")
 
 
-PREF_KEYS = ("level", "focus", "space", "mine")
+PREF_KEYS = ("level", "focus", "space", "mine", "broker")
 
 
 def prefs_out(prefs: dict) -> dict:
     """The preferences the app reads; My space's layout only once one was saved."""
-    return {k: prefs.get(k) for k in PREF_KEYS if k != "mine" or prefs.get("mine")}
+    return {k: prefs.get(k) for k in PREF_KEYS if k not in ("mine", "broker") or prefs.get(k)}
 
 
 def prefs_of(uid: str) -> dict:

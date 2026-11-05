@@ -1,5 +1,6 @@
 import { zerodhaLine } from "../lib/zerodha";
 import { brokerBadge, brokerLine, type BrokerStatus } from "../lib/brokers";
+import { BrokerGuide } from "./BrokerGuide";
 import { useCallback, useEffect, useState } from "react";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -68,7 +69,9 @@ export function ConnectCards() {
     for (const name of ["broker", "b", "bs", "bc"]) q.delete(name);
     window.history.replaceState(null, "", window.location.pathname + (q.toString() ? `?${q}` : "") + window.location.hash);
     const name = BROKER_NAMES[key];
-    const say = (r: string) => notify(r === "ok" ? `${name} is connected and your holdings are read.` : r === "cancelled" ? `The ${name} login was cancelled.` : `The ${name} login didn't work. Try again.`);
+    const say = (r: string) => notify(r === "ok" ? `${name} is connected and your holdings are read.` : r === "cancelled" ? `The ${name} login was cancelled.`
+      // the broker itself said no (Dhan's own app and someone else's account): the other two ways still work
+      : r === "refused" ? `${name} didn't allow this login yet. Upload your holdings file or forward your statement instead.` : `The ${name} login didn't work. Try again.`);
     if (b !== "confirm") { say(b); return; }
     if (!bs || !bc) { say("failed"); load(); return; }
     api<{ connect: Conn }>(`/connect/${key}/confirm`, { method: "POST", body: { ref: bs, claim: bc } })
@@ -78,6 +81,7 @@ export function ConnectCards() {
   if (c === null) return null;
   return (
     <>
+      <BrokerGuide conn={c} where="settings" />
       <InboxCard c={c} set={set} load={load} />
       <BrokersCard c={c} set={set} />
       <IbkrCard c={c} set={set} />

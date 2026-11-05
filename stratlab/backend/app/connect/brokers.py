@@ -10,7 +10,8 @@ Read-only: the only broker addresses this file may call are listed in READ_ONLY 
 holdings). No order, funds or other write address is ever called; _http refuses anything else.
 
 Who may connect: admins only until the broker's *_FOR_ALL flag is "true" (as KITE_MULTIUSER_APPROVED does for Zerodha).
-Dhan's individual app works only for its owner's own account, so Dhan opens to everyone only with partner credentials.
+Dhan's individual app works only for its owner's own account: until partner credentials are set, Dhan refuses anyone
+else's login, and that ends on Settings in plain words.
 
 How each login is bound to the person who started it: the login address carries a signed, 15-minute state naming the user
 and the broker, and a start record (one per user and broker) holds its hash. Upstox returns the state and the callback
@@ -72,9 +73,11 @@ def _now() -> datetime:
 
 
 class BrokerError(Exception):
-    def __init__(self, message: str, expired: bool = False):
+    """`refused`: the broker itself didn't allow this login (Dhan's individual app and an account not its owner's), with
+    `reason`, for the server's log only."""
+    def __init__(self, message: str, expired: bool = False, refused: bool = False, reason: str = ""):
         super().__init__(message)
-        self.message, self.expired = message, expired
+        self.message, self.expired, self.refused, self.reason = message, expired, refused, reason
 
 
 def _http(method: str, url: str, *, headers: dict | None = None, params: dict | None = None,
@@ -322,6 +325,8 @@ class AngelOne(Broker):
 
 
 # ---------- Dhan (DhanHQ v2 consent login) ----------
+REFUSED = "Dhan didn't allow this login yet. Upload your holdings file or forward your statement instead."
+
 class Dhan(Broker):
     key, name, source = "dhan", "Dhan", "Dhan login"
     state_back = "no"
@@ -336,8 +341,9 @@ class Dhan(Broker):
         return (self.partner() or self.individual()) and vault.ready()
 
     def for_all(self) -> bool:
-        # an individual app logs in only its owner's own account: open to others only through the partner flow
-        return settings.DHAN_FOR_ALL and self.partner()
+        # the owner's flag, as for the others. An individual app logs in only its owner's own account, so until partner
+        # credentials are set Dhan refuses anyone else's login; that ends on Settings in plain words (exchange, routes.py)
+        return settings.DHAN_FOR_ALL
 
     def creds(self) -> dict:
         if self.partner():
@@ -365,10 +371,13 @@ class Dhan(Broker):
         status, body = _http("GET", url, headers=self.creds(), params={"tokenId": tid})
         tok = body.get("accessToken") if isinstance(body, dict) else None
         if status != 200 or not isinstance(tok, str) or not tok:
+            if not self.partner() and 400 <= status < 500:
+                code = str(body.get("errorCode") or "") if isinstance(body, dict) else ""
+                raise BrokerError(REFUSED, refused=True, reason=f"consume answered {status} {code[:20]} (individual app, no partner credentials)")
             raise BrokerError("Dhan didn't accept that login. Try again.")
         account = str(body.get("dhanClientId") or "")[:20]
         if not self.partner() and account.strip() != settings.DHAN_CLIENT_ID.strip():
-            raise BrokerError("This Dhan connection works only for the account it was set up with.")
+            raise BrokerError(REFUSED, refused=True, reason="the account isn't the app owner's (individual app, no partner credentials)")
         ends = None
         try:                                    # "2025-09-23T12:37:23", India time with no zone
             ends = datetime.fromisoformat(str(body.get("expiryTime") or "")).replace(tzinfo=IST).astimezone(timezone.utc)

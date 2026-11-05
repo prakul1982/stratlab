@@ -18,6 +18,7 @@ import { Badge, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, Emp
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
 import { orList } from "../lib/brokers";
+import { BrokerGuide } from "../components/BrokerGuide";
 import { dayLabel, dollarRate, editChange, pnlLabel, priceNote, syncedNote, type Change, type Closes, type Mkt } from "../lib/holdingsEdit";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
@@ -349,6 +350,8 @@ export function HoldingsPage() {
           </div>
         )}
       </Card>
+
+      <BrokerGuide where="holdings" onUpload={() => document.querySelector<HTMLInputElement>('main input[aria-label="Holdings file"]')?.click()} />
 
       {!view && (error
         ? <ErrorState title="Your holdings couldn't be read" action={{ label: "Try again", onClick: load }}>{error}</ErrorState>
