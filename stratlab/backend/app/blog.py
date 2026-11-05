@@ -13,7 +13,7 @@ A post's body is structured blocks (headings, paragraphs, lists, tables; a text 
 the row already cleaned and escaped again when drawn, so nothing a source returns can put markup or an outside link on a
 page. Facts only, no advice wording, no data-vendor names. Nothing is held in memory: every page reads its rows."""
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from . import db
 from .branding import public_text
@@ -579,6 +579,113 @@ def backfill(issues: list[dict]) -> dict:
         else:
             skipped += 1
     return {"added": added, "skipped": skipped}
+
+
+def week_slug(region: str, day: str) -> str:
+    return f"{'india' if region == 'IN' else 'us'}-week-in-review-{day}"
+
+
+def _ipo_weeks(region: str, start: str, end: str, now: datetime | None = None) -> tuple[list, list]:
+    """India's issues that listed between two days, and those that open in the week after `end`, from the IPO tracker's rows:
+    names, days and the issue price only (a weekend post is a record of the week, not a view on any issue)."""
+    if region != "IN":
+        return [], []
+    try:
+        from . import ipo
+        rows = ipo.load("IN")["rows"]
+    except Exception:
+        return [], []
+    nxt_end = (date.fromisoformat(end) + timedelta(days=9)).isoformat()
+    listed, opening = [], []
+    for r in rows:
+        if r.get("market") != "IN" or r.get("social") or r.get("issue_status"):
+            continue
+        name = clean_text(r.get("name") or r.get("symbol") or "", 120)
+        seg = "SME" if str(r.get("segment") or "").upper().startswith("SME") else "Main board"
+        lst, opn = str(r.get("listing") or "")[:10], str(r.get("open") or "")[:10]
+        if name and start <= lst <= end and not r.get("listing_expected"):
+            listed.append([name, seg, short_day(lst), level(r["price"], "IN") if isinstance(r.get("price"), (int, float)) else "–"])
+        elif name and end < opn <= nxt_end:
+            opening.append([name, seg, short_day(opn), short_day(str(r.get("close") or "")[:10]) if r.get("close") else "–"])
+    return sorted(listed, key=lambda x: x[0])[:30], sorted(opening, key=lambda x: x[0])[:30]
+
+
+def week_post(issue: dict, now: datetime | None = None) -> dict | None:
+    """The Saturday weekly Market Brief as a "week in review" post (the blog had nothing new on a weekend): the week's index
+    changes, the sectors that changed quadrant over the week, the stocks newly matching the price rule in the week's five
+    sessions, India's IPOs that listed that week and those opening the next, and the closures ahead. The same market-level
+    fields brief_post reads, never a reader's; None for anything but a weekly market issue."""
+    if not isinstance(issue, dict) or issue.get("kind") != "market" or not issue.get("weekly") or "uid" in issue:
+        return None
+    region = issue.get("region")
+    if region not in MARKET_NAME:
+        return None
+    try:
+        day = date.fromisoformat(str(issue.get("day") or "")[:10])
+    except ValueError:
+        return None
+    from .newsletter.content import week_window
+    try:
+        start, end = week_window(region, day)
+    except Exception:
+        start, end = (day - timedelta(days=5)).isoformat(), (day - timedelta(days=1)).isoformat()
+    iso, name = day.isoformat(), MARKET_NAME[region]
+    span = f"{short_day(start)} to {short_day(end)}"
+    indices = [i for i in issue.get("indices") or [] if isinstance(i, dict) and isinstance(i.get("price"), (int, float)) and i.get("name")]
+    moved = [i for i in indices if isinstance(i.get("change_pct"), (int, float))]
+    lead = next((i for i in moved if i["name"] == MAIN_INDEX[region]), moved[0] if moved else None)
+    title = f"{name} week in review, {span}" + (f": {lead['name']} {pct(lead['change_pct'])}" if lead else "")
+    summary = (f"The {name} market from {long_day(start)} to {long_day(end)}"
+               + (f": {lead['name']} closed the week at {level(lead['price'], region)} ({pct(lead['change_pct'])} on the week)" if lead else "")
+               + ". Facts, not advice.")
+    blocks: list[dict] = [{"t": "p", "text": f"The {name} market's week, {span}, from the week's closing figures. A change on the week is "
+                                             "measured from the close of the week before."}]
+    tabs = _brief_tables(issue)
+    idx = next((t for t in tabs if t["title"] == "Indices"), None)
+    if idx:
+        blocks += [{"t": "h2", "text": "Index closes on the week"}, _table_block(idx, region)]
+    rot = next((t for t in tabs if t["title"] == "Sector rotation"), None)
+    if rot:
+        blocks += [{"t": "h2", "text": "Sectors that changed quadrant this week"},
+                   {"t": "p", "text": "The rotation chart places each sector in one of four quadrants (leading, weakening, lagging, improving) "
+                                      "from its strength against the market and the direction it is moving, on weekly candles."},
+                   _table_block(rot, region),
+                   {"t": "p", "text": [{"a": "Open the rotation chart", "href": ROTATION_PATH[region]}, "."]}]
+    both, only = (next((t for t in tabs if t["title"].startswith(p)), None) for p in ("Newly matched Stage 2", "Newly in Stage 2"))
+    if both or only:
+        blocks += [{"t": "h2", "text": "Stocks newly matching a price rule this week"},
+                   {"t": "p", "text": "A stock is in Stage 2 when its price is above a rising 150-day average; the Supertrend (10, 3) is a trend "
+                                      "line built from the average true range. A screen of price history, not a view on any company."}]
+        if both:
+            blocks += [{"t": "h3", "text": "Stage 2 with the price above its Supertrend"}, _table_block(both, region)]
+        if only:
+            blocks += [{"t": "h3", "text": "Newly in Stage 2, Supertrend not up"}, _table_block(only, region)]
+    listed, opening = _ipo_weeks(region, start, end, now)
+    if listed or opening:
+        blocks.append({"t": "h2", "text": "IPOs"})
+        if listed:
+            blocks += [{"t": "h3", "text": "Listed this week"},
+                       {"t": "table", "caption": f"IPOs that listed in India, {span}", "head": ["Issue", "Segment", "Listed", "Issue price"], "rows": listed}]
+        if opening:
+            blocks += [{"t": "h3", "text": "Opening next week"},
+                       {"t": "table", "caption": "IPOs opening for bids in India in the coming week", "head": ["Issue", "Segment", "Opens", "Closes"], "rows": opening}]
+        blocks.append({"t": "p", "text": [{"a": "See every issue in the IPO tracker", "href": "/invest/ipos"}, "."]})
+    shut = _section(issue, "Market holiday")
+    if shut and shut.get("items"):
+        blocks += [{"t": "h2", "text": "Market holiday ahead"}, {"t": "p", "text": str(shut["items"][0].get("text") or "")}]
+    blocks.append({"t": "p", "text": ["Test an idea on these markets yourself: ", {"a": "build and backtest a strategy", "href": "/"},
+                                      ", or ", {"a": "read the daily briefs", "href": "/blog/briefs"}, "."]})
+    blocks.append({"t": "details", "title": "How this review is made",
+                   "items": [f"It is built by StratLab's own jobs on Saturday morning from the {name} exchange's closing figures for the week and "
+                             "StratLab's IPO tracker. Nothing here comes from any user's account, and nothing in it is a view on what prices will do."]})
+    return {"slug": week_slug(region, iso), "kind": "brief", "market": region, "title": title, "summary": summary, "blocks": blocks,
+            "day": iso, "published_at": now_iso(now), "indexable": bool(lead), "gen": BRIEF_GEN}
+
+
+def save_week(issue: dict, now: datetime | None = None) -> bool:
+    """Save the Saturday week in review as a post, once (see week_post)."""
+    post = week_post(issue, now)
+    return add_once(post) if post else False
 
 
 def save_brief(issue: dict, now: datetime | None = None) -> bool:

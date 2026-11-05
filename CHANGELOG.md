@@ -2,6 +2,26 @@
 
 What shipped, newest first, grouped by month. Built from the git history.
 
+## November 2026
+
+### 5 November 2026: Releases 5 to 10, the launch polish
+
+- **Loading bars, not warnings:** every card that waits for something shows a calm animated bar with a plain line ("Mapping the theme…"); raw errors and timings are no longer shown to visitors. The bar at the top of the screen was tried and removed: card bars only.
+- **Decks redesigned:** company deep dives and theme maps download as better-looking PowerPoint or PDF decks that carry everything on the page, named "StratLab - <what> - <day>.pdf".
+- **Feedback** sits in the account menu and reaches the owner by email; the library, screener and table layouts were tidied from the owner's screenshots, and Calendar keeps the space it was opened from.
+- **Market Mood:** live breadth while the market is open, and a copy from market hours is never served as live after the close.
+- **Admin:** an audit of every warning with self-healing for the ones that can fix themselves; the AI panel lists only models that answer, a model a provider calls "not included in your free usage" turns off that model alone (it had paused all of Ollama), Ollama Cloud was added, Mistral (now paid) and Cerebras (trial credit only) were removed; an invoice seller without a GSTIN counts as complete.
+- **Errors in people's browsers** now reach Sentry, as server errors already did.
+- **Blog:** a week in review every Saturday for India and the US (the week's index changes, sectors that changed quadrant, stocks newly matching the price rule, India's IPOs that listed and those opening next), beside the daily briefs and research posts.
+- **Charts** wait a few seconds for the price source's rate limit instead of failing in the minutes after a deploy.
+- **Landing page:** Themes, company decks, Market Mood and research posts are listed with the other research tools.
+
+### 4 November 2026: Releases 1 to 4
+
+- **Claude for research** within a $99 monthly cap, with the free providers behind it; the free AI providers were checked one by one and fixed.
+- **Themes:** built from official sector lists, answered at once from what is already known, then filled in.
+- **Safer sign-in, security and memory fixes**, a fixed test clock, money imports that keep their days, stuck jobs that restart, and the last company-data mismatches.
+
 ## October 2026
 
 ### 29 October 2026: Themes, a deep dive with margins by layer (THEME-1)

@@ -915,13 +915,11 @@ class Job:
         return self._send(region, issue, weekly, problems), True
 
     def post_brief(self, issue: dict, weekly: bool) -> bool:
-        """The day's Market Brief also goes on the public blog (BLOG-1), once per market per day: a post made from the issue's
-        market-level facts, never from a reader's. Whatever goes wrong here is logged and never stops the send."""
-        if weekly:
-            return False
+        """The day's Market Brief also goes on the public blog (BLOG-1), once per market per day, and the Saturday weekly one as
+        a "week in review" post: a post made from the issue's market-level facts, never from a reader's. Whatever goes wrong here is logged and never stops the send."""
         try:
             from .. import blog
-            return blog.save_brief(issue)
+            return blog.save_week(issue) if weekly else blog.save_brief(issue)
         except Exception as e:
             print("newsletters: the brief's blog post failed:", str(e)[:160])
             return False

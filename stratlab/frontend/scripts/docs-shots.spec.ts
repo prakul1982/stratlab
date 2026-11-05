@@ -76,7 +76,7 @@ for (const theme of THEMES) {
     await ctx.close();
   });
 
-  for (const [space, path, ready] of [["trade", "/trade", "Straddles, strangles"], ["invest", "/invest", "Your research desk"],
+  for (const [space, path, ready] of [["trade", "/trade", "Straddles, strangles"], ["invest", "/invest", "Your watchlist"],
     ["money", "/money", "Your money"]] as const) {
     test(`${space} home, ${theme}`, async ({ browser }) => {
       const { ctx, page } = await open(browser, theme, { signedIn: true, space });

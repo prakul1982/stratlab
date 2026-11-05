@@ -35,6 +35,14 @@ def issue_for(region="IN", day=THU, **more):
     return {**job.make_issue(market(region, False, day), region), **more}
 
 
+SAT = date(2026, 10, 3)
+
+
+def week_issue(region="IN", day=SAT, **more):
+    """The Saturday weekly Market Brief issue, as the newsletter job builds it."""
+    return {**job.make_issue(market(region, True, day), region), **more}
+
+
 def page(client, path):
     r = client.get(path)
     assert r.status_code == 200, (path, r.status_code)
@@ -76,10 +84,40 @@ def test_the_newsletter_job_saves_the_brief_once_even_when_it_runs_again(w, monk
     job.Job().tick(AFTER_IN_CLOSE)                                       # a restart, the same day
     got = db.sb().table("blog_posts").select("slug").execute().data
     assert [r["slug"] for r in got] == ["india-market-brief-2026-10-01"]
-    # the weekly digest is not a daily brief, and a failing blog never stops the send
-    assert job.Job().post_brief(issue_for(weekly=True) | {"weekly": True}, True) is False
+    # the weekly digest is not a daily brief: it becomes the week in review instead, and a failing blog never stops the send
+    assert blog.brief_post(issue_for() | {"weekly": True}) is None
+    assert job.Job().post_brief(week_issue(), True) is True
     monkeypatch.setattr(blog, "save_brief", lambda issue: 1 / 0)
+    monkeypatch.setattr(blog, "save_week", lambda issue: 1 / 0)
     assert job.Job().post_brief(issue_for(), False) is False
+    assert job.Job().post_brief(week_issue(), True) is False
+
+
+def test_the_saturday_weekly_brief_becomes_a_week_in_review_post_once(w, monkeypatch):
+    """Owner, 5 Nov: the blog had nothing new at the weekend. The Saturday weekly brief is posted as a week in review: the week's
+    index changes, its IPOs (listed that week, opening the next) and how it is made, with a way into the app, once per market."""
+    from app import ipo
+    rows = [{"market": "IN", "name": "Listed Co", "symbol": "LST", "segment": "Mainboard", "listing": "2026-09-30", "price": 120},
+            {"market": "IN", "name": "Opening Co", "symbol": "OPN", "segment": "SME", "open": "2026-10-06", "close": "2026-10-08"},
+            {"market": "IN", "name": "Old Co", "symbol": "OLD", "segment": "Mainboard", "listing": "2026-09-01", "price": 50},
+            {"market": "IN", "name": "Pulled Co", "open": "2026-10-06", "issue_status": "withdrawn"}]
+    monkeypatch.setattr(ipo, "load", lambda region: {"rows": rows})
+    assert blog.save_week(week_issue("IN")) is True and blog.save_week(week_issue("IN")) is False
+    assert blog.save_week(week_issue("US")) is True
+    assert blog.save_week(issue_for("IN")) is False                          # a daily issue is not a week
+    post = blog.get("india-week-in-review-2026-10-03")
+    assert post["kind"] == "brief" and post["indexable"] is True
+    assert post["title"].startswith("India week in review, ") and "NIFTY 50" in post["title"]
+    body = json.dumps(post["body"])
+    assert "Index closes on the week" in body and "Listed Co" in body and "Opening Co" in body
+    assert "Old Co" not in body and "Pulled Co" not in body                  # another week's listing; an issue that didn't go ahead
+    assert "/invest/ipos" in body and "backtest" in body
+    us = json.dumps(blog.get("us-week-in-review-2026-10-03")["body"])
+    assert "IPOs" not in us                                                  # the tracker's rows are India's
+    html = page(w["client"], "/blog/india-week-in-review-2026-10-03")
+    assert "India week in review" in html and "Listed Co" in html
+    assert not any(v in html.lower() for v in VENDORS)
+    assert "india-week-in-review-2026-10-03" in page(w["client"], "/blog/briefs")
 
 
 def test_a_holiday_or_a_day_without_a_figure_is_kept_out_of_search(w):

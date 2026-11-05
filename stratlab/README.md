@@ -108,11 +108,11 @@ Leave the Razorpay settings empty and the Plans page shows the paid plans as "Co
 5. **Check it once for real:** buy Basic with your own account, confirm the Account page shows it and Admin → Money lists the subscription, then cancel from Account (you keep it until the period ends). Refund yourself from the Razorpay dashboard if you like.
 
 ### 4. AI builder (all plans) and alerts (Basic and Pro)
-- **AI strategy builder and research reads:** set a key for one or more providers. They're tried in order until one answers, so a rate limit or outage at one moves on to the next (the order for each kind of job is below). All but Anthropic have free tiers. Two or three free keys are plenty: Research answers are cached and shared between users, so a popular stock costs one AI call a day.
+- **AI strategy builder and research reads:** set a key for one or more providers. They're tried in order until one answers, so a rate limit or outage at one moves on to the next (the order for each kind of job is below). All but Anthropic and Mistral have free tiers (Cerebras was dropped in November 2026: trial credit only). Two or three free keys are plenty: Research answers are cached and shared between users, so a popular stock costs one AI call a day.
   - `GROQ_API_KEY` from console.groq.com: free and the fastest. A good first choice.
-  - `CEREBRAS_API_KEY` from cloud.cerebras.ai: free and very fast.
   - `SAMBANOVA_API_KEY` from cloud.sambanova.ai: free tier, fast Llama 70B.
-  - `MISTRAL_API_KEY` from console.mistral.ai: free "Experiment" plan.
+  - `OLLAMA_API_KEY` from ollama.com/settings/keys: a light free plan, open models such as gpt-oss.
+  - `MISTRAL_API_KEY` from console.mistral.ai: no longer free for this use (it asks for payment since November 2026); only with a paid plan.
   - `GEMINI_API_KEY` from aistudio.google.com: free tier.
   - `OPENROUTER_API_KEY` from openrouter.ai: with `OPENROUTER_MODEL=auto` only free models are used.
   - `ANTHROPIC_API_KEY`: paid. Set `AI_PROVIDER=anthropic` to try Claude first.

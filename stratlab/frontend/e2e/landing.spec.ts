@@ -45,7 +45,7 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   const research = page.locator("#invest");
   for (const t of ["Company pages", "Deep dive", "Results calendar", "Corporate actions", "Deals and insider trades", "Surveillance lists",
     "Filings and red flags", "Screens", "Stage 2 scan", "Sector rotation", "Market breadth", "Price charts", "ETF price vs NAV",
-    "IPOs", "Business updates", "Named holders", "Stock lending fees"]) await expect(research.getByText(t, { exact: true })).toBeVisible();
+    "IPOs", "Business updates", "Named holders", "Stock lending fees", "Themes", "Company decks", "Market mood", "Research posts"]) await expect(research.getByText(t, { exact: true })).toBeVisible();
   const portfolio = page.locator("#money");
   for (const t of ["My Holdings", "Tax report", "Mutual funds", "Fund costs", "Net worth", "Tax tools", "US stocks in Indian tax", "ITR-ready export", "Money calendar",
     "Test a SIP", "Rates after tax", "Share cards and invites"]) await expect(portfolio.getByText(t, { exact: true })).toBeVisible();

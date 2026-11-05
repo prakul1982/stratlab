@@ -115,7 +115,7 @@ about 3 to 10 seconds a company.
   and changing the rupee price doesn't change it. Any price can be overridden here, and cleared to go back to the set
   price. **Read today's rates** only refreshes the "about ₹…" notes. No Razorpay plan is needed to show a price: without
   one in that currency, visitors pay the rupee price and their card converts it.
-- **Invoices** (Money): the seller's legal name, address, state, GSTIN and LUT ARN. Every payment gets a GST invoice
+- **Invoices** (Money): the seller's legal name, address, state, GSTIN and LUT ARN (GSTIN and LUT ARN are optional: without a GSTIN the receipt says the seller isn't registered under GST, and Admin no longer warns). Every payment gets a GST invoice
   (CGST and SGST within the state, IGST across states, exports zero-rated under the LUT).
 - **Exchange holidays** (Data and jobs): a row per market with where its holidays come from (the calendar package or
   the exchange's own list), how far ahead they're known, the next holiday and a status with a hint. For India, add a
@@ -283,7 +283,7 @@ adding a key in **Railway → Variables**, redeploy, then press **Re-rank models
 | --- | --- | --- | --- | --- |
 | Groq | About 30 requests a minute and 1,000 a day per model; the big models also have a daily token cap | Yes | [console.groq.com/keys](https://console.groq.com/keys) | `GROQ_API_KEY` (`GROQ_MODEL`) |
 | Google Gemini | Flash models: a few hundred to a thousand requests a day each; Gemma models many more | Yes. Free-tier prompts may be used by Google to improve its products | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | `GEMINI_API_KEY` (`GEMINI_MODEL`) |
-| Mistral | "Experiment" plan: about 1 request a second and a large monthly token allowance (phone check at sign-up) | Allowed, but prompts may be used to train Mistral's models | [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys) | `MISTRAL_API_KEY` (`MISTRAL_MODEL`) |
+| Mistral | **No longer free for this use (5 Nov 2026):** the key started asking for payment, so it was removed. Still supported if you add a paid key | Yes on a paid plan | [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys) | `MISTRAL_API_KEY` (`MISTRAL_MODEL`) |
 | SambaNova | About 20 requests a minute and 20 a day per model (measured only when you press Re-rank) | Yes | [cloud.sambanova.ai/apis](https://cloud.sambanova.ai/apis) | `SAMBANOVA_API_KEY` (`SAMBANOVA_MODEL`) |
 | OpenRouter | Models marked `:free` only: 20 a minute, 50 a day (1,000 a day once $10 of credit was ever bought) | Yes; some free models' hosts log prompts | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) | `OPENROUTER_API_KEY` (`OPENROUTER_MODEL`) |
 | Cloudflare Workers AI | 10,000 "neurons" a day (a few hundred short answers), reset at 00:00 UTC | Yes | [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens): use the "Workers AI" token template; the account id is on the dashboard's overview | `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (`CLOUDFLARE_MODEL`) |
@@ -309,7 +309,7 @@ resellers of other providers' free pools (Kilo Code, Requesty, AnyAPI, Gonka), *
 and Pollinations (no account, no terms to rely on, and prompts pass through a third party). Free limits change often:
 the **Test** and **Re-rank** buttons show what actually works today.
 
-**Suggested set-up:** Groq, Google Gemini and Mistral first (production-ready, generous), then Cloudflare and OpenRouter.
+**Suggested set-up (5 Nov 2026):** Groq and Google Gemini first (production-ready, generous), then Cloudflare, OpenRouter and Ollama Cloud; Claude covers the long research reads within its monthly cap.
 The flagged ones add resilience but are asked last.
 
 ### How it picks models
