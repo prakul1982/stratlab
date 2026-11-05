@@ -38,8 +38,10 @@ test("RES-1: live prices, earlier moves and implied moves are read for the rows 
   assert.match(quotes, /useMarketRefresh\(\[region\], read, symbols\.length > 0\)/);          // each minute while the market trades, never otherwise
   assert.match(quotes, /researchApi\.quotes\(region, syms\)/);
   assert.match(page, /useRowQuotes\(region, symbols\)/);
-  assert.match(page, /i \+= 6\) \{/);
-  assert.match(page, /i \+= 8\) \{/);
+  assert.match(page, /readAll<MovesAnswer>\(symbols, 6,/);                      // six a call, eight for the options, asked at the same time
+  assert.match(page, /readAll<Implied>\(list, 8,/);
+  assert.match(page, /pending: r\.pending \?\? \[\]/);                          // what the server could not reach in time is asked again (owner, 5 Nov)
+  assert.doesNotMatch(page, /Reading…/);                                           // the kit's bar while a cell loads, a dash when there is nothing
   assert.match(page, /\/research\/results\/moves\?region=/);
   assert.match(page, /\/research\/results\/implied\?symbols=/);
   assert.match(page, /Prices as of \$\{fmtTime\(quoteAt!/);

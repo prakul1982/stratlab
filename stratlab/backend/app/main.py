@@ -2626,7 +2626,9 @@ def results_moves(region: str = "IN", symbols: str = Query("", max_length=400), 
     from its daily prices, kept once worked out. Up to 12 companies; the prices of 6 are read in one call, the rest on the next."""
     r = research_routes.region_of(region)
     throttle(profile, "results_moves", 30, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
-    return research_routes.ok({"moves": results_calendar.moves_for(r, _symbols_arg(symbols, r, 12))})
+    pending: list[str] = []
+    got = results_calendar.moves_for(r, _symbols_arg(symbols, r, 12), pending=pending)
+    return research_routes.ok({"moves": got, "pending": list(dict.fromkeys(pending))})
 
 
 @app.get("/research/results/implied")
@@ -2634,7 +2636,9 @@ def results_implied(symbols: str = Query("", max_length=200), day: str = "", pro
     """For stocks with futures and options (India): the move their options price in to the first expiry on or after the results
     day, from the at-the-money straddle. Up to 8 stocks; none without the broker's option prices."""
     throttle(profile, "results_implied", 20, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
-    return research_routes.ok({"implied": results_calendar.implied_for(_symbols_arg(symbols, "IN", 8), day[:10] or None)})
+    pending: list[str] = []
+    got = results_calendar.implied_for(_symbols_arg(symbols, "IN", 8), day[:10] or None, pending=pending)
+    return research_routes.ok({"implied": got, "pending": list(dict.fromkeys(pending))})
 
 
 @app.get("/research/results/{region}/{symbol}")
@@ -5302,13 +5306,14 @@ def delete_screen(sid: str, profile=Depends(current_profile)):
 
 
 # ---------- market breadth: how many stocks take part in the market's moves ----------
-def breadth_load(region: str, symbol: str, days: int) -> list[dict]:
-    """A stock's daily candles for the breadth run, kept out of the price cache (a whole market would empty it)."""
+def breadth_load(region: str, symbol: str, days: int, max_wait: float | None = None) -> list[dict]:
+    """A stock's daily candles for the breadth run, kept out of the price cache (a whole market would empty it). `max_wait`: a page's
+    read gives up (KiteBusy) rather than queue longer than that behind the jobs' reads for the broker's request turns."""
     if region == "IN":
         inst = kite.equity(symbol)
         if not inst:
             raise LookupError("not listed")
-        return kite.history(inst["token"], "1d", days, store=False)
+        return kite.history(inst["token"], "1d", days, store=False, **({"max_wait": max_wait} if max_wait is not None else {}))
     return markets.provider(region).history({"token": symbol}, "1d", days)
 
 
@@ -5322,7 +5327,8 @@ def results_options(symbol: str, day: str | None) -> dict | None:
     return results_calendar.straddle_move(options_data.chain("NSE", symbol, expiries[0], around=1))
 
 
-results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d), options=results_options)
+# the results page's reads wait at most 3 s for a broker turn: behind a job's queue they come back "pending" and are asked again
+results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options)
 
 
 def breadth_index(region: str, symbol: str, days: int) -> list[dict]:

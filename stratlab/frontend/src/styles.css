@@ -2940,6 +2940,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
  * stays put and breathes instead */
 .k-working { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
 .k-working.sm { padding: 0; border: 0; background: none; gap: 6px; }
+.k-working.inline { display: inline-block; width: 48px; padding: 0; border: 0; background: none; vertical-align: middle; }
 .k-working-bar { position: relative; display: block; height: 4px; border-radius: 99px; background: var(--chip); overflow: hidden; }
 .k-working-bar > span { position: absolute; inset: 0 auto 0 0; width: 38%; border-radius: inherit; background: linear-gradient(90deg, transparent, var(--blue), transparent);
   animation: k-working 1.4s cubic-bezier(.45, 0, .55, 1) infinite; }

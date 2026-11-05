@@ -181,5 +181,15 @@ a.inv-theme:hover { border-color: var(--ink); }
 }
 /* business updates: the small history chart in a company's row (RES-1 follow-up) */
 .biz-spark { display: block; width: 120px; max-width: 100%; }
-.res-sym { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; white-space: nowrap; }
+.res-sym { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
 .res-moves { display: flex; flex-wrap: wrap; gap: 0 8px; }
+/* a results row is two lines (owner, 5 Nov): the symbol, its tags and the name, then the meeting and a small filing link; what is longer than
+   the column ends in an ellipsis, the whole of it in the tooltip */
+.res-co { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: 19rem; max-width: 100%; }
+.res-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.res-sub { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.res-filed { font-size: inherit; }
+.res-mv { display: grid; gap: 2px; }
+.res-mv-top { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.res-mv .res-moves { flex-wrap: nowrap; white-space: nowrap; }
+@media (max-width: 640px) { .res-co { width: auto; } }

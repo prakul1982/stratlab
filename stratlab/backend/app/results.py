@@ -1010,6 +1010,8 @@ PAST_KEEP = 6                        # results days kept for each company
 PAST_BACK_DAYS = 480                 # how far back the weekly read of the calendar goes
 PAST_CHUNK = 92                      # days asked for in one read
 MOVES_PER_ASK = 6                    # companies' price histories read for one request: the rest wait for the next
+MOVES_BUDGET = 8.0                   # seconds one request spends reading price histories; the rest are answered "pending" (asked again)
+IMPLIED_BUDGET = 8.0                 # the same for the option chains of one request
 MAX_PAST = 4000                      # companies in either store
 HISTORY_DAYS = 500                   # days of daily prices read for a company's moves
 _hist = {"fn": None, "options": None}
@@ -1111,11 +1113,20 @@ def since_move(bars: list[dict], day: date) -> float | None:
     return round((seen[-1][1] / before[-1] - 1) * 100, 2)
 
 
-def moves_for(region: str, symbols: list[str], today: date | None = None) -> dict[str, dict | None]:
+def _busy(e: Exception) -> bool:
+    """A read that met a busy source (the broker's request turns booked ahead, a rate limit): worth asking again in a moment, never kept."""
+    return bool(getattr(e, "busy", False)) or "busy" in type(e).__name__.lower() or isinstance(e, TimeoutError)
+
+
+def moves_for(region: str, symbols: list[str], today: date | None = None, pending: list[str] | None = None,
+              budget: float | None = None) -> dict[str, dict | None]:
     """For each company: {"moves": ..., "since": ...}. `moves`: what its price did over its earlier results days (see reaction),
     worked out from its daily prices, read once and kept (a company's list changes only when it has a new results day); `since`:
     the change from the close before its newest results day (the last week's) to the latest close, kept ten minutes. At most
-    MOVES_PER_ASK companies' price histories are read in one call, the rest on the next; a company with neither is None."""
+    MOVES_PER_ASK companies' price histories are read in one call, for at most MOVES_BUDGET seconds; a company with neither is None.
+    `pending` (a list) is given the companies still to be read: not reached in this call, or their source was busy. A busy read is
+    never kept as "nothing" (owner, 5 Nov: the page's "Past results-day moves" sat on "Reading…" behind the broker's queue, and a busy
+    read had been kept as no moves until the company's next results day); a read that failed otherwise is kept for the day."""
     from .intel.net import TTLCache
     global _since
     if _since is None:
@@ -1126,25 +1137,35 @@ def moves_for(region: str, symbols: list[str], today: date | None = None) -> dic
     rows = store["rows"]
     uniq = list(dict.fromkeys(symbols))
     events = {s: recent_event(region, s, today) for s in uniq}
-    todo = [s for s in uniq if (past.get(s) and (not rows.get(s) or rows[s].get("dates") != past[s]))
-            or (events[s] and _since.get((region, s, events[s])) is None)]
+    stale = lambda s: not rows.get(s) or rows[s].get("dates") != past[s] or (rows[s].get("failed") and rows[s].get("at") != today.isoformat())  # noqa: E731
+    todo = [s for s in uniq if (past.get(s) and stale(s)) or (events[s] and _since.get((region, s, events[s])) is None)]
     read = _hist.get("fn")
     done, changed = 0, False
-    for s in todo:
-        if read is None or done >= MOVES_PER_ASK:
+    start = time.monotonic()
+    budget = MOVES_BUDGET if budget is None else budget
+    for i, s in enumerate(todo):
+        if read is None:
+            break
+        if done >= MOVES_PER_ASK or (done and time.monotonic() - start > budget):         # at least one a call
+            if pending is not None:
+                pending.extend(todo[i:])
             break
         done += 1
         try:
             bars = read(region, s, HISTORY_DAYS)
         except Exception as e:
             print("results moves:", region, s, str(e)[:100])
+            if _busy(e):
+                if pending is not None:
+                    pending.append(s)
+                continue
             if past.get(s):
-                rows[s] = {"at": today.isoformat(), "dates": past[s], "moves": []}
+                rows[s] = {"at": today.isoformat(), "dates": past[s], "moves": [], "failed": True}
                 changed = True
             if events[s]:
                 _since.set((region, s, events[s]), {"pct": None}, 600)
             continue
-        if past.get(s) and (not rows.get(s) or rows[s].get("dates") != past[s]):
+        if past.get(s) and stale(s):
             mv = [[d, reaction(bars, date.fromisoformat(d))] for d in past[s][:PAST_KEEP]]
             rows[s] = {"at": today.isoformat(), "dates": past[s], "moves": [m for m in mv if m[1] is not None]}
             changed = True
@@ -1167,21 +1188,32 @@ def moves_for(region: str, symbols: list[str], today: date | None = None) -> dic
     return out
 
 
-def implied_for(symbols: list[str], day: str | None = None) -> dict[str, dict | None]:
+def implied_for(symbols: list[str], day: str | None = None, pending: list[str] | None = None, budget: float | None = None) -> dict[str, dict | None]:
     """For stocks with futures and options: the at-the-money straddle of the first expiry on or after the results day, as a share
     of the price (the move the options price in to that expiry). From the option prices the app already reads; None for a stock
-    without them now (the broker is not connected, no quote for the strike, no expiry that late). At most 8 stocks."""
+    without them now (the broker is not connected, no quote for the strike, no expiry that late). At most 8 stocks, read for at most
+    IMPLIED_BUDGET seconds: `pending` (a list) is given the ones not reached or whose source was busy, to be asked again."""
     fn = _hist.get("options")
     out: dict[str, dict | None] = {}
     fos = fo_symbols()
+    start = time.monotonic()
+    budget = IMPLIED_BUDGET if budget is None else budget
+    done = 0
     for s in list(dict.fromkeys(symbols))[:8]:
         out[s] = None
         if fn is None or s not in fos:
             continue
+        if done and time.monotonic() - start > budget:                                    # at least one a call
+            if pending is not None:
+                pending.append(s)
+            continue
+        done += 1
         try:
             got = fn(s, day)
         except Exception as e:
             print("results implied:", s, str(e)[:100])
+            if _busy(e) and pending is not None:
+                pending.append(s)
             continue
         out[s] = got
     return out

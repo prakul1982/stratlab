@@ -205,18 +205,49 @@ def test_only_a_few_companies_prices_are_read_in_one_ask(w):
     assert len(asked) == 2 * R.MOVES_PER_ASK                                        # the next ask does the next six
 
 
-def test_a_company_whose_prices_cannot_be_read_is_not_asked_again_until_its_days_change(w):
+def test_a_company_whose_prices_cannot_be_read_is_not_asked_again_that_day(w):
     R.add_past("IN", [meeting("TCS", date(2026, 7, 9))], TODAY)
     asked = []
 
     def down(region, s, days):
         asked.append(s)
-        raise SourceError("the broker", "busy", busy=True)
+        raise SourceError("the broker", "not listed")
 
     R.setup(history=down)
     assert R.moves_for("IN", ["TCS"], TODAY)["TCS"] is None
     R.moves_for("IN", ["TCS"], TODAY)
     assert asked == ["TCS"]
+    R.moves_for("IN", ["TCS"], TODAY + timedelta(days=1))                          # the next day it is read again (it used to wait for a new results day)
+    assert asked == ["TCS", "TCS"]
+
+
+def test_a_busy_read_is_answered_pending_and_never_kept_as_nothing(w):
+    """Owner, 5 Nov: "Past results-day moves" sat on "Reading…": the page's read queued behind the broker's jobs, and a busy read was kept
+    as no moves until the company's next results day. Now a busy read, and a company not reached in the time a call has, come back pending."""
+    R.add_past("IN", [meeting(s, date(2026, 7, 9)) for s in ("TCS", "INFY", "WIPRO")], TODAY)
+    asked, busy = [], {"on": True}
+
+    def read(region, s, days):
+        asked.append(s)
+        if busy["on"]:
+            raise SourceError("the broker", "busy", busy=True)
+        return bars({"2026-07-08": 100, "2026-07-10": 102})
+
+    R.setup(history=read)
+    pending: list[str] = []
+    got = R.moves_for("IN", ["TCS", "INFY"], TODAY, pending=pending)
+    assert got == {"TCS": None, "INFY": None} and pending == ["TCS", "INFY"]
+    busy["on"] = False
+    pending = []
+    assert R.moves_for("IN", ["TCS"], TODAY, pending=pending)["TCS"]["moves"]["last"] == [2.0] and pending == []      # asked again, read
+    # out of time (one is always read): the rest of the call's companies are pending, not "nothing"
+    pending = []
+    got = R.moves_for("IN", ["INFY", "WIPRO"], TODAY, pending=pending, budget=0.0)
+    assert got["INFY"]["moves"]["last"] == [2.0] and got["WIPRO"] is None and pending == ["WIPRO"]
+    pending = []
+    R.setup(options=lambda s, day: R.straddle_move(chain()))
+    got = R.implied_for(["TCS", "INFY"], "2026-10-29", pending=pending, budget=0.0)
+    assert got["TCS"]["pct"] == 2.9 and got["INFY"] is None and pending == ["INFY"]                                  # at least one a call
 
 
 def test_since_the_results_is_the_latest_close_against_the_close_before_the_day(w):
