@@ -56,7 +56,9 @@ def seller() -> dict:
     return {f: (s.get(f) or "") for f in FIELDS} | {"prefix": s.get("prefix") or "SL"}
 
 
-REQUIRED = (("legal_name", "legal name"), ("address", "address"), ("state", "state"), ("gstin", "GSTIN"))
+# a GSTIN is not required: a supplier below the registration threshold has none, and its invoices say it isn't registered under
+# GST (the owner's firm, 5 Nov); with one, invoices carry GST
+REQUIRED = (("legal_name", "legal name"), ("address", "address"), ("state", "state"))
 
 
 def readiness() -> dict:
