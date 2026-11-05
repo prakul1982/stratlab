@@ -9,7 +9,11 @@ const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
 
 test("every call to the server drives the top loading bar, which the app draws on every signed-in page", () => {
   assert.match(read("src/lib/api.ts"), /export function api<T = any>\(path: string, opts: Opts = \{\}\): Promise<T> \{\n  callStarted\(\);\n  return send<T>\(path, opts\)\.finally\(callEnded\);/);
-  assert.match(read("src/lib/inflight.ts"), /export function callStarted\(\): void \{ out \+= 1; watchers\.forEach\(\(f\) => f\(out\)\); \}/);
+  assert.match(read("src/lib/inflight.ts"), /export function callStarted\(\): void \{ out \+= 1; tell\(\); \}/);
+  assert.match(read("src/lib/inflight.ts"), /const tell = \(\) => watchers\.forEach\(\(f\) => f\(out \+ loads\)\);/);
+  // ...and a page's own code on its way: the app's page fallback counts as a wait
+  assert.match(read("src/main.tsx"), /<Suspense fallback=\{<PageCodeWait>/);
+  assert.match(read("src/components/TopProgress.tsx"), /useEffect\(\(\) => \{ loadStarted\(\); return loadEnded; \}, \[\]\);/);
   const top = read("src/components/TopProgress.tsx");
   assert.match(top, /export const SHOW_AFTER_MS = (\d+);/);
   assert.ok(Number(top.match(/SHOW_AFTER_MS = (\d+)/)[1]) <= 400, "a wait shows the bar within 0.4 s");

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { onCount, callsInFlight } from "../lib/inflight";
+import { useEffect, useState, type ReactNode } from "react";
+import { onCount, busyCount, loadEnded, loadStarted } from "../lib/inflight";
 
 /** A thin moving bar along the top of the screen while the app waits on the server (owner, 5 Nov: "put loading bar everywhere, it creates
  * confusion whether something is working or not"). Every call to the server counts (lib/api, lib/inflight); the bar shows once a wait
@@ -21,10 +21,16 @@ export function TopProgress() {
         hide = window.setTimeout(() => setState("off"), 450);
       }
     };
-    on(callsInFlight());
+    on(busyCount());
     const stop = onCount(on);
     return () => { stop(); window.clearTimeout(show); window.clearTimeout(hide); };
   }, []);
   if (state === "off") return null;
   return <div className={`top-progress${state === "done" ? " done" : ""}`} role="progressbar" aria-label="Loading" aria-busy={state === "on"}><span /></div>;
+}
+
+/** The app's page fallback while a page's own code downloads: the usual "Opening" placeholder, and the top bar runs for it too. */
+export function PageCodeWait({ children }: { children: ReactNode }) {
+  useEffect(() => { loadStarted(); return loadEnded; }, []);
+  return <>{children}</>;
 }

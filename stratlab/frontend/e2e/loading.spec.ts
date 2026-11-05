@@ -10,8 +10,9 @@ test("a slow answer shows the top loading bar, and it goes when the answer is in
   await expect(page.locator("aside.sidebar .acct-btn").or(page.getByRole("button", { name: "Open menu" })).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".top-progress")).toHaveCount(0, { timeout: 15_000 });
   // the library's list answers 2 s late
-  await page.route(/\/library(\?|$)/, async (r) => { await new Promise((res) => setTimeout(res, 2000)); await r.fallback(); });
+  await page.route(/\/library(\?|$)/, async (r) => { await new Promise((res) => setTimeout(res, 5000)); await r.fallback(); });
   await page.evaluate(() => { history.pushState({}, "", "/library"); window.dispatchEvent(new PopStateEvent("popstate")); });
-  await expect(page.locator(".top-progress > span")).toBeVisible({ timeout: 2_000 });
+  // the bar runs while the page's code downloads and while its list is asked for (2 s late): it is up well before the answer
+  await expect(page.locator(".top-progress > span")).toBeVisible({ timeout: 4_000 });
   await expect(page.locator(".top-progress")).toHaveCount(0, { timeout: 15_000 });
 });
