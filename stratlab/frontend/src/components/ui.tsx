@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { importWithRetry } from "../lib/lazyRetry";
 import type { CheckStatus, VerdictKind } from "../lib/types";
-import { usePopover } from "./kit/Dialog";
 import { asOf } from "../lib/format";
 
 const VERDICT_NAME: Record<VerdictKind, string> = {
@@ -53,27 +53,22 @@ export function AutoGrow(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
   return <textarea ref={ref} rows={1} {...props} />;
 }
 
+// the box itself, placed over the page, is its own small file: this one is in the landing page's download (R5V-020)
+const InfoPop = lazy(() => importWithRetry(() => import("./InfoPop")));
+
 /** A small (i) button that explains the thing next to it. Click or tap to open; Escape or a click outside closes, and
  * focus stays on the button. Name it after what it explains ("About Markets"); beside a heading it sits after the
- * heading element, never inside it. */
+ * heading element, never inside it. The box (InfoPop) is drawn on top of the page, fixed to the button, so a table's scroll
+ * box or a card's edge never cuts it (owner, 5 Nov). */
 export function Info({ children, label = "What does this mean?" }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
-  const [side, setSide] = useState<"left" | "right">("left");
-  const wrap = useRef<HTMLSpanElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
-  const pop = useRef<HTMLSpanElement>(null);
   const id = useId();
-  usePopover(open, setOpen, btn, pop, { focusInto: false, outside: wrap });
-  useEffect(() => {
-    if (!open) return;
-    const r = wrap.current?.getBoundingClientRect();
-    if (r) setSide(r.left + 300 > window.innerWidth - 12 ? "right" : "left");
-  }, [open]);
   return (
-    <span ref={wrap} className="info">
+    <span className="info">
       <button ref={btn} type="button" className="info-btn" aria-label={label} aria-expanded={open} aria-controls={open ? id : undefined}
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open); }}>i</button>
-      {open && <span ref={pop} id={id} role="note" className={`info-pop ${side}`}>{children}</span>}
+      {open && <Suspense fallback={null}><InfoPop id={id} btn={btn} close={setOpen}>{children}</InfoPop></Suspense>}
     </span>
   );
 }

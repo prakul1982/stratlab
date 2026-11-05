@@ -177,7 +177,7 @@ test("the new-idea page offers the strategy import and the library once each (LI
   const main = page.locator("main");
   await expect(main.getByRole("heading", { name: "More you can do" })).toBeVisible({ timeout: 30_000 });
   expect(await main.getByText("Import a strategy", { exact: true }).count(), "Import a strategy on the page").toBeLessThanOrEqual(2);   // the header button and its own card (the dialog), not a third tile
-  expect(await main.locator(".explore-card", { hasText: "Strategy library" }).count()).toBe(0);
-  expect(await main.locator(".explore-card", { hasText: "Import a strategy" }).count()).toBe(0);
+  expect(await main.locator(".k-more-link", { hasText: "Strategy library" }).count()).toBe(0);
+  expect(await main.locator(".k-more-link", { hasText: "Import a strategy" }).count()).toBe(0);
   expect(errors).toEqual([]);
 });

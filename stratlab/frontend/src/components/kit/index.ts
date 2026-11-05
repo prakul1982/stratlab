@@ -23,6 +23,7 @@ export { ConfirmDialog } from "./ConfirmDialog";
 export { Dialog, useDialogFocus, usePopover, tabbables } from "./Dialog";
 export { Meter, ShareTable, type ShareRow } from "./BarList";
 export { Disclosure } from "./Disclosure";
+export { FoldCard } from "./FoldCard";
 export { FoldTable } from "./FoldTable";
 export { Pager } from "./Pager";
 export { UploadButton, UploadProblem, useUploadProblem } from "./UploadButton";

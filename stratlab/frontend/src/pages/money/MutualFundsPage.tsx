@@ -7,7 +7,7 @@ import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { LIMITS } from "../../lib/plans";
-import { Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, ShareTable, Signed, Skeleton, UploadButton, type Column, UploadProblem, useUploadProblem, Notes } from "../../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FoldCard, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, ShareTable, Signed, Skeleton, UploadButton, type Column, UploadProblem, useUploadProblem, Notes } from "../../components/kit";
 import { CostCell, CostDetail, CostHow, CostNotes, costFigures, costStatsShown, costsShown, useFundCosts } from "./FundCosts";
 import { BehaviourDetail, BehaviourHow, BehaviourNotes, behaviourFigures, GapCell, behaviourShown, behaviourStatsShown, hasGap, useFundBehaviour } from "./FundBehaviour";
 import { Earlier } from "../../components/Earlier";
@@ -15,6 +15,7 @@ import { movedYearNote, openFy } from "../../lib/fy";
 import { importLine } from "../../lib/mfImport";
 import { useAskedFy } from "../../lib/useFy";
 import { PlanInline } from "../../components/PlanInterest";
+import { InboxNote } from "../../components/InboxNote";
 
 /* /money/mutual-funds: the Consolidated Account Statement read into every scheme's value at the latest NAV, what went in,
  * the gain and XIRR, the mix by category, and capital gains for each financial year. Built from the kit (components/kit).
@@ -246,6 +247,8 @@ export function MutualFundsPage() {
         {view && view.files.length > 0 && (
           <p className="k-note">{(view.txns - (view.charge_lines ?? 0)).toLocaleString("en-IN")} transactions{view.charge_lines ? ` and ${view.charge_lines.toLocaleString("en-IN")} stamp duty or tax lines` : ""} from {view.files.length} file{view.files.length === 1 ? "" : "s"}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}</p>
         )}
+        {/* the statement can come by itself: the inbox of Settings → Connected accounts, offered where the upload is (owner, 5 Nov) */}
+        <InboxNote />
       </Card>
 
       {!view && (error
@@ -293,8 +296,10 @@ export function MutualFundsPage() {
             </Card>
           )}
 
-          <Card label="Your schemes">
-            <CardHead title="Your schemes" info={'Gain is the current value less the cost of the units held. "Taxed as" is read from the category; change it, under the scheme, where your fund\'s documents say otherwise. Open a scheme for its units, NAV, cost, taxes, SIP record and sales.'} />
+          {/* closed by default, its row saying how many are held and their value (owner, 5 Nov) */}
+          <FoldCard title="Your schemes" label="Your schemes" testId="mf-schemes"
+            meta={held.length > 0 ? `${held.length} held · ${inr(t.value)}` : `${schemes.length} no longer held`}
+            info={'Gain is the current value less the cost of the units held. "Taxed as" is read from the category; change it, under the scheme, where your fund\'s documents say otherwise. Open a scheme for its units, NAV, cost, taxes, SIP record and sales.'}>
             {/* each scheme is one row, said once; fully redeemed schemes apart, so the list is what you hold (DG-026) */}
             {held.length > 0 && <FoldTable csv="mutual fund schemes" label="Schemes" columns={schemeCols} rows={held} rowKey={(s) => s.key} detail={detail} openWhen={open} />}
             <Earlier label="Schemes you no longer hold" count={schemes.length - held.length} className="in-card">
@@ -303,7 +308,7 @@ export function MutualFundsPage() {
             <Disclosure summary="What each tax kind means">
               <Notes label="What each tax kind means" items={(Object.keys(view.kinds) as Kind[]).map((k) => view.kinds[k])} />
             </Disclosure>
-          </Card>
+          </FoldCard>
 
           {/* the limit it lifts is named, as on Plans (DP2-012: the lock didn't say Free keeps 5 funds) */}
           {!view.gains_allowed && <PlanNote>Capital gains for each financial year, and every scheme you hold (Free keeps {LIMITS.free.mf_schemes}), are on the {view.gains_plan} plan.</PlanNote>}

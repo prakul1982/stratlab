@@ -90,6 +90,17 @@ test("statement inbox: an address, the filter steps, a password, and a statement
   await sane(page, errors, phone);
   await shot(page, "connected-inbox", phone, !phone);
 
+  // the funds page offers the same inbox beside its statement upload, with this address, and links back here (owner, 5 Nov)
+  const mine = (await address.textContent())!;
+  await page.goto("/money/mutual-funds");
+  const note = main.getByTestId("inbox-note");
+  await expect(note).toContainText("Statement inbox is on", { timeout: 30_000 });
+  await expect(note).toContainText(mine);
+  await note.getByRole("link", { name: "Inbox settings" }).click();
+  await expect(page).toHaveURL(/\/settings#inbox$/);
+  await expect(inbox.getByTestId("inbox-address")).toHaveText(mine, { timeout: 30_000 });
+  await sane(page, errors, phone);
+
   // turning it off deletes the address and the password
   await inbox.getByRole("button", { name: "Turn off the inbox" }).click();
   await page.getByRole("button", { name: "Turn it off" }).click();
@@ -120,7 +131,7 @@ test("US stocks: a bad token says why, a good one reads positions, disconnecting
   await expect(page.getByText("doesn't recognise that token")).toBeVisible({ timeout: 30_000 });
   await card.getByLabel("Flex token").fill("good-token-1234567890");
   await card.getByRole("button", { name: "Connect" }).click();
-  await expect(card.getByTestId("ibkr-line")).toContainText("US positions", { timeout: 30_000 });
+  await expect(card.getByTestId("ibkr-line")).toContainText(/\d+ US positions?\b/, { timeout: 30_000 });   // "1 US position", in the singular for one
   await expect(card.getByText("Connected", { exact: true })).toBeVisible();
   const view = await (await request.get(`${API}/connect`, { headers: auth(u) })).text();
   expect(view).not.toContain("good-token-1234567890");
@@ -155,7 +166,9 @@ test("Zerodha is open to the owner: log in, read holdings, refresh; and an EPF p
   // and when Zerodha ends that login by itself (R46-001)
   await expect(z.getByTestId("kite-line")).toContainText(/ · this login ends (at|on) (\d{1,2} \w{3}, )?06:00 IST$/);
   await z.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByText("Read 1 holdings.")).toBeVisible();
+  // one holding is "1 holding" (19.jpg had "Read 1 holdings."), and a read that found it says nothing about holdings kept from before
+  await expect(page.getByText("Read 1 holding.", { exact: true })).toBeVisible();
+  await expect(z).not.toContainText("returned no holdings");
   await sane(page, errors, phone);
   await shot(page, "connected-zerodha", phone, !phone);
   await z.getByRole("button", { name: "Disconnect" }).click();

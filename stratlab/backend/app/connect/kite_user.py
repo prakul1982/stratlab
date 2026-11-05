@@ -244,10 +244,19 @@ def refresh(uid: str) -> dict:
     # a read is whole only when the holdings call itself returned rows: today's positions alone must not take out the
     # holdings read before
     got = sync.sync_holdings(profile, rows, "kite", "Zerodha Kite", replace=bool(holdings))
-    why = sync.note(got, "Zerodha") or (None if holdings or not rows else
-                                         "Zerodha returned no holdings, so the holdings read from it before are kept as they were.")
+    why = sync.note(got, "Zerodha") or (None if holdings else kept_note(got.get("unnamed") or 0))
     state.update(uid, "kite", refreshed_at=state.now(), status="ok", detail=why, count=got["count"])
     return {"count": got["count"], "unmatched": got["unmatched_count"], "added": got["added"], "changed": got["changed"]}
+
+
+def kept_note(n: int) -> str | None:
+    """The card's line when Zerodha's holdings list came back empty but today's buys were read: the holdings read from it before
+    are kept, and it says how many. None when there were none to keep (19.jpg: "Read 1 holding." beside "the holdings read from it
+    before are kept", when nothing had been read before)."""
+    if n <= 0:
+        return None
+    return (f"Zerodha returned no holdings, only today's buys, so the {n} holding{'' if n == 1 else 's'} read from it before "
+            f"{'is' if n == 1 else 'are'} kept as {'it was' if n == 1 else 'they were'}.")
 
 
 def status(uid: str, profile: dict) -> dict:

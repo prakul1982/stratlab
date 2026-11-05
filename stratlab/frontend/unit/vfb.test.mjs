@@ -57,8 +57,11 @@ test("VR1-101, VR1-103, VR1-104: the scan page says things once; the screener's 
 });
 
 test("VR1-102: the space's main button keeps its place on the page it points to", () => {
-  assert.match(read("src/components/Shell.tsx"), /<span className="side-new-gap" aria-hidden="true" \/>/);
-  assert.match(css, /\.side-new-gap \{ display: block; height: 34px; \}/);
+  // owner, 5 Nov: the button itself stays there (it was an empty slot of its height)
+  const shell = read("src/components/Shell.tsx");
+  assert.match(shell, /<button className="side-new" onClick=\{goMain\}>/);
+  assert.doesNotMatch(shell, /side-new-gap/);
+  assert.doesNotMatch(css, /side-new-gap/);
 });
 
 test("VR1-105 (UI-CO item 1): a company's corporate actions are one table: what is ahead (or a line saying nothing is), then the past three years", () => {
@@ -117,16 +120,19 @@ test("VR1-130: the alerts summary is one sentence row with the settings link in 
 test("VR1-140, VR1-149, VR1-150, VR1-151: Money home's figures and tiles, label baselines, a disabled main button, the rates table", () => {
   assert.match(read("src/pages/SpaceHomes.tsx"), /grid2 space-panels money-panels/);
   assert.match(css, /\.money-panels \.k-stats \{ grid-template-columns: repeat\(auto-fit, minmax\(96px, 1fr\)\);/);
-  assert.match(css, /\.explore-grid\.money-cards \{ grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 215px\), 1fr\)\); \}/);
+  // Money's other tools are rows of one table in a fold since 5 Nov (owner), not tiles in rows of four
+  assert.match(read("src/pages/SpaceHomes.tsx"), /<MoreTools id="money-tools" title="More in Money" rows=\{tools\} \/>/);
   assert.match(css, /\.k-stat-k \.info \{ margin-block: -4px; \}/);
   assert.match(css, /\.btn:disabled:not\(\.quiet\):not\(\.blue\):not\(\.outline\) \{ opacity: 1; background: transparent; border: 1px dashed var\(--dash\);/);
   assert.match(read("src/pages/money/RatesPage.tsx"), /className="k-page rates-page"/);
   assert.match(css, /\.rates-page \.k-table th\.k-wrap\[scope="row"\] \{ min-width: 260px; \}/);
 });
 
-test("VR1-141, VR1-142, VR1-143: Net worth has one quick-add strip, a plain History fold and one 'as of' for the assets", () => {
+test("VR1-141, VR1-142, VR1-143: Net worth has one quick add, a plain History fold and one 'as of' for the assets", () => {
   const n = read("src/pages/money/NetWorthPage.tsx");
-  assert.match(n, /<Card compact label="Add to your net worth">/);
+  // owner, 5 Nov: the quick add sits beside the header's button as a menu, not a strip card of its own
+  assert.match(n, /<MoreMenu label="Quick add"/);
+  assert.doesNotMatch(n, /<Card compact label="Add to your net worth">/);
   assert.doesNotMatch(n, /<CardHead title="Add to your net worth" \/>/);
   assert.match(n, /History: \{hist\.length\} snapshot/);
   assert.doesNotMatch(n, /<summary className="k-small">The history's snapshots/);

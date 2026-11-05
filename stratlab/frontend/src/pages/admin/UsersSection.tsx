@@ -146,7 +146,7 @@ export function UsersSection() {
   const doPromo = async () => {
     setBusy(true);
     try {
-      if (promo === "start") { await api("/admin/promo", { method: "POST", body: { days } }); notify(`Launch offer on for ${days} days.`); }
+      if (promo === "start") { await api("/admin/promo", { method: "POST", body: { days } }); notify(`Launch offer on for ${days} ${days === 1 ? "day" : "days"}.`); }
       else { await api("/admin/promo", { method: "DELETE" }); notify("Launch offer ended."); }
       setPromo(null); await reload();
     } catch (e) { fail(e); } finally { setBusy(false); }

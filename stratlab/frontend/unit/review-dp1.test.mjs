@@ -124,7 +124,9 @@ test("DP1-019: locked pages show what they hold, and ask the server nothing it w
 
 test("DP1-020: home tiles for a paid tool say its plan on the tile", () => {
   const ex = read("src/components/Explore.tsx");
-  assert.match(ex, /lockedOn\(f\.flag\) \? `On the \$\{lockedOn\(f\.flag\)\} plan →`/);
+  // a row of the tools' table since 5 Nov: the plan said under the tool's name
+  assert.match(ex, /const tag = plan \? `On the \$\{plan\} plan` : /);
+  assert.match(ex, /tag: tag && <span className="k-more-lock">\{tag\}<\/span>/);
   const feats = read("src/lib/features.ts");
   for (const f of ["scans", "filings", "alerts", "investor_home"]) assert.match(feats, new RegExp(`flag: "${f}" \\}`), f);
   assert.match(read("src/pages/SpaceHomes.tsx"), /title: "Trend scan", line: "Stocks in a rising trend with the Supertrend up\.", flag: "scans" \}/);

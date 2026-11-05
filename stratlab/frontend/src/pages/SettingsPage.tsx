@@ -28,7 +28,7 @@ const SECTIONS = [
   { value: "check", label: "Connection check" },
 ];
 /** Older links and the ids of the cards inside a section. */
-const ALIAS: Record<string, string> = { theme: "experience", newsletters: "notifications", emails: "notifications", alerts: "notifications", connected: "accounts", connection: "check" };
+const ALIAS: Record<string, string> = { theme: "experience", newsletters: "notifications", emails: "notifications", alerts: "notifications", connected: "accounts", inbox: "accounts", zerodha: "accounts", connection: "check" };
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 const TONE = { pass: "ok", warn: "warn", fail: "warn" } as const;

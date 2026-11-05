@@ -29,6 +29,8 @@ const WHAT: Record<string, string> = {
   too_big: "The PDF was too large", no_pdf: "An email came with no PDF attached", empty: "No holdings were found in it", unknown: "Account not found",
 };
 const MAX_MB = 5;
+/** "1 holding", "2 holdings", "0 holdings": a count with its word in the singular only for one (19.jpg: "Read 1 holdings.") */
+const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** The shared copy of what the server knows, reloaded after every action. */
 function useConnect() {
@@ -227,7 +229,7 @@ function BrokersCard({ c, set }: P) {
     try {
       const r = await api<{ count: number; connect: Conn }>(`/connect/${b.path}/refresh`, { method: "POST" });
       set(r.connect);
-      notify(`Read ${r.count} holdings.`);
+      notify(`Read ${count(r.count, "holding")}.`);
       setBusy(null);
     } catch (e) {
       if ((e as { code?: string }).code === "login_needed") { await login(b); return; }
@@ -288,12 +290,12 @@ function IbkrCard({ c, set }: P) {
       const r = await api<{ positions: number; trades_added: number; connect: Conn }>("/connect/ibkr", { method: "PUT", body: { token: token.trim(), query_id: query.trim(), expires: expires || null } });
       set(r.connect);
       setToken(""); setQuery(""); setExpires("");
-      notify(`Connected. ${r.positions} US positions read, ${r.trades_added} trades added to your journal.`);
+      notify(`Connected. ${count(r.positions, "US position")} read, ${count(r.trades_added, "trade")} added to your journal.`);
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   const refresh = async () => {
     setBusy(true);
-    try { const r = await api<{ positions: number; trades_added: number; connect: Conn }>("/connect/ibkr/refresh", { method: "POST" }); set(r.connect); notify(`Read ${r.positions} US positions, ${r.trades_added} new trades.`); }
+    try { const r = await api<{ positions: number; trades_added: number; connect: Conn }>("/connect/ibkr/refresh", { method: "POST" }); set(r.connect); notify(`Read ${count(r.positions, "US position")}, ${count(r.trades_added, "new trade")}.`); }
     catch (e) { fail(e); } finally { setBusy(false); }
   };
   const drop = async () => {
@@ -305,7 +307,7 @@ function IbkrCard({ c, set }: P) {
       <CardHead title="US stocks (Interactive Brokers)" info="Paste a read-only Flex token and query id from Interactive Brokers once. Every morning (India time) your US positions go to My Holdings and your closed trades to the trade journal. The token can't trade or move money."
         actions={<Badge tone={b.connected ? (b.status === "ok" ? "ok" : "warn") : "plain"}>{b.connected ? (b.status === "ok" ? "Connected" : "Needs attention") : "Not connected"}</Badge>} />
       {b.connected ? <>
-        <p className="k-small" data-testid="ibkr-line">{b.synced_at ? `Read ${ago(b.synced_at)} · ${b.positions ?? 0} US positions, ${b.trades ?? 0} new trades` : "Not read yet"}{b.expires ? ` · token ends ${dateOnly(b.expires)}` : ""}</p>
+        <p className="k-small" data-testid="ibkr-line">{b.synced_at ? `Read ${ago(b.synced_at)} · ${count(b.positions ?? 0, "US position")}, ${count(b.trades ?? 0, "new trade")}` : "Not read yet"}{b.expires ? ` · token ends ${dateOnly(b.expires)}` : ""}</p>
         {b.status && b.status !== "ok" && b.detail && <Notice tone="warn" role="status">{b.detail}</Notice>}
         <FormActions>
           <button type="button" className="btn" disabled={busy} onClick={() => void refresh()}>Refresh</button>

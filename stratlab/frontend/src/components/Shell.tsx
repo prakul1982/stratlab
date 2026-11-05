@@ -257,6 +257,16 @@ export function Shell({ children }: { children: ReactNode }) {
   const homeLabel = space === "mine" ? MINE_NAME : `${SPACES[space].label} home`;
   // the space's main action, in the menu and on a phone's top bar alike (DI-021: the phone's "+" was always New notebook)
   const main = mainAction(space, focus, !!me?.has_holdings);
+  // on the page the main button opens, it goes to the place on it for that action (`data-main-action`: My Holdings' upload; a notebook's
+  // idea box; else the page's first box) and puts the focus there
+  const goMain = () => {
+    if (path !== main.to) { nav(main.to); return; }
+    setOpen(false);
+    const spot = document.querySelector<HTMLElement>("main [data-main-action], main #idea, main .k-card input:not([type=hidden]):not([type=checkbox])");
+    (spot ?? document.querySelector<HTMLElement>("main h1"))?.scrollIntoView({ behavior: scrollBehavior(), block: spot ? "center" : "start" });
+    const field = spot && (spot.matches("input, textarea, button") ? spot : spot.querySelector<HTMLElement>("input:not([hidden]), textarea, button"));
+    field?.focus({ preventScroll: true });
+  };
   const sidebar = (
     <aside ref={aside} id="side-menu" className={`sidebar${open ? " open" : ""}`} aria-label={open ? "Menu" : "Navigation"}
       {...(open ? { role: "dialog", "aria-modal": true } : {})}>
@@ -267,9 +277,10 @@ export function Shell({ children }: { children: ReactNode }) {
           <button className="side-hide" aria-label="Hide the menu" title="Hide the menu (more room for the page)" onClick={() => setSlim(true)}><Chevron size={14} /></button>
         </div>
         <SpaceSwitch space={space} onPick={goSpace} />
-        {/* the space's main button: never a link to the page you are on */}
-        {/* (VR1-102: on that page the button's place is kept, so the menu doesn't jump 42px against the pages around it) */}
-        {path !== main.to ? <button className="side-new" onClick={() => nav(main.to)}>{main.icon}{main.label}</button> : <span className="side-new-gap" aria-hidden="true" />}
+        {/* the space's main button, on every page (owner, 5 Nov: on My Holdings it vanished and left a gap); on the page it opens it
+            brings that page's own place for it into view instead of opening the page again. Not marked current: the menu's own entry
+            for the page is the one highlighted item (ui-lint R7) */}
+        <button className="side-new" onClick={goMain}>{main.icon}{main.label}</button>
         <button className="search-btn" onClick={() => setSearch(true)} aria-keyshortcuts={/Mac/.test(navigator.platform) ? "Meta+K" : "Control+K"}>
           <Sparkle size={16} /><span>Ask or do anything</span>{/* no keyboard shortcut on a touch screen (R50-016) */}
           {!window.matchMedia?.("(pointer: coarse)").matches && <kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>}
@@ -316,7 +327,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <span className="row tight">
           <button className="icon-btn" aria-label="Search or ask anything" onClick={() => setSearch(true)}><Search /></button>
           <button className="icon-btn" aria-label="Markets" onClick={() => openMarkets({ open: "toggle" })}><Markets /></button>
-          <button className="icon-btn" aria-label={main.label} title={main.label} onClick={() => nav(main.to)}>{main.to === "/new" ? <Plus /> : main.icon}</button>
+          <button className="icon-btn" aria-label={main.label} title={main.label} onClick={goMain}>{main.to === "/new" ? <Plus /> : main.icon}</button>
         </span>
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}

@@ -75,9 +75,10 @@ test("MO-4a: the notebook is centred like every page, and the Lab notes float, o
 
   // Escape closes it and puts the focus back on the button; an open (i) tip takes the first Escape
   await panel.getByRole("button", { name: "About lab notes" }).click();
-  await expect(panel.getByRole("note")).toBeVisible();
+  // the tip is drawn on the page's top layer (a portal), not inside the panel, so no edge cuts it (owner, 5 Nov)
+  await expect(page.getByRole("note")).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(panel.getByRole("note")).toHaveCount(0);
+  await expect(page.getByRole("note")).toHaveCount(0);
   await expect(panel).toBeVisible();
   await box.focus();
   await page.keyboard.press("Escape");

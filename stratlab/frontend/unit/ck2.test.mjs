@@ -68,9 +68,11 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   assert.doesNotMatch(css, /explore-go \{ margin-top: auto/);
   assert.doesNotMatch(css, /\.money-panels > \.k-card > \.k-stack/);
   assert.doesNotMatch(read("src/pages/trade/events.css"), /ev-week-more \{ margin-top: auto/);
-  // Invest's short tile list shares its row
-  assert.match(css, /\.k-explore \.explore-grid \{ grid-template-columns: repeat\(auto-fit, minmax\(230px, 1fr\)\); \}/);   // VR2-001: the tiles of a row are as tall as each other (no align-items:start)
-  assert.doesNotMatch(css, /\.k-explore \.explore-grid \{[^}]*align-items: start/);
+  // Invest's short tool list leaves no half-empty row: since 5 Nov (owner, "make it like a dropdown everywhere") the tools are rows of
+  // one table in a closed fold, not a grid of tiles, so the tile grid's rule is gone with it
+  assert.match(read("src/components/Explore.tsx"), /<MoreTools id="explore" title=\{title\} rows=\{rows\}>/);
+  assert.match(read("src/components/MoreTools.tsx"), /<DataTable stack label=\{title\} columns=\{cols\} rows=\{rows\}/);
+  assert.doesNotMatch(css, /\.k-explore \.explore-grid/);
   // Money home: the tax card's explanation is behind its (i); each card its own height
   const home = read("src/pages/SpaceHomes.tsx");
   assert.match(home, /<Panel title=\{year \? `Tax, \$\{year\.label\}` : "Tax this year"\} info=\{how\}/);
