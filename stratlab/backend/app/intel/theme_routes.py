@@ -511,22 +511,57 @@ def members_of(m: dict, dive: dict) -> list[dict]:
     if only:
         groups.append(("Named in a sub-theme only", list(only.values())))
     out = []
+    official = {v.get("layer") or "": bool(v.get("official")) and v.get("basis") != "list" for v in m.get("value_chain") or []}
     for layer, cos in groups:
         for c in cos:
             f = figs.get(c["ticker"]) or {}
-            out.append({"symbol": c["ticker"], "name": c.get("name") or f.get("name") or c["ticker"], "layer": layer,
+            out.append({"symbol": c["ticker"], "name": c.get("name") or f.get("name") or c["ticker"], "layer": layer, "official": official.get(layer, False),
+                        "industry": c.get("industry") or None, "what": c.get("what") or f.get("what") or None,
                         "cap": c.get("cap") if c.get("cap") is not None else f.get("cap"), "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
                         "net": f.get("net"), "roce": f.get("roce"), "year": f.get("year"), "by": by_of(c)})
     return out
 
 
-def deck_view(r: str, m: dict, dive: dict) -> dict:
-    """What theme deck slides are made of (deck.theme_plan): the map's words and checks, the dive's figures."""
+def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
+    """What theme deck slides are made of (deck.theme_plan): every part of the theme's page (DECK, 5 Nov: "it doesn't contain everything
+    there is on the page about the theme"): the map's words and checks, the dive's figures and sections, and the parts the page reads on its
+    own (`extra`: news, listings, prices, business; None where they weren't read)."""
     med = ((dive.get("sections") or {}).get("medians") or {}).get("ebitda") or {}
-    return {"region": r, "sector": m.get("sector") or dive.get("sector"), "summary": m.get("summary") or "", "as_of": dive.get("as_of"),
+    return {"region": r, "sector": m.get("sector") or dive.get("sector"), "summary": m.get("summary") or "", "core": m.get("core") or "",
+            "etfs": m.get("etfs") or [], "generated_at": m.get("generated_at") or 0, "as_of": dive.get("as_of"),
             "unit": dive.get("unit"), "basis": dive.get("basis"), "chain": dive.get("chain") or {}, "layers": dive.get("layers") or [],
+            "subs": dive.get("subs") or [], "sections": dive.get("sections") or {}, "company_wide": dive.get("company_wide") or [],
+            "members_with_figures": dive.get("members"),
             "members": members_of(m, dive), "tailwinds": m.get("tailwinds") or [], "risks": m.get("risks") or [],
-            "placements": m.get("placements") or {}, "figures": dive.get("figures") or {}, "median_ebitda": med.get("median")}
+            "placements": m.get("placements") or {}, "figures": dive.get("figures") or {}, "median_ebitda": med.get("median"),
+            "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
+
+
+def deck_extras(r: str, theme: str, m: dict, profile: dict) -> dict:
+    """The parts of the theme's page that it reads on its own, as the page last read them: the latest headlines and the new listings from
+    their caches, the prices of the companies already read (no candles fetched for the deck), and the business updates on the plans that
+    have them. A part not read yet is None, and the deck says so once."""
+    out: dict = {}
+    fm = theme_base.for_figures(m)[0]
+    stamp = int(float(fm.get("generated_at") or 0))
+    hit = NEWS_CACHE.get((r, theme.lower(), stamp))
+    out["news"] = hit["items"] if hit else None
+    listed = IPO_CACHE.get((r, theme.lower(), int(float(m.get("generated_at") or 0))))
+    out["listings"] = listed["items"] if listed and listed.get("checked") else None
+    names = _map_names(fm)
+    placed = sorted({c["ticker"]: names.get(c["ticker"]) for grp in (fm.get("value_chain") or []) + (fm.get("sub_themes") or [])
+                     for c in grp.get("companies") or []}.items())
+    if placed and any(PRICE_CACHE.get(f"{r}:{sym}") for sym, _ in placed):
+        try:
+            prices = gather_prices(r, placed, bars_loader(r), bench_loader(r), budget=0.0)
+            out["prices"] = prices if prices.get("companies") else None
+        except Exception as e:                       # the deck is made without them, and says so
+            print("theme deck: prices not read:", type(e).__name__, str(e)[:100])
+    if r == "IN":
+        from .. import biz_updates
+        if biz_updates._allowed(profile):
+            out["business"] = business_of(r, m)
+    return out
 
 
 @router.get("/theme-dive/deck")
@@ -541,7 +576,7 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     r, theme, m, _ = R.sector_map(profile, region, q, False)
     m = with_descriptions(r, checked(r, theme, m))
     mark = main.check_deep(profile, "deck", "", r, mark=f"deck:theme:{r}:{theme_data.slug(theme)}")
-    view = deck_view(r, m, dive_of(r, theme, m))
+    view = deck_view(r, m, dive_of(r, theme, m), deck_extras(r, theme, m, profile))
     body = deck.build_theme(view, pdf=format == "pdf")
     if mark:                                   # counted once the file is made: a deck that failed to build uses nothing
         db.add_usage(profile["id"], "deck")
@@ -582,11 +617,16 @@ def theme_dive_business(q: str, region: str = "IN", profile=Depends(current_prof
     if not biz_updates._allowed(profile):
         return R.ok({"allowed": False, "layers": [], "subs": [], "companies": 0, "of": 0})
     r, theme, m, _ = R.sector_map(profile, region, q, False)
-    m = theme_base.for_figures(checked(r, theme, m))[0]
+    return R.ok(business_of(r, checked(r, theme, m)))
+
+
+def business_of(r: str, m: dict) -> dict:
+    """The theme's business-update figures by layer and sub-theme (the page's section and the deck's slides)."""
+    m = theme_base.for_figures(m)[0]
     names = _map_names(m)
     blocks = [{"layer": v.get("layer") or "", "companies": [{"symbol": c["ticker"]} for c in v.get("companies") or []]} for v in m.get("value_chain") or []]
     subs = [{"name": v.get("name") or "", "companies": [{"symbol": c["ticker"]} for c in v.get("companies") or []]} for v in m.get("sub_themes") or []]
-    return R.ok({"allowed": True, **theme_data.business_section(blocks, subs, names, business_reader())})
+    return {"allowed": True, **theme_data.business_section(blocks, subs, names, business_reader())}
 
 
 # ---------- new listings ----------
