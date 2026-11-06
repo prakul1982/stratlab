@@ -1826,6 +1826,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 
 /* table */
 /* EXPORT: a table's "Download CSV" sits over its top right edge, out of the way of the figures */
+@media (max-width: 640px) { .k-csv-verb { display: none; } }
 .k-tbl-tools { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: var(--s2, 8px); }
 /* a table's "select all" box (DataTable selectAll): in the first header cell, lined up with the rows' boxes under it; over a phone's cards, at the left */
 .k-tap.k-th-check { margin: -9px -1px -9px -9px; vertical-align: middle; }   /* the header text then starts where the rows' names do (.rot-name: the box, then 8px) */
@@ -1917,6 +1918,20 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   /* VR1-147: a column marked `up` (a sale's gain) sits right under the name with its label kept, not after eleven other figures */
   .k-tbl-wrap.stack.has-up .k-table th[scope="row"] { order: -2; }
   .k-tbl-wrap.stack.has-up .k-table td.k-first { order: -1; }
+  /* LIVE4-010: a `compact` table is two short lines a row on a phone, not a card of labelled figures: the name with its `brief` figures at
+     the right, then the rest in one line, each after its label; a line between rows, no boxes. The zero-height ::before is the line break. */
+  .k-tbl-wrap.stack.compact .k-table tr { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; padding: 10px 2px; margin: 0;
+    border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
+  .k-tbl-wrap.stack.compact .k-table tbody tr:last-child { border-bottom: 0; }
+  .k-tbl-wrap.stack.compact .k-table tr::before { content: ""; order: -1; flex-basis: 100%; height: 0; }
+  .k-tbl-wrap.stack.compact .k-table th[scope="row"] { order: -3; flex: 1 1 0; min-width: 0; }
+  .k-tbl-wrap.stack.compact .k-table td.k-brief { order: -2; flex: none; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+  .k-tbl-wrap.stack.compact .k-table td { flex: none; font-size: var(--t-note); white-space: nowrap; }
+  .k-tbl-wrap.stack.compact .k-table td[data-label]::before { display: inline; margin-right: 4px; }
+  .k-tbl-wrap.stack.compact .k-table td.k-brief { font-size: var(--t-label); }
+  .k-tbl-wrap.stack.compact .k-table td.k-brief::before { display: none; }
+  .k-tbl-wrap.stack.compact .k-table td.k-phone-off { display: none; }
+  .k-tbl-wrap.stack.compact .k-table td.k-act, .k-tbl-wrap.stack.compact .k-table td.k-row-note, .k-tbl-wrap.stack.compact .k-table td.k-empty-row { flex: 1 1 100%; white-space: normal; }
   /* a heat cell fills a table cell edge to edge; on a card it is a chip that stays inside its figure (R88-003) */
   .k-tbl-wrap.stack .inv-heat-cell { display: inline-block; margin: 0; padding: 2px 8px; border-radius: 6px; }
 }
@@ -2655,7 +2670,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   input[type=checkbox], input[type=radio],
   .k-check input[type="checkbox"], .k-check input[type="radio"],
   .k-table td input[type="checkbox"], .k-table th input[type="checkbox"] { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
-  .k-table td a, .k-table th a { min-width: 32px; }
+  .k-table td a, .k-table th a { min-width: 32px; flex-shrink: 0; }   /* the 32px floor replaced min-width:auto, so a link in a flex row shrank under its words and the next tag drew over them (LIVE4-010: "COROMANDEE&O") */
   .k-page a.link { padding-block: 8px; }
   .k-page button.link { display: inline-flex; align-items: center; min-height: 32px; }
   a.link.tap, .k-page a.link.tap { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; }
