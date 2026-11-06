@@ -72,6 +72,8 @@ test("with analytics on, the ad landing sends ad_landing_view, and ad_signup_cli
   // requests are read as they go; a beacon (what the click sends, as the page leaves) is read in the page, its words said on the console
   await page.addInitScript(() => {
     Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false });
+    // CI's headless shell names itself "HeadlessChrome" in userAgentData and PostHog drops those events, as analytics.spec's test hides
+    Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => undefined });
     Object.defineProperty(Navigator.prototype, "userAgent", { get: () => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36" });
     const send = navigator.sendBeacon.bind(navigator);
     navigator.sendBeacon = (url, data) => {
@@ -94,11 +96,10 @@ test("with analytics on, the ad landing sends ad_landing_view, and ad_signup_cli
   await page.route("https://demo.supabase.co/**", (r) => r.fulfill({ status: 204, body: "" }));
   const errors = await open(page, "/?fbclid=x", `window.STRATLAB_CONFIG = {API_BASE:"${API}",SUPABASE_URL:"https://demo.supabase.co",SUPABASE_ANON_KEY:"demo",POSTHOG_KEY:"phc_test"};`);
   await adView(page, errors);
-  // analytics loads when the browser is idle after the first paint (lib/analytics.ts), then sends its batch: on a busy CI runner that took
-  // longer than 15 s (browser 5, phone); 30 s as the other first-load waits
-  await expect.poll(() => said.join("\n"), { timeout: 30_000 }).toContain("ad_landing_view");
+  // analytics loads when the browser is idle after the first paint (lib/analytics.ts), then sends its batch
+  await expect.poll(() => said.join("\n"), { timeout: 20_000 }).toContain("ad_landing_view");
   expect(said.join("\n")).toMatch(/"kind":"home","source":"fbclid"/);
   await page.getByRole("button", { name: "Try free with Google" }).click();
-  await expect.poll(() => said.filter((x) => x.startsWith("beacon ")).join("\n"), { timeout: 30_000 }).toContain("ad_signup_click");
+  await expect.poll(() => said.filter((x) => x.startsWith("beacon ")).join("\n"), { timeout: 20_000 }).toContain("ad_signup_click");
   await ctx.close();
 });
