@@ -113,3 +113,52 @@ def test_the_business_updates_route_says_pending_while_the_first_read_goes_on(w,
     r = w["client"].get("/research/business-updates/HDFCBANK", headers=w["headers"]("pro-token"))
     assert r.status_code == 200 and not r.json().get("pending")
     swr.clear()
+
+
+# ---------- LIVE4-024: the mood answers with the last good read at once, also on a new server ----------
+def test_a_new_server_answers_the_mood_with_the_last_read_kept_and_reads_a_fresh_one_behind_it(w, monkeypatch):
+    import threading
+    import time
+    from app.intel import mood as M
+    from app.intel import company as Co
+    monkeypatch.setattr(Co, "market_open", lambda region, now=None: False)
+    gate, builds = threading.Event(), []
+
+    def build(self, region):
+        builds.append(region)
+        gate.wait(5)
+        return {"region": region, "is_open": False, "headline": f"fresh {len(builds)}", "lines": []}
+    monkeypatch.setattr(M.Mood, "build", build)
+    monkeypatch.setattr(M, "KEEP_EVERY", 0.0)
+    first = M.Mood(object())
+    gate.set()
+    got, at = first.get("US", wait=3.0)
+    assert got["headline"] == "fresh 1"                                       # the very first read of all: waited for
+    gate.clear()
+    later = M.Mood(object())                                                  # a restart: nothing in memory
+    later.payloads.fresh_for = 0.0
+    t0 = time.monotonic()
+    monkeypatch.setattr(M, "FRESH_SHUT", 0.0)
+    got, at = later.get("US", wait=20.0)
+    assert time.monotonic() - t0 < 1.0 and got["headline"] == "fresh 1" and at   # the kept read at once, not a 20 s wait
+    gate.set()
+    time.sleep(0.3)
+    assert len(builds) == 2 and later.payloads.kept("US")[1]["headline"] == "fresh 2"   # the fresh one was read behind it
+
+
+def test_a_copy_from_before_the_close_waits_a_few_seconds_then_is_shown_marked_as_being_read_again(monkeypatch):
+    import threading
+    import time
+    from app.intel import mood as M
+    from app.intel import company as Co
+    monkeypatch.setattr(Co, "market_open", lambda region, now=None: False)
+    gate = threading.Event()
+    monkeypatch.setattr(M.Mood, "build", lambda self, region: gate.wait(5) and {"region": region, "is_open": False, "headline": "after", "lines": []})
+    monkeypatch.setattr(M, "MISMATCH_WAIT", 0.2)
+    m = M.Mood(object())
+    m._seeded.add("IN")
+    m.payloads.put("IN", {"region": "IN", "is_open": True, "headline": "live", "lines": []})
+    t0 = time.monotonic()
+    got, _ = m.get("IN", wait=20.0)
+    assert time.monotonic() - t0 < 1.5 and got["headline"] == "live" and got["refreshing"] is True
+    gate.set()

@@ -33,3 +33,24 @@ test("LIVE4-022: the company AI read is asked a few times, once per company, and
   assert.match(biz, /bizApi\.settled\(symbol, \(\) => live\)/);
   assert.match(biz, /if \(!got\.pending \|\| i >= BIZ_PENDING_TRIES \|\| !alive\(\)\) return got;/);
 });
+
+test("LIVE4-024: the last mood read shows at once, kept for the session and on the device, and an old one is read again behind it", async () => {
+  const { keptMood, keepMood, moodStale, MOOD_STALE_OPEN, MOOD_KEEP } = await import("../src/lib/moodCache.ts");
+  const now = Date.parse("2026-11-06T07:00:00Z");
+  const us = { region: "US", is_open: false, read_at: new Date(now - 60_000).toISOString(), headline: "Stocks rose", lines: [] };
+  assert.equal(keptMood("US", now), null);                              // never read: the loading bar
+  keepMood("US", us);
+  assert.equal(keptMood("US", now).headline, "Stocks rose");             // switching back: shown at once
+  assert.ok(localStorage.getItem("stratlab.mood.v1.US"));                // and on this device for the next visit
+  keepMood("IN", { region: "IN", pending: true });
+  assert.equal(keptMood("IN", now), null);                               // a "pending" answer is no read
+  assert.equal(moodStale(us, now), false);
+  assert.equal(moodStale({ ...us, is_open: true, read_at: new Date(now - (MOOD_STALE_OPEN + 5) * 1000).toISOString() }, now), true);
+  assert.equal(moodStale({ ...us, refreshing: true }, now), true);
+  localStorage.setItem("stratlab.mood.v1.IN", JSON.stringify({ region: "IN", read_at: new Date(now - (MOOD_KEEP + 60) * 1000).toISOString() }));
+  assert.equal(keptMood("IN", now), null);                               // too old to show
+  const page = read("src/pages/PulseMood.tsx");
+  assert.match(page, /useState<PulseMood \| null>\(\(\) => keptMood\(region\)\)/);
+  assert.match(page, /if \(moodStale\(d\) && fresher\+\+ < 8\) next = setTimeout\(load, 4000\);/);
+  assert.match(page, /\{updating && <Working inline label="Reading the market again" \/>\}/);
+});

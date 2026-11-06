@@ -24,6 +24,10 @@ from .snapshot import Snapshot
 
 MINUS = "−"
 FRESH_OPEN, FRESH_SHUT = 60.0, 900.0      # seconds a finished payload is served from memory, market open / shut
+KEEP_KEY = "mood:last:"                   # the last finished payload per region, in the database: a new server answers with it at once
+KEEP_EVERY = 600.0                        # seconds between two writes of it (each read is a minute apart in market hours)
+KEEP_FOR = 3 * 86400.0                    # a stored payload older than this is not answered with
+MISMATCH_WAIT = 6.0                       # seconds a copy from the other side of the open or close waits for the fresh read
 CLOSES_FRESH = 4 * 3600.0                 # daily closes change once a day
 TOP = 5                                   # stocks in each of "adding" and "taking" points
 CHUNK = 24                                # hub.quotes reads at most this many symbols at once
@@ -421,10 +425,50 @@ class Mood:
         self.hub = hub
         self.payloads = Snapshot(FRESH_OPEN, give_up=40)
         self.closes = Snapshot(CLOSES_FRESH, give_up=60)
+        self._kept_at: dict[str, float] = {}       # region -> when its payload was last written to the database
+        self._seeded: set[str] = set()
+
+    # -- the last good read, kept across restarts (LIVE4-024: the first visit after a deploy waited 10 to 29 s for a first read) --
+    def _keep(self, region: str, value: dict) -> None:
+        import json
+        import time
+        if time.time() - self._kept_at.get(region, 0.0) < KEEP_EVERY:
+            return
+        self._kept_at[region] = time.time()
+        try:
+            from .. import db
+            db.set_setting(KEEP_KEY + region, json.dumps({"at": time.time(), "value": value}, separators=(",", ":"), default=str))
+        except Exception as e:
+            print("mood: couldn't keep the read:", str(e)[:120])
+
+    def _seed(self, region: str) -> None:
+        """A server with nothing in memory starts from the last read kept in the database (a fresh read starts behind it)."""
+        import json
+        import time
+        if region in self._seeded:
+            return
+        self._seeded.add(region)
+        if self.payloads.kept(region):
+            return
+        try:
+            from .. import db
+            got = json.loads(db.get_setting(KEEP_KEY + region) or "null") or {}
+        except Exception:
+            return
+        at, value = got.get("at"), got.get("value")
+        if isinstance(value, dict) and isinstance(at, (int, float)) and time.time() - at < KEEP_FOR:
+            self.payloads.put(region, value, at)
+            self._kept_at[region] = at
+
+    def _build_kept(self, region: str) -> dict:
+        value = self.build(region)
+        self._keep(region, value)
+        return value
 
     def forget(self):
         self.payloads = Snapshot(FRESH_OPEN, give_up=40)
         self.closes = Snapshot(CLOSES_FRESH, give_up=60)
+        self._seeded = set()
 
     # -- sources, each bounded and each allowed to fail alone --
     def _quotes(self, region: str, symbols: list[str]) -> dict[str, dict]:
@@ -689,18 +733,20 @@ class Mood:
         from .company import market_open
         open_now = market_open(region)
         self.payloads.fresh_for = FRESH_OPEN if open_now else FRESH_SHUT
+        self._seed(region)
         hit = self.payloads.kept(region)
         if hit and bool((hit[1] or {}).get("is_open")) != open_now:
             # a copy from the other side of the open or the close (the first visit after a quiet spell got a market-hours copy
-            # saying "live" at 17:13 IST): the fresh read is waited for, and the old copy is the answer only if it can't come
-            f = self.payloads._start(region, lambda: self.build(region))
+            # saying "live" at 17:13 IST): the fresh read is waited for a few seconds, and the old copy is the answer only if it
+            # can't come (the page shows it with its read time and says it is being read again)
+            f = self.payloads._start(region, lambda: self._build_kept(region))
             try:
-                value = f.result(timeout=max(0.0, wait))
+                value = f.result(timeout=max(0.0, min(wait, MISMATCH_WAIT)))
                 got = self.payloads.kept(region)
                 return value, (got[0] if got else None)
             except Exception:
-                return hit[1], hit[0]
-        return self.payloads.get(region, lambda: self.build(region), wait)
+                return {**hit[1], "refreshing": True}, hit[0]
+        return self.payloads.get(region, lambda: self._build_kept(region), wait)
 
 
 _SUFFIX = re.compile(r"\s+(?:limited|ltd\.?|inc\.?|corporation|corp\.?|company|co\.?|plc|holdings?)\s*$", re.I)

@@ -369,6 +369,7 @@ def test_a_copy_from_before_the_close_is_not_served_as_live_after_it(monkeypatch
     # close (owner's live check, 5 Nov); a kept copy from the other side of the open or the close waits for the fresh read
     from app.intel import company
     m = mood.Mood(object())
+    m._seeded.add("IN")                  # this server's own reads only, not a copy another test kept in the database (LIVE4-024)
     builds = []
     monkeypatch.setattr(m, "build", lambda region: builds.append(region) or {"is_open": company.market_open(region), "n": len(builds)})
     monkeypatch.setattr(company, "market_open", lambda region, now=None: True)

@@ -210,6 +210,8 @@ export interface MoodSectorRow { name: string; label: string; change_pct: number
 export interface MoodQuoteRow { label: string; symbol: string; tag: string; price: number; change_pct: number | null; day: string | null; same_day: boolean | null }
 export interface PulseMood {
   pending?: boolean; region: Region; is_open: boolean; today: string; levels_at: string | null; read_at?: string | null;
+  /** a copy from before the open or close, answered while the fresh read goes on (LIVE4-024) */
+  refreshing?: boolean;
   headline: string; lines: string[];
   compare: { index: string; avg_abs: number; days: number; ratio: number; words: string } | null;
   breadth: { group: string; live: boolean; day: string | null; close_day: string | null; prev_day: string | null; adv: number | null; dec: number | null; unch: number | null;

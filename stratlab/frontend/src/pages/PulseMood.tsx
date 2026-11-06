@@ -4,8 +4,9 @@ import { useLiveRefresh } from "../lib/liveRefresh";
 import { fmtDate, pct, safeHref } from "../lib/format";
 import { newsWhen } from "../lib/researchFormat";
 import { researchApi, type MoodBreadthRow, type NewsItem, type PulseAI, type PulseMood, type Region } from "../lib/research";
+import { keepMood, keptMood, moodStale } from "../lib/moodCache";
 import { crore, moverRows, movedBy, pairable, riskLevel, sectorCount, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
-import { Card, CardHead, DataTable, Delta, EmptyState, Skeleton, type Column } from "../components/kit";
+import { Card, CardHead, DataTable, Delta, EmptyState, Skeleton, Working, type Column } from "../components/kit";
 
 /* The Market pulse's tables (MOOD-1). Every block that shows figures or records is a table with a header row, numbers
  * right-aligned and a ▲/▼ with a sign for a change; on a phone each row is a card (DataTable's stack). The words above them
@@ -16,31 +17,46 @@ const chg = (v: number | null | undefined) => (v == null ? "–" : <Delta value=
 
 /** The mood as the server read it, again each minute while the market trades; `pending` until its first read is back. */
 export function usePulseMood(region: Region) {
-  const [mood, setMood] = useState<PulseMood | null>(null);
+  // the last read at once (this session's, else this device's), a fresh one read behind it; the loading bar only when there is none
+  const [mood, setMood] = useState<PulseMood | null>(() => keptMood(region));
   const [error, setError] = useState<string | null>(null);
   const [again, setAgain] = useState(0);
   useEffect(() => {
-    let live = true, tries = 0;
+    let live = true, tries = 0, fresher = 0;
     let next: ReturnType<typeof setTimeout> | undefined;
-    setMood(null); setError(null);
+    const shown = keptMood(region);
+    setMood(shown); setError(null);
     const load = () => researchApi.pulseMood(region).then((d) => {
       if (!live) return;
-      if (d.pending) { if (tries++ < 20) next = setTimeout(load, 3000); else setError("The market's figures are taking longer than usual."); return; }
+      if (d.pending) {
+        if (tries++ < 20) next = setTimeout(load, 3000);
+        else if (!keptMood(region)) setError("The market's figures are taking longer than usual.");
+        return;
+      }
+      keepMood(region, d);
       setMood(d);
-    }).catch((e) => { if (live) setError((e as Error).message || "The market's figures couldn't be read."); });
+      // an old copy (the server's last read from before a restart, or from before the open or close): asked again for the fresh one
+      if (moodStale(d) && fresher++ < 8) next = setTimeout(load, 4000);
+    }).catch((e) => { if (live && !keptMood(region)) setError((e as Error).message || "The market's figures couldn't be read."); });
     load();
     return () => { live = false; if (next) clearTimeout(next); };
   }, [region, again]);
-  useLiveRefresh(!!mood?.is_open, () => { researchApi.pulseMood(region).then((d) => { if (!d.pending) setMood((cur) => (cur ? d : cur)); }).catch(() => undefined); });
-  return { mood, error, retry: () => setAgain((n) => n + 1) };
+  useLiveRefresh(!!mood?.is_open, () => { researchApi.pulseMood(region).then((d) => { if (!d.pending) { keepMood(region, d); setMood((cur) => (cur ? d : cur)); } }).catch(() => undefined); });
+  return { mood, error, retry: () => setAgain((n) => n + 1), updating: moodStale(mood) };
 }
 
 /** The headline and its few lines, each from one of the tables below. */
-export function MoodCard({ m, region }: { m: PulseMood; region: Region }) {
+export function MoodCard({ m, region, updating = false }: { m: PulseMood; region: Region;
+  /** an older read shown while a fresh one is read behind it: its read time says when, with the kit's small bar beside it (LIVE4-024) */
+  updating?: boolean }) {
+  const tz = region === "IN" ? "Asia/Kolkata" : "America/New_York", loc = region === "IN" ? "en-IN" : "en-US";
+  const readDay = m.read_at ? new Date(m.read_at).toLocaleDateString("en-CA", { timeZone: tz }) : null;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+  const readAt = m.read_at ? `${readDay !== today ? `${fmtDate(readDay!, { weekday: true, year: false })}, ` : ""}${new Date(m.read_at).toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit", timeZone: tz })}` : "";
   return (
     <Card testId="pulse-mood-card">
       <CardHead title="The mood" info="One short headline and a few lines, each worked out from the tables below with one rounding, so a line and its table cannot disagree. Facts about today, not a forecast. The index levels are in the first table."
-        actions={m.read_at ? <span className="k-note">Read {new Date(m.read_at).toLocaleTimeString(region === "IN" ? "en-IN" : "en-US", { hour: "2-digit", minute: "2-digit", timeZone: region === "IN" ? "Asia/Kolkata" : "America/New_York" })}</span> : undefined} />
+        actions={m.read_at ? <span className="k-row k-note" data-testid="pulse-mood-read">Read {readAt}{updating && <Working inline label="Reading the market again" />}</span> : undefined} />
       {m.headline ? <p className="inv-summary" data-testid="pulse-mood"><b>{m.headline}</b></p> : <p className="k-small k-muted">The tables below are the day's figures; their summary isn't available right now.</p>}
       {m.lines.length > 0 && <ul className="k-list" data-testid="pulse-mood-lines">{m.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
     </Card>

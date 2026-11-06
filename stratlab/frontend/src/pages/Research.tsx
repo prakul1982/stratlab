@@ -493,7 +493,7 @@ export function PulsePage() {
   const [region, setRegion] = useRegion();
   const levels = usePulse(region);
   const data = levels.data;
-  const { mood, error: moodErr, retry: moodRetry } = usePulseMood(region);
+  const { mood, error: moodErr, retry: moodRetry, updating: moodUpdating } = usePulseMood(region);
   const [ai, setAi] = useState<PulseAI | null>(null);
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -519,7 +519,7 @@ export function PulsePage() {
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><PulseLevels p={levels} /></Card>
       {/* the mood and every table under it come from one read of the figures (mood.py): a line and its table cannot disagree (MOOD-1) */}
-      {mood ? <MoodCard m={mood} region={region} /> : moodErr
+      {mood ? <MoodCard m={mood} region={region} updating={moodUpdating} /> : moodErr
         ? <Card><ErrorState title="The market's figures couldn't be read" action={{ label: "Try again", onClick: moodRetry }}>{moodErr}</ErrorState></Card> : <MoodSkeleton />}
       {mood?.breadth && <BreadthTable b={mood.breadth} />}
       {mood?.sectors && <SectorsTable s={mood.sectors} />}
