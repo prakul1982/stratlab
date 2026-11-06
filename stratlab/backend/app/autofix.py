@@ -175,6 +175,17 @@ def escalate(st: dict, now: datetime, check: Check, issue: dict, send: Callable[
     return ok
 
 
+def fixed_text(fix_text: str, tried: list[dict]) -> str:
+    """What the history says when a check passes again: the remedy is credited only when a try of it went through (LIVE5-011: "Re-ran
+    the job at 11:44 — fixed" when that re-run had failed with "No route"); otherwise the check passes on its own."""
+    good = [t for t in tried if not t.get("error")]
+    if good:
+        return f"{fix_text} at {_clock(good[-1]['at'])}; the check passes now — fixed"
+    if tried:
+        return f"the check passes now; the automatic {'try' if len(tried) == 1 else 'tries'} had failed, so the job's own next run cleared it"
+    return "the check passes now: cleared by itself"
+
+
 def sweep(checks: list[Check], now: datetime | None = None, st: dict | None = None,
           send: Callable[[str, str], bool] = _send, run: Callable[[Check], tuple[bool, str]] = _run, partial: bool = False) -> dict:
     """One pass over the checks (see the module's note). Returns the state, which the caller saves. `partial`: only these checks
@@ -187,8 +198,7 @@ def sweep(checks: list[Check], now: datetime | None = None, st: dict | None = No
         issue = st["open"].get(c.id)
         if not c.problem:
             if issue:                       # it went away: by the remedy, or by itself
-                by = (f"{c.fix_text} at {_clock(issue['tried'][-1]['at'])}" if issue.get("tried") else "cleared by itself")
-                _note(st, now, issue, "fixed", f"{by} — fixed")
+                _note(st, now, issue, "fixed", fixed_text(c.fix_text, issue.get("tried") or []))
                 del st["open"][c.id]
             continue
         fp = fingerprint(c.id, c.problem)

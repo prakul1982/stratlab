@@ -16,7 +16,7 @@ from ..kite_service import KiteService
 from .finnhub import Finnhub
 from .net import NotFound, SourceError, num, rate_wait, with_rate_wait
 from .news import GoogleNews, Wikipedia, company_headline, mentions, plain_headline
-from .screener import Screener, clean_profile, summary as scr_summary
+from .screener import Screener, clean_profile, own_site, summary as scr_summary
 from .yahoo import Yahoo
 from ..kite_service import ist_date
 
@@ -1393,7 +1393,7 @@ class Research:
         return {
             "region": "US", "symbol": sym, "name": p.get("name"), "exchange": one["exchange"],
             "currency": one["currency"], "reporting_currency": one["reporting_currency"],
-            "logo": p.get("logo") or None, "website": p.get("weburl") or None,
+            "logo": p.get("logo") or None, "website": own_site(p.get("weburl")),
             "facts": [{"label": k, "value": v} for k, v in (("Industry", p.get("finnhubIndustry")), ("Country", p.get("country")),
                                                             ("Listed since", _long_day(p.get("ipo"))), ("Exchange", one["exchange"]),
                                                             ("Results reported in", one["reporting_currency"] if one["foreign"] else None)) if v],
@@ -1664,7 +1664,7 @@ class Research:
             s = {**s, "market_cap_cr": None, "pe": None, "pb": None, "div_yield": None}
         out = {
             "region": "IN", "symbol": sym, "name": name, "exchange": exchange, "currency": "INR", "logo": None,
-            "website": (scr or {}).get("website"), "industry": None, "bse_code": code,
+            "website": own_site((scr or {}).get("website")), "industry": None, "bse_code": code,
             "facts": [{"label": "Listed", "value": f"BSE only · {code}" if code else f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr")
                                                                                                     else [{"label": "Market cap", "value": "Unavailable"}] if s.get("cap_problem") else []),
             "cap_note": stock_pages.CAP_UNAVAILABLE if s.get("cap_problem") else None,

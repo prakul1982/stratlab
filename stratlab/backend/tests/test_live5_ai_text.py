@@ -47,3 +47,33 @@ def test_a_flow_row_about_the_other_institutions_is_dropped_and_names_keep_their
     st = grounding.story_of("Sensex Nifty rally", titles)
     assert st and st["label"].startswith("Sensex")
     assert grounding.story_of("crude oil", ["Crude oil jumps", "Crude oil at a high", "x"])["label"] == "crude oil"
+
+
+def test_the_history_credits_a_re_run_only_when_it_went_through():
+    """LIVE5-011: "Re-ran the job at 6 Nov 11:44 AM IST — fixed" when that re-run had failed ("No route /admin/ipos/refresh")."""
+    from datetime import datetime, timedelta, timezone
+    from app import autofix
+    t0 = datetime(2026, 11, 6, 6, 0, tzinfo=timezone.utc)
+    chk = lambda problem: autofix.Check(id="job:ipo", name="IPOs", problem=problem, fix=lambda: None, fix_text="re-ran the job")   # noqa: E731
+    run = lambda c: (False, "No route /admin/ipos/refresh")                                                                       # noqa: E731
+    st = autofix.sweep([chk("IPOs: the exchange's page failed")], t0, autofix._empty(), lambda s, t: True, run)
+    st = autofix.sweep([chk("IPOs: the exchange's page failed")], t0 + timedelta(minutes=16), st, lambda s, t: True, run)
+    assert st["open"]["job:ipo"]["tried"][0]["error"]
+    st = autofix.sweep([chk(None)], t0 + timedelta(minutes=40), st, lambda s, t: True, run)
+    text = st["history"][0]["text"]
+    assert st["history"][0]["event"] == "fixed" and "re-ran the job at" not in text and "had failed" in text
+    assert autofix.fixed_text("re-ran the job", [{"at": "2026-11-06T06:16:00+00:00"}]).startswith("re-ran the job at ")
+    assert autofix.fixed_text("re-ran the job", []) == "the check passes now: cleared by itself"
+
+
+def test_a_company_website_is_its_own_home_page_never_a_rating_pdf_or_an_encyclopaedia():
+    """LIVE5-011: RELIANCE's website field held a rating agency's PDF, TCS's an old annual report, INFY's a CRISIL page."""
+    from app.intel.screener import own_site
+    assert own_site("https://www.ril.com/") == "https://www.ril.com/"
+    assert own_site("https://www.tcs.com/investor-relations") == "https://www.tcs.com/"
+    assert own_site("https://www.tcs.com/content/dam/annual-report-2019-20.pdf") is None
+    assert own_site("https://www.crisil.com/mnt/winshare/Ratings/RatingList/RatingDocs/Infosys.html") is None
+    assert own_site("https://www.careratings.com/upload/CompanyFiles/PR/Titan.pdf") is None
+    assert own_site("https://en.wikipedia.org/wiki/Reliance_Industries") is None
+    assert own_site("https://www.icra.in/Rationale/ShowRationaleReport?Id=1") is None
+    assert own_site("mailto:ir@ril.com") is None and own_site("") is None and own_site(None) is None

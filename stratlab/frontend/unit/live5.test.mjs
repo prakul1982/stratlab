@@ -139,3 +139,14 @@ test("LIVE5-010: a row still pending at the deadline shows a dash, then its late
   assert.deepEqual(put.HAL, [null, { avg: 2.4 }]);          // a dash at the deadline, then the answer
   assert.ok(calls >= 3);
 });
+
+test("LIVE5-011: a shared Calendar page opened fresh has its own space's trail on every device, whatever menu was saved there", async () => {
+  const { menuView } = await import("../src/lib/spaces.ts");
+  // the phone saved "My space", the laptop "Invest": a fresh Results page is Invest's on both
+  assert.equal(menuView("/research/results", "mine", true, {}), "invest");
+  assert.equal(menuView("/research/results", "invest", true, {}), "invest");
+  // reached from My space's menu in this visit, it stays in My space
+  assert.equal(menuView("/research/results", "mine", true, { from: "mine" }), "mine");
+  // a page pinned to My space that is not shared keeps Mine's menu, as before
+  assert.equal(menuView("/holdings", "mine", true), "mine");
+});
