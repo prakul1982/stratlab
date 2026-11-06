@@ -4366,8 +4366,15 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
 
 
 @app.get("/library")
-def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "hold", official: bool = False, profile=Depends(current_profile)):
-    shown = library.same_hold([e for e in library.all_entries() if library.visible(e, profile["id"]) and (e.get("official") or not official)])
+def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "hold", official: bool = False, whose: str = "",
+                   profile=Depends(current_profile)):
+    """The library's entries. `whose`: "official" StratLab's own, "users" only those people published (R15, owner: "in everyone don't show
+    stratlab ones"), anything else both; `official=true` is the older spelling of "official"."""
+    whose = "official" if official else whose
+
+    def mine(e):
+        return whose not in ("official", "users") or bool(e.get("official")) == (whose == "official")
+    shown = library.same_hold([e for e in library.all_entries() if library.visible(e, profile["id"]) and mine(e)])
     rows = library.search(shown, market.upper()[:10], verdict[:12], q[:80], sort)
     return {"entries": [library.public(e, profile["id"]) for e in rows[:200]], "total": len(rows),
             "reasons": library.REASONS, "markets": library.market_counts(shown)}

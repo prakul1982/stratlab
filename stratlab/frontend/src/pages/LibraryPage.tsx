@@ -32,7 +32,8 @@ export function LibraryPage() {
   const [verdict, setVerdict] = useState("");
   // furthest ahead of buy and hold first by default: by checks alone, a strategy 108.5 points behind it led the list (DA-037)
   const [sort, setSort] = useState("hold");
-  const [official, setOfficial] = useState(false);
+  // whose strategies: both, only those people published ("Everyone's", owner R15: "in everyone don't show stratlab ones"), or StratLab's own
+  const [whose, setWhose] = useState<"all" | "users" | "official">("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [reporting, setReporting] = useState<{ id: string; reason: string } | null>(null);
@@ -42,13 +43,13 @@ export function LibraryPage() {
   useEffect(() => {
     let live = true;       // a slower answer for an earlier search must not replace the one for the search now on screen
     const t = window.setTimeout(() => {
-      const p = new URLSearchParams({ q, market, verdict, sort, ...(official ? { official: "true" } : {}) });
+      const p = new URLSearchParams({ q, market, verdict, sort, ...(whose !== "all" ? { whose } : {}) });
       setFailed(false);
       api<{ entries: LibEntry[]; total: number; reasons?: Record<string, string>; markets?: Record<string, number> }>(`/library?${p}`)
         .then((r) => { if (!live) return; setRows(r.entries); setTotal(r.total); setCounts(r.markets); if (r.reasons) setReasons(r.reasons); }).catch((e) => { if (!live) return; setRows([]); setFailed(true); fail(e); });
     }, 200);
     return () => { live = false; window.clearTimeout(t); };
-  }, [q, market, verdict, sort, official, fail, again]);
+  }, [q, market, verdict, sort, whose, fail, again]);
 
   const copy = async (e: LibEntry) => {
     setBusy(e.id);
@@ -77,7 +78,7 @@ export function LibraryPage() {
     } catch (x) { fail(x); } finally { setBusy(null); }
   };
   const choices = marketChoices(counts, rows ?? [], market);
-  const filtered = !!(q || market || verdict || official);
+  const filtered = !!(q || market || verdict || whose !== "all");
   // the intro doesn't promise other people's rules while every entry is StratLab's own (R5O-014); read from the
   // unfiltered list, kept while a filter narrows it
   const [onlyOurs, setOnlyOurs] = useState(true);
@@ -94,7 +95,7 @@ export function LibraryPage() {
         <div className="k-toolbar">
           <label className="k-search"><Search size={18} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: RSI, BANKNIFTY, breakout" aria-label="Search the library" /></label>
           <Select label="Verdict" value={verdict} onChange={setVerdict} options={VERDICTS.map(([value, label]) => ({ value, label }))} />
-          <Seg label="Whose" options={[{ value: "all", label: "Everyone's" }, { value: "official", label: "StratLab's own" }]} value={official ? "official" : "all"} onChange={(v) => setOfficial(v === "official")} />
+          <Seg label="Whose" options={[{ value: "all", label: "All" }, { value: "users", label: "Everyone's" }, { value: "official", label: "StratLab's own" }]} value={whose} onChange={(v) => setWhose(v as typeof whose)} />
           <Seg label="Sort" options={[{ value: "hold", label: "Ahead of buy and hold", short: "Vs hold" }, { value: "best", label: "Most checks passed", short: "Checks" },
             { value: "new", label: "Newest" }, { value: "copied", label: "Most copied", short: "Copied" }]} value={sort} onChange={setSort} />
         </div>
@@ -115,7 +116,7 @@ export function LibraryPage() {
               {rows.some(trails) && <>{CHECKS_NOT_HOLD} </>}{LIBRARY_DATES}{rows.some((e) => needs(e)) && <> {COPY_ANY_PLAN}</>}
             </p>
             {/* one table on every screen (TABLES EVERYWHERE, owner 4 Nov): the figures in sortable columns, the rules under each row */}
-            <LibraryTable key={`${q}|${market}|${verdict}|${sort}|${official}`} rows={rows}
+            <LibraryTable key={`${q}|${market}|${verdict}|${sort}|${whose}`} rows={rows}
               actions={(e) => (
                 <div className="k-row lib-buttons">
                   <button type="button" className="btn sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${strategyName(e)}, ${libMeta(e)}`}>{busy === e.id ? "Copying…" : "Copy"}</button>
