@@ -7129,11 +7129,44 @@ def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
 
 
 PLATFORM_RUN = "platform-check-run"
+PLATFORM_BUILD_RUN = "platform-check-build"
+PLATFORM_BUILD_AFTER = timedelta(minutes=20)      # a new build is checked once it has been up this long (its caches warm, its jobs started)
+
+
+def platform_build_due(now: datetime) -> str | None:
+    """The running build when the kept check result is another build's and this server has been up PLATFORM_BUILD_AFTER: a deploy
+    after the day's check time is checked the same day, not the next afternoon (LIVE4-023: the live build had no check of its own
+    from its deploy at 03:27 IST, Admin showing the old build's). None otherwise, and when the build isn't known (a local run)."""
+    build = build_info.info()["short"]
+    if not build:
+        return None
+    try:
+        started = datetime.fromisoformat(build_info.STARTED_AT)
+        last = json.loads(db.get_setting(PLATFORM_LAST) or "null") or {}
+    except (ValueError, TypeError):
+        return None
+    if now < started + PLATFORM_BUILD_AFTER or last.get("build") == build:
+        return None
+    return build
 
 
 def platform_pass(now: datetime) -> bool | None:
-    """The day's check if it is due (PLATFORM_AT has passed) and hasn't run: a restart after that time still runs it.
+    """The day's check if it is due (PLATFORM_AT has passed) and hasn't run: a restart after that time still runs it. A new build
+    is checked once too, whatever the time (platform_build_due).
     None: another container leads (asked again soon); True: it failed (asked again in an hour); False: done or not due."""
+    build = platform_build_due(now)
+    if build:
+        if not leader.leading():
+            return None
+        run = run_marks.claim(PLATFORM_BUILD_RUN, build)
+        if run is not None:
+            try:
+                daily_platform_check()
+            except Exception as e:
+                print("platform check of the new build failed:", e)
+                db.delete_setting(PLATFORM_BUILD_RUN)
+                return True
+            run.done()
     at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
     if now < at:
         return False
@@ -7168,7 +7201,7 @@ def platform_job():
         at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
         if at <= now:
             at += timedelta(days=1)
-        time.sleep(max(1, min(3600, (at - now).total_seconds())))
+        time.sleep(max(1, min(600, (at - now).total_seconds())))       # ten minutes at most: a new build is checked soon after its wait
 
 
 def platform_issue(out: dict | None) -> "autofix.Check":

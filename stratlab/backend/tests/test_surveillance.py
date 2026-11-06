@@ -166,6 +166,33 @@ def test_the_surveillance_breaker_rests_after_three_outages_and_spares_the_filin
     assert feed.announcements("RELIANCE") == []               # the filings feed has its own breaker
 
 
+def test_the_price_band_file_is_read_from_its_other_addresses_when_one_is_turned_away(w):
+    """LIVE4-023: "price bands: The exchange's file was refused (403)" while the file answered at its other addresses."""
+    good = "Symbol,Series,Security Name,Band,Remarks\n" + "".join(f"S{i},EQ,S{i} Ltd,20,-\n" for i in range(400))
+    asked = []
+
+    def handler(r):
+        asked.append(str(r.url))
+        if str(r.url) == F.SEC_LIST:
+            return httpx.Response(403)
+        return httpx.Response(200, text=good) if "archives.nseindia.com/content/equities/sec_list.csv" in str(r.url) else httpx.Response(404)
+    feed = F.NSEFilings(transport=httpx.MockTransport(handler))
+    assert len(feed.security_bands()) == 400 and asked[:2] == [F.SEC_LIST, F.SEC_LIST_URLS[1]]
+    # turned away everywhere: said as the exchange's side, and the feature check says "source refused", not a failure of ours
+    feed = F.NSEFilings(transport=httpx.MockTransport(lambda r: httpx.Response(403)))
+    with pytest.raises(SourceError, match="a fault on the exchange's side") as e:
+        feed.security_bands()
+    assert e.value.refused
+
+    class Refusing:
+        asm_list = staticmethod(lambda: {"lt": {"A": 1}, "st": {}})
+        gsm_list = esm_list = staticmethod(lambda: {})
+        fo_ban = staticmethod(lambda: ("2026-11-06", []))
+        security_bands = feed.security_bands
+    got = platform_check.check_surveillance(Refusing())
+    assert got["state"] == "warn" and "price bands: source refused" in got["detail"] and "Failed" not in got["detail"]
+
+
 # ---------- keeping the lists ----------
 def test_refresh_keeps_each_list_with_its_date_and_logs_nothing_the_first_time(w):
     out = S.refresh(Feed(), TODAY)
