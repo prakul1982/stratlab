@@ -7,7 +7,7 @@ import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { LIMITS } from "../../lib/plans";
-import { Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FoldCard, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, ShareTable, Signed, Skeleton, UploadButton, type Column, UploadProblem, useUploadProblem, Notes } from "../../components/kit";
+import { CsvButton, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FoldCard, FoldTable, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, ShareTable, Signed, Skeleton, UploadButton, type Column, UploadProblem, useUploadProblem, Notes } from "../../components/kit";
 import { CostCell, CostDetail, CostHow, CostNotes, costFigures, costStatsShown, costsShown, useFundCosts } from "./FundCosts";
 import { BehaviourDetail, BehaviourHow, BehaviourNotes, behaviourFigures, GapCell, behaviourShown, behaviourStatsShown, hasGap, useFundBehaviour } from "./FundBehaviour";
 import { Earlier } from "../../components/Earlier";
@@ -156,12 +156,13 @@ export function MutualFundsPage() {
   // one row for a scheme: what it is worth and returns, its cost and how it did against the fund; the rest is folded under it
   const allSchemeCols: Column<Scheme>[] = [
     { key: "scheme", header: "Scheme", rowHeader: true, cell: (s) => {
-      const flags = flagsOf(s, missing.has(s.key));
+      // R15 #7 (owner, 7 Nov: "this whole thing has a weird ui"): the name on one line (the whole of it on hover), and its category and
+      // anything to look at as one small muted line under it; the scheme opens on its own when there is something to do
+      const note = [s.category || "No category in the statement", ...flagsOf(s, missing.has(s.key))].join(" · ");
       return (
         <>
-          <b>{s.name}</b>
-          <span className="k-sub-line">{s.category || "No category in the statement"}</span>
-          {flags.map((f) => <span key={f} className="k-sub-line k-down">{f}</span>)}
+          <b className="mf-name" title={s.name}>{s.name}</b>
+          <span className="k-sub-line mf-name-note" title={note}>{note}</span>
         </>);
     } },
     { key: "val", header: "Value", numeric: true, cell: (s) => inr(s.value) },
@@ -302,10 +303,11 @@ export function MutualFundsPage() {
 
           {/* closed by default, its row saying how many are held and their value (owner, 5 Nov) */}
           <FoldCard title="Your schemes" label="Your schemes" testId="mf-schemes"
+            actions={held.length > 0 ? <CsvButton name="mutual fund schemes" label="Schemes" columns={schemeCols} rows={held} /> : undefined}
             meta={held.length > 0 ? `${held.length} held · ${inr(t.value)}` : `${schemes.length} no longer held`}
             info={'Gain is the current value less the cost of the units held. "Taxed as" is read from the category; change it, under the scheme, where your fund\'s documents say otherwise. Open a scheme for its units, NAV, cost, taxes, SIP record and sales.'}>
             {/* each scheme is one row, said once; fully redeemed schemes apart, so the list is what you hold (DG-026) */}
-            {held.length > 0 && <FoldTable csv="mutual fund schemes" label="Schemes" columns={schemeCols} rows={held} rowKey={(s) => s.key} detail={detail} openWhen={open} />}
+            {held.length > 0 && <FoldTable label="Schemes" columns={schemeCols} rows={held} rowKey={(s) => s.key} detail={detail} openWhen={open} />}
             <Earlier label="Schemes you no longer hold" count={schemes.length - held.length} className="in-card">
               <FoldTable csv="mutual fund schemes no longer held" label="Schemes you no longer hold" columns={schemeCols} rows={schemes.filter((s) => s.units <= 0)} rowKey={(s) => s.key} detail={detail} openWhen={open} />
             </Earlier>

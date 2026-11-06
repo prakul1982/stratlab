@@ -2090,6 +2090,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-foldcard-head { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 36px; }
 .k-foldcard-head .k-card-titlerow { min-width: 0; }
 .k-foldcard-head .info { position: relative; z-index: 1; }
+.k-foldcard-end { display: inline-flex; align-items: center; gap: var(--s4); flex: none; }
+.k-foldcard-actions { position: relative; z-index: 1; display: inline-flex; gap: var(--s2); }   /* above the head's tap target */
 .k-foldcard-btn { all: unset; display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; font: inherit; color: inherit; border-radius: 6px; }   /* a 44px target (the row around it is one too) */
 .k-foldcard-btn::after { content: ""; position: absolute; inset: calc(-1 * var(--s3)) calc(-1 * var(--s5)); border-radius: var(--r-card); }
 .k-foldcard-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
@@ -2779,6 +2781,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .k-fold-sum:hover { background: var(--paper-2); }
 .k-fold-name, .k-fold-cell { min-width: 0; overflow-wrap: anywhere; }
 .k-fold-name b { display: block; font-weight: 600; }
+/* R15 #7: a scheme's name and its note one line each, cut with … (the whole on hover); a figure with nothing to show is a muted dash */
+.k-fold-name .mf-name, .k-fold-name .mf-name-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-fold-v .k-none, .k-fold-v.k-none { color: var(--muted); }
 .k-fold-k { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }   /* the column's name: the header row's on a wide screen, spoken here */
 .k-fold-v { display: block; font-variant-numeric: tabular-nums; }
 .k-fold-body { padding: var(--s2) var(--s3) var(--s5); display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }

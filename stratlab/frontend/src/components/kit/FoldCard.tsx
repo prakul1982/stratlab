@@ -7,9 +7,12 @@ import { textOf } from "./Card";
  * the tap target. Closed by default (owner, 5 Nov: "More in Money" and "Your schemes" were walls of cards and rows). The
  * contents stay on the page while closed (hidden), so a link into them still finds them; `openWhen` opens it from outside
  * (a link to something inside). */
-export function FoldCard({ title, meta, info, infoLabel, open: initial = false, openWhen, id, label, testId, className, level = 2, children }: {
+export function FoldCard({ title, meta, info, infoLabel, open: initial = false, openWhen, id, label, testId, className, level = 2, actions, children }: {
   title: string; meta?: ReactNode; info?: ReactNode; infoLabel?: string; open?: boolean; openWhen?: boolean; id?: string; label?: string;
-  testId?: string; className?: string; level?: 2 | 3; children: ReactNode;
+  testId?: string; className?: string; level?: 2 | 3;
+  /** a small control on the head row, before the summary (a "Download CSV"): not a row of its own under the head (R15 #7) */
+  actions?: ReactNode;
+  children: ReactNode;
 }) {
   const [open, setOpen] = useState(initial);
   useEffect(() => { if (openWhen) setOpen(true); }, [openWhen]);
@@ -27,7 +30,12 @@ export function FoldCard({ title, meta, info, infoLabel, open: initial = false, 
           </H>
           {info && <Info label={infoLabel ?? `About ${title}`}>{info}</Info>}
         </div>
-        <span className="k-foldcard-meta" aria-hidden="true">{meta}<span className="k-foldcard-chev" /></span>
+        {actions ? (
+          <span className="k-foldcard-end">
+            <span className="k-foldcard-actions">{actions}</span>
+            <span className="k-foldcard-meta" aria-hidden="true">{meta}<span className="k-foldcard-chev" /></span>
+          </span>
+        ) : <span className="k-foldcard-meta" aria-hidden="true">{meta}<span className="k-foldcard-chev" /></span>}
       </div>
       <div id={body} className="k-foldcard-body" hidden={!open}>{children}</div>
     </section>

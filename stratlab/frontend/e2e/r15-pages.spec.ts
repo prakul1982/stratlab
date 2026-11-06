@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { HOLDINGS_FILES, MF, open, sane } from "./pages-kit";
+import { readFileSync } from "node:fs";
+import { HOLDINGS_FILES, MF, open, sane, sessionAs } from "./pages-kit";
 
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 
@@ -224,4 +225,34 @@ test("R15 #6: Mutual funds' upload is one row (pick, read, the files so far); th
   await expect(form.getByLabel("PDF password")).toBeVisible();
   await expect(read).toBeEnabled();
   await sane(page, errors);
+});
+
+test("R15 #7 (item 5): Your schemes: one-line names, one muted note each, Download CSV on the card's head row", async ({ page, request }, info) => {
+  const n = (info.repeatEachIndex % 6) * 2 + (info.project.name === "phone" ? 1 : 0);
+  const who = { token: `r15-${n}`, id: `u-r15-${n}`, email: `r15${n}@example.com` };
+  const auth = { Authorization: `Bearer ${who.token}` };
+  expect((await request.delete(`${API}/money/mutual-funds`, { headers: auth })).ok()).toBeTruthy();
+  const data = `data:application/pdf;base64,${readFileSync(MF + "synthetic_cas.pdf").toString("base64")}`;
+  const added = await request.post(`${API}/money/mutual-funds/import`, { headers: auth, data: { filename: "synthetic_cas.pdf", data, password: "ABCDE1234F", mode: "replace" } });
+  expect(added.ok(), await added.text()).toBeTruthy();
+  const errors = await open(page, "/money/mutual-funds", "Your schemes", sessionAs(who.token, who.id, who.email));
+  const card = page.getByTestId("mf-schemes");
+  const fold = card.getByRole("button", { name: /^Your schemes/ });
+  const csv = card.getByRole("button", { name: /^Download CSV/ });
+  await expect(csv).toBeVisible();
+  if (info.project.name === "desktop") {
+    const [a, b] = [await fold.boundingBox(), await csv.boundingBox()];
+    expect(Math.abs((a!.y + a!.height / 2) - (b!.y + b!.height / 2)), "the CSV button is on the head row").toBeLessThan(8);
+  }
+  if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
+  const flexi = card.getByRole("listitem").filter({ hasText: "Example Flexi Cap Fund" });
+  const name = flexi.locator(".mf-name");
+  await expect(name).toHaveAttribute("title", "Example Flexi Cap Fund - Direct Plan - Growth");
+  expect(await name.evaluate((el) => getComputedStyle(el).whiteSpace)).toBe("nowrap");
+  // the category and anything to look at: one muted line, not a stack of lines
+  await expect(flexi.locator(".k-fold-name .k-sub-line")).toHaveCount(1);
+  await expect(flexi.locator(".k-fold-name .k-down")).toHaveCount(0);
+  await expect(card.getByText("What each tax kind means")).toBeVisible();
+  await sane(page, errors);
+  await request.delete(`${API}/money/mutual-funds`, { headers: auth });
 });
