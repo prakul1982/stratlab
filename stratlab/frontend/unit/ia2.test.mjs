@@ -14,7 +14,7 @@ test("items 37, 43: on a laptop the page column keeps an 80px right margin with 
   const css = read("src/components/watch/launcher.css");
   const block = css.match(/@media \(min-width: 901px\) and \(max-width: 1599px\) \{\n([^]*?)\n\}/)[1];
   // 80px margin, 44px button: (80 - 44) / 2 = 18px either side
-  assert.match(block, /\.mw-launch\.app \{ width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 18px; \}/);
+  assert.match(block, /\.mw-launch\.app, \.mw-launch\.public \{ width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 18px; \}/);   // LIVE5-007: a public page's too
   assert.match(block, /body:not\(\.mw-docked\) \.shell > \.main \{ padding-right: 80px; \}/);
 });
 

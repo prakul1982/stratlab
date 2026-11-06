@@ -97,3 +97,17 @@ test("LIVE5-003: the live round's 52-week highs and lows fill today's column; af
   assert.match(mood, /const when = b\.live && open \? "so far today" : `on \$\{day\(b\.day\)\}`;/);     // LIVE5-009
   assert.match(mood, /const waiting = open \? "At the close" : "This evening";/);
 });
+
+test("LIVE5-006/007: Market Watch says the last close's day once its markets are shut; visitors get no floating button", async () => {
+  const { asOfLine } = await import("../src/lib/watch.ts");
+  // 15:29:59 IST on Fri 6 Nov, read again at 16:29
+  assert.equal(asOfLine(["2026-11-06T09:59:59Z", "2026-11-06T10:59:39Z"], "Asia/Kolkata", true), "Closed · last close Fri 6 Nov");
+  assert.equal(asOfLine(["2026-11-06T21:00:00Z"], "America/New_York", true), "Closed · last close Fri 6 Nov");
+  assert.equal(asOfLine(["2026-11-06T04:59:39Z"]), "Prices as of 10:29:39 IST");
+  const visitor = readFileSync(new URL("../src/visitor/VisitorApp.tsx", import.meta.url), "utf8");
+  assert.match(visitor, /\{userId && <PublicMarkets userId=\{userId\} \/>\}/);
+  const launcher = readFileSync(new URL("../src/components/watch/Launcher.tsx", import.meta.url), "utf8");
+  assert.match(launcher, /if \(shown && shapeOf\(layout, window\.innerWidth\) !== "dock"\) close\(\);/);
+  const css = readFileSync(new URL("../src/components/watch/launcher.css", import.meta.url), "utf8");
+  assert.match(css, /@media \(max-width: 900px\) \{\n  \.mw-launch\.app, \.mw-launch\.public \{ display: none; \}/);
+});

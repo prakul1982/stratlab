@@ -214,10 +214,13 @@ export function changeArrow(v: number | null | undefined): string {
 /** When the newest price on the list was read, for the panel's foot: "Prices as of 12:55:04 IST"; null before any price
  * (LIVE4-009: every other price block says when, the Market Watch panel said nothing). `ats` are the quotes' times and the
  * moment the last tick came in. */
-export function asOfLine(ats: (string | number | null | undefined)[], tz = "Asia/Kolkata"): string | null {
+export function asOfLine(ats: (string | number | null | undefined)[], tz = "Asia/Kolkata", closed = false): string | null {
   const ms = ats.map((a) => (a == null ? NaN : typeof a === "number" ? a : Date.parse(a))).filter((x) => Number.isFinite(x));
   if (!ms.length) return null;
   const d = new Date(Math.max(...ms));
+  // every market on the list is shut: its prices are the last close, said with the day, never the moment they were read
+  // (LIVE5-006: "Prices as of 16:29:39 IST" for the 15:30 close)
+  if (closed) return `Closed · last close ${d.toLocaleDateString("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).replace(",", "")}`;
   const t = d.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
   return `Prices as of ${t} ${tz === "Asia/Kolkata" ? "IST" : tz === "America/New_York" ? "ET" : ""}`.trim();
 }
