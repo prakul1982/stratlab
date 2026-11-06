@@ -167,9 +167,12 @@ export function ThemesPage() {
               {nav.length > 1 && <PageNav items={nav} />}
               {/* on every theme with figures (owner, 7 Nov: "did you remove the blog button for me too?": it showed only when the figures were notable) */}
               {me?.is_admin && dive.members > 0 && (
-                <Notice action={{ label: "Draft a blog post", onClick: draftIt }}>{draft ?? (dive.notable.length > 0
-                  ? "The figures show something notable. A draft post can be made from them; it stays hidden until you publish it."
-                  : "A draft post can be made from this theme's figures; it stays hidden until you publish it.")}</Notice>
+                <div className="k-row" data-testid="theme-blog">
+                  <span className="k-small k-muted">{draft ?? (dive.notable.length > 0
+                    ? "The figures show something notable. A draft post can be made from them; it stays hidden until you publish it."
+                    : "A draft post can be made from this theme's figures; it stays hidden until you publish it.")}</span>
+                  <button type="button" className="btn quiet sm" onClick={draftIt} disabled={draft === "Drafting…"}>Draft a blog post</button>
+                </div>
               )}
               {dive.members === 0 ? (
                 <Card><p className="k-small">No company in this theme has stored figures yet: none is in an official industry of the theme, and none the map named has a description that shows it does the work. Try a more specific theme.</p></Card>
