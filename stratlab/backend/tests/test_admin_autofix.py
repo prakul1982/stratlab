@@ -243,3 +243,43 @@ def test_the_holidays_light_and_the_self_healing_follow_the_season_rule(w, monke
     assert "31 Dec" in c.problem or "2026-12-31" in c.problem
     assert c.fix and c.backoff[0] >= 6 * 3600 and "paste them" in c.action
 
+
+
+# ---------- every remedy's route exists in the real app (LIVE4-016: "No route /admin/ipos/refresh", 8 tries, 2 mails) ----------
+def _remedy_paths_in_source() -> set[str]:
+    import re
+    from pathlib import Path
+    out = set()
+    for f in (Path(__file__).resolve().parents[1] / "app").rglob("*.py"):
+        out |= set(re.findall(r'"path":\s*f?"(/admin/[^"?{]+)', f.read_text()))
+    return out
+
+
+def test_every_remedy_route_in_the_registry_is_a_real_post_route_of_the_app(w):
+    from app import main, route_list
+    rows = admin_jobs.rows()
+    paths = {p for r in rows for p in [x.get("path") for x in r.get("run") or []] if p}
+    assert "/admin/ipos/refresh" in paths and len(paths) >= 10
+    paths |= _remedy_paths_in_source()
+    from urllib.parse import urlsplit
+    missing = sorted(p for p in paths if route_list.find(main.app, urlsplit(p).path, "POST") is None)
+    assert not missing, f"remedies that call a route the app doesn't have: {missing}"
+
+
+def test_a_remedy_finds_a_route_that_lives_on_an_included_router(monkeypatch):
+    from fastapi import APIRouter, Depends, FastAPI
+    app, router, got = FastAPI(), APIRouter(), {}
+
+    @router.post("/admin/ipos/refresh")
+    def refresh(_=Depends(lambda: None)):
+        got["ran"] = True
+        return {"started": True}
+    app.include_router(router)
+    monkeypatch.setattr(autofix, "_app", app)
+    assert autofix.call_route("/admin/ipos/refresh") == {"started": True} and got == {"ran": True}
+
+
+def test_the_live_app_resolves_the_ipo_remedy_to_the_ipo_refresh_endpoint():
+    from app import ipo, main, route_list
+    r = route_list.find(main.app, "/admin/ipos/refresh", "POST")
+    assert r is not None and r.endpoint is ipo.ipos_refresh

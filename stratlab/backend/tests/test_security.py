@@ -18,7 +18,17 @@ PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{t
           "/public/library", "/public/library/{eid}",   # StratLab's own library strategies, read only, for visitors
           "/public/business",                       # the seller's name, address and email, for the policy pages
           # a Market Brief's headline from the plain-text email: forwards only to a link stored in that brief (R13-003)
-          "/news-link/{iid}/{n}"}
+          "/news-link/{iid}/{n}",
+          # routes on included routers, seen since the sweep reads every router (newer FastAPI keeps them unflattened; LIVE4-016):
+          "/blog", "/blog/", "/blog/briefs", "/blog/briefs/", "/blog/research", "/blog/research/", "/blog/{slug}", "/blog/{slug}/",
+          "/blog/feed.xml",                         # the public blog and its feed
+          "/connect/dhan/callback", "/connect/kite/callback", "/connect/upstox/callback",   # broker logins return here (state-checked)
+          "/feedback",                              # a report from anyone, signed in or not (throttled per address)
+          "/hooks/signal/{token}",                  # a chart alert's webhook: the secret token in the address is the key
+          "/inbound/email/{provider}",              # the mail provider's inbound hook (signature-checked)
+          "/mcp",                                   # the AI-assistant endpoint: its own key in the request
+          "/money/calendar/feed/{token}.ics",       # a personal calendar feed: the secret token in the address is the key
+          "/public/markets/watch"}                  # the visitor's fixed Market Watch board
 
 
 def _deps(d) -> set:
@@ -29,9 +39,10 @@ def _deps(d) -> set:
 
 
 def routes():
-    for r in main.app.routes:
+    from app.route_list import declared, every_route
+    for r in every_route(main.app.routes):      # included routers too (newer FastAPI keeps them unflattened; LIVE4-016)
         # the app's own routes (other tests add throwaway ones, e.g. a route that crashes on purpose)
-        if isinstance(r, APIRoute) and getattr(r.endpoint, "__module__", "").startswith("app."):
+        if isinstance(declared(r), APIRoute) and getattr(r.endpoint, "__module__", "").startswith("app."):
             for m in r.methods - {"HEAD", "OPTIONS"}:
                 yield m, r.path, _deps(r.dependant)
 
@@ -54,6 +65,8 @@ def client():
     mp = pytest.MonkeyPatch()
     w = W.build(mp)
     mp.setattr(guard, "BAD_TOKENS_PER_MINUTE", 10**6)     # this test sends a bad token to every route on purpose
+    for limit in ("PER_MINUTE_ANON", "PER_MINUTE_ADDRESS", "PER_MINUTE_USER"):   # ... over 450 routes, each three times
+        mp.setattr(guard, limit, 10**6)
     yield w["client"]
     w["close"]()
     mp.undo()

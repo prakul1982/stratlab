@@ -244,19 +244,20 @@ def call_route(path: str):
     from urllib.parse import parse_qsl, urlsplit
 
     from fastapi import params
+    from .route_list import find
     u = urlsplit(path)
     q = {k: v for k, v in parse_qsl(u.query) if k not in HEAVY_FLAGS}
-    for r in getattr(_app, "routes", None) or []:
-        if getattr(r, "path", None) == u.path and "POST" in (getattr(r, "methods", None) or ()):
-            kw = {}
-            for name, p in inspect.signature(r.endpoint).parameters.items():
-                if isinstance(p.default, params.Depends):
-                    kw[name] = None
-                elif name in q:
-                    kw[name] = _coerce(q[name], p.annotation)
-            out = r.endpoint(**kw)
-            return asyncio.run(out) if inspect.iscoroutine(out) else out
-    raise LookupError(f"No route {u.path}")
+    r = find(_app, u.path, "POST")          # included routers too (LIVE4-016: "No route /admin/ipos/refresh" for a real route)
+    if r is None:
+        raise LookupError(f"No route {u.path}")
+    kw = {}
+    for name, p in inspect.signature(r.endpoint).parameters.items():
+        if isinstance(p.default, params.Depends):
+            kw[name] = None
+        elif name in q:
+            kw[name] = _coerce(q[name], p.annotation)
+    out = r.endpoint(**kw)
+    return asyncio.run(out) if inspect.iscoroutine(out) else out
 
 
 def gather() -> list[Check]:
