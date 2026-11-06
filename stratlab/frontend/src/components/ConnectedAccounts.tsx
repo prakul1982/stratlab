@@ -140,30 +140,30 @@ function InboxCard({ c, set, load }: P) {
         </FormActions>
       )}
       {i.address && <>
+        {/* R15 #21 (owner, 7 Nov: "fix ui"): the address and Copy on one row; the password box with its buttons and the saved chip on
+            one row; the last statement one line; the upload by hand folded; turning it off a quiet link at the end */}
         <div className="k-field">
           <div className="k-label-row"><span className="k-lbl">Your address</span></div>
-          <div className="k-row">
+          <div className="inbox-row inbox-address-row">
             <code className="k-address" data-testid="inbox-address">{i.address}</code>
-            <button type="button" className="btn sm" onClick={() => void copy()}>Copy</button>
+            <button type="button" className="btn quiet sm" onClick={() => void copy()}>Copy</button>
           </div>
         </div>
         {i.forwarding_code && <Notice role="status" label="Forwarding code">Gmail sent a confirmation code to this address: <b>{i.forwarding_code.code}</b>. Type it into Gmail's forwarding page to finish.</Notice>}
-        <FormGrid onSubmit={(e) => { e.preventDefault(); if (pw.trim()) void call(async () => { const r = await api<Conn>("/connect/inbox/password", { method: "PUT", body: { password: pw } }); setPw(""); return r; }, "Password saved."); }}
-          label="Statement password">
+        <form className="inbox-row inbox-pw" aria-label="Statement password"
+          onSubmit={(e) => { e.preventDefault(); if (pw.trim()) void call(async () => { const r = await api<Conn>("/connect/inbox/password", { method: "PUT", body: { password: pw } }); setPw(""); return r; }, "Password saved."); }}>
           <Field label="Your statement password" type="password" autoComplete="off" value={pw} maxLength={64} onChange={(e) => setPw(e.target.value)}
             placeholder={i.has_password ? "Saved. Type to replace it" : ""}
             info="Statements arrive locked. NSDL and CDSL use your PAN in capital letters. CAMS and KFintech use the password you chose when you asked for the statement, so choose the same one every time. It is kept encrypted, never shown again, and used only to open your statements." />
-          <FormActions>
-            <button type="submit" className="btn" disabled={busy || !pw.trim()}>{i.has_password ? "Change password" : "Set your statement password"}</button>
-            {i.has_password && <button type="button" className="btn quiet" disabled={busy} onClick={() => void call(() => api<Conn>("/connect/inbox/password", { method: "DELETE" }), "Password removed.")}>Remove it</button>}
-            {i.has_password ? <Badge tone="ok">Password saved</Badge> : <Badge tone="warn">No password yet</Badge>}
-          </FormActions>
-        </FormGrid>
-        <div className="k-line-row" data-testid="inbox-last">
-          <span className="k-line-text"><b>Last received</b>
-            <span className="k-sub-line">{i.last ? `${dateOnly(i.last.at)} · ${i.last.via === "upload" ? "uploaded by hand" : "by email"}${i.last.detail ? ` · ${i.last.detail}` : ""}` : "Nothing yet. Statements arrive once your filter is set up."}</span></span>
-          {i.last && <Badge tone={i.last.status === "ok" ? "ok" : "warn"}>{WHAT[i.last.status] ?? "Couldn't be read"}</Badge>}
-        </div>
+          <button type="submit" className="btn sm" disabled={busy || !pw.trim()}>{i.has_password ? "Save" : "Set your statement password"}</button>
+          {i.has_password && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void call(() => api<Conn>("/connect/inbox/password", { method: "DELETE" }), "Password removed.")}>Remove</button>}
+          {i.has_password ? <Badge tone="ok">Password saved</Badge> : <Badge tone="warn">No password yet</Badge>}
+        </form>
+        <p className="k-small inbox-last" data-testid="inbox-last">
+          <b>Last received</b>{" · "}
+          <span className="k-muted">{i.last ? `${dateOnly(i.last.at)} · ${i.last.via === "upload" ? "uploaded by hand" : "by email"}${i.last.detail ? ` · ${i.last.detail}` : ""}` : "Nothing yet. Statements arrive once your filter is set up."}</span>
+          {i.last && <> <Badge tone={i.last.status === "ok" ? "ok" : "warn"}>{WHAT[i.last.status] ?? "Couldn't be read"}</Badge></>}
+        </p>
         <Disclosure summary="Set up the filter, once" testId="inbox-steps">
           <div className="k-stack">
             <p><b>Gmail</b></p>
@@ -184,8 +184,7 @@ function InboxCard({ c, set, load }: P) {
           </div>
         </Disclosure>
       </>}
-      <div className="k-field">
-        <div className="k-label-row"><span className="k-lbl">Upload a statement</span></div>
+      <Disclosure summary="Upload a statement by hand" testId="inbox-upload" open={!i.address || undefined}>
         <p className="k-small k-muted">If an email didn't arrive, upload the PDF here. It is read the same way.</p>
         <FormGrid label="Upload a statement">
           <div className="k-field-short"><Field label="Password" optional type="password" autoComplete="off" value={upPw} maxLength={64} onChange={(e) => setUpPw(e.target.value)}
@@ -196,8 +195,8 @@ function InboxCard({ c, set, load }: P) {
         </FormGrid>
         <UploadProblem problem={problem} />
         {result && <Notice role="status" label="Statement result">{result}</Notice>}
-      </div>
-      {i.address && <div><button type="button" className="btn quiet sm" onClick={() => setAsking(true)}>Turn off the inbox</button></div>}
+      </Disclosure>
+      {i.address && <div><button type="button" className="linklike inbox-off" onClick={() => setAsking(true)}>Turn off the inbox</button></div>}
       {asking && <ConfirmDialog title="Turn off the statement inbox?" confirmLabel="Turn it off" busy={busy} onClose={() => setAsking(false)}
         onConfirm={() => { void call(() => api<Conn>("/connect/inbox", { method: "DELETE" }), "The inbox is off and your password is deleted."); setAsking(false); }}>
         Your address stops working and your saved statement password is deleted. Holdings and funds already read stay.</ConfirmDialog>}

@@ -1598,6 +1598,24 @@ ul.order-rows li .order-pick { grid-column: 2 / -1; margin-top: -4px; }
 ul.leg-picks { margin: 0; padding-left: 18px; }
 /* Signal forward test (/trade/signals) and chart replay (/trade/replay) */
 
+/* R15 #19: the forward test's URL card holds the steps under a rule, and the form's card beside it ends level */
+.sg-two > .k-card { height: 100%; }
+.sg-howto { display: flex; flex-direction: column; gap: var(--s2); border-top: 1px solid var(--line); padding-top: var(--s4); margin-top: var(--s1); }
+.sg-howto .k-card-title { font-size: var(--t-body); margin: 0; }
+/* R15 #20: chart replay's new-replay form in three rows */
+.rp-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3) var(--s5); }
+.rp-row-top { align-items: flex-start; justify-content: space-between; }
+.rp-row-top > .k-field { flex: 1 1 360px; min-width: 0; }
+.rp-random { flex: none; padding-top: 26px; }
+.rp-row-inst { align-items: flex-start; }
+.rp-row-inst > .k-field:not(.wide) { flex: 0 0 220px; }
+.rp-row-inst > .k-field.wide { flex: 1 1 320px; min-width: 0; }
+.rp-row-go > .k-field { flex: 0 0 220px; }
+.rp-row-go > .k-note { align-self: flex-end; padding-bottom: 13px; }
+@media (max-width: 640px) {
+  .rp-random { padding-top: 0; }
+  .rp-row-inst > .k-field:not(.wide), .rp-row-go > .k-field { flex: 1 1 100%; }
+}
 .sg-code { margin: 0; padding: 12px 14px; background: var(--chip); border-radius: 10px; font-family: var(--mono); font-size: 13px; overflow-x: auto; white-space: pre; max-width: 100%; }
 
 /* business updates and named holders (BizUpdates.tsx, NamedHolders.tsx, HoldersPage, BizUpdatesPage) */
@@ -2196,6 +2214,15 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 @media (max-width: 640px) { .nw-add { display: flex; width: 100%; } .nw-add > .btn { flex: 1 1 auto; justify-content: center; } .nw-add .more-pop { left: auto; right: 0; } }
 /* the statement inbox offered under a statement upload (Mutual funds): a ruled line at the card's foot, its address inline */
 .k-line-row.k-inbox-note { border-bottom: 0; border-top: 1px solid var(--line); padding-top: var(--s3); }
+/* R15 #21: Settings' statement inbox: a box and its buttons on one row, the last statement one line, turning it off a quiet red link */
+.inbox-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2) var(--s3); }
+.inbox-address-row { align-items: center; flex-wrap: nowrap; }
+.inbox-address-row .k-address { min-width: 0; flex: 0 1 auto; }
+.inbox-pw > .k-field { flex: 0 1 280px; }
+.inbox-pw > .badge { align-self: center; margin-bottom: 0; }
+.inbox-last { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.linklike.inbox-off { display: inline-flex; align-items: center; min-height: 36px; color: var(--down); font-size: var(--t-label); text-decoration: underline; text-underline-offset: 2px; }
+.linklike.inbox-off:hover { color: var(--down); filter: brightness(1.15); }
 .k-inbox-note .k-address { padding: 1px 6px; font-size: 12.5px; }
 .k-line-row > .k-line-text { display: flex; flex-direction: column; min-width: 0; }
 .k-line-row b { font-weight: 600; overflow-wrap: anywhere; }

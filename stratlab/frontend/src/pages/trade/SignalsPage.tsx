@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, CFG } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -49,7 +49,7 @@ const curOf = (i: Instrument) => i.currency || "INR";
 const tone = (n: number) => (n === 0 ? undefined : n > 0 ? ("up" as const) : ("down" as const));
 const statusTone = (s: string) => (s === "running" ? "ok" : s === "paused" ? "warn" : "plain") as "ok" | "warn" | "plain";
 
-function UrlCard({ ov, reload }: { ov: Overview; reload: () => void }) {
+function UrlCard({ ov, reload, children }: { ov: Overview; reload: () => void; children?: ReactNode }) {
   const { fail, notify } = useApp();
   const [fresh, setFresh] = useState<string | null>(null);
   const [ask, setAsk] = useState<"first" | "new" | "off" | null>(null);
@@ -88,6 +88,7 @@ function UrlCard({ ov, reload }: { ov: Overview; reload: () => void }) {
       {ask === "first" && <ConfirmDialog title="Make your URL?" confirmLabel="Make my URL" onConfirm={make} onClose={() => setAsk(null)} danger={false}>Anyone who has it can move your signal sessions' paper positions. It is shown once only, and can be turned off at any time.</ConfirmDialog>}
       {ask === "new" && <ConfirmDialog title="Make a new URL?" confirmLabel="Make a new URL" onConfirm={make} onClose={() => setAsk(null)}>The old one stops working at once, so alerts using it must be updated.</ConfirmDialog>}
       {ask === "off" && <ConfirmDialog title="Turn the URL off?" confirmLabel="Turn it off" onConfirm={off} onClose={() => setAsk(null)}>Every signal sent to it is refused from now on.</ConfirmDialog>}
+      {children}
     </Card>
   );
 }
@@ -148,18 +149,19 @@ function NewSession({ onStarted }: { onStarted: (id: string) => void }) {
   );
 }
 
-/** The steps for a TradingView alert, in order (DA-039: the page never said what to do with the URL, outside its lock note). */
+/** The steps for a TradingView alert, in order (DA-039: the page never said what to do with the URL, outside its lock note). In the URL's
+ * card, under it (R15 #19, owner 7 Nov: "fix ui"): the two short cards stacked beside the tall form left a gap and uneven edges. */
 function HowTo() {
   return (
-    <Card label="Connect a TradingView alert">
-      <CardHead level={3} title="Connect a TradingView alert" />
+    <section className="sg-howto" aria-label="Connect a TradingView alert">
+      <h3 className="k-card-title">Connect a TradingView alert</h3>
       <ol className="k-list">
         <li>Make your URL above and copy it. Start a session for the instrument the alert is on.</li>
         <li>In TradingView, create an alert on that chart. Under Notifications, tick Webhook URL and paste your URL.</li>
         <li>In the alert's Message box, put the message below with your session's id, and <code>buy</code>, <code>sell</code> or <code>exit</code> as the action.</li>
         <li>When the alert fires, the signal shows in the session's log with its fill. Chartink alerts work the same way, with the URL as their webhook.</li>
       </ol>
-    </Card>
+    </section>
   );
 }
 
@@ -366,13 +368,9 @@ export function SignalsPage() {
           )}
           {sid ? <SessionView key={sid} sid={sid} onGone={onGone} /> : (
             <>
-              {/* the short webhook card and the how-to share the left column beside the tall new-session form, so neither
-                  column leaves a gap under it (MO-4b) */}
-              <div className="k-two">
-                <div className="k-page">
-                  <UrlCard ov={ov} reload={load} />
-                  <HowTo />
-                </div>
+              {/* the webhook URL and the how-to are one card beside the new-session form, the two ending level (MO-4b; R15 #19) */}
+              <div className="k-two sg-two">
+                <UrlCard ov={ov} reload={load}><HowTo /></UrlCard>
                 <NewSession onStarted={(id) => { refreshMe(); load(); nav(`/trade/signals/${id}`); }} />
               </div>
               {!ov.sessions.length && <EmptyState title="No signal sessions yet">Start one above, then put its session id and your URL into an alert.</EmptyState>}

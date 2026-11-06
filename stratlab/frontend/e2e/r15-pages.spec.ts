@@ -256,3 +256,78 @@ test("R15 #7 (item 5): Your schemes: one-line names, one muted note each, Downlo
   await sane(page, errors);
   await request.delete(`${API}/money/mutual-funds`, { headers: auth });
 });
+
+const r15 = (info: { repeatEachIndex: number; project: { name: string } }, base: number) => {
+  const n = base + (info.repeatEachIndex % 3) * 2 + (info.project.name === "phone" ? 1 : 0);
+  return { token: `r15-${n}`, id: `u-r15-${n}`, email: `r15${n}@example.com` };
+};
+
+test("R15 #19: Forward test: the URL and the steps are one card, level with the new-session form; Start session is a solid button", async ({ page }, info) => {
+  const who = r15(info, 0);
+  const errors = await open(page, "/trade/signals", "New signal session", sessionAs(who.token, who.id, who.email));
+  const url = page.getByRole("region", { name: "Your webhook URL" });
+  const form = page.getByRole("region", { name: "New signal session" });
+  await expect(url.getByRole("region", { name: "Connect a TradingView alert" })).toBeVisible();
+  if (info.project.name === "desktop") {
+    const [a, b] = [await url.boundingBox(), await form.boundingBox()];
+    expect(Math.abs(a!.y - b!.y)).toBeLessThan(2);
+    expect(Math.abs(a!.height - b!.height), "the two cards end level").toBeLessThan(2);
+  }
+  const start = form.getByRole("button", { name: "Start session" });
+  await expect(start).toBeDisabled();
+  expect(await start.evaluate((el) => getComputedStyle(el).borderTopStyle)).toBe("solid");
+  await sane(page, errors);
+});
+
+test("R15 #20: Chart replay's New replay is three compact rows", async ({ page }, info) => {
+  const who = r15(info, 0);
+  const errors = await open(page, "/trade/replay", "New replay", sessionAs(who.token, who.id, who.email));
+  const card = page.getByRole("region", { name: "New replay" });
+  const random = card.getByRole("button", { name: "Random stock and date" });
+  const chips = card.getByRole("group", { name: "Candle size" }).first();
+  const pick = card.getByRole("form", { name: "Pick a stock and a date" });
+  const start = pick.getByRole("button", { name: "Start replay" });
+  const date = pick.getByLabel("Start date").first();
+  await expect(random).toBeVisible();
+  if (info.project.name === "desktop") {
+    const mid = async (l: typeof random) => { const b = (await l.boundingBox())!; return b.y + b.height / 2; };
+    const [c, r] = [await chips.boundingBox(), await random.boundingBox()];
+    expect(r!.y, "the random button beside the candle sizes").toBeLessThan(c!.y + c!.height);
+    expect(Math.abs(await mid(start) - await mid(date)), "the start date and Start replay on one row").toBeLessThan(12);
+    const market = pick.getByLabel("Market");
+    if (await market.count()) {
+      const search = pick.getByRole("combobox").or(pick.locator(".k-picker input")).last();
+      expect(Math.abs(await mid(market) - await mid(search)), "market and instrument on one row").toBeLessThan(12);
+      expect((await search.boundingBox())!.width).toBeGreaterThan((await market.boundingBox())!.width);
+    }
+    // no big empty band: the card is short
+    expect((await card.boundingBox())!.height, "no big empty areas (it was about 670px)").toBeLessThan(470);
+  }
+  expect(await start.evaluate((el) => getComputedStyle(el).borderTopStyle)).toBe("solid");
+  await sane(page, errors);
+});
+
+test("R15 #21: Settings' statement inbox: address and Copy on a row, the password row, one line for the last, the upload folded, a quiet turn-off link", async ({ page, request }, info) => {
+  const who = r15(info, 6);
+  const auth = { Authorization: `Bearer ${who.token}` };
+  await request.delete(`${API}/connect/inbox`, { headers: auth });
+  expect((await request.post(`${API}/connect/inbox`, { headers: auth })).ok()).toBeTruthy();
+  const errors = await open(page, "/settings#inbox", "Statement inbox", sessionAs(who.token, who.id, who.email));
+  const inbox = page.locator("#inbox");
+  const address = inbox.getByTestId("inbox-address");
+  const copy = inbox.getByRole("button", { name: "Copy" });
+  await expect(address).toBeVisible({ timeout: 30_000 });
+  const mid = async (l: typeof copy) => { const b = (await l.boundingBox())!; return b.y + b.height / 2; };
+  expect(Math.abs(await mid(copy) - await mid(address)), "Copy beside the address").toBeLessThan(6);
+  const pw = inbox.getByRole("form", { name: "Statement password" });
+  const set = pw.getByRole("button", { name: "Set your statement password" });
+  if (info.project.name === "desktop") expect(Math.abs((await set.boundingBox())!.y + (await set.boundingBox())!.height - ((await pw.getByLabel("Your statement password", { exact: true }).boundingBox())!.y + (await pw.getByLabel("Your statement password", { exact: true }).boundingBox())!.height))).toBeLessThan(6);
+  await expect(inbox.getByTestId("inbox-last")).toContainText("Last received · Nothing yet");
+  const upload = inbox.getByTestId("inbox-upload");
+  await expect(upload.locator("summary")).toHaveText("Upload a statement by hand");
+  expect(await upload.evaluate((d) => (d as HTMLDetailsElement).open)).toBe(false);
+  const off = inbox.getByRole("button", { name: "Turn off the inbox" });
+  await expect(off).not.toHaveClass(/\bbtn\b/);
+  await sane(page, errors);
+  await request.delete(`${API}/connect/inbox`, { headers: auth });
+});
