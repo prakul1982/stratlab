@@ -12,6 +12,7 @@ from datetime import date, datetime
 
 from .coinbase import DataError
 from ..kite_service import ist_date
+from ..candles import whole_candles
 
 ROLL_DAYS = 3
 
@@ -143,6 +144,7 @@ class MCXProvider:
             return math.ceil(candles * 7 / 5) + 10
         return math.ceil(candles / self.per_day(tf) * 7 / 5) + 3
 
+    @whole_candles
     def history(self, inst: dict, tf: str, days: int) -> list[dict]:
         if tf != "1d":       # no continuous intraday series: only the current contract's own life
             days = min(days, self.max_days[tf])
