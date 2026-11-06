@@ -65,7 +65,7 @@ test("TABLE-SWEEP: no half-empty column: a note column only when a row has a not
   assert.match(css, /\.k-tbl-wrap\.stack \.k-table td\[data-blank\] \{ display: none; \}/);
   const nw = read("src/pages/money/NetWorthPage.tsx");
   assert.match(nw, /\.\.\.\(view\?\.insurance\.policies\.some\(\(p\) => p\.next_due\) \? \[\{ key: "due", header: "Next due"/);   // no column of dashes
-  assert.match(nw, /<FactTable label="Where you stand" itemHead="Total" figureHead="Now" noteHead="Change" numeric/);
+  assert.match(nw, /<FactTable label="Where you stand" itemHead="Total" figureHead="Now" numeric rows=\{\[/);      // R15 #3: the change is the headline's, beside the table
   assert.match(read("src/pages/money/SipTestPage.tsx"), /\{ key: "name", header: "How the money went in", rowHeader: true/);
 });
 

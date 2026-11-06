@@ -177,10 +177,11 @@ test("DD-051: the deep dive's tables are cards on a phone", () => {
   assert.match(read("src/styles.css"), /\.biz-updates \.k-tbl-wrap\.stack \.inv-clamp \{ display: none; \}/);
 });
 
-test("DD-054: the deep dive links to the company page's holders and deals instead of repeating them", () => {
+test("DD-054: the deep dive doesn't repeat the company page's holders and deals (R15 #15: nor keeps a card that only linked to them)", () => {
   const deep = read("src/pages/DeepDive.tsx");
   assert.doesNotMatch(deep, /<DealsPanel|<NamedHoldersPanel/);
-  assert.match(deep, /to=\{`\/research\/IN\/\$\{encodeURIComponent\(v\.symbol\)\}#deals`\}/);
+  // changed on purpose (owner, 7 Nov): the "Holders and deals" card held only those two links, so it is gone
+  assert.doesNotMatch(deep, /<Panel title="Holders and deals">/);
 });
 
 test("DD-060, DD-061: compare lines its columns up, draws both prices, shows who owns each, and is kind about one company twice", () => {

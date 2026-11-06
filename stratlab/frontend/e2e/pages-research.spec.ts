@@ -203,8 +203,8 @@ test("deals and insider trades: a dated table on the company page and the deep d
 
   errors = await open(page, "/research/IN/RELIANCE/deep", "Growth and margins");
   await expect(page.getByText("Promoter and insider buying and selling, 6 months").first()).toBeVisible({ timeout: 30_000 });
-  // the deals are the company page's own table, linked from the deep dive rather than shown twice (DD-054)
-  await expect(page.getByTestId("deep-holders-deals").getByRole("link", { name: "deals and insider trades" })).toHaveAttribute("href", "/research/IN/RELIANCE#deals");
+  // the deals are the company page's own table (DD-054); R15 #15 (owner, 7 Nov, changed on purpose): no "Holders and deals" card that only linked there
+  await expect(page.getByRole("heading", { name: "Holders and deals" })).toHaveCount(0);
   if (phone) await touchable(page);
   await sane(page, errors);
 });

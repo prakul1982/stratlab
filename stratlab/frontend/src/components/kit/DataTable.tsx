@@ -115,7 +115,7 @@ export function CsvButton<R>({ name, label, columns, rows, text = "Download CSV"
   );
 }
 
-export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, scrollEnd, csv, detail, selectAll, compact }: {
+export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, pageDesktop, scrollEnd, csv, detail, selectAll, compact }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** EXPORT: a "Download CSV" button over the table, the file named after this (stratlab-<name>-<today>.csv); `rows` when the file
    * holds more than the table shows now (a group showing its first 12). */
@@ -140,6 +140,8 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   rowAttrs?: (row: R) => Record<string, string>; rowNote?: (row: R) => ReactNode | undefined;
   /** With `stack`: on a phone, this many cards at a time, then "Show more" (R6O-018: 352 ETF cards made one 13,000 px page). */
   phonePage?: number;
+  /** With `phonePage`: a desktop pages the rows the same way ("Each sale in rupees": the first 10, then Show more; owner, 7 Nov). */
+  pageDesktop?: boolean;
   /** With `stack`: on a phone each row is two short lines, not a card of labelled figures (LIVE4-010: a results day of ten companies was
    *  2,900 px of cards): the name with the `brief` figures at its right, then the other figures in one line, each after a short label; a
    *  column marked `phone: false` and a cell that is only a dash are left out. Desktop is unchanged. */
@@ -187,7 +189,7 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
   const toggle = (k: string) => setOpenRows((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const uid = useId();
-  const cap = stack && phonePage && phone ? phonePage * pages : Infinity;
+  const cap = stack && phonePage && (phone || pageDesktop) ? phonePage * pages : Infinity;
   const rows = allRows.length > cap ? allRows.slice(0, cap) : allRows;
   const left = allRows.length - rows.length;
   const file = typeof csv === "string" ? { name: csv, rows: allRows } : csv ? { name: csv.name, rows: csv.rows ?? allRows } : null;

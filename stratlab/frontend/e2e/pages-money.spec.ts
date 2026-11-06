@@ -30,8 +30,10 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await expect(table.getByRole("columnheader", { name: "Trend", exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Recent filings")).toBeVisible();
   expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
-  await page.getByRole("radio", { name: "Add to my holdings" }).click();
+  // R15 #4: Add or Start again once the file is picked, then Read this file
   await page.locator("input[type=file]").setInputFiles(HOLDINGS_FILES + "groww_holdings_statement.xlsx");
+  await page.getByRole("radio", { name: "Add to my holdings" }).click();
+  await page.getByRole("button", { name: "Read this file" }).click();
   await expect(page.getByText("Read as a Groww file")).toBeVisible({ timeout: 30_000 });   // matching a first file reads the stock lists
   const missed = page.getByRole("table", { name: "Lines that couldn't be matched" });
   await expect(missed.getByText(/INE000X01000/)).toBeVisible();
@@ -207,13 +209,16 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   // the total, at the top of the year, with where it comes from
   const total = page.getByRole("region", { name: "Total tax estimate" });
   await expect(total.getByRole("heading", { name: "Total tax estimate, FY 2024-25" })).toBeVisible();
-  await expect(total.getByRole("table", { name: "Total tax breakdown" }), "the workings are folded until asked for (LIVE1B-010)").toBeHidden();
+  // R15 #6 (owner, 7 Nov: "keep this open by default"): the workings' fold starts open
+  await expect(total.getByRole("table", { name: "Total tax breakdown" }), "the workings are open to start with").toBeVisible();
   const chips = total.getByRole("table", { name: "Where the tax comes from" });          // a table (RES-1): a row for each source
   await expect(chips.getByRole("row")).toHaveCount(5);                                      // the header and four sources
   for (const c of ["Capital gains", "Intraday", "F&O", "Other income"]) await expect(chips.getByRole("row").filter({ hasText: c })).toHaveCount(1);
   await expect(total.getByText(/no other income entered yet/)).toBeVisible();
-  await total.getByText("How we got here").click();
   await expect(total.getByRole("table", { name: "Total tax breakdown" }).getByText("Estimated total tax")).toBeVisible();
+  await total.getByText("How we got here").click();
+  await expect(total.getByRole("table", { name: "Total tax breakdown" }), "it still folds").toBeHidden();
+  await total.getByText("How we got here").click();
   // F&O by segment, and the return and audit facts
   const segs = page.getByRole("table", { name: "F&O by segment" });
   for (const s of ["F&O", "Commodity", "Currency"]) await expect(segs.getByText(s, { exact: true })).toBeVisible();

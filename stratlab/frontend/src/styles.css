@@ -94,7 +94,8 @@ h1.eyebrow { font-weight: 400; }
 .btn:hover { color: var(--on-ink); filter: brightness(1.12); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 /* VR1-150: a disabled main button was the main button at half strength, a muddy grey-beige that read as a grey secondary one: it is an empty outline with muted words instead */
-.btn:disabled:not(.quiet):not(.blue):not(.outline) { opacity: 1; background: transparent; border: 1px dashed var(--dash); color: var(--muted); }
+/* R15 #19 (owner, 7 Nov: "Start session" was "a dashed ghost"): a solid, muted button, the same shape as the rest, never a dashed outline */
+.btn:disabled:not(.quiet):not(.blue):not(.outline) { opacity: 1; background: var(--chip); border: 1px solid var(--line-2); color: var(--muted); }
 /* LIVE1B-016, 047: a button that is working (it says "Adding…") keeps its fill, dimmed: the dashed outline is for one that cannot be pressed yet */
 .btn:disabled[aria-busy="true"]:not(.quiet):not(.blue):not(.outline):not(.danger) { opacity: .6; background: var(--ink); border: 1px solid var(--ink); color: var(--on-ink); cursor: progress; }
 .btn.blue { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
@@ -1590,6 +1591,24 @@ ul.order-rows li .order-pick { grid-column: 2 / -1; margin-top: -4px; }
 ul.leg-picks { margin: 0; padding-left: 18px; }
 /* Signal forward test (/trade/signals) and chart replay (/trade/replay) */
 
+/* R15 #19: the forward test's URL card holds the steps under a rule, and the form's card beside it ends level */
+.sg-two > .k-card { height: 100%; }
+.sg-howto { display: flex; flex-direction: column; gap: var(--s2); border-top: 1px solid var(--line); padding-top: var(--s4); margin-top: var(--s1); }
+.sg-howto .k-card-title { font-size: var(--t-body); margin: 0; }
+/* R15 #20: chart replay's new-replay form in three rows */
+.rp-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3) var(--s5); }
+.rp-row-top { align-items: flex-start; justify-content: space-between; }
+.rp-row-top > .k-field { flex: 1 1 360px; min-width: 0; }
+.rp-random { flex: none; padding-top: 26px; }
+.rp-row-inst { align-items: flex-start; }
+.rp-row-inst > .k-field:not(.wide) { flex: 0 0 220px; }
+.rp-row-inst > .k-field.wide { flex: 1 1 320px; min-width: 0; }
+.rp-row-go > .k-field { flex: 0 0 220px; }
+.rp-row-go > .k-note { align-self: flex-end; padding-bottom: 13px; }
+@media (max-width: 640px) {
+  .rp-random { padding-top: 0; }
+  .rp-row-inst > .k-field:not(.wide), .rp-row-go > .k-field { flex: 1 1 100%; }
+}
 .sg-code { margin: 0; padding: 12px 14px; background: var(--chip); border-radius: 10px; font-family: var(--mono); font-size: 13px; overflow-x: auto; white-space: pre; max-width: 100%; }
 
 /* business updates and named holders (BizUpdates.tsx, NamedHolders.tsx, HoldersPage, BizUpdatesPage) */
@@ -1734,6 +1753,21 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-chip.add { border-style: dashed; color: var(--blue-ink); }
 /* a remembered custom choice: its chip and a small × that forgets it (the pair is one rounded shape) */
+/* R15: a connected source as a chip ("● Zerodha · 13 h ago ↻"), in a row with the upload button (Holdings, Mutual funds) */
+.k-source { display: inline-flex; align-items: center; gap: 8px; flex: none; max-width: 100%; }
+.k-source-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; }
+.k-source-chip.static { cursor: default; }
+.k-source-chip.static:hover { border-color: var(--line-2); }
+.k-source-chip:disabled { cursor: progress; opacity: 1; }
+.k-source-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.k-source-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--up); flex: none; }
+.k-source.off .k-source-dot { background: var(--muted); }
+.k-source-go { color: var(--muted); font-size: 13px; }
+.k-source-chip .k-working.inline { width: 28px; }
+.k-source-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.k-source-row > .k-field { flex: 0 1 300px; }
+.mf-upload { display: flex; flex-direction: column; gap: 12px; }
+.mf-picked { align-items: flex-end; }
 .k-chip-mine { display: inline-flex; flex: none; align-items: stretch; }
 .k-chip-mine > .k-chip { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-right: 8px; }
 .k-chip-x { flex: none; height: 32px; min-width: 28px; padding: 0 8px 0 4px; border: 1px solid var(--line-2, var(--line)); border-left-width: 0; border-radius: 0 999px 999px 0; background: var(--card); color: var(--muted); cursor: pointer; font: inherit; }
@@ -1774,6 +1808,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-field.wide { grid-column: 1 / -1; }
 .k-card > .k-field { max-width: 420px; }   /* a lone field in a card (a stock lookup) is not stretched across it */
 .k-card > .k-field.wide { max-width: none; }   /* a row that should fill the card (a document upload) */
+.k-card > .k-field:has(.k-picker) { max-width: none; }   /* R15 #13 (owner, 7 Nov): a company or instrument search spans its card, its chips under it */
 .k-label-row { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 22px; }
 .k-label-row label { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .k-label-row .opt { font-weight: 400; color: var(--muted); }
@@ -2092,6 +2127,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-foldcard-head { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 36px; }
 .k-foldcard-head .k-card-titlerow { min-width: 0; }
 .k-foldcard-head .info { position: relative; z-index: 1; }
+.k-foldcard-end { display: inline-flex; align-items: center; gap: var(--s4); flex: none; }
+.k-foldcard-actions { position: relative; z-index: 1; display: inline-flex; gap: var(--s2); }   /* above the head's tap target */
 .k-foldcard-btn { all: unset; display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; font: inherit; color: inherit; border-radius: 6px; }   /* a 44px target (the row around it is one too) */
 .k-foldcard-btn::after { content: ""; position: absolute; inset: calc(-1 * var(--s3)) calc(-1 * var(--s5)); border-radius: var(--r-card); }
 .k-foldcard-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
@@ -2127,6 +2164,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .k-sec-chev { transition: none; } }
 /* the tools of a space, in a FoldCard: a calm table of name, one line and where it lives in the menu */
 .k-more-tools .k-table td.k-wrap { white-space: normal; min-width: 16rem; }
+/* on a phone's cards the line takes the card's width (open by default since R15 #1, "Elsewhere in StratLab" ran 67px past a 390px screen) */
+@media (max-width: 640px) { .k-more-tools .k-tbl-wrap.stack .k-table td.k-wrap { min-width: 0; grid-column: 1 / -1; } }
 .k-more-tools .k-more-go { display: inline-flex; flex-direction: column; gap: 2px; }
 .k-more-tools .k-more-lock { font-size: var(--t-note); color: var(--muted); }
 .k-chipset { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -2218,6 +2257,15 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 @media (max-width: 640px) { .nw-add { display: flex; width: 100%; } .nw-add > .btn { flex: 1 1 auto; justify-content: center; } .nw-add .more-pop { left: auto; right: 0; } }
 /* the statement inbox offered under a statement upload (Mutual funds): a ruled line at the card's foot, its address inline */
 .k-line-row.k-inbox-note { border-bottom: 0; border-top: 1px solid var(--line); padding-top: var(--s3); }
+/* R15 #21: Settings' statement inbox: a box and its buttons on one row, the last statement one line, turning it off a quiet red link */
+.inbox-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2) var(--s3); }
+.inbox-address-row { align-items: center; flex-wrap: nowrap; }
+.inbox-address-row .k-address { min-width: 0; flex: 0 1 auto; }
+.inbox-pw > .k-field { flex: 0 1 280px; }
+.inbox-pw > .badge { align-self: center; margin-bottom: 0; }
+.inbox-last { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.linklike.inbox-off { display: inline-flex; align-items: center; min-height: 36px; color: var(--down); font-size: var(--t-label); text-decoration: underline; text-underline-offset: 2px; }
+.linklike.inbox-off:hover { color: var(--down); filter: brightness(1.15); }
 .k-inbox-note .k-address { padding: 1px 6px; font-size: 12.5px; }
 .k-line-row > .k-line-text { display: flex; flex-direction: column; min-width: 0; }
 .k-line-row b { font-weight: 600; overflow-wrap: anywhere; }
@@ -2803,6 +2851,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .k-fold-sum:hover { background: var(--paper-2); }
 .k-fold-name, .k-fold-cell { min-width: 0; overflow-wrap: anywhere; }
 .k-fold-name b { display: block; font-weight: 600; }
+/* R15 #7: a scheme's name and its note one line each, cut with … (the whole on hover); a figure with nothing to show is a muted dash */
+.k-fold-name .mf-name, .k-fold-name .mf-name-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-fold-v .k-none, .k-fold-v.k-none { color: var(--muted); }
 .k-fold-k { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }   /* the column's name: the header row's on a wide screen, spoken here */
 .k-fold-v { display: block; font-variant-numeric: tabular-nums; }
 .k-fold-body { padding: var(--s2) var(--s3) var(--s5); display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
@@ -3117,4 +3168,18 @@ body:has(.shell) .mw-launch { bottom: calc(16px + env(safe-area-inset-bottom, 0p
   .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { overflow-wrap: normal; word-break: normal; }
   .k-tbl-wrap.k-fit .k-table tbody th > a:first-child, .k-tbl-wrap.k-fit .k-table tbody th > b:first-child,
   .k-tbl-wrap.k-fit .k-table :is(button, .btn, .k-badge, .k-chip, .k-delta) { white-space: nowrap; }
+}
+
+/* R15 #3 (owner, 7 Nov): Net worth's "Where you stand": the headline (figure large, its change beside it) on the left half, what you own,
+   owe and are worth as a small table on the right; one under the other on a phone */
+.nw-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 32px; }
+.nw-head-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.nw-head-label { font-size: var(--t-note); color: var(--muted); }
+.nw-head-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; }
+.nw-head-figure { font-size: 32px; line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.nw-head-change { font-size: var(--t-label); }
+.nw-head .k-facts { margin: 0; }
+@media (max-width: 640px) {
+  .nw-head { grid-template-columns: 1fr; gap: 16px; }
+  .nw-head-figure { font-size: 28px; }
 }

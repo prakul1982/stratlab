@@ -107,9 +107,10 @@ test("Net worth: one snapshot is removed from the history after a confirm; the e
     await welcome.getByRole("button", { name: /^All of it/ }).click();
     await page.goto("/money/net-worth");
   }
+  // R15 #3 (changed on purpose): the snapshots open from the totals card's History button, not a "History: N snapshots" fold at its foot
+  await page.getByRole("button", { name: "History · 1 snapshot" }).click({ timeout: 30_000 });
   const snaps = page.getByTestId("nw-snapshots");
-  await expect(snaps).toBeVisible({ timeout: 30_000 });
-  await snaps.locator("summary").click();
+  await expect(snaps).toBeVisible();
   await snaps.getByRole("button", { name: /^Remove the snapshot of/ }).first().click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Only that day's net worth leaves the history chart");
@@ -139,15 +140,16 @@ test.describe("on a month's first day, the market shut", () => {
       await welcome.getByRole("button", { name: /^All of it/ }).click();
       await page.goto("/money/net-worth");
     }
+    // R15 #3 (changed on purpose): opened from the totals card's History button
+    await page.getByRole("button", { name: "History · 2 snapshots" }).click({ timeout: 30_000 });
     const snaps = page.getByTestId("nw-snapshots");
-    await expect(snaps.locator("summary")).toHaveText("History: 2 snapshots", { timeout: 30_000 });
-    await snaps.locator("summary").click();
     await expect(snaps.getByRole("row", { name: /1 Nov 2026/ })).toContainText("taken when an entry changed");
     await expect(snaps.getByRole("row", { name: /30 Oct 2026/ })).toContainText("monthly");
     await snaps.getByRole("button", { name: "Remove the snapshot of 30 Oct 2026" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Remove this snapshot" }).click();
     await expect(page.getByText("Snapshot removed.")).toBeVisible();
-    await expect(page.getByTestId("nw-snapshots").locator("summary")).toHaveText("History: 1 snapshot");
+    await expect(page.getByRole("button", { name: "History · 1 snapshot" })).toBeVisible();
+    await expect(page.getByTestId("nw-snapshots").getByRole("row", { name: /1 Nov 2026/ })).toBeVisible();
     await expect(page.locator("main")).toContainText("Savings account");
     expect(errors).toEqual([]);
     await request.delete(`${api}/money/net-worth`, { headers: auth });

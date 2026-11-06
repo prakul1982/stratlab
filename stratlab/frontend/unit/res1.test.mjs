@@ -7,7 +7,7 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const page = read("src/pages/ResultsPage.tsx");
 
 test("RES-1: one table a day with the figures a person looks at on a results day", () => {
-  assert.match(page, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Results on \$\{resultDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => `\$\{r\.symbol\}-\$\{r\.date\}`\} columns=\{columns\} stack compact phonePage=\{10\} \/>/);
+  assert.match(page, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Results on \$\{resultDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => `\$\{r\.symbol\}-\$\{r\.date\}`\} columns=\{on\.some\(\(r\) => r\.fo\) \? columns : columns\.filter\(\(c\) => c\.key !== "im"\)\} stack compact phonePage=\{10\} \/>/);      // R15 #11
   // LIVE4-010: shorter headers that fit one line (the (i) says the rest); the CSV keeps the full names
   // LIVE5-002: revenue and profit share the "Quarter" column (a CSV-only pair keeps them apart); "Implied" fits a 1280 screen
   for (const h of ["Company", "Market value", "Price", '"Day"', "Quarter", "Revenue", "Profit", "Usual move", "Implied"])

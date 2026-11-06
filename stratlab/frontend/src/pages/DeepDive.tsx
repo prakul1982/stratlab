@@ -337,12 +337,7 @@ export function DeepDivePage() {
           {!us && <BizUpdatesPanel symbol={v.symbol} wrap={(body, right) => <Panel title="Business updates" right={right}
             info="Monthly or quarterly numbers the company files between results, copied from its own filing with the line and page each comes from.">{body}</Panel>} />}
 
-          {/* the named holders and the deals tables are the company page's: linked from here, not shown twice (DD-054) */}
-          {!us && <Panel title="Holders and deals">
-            <p className="k-small" data-testid="deep-holders-deals">The named holders above 1% and the deals and insider trades are on the company page:{" "}
-              <Link className="link" to={`/research/IN/${encodeURIComponent(v.symbol)}#named-holders`}>named holders</Link>,{" "}
-              <Link className="link" to={`/research/IN/${encodeURIComponent(v.symbol)}#deals`}>deals and insider trades</Link>.</p>
-          </Panel>}
+          {/* the named holders and the deals tables are the company page's (DD-054); no card here that only linked to them (R15, owner 7 Nov) */}
 
           {n.bank ? (
             <Panel title="Capex and cash">

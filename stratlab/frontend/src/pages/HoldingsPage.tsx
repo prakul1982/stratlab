@@ -19,6 +19,7 @@ import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
 import { orList } from "../lib/brokers";
 import { BrokerGuide } from "../components/BrokerGuide";
+import { SourceChip } from "../components/kit/SourceChip";
 import { dayLabel, dollarRate, editChange, pnlLabel, priceNote, syncedNote, type Change, type Closes, type Mkt } from "../lib/holdingsEdit";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
@@ -93,6 +94,8 @@ export function HoldingsPage() {
   const [mode, setMode] = useState<"replace" | "add">("add");
   const [replacing, setReplacing] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [readingFrom, setReadingFrom] = useState<string | null>(null);   // the broker chip reading now (its loading bar)
+  const [pending, setPending] = useState<File | null>(null);              // a file picked, waiting for Add or Start again (R15 #4)
   const [reading, setReading] = useState(false);        // a file is being read: only then does the upload button say "Reading…" (LIVE1B-047)
   const [result, setResult] = useState<(ImportReply & { replaced: boolean; usKept: number }) | null>(null);
   const [edit, setEdit] = useState<Row | null>(null);
@@ -137,7 +140,7 @@ export function HoldingsPage() {
 
   // a connected Zerodha is read again from here, not only from Settings; a login that has ended goes to Zerodha's own sign-in (LIVE1C-057)
   const refreshZerodha = async () => {
-    setBusy(true);
+    setBusy(true); setReadingFrom("zerodha");
     try {
       const r = await api<{ count: number }>("/connect/kite/refresh", { method: "POST" });
       notify(`Read ${r.count} holding${r.count === 1 ? "" : "s"} from Zerodha.`);
@@ -146,12 +149,12 @@ export function HoldingsPage() {
       if ((e as { code?: string }).code === "login_needed") {
         try { const r = await api<{ url: string }>("/connect/kite/login"); window.location.href = r.url; return; } catch (e2) { fail(e2); }
       } else fail(e);
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setReadingFrom(null); }
   };
 
   // Upstox and Dhan, read again from here the same way
   const refreshBroker = async (b: { key: string; name: string }) => {
-    setBusy(true);
+    setBusy(true); setReadingFrom(b.key);
     try {
       const r = await api<{ count: number }>(`/connect/${b.key}/refresh`, { method: "POST" });
       notify(`Read ${r.count} holding${r.count === 1 ? "" : "s"} from ${b.name}.`);
@@ -160,7 +163,7 @@ export function HoldingsPage() {
       if ((e as { code?: string }).code === "login_needed") {
         try { const r = await api<{ url: string }>(`/connect/${b.key}/login`); window.location.href = r.url; return; } catch (e2) { fail(e2); }
       } else fail(e);
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setReadingFrom(null); }
   };
 
   const { problem, clear: clearProblem, refused, reject } = useUploadProblem();     // a refused file's reason stays beside the upload (RC6-010)
@@ -170,11 +173,19 @@ export function HoldingsPage() {
     // LIVE1B-002: the last file's answer goes the moment another is picked, so a refusal never sits under an old "saved" line
     setResult(null); clearProblem();
     if (f.size > MAX_MB * 1024 * 1024) { reject(`That file is larger than ${MAX_MB} MB. A holdings export is much smaller; check it's the right file.`); reset(); return; }
-    // nothing held yet: the file is the holdings either way. Held Indian stocks and "Start again": asked first (MONEY-2)
-    const how = rows.length ? mode : "replace";
-    if (how === "replace" && rows.some((r) => !isUS(r))) { setReplacing(f); reset(); return; }
-    await upload(f, how);
+    // nothing held yet: the file is the holdings either way, read at once. With holdings, the file waits for Add or Start again,
+    // which show only now (R15 #4, owner 7 Nov: the choice took a row before any file was picked)
     reset();
+    if (rows.length) { setMode("add"); setPending(f); return; }
+    await upload(f, "replace");
+  };
+  /** The picked file, read the way chosen; held Indian stocks and "Start again" are asked first (MONEY-2). */
+  const readPending = async () => {
+    const f = pending;
+    if (!f) return;
+    setPending(null);
+    if (mode === "replace" && rows.some((r) => !isUS(r))) { setReplacing(f); return; }
+    await upload(f, mode);
   };
   const upload = async (f: File, how: "replace" | "add") => {
     setBusy(true); setReading(true);
@@ -290,6 +301,8 @@ export function HoldingsPage() {
     { key: "why", header: "Why", wrap: true, cell: (u) => <span className="k-muted">{u.reason}</span> },
   ];
 
+  // the Zerodha chip, unless the empty state below already says Zerodha is connected and returned nothing (R35: said twice)
+  const zerodhaChip = !!view?.zerodha && !(rows.length === 0 && zerodhaEmpty(view.zerodha));
   return (
     <div className="k-page">
       <PageHeader eyebrow="Money · Portfolio" title="My Holdings" asOf={view?.prices_at} asOfTz={rows.length > 0 && rows.every(isUS) ? marketTz("US") : undefined}
@@ -299,31 +312,36 @@ export function HoldingsPage() {
         info="Facts, not advice. Only you can see your holdings." infoLabel="About your holdings" />
 
       <Card>
-        <CardHead title="Import from your broker" info={<>Download your holdings as Excel or CSV from {BROKERS} (usually Portfolio › Holdings › Download), then upload it here. Any other CSV works too with columns for Symbol (or ISIN), Quantity and Average price.</>}
-          actions={rows.length > 0 ? <Seg label="What the file does" options={[{ value: "add", label: "Add to my holdings" }, { value: "replace", label: "Start again with this file" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} /> : undefined} />
-        <div className="k-row" data-main-action="">
+        <CardHead title="Import from your broker" info={<>Download your holdings as Excel or CSV from {BROKERS} (usually Portfolio › Holdings › Download), then upload it here (up to {MAX_MB} MB). Any other CSV works too with columns for Symbol (or ISIN), Quantity and Average price. A connected broker is read again with a tap on its chip.</>} />
+        {/* R15 #4 (owner, 7 Nov: "make this whole thing small buttons and like tickers"): one row, the upload button and a chip for each
+            connected broker ("● Zerodha · 13 h ago ↻", a tap reads it now, the loading bar in the chip meanwhile); wraps on a phone */}
+        <div className="k-source-row" data-main-action="">
           <UploadButton label="Upload holdings file" busy={reading} accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Holdings file" onFiles={pick} />
-          <span className="k-note">Excel or CSV, up to {MAX_MB} MB.</span>
+          {zerodhaChip && view?.zerodha && (
+            <SourceChip testId="zerodha-refresh" name="Zerodha" when={view.zerodha.read_at ? ago(view.zerodha.read_at) : undefined} busy={readingFrom === "zerodha"}
+              onRead={() => { if (!busy) void refreshZerodha(); }} label="Read from Zerodha now"
+              title={`Zerodha is connected${view.zerodha.read_at ? `, last read ${ago(view.zerodha.read_at)}` : ""}. A tap reads it now.`} />
+          )}
+          {(view?.brokers ?? []).map((b) => (
+            <SourceChip key={b.key} testId={`${b.key}-refresh`} name={b.name} when={b.read_at ? ago(b.read_at) : undefined} off={!b.live} busy={readingFrom === b.key}
+              onRead={() => { if (!busy) void refreshBroker(b); }} label={`Read from ${b.name} now`}
+              title={`${b.name} is connected${b.read_at ? `, last read ${ago(b.read_at)}` : ""}${b.live ? "" : ". Its login has ended, so the next read asks you to log in again"}.`} />
+          ))}
         </div>
+        {pending && (
+          <div className="k-source-row" role="group" aria-label="The file picked" data-testid="holdings-pending">
+            <span className="k-small"><b>{pending.name}</b></span>
+            <Seg label="What the file does" options={[{ value: "add", label: "Add to my holdings" }, { value: "replace", label: "Start again with this file" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} />
+            <button type="button" className="btn sm" onClick={() => void readPending()}>Read this file</button>
+            <button type="button" className="btn quiet sm" onClick={() => setPending(null)}>Cancel</button>
+          </div>
+        )}
+        {zerodhaChip && <p className="k-note" data-testid="zerodha-note">Zerodha ends its login each morning, so one tap a day keeps it current; <Link to="/settings#accounts">a statement inbox in Settings</Link> does it without a tap.</p>}
         <UploadProblem problem={problem} />
         {(problem || (result && !result.saved && !result.duplicate)) && (
           // MONEY-6a: a refused file says what is read, not only why this one wasn't
           <p className="k-note" data-testid="holdings-format">A file of your own needs the columns <b>Symbol</b> (or ISIN), <b>Quantity</b> and <b>Average price</b>, one stock a line (e.g. INFY, 10, 1500); the names may be in any case. Files read as they are: {BROKERS}.</p>
         )}
-        {view?.zerodha && rows.length === 0 && zerodhaEmpty(view.zerodha)
-          ? null      // the empty state below already says Zerodha is connected and returned nothing (R35: said twice)
-          : view?.zerodha
-          ? <div className="k-row" data-testid="zerodha-refresh">
-              <span className="k-note">Zerodha is connected{view.zerodha.read_at ? `, last read ${ago(view.zerodha.read_at)}` : ""}. Zerodha ends its login each morning, so one tap a day keeps this current; <Link to="/settings#accounts">a statement inbox in Settings</Link> does it without a tap.</span>
-              <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void refreshZerodha()}>{busy ? "Reading…" : "Read from Zerodha now"}</button>
-            </div>
-          : null}
-        {(view?.brokers ?? []).map((b) => (
-          <div className="k-row" key={b.key} data-testid={`${b.key}-refresh`}>
-            <span className="k-note">{b.name} is connected{b.read_at ? `, last read ${ago(b.read_at)}` : ""}{b.live ? "" : ". Its login has ended, so the next read asks you to log in again"}.</span>
-            <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void refreshBroker(b)}>{busy ? "Reading…" : `Read from ${b.name} now`}</button>
-          </div>
-        ))}
         {!view?.zerodha && !(view?.brokers ?? []).length && (
           // the brokers named are the ones this account may log in to (LIVE1B-042: none offered where it isn't there)
           <p className="k-note" data-testid="connect-offer">Prefer not to upload each time? <Link to="/settings#accounts">{connectOffer(view)}</Link> and this stays up to date by itself.</p>

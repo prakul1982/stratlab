@@ -83,35 +83,40 @@ function Setup({ ov, onStart }: { ov: Overview; onStart: (s: Session) => void })
   return (
     <Card label="New replay">
       <CardHead title="New replay" />
+      {/* R15 #20 (owner, 7 Nov: "fix ui"): three rows, no big empty areas: the candle size with the random button beside it, the market
+          and the instrument (wide) side by side, and the start date with Start replay; the candle limits are in the size's (i) */}
       <div className="k-stack">
-        <FieldGroup label="Candle size" info={`Smaller candles go back only a few months (5-minute about four), daily candles years. ${CANDLE_LIMITS}`} infoLabel="About candle sizes">
-          <ChipBar wrap label="Candle size" value={tf} onChange={setTf} options={sizes.map((c) => ({ value: c.value, label: TF_NAME[c.value] ?? c.label }))}
-            custom={{ storageKey: `stratlab.chips.replay.${me?.id ?? "anon"}`, units: CANDLE_UNITS, defaultUnit: "min", validate: candleCheck(ov.tfs) }} />
-        </FieldGroup>
-        <div className="k-row">
-          <button type="button" className="btn outline" disabled={busy || !indiaLive} onClick={() => go(true)}>Random stock and date</button>
-          <Info>A NIFTY 50 stock on a random past date. The symbol and the dates stay hidden until you finish, so you can't remember what happened next.</Info>
+        <div className="rp-row rp-row-top">
+          <FieldGroup label="Candle size" info={`Smaller candles go back only a few months (5-minute about four), daily candles years. ${CANDLE_LIMITS}`} infoLabel="About candle sizes">
+            <ChipBar wrap label="Candle size" value={tf} onChange={setTf} options={sizes.map((c) => ({ value: c.value, label: TF_NAME[c.value] ?? c.label }))}
+              custom={{ storageKey: `stratlab.chips.replay.${me?.id ?? "anon"}`, units: CANDLE_UNITS, defaultUnit: "min", validate: candleCheck(ov.tfs) }} />
+          </FieldGroup>
+          <div className="k-row rp-random">
+            <button type="button" className="btn outline" disabled={busy || !indiaLive} onClick={() => go(true)}>Random stock and date</button>
+            <Info>A NIFTY 50 stock on a random past date. The symbol and the dates stay hidden until you finish, so you can't remember what happened next.</Info>
+          </div>
         </div>
         {!indiaLive && <p className="k-note" data-testid="rp-random-off">A random replay picks a NIFTY 50 stock, and India's market data is offline right now, so it can't start. Pick an instrument from another market below.</p>}
         {problem && <p className="k-note k-bad" role="alert" data-testid="rp-problem">{problem}</p>}
-        <span className="k-small k-muted">Or pick one yourself</span>
-        <FormGrid label="Pick a stock and a date" onSubmit={(e) => { e.preventDefault(); void go(false); }}>
-          {live.length > 1 && (
-            <Field label="Market">{(id) => <Select id={id} value={market?.id ?? ""} onChange={(v) => { setMid(v); setInst(null); }} options={live.map((m) => ({ value: m.id, label: m.name }))} />}</Field>
-          )}
-          <FieldGroup label="Instrument" wide>
-            {inst ? (
-              <div className="k-row"><Badge tone="ok">{inst.symbol}</Badge><button type="button" className="btn quiet sm" onClick={() => setInst(null)}>Pick another</button></div>
-            ) : market ? <InstrumentSearch market={market} compact onPick={setInst} /> : <p className="k-small k-muted">Market data is offline right now.</p>}
-          </FieldGroup>
+        <span className="k-small k-muted rp-or">Or pick one yourself</span>
+        <form className="k-stack rp-pick" aria-label="Pick a stock and a date" onSubmit={(e) => { e.preventDefault(); void go(false); }}>
+          <div className="rp-row rp-row-inst">
+            {live.length > 1 && (
+              <Field label="Market">{(id) => <Select id={id} value={market?.id ?? ""} onChange={(v) => { setMid(v); setInst(null); }} options={live.map((m) => ({ value: m.id, label: m.name }))} />}</Field>
+            )}
+            <FieldGroup label="Instrument" wide>
+              {inst ? (
+                <div className="k-row"><Badge tone="ok">{inst.symbol}</Badge><button type="button" className="btn quiet sm" onClick={() => setInst(null)}>Pick another</button></div>
+              ) : market ? <InstrumentSearch market={market} compact onPick={setInst} /> : <p className="k-small k-muted">Market data is offline right now.</p>}
+            </FieldGroup>
+          </div>
           {!rupees && <p className="k-note" data-testid="rp-not-saved">{JOURNAL_RUPEES}</p>}
-          <DateField label="Start date" value={start} max={new Date(Date.now() - 86400_000).toISOString().slice(0, 10)} onChange={setStart} />
-          <FormActions>
+          <div className="rp-row rp-row-go">
+            <DateField label="Start date" value={start} max={new Date(Date.now() - 86400_000).toISOString().slice(0, 10)} onChange={setStart} />
             <button type="submit" className="btn" disabled={busy || !inst || !start}>{busy ? "Loading candles…" : "Start replay"}</button>
             {!busy && (!inst || !start) && <span className="k-note">{!inst ? "Pick an instrument first." : "Choose a start date first."}</span>}
-          </FormActions>
-        </FormGrid>
-        <p className="k-note">Daily candles go back years; smaller candles only a few months (5-minute about four).</p>
+          </div>
+        </form>
       </div>
     </Card>
   );

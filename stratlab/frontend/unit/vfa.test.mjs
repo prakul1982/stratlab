@@ -67,11 +67,12 @@ test("VR1-021, VR1-022, VR1-031: the 'more you can do' tools keep one name and w
   assert.match(read("src/components/Explore.tsx"), /title = "More you can do"/);
 });
 
-test("owner, 5 Nov: More you can do is one closed fold that says how many tools it holds, with every tool of every group inside", () => {
+test("owner, 5 Nov / 7 Nov: More you can do is one fold, open by default, that says how many tools it holds, with every tool of every group inside", () => {
   // (29 Oct the owner asked for no fold; 5 Nov: "make it like a dropdown everywhere", closed by default, a clear summary row)
   const ex = read("src/components/Explore.tsx");
   assert.match(ex, /const rows: ToolRow\[\] = sections\.flatMap\(\(\{ g, tiles \}\) => tiles\.map/);          // IA-1: every menu entry of the space, in the menu's shape
   const more = read("src/components/MoreTools.tsx");
+  assert.match(more, /<FoldCard id=\{id\} open className="k-more-tools"/);          // R15 #1 (owner, 7 Nov): open by default on every home
   assert.match(more, /meta=\{`\$\{rows\.length\} tool\$\{rows\.length === 1 \? "" : "s"\}`\}/);
   const fold = read("src/components/kit/FoldCard.tsx");
   assert.match(fold, /open: initial = false/);

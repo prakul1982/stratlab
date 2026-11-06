@@ -9,9 +9,12 @@ import { SectionMenu, useSectionFrame } from "./Section";
  * contents stay on the page while closed (hidden), so a link into them still finds them; `openWhen` opens it from outside
  * (a link to something inside). Opened or closed, it stays that way for the person on this page, and it moves up or down like every
  * other section (kit/Section.tsx). */
-export function FoldCard({ title, meta, info, infoLabel, open: initial = false, openWhen, id, label, testId, className, level = 2, children }: {
+export function FoldCard({ title, meta, info, infoLabel, open: initial = false, openWhen, id, label, testId, className, level = 2, actions, children }: {
   title: string; meta?: ReactNode; info?: ReactNode; infoLabel?: string; open?: boolean; openWhen?: boolean; id?: string; label?: string;
-  testId?: string; className?: string; level?: 2 | 3; children: ReactNode;
+  testId?: string; className?: string; level?: 2 | 3;
+  /** a small control on the head row, before the summary (a "Download CSV"): not a row of its own under the head (R15 #7) */
+  actions?: ReactNode;
+  children: ReactNode;
 }) {
   const el = useRef<HTMLElement>(null);
   const frame = useSectionFrame(el, { id, title, defaultOpen: initial });
@@ -36,6 +39,7 @@ export function FoldCard({ title, meta, info, infoLabel, open: initial = false, 
           {info && <Info label={infoLabel ?? `About ${title}`}>{info}</Info>}
         </div>
         <span className="k-foldcard-end">
+          {actions && <span className="k-foldcard-actions">{actions}</span>}
           <span className="k-foldcard-meta" aria-hidden="true">{meta}<span className="k-foldcard-chev" /></span>
           {frame.on && <SectionMenu frame={frame} />}
         </span>

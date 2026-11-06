@@ -29,11 +29,14 @@ test("MONEY-2: a holdings file adds by default; Start again asks first, naming w
   const errors = await open(page, "/holdings", "By sector", sessionAs(u.token, u.id, u.email));
   await settle(page);
   const table = page.getByRole("table", { name: "Positions" });
-  await expect(page.getByRole("radio", { name: "Add to my holdings" })).toBeChecked();
+  // R15 #4 (changed on purpose): Add or Start again shows only once a file is picked
+  await expect(page.getByRole("radio", { name: "Add to my holdings" })).toHaveCount(0);
 
   // Start again: the dialog names the count, and Cancel sends nothing
-  await page.getByRole("radio", { name: "Start again with this file" }).click();
   await page.getByLabel("Holdings file").setInputFiles(HOLDINGS_FILES + "upstox_holdings.csv");
+  await expect(page.getByRole("radio", { name: "Add to my holdings" })).toBeChecked();
+  await page.getByRole("radio", { name: "Start again with this file" }).click();
+  await page.getByRole("button", { name: "Read this file" }).click();
   const ask = page.getByRole("dialog", { name: "Start again with this file?" });
   await expect(ask).toContainText(`This replaces your ${held} holdings with the stocks in upstox_holdings.csv.`);
   await ask.getByRole("button", { name: "Cancel" }).click();
@@ -44,6 +47,8 @@ test("MONEY-2: a holdings file adds by default; Start again asks first, naming w
 
   // the same file again, confirmed: the old stocks go
   await page.getByLabel("Holdings file").setInputFiles(HOLDINGS_FILES + "upstox_holdings.csv");
+  await page.getByRole("radio", { name: "Start again with this file" }).click();
+  await page.getByRole("button", { name: "Read this file" }).click();
   await ask.getByRole("button", { name: "Replace my holdings" }).click();
   await expect(page.getByText("Read as an Upstox file")).toBeVisible({ timeout: 30_000 });
   await expect(table.getByText("BHARTIARTL", { exact: true })).toBeVisible();
@@ -51,8 +56,10 @@ test("MONEY-2: a holdings file adds by default; Start again asks first, naming w
 
   // back to Add (the default after a reload too): no question, the file's stocks join the others
   await page.reload();
-  await expect(page.getByRole("radio", { name: "Add to my holdings" })).toBeChecked({ timeout: 30_000 });
+  await expect(table.getByText("BHARTIARTL", { exact: true })).toBeVisible({ timeout: 30_000 });
   await page.getByLabel("Holdings file").setInputFiles(HOLDINGS_FILES + kite);
+  await expect(page.getByRole("radio", { name: "Add to my holdings" })).toBeChecked();
+  await page.getByRole("button", { name: "Read this file" }).click();
   await expect(page.getByText("Read as a Zerodha Kite file")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(table.getByText("SBIN", { exact: true })).toBeVisible();

@@ -297,13 +297,13 @@ test("item 39: every ▲/▼ change is green up or red down, light and dark, on 
   }
   expect(arrows, "the pages drew their changes").toBeGreaterThan(20);
   expect(faults).toEqual([]);
-  // Market today's two tables the owner pointed at: their pills are green or red
+  // Market today's two tables the owner pointed at: their changes are green or red. R15 #16 (owner, 7 Nov, changed on purpose): coloured
+  // text (the kit's Signed), no pill backgrounds
   await page.goto("/research/pulse");
   for (const id of ["pulse-flows", "pulse-risk"]) {
-    const pills = page.getByTestId(id).locator(".k-delta");
-    await expect(pills.first()).toBeVisible({ timeout: 30_000 });
-    for (const cls of await pills.evaluateAll((els) => els.map((e) => e.className))) expect(cls, id).toMatch(/\bk-delta (up|down|flat)\b/);
-    expect(await pills.evaluateAll((els) => els.filter((e) => /\b(up|down)\b/.test(e.className)).length), `${id}: coloured pills`).toBeGreaterThan(0);
+    const signed = page.getByTestId(id).locator("td .k-up, td .k-down");
+    await expect(signed.first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId(id).locator(".k-delta")).toHaveCount(0);
   }
 });
 

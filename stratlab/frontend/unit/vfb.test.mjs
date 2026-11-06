@@ -16,7 +16,7 @@ const invest = read("src/styles-invest.css");
 
 test("VR1-147: the US tax tables are phone cards, with a sale's gain right under its name", () => {
   const p = read("src/pages/money/UsTaxPage.tsx");
-  for (const l of ["US trades", "US sales in rupees", "US dividends and credit", "Open US lots", "Schedule FA"]) assert.match(p, new RegExp(`<DataTable (?:csv=(?:"[^"]*"|\\{[^\\n]*?\\}) )?stack (phonePage=\\{10\\} )?label="${l}"`));
+  for (const l of ["US trades", "US sales in rupees", "US dividends and credit", "Open US lots", "Schedule FA"]) assert.match(p, new RegExp(`<DataTable (?:csv=(?:"[^"]*"|\\{[^\\n]*?\\}) )?stack (phonePage=\\{10\\} (pageDesktop )?)?label="${l}"`));      // R15 #7: US sales page 10 at a time on a desktop too
   assert.match(p, /key: "gain", header: "Gain \(₹\)", numeric: true, up: true/);
   // the dollars and the rate used sit under each rupee figure, so the row fits (LIVE1B-027)
   assert.match(p, /\{usd\(r\.cost_usd\)\} at \{rateText\(r\.rate_buy\)\}/);
@@ -123,7 +123,8 @@ test("VR1-140, VR1-149, VR1-150, VR1-151: Money home's figures and tiles, label 
   // Money's other tools are rows of one table in a fold since 5 Nov (owner), not tiles in rows of four
   assert.match(read("src/pages/SpaceHomes.tsx"), /<MoreTools id="money-tools" title="More in Money" rows=\{tools\} \/>/);
   assert.match(css, /\.k-stat-k \.info \{ margin-block: -4px; \}/);
-  assert.match(css, /\.btn:disabled:not\(\.quiet\):not\(\.blue\):not\(\.outline\) \{ opacity: 1; background: transparent; border: 1px dashed var\(--dash\);/);
+  // R15 #19 (owner, 7 Nov, changed on purpose): a solid muted button, not a dashed ghost
+  assert.match(css, /\.btn:disabled:not\(\.quiet\):not\(\.blue\):not\(\.outline\) \{ opacity: 1; background: var\(--chip\); border: 1px solid var\(--line-2\); color: var\(--muted\); \}/);
   assert.match(read("src/pages/money/RatesPage.tsx"), /className="k-page rates-page"/);
   assert.match(css, /\.rates-page \.k-table th\.k-wrap\[scope="row"\] \{ min-width: 260px; \}/);
 });

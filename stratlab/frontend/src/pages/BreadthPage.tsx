@@ -13,7 +13,7 @@ import { latestDue, marketTz, minus, softHyphens, type Pending } from "../lib/fo
 import { homeRegion } from "../lib/homeMarket";
 import { LineChart, PairBars } from "../components/Charts";
 import { BreadthAlertButton } from "../components/BreadthAlert";
-import { change as figChange, figure, liveRows, measureRows, type MeasureRow, type Part } from "../lib/breadthTable";
+import { change as figChange, figure, liveRows, measureRows, partTone, type MeasureRow, type Part } from "../lib/breadthTable";
 import { Info } from "../components/ui";
 import {
   Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Notice, PageHeader, PlanNote, Skeleton, Stat, StatRow,
@@ -162,7 +162,7 @@ function MeasureName({ r, help, extra }: { r: MeasureRow; help: Record<string, s
 function Parts({ parts, of }: { parts: Part[]; of: (p: Part) => ReactNode }) {
   return <>{parts.map((p, i) => <span key={i}>{i > 0 && <span className="k-muted"> / </span>}{of(p)}</span>)}</>;
 }
-const figCell = (p: Part, v: number | null) => <span className={p.tone === "up" ? "k-up" : p.tone === "down" ? "k-down" : undefined}>{figure(v, p.unit)}</span>;
+const figCell = (p: Part, v: number | null) => <span className={partTone(p, v)}>{figure(v, p.unit)}</span>;
 /** The change of a row: its parts' changes with a ▲/▼ and a sign (never colour alone), green up and red down like every change pill (item 39). */
 function Changes({ parts }: { parts: Part[] }) {
   if (parts.every((p) => p.change == null)) return <>–</>;

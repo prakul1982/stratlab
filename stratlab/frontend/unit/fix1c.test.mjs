@@ -149,7 +149,8 @@ test("LIVE1C-055: the Money space's main button says Update holdings once there 
 
 test("LIVE1C-056: no repeated totals on Net worth, and the tax report's working is the table with the words behind a fold", () => {
   const nw = read("src/pages/money/NetWorthPage.tsx");
-  assert.match(nw, /\.\.\.\(t\.liabilities > 0 \? \[\{ id: "assets", k: "Assets"/);       // a row of the "Where you stand" table (UI-CO), left out with no loans
+  // R15 #3 (owner, 7 Nov, changed on purpose): "Where you stand" is the headline beside a small table of what you own, owe and are worth
+  assert.match(nw, /\{ id: "assets", k: "What you own", v: inr\(t\.assets\) \},\n\s*\{ id: "loans", k: "What you owe", v: inr\(t\.liabilities\) \}/);
   assert.match(nw, /view\.allocation\.length > 1 && \(/);
   const tax = read("src/pages/TaxReportPage.tsx");
   assert.match(tax, /<Disclosure summary="The same working in words">/);
