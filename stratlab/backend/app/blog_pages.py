@@ -381,14 +381,16 @@ class ThemeDraft(BaseModel):
 
 @admin_router.post("/admin/blog/theme")
 def admin_blog_theme(req: ThemeDraft, profile=Depends(admin.admin_profile)):
-    """Draft a research post from a theme's deep dive when its data shows something notable (a layer's margin far from the others', or a big
-    move over three years). The post is stored hidden: the owner reads it in the list above and publishes it by hand. Nothing is published here."""
+    """Draft a research post from a theme's deep dive: what its data shows that is notable (a layer's margin far from the others', a big move
+    over three years) where it shows something, else its layers' figures (R15, owner: "did you remove the blog button for me too?": the
+    button is on every theme with figures now). The post is stored hidden: the owner reads it in the list above and publishes it by hand.
+    Nothing is published here."""
     from .intel import routes as R, theme_routes
     r, theme, m, _ = R.sector_map(profile, req.region, req.q, False)
     m = theme_routes.checked(r, theme, m, wait=True)
     from .intel import theme_data
     dive = theme_data.build(r, theme, m, theme_routes.sources(r, theme))
-    return ok(blog_research.draft_theme_post(dive, theme, r))
+    return ok(blog_research.draft_theme_post(dive, theme, r, notable_only=False))
 
 
 @admin_router.post("/admin/blog/briefs")

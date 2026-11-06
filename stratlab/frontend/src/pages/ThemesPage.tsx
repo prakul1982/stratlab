@@ -43,6 +43,7 @@ export function ThemesPage() {
   const run = async (theme: string, o: { refresh?: boolean; keep?: boolean } = {}) => {
     if (!theme.trim()) return;
     const mine = ++seq.current;
+    if (o.refresh) { tries.current = 0; setStopped(false); }   // Refresh asks again from the start
     if (!o.keep) setBusy(true);           // a quiet re-ask while the AI fills in doesn't turn the buttons to "Mapping…" every 5 s
     setError(null); if (!o.refresh && !o.keep) { setR(null); setDive(null); setPrices(null); setNews(null); setBiz(null); setIpos(null); }
     try { const out = await researchApi.sector(region, theme, !!o.refresh); if (mine === seq.current) setR(out); }
@@ -61,28 +62,33 @@ export function ThemesPage() {
   useEffect(() => {
     if (!r || !q) return;
     let live = true;
-    setDiveError(null); setDive(null);
+    // the shown numbers stay while the theme is read again (owner, 7 Nov: "it was vanishing all the data for a sec and then bringing it
+    // all back"); a new theme or market clears them in run()
+    setDiveError(null);
     themeApi.dive(region, q).then((d) => live && setDive(d)).catch((e) => live && setDiveError((e as Error).message));
     setNewsBusy(true); themeApi.news(region, q).then((n) => live && setNews(n.items)).catch(() => live && setNews(null)).finally(() => live && setNewsBusy(false));
     themeApi.business(region, q).then((b) => live && setBiz(b)).catch(() => live && setBiz(null));
     themeApi.listings(region, q).then((l) => live && setIpos(l)).catch(() => live && setIpos({ items: [], checked: false }));
-    return () => { live = false; };
+    return () => { live = false; setNewsBusy(false); };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [key]);
   // prices: read at a gentle pace on the server; asked again while some companies are still waiting
   useEffect(() => {
-    if (!dive || !q || dive.members === 0) { setPrices(null); return; }
+    if (!dive || !q || dive.members === 0) { setPrices(null); setPricesBusy(false); return; }
     let live = true, tries = 0, timer: ReturnType<typeof setTimeout> | undefined;
+    // busy while a read is out or another is coming: the bar stops when the page stops asking, even with some prices still not read
+    // (owner, 7 Nov: "after finishing it's still loading")
     const go = () => {
       setPricesBusy(true);
       themeApi.prices(region, q).then((p) => {
         if (!live) return;
-        setPrices(p); setPricesBusy(false);
+        setPrices(p);
         if (p.pending > 0 && ++tries < PRICE_TRIES) timer = setTimeout(go, PRICE_EVERY_MS);
+        else setPricesBusy(false);
       }).catch(() => { if (live) setPricesBusy(false); });
     };
     go();
-    return () => { live = false; if (timer) clearTimeout(timer); };
+    return () => { live = false; if (timer) clearTimeout(timer); setPricesBusy(false); };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [dive]);
 
@@ -91,16 +97,18 @@ export function ThemesPage() {
   const working = r?.ai?.state === "working";
   const pending = working || (!!pl && !pl.checked && (pl.pending > 0 || pl.industries_by === "pending"));
   const tries = useRef(0);
-  useEffect(() => { tries.current = 0; }, [q, region]);
+  const [stopped, setStopped] = useState(false);       // the page asked CHECK_TRIES times and stopped: no bar that never ends
+  useEffect(() => { tries.current = 0; setStopped(false); }, [q, region]);
   useEffect(() => {
-    if (!pending || tries.current >= CHECK_TRIES) return;
+    if (!pending) return;
+    if (tries.current >= CHECK_TRIES) { setStopped(true); return; }
     const t = setTimeout(() => { tries.current++; run(q, { keep: true }); }, CHECK_EVERY_MS);
     return () => clearTimeout(t);
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [pending, r]);
   const draftIt = async () => {
     setDraft("Drafting…");
-    try { const d = await themeApi.draft(region, q); setDraft(d.result === "nothing notable" ? "The figures show nothing notable enough for a post yet." : d.slug ? `Draft saved (${d.result}). It is hidden: read it under Admin, Blog, and publish it there if it is right.` : `Not drafted: ${d.problem ?? d.result}.`); }
+    try { const d = await themeApi.draft(region, q); setDraft(d.result === "nothing notable" || d.result === "too few figures" ? "The theme needs two layers with margin figures for a post." : d.slug ? `Draft saved (${d.result}). It is hidden: read it under Admin, Blog, and publish it there if it is right.` : `Not drafted: ${d.problem ?? d.result}.`); }
     catch (e) { setDraft((e as Error).message); }
   };
   const nav = dive ? [
@@ -139,7 +147,8 @@ export function ThemesPage() {
             )}
           </Card>
           {/* still being prepared: a moving bar and one short line; the page asks again on its own (owner, 5 Nov: no warnings for work in progress) */}
-          {pending && (
+          {pending && stopped && <p className="k-note" data-testid="theme-still-checking">Some of this theme's checks are still running. Refresh to see them.</p>}
+          {pending && !stopped && (
             <Working label={working && !r.generated_at ? "Mapping the theme: sorting its companies into layers. It fills in here on its own, usually within a minute."
               : pl && pl.pending > 0 ? "Checking each company against its own description…"
               : working ? "Writing the tailwinds and risks…"
@@ -156,8 +165,11 @@ export function ThemesPage() {
           {dive && (
             <>
               {nav.length > 1 && <PageNav items={nav} />}
-              {me?.is_admin && dive.notable.length > 0 && (
-                <Notice action={{ label: "Draft a blog post", onClick: draftIt }}>{draft ?? "The figures show something notable. A draft post can be made from them; it stays hidden until you publish it."}</Notice>
+              {/* on every theme with figures (owner, 7 Nov: "did you remove the blog button for me too?": it showed only when the figures were notable) */}
+              {me?.is_admin && dive.members > 0 && (
+                <Notice action={{ label: "Draft a blog post", onClick: draftIt }}>{draft ?? (dive.notable.length > 0
+                  ? "The figures show something notable. A draft post can be made from them; it stays hidden until you publish it."
+                  : "A draft post can be made from this theme's figures; it stays hidden until you publish it.")}</Notice>
               )}
               {dive.members === 0 ? (
                 <Card><p className="k-small">No company in this theme has stored figures yet: none is in an official industry of the theme, and none the map named has a description that shows it does the work. Try a more specific theme.</p></Card>

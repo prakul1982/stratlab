@@ -723,14 +723,15 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
             "published_at": blog.now_iso(now), "indexable": True, "published": False, "day": blog.now_iso(now)[:10], "src": src}
 
 
-def theme_post(dive: dict, theme: str, region: str, now: datetime | None = None) -> dict | None:
+def theme_post(dive: dict, theme: str, region: str, now: datetime | None = None, notable_only: bool = True) -> dict | None:
     """A DRAFT research post from a theme's deep dive (intel/theme_data.build) when the data shows something worth saying: one layer's
     EBITDA margin far from the others', or a layer whose margin moved a lot over three years. None when it shows nothing notable. The post is
     never published here: it is stored hidden, for the owner to read in Admin and publish by hand. Every figure is the dive's; the words only
-    say what the table says."""
+    say what the table says. `notable_only=False` (the owner's button, and a theme read with no post yet: R15) makes it from any theme
+    whose chain has two layers with a margin."""
     notable = dive.get("notable") or []
     rows = [r for r in (dive.get("chain") or {}).get("rows") or [] if r.get("ebitda") is not None]
-    if not notable or len(rows) < 2:
+    if (notable_only and not notable) or len(rows) < 2:
         return None
     return theme_post_from(theme_source(dive, theme, region), now)
 
@@ -743,11 +744,12 @@ def pts_or_dash(v) -> str:
     return "–" if v is None else p1(v)
 
 
-def draft_theme_post(dive: dict, theme: str, region: str, now: datetime | None = None) -> dict:
-    """Store the theme's draft post (hidden) when its data is notable: {"result": "new" | "updated" | "same" | "nothing notable" | "left out", "slug"}."""
-    post = theme_post(dive, theme, region, now)
+def draft_theme_post(dive: dict, theme: str, region: str, now: datetime | None = None, notable_only: bool = True) -> dict:
+    """Store the theme's draft post (hidden) when its data is notable (or, with notable_only=False, has two layers with a margin):
+    {"result": "new" | "updated" | "same" | "nothing notable" | "too few figures" | "left out", "slug"}."""
+    post = theme_post(dive, theme, region, now, notable_only)
     if not post:
-        return {"result": "nothing notable", "slug": None}
+        return {"result": "nothing notable" if notable_only else "too few figures", "slug": None}
     bad = advice_words(post)
     if bad:
         return {"result": "left out", "slug": None, "problem": f"it has the word {bad!r}"}

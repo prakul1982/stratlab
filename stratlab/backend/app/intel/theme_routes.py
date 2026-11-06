@@ -480,7 +480,61 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False) -> dict:
         hit["placements"], hit["figures"] = m.get("placements"), figures
         if (m.get("placements") or {}).get("checked"):
             DIVE_CACHE.set(key, hit, DIVE_TTL)
+            auto_post(r, theme, hit)
     return hit
+
+
+# ---------- a blog post for a theme people read (R15) ----------
+AUTO_POSTS_A_DAY = 3                 # bounded work: at most this many new theme posts a day, whatever people read
+AUTO_KEY = "blog:auto_theme"
+_auto_lock = threading.Lock()
+_auto_busy: set = set()
+
+
+def auto_post(r: str, theme: str, dive: dict, wait: bool = False) -> None:
+    """A theme read with all its placements checked and no blog post yet gets one, from the dive just built (no second read): the owner, 7
+    Nov: "if someone searches a theme we don't have a blog about, make a blog out of it automatically". Stored hidden, as every theme post
+    is (blog_research.theme_post), for the owner to publish from Admin; one per theme (its address), at most AUTO_POSTS_A_DAY new ones a day;
+    no email. Runs beside the request (`wait` for tests); a failure only prints."""
+    import os
+    if not wait and os.environ.get("THEME_AUTO_POST", "1").strip().lower() in ("0", "false", "no", "off"):
+        return
+    from .. import blog_research
+    try:
+        post = blog_research.theme_post(dive, theme, r, notable_only=False)
+    except Exception as e:
+        print("theme auto post: not made:", type(e).__name__, str(e)[:100])
+        return
+    if not post:
+        return
+    slug = post["slug"]
+    with _auto_lock:
+        if slug in _auto_busy:
+            return
+        _auto_busy.add(slug)
+
+    def go():
+        from .. import blog
+        try:
+            if blog.get(slug) or blog_research.advice_words(post):
+                return
+            day = datetime.now(timezone.utc).date().isoformat()
+            with _auto_lock:
+                st = db.json_value(db.get_setting(AUTO_KEY), {}) or {}
+                n = int(st.get("n") or 0) if st.get("day") == day else 0
+                if n >= AUTO_POSTS_A_DAY:
+                    return
+                db.set_setting(AUTO_KEY, json.dumps({"day": day, "n": n + 1}))
+            print("theme auto post:", slug, blog.upsert_research(post))
+        except Exception as e:
+            print("theme auto post: not stored:", slug, type(e).__name__, str(e)[:100])
+        finally:
+            with _auto_lock:
+                _auto_busy.discard(slug)
+    if wait:
+        go()
+    else:
+        threading.Thread(target=go, name="theme-auto-post", daemon=True).start()
 
 
 # ---------- the theme's deck (EXPORT) ----------
