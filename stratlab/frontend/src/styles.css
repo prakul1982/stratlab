@@ -1950,6 +1950,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   .k-tbl-wrap.stack.compact .k-table td.k-brief { font-size: var(--t-label); }
   .k-tbl-wrap.stack.compact .k-table td.k-brief::before { display: none; }
   .k-tbl-wrap.stack.compact .k-table td.k-phone-off { display: none; }
+  .k-tbl-wrap.stack.compact .k-table td.k-wrap { flex: 1 1 100%; white-space: normal; }   /* a column of words (an event's details) takes its own line and wraps */
   .k-tbl-wrap.stack.compact .k-table td.k-act, .k-tbl-wrap.stack.compact .k-table td.k-row-note, .k-tbl-wrap.stack.compact .k-table td.k-empty-row { flex: 1 1 100%; white-space: normal; }
   /* a heat cell fills a table cell edge to edge; on a card it is a chip that stays inside its figure (R88-003) */
   .k-tbl-wrap.stack .inv-heat-cell { display: inline-block; margin: 0; padding: 2px 8px; border-radius: 6px; }

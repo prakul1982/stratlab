@@ -230,7 +230,8 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
         {foot && rows.length > 0 && (
           <tfoot>
             <tr role={stack ? "row" : undefined}>{columns.map((c, i) => (i === 0 ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined}>{foot[c.key]}</th>
-              : <td key={c.key} role={stack ? "cell" : undefined} data-label={typeof c.header === "string" ? c.header : textOf(c.header).trim() || undefined} className={c.numeric ? "k-num" : undefined}>{foot[c.key]}</td>))}</tr>
+              : <td key={c.key} role={stack ? "cell" : undefined} data-label={typeof c.header === "string" ? c.header : textOf(c.header).trim() || undefined}
+                  data-blank={foot[c.key] == null || foot[c.key] === "" ? "" : undefined} className={c.numeric ? "k-num" : undefined}>{foot[c.key]}</td>))}</tr>
           </tfoot>
         )}
       </table>

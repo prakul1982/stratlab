@@ -8,7 +8,8 @@ import { companyRows, crore, moverRows, movedBy, pairable, riskLevel, sectorCoun
 import { Card, CardHead, DataTable, Delta, EmptyState, Skeleton, type Column } from "../components/kit";
 import { sparseNotes } from "../components/kit/DataTable";
 
-/* The Market pulse's tables (MOOD-1). Every block that shows figures or records is a table with a header row, numbers
+/* The Market pulse's tables (MOOD-1). On a phone the tables of figures are DataTable's `compact` rows (LIVE4-010/007: Mood was 16,604px
+ * on a phone, a card of labelled figures a row): the name with its day's figures at the right, the rest in one line under it. Every block that shows figures or records is a table with a header row, numbers
  * right-aligned and a ▲/▼ with a sign for a change; on a phone each row is a card (DataTable's stack). The words above them
  * come from the same payload (intel/mood.py), so a line and its table agree. Facts only: no advice, no forecast. */
 
@@ -54,14 +55,14 @@ export function BreadthTable({ b }: { b: NonNullable<PulseMood["breadth"]> }) {
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <><b>{r.label}</b><span className="k-sub-line">{r.means}</span></> },
     // live, the 52-week highs and lows are counted at the close: their cell says so rather than standing empty (owner, 5 Nov)
     // the live count's own quarter-hour in its header, so Mood's count and Breadth's are each labelled with their round (LIVE4-005)
-    { key: "now", header: b.live ? (b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted">At the close</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
+    { key: "now", header: b.live ? (b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted">At the close</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
     { key: "prev", header: day(b.prev_day) || "Day before", numeric: true, cell: (r) => (r.before == null ? "–" : r.kind === "share" ? `${r.before.toFixed(1)}%` : whole(r.before)) },
     { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
   ];
   return (
     <Card testId="pulse-breadth">
       <CardHead title={`How many stocks took part · ${b.group}`} info={`The stocks of ${b.group} counted ${when}${b.live ? " (a count every quarter hour from live prices; the 52-week highs and lows come with the close)" : ""}. Every stock counts once, whatever its size.`} />
-      <DataTable stack label={`Breadth of ${b.group}`} columns={cols} rows={b.rows} rowKey={(r) => r.key} />
+      <DataTable stack compact label={`Breadth of ${b.group}`} columns={cols} rows={b.rows} rowKey={(r) => r.key} />
       {b.ratio != null && <p className="k-note">{whole(b.adv)} rose to {whole(b.dec)} fell: {b.ratio.toFixed(2)} to 1, of {whole(b.stocks)} stocks{b.live && b.at ? `, in the ${b.at} IST count` : ""}.</p>}
     </Card>
   );
@@ -71,16 +72,16 @@ export function SectorsTable({ s, closedDay }: { s: NonNullable<PulseMood["secto
   type Row = (typeof s.rows)[number];
   const cols: Column<Row>[] = [
     { key: "n", header: "Sector index", rowHeader: true, cell: (r) => r.label },
-    { key: "d", header: sessionHeader(closedDay, day), numeric: true, cell: (r) => chg(r.change_pct) },
+    { key: "d", header: sessionHeader(closedDay, day), numeric: true, brief: true, cell: (r) => chg(r.change_pct) },
     { key: "w", header: "1 week", numeric: true, cell: (r) => chg(r.w1) },
     { key: "m", header: "1 month", numeric: true, cell: (r) => chg(r.m1) },
-    { key: "by", header: "Moved by", wrap: true, cell: (r) => (r.movers.length ? movedBy(r.movers, (v) => pct(v, 2)) : "–") },
+    { key: "by", header: "Moved by", wrap: true, phone: false, cell: (r) => (r.movers.length ? movedBy(r.movers, (v) => pct(v, 2)) : "–") },
   ];
   return (
     <Card testId="pulse-sectors">
       <CardHead title="Sectors" info="Each sector index's move today, over the last 5 and 21 sessions (against today's level), and the two of its largest companies that moved most, from their market value and today's move." />
       <p className="k-small" data-testid="pulse-sector-count">{sectorCount(s)}.</p>
-      <DataTable csv="sector indices" stack label="Sector indices, best first" columns={cols} rows={s.rows} rowKey={(r) => r.name} />
+      <DataTable csv="sector indices" stack compact label="Sector indices, best first" columns={cols} rows={s.rows} rowKey={(r) => r.name} />
     </Card>
   );
 }
@@ -89,13 +90,13 @@ export function MoversTable({ m, closedDay }: { m: NonNullable<PulseMood["movers
   const rows = moverRows(m);
   const cols: Column<(typeof rows)[number]>[] = [
     { key: "n", header: "Company", rowHeader: true, cell: (r) => r.name ?? r.symbol },
-    { key: "c", header: closedDay ? `Move on ${day(closedDay)}` : "Move today", numeric: true, cell: (r) => chg(r.change_pct) },
+    { key: "c", header: closedDay ? `Move on ${day(closedDay)}` : "Move today", numeric: true, brief: true, cell: (r) => chg(r.change_pct) },
     { key: "p", header: "Points", numeric: true, cell: (r) => <Delta value={r.points}>{signedPoints(r.points)}</Delta> },
   ];
   return (
     <Card testId="pulse-movers" label={`What moved the ${m.index}`}>
       <CardHead title={`What moved the ${m.index}`} info="The companies adding the most points to the index and taking the most from it today. Points are estimated from each company's market value against the index's total, so they differ a little from the exchange's own free-float figures." />
-      <DataTable stack label={`Companies that moved the ${m.index} most`} columns={cols} rows={rows} rowKey={(r) => r.symbol}
+      <DataTable stack compact label={`Companies that moved the ${m.index} most`} columns={cols} rows={rows} rowKey={(r) => r.symbol}
         foot={m.est_total != null && m.actual != null ? { n: "All its companies, estimated", c: "", p: <span>{signedPoints(m.est_total)}</span> } : undefined} />
       {m.actual != null && <p className="k-note" data-testid="pulse-movers-actual">The {m.index} itself moved {signedPoints(m.actual)} points.</p>}
     </Card>
@@ -114,7 +115,7 @@ export function FlowsTable({ f, source }: { f: NonNullable<PulseMood["flows"]>; 
   return (
     <Card testId="pulse-flows">
       <CardHead title="FII and DII, cash market" info={f.note} />
-      <DataTable stack label="FII and DII net buying, last five days" columns={cols} rows={[...f.rows].reverse()} rowKey={(r) => r.day}
+      <DataTable stack compact label="FII and DII net buying, last five days" columns={cols} rows={[...f.rows].reverse()} rowKey={(r) => r.day}
         foot={{ d: `${f.rows.length}-day total`, f: net(f.fii_total), i: net(f.dii_total) }} />
       {source && <p className="k-note" data-testid="pulse-flows-source">{source}</p>}
     </Card>
@@ -124,13 +125,13 @@ export function FlowsTable({ f, source }: { f: NonNullable<PulseMood["flows"]>; 
 export function RiskTable({ r }: { r: NonNullable<PulseMood["risk"]> }) {
   const cols: Column<(typeof r.rows)[number]>[] = [
     { key: "n", header: "Measure", rowHeader: true, cell: (x) => x.label },
-    { key: "p", header: "Level", numeric: true, cell: (x) => riskLevel(x) },
-    { key: "c", header: "Change", numeric: true, cell: (x) => chg(x.change_pct) },
+    { key: "p", header: "Level", numeric: true, brief: true, cell: (x) => riskLevel(x) },
+    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => chg(x.change_pct) },
   ];
   return (
     <Card testId="pulse-risk">
       <CardHead title="Volatility, currencies and rates" info="The volatility index, the rupee, crude oil, gold, the US 10-year yield and the dollar index, with the move since the previous close." />
-      <DataTable stack label="Volatility, currencies and rates" columns={cols} rows={r.rows} rowKey={(x) => x.symbol} />
+      <DataTable stack compact label="Volatility, currencies and rates" columns={cols} rows={r.rows} rowKey={(x) => x.symbol} />
     </Card>
   );
 }
@@ -139,13 +140,13 @@ export function GlobalTable({ g, region }: { g: NonNullable<PulseMood["global"]>
   const cols: Column<(typeof g.rows)[number]>[] = [
     { key: "n", header: "Market", rowHeader: true, cell: (x) => x.label },
     { key: "a", header: "Area", cell: (x) => x.tag },
-    { key: "c", header: "Move", numeric: true, cell: (x) => chg(x.change_pct) },
+    { key: "c", header: "Move", numeric: true, brief: true, cell: (x) => chg(x.change_pct) },
     { key: "s", header: "Session", cell: (x) => (x.same_day === false && x.day ? `on ${day(x.day)}` : "today") },
   ];
   return (
     <Card testId="pulse-global">
       <CardHead title={region === "IN" ? "Other markets" : "Markets overseas"} info={region === "IN" ? "Asian and European markets and US futures: their latest session's move." : "The latest session of the Asian and European markets, and India's."} />
-      <DataTable stack label="Other markets" columns={cols} rows={g.rows} rowKey={(x) => x.symbol} />
+      <DataTable stack compact label="Other markets" columns={cols} rows={g.rows} rowKey={(x) => x.symbol} />
     </Card>
   );
 }
@@ -159,13 +160,13 @@ export function CalendarTable({ c }: { c: NonNullable<PulseMood["calendar"]> }) 
   ];
   const cols: Column<Row>[] = [
     { key: "w", header: "When", rowHeader: true, cell: (r) => r.when },
-    { key: "k", header: "Type", cell: (r) => r.kind },
+    { key: "k", header: "Type", brief: true, cell: (r) => r.kind },
     { key: "d", header: "Details", wrap: true, cell: (r) => r.what },
   ];
   return (
     <Card testId="pulse-calendar">
       <CardHead title="Coming up" info="Results due from the largest companies in the next seven days, IPOs open now, and the economic events on the app's calendar." />
-      <DataTable stack label="Results, IPOs and events this week" columns={cols} rows={rows} rowKey={(r) => r.key} />
+      <DataTable stack compact label="Results, IPOs and events this week" columns={cols} rows={rows} rowKey={(r) => r.key} />
     </Card>
   );
 }
@@ -183,15 +184,15 @@ export function IndexTable({ indices, missing, dayText, whenOf }: { indices: { n
   const level = (i: Row) => i.price.toLocaleString(i.name.includes("NIFTY") || i.name === "SENSEX" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cols: Column<Row>[] = [
     { key: "n", header: "Index", rowHeader: true, cell: (i) => i.name },
-    { key: "l", header: "Level", numeric: true, cell: level },
-    { key: "c", header: "Change", numeric: true, cell: (i) => (i.change_pct == null ? "–" : <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta>) },
+    { key: "l", header: "Level", numeric: true, brief: true, cell: level },
+    { key: "c", header: "Change", numeric: true, brief: true, cell: (i) => (i.change_pct == null ? "–" : <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta>) },
     { key: "h", header: "Against 52-week high", numeric: true, cell: (i) => (i.from_high_pct == null ? "–" : i.from_high_pct > -0.5 ? "near its high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below`) },
     { key: "w", header: "As of", cell: (i) => <span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{whenOf(i)}</span> },
   ];
   void dayText;
   return (
     <>
-      <DataTable stack label="Index levels" columns={cols} rows={indices} rowKey={(i) => i.name} />
+      <DataTable stack compact label="Index levels" columns={cols} rows={indices} rowKey={(i) => i.name} />
       {!!missing?.length && <p className="k-small k-muted" data-testid="index-missing">{missing.join(", ")} couldn't load.</p>}
     </>
   );
@@ -264,7 +265,7 @@ export function HeadlinesTable({ items, ai }: { items: NewsItem[]; ai: PulseAI |
   if (!items.length) return <EmptyState title={ai ? "No newer headlines yet" : "No headlines yet today"}>{ai ? "The read above was written from the last session's headlines. New ones are read every few minutes." : "They are read again every few minutes."}</EmptyState>;
   return (
     <>
-      <DataTable stack label="Today's headlines" columns={cols} rows={sorted} rowKey={(n, i) => `${i}-${n.headline}`} />
+      <DataTable stack compact label="Today's headlines" columns={cols} rows={sorted} rowKey={(n, i) => `${i}-${n.headline}`} />
       {story && <p className="k-note" data-testid="pulse-story">The main story in today's headlines: {story.label}, {story.n} of {story.of} (marked above{under ? " under each headline it counts" : ""}).</p>}
     </>
   );

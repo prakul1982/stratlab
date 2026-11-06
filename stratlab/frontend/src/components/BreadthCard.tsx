@@ -33,7 +33,7 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
   const table = d && d !== "error" ? cardTable(d) : null;
   const columns: Column<CardRow>[] = table ? [
     { key: "k", header: "Measure", rowHeader: true, cell: (r) => r.k },
-    { key: "now", header: table.nowHead, numeric: true, cell: (r) => r.now ?? <span className="k-muted">At the close</span> },
+    { key: "now", header: table.nowHead, numeric: true, brief: true, cell: (r) => r.now ?? <span className="k-muted">At the close</span> },
     ...(table.beforeHead ? [{ key: "before", header: table.beforeHead, numeric: true, cell: (r: CardRow) => r.before ?? "–" }] : []),
   ] : [];
   // the page opens on the group this card shows (or, before it has loaded, on this market), not the reader's own market
@@ -49,7 +49,8 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
             <span className="eyebrow">{d.group.name} · <span data-testid="breadth-card-when">{f.when}</span></span>
             {/* TABLE-SWEEP (owner, 29 Oct: "stat tiles with 'vs yesterday' lines" are a table): the three counts as rows; LIVE4-008: the newest
                 count and the close before it each in a column headed with its day, so no figure sits under another day's header */}
-            {table && <DataTable label={`Market breadth, ${d.group.name}`} columns={columns} rows={table.rows} rowKey={(r) => r.id} />}
+            {/* on a phone two short lines a measure (the newest count at the right, the close before under it), not a card each */}
+            {table && <DataTable stack compact label={`Market breadth, ${d.group.name}`} columns={columns} rows={table.rows} rowKey={(r) => r.id} />}
             {!f.live && <AsOf parts={[["Prices", d.as_of]]} tz={marketTz(d.group.region)} />}
           </div>
         )}

@@ -231,3 +231,14 @@ test("LIVE4-021: an ESOP trust's row says what it is, and the insiders' line say
   assert.match(d, /d\.trust \? <span className="k-sub-line" data-testid="deal-trust">Employee stock option trust: buys for staff options<\/span>/);
   assert.match(d, /\{rep\.trust_note && <span className="k-muted" data-testid="deals-trust-note"> \{rep\.trust_note\}<\/span>\}/);
 });
+
+test("LIVE4-010/007: Mood's tables of figures and the Invest breadth card are compact rows on a phone", () => {
+  const m = read("src/pages/PulseMood.tsx");
+  for (const label of ["Index levels", "Volatility, currencies and rates", "Other markets", "Sector indices, best first", "FII and DII net buying, last five days", "Results, IPOs and events this week", "Today's headlines"])
+    assert.match(m, new RegExp(`stack compact label="${label.replace(/[()]/g, "\\$&")}"`), label);
+  assert.match(m, /key: "by", header: "Moved by", wrap: true, phone: false,/);
+  assert.match(read("src/components/BreadthCard.tsx"), /<DataTable stack compact label=/);
+  // a footer cell with nothing in it is marked, so a phone row shows no label over nothing; a column of words wraps on its own line
+  assert.match(read("src/components/kit/DataTable.tsx"), /data-blank=\{foot\[c\.key\] == null \|\| foot\[c\.key\] === "" \? "" : undefined\}/);
+  assert.match(css, /\.k-tbl-wrap\.stack\.compact \.k-table td\.k-wrap \{ flex: 1 1 100%; white-space: normal; \}/);
+});
