@@ -49,6 +49,10 @@
 // VR-7: what the review found by eye on a phone and the checker could not see:
 //   R26 content past its card (VR7-013)     a table, picture, control or tile inside a card (no scrolling box between) whose right edge is > 3px past the card's right edge
 //                                            (the first plan table was 349px in a 322px card: its last column over the border)
+// LIVE5: what the re-score found at 1280 and the checker could not see:
+//   R27 a table cut on a desktop (LIVE5-002) a list table (not a grid read across on purpose) at a desktop width with a column past its
+//                                            scrolling box's edge (the results day's "Options imply" off a 1280 screen), or a row's name
+//                                            cut by an ellipsis to under 56px ("HINDALCO F&O H…")
 export interface Violation { rule: string; element: string; key: string; detail: string }
 export interface LintOpts { phone: boolean; mark: boolean }
 export interface PageFrame { h1Top: number; h1Left: number; right: number }
@@ -757,6 +761,23 @@ export function lintPage(opts: LintOpts): LintResult {
     }
   }
 
+  // ---- R27 a table cut on a desktop (LIVE5-002) -----------------------------------------------------------------------------------------------------
+  if (!opts.phone) {
+    for (const e of all) {
+      if (!e.matches(".k-tbl-wrap") || e.matches("[data-grid]") || !shown(e) || e.scrollWidth <= e.clientWidth + 4) continue;
+      const er = R(e), tbl = e.querySelector("table");
+      const row1 = tbl?.querySelector("thead tr");
+      const head = row1 ? Array.from(row1.children).filter(shown) : [];
+      const cut = head.filter((h) => R(h).right > er.right + 1);
+      if (cut.length) add("R27", e, `a table of ${head.length} columns shows ${head.length - cut.length} at ${vw}px (${cut.slice(0, 3).map((h) => `"${textOf(h).slice(0, 14)}"`).join(", ")} past the edge)`);
+    }
+    for (const n of all) {
+      if (!n.closest("tbody th, tbody td") || S(n).textOverflow !== "ellipsis" || !shown(n)) continue;
+      const w = R(n).width, t = textOf(n).trim();
+      if (t.length > 4 && w < 56 && (n as HTMLElement).scrollWidth > w + 2) add("R27", n, `a name cut to ${Math.round(w)}px ("${t.slice(0, 18)}")`);
+    }
+  }
+
   // ---- R14 overlay on content (G2) --------------------------------------------------------------------------------------------------------------------
   // a fixed/sticky box that is not app chrome: the notebook's "Lab notes" pill sat over a row's delete button, the end of "Edit in words"
   // and the "Testing on" box. Content is measured once on the page, the overlay's own box at the top, middle and bottom of the scroll.
@@ -824,7 +845,7 @@ export function lintPage(opts: LintOpts): LintResult {
     if (counts[f.rule] <= 25) violations.push({ rule: f.rule, element: f.el === document.body ? "body" : labelOf(f.el), key: f.el === document.body ? "body" : keyOf(f.el), detail: f.detail });
   }
   if (opts.mark) {
-    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6", R26: "#ff4500" };
+    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6", R26: "#ff4500", R27: "#ff8c00" };
     const st = document.createElement("style");
     st.textContent = Object.entries(colour).map(([r, c]) => `[data-uilint~="${r}"]{outline:3px solid ${c} !important;outline-offset:-2px !important}`).join("\n");
     document.head.appendChild(st);

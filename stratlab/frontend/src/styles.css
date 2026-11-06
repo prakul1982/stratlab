@@ -1854,6 +1854,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-tbl-wrap { position: relative; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 12px;   /* overflow-y: with overflow-x auto it computed to auto too, and a 1px spill drew a vertical scrollbar beside the screener's filters (owner, 5 Nov) */
   background: linear-gradient(to right, var(--card) 30%, transparent) 0 0 / 28px 100% no-repeat local, linear-gradient(to left, var(--card) 30%, transparent) 100% 0 / 28px 100% no-repeat local,
     radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 0 0 / 16px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 100% 0 / 16px 100% no-repeat scroll; }
+/* LIVE5-002: a column marked `narrow: false` leaves the table when the table is narrower than a wide desktop's (a 1280 or 1024 screen),
+   measured on the table's own box, so the rest stay in view without sideways scrolling */
+.k-tbl-wrap.has-narrow { container-type: inline-size; }
+@container (max-width: 899px) { .k-table th.k-narrow-off, .k-table td.k-narrow-off { display: none; } }
+@container (max-width: 719px) {
+  .k-table th.k-tight-off, .k-table td.k-tight-off, .k-table .k-tight-hide { display: none; }
+  .has-narrow .k-table th, .has-narrow .k-table td { padding-left: 10px; padding-right: 10px; }
+  .has-narrow .k-table td.k-wrap, .has-narrow .k-table th.k-wrap { min-width: 0; }
+}
 /* a table wider than its card fades out at the right edge until it is scrolled to the end (where the browser can tie it to the scroll; elsewhere the edge shadow above is the hint) */
 @property --k-edge { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @keyframes k-edge { from { --k-edge: 32px; } to { --k-edge: 0px; } }

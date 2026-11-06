@@ -63,6 +63,7 @@ export const RULES: Record<string, string> = {
   R24: "Faint checkbox: an unchecked checkbox/radio whose border and fill are both < 3:1 against what is behind it",
   R25: "Same sentence twice: one sentence (30+ characters) said twice in one card (table rows left out)",
   R26: "Content past its card: a table, picture, control or tile whose right edge is > 3px past the right edge of the card that holds it",
+  R27: "A table cut on a desktop: a list table with a column past its scrolling box's edge, or a row's name cut by an ellipsis to under 56px",
 };
 
 interface Row extends Violation { page: string; label: string; width: number; theme: string; shot?: string; allowed?: string }
@@ -293,6 +294,13 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
   expect(await fire(`<div class="k-card" style="width:322px"><table style="width:349px"><tr><td>Backtests</td><td>10</td><td>Unlimited</td></tr></table></div>`), "R26 table past its card").toContain("R26");
   expect(await fire(`<div class="k-card" style="width:322px"><table style="width:280px"><tr><td>Backtests</td><td>10</td><td>Unlimited</td></tr></table></div>`), "R26 table inside its card").not.toContain("R26");
   expect(await fire(`<div class="k-card" style="width:322px"><div style="overflow-x:auto"><table style="width:600px"><tr><td>Backtests</td></tr></table></div></div>`), "R26 a scrolling box").not.toContain("R26");
+  // R27 a list table wider than its box at a desktop width (the results day at 1280), a grid read across on purpose, and a name cut to a few letters
+  const wrap = (attrs: string, w: number) => `<div class="k-tbl-wrap" ${attrs} style="width:400px;overflow-x:auto"><table style="width:${w}px"><thead><tr><th>Company</th><th style="width:300px">Price</th></tr></thead><tbody><tr><td>A</td><td>1</td></tr></tbody></table></div>`;
+  expect(await fire(wrap("", 600)), "R27 table past its box").toContain("R27");
+  expect(await fire(wrap("", 380)), "R27 table that fits").not.toContain("R27");
+  expect(await fire(wrap("data-grid", 600)), "R27 a grid scrolls on purpose").not.toContain("R27");
+  expect(await fire(`<table><tbody><tr><th><span style="display:block;width:30px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Hindalco Industries</span></th></tr></tbody></table>`), "R27 a name cut to a few letters").toContain("R27");
+  expect(await fire(`<table><tbody><tr><th><span style="display:block;width:30px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Hindalco Industries</span></th></tr></tbody></table>`, true), "R27 is for desktops").not.toContain("R27");
   // R12 caption under a list
   expect(await fire(`<ul><li>One</li><li>Two</li></ul><p style="font-size:12px">Dots: each notebook's last verdict.</p>`), "R12 caption").toContain("R12");
 });

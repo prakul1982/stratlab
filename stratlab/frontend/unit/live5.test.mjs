@@ -1,6 +1,7 @@
 // LIVE5 (re-score after Release 13, 6 Nov 2026): the fixes that can be checked without a browser.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { pricesNote, quoteAsk, readRows, sessionDayOf } from "../src/lib/rowReads.ts";
 
 const day = (iso) => ({ "2026-11-05": "Thu 5 Nov", "2026-11-06": "Fri 6 Nov" })[iso] ?? iso;
@@ -49,4 +50,28 @@ test("LIVE5-001: the footer names the day of the prices shown and counts the row
   assert.equal(pricesNote({ ...base, live: true, asOf: "10:31 IST" }, day),
     "Prices as of 10:31 IST, read for the 76 companies shown and again each minute while the market trades.");
   assert.equal(pricesNote({ ...base, rows: 0 }, day), "");
+});
+
+test("LIVE5-011: no arrow on a change that prints as zero, an arrow on one that doesn't", async () => {
+  const { arrowOf } = await import("../src/lib/format.ts");
+  assert.equal(arrowOf(0.04, "0.0"), "");
+  assert.equal(arrowOf(-0.04, "0.0%"), "");
+  assert.equal(arrowOf(0, "0.0"), "");
+  assert.equal(arrowOf(0.06, "0.1"), "▲");
+  assert.equal(arrowOf(-3.4, "3.4%"), "▼");
+  assert.equal(arrowOf(null), "");
+});
+
+test("LIVE5-002: the results day fits a 1280 and a 1024 screen: market value then the quarter leave a narrow table, the name has its own line", () => {
+  const page = readFileSync(new URL("../src/pages/ResultsPage.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  const inv = readFileSync(new URL("../src/styles-invest.css", import.meta.url), "utf8");
+  assert.match(page, /key: "cap", header: "Market value", numeric: true, phone: false, narrow: false/);
+  assert.match(page, /key: "q", header: "Quarter", [^\n]*tight: false/);
+  assert.match(page, /key: "im", header: "Implied"/);
+  assert.match(css, /\.k-tbl-wrap\.has-narrow \{ container-type: inline-size; \}/);
+  assert.match(css, /@container \(max-width: 899px\) \{ \.k-table th\.k-narrow-off, \.k-table td\.k-narrow-off \{ display: none; \} \}/);
+  assert.match(inv, /\.res-co \{ [^}]*min-width: 11rem;/);
+  assert.match(inv, /\.res-mv-top \{ display: flex; flex-wrap: wrap;/);
+  assert.doesNotMatch(page, /v > 0 \? "▲" : v < 0 \? "▼"/);
 });

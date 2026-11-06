@@ -20,7 +20,7 @@ import { chartsSaid, indicatorsSaid, nextPlanWith } from "../../lib/watch";
 import { ChipBar } from "../../components/kit/ChipBar";
 import { ConfirmDialog } from "../../components/kit/ConfirmDialog";
 import { CHART_TF_UNITS, chartTfCheck } from "../../lib/intervals";
-import { currencySymbol, signCls } from "../../lib/format";
+import { arrowOf, currencySymbol, signCls } from "../../lib/format";
 import "./priceChart.css";
 
 export type Tf = "1m" | "3m" | "5m" | "10m" | "15m" | "30m" | "1h" | "2h" | "4h" | "1d" | "1w" | "1mo";
@@ -826,7 +826,7 @@ const [saveNote, setSaveNote] = useState("");
                 <span className="pc-hide-phone"><span className="k">O</span>{fmt(h.bar.o)}</span><span className="pc-hide-phone"><span className="k">H</span>{fmt(h.bar.h)}</span><span className="pc-hide-phone"><span className="k">L</span>{fmt(h.bar.l)}</span>
               </>}
               <span><span className="k">C</span>{fmt(h.bar.c)}</span>
-              {chg != null && <span className={`${signCls(chg, signedPct(chgPct))} pc-chg`}><span className="k" title="Close compared with the previous candle's close">{TF_LABEL[tf]} change:</span> {chg >= 0 ? "▲" : "▼"} {e ? e.priceText(Math.abs(chg), h!.bar.c) : ""} ({signedPct(chgPct)})</span>}
+              {chg != null && <span className={`${signCls(chg, signedPct(chgPct))} pc-chg`}><span className="k" title="Close compared with the previous candle's close">{TF_LABEL[tf]} change:</span> {arrowOf(chg, signedPct(chgPct))} {e ? e.priceText(Math.abs(chg), h!.bar.c) : ""} ({signedPct(chgPct)})</span>}
             </>}
           </div>
           {(pill || formingIn != null) && (

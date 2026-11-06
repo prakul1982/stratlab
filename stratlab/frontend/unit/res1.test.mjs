@@ -9,9 +9,10 @@ const page = read("src/pages/ResultsPage.tsx");
 test("RES-1: one table a day with the figures a person looks at on a results day", () => {
   assert.match(page, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Results on \$\{resultDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => `\$\{r\.symbol\}-\$\{r\.date\}`\} columns=\{columns\} stack compact phonePage=\{10\} \/>/);
   // LIVE4-010: shorter headers that fit one line (the (i) says the rest); the CSV keeps the full names
-  for (const h of ["Company", "Market value", "Price", '"Day"', "Revenue", "Profit", "Usual move", "Options imply"])
+  // LIVE5-002: revenue and profit share the "Quarter" column (a CSV-only pair keeps them apart); "Implied" fits a 1280 screen
+  for (const h of ["Company", "Market value", "Price", '"Day"', "Quarter", "Revenue", "Profit", "Usual move", "Implied"])
     assert.ok(page.includes(`header: ${h.startsWith('"') ? h : `"${h}"`}`), h);
-  for (const h of ["Price now", "Revenue YoY", "Profit YoY", "Past results-day moves"]) assert.ok(page.includes(`csvHeader: "${h}"`), h);
+  for (const h of ["Price now", "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply"]) assert.ok(page.includes(`csvHeader: "${h}"`), h);
   assert.doesNotMatch(page, /className="inv-row"/);        // no chips and no two uneven columns
   assert.doesNotMatch(page, /k-cols/);
 });

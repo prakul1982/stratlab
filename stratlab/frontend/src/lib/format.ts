@@ -460,6 +460,13 @@ export function changeDir(v: number | null | undefined, text?: string): "up" | "
   return v > 0 ? "up" : "down";
 }
 
+/** The arrow before a change as printed: "▲" or "▼", none when the figure shown rounds to nothing (LIVE5-011: a usual move of
+ * 0.04% read "▲0.0"). `text` is the figure as shown. */
+export function arrowOf(v: number | null | undefined, text?: string): "▲" | "▼" | "" {
+  const d = changeDir(v, text);
+  return d === "up" ? "▲" : d === "down" ? "▼" : "";
+}
+
 /** Up or down for a gain or loss that is the user's own (a holding's profit, a fund's gain): for a Stat's `tone`, or
  * `k-${signTone(v)}` as a class. Nothing for zero or a missing value. Never use it on a market-wide change. */
 export function signTone(v: number | null | undefined): "up" | "down" | undefined {

@@ -48,7 +48,8 @@ test("LIVE4-010: the results calendar is compact on a phone and its headers fit 
   assert.match(page, /columns=\{columns\} stack compact phonePage=\{10\}/);
   assert.match(page, /key: "px", header: "Price", numeric: true, brief: true/);
   assert.match(page, /key: "day", header: "Day", numeric: true, brief: true/);
-  for (const k of ["cap", "rev", "pat"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*phone: false`), k);
+  for (const k of ["cap", "q"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*phone: false`), k);   // LIVE5-002: rev and pat are one "q" column
+  for (const k of ["rev", "pat"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*csvOnly: true`), k);
   assert.match(invCss, /\.inv-day \.k-table thead th \{ white-space: nowrap; \}/);
   assert.match(invCss, /\.k-tbl-wrap\.compact \.res-moves, \.k-tbl-wrap\.compact \.res-plain, \.k-tbl-wrap\.compact \.res-name \{ display: none; \}/);
   // the day's CSV button shares the day's heading line; on a phone it says "CSV"
