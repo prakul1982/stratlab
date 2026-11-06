@@ -21,6 +21,7 @@ export const loadLegal = () => import("../pages/LegalPage");
 export const loadGate = () => import("../pages/Gate");
 export const loadVerdict = () => import("../pages/PublicVerdict");
 export const loadLibrary = () => import("../pages/PublicLibrary");
+export const loadAd = () => import("../pages/AdLanding");
 const Login = page(loadLogin, "Login");
 const LegalPage = page(loadLegal, "LegalPage");
 const SignInGate = page(loadGate, "SignInGate");
@@ -28,6 +29,7 @@ const NotFound = page(loadGate, "NotFound");
 const PublicVerdict = page(loadVerdict, "PublicVerdict");
 const PublicLibrary = page(loadLibrary, "PublicLibrary");
 const PublicLibraryEntry = page(loadLibrary, "PublicLibraryEntry");
+const AdLanding = page(loadAd, "AdLanding");
 
 /** The first page's code, started at once (in parallel with the rest of the start-up) for an address. */
 export function warmVisitorPage(path: string): Promise<unknown> {
@@ -39,8 +41,8 @@ export function warmVisitorPage(path: string): Promise<unknown> {
 
 /** `userId`: someone signed in who opened a page anyone sees (a policy, a shared verdict): their Market Watch, not the visitor's board. */
 export function VisitorApp({ userId }: { userId?: string } = {}) {
-  const { pathname } = useLocation();
-  const view = visitorView(pathname);
+  const { pathname, search } = useLocation();
+  const view = visitorView(pathname, search);
   const kind: SeoKind = view.kind === "gate" ? "gate" : view.kind === "notfound" ? "notfound" : view.kind === "verdict" ? "verdict" : "public";
   // the tab's title and what search engines are told, before the page adds anything of its own (a verdict names itself)
   const first = useRef(true);
@@ -66,8 +68,10 @@ export function VisitorApp({ userId }: { userId?: string } = {}) {
   const fallback = words ? <div style={{ display: "contents" }} data-held dangerouslySetInnerHTML={{ __html: words }} /> : wait;
   return (
     <>
-    <Suspense fallback={fallback}>
-      {view.kind === "landing" ? <Login section={view.section} panel={view.panel} heading={landingHeading(pathname)} intro={landingIntro(pathname)} plansOnly={isPlansPath(pathname)} slim={slimOf(pathname) ?? undefined} />
+    {/* the ad landing waits on the splash: the words held for "/" are the full landing page's, not its own */}
+    <Suspense fallback={view.kind === "ad" ? wait : fallback}>
+      {view.kind === "ad" ? <AdLanding />
+        : view.kind === "landing" ? <Login section={view.section} panel={view.panel} heading={landingHeading(pathname)} intro={landingIntro(pathname)} plansOnly={isPlansPath(pathname)} slim={slimOf(pathname) ?? undefined} />
         : view.kind === "legal" ? <LegalPage />
         : view.kind === "verdict" ? <PublicVerdict token={view.token} />
         : view.kind === "library" ? <PublicLibrary />

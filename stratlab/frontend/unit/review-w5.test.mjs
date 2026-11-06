@@ -116,7 +116,8 @@ test("/tour as a class: every app address is sent to the app by the site, kept f
   const rw = new RegExp(`^${v.rewrites.find((r) => r.destination === "/index.html").source}$`);
   const [fresh, noindex] = v.headers.filter((x) => x.source.includes("|help|")).map((h) => new RegExp(`^${h.source}$`));
   // public: the landing page and its sections, the library (served by its own page), and the plans/help a visitor reads
-  const PUBLIC = new Set(["/", "/library", "/plans", "/pricing", "/faq"]);
+  // (R15: and the ad landing, /start, which names "/" as its canonical address)
+  const PUBLIC = new Set(["/", "/library", "/plans", "/pricing", "/faq", "/start"]);
   for (const r of APP_ROUTES) {
     const p = r.replace(/:[a-z]+/gi, "x").replace(/\/\*$/, "/x");
     if (r === "/" || r === "/library") continue;

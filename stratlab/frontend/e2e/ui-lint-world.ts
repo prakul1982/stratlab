@@ -126,7 +126,8 @@ export async function seedWorld(request: APIRequestContext): Promise<World> {
     if (/^\/research\//.test(bare) || /^\/invest\//.test(bare)) return "invest";
     return undefined;
   };
-  const open = ["/", "/plans", "/library", "/help", "/terms#feedback"];
+  // R15: the ad landing, at its own address and on "/" for a visit from the ad
+  const open = ["/", "/plans", "/library", "/help", "/terms#feedback", "/start", "/?fbclid=ui-lint"];
   const routes: Route[] = [
     ...Array.from(new Set(app)).map((p) => ({ path: p, label: p, signedIn: true, space: spaceFor(p) })),
     ...open.map((p) => ({ path: p, label: `${p} (signed out)`, signedIn: false })),

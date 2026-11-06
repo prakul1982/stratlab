@@ -10,6 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { absolute, BROWSE_COMPANIES, HOME_DESCRIPTION, INSTAGRAM, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
 import { FAQ, faqText } from "../src/content/faq.ts";
+import { AD_PAGE } from "../src/content/ad.ts";
 import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED } from "../src/content/legal.ts";
 import { PLAN_IDS, PLAN_NAME, PRICE, WHO } from "../src/lib/plans.ts";
 
@@ -107,7 +108,8 @@ export const HOME_LINKS = `\n<ul class="boot-links">\n${BROWSE_COMPANIES.map(([t
 
 /** Every file to write, as [path under dist, html]. The home page replaces index.html itself. */
 export function pageFiles(template) {
-  const files = PAGES.map((p) => [p.path === "/" ? "index.html" : `${p.path.slice(1)}/index.html`,
+  // R15: the ad landing's page, from its own words (content/ad.ts), not the landing page's table
+  const files = [...PAGES, AD_PAGE].map((p) => [p.path === "/" ? "index.html" : `${p.path.slice(1)}/index.html`,
     pageHtml(template, { title: p.title, description: p.description, canonical: p.index ? absolute(p.canonical ?? p.path) : null, index: p.index,
       jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : p.path === "/plans" ? plansJsonLd() : "", heading: p.heading, summary: p.summary,
       body: LEGAL_BLOCKS[p.path] ? legalBody(p.path, p.heading) : "",

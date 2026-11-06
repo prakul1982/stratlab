@@ -1,0 +1,35 @@
+/* R15: the ad landing (/start, and "/" for a visit from the ad). One phone screen: the line, the way in, three points; the three
+   sample cards under it (a row on a desktop, one under another on a phone, the first one starting on the first screen). */
+.adl { display: flex; flex-direction: column; }
+.adl-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 14px; padding-bottom: 14px; }
+.adl-main { flex: 1 0 auto; display: flex; flex-direction: column; gap: 40px; padding-top: clamp(12px, 4vh, 48px); padding-bottom: 40px; }
+.adl-hero { display: flex; flex-direction: column; gap: 18px; max-width: 760px; }
+.adl-h1 { margin: 0; font-size: clamp(30px, 4.2vw, 52px); line-height: 1.08; font-weight: 400; letter-spacing: -.025em; color: var(--ink); }
+.adl-points { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 16px; color: var(--ink-2); }
+.adl-points li { position: relative; padding-left: 26px; }
+.adl-points li::before { content: ""; position: absolute; left: 2px; top: .38em; width: 12px; height: 7px; border-left: 2px solid var(--blue); border-bottom: 2px solid var(--blue); transform: rotate(-45deg); }
+.adl-go { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.adl-more { align-self: flex-start; display: inline-flex; align-items: center; min-height: 36px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.adl-more:hover { color: var(--ink); }
+.adl-shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.adl-shot { margin: 0; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.adl-quote { margin: 0; font-size: 15px; line-height: 1.4; color: var(--ink-2); }
+.adl-verdict { font-size: 26px; line-height: 1.05; font-weight: 400; letter-spacing: -.02em; color: var(--blue); }
+.adl-co { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.adl-co b { font-size: 20px; font-weight: 600; }
+.adl-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adl-up { color: var(--up); }
+.adl-rows { margin: 0; padding: 12px 0 0; list-style: none; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; }
+.adl-rows li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.adl-rows li > span:first-child { color: var(--muted); }
+.adl-foot { padding-top: 16px; padding-bottom: 24px; border-top: 1px solid var(--line); }
+@media (max-width: 760px) {
+  .adl-main { gap: 24px; padding-bottom: 28px; }
+  .adl-hero { gap: 14px; }
+  .adl-points { font-size: 15px; gap: 6px; }
+  .adl-cta { width: 100%; justify-content: center; }
+  .adl-go { gap: 8px; }
+  .adl-shots { grid-template-columns: 1fr; gap: 12px; }
+  .adl-shot { padding: 16px; gap: 10px; }
+  .adl-verdict { font-size: 22px; }
+}
