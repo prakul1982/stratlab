@@ -7,6 +7,7 @@ import { useApp } from "../lib/app";
 import { ago, fmtTime, marketTz, pctPlain, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { LIVE_ROWS, useRowQuotes } from "../lib/rowQuotes";
+import { pricesNote, sessionDayOf } from "../lib/rowReads";
 import { REGION_NAME, saveRegion, savedRegion, screenCap, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
 import { ActionCell, ActionFigure, KIND_NAME, exDay, recordCell, type ActionKind, type CorpAction } from "../components/CorpActions";
@@ -70,7 +71,12 @@ export function CorpActionsPage() {
   // the prices of the rows in view (the first LIVE_ROWS), read each minute while the market trades
   const inView = useMemo(() => [...(data?.ahead ?? []), ...(data?.recent ?? [])].slice(0, LIVE_ROWS), [data]);
   const symbols = useMemo(() => [...new Set(inView.map((r) => r.symbol))], [inView]);
-  const { quotes, quoteAt, live: isLive } = useRowQuotes(region, symbols);
+  const { quotes, quoteAt, live: isLive, reading: quotesReading } = useRowQuotes(region, symbols);
+  // the session the prices read are of, and the rows still on an older stored close (LIVE5-001)
+  const tz = marketTz(region);
+  const closeDay = sessionDayOf(Object.values(quotes).map((x) => x?.at), tz) ?? inView.find((r) => r.last_at)?.last_at?.slice(0, 10) ?? null;
+  const olderRows = closeDay ? [...new Map(inView.filter((r) => quotes[r.symbol]?.price == null && r.last != null && r.last_at && r.last_at.slice(0, 10) < closeDay)
+    .map((r) => [r.symbol, r])).values()] : [];
 
   const toggleAlerts = async () => {
     if (!data) return;
@@ -187,8 +193,8 @@ export function CorpActionsPage() {
             </Card>
           )}
           <p className="k-note" data-testid="actions-prices">
-            {isLive ? `Prices as of ${fmtTime(quoteAt!, { tz: marketTz(region), zone: true })}, read for the first ${Math.min(symbols.length, LIVE_ROWS)} companies in view and again each minute while the market trades.`
-              : symbols.length ? "Prices are each company's last close; the market is not trading now." : ""} The yield is one payment over the price now, not the year's.
+            {pricesNote({ live: isLive, asOf: quoteAt ? fmtTime(quoteAt, { tz, zone: true }) : null, rows: symbols.length, cap: LIVE_ROWS, closeDay,
+              older: olderRows.length, olderDay: olderRows.map((r) => r.last_at!.slice(0, 10)).sort()[0] ?? null, reading: quotesReading }, exDay)} The yield is one payment over the price now, not the year's.
           </p>
         </>
       )}

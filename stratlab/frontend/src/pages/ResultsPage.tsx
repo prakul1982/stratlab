@@ -7,7 +7,7 @@ import { useCompanyScope } from "../lib/useCompanyScope";
 import { ago, fmtDate, fmtTime, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { LIVE_ROWS, useRowQuotes } from "../lib/rowQuotes";
-import { readRows, shownOrder } from "../lib/rowReads";
+import { pricesNote, readRows, sessionDayOf, shownOrder } from "../lib/rowReads";
 import { REGION_NAME, screenCap, useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
 import { CalendarFilters, NO_CAL, SIZE_NAME, calCount, keepFilters, keptFilters, type CalFilters, type Facets } from "../components/CalendarFilters";
@@ -111,7 +111,7 @@ export function ResultsPage() {
   const shown = useMemo(() => (data ? shownOrder(data.weeks, data.today) : []), [data]);
   const symbols = useMemo(() => [...new Set(shown.map((r) => r.symbol))], [shown]);
   const quoted = useMemo(() => symbols.slice(0, LIVE_ROWS), [symbols]);
-  const { quotes, quoteAt, live: isLive } = useRowQuotes(region, quoted);
+  const { quotes, quoteAt, live: isLive, reading: quotesReading } = useRowQuotes(region, quoted);
   const [moves, setMoves] = useState<Record<string, MovesAnswer | null>>({});
   const [implied, setImplied] = useState<Record<string, Implied | null>>({});
   // false once the server says option prices can't be read now (the broker not connected): the column is hidden and one line says why
@@ -176,6 +176,15 @@ export function ResultsPage() {
   const cur = region === "IN" ? "INR" : "USD";
   const anyFo = region === "IN" && !!data?.weeks.some((w) => w.rows.some((r) => r.fo));
   const showImplied = anyFo && optionsOn;
+
+  // the line under the tables: the session the prices read are of, and the rows still on an older stored close (LIVE5-001: the
+  // first row's stored close named the day, "Thu 5 Nov", under rows showing Fri 6 Nov's)
+  const tz = marketTz(region);
+  const closeDay = sessionDayOf(Object.values(quotes).map((x) => x?.at), tz) ?? shown.find((r) => r.last_at)?.last_at?.slice(0, 10) ?? null;
+  const olderRows = closeDay ? [...new Map(shown.filter((r) => quotes[r.symbol]?.price == null && r.last != null && r.last_at && r.last_at.slice(0, 10) < closeDay)
+    .map((r) => [r.symbol, r])).values()] : [];
+  const pricesLine = pricesNote({ live: isLive, asOf: quoteAt ? fmtTime(quoteAt, { tz, zone: true }) : null, rows: symbols.length, cap: LIVE_ROWS, closeDay,
+    older: olderRows.length, olderDay: olderRows.map((r) => r.last_at!.slice(0, 10)).sort()[0] ?? null, reading: quotesReading }, resultDay);
 
   const columns: Column<ResultRow>[] = [
     // two lines a row (owner, 5 Nov: "still shit ui", rows stacked company, name, purpose and filing link four lines high): the symbol and
@@ -317,8 +326,7 @@ export function ResultsPage() {
       })}
       {data && !empty && (
         <p className="k-note" data-testid="results-prices">
-          {isLive ? `Prices as of ${fmtTime(quoteAt!, { tz: marketTz(region), zone: true })}, read for ${symbols.length > LIVE_ROWS ? `the first ${LIVE_ROWS} of the ${symbols.length}` : `the ${symbols.length}`} companies shown and again each minute while the market trades.`
-            : symbols.length ? `Prices are each company's last close${data.weeks.flatMap((w) => w.rows).find((r) => r.last_at)?.last_at ? `, ${resultDay(data.weeks.flatMap((w) => w.rows).find((r) => r.last_at)!.last_at!)}` : ""}; the market is not trading now.` : ""}
+          {pricesLine}
           {" "}Past results-day moves are from the app's own daily prices{showImplied ? `; "Options imply" is the at-the-money straddle over the price` : ""}.
           {anyFo && !optionsOn ? " Option prices can't be read right now, so the move they imply is not shown." : ""} Facts, not a forecast.
         </p>

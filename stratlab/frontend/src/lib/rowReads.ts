@@ -82,3 +82,57 @@ export function shownOrder<R extends { date: string }>(weeks: { rows: R[] }[], t
   }
   return [...ahead, ...past];
 }
+
+/** A quotes call as readRows asks it (LIVE5-001: a results page's rows past the price source's budget were answered "no price",
+ * and a call that failed was never asked again, so 28 rows and every row "Show 50 more" added kept the day before's close): a
+ * stock the server says was busy, or every stock of a call that failed, is pending (asked again after a pause); a stock with
+ * no price is a dash. */
+export function quoteAsk<Q extends { price?: number | null }>(call: (part: string[]) => Promise<{ quotes?: Record<string, Q | null>; pending?: string[] }>) {
+  return async (part: string[]): Promise<PartAnswer<Q>> => {
+    try {
+      const r = await call(part);
+      const quotes = r?.quotes ?? {};
+      const got: Record<string, Q | null> = {};
+      for (const s of part) {
+        const q = quotes[s] ?? quotes[s.toUpperCase()] ?? null;
+        got[s] = q && q.price != null ? q : null;
+      }
+      return { got, pending: (r?.pending ?? []).filter((s) => part.includes(s)) };
+    } catch {
+      return { got: {}, pending: [...part] };
+    }
+  };
+}
+
+/** The market day (YYYY-MM-DD, in the market's zone) of the newest of these read times: the session the prices are of. */
+export function sessionDayOf(ats: (string | null | undefined)[], tz: string): string | null {
+  let best: number | null = null;
+  for (const a of ats) {
+    const t = a ? Date.parse(a) : NaN;
+    if (!Number.isNaN(t) && (best == null || t > best)) best = t;
+  }
+  return best == null ? null : new Date(best).toLocaleDateString("en-CA", { timeZone: tz });
+}
+
+export interface PricesNote {
+  /** whether the newest price was read while the market trades */ live: boolean;
+  /** that read's time, formatted */ asOf: string | null;
+  /** companies shown, and how many of them get a price */ rows: number; cap: number;
+  /** the session the prices are of (YYYY-MM-DD) */ closeDay: string | null;
+  /** rows still on an older stored close (their price not read yet), and that close's day */ older: number; olderDay: string | null;
+  /** whether prices are still being asked for */ reading?: boolean;
+}
+
+/** The line under a calendar's tables that says what its prices are (LIVE5-001: "last close, Thu 5 Nov" was taken from the first
+ * row's stored close while the rows above it showed Fri 6 Nov's): the day is the session the prices read are of, and rows still
+ * on an older close are counted and their day said. */
+export function pricesNote(o: PricesNote, day: (iso: string) => string): string {
+  if (o.live && o.asOf) {
+    return `Prices as of ${o.asOf}, read for ${o.rows > o.cap ? `the first ${o.cap} of the ${o.rows}` : `the ${o.rows}`} companies shown and again each minute while the market trades.`;
+  }
+  if (!o.rows) return "";
+  const base = `Prices are each company's last close${o.closeDay ? `, ${day(o.closeDay)}` : ""}; the market is not trading now.`;
+  if (!o.older || !o.olderDay || (o.closeDay && o.olderDay >= o.closeDay)) return base;
+  const one = o.older === 1;
+  return `${base} ${o.older} ${one ? "company's price" : "companies' prices"} ${o.reading ? (one ? "is still being read" : "are still being read") : "couldn't be read just now"}; ${one ? "it shows" : "they show"} the close of ${day(o.olderDay)}, in grey.`;
+}

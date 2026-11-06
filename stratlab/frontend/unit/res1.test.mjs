@@ -36,11 +36,11 @@ test("RES-1: the filters are size, sector, index, day, purpose, sort and F&O, wi
 
 test("RES-1: live prices, earlier moves and implied moves are read for every row shown, in the order shown, a few calls at a time", () => {
   // LIVE4-001 (behaviour changed on purpose): every row the page shows, not the first 48 in the list's order (often the folded days gone by)
-  assert.match(quotes, /export const LIVE_ROWS = 240;/);
+  assert.match(quotes, /export const LIVE_ROWS = 1000;/);                         // LIVE5-001: a day opened in full ran past 240
   assert.match(page, /shownOrder\(data\.weeks, data\.today\)/);
   assert.match(page, /const quoted = useMemo\(\(\) => symbols\.slice\(0, LIVE_ROWS\), \[symbols\]\)/);
   assert.match(quotes, /useMarketRefresh\(\[region\], read, symbols\.length > 0\)/);          // each minute while the market trades, never otherwise
-  assert.match(quotes, /researchApi\.quotes\(region, syms\)/);
+  assert.match(quotes, /quoteAsk\(\(part\) => researchApi\.quotesPending\(region, part\)\)/);   // LIVE5-001: busy rows are asked again
   assert.doesNotMatch(quotes, /setQuotes\(\{\}\);\n\s*if \(symbols\.length\) read\(\)/);   // more rows keep the prices already read
   assert.match(page, /useRowQuotes\(region, quoted\)/);
   assert.match(page, /readRows<MovesAnswer>\(newMoves,[\s\S]*?\{ size: 12, parallel: 3, alive \}/);   // only the rows not asked yet ("Show 50 more")
@@ -52,8 +52,7 @@ test("RES-1: live prices, earlier moves and implied moves are read for every row
   assert.doesNotMatch(page, /Reading…/);                                           // the kit's bar while a cell loads, a dash when there is nothing
   assert.match(page, /\/research\/results\/moves\?region=/);
   assert.match(page, /\/research\/results\/implied\?symbols=/);
-  assert.match(page, /Prices as of \$\{fmtTime\(quoteAt!/);
-  assert.match(page, /Prices are each company's last close/);
+  assert.match(page, /pricesNote\(\{ live: isLive/);                                // LIVE5-001: the footer names the session the prices are of
 });
 
 test("RES-1: the corporate actions calendar is a table a day with the same filters and live prices", () => {
