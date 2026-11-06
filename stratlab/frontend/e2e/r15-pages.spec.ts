@@ -41,3 +41,28 @@ test("R15 #7: US stocks tax's Each sale in rupees shows the first 10 sales, then
   await expect(sales.getByRole("row").filter({ hasText: /SYM\d+/ })).toHaveCount(13);
   await sane(page, errors);
 });
+
+test("R15 #3: Where you stand is the headline figure beside a small own / owe / net worth table; History opens the snapshots", async ({ page }, info) => {
+  const errors = await open(page, "/money/net-worth", "Where you stand");
+  const card = page.getByRole("region", { name: "Totals" });
+  const head = card.getByTestId("nw-headline");
+  await expect(head.getByTestId("nw-figure")).toHaveText(/^₹[\d,]+$/);
+  const table = card.getByRole("table", { name: "Where you stand" });
+  for (const r of ["What you own", "What you owe", "Net worth"]) await expect(table.getByRole("row").filter({ hasText: r })).toHaveCount(1);
+  if (info.project.name === "desktop") {
+    // balanced edge to edge: the figure on the left half, the table on the right
+    const [c, f, t] = [await card.boundingBox(), await head.getByTestId("nw-figure").boundingBox(), await table.boundingBox()];
+    expect(f!.x).toBeLessThan(c!.x + c!.width / 2);
+    expect(t!.x).toBeGreaterThan(c!.x + c!.width / 2 - 40);
+    expect(t!.x + t!.width).toBeGreaterThan(c!.x + c!.width - 60);
+  }
+  // no "History: N snapshots" line at the card's foot: the header's History button opens them
+  await expect(card.locator("summary", { hasText: /^History:/ })).toHaveCount(0);
+  const btn = card.getByRole("button", { name: /^History · \d+ snapshots?$/ });
+  await expect(card.getByTestId("nw-snapshots")).toHaveCount(0);
+  await btn.click();
+  await expect(card.getByTestId("nw-snapshots").getByRole("table", { name: "The history's snapshots" })).toBeVisible();
+  await btn.click();
+  await expect(card.getByTestId("nw-snapshots")).toHaveCount(0);
+  await sane(page, errors);
+});

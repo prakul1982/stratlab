@@ -25,7 +25,7 @@ test("RC2B-001: My space's net worth tile follows the page's rule: no change fro
 test("RC2B-020, RC2B-021: the net worth chart waits for a third snapshot, and the add modal's way back is 'Back'", () => {
   const page = read("src/pages/money/NetWorthPage.tsx");
   assert.match(page, /view\.history_allowed && whole\.length >= 3 && \(/);
-  assert.match(page, /whole\.length < 3 && snapsList/);
+  assert.match(page, /whole\.length < 3 && \(snapsOpen \|\| empty\) && <div id="nw-snaps-list"/);      // R15 #3: the snapshots open from the card's History button
   assert.match(page, />← Back<\/button>/);
   assert.doesNotMatch(page, /← Something else/);
   const home = read("src/pages/MineHome.tsx");
