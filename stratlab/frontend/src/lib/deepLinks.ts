@@ -3,6 +3,9 @@
  * visitor on /research/IN/RELIANCE gets "Sign in to see RELIANCE" instead of the landing page at that address, and an
  * address nobody routes gets "Page not found". unit/deepLinks.test.mjs checks APP_ROUTES against main.tsx's routes. */
 import { locate, locateGroup } from "./nav";
+import { isAdVisit } from "./entry";
+
+export { isAdVisit };
 
 /** Every route main.tsx has for a signed-in person (its <Route path>s, without the catch-all). */
 export const APP_ROUTES = [
@@ -20,6 +23,8 @@ export const APP_ROUTES = [
   "/research/investor", "/chart/:market/:symbol", "/research/:region/:symbol", "/login", "/signup", "/about",
   // IA-1: the one Calendar's own page and Market today's Flows tab
   "/calendar", "/invest/flows",
+  // R15: the ad landing; signed in, it is home
+  "/start",
 ];
 
 const PATTERNS = APP_ROUTES.map((r) => new RegExp("^" + r.replace(/\/\*$/, "(/.*)?").replace(/:[A-Za-z]+/g, "[^/]+") + "/?$"));
@@ -96,12 +101,15 @@ export function describePath(path: string): Described | null {
 export type VisitorView =
   | { kind: "landing"; section: string | null; panel?: "login" | "signup" }
   | { kind: "legal" } | { kind: "verdict"; token: string } | { kind: "library" } | { kind: "libraryEntry"; id: string }
-  | { kind: "gate" } | { kind: "notfound" };
+  | { kind: "gate" } | { kind: "notfound" } | { kind: "ad" };
+
 
 const LEGAL = /^\/(terms|privacy|refunds|contact)$/;
 
-export function visitorView(path: string): VisitorView {
+export function visitorView(path: string, search = ""): VisitorView {
   const p = clean(path).replace(/(.)\/$/, "$1");
+  // R15: the ad landing, at its own address and on "/" for a visit from the ad
+  if (p === "/start" || (p === "/" && isAdVisit(search))) return { kind: "ad" };
   if (LEGAL.test(p)) return { kind: "legal" };
   const v = p.match(/^\/verdict\/([^/]+)$/);
   if (v) return { kind: "verdict", token: safeDecode(v[1]) };

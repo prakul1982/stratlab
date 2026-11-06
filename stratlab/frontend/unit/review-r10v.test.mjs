@@ -152,7 +152,7 @@ test("the visitor half draws the kept words while a page's code downloads, and t
   const visitor = read("src/visitor/VisitorApp.tsx");
   assert.match(visitor, /const words = view\.kind === "landing" && view\.section === "faq" \? "" : heldStartup\(\);/);   // not /faq (R80-003)
   assert.match(visitor, /words \? <div style=\{\{ display: "contents" \}\} data-held dangerouslySetInnerHTML=\{\{ __html: words \}\} \/> : wait/);
-  assert.match(visitor, /<Suspense fallback=\{fallback\}>/);
+  assert.match(visitor, /<Suspense fallback=\{view\.kind === "ad" \? wait : fallback\}>/);      // R15: the ad landing waits on the splash, not the landing's words
   // with nothing kept, the splash is still a main landmark with a heading (R6V-013)
   assert.match(visitor, /<main id="main" tabIndex=\{-1\}><h1 className="sr-only">StratLab<\/h1><Opening label="Opening StratLab" \/><\/main>/);
   const entry = read("src/entry.tsx");

@@ -258,6 +258,7 @@ function Routed() {
         <Route path="/login" element={<Redirect to="/" />} />
         <Route path="/signup" element={<Redirect to="/" />} />
         <Route path="/about" element={<Redirect to="/features" />} />
+        <Route path="/start" element={<Redirect to="/" />} />
         <Route path="/trade/g/:group" element={<GroupPage />} />
         <Route path="/invest/g/:group" element={<GroupPage />} />
         <Route path="/money/g/:group" element={<GroupPage />} />

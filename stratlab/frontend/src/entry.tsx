@@ -10,7 +10,7 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "./styles.css";
 import "./styles-invest.css";
-import { isPublicForAll, publicReads, wantsAccount } from "./lib/entry";
+import { isAdVisit, isPublicForAll, publicReads, wantsAccount } from "./lib/entry";
 import { holdStartup } from "./lib/held";
 
 /* The one entry point. It reads /config.js (once more, if the first try failed), then loads only the half of the site this
@@ -22,7 +22,8 @@ import { holdStartup } from "./lib/held";
 
 /** The first public page's code, by address (the same files VisitorApp loads, asked for early). */
 const publicPage = (p: string) =>
-  /^\/(terms|privacy|refunds|contact)\/?$/.test(p) ? import("./pages/LegalPage")
+  /^\/start\/?$/.test(p) || (p === "/" && isAdVisit(location.search)) ? import("./pages/AdLanding")
+    : /^\/(terms|privacy|refunds|contact)\/?$/.test(p) ? import("./pages/LegalPage")
     : /^\/verdict\//.test(p) ? import("./pages/PublicVerdict")
     : /^\/library(\/|$)/.test(p) ? import("./pages/PublicLibrary")
     : /^\/(pricing|plans|upgrade|help|faq|features|login|signup|about)?\/?$/.test(p) ? import("./pages/Login")
