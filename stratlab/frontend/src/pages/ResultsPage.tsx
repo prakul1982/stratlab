@@ -248,7 +248,8 @@ export function ResultsPage() {
         </span>);
     } },
     ...(showImplied ? [{ key: "im", header: "Implied", cardLabel: "Implied", csvHeader: "Options imply", numeric: true, info: "For stocks with futures and options: the price of the at-the-money call and put together, as a share of the stock's price, for the first expiry on or after the results day. Read from the broker's option prices while it is connected.", cell: (r: ResultRow) => {
-      if (!r.fo) return <span className="k-muted">–</span>;
+      // R15 #11 (owner, 7 Nov: "there is still no implied vols"): implied moves exist only for F&O stocks, so a row that has none says why
+      if (!r.fo) return <span className="k-muted" title="Implied moves are read from futures and options; this stock has none">Not F&O</span>;
       const i = implied[r.symbol];
       if (i === undefined) return <Working inline label="Reading the option prices" />;
       return i ? <span title={`At the ${i.strike.toLocaleString("en-IN")} strike, to the ${resultDay(i.expiry)} expiry`}>±{i.pct.toFixed(1)}%</span> : <span className="k-muted" title="No option prices for it now">–</span>;
@@ -313,7 +314,7 @@ export function ResultsPage() {
           return (
             <div key={d} className="inv-day" data-testid="results-day">
               <span className="k-eyebrow">{dayHeading(d, info.count, data.today)}</span>
-              <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`} columns={columns} stack compact phonePage={10} />
+              <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`} columns={on.some((r) => r.fo) ? columns : columns.filter((c) => c.key !== "im")} stack compact phonePage={10} />
               {info.count > info.shown && (
                 <div className="k-row">
                   <span className="k-note">Showing {info.shown} of {info.count.toLocaleString("en-IN")} on {resultDay(d)}.</span>

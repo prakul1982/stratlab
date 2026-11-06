@@ -128,3 +128,39 @@ test("R15 #16, #17: Market today's mood: the headlines read sits under the mood;
   }
   await sane(page, errors);
 });
+
+test("R15 #11: Results' Implied column only on days with an F&O stock; a non-F&O row says Not F&O; F&O rows fill in", async ({ page }, info) => {
+  const errors = await open(page, "/research/results?region=IN&scope=all", "Board meetings companies have called");
+  await expect(page.getByTestId("results-count")).toHaveText("20 companies", { timeout: 30_000 });
+  await expect(page.getByText("Reading the option prices")).toHaveCount(0, { timeout: 20_000 });
+  const tables = page.getByRole("table", { name: /^Results on/ });
+  const n = await tables.count();
+  let withFo = 0, without = 0;
+  for (let i = 0; i < n; i++) {
+    const t = tables.nth(i);
+    const fo = await t.getByText("F&O", { exact: true }).count();
+    const implied = info.project.name === "desktop" ? t.getByRole("columnheader").filter({ hasText: "Implied" }) : t.getByText(/^(Implied|Not F&O)/);
+    if (fo > 0) {
+      withFo++;
+      if (info.project.name === "desktop") await expect(implied).toHaveCount(1);
+      await expect(t.getByText(/^±\d+\.\d%$/).first()).toBeVisible();
+      const plain = await t.getByRole("row").count() - 1 - fo;
+      if (plain > 0 && info.project.name === "desktop") await expect(t.getByText("Not F&O").first()).toBeVisible();
+    } else {
+      without++;
+      await expect(implied, "no Implied column on a day with no F&O stock").toHaveCount(0);
+    }
+  }
+  expect(withFo, "the world has a day with F&O stocks").toBeGreaterThan(0);
+  expect(without, "...and a day without").toBeGreaterThan(0);
+  await sane(page, errors);
+});
+
+test("R15 #13: Find a company's search spans its card, the chips under it", async ({ page }, info) => {
+  test.skip(info.project.name === "phone", "a phone's box is the card's width anyway");
+  const errors = await open(page, "/research", "Find a company");
+  const card = page.locator("section.k-card").filter({ has: page.getByRole("heading", { name: "Find a company" }) });
+  const [c, box] = [await card.boundingBox(), await card.getByRole("combobox").or(card.locator("input")).first().boundingBox()];
+  expect(box!.width).toBeGreaterThan(c!.width * 0.85);
+  await sane(page, errors);
+});

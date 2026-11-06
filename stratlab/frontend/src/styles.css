@@ -1781,6 +1781,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-field.wide { grid-column: 1 / -1; }
 .k-card > .k-field { max-width: 420px; }   /* a lone field in a card (a stock lookup) is not stretched across it */
 .k-card > .k-field.wide { max-width: none; }   /* a row that should fill the card (a document upload) */
+.k-card > .k-field:has(.k-picker) { max-width: none; }   /* R15 #13 (owner, 7 Nov): a company or instrument search spans its card, its chips under it */
 .k-label-row { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 22px; }
 .k-label-row label { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .k-label-row .opt { font-weight: 400; color: var(--muted); }
