@@ -14,7 +14,8 @@ test("VR5-001 and VR5-002: the Invest home's eyebrow says something its crumb an
   assert.match(read("src/pages/SpaceHomes.tsx"), /<Head eyebrow="Invest · companies and markets" title="Invest home">/);
   const card = read("src/components/BreadthCard.tsx");
   assert.doesNotMatch(card, /tone="live"/);
-  assert.match(card, /<FactTable label=\{`Market breadth, \$\{d\.group\.name\}`\} itemHead="Measure" figureHead=\{dates\?\.counts \?\? "Latest"\}/);   // TABLE-SWEEP: its three figures are a table (they were tiles, two across on a phone: VR5-006)
+  // TABLE-SWEEP: its three figures are a table (they were tiles, two across on a phone: VR5-006); LIVE4-008: with a dated column each for the newest count and the close before
+  assert.match(card, /<DataTable label=\{`Market breadth, \$\{d\.group\.name\}`\} columns=\{columns\} rows=\{table\.rows\}/);   // TABLE-SWEEP: its three figures are a table (they were tiles, two across on a phone: VR5-006)
 });
 
 test("VR5-003: the public library's header button reads 'Sign in' on a small phone, and the logo is never squeezed", () => {
