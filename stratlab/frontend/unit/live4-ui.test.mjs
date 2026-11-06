@@ -45,7 +45,7 @@ test("LIVE4-010: a link in a table cell never shrinks under its own words (COROM
 
 test("LIVE4-010: the results calendar is compact on a phone and its headers fit one line on a desktop", () => {
   const page = read("src/pages/ResultsPage.tsx");
-  assert.match(page, /columns=\{columns\} stack compact phonePage=\{10\}/);
+  assert.match(page, /columns=\{on\.some\(\(r\) => r\.fo\) \? columns : columns\.filter\(\(c\) => c\.key !== "im"\)\} stack compact phonePage=\{10\}/);      // R15 #11: no Implied column on a day with no F&O stock
   assert.match(page, /key: "px", header: "Price", numeric: true, brief: true/);
   assert.match(page, /key: "day", header: "Day", numeric: true, brief: true/);
   for (const k of ["cap", "q"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*phone: false`), k);   // LIVE5-002: rev and pat are one "q" column
