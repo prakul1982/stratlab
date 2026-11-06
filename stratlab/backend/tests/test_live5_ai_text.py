@@ -95,3 +95,19 @@ def test_a_block_deal_party_is_written_out_in_full_and_title_case():
     assert tidy_party("THE MTBJ LTD. AS TRST FOR GOVRNMNT PENSION INVSTMNT FUND MUTB400045794") == want
     assert tidy_party("The MTBJ Ltd. as TRST for Govrnmnt Pension Invstmnt Fund") == want
     assert tidy_party("SOCIETE GENERALE") == "Societe Generale"
+
+
+def test_the_ipo_posts_table_lists_every_issue_and_pages_them_on_a_phone():
+    """LIVE4-019 partial: "the latest 50 of 85 are shown"."""
+    from app import blog
+    rows = [[f"Issue {i}", "1 Nov", "₹100", "+1%", "+2%", "3x"] for i in range(85)]
+    html = blog.blocks_html([{"t": "table", "caption": "IPO listing day", "head": ["Issue", "Listed", "Issue price", "Open", "Close", "Subscribed"],
+                              "rows": rows, "align": "lrrrrr", "page": 20}])
+    assert html.count("<tr>") == 86                                   # every issue (and the head)
+    assert '<tbody class="pg-more">' in html and "Show all 85 rows" in html and 'class="pg-all"' in html
+    first = html.split('<tbody class="pg-more">')[0]
+    assert first.count("<tr>") == 21
+    plain = blog.blocks_html([{"t": "table", "head": ["A", "B"], "rows": [["x", "1"]] * 3, "page": 20}])
+    assert "pg-more" not in plain and "Show all" not in plain
+    from app import blog_research
+    assert blog_research.IPO_ROWS_SHOWN >= 150

@@ -3058,3 +3058,7 @@ body:has(.shell.slim) .consent { margin-left: 16px; }
 @media (max-width: 900px) { body:has(.shell) .consent { margin: 8px 12px 0; } }
 body:has(.shell) .shell { padding-bottom: 0; }
 body:has(.shell) .mw-launch { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+/* LIVE5 partial: a few totals across one row (FactTable `across`): each figure with its note under it, the columns sharing the width */
+.k-facts-across .k-table { table-layout: fixed; width: 100%; }
+.k-facts-across .k-facts-cell { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: normal; }
+.k-facts-across .k-facts-cell > .k-sub-line { text-align: right; }

@@ -25,7 +25,8 @@ GEN = 5                             # the version of what the builders write; bu
 GEN_KEY = "blog:research:gen"       # {"gen", "ok", "tries", "at"} of the last run made for a version
 SIP_AMOUNT = 10000
 SIP_HORIZONS = (3, 5)
-IPO_ROWS_SHOWN = 50
+IPO_ROWS_SHOWN = 1000               # every issue counted is listed (LIVE4-019 partial: "the latest 50 of 85"); a phone pages them
+IPO_PHONE_PAGE = 20
 RESEARCH_DAY = 3                    # the monthly run waits for the third (the data of the month's first days is in by then)
 NUMBER_WORDS = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten", 11: "eleven", 12: "twelve"}
 MARKETS = ["IN", "US", "UK", "EU", "JP", "CRYPTO", "FX", "MCX", "CDS", "CMDTY"]
@@ -293,7 +294,8 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
     blocks += [{"t": "fold", "title": "Every issue counted", "note": f"{shown} of {len(have)} issues" if len(have) > shown else f"{len(have)} issues", "blocks": [
                    {"t": "p", "text": f"Newest listing first{f'; the latest {IPO_ROWS_SHOWN} of {len(have)} are shown, and every figure above counts all {len(have)}' if len(have) > IPO_ROWS_SHOWN else ''}."},
                    {"t": "table", "caption": f"IPO listing day in India, {year}: Open and Close are the first day's price against the issue price",
-                    "head": ["Issue", "Listed", "Issue price", "Open", "Close", "Subscribed"], "rows": table, "align": "lrrrrr", "widths": [38, 13, 12, 11, 11, 15]}]},
+                    "head": ["Issue", "Listed", "Issue price", "Open", "Close", "Subscribed"], "rows": table, "align": "lrrrrr", "widths": [38, 13, 12, 11, 11, 15],
+                    "page": IPO_PHONE_PAGE}]},
                {"t": "details", "title": "The headline figures in words", "items": words, "words": True},
                {"t": "details", "title": "How this was worked out", "items": [
                    "Data: the exchanges' public-issue pages (issue price, dates, bids received) and the exchanges' daily prices after listing. The tracker is "
