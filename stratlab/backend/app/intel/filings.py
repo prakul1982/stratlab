@@ -1648,7 +1648,20 @@ class IndiaFilings:
         code = self.code_of(symbol)
         if code:
             return self.bse.announcements(code, days)
-        items = self.nse.announcements(symbol, days)
+        try:
+            items = self.nse.announcements(symbol, days)
+        except SourceError as e:
+            # NSE not answering (6 Nov: it timed out from our server for an evening and every company page's filings went to a 503):
+            # the same company's filings under its BSE listing, when it has one; with none, or BSE down too, NSE's own error stands
+            if not e.busy or not self.twin_of:
+                raise
+            try:
+                twin = self.twin_of(symbol)
+                if twin:
+                    return self.bse.announcements(twin, days)
+            except SourceError:
+                pass
+            raise
         if items or not self.twin_of:
             return items
         # NSE's feed answers nothing for some symbols whose company is listed and filing (Abbott India, Goodyear India):

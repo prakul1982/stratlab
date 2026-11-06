@@ -57,6 +57,31 @@ def test_a_bse_feed_refusal_leaves_the_nse_answer():
     assert F.IndiaFilings(_Feed([]), Down(), lambda s: None, lambda s: "500488").announcements("ABBOTINDIA", 732) == []
 
 
+def test_nse_not_answering_reads_the_bse_listing_and_with_none_nse_s_error_stands():
+    import pytest
+    item = {"at": "2026-09-01T10:00", "category": "results", "subject": "Results", "text": "", "url": None}
+
+    class NseDown:
+        def __init__(self, busy=True):
+            self.busy = busy
+
+        def announcements(self, key, days):
+            raise F.SourceError("the exchange", "timed out", busy=self.busy)
+
+    class BseDown:
+        def announcements(self, key, days):
+            raise F.SourceError("BSE", "refused", busy=True)
+    bse = _Feed([item])
+    assert F.IndiaFilings(NseDown(), bse, lambda s: None, lambda s: "500325").announcements("RELIANCE", 732) == [item]
+    assert bse.asked == ["500325"]
+    for feed in (F.IndiaFilings(NseDown(), bse, lambda s: None, lambda s: None),          # no BSE listing
+                 F.IndiaFilings(NseDown(), BseDown(), lambda s: None, lambda s: "500325"),  # BSE down too
+                 F.IndiaFilings(NseDown(), bse, lambda s: None),                            # no twin lookup
+                 F.IndiaFilings(NseDown(busy=False), bse, lambda s: None, lambda s: "1")):  # a real "no such thing"
+        with pytest.raises(F.SourceError, match="timed out"):
+            feed.announcements("RELIANCE", 732)
+
+
 # ---------- calls from the last week ----------
 def _call(at, held=True):
     # SECMEM 6: a call held (its recording) is due a transcript after the grace days; a notice of one to come only once older
