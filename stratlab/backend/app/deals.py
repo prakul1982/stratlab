@@ -10,6 +10,7 @@ disclosures in a few calls and uses them three ways: the stock alerts on deals a
 "a promoter or insider bought in the last N days" filter (one stored date per company), and the My Stocks
 newsletter (the last few days' disclosures, stored by the day they were filed)."""
 import json
+import re as _re
 import threading
 from datetime import date, datetime, timedelta
 
@@ -34,6 +35,55 @@ SIDE_WORD = {"bought": "bought", "sold": "sold", "pledged": "pledged", "released
 _cache = TTLCache(max_items=200)
 
 
+# ---------- names as a reader writes them ----------
+_TRUST = _re.compile(r"\b(employees?'?|esop|esps|staff)\b.*\b(trust|trst)\b|\b(trust|trst)\b.*\b(esop|esps|employees?'?)\b", _re.I)
+_CODE = _re.compile(r"\s*\b[A-Z]{2,}\d{5,}\b")          # a custodian's account code ("MUTB400045794"), not part of a name
+
+
+_SMALL = {"THE", "AS", "FOR", "OF", "AND", "IN", "ON", "TO", "A", "AN", "BY"}
+_ACRONYMS = {"ICICI", "HDFC", "HSBC", "BNP", "UBS", "LLP", "NSE", "BSE", "LIC", "SBI", "UTI", "IDFC", "IIFL", "DSP", "PPFAS", "ESOP", "PLC", "FPI", "AMC"}
+
+
+def esop_trust(who: str | None) -> bool:
+    """A company's employee stock option trust (it buys shares to hand to staff under their options, then passes them on off
+    market): not a promoter or insider buying on their own account (LIVE4-021: Titan's ESOP trust read as "1 person bought")."""
+    return bool(who and _TRUST.search(who))
+
+
+def tidy_party(name: str | None) -> str | None:
+    """A bulk or block deal's party as the exchange's list writes it, in capitals with an account code ("THE MTBJ LTD. AS TRST FOR
+    GOVRNMNT PENSION INVSTMNT FUND MUTB400045794"), without the code and in title case; a name already in its own case is kept."""
+    if not name:
+        return name
+    out = _CODE.sub("", str(name)).strip(" ,") or str(name)
+    if _re.search(r"[a-z]", out):
+        return out
+
+    def word(w: str, first: bool) -> str:
+        core = _re.sub(r"[^A-Z&]", "", w)
+        if core in ("LTD", "PVT", "PTE", "CO", "INC", "CORP", "LLC"):
+            return w.replace(core, core[0] + core[1:].lower())
+        if not core or _re.search(r"\d", w) or core in _ACRONYMS or (len(core) <= 3 and core not in _SMALL) or not _re.search(r"[AEIOUY]", core):
+            return w
+        if core in _SMALL and not first:
+            return w.lower()
+        i = next((k for k, ch in enumerate(w) if ch.isalpha()), 0)
+        return w[:i + 1] + w[i + 1:].lower()
+    return " ".join(word(w, i == 0) for i, w in enumerate(out.split()))
+
+
+def tidy_items(items: list[dict]) -> list[dict]:
+    """Each deal with its parties' names tidied (bulk and block deals) and an ESOP trust marked (`trust`)."""
+    out = []
+    for d in items:
+        d = dict(d)
+        if d.get("kind") in ("bulk", "block") and d.get("who"):
+            d["who"] = tidy_party(d["who"])
+        d["trust"] = esop_trust(d.get("who"))
+        out.append(d)
+    return out
+
+
 # ---------- one company ----------
 def fetch(feed, kind: str, symbol: str | None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
     return getattr(feed, METHOD[kind])(symbol, days, to)
@@ -51,9 +101,21 @@ def report(feed, symbol: str, days: int = DEALS_DAYS) -> dict:
             last = e
     if last is not None and len(problems) == len(KINDS):
         raise last
-    items = sort_deals(items)
+    items = tidy_items(sort_deals(items))
     return {"symbol": symbol, "days": days, "items": items[:300], "count": len(items), "problems": problems,
-            "flow": flow(items), "flow_days": FLOW_DAYS, "source": SOURCE}
+            "flow": flow(items), "flow_days": FLOW_DAYS, "source": SOURCE, "trust_note": trust_note(items)}
+
+
+def trust_note(items: list[dict], today: date | None = None, days: int = FLOW_DAYS) -> str | None:
+    """The line saying an ESOP trust's open-market trades are left out of the insiders' count, naming it; None when it had none."""
+    today = today or ist_now().date()
+    cut = (today - timedelta(days=days)).isoformat()
+    names = sorted({d.get("who") for d in items or [] if d.get("kind") == "insider" and d.get("mode") == "market" and str(d.get("date")) >= cut
+                    and esop_trust(d.get("who"))})
+    if not names:
+        return None
+    return (f"{' and '.join(names)} {'buy and sell' if len(names) > 1 else 'buys and sells'} shares for staff stock options; "
+            f"{'its' if len(names) == 1 else 'their'} trades are left out of this count.")
 
 
 def flow(items: list[dict], today: date | None = None, days: int = FLOW_DAYS) -> dict | None:
@@ -66,6 +128,8 @@ def flow(items: list[dict], today: date | None = None, days: int = FLOW_DAYS) ->
     people: dict[str, set] = {"bought": set(), "sold": set()}
     for d in items or []:
         if d.get("kind") != "insider" or d.get("mode") != "market" or d.get("side") not in people or str(d.get("date")) < cut:
+            continue
+        if esop_trust(d.get("who")):        # buying for staff options, not an insider's own decision (LIVE4-021)
             continue
         side = d["side"]
         out[side] += d.get("qty") or 0

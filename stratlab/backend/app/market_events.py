@@ -964,7 +964,9 @@ def index_events(part: dict, today: date) -> list[dict]:
             outs = ", ".join(x[0] for x in s["out"][:8]) + (f" and {len(s['out']) - 8} more" if len(s["out"]) > 8 else "")
             lines.append(f"{s['index']}: " + "; ".join(p for p in (f"in {ins}" if ins else "", f"out {outs}" if outs else "") if p))
         more = f" Changes in {len(names) - 6} more indices too." if len(names) > 6 else ""
-        title = f"Index changes take effect: {names[0]}" + (f" and {len(names) - 1} more" if len(names) > 1 else "")
+        # every index named up to three, else their count (LIVE4-008: "Nifty 100 and 1 more" on Invest home's Coming up)
+        title = (f"Index changes take effect: {names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]}" if len(names) <= 3
+                 else f"Index changes take effect in {len(names)} indices")
         out.append(_ev("index", eff, title, f"Announced on {nice(c['announced'])}, from the start of {nice(eff)}. " + ". ".join(lines) + "." + more,
                        eid=_id("index", c["id"]), url=c.get("url"), status="released" if eff <= today else "scheduled",
                        change=c["id"], symbols=sorted({x[0] for s in c["sections"] for x in s["in"] + s["out"]})[:400]))

@@ -7,7 +7,8 @@ register("data:text/javascript," + encodeURIComponent(`export async function res
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 globalThis.window ??= { STRATLAB_CONFIG: { API_BASE: "", SUPABASE_URL: "", SUPABASE_ANON_KEY: "" } };
 
-const { unlimitedLabel, FEATURES, AI_BUILDS_PER_DAY } = await import("../src/lib/plans.ts");
+const { unlimitedLabel, AI_BUILDS_PER_DAY } = await import("../src/lib/plans.ts");
+const { FEATURES } = await import("../src/lib/planFeatures.ts");          // LIVE4-020: the full lists, apart
 const { latestDue } = await import("../src/lib/format.ts");
 const offer = await import("../src/lib/offer.ts");
 

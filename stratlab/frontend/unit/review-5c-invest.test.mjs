@@ -147,7 +147,8 @@ test("R5C-006: every Invest home link opens its page on the market picked there"
   const home = read("src/pages/SpaceHomes.tsx");
   assert.match(home, /const tools: Tool\[\] = investStrip\(region\)\.map\(\(t\) => \(\{ \.\.\.INVEST_STRIP\[t\.key\], to: t\.to \}\)\);/);
   assert.match(home, /<Link to=\{withRegion\("\/research\/investor", region\)\} className="link">At a glance →<\/Link>/);
-  assert.match(home, /<Link to=\{withRegion\("\/research\/results", region\)\} className="link">Calendar →<\/Link>/);
+  // LIVE4-008: the header link says "All N →" when the day has more than the six named
+  assert.match(home, /<Link to=\{withRegion\("\/research\/results", region\)\} className="link" data-testid="invest-results-all">/);
   assert.match(home, /<Link to="\/research\/filings\?region=IN" className="link">All filings →<\/Link>/);
   const card = read("src/components/BreadthCard.tsx");
   assert.match(card, /`\/invest\/breadth\?group=\$\{encodeURIComponent\(d\.group\.id\)\}` : `\/invest\/breadth\?region=\$\{region\}`/);

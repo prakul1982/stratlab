@@ -626,12 +626,20 @@ def test_a_theme_post_sets_layers_against_layers_and_draws_them(w):
     # the group no layer took is never the high end of the gap, nor a layer's move: the gap is Network security against Data security
     assert post["summary"] == "Median EBITDA margin is highest in Network security (13.5%) and lowest in Data security (−9.1%), 22.6 points apart."
     assert "Named in the theme's list" not in words and "10.0 points" not in words
-    assert "Data security: EBITDA margin up 7.2 points, from −13.4% in Dec 2022 to −6.2% in Dec 2025" in words
+    # LIVE4-018: the move is the layer's companies added together, said as such beside the chart's median
+    assert ("Data security: combined EBITDA margin (its 2 companies' figures added together, not the median in the chart) up 7.2 points, "
+            "from −13.4% in Dec 2022 to −6.2% in Dec 2025") in words
+    tiles = next(b for b in post["blocks"] if b["t"] == "stats")["items"]
+    assert [t["l"] for t in tiles] == ["companies", "layers", "highest layer margin", "lowest layer margin"] and all(t.get("s") for t in tiles)
     assert "Identity has one company, so its figures are that company's own." in words
     assert "9 listed US companies in the cybersecurity theme, sorted into 3 layers" in words and "3 of them are part of the theme but in no layer" in words
     charts = [b for b in post["blocks"] if b["t"] == "hbar"]
     assert [r["label"] for r in charts[0]["rows"]] == ["Network security", "Identity", "Data security"]             # the chain's layers only
     assert [r["text"] for r in charts[0]["rows"]] == ["13.5%", "5.5%", "−9.1%"] and charts[1]["rows"][0]["text"] == "21,632"
+    # each chart says which companies it leaves out (LIVE4-018: 4 of 14 were in no chart with nothing said under it)
+    for c in charts:
+        assert "Not drawn: the 3 companies in the theme's list but in no layer; their figures are in the table below." in c["note"]
+    assert "the median of each layer's companies" in charts[0]["note"]
     table = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Layer" and len(b["head"]) == 6)
     assert table["rows"][-1][0] == "In the theme's list, in no layer" and table["rows"][0][3:] == ["13.5%", "2.7%", "93.3%"]     # no plus sign on a margin
     assert table["head"][2] == "Revenue ($ million)"
@@ -669,9 +677,24 @@ def test_the_live_theme_post_is_written_again_in_the_new_form_after_a_deploy(w, 
     assert got["summary"].startswith("Median EBITDA margin is highest in Edge delivery and application protection (14.8%) and lowest in Vulnerability and data security (−9.1%)")
     html = page(w["client"], "/blog/theme-cybersecurity-margins-us")
     assert '<figure class="hb">' in html and "latest full latest" not in html and "gap of 42.5" not in html
-    assert "Vulnerability and data security: EBITDA margin up 7.2 points" in html
+    assert "Vulnerability and data security: combined EBITDA margin (its 2 companies&#x27; figures added together, not the median in the chart) up 7.2 points" in html \
+        or "Vulnerability and data security: combined EBITDA margin (its 2 companies' figures added together, not the median in the chart) up 7.2 points" in html
+    assert "No figure for Endpoint and detection: none of its companies reports EBITDA" in html
     assert blog_research.run_if_stale(datetime(2026, 11, 6, 11, tzinfo=timezone.utc)) is None        # once per version
     assert blog_research.rewrite_theme_posts(datetime(2026, 11, 7, tzinfo=timezone.utc))[0][0]["result"] == "same"   # from its kept figures now: no change
+
+
+def test_the_ipo_posts_tiles_each_say_which_issues_they_count(w):
+    """LIVE4-019: "120 issues listed", "65 of 85 closed above" and "+10.5% median open … 83 issues" counted three sets with nothing saying so."""
+    ipo = blog_research.ipo_listing_day(ipo_facts())
+    tiles = next(b for b in ipo["blocks"] if b["t"] == "stats")["items"]
+    subs = [t["s"] for t in tiles]
+    assert subs[0].startswith("all in the tracker, ")
+    assert re.match(r"^of the \d+ with a listing-day close$", subs[1]) and re.match(r"^of the same \d+, against the issue price$", subs[2])
+    if len(tiles) > 3:
+        assert re.match(r"^of the \d+ with an opening price$", subs[3])
+    intro = ipo["blocks"][0]["text"]
+    assert " in 20" not in intro.split(".")[0] and "that listed from " in intro       # the intro names the same span as the title
 
 
 def test_the_ipo_and_sip_posts_draw_their_key_numbers_as_bars(w):

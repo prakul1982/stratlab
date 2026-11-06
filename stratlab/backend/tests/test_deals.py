@@ -484,3 +484,27 @@ def test_newsletter_lists_new_deals_for_the_users_stocks(w):
     assert "1 new deal or insider trade disclosed." in write.template(f)
     for ln in lines:
         assert not ADVICE.search(ln["text"]) and not PROVIDERS.search(ln["text"])
+
+
+def test_an_esop_trust_is_not_an_insider_buying_and_deal_names_read_as_names():
+    """LIVE4-021: TITAN's "1 person bought 5,71,297 shares (₹280.7 crore)" was the Titan Employee Stock Option Trust buying for staff
+    options; block-deal parties came in capitals with a custodian's account code."""
+    from datetime import date as _d
+    today = _d(2026, 11, 6)
+    trust = {"kind": "insider", "mode": "market", "side": "bought", "who": "Titan Employee Stock Option Trust", "qty": 571297, "value": 2.807e9, "date": "2026-09-01"}
+    person = {"kind": "insider", "mode": "market", "side": "bought", "who": "A Shah", "qty": 1000, "value": 4.9e6, "date": "2026-09-02"}
+    assert deals.esop_trust("Titan Employee Stock Option Trust") and deals.esop_trust("INFOSYS EXPANDED STOCK OWNERSHIP TRUST (ESOP)")
+    assert not deals.esop_trust("A Shah") and not deals.esop_trust("Tata Sons Private Limited") and not deals.esop_trust(None)
+    assert deals.flow([trust], today) is None                                  # only the trust: no insider buying to report
+    f = deals.flow([trust, person], today)
+    assert f["buyers"] == 1 and f["bought"] == 1000
+    assert deals.trust_note([trust, person], today) == ("Titan Employee Stock Option Trust buys and sells shares for staff stock options; "
+                                                        "its trades are left out of this count.")
+    assert deals.trust_note([person], today) is None
+    assert deals.tidy_party("THE MTBJ LTD. AS TRST FOR GOVRNMNT PENSION INVSTMNT FUND MUTB400045794").startswith("The MTBJ Ltd. as TRST for Govrnmnt Pension")
+    assert "MUTB400045794" not in deals.tidy_party("THE MTBJ LTD. AS TRST FOR GOVRNMNT PENSION INVSTMNT FUND MUTB400045794")
+    assert deals.tidy_party("Goldman Sachs (Singapore) Pte") == "Goldman Sachs (Singapore) Pte"            # its own case is kept
+    assert deals.tidy_party("GOLDMAN SACHS (SINGAPORE) PTE") == "Goldman Sachs (Singapore) Pte"
+    assert deals.tidy_party("ICICI PRUDENTIAL MUTUAL FUND") == "ICICI Prudential Mutual Fund"
+    got = deals.tidy_items([{**trust}, {"kind": "block", "who": "SBI MUTUAL FUND MUTB400045828", "side": "bought"}])
+    assert got[0]["trust"] is True and got[1]["who"] == "SBI Mutual Fund" and got[1]["trust"] is False

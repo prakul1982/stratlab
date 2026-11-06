@@ -93,13 +93,17 @@ test("landing: the plans match the server's plans exactly", async ({ page, reque
     await expect(card).toBeVisible();
     await expect(card.locator(".lp-amount")).toContainText(`₹${plans[id].price.toLocaleString("en-IN")}`);
     const p = plans[id];
-    await expect(card).toContainText(`${p.stock_alerts} stock alerts`);
     if (p.backtests_per_month != null) await expect(card).toContainText(`${p.backtests_per_month} backtests`);
     else await expect(card).toContainText("Unlimited backtests");
   }
-  await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`up to ${plans.free.holdings} holdings`);
-  await expect(page.locator('.lp-price[data-plan="basic"]')).toContainText(`${plans.basic.screens} saved screens, ${plans.basic.holdings} holdings`);
+  // LIVE4-020: the cards show the Plans page's five lines; every feature, with each limit, is in the fold under them
+  await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`${plans.free.stock_alerts} stock alerts, ${plans.free.screens} saved screens, ${plans.free.holdings} holdings`);
   await expect(page.locator('.lp-price[data-plan="pro"]')).toContainText(`Paper trade ${plans.pro.live_limit} strategies`);
+  const all = page.getByTestId("all-features");
+  await all.locator("summary").click();
+  for (const id of ["free", "basic", "pro"]) await expect(all.locator(`[data-plan="${id}"]`)).toContainText(`${plans[id].stock_alerts} stock alerts`, { timeout: 15_000 });
+  await expect(all.locator('[data-plan="free"]')).toContainText(`up to ${plans.free.holdings} holdings`);
+  await expect(all.locator('[data-plan="basic"]')).toContainText(`${plans.basic.screens} saved screens, ${plans.basic.holdings} holdings`);
   // what's on sale is the server's one answer (plans.offer_state via /pricing): the fake world has no payments, so the
   // page says paid plans open soon, sells nothing and promises no invoices, renewals or yearly prices; and never that
   // paid features are open to everyone (they are locked by plan, payments on or not: the owner, 7 Oct)
@@ -117,12 +121,13 @@ test("landing: the plans match the server's plans exactly", async ({ page, reque
   }
   await expect(pricing).not.toContainText(/Start with (Basic|Pro)|Cancel any time|GST invoice|Paying yearly/);
   await expect(pricing).toContainText("Rupee prices include 18% GST.");
-  await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`${plans.free.mf_schemes} mutual funds and ${plans.free.networth_items} net worth entries`);
-  await expect(page.locator('.lp-price[data-plan="free"]')).toContainText(`your last ${plans.free.journal_trades} trades`);
-  // each space's paid tools on the card of the plan that adds them (tests/test_plan_copy.py checks every one)
-  await expect(page.locator('.lp-price[data-plan="basic"]')).toContainText("full trade journal");
+  // the full lists (in the fold opened above, LIVE4-020) carry every limit and each space's paid tools on the plan that adds them
+  await expect(all.locator('[data-plan="free"]')).toContainText(`${plans.free.mf_schemes} mutual funds and ${plans.free.networth_items} net worth entries`);
+  await expect(all.locator('[data-plan="free"]')).toContainText(`your last ${plans.free.journal_trades} trades`);
+  await expect(all.locator('[data-plan="basic"]')).toContainText("full trade journal");
+  await expect(page.locator('.lp-price[data-plan="basic"]')).toContainText("Full trade journal");
   await expect(page.locator('.lp-price[data-plan="pro"]')).toContainText("ITR-ready");
-  for (const card of await page.locator(".lp-price").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
+  for (const card of await page.locator(".lp-price").all()) expect(await card.locator("li").count()).toBe(5);            // the Plans page's five lines
 });
 
 test("landing: facts only, no data sources, fits the screen", async ({ page }) => {

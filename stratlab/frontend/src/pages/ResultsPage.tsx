@@ -191,7 +191,7 @@ export function ResultsPage() {
             {r.fo && <span className="k-note k-muted">F&amp;O</span>}
             {r.name && <span className="k-note k-muted res-name" title={r.name}>{r.name}</span>}
           </span>
-          <span className="k-note k-muted res-sub" title={r.out ? `${purpose} · Filed ${resultDay(r.out.at)}: ${r.out.title}${numbers}` : purpose}>
+          <span className={`k-note k-muted res-sub${!r.out && !r.when && /^financial results$/i.test(r.purpose.trim()) ? " res-plain" : ""}`} title={r.out ? `${purpose} · Filed ${resultDay(r.out.at)}: ${r.out.title}${numbers}` : purpose}>
             {purpose}
             {r.out && <> · {r.out.url
               ? <a className="link res-filed" href={safeHref(r.out.url)} target="_blank" rel="noopener noreferrer">Filed {resultDay(r.out.at)} ↗</a>
@@ -199,19 +199,22 @@ export function ResultsPage() {
           </span>
         </span>);
     } },
-    { key: "cap", header: "Market value", numeric: true, cell: (r) => (r.cap == null ? <span className="k-muted">–</span> : <span title={r.band ? `${SIZE_NAME[r.band]} company` : undefined}>{screenCap(r.cap, r.region)}</span>) },
-    { key: "px", header: "Price now", numeric: true, cell: (r) => {
+    // LIVE4-010: short headers that stay on one line at 1440 (the (i) says the rest); on a phone each company is two short lines (the table's
+    // `compact`): the symbol with the price and the day's move at its right, then the usual move and what the options imply; market value,
+    // revenue and profit stay on the desktop table and the company page (a fifth figure ran the line onto a third)
+    { key: "cap", header: "Market value", numeric: true, phone: false, cell: (r) => (r.cap == null ? <span className="k-muted">–</span> : <span title={r.band ? `${SIZE_NAME[r.band]} company` : undefined}>{screenCap(r.cap, r.region)}</span>) },
+    { key: "px", header: "Price", numeric: true, brief: true, csvHeader: "Price now", cell: (r) => {
       const x = quotes[r.symbol];
       if (x?.price != null) return <span title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur)}</span>;
       return r.last == null ? <span className="k-muted">–</span> : <span className="k-muted" title={r.last_at ? `Last close, ${resultDay(r.last_at)}` : "Last close"}>{price(r.last, cur)}</span>;
     } },
-    { key: "day", header: "Day", numeric: true, cell: (r) => {
+    { key: "day", header: "Day", numeric: true, brief: true, cell: (r) => {
       const x = quotes[r.symbol];
       return x?.change_pct == null ? <span className="k-muted">–</span> : <Signed value={x.change_pct}>{pct(x.change_pct, 2)}</Signed>;
     } },
-    { key: "rev", header: "Revenue YoY", numeric: true, info: "The latest reported quarter's revenue against the same quarter a year before (YoY), from the company's results as the app keeps them. Hover a figure for the quarters compared.", cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} /> },
-    { key: "pat", header: "Profit YoY", numeric: true, info: "The latest reported quarter's net profit against the same quarter a year before. A quarter that came after a loss has no growth figure.", cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} /> },
-    { key: "mv", header: "Past results-day moves", wrap: true, info: "The change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
+    { key: "rev", header: "Revenue", csvHeader: "Revenue YoY", numeric: true, phone: false, info: "Year on year (YoY): the latest reported quarter's revenue against the same quarter a year before (YoY), from the company's results as the app keeps them. Hover a figure for the quarters compared.", cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} /> },
+    { key: "pat", header: "Profit", csvHeader: "Profit YoY", numeric: true, phone: false, info: "Year on year: the latest reported quarter's net profit against the same quarter a year before. A quarter that came after a loss has no growth figure.", cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} /> },
+    { key: "mv", header: "Usual move", cardLabel: "Usual move", csvHeader: "Past results-day moves", wrap: true, info: "Past results-day moves: the change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
       const a = moves[r.symbol], m = a?.moves ?? r.moves;
       const since = a?.since;
       if (!m && !since) return a === undefined ? <Working inline label="Reading earlier results days" /> : <span className="k-muted">–</span>;
@@ -224,7 +227,7 @@ export function ResultsPage() {
           {m && <span className="k-note res-moves" title="The latest four, newest first, in %">{m.last.map((v, i) => <Move key={i} v={v} bare />)}</span>}
         </span>);
     } },
-    ...(showImplied ? [{ key: "im", header: "Options imply", numeric: true, info: "For stocks with futures and options: the price of the at-the-money call and put together, as a share of the stock's price, for the first expiry on or after the results day. Read from the broker's option prices while it is connected.", cell: (r: ResultRow) => {
+    ...(showImplied ? [{ key: "im", header: "Options imply", cardLabel: "Implied", csvHeader: "Options imply", numeric: true, info: "For stocks with futures and options: the price of the at-the-money call and put together, as a share of the stock's price, for the first expiry on or after the results day. Read from the broker's option prices while it is connected.", cell: (r: ResultRow) => {
       if (!r.fo) return <span className="k-muted">–</span>;
       const i = implied[r.symbol];
       if (i === undefined) return <Working inline label="Reading the option prices" />;
@@ -290,7 +293,7 @@ export function ResultsPage() {
           return (
             <div key={d} className="inv-day" data-testid="results-day">
               <span className="k-eyebrow">{dayHeading(d, info.count, data.today)}</span>
-              <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`} columns={columns} stack phonePage={10} />
+              <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`} columns={columns} stack compact phonePage={10} />
               {info.count > info.shown && (
                 <div className="k-row">
                   <span className="k-note">Showing {info.shown} of {info.count.toLocaleString("en-IN")} on {resultDay(d)}.</span>

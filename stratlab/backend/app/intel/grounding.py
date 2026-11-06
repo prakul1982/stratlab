@@ -594,13 +594,13 @@ def card_levels(text, indices: list[dict]):
 _COUNT_NAMES = {2: "both", 3: "all three", 4: "all four"}
 
 
-def mood_line(indices: list[dict], sectors: dict | None = None, compare: dict | None = None) -> str:
+def mood_line(indices: list[dict], sectors: dict | None = None, compare: dict | None = None, breadth: dict | None = None) -> str:
     """The mood in plain words, worked out from the day's index moves (and StratLab's sector count and how big a day it is
     against the index's usual one, when there are those), so it is a fact of the numbers and never the AI's impression
     (DD-001: a read that recited the levels and gave no mood). The index levels and moves are not said again: the cards
     above carry them (MOOD-1). The wording is mood.headline_of's, the one the Market pulse tables are checked against."""
     from . import mood
-    return mood.headline_of(indices, sectors, compare)
+    return mood.headline_of(indices, sectors, compare, breadth)
 
 
 # the subjects a day's headlines are often about, for naming the main story when the AI gives none that holds (DD-001)

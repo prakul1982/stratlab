@@ -21,6 +21,10 @@ export type Column<R> = {
   cardLabel?: string;                        // the figure's name on a phone card when the header isn't plain text (R88-003)
   up?: boolean;                              // on a phone card, this figure comes right under the row's name with its label, ahead of the other columns: the gain, not the ninth figure (VR1-147)
   lead?: boolean;                            // on a phone card (`stack`), this cell comes right under the row's name, across the card: the answer first (DE-004, DE-035)
+  /** With the table's `compact`: on a phone this figure sits on the row's first line, right of the name, with no label (a price, the day's move). */
+  brief?: boolean;
+  /** With the table's `compact`: false leaves this column off a phone's two-line row (a figure the company page has; the desktop table keeps it). */
+  phone?: false;
   /** EXPORT: the cell's value in the table's CSV (a number as a number, a day as "2026-11-04"); null leaves the column out of the file (a
    * trend line, a chart). Without it the file has what the cell shows, a plain number or percent read back as a number. */
   csv?: ((row: R) => CsvValue) | null;
@@ -28,8 +32,13 @@ export type Column<R> = {
 };
 
 const info = (c: { header?: ReactNode; info?: ReactNode }) => <Info label={`About ${typeof c.header === "string" ? c.header.toLowerCase() : "this column"}`}>{c.info}</Info>;
-const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: boolean; up?: boolean; corner?: boolean }) =>
-  [c.numeric && "k-num", c.wrap && "k-wrap", c.action && "k-act", c.action && c.corner && "k-corner", c.lead && "k-lead", c.up && "k-first"].filter(Boolean).join(" ") || undefined;
+const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: boolean; up?: boolean; corner?: boolean; brief?: boolean; phone?: false }) =>
+  [c.numeric && "k-num", c.wrap && "k-wrap", c.action && "k-act", c.action && c.corner && "k-corner", c.lead && "k-lead", c.up && "k-first",
+    c.brief && "k-brief", c.phone === false && "k-phone-off"].filter(Boolean).join(" ") || undefined;
+
+/** A cell that says only "no figure" (a dash, or nothing): a phone card leaves it out instead of a label over a dash (LIVE4-010: every
+ * Results card ended "Options imply –"). */
+export const dashOnly = (text: string): boolean => /^\s*[–—-]\s*$/.test(text);
 
 /** The one table: a header row, right-aligned numbers, a hover row, and its own horizontal scroll box so a wide table
  * never makes the page scroll sideways. `label` names the table for screen readers. `rowNote` turns a row into its
@@ -92,12 +101,13 @@ export function CsvButton<R>({ name, label, columns, rows, text = "Download CSV"
   const save = () => { const t = tableCsv(columns, rows); downloadCsv(csvName(name, istToday()), t.head, t.rows); };
   return (
     <button type="button" className="btn quiet sm" data-csv={name} aria-label={`${text}: ${label}`} title="Download this table as a CSV file, to open in a spreadsheet" onClick={save}>
-      <Download size={16} />{text}
+      {/* on a phone the button says "CSV" (its name stays "Download CSV: …"), so it shares the line with the day or title above a table (LIVE4-010) */}
+      <Download size={16} />{text === "Download CSV" ? <span><span className="k-csv-verb">Download </span>CSV</span> : text}
     </button>
   );
 }
 
-export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, scrollEnd, csv, detail, selectAll }: {
+export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, scrollEnd, csv, detail, selectAll, compact }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** EXPORT: a "Download CSV" button over the table, the file named after this (stratlab-<name>-<today>.csv); `rows` when the file
    * holds more than the table shows now (a group showing its first 12). */
@@ -122,6 +132,10 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   rowAttrs?: (row: R) => Record<string, string>; rowNote?: (row: R) => ReactNode | undefined;
   /** With `stack`: on a phone, this many cards at a time, then "Show more" (R6O-018: 352 ETF cards made one 13,000 px page). */
   phonePage?: number;
+  /** With `stack`: on a phone each row is two short lines, not a card of labelled figures (LIVE4-010: a results day of ten companies was
+   *  2,900 px of cards): the name with the `brief` figures at its right, then the other figures in one line, each after a short label; a
+   *  column marked `phone: false` and a cell that is only a dash are left out. Desktop is unchanged. */
+  compact?: boolean;
   /** A row's details one tap away: a button at the end of the row's name opens them in a row of their own right under it, across the
    * whole table (a phone card: under the card). TABLES EVERYWHERE (owner, 4 Nov): the library's "Rules and details" under its row. */
   detail?: { label: string; render: (row: R) => ReactNode };
@@ -163,7 +177,7 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
     <>
     {((file && file.rows.length > 0) || (cardsNow && selectAll && allRows.length > 0)) && (
       <div className="k-tbl-tools">{cardsNow && allBox(true)}{file && file.rows.length > 0 && <CsvButton name={file.name} label={label} columns={columns} rows={file.rows} />}</div>)}
-    <div ref={box} data-grid={grid || scrollEnd ? "" : undefined} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
+    <div ref={box} data-grid={grid || scrollEnd ? "" : undefined} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && compact ? " compact" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
           <tr role={stack ? "row" : undefined}>{columns.map((c, ci) => {
@@ -197,8 +211,9 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
                   if (note !== undefined && i > 0) return i === 1 ? <td key={c.key} colSpan={columns.length - 1} className="k-row-note">{note}</td> : null;
                   const label = c.cardLabel ?? (typeof c.header === "string" ? c.header : textOf(c.header).trim() || undefined);
                   const v = minusNode(c.cell(r));
-                  // TABLE-SWEEP: an empty cell is marked, so a phone card leaves it out instead of a label over nothing
-                  const blank = v == null || v === "" || v === false;
+                  // TABLE-SWEEP: an empty cell is marked, so a phone card leaves it out instead of a label over nothing; a compact phone row
+                  // leaves out a lone dash too
+                  const blank = v == null || v === "" || v === false || (cardsNow && !!compact && !c.rowHeader && dashOnly(cellText(v)));
                   return c.rowHeader ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined} className={cls(c)}>{v}{more}</th>
                     : <td key={c.key} role={stack ? "cell" : undefined} data-label={label} data-blank={blank ? "" : undefined} className={cls(c)}>{v}</td>;
                 })}
@@ -215,7 +230,8 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
         {foot && rows.length > 0 && (
           <tfoot>
             <tr role={stack ? "row" : undefined}>{columns.map((c, i) => (i === 0 ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined}>{foot[c.key]}</th>
-              : <td key={c.key} role={stack ? "cell" : undefined} data-label={typeof c.header === "string" ? c.header : textOf(c.header).trim() || undefined} className={c.numeric ? "k-num" : undefined}>{foot[c.key]}</td>))}</tr>
+              : <td key={c.key} role={stack ? "cell" : undefined} data-label={typeof c.header === "string" ? c.header : textOf(c.header).trim() || undefined}
+                  data-blank={foot[c.key] == null || foot[c.key] === "" ? "" : undefined} className={c.numeric ? "k-num" : undefined}>{foot[c.key]}</td>))}</tr>
           </tfoot>
         )}
       </table>

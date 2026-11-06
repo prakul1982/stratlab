@@ -264,7 +264,7 @@ def clean_blocks(blocks: list) -> list[dict]:
                 if label:
                     rows.append({"label": label, "value": v, "text": clean_text(r.get("text"), 24) or ("no figure" if v is None else f"{v:,.1f}".replace("-", MINUS))})
             if any(r["value"] is not None for r in rows):
-                out.append({"t": "hbar", "caption": clean_text(b.get("caption"), 200), "rows": rows, "note": clean_text(b.get("note"), 300)})
+                out.append({"t": "hbar", "caption": clean_text(b.get("caption"), 200), "rows": rows, "note": clean_text(b.get("note"), 600)})
         elif t == "fold":
             # VR7-002: a section that a phone folds (the strategy post's ten market tables were 10,000px of cards on a phone): a heading, one
             # small note beside it ("10 tests") and the blocks inside; a desktop shows it open, as the plain heading and blocks it was

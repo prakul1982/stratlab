@@ -505,8 +505,9 @@ export function NetWorthPage() {
           </Card>
 
           {empty && (
-            <EmptyState title="Nothing added yet" action={{ label: "Add an entry", onClick: () => openAdd() }}>
-              Add your savings, deposits, EPF or a loan. Stocks in <Link className="link" to="/holdings">My Holdings</Link> are added to the total on their own once you have some there.
+            // LIVE4-012: no second "Add an entry" 400px under the first: the button at the top is the way in, and the empty card says where it is
+            <EmptyState title="Nothing added yet">
+              Add your savings, deposits, EPF or a loan with Add an entry at the top. Stocks in <Link className="link" to="/holdings">My Holdings</Link> are added to the total on their own once you have some there.
             </EmptyState>
           )}
           {/* the history can hold a snapshot from entries since removed (R7M-012: ₹2,43,481.78 on 8 Oct beside "Nothing added yet"):

@@ -84,7 +84,7 @@ test("View as chips fit the menu, paper-trade messages say Basic, and locks and 
   assert.match(css, /\.acct-viewas \{ display: flex; flex-wrap: wrap;/);
   assert.match(css, /\.acct-pop \[role="menuitemradio"\] \{ flex: 1 1 0; min-width: 0;/);
   assert.match(read("src/components/AlertSettings.tsx"), /every paper trade\{!canAlert && <span className="k-inline-badge"><Badge tone="warn">Basic<\/Badge>/);
-  const plans = read("src/lib/plans.ts");
+  const plans = read("src/lib/plans.ts") + read("src/lib/planFeatures.ts");          // LIVE4-020: the full lists are in their own file
   // reworded in DK-003 (short lines on the cards); the same facts
   assert.match(plans, /the Stage 2 scan and every other trend scan/);
   assert.match(plans, /the Market Brief on News/);

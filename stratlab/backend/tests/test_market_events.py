@@ -434,3 +434,14 @@ def test_a_run_where_every_source_failed_is_an_error_and_not_finished(w):
     web.down = set()
     job.tick(morning)
     assert run_marks.status("newsjob:mktevents-am", "2026-10-05") == "done" and not job.all_failed
+
+
+def test_an_index_change_names_its_indices_not_and_n_more():
+    """LIVE4-008: "Index changes take effect: Nifty 100 and 1 more" on the Invest home's Coming up."""
+    from datetime import date as _d
+    from app import market_events
+    sec = lambda n: {"index": n, "in": [["ABC", "Abc Ltd"]], "out": [["XYZ", "Xyz Ltd"]]}          # noqa: E731
+    two = {"changes": [{"id": "c1", "effective": "2026-11-04", "announced": "2026-10-20", "url": None, "sections": [sec("Nifty 100"), sec("Nifty Next 50")]}]}
+    assert market_events.index_events(two, _d(2026, 10, 28))[0]["title"] == "Index changes take effect: Nifty 100 and Nifty Next 50"
+    five = {"changes": [{**two["changes"][0], "sections": [sec(f"Nifty {k}") for k in ("50", "100", "200", "500", "Bank")]}]}
+    assert market_events.index_events(five, _d(2026, 10, 28))[0]["title"] == "Index changes take effect in 5 indices"

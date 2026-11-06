@@ -144,7 +144,8 @@ test("admin: exchange holidays show every market's source, coverage and next hol
   const panel = page.locator("section", { has: page.getByRole("heading", { name: "Exchange holidays" }) });
   const table = panel.getByRole("table", { name: "Holidays by market" });
   for (const name of ["India (NSE/BSE)", "MCX", "Currency F&O", "US", "UK", "Europe", "Japan", "Commodities", "Crypto", "Forex"])
-    await expect(table.getByRole("rowheader", { name, exact: true })).toBeVisible();
+    // LIVE4-017: the market's source is a line under its name
+    await expect(table.getByRole("rowheader").locator(".adm-market").getByText(name, { exact: true })).toBeVisible();
   await expect(table.getByText("No exchange holidays: trades 24/7")).toHaveCount(1);
   await expect(table.getByText("No exchange holidays: trades on weekdays")).toHaveCount(1);
   await expect(table.getByText("Built-in calendar rules")).toHaveCount(5);

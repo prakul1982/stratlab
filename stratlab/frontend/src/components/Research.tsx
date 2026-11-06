@@ -223,6 +223,9 @@ function RangeBar({ b, m, currency, industry }: { b: NonNullable<ReturnType<type
   );
 }
 
+/** "banks" for a bank's page: the industry as the note names it. */
+const industryWord = (industry?: string | null): string => (/\bbank/i.test(industry ?? "") ? "banks" : (industry ?? "this industry").toLowerCase());
+
 /** Key numbers: each group is a small table (the group's name | Value | Basis | Range bar), the tables in two columns of one width (CSS columns balance them, in reading order on a phone). A long note is a numbered note under the tables, its mark beside the value (UI-CO item 2). */
 export function MetricsGrid({ groups, currency, industry }: { groups: MetricGroup[]; currency: string; industry?: string | null }) {
   const used = Object.entries(TERMS).filter(([k]) => groups.some((g) => g.items.some((m) => m.label === k)));
@@ -230,6 +233,9 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
   for (const g of groups) for (const m of g.items) if (m.note && m.note.length > LONG_NOTE) foot.push({ n: foot.length + 1, label: m.label, text: m.note });
   const mark = (m: { label: string; note?: string | null }) => foot.find((f) => f.label === m.label && f.text === m.note);
   const anyBar = groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry)));
+  // LIVE4-013: the note says which spans are this industry's, or that they are the same for all (a bank and a defence maker had identical
+  // bands under "adjusted for the company's industry")
+  const scaledAny = groups.flatMap((g) => g.items.filter((m) => bandPosition(m.label, m.value, industry)?.scaled).map((m) => m.label)).join(", ");
   return (
     <>
       <div className="inv-metrics">
@@ -245,7 +251,7 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
               </div>
         ))}
       </div>
-      {anyBar && <p className="k-note inv-krail-key" data-testid="krail-legend"><span className="inv-krail-demo" aria-hidden="true"><span /><b /></span>Usual range: the shaded part of each bar is the usual span of that measure for large listed companies, adjusted for the company's industry where it differs (StratLab's rule of thumb, not this company's own history); the dark mark is this company. The figures under a bar are the shaded part's ends; hover a bar for its whole scale.</p>}
+      {anyBar && <p className="k-note inv-krail-key" data-testid="krail-legend"><span className="inv-krail-demo" aria-hidden="true"><span /><b /></span>Usual range: the shaded part of each bar is the usual span of that measure for large listed companies (StratLab's rule of thumb, not this company's own history){scaledAny ? `; for ${industryWord(industry)} a few measures use that industry's span instead (${scaledAny}), the others the general one` : "; it is the same span for every industry"}. The dark mark is this company. The figures under a bar are the shaded part's ends; hover a bar for its whole scale.</p>}
       {foot.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">{foot.map((f) => <li key={f.n}><sup>{f.n}</sup> {f.label}: {f.text}</li>)}</ul>}
       {used.length > 0 && (
         <Disclosure summary="What these terms mean">
