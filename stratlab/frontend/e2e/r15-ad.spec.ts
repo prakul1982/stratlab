@@ -94,9 +94,11 @@ test("with analytics on, the ad landing sends ad_landing_view, and ad_signup_cli
   await page.route("https://demo.supabase.co/**", (r) => r.fulfill({ status: 204, body: "" }));
   const errors = await open(page, "/?fbclid=x", `window.STRATLAB_CONFIG = {API_BASE:"${API}",SUPABASE_URL:"https://demo.supabase.co",SUPABASE_ANON_KEY:"demo",POSTHOG_KEY:"phc_test"};`);
   await adView(page, errors);
-  await expect.poll(() => said.join("\n"), { timeout: 15_000 }).toContain("ad_landing_view");
+  // analytics loads when the browser is idle after the first paint (lib/analytics.ts), then sends its batch: on a busy CI runner that took
+  // longer than 15 s (browser 5, phone); 30 s as the other first-load waits
+  await expect.poll(() => said.join("\n"), { timeout: 30_000 }).toContain("ad_landing_view");
   expect(said.join("\n")).toMatch(/"kind":"home","source":"fbclid"/);
   await page.getByRole("button", { name: "Try free with Google" }).click();
-  await expect.poll(() => said.filter((x) => x.startsWith("beacon ")).join("\n"), { timeout: 15_000 }).toContain("ad_signup_click");
+  await expect.poll(() => said.filter((x) => x.startsWith("beacon ")).join("\n"), { timeout: 30_000 }).toContain("ad_signup_click");
   await ctx.close();
 });
