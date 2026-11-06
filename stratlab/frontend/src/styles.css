@@ -3077,3 +3077,18 @@ body:has(.shell) .mw-launch { bottom: calc(16px + env(safe-area-inset-bottom, 0p
   .k-tbl-wrap.k-fit .k-table tbody th > a:first-child, .k-tbl-wrap.k-fit .k-table tbody th > b:first-child,
   .k-tbl-wrap.k-fit .k-table :is(button, .btn, .k-badge, .k-chip, .k-delta) { white-space: nowrap; }
 }
+
+/* R15 #3 (temporary, ?nw=A / ?nw=B): Net worth's "Where you stand" headline designs for the owner to choose between */
+.nw-head { display: flex; align-items: flex-start; gap: 24px; }
+.nw-head-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 auto; }
+.nw-head-label { font-size: var(--t-note); color: var(--muted); }
+.nw-head-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; }
+.nw-head-figure { font-size: 32px; line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.nw-head-change { font-size: var(--t-label); }
+.nw-head-history { margin-left: auto; white-space: nowrap; padding-top: 2px; }
+.nw-head-b { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 32px; }
+.nw-head-b .k-facts { margin: 0; }
+@media (max-width: 640px) {
+  .nw-head-b { grid-template-columns: 1fr; gap: 16px; }
+  .nw-head-figure { font-size: 28px; }
+}
