@@ -67,8 +67,11 @@ test("LIVE4-014: ICICI Direct and Motilal Oswal follow their own help pages; HDF
   assert.equal(mo.file.read, "pdf");
   assert.match(mo.file.steps[0], /Portfolio tab downloads your holdings statement as a PDF, which can't be read here/);
   assert.match(mo.file.help, /^https:\/\/www\.motilaloswal\.com\//);
+  // LIVE5 partial: HDFC's own pages don't give the menus, and the guide says so plainly (behaviour changed on purpose)
+  assert.match(G.guideFor("hdfc").file.steps[0], /own help pages don't say how to download your holdings as a file, so StratLab can't name their menus/);
+  assert.match(G.guideFor("hdfc").file.steps.join(" "), /If it only gives a PDF, use the statement by email below/);
   for (const id of ["hdfc", "other"]) {
-    assert.match(G.guideFor(id).file.steps[0], /look for Holdings \(or Portfolio\), then Download \/ Export\./, id);
+    if (id === "other") assert.match(G.guideFor(id).file.steps[0], /look for Holdings \(or Portfolio\), then Download \/ Export\./, id);
     assert.equal(G.guideFor(id).file.help, undefined, id);          // no page of the broker's own to link
   }
   // no broker is left with the old generic "Open your holdings (or portfolio)" steps

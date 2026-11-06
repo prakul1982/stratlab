@@ -150,3 +150,12 @@ test("LIVE5-011: a shared Calendar page opened fresh has its own space's trail o
   // a page pinned to My space that is not shared keeps Mine's menu, as before
   assert.equal(menuView("/holdings", "mine", true), "mine");
 });
+
+test("LIVE4 partials: Angel One has its row in the Brokers table; HDFC's guide says plainly what can't be checked", async () => {
+  const ca = readFileSync(new URL("../src/components/ConnectedAccounts.tsx", import.meta.url), "utf8");
+  assert.match(ca, /if \(g\.connect !== "none" \|\| rows\.some\(\(r\) => r\.key === g\.id \|\| r\.name === g\.name\)\) continue;/);
+  assert.match(ca, /No live connection yet: upload the holdings file in My Holdings, or email the monthly statement\./);
+  const G = await import("../src/lib/brokerGuide.ts");
+  assert.equal(G.guideFor("angelone").connect, "none");
+  assert.equal(G.guideFor("hdfc").file.help, undefined);
+});

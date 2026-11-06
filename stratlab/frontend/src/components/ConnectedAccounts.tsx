@@ -1,6 +1,7 @@
 import { zerodhaLine } from "../lib/zerodha";
 import { brokerBadge, brokerLine, type BrokerStatus } from "../lib/brokers";
 import { BrokerGuide } from "./BrokerGuide";
+import { GUIDE_BROKERS } from "../lib/brokerGuide";
 import { useCallback, useEffect, useState } from "react";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -220,6 +221,13 @@ function BrokersCard({ c, set }: P) {
     { ...k, key: "kite", name: "Zerodha", id: "zerodha", path: "kite", line: k.available && k.connected ? zerodhaLine(k) : "", lineId: "kite-line" },
     ...(c.brokers ?? []).map((b) => ({ ...b, id: b.key, path: b.key, line: brokerLine(b), lineId: `${b.key}-line` })),
   ];
+  // a broker whose live connection has been asked for but isn't there yet (Angel One) has its row too, saying so (LIVE4-015 partial:
+  // the guide said "Not set up yet" while the table had no row for it)
+  for (const g of GUIDE_BROKERS) {
+    if (g.connect !== "none" || rows.some((r) => r.key === g.id || r.name === g.name)) continue;
+    rows.push({ key: g.id, name: g.name, configured: false, available: false, connected: false, live: false, refreshed_label: null, count: null, detail: null,
+      id: g.id, path: g.id, line: "No live connection yet: upload the holdings file in My Holdings, or email the monthly statement.", lineId: `${g.id}-line` });
+  }
   const login = async (b: BrokerRow) => {
     setBusy({ key: b.key, what: `Opening the ${b.name} login` });
     try { const r = await api<{ url: string }>(`/connect/${b.path}/login`); window.location.href = r.url; } catch (e) { fail(e); setBusy(null); }
