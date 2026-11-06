@@ -65,15 +65,20 @@ def test_breadth_counts_the_close_and_then_the_live_round():
     # while the market trades the live round is the count; the 52-week highs and lows stay the last close's
     live = {"adv": 300, "dec": 180, "unch": 20, "pct20": 40.0, "pct50": 30.5, "pct200": 35.0}
     b = mood.breadth_block(TODAY, live, "NIFTY 500", "2026-10-29")
-    assert b["live"] and b["adv"] == 300 and b["stocks"] == 500 and b["highs"] == 7 and b["day"] == "2026-10-29" and b["close_day"] == "2026-10-28"
+    # LIVE5-003: the figures are the live round's; a round without 52-week counts (stored before they were counted) has none for today
+    assert b["live"] and b["adv"] == 300 and b["stocks"] == 500 and b["highs"] is None and b["day"] == "2026-10-29" and b["close_day"] == "2026-10-28"
     # ...and every live row is set against the last close, under that day's heading (owner, 5 Nov: "why is data empty here")
     assert b["prev_day"] == "2026-10-28"
     rows = {r["key"]: r for r in b["rows"]}
     assert rows["adv"]["before"] == 254 and rows["adv"]["change"] == 46
     assert rows["pct50"]["before"] == 19.2 and rows["pct50"]["change"] == 11.3
     assert all(rows[k]["before"] is not None for k in ("adv", "dec", "unch", "pct50", "pct200"))
-    # the 52-week highs and lows are a close's count: today's cell waits for the close, the last close's figure is beside it
+    # such a round's 52-week cell is empty, the last close's figure beside it; a round that counted them fills today's cell (LIVE5-003)
     assert rows["highs"]["now"] is None and rows["highs"]["before"] == 7 and rows["highs"]["change"] is None
+    b = mood.breadth_block(TODAY, {**live, "hi": 31, "lo": 2}, "NIFTY 500", "2026-10-29")
+    rows = {r["key"]: r for r in b["rows"]}
+    assert (b["highs"], b["lows"]) == (31, 2)
+    assert rows["highs"]["now"] == 31 and rows["highs"]["before"] == 7 and rows["highs"]["change"] == 24 and rows["lows"]["now"] == 2
     assert mood.breadth_block(None, None, "NIFTY 500", "2026-10-29") is None
 
 

@@ -71,7 +71,8 @@ test("RES-1: the corporate actions calendar is a table a day with the same filte
 test("RES-1: facts and arrows, never a view: no advice words on the page", () => {
   assert.doesNotMatch(page, /\b(buy|sell|should|accumulate|avoid|trade this)\b/i);
   // the arrow and the sign; the latest moves in a row drop their % (the heading says percent, owner 5 Nov: rows fit the card)
-  assert.match(page, /\$\{v > 0 \? "▲" : v < 0 \? "▼" : ""\}\$\{Math\.abs\(v\)\.toFixed\(1\)\}\$\{bare \? "" : "%"\}/);
+  // LIVE5-011: the arrow from arrowOf, none on a move that prints as 0.0
+  assert.match(page, /const t = `\$\{Math\.abs\(v\)\.toFixed\(1\)\}\$\{bare \? "" : "%"\}`;\n\s*return <Signed value=\{v\}>\{`\$\{arrowOf\(v, t\)\}\$\{t\}`\}<\/Signed>;/);
   assert.match(page, /Facts, not a forecast\./);
 });
 

@@ -118,7 +118,8 @@ export function cardFigures(d: Pick<BreadthView, "today" | "live"> & { pending?:
 } | null {
   const final = d.live?.state === "final";          // after the close, until the evening's count (R28-012)
   const l = d.live && (d.live.state === "live" || final) ? d.live.latest : null;
-  if (l) return { live: true, final, adv: l.adv, dec: l.dec, pct50: l.pct50, highs: null, lows: null, when: final ? `Today, final at ${d.live?.as_of} IST` : d.live?.as_of ? `Live as of ${d.live.as_of} IST` : "Live" };
+  // LIVE5-003: the live round's own 52-week highs and lows (null on a round stored before they were counted)
+  if (l) return { live: true, final, adv: l.adv, dec: l.dec, pct50: l.pct50, highs: l.hi ?? null, lows: l.lo ?? null, when: final ? `Today, final at ${d.live?.as_of} IST` : d.live?.as_of ? `Live as of ${d.live.as_of} IST` : "Live" };
   if (!d.today) return null;
   return { live: false, adv: d.today.adv.value, dec: d.today.dec.value, pct50: d.today.pct50.value, highs: d.today.highs.value,
     lows: d.today.lows.value, when: latestDue(d.today.day, d.pending) ?? `Last close, ${shortDay(d.today.day)}` };
@@ -132,9 +133,10 @@ export function withLive(cur: BreadthView | null | "error", got: Pick<BreadthVie
 
 /** The Invest home's breadth card as a table of two days (LIVE4-008: a two-column table across the card was mostly empty, and the
  * last close's 52-week highs and lows sat under a "Today, 6 Nov" header): the newest count, and the close before it in a column of
- * its own, each headed with its day. While the market trades the year's highs and lows have no count yet: "At the close". */
+ * its own, each headed with its day. The year's highs and lows come from the live round (LIVE5-003); a round without them says "At the
+ * close" while the market trades and "This evening" after it (`waiting`). */
 export type CardRow = { id: "adv" | "pct50" | "hl"; k: string; now: string | null; before: string | null };
-export function cardTable(d: Pick<BreadthView, "today" | "live"> & { pending?: Pending }): { nowHead: string; beforeHead: string | null; rows: CardRow[] } | null {
+export function cardTable(d: Pick<BreadthView, "today" | "live"> & { pending?: Pending }): { nowHead: string; beforeHead: string | null; rows: CardRow[]; waiting: string } | null {
   const f = cardFigures(d);
   if (!f) return null;
   const t = d.today;
@@ -146,11 +148,11 @@ export function cardTable(d: Pick<BreadthView, "today" | "live"> & { pending?: P
   const prior = (k: "adv" | "dec" | "pct50" | "highs" | "lows") => (t ? (priorIsToday ? t[k].prev : t[k].value) : null);
   const nowHead = f.live ? (liveDay ? `Today, ${shortDay(liveDay)}` : "Today") : t ? `Close of ${shortDay(t.day)}` : "Latest";
   const beforeHead = priorDay ? `Close of ${shortDay(priorDay)}` : null;
-  const hlNow = f.live ? (liveDay && t?.day === liveDay ? pair(t.highs.value, t.lows.value) : null) : pair(f.highs, f.lows);
+  const hlNow = f.live ? (liveDay && t?.day === liveDay ? pair(t.highs.value, t.lows.value) : f.highs != null && f.lows != null ? pair(f.highs, f.lows) : null) : pair(f.highs, f.lows);
   const rows: CardRow[] = [
     { id: "adv", k: "Rose / fell", now: pair(f.adv, f.dec), before: beforeHead ? pair(prior("adv"), prior("dec")) : null },
     { id: "pct50", k: "Above 50-day average", now: share(f.pct50), before: beforeHead ? share(prior("pct50")) : null },
     { id: "hl", k: "52-week highs / lows", now: hlNow, before: beforeHead ? pair(prior("highs"), prior("lows")) : null },
   ];
-  return { nowHead, beforeHead, rows };
+  return { nowHead, beforeHead, rows, waiting: f.final ? "This evening" : "At the close" };
 }

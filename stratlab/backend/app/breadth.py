@@ -204,15 +204,20 @@ def stock_flags(bars: list[dict], through: str | None = None) -> pd.DataFrame | 
 
 def base_row(bars: list[dict], through: str | None = None) -> list | None:
     """What the intraday view needs of a stock's finished days: [last close, closes counted, sum of the last 19, 49 and
-    199 closes] (a sum is None while the stock has fewer closes than that). Today's price then makes the 20-, 50- and
-    200-day averages as (sum + price) / n."""
+    199 closes, the highest high and the lowest low of the last 251 sessions] (a sum or a range is None while the stock has
+    fewer days than that). Today's price then makes the 20-, 50- and 200-day averages as (sum + price) / n, and today's
+    high or low past the range is a new 52-week high or low, the daily run's own rule (LIVE5-003: after the close the day's
+    highs and lows waited for the evening run and the pages said "At the close" for hours)."""
     df = _frame(bars, through)
     if df is None:
         return None
     c = df["c"]
     n = len(c)
     sums = [round(float(c.iloc[-k:].sum()), 4) if n >= k else None for k in (19, 49, 199)]
-    return [round(float(c.iloc[-1]), 4), n, *sums]
+    span = YEAR - 1
+    hi = round(float(df["h"].iloc[-span:].max()), 4) if n >= span else None
+    lo = round(float(df["l"].iloc[-span:].min()), 4) if n >= span else None
+    return [round(float(c.iloc[-1]), 4), n, *sums, hi, lo]
 
 
 # ---------- adding stocks up ----------

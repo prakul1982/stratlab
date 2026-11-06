@@ -2,7 +2,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { register } from "node:module";
 import { pricesNote, quoteAsk, readRows, sessionDayOf } from "../src/lib/rowReads.ts";
+
+// a source file's own imports name no extension ("./api"): try ".ts" (as unit/live4-ui.test.mjs does)
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
+globalThis.window ??= { STRATLAB_CONFIG: { API_BASE: "", SUPABASE_URL: "", SUPABASE_ANON_KEY: "" } };
 
 const day = (iso) => ({ "2026-11-05": "Thu 5 Nov", "2026-11-06": "Fri 6 Nov" })[iso] ?? iso;
 
@@ -74,4 +80,20 @@ test("LIVE5-002: the results day fits a 1280 and a 1024 screen: market value the
   assert.match(inv, /\.res-co \{ [^}]*min-width: 11rem;/);
   assert.match(inv, /\.res-mv-top \{ display: flex; flex-wrap: wrap;/);
   assert.doesNotMatch(page, /v > 0 \? "▲" : v < 0 \? "▼"/);
+});
+
+test("LIVE5-003: the live round's 52-week highs and lows fill today's column; after the close a round without them says 'This evening'", async () => {
+  const { cardTable } = await import("../src/lib/breadth.ts");
+  const fig = (value, prev) => ({ value, prev, change: null });
+  const today = { day: "2026-11-05", prev_day: "2026-11-04", adv: fig(359, 300), dec: fig(138, 200), pct50: fig(46.4, 44.0), highs: fig(24, 20), lows: fig(3, 5) };
+  const final = { state: "final", day: "2026-11-06", as_of: "15:30", latest: { adv: 228, dec: 268, pct50: 41.0, hi: 9, lo: 14 } };
+  const t = cardTable({ today, live: final });
+  assert.equal(t.nowHead, "Today, 6 Nov");
+  assert.deepEqual(t.rows.find((r) => r.id === "hl"), { id: "hl", k: "52-week highs / lows", now: "9 / 14", before: "24 / 3" });
+  const old = cardTable({ today, live: { ...final, latest: { adv: 228, dec: 268, pct50: 41.0 } } });
+  assert.equal(old.rows.find((r) => r.id === "hl").now, null);
+  assert.equal(old.waiting, "This evening");
+  const mood = readFileSync(new URL("../src/pages/PulseMood.tsx", import.meta.url), "utf8");
+  assert.match(mood, /const when = b\.live && open \? "so far today" : `on \$\{day\(b\.day\)\}`;/);     // LIVE5-009
+  assert.match(mood, /const waiting = open \? "At the close" : "This evening";/);
 });

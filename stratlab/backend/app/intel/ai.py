@@ -22,6 +22,8 @@ RULES = """Rules:
   acquired unless the FACTS' "status" says so, and don't invent precise figures that aren't in the facts. Mark anything
   you estimate as an estimate.
 - Plain English a retail investor understands. No markdown, no emojis.
+- Write to the reader about the company, never about this message: no "FACTS", "the data provided", "the prompt" or
+  "JSON". When a date or figure isn't known, leave the point out rather than saying it isn't given.
 - Facts and analysis only, never advice: no buy, sell, hold, accumulate or avoid; no price targets; no "undervalued",
   "cheap", "expensive" or "worth buying"; no predictions of where a price will go; no ranking of stocks to own.
   Describe what the numbers and the company show, and let the reader decide.
@@ -468,7 +470,9 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
 
     def rows(x, keys, n=4):
         return [{k: str(i.get(k) or "")[:400] for k in keys} for i in (x or []) if isinstance(i, dict)][:n]
-    flows = rows(r.get("flows"), ("title", "detail", "direction"))
+    # a row whose words are about the other institutions than its title names is dropped (LIVE5-009: "FIIs net buyers on Nov 5" over
+    # "Domestic institutions were net sellers of Rs 10,445 crore")
+    flows = [f for f in rows(r.get("flows"), ("title", "detail", "direction")) if same_side(f["title"], f["detail"])]
     for f in flows:
         # inflow or outflow only for a flow in the day's institutional figures, never for a story a headline tells (R16B-003)
         d = f["direction"].upper()
@@ -493,6 +497,21 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
             "story": {**story, "headlines": titles} if story else None,
             "flows_source": grounding.flows_source(cash_facts) if cash_facts and quoted else "",
             **{k: [{**x, f: tidy(x.get(f))} for x in out.get(k) or []] for k, f in (("hot", "why"), ("flows", "detail"), ("themes", "detail"))}}
+
+
+_FOREIGN = re.compile(r"\b(?:FIIs?|FPIs?|foreign (?:institution|portfolio|investor|fund)s?\w*)\b", re.I)
+_DOMESTIC = re.compile(r"\b(?:DIIs?|domestic (?:institution|investor|fund)s?\w*|mutual funds?)\b", re.I)
+
+
+def same_side(title: str, detail: str) -> bool:
+    """False when a topic's title names one side of the institutions (foreign or domestic) and its words name only the other."""
+    tf, td = bool(_FOREIGN.search(title or "")), bool(_DOMESTIC.search(title or ""))
+    df, dd = bool(_FOREIGN.search(detail or "")), bool(_DOMESTIC.search(detail or ""))
+    if tf and not td:
+        return df or not dd
+    if td and not tf:
+        return dd or not df
+    return True
 
 
 def compare(a: dict, b: dict, ai) -> dict:

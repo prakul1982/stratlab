@@ -164,8 +164,8 @@ def compare_today(name: str, change_pct, typ: dict | None) -> dict | None:
 
 def breadth_block(view_today: dict | None, live: dict | None, group_name: str, session_day: str | None) -> dict | None:
     """Advancers, decliners, unchanged, new 52-week highs and lows and the shares above the 20-, 50- and 200-day averages.
-    While the market trades the live counts (a quarter-hourly round) are the figures; highs and lows come from the last
-    close's count either way (the live round does not count them). `rows` is the table: measure, today, the day before,
+    While the market trades, and after the close until the evening run, the live counts (a quarter-hourly round) are the
+    figures, today's 52-week highs and lows among them (LIVE5-003); a round stored before they were counted has none. `rows` is the table: measure, today, the day before,
     the change, with what it means in a few words."""
     t = view_today or None
     lv = live if live and live.get("adv") is not None else None
@@ -195,14 +195,18 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
     def row(key, label, now, before, kind, means, unit=""):
         rows.append({"key": key, "label": label, "now": now, "before": before, "kind": kind, "means": means, "unit": unit,
                      "change": round(now - before, 1 if unit == "%" else 0) if now is not None and before is not None else None})
-    # live: each count against the last close's; the 52-week highs and lows are counted at the close only, so today's cell waits for
-    # it (now None, said in words on the page) and the last close's figure stands in its own column
+    # live: each count against the last close's, the last close's figure in its own column
     before = v if lv else prev
     row("adv", "Stocks that rose", adv, before("adv"), "count", "Stocks closing above the previous close.")
     row("dec", "Stocks that fell", dec, before("dec"), "count", "Stocks closing below the previous close.")
     row("unch", "Unchanged", unch, before("unch"), "count", "Stocks closing at the previous close.")
-    row("highs", "New 52-week highs", None if lv else out["highs"], before("highs"), "count", "Stocks at their highest price in a year.")
-    row("lows", "New 52-week lows", None if lv else out["lows"], before("lows"), "count", "Stocks at their lowest price in a year.")
+    # LIVE5-003: the live rounds count today's new 52-week highs and lows too (a day's high past the last 251 sessions' highest), so
+    # after the close the day's figure is in its own column, not "At the close" for the hours until the evening run
+    hi_now, lo_now = (num(lv.get("hi")), num(lv.get("lo"))) if lv else (out["highs"], out["lows"])
+    if lv:
+        out["highs"], out["lows"] = hi_now, lo_now
+    row("highs", "New 52-week highs", hi_now, before("highs"), "count", "Stocks at their highest price in a year.")
+    row("lows", "New 52-week lows", lo_now, before("lows"), "count", "Stocks at their lowest price in a year.")
     row("pct50", "Above 50-day average", out["pct50"], before("pct50"), "share", "Share of stocks priced above their 50-day average.", "%")
     row("pct200", "Above 200-day average", out["pct200"], before("pct200"), "share", "Share of stocks priced above their 200-day average.", "%")
     out["rows"] = [r for r in rows if r["now"] is not None or (lv and r["before"] is not None)]
@@ -357,7 +361,9 @@ def lines_of(p: dict) -> list[str]:
         out.append(("compare", f"{lead.format(c['index'])} {c['ratio']:.1f} times its 20-day average daily move ({fpct(c['avg_abs'], sign=False)})."))
     b = p.get("breadth")
     if b and b.get("adv") is not None and b.get("dec") is not None:
-        when = "so far today" if b.get("live") else f"on {day_words(b.get('day'))}" if b.get("day") else ""
+        # after the close the live round is the day's final count: "on 6 Nov", never "so far today" (LIVE5-009)
+        when = ("so far today" if p.get("is_open", True) else f"on {day_words(b.get('day'))}" if b.get("day") else "") if b.get("live") \
+            else f"on {day_words(b.get('day'))}" if b.get("day") else ""
         tail = f"; {fpct(b['pct50'], 1, sign=False)} are above their 50-day average" if b.get("pct50") is not None else ""
         out.append(("breadth", f"{fnum(b['adv'])} of {fnum(b['stocks'])} {b['group']} stocks rose and {fnum(b['dec'])} fell {when}{tail}.".replace("  ", " ")))
     s = p.get("sectors")

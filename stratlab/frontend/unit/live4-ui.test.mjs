@@ -137,7 +137,8 @@ test("LIVE4-008: the breadth card is a table of two days, each column headed wit
   assert.equal(shut.beforeHead, "Close of 4 Nov");
   assert.deepEqual(shut.rows.map((r) => r.before), ["300 / 200", "44.0%", "20 / 5"]);
   const card = read("src/components/BreadthCard.tsx");
-  assert.match(card, /r\.now \?\? <span className="k-muted">At the close<\/span>/);
+  assert.match(card, /r\.now \?\? <span className="k-muted">\{table\.waiting\}<\/span>/);     // LIVE5-003: "At the close" or "This evening"
+  assert.equal(t.waiting, "At the close");
   assert.doesNotMatch(card, /FactTable/);
   // Invest home's results: the day's whole count, no "and N more" tail, the whole day linked in the header
   const homes = read("src/pages/SpaceHomes.tsx");

@@ -65,19 +65,23 @@ export function MoodCard({ m, region, updating = false }: { m: PulseMood; region
   );
 }
 
-export function BreadthTable({ b }: { b: NonNullable<PulseMood["breadth"]> }) {
-  const when = b.live ? "so far today" : `on ${day(b.day)}`;
+export function BreadthTable({ b, open = true }: { b: NonNullable<PulseMood["breadth"]>; /** the market trades now */ open?: boolean }) {
+  // after the close the live round is the day's final count: "on 6 Nov", not "so far today" (LIVE5-009)
+  const when = b.live && open ? "so far today" : `on ${day(b.day)}`;
+  // a 52-week cell without a count: while the market trades it comes with the close; after it, with the evening's count (LIVE5-003:
+  // "At the close" stood 56 minutes after the close)
+  const waiting = open ? "At the close" : "This evening";
   const cols: Column<MoodBreadthRow>[] = [
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <><b>{r.label}</b><span className="k-sub-line">{r.means}</span></> },
     // live, the 52-week highs and lows are counted at the close: their cell says so rather than standing empty (owner, 5 Nov)
     // the live count's own quarter-hour in its header, so Mood's count and Breadth's are each labelled with their round (LIVE4-005)
-    { key: "now", header: b.live ? (b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted">At the close</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
+    { key: "now", header: b.live ? (b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted" title="Counted from the exchange's evening price file">{waiting}</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
     { key: "prev", header: day(b.prev_day) || "Day before", numeric: true, cell: (r) => (r.before == null ? "–" : r.kind === "share" ? `${r.before.toFixed(1)}%` : whole(r.before)) },
     { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
   ];
   return (
     <Card testId="pulse-breadth">
-      <CardHead title={`How many stocks took part · ${b.group}`} info={`The stocks of ${b.group} counted ${when}${b.live ? " (a count every quarter hour from live prices; the 52-week highs and lows come with the close)" : ""}. Every stock counts once, whatever its size.`} />
+      <CardHead title={`How many stocks took part · ${b.group}`} info={`The stocks of ${b.group} counted ${when}${b.live ? (open ? " (a count every quarter hour from live prices, the 52-week highs and lows among them)" : " (the last quarter hour's count from live prices; the evening's count from the exchange's price file replaces it)") : ""}. Every stock counts once, whatever its size.`} />
       <DataTable stack compact label={`Breadth of ${b.group}`} columns={cols} rows={b.rows} rowKey={(r) => r.key} />
       {b.ratio != null && <p className="k-note">{whole(b.adv)} rose to {whole(b.dec)} fell: {b.ratio.toFixed(2)} to 1, of {whole(b.stocks)} stocks{b.live && b.at ? `, in the ${b.at} IST count` : ""}.</p>}
     </Card>
@@ -232,10 +236,10 @@ export function HotTable({ ai, region }: { ai: PulseAI; region: Region }) {
 
 export function TopicsTable({ ai }: { ai: PulseAI }) {
   type Row = PulseAI["flows"][number];
-  const directed = ai.flows.some((f) => f.direction);
+  // the direction of an institutional flow is a tag under its topic, not a column of dashes for the rows that are stories (LIVE5-009:
+  // "Broad sector gains | – |")
   const cols: Column<Row>[] = [
-    { key: "t", header: "Topic", rowHeader: true, wrap: true, cell: (f) => <b>{f.title}</b> },
-    ...(directed ? [{ key: "d", header: "Direction", cell: (f: Row) => (f.direction ? f.direction.toLowerCase() : "–") } as Column<Row>] : []),
+    { key: "t", header: "Topic", rowHeader: true, wrap: true, cell: (f) => <><b>{f.title}</b>{f.direction && <span className="k-sub-line">{f.direction.toLowerCase()}</span>}</> },
     { key: "w", header: "In the headlines", wrap: true, cell: (f) => f.detail },
   ];
   return (
