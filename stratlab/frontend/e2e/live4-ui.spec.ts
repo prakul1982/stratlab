@@ -59,3 +59,30 @@ test("LIVE4-010: a results day is two short lines a company on a phone, one line
   }
   await sane(page, errors);
 });
+
+test("LIVE4-007/010: Mood's index levels and the Invest breadth card are short rows on a phone; their columns fit on a desktop", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/research/pulse", "How the market", pro);
+  const levels = page.getByRole("table", { name: "Index levels" });
+  await expect(levels.locator("tbody tr").first()).toBeVisible({ timeout: 30_000 });
+  const hs = await levels.locator("tbody tr").evaluateAll((trs) => trs.map((t) => t.getBoundingClientRect().height));
+  for (const h of hs) expect(h, "an index's row").toBeLessThan(phone ? 72 : 60);
+  await sane(page, errors);
+  await page.goto("/invest");
+  const card = page.getByTestId("breadth-card");
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  const rows = await card.locator("tbody tr").evaluateAll((trs) => trs.map((t) => t.getBoundingClientRect().height));
+  expect(rows.length).toBe(3);
+  for (const h of rows) expect(h, "a breadth row").toBeLessThan(phone ? 72 : 60);
+});
+
+test("LIVE4-011: every column of sector rotation's table is in view at 1440, with no 'No stocks list' under each name", async ({ page }, info) => {
+  test.skip(info.project.name === "phone", "the desktop width");
+  const errors = await open(page, "/research/rotation", "rotation", pro);
+  const wrap = page.getByTestId("rot-table").locator(".k-tbl-wrap");
+  await expect(wrap).toBeVisible({ timeout: 60_000 });
+  const [sw, cw] = await wrap.evaluate((w) => [w.scrollWidth, w.clientWidth]);
+  expect(sw, "the table scrolls sideways").toBeLessThanOrEqual(cw + 1);
+  await expect(page.getByTestId("rot-table").getByText("No stocks list")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

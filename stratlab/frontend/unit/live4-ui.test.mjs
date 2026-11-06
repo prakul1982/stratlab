@@ -240,5 +240,5 @@ test("LIVE4-010/007: Mood's tables of figures and the Invest breadth card are co
   assert.match(read("src/components/BreadthCard.tsx"), /<DataTable stack compact label=/);
   // a footer cell with nothing in it is marked, so a phone row shows no label over nothing; a column of words wraps on its own line
   assert.match(read("src/components/kit/DataTable.tsx"), /data-blank=\{foot\[c\.key\] == null \|\| foot\[c\.key\] === "" \? "" : undefined\}/);
-  assert.match(css, /\.k-tbl-wrap\.stack\.compact \.k-table td\.k-wrap \{ flex: 1 1 100%; white-space: normal; \}/);
+  assert.match(css, /\.k-tbl-wrap\.stack\.compact \.k-table td\.k-wrap \{ flex: 1 1 auto; min-width: 0; white-space: normal; \}/);
 });
