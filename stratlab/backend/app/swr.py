@@ -14,9 +14,18 @@ _lock = threading.Lock()
 MAX_KEYS = 2000
 
 
-def get(key, read: Callable, fresh: float = 3600, keep: float = 86400, now: float | None = None):
+class Pending(Exception):
+    """No answer kept and the first read is not back within the caller's `wait`: it goes on behind, ask again in a moment."""
+
+
+_flights: dict = {}              # key -> the Future of a first read under way (callers with a `wait` share it)
+
+
+def get(key, read: Callable, fresh: float = 3600, keep: float = 86400, now: float | None = None, wait: float | None = None):
     """`read()`'s answer for `key`: the kept one when it is younger than `keep` (read again behind it once it is older
-    than `fresh`), else read now (its error raised, as without this)."""
+    than `fresh`), else read now (its error raised, as without this). `wait`: with nothing kept, the read is waited for at most
+    this many seconds, then Pending is raised while it goes on (LIVE4-022: a cold read of the exchange's list outlasted the
+    host's patience and the browser saw a reply with no CORS headers); callers asking meanwhile share that one read."""
     now = time.time() if now is None else now
     with _lock:
         hit = _kept.get(key)
@@ -24,9 +33,33 @@ def get(key, read: Callable, fresh: float = 3600, keep: float = 86400, now: floa
         if now - hit[0] >= fresh:
             _behind(key, read)
         return hit[1]
-    value = read()
-    _put(key, value)
-    return value
+    if wait is None:
+        value = read()
+        _put(key, value)
+        return value
+    from concurrent.futures import Future
+    from concurrent.futures import TimeoutError as FutureTimeout
+    with _lock:
+        fut = _flights.get(key)
+        mine = fut is None
+        if mine:
+            fut = _flights[key] = Future()
+    if mine:
+        def run():
+            try:
+                value = read()
+                _put(key, value)
+                fut.set_result(value)
+            except BaseException as e:                              # handed to whoever waits; nothing kept
+                fut.set_exception(e)
+            finally:
+                with _lock:
+                    _flights.pop(key, None)
+        threading.Thread(target=run, daemon=True).start()
+    try:
+        return fut.result(timeout=wait)
+    except FutureTimeout:
+        raise Pending(str(key)) from None
 
 
 def _put(key, value) -> None:

@@ -22,10 +22,24 @@ export interface BizFiling { id: string; at: string; title: string; url: string;
 export interface BizView {
   symbol: string; filings: BizFiling[]; unread: number; allowed: boolean; metrics: BizMetric[]; headline: string | null;
   problems: string[]; note: string; just_read?: number;
+  /** the company's first read of the exchange's list is still going on: ask again in a moment (LIVE4-022) */
+  pending?: boolean;
 }
+
+/** How often, and how many times, the panel asks again while the server's first read is going on (about a minute). */
+export const BIZ_PENDING_MS = 3000;
+export const BIZ_PENDING_TRIES = 20;
 
 export const bizApi = {
   get: (symbol: string) => api<BizView>(`/research/business-updates/${encodeURIComponent(symbol)}`),
+  /** get, asked again while the answer says pending; the last answer once it isn't (or the tries are spent) */
+  settled: async (symbol: string, alive: () => boolean): Promise<BizView> => {
+    for (let i = 0; ; i += 1) {
+      const got = await bizApi.get(symbol);
+      if (!got.pending || i >= BIZ_PENDING_TRIES || !alive()) return got;
+      await new Promise((ok) => setTimeout(ok, BIZ_PENDING_MS));
+    }
+  },
   read: (symbol: string) => api<BizView>(`/research/business-updates/${encodeURIComponent(symbol)}/read`, { method: "POST" }),
 };
 
@@ -67,12 +81,12 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
   useEffect(() => {
     let live = true;
     setV(null); setError(null); setPick(null);
-    bizApi.get(symbol).then((x) => live && setV(x)).catch((e) => live && setError((e as Error).message));
+    bizApi.settled(symbol, () => live).then((x) => live && setV(x)).catch((e) => live && setError((e as Error).message));
     return () => { live = false; };
   }, [symbol]);
 
   if (error) return null;                       // a side panel: the filings panel already says when the exchange is down
-  if (!v) return wrap(<Skeleton label="Looking for business updates" lines={2} />);
+  if (!v || v.pending) return v?.pending ? null : wrap(<Skeleton label="Looking for business updates" lines={2} />);
   if (!v.filings.length && !v.metrics.length) return null;
 
   const read = async () => {

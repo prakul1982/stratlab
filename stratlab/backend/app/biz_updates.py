@@ -1204,11 +1204,14 @@ def feed_items(feed, sym: str, days: int = LOOKBACK_DAYS) -> list[dict]:
     return both(sym, days) if both else feed.announcements(sym, days)
 
 
-def _items(sym: str) -> tuple[list[dict], list[str]]:
+FIRST_READ_WAIT = 6.0                # seconds a page waits for a company's first list read; then "pending" and it asks again (LIVE4-022)
+
+
+def _items(sym: str, wait: float | None = None) -> tuple[list[dict], list[str]]:
     from . import swr
     try:
         # the last list at once, read again behind it after an hour (R46-004: 3 to 9 s each time the cache ran out)
-        return swr.get(("biz", sym), lambda: feed_items(_wire["feed"](), sym)), []
+        return swr.get(("biz", sym), lambda: feed_items(_wire["feed"](), sym), wait=wait), []
     except SourceError as e:
         return [], [str(e)]
 
@@ -1216,9 +1219,14 @@ def _items(sym: str) -> tuple[list[dict], list[str]]:
 @router.get("/research/business-updates/{symbol}")
 def business_updates(symbol: str, profile=Depends(current_profile)):
     """One Indian company's monthly or quarterly business updates: the filings for everyone; the figures read from them,
-    with the changes and the chart, on Basic and up."""
+    with the changes and the chart, on Basic and up. `pending`: the company's first list read is still going on (the page asks again
+    in a moment), so a slow exchange never holds the request until the host gives up on it."""
+    from . import swr
     sym = _symbol(symbol)
-    items, problems = _items(sym)
+    try:
+        items, problems = _items(sym, wait=FIRST_READ_WAIT)
+    except swr.Pending:
+        return ok({**view(sym, [], _allowed(profile), []), "pending": True})
     return ok(view(sym, items, _allowed(profile), problems))
 
 

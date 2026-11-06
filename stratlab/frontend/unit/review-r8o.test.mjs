@@ -48,7 +48,7 @@ test("R8O-007: a company page asks for its AI read behind the page and stops whe
   assert.ok(AI_POLL_MS * AI_POLLS >= 60_000 && AI_POLL_MS <= 5000);
   const src = read("src/lib/research.ts");
   assert.match(src, /\?background=true/);
-  assert.match(src, /if \(!alive\(\)\) throw/);
+  assert.match(src, /if \(!\(refresh \? alive\(\) : anyAlive\(\)\)\) throw/);      // LIVE4-022: a shared wait stops once every caller has left
   // the read mounts only once the company's numbers are on the page
   assert.match(read("src/pages/Research.tsx"), /if \(!c\) return \([\s\S]*<AIRead region=\{region\} symbol=\{c\.symbol\}/);
 });

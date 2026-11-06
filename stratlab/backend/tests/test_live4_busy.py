@@ -70,3 +70,46 @@ def test_a_us_page_with_its_listing_source_busy_is_busy_not_no_such_company(monk
     with pytest.raises(SourceError) as e:
         hub._us_listing("NVDA")
     assert e.value.busy and not isinstance(e.value, C.NotFound)
+
+
+# ---------- LIVE4-022: a slow first read never holds a request until the host gives up on it ----------
+def test_a_first_read_slower_than_the_wait_answers_pending_and_is_kept_when_it_lands():
+    import threading
+    import time
+    from app import swr
+    swr.clear()
+    gate, calls = threading.Event(), []
+
+    def slow():
+        calls.append(1)
+        gate.wait(5)
+        return ["filed"]
+    t0 = time.monotonic()
+    with pytest.raises(swr.Pending):
+        swr.get(("biz", "SLOWCO"), slow, wait=0.2)
+    assert time.monotonic() - t0 < 1.0
+    with pytest.raises(swr.Pending):
+        swr.get(("biz", "SLOWCO"), slow, wait=0.1)          # asked again meanwhile: the same read, not a second one
+    gate.set()
+    time.sleep(0.2)
+    assert swr.get(("biz", "SLOWCO"), slow, wait=0.1) == ["filed"] and len(calls) == 1
+    with pytest.raises(RuntimeError):                      # a read that fails in time raises its error, as without a wait
+        swr.get(("biz", "BADCO"), lambda: (_ for _ in ()).throw(RuntimeError("down")), wait=1.0)
+    swr.clear()
+
+
+def test_the_business_updates_route_says_pending_while_the_first_read_goes_on(w, monkeypatch):
+    import threading
+    from app import biz_updates, swr
+    swr.clear()
+    gate = threading.Event()
+    monkeypatch.setattr(biz_updates, "FIRST_READ_WAIT", 0.1)
+    monkeypatch.setattr(biz_updates, "feed_items", lambda feed, sym: gate.wait(5) and [])
+    r = w["client"].get("/research/business-updates/HDFCBANK", headers=w["headers"]("pro-token"))
+    assert r.status_code == 200 and r.json()["pending"] is True
+    gate.set()
+    import time
+    time.sleep(0.2)
+    r = w["client"].get("/research/business-updates/HDFCBANK", headers=w["headers"]("pro-token"))
+    assert r.status_code == 200 and not r.json().get("pending")
+    swr.clear()
