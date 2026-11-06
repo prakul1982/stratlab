@@ -17,7 +17,7 @@ export function FactTable({ label, rows, itemHead = "Item", figureHead = "Figure
 }) {
   const phone = usePhone();
   if (across && !phone && rows.length > 0 && rows.length <= 4) {
-    const cols: Column<{ id: string }>[] = rows.map((r) => ({ key: r.id, header: <>{r.k}</>, csvHeader: typeof r.k === "string" ? r.k : r.id,
+    const cols: Column<{ id: string }>[] = rows.map((r) => ({ key: r.id, header: <>{r.k}</>, csvHeader: typeof r.k === "string" ? r.k : r.id, numeric,
       cell: () => <span className="k-facts-cell">{r.v}{r.n && <span className="k-sub-line">{r.n}</span>}</span> }));
     return <div className="k-facts k-facts-across"><DataTable label={label} rows={[{ id: "now" }]} rowKey={(r) => r.id} columns={cols} /></div>;
   }
