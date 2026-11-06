@@ -564,27 +564,50 @@ def deck_extras(r: str, theme: str, m: dict, profile: dict) -> dict:
     return out
 
 
+DECK_CACHE = TTLCache(max_items=24, max_bytes=8 * 1024 * 1024)            # a theme's PDF or PowerPoint, about 200 KB
+DECK_TTL = 6 * 3600
+REGION_WORD = {"IN": "India", "US": "US"}
+
+
+def deck_file_name(theme: str, r: str, fmt: str, day: date) -> str:
+    """The file's name as the page saves it (lib/deckName.ts): "StratLab - India Defence theme (India) - 7 Nov 2026.pdf", plain ASCII."""
+    import re
+    import unicodedata
+    clean = unicodedata.normalize("NFKD", f"{theme} theme ({REGION_WORD.get(r, r)})").encode("ascii", "ignore").decode()
+    clean = re.sub(r"\s+", " ", re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", clean)).strip()[:120] or "StratLab deck"
+    return f"StratLab - {clean} - {day.day} {day.strftime('%b %Y')}.{fmt}"
+
+
 @router.get("/theme-dive/deck")
 def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=Depends(current_profile)):
     """The theme deep dive as slides, PowerPoint or PDF (EXPORT): the cover, the value chain, every company with its figures, the
     tailwinds and risks with their sources, and which placements are confirmed. Counted against the plan's monthly decks as a
-    company's deck is (Free 1, Basic 5, Pro unlimited); a theme's PDF and PowerPoint are one deck, once a month."""
-    from .. import deck, main
+    company's deck is (Free 1, Basic 5, Pro unlimited); a theme's PDF and PowerPoint are one deck, once a month. A file made today for the
+    same read of the theme is kept (DECK_CACHE) and sent again at once: the owner, 6 Nov: "it's taking a whole lot of time to make the pdf"."""
+    from .. import biz_updates, deck, main
     if format not in ("pptx", "pdf"):
         err(400, "bad_format", "Pick PowerPoint or PDF.")
     R = _routes()
     r, theme, m, _ = R.sector_map(profile, region, q, False)
     m = with_descriptions(r, checked(r, theme, m))
     mark = main.check_deep(profile, "deck", "", r, mark=f"deck:theme:{r}:{theme_data.slug(theme)}")
-    view = deck_view(r, m, dive_of(r, theme, m), deck_extras(r, theme, m, profile))
-    body = deck.build_theme(view, pdf=format == "pdf")
+    today = datetime.now(R.IST).date()
+    biz = r == "IN" and bool(biz_updates._allowed(profile))       # the one part of the deck that depends on the plan
+    stamp = int(float(m.get("generated_at") or 0))
+    seen = (NEWS_CACHE.get((r, theme.lower(), int(float(theme_base.for_figures(m)[0].get("generated_at") or 0)))) is not None,
+            bool((IPO_CACHE.get((r, theme.lower(), stamp)) or {}).get("checked")))     # a part read since is in a new file
+    key = (r, theme.lower(), format, today.isoformat(), stamp, biz, seen)
+    body = DECK_CACHE.get(key)
+    if body is None:
+        view = deck_view(r, m, dive_of(r, theme, m), deck_extras(r, theme, m, profile))
+        body = deck.build_theme(view, pdf=format == "pdf")
+        DECK_CACHE.set(key, body, DECK_TTL, size=len(body))
     if mark:                                   # counted once the file is made: a deck that failed to build uses nothing
         db.add_usage(profile["id"], "deck")
         db.add_usage(profile["id"], mark)
-    name = f"stratlab-theme-{theme_data.slug(theme) or 'theme'}-{r.lower()}"
     from fastapi.responses import Response
     return Response(body, media_type="application/pdf" if format == "pdf" else "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                    headers={"Content-Disposition": f'attachment; filename="{name}.{format}"'})
+                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, format, today)}"'})
 
 
 # ---------- business updates ----------

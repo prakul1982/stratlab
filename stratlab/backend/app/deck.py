@@ -608,8 +608,10 @@ def table_pages(head: list, rows: list, widths: list, w: float, h: float, most: 
                 group = r["group"]
         pages.append(lead + chunk)
         i += n
-    if len(pages) > 1 and most > 2 and len(pages[-1]) < max(3, len(pages[-2]) // 2):
-        even = -(-len(rows) // len(pages))
+    even = -(-len(rows) // len(pages)) if pages else most
+    # evening out only when it asks for fewer rows a page than this pass did: tall rows can make the evened pages end short again, and
+    # asking for the same number again never ended (R15: a theme's PDF ran 5 minutes into a RecursionError and never downloaded)
+    if len(pages) > 1 and most > 2 and even < most and len(pages[-1]) < max(3, len(pages[-2]) // 2):
         again = table_pages(head, rows, widths, w, h, even, first, strong)
         if len(again) == len(pages):
             return again
