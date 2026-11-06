@@ -50,3 +50,37 @@ test("LIVE4-010: the results calendar is compact on a phone and its headers fit 
   assert.match(read("src/components/kit/DataTable.tsx"), /<span className="k-csv-verb">Download <\/span>CSV/);
   assert.match(css, /@media \(max-width: 640px\) \{ \.k-csv-verb \{ display: none; \} \}/);
 });
+
+test("LIVE4-014: ICICI Direct and Motilal Oswal follow their own help pages; HDFC and Other say what to look for", async () => {
+  const G = await import("../src/lib/brokerGuide.ts");
+  const icici = G.guideFor("icici");
+  assert.equal(icici.file.help, "https://www.icicidirect.com/faqs/stocks/how-can-i-download-a-summary-of-my-portfolio-on-website");
+  assert.match(icici.file.steps.join(" "), /open Stocks\. Open Portfolio\. Press the Download icon and choose the file format/);
+  const mo = G.guideFor("motilal");
+  assert.equal(mo.file.read, "pdf");
+  assert.match(mo.file.steps[0], /Portfolio tab downloads your holdings statement as a PDF, which can't be read here/);
+  assert.match(mo.file.help, /^https:\/\/www\.motilaloswal\.com\//);
+  for (const id of ["hdfc", "other"]) {
+    assert.match(G.guideFor(id).file.steps[0], /look for Holdings \(or Portfolio\), then Download \/ Export\./, id);
+    assert.equal(G.guideFor(id).file.help, undefined, id);          // no page of the broker's own to link
+  }
+  // no broker is left with the old generic "Open your holdings (or portfolio)" steps
+  for (const b of G.GUIDE_BROKERS) assert.doesNotMatch(b.file.steps.join(" "), /Open your holdings \(or portfolio\)/, b.id);
+});
+
+test("LIVE4-015: the upload step says where the button is; Angel One's row says it has no live connection; notes match the rows", async () => {
+  const G = await import("../src/lib/brokerGuide.ts");
+  for (const b of G.GUIDE_BROKERS) assert.doesNotMatch(b.file.steps.join(" "), /upload the file here/i, b.id);
+  assert.equal(G.uploadStep(G.guideFor("zerodha"), "holdings"), "Press Upload holdings file and pick the file.");
+  assert.equal(G.uploadStep(G.guideFor("zerodha"), "settings"), "Press Upload in My Holdings and pick the file there.");
+  assert.equal(G.uploadStep(G.guideFor("paytm"), "settings"), null);
+  assert.equal(G.guideFor("angelone").connect, "none");
+  assert.deepEqual(G.waysFor(G.guideFor("angelone")), ["connect", "file", "email"]);
+  assert.match(G.EMAIL_STEPS[0], /each month you trade, every six months otherwise/);
+  const guide = read("src/components/BrokerGuide.tsx");
+  assert.match(guide, /No live connection yet: upload the holdings file or email the statement\./);
+  assert.match(guide, /\[\.\.\.b\.file\.steps, uploadStep\(b, where\)\]/);
+  assert.match(guide, /where === "settings" \? "Set up your private address with Set up my inbox/);
+  // the Brokers note counts only rows marked "Not open yet", not the ones not set up on the site
+  assert.match(read("src/components/ConnectedAccounts.tsx"), /const closed = rows\.filter\(\(b\) => b\.configured !== false && !b\.available\);/);
+});

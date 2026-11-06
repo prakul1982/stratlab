@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { brokerBadge, brokerLine, type BrokerStatus } from "../lib/brokers";
-import { EMAIL_STEPS, GUIDE_BROKERS, STATEMENT_SENDERS, guideFor, readLine, waysFor, type GuideBroker, type GuideWay } from "../lib/brokerGuide";
+import { EMAIL_STEPS, GUIDE_BROKERS, STATEMENT_SENDERS, guideFor, readLine, uploadStep, waysFor, type GuideBroker, type GuideWay } from "../lib/brokerGuide";
 import { zerodhaLine } from "../lib/zerodha";
 import { Badge, Card, CardHead, ChipBar, DataTable, Working, type Column } from "./kit";
 
@@ -17,7 +17,7 @@ export type GuideConn = { kite: KiteLike; brokers?: BrokerStatus[]; inbox: { rea
 const TITLES: Record<GuideWay, { title: string; sub: string }> = {
   connect: { title: "Connect", sub: "Live, read-only" },
   file: { title: "Upload a file", sub: "Any time" },
-  email: { title: "Email the monthly statement", sub: "Every broker, by itself" },
+  email: { title: "Email the statement", sub: "Every broker, by itself" },   // NSDL/CDSL send it monthly only in a month with a trade (LIVE4-015)
 };
 
 /** `where`: the page it's on (Settings links to My Holdings for the upload; My Holdings opens its own upload). */
@@ -38,7 +38,7 @@ export function BrokerGuide({ conn: given, where, onUpload }: { conn?: GuideConn
   };
 
   const status = (b: GuideBroker): (KiteLike & { name: string; path: string }) | null => {
-    if (!b.connect || !conn) return null;
+    if (!b.connect || b.connect === "none" || !conn) return null;
     if (b.connect === "kite") return { ...conn.kite, name: "Zerodha", path: "kite" };
     const s = conn.brokers?.find((x) => x.key === b.connect);
     return s ? { ...s, path: s.key } : null;
@@ -53,6 +53,8 @@ export function BrokerGuide({ conn: given, where, onUpload }: { conn?: GuideConn
 
   const how = (b: GuideBroker, w: GuideWay) => {
     if (w === "connect") {
+      // asked for, not there yet (LIVE4-015: Angel One): say so, with the two ways that work now
+      if (b.connect === "none") return <span className="k-line-text"><Badge tone="plain">Not set up yet</Badge><span className="k-sub-line">No live connection yet: upload the holdings file or email the statement.</span></span>;
       const s = status(b);
       if (!s) return conn === undefined ? <Working small label="Reading the connection" /> : <span className="k-small k-muted">The connection's state couldn't be read. Settings shows it.</span>;
       const badge = brokerBadge(s);
@@ -65,7 +67,7 @@ export function BrokerGuide({ conn: given, where, onUpload }: { conn?: GuideConn
     if (w === "file") {
       return (
         <div className="k-stack tight">
-          <ol className="k-steps">{b.file.steps.map((x) => <li key={x}>{x}</li>)}</ol>
+          <ol className="k-steps">{[...b.file.steps, uploadStep(b, where)].filter((x): x is string => !!x).map((x) => <li key={x}>{x}</li>)}</ol>
           <p className="k-small k-muted">{readLine(b)}{b.file.help && <> <a className="link" href={b.file.help} target="_blank" rel="noopener noreferrer">{b.name}'s help page</a></>}</p>
         </div>
       );
@@ -77,7 +79,7 @@ export function BrokerGuide({ conn: given, where, onUpload }: { conn?: GuideConn
         {box?.address
           ? <><code className="k-address" data-testid="guide-address">{box.address}</code>
               <p className="k-small k-muted">Your private address. The email filter forwards mail from {STATEMENT_SENDERS.split(" OR ").join(", ")}.</p></>
-          : <p className="k-small k-muted">{box && !box.ready ? "The statement inbox isn't set up on this site yet." : "Set up your private address in Settings, then forward mail from those senders to it."}</p>}
+          : <p className="k-small k-muted">{box && !box.ready ? "The statement inbox isn't set up on this site yet." : where === "settings" ? "Set up your private address with Set up my inbox, then forward mail from those senders to it." : "Set up your private address in Settings, then forward mail from those senders to it."}</p>}
       </div>
     );
   };
@@ -109,7 +111,7 @@ export function BrokerGuide({ conn: given, where, onUpload }: { conn?: GuideConn
 
   return (
     <Card id="pick-broker" label="Pick your broker">
-      <CardHead title="Pick your broker" info="Each broker's ways to bring your holdings into StratLab: a live connection where there is one, the holdings file it lets you download, and the monthly statement by email, which lists your shares at every broker. Your pick is remembered." />
+      <CardHead title="Pick your broker" info="Each broker's ways to bring your holdings into StratLab: a live connection where there is one, the holdings file it lets you download, and the depository's statement by email (each month you trade, every six months otherwise), which lists your shares at every broker. Your pick is remembered." />
       <ChipBar label="Your broker" wrap options={GUIDE_BROKERS.map((b) => ({ value: b.id, label: b.name }))} value={sel?.id ?? ""} onChange={pick} />
       {sel
         ? <DataTable label={`Ways to bring in your ${sel.id === "other" ? "" : `${sel.name} `}holdings`} columns={columns} rows={waysFor(sel)} rowKey={(w) => w} stack

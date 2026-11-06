@@ -60,17 +60,18 @@ test("Pick your broker: the list, Other last, and each broker's ways in order", 
   assert.equal(new Set(G.GUIDE_BROKERS.map((b) => b.id)).size, names.length);
   for (const b of G.GUIDE_BROKERS) assert.match(b.id, /^[a-z0-9]{2,20}$/);          // what the server keeps as the pick
   // a live connection only where StratLab has one; Groww has none (nothing said about one)
-  assert.deepEqual(G.GUIDE_BROKERS.filter((b) => b.connect).map((b) => [b.id, b.connect]), [["zerodha", "kite"], ["upstox", "upstox"], ["dhan", "dhan"]]);
+  // Angel One's is asked for, not there yet: its row says so (LIVE4-015)
+  assert.deepEqual(G.GUIDE_BROKERS.filter((b) => b.connect).map((b) => [b.id, b.connect]), [["zerodha", "kite"], ["upstox", "upstox"], ["angelone", "none"], ["dhan", "dhan"]]);
   assert.deepEqual(G.waysFor(G.guideFor("upstox")), ["connect", "file", "email"]);
   assert.deepEqual(G.waysFor(G.guideFor("groww")), ["file", "email"]);
-  assert.deepEqual(G.waysFor(G.guideFor("angelone")), ["file", "email"]);          // owner, 5 Nov: no Angel One connection
+  assert.deepEqual(G.waysFor(G.guideFor("angelone")), ["connect", "file", "email"]);          // owner, 5 Nov: no Angel One connection; LIVE4-015: a row that says so
   assert.deepEqual(G.waysFor(G.guideFor("other")), ["file", "email"]);
   assert.equal(G.guideFor("nope"), null);
   assert.equal(G.guideFor(null), null);
   for (const b of G.GUIDE_BROKERS) {
     assert.ok(b.file.steps.length >= 2, b.id);
     // steps that name menus come from the broker's own help page, on its own site
-    if (b.file.help) assert.match(b.file.help, /^https:\/\/(support\.zerodha\.com|groww\.in|upstox\.com|www\.angelone\.in|dhan\.co|www\.kotakneo\.com|www\.paytmmoney\.com)\//, b.id);
+    if (b.file.help) assert.match(b.file.help, /^https:\/\/(support\.zerodha\.com|groww\.in|upstox\.com|www\.angelone\.in|dhan\.co|www\.kotakneo\.com|www\.paytmmoney\.com|www\.icicidirect\.com|www\.motilaloswal\.com)\//, b.id);
     assert.ok(G.readLine(b).length > 20);
   }
   assert.match(G.guideFor("zerodha").file.steps.join(" "), /Console.*Portfolio, then Holdings.*XLSX beside Download/);

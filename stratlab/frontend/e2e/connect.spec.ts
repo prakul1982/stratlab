@@ -263,9 +263,10 @@ test("Pick your broker: each broker's ways (connect, file, email), the pick kept
   await sane(page, errors, phone);
   await shot(page, "connected-pick-broker", phone, !phone);
 
-  // Angel One: no live connection here (owner, 5 Nov): its file and the email only
+  // Angel One: no live connection here (owner, 5 Nov): its row says so, with no button (LIVE4-015), then its file and the email
   await chips.getByRole("button", { name: "Angel One" }).click();
-  await expect(guide.getByTestId("guide-connect")).toHaveCount(0);
+  await expect(guide.getByTestId("guide-connect")).toContainText("No live connection yet: upload the holdings file or email the statement.");
+  await expect(guide.getByTestId("guide-connect").getByRole("button")).toHaveCount(0);
   await expect(guide.getByTestId("guide-file")).toContainText("open Portfolio");
 
   // Upstox: its connection in its real state (not open to this account), first
