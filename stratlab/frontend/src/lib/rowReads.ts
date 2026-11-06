@@ -13,13 +13,18 @@ export interface ReadOptions {
   parallel?: number;
   /** a row with no answer by then shows a dash (a later answer still fills it) */
   deadlineMs?: number;
+  /** rows still pending at the deadline go on being asked for until this long after the start, so a late answer does fill them
+   * (LIVE5-010: HAL's and POWERINDIA's usual moves stayed a dash though the server had them a few seconds later); at least deadlineMs */
+  untilMs?: number;
   /** the pause before asking again for what came back pending */
   pauseMs?: number;
   /** false once the page has moved on (another market, the page closed): nothing more is asked or put */
   alive?: () => boolean;
 }
 
-export const READ_DEADLINE_MS = 18000;
+export const READ_DEADLINE_MS = 10000;
+/** ...and how long rows past it are still asked for (their dash is filled when the answer comes) */
+export const READ_UNTIL_MS = 60000;
 export const READ_PAUSE_MS = 2000;
 
 const sleep = (ms: number) => new Promise<void>((ok) => setTimeout(ok, ms));
@@ -30,14 +35,16 @@ const sleep = (ms: number) => new Promise<void>((ok) => setTimeout(ok, ms));
 export async function readRows<T>(list: string[], ask: (part: string[]) => Promise<PartAnswer<T>>,
   put: (got: Record<string, T | null>) => void, o: ReadOptions): Promise<void> {
   const alive = o.alive ?? (() => true);
-  const parallel = Math.max(1, o.parallel ?? 3), deadline = Date.now() + (o.deadlineMs ?? READ_DEADLINE_MS), pause = o.pauseMs ?? READ_PAUSE_MS;
+  const parallel = Math.max(1, o.parallel ?? 3), start = Date.now(), deadline = start + (o.deadlineMs ?? READ_DEADLINE_MS), pause = o.pauseMs ?? READ_PAUSE_MS;
+  const until = Math.max(deadline, start + (o.untilMs ?? o.deadlineMs ?? READ_DEADLINE_MS));
   const open = new Set(list);              // rows with neither a value nor a dash yet
-  const settle = (got: Record<string, T | null>) => {
+  const answered = new Set<string>();      // rows the server has answered (a dash put at the deadline is not an answer)
+  const settle = (got: Record<string, T | null>, real = true) => {
     if (!alive()) return;
-    const keys = Object.keys(got);
+    const keys = Object.keys(got).filter((k) => !answered.has(k));
     if (!keys.length) return;
-    for (const k of keys) open.delete(k);
-    put(got);
+    for (const k of keys) { open.delete(k); if (real) answered.add(k); }
+    put(Object.fromEntries(keys.map((k) => [k, got[k]])));
   };
   const dashes = (rows: Iterable<string>) => Object.fromEntries([...rows].map((s) => [s, null])) as Record<string, T | null>;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -45,8 +52,8 @@ export async function readRows<T>(list: string[], ask: (part: string[]) => Promi
 
   const work = (async () => {
     let todo = [...new Set(list)];
-    for (let round = 0; todo.length && alive() && Date.now() < deadline; round += 1) {
-      if (round) await sleep(Math.min(pause, Math.max(0, deadline - Date.now())));
+    for (let round = 0; todo.length && alive() && Date.now() < until; round += 1) {
+      if (round) await sleep(Math.min(pause, Math.max(0, until - Date.now())));
       const parts: string[][] = [];
       for (let i = 0; i < todo.length; i += o.size) parts.push(todo.slice(i, i + o.size));
       const again: string[] = [];
@@ -60,17 +67,18 @@ export async function readRows<T>(list: string[], ask: (part: string[]) => Promi
             again.push(...part.filter((s) => wait.has(s)));
             settle(Object.fromEntries(part.filter((s) => !wait.has(s)).map((s) => [s, got[s] ?? null])));
           } catch {
-            settle(dashes(part));             // a refused or failed call: its rows show a dash, never "Reading" for good
+            settle(dashes(part), false);      // a refused or failed call: its rows show a dash, never "Reading" for good
           }
         }
       };
       await Promise.all(Array.from({ length: Math.min(parallel, parts.length) }, lane));
-      todo = again.filter((s) => open.has(s));
+      todo = again.filter((s) => !answered.has(s));
     }
   })();
   await Promise.race([work, late]);
   if (timer) clearTimeout(timer);
-  if (alive() && open.size) settle(dashes(open));      // out of time: a dash for what is left (a late answer still fills it)
+  if (alive() && open.size) settle(dashes(open), false);      // out of time: a dash for what is left (a late answer still fills it)
+  if (until > deadline) await work;                           // the rows past the deadline go on being asked for until `until`
 }
 
 /** The rows of a calendar in the order a person sees them: each week's days still to come first, then its days gone by (which fold

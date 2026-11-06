@@ -44,8 +44,8 @@ test("RES-1: live prices, earlier moves and implied moves are read for every row
   assert.match(quotes, /quoteAsk\(\(part\) => researchApi\.quotesPending\(region, part\)\)/);   // LIVE5-001: busy rows are asked again
   assert.doesNotMatch(quotes, /setQuotes\(\{\}\);\n\s*if \(symbols\.length\) read\(\)/);   // more rows keep the prices already read
   assert.match(page, /useRowQuotes\(region, quoted\)/);
-  assert.match(page, /readRows<MovesAnswer>\(newMoves,[\s\S]*?\{ size: 12, parallel: 3, alive \}/);   // only the rows not asked yet ("Show 50 more")
-  assert.match(page, /readRows<Implied>\(list,[\s\S]*?\{ size: 8, parallel: 1, alive \}/);
+  assert.match(page, /readRows<MovesAnswer>\(newMoves,[\s\S]*?\{ size: 12, parallel: 3, alive, untilMs: READ_UNTIL_MS \}/);   // only the rows not asked yet ("Show 50 more")
+  assert.match(page, /readRows<Implied>\(list,[\s\S]*?\{ size: 8, parallel: 1, alive, untilMs: READ_UNTIL_MS \}/);
   assert.doesNotMatch(page, /READ_ROUNDS/);                                       // no give-up count that left cells on "Reading"
   assert.match(page, /pending: r\.pending \?\? \[\]/);                          // what the server could not reach in time is asked again (owner, 5 Nov)
   assert.match(page, /if \(r\.available === false && alive\(\)\) setOptionsOn\(false\)/);   // LIVE4-002: no option prices: the column hides, one line says why

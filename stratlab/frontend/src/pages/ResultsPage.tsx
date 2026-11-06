@@ -7,7 +7,7 @@ import { useCompanyScope } from "../lib/useCompanyScope";
 import { ago, arrowOf, fmtDate, fmtTime, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { LIVE_ROWS, useRowQuotes } from "../lib/rowQuotes";
-import { pricesNote, readRows, sessionDayOf, shownOrder } from "../lib/rowReads";
+import { READ_UNTIL_MS, pricesNote, readRows, sessionDayOf, shownOrder } from "../lib/rowReads";
 import { REGION_NAME, screenCap, useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
 import { CalendarFilters, NO_CAL, SIZE_NAME, calCount, keepFilters, keptFilters, type CalFilters, type Facets } from "../components/CalendarFilters";
@@ -129,7 +129,8 @@ export function ResultsPage() {
 
   // the two extra columns are read at the same time, a few calls at once; a company the server could not get to in time (its price source
   // busy, or the call's few seconds spent) comes back "pending" and is asked again until READ_DEADLINE_MS, when what is left shows a dash
-  // (owner, 5 Nov: never a cell stuck on its loading bar)
+  // (owner, 5 Nov: never a cell stuck on its loading bar); what is still pending then goes on being asked for until READ_UNTIL_MS, and
+  // fills its dash when it comes (LIVE5-010: HAL's usual move stayed a dash though the server had it seconds later)
   useEffect(() => {
     if (!symbols.length) return;
     const ticket = gen.current;
@@ -143,7 +144,7 @@ export function ResultsPage() {
       void readRows<MovesAnswer>(newMoves, async (part) => {
         const r = await api<{ moves?: Record<string, MovesAnswer | null>; pending?: string[] }>(`/research/results/moves?region=${region}&symbols=${part.map(encodeURIComponent).join(",")}`);
         return { got: r.moves ?? {}, pending: r.pending ?? [] };
-      }, merge(setMoves), { size: 12, parallel: 3, alive });
+      }, merge(setMoves), { size: 12, parallel: 3, alive, untilMs: READ_UNTIL_MS });
     }
     // the move the options price in: the stocks with futures and options, eight a call, each day's stocks to that day's expiry
     if (region === "IN") {
@@ -158,7 +159,7 @@ export function ResultsPage() {
           const r = await api<{ implied?: Record<string, Implied | null>; pending?: string[]; available?: boolean }>(`/research/results/implied?symbols=${part.map(encodeURIComponent).join(",")}&day=${day}`);
           if (r.available === false && alive()) setOptionsOn(false);
           return { got: r.implied ?? {}, pending: r.pending ?? [] };
-        }, merge(setImplied), { size: 8, parallel: 1, alive });
+        }, merge(setImplied), { size: 8, parallel: 1, alive, untilMs: READ_UNTIL_MS });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

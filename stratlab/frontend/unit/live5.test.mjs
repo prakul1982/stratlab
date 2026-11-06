@@ -124,3 +124,18 @@ test("LIVE5-008: rotation's gaps over the benchmark are points, and its chart an
   assert.equal(ptsText(3.274), "+3.27");
   assert.equal(ptsText(-0.001), "0.00");
 });
+
+test("LIVE5-010: a row still pending at the deadline shows a dash, then its late answer fills it", async () => {
+  const put = {};
+  let calls = 0;
+  const t0 = Date.now();
+  await readRows(["HAL", "TCS"], async (part) => {
+    calls += 1;
+    // TCS answers at once; HAL stays pending for the first ~150 ms (past the 60 ms deadline), then answers
+    const late = Date.now() - t0 < 150;
+    return { got: { TCS: { avg: 1 }, ...(late ? {} : { HAL: { avg: 2.4 } }) }, pending: late ? part.filter((s) => s === "HAL") : [] };
+  }, (got) => { for (const [k, v] of Object.entries(got)) { (put[k] ??= []).push(v); } }, { size: 12, deadlineMs: 60, untilMs: 1000, pauseMs: 20 });
+  assert.deepEqual(put.TCS, [{ avg: 1 }]);
+  assert.deepEqual(put.HAL, [null, { avg: 2.4 }]);          // a dash at the deadline, then the answer
+  assert.ok(calls >= 3);
+});
