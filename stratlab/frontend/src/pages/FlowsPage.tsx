@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
+import { arrowOf } from "../lib/format";
 import { crore, dayName, spanLine, statusLine, type CashPoint, type Summary } from "../lib/positioning";
 import { cutPoints } from "../lib/range";
 import { LineChart } from "../components/Charts";
@@ -14,7 +15,8 @@ import { Card, CardHead, DataTable, EmptyState, ErrorState, PageHeader, RangeChi
 /** A crore figure with its sign and ▲/▼, in the kit's colours. */
 function Net({ v }: { v: number | null | undefined }) {
   if (v == null) return <span className="k-muted">–</span>;
-  return <Signed value={v}>{`${v > 0 ? "▲ " : v < 0 ? "▼ " : ""}${crore(v, true)}`}</Signed>;
+  const t = crore(v, true), a = arrowOf(v, t);
+  return <Signed value={v}>{`${a ? `${a} ` : ""}${t}`}</Signed>;
 }
 
 type DayRow = CashPoint & { both: number | null };

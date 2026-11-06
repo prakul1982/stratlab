@@ -9,10 +9,18 @@ export type Fact = { id: string; k: ReactNode; v: ReactNode; n?: ReactNode };
  * left out by the caller. On a phone the table is a list of cards, as every table here is; with `noteUnder` the note goes under the item
  * there instead, so the table stays two columns across and fits even where it opens inside a fold (TABLE-SWEEP: a three-column table in
  * a fund's fold pushed a 390px page sideways). */
-export function FactTable({ label, rows, itemHead = "Item", figureHead = "Figure", noteHead = "Note", numeric = false, noteUnder = false }: {
+export function FactTable({ label, rows, itemHead = "Item", figureHead = "Figure", noteHead = "Note", numeric = false, noteUnder = false, across = false }: {
   label: string; rows: Fact[]; itemHead?: string; figureHead?: string; noteHead?: string; numeric?: boolean; noteUnder?: boolean;
+  /** A few totals (up to four) read across one row, each under its own heading with its note under the figure, instead of a two-column
+   * table 1,000 px wide holding one to three rows (LIVE5 partial: Net worth's "Where you stand"). A phone keeps the rows. */
+  across?: boolean;
 }) {
   const phone = usePhone();
+  if (across && !phone && rows.length > 0 && rows.length <= 4) {
+    const cols: Column<{ id: string }>[] = rows.map((r) => ({ key: r.id, header: <>{r.k}</>, csvHeader: typeof r.k === "string" ? r.k : r.id,
+      cell: () => <span className="k-facts-cell">{r.v}{r.n && <span className="k-sub-line">{r.n}</span>}</span> }));
+    return <div className="k-facts k-facts-across"><DataTable label={label} rows={[{ id: "now" }]} rowKey={(r) => r.id} columns={cols} /></div>;
+  }
   const notes = rows.some((r) => r.n);
   // a note only some rows have goes under the item on every screen, not in a column blank in half its rows (LIVE3-015, LIVE3-021)
   const under = notes && ((noteUnder && phone) || sparseNotes(rows.filter((r) => r.n).length, rows.length));

@@ -62,6 +62,8 @@ article p,article li{max-width:none}article>p,article li{font-size:16px;line-hei
 .btbl th[scope=row],.btbl thead th:first-child{text-align:left;position:static;background:transparent;min-width:0;white-space:nowrap}
 .btbl thead th{font-weight:600;color:var(--ink-2);vertical-align:bottom}.btbl td small.sub,.btbl th small.sub{display:block;font-weight:400;font-size:12.5px;color:var(--muted)}
 .btbl tr:last-child td,.btbl tr:last-child th{border-bottom:0}
+.pg-all{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.pg-btn{display:none}
+@media (max-width:640px){.pg-all:not(:checked)~.btbl.paged tbody.pg-more{display:none}.pg-btn{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;margin:0 0 16px;border:1px solid var(--line-2);border-radius:999px;font-size:14px;font-weight:600;cursor:pointer}.pg-all:checked~.pg-btn{display:none}.pg-all:focus-visible~.pg-btn{outline:2px solid var(--ink);outline-offset:2px}}
 .btbl.fx table{table-layout:fixed;min-width:880px}.btbl.fx td,.btbl.fx tbody th{overflow:hidden;text-overflow:ellipsis}
 article ul.kpis{list-style:none;padding:0;margin:14px 0 8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
 .kpis li{margin:0;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;display:grid;grid-template-rows:auto 1fr auto;gap:2px}

@@ -10,7 +10,9 @@ export type LiveView = {
   latest: { adv: number; dec: number; unch: number; a20: number; n20: number; a50: number; n50: number; a200: number; n200: number; idx: number | null;
     pct20: number | null; pct50: number | null; pct200: number | null;
     /** the group's size and its stocks with no price today (older points have neither) */
-    of?: number | null; unread?: number | null } | null;
+    of?: number | null; unread?: number | null;
+    /** today's new 52-week highs and lows so far, and the stocks with a year of days (LIVE5-003); absent on rounds stored before */
+    hi?: number | null; lo?: number | null; n52?: number | null } | null;
 };
 export type LiveSeries = { times: string[]; adv: number[]; dec: number[]; pct20: (number | null)[]; pct50: (number | null)[]; pct200: (number | null)[]; idx: (number | null)[] };
 

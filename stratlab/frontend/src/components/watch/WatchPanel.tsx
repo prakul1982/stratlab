@@ -107,10 +107,13 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
     else { const old = rowRefs.current.get(id); if (old) io.current?.unobserve(old); rowRefs.current.delete(id); seen.current.delete(id); }
   };
 
-  const asOf = asOfLine([...Object.values(quotes).map((q) => q?.at), tickAt]);
   const priceOf = (it: WatchItem) => ticks[it.id] ?? quotes[it.id]?.price ?? null;
   const changeFor = (it: WatchItem) => changeOf(quotes[it.id] ?? undefined, ticks[it.id]);
   const open = useMemo(() => Object.fromEntries(markets.map((m) => [m.id, marketState(m).open])), [markets]);
+  const allShut = !!list?.items.length && list.items.every((it) => open[it.market] === false);
+  // a list of only US stocks says its day in New York's time (the US close is past midnight in India)
+  const tzOf = list?.items.length && list.items.every((it) => it.market === "US") ? "America/New_York" : "Asia/Kolkata";
+  const asOf = asOfLine([...Object.values(quotes).map((q) => q?.at), allShut ? null : tickAt], allShut ? tzOf : undefined, allShut);
   const noteOf = (it: WatchItem): "Delayed" | "Closed" | null => (quotes[it.id]?.delayed ? "Delayed" : open[it.market] === false ? "Closed" : null);
 
   // ---------- the rows in order, and dragging them ----------

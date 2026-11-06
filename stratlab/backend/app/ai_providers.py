@@ -218,7 +218,14 @@ def complete(system: str, text: str, gemini=None, anthropic=None, transport=None
              kind: str = "quick", want_json: bool = True, use_cache: bool = True, bulk: bool | None = None) -> str:
     """Ask the best available models in turn and return the first checked reply (a JSON object, unless
     want_json=False). `kind` is the job: "quick", "research" or "long". `gemini`/`anthropic` replace those
-    providers with a plain function (tests); the app's own wrappers are marked `_builtin` and ignored."""
+    providers with a plain function (tests); the app's own wrappers are marked `_builtin` and ignored. Every reply goes
+    through ai_text.clean_reply: no sentence about the prompt ("given in the FACTS") reaches a page (LIVE5-005)."""
+    from .ai_text import clean_reply
+    return clean_reply(_complete(system, text, gemini, anthropic, transport, max_tokens, kind, want_json, use_cache, bulk))
+
+
+def _complete(system: str, text: str, gemini=None, anthropic=None, transport=None, max_tokens: int = 1500,
+              kind: str = "quick", want_json: bool = True, use_cache: bool = True, bulk: bool | None = None) -> str:
     task = kind if kind in TASKS else "quick"
     names, _ = _names(task)
     if not names:
@@ -313,7 +320,8 @@ def ask_provider(name: str, system: str, text: str, max_tokens: int = 1500, tran
         if R.ready(name, model) > 0:
             continue
         try:
-            return R.ask_model(name, model, system, text, max_tokens, want_json, deadline, transport)
+            from .ai_text import clean_reply
+            return clean_reply(R.ask_model(name, model, system, text, max_tokens, want_json, deadline, transport))   # LIVE5-005
         except (CallError, BadReply) as e:
             last = e
             if isinstance(e, CallError) and e.scope == "provider":

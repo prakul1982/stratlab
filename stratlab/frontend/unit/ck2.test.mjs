@@ -90,7 +90,9 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   // the plans: each card its own height, its button under its list
   assert.match(css, /\.k-plans \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\); gap: var\(--s4\); align-items: start; \}/);
   const allow = JSON.parse(read("e2e/ui-lint.allow.json")).allow;
-  assert.deepEqual(allow.map((x) => `${x.page} ${x.rule} ${x.element}`), ["/plans R1 k-plan"]);
+  // LIVE5: four very wide comparison tables accepted under R27 at 1280 (each with its reason), as follow-ups of their own
+  assert.deepEqual(allow.map((x) => `${x.page} ${x.rule} ${x.element}`), ["/plans R1 k-plan", "* R27 StrategyMarketAfter costsBuy and holdvs",
+    "* R27 StockGain or lossTermSoldCostSaleBought", "* R27 CompanyMarket value ↓iRevenue growthEBIT", "* R27 StockCloseDay %StageSupertrendSince"]);
   // the company page: the peers' tiles in equal rows, the news under them
   assert.match(read("src/pages/Research.tsx"), /<div className="k-stack">\s*\{c\.peers\.length > 0 && <Card><CardHead title="Similar companies"/);
   assert.match(read("src/pages/Research.tsx"), /<QuoteTable region=\{region\} symbols=\{c\.peers\} label="Similar companies" \/>/);      // (UI-CO: the peers are a table, not tiles)

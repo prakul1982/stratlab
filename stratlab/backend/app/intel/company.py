@@ -5,6 +5,8 @@ Every call is made in parallel and every source can fail on its own: the profile
 carries a `sources` list saying which ones answered, so the page can show what's
 missing instead of breaking."""
 import re
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from datetime import time as dtime
@@ -14,7 +16,7 @@ from ..kite_service import KiteService
 from .finnhub import Finnhub
 from .net import NotFound, SourceError, num, rate_wait, with_rate_wait
 from .news import GoogleNews, Wikipedia, company_headline, mentions, plain_headline
-from .screener import Screener, clean_profile, summary as scr_summary
+from .screener import Screener, clean_profile, own_site, summary as scr_summary
 from .yahoo import Yahoo
 from ..kite_service import ist_date
 
@@ -106,6 +108,31 @@ def change_2dp(price, prev, given=None) -> float | None:
     if v is None or v != v or v in (float("inf"), float("-inf")):
         return None
     return float(Decimal(repr(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+CLOSED_KEEP = 10 * 60             # seconds a quote read after the market closed is reused by every page (LIVE5-001)
+_closed_quotes: dict[tuple[str, str], tuple[float, dict]] = {}
+_closed_lock = threading.Lock()
+
+
+def _closed_quote(region: str, symbol: str, now: float | None = None) -> dict | None:
+    """A quote read since the market closed, within CLOSED_KEEP; None otherwise."""
+    hit = _closed_quotes.get((region, symbol))
+    if hit and (now if now is not None else time.time()) - hit[0] < CLOSED_KEEP:
+        return dict(hit[1])
+    return None
+
+
+def _keep_closed_quote(region: str, symbol: str, q: dict, now: float | None = None) -> None:
+    with _closed_lock:
+        if len(_closed_quotes) > 4000:
+            _closed_quotes.clear()
+        _closed_quotes[(region, symbol)] = (now if now is not None else time.time(), dict(q))
+
+
+def forget_closed_quotes() -> None:
+    with _closed_lock:
+        _closed_quotes.clear()
 
 
 def last_session_move(q: dict | None, bars: list[dict] | None, region: str = "IN", now: datetime | None = None) -> dict | None:
@@ -224,10 +251,21 @@ def _latest_yoy(s: dict, what: str) -> dict:
 def _groups(*groups) -> list[dict]:
     out = []
     for title, items in groups:
-        items = [i for i in items if i["value"] is not None or i.get("text")]
+        items = same_rounding([i for i in items if i["value"] is not None or i.get("text")])
         if items:
             out.append({"title": title, "items": items})
     return out
+
+
+def same_rounding(items: list[dict]) -> list[dict]:
+    """One rounding for one kind of figure in a row: the compounded growth rates (3Y, 5Y, 10Y CAGR, the price's 1Y to 10Y) of a group
+    are all whole numbers when the source gave any of them in whole numbers (LIVE4-013 partial: "3Y CAGR +7.1% · 5Y +7.8% · 10Y CAGR
+    +7%"), never a precise-looking "+7.0%" beside them. The latest year-on-year figure is another kind and keeps its decimal."""
+    rates = [i for i in items if i.get("unit") == "%±" and i.get("label") != "Latest YoY" and i.get("value") is not None]
+    if any(i.get("dp") == 0 for i in rates):
+        ids = {id(i) for i in rates}
+        items = [{**i, "dp": 0} if id(i) in ids else i for i in items]
+    return items
 
 
 def _of(item: dict, period: str | None, more: str | None = None) -> dict:
@@ -919,10 +957,19 @@ class Research:
 
     # ---------- quotes ----------
     def quotes(self, region: str, symbols: list[str]) -> dict[str, dict]:
+        return self.quotes_pending(region, symbols)[0]
+
+    def quotes_pending(self, region: str, symbols: list[str]) -> tuple[dict[str, dict], list[str]]:
+        """({symbol: quote or None}, the symbols whose source was busy: asked again in a moment, not "no price"). LIVE5-001: a
+        results page priced 240 rows 24 a call, each stock one read of a source allowed 90 a minute, on the pool's threads
+        with a job's 8 s wait for each; the reads past the source's budget came back None, so 28 rows and every row "Show 50
+        more" added kept the day before's close for good. Now a page's reads wait only the request's second for the source,
+        a stock whose read was refused for the budget is said to be pending (the page asks for it again), and once the
+        market has closed each stock's quote of the session is kept CLOSED_KEEP for every page (the close doesn't change)."""
         from ..us_ticker import canon
         symbols = [canon(region, s) for s in symbols if s.strip()][:24]
         if not symbols:
-            return {}
+            return {}, []
         if region == "IN" and self._kite():
             try:
                 # one read of the broker's feed shared by everyone for a few seconds, not one for each page open (LIVE-1: the pages
@@ -931,8 +978,17 @@ class Research:
             except Exception:
                 got = None
             if got is not None:
-                return {s: self._last_session(s, q) for s, q in got.items()} if not market_open(region) else got
-        out = {}
+                return ({s: self._last_session(s, q) for s, q in got.items()} if not market_open(region) else got), []
+        out: dict[str, dict | None] = {}
+        pending: list[str] = []
+        closed = not market_open(region)
+        todo = []
+        for s in symbols:
+            kept = _closed_quote(region, s) if closed else None
+            if kept is not None:
+                out[s] = kept
+            else:
+                todo.append(s)
 
         def one(sym):
             # Yahoo first: peers and watchlists would use up Finnhub's 60 calls a minute
@@ -945,13 +1001,23 @@ class Research:
                         return {"price": q.get("c"), "change": q.get("d"), "change_pct": q.get("dp"),
                                 "prev_close": q.get("pc"), "high": q.get("h"), "low": q.get("l"), "open": q.get("o")}
                 raise
-        futures = {s: _pool.submit(one, s) for s in symbols}
+        wait = rate_wait()            # a page's short wait for the source goes with each read onto the pool's threads
+        futures = {s: _pool.submit(with_rate_wait(wait, lambda s=s: one(s))) for s in todo}
         for s, f in futures.items():
             try:
-                out[s] = f.result(timeout=20)
+                q = f.result(timeout=20)
+            except SourceError as e:
+                if e.busy:
+                    pending.append(s)
+                out[s] = None
+                continue
             except Exception:
                 out[s] = None
-        return out
+                continue
+            out[s] = q
+            if closed and q and q.get("price") is not None:
+                _keep_closed_quote(region, s, q)
+        return out, pending
 
     # ---------- charts ----------
     def chart(self, region: str, symbol: str, rng: str = "1y", tf: str = "1d", before: str = "") -> dict:
@@ -1046,6 +1112,8 @@ class Research:
         """The quote with the last session's change while India's market hasn't traded today (see last_session_move)."""
         if not q or market_open("IN"):
             return q
+        if session_day(q.get("at"), "IN") == market_today("IN"):
+            return q                  # today's session's quote: no candles to read (24 broker reads a call after the close, LIVE5-001)
         try:
             if bars is None:
                 inst = self.kite.equity(sym) or self.kite.by_symbol(sym)
@@ -1336,7 +1404,7 @@ class Research:
         return {
             "region": "US", "symbol": sym, "name": p.get("name"), "exchange": one["exchange"],
             "currency": one["currency"], "reporting_currency": one["reporting_currency"],
-            "logo": p.get("logo") or None, "website": p.get("weburl") or None,
+            "logo": p.get("logo") or None, "website": own_site(p.get("weburl")),
             "facts": [{"label": k, "value": v} for k, v in (("Industry", p.get("finnhubIndustry")), ("Country", p.get("country")),
                                                             ("Listed since", _long_day(p.get("ipo"))), ("Exchange", one["exchange"]),
                                                             ("Results reported in", one["reporting_currency"] if one["foreign"] else None)) if v],
@@ -1607,7 +1675,7 @@ class Research:
             s = {**s, "market_cap_cr": None, "pe": None, "pb": None, "div_yield": None}
         out = {
             "region": "IN", "symbol": sym, "name": name, "exchange": exchange, "currency": "INR", "logo": None,
-            "website": (scr or {}).get("website"), "industry": None, "bse_code": code,
+            "website": own_site((scr or {}).get("website")), "industry": None, "bse_code": code,
             "facts": [{"label": "Listed", "value": f"BSE only · {code}" if code else f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr")
                                                                                                     else [{"label": "Market cap", "value": "Unavailable"}] if s.get("cap_problem") else []),
             "cap_note": stock_pages.CAP_UNAVAILABLE if s.get("cap_problem") else None,

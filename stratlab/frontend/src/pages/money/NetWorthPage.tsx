@@ -486,7 +486,7 @@ export function NetWorthPage() {
             <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined} />
             {/* with no loans the assets are the net worth: the same figure said again is left out (LIVE1C-056: ₹20,33,027 five times) */}
             {/* TABLE-SWEEP: a named first column and right-aligned figures; the Change column only when there is a change or a restated note to show */}
-            <FactTable label="Where you stand" itemHead="Total" figureHead="Now" noteHead="Change" numeric rows={[
+            <FactTable label="Where you stand" itemHead="Total" figureHead="Now" noteHead="Change" numeric across rows={[
               { id: "net", k: "Net worth", v: <b>{inr(t.net)}</b>, n: move ? <><Delta value={move.change}>{signedInrCompact(move.change)}</Delta> {sinceNote(move, day, inrCompact)}</> : restatedNote(hist, view?.valuation, day) ?? undefined },
               ...(t.liabilities > 0 ? [{ id: "assets", k: "Assets", v: inr(t.assets) }, { id: "loans", k: "Loans", v: inr(t.liabilities) }] : []),
             ]} />

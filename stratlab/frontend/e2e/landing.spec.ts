@@ -62,18 +62,19 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   expect(await page.locator("#trade .lp-tool").count() % 4).toBe(0);
   expect(await page.locator("#alerts .lp-tool").count() % 3).toBe(0);
   expect(await page.locator("#money .lp-beyond-card").count() % 2).toBe(0);
-  await expect(page.locator("#faq details")).not.toHaveCount(0);
-  expect(await page.locator("#faq details").count(), "the FAQ stays short").toBeLessThanOrEqual(10);
+  await expect(page.locator("#faq details:not(.lp-phone-fold)")).not.toHaveCount(0);
+  // the questions themselves (on a phone those past the fifth sit in one fold of their own: LIVE5 partial)
+  expect(await page.locator("#faq details:not(.lp-phone-fold)").count(), "the FAQ stays short").toBeLessThanOrEqual(10);
   // the option chains StratLab records, as the server records them
   // (R5V-019, R80-001: one listed contract backtests on its own prices (Pro); strike-picking strategies are paper traded only)
-  const options = page.locator("#faq details", { hasText: "Can I backtest options?" });
+  const options = page.locator("#faq details:not(.lp-phone-fold)", { hasText: "Can I backtest options?" });
   await options.locator("summary").click();
   await expect(options).toContainText("NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX");
   await expect(options).toContainText("What you can do today is paper trade options");
   await expect(options).toContainText("One contract at a time");
   // the invite rule, in the backend's own numbers (R5V-019: the owner's longer wording was one sentence nobody could follow;
   // unit/seo.test.mjs checks each number against app/invite_rewards.py)
-  const invites = page.locator("#faq details", { hasText: "How do invite rewards work?" });
+  const invites = page.locator("#faq details:not(.lp-phone-fold)", { hasText: "How do invite rewards work?" });
   await invites.locator("summary").click();
   await expect(invites).toContainText("You and a friend can each get a free month of Basic.");
   await expect(invites).toContainText("uses StratLab on 3 different days in their first 14 days");
@@ -154,6 +155,9 @@ test("landing: no fake buttons, no card that looks picked, the bitcoin sign, and
   const errors = await open(page);
   // the research sample's button is a real button that says it goes to Google, then opens the idea builder (the sample is
   // a made-up company, so the button names none) (R5V-002, R5V-011)
+  // (on a phone the sample is one fold away: LIVE5 partial, the landing page's length)
+  const sample = page.locator("details.lp-phone-fold > summary", { hasText: "See a sample company page" });
+  if (await sample.count()) await sample.click();
   const idea = page.locator(".lp-rmock").getByRole("button", { name: /Continue with Google to test it/ });
   await expect(idea).toBeVisible();
   expect(await page.locator(".lp-fake-btn").count()).toBe(0);

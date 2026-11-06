@@ -34,7 +34,8 @@ OPEN_AT, CLOSE_AT = "09:15", "15:30"
 COUNTS = ("adv", "dec", "unch", "a20", "n20", "a50", "n50", "a200", "n200")
 # a point: [HH:MM, *COUNTS, the index level, the group's size, its stocks with no price today] (R24-003: the last two say
 # why rose + fell + unchanged is short of the group: 2,344 of 2,563 on All NSE)
-FIELDS = COUNTS + ("idx", "of", "unread")
+# LIVE5-003: then today's new 52-week highs and lows and the stocks with a year of days to judge them by (older points end at "unread")
+FIELDS = COUNTS + ("idx", "of", "unread", "hi", "lo", "n52")
 LIVE_REGIONS = ("IN",)
 SPLIT_GAP = 0.3                      # a previous close this far (as a share) from the stored last close is another basis (a split, a bonus)
 
@@ -70,6 +71,14 @@ def _traded_before(at, day: str) -> bool:
     return (t if t.tzinfo else t.replace(tzinfo=IST)).astimezone(IST).date().isoformat() < day
 
 
+def _num(v) -> float | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f > 0 else None
+
+
 def count(base: dict[str, list], quotes: dict[str, dict], symbols: list[str], day: str | None = None) -> dict[str, int]:
     """One group's live counts. A stock needs a price and a previous close; an average counts the stock only when it has
     that many closes. Today's price is the latest close in each average. A stock whose previous close is over 30% from
@@ -79,6 +88,7 @@ def count(base: dict[str, list], quotes: dict[str, dict], symbols: list[str], da
     today, R24-003: such a stock was counted as unchanged)."""
     out = dict.fromkeys(COUNTS, 0)
     out["of"], out["unread"] = len(symbols), 0
+    out["hi"] = out["lo"] = out["n52"] = 0
     for s in symbols:
         q = quotes.get(s) or {}
         b = base.get(s)
@@ -96,6 +106,14 @@ def count(base: dict[str, list], quotes: dict[str, dict], symbols: list[str], da
             continue
         if b[0] and abs(prev / b[0] - 1) > SPLIT_GAP:
             continue            # a split or bonus went ex today: the stored sums are of the old prices (the stock isn't below them)
+        top, bottom = (b[5], b[6]) if len(b) > 6 else (None, None)
+        if top is not None and bottom is not None:
+            # a new 52-week high: the day's high above every high of the last 251 sessions (breadth.flags' rule); the day's range
+            # from the quote, else its price
+            hi, lo = _num(q.get("high")) or px, _num(q.get("low")) or px
+            out["n52"] += 1
+            out["hi"] += 1 if hi > top else 0
+            out["lo"] += 1 if lo < bottom else 0
         for k, total in ((20, b[2]), (50, b[3]), (200, b[4])):
             if total is None:
                 continue
@@ -215,7 +233,8 @@ class Live:
                 continue
             idx = (quotes.get(breadth.GROUPS[g]["index"]) or {}).get("price")
             # a point is its quarter hour's ("10:30" for a round run at 10:31 or retried at 10:33): one point a quarter hour
-            row = [slot, *(c[f] for f in COUNTS), round(float(idx), 2) if idx else None, c["of"], c["unread"]]
+            row = [slot, *(c[f] for f in COUNTS), round(float(idx), 2) if idx else None, c["of"], c["unread"],
+                   c["hi"] if c["n52"] else None, c["lo"] if c["n52"] else None, c["n52"]]
             pts = [p for p in load(g, day)["points"] if p[0] != slot] + [row]
             save(g, day, pts)
         self.last_round[region] = time.time()
@@ -293,7 +312,7 @@ def rebuild_base(load_bars, region: str, now: datetime, gap: float = breadth.GAP
         if i and gap:
             sleep(gap)
         try:
-            row = breadth.base_row(load_bars(region, s, 330), through)
+            row = breadth.base_row(load_bars(region, s, 400), through)     # 400 days: a year of sessions for the 52-week range
             streak = 0
         except Exception:
             streak += 1

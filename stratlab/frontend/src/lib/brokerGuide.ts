@@ -44,7 +44,12 @@ export const GUIDE_BROKERS: GuideBroker[] = [
   { id: "icici", name: "ICICI Direct", file: { read: "known", help: "https://www.icicidirect.com/faqs/stocks/how-can-i-download-a-summary-of-my-portfolio-on-website",
     steps: ["Log in on the ICICI Direct website and open Stocks.", "Open Portfolio.", "Press the Download icon and choose the file format (Excel or CSV)."] } },
   // HDFC's own help pages give no menu for a holdings file one can download (its app emails a holding statement): what to look for
-  { id: "hdfc", name: "HDFC Sky / HDFC Securities", file: { read: "known", steps: generic("HDFC Sky or the HDFC Securities website"),
+  // LIVE5 partial: no help page of HDFC Sky's or HDFC Securities' own that could be read (6 Nov 2026) says how holdings download as a file,
+  // so the guide says so plainly instead of naming menus it can't check
+  { id: "hdfc", name: "HDFC Sky / HDFC Securities", file: { read: "known", steps: [
+    "HDFC Sky's and HDFC Securities' own help pages don't say how to download your holdings as a file, so StratLab can't name their menus.",
+    "Your stocks are under Portfolio, then Holdings: look there for Download or Export, and save it as CSV or Excel.",
+    "If it only gives a PDF, use the statement by email below, or make a CSV of your own (columns below)."],
     note: "The import recognises the HDFC Securities holdings file as it is; any other file needs the columns Symbol (or ISIN), Quantity and Average price." } },
   { id: "kotak", name: "Kotak Neo", file: { read: "columns", help: "https://www.kotakneo.com/support/how-to-generate-the-statements-online-from-the-website-or-app",
     steps: ["In Kotak Neo, open your profile icon, then Reports.", "Choose the holdings report.", "Press the Excel icon to download it."] } },

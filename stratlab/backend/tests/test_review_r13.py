@@ -454,7 +454,8 @@ def test_a_stitched_currency_series_that_stopped_long_ago_gives_way_to_the_contr
     from app.data.mcx import MCXProvider, ended_early
     monkeypatch.setattr(mcx, "ist_date", lambda: date(2026, 11, 4))
     old = [{"t": f"2023-06-{d:02d}T00:00:00+05:30", "o": 82.1 + d / 100, "h": 82.3, "l": 82.0, "c": 82.2 + d / 100, "v": 900} for d in range(1, 7)]
-    recent = [{"t": f"2026-10-{d:02d}T00:00:00+05:30", "o": 88.1 + d / 100, "h": 88.4, "l": 88.0, "c": 88.2 + d / 100, "v": 900} for d in range(20, 31)]
+    # (whole candles: a close above its high is corrected by app/candles.py since 6 Nov, so the fixture keeps its closes inside the range)
+    recent = [{"t": f"2026-10-{d:02d}T00:00:00+05:30", "o": 88.1 + d / 100, "h": 88.6, "l": 88.0, "c": 88.2 + d / 100, "v": 900} for d in range(20, 31)]
     assert ended_early(old) and not ended_early(recent) and not ended_early([]) and not ended_early(None)
     assert not ended_early([{"t": "2026-10-26T00:00:00+05:30"}])          # a long holiday (Diwali week) is not a stop
 

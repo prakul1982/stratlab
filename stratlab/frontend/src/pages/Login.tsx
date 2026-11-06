@@ -197,6 +197,16 @@ function Head({ eyebrow, title, children, h1 }: { eyebrow: string; title: string
   );
 }
 
+/** LIVE5 partial (landing 13,297 px on an iPhone): on a phone a long block is one fold away under `label`, on a wider screen it is in
+ * view. Decided once, as the page opens (no listener: the landing's JavaScript stays small). */
+const phoneNow = (): boolean => typeof window !== "undefined" && !!window.matchMedia?.("(max-width: 640px)").matches;
+function PhoneFold({ label, children }: { label: string; children: ReactNode }) {
+  const [phone] = useState(phoneNow);
+  return phone ? <details className="lp-more lp-phone-fold"><summary>{label}</summary><div className="stack g24">{children}</div></details> : <>{children}</>;
+}
+
+const faqItem = (f: (typeof FAQ)[number]) => <details key={f.q}><summary>{f.q}</summary>{f.a.map((t) => <p key={t} className="muted">{t}</p>)}</details>;
+
 /** A few tools in view, the rest one click away: the page stays short and nothing is left out. */
 function ToolList({ items, label, shown = 4, three = false }: { items: [string, string][]; label: string; shown?: number; three?: boolean }) {
   const tool = ([t, b]: [string, string]) => <div key={t} className="lp-tool"><b>{t}</b><p className="small muted">{b}</p></div>;
@@ -210,6 +220,22 @@ function ToolList({ items, label, shown = 4, three = false }: { items: [string, 
           <div className={cls}>{items.slice(shown).map(tool)}</div>
         </details>
       )}
+    </div>
+  );
+}
+
+/** Eight Money tools in view (two full rows of four), the rest one click away; on a phone four, the rest folded (LIVE5 partial). */
+function MoneyCards() {
+  const [phone] = useState(phoneNow);
+  const shown = phone ? 4 : 8, rest = PORTFOLIO.length - shown;
+  return (
+    <div className="stack">
+      <div className="lp-money">{PORTFOLIO.slice(0, shown).map(moneyCard)}</div>
+      <details className="lp-more">
+        <summary>{rest} more Money tools</summary>
+        {/* six more in four columns left two on a second line; in three they are two full rows (VR3-013) */}
+        <div className={`lp-money${rest % 4 !== 0 && rest % 3 === 0 ? " lp-money-3" : ""}`}>{PORTFOLIO.slice(shown).map(moneyCard)}</div>
+      </details>
     </div>
   );
 }
@@ -332,10 +358,12 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
           </div>
           <div className="stack g14">
             <h2 className="serif lp-h3">{HOW_TITLE}</h2>
+            <PhoneFold label="The three steps">
             <ol className="lp-steps lp-steps-3">
               {HOW_STEPS.map(([t, b], k) => <li key={t} className="lp-card"><span className="lp-num">{k + 1}</span><b>{t}</b><p className="small muted">{b}</p></li>)}
             </ol>
             <p className="small muted">{HOW_MONEY}</p>
+            </PhoneFold>
           </div>
         </div>
       </section>}
@@ -359,8 +387,9 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             </div>
           </div>
 
-          <LibraryExamples />
+          <PhoneFold label="Real verdicts, open to read"><LibraryExamples /></PhoneFold>
 
+          <PhoneFold label="Options, more Trade tools and the markets">
           <div className="lp-card lp-travel lp-options">
             <div className="stack g6">
               <span className="eyebrow">Options</span>
@@ -378,6 +407,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
               {MARKETS.map(([sym, n]) => <div key={n} className="lp-market"><span className="lp-sym" aria-hidden="true">{sym}</span><b>{n}</b></div>)}
             </div>
           </div>
+          </PhoneFold>
         </div>
       </section>
 
@@ -397,7 +427,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
                 </div>
               </div>
             </div>
-            <ResearchMock />
+            <PhoneFold label="See a sample company page"><ResearchMock /></PhoneFold>
           </div>
           <ToolList items={RESEARCH} label="research tools" />
         </div>
@@ -409,14 +439,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             Bring the files you already have. StratLab keeps them private and reports facts and arithmetic about what you own.
           </Head>
           {/* eight in view (two full rows of four, four of two on a phone), the rest one click away */}
-          <div className="stack">
-            <div className="lp-money">{PORTFOLIO.slice(0, 8).map(moneyCard)}</div>
-            <details className="lp-more">
-              <summary>{PORTFOLIO.length - 8} more Money tools</summary>
-              {/* six more in four columns left two on a second line; in three they are two full rows (VR3-013) */}
-              <div className={`lp-money${(PORTFOLIO.length - 8) % 4 !== 0 && (PORTFOLIO.length - 8) % 3 === 0 ? " lp-money-3" : ""}`}>{PORTFOLIO.slice(8).map(moneyCard)}</div>
-            </details>
-          </div>
+          <MoneyCards />
         </div>
       </section>
 
@@ -460,7 +483,8 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             )}
           </div>
           <div className="lp-faq">
-            {FAQ.map((f) => <details key={f.q}><summary>{f.q}</summary>{f.a.map((t) => <p key={t} className="muted">{t}</p>)}</details>)}
+            {FAQ.slice(0, 5).map(faqItem)}
+            {FAQ.length > 5 && <PhoneFold label={`${FAQ.length - 5} more questions`}>{FAQ.slice(5).map(faqItem)}</PhoneFold>}
           </div>
         </div>
       </section>}
@@ -581,17 +605,20 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                 </div>
                 {"note" in act ? <span className="lp-plan-note small muted">{act.note}</span>
                   : <button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>}
+                {/* on a phone the five lines are one fold under the button (LIVE5 partial: three cards of five lines were 2,100 px) */}
+                <PhoneFold label={`What ${PLAN_NAME[p]} includes`}>
                 <ul className="lp-plan-list">
                   {/* LIVE4-020: the same five lines as the Plans page's cards (one source, lib/plans KEY); every feature is in its table */}
                   {KEY[p].map((f) => <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}
                 </ul>
+                </PhoneFold>
               </div>
             );
           })}
         </div>
         <AllFeatures />
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
-        {loading ? <span className="lp-skel lp-skel-fine" /> : <p className="small muted k-measure m80" data-testid="usd-note">{[...small, usdNote(rate, pricing?.usd_inr?.fallback)].join(" ")}</p>}
+        {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, usdNote(rate, pricing?.usd_inr?.fallback)].join(" ")}</p></PhoneFold>}
       </div>
     </section>
   );

@@ -129,6 +129,9 @@ def fresh_shared_quotes():
         qs, main = sys.modules.get("app.quote_share"), sys.modules.get("app.main")
         if qs is not None:
             qs.forget()
+        co = sys.modules.get("app.intel.company")
+        if co is not None:
+            co.forget_closed_quotes()            # quotes kept after a close (LIVE5-001)
         if main is not None and hasattr(main, "_breadth_views"):
             main._breadth_views.clear()          # the breadth route's stored days, kept a few seconds (LIVE-1)
         tr = sys.modules.get("app.intel.theme_routes")

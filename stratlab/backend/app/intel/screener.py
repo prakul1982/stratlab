@@ -26,6 +26,32 @@ _BREAKDOWN = re.compile(r"\s*(?:\[\d{1,3}\]\s*)?\b(?:Revenue|Business|Segment(?:
 _HEADING = re.compile(r"(?<=[a-z0-9\)\.])(?<![Tt]he)(?<![Oo]ur)\s+(?:Architecture|Overview|Background|Operations|Strategy|Segments|Highlights)\s+(?=[A-Z][a-z])")
 
 
+# hosts that are never a company's own website: the profile's links to its credit ratings, an encyclopaedia, the exchanges and the
+# news (LIVE5-011: RELIANCE's "website" was a rating agency's PDF, TCS's a 2019-20 annual report, INFY's CRISIL, TITAN's CARE)
+NOT_OWN_SITE = ("screener.in", "bseindia.com", "nseindia.com", "wikipedia.org", "wikimedia.org", "crisil.com", "icra.in", "icraindia.com",
+                "careratings.com", "careedge.in", "indiaratings.co.in", "brickworkratings.com", "acuite.in", "infomerics.com",
+                "moodys.com", "spglobal.com", "fitchratings.com", "moneycontrol.com", "economictimes.indiatimes.com", "livemint.com",
+                "business-standard.com", "google.com", "linkedin.com", "twitter.com", "x.com", "facebook.com", "youtube.com",
+                "instagram.com", "sebi.gov.in", "mca.gov.in")
+_FILE = re.compile(r"\.(?:pdf|xlsx?|docx?|zip|pptx?|jpe?g|png)$", re.I)
+
+
+def own_site(href: str) -> str | None:
+    """A company's own website from a profile link, as its home page ("https://www.ril.com/"): None for a document (a PDF report), a
+    third party's site (a rating agency, an encyclopaedia, an exchange, the news) or anything that isn't a web address."""
+    from urllib.parse import urlsplit
+    try:
+        u = urlsplit(str(href or "").strip())
+    except ValueError:
+        return None
+    host = (u.hostname or "").lower().rstrip(".")
+    if u.scheme not in ("http", "https") or "." not in host or _FILE.search(u.path or ""):
+        return None
+    if any(host == b or host.endswith("." + b) for b in NOT_OWN_SITE):
+        return None
+    return f"{u.scheme}://{host}/"
+
+
 def clean_profile(text: str | None) -> str | None:
     """A company profile as people read it: no "[1]" footnote marks and no breakdown lists pasted after the
     description (R5O-027). Nothing left: None."""
@@ -99,9 +125,9 @@ def parse(html: str) -> dict:
             if about:
                 out["about"] = about[:1200]
         for a in prof.find_all("a", href=True):
-            href = a["href"]
-            if href.startswith("http") and "screener.in" not in href and "bseindia" not in href and "nseindia" not in href:
-                out.setdefault("website", href)
+            site = own_site(a["href"])
+            if site:
+                out.setdefault("website", site)
 
     for sec_id, key in (("quarters", "quarters"), ("profit-loss", "pl"), ("balance-sheet", "balance"),
                         ("cash-flow", "cashflow"), ("ratios", "ratios_table"), ("shareholding", "shareholding")):

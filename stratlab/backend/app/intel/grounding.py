@@ -627,6 +627,21 @@ def headline_count(phrase: str, titles: list[str]) -> int:
     return sum(1 for t in titles if all(re.search(r"\b" + re.escape(w), str(t or "").lower()) for w in stems))
 
 
+_PROPER = {"sensex", "nifty", "rbi", "sebi", "fed", "dow", "nasdaq", "wall", "fii", "fiis", "dii", "diis", "opec", "us", "india",
+           "china", "trump", "budget", "gst", "it", "bank", "reliance", "adani", "tata", "infosys", "hdfc", "icici"}
+
+
+def _proper_first(phrase: str, titles: list[str]) -> bool:
+    """Whether a phrase's first word is a name ("Sensex", "RBI"): a known one, or written with a capital inside a headline, not
+    only as its first word (LIVE5-009: "Main story: sensex Nifty rally")."""
+    first = (phrase.split() or [""])[0].strip(",.:;")
+    if not first or not first[:1].isupper():
+        return False
+    if first.lower() in _PROPER:
+        return True
+    return any(re.search(r"(?<=\S )" + re.escape(first) + r"\b", t) for t in titles)
+
+
 def story_of(driver: str, titles: list[str]) -> dict | None:
     """The day's main story as the headlines tell it: {"label", "n", "of", "indices"} where `indices` are the positions in
     `titles` of the headlines that carry it. The AI's `driver` (every word of it in a headline) or the subject of _STORIES,
@@ -639,7 +654,7 @@ def story_of(driver: str, titles: list[str]) -> dict | None:
         stems = _phrase_stems(d)
         if stems:
             hits = [i for i, t in enumerate(titles) if all(re.search(r"\b" + re.escape(w), t.lower()) for w in stems)]
-        best = d if d[:2].isupper() else d[:1].lower() + d[1:]           # "crude oil", but "RBI policy" as written
+        best = d if d[:2].isupper() or _proper_first(d, titles) else d[:1].lower() + d[1:]   # "crude oil", but "RBI policy", "Sensex rally" as written
         n = len(hits)
     if n < 2:
         best, n, hits = "", 0, []

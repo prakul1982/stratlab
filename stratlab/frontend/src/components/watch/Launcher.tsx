@@ -3,6 +3,7 @@
  * It holds the button, the panel's place on the page and the loading of the panel itself; the panel (and the chart, and the account code behind it) loads when it is first opened,
  * or when the button is pointed at. The visitor's panel is a read-only board and loads no account code. */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useLocation, useNavigationType } from "react-router-dom";
 import { usePersisted } from "../../lib/persist";
 import { importWithRetry } from "../../lib/lazyRetry";
 import { clampLayout, cornerCover, dockWidth, DEFAULT_LAYOUT, isSheet, LAYOUT_KEY, shapeOf, type PanelLayout } from "../../lib/watchLayout";
@@ -94,6 +95,18 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
   }, [shown]);
 
   const close = useCallback(() => patch({ open: false }), [patch]);
+  // a panel floating over the page (not docked beside it) shuts when the person goes to another page, so it never sits over the next
+  // page's controls (LIVE5-006: it stayed open across pages over Sector rotation's Trail and Animate); a docked panel takes its width
+  // from the page and stays
+  // a redirect (a replace: "/" to the person's own home) is the page they asked for, not another one, so a panel open at load stays
+  const { pathname } = useLocation();
+  const how = useNavigationType();
+  const lastPath = useRef(pathname);
+  useEffect(() => {
+    if (lastPath.current === pathname) return;
+    lastPath.current = pathname;
+    if (how !== "REPLACE" && shown && shapeOf(layout, window.innerWidth) !== "dock") close();
+  }, [pathname]);    // eslint-disable-line react-hooks/exhaustive-deps -- only a change of page
   const Panel = mode === "app" ? AppPanel : PublicPanel;
   return (
     <>

@@ -48,7 +48,8 @@ test("LIVE4-010: the results calendar is compact on a phone and its headers fit 
   assert.match(page, /columns=\{columns\} stack compact phonePage=\{10\}/);
   assert.match(page, /key: "px", header: "Price", numeric: true, brief: true/);
   assert.match(page, /key: "day", header: "Day", numeric: true, brief: true/);
-  for (const k of ["cap", "rev", "pat"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*phone: false`), k);
+  for (const k of ["cap", "q"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*phone: false`), k);   // LIVE5-002: rev and pat are one "q" column
+  for (const k of ["rev", "pat"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*csvOnly: true`), k);
   assert.match(invCss, /\.inv-day \.k-table thead th \{ white-space: nowrap; \}/);
   assert.match(invCss, /\.k-tbl-wrap\.compact \.res-moves, \.k-tbl-wrap\.compact \.res-plain, \.k-tbl-wrap\.compact \.res-name \{ display: none; \}/);
   // the day's CSV button shares the day's heading line; on a phone it says "CSV"
@@ -66,8 +67,11 @@ test("LIVE4-014: ICICI Direct and Motilal Oswal follow their own help pages; HDF
   assert.equal(mo.file.read, "pdf");
   assert.match(mo.file.steps[0], /Portfolio tab downloads your holdings statement as a PDF, which can't be read here/);
   assert.match(mo.file.help, /^https:\/\/www\.motilaloswal\.com\//);
+  // LIVE5 partial: HDFC's own pages don't give the menus, and the guide says so plainly (behaviour changed on purpose)
+  assert.match(G.guideFor("hdfc").file.steps[0], /own help pages don't say how to download your holdings as a file, so StratLab can't name their menus/);
+  assert.match(G.guideFor("hdfc").file.steps.join(" "), /If it only gives a PDF, use the statement by email below/);
   for (const id of ["hdfc", "other"]) {
-    assert.match(G.guideFor(id).file.steps[0], /look for Holdings \(or Portfolio\), then Download \/ Export\./, id);
+    if (id === "other") assert.match(G.guideFor(id).file.steps[0], /look for Holdings \(or Portfolio\), then Download \/ Export\./, id);
     assert.equal(G.guideFor(id).file.help, undefined, id);          // no page of the broker's own to link
   }
   // no broker is left with the old generic "Open your holdings (or portfolio)" steps
@@ -136,7 +140,8 @@ test("LIVE4-008: the breadth card is a table of two days, each column headed wit
   assert.equal(shut.beforeHead, "Close of 4 Nov");
   assert.deepEqual(shut.rows.map((r) => r.before), ["300 / 200", "44.0%", "20 / 5"]);
   const card = read("src/components/BreadthCard.tsx");
-  assert.match(card, /r\.now \?\? <span className="k-muted">At the close<\/span>/);
+  assert.match(card, /r\.now \?\? <span className="k-muted">\{table\.waiting\}<\/span>/);     // LIVE5-003: "At the close" or "This evening"
+  assert.equal(t.waiting, "At the close");
   assert.doesNotMatch(card, /FactTable/);
   // Invest home's results: the day's whole count, no "and N more" tail, the whole day linked in the header
   const homes = read("src/pages/SpaceHomes.tsx");

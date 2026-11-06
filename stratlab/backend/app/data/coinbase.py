@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import httpx
 
 from ..http_retry import real_transport
+from ..candles import whole_candles
 
 BASE = "https://api.exchange.coinbase.com"
 GRANULARITY = {"1d": 86400, "1h": 3600, "15m": 900, "5m": 300}
@@ -170,6 +171,7 @@ class CoinbaseProvider:
     def warmup_days(tf: str, candles: int = 210) -> int:
         return math.ceil(candles / PER_DAY[tf]) + 2
 
+    @whole_candles
     def history(self, inst: dict, tf: str, days: int) -> list[dict]:
         g = GRANULARITY[tf]
         # a daily series is of its UTC day: the day's candle is forming, and tomorrow's request must not get today's list

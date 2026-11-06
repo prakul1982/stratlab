@@ -4,7 +4,7 @@ import { Card, EmptyState, PageHeader, Select } from "../components/kit";
 import { ChartWorkspace } from "../components/watch/ChartWorkspace";
 import { openMarkets } from "../components/watch/Launcher";
 import { useApp } from "../lib/app";
-import { currencySymbol, signCls } from "../lib/format";
+import { arrowOf, currencySymbol, signCls } from "../lib/format";
 import { useDocTitle } from "../lib/title";
 import { live, putItems } from "../lib/watchApi";
 import { changeOf, changeText, currencyOf, itemFromPath, labelOf, MARKET_NAME, priceText, subtitleOf, type WatchQuote } from "../lib/watch";
@@ -60,7 +60,7 @@ export function ChartPage() {
       <Card>
         <div className="chart-quote" aria-live="off">
           <b className="chart-px">{p == null ? "–" : `${cur}${priceText(p, quote?.currency ?? null, item.market, item.symbol)}`}</b>
-          <span className={signCls(c, t)}>{c != null && c !== 0 ? (c > 0 ? "▲ " : "▼ ") : ""}{t}{c != null ? " today" : ""}</span>
+          <span className={signCls(c, t)}>{arrowOf(c, t) ? `${arrowOf(c, t)} ` : ""}{t}{c != null ? " today" : ""}</span>
           {quote?.delayed && <span className="k-note">Delayed: this price can be up to 15 minutes behind the market.</span>}
         </div>
         <ChartWorkspace item={item} height={h} />

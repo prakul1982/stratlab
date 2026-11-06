@@ -18,6 +18,7 @@ from kiteconnect.exceptions import TokenException
 
 from .config import settings
 from . import db, last_session, name_search
+from .candles import whole_candles
 
 IST = ZoneInfo("Asia/Kolkata")
 # our timeframe -> (kite interval, max days per request, candles per trading day)
@@ -640,6 +641,7 @@ class KiteService:
         return tokens.get(key)
 
     # ---------- historical candles ----------
+    @whole_candles
     def history(self, token: int, tf: str, days: int, continuous: bool | None = None, ttl: float | None = None,
                 store: bool = True, max_wait: float | None = None) -> list[dict]:
         """Candles for a token. Futures on daily candles use Kite's continuous series unless told otherwise;
@@ -725,6 +727,7 @@ class KiteService:
         return [{"t": datetime.fromtimestamp(flat[i], IST).isoformat(), "o": flat[i + 1], "h": flat[i + 2], "l": flat[i + 3], "c": flat[i + 4], "v": flat[i + 5]}
                 for i in range(0, len(flat), n)]
 
+    @whole_candles
     def history_range(self, token: int, tf: str, start: datetime, end: datetime) -> list[dict]:
         """Candles of a token from `start` up to `end` (aware times), read in blocks of BLOCK_DAYS calendar days that every
         viewer of the instrument shares: scrolling a minute chart back asks for one more block, never for the years in

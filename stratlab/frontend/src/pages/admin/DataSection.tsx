@@ -126,7 +126,8 @@ export function DataSection() {
     <>
       <Card label="Background jobs">
         <CardHead title="Background jobs" info="Each job runs on its own clock; Next run says when. Run now starts it at once where the job has a manual trigger (a job without a button runs on its clock only). A job that reads from the exchange can take a minute or two." />
-        {!jobs ? <Skeleton label="Loading the jobs" /> : <DataTable label="Background jobs" rows={jobs} rowKey={(j) => j.id} columns={cols} stack phonePage={8} />}
+        {/* LIVE5-008: the jobs' list is the page's main one, with more under it: its loading holds the screen, so nothing below moves (CLS 0.34) */}
+        {!jobs ? <Skeleton label="Loading the jobs" page /> : <DataTable label="Background jobs" rows={jobs} rowKey={(j) => j.id} columns={cols} stack phonePage={8} />}
       </Card>
 
       <Card label="India broker data">

@@ -48,7 +48,10 @@ export function menuView(path: string, showing: SpaceView, keepsMine = false, o:
   // the account's saved choice ("My space") arriving after the click must not pull Trade's Calendar into it
   const kept = sharedPage(path) ? spaceParam(o.search) ?? (o.from && o.from !== "mine" ? o.from : null) : null;
   if (kept) return kept;
-  if (showing === "mine" && keepsMine) return "mine";
+  // a shared page (the Calendar) opened fresh is in the address's own space on every device, not the menu saved on this one
+  // (LIVE5-011: the same Results page read "My space › Calendar › Results" on a phone and "Invest › Calendar › Results" on a laptop);
+  // reached from My space in this visit, it stays in My space
+  if (showing === "mine" && keepsMine && (!sharedPage(path) || o.from === "mine")) return "mine";
   return here;
 }
 
