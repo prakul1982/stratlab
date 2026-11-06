@@ -1129,13 +1129,6 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 @media (max-width: 640px) {
   /* a wide table scrolls inside its card: the first column (what each row is) stays put, and a soft edge shows
      there's more to the side */
-  .table-wrap {
-    background:
-      linear-gradient(to right, var(--card) 30%, transparent) left / 24px 100% no-repeat local,
-      linear-gradient(to left, var(--card) 30%, transparent) right / 24px 100% no-repeat local,
-      radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, .14), transparent) left / 10px 100% no-repeat scroll,
-      radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, .14), transparent) right / 10px 100% no-repeat scroll;
-  }
   .table-wrap td:first-child, .table-wrap th:first-child { position: sticky; left: 0; z-index: 1; background: var(--card); }
   .table-wrap th:first-child { background: var(--paper-2); }
   .table-wrap tr.atm td:first-child, .rot-row.on td:first-child { background: var(--chip); }
@@ -1800,7 +1793,32 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
 .k-date-btn:hover, .k-date-btn:focus-visible { background: var(--paper-2); color: var(--ink); }
 .k-date-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.k-date-native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+.k-date-btn[aria-expanded="true"] { background: var(--paper-2); color: var(--ink); }
+/* the kit's calendar under a date box (DatePicker): one month, Monday first, in the kit's colours, never the browser's own */
+.k-cal { position: absolute; top: calc(100% + 6px); left: 0; z-index: 45; width: 296px; max-width: calc(100vw - 32px); padding: 10px; display: flex; flex-direction: column; gap: 6px;
+  background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, .18); font-size: 14px; }
+.k-cal.flip { left: auto; right: 0; }
+.k-cal-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.k-cal-title { font-weight: 600; color: var(--ink); }
+.k-cal-nav { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--ink); cursor: pointer; }
+.k-cal-nav:hover:not(:disabled), .k-cal-nav:focus-visible { background: var(--chip); outline: none; }
+.k-cal-nav:disabled { color: var(--muted); opacity: .4; cursor: default; }
+.k-cal-arrow { width: 8px; height: 8px; border-left: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; }
+.k-cal-arrow.prev { transform: translateX(1px) rotate(45deg); }
+.k-cal-arrow.next { transform: translateX(-1px) rotate(-135deg); }
+.k-cal-grid { display: flex; flex-direction: column; gap: 2px; }
+.k-cal-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.k-cal-row > span { display: grid; }
+.k-cal-dow { text-align: center; font-size: 12px; color: var(--muted); padding: 2px 0 4px; }
+.k-cal-day { height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
+.k-cal-day.out { color: var(--muted); }
+.k-cal-day.today { box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 600; }
+.k-cal-day:hover:not(:disabled) { background: var(--chip); }
+.k-cal-day:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.k-cal-day.on { background: var(--ink); color: var(--on-ink); font-weight: 600; }
+.k-cal-day:disabled { color: var(--muted); opacity: .35; cursor: default; }
+.k-cal-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; border-top: 1px solid var(--line); }
+@media (max-width: 640px) { .k-cal { width: min(320px, calc(100vw - 32px)); } .k-cal-day { height: 40px; } }
 .k-input-unit { position: relative; }
 .k-input-unit .u { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: var(--t-label); pointer-events: none; }
 .k-input-unit .k-input { padding-right: var(--unit-w, 52px); }
@@ -1852,8 +1870,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-tbl-tools .k-select-all { margin-right: auto; min-height: 40px; flex: 1 1 auto; min-width: 0; }
 .k-tbl-tools > :not(.k-select-all) { flex: none; white-space: nowrap; }   /* the CSV button keeps its one line beside a long "select all" */   /* its own row above the table: at -4px it sat on the table's top edge (owner, 5 Nov) */
 .k-tbl-wrap { position: relative; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 12px;   /* overflow-y: with overflow-x auto it computed to auto too, and a 1px spill drew a vertical scrollbar beside the screener's filters (owner, 5 Nov) */
-  background: linear-gradient(to right, var(--card) 30%, transparent) 0 0 / 28px 100% no-repeat local, linear-gradient(to left, var(--card) 30%, transparent) 100% 0 / 28px 100% no-repeat local,
-    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 0 0 / 16px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 100% 0 / 16px 100% no-repeat scroll; }
+  /* no painted edge (owner, 7 Nov: a light stripe at the right of a table that did not scroll, where the card's colour under the
+     edge cover differed from the box's): the only hint is the fade below, which is there only while the table can scroll further */
+}
 /* LIVE5-002: a column marked `narrow: false` leaves the table when the table is narrower than a wide desktop's (a 1280 or 1024 screen),
    measured on the table's own box, so the rest stay in view without sideways scrolling */
 .k-tbl-wrap.has-narrow { container-type: inline-size; }
@@ -1867,7 +1886,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 @property --k-edge { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @keyframes k-edge { from { --k-edge: 32px; } to { --k-edge: 0px; } }
 @supports (animation-timeline: scroll()) {
-  .k-tbl-wrap:not(.sticky) { animation: k-edge linear both; animation-timeline: scroll(self inline); animation-range: calc(100% - 32px) 100%;
+  .k-tbl-wrap:not(.sticky), .table-wrap { animation: k-edge linear both; animation-timeline: scroll(self inline); animation-range: calc(100% - 32px) 100%;
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--k-edge)), transparent); mask-image: linear-gradient(to right, #000 calc(100% - var(--k-edge)), transparent); }
 }
 .k-table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -2084,6 +2103,28 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-foldcard-body[hidden] { display: none; }
 @media (max-width: 640px) { .k-foldcard-btn::after { inset: calc(-1 * var(--s3)) calc(-1 * var(--s4)); } .k-foldcard-meta { gap: var(--s2); } }
 @media (prefers-reduced-motion: reduce) { .k-foldcard-chev { transition: none; } }
+/* Every page section closes to its header row and moves up or down, remembered (owner, 7 Nov; kit/Section.tsx): two quiet buttons at the
+   right end of the header, the "⋯" menu and the chevron. The header keeps their room, so its own controls never run under them. */
+.k-card-head:has(> .k-sec) { position: relative; padding-right: 68px; }
+.k-sec { position: absolute; top: 0; right: 0; height: 36px; display: inline-flex; align-items: center; gap: 4px; }
+.k-sec-btn { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.k-sec-btn:hover { background: var(--chip); color: var(--ink); }
+.k-sec-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.k-sec-btn svg { width: 18px; height: 18px; fill: currentColor; }
+.k-sec-menu > .k-sec-btn[aria-expanded="true"] { background: var(--chip); color: var(--ink); }
+.k-sec-chev { width: 8px; height: 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(2px) rotate(-135deg); transition: transform .15s; }
+.k-sec-fold[aria-expanded="false"] .k-sec-chev { transform: translateY(-2px) rotate(45deg); }
+.k-sec-menu { position: relative; z-index: 1; }
+.k-sec-pop { left: auto; right: 0; min-width: 160px; }
+.k-sec-pop button.off { color: var(--muted); opacity: .55; cursor: default; }
+.k-sec-pop button.off:hover { background: transparent; }
+/* a closed section: its header row only (its own controls too wait until it is opened) */
+.k-card.k-folded { gap: 0; padding-block: var(--s3); }
+.k-card.k-folded > :not(.k-card-head) { display: none !important; }
+.k-card.k-folded > .k-card-head > .k-card-actions { display: none; }
+.k-foldcard-end { flex: none; display: inline-flex; align-items: center; gap: var(--s2); }
+@media (max-width: 640px) { .k-card-head:has(> .k-sec) { padding-right: 76px; } .k-sec-btn { width: 34px; height: 34px; } }
+@media (prefers-reduced-motion: reduce) { .k-sec-chev { transition: none; } }
 /* the tools of a space, in a FoldCard: a calm table of name, one line and where it lives in the menu */
 .k-more-tools .k-table td.k-wrap { white-space: normal; min-width: 16rem; }
 .k-more-tools .k-more-go { display: inline-flex; flex-direction: column; gap: 2px; }

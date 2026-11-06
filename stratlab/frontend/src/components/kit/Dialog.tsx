@@ -168,7 +168,9 @@ export function usePopover(open: boolean, setOpen: (v: boolean) => void, trigger
       const down = (e: PointerEvent) => {
         const t = e.target as Node;
         const wrap = outside?.current;
-        if (wrap ? !wrap.contains(t) : !panel.current?.contains(t) && !trigger.current?.contains(t)) close.current(false);
+        // a press elsewhere closes it and leaves the focus to what was pressed: putting it back on the button scrolled the page under the
+        // pointer, so the press never became a click (owner, 7 Nov: "i still have to click multiple times")
+        if (wrap ? !wrap.contains(t) : !panel.current?.contains(t) && !trigger.current?.contains(t)) { was.current = false; close.current(false); }
       };
       document.addEventListener("keydown", key, true);
       document.addEventListener("pointerdown", down);

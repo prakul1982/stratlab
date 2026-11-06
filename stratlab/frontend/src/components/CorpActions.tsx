@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { price, safeHref, fmtDate } from "../lib/format";
 import type { Region } from "../lib/research";
-import { Badge, DataTable, ErrorState, Skeleton } from "./kit";
+import { Badge, DataTable, ErrorState, ShowLess, Skeleton } from "./kit";
 
 /* Corporate actions: dividends, bonus issues, splits, buybacks, rights issues and demergers, by ex-date. */
 
@@ -125,7 +125,7 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
               {r.a.url && <a className="link k-note" href={safeHref(r.a.url)} target="_blank" rel="noopener noreferrer">Notice ↗</a>}</span>)) },
         ]} /></div>
       {notes.length > 0 && <ul className="k-note cmp-foots" data-testid="div-now">{notes.map((x) => <li key={x.id}><sup>{x.n}</sup> {x.label} of {x.when}: {x.text}</li>)}</ul>}
-      {data.past.length > 5 && <button className="btn quiet sm k-btn-end" onClick={() => setAll(!all)}>{all ? "Show fewer" : `Show all ${data.past.length}`}</button>}
+      {data.past.length > 5 && (all ? <ShowLess className="btn quiet sm k-btn-end" onLess={() => setAll(false)} /> : <button className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {data.past.length}</button>)}
       <Link className="link k-small" to={`/research/corporate-actions?region=${region}`}>Every company's corporate actions →</Link>
     </div>
   );

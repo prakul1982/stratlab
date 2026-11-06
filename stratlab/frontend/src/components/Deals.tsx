@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { inr, safeHref, fmtDate } from "../lib/format";
-import { Badge, DataTable, EmptyState, ErrorState, Seg, Skeleton } from "./kit";
+import { Badge, DataTable, EmptyState, ErrorState, Seg, ShowLess, Skeleton } from "./kit";
 import { afterText, pairDeals } from "../lib/dealRows";
 
 export type DealKind = "insider" | "sast" | "bulk" | "block";
@@ -91,6 +91,7 @@ export function DealsPanel({ symbol }: { symbol: string }) {
         </div>
       )}
       {rows.length > list.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {rows.length}</button>}
+      {more && rows.length > 12 && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
       {rep.problems.length > 0 && <p className="k-note">Not available right now: {rep.problems.join(", ")}. Try again later.</p>}
       <p className="k-note">From exchange disclosures over the last year, as filed: insider trades and pledges by promoters, directors and key staff, substantial acquisitions, and bulk and block deals. Facts, not advice.</p>
     </div>

@@ -1,4 +1,5 @@
 import { Fragment, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ShowLess } from "./ShowLess";
 import { Info } from "../ui";
 import { textOf } from "./Card";
 import { istToday, minusNode } from "../../lib/format";
@@ -261,10 +262,11 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
         )}
       </table>
     </div>
-    {left > 0 && (
+    {(left > 0 || (pages > 1 && cap !== Infinity)) && (
       <div className="k-row">
         <span className="k-note">Showing {rows.length} of {allRows.length}.</span>
-        <button type="button" className="btn quiet sm" onClick={() => setPages((n) => n + 1)}>Show {Math.min(left, phonePage ?? left)} more</button>
+        {left > 0 && <button type="button" className="btn quiet sm" onClick={() => setPages((n) => n + 1)}>Show {Math.min(left, phonePage ?? left)} more</button>}
+        {pages > 1 && <ShowLess onLess={() => setPages(1)} />}
       </div>
     )}
     </>

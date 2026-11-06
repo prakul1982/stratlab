@@ -6,7 +6,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, fmtDate, openDays, openFor } from "../../lib/format";
 import { oldAudit } from "./auditAge";
-import { Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, Disclosure, EmptyState, Field, FormActions, Meter, Notice, Select, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, ShowLess, Disclosure, EmptyState, Field, FormActions, Meter, Notice, Select, Skeleton, type Column } from "../../components/kit";
 
 /** fact: true of the company (a recent listing, no calls held), not a gap of ours; pending: a source turned the check away, so it runs again. */
 type Level = "mismatch" | "gap" | "error" | "fact" | "pending";
@@ -327,9 +327,10 @@ function Findings({ rows: all, sum, running, file, region, onRecheck, old }: { r
                 {!old && i.level !== "fact" && openDays(i.since ?? r.at) != null && <span className="k-muted" data-testid="audit-age"> · {openFor(openDays(i.since ?? r.at)!)}</span>}</span>)}
             </div>
           ))}
-          {rows.length > upTo && upTo < SHOWN && (
-            <div className="k-row"><span className="k-note">Showing {upTo} of {Math.min(rows.length, SHOWN)}.</span>
-              <button type="button" className="btn quiet sm" onClick={() => setUpTo((n) => n + PAGE_ROWS)}>Show {Math.min(PAGE_ROWS, Math.min(rows.length, SHOWN) - upTo)} more</button></div>
+          {((rows.length > upTo && upTo < SHOWN) || (upTo > PAGE_ROWS && rows.length > PAGE_ROWS)) && (
+            <div className="k-row"><span className="k-note">Showing {Math.min(upTo, rows.length, SHOWN)} of {Math.min(rows.length, SHOWN)}.</span>
+              {rows.length > upTo && upTo < SHOWN && <button type="button" className="btn quiet sm" onClick={() => setUpTo((n) => n + PAGE_ROWS)}>Show {Math.min(PAGE_ROWS, Math.min(rows.length, SHOWN) - upTo)} more</button>}
+              {upTo > PAGE_ROWS && rows.length > PAGE_ROWS && <ShowLess onLess={() => setUpTo(PAGE_ROWS)} />}</div>
           )}
         </div>
       )}

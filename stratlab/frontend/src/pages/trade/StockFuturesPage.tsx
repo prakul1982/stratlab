@@ -7,7 +7,7 @@ import { AlertButton } from "../../components/AlertForm";
 import { Info } from "../../components/ui";
 import { Search } from "../../components/Icons";
 import { POSITIONING_VIEWS, RouteSeg } from "../../components/RouteSeg";
-import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, FactTable, PageHeader, RangeChips, Select, Signed, Skeleton, useRange, type Column } from "../../components/kit";
+import { Card, CardHead, ChipBar, DataTable, ShowLess, EmptyState, ErrorState, FactTable, PageHeader, RangeChips, Select, Signed, Skeleton, useRange, type Column } from "../../components/kit";
 import "./trade.css";
 import "./positioning.css";
 
@@ -216,9 +216,10 @@ export function StockFuturesPage() {
               </div>
               {same && <p className="k-note" data-testid="sf-expiry">Every stock's near futures expire {same.e ? dayText(same.e) : "on the same day"}: {same.td} trading day{same.td === 1 ? "" : "s"} to go{same.td <= t.roll_window ? ", so the share in later expiries is read as the rollover" : ""}.</p>}
               <DataTable csv={{ name: "stock futures", rows }} label="Stock futures by stock" columns={cols} rows={shown} rowKey={(r) => r.symbol} rowAttrs={(r): Record<string, string> => ({ "data-stock": r.symbol, ...(pick === r.symbol ? { "data-on": "1" } : {}) })} empty="No stock matches that." />
-              {rows.length > shown.length && (
-                <div className="k-row"><button type="button" className="btn quiet sm" data-testid="sf-more" onClick={() => setLimit((n) => n + SF_PAGE)}>
-                  Show {Math.min(SF_PAGE, rows.length - shown.length)} more ({rows.length - shown.length} not shown)</button></div>
+              {(rows.length > shown.length || (limit > SF_PAGE && rows.length > SF_PAGE)) && (
+                <div className="k-row">{rows.length > shown.length && <button type="button" className="btn quiet sm" data-testid="sf-more" onClick={() => setLimit((n) => n + SF_PAGE)}>
+                  Show {Math.min(SF_PAGE, rows.length - shown.length)} more ({rows.length - shown.length} not shown)</button>}
+                  {limit > SF_PAGE && rows.length > SF_PAGE && <ShowLess onLess={() => setLimit(SF_PAGE)} />}</div>
               )}
               <p className="k-note">
                 {t.full ? <>Pick a stock for its history and an alert when its MWPL use crosses 80%.</>

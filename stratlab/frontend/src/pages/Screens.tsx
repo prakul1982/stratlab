@@ -15,7 +15,7 @@ import { Info } from "../components/ui";
 import { SurvBadges } from "../components/Surveillance";
 import { useMoreColumns } from "../components/MoreColumns";
 import {
-  Card, CardHead, ChipSet, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
+  Card, CardHead, ChipSet, CheckField, ConfirmDialog, DataTable, ShowLess, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
   type Column,
 } from "../components/kit";
 import { limitLine, planIdOf } from "../lib/lockText";
@@ -98,6 +98,7 @@ export function ScreensPage() {
   const [desc, setDesc] = useState(start.desc);
   const [out, setOut] = useState<ScreenResult | null>(null);
   const [rows, setRows] = useState<ScreenRow[]>([]);
+  const first = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [metaTries, setMetaTries] = useState(0);              // one more with each "Try again": the filters' own list can fail alone (LIVE2-020)
@@ -137,6 +138,7 @@ export function ScreensPage() {
     screensApi.run(region, current, sort, desc, offset)
       .then((r) => {
         if (n !== seq.current) return;
+        if (!offset) first.current = r.rows.length;          // the first page's size, where "Show less" goes back to
         setOut(r); setRows((old) => (offset ? [...old, ...r.rows] : r.rows)); setError(null);
         const shown = offset + r.rows.length;
         // back on a screen that had more rows showing: the next page is asked for until they are all there again
@@ -321,6 +323,7 @@ export function ScreensPage() {
               </div>
             )}
             {out && rows.length < out.total && <button className="btn quiet sm k-btn-end" disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString("en-IN")} left)</button>}
+            {out && first.current > 0 && rows.length > first.current && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setRows((old) => old.slice(0, first.current))} />}
           </Card>
 
           <Card className={`screens-save${showFilters ? "" : " folded"}`}>

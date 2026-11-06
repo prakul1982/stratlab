@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
-import { DataTable, ErrorState, Signed, Skeleton } from "./kit";
+import { DataTable, ErrorState, ShowLess, Signed, Skeleton } from "./kit";
 
 /* Named holders above 1% from the quarterly shareholding pattern (shareholders.py): the promoter group's members and
  * every public holder above 1%, by stake size, with the change since the quarter before. Names and numbers as filed. */
@@ -89,6 +89,7 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
           ]} />
       )}
       {v.holders.length > list.length && <button className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {v.holders.length}</button>}
+      {all && v.holders.length > 12 && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setAll(false)} />}
       {v.dropped.length > 0 && <p className="k-small"><span className="k-muted">Listed last quarter, not this one (below 1%, or sold):</span>{" "}
         {v.dropped.map((d) => `${d.name} (${d.prev_pct.toFixed(2)}%)`).join("; ")}</p>}
       <p className="k-note">{v.note}{!v.search && <> Searching a holder across companies and following one is on the <Link className="link" to="/plans">Basic plan</Link>.</>}</p>
