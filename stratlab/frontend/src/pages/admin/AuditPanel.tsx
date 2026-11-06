@@ -1,3 +1,4 @@
+import { kindsOf } from "../../lib/auditKinds";
 import { downloadCsv } from "../../lib/csvDownload";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -304,6 +305,13 @@ function Findings({ rows: all, sum, running, file, region, onRecheck, old }: { r
           options={(["mismatch", "error", "gap", "fact", "pending", "all"] as const).map((k) => ({ value: k, label: SHOWS[k] }))} />
         {!!all.length && <button type="button" className="btn quiet sm" onClick={csv}>Download CSV</button>}
       </div>
+      {/* LIVE4-017: the findings shown, counted by kind first (how many companies have each), then the companies one by one */}
+      {rows.length > 0 && show !== "pending" && (() => { const kinds = kindsOf(all, show); return kinds.length > 1 && (
+        <DataTable label={`${SHOWS[show]} by kind`} rows={kinds} rowKey={(k) => `${k.area}-${k.kind}`} columns={[
+          { key: "a", header: "Area", rowHeader: true, cell: (k) => k.area },
+          { key: "k", header: "Kind", wrap: true, cell: (k) => k.kind },
+          { key: "c", header: "Companies", numeric: true, cell: (k) => k.companies.toLocaleString("en-IN") },
+        ]} />); })()}
       {rows.length === 0 ? <EmptyState title={`Nothing of this kind${running ? " yet" : ""}`}>Pick another kind above to see the rest.</EmptyState> : (
         <div className="k-stack">
           {rows.length > SHOWN && <p className="k-small k-muted">Showing {SHOWN} of {rows.length} companies; the CSV has all of them.</p>}

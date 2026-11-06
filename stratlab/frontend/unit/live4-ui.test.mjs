@@ -187,3 +187,22 @@ test("LIVE4-013: the usual-range note says which spans are the industry's; an In
   assert.match(read("src/pages/Research.tsx"), /industry=\{c\.industry \?\? \(c\.bank \? "bank" : null\)\}/);
   assert.doesNotMatch(read("src/lib/help.ts"), /adjusted for the company's industry;/);
 });
+
+test("LIVE4-017: the audit's findings are counted by kind; the holidays table fits its card", async () => {
+  const A = await import("../src/lib/auditKinds.ts");
+  assert.equal(A.kindOf("Filed no investor presentation in the last two years, though 12 of its filings are about calls"), "Filed no investor presentation in the last two years, though N of its filings are about calls");
+  assert.equal(A.kindOf("No annual or quarterly report filed in the last two years: the company has stopped filing with the SEC"), "No annual or quarterly report filed in the last two years");
+  const rows = [
+    { symbol: "HAL", issues: [{ level: "fact", area: "Documents", detail: "No call transcript filed, though 3 of its filings: none" }, { level: "gap", area: "Checklist", detail: "x" }] },
+    { symbol: "ITC", issues: [{ level: "fact", area: "Documents", detail: "No call transcript filed, though 5 of its filings: none" }] },
+    { symbol: "TCS", issues: [{ level: "fact", area: "Prices", detail: "Untraded for 4 days" }] },
+  ];
+  assert.deepEqual(A.kindsOf(rows, "fact"), [
+    { area: "Documents", kind: "No call transcript filed, though N of its filings", companies: 2 },
+    { area: "Prices", kind: "Untraded for N days", companies: 1 },
+  ]);
+  assert.match(read("src/pages/admin/AuditPanel.tsx"), /const kinds = kindsOf\(all, show\)/);
+  const h = read("src/pages/admin/HolidaysPanel.tsx");
+  assert.doesNotMatch(h, /header: "Source"/);
+  assert.match(h, /<span className="k-sub-line">\{r\.days_left\} days ahead<\/span>/);
+});
