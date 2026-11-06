@@ -9,13 +9,13 @@ import { confirmMatches, confirmWord, PLAN_NAME, planNote, type UserRow } from "
 
 const DURATIONS = [{ value: "30", label: "30 days" }, { value: "90", label: "90 days" }, { value: "365", label: "1 year" }, { value: "none", label: "No end date" }];
 
-/** One user, opened from the row's "…" button: their facts, then Change plan or Delete data, each in this same box.
+/** One user, opened from the row's "…" button: their facts, then Change plan, Delete data or Delete user, each in this same box.
  * Deleting asks for the email typed in (never the browser's own box). */
 export function UserDialog({ user, onClose, onChanged }: { user: UserRow; onClose: () => void; onChanged: () => void }) {
-  const [step, setStep] = useState<"menu" | "plan" | "erase">("menu");
+  const [step, setStep] = useState<"menu" | "plan" | "erase" | "delete">("menu");
   const who = user.email ?? "this user";
   return (
-    <Modal title={step === "plan" ? `Change plan: ${who}` : step === "erase" ? `Delete the data of ${who}?` : who} onClose={onClose}>
+    <Modal title={step === "plan" ? `Change plan: ${who}` : step === "erase" ? `Delete the data of ${who}?` : step === "delete" ? `Delete the user ${who}?` : who} onClose={onClose}>
       {step === "menu" && (
         <div className="k-stack">
           <FigureTable label={`${who}: account`} header="Account" valueHeader="Value" noteHeader={null} rows={[
@@ -29,11 +29,14 @@ export function UserDialog({ user, onClose, onChanged }: { user: UserRow; onClos
           <div className="k-row">
             <button type="button" className="btn outline" onClick={() => setStep("plan")}>Change plan</button>
             <button type="button" className="btn quiet danger" onClick={() => setStep("erase")}>Delete data…</button>
+            {/* owner, 7 Nov: "can you give a option to delete user" */}
+            {user.email && <button type="button" className="btn quiet danger" onClick={() => setStep("delete")}>Delete user…</button>}
           </div>
         </div>
       )}
       {step === "plan" && <PlanForm user={user} onBack={() => setStep("menu")} onSaved={() => { onChanged(); onClose(); }} />}
       {step === "erase" && <EraseForm user={user} onBack={() => setStep("menu")} onDone={onClose} />}
+      {step === "delete" && <DeleteUserForm user={user} onBack={() => setStep("menu")} onDone={() => { onChanged(); onClose(); }} />}
     </Modal>
   );
 }
@@ -97,6 +100,43 @@ function EraseForm({ user, onBack, onDone }: { user: UserRow; onBack: () => void
           placeholder={word} autoComplete="off" spellCheck={false} />
         <FormActions>
           <button type="submit" className="btn danger" disabled={!ok || busy}>{busy ? "Deleting…" : "Delete this user's data"}</button>
+          <button type="button" className="btn quiet" onClick={onBack}>Back</button>
+        </FormActions>
+      </FormGrid>
+    </div>
+  );
+}
+
+/** The server's own refusal of a plan still billed (main.admin_delete_user), said before the button is offered. */
+export const CANCEL_FIRST = "Their plan is still billed. Cancel the subscription first, then delete the user, so nothing paid is cut off or charged again.";
+
+/** Delete the user: every row of theirs and their sign-in account, once their email is typed (the server checks it again, and refuses
+ * the owner's own account, an admin's, and a plan still billed). */
+function DeleteUserForm({ user, onBack, onDone }: { user: UserRow; onBack: () => void; onDone: () => void }) {
+  const { notify, fail } = useApp();
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const word = user.email ?? "";
+  const ok = !!word && confirmMatches(typed, word);
+  const billed = user.paying && !user.cancel_at_period_end;
+  const remove = async () => {
+    if (!ok || billed) return;
+    setBusy(true);
+    try {
+      const r = await api<{ ok: boolean; failed: { label: string }[] }>(`/admin/users/${user.id}/delete-account`, { method: "POST", body: { confirm: typed } });
+      notify(r.ok ? `${word} is deleted.` : `Not deleted: ${r.failed.map((f) => f.label).join(", ")} couldn't be removed. Their sign-in account stays, so you can run it again.`);
+      onDone();
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+  return (
+    <div className="k-stack" data-testid="delete-user">
+      <p className="k-small k-muted">This deletes their sign-in account and everything of theirs: profile, holdings, notebooks, watchlists, preferences, alerts,
+        connected accounts (tokens and inbox address), net worth and briefs, with no way back. Their invoices and the payment records behind them stay, as tax law asks.</p>
+      {billed && <Notice tone="warn">{CANCEL_FIRST}</Notice>}
+      <FormGrid label="Delete this user" onSubmit={(e) => { e.preventDefault(); void remove(); }}>
+        <Field label="Type their email to confirm" wide value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={word} autoComplete="off" spellCheck={false} />
+        <FormActions>
+          <button type="submit" className="btn danger" disabled={!ok || busy || billed}>{busy ? "Deleting…" : "Delete this user"}</button>
           <button type="button" className="btn quiet" onClick={onBack}>Back</button>
         </FormActions>
       </FormGrid>

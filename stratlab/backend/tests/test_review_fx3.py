@@ -183,6 +183,34 @@ def test_closing_the_account_deletes_the_data_and_the_sign_in_and_keeps_the_invo
     assert db.find_profile("u-free") is None
 
 
+def test_the_owner_deletes_a_user_after_typing_their_email_never_an_admin_or_a_billed_plan(w):
+    """R15 (owner, #23: "can you give a option to delete user"): Admin -> Users, Delete user: every row of theirs and their sign-in
+    account, once their email is typed; never the owner's own account or an admin's; a plan still billed is refused; one audit line."""
+    c = w["client"]
+    mine, theirs = seed("u-free"), seed("u-basic")
+    url = "/admin/users/u-free/delete-account"
+    assert c.post(url, json={"confirm": "free@example.com"}).status_code == 401
+    assert c.post(url, headers=PRO, json={"confirm": "free@example.com"}).status_code == 403          # admins only
+    assert c.post(url, headers=ADMIN, json={"confirm": "nope@example.com"}).status_code == 400        # the email must be typed
+    assert db.find_profile("u-free") and w["fake"].auth.admin.deleted == []
+    r = c.post(url, headers=ADMIN, json={"confirm": " FREE@example.com "})
+    assert r.status_code == 200, r.text
+    assert r.json()["ok"] and r.json()["email"] == "free@example.com" and "u-free" in w["fake"].auth.admin.deleted
+    assert db.find_profile("u-free") is None and holdings.load("u-free")["items"] == [] and db.get_setting("billing:u-free") is None
+    assert json.loads(db.get_setting("invoices:u-free")) == ["INV-9"]                                 # kept, as tax law asks
+    assert db.find_profile("u-basic") and holdings.load("u-basic")["items"] and db.get_setting(job.SENT + theirs)
+    line = json.loads(db.get_setting("admin:deleted_users"))[-1]
+    assert line["uid"] == "u-free" and line["email"] == "free@example.com" and line["closed"] and line["by"]
+    # the owner's own account, and a plan still billed
+    r = c.post("/admin/users/u-admin/delete-account", headers=ADMIN, json={"confirm": "owner@example.com"})
+    assert r.status_code == 403 and "own_account" in r.text and db.find_profile("u-admin")
+    db.update_profile("u-pro", razorpay_subscription_id="sub_1", plan="pro", plan_status="active", cancel_at_period_end=False)
+    r = c.post("/admin/users/u-pro/delete-account", headers=ADMIN, json={"confirm": "pro@example.com"})
+    assert r.status_code == 409 and "Cancel the subscription first" in r.text and db.find_profile("u-pro")
+    assert c.post("/admin/users/no-such/delete-account", headers=ADMIN, json={"confirm": "x@y.z"}).status_code == 404
+    assert "u-pro" not in w["fake"].auth.admin.deleted and "u-admin" not in w["fake"].auth.admin.deleted
+
+
 def test_closing_needs_the_email_typed_and_is_refused_for_the_owner_and_a_billed_plan(w):
     c = w["client"]
     seed("u-free")

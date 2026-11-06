@@ -175,7 +175,7 @@ export function UsersSection() {
       { key: "free", header: "Free months", info: "Free months of Basic this user earned from invites", numeric: true, cell: (u: UserRow) => u.free_months ?? 0 },
     ] : []),
     { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (u) => (
-      <button type="button" className="btn quiet sm" aria-haspopup="dialog" aria-label={`Actions for ${u.email ?? "this user"}`} title="Change plan or delete data"
+      <button type="button" className="btn quiet sm" aria-haspopup="dialog" aria-label={`Actions for ${u.email ?? "this user"}`} title="Change plan, delete data or delete the user"
         onClick={() => setOpen(u)}>⋯</button>) },
   ];
   const sess: Column<SessionRow>[] = [
@@ -197,7 +197,7 @@ export function UsersSection() {
   return (
     <>
       <Card label="Users">
-        <CardHead title="Users" info="Experiments and AI builds are for this month; Invited is everyone who signed up through the user's invite link, ever; Free months are the months of Basic they earned from invites. The newest 200 users are loaded; search by email to find others. The … button on a row changes the plan or deletes the user's data. Test accounts (the +sl- addresses made for reviewers) are left out of the list and of every count on Overview unless shown."
+        <CardHead title="Users" info="Experiments and AI builds are for this month; Invited is everyone who signed up through the user's invite link, ever; Free months are the months of Basic they earned from invites. The newest 200 users are loaded; search by email to find others. The … button on a row changes the plan, deletes the user's data or deletes the user. Test accounts (the +sl- addresses made for reviewers) are left out of the list and of every count on Overview unless shown."
           actions={<>
             <CheckField label={`Show test accounts${ov?.stats.test_accounts ? ` (${ov.stats.test_accounts})` : ""}`} checked={showTest} onChange={setShowTest} />
             {more.toggle}

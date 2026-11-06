@@ -223,6 +223,25 @@ test("admin users: a calm table filtered by plan, a … button per row, and dele
   await expect(page.getByRole("status").first()).toContainText("The app data of load2@example.com is deleted.");
   expect(erased).toEqual(["/admin/users/u-load-2/delete-data"]);
   await expect(ask).toHaveCount(0);
+  // R15 (owner: "can you give a option to delete user"): Delete user asks for the email typed in, then deletes (mocked: nobody is deleted)
+  const removed: { path: string; body: unknown }[] = [];
+  await page.route((u) => /\/admin\/users\/[^/]+\/delete-account$/.test(u.pathname), async (r) => {
+    removed.push({ path: new URL(r.request().url()).pathname, body: r.request().postDataJSON() });
+    await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, closed: true, failed: [], done: [] }) });
+  });
+  await table.getByRole("button", { name: "Actions for load2@example.com" }).click();
+  await page.getByRole("dialog", { name: "load2@example.com" }).getByRole("button", { name: "Delete user…" }).click();
+  const del = page.getByRole("dialog", { name: "Delete the user load2@example.com?" });
+  const kill = del.getByRole("button", { name: "Delete this user" });
+  await expect(kill).toBeDisabled();
+  await del.getByLabel("Type their email to confirm").fill("load2@example.co");
+  await expect(kill).toBeDisabled();
+  await shot(page, "admin-users-delete-user", info);
+  await del.getByLabel("Type their email to confirm").fill("load2@example.com");
+  await kill.click();
+  await expect(page.getByRole("status").first()).toContainText("load2@example.com is deleted.");
+  expect(removed).toEqual([{ path: "/admin/users/u-load-2/delete-account", body: { confirm: "load2@example.com" } }]);
+  await expect(del).toHaveCount(0);
   // Change plan opens in the same box, and Back returns to the user's facts
   await table.getByRole("button", { name: "Actions for load2@example.com" }).click();
   await page.getByRole("dialog", { name: "load2@example.com" }).getByRole("button", { name: "Change plan" }).click();

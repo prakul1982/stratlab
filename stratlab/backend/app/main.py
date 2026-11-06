@@ -6614,6 +6614,47 @@ def admin_delete_user_data(user_id: str, who=Depends(admin.admin_profile)):
     return {"ok": not out["failed"], "email": rows[0].get("email"), **out}
 
 
+ADMIN_DELETES = "admin:deleted_users"      # the audit lines of accounts the owner deleted: [{"at", "by", "uid", "email", "done", "failed"}]
+
+
+@app.post("/admin/users/{user_id}/delete-account")
+def admin_delete_user(user_id: str, req: DeleteMyDataReq, who=Depends(admin.admin_profile)):
+    """Delete one user (owner, 7 Nov: "can you give a option to delete user"): every row of theirs in every store, then their sign-in
+    account, as their own "Delete my account" does (user_data.close_account), once their email is typed in to confirm. Never the
+    owner's own account or an admin's; a plan still billed is refused (cancel it first: nothing paid is cancelled here). Invoices and
+    the payment records behind them stay, as tax law asks. One audit line is kept for each deletion."""
+    not_viewing(who)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", user_id):
+        err(404, "no_user", "No user with that ID.")
+    rows = db.sb().table("profiles").select("*").eq("id", user_id).execute().data
+    if not rows:
+        err(404, "no_user", "No user with that ID.")
+    target = rows[0]
+    email = (target.get("email") or "").strip().lower()
+    if not email or req.confirm.strip().lower() != email:
+        err(400, "confirm_mismatch", "Type the user's email exactly to confirm.")
+    if user_id == who.get("id"):
+        err(403, "own_account", "This is your own account, so it can't be deleted from here.")
+    if email in admin.admin_emails() or user_id in admin._owner_map():
+        err(403, "admin_account", "This is an admin's account, so it can't be deleted from here.")
+    sub, status = target.get("razorpay_subscription_id"), target.get("plan_status")
+    if sub and status not in billing.FINAL and not target.get("cancel_at_period_end"):
+        err(409, "cancel_first", "This user's plan is still billed. Cancel the subscription first, then delete the user, so nothing paid "
+                                 "is cut off or charged again.")
+    throttle(who, "admin-delete-user", 20, 3600, "Too many deletions in an hour. Try again later.")
+    out = user_data.close_account(user_id)
+    line = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "by": who.get("email"), "uid": user_id, "email": email,
+            "closed": out["closed"], "done": len(out["done"]), "failed": [f["label"] for f in out["failed"]]}
+    try:
+        log_rows = db.json_value(db.get_setting(ADMIN_DELETES), [])
+        db.set_setting(ADMIN_DELETES, json.dumps(([*log_rows] if isinstance(log_rows, list) else [])[-499:] + [line]))
+    except Exception as e:                       # the deletion stands; the server log keeps the line
+        print("admin delete user: audit line not stored:", str(e)[:120])
+    log.warning("admin %s deleted user %s (%s): closed=%s, %d areas done, %d failed", who.get("email"), user_id, email, out["closed"],
+                len(out["done"]), len(out["failed"]))
+    return {"ok": out["closed"], "email": email, **out}
+
+
 @app.get("/admin/sessions")
 def admin_sessions(test: bool = False, _=Depends(admin.admin_profile)):
     """The paper sessions running now. The test accounts' are left out unless `test`, as every other count in Admin leaves them out
