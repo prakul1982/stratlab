@@ -108,9 +108,19 @@ test("add a symbol and see its price, reorder the list, and the list is kept", a
   expect(errors).toEqual([]);
 });
 
-test("the panel stays mounted from page to page", async ({ page }, info) => {
+test("LIVE5-006: a panel floating over the page shuts on another page; a docked one stays mounted from page to page", async ({ page }, info) => {
   test.skip(info.project.name === "phone", "desktop only");
+  // 1440: a "docked" panel floats in the corner over the page (it docks from 1600): going to another page shuts it (behaviour changed on
+  // purpose: it stayed open over Sector rotation's controls)
   await open(page, "/");
+  await openPanel(page);
+  await page.getByRole("link", { name: "Settings", exact: true }).first().click().catch(() => page.goto("/settings"));
+  await expect(page).toHaveURL(/\/settings/);
+  await expect(panel(page)).toHaveCount(0);
+  await expect(launch(page)).toBeVisible();
+  // 1700: docked beside the page, it takes its width from the page and stays, the same element
+  await page.setViewportSize({ width: 1700, height: 1000 });
+  await page.goto("/");
   await openPanel(page);
   await page.evaluate(() => { (window as unknown as { __mw: Element }).__mw = document.querySelector("[data-testid=market-watch]")!; });
   await page.getByRole("link", { name: "Settings", exact: true }).first().click().catch(() => page.goto("/settings"));
@@ -219,10 +229,9 @@ test("the panel never covers the cookie question or the page's main actions", as
   await open(page, "/", { ads: true });
   const ask = page.getByTestId("consent");
   await expect(ask).toBeVisible();
-  // the button rises above the question, not over it
+  // signed in, the question is a band in the page's flow above the page (LIVE5 partial), the button in its corner: never over it
   const l = (await launch(page).boundingBox())!, a = (await ask.boundingBox())!;
   expect(gone(l, a), `the button ${JSON.stringify(l)} covers the question ${JSON.stringify(a)}`).toBe(true);
-  expect(l.y + l.height).toBeLessThanOrEqual(a.y);
   await launch(page).click();
   const p = (await panel(page).boundingBox())!;
   // at this window width the panel floats in the corner above the question and leaves the page as it is (the page keeps its width)
@@ -233,7 +242,7 @@ test("the panel never covers the cookie question or the page's main actions", as
   expect(main.x + main.width, "the page keeps its width").toBeGreaterThan(p.x + 100);
   const action = (await page.locator(".side-new").first().boundingBox())!;
   expect(gone(action, p)).toBe(true);
-  // closing it brings the button back, above the question again
+  // closing it brings the button back, clear of the question
   await panel(page).getByRole("button", { name: "Close Market Watch" }).click();
   await expect(launch(page)).toBeVisible();
   await expect(launch(page)).toBeFocused();
@@ -293,26 +302,18 @@ test.describe("on a wide window", () => {
   });
 });
 
-test("a visitor sees a read-only board of the main markets, with no account calls", async ({ page }, info) => {
-  const { errors, asked } = await open(page, "/library", { who: null });
-  await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
-  const phone = info.project.name === "phone";
-  await launch(page).click();
-  const mw = panel(page);
-  await expect(mw).toBeVisible();
-  const rows = mw.getByRole("list", { name: "Main markets" }).getByRole("listitem");
-  await expect(rows.first()).toBeVisible({ timeout: 20_000 });
-  expect(await rows.count()).toBeGreaterThanOrEqual(8);
-  await expect(rows.first().locator(".mw-price")).not.toHaveText("–", { timeout: 15_000 });
-  await expect(mw.getByRole("button", { name: /Add a symbol|Add symbol/ })).toHaveCount(0);
-  await expect(mw.getByRole("link", { name: "Sign in" })).toBeVisible();
-  await expect(mw.getByText(/own lists/)).toBeVisible();
-  if (!phone) await expect(page.locator("#main, .pub-main").first()).toBeVisible();
-  expect(asked.filter((p) => p.startsWith("/watch") || p.startsWith("/me") || p.startsWith("/chart"))).toEqual([]);
-  expect(asked).toContain("/public/markets/watch");
-  expect(errors).toEqual([]);
-  await mw.getByRole("button", { name: "Close Market Watch" }).click();
-  await expect(panel(page)).toHaveCount(0);
+test("LIVE5-007: a visitor's public pages have no Markets button over their text, and read no market board", async ({ page }) => {
+  // behaviour changed on purpose: the round button sat over the Free plan's bullets on an iPhone, for visitors the board wasn't for
+  for (const path of ["/library", "/plans", "/"]) {
+    const { errors, asked } = await open(page, path, { who: null });
+    await expect(page.locator("h1").first()).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(800);
+    await expect(launch(page)).toHaveCount(0);
+    await expect(panel(page)).toHaveCount(0);
+    expect(asked).not.toContain("/public/markets/watch");
+    expect(errors).toEqual([]);
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  }
 });
 
 test("Free is told what it keeps before a limit bites", async ({ page, request }, info) => {

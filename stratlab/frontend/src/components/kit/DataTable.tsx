@@ -25,6 +25,13 @@ export type Column<R> = {
   brief?: boolean;
   /** With the table's `compact`: false leaves this column off a phone's two-line row (a figure the company page has; the desktop table keeps it). */
   phone?: false;
+  /** false leaves this column off when the table is narrower than a wide desktop's (under 900 px: a 1280 or 1024 screen with the menu
+   * open), a figure the row's own page has, so the rest stay in view without sideways scrolling (LIVE5-002). The CSV keeps it. */
+  narrow?: false;
+  /** false leaves this column off when the table is narrower still (under 720 px: a 1024 screen), after the `narrow: false` ones. */
+  tight?: false;
+  /** EXPORT: a column only the CSV has (a figure the table shows inside another column's cell, LIVE5-002); never drawn. */
+  csvOnly?: true;
   /** EXPORT: the cell's value in the table's CSV (a number as a number, a day as "2026-11-04"); null leaves the column out of the file (a
    * trend line, a chart). Without it the file has what the cell shows, a plain number or percent read back as a number. */
   csv?: ((row: R) => CsvValue) | null;
@@ -32,9 +39,9 @@ export type Column<R> = {
 };
 
 const info = (c: { header?: ReactNode; info?: ReactNode }) => <Info label={`About ${typeof c.header === "string" ? c.header.toLowerCase() : "this column"}`}>{c.info}</Info>;
-const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: boolean; up?: boolean; corner?: boolean; brief?: boolean; phone?: false }) =>
+const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: boolean; up?: boolean; corner?: boolean; brief?: boolean; phone?: false; narrow?: false; tight?: false }) =>
   [c.numeric && "k-num", c.wrap && "k-wrap", c.action && "k-act", c.action && c.corner && "k-corner", c.lead && "k-lead", c.up && "k-first",
-    c.brief && "k-brief", c.phone === false && "k-phone-off"].filter(Boolean).join(" ") || undefined;
+    c.brief && "k-brief", c.phone === false && "k-phone-off", c.narrow === false && "k-narrow-off", c.tight === false && "k-tight-off"].filter(Boolean).join(" ") || undefined;
 
 /** A cell that says only "no figure" (a dash, or nothing): a phone card leaves it out instead of a label over a dash (LIVE4-010: every
  * Results card ended "Options imply –"). */
@@ -107,7 +114,7 @@ export function CsvButton<R>({ name, label, columns, rows, text = "Download CSV"
   );
 }
 
-export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, scrollEnd, csv, detail, selectAll, compact }: {
+export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack: stackProp, grid, pinHead, sort, phonePage, scrollEnd, csv, detail, selectAll, compact }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** EXPORT: a "Download CSV" button over the table, the file named after this (stratlab-<name>-<today>.csv); `rows` when the file
    * holds more than the table shows now (a group showing its first 12). */
@@ -145,6 +152,7 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   selectAll?: { on: boolean | "mixed"; set: (on: boolean) => void; label?: string };
 }) {
   const phone = usePhone();
+  const columns = allColumns.filter((c) => !c.csvOnly);
   // a table that does not fit the phone is read as cards, however few its columns (a watchlist's Actions column sat off the edge); `spill` is set after
   // a first look at the drawn table
   const [spill, setSpill] = useState(false);
@@ -158,6 +166,23 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
     if (stackProp === undefined && !grid && !scrollEnd && !pinHead && !spill && b && b.scrollWidth > b.clientWidth + 2) setSpill(true);
   }, [phone, spill, stackProp, grid, scrollEnd, pinHead, allRows.length, columns.length]);
   useLayoutEffect(() => { if (scrollEnd) scrollToEnd(box.current); }, [scrollEnd, columns.length, allRows.length]);
+  // LIVE5-002 (globally): a list table wider than its box on a desktop (a 1280 screen, a narrow Admin column) lets its words wrap and its
+  // cells' padding narrow (`k-fit`), so every column is in view without sideways scrolling; figures stay on one line. Measured again when
+  // the box's width changes. A grid read across on purpose (an option chain, periods) keeps its scroll.
+  const [fit, setFit] = useState(false);
+  const [boxW, setBoxW] = useState(0);
+  useEffect(() => {
+    const b = box.current;
+    if (!b || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setBoxW((w) => (Math.abs(w - b.clientWidth) > 1 ? b.clientWidth : w)));
+    ro.observe(b);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => { setFit(false); }, [boxW, columns.length, allRows.length]);
+  useLayoutEffect(() => {
+    const b = box.current;
+    if (!fit && !phone && !grid && !scrollEnd && b && b.scrollWidth > b.clientWidth + 2) setFit(true);
+  });
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
   const toggle = (k: string) => setOpenRows((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const uid = useId();
@@ -176,8 +201,8 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   return (
     <>
     {((file && file.rows.length > 0) || (cardsNow && selectAll && allRows.length > 0)) && (
-      <div className="k-tbl-tools">{cardsNow && allBox(true)}{file && file.rows.length > 0 && <CsvButton name={file.name} label={label} columns={columns} rows={file.rows} />}</div>)}
-    <div ref={box} data-grid={grid || scrollEnd ? "" : undefined} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && compact ? " compact" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
+      <div className="k-tbl-tools">{cardsNow && allBox(true)}{file && file.rows.length > 0 && <CsvButton name={file.name} label={label} columns={allColumns} rows={file.rows} />}</div>)}
+    <div ref={box} data-grid={grid || scrollEnd ? "" : undefined} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && compact ? " compact" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${columns.some((c) => c.narrow === false || c.tight === false) ? " has-narrow" : ""}${fit ? " k-fit" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
           <tr role={stack ? "row" : undefined}>{columns.map((c, ci) => {

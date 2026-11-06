@@ -522,7 +522,7 @@ export function PulsePage() {
       {/* the mood and every table under it come from one read of the figures (mood.py): a line and its table cannot disagree (MOOD-1) */}
       {mood ? <MoodCard m={mood} region={region} updating={moodUpdating} /> : moodErr
         ? <Card><ErrorState title="The market's figures couldn't be read" action={{ label: "Try again", onClick: moodRetry }}>{moodErr}</ErrorState></Card> : <MoodSkeleton />}
-      {mood?.breadth && <BreadthTable b={mood.breadth} />}
+      {mood?.breadth && <BreadthTable b={mood.breadth} open={mood.is_open !== false} />}
       {mood?.sectors && <SectorsTable s={mood.sectors} closedDay={pulseClosedDay(data?.indices)} />}
       {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} closedDay={pulseClosedDay(data?.indices)} />)}
       {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}

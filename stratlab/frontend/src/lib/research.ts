@@ -273,6 +273,8 @@ export const researchApi = {
   chart: (r: Region, s: string, range: string) =>
     api<{ currency: string; source: string; candles: { t: string; c: number }[] }>(`/research/chart/${r}/${encodeURIComponent(s)}?range=${range}`),
   quotes: (r: Region, syms: string[]) => api<Record<string, Quote | null>>(`/research/quotes?region=${r}&symbols=${syms.map(encodeURIComponent).join(",")}`),
+  /** The same quotes, with the stocks the server's price source was busy for (asked again in a moment, LIVE5-001). */
+  quotesPending: (r: Region, syms: string[]) => api<{ quotes: Record<string, Quote | null>; pending: string[] }>(`/research/quotes?region=${r}&pending=1&symbols=${syms.map(encodeURIComponent).join(",")}`),
   search: (r: Region, q: string) => api<{ symbol: string; name: string; exchange: string; region: Region }[]>(`/research/search?region=${r}&q=${encodeURIComponent(q)}`),
   /** `pending`: the server's first read of the levels since it started isn't back yet (ask again in a moment, R24-001) */
   pulse: (r: Region, focus = "") => api<PulseData>(`/research/pulse?region=${r}${focusParam(focus)}`),

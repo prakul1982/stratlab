@@ -50,12 +50,43 @@ def esop_trust(who: str | None) -> bool:
     return bool(who and _TRUST.search(who))
 
 
+# the exchange's list shortens long names to fit its column: the shortenings that mean one thing each, written out (LIVE4-021 partial:
+# "The MTBJ Ltd. as TRST for Govrnmnt Pension Invstmnt Fund")
+_LONG = {"TRST": "TRUST", "GOVRNMNT": "GOVERNMENT", "GOVT": "GOVERNMENT", "INVSTMNT": "INVESTMENT", "INVSTMNTS": "INVESTMENTS",
+         "INVESTMNT": "INVESTMENT", "MGMT": "MANAGEMENT", "MNGMNT": "MANAGEMENT", "INTL": "INTERNATIONAL", "MKTS": "MARKETS", "MKT": "MARKET",
+         "EMRG": "EMERGING", "EMERG": "EMERGING", "OPPS": "OPPORTUNITIES", "OPP": "OPPORTUNITIES",
+         "PTFL": "PORTFOLIO", "PRTFL": "PORTFOLIO", "ACCT": "ACCOUNT", "A/C": "ACCOUNT", "SECS": "SECURITIES", "ADV": "ADVISORS",
+         "ADVSRS": "ADVISORS", "CORPN": "CORPORATION", "INSTL": "INSTITUTIONAL", "SVCS": "SERVICES", "TECH": "TECHNOLOGIES"}
+_LONG_NAMES = [(_re.compile(r"\bMTBJ\b", _re.I), "MASTER TRUST BANK OF JAPAN")]
+
+
+def _expand(name: str) -> str:
+    """The exchange's shortenings in a name written out: in capitals in a name all in capitals (title case comes after), else in the
+    name's own case ("Trust", "Government", "Master Trust Bank of Japan")."""
+    caps = not _re.search(r"[a-z]", name)
+
+    def cased(full: str, w: str) -> str:
+        if caps:
+            return full
+        if w[:1].islower():
+            return full.lower()
+        return " ".join(x.lower() if x in _SMALL else x.capitalize() for x in full.split())
+    for rx, full in _LONG_NAMES:
+        name = rx.sub(lambda m, f=full: cased(f, m.group(0)), name)
+
+    def one(m: "_re.Match") -> str:
+        w = m.group(0)
+        full = _LONG.get(w.upper())
+        return cased(full, w) if full else w
+    return _re.sub(r"[A-Za-z]+(?:/[A-Za-z]+)?", one, name)
+
+
 def tidy_party(name: str | None) -> str | None:
     """A bulk or block deal's party as the exchange's list writes it, in capitals with an account code ("THE MTBJ LTD. AS TRST FOR
     GOVRNMNT PENSION INVSTMNT FUND MUTB400045794"), without the code and in title case; a name already in its own case is kept."""
     if not name:
         return name
-    out = _CODE.sub("", str(name)).strip(" ,") or str(name)
+    out = _expand(_CODE.sub("", str(name)).strip(" ,") or str(name))
     if _re.search(r"[a-z]", out):
         return out
 

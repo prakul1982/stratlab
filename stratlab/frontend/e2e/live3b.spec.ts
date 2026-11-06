@@ -34,7 +34,12 @@ test("the analytics question is a slim bar on a phone on every page that asks it
     await expect(ask, path).toBeVisible({ timeout: 30_000 });
     const box = (await ask.boundingBox())!;
     expect(box.height, `${path}: the bar's height`).toBeLessThanOrEqual(112);
-    expect(Math.round(box.y + box.height), `${path}: along the window's foot`).toBe(860);
+    // signed out it runs along the window's foot; signed in it is a band in the page's flow above the page, covering nothing (LIVE5
+    // partial: the fixed bar covered the lower page for someone signed in who hadn't answered; behaviour changed on purpose)
+    if (who && await page.locator(".shell").count()) {
+      expect(await ask.evaluate((e) => getComputedStyle(e).position), `${path}: in the page's flow`).toBe("relative");
+      expect(box.y, `${path}: above the page`).toBeLessThan(40);
+    } else expect(Math.round(box.y + box.height), `${path}: along the window's foot`).toBe(860);
     await expect(ask.locator(".consent-short"), path).toBeVisible();
     await expect(ask.locator(".consent-long"), path).toBeHidden();
     await expect(ask.getByRole("link", { name: "What this means" }), path).toBeVisible();
@@ -60,6 +65,8 @@ const SHIFT_PAGES: [string, boolean, number][] = [
   ["/library", false, 1440], ["/library", false, 390], ["/privacy", false, 1440], ["/terms", false, 1440], ["/privacy", false, 390], ["/", false, 1440],
   ["/library", true, 1440], ["/research/pulse", true, 390], ["/research/pulse", true, 1440], ["/research/screens", true, 390], ["/research/screens", true, 1440],
   ["/tour", true, 390], ["/trade", true, 1440], ["/research", true, 390],
+  // LIVE5-008: sector rotation moved by 0.25 (the chart and the header's date arriving) and Admin's Data by 0.34 (the jobs' table under a short placeholder)
+  ["/research/rotation", true, 1440], ["/admin/data", true, 1440], ["/research/results", true, 1440],
 ];
 test("pages hold still while they load: layout shift under 0.1 on every page the review measured, phone and desktop (LIVE3-012)", async ({ page }) => {
   test.setTimeout(400_000);

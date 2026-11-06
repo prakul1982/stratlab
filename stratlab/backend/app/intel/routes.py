@@ -572,16 +572,25 @@ def chart(region: str, symbol: str, range: str = "1y", tf: str = "1d", before: s
 
 
 @router.get("/quotes")
-def quotes(region: str = "IN", symbols: str = "", profile=Depends(current_profile)):
+def quotes(region: str = "IN", symbols: str = "", pending: bool = False, profile=Depends(current_profile)):
+    """{symbol: quote} for up to 24 stocks. With `pending`, {"quotes": {...}, "pending": [...]}: the stocks whose price source
+    was busy for this call, which the page asks for again in a moment (LIVE5-001: a long results page's rows past the source's
+    budget were answered "no price" and kept the day before's close)."""
     r = region_of(region)
     asked = [s.strip().upper() for s in symbols.split(",") if s.strip()][:24]
     syms = [symbol_of(s, r) for s in asked]
-    got = source_call(lambda: hub.quotes(r, syms))
+    if hasattr(hub, "quotes_pending"):
+        got, busy = source_call(lambda: hub.quotes_pending(r, syms))
+    else:
+        got, busy = source_call(lambda: hub.quotes(r, syms)), []
+    back = {s: a for a, s in zip(asked, syms)}
     # answered under the ticker asked for too, so a page holding "BRK.B" finds its quote (R13-001)
     if isinstance(got, dict):
         for a, s in zip(asked, syms):
             if a != s and s in got:
                 got.setdefault(a, got[s])
+    if pending:
+        return ok({"quotes": got, "pending": [back.get(s, s) for s in busy]})
     return ok(got)
 
 

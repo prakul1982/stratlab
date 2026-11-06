@@ -43,7 +43,7 @@ def test_daily_run_stores_each_stocks_finished_days(mem):
     assert b["UP"][0] == 999.0 and b["UP"][1] >= 200
     assert b["UP"][2] == sum(range(999 - 18, 1000))                 # the last 19 closes
     short = [{"t": "2026-09-29T00:00:00+05:30", "c": 2.0}, {"t": "2026-09-30T00:00:00+05:30", "c": 1.0}]
-    assert breadth.base_row(short) == [1.0, 2, None, None, None]
+    assert breadth.base_row(short) == [1.0, 2, None, None, None, None, None]     # LIVE5-003: with the 52-week range (None: under a year)
     assert breadth.base_row([]) is None
 
 

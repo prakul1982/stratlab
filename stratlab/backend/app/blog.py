@@ -13,6 +13,7 @@ A post's body is structured blocks (headings, paragraphs, lists, tables; a text 
 the row already cleaned and escaped again when drawn, so nothing a source returns can put markup or an outside link on a
 page. Facts only, no advice wording, no data-vendor names. Nothing is held in memory: every page reads its rows."""
 import math
+import hashlib
 import re
 from datetime import date, datetime, timedelta, timezone
 
@@ -237,6 +238,10 @@ def clean_blocks(blocks: list) -> list[dict]:
                     tbl["widths"] = widths
                 if b.get("wrap") is True:               # a table of names, not figures: its cells wrap and sit on the left (a theme's companies by layer)
                     tbl["wrap"] = True
+                # every row on a wide screen; on a phone the first `page` rows, the rest one tap away (LIVE4-019 partial: "the latest 50 of 85")
+                pg = b.get("page")
+                if isinstance(pg, int) and not isinstance(pg, bool) and 5 <= pg < len(rows):
+                    tbl["page"] = pg
                 out.append(tbl)
         elif t == "stats":
             # the headline numbers as tiles: a big figure, what it counts, and an optional small line (PUB-2)
@@ -319,12 +324,22 @@ def blocks_html(blocks: list) -> str:
             # small card per row (blog_pages.py), instead of a table cut off by the edge of the screen
             lab = lambda n: f' data-l="{_esc(b["head"][n])}"' if n < len(b["head"]) else ""  # noqa: E731
             head = "".join(f'<th scope="col"{cls(n)}>{_esc(h)}</th>' for n, h in enumerate(b["head"]))
-            rows = "".join("<tr>" + "".join((f'<th scope="row"{cls(n)}>{inline_html(c)}</th>' if n == 0 else f"<td{cls(n)}{lab(n)}>{inline_html(c)}</td>")
-                                            for n, c in enumerate(r)) + "</tr>" for r in b["rows"])
+            row = lambda r: "<tr>" + "".join((f'<th scope="row"{cls(n)}>{inline_html(c)}</th>' if n == 0 else f"<td{cls(n)}{lab(n)}>{inline_html(c)}</td>")  # noqa: E731
+                                             for n, c in enumerate(r)) + "</tr>"
+            pg = b.get("page")
+            rows = "".join(row(r) for r in b["rows"][:pg] if pg) if pg else "".join(row(r) for r in b["rows"])
+            if pg:
+                # a phone shows the first `pg` rows, and "Show all N" (a box ticked, no script) opens the rest; a wide screen has them all
+                rows += '</tbody><tbody class="pg-more">' + "".join(row(r) for r in b["rows"][pg:])
             cols = "<colgroup>" + "".join(f'<col style="width:{w}%">' for w in b["widths"]) + "</colgroup>" if b.get("widths") else ""
             wide = (" wide" + (" w4" if len(b["head"]) == 5 else "")) if len(b["head"]) >= 5 else ""
             wide += " wrap" if b.get("wrap") else ""
-            out.append(f'<div class="btbl{" fx" if cols else ""}{wide}"><table>{cap}{cols}<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>')
+            box = btn = ""
+            if pg:
+                key = "pg" + hashlib.sha1((b.get("caption") or b["head"][0]).encode(), usedforsecurity=False).hexdigest()[:8]
+                box = f'<input type="checkbox" id="{key}" class="pg-all">'
+                btn = f'<label for="{key}" class="pg-btn">Show all {len(b["rows"])} rows</label>'
+            out.append(f'{box}<div class="btbl{" fx" if cols else ""}{wide}{" paged" if pg else ""}"><table>{cap}{cols}<thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>{btn}')
         elif t == "stats":
             out.append('<ul class="kpis">' + "".join(
                 f'<li><b>{_esc(i["v"])}</b><span>{_esc(i["l"])}</span>' + (f'<small>{_esc(i["s"])}</small>' if i.get("s") else "") + "</li>"

@@ -33,7 +33,7 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
   const table = d && d !== "error" ? cardTable(d) : null;
   const columns: Column<CardRow>[] = table ? [
     { key: "k", header: "Measure", rowHeader: true, cell: (r) => r.k },
-    { key: "now", header: table.nowHead, numeric: true, brief: true, cell: (r) => r.now ?? <span className="k-muted">At the close</span> },
+    { key: "now", header: table.nowHead, numeric: true, brief: true, cell: (r) => r.now ?? <span className="k-muted">{table.waiting}</span> },
     ...(table.beforeHead ? [{ key: "before", header: table.beforeHead, numeric: true, cell: (r: CardRow) => r.before ?? "–" }] : []),
   ] : [];
   // the page opens on the group this card shows (or, before it has loaded, on this market), not the reader's own market

@@ -117,8 +117,11 @@ test("US stocks: a bad token says why, a good one reads positions, disconnecting
   const main = page.locator("main");
   await expect(main.locator("#zerodha")).toContainText("Not open yet", { timeout: 30_000 });
   await expect(main.locator("#zerodha").getByRole("button", { name: "Connect Zerodha" })).toHaveCount(0);
-  // Upstox and Dhan are admin-only until their flags: one short row each, no button; Angel One has no connection
-  await expect(main.locator("#angelone")).toHaveCount(0);
+  // Upstox and Dhan are admin-only until their flags: one short row each, no button; Angel One has no connection yet and its row says so
+  // (LIVE4-015 partial: it had no row while the guide said "Not set up yet"; behaviour changed on purpose)
+  await expect(main.locator("#angelone")).toContainText("Not set up yet");
+  await expect(main.locator("#angelone")).toContainText("No live connection yet");
+  await expect(main.locator("#angelone").getByRole("button")).toHaveCount(0);
   for (const [id, name] of [["upstox", "Upstox"], ["dhan", "Dhan"]]) {
     await expect(main.locator(`#${id}`)).toContainText("Not open yet");
     await expect(main.locator(`#${id}`).getByRole("button", { name: `Connect ${name}` })).toHaveCount(0);

@@ -1854,6 +1854,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-tbl-wrap { position: relative; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 12px;   /* overflow-y: with overflow-x auto it computed to auto too, and a 1px spill drew a vertical scrollbar beside the screener's filters (owner, 5 Nov) */
   background: linear-gradient(to right, var(--card) 30%, transparent) 0 0 / 28px 100% no-repeat local, linear-gradient(to left, var(--card) 30%, transparent) 100% 0 / 28px 100% no-repeat local,
     radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 0 0 / 16px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 100% 0 / 16px 100% no-repeat scroll; }
+/* LIVE5-002: a column marked `narrow: false` leaves the table when the table is narrower than a wide desktop's (a 1280 or 1024 screen),
+   measured on the table's own box, so the rest stay in view without sideways scrolling */
+.k-tbl-wrap.has-narrow { container-type: inline-size; }
+@container (max-width: 899px) { .k-table th.k-narrow-off, .k-table td.k-narrow-off { display: none; } }
+@container (max-width: 719px) {
+  .k-table th.k-tight-off, .k-table td.k-tight-off, .k-table .k-tight-hide { display: none; }
+  .has-narrow .k-table th, .has-narrow .k-table td { padding-left: 10px; padding-right: 10px; }
+  .has-narrow .k-table td.k-wrap, .has-narrow .k-table th.k-wrap { min-width: 0; }
+}
 /* a table wider than its card fades out at the right edge until it is scrolled to the end (where the browser can tie it to the scroll; elsewhere the edge shadow above is the hint) */
 @property --k-edge { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @keyframes k-edge { from { --k-edge: 32px; } to { --k-edge: 0px; } }
@@ -3034,3 +3043,37 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* a card's loading placeholder starts with the same moving bar, so a wait always looks like work going on */
 .k-skel-box > .k-working-bar { margin-bottom: 4px; }
+/* LIVE5 partial: the landing page on a phone was 13,297 px. Each space's three tools are said again in its own section below (its
+   "See … ↓" goes there), the four checks keep their words without their pictures, and the long blocks fold (Login.tsx PhoneFold) */
+@media (max-width: 640px) {
+  .lp-space .lp-space-list { display: none; }
+  .lp-checks .lp-art { display: none; }
+  .lp-phone-fold > .stack { margin-top: 16px; }
+}
+/* LIVE5 partial (the analytics question covered the lower page for someone signed in who hadn't answered): in the app it is a band in
+   the page's flow above the page column, which scrolls away with the page and covers nothing, instead of a bar fixed over the foot of
+   every screen; the page needs no padding for it, and the Markets button stays in its corner */
+body:has(.shell) .consent { position: relative; left: auto; right: auto; bottom: auto; width: auto; margin: 12px 16px 0 calc(248px + 16px); z-index: 1; box-shadow: none; }
+body:has(.shell.slim) .consent { margin-left: 16px; }
+@media (max-width: 900px) { body:has(.shell) .consent { margin: 8px 12px 0; } }
+body:has(.shell) .shell { padding-bottom: 0; }
+body:has(.shell) .mw-launch { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+/* LIVE5 partial: a few totals across one row (FactTable `across`): each figure with its note under it, the columns sharing the width */
+.k-facts-across .k-tbl-wrap { display: inline-block; max-width: 100%; vertical-align: top; }
+.k-facts-across .k-table { width: auto; }
+.k-facts-across .k-table th, .k-facts-across .k-table td { min-width: 150px; padding-right: 32px; }
+.k-facts-across .k-table td { font-size: 17px; font-variant-numeric: tabular-nums; }
+.k-facts-across .k-facts-cell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; white-space: normal; }
+.k-facts-across .k-facts-cell > .k-sub-line { font-size: var(--t-note); }
+/* LIVE5-002 (globally): a list table that ran past its box on a desktop (DataTable's k-fit): words wrap, figures stay on one line,
+   padding narrows and a row's buttons may take two lines, so every column is in view at 1280 */
+@media (min-width: 641px) {
+  .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { white-space: normal; padding-left: 10px; padding-right: 10px; }
+  .k-tbl-wrap.k-fit .k-table td.k-num { white-space: nowrap; }
+  .k-tbl-wrap.k-fit .k-table td.k-wrap, .k-tbl-wrap.k-fit .k-table th.k-wrap { min-width: 7rem; }
+  .k-tbl-wrap.k-fit .k-table td.k-act .k-row { flex-wrap: wrap; justify-content: flex-end; }
+  /* a word never breaks inside itself: a row's name (a symbol), a header word, a button or a tag keep their letters together */
+  .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { overflow-wrap: normal; word-break: normal; }
+  .k-tbl-wrap.k-fit .k-table tbody th > a:first-child, .k-tbl-wrap.k-fit .k-table tbody th > b:first-child,
+  .k-tbl-wrap.k-fit .k-table :is(button, .btn, .k-badge, .k-chip, .k-delta) { white-space: nowrap; }
+}

@@ -7,10 +7,9 @@
 }
 .mw-launch:hover { border-color: var(--ink); }
 /* the app's phone has Markets in its top bar; a visitor's phone keeps a round button, so it covers as little as it can */
+/* LIVE5-007: on a public page (someone signed in reading the plans or the blog) a phone has no margin for a floating button: none there */
 @media (max-width: 900px) {
-  .mw-launch.app { display: none; }
-  .mw-launch.public { width: var(--ctl); padding: 0; justify-content: center; }
-  .mw-launch.public span { display: none; }
+  .mw-launch.app, .mw-launch.public { display: none; }
 }
 /* VR7-019: on a laptop the page's content runs to within 56px of the window's edge, so the 108px "Markets" pill stood over the right end of the cards behind it (the
    "Calendar →" on Invest, the corner of the last Money card). Under 1600px it is a round 44px button that fits the margin (its name is its tooltip and its label for a
@@ -18,8 +17,8 @@
    Items 37 and 43 (owner, 30 Oct: "not aligned properly", it sat 1px from the cards at 1280 and 6px at 1440; he picked this of the two ways shown):
    the page column keeps an 80px right margin on a laptop and the button sits centred in it, 18px clear of the cards, its bottom where it was */
 @media (min-width: 901px) and (max-width: 1599px) {
-  .mw-launch.app { width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 18px; }
-  .mw-launch.app span { display: none; }
+  .mw-launch.app, .mw-launch.public { width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 18px; }
+  .mw-launch.app span, .mw-launch.public span { display: none; }
   body:not(.mw-docked) .shell > .main { padding-right: 80px; }
 }
 /* a docked panel takes its width from the page, and the cookie question moves out from under it */

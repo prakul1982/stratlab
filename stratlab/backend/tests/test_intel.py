@@ -45,7 +45,7 @@ def test_screener_parser_reads_every_section():
     assert p["name"] == "Reliance Industries Ltd"
     assert p["ratios"]["Stock P/E"] == "27.4" and "19,05,432" in p["ratios"]["Market Cap"]
     assert p["about"].startswith("Reliance Industries Limited is a Fortune 500")
-    assert p["website"] == "http://www.ril.com"
+    assert p["website"] == "http://www.ril.com/"                 # LIVE5-011: the home page of the own domain
     assert p["pl"]["cols"][0] == "Mar 2020" and p["pl"]["rows"]["Sales"][-1] == 976541
     assert p["quarters"]["rows"]["OPM %"][-1] == 18
     assert p["shareholding"]["rows"]["Promoters"][-1] == 50.07

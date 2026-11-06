@@ -426,6 +426,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     etf_nav.forget()                            # the ETF list and gap history another test stored
     from app import vix
     vix.forget()                                # India VIX quotes and history another test read
+    from app.intel import company as _company
+    _company.forget_closed_quotes()             # quotes read after a close another test kept (LIVE5-001)
     from app import biz_updates, shareholders
     biz_updates.forget()                        # business-update reads and named holders another test stored
     shareholders.forget()

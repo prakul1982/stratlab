@@ -108,7 +108,7 @@ test("MOOD-1: the rotation's four run-on sentences are a table of every one, wit
   assert.match(s, /\.\.\.QUADRANTS\.map\(\(x\) => \(\{ value: x\.id, label: `\$\{x\.name\} \$\{counts\[x\.id\]\}` \}\)\)/);
   assert.match(s, /Entered Leading/);
   assert.doesNotMatch(s, /<Badge[^>]*>New</);                                       // no "New" tag anywhere (owner's rule): the mark says what it is
-  assert.match(s, /header: "1W"[\s\S]*"1M"[\s\S]*"3M"|\{ w1: "1W", m1: "1M", m3: "3M" \}/);
+  assert.match(s, /\{ w1: "1W, pts", m1: "1M, pts", m3: "3M, pts" \}/);           // LIVE5-008: a gap over the benchmark, in points
   assert.match(s, /sort=\{\{ key: sort\?\.key \?\? "", desc: sort\?\.desc \?\? false, onSort \}\}/);
   // the chart (the map) comes first, the table below it (owner, 31 Oct: "the map should be up")
   assert.ok(s.indexOf("<ChartFrame title={`${out.name} vs ${out.benchmark}`}") < s.indexOf('testId="rot-table"'));

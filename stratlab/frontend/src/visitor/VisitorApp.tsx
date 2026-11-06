@@ -75,8 +75,9 @@ export function VisitorApp({ userId }: { userId?: string } = {}) {
         : view.kind === "gate" ? <SignInGate />
         : <NotFound signedIn={false} />}
     </Suspense>
-    {/* the read-only board of main markets, on every public page, outside the page's own loading (MW-1) */}
-    <PublicMarkets userId={userId} />
+    {/* Market Watch on a public page only for someone signed in (LIVE5-007: the round button sat over the Free plan's bullets on an
+        iPhone, for visitors the board wasn't for); outside the page's own loading (MW-1) */}
+    {userId && <PublicMarkets userId={userId} />}
     </>
   );
 }

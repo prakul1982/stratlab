@@ -86,6 +86,9 @@ function SlowFirstScan() {
 /** How long the rotation can take before the page says it is still working. */
 const ROTATION_SLOW_MS = 6000;
 
+/** A gap between two returns in percentage points, signed, two decimals: "+3.27", "−0.40", "0.00" (LIVE5-008). */
+export const ptsText = (v: number): string => { const t = Math.abs(v).toFixed(2); return /[1-9]/.test(t) ? `${v > 0 ? "+" : "−"}${t}` : t; };
+
 export function ScanPage() {
   const [region, setRegion] = useRegion();
   const [params, setParams] = useSearchParams();
@@ -493,7 +496,7 @@ export function RotationPage() {
   const stale = busy && !!out;
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of}
+      <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of} asOfPending={!out && !failed}
         asOfLabel={provisional ? "Provisional closes (prints still settling) up to" : "Closes up to"} asOfTz={marketTz(region)}
         lede="Where each sector (or stock) stands against the market, and which way it's moving. Right of centre = stronger than the benchmark; above centre = gaining pace. Most move clockwise through the four corners." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); setBackTo(null); }} /></div>
@@ -521,7 +524,8 @@ export function RotationPage() {
         </FormGrid>
       </Card>
       {failed && <ErrorState title="The rotation couldn't be worked out" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{failed}</ErrorState>}
-      {busy && !out && !failed && <Card><Skeleton label="Comparing each one with the market" lines={4} />
+      {/* LIVE5-008: the chart's place is held while it is worked out (CLS 0.25: the chart and the header's date arrived and moved the page) */}
+      {busy && !out && !failed && <Card><Skeleton label="Comparing each one with the market" lines={4} page />
         {slow && <p className="k-small k-muted" role="status" data-testid="rotation-slow">Still working: the first look after the close reads the day's closes for every member. It can take up to a minute, and the answer is kept for the next visit.</p>}</Card>}
       {out && (
         <ChartFrame title={`${out.name} vs ${out.benchmark}`} busy={stale ? "Comparing each one with the market" : undefined}
@@ -567,10 +571,12 @@ export function RotationPage() {
               { key: "x", header: "Strength", numeric: true, sortable: true, info: ROTATION_UNITS, cell: (r) => r.x.toFixed(2) },
               // its heading (the way the dot moved in the last step) is the arrow beside the momentum: a column of its own made the table wider than the page
               { key: "y", header: "Momentum", numeric: true, sortable: true, cell: (r) => <>{r.y.toFixed(2)} <span className="k-muted" title="The way it moved in the last step" aria-label={r.heading == null ? "no move" : `heading ${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span></> },
-              ...(["w1", "m1", "m3"] as const).map((k) => ({ key: k, header: { w1: "1W", m1: "1M", m3: "3M" }[k], cardLabel: { w1: "1 week vs the benchmark", m1: "1 month vs the benchmark", m3: "3 months vs the benchmark" }[k],
-                numeric: true, sortable: true, cell: (r: RotationRow) => (r.ret?.[k] == null ? "–" : <Delta value={r.ret[k]!}>{pct(r.ret[k]!, 2)}</Delta>) })),
+              // LIVE5-008: a return over the benchmark's is a gap in percentage points ("+3.27 pts"), not a percent of anything
+              ...(["w1", "m1", "m3"] as const).map((k) => ({ key: k, header: { w1: "1W, pts", m1: "1M, pts", m3: "3M, pts" }[k], csvHeader: { w1: "1W vs the benchmark (pts)", m1: "1M vs the benchmark (pts)", m3: "3M vs the benchmark (pts)" }[k],
+                cardLabel: { w1: "1 week vs the benchmark, pts", m1: "1 month vs the benchmark, pts", m3: "3 months vs the benchmark, pts" }[k],
+                numeric: true, sortable: true, csv: (r: RotationRow) => r.ret?.[k] ?? null, cell: (r: RotationRow) => (r.ret?.[k] == null ? "–" : <Delta value={r.ret[k]!}>{ptsText(r.ret[k]!)}</Delta>) })),
             ]} />
-          <p className="k-note">1W, 1M and 3M: how much more (or less) each returned than {out.benchmark} over the last 5, 21 and 63 sessions, in percentage points. Heading, the arrow beside Momentum, is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. {counts.leading + counts.improving + counts.weakening + counts.lagging === all.length ? `All ${all.length} are listed.` : ""}</p>
+          <p className="k-note">1W, 1M and 3M: how much more (or less) each returned than {out.benchmark} over the last 5, 21 and 63 sessions, in percentage points (pts): a sector up 10.4% against the benchmark's 7.1% is +3.3 pts. Heading, the arrow beside Momentum, is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. {counts.leading + counts.improving + counts.weakening + counts.lagging === all.length ? `All ${all.length} are listed.` : ""}</p>
           {isIndex && (() => { const none = all.filter((r) => !(r.stocks ?? 0)).length; return none > 0
             ? <p className="k-note" data-testid="rot-no-stocks">{none === all.length ? `No list of main stocks is kept for these ${all.length} indices, so they have no Stocks → link.` : `${none} of these ${all.length} have no list of main stocks kept here, so no Stocks → link.`}</p> : null; })()}
           {out.skipped.length > 0 && <p className="k-note">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
