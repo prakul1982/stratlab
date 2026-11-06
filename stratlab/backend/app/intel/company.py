@@ -251,10 +251,21 @@ def _latest_yoy(s: dict, what: str) -> dict:
 def _groups(*groups) -> list[dict]:
     out = []
     for title, items in groups:
-        items = [i for i in items if i["value"] is not None or i.get("text")]
+        items = same_rounding([i for i in items if i["value"] is not None or i.get("text")])
         if items:
             out.append({"title": title, "items": items})
     return out
+
+
+def same_rounding(items: list[dict]) -> list[dict]:
+    """One rounding for one kind of figure in a row: the compounded growth rates (3Y, 5Y, 10Y CAGR, the price's 1Y to 10Y) of a group
+    are all whole numbers when the source gave any of them in whole numbers (LIVE4-013 partial: "3Y CAGR +7.1% · 5Y +7.8% · 10Y CAGR
+    +7%"), never a precise-looking "+7.0%" beside them. The latest year-on-year figure is another kind and keeps its decimal."""
+    rates = [i for i in items if i.get("unit") == "%±" and i.get("label") != "Latest YoY" and i.get("value") is not None]
+    if any(i.get("dp") == 0 for i in rates):
+        ids = {id(i) for i in rates}
+        items = [{**i, "dp": 0} if id(i) in ids else i for i in items]
+    return items
 
 
 def _of(item: dict, period: str | None, more: str | None = None) -> dict:

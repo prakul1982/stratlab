@@ -501,7 +501,8 @@ def test_an_esop_trust_is_not_an_insider_buying_and_deal_names_read_as_names():
     assert deals.trust_note([trust, person], today) == ("Titan Employee Stock Option Trust buys and sells shares for staff stock options; "
                                                         "its trades are left out of this count.")
     assert deals.trust_note([person], today) is None
-    assert deals.tidy_party("THE MTBJ LTD. AS TRST FOR GOVRNMNT PENSION INVSTMNT FUND MUTB400045794").startswith("The MTBJ Ltd. as TRST for Govrnmnt Pension")
+    # the exchange's shortenings written out (LIVE4-021 partial; was "The MTBJ Ltd. as TRST for Govrnmnt Pension")
+    assert deals.tidy_party("THE MTBJ LTD. AS TRST FOR GOVRNMNT PENSION INVSTMNT FUND MUTB400045794").startswith("The Master Trust Bank of Japan Ltd. as Trust for Government Pension")
     assert "MUTB400045794" not in deals.tidy_party("THE MTBJ LTD. AS TRST FOR GOVRNMNT PENSION INVSTMNT FUND MUTB400045794")
     assert deals.tidy_party("Goldman Sachs (Singapore) Pte") == "Goldman Sachs (Singapore) Pte"            # its own case is kept
     assert deals.tidy_party("GOLDMAN SACHS (SINGAPORE) PTE") == "Goldman Sachs (Singapore) Pte"

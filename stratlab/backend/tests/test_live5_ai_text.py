@@ -77,3 +77,21 @@ def test_a_company_website_is_its_own_home_page_never_a_rating_pdf_or_an_encyclo
     assert own_site("https://en.wikipedia.org/wiki/Reliance_Industries") is None
     assert own_site("https://www.icra.in/Rationale/ShowRationaleReport?Id=1") is None
     assert own_site("mailto:ir@ril.com") is None and own_site("") is None and own_site(None) is None
+
+
+def test_one_rounding_for_the_compounded_rates_of_a_row():
+    """LIVE4-013 partial: "3Y CAGR +7.1% · 5Y +7.8% · 10Y CAGR +7%" on HAL's page."""
+    from app.intel.company import _item, same_rounding
+    row = same_rounding([_item("Latest YoY", 16.14, "%±"), _item("3Y CAGR", 7.1, "%±"), _item("5Y CAGR", 7.8, "%±"), _item("10Y CAGR", "7%", "%±")])
+    assert [i.get("dp") for i in row] == [None, 0, 0, 0]
+    keep = same_rounding([_item("3Y CAGR", 7.1, "%±"), _item("5Y CAGR", 7.8, "%±")])
+    assert all(i.get("dp") is None for i in keep)
+
+
+def test_a_block_deal_party_is_written_out_in_full_and_title_case():
+    """LIVE4-021 partial: "The MTBJ Ltd. as TRST for Govrnmnt Pension Invstmnt Fund"."""
+    from app.deals import tidy_party
+    want = "The Master Trust Bank of Japan Ltd. as Trust for Government Pension Investment Fund"
+    assert tidy_party("THE MTBJ LTD. AS TRST FOR GOVRNMNT PENSION INVSTMNT FUND MUTB400045794") == want
+    assert tidy_party("The MTBJ Ltd. as TRST for Govrnmnt Pension Invstmnt Fund") == want
+    assert tidy_party("SOCIETE GENERALE") == "Societe Generale"
