@@ -315,7 +315,10 @@ def check_insider_trades(feed) -> dict:
     if not items:
         return _result("Insider trades", "Filings", "warn", f"No insider-trading disclosures anywhere in the market in the last {INSIDER_WINDOW_DAYS} days, "
                        "though companies file them every trading day: the exchange's insider-trading list has stopped updating.")
-    return _fresh("Insider trades", f"{len(items):,} insider trades across the market in the last {INSIDER_WINDOW_DAYS} days",
+    stale = getattr(items, "stale_at", None)
+    # the exchange didn't answer: its last list stands, with when it was read (R15: a failure in Needs your attention for a slow evening)
+    note = f" (the exchange didn't answer just now: the list as read at {_when(stale)})" if stale else ""
+    return _fresh("Insider trades", f"{len(items):,} insider trades across the market in the last {INSIDER_WINDOW_DAYS} days{note}",
                   _newest(items, "date"), who="the whole market")
 
 

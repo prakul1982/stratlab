@@ -316,6 +316,28 @@ def test_an_empty_announcements_list_is_asked_again_with_fresh_cookies_before_it
     calls.clear()
     nothing = F.NSEFilings(transport=httpx.MockTransport(lambda r: (calls.append(r.url.path), httpx.Response(200, json={"data": []}))[1]), sleep=lambda s: None)
     assert nothing.announcements("QUIET") == [] and calls.count("/api/corporate-announcements") == 2
+    # R15: kept five minutes only, not half an hour, so a company the bot guard answered empty for is asked again soon
+    import time
+    kept_until = next(v[0] for k, v in nothing.cache._d.items() if k[0] == "QUIET")
+    assert kept_until - time.time() <= F.EMPTY_TTL + 1 and F.EMPTY_TTL <= 300
+
+
+def test_an_empty_nse_answer_is_checked_against_the_bse_listing_before_it_is_called_empty():
+    """R15 (6 Nov: TCS showed no filings for half an hour): NSE answering nothing for a company listed on both exchanges, its BSE
+    filings are shown."""
+    from app.intel import filings as F
+
+    class Nse:
+        def announcements(self, symbol, days):
+            return []
+
+    class Bse:
+        def announcements(self, code, days):
+            return [{"at": "2026-11-06T10:00:00+05:30", "title": "Board meeting", "code": code}]
+    feed = F.IndiaFilings(Nse(), Bse(), code_of=lambda s: None, twin_of=lambda s: "532540" if s == "TCS" else None)
+    assert feed.announcements("TCS") == [{"at": "2026-11-06T10:00:00+05:30", "title": "Board meeting", "code": "532540"}]
+    assert [r["exchange"] for r in feed.announcements_both("TCS")] == ["BSE"]
+    assert feed.announcements("NOTWIN") == []
 
 
 def test_a_share_that_listed_today_with_no_candle_yet_is_a_new_listing_not_an_untraded_share():
