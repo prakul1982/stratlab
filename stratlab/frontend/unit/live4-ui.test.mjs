@@ -84,3 +84,32 @@ test("LIVE4-015: the upload step says where the button is; Angel One's row says 
   // the Brokers note counts only rows marked "Not open yet", not the ones not set up on the site
   assert.match(read("src/components/ConnectedAccounts.tsx"), /const closed = rows\.filter\(\(b\) => b\.configured !== false && !b\.available\);/);
 });
+
+test("LIVE4-006: a group phrase is not a company in the headlines table; the main story moves under its headlines when few carry it", async () => {
+  const P = await import("../src/lib/pulseMood.ts");
+  assert.equal(P.groupPhrase("Indian IT stocks"), true);
+  assert.equal(P.groupPhrase("PSU banks"), true);
+  assert.equal(P.groupPhrase("Metal shares"), true);
+  assert.equal(P.groupPhrase("Infosys"), false);
+  assert.equal(P.groupPhrase("HDFC Bank"), false);
+  assert.equal(P.groupPhrase("Bajaj Finance"), false);
+  assert.deepEqual(P.companyRows([{ name: "Indian IT stocks", ticker: "INFY" }, { name: "Infosys", ticker: "INFY" }]).map((r) => r.name), ["Infosys"]);
+  const mood = read("src/pages/PulseMood.tsx");
+  assert.match(mood, /rows=\{companyRows\(ai\.hot\)\}/);
+  assert.match(mood, /const under = !!story && sparseNotes\(marked, sorted\.length\);/);
+  assert.match(mood, /\.\.\.\(story && !under \? \[\{ key: "s", header: "Main story"/);
+  assert.match(read("src/pages/Research.tsx"), /<FlowsTable f=\{mood\.flows\} source=\{ai\?\.flows_source\} \/>/);
+});
+
+test("LIVE4-005 / 007: the live count's time in its header; the read time with its zone; a closed session's columns are its day", async () => {
+  const P = await import("../src/lib/pulseMood.ts");
+  assert.equal(P.sessionHeader(null, (d) => d), "Today");
+  assert.equal(P.sessionHeader("2026-11-05", () => "5 Nov"), "5 Nov");
+  const mood = read("src/pages/PulseMood.tsx");
+  assert.match(mood, /header: b\.live \? \(b\.at \? `Today, \$\{b\.at\}` : "Today"\) : day\(b\.day\)/);
+  assert.match(mood, /Read \{fmtTime\(m\.read_at, \{ tz: marketTz\(region\), zone: true \}\)\}/);
+  assert.doesNotMatch(mood, /toLocaleTimeString\(region/);
+  assert.match(mood, /key: "d", header: sessionHeader\(closedDay, day\)/);
+  assert.match(mood, /header: closedDay \? `Move on \$\{day\(closedDay\)\}` : "Move today"/);
+  assert.match(mood, /title=\{ai \? "No newer headlines yet" : "No headlines yet today"\}/);
+});

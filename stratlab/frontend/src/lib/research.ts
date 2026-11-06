@@ -211,7 +211,9 @@ export interface PulseMood {
   headline: string; lines: string[];
   compare: { index: string; avg_abs: number; days: number; ratio: number; words: string } | null;
   breadth: { group: string; live: boolean; day: string | null; close_day: string | null; prev_day: string | null; adv: number | null; dec: number | null; unch: number | null;
-    stocks: number | null; highs: number | null; lows: number | null; ratio: number | null; rows: MoodBreadthRow[] } | null;
+    stocks: number | null; highs: number | null; lows: number | null; ratio: number | null; rows: MoodBreadthRow[];
+    /** the live count's quarter-hour, "12:15" IST (LIVE4-005) */
+    at?: string | null } | null;
   sectors: { rows: MoodSectorRow[]; up: number; down: number; unchanged: number; of: number; leader: string; laggard: string } | null;
   /** One table for each index of the market (NIFTY 50 and SENSEX; the S&P 500); `est_total` and `actual` (India) say what the companies add up to and what the index moved. */
   movers: { index: string; adding: MoodMover[]; taking: MoodMover[]; of: number; note: string; est_total?: number | null; actual?: number | null }[] | null;

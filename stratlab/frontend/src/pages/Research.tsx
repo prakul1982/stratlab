@@ -34,6 +34,7 @@ import { NamedHoldersPanel } from "../components/NamedHolders";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
+import { companyRows } from "../lib/pulseMood";
 import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
@@ -521,10 +522,10 @@ export function PulsePage() {
       {mood ? <MoodCard m={mood} region={region} /> : moodErr
         ? <Card><ErrorState title="The market's figures couldn't be read" action={{ label: "Try again", onClick: moodRetry }}>{moodErr}</ErrorState></Card> : <MoodSkeleton />}
       {mood?.breadth && <BreadthTable b={mood.breadth} />}
-      {mood?.sectors && <SectorsTable s={mood.sectors} />}
-      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} />)}
+      {mood?.sectors && <SectorsTable s={mood.sectors} closedDay={pulseClosedDay(data?.indices)} />}
+      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} closedDay={pulseClosedDay(data?.indices)} />)}
       {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
-        left={mood.flows ? <FlowsTable f={mood.flows} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
+        left={mood.flows ? <FlowsTable f={mood.flows} source={ai?.flows_source} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
       {mood?.global && <GlobalTable g={mood.global} region={region} />}
       {mood?.calendar && <CalendarTable c={mood.calendar} />}
       <Card>
@@ -540,11 +541,12 @@ export function PulsePage() {
           : (
             <>
               {ai.tone && <p className="inv-summary" data-testid="pulse-tone">{ai.tone}</p>}
-              {ai.flows_source && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
+              {/* the FII/DII source line goes under the FII table (LIVE4-006); without that table it stays here */}
+              {ai.flows_source && !mood?.flows && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
             </>
           )}
       </Card>
-      {ai && ai.hot.length > 0 && <HotTable ai={ai} region={region} />}
+      {ai && companyRows(ai.hot).length > 0 && <HotTable ai={ai} region={region} />}
       {ai && ai.flows.length > 0 && <TopicsTable ai={ai} />}
       {ai && ai.themes.length > 0 && <ThemesTable ai={ai} region={region} />}
       {data && <Card><CardHead title="Headlines" /><HeadlinesTable items={data.headlines} ai={ai} /></Card>}

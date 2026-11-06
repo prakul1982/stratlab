@@ -102,7 +102,7 @@ export function CsvButton<R>({ name, label, columns, rows, text = "Download CSV"
   return (
     <button type="button" className="btn quiet sm" data-csv={name} aria-label={`${text}: ${label}`} title="Download this table as a CSV file, to open in a spreadsheet" onClick={save}>
       {/* on a phone the button says "CSV" (its name stays "Download CSV: …"), so it shares the line with the day or title above a table (LIVE4-010) */}
-      <Download size={16} />{text === "Download CSV" ? <><span className="k-csv-verb">Download </span>CSV</> : text}
+      <Download size={16} />{text === "Download CSV" ? <span><span className="k-csv-verb">Download </span>CSV</span> : text}
     </button>
   );
 }

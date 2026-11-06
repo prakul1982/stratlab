@@ -98,6 +98,12 @@ def fnum(v, dp: int = 0) -> str:
     return "–" if v is None else f"{v:,.{dp}f}".replace("-", MINUS)
 
 
+def points(v) -> str:
+    """ "36 points", "1 point" (LIVE4-007: "added about 1 points")."""
+    n = fnum(v)
+    return f"{n} point" if n == "1" else f"{n} points"
+
+
 def fcr(v) -> str:
     """Rupees crore with Indian digit grouping, no decimals."""
     v = num(v)
@@ -175,7 +181,10 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
            "stocks": v("stocks") if not lv else (adv or 0) + (dec or 0) + (unch or 0),
            "highs": v("highs"), "lows": v("lows"),
            "pct20": num(lv.get("pct20")) if lv else v("pct20"), "pct50": num(lv.get("pct50")) if lv else v("pct50"),
-           "pct200": num(lv.get("pct200")) if lv else v("pct200")}
+           "pct200": num(lv.get("pct200")) if lv else v("pct200"),
+           # the live count's own quarter-hour ("12:15", IST), so the page says which count it is (LIVE4-005: Mood's 111/388 "read 12:29"
+           # beside Breadth's 123/376 "as of 12:30" were two different rounds with nothing saying so)
+           "at": (lv.get("at") or None) if lv else None}
     out["ratio"] = round(adv / dec, 2) if adv is not None and dec else None
     rows = []
 
@@ -289,9 +298,11 @@ def quote_rows(spec: list[tuple], got: dict[str, dict | None], today: str, tzs: 
 
 
 # ---------- the words ----------
-def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None) -> str:
+def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None, breadth: dict | None = None) -> str:
     """One short headline the figures below justify: the day's tone from the index moves, how big a day it is against the
-    usual, and (when there is a count) how many sector indices went the same way. No level and no move is repeated."""
+    usual, and (when there is a count) how many sector indices went the same way. No level and no move is repeated.
+    When most stocks (the breadth count) or most sector indices went the other way from the indices, the day is "Mixed" and
+    the headline says so with those counts (LIVE4-005: "Mildly positive" over 111 risers to 388 fallers and 9 of 16 sectors down)."""
     moves = [(str(i["name"]), float(i["change_pct"])) for i in indices if i.get("name") and num(i.get("change_pct")) is not None][:4]
     if not moves:
         return ""
@@ -315,6 +326,14 @@ def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None) -> 
         return (f"Flat: {count.get(len(moves), 'the')} indices unchanged on the day" if len(moves) > 1 else "Flat on the day") + "."
     who = f"{count[len(moves)]} indices" if len(moves) in count else f"the {moves[0][0]}"
     way = "up" if up else "down"
+    against = []
+    b = breadth if breadth and breadth.get("adv") is not None and breadth.get("dec") is not None and breadth.get("stocks") else None
+    if b and (b["dec"] > b["adv"] if up else b["adv"] > b["dec"]):
+        against.append(f"{fnum(b['dec'] if up else b['adv'])} of {fnum(b['stocks'])} {b.get('group') or ''} stocks {'fell' if up else 'rose'}".replace("  ", " "))
+    if sec and (sec["down"] > sec["up"] if up else sec["up"] > sec["down"]):
+        against.append(f"{sec['down'] if up else sec['up']} of {sec['of']} sector indices {'fell' if up else 'rose'}")
+    if against:
+        return f"Mixed: {who} {way} on the day, but {' and '.join(against)}."
     out = f"{word[:1].upper() + word[1:]}: {who} {way} on the day"
     if cmp and cmp.get("words"):
         out += f", {cmp['words']}"
@@ -329,7 +348,9 @@ def lines_of(p: dict) -> list[str]:
     out: list[tuple[str, str]] = []
     c = p.get("compare")
     if c:
-        out.append(("compare", f"Today's move in the {c['index']} is {c['ratio']:.1f} times its 20-day average daily move ({fpct(c['avg_abs'], sign=False)})."))
+        # after the close the page is about the last session, not "today" (LIVE4-007: "Today's move in the S&P 500" on a page titled "at the last close")
+        lead = "Today's move in the {} is" if p.get("is_open", True) else "The last session's move in the {} was"
+        out.append(("compare", f"{lead.format(c['index'])} {c['ratio']:.1f} times its 20-day average daily move ({fpct(c['avg_abs'], sign=False)})."))
     b = p.get("breadth")
     if b and b.get("adv") is not None and b.get("dec") is not None:
         when = "so far today" if b.get("live") else f"on {day_words(b.get('day'))}" if b.get("day") else ""
@@ -344,10 +365,10 @@ def lines_of(p: dict) -> list[str]:
         bits = []
         if m["adding"]:
             a = m["adding"][0]
-            bits.append(f"{a['name']} added about {fnum(a['points'])} points to the {m['index']}")
+            bits.append(f"{a['name']} added about {points(a['points'])} to the {m['index']}")
         if m["taking"]:
             t = m["taking"][0]
-            bits.append(f"{t['name']} took off about {fnum(abs(t['points']))}")
+            bits.append(f"{t['name']} took off about {points(abs(t['points'])) if fnum(abs(t['points'])) == '1' else fnum(abs(t['points']))}")
         out.append(("movers", " and ".join(bits) + "."))
     f = p.get("flows")
     if f and f["rows"]:
@@ -534,7 +555,7 @@ class Mood:
     def _names(self, region: str) -> dict[str, str]:
         try:
             from .. import screens
-            return {r["symbol"]: short_name(r.get("name") or r["symbol"]) for r in screens.load_index(region).get("rows") or []}
+            return {r["symbol"]: short_name(r.get("name") or r["symbol"], region == "US") for r in screens.load_index(region).get("rows") or []}
         except Exception:
             return {}
 
@@ -569,7 +590,7 @@ class Mood:
             else:
                 syms, names = next((p["symbols"] for p in universes.PRESETS[region] if p["id"] == kind), []), {}
             have.update(self._quotes(region, [s for s in syms if s not in have]))          # shared by the indices: read once
-            members = [{"symbol": s, "name": nm.get(s) or short_name(names.get(s) or s), "market_cap": caps.get(s),
+            members = [{"symbol": s, "name": nm.get(s) or short_name(names.get(s) or s, region == "US"), "market_cap": caps.get(s),
                         "change_pct": (have.get(s) or {}).get("change_pct")} for s in syms]
             block = index_movers(members, lvl["prev_close"], name, total=total,
                                  actual_points=(num(lvl.get("price")) - lvl["prev_close"]) if num(lvl.get("price")) else None)
@@ -595,7 +616,7 @@ class Mood:
             rank = {s: i for i, s in enumerate(sorted(caps, key=lambda s: -caps[s]))}
             rows = [r for r in results.between(region, today, end) if r["symbol"] in rank and rank[r["symbol"]] < 100]
             rows.sort(key=lambda r: (r["date"], rank[r["symbol"]]))
-            out["results"] = [{"symbol": r["symbol"], "name": short_name(r.get("name") or r["symbol"]), "date": r["date"], "purpose": r.get("purpose")} for r in rows[:6]]
+            out["results"] = [{"symbol": r["symbol"], "name": short_name(r.get("name") or r["symbol"], region == "US"), "date": r["date"], "purpose": r.get("purpose")} for r in rows[:6]]
         except Exception as e:
             print("results calendar unavailable:", str(e)[:100])
         try:
@@ -649,7 +670,7 @@ class Mood:
             live = None
             if region in breadth_live.LIVE_REGIONS:
                 lv = breadth_live.settled(breadth_live.view(group, ready=self.hub._kite()), (vt.get("today") or {}).get("day"))
-                live = (lv or {}).get("latest") if lv and lv.get("state") in ("live", "final") else None
+                live = {**lv["latest"], "at": lv.get("as_of")} if lv and lv.get("state") in ("live", "final") and lv.get("latest") else None
             b = breadth_block(vt.get("today"), live, vt["group"]["name"], today_s)
         except Exception as e:
             print("breadth unavailable:", region, str(e)[:100])
@@ -677,7 +698,7 @@ class Mood:
              "compare": cmp, "breadth": b, "sectors": sectors, "movers": movers, "flows": flows,
              "risk": {"rows": risk} if risk else None, "global": {"rows": glob} if glob else None,
              "calendar": cal if any(cal.values()) else None}
-        p["headline"] = headline_of(levels, sectors, cmp)
+        p["headline"] = headline_of(levels, sectors, cmp, b)
         p["lines"] = lines_of(p)
         bad = verify(p)
         if bad:                           # a line the tables don't bear out is never shown (the tables still are)
@@ -706,7 +727,17 @@ class Mood:
 _SUFFIX = re.compile(r"\s+(?:limited|ltd\.?|inc\.?|corporation|corp\.?|company|co\.?|plc|holdings?)\s*$", re.I)
 
 
-def short_name(name: str) -> str:
-    """A company's name for a table cell: the legal ending off ("Reliance Industries Limited" -> "Reliance Industries")."""
+def short_name(name: str, us: bool = False) -> str:
+    """A company's name for a table cell: the legal ending off ("Reliance Industries Limited" -> "Reliance Industries"); a name
+    in exchange capitals in title case, and no "&" left hanging where "& Co" was taken off (LIVE4-007: "ELI LILLY &" and
+    "COSTCO WHOLESALE" beside "Broadcom")."""
     n = " ".join(str(name or "").split())
-    return _SUFFIX.sub("", n).strip(" ,.") or n
+    if us:                     # India's exchange names are in their own case, and "ITC" is a name, not a shout
+        try:
+            from ..stock_pages import proper_name
+            n = proper_name(n) or n
+        except Exception:
+            pass
+    out = _SUFFIX.sub("", n).strip(" ,.")
+    out = re.sub(r"\s+&$", "", out).strip(" ,.")
+    return out or n
