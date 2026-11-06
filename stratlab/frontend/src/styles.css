@@ -3043,3 +3043,10 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 
 /* a card's loading placeholder starts with the same moving bar, so a wait always looks like work going on */
 .k-skel-box > .k-working-bar { margin-bottom: 4px; }
+/* LIVE5 partial: the landing page on a phone was 13,297 px. Each space's three tools are said again in its own section below (its
+   "See … ↓" goes there), the four checks keep their words without their pictures, and the long blocks fold (Login.tsx PhoneFold) */
+@media (max-width: 640px) {
+  .lp-space .lp-space-list { display: none; }
+  .lp-checks .lp-art { display: none; }
+  .lp-phone-fold > .stack { margin-top: 16px; }
+}

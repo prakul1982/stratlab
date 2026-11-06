@@ -42,3 +42,21 @@ test("LIVE5-001: after the close every results row carries a price and the foote
     tds.filter((td) => /^\s*[–-]\s*$/.test(td.textContent ?? "")).length), { timeout: 30_000 }).toBe(0);
   await sane(page, errors);
 });
+
+test("LIVE5 partial: the landing page on a phone is under 9,000 px, its long blocks one fold away, and nothing is lost", async ({ page }, info) => {
+  test.skip(info.project.name !== "phone", "a phone's width");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.locator("h1").first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(2500);
+  const h = await page.evaluate(() => document.documentElement.scrollHeight);
+  expect(h, "the landing page's length on a phone").toBeLessThan(9000);
+  for (const label of ["Options, more Trade tools and the markets", "See a sample company page", "What Free includes", "The three steps"]) {
+    const fold = page.locator("details.lp-phone-fold", { has: page.locator("summary", { hasText: label }) }).first();
+    await expect(fold).toHaveCount(1);
+    await fold.locator("summary").click();
+    await expect(fold).toHaveAttribute("open", "");
+  }
+  await expect(page.getByText("Paper trading trial: 1 strategy for 5 market days").first()).toBeVisible();
+  await expect(page.getByTestId("markets-launch")).toHaveCount(0);                    // LIVE5-007: no floating button over it
+});
