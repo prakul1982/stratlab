@@ -2629,7 +2629,7 @@ def results_moves(region: str = "IN", symbols: str = Query("", max_length=400), 
     """What each company's price did over its earlier results days (the close after the results day against the close before it),
     from its daily prices, kept once worked out. Up to 12 companies; the prices of 6 are read in one call, the rest on the next."""
     r = research_routes.region_of(region)
-    throttle(profile, "results_moves", 30, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
+    throttle(profile, "results_moves", 90, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
     pending: list[str] = []
     got = results_calendar.moves_for(r, _symbols_arg(symbols, r, 12), pending=pending)
     return research_routes.ok({"moves": got, "pending": list(dict.fromkeys(pending))})
@@ -2639,10 +2639,12 @@ def results_moves(region: str = "IN", symbols: str = Query("", max_length=400), 
 def results_implied(symbols: str = Query("", max_length=200), day: str = "", profile=Depends(current_profile)):
     """For stocks with futures and options (India): the move their options price in to the first expiry on or after the results
     day, from the at-the-money straddle. Up to 8 stocks; none without the broker's option prices."""
-    throttle(profile, "results_implied", 20, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
+    throttle(profile, "results_implied", 40, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
     pending: list[str] = []
     got = results_calendar.implied_for(_symbols_arg(symbols, "IN", 8), day[:10] or None, pending=pending)
-    return research_routes.ok({"implied": got, "pending": list(dict.fromkeys(pending))})
+    # `available`: whether option prices can be read at all now (the broker connected); without them the page hides the column and
+    # says so in one line, instead of a dash in every row (LIVE4-002)
+    return research_routes.ok({"implied": got, "pending": list(dict.fromkeys(pending)), "available": bool(kite.ready())})
 
 
 @app.get("/research/results/{region}/{symbol}")
@@ -5330,18 +5332,51 @@ def breadth_load(region: str, symbol: str, days: int, max_wait: float | None = N
     return markets.provider(region).history({"token": symbol}, "1d", days)
 
 
+STOCK_OPTIONS = "NFO"                  # the exchange segment NSE's stock options are listed under in the broker's instrument list
+
+
 def results_options(symbol: str, day: str | None) -> dict | None:
     """The first expiry of a stock's options on or after a results day, and the move its at-the-money straddle prices in."""
     if not kite.ready():
         return None
-    expiries = [e for e in options_data.expiries("NSE", symbol) if not day or e >= day]
+    # stock options are listed under the derivatives segment, "NFO" (the instrument list's exchange), never "NSE": asked for "NSE"
+    # every stock had no expiry and the column was blank for every F&O name (LIVE4-002)
+    expiries = [e for e in options_data.expiries(STOCK_OPTIONS, symbol) if not day or e >= day]
     if not expiries:
         return None
-    return results_calendar.straddle_move(options_data.chain("NSE", symbol, expiries[0], around=1))
+    return results_calendar.straddle_move(options_data.chain(STOCK_OPTIONS, symbol, expiries[0], around=1))
+
+
+def results_options_many(symbols: list[str], day: str | None) -> dict[str, dict | None]:
+    """results_options for several stocks in two quote calls (every stock's price, then every at-the-money call and put), not two
+    per stock: the broker answers one quote call a second, so eight stocks read one by one took the call's whole time (LIVE4-002)."""
+    out: dict[str, dict | None] = {s: None for s in symbols}
+    if not kite.ready():
+        return out
+    picks = {}
+    for s in symbols:
+        expiries = [e for e in options_data.expiries(STOCK_OPTIONS, s) if not day or e >= day]
+        c = options_data.contracts(STOCK_OPTIONS, s, expiries[0]) if expiries else None
+        if c and c.strikes:
+            picks[s] = c
+    if not picks:
+        return out
+    spot_keys = {s: options_data.spot_key(STOCK_OPTIONS, s) for s in picks}
+    spots = options_data.quotes([k for k in spot_keys.values() if k])
+    legs = {}
+    for s, c in picks.items():
+        spot = (spots.get(spot_keys[s] or "") or {}).get("ltp")
+        if spot:
+            atm = c.atm(spot)
+            legs[s] = (spot, atm, c.key("CE", atm), c.key("PE", atm), c.expiry)
+    q = options_data.quotes([k for v in legs.values() for k in v[2:4] if k])
+    for s, (spot, atm, ce, pe, expiry) in legs.items():
+        out[s] = results_calendar.straddle_move({"spot": spot, "expiry": expiry, "rows": [{"strike": atm, "ce": q.get(ce or ""), "pe": q.get(pe or "")}]})
+    return out
 
 
 # the results page's reads wait at most 3 s for a broker turn: behind a job's queue they come back "pending" and are asked again
-results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options)
+results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options, options_many=results_options_many)
 
 
 def breadth_index(region: str, symbol: str, days: int) -> list[dict]:
