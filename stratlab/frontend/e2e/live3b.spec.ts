@@ -36,7 +36,7 @@ test("the analytics question is a slim bar on a phone on every page that asks it
     expect(box.height, `${path}: the bar's height`).toBeLessThanOrEqual(112);
     // signed out it runs along the window's foot; signed in it is a band in the page's flow above the page, covering nothing (LIVE5
     // partial: the fixed bar covered the lower page for someone signed in who hadn't answered; behaviour changed on purpose)
-    if (who) {
+    if (who && await page.locator(".shell").count()) {
       expect(await ask.evaluate((e) => getComputedStyle(e).position), `${path}: in the page's flow`).toBe("relative");
       expect(box.y, `${path}: above the page`).toBeLessThan(40);
     } else expect(Math.round(box.y + box.height), `${path}: along the window's foot`).toBe(860);

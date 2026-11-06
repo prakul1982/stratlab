@@ -250,6 +250,9 @@ test.describe("StratLab's own library, readable signed out (R5V-011)", () => {
   test("the landing page links a real verdict, /library lists them read only, and one opens with its rules and checks", async ({ page }) => {
     await mockLibrary(page);
     await open(page);
+    // (on a phone the verdicts are one fold away: LIVE5 partial, the landing page's length)
+    const fold = page.locator("details.lp-phone-fold > summary", { hasText: "Real verdicts, open to read" });
+    if (page.viewportSize()!.width <= 640) { await fold.waitFor({ timeout: 30_000 }); await fold.click(); }
     const ex = page.locator("#examples");
     await expect(ex.getByRole("heading", { name: "Real verdicts, open to read." })).toBeVisible({ timeout: 30_000 });
     await expect(ex.locator("a.lp-example")).toHaveCount(2);
