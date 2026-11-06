@@ -44,6 +44,7 @@
 .k-cal-kind.c4 .k-cal-dot { background: var(--q-weakening); }
 .k-cal-ev-title { font-weight: 500; overflow-wrap: anywhere; }
 @media (max-width: 640px) {
+  .k-cal-row { gap: 2px; }
   .k-cal-cell { min-height: 46px; padding: 4px 5px; }
   .k-cal-count { display: none; }
   .k-cal-tag { display: none; }

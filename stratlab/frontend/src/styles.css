@@ -1672,7 +1672,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--s5); display: flex; flex-direction: column; gap: var(--s4); min-width: 0; scroll-margin-top: 80px; }
 @media (max-width: 640px) { .k-card { padding: var(--s4); } }
 .k-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; min-height: 36px; }
-.k-card-title { display: inline-flex; align-items: center; gap: var(--s2); font-family: var(--serif); font-size: var(--t-card); font-weight: 600; min-width: 0; }
+.k-card-title { display: inline-flex; align-items: center; gap: var(--s2); font-family: var(--serif); font-size: var(--t-card); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 /* a title with its (i): the button sits after the heading element, on the same line */
 .k-card-titlerow { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
 /* VR1-110: a chart whose only control is "Table" keeps it top-right beside a long title (the title wraps, the button doesn't drop below it) */
@@ -2160,7 +2160,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-card.k-folded > :not(.k-card-head) { display: none !important; }
 .k-card.k-folded > .k-card-head > .k-card-actions { display: none; }
 .k-foldcard-end { flex: none; display: inline-flex; align-items: center; gap: var(--s2); }
-@media (max-width: 640px) { .k-card-head:has(> .k-sec) { padding-right: 76px; } .k-sec-btn { width: 34px; height: 34px; } }
+@media (max-width: 1024px), (pointer: coarse) { .k-card-head:has(> .k-sec) { padding-right: 76px; } .k-sec-btn { width: 34px; height: 34px; } }
 @media (prefers-reduced-motion: reduce) { .k-sec-chev { transition: none; } }
 /* the tools of a space, in a FoldCard: a calm table of name, one line and where it lives in the menu */
 .k-more-tools .k-table td.k-wrap { white-space: normal; min-width: 16rem; }

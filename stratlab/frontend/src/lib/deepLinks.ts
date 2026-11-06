@@ -5,8 +5,6 @@
 import { locate, locateGroup } from "./nav";
 import { isAdVisit } from "./entry";
 
-export { isAdVisit };
-
 /** Every route main.tsx has for a signed-in person (its <Route path>s, without the catch-all). */
 export const APP_ROUTES = [
   "/", "/mine", "/all", "/features", "/trade/g/:group", "/invest/g/:group", "/money/g/:group", "/trade", "/invest", "/money",
