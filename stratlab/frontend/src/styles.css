@@ -3050,3 +3050,11 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .lp-checks .lp-art { display: none; }
   .lp-phone-fold > .stack { margin-top: 16px; }
 }
+/* LIVE5 partial (the analytics question covered the lower page for someone signed in who hadn't answered): in the app it is a band in
+   the page's flow above the page column, which scrolls away with the page and covers nothing, instead of a bar fixed over the foot of
+   every screen; the page needs no padding for it, and the Markets button stays in its corner */
+body:has(.shell) .consent { position: relative; left: auto; right: auto; bottom: auto; width: auto; margin: 12px 16px 0 calc(248px + 16px); z-index: 1; box-shadow: none; }
+body:has(.shell.slim) .consent { margin-left: 16px; }
+@media (max-width: 900px) { body:has(.shell) .consent { margin: 8px 12px 0; } }
+body:has(.shell) .shell { padding-bottom: 0; }
+body:has(.shell) .mw-launch { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }

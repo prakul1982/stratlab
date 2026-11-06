@@ -229,10 +229,9 @@ test("the panel never covers the cookie question or the page's main actions", as
   await open(page, "/", { ads: true });
   const ask = page.getByTestId("consent");
   await expect(ask).toBeVisible();
-  // the button rises above the question, not over it
+  // signed in, the question is a band in the page's flow above the page (LIVE5 partial), the button in its corner: never over it
   const l = (await launch(page).boundingBox())!, a = (await ask.boundingBox())!;
   expect(gone(l, a), `the button ${JSON.stringify(l)} covers the question ${JSON.stringify(a)}`).toBe(true);
-  expect(l.y + l.height).toBeLessThanOrEqual(a.y);
   await launch(page).click();
   const p = (await panel(page).boundingBox())!;
   // at this window width the panel floats in the corner above the question and leaves the page as it is (the page keeps its width)
@@ -243,7 +242,7 @@ test("the panel never covers the cookie question or the page's main actions", as
   expect(main.x + main.width, "the page keeps its width").toBeGreaterThan(p.x + 100);
   const action = (await page.locator(".side-new").first().boundingBox())!;
   expect(gone(action, p)).toBe(true);
-  // closing it brings the button back, above the question again
+  // closing it brings the button back, clear of the question
   await panel(page).getByRole("button", { name: "Close Market Watch" }).click();
   await expect(launch(page)).toBeVisible();
   await expect(launch(page)).toBeFocused();

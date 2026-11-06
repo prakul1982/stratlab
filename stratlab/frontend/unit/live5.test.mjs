@@ -159,3 +159,9 @@ test("LIVE4 partials: Angel One has its row in the Brokers table; HDFC's guide s
   assert.equal(G.guideFor("angelone").connect, "none");
   assert.equal(G.guideFor("hdfc").file.help, undefined);
 });
+
+test("LIVE5 partial: signed in, the analytics question is a band in the page's flow, not a bar fixed over the page's foot", () => {
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(css, /body:has\(\.shell\) \.consent \{ position: relative; left: auto; right: auto; bottom: auto; width: auto; margin: 12px 16px 0 calc\(248px \+ 16px\);/);
+  assert.match(css, /body:has\(\.shell\) \.shell \{ padding-bottom: 0; \}/);
+});

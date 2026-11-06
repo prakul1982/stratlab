@@ -34,7 +34,12 @@ test("the analytics question is a slim bar on a phone on every page that asks it
     await expect(ask, path).toBeVisible({ timeout: 30_000 });
     const box = (await ask.boundingBox())!;
     expect(box.height, `${path}: the bar's height`).toBeLessThanOrEqual(112);
-    expect(Math.round(box.y + box.height), `${path}: along the window's foot`).toBe(860);
+    // signed out it runs along the window's foot; signed in it is a band in the page's flow above the page, covering nothing (LIVE5
+    // partial: the fixed bar covered the lower page for someone signed in who hadn't answered; behaviour changed on purpose)
+    if (who) {
+      expect(await ask.evaluate((e) => getComputedStyle(e).position), `${path}: in the page's flow`).toBe("relative");
+      expect(box.y, `${path}: above the page`).toBeLessThan(40);
+    } else expect(Math.round(box.y + box.height), `${path}: along the window's foot`).toBe(860);
     await expect(ask.locator(".consent-short"), path).toBeVisible();
     await expect(ask.locator(".consent-long"), path).toBeHidden();
     await expect(ask.getByRole("link", { name: "What this means" }), path).toBeVisible();
