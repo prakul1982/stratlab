@@ -206,3 +206,17 @@ test("LIVE4-017: the audit's findings are counted by kind; the holidays table fi
   assert.doesNotMatch(h, /header: "Source"/);
   assert.match(h, /<span className="k-sub-line">\{r\.days_left\} days ahead<\/span>/);
 });
+
+test("LIVE4-020: one source for the plan cards (landing and Plans page alike); the full lists folded; a shorter landing on a phone", async () => {
+  const P = await import("../src/lib/plans.ts");
+  for (const p of ["free", "basic", "pro"]) assert.equal(P.KEY[p].length, 5, p);
+  assert.match(read("src/lib/planKeys.ts"), /export \{ KEY \} from "\.\/plans";/);
+  const login = read("src/pages/Login.tsx");
+  assert.match(login, /\{KEY\[p\]\.map\(\(f\) => <li key=\{f\}><span aria-hidden="true">✓<\/span>\{f\}<\/li>\)\}/);
+  assert.match(login, /<summary>Every feature, plan by plan<\/summary>/);
+  assert.match(css, /\.lp-examples > \.lp-example:nth-child\(n\+2\), \.lp-examples-skel > \.lp-skel-card:nth-child\(n\+2\) \{ display: none; \}/);
+  // /features for a visitor is the landing page at its Trade section, kept out of search: noindex from the server and no canonical address
+  const vercel = JSON.parse(read("vercel.json"));
+  const noindex = vercel.headers.find((h) => h.headers.some((x) => x.key === "X-Robots-Tag" && /noindex/.test(x.value)) && new RegExp(`^${h.source.replace(/\(\?:/g, "(?:")}$`).test("/features"));
+  assert.ok(noindex, "/features carries the noindex header");
+});

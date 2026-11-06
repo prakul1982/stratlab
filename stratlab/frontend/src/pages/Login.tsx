@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, ty
 import { Link } from "react-router-dom";
 import { aboutUsd, usdNote, usePricing } from "../lib/currency";
 import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
-import { FEATURES, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
+import { FEATURES, KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
 import { signIn, signInUnfinished } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
@@ -582,13 +582,20 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                 {"note" in act ? <span className="lp-plan-note small muted">{act.note}</span>
                   : <button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>}
                 <ul className="lp-plan-list">
-                  {FEATURES[p].map((f) => f.endsWith(":") ? <li key={f} className="small muted lp-plan-sub">{f}</li>
-                    : <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}
+                  {/* LIVE4-020: the same five lines as the Plans page's cards (one source, lib/plans KEY); every feature is in its table */}
+                  {KEY[p].map((f) => <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}
                 </ul>
               </div>
             );
           })}
         </div>
+        {/* every feature of each plan, one fold under the even cards (the cards say the five main points) */}
+        <div className="lp-faq lp-all-features"><details>
+          <summary>Every feature, plan by plan</summary>
+          <div className="lp-all-grid">{PLAN_IDS.map((p) => (
+            <div key={p}><h4>{PLAN_NAME[p]}</h4><ul className="lp-plan-list">{FEATURES[p].map((f) => <li key={f}>{f.endsWith(":") ? <span className="small muted">{f}</span> : <><span aria-hidden="true">✓</span>{f}</>}</li>)}</ul></div>
+          ))}</div>
+        </details></div>
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
         {loading ? <span className="lp-skel lp-skel-fine" /> : <p className="small muted k-measure m80" data-testid="usd-note">{[...small, usdNote(rate, pricing?.usd_inr?.fallback)].join(" ")}</p>}
       </div>

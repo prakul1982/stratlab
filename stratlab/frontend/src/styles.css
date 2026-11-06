@@ -758,6 +758,11 @@ td.num, .num { font-family: var(--sans); }
 .lp-faq details:first-child { border-top: 1px solid var(--line); }
 .lp-faq summary { cursor: pointer; font-weight: 600; font-size: 16.5px; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 36px; }
 .lp-faq summary::-webkit-details-marker { display: none; }
+/* LIVE4-020: the plans' full feature lists, folded under the even cards */
+.lp-all-features { margin-top: 8px; }
+.lp-all-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-top: 12px; }
+.lp-all-grid h4 { margin: 0 0 8px; font-size: var(--t-body); }
+@media (max-width: 900px) { .lp-all-grid { grid-template-columns: minmax(0, 1fr); } }
 .lp-faq summary::after { content: "+"; font-family: var(--mono); color: var(--muted); font-size: 18px; line-height: 1.2; }
 .lp-faq details[open] summary::after { content: "–"; }
 .lp-faq details p { margin-top: 10px; line-height: 1.6; max-width: 60ch; }
@@ -825,6 +830,12 @@ td.num, .num { font-family: var(--sans); }
 .lp-sec .lp-markets { display: flex; flex-wrap: wrap; gap: 8px; }
 .lp-markets .lp-market { padding: 6px 14px 6px 6px; gap: 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
 .lp-markets .lp-sym { width: 32px; height: 32px; border-radius: 50%; font-size: 13px; }
+/* LIVE4-020: the landing page on a phone was 14,902px: one example verdict (the link under it opens all of them), and the markets as small chips */
+@media (max-width: 640px) {
+  .lp-examples > .lp-example:nth-child(n+2), .lp-examples-skel > .lp-skel-card:nth-child(n+2) { display: none; }
+  .lp-markets .lp-market { padding: 4px 12px 4px 4px; gap: 8px; font-size: 14px; }
+  .lp-markets .lp-sym { width: 26px; height: 26px; font-size: 12px; }
+}
 .lp-money { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .lp-money .lp-beyond-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
 .lp-money .lp-fix { margin-top: auto; font-size: 13px; }
