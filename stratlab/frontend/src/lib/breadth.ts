@@ -129,3 +129,28 @@ export function withLive(cur: BreadthView | null | "error", got: Pick<BreadthVie
   if (!cur || cur === "error" || !got || cur.group.id !== group) return cur;
   return { ...cur, live: got.live ?? null, pending: got.pending ?? undefined };
 }
+
+/** The Invest home's breadth card as a table of two days (LIVE4-008: a two-column table across the card was mostly empty, and the
+ * last close's 52-week highs and lows sat under a "Today, 6 Nov" header): the newest count, and the close before it in a column of
+ * its own, each headed with its day. While the market trades the year's highs and lows have no count yet: "At the close". */
+export type CardRow = { id: "adv" | "pct50" | "hl"; k: string; now: string | null; before: string | null };
+export function cardTable(d: Pick<BreadthView, "today" | "live"> & { pending?: Pending }): { nowHead: string; beforeHead: string | null; rows: CardRow[] } | null {
+  const f = cardFigures(d);
+  if (!f) return null;
+  const t = d.today;
+  const pair = (a: number | null | undefined, b: number | null | undefined) => `${count(a)} / ${count(b)}`;
+  const liveDay = f.live ? d.live?.day ?? null : null;
+  // the column beside the newest count: the last close while live (or the close before it, once the evening count is today's), else the day before
+  const priorIsToday = !f.live || (liveDay != null && t?.day === liveDay);
+  const priorDay = t ? (priorIsToday ? t.prev_day : t.day) : null;
+  const prior = (k: "adv" | "dec" | "pct50" | "highs" | "lows") => (t ? (priorIsToday ? t[k].prev : t[k].value) : null);
+  const nowHead = f.live ? (liveDay ? `Today, ${shortDay(liveDay)}` : "Today") : t ? `Close of ${shortDay(t.day)}` : "Latest";
+  const beforeHead = priorDay ? `Close of ${shortDay(priorDay)}` : null;
+  const hlNow = f.live ? (liveDay && t?.day === liveDay ? pair(t.highs.value, t.lows.value) : null) : pair(f.highs, f.lows);
+  const rows: CardRow[] = [
+    { id: "adv", k: "Rose / fell", now: pair(f.adv, f.dec), before: beforeHead ? pair(prior("adv"), prior("dec")) : null },
+    { id: "pct50", k: "Above 50-day average", now: share(f.pct50), before: beforeHead ? share(prior("pct50")) : null },
+    { id: "hl", k: "52-week highs / lows", now: hlNow, before: beforeHead ? pair(prior("highs"), prior("lows")) : null },
+  ];
+  return { nowHead, beforeHead, rows };
+}

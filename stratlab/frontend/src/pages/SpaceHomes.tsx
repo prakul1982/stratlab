@@ -326,14 +326,16 @@ function WatchPanel({ region }: { region: Region }) {
   );
 }
 
-type ResultsView = { today: string; weeks: { rows: ResultRow[] }[] };
+/** How many of today's results companies the Invest home names; the header links the whole day. */
+const RESULTS_SHOWN = 6;
+type ResultsView = { today: string; weeks: { rows: ResultRow[]; days?: { date: string; count: number }[] }[] };
 
 /** Results days in the market picked at the top: today's, else the next one; every company's (the largest first, the person's own among
  *  them first) or only the person's stocks, as the account chose (lib/companyScope; owner, 5 Nov: "in Invest home too it's an issue"). */
 function ResultsToday({ region }: { region: Region }) {
   const { me } = useApp();
   const scope = companiesPref(me);
-  const [rows, setRows] = useState<{ today: ResultRow[]; next: ResultRow | null } | null>(null);
+  const [rows, setRows] = useState<{ today: ResultRow[]; total: number; next: ResultRow | null } | null>(null);
   useEffect(() => {
     let live = true;
     setRows(null);
@@ -343,28 +345,31 @@ function ResultsToday({ region }: { region: Region }) {
         const all = views.flatMap((v) => (v ? v.weeks.flatMap((w) => w.rows).map((r) => ({ ...r, today: v.today })) : []));
         const today = all.filter((r) => r.date === r.today);
         const next = all.filter((r) => r.date > r.today).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
-        setRows({ today, next });
+        // the day's whole count, not only the rows the calendar sent (LIVE4-008: "10 companies have results today" on a day of 118)
+        const counted = views.flatMap((v) => (v ? v.weeks.flatMap((w) => w.days ?? []).filter((d) => d.date === v.today) : [])).reduce((a, d) => a + d.count, 0);
+        setRows({ today, total: Math.max(counted, today.length), next });
       });
     return () => { live = false; };
   }, [region, scope]);
   const mine = scope === "mine";
+  const more = rows ? rows.total > RESULTS_SHOWN : false;
   return (
+    // LIVE4-008: no "and N more" tail after the names: the first six, and the whole day one tap away in the header (as the watchlist's "See all")
     <Panel title={`${region === "US" ? "US results" : "Results"} today${mine ? ": your stocks" : ""}`}
-      right={<Link to={withRegion("/research/results", region)} className="link">Calendar →</Link>}>
+      right={<Link to={withRegion("/research/results", region)} className="link" data-testid="invest-results-all">{more ? `All ${rows!.total.toLocaleString("en-IN")} →` : "Calendar →"}</Link>}>
       {rows === null ? <PanelSkel label="Checking results dates" />
         : rows.today.length && !mine ? (
           // every company's: the largest first, in one short paragraph, so the card stays as short as it was with only your stocks beside the
           // watchlist (ui-lint R1 at 1280: four lines of companies left the watchlist with 179px empty under it)
           <p className="small" data-testid="invest-results-today">
-            <span className="muted">{rows.today.length} {rows.today.length === 1 ? "company has" : "companies have"} results today, largest first: </span>
-            {rows.today.slice(0, 6).map((r, i) => (
+            <span className="muted">{rows.total.toLocaleString("en-IN")} {rows.total === 1 ? "company has" : "companies have"} results today{more ? `; the ${RESULTS_SHOWN} largest` : ", largest first"}: </span>
+            {rows.today.slice(0, RESULTS_SHOWN).map((r, i) => (
               <span key={`${r.region}-${r.symbol}`}>{i > 0 && " · "}<Link className="link" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>{r.mine && <span className="muted"> (yours)</span>}</span>
             ))}
-            {rows.today.length > 6 && <span className="muted"> and {rows.today.length - 6} more on the calendar</span>}
           </p>
         ) : rows.today.length ? (
           <div className="k-stack snug" data-testid="invest-results-today">
-            {rows.today.slice(0, 6).map((r) => (
+            {rows.today.slice(0, RESULTS_SHOWN).map((r) => (
               <Link key={`${r.region}-${r.symbol}`} className="space-line" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}>
                 <b>{r.symbol}</b><span className="small muted">{r.out ? "Results filed" : r.purpose}{r.when ? `, ${r.when}` : ""}</span>
               </Link>

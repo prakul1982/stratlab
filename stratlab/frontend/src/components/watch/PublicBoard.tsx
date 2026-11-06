@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { publicGet } from "../../lib/http";
 import { Spark } from "../kit/Spark";
 import { Close } from "../Icons";
-import { changeText, labelOf, MARKET_NAME, priceText, type WatchItem } from "../../lib/watch";
+import { changeArrow, changeText, labelOf, MARKET_NAME, priceText, type WatchItem } from "../../lib/watch";
 import { signCls } from "../../lib/format";
 import { useDialogFocus } from "../kit/Dialog";
 import { isSheet, type PanelLayout } from "../../lib/watchLayout";
@@ -61,7 +61,7 @@ export default function PublicBoard({ layout, vw, onClose }: { layout: PanelLayo
                     <span className="mw-spark" aria-hidden="true">{r.spark && r.spark.length > 1 ? <Spark values={r.spark} tone="neutral" label={`${labelOf(it)}, recent closes`} height={24} /> : null}</span>
                     <span className="mw-px">
                       <b className="mw-price">{r.price == null ? "–" : <>{cur}{priceText(r.price, r.currency ?? null, it.market, it.symbol)}</>}</b>
-                      <span className={`mw-chg ${signCls(r.change_pct, t)}`}>{r.change_pct != null && r.change_pct > 0 ? "▲ " : r.change_pct != null && r.change_pct < 0 ? "▼ " : ""}{t}</span>
+                      <span className={`mw-chg ${signCls(r.change_pct, t)}`}>{changeArrow(r.change_pct)}{t}</span>
                     </span>
                   </div>
                 </li>

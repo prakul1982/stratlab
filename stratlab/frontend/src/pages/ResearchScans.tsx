@@ -467,6 +467,7 @@ export function RotationPage() {
   const counts = Object.fromEntries(QUADRANTS.map((q) => [q.id, all.filter((r) => r.quadrant === q.id).length])) as Record<Quadrant, number>;
   const entered = (r: RotationRow) => r.quadrant === "leading" && !!r.moved && r.moved !== "leading";
   const unit = interval === "weekly" ? "week" : "day";
+  const ago = out ? `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago` : "";
   // just after the US close the last candle is today's provisional close, as the company pages and tiles say (R89-002)
   const provisional = region === "US" && !!out?.as_of && out.as_of.slice(0, 10) === dayIn(now, marketTz("US"))
     && usSettling(markets.find((m) => m.id === "US"), new Date(now));
@@ -553,22 +554,25 @@ export function RotationPage() {
                 ? <span className="rot-name"><label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label>
                     <span>{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}
                       {/* under the name, not beside it: a button in every row made the table wider than its card and the 3M column went off the edge */}
-                      {(r.stocks ?? 0) > 0
-                        ? <button className="link k-sub-line" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>
-                        : <span className="k-sub-line" title="No list of this index's main stocks is kept here">No stocks list</span>}</span></span>
+                      {/* LIVE4-011: an index without a stocks list has nothing under its name; the note under the table says so once ("No stocks list" ×13) */}
+                      {(r.stocks ?? 0) > 0 && <button className="link k-sub-line" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>}</span></span>
                 : <span className="rot-name"><label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label>
                     <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link></span>) },
-              { key: "q", header: "Quadrant", sortable: true, cell: (r) => <QuadrantTag q={r.quadrant} /> },
+              // LIVE4-011: where it was a trail ago is a line under where it is now (it was a column of its own repeating "→ now", and the 3M
+              // column ran past the card at 1440)
+              { key: "q", header: "Quadrant", sortable: true, wrap: true, cell: (r) => (
+                <span className="rot-quad"><QuadrantTag q={r.quadrant} />
+                  {r.moved && <span className="k-sub-line" data-testid="rot-was">{r.moved === r.quadrant ? `Same as ${ago}` : <>From {QUADRANTS.find((x) => x.id === r.moved)?.name ?? r.moved}, {ago}</>}</span>}
+                  {entered(r) && <Badge tone="ok">Entered Leading</Badge>}</span>) },
               { key: "x", header: "Strength", numeric: true, sortable: true, info: ROTATION_UNITS, cell: (r) => r.x.toFixed(2) },
               // its heading (the way the dot moved in the last step) is the arrow beside the momentum: a column of its own made the table wider than the page
               { key: "y", header: "Momentum", numeric: true, sortable: true, cell: (r) => <>{r.y.toFixed(2)} <span className="k-muted" title="The way it moved in the last step" aria-label={r.heading == null ? "no move" : `heading ${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span></> },
-              { key: "m", header: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`, cardLabel: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago → now`,
-                cell: (r) => (r.moved ? (r.moved === r.quadrant ? <span className="k-small k-muted">no change</span>
-                  : <span className="rot-move"><span className="rot-was"><QuadrantTag q={r.moved} /><span aria-hidden="true">→</span><QuadrantTag q={r.quadrant} /></span>{entered(r) && <Badge tone="ok">Entered Leading</Badge>}</span>) : "–") },
               ...(["w1", "m1", "m3"] as const).map((k) => ({ key: k, header: { w1: "1W", m1: "1M", m3: "3M" }[k], cardLabel: { w1: "1 week vs the benchmark", m1: "1 month vs the benchmark", m3: "3 months vs the benchmark" }[k],
                 numeric: true, sortable: true, cell: (r: RotationRow) => (r.ret?.[k] == null ? "–" : <Delta value={r.ret[k]!}>{pct(r.ret[k]!, 2)}</Delta>) })),
             ]} />
           <p className="k-note">1W, 1M and 3M: how much more (or less) each returned than {out.benchmark} over the last 5, 21 and 63 sessions, in percentage points. Heading, the arrow beside Momentum, is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. {counts.leading + counts.improving + counts.weakening + counts.lagging === all.length ? `All ${all.length} are listed.` : ""}</p>
+          {isIndex && (() => { const none = all.filter((r) => !(r.stocks ?? 0)).length; return none > 0
+            ? <p className="k-note" data-testid="rot-no-stocks">{none === all.length ? `No list of main stocks is kept for these ${all.length} indices, so they have no Stocks → link.` : `${none} of these ${all.length} have no list of main stocks kept here, so no Stocks → link.`}</p> : null; })()}
           {out.skipped.length > 0 && <p className="k-note">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
         </Card>
       )}

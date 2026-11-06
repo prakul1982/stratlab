@@ -16,8 +16,9 @@ export function PageHeader({ eyebrow, title, lede, asOf, asOfPending = false, as
   asOfPending?: boolean;
 }) {
   const when = asOfText(asOf, { tz: asOfTz });
-  // an (i) with nothing else to sit beside ends the lede's line, instead of standing alone on a row of its own
-  const inline = !!info && !!lede && !when && !asOfPending && !actions;
+  // an (i) with no as-of badge to sit beside ends the lede's line, instead of standing alone on a row of its own or in front of the
+  // page's buttons (LIVE4-012: Net worth's (i) floated left of "Add an entry")
+  const inline = !!info && !!lede && !when && !asOfPending;
   const slot = useRef<HTMLDivElement | null>(null);
   return (
     <>

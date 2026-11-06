@@ -394,7 +394,7 @@ function CompanyView() {
       {c.metrics.length > 0 && (
         <Card id="co-numbers">
           <CardHead title="Key numbers" info={HELP.researchMetrics} actions={<Link className="btn quiet sm" to={deepTo}>10 years in the deep dive →</Link>} />
-          <MetricsGrid groups={c.metrics} currency={ccy} industry={c.industry} />
+          <MetricsGrid groups={c.metrics} currency={ccy} industry={c.industry ?? (c.bank ? "bank" : null)} />   {/* India's pages have no industry name: a lender is still a bank's spans (LIVE4-013) */}
         </Card>
       )}
 

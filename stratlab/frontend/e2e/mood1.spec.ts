@@ -187,7 +187,8 @@ for (const region of ["IN", "US"] as const) {
     const total = await table.locator("tbody tr").count();
     expect(total).toBeGreaterThanOrEqual(8);
     for (const head of ["Quadrant", "Strength", "Momentum", "1W", "1M", "3M"]) await expect(table.getByRole("columnheader", { name: new RegExp(head) })).toBeVisible();
-    await expect(table.getByRole("columnheader", { name: /ago → now/ })).toBeVisible();
+    // LIVE4-011: where each one was a trail ago is a line under its quadrant now (a column of its own pushed 3M off the card)
+    await expect(table.getByTestId("rot-was").first()).toHaveText(/^(From \w+, |Same as )\d+ (weeks?|days?) ago$/);
     // every one is a row, and the quadrant chips' counts add up to all of them: no "and 7 more"
     const bar = page.getByRole("group", { name: "Show quadrant" });
     const labels = await bar.getByRole("button").allInnerTexts();

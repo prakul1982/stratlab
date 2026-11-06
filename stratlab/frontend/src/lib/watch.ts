@@ -205,6 +205,23 @@ export function priceText(v: number | null | undefined, currency: string | null 
   return v.toLocaleString(loc, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
 
+/** The arrow before a change, from the change as written: none on "0.00%" (LIVE4-009: TCS at +0.004% showed "▲ 0.00%"). */
+export function changeArrow(v: number | null | undefined): string {
+  const t = changeText(v);
+  return t.startsWith("+") ? "▲ " : t.startsWith("−") ? "▼ " : "";
+}
+
+/** When the newest price on the list was read, for the panel's foot: "Prices as of 12:55:04 IST"; null before any price
+ * (LIVE4-009: every other price block says when, the Market Watch panel said nothing). `ats` are the quotes' times and the
+ * moment the last tick came in. */
+export function asOfLine(ats: (string | number | null | undefined)[], tz = "Asia/Kolkata"): string | null {
+  const ms = ats.map((a) => (a == null ? NaN : typeof a === "number" ? a : Date.parse(a))).filter((x) => Number.isFinite(x));
+  if (!ms.length) return null;
+  const d = new Date(Math.max(...ms));
+  const t = d.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+  return `Prices as of ${t} ${tz === "Asia/Kolkata" ? "IST" : tz === "America/New_York" ? "ET" : ""}`.trim();
+}
+
 /** +1.23%, −0.40% (a real minus), 0.00% when it rounds to nothing, – with no figure. */
 export function changeText(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "–";

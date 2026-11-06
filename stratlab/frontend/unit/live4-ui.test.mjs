@@ -3,7 +3,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { register } from "node:module";
 
+// a source file's own imports name no extension ("./api"): try ".ts" (as unit/live1.test.mjs does)
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
+
+globalThis.window ??= { STRATLAB_CONFIG: { API_BASE: "", SUPABASE_URL: "", SUPABASE_ANON_KEY: "" } };
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const css = read("src/styles.css");
 const invCss = read("src/styles-invest.css");
@@ -112,4 +118,72 @@ test("LIVE4-005 / 007: the live count's time in its header; the read time with i
   assert.match(mood, /key: "d", header: sessionHeader\(closedDay, day\)/);
   assert.match(mood, /header: closedDay \? `Move on \$\{day\(closedDay\)\}` : "Move today"/);
   assert.match(mood, /title=\{ai \? "No newer headlines yet" : "No headlines yet today"\}/);
+});
+
+test("LIVE4-008: the breadth card is a table of two days, each column headed with its day; no figure under another day's header", async () => {
+  const { cardTable } = await import("../src/lib/breadth.ts");
+  const fig = (value, prev) => ({ value, prev, change: null });
+  const today = { day: "2026-11-05", prev_day: "2026-11-04", adv: fig(359, 300), dec: fig(138, 200), pct50: fig(46.4, 44.0), highs: fig(24, 20), lows: fig(3, 5) };
+  const live = { state: "live", day: "2026-11-06", as_of: "12:30", latest: { adv: 123, dec: 376, pct50: 41.0 } };
+  const t = cardTable({ today, live });
+  assert.equal(t.nowHead, "Today, 6 Nov");
+  assert.equal(t.beforeHead, "Close of 5 Nov");
+  assert.deepEqual(t.rows.map((r) => [r.id, r.now, r.before]), [["adv", "123 / 376", "359 / 138"], ["pct50", "41.0%", "46.4%"], ["hl", null, "24 / 3"]]);
+  // after the close, before the live count: the last close against the one before it
+  const shut = cardTable({ today, live: null });
+  assert.equal(shut.nowHead, "Close of 5 Nov");
+  assert.equal(shut.beforeHead, "Close of 4 Nov");
+  assert.deepEqual(shut.rows.map((r) => r.before), ["300 / 200", "44.0%", "20 / 5"]);
+  const card = read("src/components/BreadthCard.tsx");
+  assert.match(card, /r\.now \?\? <span className="k-muted">At the close<\/span>/);
+  assert.doesNotMatch(card, /FactTable/);
+  // Invest home's results: the day's whole count, no "and N more" tail, the whole day linked in the header
+  const homes = read("src/pages/SpaceHomes.tsx");
+  assert.doesNotMatch(homes, /more on the calendar/);
+  assert.match(homes, /\{more \? `All \$\{rows!\.total\.toLocaleString\("en-IN"\)\} →` : "Calendar →"\}/);
+  assert.match(homes, /setRows\(\{ today, total: Math\.max\(counted, today\.length\), next \}\)/);
+  // the consent question is a slim bar along the foot of the page column in the app too, and the page's foot clears it
+  assert.match(css, /body:has\(\.shell\) \.consent \{ left: calc\(248px \+ 16px\); right: 16px; width: auto; flex-direction: row;/);
+  assert.match(css, /\.shell \{ padding-bottom: var\(--consent-h, 0px\); \}\n\}/);
+});
+
+test("LIVE4-009: Market Watch says when its prices are from, and draws no arrow on 0.00%", async () => {
+  const W = await import("../src/lib/watch.ts");
+  assert.equal(W.changeArrow(0.004), "");
+  assert.equal(W.changeArrow(-0.004), "");
+  assert.equal(W.changeArrow(0.05), "▲ ");
+  assert.equal(W.changeArrow(-1.2), "▼ ");
+  assert.equal(W.changeArrow(null), "");
+  assert.equal(W.asOfLine([]), null);
+  assert.equal(W.asOfLine([null, "2026-11-06T07:25:04Z", Date.parse("2026-11-06T07:25:09Z")]), "Prices as of 12:55:09 IST");
+  for (const f of ["src/components/watch/WatchRow.tsx", "src/components/watch/PublicBoard.tsx", "src/components/watch/WatchPanel.tsx"]) {
+    assert.match(read(f), /changeArrow\(/, f);
+    assert.doesNotMatch(read(f), /> 0 \? "▲ "/, f);
+  }
+  assert.match(read("src/components/watch/WatchPanel.tsx"), /\{list && asOf && <span data-testid="mw-as-of"> · \{asOf\}<\/span>\}/);
+});
+
+test("LIVE4-011: sector rotation says once that an index has no stocks list, and its names are left-aligned", () => {
+  const s = read("src/pages/ResearchScans.tsx");
+  assert.doesNotMatch(s, />No stocks list</);
+  assert.match(s, /data-testid="rot-no-stocks"/);
+  assert.match(css, /\.rot-name button\.link \{ text-align: left; \}/);
+  // where it was a trail ago is under its quadrant, not a column of its own
+  assert.doesNotMatch(s, /ago → now`/);
+  assert.match(s, /data-testid="rot-was">\{r\.moved === r\.quadrant \? `Same as \$\{ago\}` : <>From /);
+});
+
+test("LIVE4-012: a page's (i) ends its lede when there is no as-of badge, never in front of its buttons; Net worth has one Add an entry", () => {
+  assert.match(read("src/components/kit/PageHeader.tsx"), /const inline = !!info && !!lede && !when && !asOfPending;/);
+  const nw = read("src/pages/money/NetWorthPage.tsx");
+  assert.match(nw, /<EmptyState title="Nothing added yet">/);
+  assert.equal((nw.match(/Add an entry<\/button>/g) ?? []).length, 1);
+});
+
+test("LIVE4-013: the usual-range note says which spans are the industry's; an India bank gets the bank spans", () => {
+  const r = read("src/components/Research.tsx");
+  assert.doesNotMatch(r, /adjusted for the company's industry where it differs/);
+  assert.match(r, /it is the same span for every industry/);
+  assert.match(read("src/pages/Research.tsx"), /industry=\{c\.industry \?\? \(c\.bank \? "bank" : null\)\}/);
+  assert.doesNotMatch(read("src/lib/help.ts"), /adjusted for the company's industry;/);
 });
