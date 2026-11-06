@@ -165,3 +165,14 @@ test("LIVE5 partial: signed in, the analytics question is a band in the page's f
   assert.match(css, /body:has\(\.shell\) \.consent \{ position: relative; left: auto; right: auto; bottom: auto; width: auto; margin: 12px 16px 0 calc\(248px \+ 16px\);/);
   assert.match(css, /body:has\(\.shell\) \.shell \{ padding-bottom: 0; \}/);
 });
+
+test("LIVE5-002 globally: a list table wider than its box on a desktop wraps its words (k-fit) instead of hiding columns past the edge", () => {
+  const dt = readFileSync(new URL("../src/components/kit/DataTable.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(dt, /if \(!fit && !phone && !grid && !scrollEnd && b && b\.scrollWidth > b\.clientWidth \+ 2\) setFit\(true\);/);
+  assert.match(dt, /\$\{fit \? " k-fit" : ""\}/);
+  assert.match(css, /\.k-tbl-wrap\.k-fit \.k-table th, \.k-tbl-wrap\.k-fit \.k-table td \{ white-space: normal; padding-left: 10px; padding-right: 10px; \}/);
+  assert.match(css, /\.k-tbl-wrap\.k-fit \.k-table td\.k-num \{ white-space: nowrap; \}/);
+  const rules = readFileSync(new URL("../e2e/ui-lint-rules.ts", import.meta.url), "utf8");
+  assert.match(rules, /add\("R27", e, `a table of \$\{head\.length\} columns shows/);
+});

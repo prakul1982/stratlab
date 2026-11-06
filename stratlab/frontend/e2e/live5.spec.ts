@@ -52,9 +52,9 @@ test("LIVE5 partial: the landing page on a phone is under 9,000 px, its long blo
   const h = await page.evaluate(() => document.documentElement.scrollHeight);
   expect(h, "the landing page's length on a phone").toBeLessThan(9000);
   for (const label of ["Options, more Trade tools and the markets", "See a sample company page", "What Free includes", "The three steps"]) {
-    const fold = page.locator("details.lp-phone-fold", { has: page.locator("summary", { hasText: label }) }).first();
+    const fold = page.locator("details.lp-phone-fold").filter({ has: page.locator(":scope > summary", { hasText: label }) }).first();
     await expect(fold).toHaveCount(1);
-    await fold.locator("summary").click();
+    await fold.locator(":scope > summary").click();
     await expect(fold).toHaveAttribute("open", "");
   }
   await expect(page.getByText("Paper trading trial: 1 strategy for 5 market days").first()).toBeVisible();
