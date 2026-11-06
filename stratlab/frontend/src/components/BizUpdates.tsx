@@ -4,7 +4,7 @@ import { safeHref, fmtDate } from "../lib/format";
 import { bizChange, bizValue, periodName, tidyTitle } from "../lib/biz";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
-import { DataTable, EmptyState, Notice, Skeleton } from "./kit";
+import { DataTable, EmptyState, Notice, ShowLess, Skeleton } from "./kit";
 import { PlanActions } from "./PlanInterest";
 
 /* Monthly and quarterly business updates read into numbers (biz_updates.py): the company's filed figures with the line
@@ -136,6 +136,7 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
         </ul>
       ) : <EmptyState title="No business update filed">They are listed here as the company files them.</EmptyState>}
       {v.filings.length > files.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {v.filings.length}</button>}
+      {more && v.filings.length > 6 && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
       {v.problems.length > 0 && <p className="k-note">{v.problems.slice(0, 3).join(" · ")}</p>}
       <p className="k-note">{v.note}</p>
     </div>, right);

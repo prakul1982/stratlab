@@ -10,6 +10,7 @@ import { VERDICT_FACT, VerdictBadge } from "./ui";
 import { Signed } from "./kit/Signed";
 import { Badge } from "./kit/Badge";
 import { DataTable, type Column } from "./kit/DataTable";
+import { ShowLess } from "./kit/ShowLess";
 
 /* The pieces of a library strategy that its page behind sign-in and its read-only public page both draw: what an entry
  * looks like, which of its figures exist, and its rules in words. Kept apart from pages/LibraryPage.tsx so the public
@@ -181,10 +182,11 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
           sort={{ key: by?.key ?? "", desc: by?.desc ?? true, onSort: (k) => setBy((b) => (b?.key === k ? { key: k as SortKey, desc: !b.desc } : { key: k as SortKey, desc: true })) }}
           detail={{ label: "Rules and details", render: details }} />
       </div>
-      {sorted.length > PHONE_ROWS * pages && (
+      {(sorted.length > PHONE_ROWS * pages || (pages > 1 && sorted.length > PHONE_ROWS)) && (
         <div className="k-row lib-more" data-testid="lib-show-more">
-          <span className="k-note">Showing {PHONE_ROWS * pages} of {sorted.length}.</span>
-          <button type="button" className="btn quiet sm" onClick={() => setPages((n) => n + 1)}>Show {Math.min(PHONE_ROWS, sorted.length - PHONE_ROWS * pages)} more</button>
+          <span className="k-note">Showing {Math.min(PHONE_ROWS * pages, sorted.length)} of {sorted.length}.</span>
+          {sorted.length > PHONE_ROWS * pages && <button type="button" className="btn quiet sm" onClick={() => setPages((n) => n + 1)}>Show {Math.min(PHONE_ROWS, sorted.length - PHONE_ROWS * pages)} more</button>}
+          {pages > 1 && <ShowLess onLess={() => setPages(1)} />}
         </div>
       )}
     </>

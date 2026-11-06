@@ -359,7 +359,8 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await expect(page.getByRole("region", { name: "Mutual funds" }).getByText(/redemption/)).toBeVisible({ timeout: 30_000 });
 
   await page.goto("/money/mutual-funds");
-  await fold.click({ timeout: 30_000 });
+  // R15 (owner, 7 Nov) changed this on purpose: a fold stays as it was left, so "Your schemes", opened above, is still open after the visit
+  await expect(fold).toHaveAttribute("aria-expanded", "true", { timeout: 30_000 });
   await expect(schemes.getByText("Example Flexi Cap Fund - Direct Plan - Growth")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Delete my mutual fund data" }).click();
   await page.getByRole("dialog", { name: "Delete my mutual fund data?" }).getByRole("button", { name: "Delete my mutual fund data" }).click();

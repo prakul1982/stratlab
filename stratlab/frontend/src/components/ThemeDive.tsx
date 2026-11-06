@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { deckFileName } from "../lib/deckName";
 import { REGION_NAME } from "../lib/research";
 import { Link } from "react-router-dom";
-import { Badge, Card, CardHead, CsvButton, DataTable, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
+import { Badge, Card, CardHead, CsvButton, DataTable, ShowLess, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
 import { Download } from "./Icons";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
@@ -100,7 +100,7 @@ function MemberGroup({ name, official, rows, cols }: { name: string; official: b
     <section className="k-stack">
       <h3 className="k-sub">{name}{official && <span className="k-muted"> · official industry</span>}</h3>
       <DataTable label={`${name}: companies in the theme`} columns={cols} rows={shown} rowKey={(c) => c.ticker} />
-      {rows.length > MEMBERS_SHOWN && <button type="button" className="btn quiet sm" onClick={() => setAll(!all)}>{all ? `Show the first ${MEMBERS_SHOWN}` : `Show all ${rows.length} companies`}</button>}
+      {rows.length > MEMBERS_SHOWN && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>{`Show all ${rows.length} companies`}</button>)}
     </section>
   );
 }

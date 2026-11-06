@@ -394,7 +394,10 @@ export function startApp(root: HTMLElement) {
   createRoot(root).render(
     <StrictMode>
       <LoadGuard>
-        <BrowserRouter>
+        {/* every move to another page shows at once (owner, 7 Nov: "the single click is still not working ... i still have to click multiple
+            times"): as a transition (the router's default) the old page stayed on screen, with nothing moving, until the new page's code
+            had arrived, so a first click looked like it did nothing. Now the page's loading bar shows the moment it is clicked. */}
+        <BrowserRouter useTransitions={false}>
           <App />
         </BrowserRouter>
       </LoadGuard>

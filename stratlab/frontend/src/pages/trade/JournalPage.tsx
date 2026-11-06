@@ -10,7 +10,7 @@ import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
 import { journalEmpty } from "../../lib/journalEmpty";
 import { JOURNAL_COVERS, JOURNAL_LEDE, journalSavedNote, journalVsTax } from "../../lib/journalTax";
-import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column, UploadProblem, useUploadProblem } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, ShowLess, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column, UploadProblem, useUploadProblem } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
@@ -581,7 +581,9 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
       <CardHead title="Trades" actions={
         <label className="k-search j-search"><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a symbol or setup" aria-label="Find a symbol or setup" /></label>} />
       <DataTable csv={{ name: "journal trades", rows }} stack label="Trades" columns={cols} rows={rows.slice(0, shown)} rowKey={(t) => t.id} empty="No trade matches that." />
-      {rows.length > shown && <div className="k-center"><button type="button" className="btn quiet sm" onClick={() => setShown((n) => n + 100)}>Show more ({rows.length - shown} left)</button></div>}
+      {(rows.length > shown || (shown > 50 && rows.length > 50)) && <div className="k-center">
+        {rows.length > shown && <button type="button" className="btn quiet sm" onClick={() => setShown((n) => n + 100)}>Show more ({rows.length - shown} left)</button>}
+        {shown > 50 && rows.length > 50 && <ShowLess onLess={() => setShown(50)} />}</div>}
       {j.overlap > 0 && <p className="k-note">{j.overlap} tax P&amp;L line{j.overlap === 1 ? " is" : "s are"} left out: your tradebook has the same trades, with their times.</p>}
       {j.count > j.trades.length && <p className="k-note">The latest {j.trades.length.toLocaleString("en-IN")} trades are listed; the stats count all {j.count.toLocaleString("en-IN")}.</p>}
     </Card>

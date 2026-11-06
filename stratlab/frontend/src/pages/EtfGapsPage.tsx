@@ -5,7 +5,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { useMarketRefresh } from "../lib/marketLive";
 import { FUND_NAME, dayCount, gapAtLastTrade, gapShort, loadEtfGaps, type EtfGap, type EtfGaps, type Fund } from "../lib/etfGaps";
 import { EtfGapDetailView } from "../components/EtfGap";
-import { Badge, Card, CardHead, ChipBar, DataTable, ErrorState, Field, FieldGroup, FormGrid, PageHeader, Select, Skeleton, StockPicker, type Column } from "../components/kit";
+import { Badge, Card, CardHead, ChipBar, DataTable, ShowLess, ErrorState, Field, FieldGroup, FormGrid, PageHeader, Select, Skeleton, StockPicker, type Column } from "../components/kit";
 
 /* Indian ETFs' price against their NAV: every ETF on the exchange's list, the widest gap first, with each one's 30-day
  * range. Picking one opens its own view (the gap now and each day's close against that day's NAV). Facts only. */
@@ -125,6 +125,7 @@ export function EtfGapsPage() {
           {!all && !q.trim() && rows.length > TOP && (
             <div className="k-row"><span className="k-note">Showing {TOP} of {rows.length} ETFs, in the order above.</span>
               <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>Show all {rows.length}</button></div>)}
+          {all && !q.trim() && rows.length > TOP && <div className="k-row"><ShowLess onLess={() => setAll(false)} /></div>}
           <p className="k-note">{data.alerts ? <>Set an alert on a gap from an ETF's view, or on the <Link className="link" to="/alerts">Alerts page</Link>.</>
             : <>Alerts when a gap passes a level you set are on the <Link className="link" to="/plans">Basic plan</Link>.</>}</p>
         </Card>
