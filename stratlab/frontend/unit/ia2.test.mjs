@@ -144,5 +144,7 @@ test("item 44: each plan card takes its rows from the plans' grid (subgrid), and
 test("item 43: a tile's F&O note fits one line and the Money calendar's two cards stack up to 1360px", () => {
   assert.match(read("src/pages/Research.tsx"), /<FoBadges region=\{region\} symbol=\{w\.symbol\} plain \/>/);          // the F&O note is the watchlist page's since LIVE3-015
   assert.match(read("src/styles.css"), /@media \(max-width: 1360px\) \{ \.k-two\.mc-grid \{ grid-template-columns: minmax\(0, 1fr\); \} \}/);
-  assert.equal(JSON.parse(read("e2e/ui-lint.allow.json")).allow.length, 1);
+  const allow = JSON.parse(read("e2e/ui-lint.allow.json")).allow;
+  assert.equal(allow.filter((a) => a.rule !== "R27").length, 1);                   // LIVE5: R27's wide-table entries aside, still the one
+  for (const a of allow) assert.ok(a.reason && a.reason.length > 60, a.element);
 });
