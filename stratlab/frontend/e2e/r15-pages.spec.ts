@@ -66,3 +66,31 @@ test("R15 #3: Where you stand is the headline figure beside a small own / owe / 
   await expect(card.getByTestId("nw-snapshots")).toHaveCount(0);
   await sane(page, errors);
 });
+
+test("R15 #12: the breadth table is in the kit's colours on the Invest home and the Breadth page", async ({ page }) => {
+  let errors = await open(page, "/invest", "Market breadth");
+  const card = page.getByTestId("breadth-card");
+  const rose = card.getByRole("row").filter({ hasText: "Rose / fell" }).first();
+  await expect(rose.locator(".k-up").first()).toBeVisible({ timeout: 30_000 });
+  await expect(rose.locator(".k-down").first()).toBeVisible();
+  const hl = card.getByRole("row").filter({ hasText: "52-week highs / lows" }).first();
+  await expect(hl.locator(".k-up, .k-down").first()).toBeVisible();
+  const p50 = card.getByRole("row").filter({ hasText: "Above 50-day average" }).first();
+  const share = p50.locator("td .k-up, td .k-down").first();
+  await expect(share).toBeVisible();
+  const v = parseFloat((await share.innerText()).replace(/[^\d.]/g, ""));
+  await expect(share).toHaveClass(v > 50 ? /k-up/ : /k-down/);
+  await sane(page, errors);
+  errors = await open(page, "/invest/breadth", "Above 50-day average");
+  const row = page.getByRole("row").filter({ hasText: "Above 50-day average" }).first();
+  await expect(row.locator(".k-up, .k-down").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("row").filter({ hasText: "Rose / fell" }).first().locator(".k-up").first()).toBeVisible();
+  await sane(page, errors);
+});
+
+test("R15 #15: the deep dive has no Holders and deals card", async ({ page }) => {
+  const errors = await open(page, "/research/IN/RELIANCE/deep", "Growth and margins");
+  await expect(page.getByRole("heading", { name: "Growth and margins" }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Holders and deals" })).toHaveCount(0);
+  await sane(page, errors);
+});
