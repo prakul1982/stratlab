@@ -523,6 +523,20 @@ class KiteService:
         idx = self._index()
         return idx["name"].get(("NSE", want)) or idx["name"].get(("BSE", want))
 
+    def equities_named_like(self, name: str, limit: int = 3) -> list[dict]:
+        """Stocks whose name, as the broker writes it, starts like this one or is the start of it ("CARVER ROBOW" for "Carver
+        Roboweld Limited": the broker shortens some BSE and SME names), the first word the same, NSE before BSE. For a caller that
+        checks the stock is the one it means by another fact (a new listing's first trading day), never on its own."""
+        want = norm_name(name)
+        if len(want) < 8:
+            return []
+        first = want.split()[0]
+        out = []
+        for (exch, key), r in self._index()["name"].items():
+            if len(key) >= 8 and key.split()[0] == first and key != want and (key.startswith(want) or want.startswith(key)):
+                out.append((exch != "NSE", -len(key), r))
+        return [r for *_, r in sorted(out, key=lambda x: x[:2])][:limit]
+
     def equities(self) -> list[dict]:
         """Every company's stock in the day's list: NSE (any series), then those listed only on BSE."""
         self._load_instruments()

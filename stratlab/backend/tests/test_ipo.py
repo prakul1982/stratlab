@@ -678,3 +678,73 @@ def test_india_lists_are_read_through_the_day_and_one_read_covers_slots_due_toge
     assert {"in-am", "in-mid", "in-close", "us-am"} <= set(ran)
     assert w["feed"].nse.calls.count("upcoming") == 1                     # India's lists read once for its three due slots
     assert I.load("IN")["as_of"] == evening.isoformat(timespec="seconds")   # and the list says when: now, not 07:40
+
+
+# ---------- LIVE4-003: listed SME issues leave "Closed" through the day, and the list is read through the session ----------
+def test_india_lists_are_read_every_two_hours_or_so_through_the_session():
+    ins = sorted(t for n, t in I.Job.SLOTS if n.startswith("in-") and not n.endswith("-alert") and n != "in-final")
+    session = [t for t in ins if "07:00" <= t <= "16:30"]
+    gaps = [(int(b[:2]) * 60 + int(b[3:])) - (int(a[:2]) * 60 + int(a[3:])) for a, b in zip(session, session[1:])]
+    assert session[0] <= "08:00" and session[-1] >= "15:30" and max(gaps) <= 2 * 60 + 30, (session, gaps)
+
+
+def _closed_sme(name="Core4 Engineers Limited", close="2026-10-27"):
+    return {"id": "in-bse-4902", "market": "IN", "name": name, "symbol": None, "segment": "sme", "exchanges": ["BSE"], "bse_code": "4902",
+            "nkey": "core4", "open": "2026-10-23", "close": close, "low": 88.0, "high": 93.0}
+
+
+def test_a_closed_issue_moves_to_listed_once_the_broker_is_signed_in_later_in_the_day(w, monkeypatch):
+    """LIVE4-003: the morning read comes before the broker is signed in for the day, so the broker-list check found nothing and Core4
+    Engineers (listed 30 Oct) sat under "Closed" a week. The stored closed issues are looked for again through the day."""
+    signed_in = {"on": False}
+    monkeypatch.setitem(I._wire, "listed", lambda row: {"symbol": "CORE4", "exchange": "BSE", "code": "544990", "first": "2026-10-30"} if signed_in["on"] else None)
+    I.save("IN", [_closed_sme()], {}, as_of="2026-11-06T07:40:00+05:30")
+    job = I.Job(sleep=lambda s: None)
+    morning = at(2026, 11, 6, 9, 0)
+    assert job.listings_due(morning)
+    assert job.check_listings(morning) == 0 and I.stage_of(I.load("IN")["rows"][0], morning) == "closed"
+    assert not job.listings_due(morning + timedelta(minutes=5))                 # not again for half an hour
+    signed_in["on"] = True
+    job._listings_at -= I.LISTINGS_EVERY
+    later = at(2026, 11, 6, 9, 45)
+    assert job.listings_due(later) and job.check_listings(later) == 1
+    row = I.load("IN")["rows"][0]
+    assert row["listing"] == "2026-10-30" and row["bse_scrip"] == "544990" and I.stage_of(row, later) == "listed"
+    assert I.load("IN")["as_of"] == "2026-11-06T07:40:00+05:30"               # the lists' read time is not claimed for this check
+    job._listings_at -= I.LISTINGS_EVERY
+    assert not job.listings_due(later + timedelta(hours=1))                    # nothing left waiting: nothing to look up
+    assert not I.Job(sleep=lambda s: None).listings_due(at(2026, 11, 6, 23, 0))   # only through the day
+
+
+def test_the_broker_lookup_takes_a_shortened_name_only_with_a_first_trading_day_after_the_close(monkeypatch):
+    from app import main
+    k = main.kite
+    insts = {"carver": {"token": 11, "symbol": "CARVER", "exchange": "BSE", "bse_code": "544991"},
+             "carverold": {"token": 12, "symbol": "CARVERO", "exchange": "BSE", "bse_code": "500001"}}
+    first = {11: "2026-11-04", 12: "2019-03-01"}
+    monkeypatch.setattr(k, "ready", lambda: True)
+    monkeypatch.setattr(k, "equity", lambda s: None)
+    monkeypatch.setattr(k, "equity_by_name", lambda n: None)                  # the broker writes the name shorter: no exact match
+    monkeypatch.setattr(k, "history", lambda tok, tf, days, store=False: [{"t": first[tok] + "T00:00:00+05:30", "c": 1.0}])
+    monkeypatch.setattr(k, "equities_named_like", lambda n, limit=3: [insts["carverold"], insts["carver"]])
+    got = main.ipo_listed(_closed_sme("Carver Roboweld Limited", close="2026-10-30"))
+    assert got == {"symbol": "CARVER", "exchange": "BSE", "code": "544991", "first": "2026-11-04"}
+    monkeypatch.setattr(k, "equities_named_like", lambda n, limit=3: [insts["carverold"]])
+    assert main.ipo_listed(_closed_sme("Carver Roboweld Limited", close="2026-10-30")) is None     # an older company of a like name: not it
+    monkeypatch.setattr(k, "ready", lambda: False)
+    assert main.ipo_listed(_closed_sme()) is None
+
+
+def test_names_the_broker_shortened_are_found_by_their_start(monkeypatch):
+    from app import kite_service as ks
+    k = ks.KiteService()
+    rows = [{"token": 1, "symbol": "CARVER", "name": "CARVER ROBOW", "exchange": "BSE", "type": "EQ"},
+            {"token": 2, "symbol": "CORE4", "name": "CORE4 ENGINEERS LTD", "exchange": "BSE", "type": "EQ"},
+            {"token": 3, "symbol": "CARVERX", "name": "CARVER", "exchange": "NSE", "type": "EQ"},
+            {"token": 4, "symbol": "WISCON-SM", "name": "WISCON INDUSTR", "exchange": "NSE", "type": "EQ"}]
+    monkeypatch.setattr(k, "_load_instruments", lambda: None)
+    k._inst = rows
+    assert [r["symbol"] for r in k.equities_named_like("Carver Roboweld Limited")] == ["CARVER"]   # "carver" alone is too short to match
+    assert [r["symbol"] for r in k.equities_named_like("Wiscon Industr")] == []                     # the same name exactly is equity_by_name's
+    assert k.equity_by_name("Core4 Engineers Limited")["symbol"] == "CORE4"
+    assert k.equities_named_like("Tata") == []

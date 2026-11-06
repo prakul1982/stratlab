@@ -298,12 +298,20 @@ def ipo_listed(row: dict) -> dict | None:
     first trading day in the last 50 days (an older first day is another company of a like name): None while it isn't listed."""
     if not kite.ready():
         return None
-    inst = (kite.equity(row["symbol"]) if row.get("symbol") else None) or kite.equity_by_name(row.get("name") or "")
-    if not inst:
-        return None
-    bars = kite.history(inst["token"], "1d", 50, store=False)
-    return {"symbol": inst.get("symbol"), "exchange": inst.get("exchange"), "code": inst.get("bse_code"),
-            "first": str(bars[0]["t"])[:10] if bars else None}
+    found = [x for x in ((kite.equity(row["symbol"]) if row.get("symbol") else None), kite.equity_by_name(row.get("name") or "")) if x]
+    # a name the broker shortened ("CARVER ROBOW" for Carver Roboweld Limited, LIVE4-003): taken only with a first trading day after
+    # the bidding closed, so an older company of a like name is never taken for the issue
+    found += kite.equities_named_like(row.get("name") or "")
+    seen = set()
+    for inst in found:
+        if inst["token"] in seen or len(seen) >= 3:
+            continue
+        seen.add(inst["token"])
+        bars = kite.history(inst["token"], "1d", 50, store=False)
+        first = str(bars[0]["t"])[:10] if bars else None
+        if first and first > (row.get("close") or ""):
+            return {"symbol": inst.get("symbol"), "exchange": inst.get("exchange"), "code": inst.get("bse_code"), "first": first}
+    return None
 
 
 ipo.setup(lambda: filings_feed, lambda: us_market_calendar, lambda: (_gemini, _anthropic), lambda: markets.providers["US"].yahoo,
