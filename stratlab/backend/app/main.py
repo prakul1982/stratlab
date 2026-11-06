@@ -6750,7 +6750,7 @@ def live_price(sym: str):
     return filings_feed.last_price(sym)
 
 
-def audit_one(sym: str, docs: bool, exchange=None, region: str = "IN", new: bool = False) -> dict:
+def audit_one(sym: str, docs: bool, exchange=None, region: str = "IN", new: bool | str = False) -> dict:
     us = region == "US"
     read = (lambda cands, probs, p: deepdive.readable(deep_docs, cands, 1, probs, company_hosts(p))) if docs and not us else None
     row = audit.audit_company(sym, lambda s: deep_base(s, region, trades=False), deep_view, None if us else exchange, read,
@@ -6773,7 +6773,7 @@ def _nse_check(sym: str) -> dict:
             kite.instruments_of("BSE")
         except Exception:
             pass
-    return audit_one(research_routes.symbol_of(sym), False, _market_breaker[0], "IN", market_audit.is_new(sym))
+    return audit_one(research_routes.symbol_of(sym), False, _market_breaker[0], "IN", market_audit.new_since(sym))
 
 
 BSE_ONLY = "audit:bse-only"                # the last good list of BSE-only companies: {code: {ts, token, name}}
@@ -6880,7 +6880,7 @@ def _market_check(sym: str) -> dict:
         _load_bse_map()
         ts = (_bse_map.get(code) or {}).get("ts")
         price = live_price if ts and kite.ready() else None          # BSE's own quote, by the scrip code
-        row = audit.audit_company(code, deep_base, deep_view, price, None, lambda s: research_hub.company("IN", s), market_audit.is_new(sym))
+        row = audit.audit_company(code, deep_base, deep_view, price, None, lambda s: research_hub.company("IN", s), market_audit.new_since(sym))
         for i in row["issues"]:
             i["detail"] = public_text(i["detail"])
         name = row.get("name") if row.get("name") not in (None, "", code) else None   # the check stopped before the name

@@ -125,6 +125,36 @@ def test_stored_refusals_and_short_histories_are_restated():
     assert audit.restate_row(us, us=True) == [audit._issue("fact", "Documents", audit.STOPPED_FILING)]
 
 
+def test_gaps_found_under_older_rules_are_checked_again_before_they_count():
+    """R15 (owner: "why are these gaps in both india and us"): 9 of India's 11 gaps were found on 31 Oct and 1 Nov, before the 4 Nov
+    rules for a relisted share's range, a part-year column and a filing's own revenue labels. They wait for their next check (not
+    counted as gaps); a gap found since stands, and so does a kind whose rules didn't change."""
+    old, new = "2026-11-01T11:58:17+00:00", "2026-11-06T02:30:51+00:00"
+    rng = audit._issue("gap", "New listing", "Its 52-week range isn't marked as the range since listing, though it listed within the last weeks")
+    chk = audit._issue("gap", "Checklist", "3 checks couldn't be judged: Sales growth, 3 years, Profit growth, 3 years, EBITDA margin holding up")
+    rev = audit._issue("gap", "Numbers", "Revenue or profit missing for Dec 2016")
+    ind = audit._issue("gap", "Industry", "No industry classification; treated as a general business")
+    got = audit.restate_row({"at": old, "issues": [rng, chk, ind]})
+    assert [i["level"] for i in got] == ["pending", "pending", "gap"]
+    assert got[0]["detail"] == "Not checked yet: it was found under the checks' older rules. It is checked again later." and got[0]["then"] == rng
+    assert audit._transient({"issues": got}) and audit.restate_row({"at": old, "issues": [rev]}, us=True)[0]["level"] == "pending"
+    assert [i["level"] for i in audit.restate_row({"at": new, "issues": [rng, chk]})] == ["gap", "gap"]
+
+
+def test_a_share_checked_on_its_listing_day_before_its_first_session_is_checked_again():
+    """R15: BRIGHTOUTD, BSE:545020 and 545021 were checked at 08:00 IST on 6 Nov, the morning they listed, and counted as "52-week
+    range isn't marked as the range since listing" gaps. Before its first session closes there is no such range: checked again later."""
+    from zoneinfo import ZoneInfo
+    ist = ZoneInfo("Asia/Kolkata")
+    page = {"range52": {"low": 98.0, "high": 98.0}, "quote": {"price": 98.0}}
+    morning = datetime(2026, 11, 6, 8, 0, tzinfo=ist)
+    got = audit.check_listing(page, {"region": "IN", "ratios": {}}, {"years": []}, {}, "2026-11-06", morning)
+    assert [i["level"] for i in got] == ["pending"] and got[0]["then"]["detail"] == audit.NOT_TRADED_YET
+    later = datetime(2026, 11, 7, 10, 0, tzinfo=ist)               # its first session has closed: the range must say "since listing"
+    got = audit.check_listing(page, {"region": "IN", "ratios": {}}, {"years": []}, {}, "2026-11-06", later)
+    assert [i["level"] for i in got] == ["gap"]
+
+
 def test_market_audit_rechecks_only_refused_companies(monkeypatch):
     from tests import world as W
     w = W.build(monkeypatch)
