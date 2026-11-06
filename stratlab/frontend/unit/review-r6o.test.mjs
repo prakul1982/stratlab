@@ -113,7 +113,7 @@ test("ETF vs NAV: the close the gap uses and the price's day are shown, and a ph
   assert.match(p, /fmtDate\(dayIn\(r\.price_at\) \?\? r\.price_at, \{ year: false \}\)/);
   assert.match(p, /stack phonePage=\{25\}/);
   const dt = read("src/components/kit/DataTable.tsx");
-  assert.match(dt, /const cap = stack && phonePage && phone \? phonePage \* pages : Infinity;/);
+  assert.match(dt, /const cap = stack && phonePage && \(phone \|\| pageDesktop\) \? phonePage \* pages : Infinity;/);      // R15 #7: a table may page a desktop too
   assert.match(dt, /Show \{Math\.min\(left, phonePage \?\? left\)\} more/);
 });
 

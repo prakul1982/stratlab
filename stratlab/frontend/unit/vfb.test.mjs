@@ -16,7 +16,7 @@ const invest = read("src/styles-invest.css");
 
 test("VR1-147: the US tax tables are phone cards, with a sale's gain right under its name", () => {
   const p = read("src/pages/money/UsTaxPage.tsx");
-  for (const l of ["US trades", "US sales in rupees", "US dividends and credit", "Open US lots", "Schedule FA"]) assert.match(p, new RegExp(`<DataTable (?:csv=(?:"[^"]*"|\\{[^\\n]*?\\}) )?stack (phonePage=\\{10\\} )?label="${l}"`));
+  for (const l of ["US trades", "US sales in rupees", "US dividends and credit", "Open US lots", "Schedule FA"]) assert.match(p, new RegExp(`<DataTable (?:csv=(?:"[^"]*"|\\{[^\\n]*?\\}) )?stack (phonePage=\\{10\\} (pageDesktop )?)?label="${l}"`));      // R15 #7: US sales page 10 at a time on a desktop too
   assert.match(p, /key: "gain", header: "Gain \(₹\)", numeric: true, up: true/);
   // the dollars and the rate used sit under each rupee figure, so the row fits (LIVE1B-027)
   assert.match(p, /\{usd\(r\.cost_usd\)\} at \{rateText\(r\.rate_buy\)\}/);
