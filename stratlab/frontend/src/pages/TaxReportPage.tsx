@@ -545,9 +545,10 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
       <InputsPanel key={y.fy} y={y} onSave={onSave} />
       {/* LIVE1B-011: the dividends, advance tax and the exemption are a line here, not a card holding one sentence and a button */}
       <p className="k-small k-muted">Dividends with their TDS, the advance tax due by each date and the long-term exemption used are in <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>Tax tools</Link>.</p>
-      {/* LIVE1B-010: folded: the steps and the table below them said the same figures twice, open, under the inputs */}
+      {/* LIVE1B-010: a fold: the steps and the table below them said the same figures twice, open, under the inputs. Open to start
+          with (owner, 7 Nov: "keep this open by default"); the words stay folded inside */}
       {t.available && (
-        <Disclosure summary="How we got here">
+        <Disclosure summary="How we got here" open>
           {(t.notes ?? []).length > 0 && <ul className="k-list muted" aria-label="Notes on the estimate">{t.notes!.map((n) => <li key={n}>{n}</li>)}</ul>}
           <DataTable label="Total tax breakdown" columns={lineCols} rows={t.lines.map((l, i) => ({ ...l, i }))} rowKey={(l) => String(l.i)} />
           {/* the steps in words say what the table's lines say in figures: one fold under it, not the same working twice in full (LIVE1C-056) */}

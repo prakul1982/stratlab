@@ -107,8 +107,7 @@ test("LIVE1B-009, 010, 011: one tax figure beside the total; the notes said once
   assert.match(t, /<CardHead title=\{`Total tax estimate, \$\{y\.label\}`\}/);
   assert.doesNotMatch(t, /rep\?\.disclaimer/);                                                      // the long note was the "Covers only..." paragraph twice
   assert.match(t, /for an individual of the age band and residency you choose\. House property, foreign income[^"]*advance tax and TDS already paid aren't included\./);
-  assert.match(t, /<Disclosure summary="How we got here">/);                                        // folded
-  assert.doesNotMatch(t, /<Disclosure summary="How we got here" open>/);
+  assert.match(t, /<Disclosure summary="How we got here" open>/);                                   // a fold, open to start with (R15 #6, owner 7 Nov)
   assert.doesNotMatch(t, /<Card label="Tax tools">/);                                              // 011
   assert.match(t, /are in <Link className="link" to=\{fyLink\("\/money\/tax-tools", y\.fy\)\}>Tax tools<\/Link>\./);
 });

@@ -15,7 +15,8 @@ export type ToolRow = {
 /** The rest of a space's tools at the foot of its home (My space, Trade, Invest, Money, the notebooks): one row, closed, that says how
  * many tools are in it, and opened, one calm table of name, line and menu entry (owner, 5 Nov: "More in Money" was "very weird and
  * very filled", a wall of cards; "make it like a dropdown everywhere"). The menu entry is said on its first row only, so the table reads
- * in groups. `children`: more under the table (Explore's "Elsewhere in StratLab"). */
+ * in groups. Open by default (owner, 7 Nov: "keep just More open in Money by default"; every home's the same), still a row that folds.
+ * `children`: more under the table (Explore's "Elsewhere in StratLab"). */
 export function MoreTools({ title, rows, children, id }: { title: string; rows: ToolRow[]; children?: ReactNode; id?: string }) {
   const phone = usePhone();
   const firstOf = new Set(rows.filter((r, i) => i === 0 || rows[i - 1].groupId !== r.groupId).map((r) => r.id));
@@ -30,7 +31,7 @@ export function MoreTools({ title, rows, children, id }: { title: string; rows: 
     ...(phone ? [] : [{ key: "in", header: "Menu entry", cell: (r: ToolRow) => (firstOf.has(r.id) ? r.group : "") }]),
   ];
   return (
-    <FoldCard id={id} className="k-more-tools" title={title} meta={`${rows.length} tool${rows.length === 1 ? "" : "s"}`} testId="more-tools">
+    <FoldCard id={id} open className="k-more-tools" title={title} meta={`${rows.length} tool${rows.length === 1 ? "" : "s"}`} testId="more-tools">
       <DataTable stack label={title} columns={cols} rows={rows} rowKey={(r) => r.id} rowAttrs={(r) => ({ "data-entry": r.groupId })} />
       {children}
     </FoldCard>
