@@ -315,31 +315,52 @@ def check_insider_trades(feed) -> dict:
     if not items:
         return _result("Insider trades", "Filings", "warn", f"No insider-trading disclosures anywhere in the market in the last {INSIDER_WINDOW_DAYS} days, "
                        "though companies file them every trading day: the exchange's insider-trading list has stopped updating.")
-    return _fresh("Insider trades", f"{len(items):,} insider trades across the market in the last {INSIDER_WINDOW_DAYS} days",
+    stale = getattr(items, "stale_at", None)
+    # the exchange didn't answer: its last list stands, with when it was read (R15: a failure in Needs your attention for a slow evening)
+    note = f" (the exchange didn't answer just now: the list as read at {_when(stale)})" if stale else ""
+    return _fresh("Insider trades", f"{len(items):,} insider trades across the market in the last {INSIDER_WINDOW_DAYS} days{note}",
                   _newest(items, "date"), who="the whole market")
 
 
-def check_surveillance(feed) -> dict:
+def check_surveillance(feed, timeout: float | None = None) -> dict:
     """The exchange's surveillance lists (ASM, GSM, ESM, the F&O ban file and the price-band file), which the badges,
     the screens' filter and the surveillance alerts read. These addresses can't be tried from a test machine, so this
-    is where a changed address or shape shows first. Each list is read on its own; any that fails is named."""
-    got, bad, refused = [], [], []
-    for name, fn, count in (("ASM", feed.asm_list, lambda x: len(x.get("lt") or {}) + len(x.get("st") or {})),
-                            ("GSM", feed.gsm_list, len), ("ESM", feed.esm_list, len),
-                            ("F&O ban", feed.fo_ban, lambda x: len(x[1])), ("price bands", feed.security_bands, len)):
-        try:
-            got.append(f"{name} {count(fn())}")
-        except Exception as e:
+    is where a changed address or shape shows first. The lists are read side by side, each with its own short time
+    (surveillance.PART_TIMEOUT): one that is slow is "stale, from <when its kept copy was read>", not a failure, and the
+    others stand (R15: "Took longer than 45 seconds: no answer yet, timed out" while one file hung). Any that fails is named."""
+    from . import surveillance as S
+    kept = S.load()
+    read = S.read_parts(feed, timeout=timeout)
+    count = {"asm": lambda r: len(r.get("lt") or {}) + len(r.get("st") or {}), "gsm": len, "esm": len,
+             "fo_ban": lambda r: len(r.get("symbols") or []), "bands": lambda r: len(r.get("series") or {})}
+    names = {"asm": "ASM", "gsm": "GSM", "esm": "ESM", "fo_ban": "F&O ban", "bands": "price bands"}
+    got, bad, refused, stale = [], [], [], []
+    for part in S.PARTS:
+        name, res = names[part], read.get(part)
+        if not isinstance(res, Exception):
+            got.append(f"{name} {count[part](res[1])}")
+        elif isinstance(res, S.Slow) and (kept.get(part) or {}).get("checked"):
+            stale.append(f"{name}: slow to answer, stale, from {_when(kept[part]['checked'])}")
+        elif getattr(res, "refused", False):
             # turned away by the exchange (401/403 at every address): the source's fault, said so, not a failure of ours (LIVE4-023)
-            if getattr(e, "refused", False):
-                refused.append(f"{name}: source refused")
-            else:
-                bad.append(f"{name}: {str(e)[:100]}")
-    if not got:
+            refused.append(f"{name}: source refused")
+        else:
+            bad.append(f"{name}: {str(res)[:100]}")
+    if not got and not stale:
         return _result("Surveillance lists", "Filings", "fail", "No list answered. " + " · ".join(bad + refused))
-    detail = "Read: " + ", ".join(got) + "." + (" Failed: " + " · ".join(bad) if bad else "") + \
+    detail = ("Read: " + ", ".join(got) + "." if got else "No list answered just now.") + (" " + "; ".join(stale) + "." if stale else "") + \
+        (" Failed: " + " · ".join(bad) if bad else "") + \
         (" The exchange's side: " + " · ".join(refused) + " (it keeps the last copy read)." if refused else "")
-    return _result("Surveillance lists", "Filings", "warn" if bad or refused else "pass", detail)
+    return _result("Surveillance lists", "Filings", "warn" if bad or refused or not got else "pass", detail)
+
+
+def _when(iso: str) -> str:
+    """"6 Nov 19:45" from a stored ISO time (India's), or the text as it is."""
+    try:
+        t = datetime.fromisoformat(str(iso))
+    except ValueError:
+        return str(iso)
+    return f"{t.day} {t.strftime('%b %H:%M')}"
 
 
 BSE_REFUSING = ("BSE is turning this server's requests away: {why}. Only companies listed on BSE alone are affected: "

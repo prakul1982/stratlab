@@ -34,6 +34,14 @@ def test_publish_browse_copy_and_take_down(api, store):
     rows = api.get("/library", params={"market": "crypto", "q": "btc"}).json()
     assert rows["total"] == 1 and not rows["entries"][0]["mine"]
     assert api.get("/library", params={"market": "US"}).json()["total"] == 0
+    # R15 (owner: "in everyone don't show stratlab ones"): "Everyone's" is what people published, "StratLab's own" is ours alone
+    ours = {**library.load(e["id"]), "id": "seed-test-official", "official": True, "owner": None, "author": "StratLab"}
+    library.save(ours)
+    whose = lambda w: [x["id"] for x in api.get("/library", params={"market": "crypto", "whose": w}).json()["entries"]]      # noqa: E731
+    assert whose("users") == [e["id"]] and whose("official") == ["seed-test-official"]
+    assert sorted(whose("")) == sorted([e["id"], "seed-test-official"])
+    assert [x["id"] for x in api.get("/library", params={"market": "crypto", "official": "true"}).json()["entries"]] == ["seed-test-official"]
+    library.remove("seed-test-official")
     mine = api.post(f"/library/{e['id']}/copy").json()
     assert mine["name"] == "BTC trend" and mine["strategy"]["entry"][0]["l"]["p"] == 10 and mine["strategy"]["entry"][0]["op"] == "xa" and mine["experiments"] == []
     assert "Copied from the strategy library" in mine["notes"] and mine["instrument"]["symbol"] == "BTC/USD"

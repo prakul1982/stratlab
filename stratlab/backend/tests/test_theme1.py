@@ -357,6 +357,49 @@ def test_a_draft_post_is_made_only_when_the_data_is_notable_and_is_never_publish
     assert blog_research.draft_theme_post(flat, "Test theme", "IN") == {"result": "nothing notable", "slug": None}
 
 
+def test_the_owners_button_drafts_a_post_from_any_theme_with_two_layers_of_margins():
+    """R15 (owner: "did you remove the blog button for me too?"): the button is on every theme with figures, so the post is made from the
+    layers' figures when nothing is notable; a chain with fewer than two layers with a margin still makes none."""
+    flat = {**dive(), "notable": []}
+    post = blog_research.theme_post(flat, "Test theme", "IN", notable_only=False)
+    assert post and post["published"] is False and post["slug"] == "theme-test-theme-margins-in" and blog_research.advice_words(post) is None
+    one = {**flat, "chain": {**flat["chain"], "rows": flat["chain"]["rows"][:1]}}
+    assert blog_research.draft_theme_post(one, "Test theme", "IN", notable_only=False) == {"result": "too few figures", "slug": None}
+
+
+def test_a_theme_read_with_no_post_gets_one_hidden_once_and_at_most_three_a_day(monkeypatch):
+    """R15 (owner: "if someone searches a theme we don't have a blog about, make a blog out of it automatically"): from the dive just built,
+    stored hidden, one per theme, at most AUTO_POSTS_A_DAY new ones a day."""
+    from app.intel import theme_routes as T
+    stored, settings = {}, {}
+    monkeypatch.setattr(blog_research.blog, "get", lambda slug: stored.get(slug))
+    monkeypatch.setattr(blog_research.blog, "upsert_research", lambda post, now=None: stored.setdefault(post["slug"], post) and "new")
+    monkeypatch.setattr(db, "get_setting", lambda k: settings.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: settings.__setitem__(k, v))
+    d = dive()
+    T.auto_post("IN", "Test theme", d, wait=True)
+    T.auto_post("IN", "Test theme", d, wait=True)                    # the same theme again: already has its post
+    assert list(stored) == ["theme-test-theme-margins-in"] and stored["theme-test-theme-margins-in"]["published"] is False
+    for t in ("Second theme", "Third theme", "Fourth theme"):
+        T.auto_post("IN", t, d, wait=True)
+    assert len(stored) == T.AUTO_POSTS_A_DAY and "theme-fourth-theme-margins-in" not in stored
+    assert json.loads(settings[T.AUTO_KEY])["n"] == T.AUTO_POSTS_A_DAY
+
+
+def test_a_checked_dive_asks_for_its_post_and_an_unchecked_one_does_not(monkeypatch):
+    from app.intel import theme_routes as T
+    asked = []
+    monkeypatch.setattr(T, "auto_post", lambda r, theme, hit, wait=False: asked.append((r, theme)))
+    monkeypatch.setattr(T.theme_data, "build", lambda r, theme, fm, src: {"layers": []})
+    monkeypatch.setattr(T, "sources", lambda r, theme: None)
+    monkeypatch.setattr(T.theme_base, "for_figures", lambda m: ({"value_chain": []}, None))
+    T.DIVE_CACHE.clear() if hasattr(T.DIVE_CACHE, "clear") else None
+    T.dive_of("IN", "Auto test theme", {"generated_at": 1, "placements": {"checked": False, "placed": 1}})
+    assert asked == []
+    T.dive_of("IN", "Auto test theme", {"generated_at": 1, "placements": {"checked": True, "placed": 2}})
+    assert asked == [("IN", "Auto test theme")]
+
+
 def test_storing_the_draft_keeps_it_hidden_and_an_update_does_not_publish_it(monkeypatch):
     stored = {}
 

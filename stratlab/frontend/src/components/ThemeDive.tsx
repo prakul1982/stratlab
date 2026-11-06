@@ -496,7 +496,8 @@ function PriceCards({ dive, prices, busy }: { dive: Dive; prices: Prices | null;
         { key: "b", header: "Theme, equal-weighted", numeric: true, cell: (x) => x.b }, { key: "c", header: prices?.benchmark || "Index", numeric: true, cell: (x) => x.c },
         { key: "d", header: "Companies", numeric: true, cell: (x) => x.d },
       ]} rows={retRows} rowKey={(x) => x.key} empty={busy ? "Reading prices…" : "No prices yet."} />
-      {(busy && !prices) || (prices && prices.pending > 0) ? <Working small label="Reading the companies' latest prices…" /> : null}
+      {busy ? <Working small label="Reading the companies' latest prices…" />
+        : prices && prices.pending > 0 ? <p className="k-note">{prices.pending.toLocaleString("en-IN")} {prices.pending === 1 ? "company's price isn't" : "companies' prices aren't"} read yet.</p> : null}
       {prices?.line && (
         <>
           <h3 className="k-sub">The theme against {prices.benchmark}, weekly, rebased to 100</h3>

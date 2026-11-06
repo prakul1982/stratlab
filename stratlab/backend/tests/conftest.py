@@ -4,6 +4,7 @@ import sys
 os.environ.setdefault("BACKTEST_PROCESSES", "0")      # backtests in the test process, where fakes are patched in
 os.environ["AI_AUTO_PROBE"] = "0"                     # no background AI model measuring (it would use the network)
 os.environ["AUTOFIX"] = "0"                           # no background self-healing sweep (tests run it by hand)
+os.environ["THEME_AUTO_POST"] = "0"                   # no blog post drafted beside a theme read (tests call auto_post with wait=True)
 os.environ["OFFICIAL_CLOSE_FETCH"] = "0"               # no exchange file or broker read for official closes (app/official_close.py)
 
 import pytest

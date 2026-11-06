@@ -7,6 +7,7 @@ nearest contract that isn't about to expire (contracts within ROLL_DAYS of expir
 - Quantities are in the units the price is quoted in, and always a whole number of lots: one gold lot is 1 kg,
   quoted per 10 g, so a lot is 100 price units. That keeps every rupee of profit and loss true to the exchange."""
 import math
+import re
 import time
 from datetime import date, datetime
 
@@ -55,9 +56,17 @@ ALIASES = {"GOLD MINI": "GOLDM", "SILVER MINI": "SILVERM", "CRUDE": "CRUDEOIL", 
 MINUTES = {"1h": 60, "15m": 15, "5m": 5}              # candles a day: the session's length (open to the day's close) over this
 
 
+def monthly(name: str, symbol: str) -> bool:
+    """A month's contract ("USDINR26NOVFUT"), not a week's ("USDINR26N13FUT")."""
+    return bool(re.fullmatch(rf"{re.escape(name)}\d{{2}}[A-Z]{{3}}FUT", str(symbol or "")))
+
+
 def front(contracts: list[dict], today: date) -> dict | None:
-    """The contract to trade: the nearest one more than ROLL_DAYS from expiry."""
-    live = sorted((c for c in contracts if c["expiry"] >= today), key=lambda c: c["expiry"])
+    """The contract to trade: the nearest month's contract more than ROLL_DAYS from expiry. A week's contract is passed over
+    when month contracts are listed (R15: USDINR resolved to the weekly USDINR26N13FUT, which hardly trades: its daily series
+    was one standing price with no volume, with no candle for 6 Nov hours after the close, and the feature check failed)."""
+    months = [c for c in contracts if c.get("monthly", True)]
+    live = sorted((c for c in (months or contracts) if c["expiry"] >= today), key=lambda c: c["expiry"])
     for c in live:
         if (c["expiry"] - today).days > ROLL_DAYS:
             return c
@@ -90,7 +99,8 @@ class MCXProvider:
             if x.get("instrument_type") != "FUT" or name not in self.contracts or not x.get("expiry"):
                 continue
             exp = x["expiry"] if isinstance(x["expiry"], date) else date.fromisoformat(str(x["expiry"])[:10])
-            by.setdefault(name, []).append({"token": int(x["instrument_token"]), "symbol": x["tradingsymbol"], "expiry": exp})
+            by.setdefault(name, []).append({"token": int(x["instrument_token"]), "symbol": x["tradingsymbol"], "expiry": exp,
+                                            "monthly": monthly(name, x["tradingsymbol"])})
         self._by_name, self._day = by, today
 
     def _make(self, name: str, c: dict) -> dict:

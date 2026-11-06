@@ -4366,8 +4366,15 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
 
 
 @app.get("/library")
-def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "hold", official: bool = False, profile=Depends(current_profile)):
-    shown = library.same_hold([e for e in library.all_entries() if library.visible(e, profile["id"]) and (e.get("official") or not official)])
+def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "hold", official: bool = False, whose: str = "",
+                   profile=Depends(current_profile)):
+    """The library's entries. `whose`: "official" StratLab's own, "users" only those people published (R15, owner: "in everyone don't show
+    stratlab ones"), anything else both; `official=true` is the older spelling of "official"."""
+    whose = "official" if official else whose
+
+    def mine(e):
+        return whose not in ("official", "users") or bool(e.get("official")) == (whose == "official")
+    shown = library.same_hold([e for e in library.all_entries() if library.visible(e, profile["id"]) and mine(e)])
     rows = library.search(shown, market.upper()[:10], verdict[:12], q[:80], sort)
     return {"entries": [library.public(e, profile["id"]) for e in rows[:200]], "total": len(rows),
             "reasons": library.REASONS, "markets": library.market_counts(shown)}
@@ -6607,6 +6614,47 @@ def admin_delete_user_data(user_id: str, who=Depends(admin.admin_profile)):
     return {"ok": not out["failed"], "email": rows[0].get("email"), **out}
 
 
+ADMIN_DELETES = "admin:deleted_users"      # the audit lines of accounts the owner deleted: [{"at", "by", "uid", "email", "done", "failed"}]
+
+
+@app.post("/admin/users/{user_id}/delete-account")
+def admin_delete_user(user_id: str, req: DeleteMyDataReq, who=Depends(admin.admin_profile)):
+    """Delete one user (owner, 7 Nov: "can you give a option to delete user"): every row of theirs in every store, then their sign-in
+    account, as their own "Delete my account" does (user_data.close_account), once their email is typed in to confirm. Never the
+    owner's own account or an admin's; a plan still billed is refused (cancel it first: nothing paid is cancelled here). Invoices and
+    the payment records behind them stay, as tax law asks. One audit line is kept for each deletion."""
+    not_viewing(who)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", user_id):
+        err(404, "no_user", "No user with that ID.")
+    rows = db.sb().table("profiles").select("*").eq("id", user_id).execute().data
+    if not rows:
+        err(404, "no_user", "No user with that ID.")
+    target = rows[0]
+    email = (target.get("email") or "").strip().lower()
+    if not email or req.confirm.strip().lower() != email:
+        err(400, "confirm_mismatch", "Type the user's email exactly to confirm.")
+    if user_id == who.get("id"):
+        err(403, "own_account", "This is your own account, so it can't be deleted from here.")
+    if email in admin.admin_emails() or user_id in admin._owner_map():
+        err(403, "admin_account", "This is an admin's account, so it can't be deleted from here.")
+    sub, status = target.get("razorpay_subscription_id"), target.get("plan_status")
+    if sub and status not in billing.FINAL and not target.get("cancel_at_period_end"):
+        err(409, "cancel_first", "This user's plan is still billed. Cancel the subscription first, then delete the user, so nothing paid "
+                                 "is cut off or charged again.")
+    throttle(who, "admin-delete-user", 20, 3600, "Too many deletions in an hour. Try again later.")
+    out = user_data.close_account(user_id)
+    line = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "by": who.get("email"), "uid": user_id, "email": email,
+            "closed": out["closed"], "done": len(out["done"]), "failed": [f["label"] for f in out["failed"]]}
+    try:
+        log_rows = db.json_value(db.get_setting(ADMIN_DELETES), [])
+        db.set_setting(ADMIN_DELETES, json.dumps(([*log_rows] if isinstance(log_rows, list) else [])[-499:] + [line]))
+    except Exception as e:                       # the deletion stands; the server log keeps the line
+        print("admin delete user: audit line not stored:", str(e)[:120])
+    log.warning("admin %s deleted user %s (%s): closed=%s, %d areas done, %d failed", who.get("email"), user_id, email, out["closed"],
+                len(out["done"]), len(out["failed"]))
+    return {"ok": out["closed"], "email": email, **out}
+
+
 @app.get("/admin/sessions")
 def admin_sessions(test: bool = False, _=Depends(admin.admin_profile)):
     """The paper sessions running now. The test accounts' are left out unless `test`, as every other count in Admin leaves them out
@@ -6743,7 +6791,7 @@ def live_price(sym: str):
     return filings_feed.last_price(sym)
 
 
-def audit_one(sym: str, docs: bool, exchange=None, region: str = "IN", new: bool = False) -> dict:
+def audit_one(sym: str, docs: bool, exchange=None, region: str = "IN", new: bool | str = False) -> dict:
     us = region == "US"
     read = (lambda cands, probs, p: deepdive.readable(deep_docs, cands, 1, probs, company_hosts(p))) if docs and not us else None
     row = audit.audit_company(sym, lambda s: deep_base(s, region, trades=False), deep_view, None if us else exchange, read,
@@ -6766,7 +6814,7 @@ def _nse_check(sym: str) -> dict:
             kite.instruments_of("BSE")
         except Exception:
             pass
-    return audit_one(research_routes.symbol_of(sym), False, _market_breaker[0], "IN", market_audit.is_new(sym))
+    return audit_one(research_routes.symbol_of(sym), False, _market_breaker[0], "IN", market_audit.new_since(sym))
 
 
 BSE_ONLY = "audit:bse-only"                # the last good list of BSE-only companies: {code: {ts, token, name}}
@@ -6873,7 +6921,7 @@ def _market_check(sym: str) -> dict:
         _load_bse_map()
         ts = (_bse_map.get(code) or {}).get("ts")
         price = live_price if ts and kite.ready() else None          # BSE's own quote, by the scrip code
-        row = audit.audit_company(code, deep_base, deep_view, price, None, lambda s: research_hub.company("IN", s), market_audit.is_new(sym))
+        row = audit.audit_company(code, deep_base, deep_view, price, None, lambda s: research_hub.company("IN", s), market_audit.new_since(sym))
         for i in row["issues"]:
             i["detail"] = public_text(i["detail"])
         name = row.get("name") if row.get("name") not in (None, "", code) else None   # the check stopped before the name

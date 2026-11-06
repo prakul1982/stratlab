@@ -425,7 +425,7 @@ def check_prices(snap: dict, trend: dict | None, exchange, why: str | None = Non
 LISTING = "New listing"
 
 
-def check_listing(page: dict | None, p: dict, nums: dict, snap: dict) -> list[dict]:
+def check_listing(page: dict | None, p: dict, nums: dict, snap: dict, listed: str | None = None, now: datetime | None = None) -> list[dict]:
     """What is special about a share that has just listed, against its company page (`page`: the public page's figures)
     and the numbers behind it (MS1-006): its range is the range since listing, the first session's change is against the
     issue price (not the open), its market value counts the shares after the issue (a balance sheet from before it has
@@ -437,7 +437,12 @@ def check_listing(page: dict | None, p: dict, nums: dict, snap: dict) -> list[di
     rng, q = page.get("range52") or {}, page.get("quote") or {}
     since = rng.get("since")
     if p.get("region") != "US":
-        if not since and rng.get("low") is None and rng.get("high") is None and not q.get("price"):
+        if not since and first_session_open(listed, now):
+            # checked on its listing day before its first session closed (R15: BRIGHTOUTD, BSE:545020 and 545021 at 08:00 IST on
+            # 6 Nov, listing that morning, were counted as gaps): there is no range since listing yet, so it is checked again later
+            out.append(_later(LISTING, "it was checked on its listing day, before its first session closed",
+                              _issue("fact", LISTING, NOT_TRADED_YET)))
+        elif not since and rng.get("low") is None and rng.get("high") is None and not q.get("price"):
             # checked before its first session (SFCTECH, BLSPOLY, BSE:545010 on 3 Nov at 08:08 IST, listing that morning)
             out.append(_issue("fact", LISTING, NOT_TRADED_YET))
         elif not since and rng.get("traded_from"):
@@ -469,6 +474,18 @@ def check_listing(page: dict | None, p: dict, nums: dict, snap: dict) -> list[di
             if i is not None and f"{key}_cagr_{n}y" not in (nums.get("growth_nm") or {}):
                 out.append(_issue("mismatch", LISTING, f"A {n}-year {key} growth rate is shown from a tiny base in {years[i]['year']} instead of n/m"))
     return out
+
+
+def first_session_open(listed: str | None, now: datetime | None = None) -> bool:
+    """Whether a share that listed on `listed` (ISO day) has had no session close yet by `now`: India's latest completed
+    session is before its listing day."""
+    if not listed:
+        return False
+    try:
+        from . import last_session
+        return str(listed)[:10] > last_session.latest_day("IN", now)
+    except Exception:
+        return False
 
 
 def _no_sales(rows: list[dict]) -> bool:
@@ -719,9 +736,25 @@ def restate(issue: dict, us: bool = False) -> dict | None:
     return issue
 
 
+# when the rules behind these gaps last changed (SECMEM 6 and the SEC reader, 4 Nov: a relisted share's range, a part-year column in the
+# checklist, a filing's own revenue labels): a gap found before then is checked again before it counts (R15, owner: "why are these
+# gaps in both india and us": 9 of India's 11 were found on 31 Oct and 1 Nov, under the older rules)
+RULES_AT = "2026-11-04T14:00:00+00:00"
+RECHECKED = {("New listing", "Its 52-week range isn't marked"), ("Checklist", ""), ("Numbers", "Revenue or profit missing"),
+             ("Capex", "No capex estimate for the last three years"), ("Documents", "No call transcript found"), ("Valuation", "P/E ")}
+
+
+def older_rules(row: dict, issue: dict) -> bool:
+    """A gap of a kind whose rules changed at RULES_AT, found before then."""
+    if issue.get("level") != "gap" or not row.get("at") or str(row["at"]) >= RULES_AT:
+        return False
+    return any(issue.get("area") == a and str(issue.get("detail") or "").startswith(d) for a, d in RECHECKED)
+
+
 def restate_row(row: dict, us: bool = False) -> list[dict]:
     """A stored company's findings with today's rules, including those that depend on each other: checks a short
-    history explains are a fact, and no annual and no quarterly report together mean the company stopped filing."""
+    history explains are a fact, and no annual and no quarterly report together mean the company stopped filing. A gap
+    found under older rules (older_rules) waits for its next check, which says whether it stands."""
     issues = [x for x in (restate(i, us) for i in row.get("issues") or []) if x]
     details = [i["detail"] for i in issues]
     if any(d.startswith("Only ") and "so far" in d for d in details):
@@ -730,7 +763,7 @@ def restate_row(row: dict, us: bool = False) -> list[dict]:
     if us and any(d.startswith("No annual report") for d in details) and any(d.startswith("No quarterly report") for d in details):
         issues = [i for i in issues if not i["detail"].startswith(("No annual report", "No quarterly report"))]
         issues.append(_issue("fact", "Documents", STOPPED_FILING))
-    return issues
+    return [_later(i["area"], "it was found under the checks' older rules", i) if older_rules(row, i) else i for i in issues]
 
 
 # the old wording for a company with no figures filed as data, before the reason was read from its filings
@@ -760,7 +793,7 @@ class Breaker:
         return out
 
 
-def audit_company(sym: str, base_fn, view_fn, exchange_price=None, read=None, listing_fn=None, new: bool = False) -> dict:
+def audit_company(sym: str, base_fn, view_fn, exchange_price=None, read=None, listing_fn=None, new: bool | str = False) -> dict:
     """One company, start to finish. Each source failing shows up as a row (an error, or a check to run again when the
     source only turned us away), never stops the run. `listing_fn(sym)`: the company page's figures, read for a share that
     has traded for under 30 days, for the checks only a new listing has (check_listing). `new`: the exchange's list says it
@@ -808,7 +841,7 @@ def audit_company(sym: str, base_fn, view_fn, exchange_price=None, read=None, li
             issues = [_issue("fact", "Industry", NO_SIC) if i["level"] == "gap" and i["area"] == "Industry" else i for i in issues]
         if listing_fn and base.get("trend_why") == "new":
             try:
-                issues += check_listing(listing_fn(sym), p, view["numbers"], view.get("snapshot") or {})
+                issues += check_listing(listing_fn(sym), p, view["numbers"], view.get("snapshot") or {}, new if isinstance(new, str) else None)
             except Exception as e:
                 why = _plain(getattr(e, "detail", None) if isinstance(getattr(e, "detail", None), str) else e)[:120] or e.__class__.__name__
                 issues.append(_later(LISTING, f"its company page couldn't be read ({why})") if RETRY_LATER.search(why)
@@ -1226,6 +1259,14 @@ class MarketAudit:
         """Whether the exchange's list says `sym` listed (or first appeared) within the last NEW_DAYS days."""
         with self.lock:
             return self._is_new(sym, datetime.now(timezone.utc).date())
+
+    def new_since(self, sym: str) -> str | bool:
+        """The day `sym` listed (ISO) when it is new (is_new), so its check knows whether its first session has closed; False when not new."""
+        with self.lock:
+            if not self._is_new(sym, datetime.now(timezone.utc).date()):
+                return False
+            info = self.listing.get(sym) or {}
+            return str(info.get("listed") or info.get("seen") or "")[:10] or True
 
     def _listed_days(self, sym: str, today) -> int | None:
         """Days since `sym` listed (or first showed up on the list); None when unknown."""

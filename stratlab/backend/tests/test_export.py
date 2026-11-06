@@ -93,6 +93,20 @@ def test_a_long_member_list_runs_over_slides_and_no_row_is_dropped():
         assert len(deck.table_layout({"head": deck.MEMBER_HEAD, "rows": p, "widths": deck.MEMBER_WIDTHS}, deck.W_IN - 2 * deck.M, 4.85)["rows"]) == len(p)
 
 
+def test_evening_out_pages_with_tall_rows_ends_and_drops_no_row():
+    """R15 (owner, 7 Nov: "my pdf still isn't downloaded"): two tall rows between short ones made the evened pages end short again, and
+    table_pages asked for the same number of rows a page forever: 5 minutes, then a RecursionError and no file. Now it ends at once."""
+    import time
+
+    def row(i, n):
+        return [f"Company {i} Ltd (C{i})", "Auto parts", "₹1,000 cr", "“" + " ".join(["wheel"] * n) + "”", "Added, not yet confirmed"]
+    rows = [row(i, 100 if i in (2, 3) else 1) for i in range(5)]
+    t = time.time()
+    pages = deck.table_pages(deck.MEMBER_HEAD, rows, deck.MEMBER_WIDTHS, deck.W_IN - 2 * deck.M, deck.BOT - deck.TOP - 0.35, most=16)
+    assert time.time() - t < 5
+    assert [r for p in pages for r in p] == rows
+
+
 def test_the_theme_deck_is_a_real_powerpoint_and_a_real_pdf():
     from pptx import Presentation
     v = view()
@@ -121,7 +135,19 @@ def test_the_deck_route_downloads_both_formats_as_one_deck_and_stops_at_the_plan
         routes.public_facts = lambda region, sym: None
         r = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pdf")
         assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content[:5] == b"%PDF-"
-        assert r.headers["content-disposition"] == 'attachment; filename="stratlab-theme-ai-data-centers-us.pdf"'
+        from datetime import datetime
+        from app.intel import theme_routes
+        day = datetime.now(routes.IST).date()
+        # R15: the name people see in Downloads, as the page names it (lib/deckName.ts), not "stratlab-theme-ai-data-centers-us.pdf"
+        assert r.headers["content-disposition"] == f'attachment; filename="StratLab - AI data centers theme (US) - {day.day} {day:%b %Y}.pdf"'
+        built = []
+        real_build = deck.build_theme
+        deck.build_theme = lambda v, pdf=False: built.append(pdf) or real_build(v, pdf)
+        try:                                                                           # the same file again today: sent from the kept copy
+            again = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pdf")
+        finally:
+            deck.build_theme = real_build
+        assert again.status_code == 200 and again.content == r.content and built == [] and len(theme_routes.DECK_CACHE._d) >= 1
         assert api.usage.count("deck") == 1 and "deck:theme:US:ai-data-centers" in api.usage
         r = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pptx")      # the same theme's other format: free
         assert r.status_code == 200 and r.content[:2] == b"PK" and r.headers["content-disposition"].endswith('.pptx"')
