@@ -184,11 +184,11 @@ test("the app's slot reads the plan the app already uses, and shows nothing unti
 // ---------- the plans say it ----------
 test("Basic and Pro have no ads, and the plans say so", async () => {
   const P = await import("../src/lib/plans.ts");
-  assert.ok(P.FEATURES.basic.some((f) => /^No ads, /.test(f)));
+  assert.ok((await import("../src/lib/planFeatures.ts")).FEATURES.basic.some((f) => /^No ads, /.test(f)));
   assert.deepEqual(P.ADS, { free: "After you allow them", basic: "None", pro: "None" });
   assert.match(read("src/components/PlanCompare.tsx"), /ADS\[p\]/);
   // Free's card names no ad: the page says it in the table row, the FAQ and the policy
-  assert.ok(!P.FEATURES.free.some((f) => /\bads?\b/i.test(f)));
+  assert.ok(!(await import("../src/lib/planFeatures.ts")).FEATURES.free.some((f) => /\bads?\b/i.test(f)));
 });
 
 test("the privacy page and the FAQ say plainly: Google ads after consent, what Google may set, how to say no, none on Basic and Pro", async () => {

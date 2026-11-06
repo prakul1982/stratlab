@@ -39,7 +39,8 @@ for (const region of ["IN", "US"] as const) {
     expect(Number(count[2])).toBe(rows);
     expect(headline + " " + lines.join(" ")).toContain(`${count[1]} of ${count[2]} sector indices`);
     // every sector row has its day, week and month and the companies that moved it
-    for (const head of ["Sector index", "Today", "1 week", "1 month", "Moved by"]) await expect(sectors.getByRole("columnheader", { name: head })).toBeVisible();
+    // the day's column is "Today", or the session's day on a page about the last close (LIVE4-007)
+    for (const head of ["Sector index", /^(Today|\d{1,2} [A-Z][a-z]{2})$/, "1 week", "1 month", "Moved by"]) await expect(sectors.getByRole("columnheader", { name: head })).toBeVisible();
     // the cards' levels are not said again in the words
     const levels = await page.locator('table[aria-label="Index levels"] tbody tr th').allInnerTexts();
     expect(levels.length).toBeGreaterThanOrEqual(2);

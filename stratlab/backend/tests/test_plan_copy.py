@@ -5,7 +5,9 @@ from pathlib import Path
 
 from app.plans import FEATURE_PLAN, FEATURES, PLANS
 
-TS = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "plans.ts").read_text(encoding="utf-8")
+_LIB = Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib"
+# LIVE4-020: the full feature lists (FEATURES) moved to planFeatures.ts, loaded with the landing page's fold; read with plans.ts as one text
+TS = (_LIB / "plans.ts").read_text(encoding="utf-8") + "\n" + (_LIB / "planFeatures.ts").read_text(encoding="utf-8")
 
 
 def _block(name: str) -> str:

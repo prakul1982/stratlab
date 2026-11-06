@@ -1,8 +1,8 @@
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { Link } from "react-router-dom";
 import { aboutUsd, usdNote, usePricing } from "../lib/currency";
 import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
-import { FEATURES, KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
+import { KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
 import { signIn, signInUnfinished } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
@@ -589,17 +589,29 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
             );
           })}
         </div>
-        {/* every feature of each plan, one fold under the even cards (the cards say the five main points) */}
-        <div className="lp-faq lp-all-features"><details>
-          <summary>Every feature, plan by plan</summary>
-          <div className="lp-all-grid">{PLAN_IDS.map((p) => (
-            <div key={p}><h4>{PLAN_NAME[p]}</h4><ul className="lp-plan-list">{FEATURES[p].map((f) => <li key={f}>{f.endsWith(":") ? <span className="small muted">{f}</span> : <><span aria-hidden="true">✓</span>{f}</>}</li>)}</ul></div>
-          ))}</div>
-        </details></div>
+        <AllFeatures />
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
         {loading ? <span className="lp-skel lp-skel-fine" /> : <p className="small muted k-measure m80" data-testid="usd-note">{[...small, usdNote(rate, pricing?.usd_inr?.fallback)].join(" ")}</p>}
       </div>
     </section>
+  );
+}
+
+/** Every feature of each plan, one fold under the even cards (the cards say the five main points: LIVE4-020). The lists load when the
+ * fold is first opened, so the landing page's JavaScript stays under its 450 KB (R5V-020). */
+function AllFeatures() {
+  const [all, setAll] = useState<Record<PlanId, string[]> | null>(null);
+  const load = (e: SyntheticEvent<HTMLDetailsElement>) => {
+    if (all || !e.currentTarget.open) return;
+    void import("../lib/planFeatures").then((m) => setAll(m.FEATURES)).catch(() => undefined);
+  };
+  return (
+    <div className="lp-faq lp-all-features"><details onToggle={load} data-testid="all-features">
+      <summary>Every feature, plan by plan</summary>
+      {all ? <div className="lp-all-grid">{PLAN_IDS.map((p) => (
+        <div key={p} data-plan={p}><h4>{PLAN_NAME[p]}</h4><ul className="lp-plan-list">{all[p].map((f) => <li key={f}>{f.endsWith(":") ? <span className="small muted">{f}</span> : <><span aria-hidden="true">✓</span>{f}</>}</li>)}</ul></div>
+      ))}</div> : <p className="small muted">Opening the lists…</p>}
+    </details></div>
   );
 }
 

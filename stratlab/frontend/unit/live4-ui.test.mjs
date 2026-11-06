@@ -214,6 +214,11 @@ test("LIVE4-020: one source for the plan cards (landing and Plans page alike); t
   const login = read("src/pages/Login.tsx");
   assert.match(login, /\{KEY\[p\]\.map\(\(f\) => <li key=\{f\}><span aria-hidden="true">✓<\/span>\{f\}<\/li>\)\}/);
   assert.match(login, /<summary>Every feature, plan by plan<\/summary>/);
+  // the full lists load when the fold opens, in their own file (the landing page's JavaScript budget)
+  assert.match(login, /void import\("\.\.\/lib\/planFeatures"\)\.then\(\(m\) => setAll\(m\.FEATURES\)\)/);
+  assert.doesNotMatch(read("src/lib/plans.ts"), /export const FEATURES/);
+  const F = await import("../src/lib/planFeatures.ts");
+  for (const p of ["free", "basic", "pro"]) assert.ok(F.FEATURES[p].length >= 6, p);
   assert.match(css, /\.lp-examples > \.lp-example:nth-child\(n\+2\), \.lp-examples-skel > \.lp-skel-card:nth-child\(n\+2\) \{ display: none; \}/);
   // /features for a visitor is the landing page at its Trade section, kept out of search: noindex from the server and no canonical address
   const vercel = JSON.parse(read("vercel.json"));

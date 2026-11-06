@@ -15,7 +15,7 @@ export type CalendarStatus = { known_until: string | null; added: string[]; by_h
 
 const COLUMNS: Column<MarketCoverage>[] = [
   // LIVE4-017: the source under the market's name and the days left under the date, so the table fits its card at 1440 (it ran 16px past it)
-  { key: "m", header: "Market", rowHeader: true, wrap: true, csv: (r) => r.name, cell: (r) => <>{r.name}<span className="k-sub-line">{r.source}</span></> },
+  { key: "m", header: "Market", rowHeader: true, wrap: true, csv: (r) => r.name, cell: (r) => <><span className="adm-market">{r.name}</span><span className="k-sub-line">{r.source}</span></> },
   { key: "k", header: "Known until", wrap: true, cell: (r) => (r.state === "none" ? "–" : <>{r.known_until ? dateOnly(r.known_until) : "–"}{r.days_left != null && <span className="k-sub-line">{r.days_left} days ahead</span>}</>) },
   { key: "n", header: "Next holiday", wrap: true, cell: (r) => (r.state === "none" ? "–" : r.next ? <>{dateOnly(r.next)}{r.next_name && <span className="k-muted"> · {r.next_name}</span>}</> : "–") },
   { key: "st", header: "Status", wrap: true, cell: (r) => (r.state === "none" ? <span className="k-muted">–</span>
