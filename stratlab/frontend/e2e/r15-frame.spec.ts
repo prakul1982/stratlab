@@ -220,10 +220,10 @@ test("a date box opens the kit's calendar on its first click; a day picks; Esc a
   await expect(cal).toBeVisible();
   await expect(cal.getByRole("grid")).toBeVisible();
   await expect(input).toBeFocused();                       // typing still works while it is open
-  const title = (await cal.locator(".k-cal-title").textContent())!;
+  const title = (await cal.locator(".k-dp-title").textContent())!;
   await cal.getByRole("button", { name: "Next month" }).click();
-  await expect(cal.locator(".k-cal-title")).not.toHaveText(title);
-  const day = cal.locator(".k-cal-day:not(.out):not(:disabled)").nth(10);
+  await expect(cal.locator(".k-dp-title")).not.toHaveText(title);
+  const day = cal.locator(".k-dp-day:not(.out):not(:disabled)").nth(10);
   const said = (await day.getAttribute("aria-label"))!;      // "Tuesday 10 November 2026"
   await day.click();
   await expect(cal).toHaveCount(0);
@@ -232,9 +232,9 @@ test("a date box opens the kit's calendar on its first click; a day picks; Esc a
   // its button opens it with focus on the chosen day; the arrows move; Esc closes and goes back to the box
   await box.getByRole("button", { name: /on a calendar$/ }).click();
   await expect(cal).toBeVisible();
-  await expect(cal.locator(".k-cal-day.on")).toBeFocused();
+  await expect(cal.locator(".k-dp-day.on")).toBeFocused();
   await page.keyboard.press("ArrowRight");
-  await expect(cal.locator(".k-cal-day:focus")).not.toHaveClass(/\bon\b/);
+  await expect(cal.locator(".k-dp-day:focus")).not.toHaveClass(/\bon\b/);
   await page.keyboard.press("Escape");
   await expect(cal).toHaveCount(0);
   await expect(input).toBeFocused();

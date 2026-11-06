@@ -40,28 +40,28 @@ export function DatePicker({ value, min, max, onPick, onClose, focusGrid, label,
   const prevOk = !min || addDays(`${month}-01`, -1) >= min;
   const nextOk = !max || addMonths(`${month}-01`, 1) <= max;
   return (
-    <div className={`k-cal${flip ? " flip" : ""}`} role="dialog" aria-label={label} aria-modal="false"
+    <div className={`k-dp${flip ? " flip" : ""}`} role="dialog" aria-label={label} aria-modal="false"
       onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(true); } }}>
-      <div className="k-cal-head">
-        <button type="button" className="k-cal-nav" aria-label="Previous month" disabled={!prevOk} onClick={() => go(addMonths(at, -1))}><span className="k-cal-arrow prev" aria-hidden="true" /></button>
-        <span className="k-cal-title" aria-live="polite">{monthTitle(month)}</span>
-        <button type="button" className="k-cal-nav" aria-label="Next month" disabled={!nextOk} onClick={() => go(addMonths(at, 1))}><span className="k-cal-arrow next" aria-hidden="true" /></button>
+      <div className="k-dp-head">
+        <button type="button" className="k-dp-nav" aria-label="Previous month" disabled={!prevOk} onClick={() => go(addMonths(at, -1))}><span className="k-dp-arrow prev" aria-hidden="true" /></button>
+        <span className="k-dp-title" aria-live="polite">{monthTitle(month)}</span>
+        <button type="button" className="k-dp-nav" aria-label="Next month" disabled={!nextOk} onClick={() => go(addMonths(at, 1))}><span className="k-dp-arrow next" aria-hidden="true" /></button>
       </div>
-      <div className="k-cal-grid" role="grid" aria-label={monthTitle(month)} ref={grid} onKeyDown={key}>
-        <div role="row" className="k-cal-row">{WEEK.map((w) => <span key={w} role="columnheader" className="k-cal-dow">{w}</span>)}</div>
+      <div className="k-dp-grid" role="grid" aria-label={monthTitle(month)} ref={grid} onKeyDown={key}>
+        <div role="row" className="k-dp-row">{WEEK.map((w) => <span key={w} role="columnheader" className="k-dp-dow">{w}</span>)}</div>
         {[0, 1, 2, 3, 4, 5].map((r) => (
-          <div role="row" className="k-cal-row" key={r}>
+          <div role="row" className="k-dp-row" key={r}>
             {days.slice(r * 7, r * 7 + 7).map((d) => (
               <span role="gridcell" key={d} aria-selected={d === value || undefined}>
                 <button type="button" data-day={d} tabIndex={d === at ? 0 : -1} disabled={!ok(d)} aria-label={dayName(d)}
-                  className={`k-cal-day${d.slice(0, 7) !== month ? " out" : ""}${d === value ? " on" : ""}${d === today ? " today" : ""}`}
+                  className={`k-dp-day${d.slice(0, 7) !== month ? " out" : ""}${d === value ? " on" : ""}${d === today ? " today" : ""}`}
                   onClick={() => onPick(d)}>{+d.slice(8)}</button>
               </span>
             ))}
           </div>
         ))}
       </div>
-      <div className="k-cal-foot">
+      <div className="k-dp-foot">
         <button type="button" className="btn quiet sm" disabled={!ok(today)} onClick={() => onPick(today)}>Today</button>
         {value && <span className="k-note">{showDay(value)}</span>}
       </div>

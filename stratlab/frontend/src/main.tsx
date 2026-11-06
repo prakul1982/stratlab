@@ -25,8 +25,17 @@ import { closedLine, nextOpenAt, reconnectAt } from "./lib/dataBack";
 import type { Market } from "./lib/types";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
-const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
-  lazy(() => importWithRetry(load).then((m) => ({ default: m[name] })));
+// A page whose file has already arrived (another page of the same file was opened: the company page after Research) is drawn at once,
+// with no loading bar in between: page moves are not transitions (see BrowserRouter below), so a lazy page that waits even a moment
+// would flash the bar and draw two headings. The choice is made once per visit to the page, so it is never swapped while open.
+const arrived = new Map<() => Promise<unknown>, Record<string, ComponentType>>();
+const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K): ComponentType => {
+  const Lazy = lazy(() => importWithRetry(load).then((m) => { arrived.set(load, m); return { default: m[name] as ComponentType }; }));
+  return function Page() {
+    const [Ready] = useState<ComponentType | null>(() => arrived.get(load)?.[name] ?? null);
+    return Ready ? <Ready /> : <Lazy />;
+  };
+};
 const home = () => import("./pages/Home");
 const spaceHomes = () => import("./pages/SpaceHomes");
 const SpaceHome = page(spaceHomes, "SpaceHome");

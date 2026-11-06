@@ -21,14 +21,15 @@ export function MoreTools({ title, rows, children, id }: { title: string; rows: 
   const phone = usePhone();
   const firstOf = new Set(rows.filter((r, i) => i === 0 || rows[i - 1].groupId !== r.groupId).map((r) => r.id));
   const cols: Column<ToolRow>[] = [
+    // the menu entry heads each group, first and said once (open by default, R15: in a later column a mostly blank column read as
+    // half-empty, LIVE3-021); a phone's cards are the name and its line only: a "Menu entry" row on each made the list twice as long
+    ...(phone ? [] : [{ key: "in", header: "Menu entry", cell: (r: ToolRow) => (firstOf.has(r.id) ? r.group : "") }]),
     { key: "tool", header: "Tool", rowHeader: true, cell: (r) => (
       <span className="k-more-go">
         <Link className="link k-more-link" to={r.to} onClick={r.onClick} {...r.attrs}>{r.title}</Link>
         {r.tag}
       </span>) },
     { key: "what", header: "What it is", wrap: true, lead: true, cell: (r) => <span className="k-muted">{r.line}</span> },
-    // a phone's cards are the name and its line only: a "Menu entry" row on each made the list twice as long
-    ...(phone ? [] : [{ key: "in", header: "Menu entry", cell: (r: ToolRow) => (firstOf.has(r.id) ? r.group : "") }]),
   ];
   return (
     <FoldCard id={id} open className="k-more-tools" title={title} meta={`${rows.length} tool${rows.length === 1 ? "" : "s"}`} testId="more-tools">

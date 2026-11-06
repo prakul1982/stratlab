@@ -132,3 +132,17 @@ test("no light stripe at a table's right edge: no painted edge shadow, only the 
   assert.doesNotMatch(css, /farthest-side at 100% 50%/);
   assert.match(css, /animation-timeline: scroll\(self inline\)/);
 });
+
+test("R15 CI: the date picker's classes are its own (k-dp), never the market calendar's (k-cal), which they had squeezed", () => {
+  const css = read("src/styles.css");
+  assert.doesNotMatch(css, /^\.k-cal(-row|-grid|-head|-day)?\s*\{/m);
+  assert.match(css, /^\.k-dp \{ position: absolute;/m);
+  assert.doesNotMatch(read("src/components/kit/DateInput.tsx"), /k-cal/);
+});
+
+test("R15 CI: a page whose file has arrived draws at once; the section menu's dots are no svg; a More list's menu entry comes first", () => {
+  assert.match(read("src/main.tsx"), /const \[Ready\] = useState<ComponentType \| null>\(\(\) => arrived\.get\(load\)\?\.\[name\] \?\? null\);/);
+  assert.doesNotMatch(read("src/components/kit/Section.tsx"), /<svg/);
+  const more = read("src/components/MoreTools.tsx");
+  assert.ok(more.indexOf('header: "Menu entry"') < more.indexOf('header: "Tool"'));
+});

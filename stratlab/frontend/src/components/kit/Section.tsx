@@ -167,7 +167,8 @@ export function useSectionFrame(el: RefObject<HTMLElement | null>, { id, title: 
 export const SectionCtx = createContext<SectionFrame | null>(null);
 export const useSection = () => useContext(SectionCtx);
 
-const Dots = () => <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>;
+// three dots drawn by the style sheet, not an svg: a card's first svg is its chart, and checks that measure a chart find that one
+const Dots = () => <span className="k-sec-dots" aria-hidden="true" />;
 
 /** The section's "⋯" menu: Move up, Move down, Reset order. */
 export function SectionMenu({ frame }: { frame: SectionFrame }) {
