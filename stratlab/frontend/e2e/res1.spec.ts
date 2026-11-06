@@ -84,6 +84,9 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   await expect(reliance.getByText(/^±\d+\.\d%$/).first()).toBeVisible({ timeout: 30_000 });      // the usual move, once the prices were read
     await expect(reliance.getByText(/^[▲▼]\d+\.\d$/).first()).toBeVisible();                   // the latest moves: arrow and figure (the heading says percent)
   await expect(reliance.getByText(/^±\d+\.\d%$/)).toHaveCount(2, { timeout: 30_000 });             // ...and the move the options price in
+  // LIVE4-001: every row's earlier moves and implied move end in a figure or a dash within 20 s, none left on its loading bar
+  await expect(page.getByText("Reading earlier results days")).toHaveCount(0, { timeout: 20_000 });
+  await expect(page.getByText("Reading the option prices")).toHaveCount(0, { timeout: 20_000 });
   // the price column says when it was read, or that it is the last close
   await expect(page.getByTestId("results-prices")).toContainText(/Prices as of \d|last close/);
   await sane(page, errors);
