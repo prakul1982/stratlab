@@ -20,7 +20,9 @@ export interface SeriesPoint { y: string; v: number }
 export interface Company {
   region: Region; symbol: string; name: string; exchange: string | null; currency: string; logo: string | null;
   website: string | null; industry: string | null; facts: { label: string; value: string }[];
-  market_cap: number | null; cap_note?: string | null; quote: Quote | null; range52: { low: number | null; high: number | null; since?: string | null; traded_from?: string | null };
+  market_cap: number | null; cap_note?: string | null;
+  /** the figures are the company's last stored ones (the fundamentals source busy): when they were worked out, or true (LIVE4-004) */
+  figures_kept?: string | true; quote: Quote | null; range52: { low: number | null; high: number | null; since?: string | null; traded_from?: string | null };
   /** a company that no longer trades (merged or delisted): what became of it (DD-012) */ delisted?: import("./researchFormat").Delisted | null;
   margins: { gross: number | null; operating: number | null; net: number | null } | null;
   metrics: MetricGroup[];

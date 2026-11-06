@@ -340,6 +340,7 @@ function CompanyView() {
           <div className="k-stack inv-head-cap">
             {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
             {c.market_cap == null && c.cap_note && <p className="k-small k-muted" data-cap-check>{c.cap_note}</p>}
+            {c.figures_kept && <p className="k-small k-muted" data-figures-kept>{typeof c.figures_kept === "string" ? `Figures as of ${fmtDate(c.figures_kept.slice(0, 10))}` : "Last stored figures"}; the latest couldn't be read just now.</p>}
           </div>
           <div className="k-stack inv-head-price">
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} since={c.range52.since} tradedFrom={c.range52.traded_from} currency={ccy} compact />

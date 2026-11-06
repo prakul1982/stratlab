@@ -3302,6 +3302,7 @@ suggester = suggest.Suggester({"IN": _india_suggestions, "US": lambda: suggest.u
 KiteService.names_fn = staticmethod(lambda: _isin["map"])
 Research.local_search = staticmethod(lambda q, region: suggester.search_ranked(q, region, 10))
 Research.nse_twin = staticmethod(lambda code: _quiet(nse_twin_of, code))     # 500325 opens RELIANCE (DD-003)
+Research.kept_facts = staticmethod(lambda r, s: _quiet(stock_page_store.peek, r, s))    # a busy fundamentals source: the stored figures (LIVE4-004)
 
 
 @app.get("/suggest/companies")

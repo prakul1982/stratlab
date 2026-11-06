@@ -31,6 +31,25 @@ _pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="intel")
 _index_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="indices")
 
 
+BUSY_TEXT = "The company's figures are busy right now. Try again in a minute."
+
+
+def busy_error(e: BaseException) -> bool:
+    """An error that means a source can't be asked right now (its rate limit, a broker turn not reached in time, a call out of time),
+    never that the thing asked for doesn't exist."""
+    return bool(getattr(e, "busy", False)) or "busy" in type(e).__name__.lower() or isinstance(e, TimeoutError)
+
+
+def kept_summary(kept: dict | None) -> dict:
+    """The fundamentals summary's figures from a company's stored public-page facts (see Research.kept_facts): what a page shows while
+    the fundamentals source is busy. Empty without them."""
+    if not kept:
+        return {}
+    pick = {"market_cap_cr": "market_cap", "pe": "pe", "roe": "roe", "roce": "roce", "div_yield": "div_yield", "net_margin": "net_margin",
+            "opm": "opm", "debt_cr": "debt", "debt_equity": "debt_equity", "low52": "low52", "high52": "high52"}
+    return {k: kept.get(v) for k, v in pick.items() if kept.get(v) is not None}
+
+
 def _long_day(v):
     """An ISO date as the page writes dates ("12 Dec 1980"), else as given (R54-010: "Listed since 1980-12-12")."""
     try:
@@ -815,11 +834,12 @@ class Research:
                 status.setdefault(src, {"source": src, "ok": True, "error": None})
             except SourceError as e:
                 results[k] = None
-                status[src] = {"source": src, "ok": False, "error": str(e)}
+                status[src] = {"source": src, "ok": False, "error": str(e), "busy": bool(e.busy)}
                 lost.setdefault(src, []).append(k)
             except Exception as e:  # a parsing surprise in one source mustn't sink the page
                 results[k] = None
-                status[src] = {"source": src, "ok": False, "error": f"Unexpected error ({e.__class__.__name__})."}
+                # a broker turn not reached in time or a call that ran out of time is a busy source, not a missing company (LIVE4-004)
+                status[src] = {"source": src, "ok": False, "error": f"Unexpected error ({e.__class__.__name__}).", "busy": busy_error(e)}
                 lost.setdefault(src, []).append(k)
         for src, keys in lost.items():
             status[src]["what"] = list(dict.fromkeys(Research.WHAT[k] for k in keys if k in Research.WHAT))
@@ -830,6 +850,15 @@ class Research:
     local_search = None
     # a BSE scrip code -> the NSE symbol of the same company, when it is listed on both (500325 -> RELIANCE). Set by main.
     nse_twin = None
+    # (region, symbol) -> the company's last stored figures (the public page's facts, however old) or None. Set by main. A page whose
+    # fundamentals source is busy shows these meanwhile, never a page cut down to the name in capitals (LIVE4-004)
+    kept_facts = None
+
+    def _kept(self, region: str, sym: str) -> dict | None:
+        try:
+            return self.kept_facts(region, sym) if callable(self.kept_facts) else None
+        except Exception:
+            return None
 
     def search(self, q: str, region: str) -> list[dict]:
         """Up to 10 companies for what's typed: a symbol, a name or a short name ("HDFC Bank", "Infy", "Apple"). India
@@ -1235,7 +1264,12 @@ class Research:
         clock), for a US page standing on the listing alone. A bare Indian code (HDFCBANK) or any other market's listing is
         no US company (R2 integration: a two-company link with no market opened HDFC Bank as a US company instead of
         trying India, LIVE2-021)."""
-        lst = self._listing_or_none(sym)
+        try:
+            lst = self.yahoo.meta(sym)
+        except Exception as e:
+            if busy_error(e):            # the listing source busy: "busy", never "No US company found" (LIVE4-004)
+                raise SourceError("Research", BUSY_TEXT, busy=True) from None
+            lst = None
         tz = lst.get("tz") if lst else None
         if not (lst and lst.get("name")) or lst.get("currency") not in (None, "USD") or (tz and not str(tz).startswith("America/")):
             return None
@@ -1428,8 +1462,15 @@ class Research:
             tasks["y"] = ("Yahoo Finance", lambda: self.yahoo.meta(_yahoo_in(code or sym)))
         r, sources = self._run(tasks)
         scr = r.get("scr")
-        if not scr and not r.get("kq") and not r.get("y"):
-            raise SourceError("Research", f"Couldn't find {sym}. Use the NSE symbol (like RELIANCE or TCS), or the BSE code for a company listed only on BSE.")
+        busy = any(x.get("busy") for x in sources if not x.get("ok"))
+        # the fundamentals source busy (our rate limit under a burst of pages): the company's last stored figures stand in, said so
+        kept = self._kept("IN", sym) if not scr and (busy or inst) else None
+        if not scr and not r.get("kq") and not r.get("y") and not kept:
+            # a busy source is never "no such company" (LIVE4-004: 21 pages at once answered "Couldn't find ITC"); a company the
+            # exchanges list is real whatever the sources say
+            if busy or inst:
+                raise SourceError("Research", BUSY_TEXT, busy=True)
+            raise NotFound("Research", f"Couldn't find {sym}. Use the NSE symbol (like RELIANCE or TCS), or the BSE code for a company listed only on BSE.")
         # a share listed within the year: its first day of trading (its range is since then), and the listing's own
         # answer, whose reference for the first session is the issue price (DD-010, DD-011)
         listing = r.get("y")
@@ -1453,12 +1494,12 @@ class Research:
                 listed_on = None
         elif listing and listing.get("first_trade"):
             listed_on = listing["first_trade"] if listing_day([{"t": listing["first_trade"]}]) else None
-        s = scr_summary(scr, listed_on) if scr else {}
+        s = scr_summary(scr, listed_on) if scr else kept_summary(kept)
         if listed_on and scr and balance_before(scr, listed_on):
             # the balance sheet's share count is from before the IPO: the source's own market value, on the shares in issue
             # now, stands (DD-011: TONBO ₹6,236 cr on the pre-IPO count against ₹6,495 cr)
             s = {**s, "market_cap_cr": num((scr.get("ratios") or {}).get("Market Cap")) or s.get("market_cap_cr")}
-        name = tidy_name((scr or {}).get("name") or (inst or {}).get("name") or (r.get("y") or {}).get("name") or sym)
+        name = tidy_name((scr or {}).get("name") or (kept or {}).get("name") or (inst or {}).get("name") or (r.get("y") or {}).get("name") or sym)
         gone = None if inst else delisted_of(sym, name)
         name = _GONE.sub("", name).strip() or name
         clean = re.sub(r"\s+(Ltd|Limited)\.?$", "", name, flags=re.I).strip()
@@ -1491,6 +1532,8 @@ class Research:
             quote = {**quote, "ref": "issue"}           # the listing's answer already gives the first session against its issue price
         if quote is None and s.get("price"):
             quote = {"price": s["price"], "at": None}      # the fundamentals page's price carries no trade time: said as unknown
+        if quote is None and kept and num(kept.get("price")) is not None:
+            quote = {"price": num(kept["price"]), "at": kept.get("price_at")}      # the stored page's last price, with its day
         s = at_live_price(s, num((quote or {}).get("price")), sym, (scr or {}).get("fetched_at"))
         from .. import stock_pages
         s = stock_pages.india_snap_checked(s, scr) if scr else s
@@ -1568,6 +1611,8 @@ class Research:
             "facts": [{"label": "Listed", "value": f"BSE only · {code}" if code else f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr")
                                                                                                     else [{"label": "Market cap", "value": "Unavailable"}] if s.get("cap_problem") else []),
             "cap_note": stock_pages.CAP_UNAVAILABLE if s.get("cap_problem") else None,
+            # the figures are the company's last stored ones (the fundamentals source busy): when they were worked out (LIVE4-004)
+            **({"figures_kept": kept.get("built_at") or True} if kept and not scr else {}),
             "market_cap": s["market_cap_cr"] * 1e7 if s.get("market_cap_cr") else None,
             # a share listed within the year: its range is since its first day of trading, said so (DD-011)
             "quote": quote, "range52": {"low": lo52, "high": hi52, **({"since": listed_on} if listed_on else {}),
