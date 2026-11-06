@@ -2123,6 +2123,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .k-foldcard-chev { transition: none; } }
 /* the tools of a space, in a FoldCard: a calm table of name, one line and where it lives in the menu */
 .k-more-tools .k-table td.k-wrap { white-space: normal; min-width: 16rem; }
+/* on a phone's cards the line takes the card's width (open by default since R15 #1, "Elsewhere in StratLab" ran 67px past a 390px screen) */
+@media (max-width: 640px) { .k-more-tools .k-tbl-wrap.stack .k-table td.k-wrap { min-width: 0; grid-column: 1 / -1; } }
 .k-more-tools .k-more-go { display: inline-flex; flex-direction: column; gap: 2px; }
 .k-more-tools .k-more-lock { font-size: var(--t-note); color: var(--muted); }
 .k-chipset { display: flex; flex-wrap: wrap; gap: 6px; }

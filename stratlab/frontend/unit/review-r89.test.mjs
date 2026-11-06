@@ -243,7 +243,7 @@ test("MO-4b: Positioning's cash and put-call cards stack, and a pair of cards in
   assert.match(css, /\.mc-grid \{ align-items: stretch; \}/);                         // the Money calendar's columns end level too (RC2B-041)
   const sig = read("src/pages/trade/SignalsPage.tsx");
   // R15 #19 (owner, 7 Nov, changed on purpose): the URL and the steps are one card beside the form, the two ending level
-  assert.match(sig, /<div className="k-two sg-two">\s*<UrlCard ov=\{ov\} reload=\{load\}><HowTo \/><\/UrlCard>/);
+  assert.match(sig, /<div className="k-two sg-two">\s*<UrlCard ov=\{ov\} reload=\{load\}><HowTo format=\{ov\.format\} \/><\/UrlCard>/);
 });
 
 test("Owner 26 Oct: + Custom flows as the last chip where the row wraps; the cost choice's note sits under the row", () => {

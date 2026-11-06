@@ -151,7 +151,7 @@ function NewSession({ onStarted }: { onStarted: (id: string) => void }) {
 
 /** The steps for a TradingView alert, in order (DA-039: the page never said what to do with the URL, outside its lock note). In the URL's
  * card, under it (R15 #19, owner 7 Nov: "fix ui"): the two short cards stacked beside the tall form left a gap and uneven edges. */
-function HowTo() {
+function HowTo({ format }: { format: Record<string, unknown> }) {
   return (
     <section className="sg-howto" aria-label="Connect a TradingView alert">
       <h3 className="k-card-title">Connect a TradingView alert</h3>
@@ -161,15 +161,18 @@ function HowTo() {
         <li>In the alert's Message box, put the message below with your session's id, and <code>buy</code>, <code>sell</code> or <code>exit</code> as the action.</li>
         <li>When the alert fires, the signal shows in the session's log with its fill. Chartink alerts work the same way, with the URL as their webhook.</li>
       </ol>
+      {/* the message of step 3, right under the steps (what each field means is in "The alert's message" below) */}
+      <pre className="sg-code" aria-label="The alert's message"><code>{JSON.stringify(format, null, 2)}</code></pre>
     </section>
   );
 }
 
-function Format({ format, ov }: { format: Record<string, unknown>; ov?: Overview }) {
+function Format({ format, ov, code = true }: { format: Record<string, unknown>; ov?: Overview; code?: boolean }) {
   return (
     <Card label="The alert's message">
       <CardHead level={3} title="The alert's message" />
-      <pre className="sg-code"><code>{JSON.stringify(format, null, 2)}</code></pre>
+      {/* on the overview the message itself is under the steps, beside the form (R15 #19); here, what each field means */}
+      {code && <pre className="sg-code"><code>{JSON.stringify(format, null, 2)}</code></pre>}
       <ul className="k-list muted">
         <li><code>action</code> is <code>buy</code>, <code>sell</code> or <code>exit</code> (closes the whole position, with no <code>qty</code>).</li>
         <li><code>symbol</code>, if sent, must match the session's: a guard against pasting the URL into the wrong alert.</li>
@@ -370,11 +373,11 @@ export function SignalsPage() {
             <>
               {/* the webhook URL and the how-to are one card beside the new-session form, the two ending level (MO-4b; R15 #19) */}
               <div className="k-two sg-two">
-                <UrlCard ov={ov} reload={load}><HowTo /></UrlCard>
+                <UrlCard ov={ov} reload={load}><HowTo format={ov.format} /></UrlCard>
                 <NewSession onStarted={(id) => { refreshMe(); load(); nav(`/trade/signals/${id}`); }} />
               </div>
               {!ov.sessions.length && <EmptyState title="No signal sessions yet">Start one above, then put its session id and your URL into an alert.</EmptyState>}
-              <Format format={ov.format} ov={ov} />
+              <Format format={ov.format} ov={ov} code={false} />
               <Earlier label="Signals that reached no session" count={ov.misses.length}>
                 <ul className="k-list">
                   {ov.misses.map((m, i) => <li key={i}>{at(m.at)}: {m.reason}</li>)}
