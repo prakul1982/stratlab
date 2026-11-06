@@ -60,6 +60,8 @@ const SHIFT_PAGES: [string, boolean, number][] = [
   ["/library", false, 1440], ["/library", false, 390], ["/privacy", false, 1440], ["/terms", false, 1440], ["/privacy", false, 390], ["/", false, 1440],
   ["/library", true, 1440], ["/research/pulse", true, 390], ["/research/pulse", true, 1440], ["/research/screens", true, 390], ["/research/screens", true, 1440],
   ["/tour", true, 390], ["/trade", true, 1440], ["/research", true, 390],
+  // LIVE5-008: sector rotation moved by 0.25 (the chart and the header's date arriving) and Admin's Data by 0.34 (the jobs' table under a short placeholder)
+  ["/research/rotation", true, 1440], ["/admin/data", true, 1440], ["/research/results", true, 1440],
 ];
 test("pages hold still while they load: layout shift under 0.1 on every page the review measured, phone and desktop (LIVE3-012)", async ({ page }) => {
   test.setTimeout(400_000);

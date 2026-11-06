@@ -111,3 +111,16 @@ test("LIVE5-006/007: Market Watch says the last close's day once its markets are
   const css = readFileSync(new URL("../src/components/watch/launcher.css", import.meta.url), "utf8");
   assert.match(css, /@media \(max-width: 900px\) \{\n  \.mw-launch\.app, \.mw-launch\.public \{ display: none; \}/);
 });
+
+test("LIVE5-008: rotation's gaps over the benchmark are points, and its chart and Admin's jobs hold their place while loading", async () => {
+  const scans = readFileSync(new URL("../src/pages/ResearchScans.tsx", import.meta.url), "utf8");
+  assert.match(scans, /\{ w1: "1W, pts", m1: "1M, pts", m3: "3M, pts" \}/);
+  assert.match(scans, /<Delta value=\{r\.ret\[k\]!\}>\{ptsText\(r\.ret\[k\]!\)\}<\/Delta>/);
+  assert.match(scans, /<Skeleton label="Comparing each one with the market" lines=\{4\} page \/>/);
+  assert.match(scans, /asOfPending=\{!out && !failed\}/);
+  assert.match(readFileSync(new URL("../src/pages/admin/DataSection.tsx", import.meta.url), "utf8"), /<Skeleton label="Loading the jobs" page \/>/);
+  const ptsText = (v) => { const t = Math.abs(v).toFixed(2); return /[1-9]/.test(t) ? `${v > 0 ? "+" : "−"}${t}` : t; };
+  assert.match(scans, /export const ptsText = \(v: number\): string => \{ const t = Math\.abs\(v\)\.toFixed\(2\); return \/\[1-9\]\/\.test\(t\) \? `\$\{v > 0 \? "\+" : "−"\}\$\{t\}` : t; \};/);
+  assert.equal(ptsText(3.274), "+3.27");
+  assert.equal(ptsText(-0.001), "0.00");
+});
