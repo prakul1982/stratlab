@@ -761,7 +761,7 @@ td.num, .num { font-family: var(--sans); }
 /* LIVE4-020: the plans' full feature lists, folded under the even cards */
 .lp-all-features { margin-top: 8px; }
 .lp-all-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-top: 12px; }
-.lp-all-grid h4 { margin: 0 0 8px; font-size: var(--t-body); }
+.lp-all-grid h3 { margin: 0 0 8px; font-size: var(--t-body); }   /* h3: under the section's h2 (axe heading-order on /plans, R13 CI) */
 @media (max-width: 900px) { .lp-all-grid { grid-template-columns: minmax(0, 1fr); } }
 .lp-faq summary::after { content: "+"; font-family: var(--mono); color: var(--muted); font-size: 18px; line-height: 1.2; }
 .lp-faq details[open] summary::after { content: "–"; }

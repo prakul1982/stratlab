@@ -609,7 +609,7 @@ function AllFeatures() {
     <div className="lp-faq lp-all-features"><details onToggle={load} data-testid="all-features">
       <summary>Every feature, plan by plan</summary>
       {all ? <div className="lp-all-grid">{PLAN_IDS.map((p) => (
-        <div key={p} data-plan={p}><h4>{PLAN_NAME[p]}</h4><ul className="lp-plan-list">{all[p].map((f) => f.endsWith(":") ? <li key={f} className="small muted lp-plan-sub">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}</ul></div>
+        <div key={p} data-plan={p}><h3>{PLAN_NAME[p]}</h3><ul className="lp-plan-list">{all[p].map((f) => f.endsWith(":") ? <li key={f} className="small muted lp-plan-sub">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}</ul></div>
       ))}</div> : <p className="small muted">Opening the lists…</p>}
     </details></div>
   );
