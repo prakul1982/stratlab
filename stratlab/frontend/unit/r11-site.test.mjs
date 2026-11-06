@@ -32,7 +32,8 @@ test("item 24: a hand-run audit over a week old is folded as history, its counts
 
 test("item 15: the Draft a blog post bar is drawn for an admin only, and its endpoint is an admin route", () => {
   const page = read("src/pages/ThemesPage.tsx");
-  assert.match(page, /\{me\?\.is_admin && dive\.notable\.length > 0 && \(\s*<Notice action=\{\{ label: "Draft a blog post"/);
+  // R15 (owner: "did you remove the blog button for me too?"): on every theme with figures, not only a notable one
+  assert.match(page, /\{me\?\.is_admin && dive\.members > 0 && \(\s*<Notice action=\{\{ label: "Draft a blog post"/);
   assert.match(read("src/lib/theme.ts"), /draft: \(r: Region, theme: string\) => api<[^>]+>\("\/admin\/blog\/theme"/);
   assert.match(read("../backend/app/blog_pages.py"), /@admin_router\.post\("\/admin\/blog\/theme"\)\ndef admin_blog_theme\(req: ThemeDraft, profile=Depends\(admin\.admin_profile\)\)/);
 });

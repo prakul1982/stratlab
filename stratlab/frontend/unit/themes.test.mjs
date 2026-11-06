@@ -78,7 +78,7 @@ test("THEMES: every company of the theme's official industries is listed by laye
   assert.match(page, /r\?\.ai\?\.state === "working"/);
   // work still running is the shared moving bar with one short line (owner, 5 Nov: "a nice animated loading bar, don't show exact warnings");
   // a company whose check timed out keeps its "not yet confirmed" mark, without a note about the timeout
-  assert.match(page, /\{pending && \(\n\s+<Working label=/);
+  assert.match(page, /\{pending && !stopped && \(\n\s+<Working label=/);
   assert.doesNotMatch(page, /pl\?\.timed_out|tone="warn" action=\{\{ label: "Check again"/);
   assert.doesNotMatch(page, /On the exchange's list for these industries/);
 });
