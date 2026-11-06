@@ -220,3 +220,9 @@ test("LIVE4-020: one source for the plan cards (landing and Plans page alike); t
   const noindex = vercel.headers.find((h) => h.headers.some((x) => x.key === "X-Robots-Tag" && /noindex/.test(x.value)) && new RegExp(`^${h.source.replace(/\(\?:/g, "(?:")}$`).test("/features"));
   assert.ok(noindex, "/features carries the noindex header");
 });
+
+test("LIVE4-021: an ESOP trust's row says what it is, and the insiders' line says its trades are left out", () => {
+  const d = read("src/components/Deals.tsx");
+  assert.match(d, /d\.trust \? <span className="k-sub-line" data-testid="deal-trust">Employee stock option trust: buys for staff options<\/span>/);
+  assert.match(d, /\{rep\.trust_note && <span className="k-muted" data-testid="deals-trust-note"> \{rep\.trust_note\}<\/span>\}/);
+});

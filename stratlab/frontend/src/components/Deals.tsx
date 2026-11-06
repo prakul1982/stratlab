@@ -10,9 +10,13 @@ export interface Deal {
   relation: "promoter" | "director" | "kmp" | "employee" | "other" | null;
   side: "bought" | "sold" | "pledged" | "released" | "invoked"; mode: "market" | "off_market" | "pledge" | "esop" | "other";
   mode_text: string | null; qty: number | null; price: number | null; value: number | null; pct_after: number | null; url: string;
+  /** the company's employee stock option trust: it buys for staff options, not as an insider (LIVE4-021) */
+  trust?: boolean;
 }
 export interface DealsReport {
   symbol: string; days: number; items: Deal[]; count: number; problems: string[]; flow_text: string | null; flow_days: number;
+  /** says an ESOP trust's trades are left out of the insiders' count, naming it */
+  trust_note?: string | null;
 }
 
 const SIDE: Record<Deal["side"], string> = { bought: "Bought", sold: "Sold", pledged: "Pledged", released: "Pledge released", invoked: "Pledge invoked" };
@@ -66,13 +70,15 @@ export function DealsPanel({ symbol }: { symbol: string }) {
     <div className="k-stack deals">
       <span className="k-small">{rep.flow_text
         ? <>Promoters and insiders on the open market, last {Math.round(rep.flow_days / 30)} months: <b>{rep.flow_text}</b>.</>
-        : <span className="k-muted">No open-market trades by promoters or insiders disclosed in the last {Math.round(rep.flow_days / 30)} months.</span>}</span>
+        : <span className="k-muted">No open-market trades by promoters or insiders disclosed in the last {Math.round(rep.flow_days / 30)} months.</span>}
+        {rep.trust_note && <span className="k-muted" data-testid="deals-trust-note"> {rep.trust_note}</span>}</span>
       <Seg label="Which disclosures" value={show} onChange={(v) => { setShow(v); setMore(false); }} options={SHOW.map(([id, label]) => ({ value: id, label }))} />
       {rows.length === 0 ? <EmptyState title="Nothing disclosed">None disclosed in the last year.</EmptyState> : (
         <div className="deals-table">
           <DataTable label={`${symbol} deals and insider trades`} rows={list} rowKey={(d: DealRow) => d.id} stack sticky={list.length > 14}
             columns={[
               { key: "who", header: "Who", rowHeader: true, wrap: true, cell: (d) => <><span className="deal-who">{d.who}</span>{d.from ? <span className="k-sub-line">from {d.from}</span>
+                : d.trust ? <span className="k-sub-line" data-testid="deal-trust">Employee stock option trust: buys for staff options</span>
                 : d.relation && d.relation !== "other" && <span className="k-sub-line">{RELATION[d.relation]}</span>}</> },
               { key: "side", header: "Bought or sold", cell: (d) => <Badge tone="plain" dot={false}>{SIDE[d.side] ?? d.side}</Badge> },
               { key: "qty", header: "Shares", numeric: true, cell: (d) => (d.qty == null ? "–" : Math.round(d.qty).toLocaleString("en-IN")) },
