@@ -35,8 +35,9 @@ test("VR5-006: Holdings' four totals are one table on a phone, and the breadth c
   await expect(card.getByRole("table").locator("tbody tr")).toHaveCount(3);
   // each figure whole and on one line, at the smallest phone too
   await page.setViewportSize({ width: 360, height: 780 });
+  // LIVE4-008: each row has the newest count and the close before it, each in its own dated column (two figures a row)
   const figs = card.getByRole("table").locator("tbody td.k-num");
-  await expect(figs).toHaveCount(3);
+  await expect(figs).toHaveCount(6);
   const cut = await figs.evaluateAll((els) => els.map((e) => [...e.childNodes].some((n) => n.nodeType === 3) ? (() => { const r = document.createRange(); r.selectNodeContents(e); return r.getClientRects().length; })() : 1));
   expect(Math.max(...cut), "a figure wraps").toBeLessThan(2);
   await noSideways(page);

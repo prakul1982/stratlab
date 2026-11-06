@@ -24,5 +24,6 @@ test("the Invest breadth card dates today's counts and the last close's highs an
   assert.equal(cardDates({ live, today: null }).highs, null);
   assert.equal(cardDates({ live, today: { day: "2026-10-16" } }), null);           // all three figures today's: said once in the heading, not under each (VR4-011)
   assert.equal(cardDates({ live: null, today: { day: "2026-10-15" } }), null);       // one day for every figure: nothing to separate
-  assert.match(fs.readFileSync(new URL("../src/components/BreadthCard.tsx", import.meta.url), "utf8"), /k: "52-week highs \/ lows", v: .*, n: dates\?\.highs \}/);
+  // LIVE4-008: the card is now a table of two dated columns (lib/breadth cardTable), the close's highs and lows in the close's column
+  assert.match(fs.readFileSync(new URL("../src/components/BreadthCard.tsx", import.meta.url), "utf8"), /header: table\.beforeHead/);
 });

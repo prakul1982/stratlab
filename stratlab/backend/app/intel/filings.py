@@ -649,6 +649,14 @@ SURV_PAGES = {                       # where the exchange publishes each list, f
     "bands": "https://www.nseindia.com/market-data/securities-available-for-trading",
 }
 SEC_LIST = "https://nsearchives.nseindia.com/content/equities/sec_list.csv"
+# the price-band file's other addresses, tried in turn when one is turned away (LIVE4-023: "refused (403)" from this server while the
+# file answered elsewhere): the older archive host, then the day-stamped copies (sec_list_05112026.csv) of the last few days
+SEC_LIST_URLS = (SEC_LIST, "https://archives.nseindia.com/content/equities/sec_list.csv")
+SEC_LIST_DAILY = ("https://nsearchives.nseindia.com/content/equities/sec_list_{d}.csv",
+                  "https://archives.nseindia.com/content/equities/sec_list_{d}.csv")
+SEC_LIST_DAYS = 3
+REFUSED_BANDS = ("The exchange turned this server away at every address of its price-band file ({code}): a fault on the exchange's "
+                 "side, not ours; the badges keep the last list read until it answers.")
 # the F&O ban file: today's under /content/fo, the older address under /archives, then the day-stamped copies
 # (fo_secban_05102026.csv) of the last few days, newest first, in case the plain name isn't published
 FO_BAN_URLS = ("https://nsearchives.nseindia.com/content/fo/fo_secban.csv",
@@ -657,6 +665,13 @@ FO_BAN_DAILY = ("https://nsearchives.nseindia.com/archives/fo/sec_ban/fo_secban_
                 "https://nsearchives.nseindia.com/content/fo/fo_secban_{d}.csv")
 FO_BAN_DAYS = 4
 FO_BAN = FO_BAN_URLS[0]
+
+
+def sec_list_urls(today=None) -> list[str]:
+    """Every address the price-band file may be at, in the order to try them."""
+    day = today or ist_now().date()
+    dated = [u.format(d=(day - timedelta(days=n)).strftime("%d%m%Y")) for n in range(SEC_LIST_DAYS) for u in SEC_LIST_DAILY]
+    return [*SEC_LIST_URLS, *dated]
 
 
 def fo_ban_urls(today=None) -> list[str]:
@@ -1259,7 +1274,10 @@ class NSEFilings:
                 raise SourceError(self.name, f"Couldn't reach the exchange's files ({e.__class__.__name__}).", busy=True) from None
             busy = r.status_code == 429 or r.status_code >= 500
             if r.status_code >= 400:
-                raise SourceError(self.name, f"The exchange's file was refused ({r.status_code}).", busy=busy)
+                e = SourceError(self.name, f"The exchange's file was refused ({r.status_code}).", busy=busy)
+                e.refused = r.status_code in (401, 403)          # turned away by the exchange (its side), not a missing file
+                e.status = r.status_code
+                raise e
         except SourceError:
             if busy:
                 fails += 1
@@ -1301,10 +1319,31 @@ class NSEFilings:
     def security_bands(self) -> dict[str, dict]:
         """Every equity's series (EQ, or BE/BZ for trade-to-trade) and daily price band, from the exchange's
         securities-available-for-trading file. Far fewer rows than the market has means a broken answer."""
-        rows = sec_list_rows(self._surv_text(SEC_LIST))
-        if len(rows) < 300:                 # the real file has a couple of thousand equities
-            raise SourceError(self.name, f"The exchange's price-band file looked wrong ({len(rows)} securities).")
-        return rows
+        shape, refused, last = None, [], None
+        for url in sec_list_urls():
+            try:
+                text = self._surv_text(url)
+            except SourceError as e:
+                if e.busy:                  # an outage (the breaker counts it): no other address is tried now
+                    raise
+                last = e
+                if getattr(e, "refused", False):
+                    refused.append(getattr(e, "status", 403))
+                continue
+            try:
+                rows = sec_list_rows(text)
+            except ValueError:
+                rows = {}
+            if len(rows) >= 300:            # the real file has a couple of thousand equities
+                return rows
+            shape = shape or SourceError(self.name, f"The exchange's price-band file looked wrong ({len(rows)} securities).")
+        if shape:
+            raise shape
+        if refused:
+            e = SourceError(self.name, REFUSED_BANDS.format(code=refused[0]))
+            e.refused = True
+            raise e
+        raise last or SourceError(self.name, "The exchange's price-band file wasn't at any of its known addresses.")
 
     def etf_list(self):
         """Every ETF's last price and last published NAV, as the exchange's ETF page lists them (etf_nav.py reads it). One

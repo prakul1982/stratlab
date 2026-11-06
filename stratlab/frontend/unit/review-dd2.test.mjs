@@ -15,8 +15,10 @@ test("DD-001 (MOOD-1): the mood card leads with the headline from the tables' fi
   // the mood is no longer a sentence the AI wrote: its headline and lines come with the tables (mood.py), the story with the headlines it counts
   const mood = read("src/pages/PulseMood.tsx"), page = read("src/pages/Research.tsx");
   assert.match(mood, /\{m\.headline \? <p className="inv-summary" data-testid="pulse-mood"><b>\{m\.headline\}<\/b><\/p>/);
-  assert.match(mood, /data-testid="pulse-story">The main story in today's headlines: \{story\.label\}, \{story\.n\} of \{story\.of\} \(marked above\)/);
-  assert.match(page, /\{ai\.flows_source && <p className="k-note" data-testid="pulse-flows-source">\{ai\.flows_source\}<\/p>\}/);
+  assert.match(mood, /data-testid="pulse-story">The main story in today's headlines: \{story\.label\}, \{story\.n\} of \{story\.of\} \(marked above/);
+  // LIVE4-006: the FII/DII source sits under the FII table, and under the read only when there is no such table
+  assert.match(mood, /\{source && <p className="k-note" data-testid="pulse-flows-source">\{source\}<\/p>\}/);
+  assert.match(page, /\{ai\.flows_source && !mood\?\.flows && <p className="k-note" data-testid="pulse-flows-source">\{ai\.flows_source\}<\/p>\}/);
   assert.match(read("src/lib/research.ts"), /story\?: \{ label: string; n: number; of: number; indices: number\[\]; headlines: string\[\] \} \| null;[\s\S]*flows_source\?: string;/);
 });
 

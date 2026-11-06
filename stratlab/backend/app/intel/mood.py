@@ -24,6 +24,10 @@ from .snapshot import Snapshot
 
 MINUS = "−"
 FRESH_OPEN, FRESH_SHUT = 60.0, 900.0      # seconds a finished payload is served from memory, market open / shut
+KEEP_KEY = "mood:last:"                   # the last finished payload per region, in the database: a new server answers with it at once
+KEEP_EVERY = 600.0                        # seconds between two writes of it (each read is a minute apart in market hours)
+KEEP_FOR = 3 * 86400.0                    # a stored payload older than this is not answered with
+MISMATCH_WAIT = 6.0                       # seconds a copy from the other side of the open or close waits for the fresh read
 CLOSES_FRESH = 4 * 3600.0                 # daily closes change once a day
 TOP = 5                                   # stocks in each of "adding" and "taking" points
 CHUNK = 24                                # hub.quotes reads at most this many symbols at once
@@ -96,6 +100,12 @@ def sgn(v, dp: int = 2) -> int:
 def fnum(v, dp: int = 0) -> str:
     v = num(v)
     return "–" if v is None else f"{v:,.{dp}f}".replace("-", MINUS)
+
+
+def points(v) -> str:
+    """ "36 points", "1 point" (LIVE4-007: "added about 1 points")."""
+    n = fnum(v)
+    return f"{n} point" if n == "1" else f"{n} points"
 
 
 def fcr(v) -> str:
@@ -175,7 +185,10 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
            "stocks": v("stocks") if not lv else (adv or 0) + (dec or 0) + (unch or 0),
            "highs": v("highs"), "lows": v("lows"),
            "pct20": num(lv.get("pct20")) if lv else v("pct20"), "pct50": num(lv.get("pct50")) if lv else v("pct50"),
-           "pct200": num(lv.get("pct200")) if lv else v("pct200")}
+           "pct200": num(lv.get("pct200")) if lv else v("pct200"),
+           # the live count's own quarter-hour ("12:15", IST), so the page says which count it is (LIVE4-005: Mood's 111/388 "read 12:29"
+           # beside Breadth's 123/376 "as of 12:30" were two different rounds with nothing saying so)
+           "at": (lv.get("at") or None) if lv else None}
     out["ratio"] = round(adv / dec, 2) if adv is not None and dec else None
     rows = []
 
@@ -289,9 +302,11 @@ def quote_rows(spec: list[tuple], got: dict[str, dict | None], today: str, tzs: 
 
 
 # ---------- the words ----------
-def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None) -> str:
+def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None, breadth: dict | None = None) -> str:
     """One short headline the figures below justify: the day's tone from the index moves, how big a day it is against the
-    usual, and (when there is a count) how many sector indices went the same way. No level and no move is repeated."""
+    usual, and (when there is a count) how many sector indices went the same way. No level and no move is repeated.
+    When most stocks (the breadth count) or most sector indices went the other way from the indices, the day is "Mixed" and
+    the headline says so with those counts (LIVE4-005: "Mildly positive" over 111 risers to 388 fallers and 9 of 16 sectors down)."""
     moves = [(str(i["name"]), float(i["change_pct"])) for i in indices if i.get("name") and num(i.get("change_pct")) is not None][:4]
     if not moves:
         return ""
@@ -315,6 +330,14 @@ def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None) -> 
         return (f"Flat: {count.get(len(moves), 'the')} indices unchanged on the day" if len(moves) > 1 else "Flat on the day") + "."
     who = f"{count[len(moves)]} indices" if len(moves) in count else f"the {moves[0][0]}"
     way = "up" if up else "down"
+    against = []
+    b = breadth if breadth and breadth.get("adv") is not None and breadth.get("dec") is not None and breadth.get("stocks") else None
+    if b and (b["dec"] > b["adv"] if up else b["adv"] > b["dec"]):
+        against.append(f"{fnum(b['dec'] if up else b['adv'])} of {fnum(b['stocks'])} {b.get('group') or ''} stocks {'fell' if up else 'rose'}".replace("  ", " "))
+    if sec and (sec["down"] > sec["up"] if up else sec["up"] > sec["down"]):
+        against.append(f"{sec['down'] if up else sec['up']} of {sec['of']} sector indices {'fell' if up else 'rose'}")
+    if against:
+        return f"Mixed: {who} {way} on the day, but {' and '.join(against)}."
     out = f"{word[:1].upper() + word[1:]}: {who} {way} on the day"
     if cmp and cmp.get("words"):
         out += f", {cmp['words']}"
@@ -329,7 +352,9 @@ def lines_of(p: dict) -> list[str]:
     out: list[tuple[str, str]] = []
     c = p.get("compare")
     if c:
-        out.append(("compare", f"Today's move in the {c['index']} is {c['ratio']:.1f} times its 20-day average daily move ({fpct(c['avg_abs'], sign=False)})."))
+        # after the close the page is about the last session, not "today" (LIVE4-007: "Today's move in the S&P 500" on a page titled "at the last close")
+        lead = "Today's move in the {} is" if p.get("is_open", True) else "The last session's move in the {} was"
+        out.append(("compare", f"{lead.format(c['index'])} {c['ratio']:.1f} times its 20-day average daily move ({fpct(c['avg_abs'], sign=False)})."))
     b = p.get("breadth")
     if b and b.get("adv") is not None and b.get("dec") is not None:
         when = "so far today" if b.get("live") else f"on {day_words(b.get('day'))}" if b.get("day") else ""
@@ -344,10 +369,10 @@ def lines_of(p: dict) -> list[str]:
         bits = []
         if m["adding"]:
             a = m["adding"][0]
-            bits.append(f"{a['name']} added about {fnum(a['points'])} points to the {m['index']}")
+            bits.append(f"{a['name']} added about {points(a['points'])} to the {m['index']}")
         if m["taking"]:
             t = m["taking"][0]
-            bits.append(f"{t['name']} took off about {fnum(abs(t['points']))}")
+            bits.append(f"{t['name']} took off about {points(abs(t['points'])) if fnum(abs(t['points'])) == '1' else fnum(abs(t['points']))}")
         out.append(("movers", " and ".join(bits) + "."))
     f = p.get("flows")
     if f and f["rows"]:
@@ -421,10 +446,50 @@ class Mood:
         self.hub = hub
         self.payloads = Snapshot(FRESH_OPEN, give_up=40)
         self.closes = Snapshot(CLOSES_FRESH, give_up=60)
+        self._kept_at: dict[str, float] = {}       # region -> when its payload was last written to the database
+        self._seeded: set[str] = set()
+
+    # -- the last good read, kept across restarts (LIVE4-024: the first visit after a deploy waited 10 to 29 s for a first read) --
+    def _keep(self, region: str, value: dict) -> None:
+        import json
+        import time
+        if time.time() - self._kept_at.get(region, 0.0) < KEEP_EVERY:
+            return
+        self._kept_at[region] = time.time()
+        try:
+            from .. import db
+            db.set_setting(KEEP_KEY + region, json.dumps({"at": time.time(), "value": value}, separators=(",", ":"), default=str))
+        except Exception as e:
+            print("mood: couldn't keep the read:", str(e)[:120])
+
+    def _seed(self, region: str) -> None:
+        """A server with nothing in memory starts from the last read kept in the database (a fresh read starts behind it)."""
+        import json
+        import time
+        if region in self._seeded:
+            return
+        self._seeded.add(region)
+        if self.payloads.kept(region):
+            return
+        try:
+            from .. import db
+            got = json.loads(db.get_setting(KEEP_KEY + region) or "null") or {}
+        except Exception:
+            return
+        at, value = got.get("at"), got.get("value")
+        if isinstance(value, dict) and isinstance(at, (int, float)) and time.time() - at < KEEP_FOR:
+            self.payloads.put(region, value, at)
+            self._kept_at[region] = at
+
+    def _build_kept(self, region: str) -> dict:
+        value = self.build(region)
+        self._keep(region, value)
+        return value
 
     def forget(self):
         self.payloads = Snapshot(FRESH_OPEN, give_up=40)
         self.closes = Snapshot(CLOSES_FRESH, give_up=60)
+        self._seeded = set()
 
     # -- sources, each bounded and each allowed to fail alone --
     def _quotes(self, region: str, symbols: list[str]) -> dict[str, dict]:
@@ -534,7 +599,7 @@ class Mood:
     def _names(self, region: str) -> dict[str, str]:
         try:
             from .. import screens
-            return {r["symbol"]: short_name(r.get("name") or r["symbol"]) for r in screens.load_index(region).get("rows") or []}
+            return {r["symbol"]: short_name(r.get("name") or r["symbol"], region == "US") for r in screens.load_index(region).get("rows") or []}
         except Exception:
             return {}
 
@@ -569,7 +634,7 @@ class Mood:
             else:
                 syms, names = next((p["symbols"] for p in universes.PRESETS[region] if p["id"] == kind), []), {}
             have.update(self._quotes(region, [s for s in syms if s not in have]))          # shared by the indices: read once
-            members = [{"symbol": s, "name": nm.get(s) or short_name(names.get(s) or s), "market_cap": caps.get(s),
+            members = [{"symbol": s, "name": nm.get(s) or short_name(names.get(s) or s, region == "US"), "market_cap": caps.get(s),
                         "change_pct": (have.get(s) or {}).get("change_pct")} for s in syms]
             block = index_movers(members, lvl["prev_close"], name, total=total,
                                  actual_points=(num(lvl.get("price")) - lvl["prev_close"]) if num(lvl.get("price")) else None)
@@ -595,7 +660,7 @@ class Mood:
             rank = {s: i for i, s in enumerate(sorted(caps, key=lambda s: -caps[s]))}
             rows = [r for r in results.between(region, today, end) if r["symbol"] in rank and rank[r["symbol"]] < 100]
             rows.sort(key=lambda r: (r["date"], rank[r["symbol"]]))
-            out["results"] = [{"symbol": r["symbol"], "name": short_name(r.get("name") or r["symbol"]), "date": r["date"], "purpose": r.get("purpose")} for r in rows[:6]]
+            out["results"] = [{"symbol": r["symbol"], "name": short_name(r.get("name") or r["symbol"], region == "US"), "date": r["date"], "purpose": r.get("purpose")} for r in rows[:6]]
         except Exception as e:
             print("results calendar unavailable:", str(e)[:100])
         try:
@@ -649,7 +714,7 @@ class Mood:
             live = None
             if region in breadth_live.LIVE_REGIONS:
                 lv = breadth_live.settled(breadth_live.view(group, ready=self.hub._kite()), (vt.get("today") or {}).get("day"))
-                live = (lv or {}).get("latest") if lv and lv.get("state") in ("live", "final") else None
+                live = {**lv["latest"], "at": lv.get("as_of")} if lv and lv.get("state") in ("live", "final") and lv.get("latest") else None
             b = breadth_block(vt.get("today"), live, vt["group"]["name"], today_s)
         except Exception as e:
             print("breadth unavailable:", region, str(e)[:100])
@@ -677,7 +742,7 @@ class Mood:
              "compare": cmp, "breadth": b, "sectors": sectors, "movers": movers, "flows": flows,
              "risk": {"rows": risk} if risk else None, "global": {"rows": glob} if glob else None,
              "calendar": cal if any(cal.values()) else None}
-        p["headline"] = headline_of(levels, sectors, cmp)
+        p["headline"] = headline_of(levels, sectors, cmp, b)
         p["lines"] = lines_of(p)
         bad = verify(p)
         if bad:                           # a line the tables don't bear out is never shown (the tables still are)
@@ -689,24 +754,36 @@ class Mood:
         from .company import market_open
         open_now = market_open(region)
         self.payloads.fresh_for = FRESH_OPEN if open_now else FRESH_SHUT
+        self._seed(region)
         hit = self.payloads.kept(region)
         if hit and bool((hit[1] or {}).get("is_open")) != open_now:
             # a copy from the other side of the open or the close (the first visit after a quiet spell got a market-hours copy
-            # saying "live" at 17:13 IST): the fresh read is waited for, and the old copy is the answer only if it can't come
-            f = self.payloads._start(region, lambda: self.build(region))
+            # saying "live" at 17:13 IST): the fresh read is waited for a few seconds, and the old copy is the answer only if it
+            # can't come (the page shows it with its read time and says it is being read again)
+            f = self.payloads._start(region, lambda: self._build_kept(region))
             try:
-                value = f.result(timeout=max(0.0, wait))
+                value = f.result(timeout=max(0.0, min(wait, MISMATCH_WAIT)))
                 got = self.payloads.kept(region)
                 return value, (got[0] if got else None)
             except Exception:
-                return hit[1], hit[0]
-        return self.payloads.get(region, lambda: self.build(region), wait)
+                return {**hit[1], "refreshing": True}, hit[0]
+        return self.payloads.get(region, lambda: self._build_kept(region), wait)
 
 
 _SUFFIX = re.compile(r"\s+(?:limited|ltd\.?|inc\.?|corporation|corp\.?|company|co\.?|plc|holdings?)\s*$", re.I)
 
 
-def short_name(name: str) -> str:
-    """A company's name for a table cell: the legal ending off ("Reliance Industries Limited" -> "Reliance Industries")."""
+def short_name(name: str, us: bool = False) -> str:
+    """A company's name for a table cell: the legal ending off ("Reliance Industries Limited" -> "Reliance Industries"); a name
+    in exchange capitals in title case, and no "&" left hanging where "& Co" was taken off (LIVE4-007: "ELI LILLY &" and
+    "COSTCO WHOLESALE" beside "Broadcom")."""
     n = " ".join(str(name or "").split())
-    return _SUFFIX.sub("", n).strip(" ,.") or n
+    if us:                     # India's exchange names are in their own case, and "ITC" is a name, not a shout
+        try:
+            from ..stock_pages import proper_name
+            n = proper_name(n) or n
+        except Exception:
+            pass
+    out = _SUFFIX.sub("", n).strip(" ,.")
+    out = re.sub(r"\s+&$", "", out).strip(" ,.")
+    return out or n

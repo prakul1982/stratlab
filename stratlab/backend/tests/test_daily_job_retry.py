@@ -109,3 +109,32 @@ def test_the_platform_check_runs_after_a_restart_past_its_time_once_a_day(monkey
         assert main.platform_pass(datetime(2026, 10, 7, 18, 0, tzinfo=IST)) is False and len(ran) == 3
     finally:
         w["close"]()
+
+
+def test_a_new_build_gets_its_own_feature_check_soon_after_its_deploy(monkeypatch):
+    """LIVE4-023: the live build had no check of its own all day (deployed 03:27 IST, after the day's check had run on the old build), so
+    Admin showed the old build's result. A build whose kept result is another build's is checked once it has been up 20 minutes."""
+    import json
+    from datetime import datetime, timedelta
+    from app import build_info, db
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        ran = []
+        IST = main.IST
+        deployed = datetime(2026, 11, 6, 3, 27, tzinfo=IST)
+        monkeypatch.setattr(main, "daily_platform_check", lambda *a, **k: ran.append(1) or {})
+        monkeypatch.setattr(leader, "leading", lambda: True)
+        monkeypatch.setattr(build_info, "STARTED_AT", deployed.isoformat())
+        monkeypatch.setattr(build_info, "info", lambda env=None: {"short": "5bd69f3"})
+        db.set_setting(main.PLATFORM_LAST, json.dumps({"build": "2aeb171", "checks": []}))
+        assert main.platform_pass(deployed + timedelta(minutes=5)) is False and ran == []       # warming up
+        assert main.platform_pass(deployed + timedelta(minutes=25)) is False and ran == [1]     # checked, long before 16:50
+        assert main.platform_pass(deployed + timedelta(minutes=40)) is False and ran == [1]     # once per build
+        db.set_setting(main.PLATFORM_LAST, json.dumps({"build": "5bd69f3", "checks": []}))
+        assert main.platform_build_due(deployed + timedelta(hours=2)) is None
+        monkeypatch.setattr(build_info, "info", lambda env=None: {"short": None})                 # a local run: no build to check
+        db.set_setting(main.PLATFORM_LAST, json.dumps({"build": "2aeb171", "checks": []}))
+        assert main.platform_build_due(deployed + timedelta(hours=2)) is None
+    finally:
+        w["close"]()

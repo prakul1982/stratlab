@@ -15,6 +15,7 @@ const R = await import("../src/lib/rules.ts");
 const P = await import("../src/lib/paperText.ts");
 const N = await import("../src/lib/notebookText.ts");
 const plans = await import("../src/lib/plans.ts");
+const { FEATURES: FEATURES_ALL } = await import("../src/lib/planFeatures.ts");          // LIVE4-020: the full lists, apart
 const { deepDiveLimitLine } = await import("../src/lib/account.ts");
 
 test("DP1-001: the count of AI builds is read again after every try, made or not", () => {
@@ -134,7 +135,7 @@ test("DP1-020: home tiles for a paid tool say its plan on the tile", () => {
 
 test("DP1-021, DP1-022, DI-032, DP1-026: an honest Free line, decks one per company, and the comparison in parts", () => {
   assert.equal(plans.WHO.free, "Every market and the core tools, free");
-  assert.ok(plans.FEATURES.free.some((l) => /each with the report card and checklist/.test(l) && /its PDF and PowerPoint count as one/.test(l)));
+  assert.ok(FEATURES_ALL.free.some((l) => /each with the report card and checklist/.test(l) && /its PDF and PowerPoint count as one/.test(l)));
   // every paid feature row belongs to one of the three parts
   const groups = new Set(plans.FLAG_GROUPS.map((g) => g.id));
   for (const [f] of plans.FLAGS) assert.ok(groups.has(plans.FLAG_GROUP[f] ?? "research"), f);

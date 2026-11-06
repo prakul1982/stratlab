@@ -34,7 +34,8 @@ test("R8O-002: the daily cap is said plainly, with no Ask again beside it", asyn
 });
 
 test("R8O-002: Plans lists the fresh AI reads a day, from the same numbers as the server", async () => {
-  const { LIMITS, NUMBERS, FEATURES } = await import("../src/lib/plans.ts");
+  const { LIMITS, NUMBERS } = await import("../src/lib/plans.ts");
+  const { FEATURES } = await import("../src/lib/planFeatures.ts");          // LIVE4-020: the full lists, apart
   assert.equal(LIMITS.free.ai_reads_per_day, 60);
   assert.equal(LIMITS.basic.ai_reads_per_day, 60);
   assert.equal(LIMITS.pro.ai_reads_per_day, null);
@@ -48,7 +49,7 @@ test("R8O-007: a company page asks for its AI read behind the page and stops whe
   assert.ok(AI_POLL_MS * AI_POLLS >= 60_000 && AI_POLL_MS <= 5000);
   const src = read("src/lib/research.ts");
   assert.match(src, /\?background=true/);
-  assert.match(src, /if \(!alive\(\)\) throw/);
+  assert.match(src, /if \(!\(refresh \? alive\(\) : anyAlive\(\)\)\) throw/);      // LIVE4-022: a shared wait stops once every caller has left
   // the read mounts only once the company's numbers are on the page
   assert.match(read("src/pages/Research.tsx"), /if \(!c\) return \([\s\S]*<AIRead region=\{region\} symbol=\{c\.symbol\}/);
 });

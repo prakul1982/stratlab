@@ -1021,12 +1021,13 @@ MOVES_BUDGET = 8.0                   # seconds one request spends reading price 
 IMPLIED_BUDGET = 8.0                 # the same for the option chains of one request
 MAX_PAST = 4000                      # companies in either store
 HISTORY_DAYS = 500                   # days of daily prices read for a company's moves
-_hist = {"fn": None, "options": None}
+_hist = {"fn": None, "options": None, "options_many": None}
 
 
-def setup(history=None, options=None):
-    """Where the daily prices (region, symbol, days) and a stock's option chain (symbol, expiry) come from: main.py's readers, or a test's."""
-    _hist["fn"], _hist["options"] = history, options
+def setup(history=None, options=None, options_many=None):
+    """Where the daily prices (region, symbol, days) and a stock's option chain (symbol, expiry) come from: main.py's readers, or a test's.
+    `options_many` (symbols, day) -> {symbol: implied move or None} reads several stocks at once, where given."""
+    _hist["fn"], _hist["options"], _hist["options_many"] = history, options, options_many
 
 
 def load_past(region: str) -> dict:
@@ -1200,9 +1201,24 @@ def implied_for(symbols: list[str], day: str | None = None, pending: list[str] |
     of the price (the move the options price in to that expiry). From the option prices the app already reads; None for a stock
     without them now (the broker is not connected, no quote for the strike, no expiry that late). At most 8 stocks, read for at most
     IMPLIED_BUDGET seconds: `pending` (a list) is given the ones not reached or whose source was busy, to be asked again."""
-    fn = _hist.get("options")
+    fn, many = _hist.get("options"), _hist.get("options_many")
     out: dict[str, dict | None] = {}
     fos = fo_symbols()
+    if many is not None:                     # every stock in one go: two quote calls in all
+        asked = list(dict.fromkeys(symbols))[:8]
+        out = {s: None for s in asked}
+        want = [s for s in asked if s in fos]
+        if not want:
+            return out
+        try:
+            got = many(want, day) or {}
+        except Exception as e:
+            print("results implied:", ",".join(want)[:80], str(e)[:100])
+            if _busy(e) and pending is not None:
+                pending.extend(want)
+            return out
+        out.update({s: got.get(s) for s in want})
+        return out
     start = time.monotonic()
     budget = IMPLIED_BUDGET if budget is None else budget
     done = 0

@@ -323,18 +323,23 @@ def check_surveillance(feed) -> dict:
     """The exchange's surveillance lists (ASM, GSM, ESM, the F&O ban file and the price-band file), which the badges,
     the screens' filter and the surveillance alerts read. These addresses can't be tried from a test machine, so this
     is where a changed address or shape shows first. Each list is read on its own; any that fails is named."""
-    got, bad = [], []
+    got, bad, refused = [], [], []
     for name, fn, count in (("ASM", feed.asm_list, lambda x: len(x.get("lt") or {}) + len(x.get("st") or {})),
                             ("GSM", feed.gsm_list, len), ("ESM", feed.esm_list, len),
                             ("F&O ban", feed.fo_ban, lambda x: len(x[1])), ("price bands", feed.security_bands, len)):
         try:
             got.append(f"{name} {count(fn())}")
         except Exception as e:
-            bad.append(f"{name}: {str(e)[:100]}")
+            # turned away by the exchange (401/403 at every address): the source's fault, said so, not a failure of ours (LIVE4-023)
+            if getattr(e, "refused", False):
+                refused.append(f"{name}: source refused")
+            else:
+                bad.append(f"{name}: {str(e)[:100]}")
     if not got:
-        return _result("Surveillance lists", "Filings", "fail", "No list answered. " + " · ".join(bad))
-    detail = "Read: " + ", ".join(got) + "." + (" Failed: " + " · ".join(bad) if bad else "")
-    return _result("Surveillance lists", "Filings", "warn" if bad else "pass", detail)
+        return _result("Surveillance lists", "Filings", "fail", "No list answered. " + " · ".join(bad + refused))
+    detail = "Read: " + ", ".join(got) + "." + (" Failed: " + " · ".join(bad) if bad else "") + \
+        (" The exchange's side: " + " · ".join(refused) + " (it keeps the last copy read)." if refused else "")
+    return _result("Surveillance lists", "Filings", "warn" if bad or refused else "pass", detail)
 
 
 BSE_REFUSING = ("BSE is turning this server's requests away: {why}. Only companies listed on BSE alone are affected: "

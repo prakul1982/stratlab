@@ -758,6 +758,11 @@ td.num, .num { font-family: var(--sans); }
 .lp-faq details:first-child { border-top: 1px solid var(--line); }
 .lp-faq summary { cursor: pointer; font-weight: 600; font-size: 16.5px; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 36px; }
 .lp-faq summary::-webkit-details-marker { display: none; }
+/* LIVE4-020: the plans' full feature lists, folded under the even cards */
+.lp-all-features { margin-top: 8px; }
+.lp-all-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-top: 12px; }
+.lp-all-grid h3 { margin: 0 0 8px; font-size: var(--t-body); }   /* h3: under the section's h2 (axe heading-order on /plans, R13 CI) */
+@media (max-width: 900px) { .lp-all-grid { grid-template-columns: minmax(0, 1fr); } }
 .lp-faq summary::after { content: "+"; font-family: var(--mono); color: var(--muted); font-size: 18px; line-height: 1.2; }
 .lp-faq details[open] summary::after { content: "–"; }
 .lp-faq details p { margin-top: 10px; line-height: 1.6; max-width: 60ch; }
@@ -825,6 +830,12 @@ td.num, .num { font-family: var(--sans); }
 .lp-sec .lp-markets { display: flex; flex-wrap: wrap; gap: 8px; }
 .lp-markets .lp-market { padding: 6px 14px 6px 6px; gap: 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
 .lp-markets .lp-sym { width: 32px; height: 32px; border-radius: 50%; font-size: 13px; }
+/* LIVE4-020: the landing page on a phone was 14,902px: one example verdict (the link under it opens all of them), and the markets as small chips */
+@media (max-width: 640px) {
+  .lp-examples > .lp-example:nth-child(n+2), .lp-examples-skel > .lp-skel-card:nth-child(n+2) { display: none; }
+  .lp-markets .lp-market { padding: 4px 12px 4px 4px; gap: 8px; font-size: 14px; }
+  .lp-markets .lp-sym { width: 26px; height: 26px; font-size: 12px; }
+}
 .lp-money { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .lp-money .lp-beyond-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
 .lp-money .lp-fix { margin-top: auto; font-size: 13px; }
@@ -955,12 +966,20 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 /* "Allow" and "No thanks" are two answers of equal weight: one width, not 63px beside 90px (VR4-012) */
 .consent-btns .btn { min-width: 104px; justify-content: center; }
 /* VR7-007: on a visitor's wide page (no side menu) the question is one slim bar along the foot of the window, not a 400px card standing over
-   the landing page's example panel until it is answered (the Markets button still rises above it, consentLift.ts); in the app it stays the corner card */
+   the landing page's example panel until it is answered (the Markets button still rises above it, consentLift.ts); the app's is the same bar (LIVE4-008) */
 @media (min-width: 901px) {
   body:not(:has(.shell)) .consent { left: 16px; right: 16px; width: auto; flex-direction: row; align-items: center; gap: 8px 20px; padding: 12px 18px; }
   body:not(:has(.shell)) .consent-title { flex: none; }
   body:not(:has(.shell)) .consent p { flex: 1 1 auto; }
   body:not(:has(.shell)) .consent-btns { flex: none; flex-wrap: nowrap; }
+  /* LIVE4-008: in the app too it is one slim bar along the foot of the page column (beside the side menu, never over it), not a 400px card
+     standing over a table's right half; the page's foot clears it (--consent-h), so nothing is out of reach under it */
+  body:has(.shell) .consent { left: calc(248px + 16px); right: 16px; width: auto; flex-direction: row; align-items: center; gap: 8px 20px; padding: 10px 18px; }
+  body:has(.shell.slim) .consent { left: 16px; }
+  body:has(.shell) .consent-title { flex: none; }
+  body:has(.shell) .consent p { flex: 1 1 auto; }
+  body:has(.shell) .consent-btns { flex: none; flex-wrap: nowrap; }
+  .shell { padding-bottom: var(--consent-h, 0px); }
 }
 /* LIVE1B-045: while the tour's note is up the question waits (a phone showed both at once); it is there again when the tour closes */
 body:has(.k-coach) .consent { visibility: hidden; }
@@ -1826,6 +1845,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 
 /* table */
 /* EXPORT: a table's "Download CSV" sits over its top right edge, out of the way of the figures */
+@media (max-width: 640px) { .k-csv-verb { display: none; } }
 .k-tbl-tools { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: var(--s2, 8px); }
 /* a table's "select all" box (DataTable selectAll): in the first header cell, lined up with the rows' boxes under it; over a phone's cards, at the left */
 .k-tap.k-th-check { margin: -9px -1px -9px -9px; vertical-align: middle; }   /* the header text then starts where the rows' names do (.rot-name: the box, then 8px) */
@@ -1917,6 +1937,21 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
   /* VR1-147: a column marked `up` (a sale's gain) sits right under the name with its label kept, not after eleven other figures */
   .k-tbl-wrap.stack.has-up .k-table th[scope="row"] { order: -2; }
   .k-tbl-wrap.stack.has-up .k-table td.k-first { order: -1; }
+  /* LIVE4-010: a `compact` table is two short lines a row on a phone, not a card of labelled figures: the name with its `brief` figures at
+     the right, then the rest in one line, each after its label; a line between rows, no boxes. The zero-height ::before is the line break. */
+  .k-tbl-wrap.stack.compact .k-table tr { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; padding: 10px 2px; margin: 0;
+    border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
+  .k-tbl-wrap.stack.compact .k-table tbody tr:last-child { border-bottom: 0; }
+  .k-tbl-wrap.stack.compact .k-table tr::before { content: ""; order: -1; flex-basis: 100%; height: 0; }
+  .k-tbl-wrap.stack.compact .k-table th[scope="row"] { order: -3; flex: 1 1 0; min-width: 0; }
+  .k-tbl-wrap.stack.compact .k-table td.k-brief { order: -2; flex: none; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+  .k-tbl-wrap.stack.compact .k-table td { flex: none; font-size: var(--t-note); white-space: nowrap; }
+  .k-tbl-wrap.stack.compact .k-table td[data-label]::before { display: inline; margin-right: 4px; }
+  .k-tbl-wrap.stack.compact .k-table td.k-brief { font-size: var(--t-label); }
+  .k-tbl-wrap.stack.compact .k-table td.k-brief::before { display: none; }
+  .k-tbl-wrap.stack.compact .k-table td.k-phone-off { display: none; }
+  .k-tbl-wrap.stack.compact .k-table td.k-wrap { flex: 1 1 auto; min-width: 0; white-space: normal; }   /* a column of words (an event's details) may wrap, and takes the rest of its line */
+  .k-tbl-wrap.stack.compact .k-table td.k-act, .k-tbl-wrap.stack.compact .k-table td.k-row-note, .k-tbl-wrap.stack.compact .k-table td.k-empty-row { flex: 1 1 100%; white-space: normal; }
   /* a heat cell fills a table cell edge to edge; on a card it is a chip that stays inside its figure (R88-003) */
   .k-tbl-wrap.stack .inv-heat-cell { display: inline-block; margin: 0; padding: 2px 8px; border-radius: 6px; }
 }
@@ -2449,12 +2484,14 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .breadth-bar > .k-chipwrap { flex: 1 1 320px; min-width: 0; }             /* the group and the range on one row, the chips taking the rest (MOOD-1) */
 .k-alert-row { margin-top: 4px; }
 /* the rotation table: "was → now" on one line with its mark under it, and a name with its "Stocks →" beside it, so a row is not three lines tall (MOOD-1) */
-.rot-move { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-.rot-move > span.k-badge { white-space: nowrap; }
-.rot-was { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+/* LIVE4-011: the quadrant now, where it was a trail ago under it, and the "Entered Leading" badge, in one cell */
+.rot-quad { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.rot-quad > .k-sub-line { white-space: nowrap; }
+.rot-quad > span.k-badge { white-space: nowrap; margin-top: 2px; }
 .rot-name { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
 .rot-name > .k-tap { flex: none; }
 .rot-name > span { min-width: 0; text-align: left; }
+.rot-name button.link { text-align: left; }   /* LIVE4-011: a ticked index's name is a button, which centred its two lines under a left-aligned header */
 .k-toolbar > .k-search { flex: 1 1 280px; }
 @media (max-width: 480px) { .k-toolbar > select.k-input { flex: 1 1 100%; } }
 .k-address { display: inline-block; max-width: 100%; padding: var(--s2) var(--s3); background: var(--paper-2); color: var(--ink); border-radius: var(--r-ctl); font: 13.5px/1.4 var(--mono); overflow-wrap: anywhere; user-select: all; }
@@ -2655,7 +2692,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   input[type=checkbox], input[type=radio],
   .k-check input[type="checkbox"], .k-check input[type="radio"],
   .k-table td input[type="checkbox"], .k-table th input[type="checkbox"] { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
-  .k-table td a, .k-table th a { min-width: 32px; }
+  .k-table td a, .k-table th a { min-width: 32px; flex-shrink: 0; }   /* the 32px floor replaced min-width:auto, so a link in a flex row shrank under its words and the next tag drew over them (LIVE4-010: "COROMANDEE&O") */
   .k-page a.link { padding-block: 8px; }
   .k-page button.link { display: inline-flex; align-items: center; min-height: 32px; }
   a.link.tap, .k-page a.link.tap { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; }

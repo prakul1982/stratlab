@@ -57,3 +57,15 @@ export const sectorCount = (s: NonNullable<PulseMood["sectors"]>): string =>
 
 /** Points an index gained or lost to one company: "+55.3", "−32.0". */
 export const signedPoints = (v: number | null | undefined): string => (v == null || !Number.isFinite(v) ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toLocaleString("en-IN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`);
+
+/** "Companies in today's headlines" holds companies: a row the read named after a group ("Indian IT stocks", "PSU banks", "metal
+ * shares") is not one, and pinning it on one symbol says more than the headline did (LIVE4-006: "Indian IT stocks → INFY"). */
+export const groupPhrase = (name: string): boolean =>
+  /\b(stocks|shares|sectors?|companies|firms|names|counters|banks|lenders|majors|makers|pack|index|indices|space)\s*$/i.test(name.trim());
+export function companyRows<T extends { name: string }>(hot: T[]): T[] {
+  return hot.filter((h) => !groupPhrase(h.name));
+}
+
+/** The column over the day's figures: "Today" while the market's session is today's, else that session's day (LIVE4-007: a
+ * "Today" column on a page titled "How the market felt at the last close"). */
+export const sessionHeader = (closedDay: string | null | undefined, dayText: (iso: string) => string): string => (closedDay ? dayText(closedDay) : "Today");

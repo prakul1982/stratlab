@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { usePopover } from "../kit/Dialog";
 import { Spark } from "../kit/Spark";
 import { signCls } from "../../lib/format";
-import { changeText, chartPath, currencyOf, labelOf, priceText, subtitleOf, type WatchItem, type WatchList, type WatchQuote } from "../../lib/watch";
+import { changeArrow, changeText, chartPath, currencyOf, labelOf, priceText, subtitleOf, type WatchItem, type WatchList, type WatchQuote } from "../../lib/watch";
 import { currencySymbol } from "../../lib/format";
 
 export interface RowProps {
@@ -26,7 +26,6 @@ export const WatchRow = forwardRef<HTMLLIElement, RowProps>(function WatchRow(p,
   usePopover(menu, setMenu, trigger, panel);
   const cur = item.kind === "index" || item.market === "FX" || item.market === "CRYPTO" ? "" : currencySymbol(quote?.currency ?? currencyOf(item));
   const text = changeText(change);
-  const up = change != null && change > 0, down = change != null && change < 0;
   const key = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); p.onNudge(e.key === "ArrowUp" ? -1 : 1); }
   };
@@ -41,7 +40,7 @@ export const WatchRow = forwardRef<HTMLLIElement, RowProps>(function WatchRow(p,
         <span className="mw-spark" aria-hidden="true">{p.spark && p.spark.length > 1 ? <Spark values={p.spark} tone="neutral" label={`${label}, recent closes`} height={24} /> : null}</span>
         <span className="mw-px">
           <b className="mw-price">{price == null ? "–" : <>{cur}{priceText(price, quote?.currency ?? null, item.market, item.symbol)}</>}</b>
-          <span className={`mw-chg ${signCls(change, text)}`}>{up ? "▲ " : down ? "▼ " : ""}{text}</span>
+          <span className={`mw-chg ${signCls(change, text)}`}>{changeArrow(change)}{text}</span>
         </span>
       </button>
       <div className="mw-more">

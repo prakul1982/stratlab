@@ -305,6 +305,60 @@ def test_implied_moves_are_for_stocks_with_options_only_and_a_few_at_a_time(w):
     assert R.implied_for(["TCS"])["TCS"] is None                                       # no options source: blank
 
 
+def test_the_implied_move_reads_a_stock_option_chain_from_the_derivatives_segment(monkeypatch):
+    """LIVE4-002: results_options asked the options list for "NSE" (the cash market), where no option is listed, so every F&O stock
+    had no expiry and the column was "–" for all of them with the feed connected. A stock's options are under "NFO"."""
+    from app import main
+    from app.options.data import OptionsData
+    from tests import fake_options_kite as F
+    monkeypatch.setitem(F.UNDERLYINGS, ("NFO", "TCS"), ("NSE:TCS", 4000.0, 20, 175))
+    monkeypatch.setitem(F.TOKENS, "NSE:TCS", 909999)
+    od = OptionsData(F.FakeOptionsKite(drift={"NSE:TCS": 0.0}))
+    asked = []
+    real_expiries = od.expiries
+    monkeypatch.setattr(od, "expiries", lambda ex, name: asked.append(ex) or real_expiries(ex, name))
+    monkeypatch.setattr(main, "options_data", od)
+    monkeypatch.setattr(main.kite, "ready", lambda: True)
+    got = main.results_options("TCS", None)
+    assert asked and set(asked) == {"NFO"}
+    assert got and got["strike"] == 4000 and got["pct"] > 0 and got["expiry"] >= "2026-10-28"
+    late = od.expiries("NFO", "TCS")[-1]
+    assert main.results_options("TCS", late)["expiry"] == late                    # the first expiry on or after the results day
+    assert main.results_options("TCS", "2099-01-01") is None                      # none that late: a dash
+    # several stocks in two quote calls, not two each (the broker answers one a second)
+    monkeypatch.setitem(F.UNDERLYINGS, ("NFO", "INFY"), ("NSE:INFY", 1500.0, 10, 400))
+    monkeypatch.setitem(F.TOKENS, "NSE:INFY", 909998)
+    od2 = OptionsData(F.FakeOptionsKite(drift={"NSE:TCS": 0.0, "NSE:INFY": 0.0}))
+    monkeypatch.setattr(main, "options_data", od2)
+    before = od2.quote_calls
+    many = main.results_options_many(["TCS", "INFY", "NOPE"], None)
+    assert od2.quote_calls - before == 2
+    assert many["TCS"] == main.results_options("TCS", None) and many["INFY"]["strike"] == 1500 and many["NOPE"] is None
+    monkeypatch.setattr(main.kite, "ready", lambda: False)
+    assert main.results_options("TCS", None) is None and main.results_options_many(["TCS"], None) == {"TCS": None}
+
+
+def test_implied_moves_read_together_when_the_source_can(w):
+    calls = []
+    R.setup(options_many=lambda syms, day: calls.append(list(syms)) or {s: R.straddle_move(chain()) for s in syms})
+    got = R.implied_for(["TCS", "RELIANCE", "INFY"], "2026-10-29")
+    assert calls == [["TCS", "INFY"]] and got["TCS"]["pct"] == 2.9 and got["RELIANCE"] is None
+    pending: list[str] = []
+    R.setup(options_many=lambda syms, day: (_ for _ in ()).throw(SourceError("the broker", "busy", busy=True)))
+    assert R.implied_for(["TCS", "INFY"], pending=pending) == {"TCS": None, "INFY": None} and pending == ["TCS", "INFY"]
+    R.setup()
+
+
+def test_the_implied_answer_says_whether_option_prices_can_be_read_now(w, monkeypatch):
+    from app import main
+    c, h = w["client"], headers("pro-token")
+    c.get("/me", headers=h)
+    monkeypatch.setattr(main.kite, "ready", lambda: False)
+    assert c.get("/research/results/implied", params={"symbols": "TCS"}, headers=h).json()["available"] is False
+    monkeypatch.setattr(main.kite, "ready", lambda: True)
+    assert c.get("/research/results/implied", params={"symbols": "TCS"}, headers=h).json()["available"] is True
+
+
 # ---------- the API ----------
 def test_the_api_takes_the_filters_and_has_the_two_new_reads(w):
     c = w["client"]

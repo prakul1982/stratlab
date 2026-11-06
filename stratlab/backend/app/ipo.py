@@ -67,6 +67,7 @@ def awaits(line: str) -> bool:
 
 
 TIMETABLE_DAYS = 14                   # days after SEBI's timetable listing day that its dates still show for an issue not confirmed listed
+LISTINGS_EVERY = 30 * 60              # seconds between looks for closed issues' stocks in the broker's list, through the day (LIVE4-003)
 LISTING_CHECK_DAYS = 30               # days after its timetable listing day that a closed issue is looked for in the broker's list
 CATCH_LISTED_DAYS = 60                # an issue BSE's table says listed, that no issue list gave, becomes a row for this many days
 EVENTS = {"open": "Opens for bidding", "close": "Closes for bidding", "allotment": "Allotment", "listing": "Listing"}
@@ -646,6 +647,18 @@ def refresh_india(feed, sebi, today: date, now: datetime | None = None, details:
     return rows, problems
 
 
+def awaiting_listing(r: dict, now: datetime) -> bool:
+    """A closed Indian issue with no listing day from any list, its timetable listing day (T+3) come, at most LISTING_CHECK_DAYS ago."""
+    if r.get("market") != "IN" or r.get("listing") or not r.get("close") or stage_of(r, now) != "closed":
+        return False
+    try:
+        due = next_working(date.fromisoformat(r["close"]), 3)
+    except ValueError:
+        return False
+    today = now.astimezone(IST).date()
+    return due <= today and (today - due).days <= LISTING_CHECK_DAYS
+
+
 def confirm_listings(rows: list[dict], now: datetime, problems: list[str], lookup=None, limit: int = 12) -> int:
     """Closed Indian issues whose listing no exchange list has given, once SEBI's timetable listing day (T+3) has come: the stock is looked
     for in the broker's instrument list (by symbol, else by company name) and taken as listed only when its first trading day is on or
@@ -660,14 +673,7 @@ def confirm_listings(rows: list[dict], now: datetime, problems: list[str], looku
     for r in rows:
         if tried >= limit:
             break
-        if r.get("market") != "IN" or r.get("listing") or not r.get("close") or stage_of(r, now) != "closed":
-            continue
-        try:
-            close = date.fromisoformat(r["close"])
-        except ValueError:
-            continue
-        due = next_working(close, 3)
-        if due > today or (today - due).days > LISTING_CHECK_DAYS:
+        if not awaiting_listing(r, now):
             continue
         tried += 1
         got = _try(problems, f"the listing of {r.get('name')}", lambda r=r: lookup(r))
@@ -1276,14 +1282,17 @@ class Job:
     restart never sends twice."""
     # India's lists are read again at midday and after the close (LIVE3-020: from 07:40 to 20:10 nothing re-read them, so at 18:45 the
     # list said "Read 07:40 IST" while the job had run an hour before); the read after the close takes the day's listing closes too
-    SLOTS = (("in-am", "07:40"), ("in-alert", "08:00"), ("us-am", "08:30"), ("in-mid", "13:40"), ("in-close", "16:10"), ("us-alert", "19:00"), ("in-final", FINAL_AT),
-             ("in-pm", "20:10"), ("us-pm", "21:30"), ("us-close", "03:30"))
+    # ...and every two hours or so through the session (LIVE4-003: "Read 07:40 IST" at 12:35 in market hours, with issues that had listed
+    # still under "Closed")
+    SLOTS = (("in-am", "07:40"), ("in-alert", "08:00"), ("us-am", "08:30"), ("in-open", "10:10"), ("in-noon", "11:50"), ("in-mid", "13:40"),
+             ("in-close", "16:10"), ("us-alert", "19:00"), ("in-final", FINAL_AT), ("in-pm", "20:10"), ("us-pm", "21:30"), ("us-close", "03:30"))
 
     def __init__(self, sleep=time.sleep):
         self.sleep = sleep
         self.status = job_status.Status("ipo", {"last_run": None, "read": None, "docs": 0, "summaries": 0, "sent": 0, "problems": [], "last_error": None})
         self._live_at = 0.0
         self._docs_at = 0.0
+        self._listings_at = 0.0
         self.busy = threading.Lock()
 
     def start(self):
@@ -1337,6 +1346,9 @@ class Job:
                     self.read(market, now, perf=market in perf_for)
                     read_now.add(market)
                 ran.append(name)
+            if not ran and self.listings_due(now):
+                if self.check_listings(now):
+                    ran.append("listings")
             if self.live_due(now):
                 self.read_open(now)
                 ran.append("live")
@@ -1362,6 +1374,25 @@ class Job:
                 self.read(m, now, perf=True)
                 did = True
         return did
+
+    def listings_due(self, now: datetime) -> bool:
+        """The stored closed issues past their timetable listing day are looked for in the broker's list every LISTINGS_EVERY through the
+        day, not only at a list read: the morning's read comes before the broker is signed in for the day, so an SME issue that no exchange
+        list reports listed sat under "Closed" until the next day's read found the broker signed in (LIVE4-003: Core4 Engineers a week)."""
+        local = now.astimezone(IST)
+        if not ("08:15" <= local.strftime("%H:%M") <= "22:00") or time.time() - self._listings_at < LISTINGS_EVERY:
+            return False
+        return any(awaiting_listing(r, now) for r in load("IN")["rows"])
+
+    def check_listings(self, now: datetime) -> int:
+        """confirm_listings over the stored rows; the rows are kept again when one moved. Returns how many moved."""
+        self._listings_at = time.time()
+        got = load("IN")
+        rows, problems = [dict(r) for r in got["rows"]], []
+        n = confirm_listings(rows, now, problems)
+        if n:
+            save("IN", rows, got["checked"], as_of=got["as_of"])
+        return n
 
     def live_due(self, now: datetime) -> bool:
         """An open issue's bids are read every quarter hour through its bidding hours, and every five minutes while it has none stored yet,

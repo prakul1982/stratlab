@@ -11,7 +11,7 @@ register("data:text/javascript," + encodeURIComponent(`export async function res
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 test("DK-003: each plan card is six to eight short lines, not run-on paragraphs", async () => {
-  const { FEATURES } = await import("../src/lib/plans.ts");
+  const { FEATURES } = await import("../src/lib/planFeatures.ts");          // LIVE4-020: the full lists, apart
   for (const p of ["free", "basic", "pro"]) {
     const lines = FEATURES[p].filter((f) => !f.endsWith(":") && !/^Everything in /.test(f));
     assert.ok(lines.length >= 6 && lines.length <= 8, `${p}: ${lines.length} lines`);

@@ -35,5 +35,6 @@ def test_a_us_listing_still_stands_on_its_own(monkeypatch):
                         ({"name": "Vodafone Group", "currency": "GBp", "tz": "Europe/London"}, False),
                         ({"name": "Odd one", "currency": "USD", "tz": "Asia/Tokyo"}, False),
                         ({}, False)):
-        monkeypatch.setattr(hub, "_listing_or_none", lambda s, x=listing: x)
+        # the listing read itself (LIVE4-004: _us_listing reads it directly, so a busy listing source says busy, not "no US company")
+        monkeypatch.setattr(hub.yahoo, "meta", lambda s, x=listing: x)
         assert (hub._us_listing("X") is not None) is ok, listing

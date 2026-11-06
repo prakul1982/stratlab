@@ -7,9 +7,11 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const page = read("src/pages/ResultsPage.tsx");
 
 test("RES-1: one table a day with the figures a person looks at on a results day", () => {
-  assert.match(page, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Results on \$\{resultDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => `\$\{r\.symbol\}-\$\{r\.date\}`\} columns=\{columns\} stack phonePage=\{10\} \/>/);
-  for (const h of ["Company", "Market value", "Price now", '"Day"', "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply"])
+  assert.match(page, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label=\{`Results on \$\{resultDay\(d\)\}`\} rows=\{on\} rowKey=\{\(r\) => `\$\{r\.symbol\}-\$\{r\.date\}`\} columns=\{columns\} stack compact phonePage=\{10\} \/>/);
+  // LIVE4-010: shorter headers that fit one line (the (i) says the rest); the CSV keeps the full names
+  for (const h of ["Company", "Market value", "Price", '"Day"', "Revenue", "Profit", "Usual move", "Options imply"])
     assert.ok(page.includes(`header: ${h.startsWith('"') ? h : `"${h}"`}`), h);
+  for (const h of ["Price now", "Revenue YoY", "Profit YoY", "Past results-day moves"]) assert.ok(page.includes(`csvHeader: "${h}"`), h);
   assert.doesNotMatch(page, /className="inv-row"/);        // no chips and no two uneven columns
   assert.doesNotMatch(page, /k-cols/);
 });
@@ -32,15 +34,21 @@ test("RES-1: the filters are size, sector, index, day, purpose, sort and F&O, wi
   assert.match(filters, /no market value kept yet, so a size can't place/);
 });
 
-test("RES-1: live prices, earlier moves and implied moves are read for the rows in view only, a few at a time", () => {
-  assert.match(quotes, /export const LIVE_ROWS = 48;/);
-  assert.match(page, /\.flatMap\(\(w\) => w\.rows\)\.slice\(0, LIVE_ROWS\)/);
+test("RES-1: live prices, earlier moves and implied moves are read for every row shown, in the order shown, a few calls at a time", () => {
+  // LIVE4-001 (behaviour changed on purpose): every row the page shows, not the first 48 in the list's order (often the folded days gone by)
+  assert.match(quotes, /export const LIVE_ROWS = 240;/);
+  assert.match(page, /shownOrder\(data\.weeks, data\.today\)/);
+  assert.match(page, /const quoted = useMemo\(\(\) => symbols\.slice\(0, LIVE_ROWS\), \[symbols\]\)/);
   assert.match(quotes, /useMarketRefresh\(\[region\], read, symbols\.length > 0\)/);          // each minute while the market trades, never otherwise
   assert.match(quotes, /researchApi\.quotes\(region, syms\)/);
-  assert.match(page, /useRowQuotes\(region, symbols\)/);
-  assert.match(page, /readAll<MovesAnswer>\(symbols, 6,/);                      // six a call, eight for the options, asked at the same time
-  assert.match(page, /readAll<Implied>\(list, 8,/);
+  assert.doesNotMatch(quotes, /setQuotes\(\{\}\);\n\s*if \(symbols\.length\) read\(\)/);   // more rows keep the prices already read
+  assert.match(page, /useRowQuotes\(region, quoted\)/);
+  assert.match(page, /readRows<MovesAnswer>\(newMoves,[\s\S]*?\{ size: 12, parallel: 3, alive \}/);   // only the rows not asked yet ("Show 50 more")
+  assert.match(page, /readRows<Implied>\(list,[\s\S]*?\{ size: 8, parallel: 1, alive \}/);
+  assert.doesNotMatch(page, /READ_ROUNDS/);                                       // no give-up count that left cells on "Reading"
   assert.match(page, /pending: r\.pending \?\? \[\]/);                          // what the server could not reach in time is asked again (owner, 5 Nov)
+  assert.match(page, /if \(r\.available === false && alive\(\)\) setOptionsOn\(false\)/);   // LIVE4-002: no option prices: the column hides, one line says why
+  assert.match(page, /Option prices can't be read right now, so the move they imply is not shown\./);
   assert.doesNotMatch(page, /Reading…/);                                           // the kit's bar while a cell loads, a dash when there is nothing
   assert.match(page, /\/research\/results\/moves\?region=/);
   assert.match(page, /\/research\/results\/implied\?symbols=/);

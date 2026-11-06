@@ -21,7 +21,7 @@ from . import blog, db, email_kit as kit
 IST = ZoneInfo("Asia/Kolkata")
 STATE_KEY = "blog:research:state"
 MONTH_KEY = "blog:research:month"
-GEN = 4                             # the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
+GEN = 5                             # the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
 GEN_KEY = "blog:research:gen"       # {"gen", "ok", "tries", "at"} of the last run made for a version
 SIP_AMOUNT = 10000
 SIP_HORIZONS = (3, 5)
@@ -250,14 +250,15 @@ def ipo_listing_day(facts: list[dict], now: datetime | None = None) -> dict | No
                       p1(f["open_pct"]) if _num(f.get("open_pct")) else "–", p1(f["close_pct"]),
                       f"{f['sub_times']:,.1f} times" if _num(f.get("sub_times")) else "–"])
     blocks: list[dict] = [
-        {"t": "p", "text": f"How Indian IPOs did on their first day of trading in {year}, for the issues in StratLab's IPO tracker. The change on listing day is the "
-                         "first session's close (or opening price) compared with the issue price."},
+        {"t": "p", "text": f"How Indian IPOs did on their first day of trading, for the issues in StratLab's IPO tracker that listed from {short(first)} to {short(last)}. "
+                         "The change on listing day is the first session's close (or opening price) compared with the issue price."},
         {"t": "h2", "text": "What the data shows"},
         {"t": "stats", "items": [
-            {"v": str(len(facts)), "l": "issue listed" if len(facts) == 1 else "issues listed", "s": f"{short(first)} to {short(last)}"},
-            {"v": f"{len(up)} of {len(have)}", "l": "closed above the issue price", "s": "on listing day"},
-            {"v": p1(median(closes)), "l": "median close against the issue price", "s": f"lowest {p1(min(closes))}, highest {p1(max(closes))}"},
-            *([{"v": p1(median(opens)), "l": "median open against the issue price", "s": f"{len(opens)} {'issue' if len(opens) == 1 else 'issues'}"}] if opens else [])]},
+            # LIVE4-019: each tile says which issues it counts (all listed, those with a listing-day close, those with an opening price)
+            {"v": str(len(facts)), "l": "issue listed" if len(facts) == 1 else "issues listed", "s": f"all in the tracker, {short(first)} to {short(last)}"},
+            {"v": f"{len(up)} of {len(have)}", "l": "closed above the issue price", "s": f"of the {len(have)} with a listing-day close"},
+            {"v": p1(median(closes)), "l": "median listing-day close", "s": f"of the same {len(have)}, against the issue price"},
+            *([{"v": p1(median(opens)), "l": "median listing-day open", "s": f"of the {len(opens)} with an opening price"}] if opens else [])]},
         ]
     # VR6-006: the tiles say the headline figures; the same four sentences were printed under them (a wall of text saying each number twice).
     # They stay in the page, folded, for a reader who wants them in words and for a crawler
@@ -652,16 +653,23 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
     names = {r["layer"] for r in layers}
     for n in src.get("notable") or []:
         if n.get("kind") == "move" and n.get("layer") in names:
-            lines.append(f"{n['layer']}: EBITDA margin {'up' if n['move'] > 0 else 'down'} {td.f1(abs(n['move']))} points, from {pts(n['from'])} in {n['from_year']} "
-                         f"to {pts(n['to'])} in {n['to_year']} (its {n['n']} companies' figures added together).")
+            # LIVE4-018: this is the layer's companies added together, not its median company (the chart's and the table's): said first, so
+            # "−6.2%" here beside "−9.1%" in the chart reads as two different measures, not a contradiction
+            lines.append(f"{n['layer']}: combined EBITDA margin (its {n['n']} companies' figures added together, not the median in the chart) "
+                         f"{'up' if n['move'] > 0 else 'down'} {td.f1(abs(n['move']))} points, from {pts(n['from'])} in {n['from_year']} to {pts(n['to'])} in {n['to_year']}.")
     single = [r["layer"] for r in layers if r.get("n") == 1]
     if single:
         lines.append(f"{single[0]} has one company, so its figures are that company's own." if len(single) == 1 else
                      f"{', '.join(single[:-1])} and {single[-1]} have one company each, so their figures are those companies' own.")
-    tiles = [{"v": str(src.get("members")), "l": "companies in the theme"}, {"v": str(len(layers)), "l": "layers of the chain"}]
+    # LIVE4-018: four labels of one line each, the detail in the line under (the labels were 1, 1, 2 and 2 lines, sub-labels at three heights)
+    tiles = [{"v": str(src.get("members")), "l": "companies", "s": "in the theme"}, {"v": str(len(layers)), "l": "layers", "s": "of its value chain"}]
     if gap:
-        tiles += [{"v": pts(gap["high_value"]), "l": "highest median EBITDA margin", "s": gap["high"]},
-                  {"v": pts(gap["low_value"]), "l": "lowest median EBITDA margin", "s": gap["low"]}]
+        tiles += [{"v": pts(gap["high_value"]), "l": "highest layer margin", "s": f"median EBITDA, {gap['high']}"},
+                  {"v": pts(gap["low_value"]), "l": "lowest layer margin", "s": f"median EBITDA, {gap['low']}"}]
+    k_apart = sum(r.get("n") or 0 for r in apart)
+    left_out = (f"Not drawn: the {k_apart} {'company' if k_apart == 1 else 'companies'} in the theme's list but in no layer; "
+                f"{'its' if k_apart == 1 else 'their'} figures are in the table below.") if k_apart else ""
+    no_margin = [r["layer"] for r in layers if r.get("ebitda") is None]
     table = [[r["layer"], str(r["n"]), p1_plain(r.get("revenue"), unit), pts(r.get("ebitda")), pts(r.get("net")), pts(r.get("roce"))] for r in layers]
     table += [[_apart_label(r), str(r["n"]), p1_plain(r.get("revenue"), unit), pts(r.get("ebitda")), pts(r.get("net")), pts(r.get("roce"))] for r in apart]
     blocks: list[dict] = [
@@ -672,12 +680,17 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
         {"t": "h2", "text": "Margin by layer"},
         {"t": "hbar", "caption": "Median EBITDA margin of each layer's companies, latest full year",
          "rows": [{"label": r["layer"], "value": r.get("ebitda"), "text": pts(r.get("ebitda")) if r.get("ebitda") is not None else "no figure"} for r in layers],
-         "note": "EBITDA margin is operating profit before depreciation as a share of revenue. A layer with no figure has no company that reports one."
-                 if any(r.get("ebitda") is None for r in layers) else ""},
+         # LIVE4-018: the chart says which layers have no figure and why, and which companies it leaves out
+         "note": " ".join(x for x in [
+             "EBITDA margin is operating profit before depreciation as a share of revenue, the median of each layer's companies.",
+             (f"No figure for {', '.join(no_margin[:-1]) + ' and ' + no_margin[-1] if len(no_margin) > 1 else no_margin[0]}: none of "
+              f"{'their' if len(no_margin) > 1 else 'its'} companies reports EBITDA (their revenue and net margin are in the table).") if no_margin else "",
+             left_out] if x)},
     ]
     if sum(1 for r in layers if r.get("revenue")) >= 2:
         blocks.append({"t": "hbar", "caption": f"Revenue of each layer, {unit}, its companies added together",
-                       "rows": [{"label": r["layer"], "value": r.get("revenue"), "text": p1_plain(r.get("revenue"), unit) if r.get("revenue") is not None else "no figure"} for r in layers]})
+                       "rows": [{"label": r["layer"], "value": r.get("revenue"), "text": p1_plain(r.get("revenue"), unit) if r.get("revenue") is not None else "no figure"} for r in layers],
+                       **({"note": left_out} if left_out else {})})
     blocks += [
         {"t": "h2", "text": "Every layer in figures"},
         {"t": "table", "caption": f"Margins and ROCE are each layer's median company; revenue, in {unit}, is its companies added together",

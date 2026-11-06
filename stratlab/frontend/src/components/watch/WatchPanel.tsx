@@ -22,7 +22,7 @@ import { signCls, currencySymbol } from "../../lib/format";
 import { getSparks, live } from "../../lib/watchApi";
 import type { LiveSub } from "../../lib/watchLive";
 import {
-  changeOf, changeText, currencyOf, DEFAULT_ID, itemFromPath, labelOf, listsSaid, moveItem, POPULAR, priceText, SORTS, sortItems,
+  asOfLine, changeArrow, changeOf, changeText, currencyOf, DEFAULT_ID, itemFromPath, labelOf, listsSaid, moveItem, POPULAR, priceText, SORTS, sortItems,
   subtitleOf, symbolsSaid, type SortMode, type WatchItem, type WatchQuote,
 } from "../../lib/watch";
 import { dragged, DOCK_FROM, drawnHeight, isSheet, MAX_W, MIN_H, MIN_W, resized, shapeOf, type PanelLayout } from "../../lib/watchLayout";
@@ -56,6 +56,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const [quotes, setQuotes] = useState<Record<string, WatchQuote | null>>({});
   const [ticks, setTicks] = useState<Record<string, number>>({});
   const [sparks, setSparks] = useState<Record<string, number[]>>({});
+  const [tickAt, setTickAt] = useState<number | null>(null);          // when the last live tick came in: the foot's "as of" (LIVE4-009)
   const pending = useRef<Record<string, number>>({});
   const timer = useRef<number>(0);
   const sub = useRef<LiveSub | null>(null);
@@ -65,7 +66,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
       quote: (k, q) => setQuotes((o) => (o[k] === q ? o : { ...o, [k]: q })),
       tick: (k, t) => {                                                // ticks are folded into one update a quarter second
         pending.current[k] = t.p;
-        if (!timer.current) timer.current = window.setTimeout(() => { timer.current = 0; const got = pending.current; pending.current = {}; setTicks((o) => ({ ...o, ...got })); }, 250);
+        if (!timer.current) timer.current = window.setTimeout(() => { timer.current = 0; const got = pending.current; pending.current = {}; setTicks((o) => ({ ...o, ...got })); setTickAt(Date.now()); }, 250);
       },
     });
     sub.current = s;
@@ -106,6 +107,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
     else { const old = rowRefs.current.get(id); if (old) io.current?.unobserve(old); rowRefs.current.delete(id); seen.current.delete(id); }
   };
 
+  const asOf = asOfLine([...Object.values(quotes).map((q) => q?.at), tickAt]);
   const priceOf = (it: WatchItem) => ticks[it.id] ?? quotes[it.id]?.price ?? null;
   const changeFor = (it: WatchItem) => changeOf(quotes[it.id] ?? undefined, ticks[it.id]);
   const open = useMemo(() => Object.fromEntries(markets.map((m) => [m.id, marketState(m).open])), [markets]);
@@ -250,7 +252,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
             <div className="mw-ctitle"><b>{labelOf(chartItem)}</b><small>{subtitleOf(chartItem)}</small></div>
             <div className="mw-cprice">
               <b>{(() => { const p = priceOf(chartItem); return p == null ? "–" : `${chartItem.kind === "index" || chartItem.market === "FX" || chartItem.market === "CRYPTO" ? "" : currencySymbol(quotes[chartItem.id]?.currency ?? currencyOf(chartItem))}${priceText(p, quotes[chartItem.id]?.currency ?? null, chartItem.market, chartItem.symbol)}`; })()}</b>
-              {(() => { const c = changeFor(chartItem); const t = changeText(c); return <span className={signCls(c, t)}>{c != null && c !== 0 ? (c > 0 ? "▲ " : "▼ ") : ""}{t}</span>; })()}
+              {(() => { const c = changeFor(chartItem); const t = changeText(c); return <span className={signCls(c, t)}>{changeArrow(c)}{t}</span>; })()}
             </div>
           </div>
           <div className="mw-chartbox"><ChartWorkspace item={chartItem} height={chartH} /></div>
@@ -330,7 +332,8 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
           </div>
           <div className="mw-foot">
             {list && w.limits?.symbols != null && !full && said ? <span role="status">{said} <Link to="/plans">See plans</Link></span>
-              : <span className="mw-foot-note">{list ? `${used} ${used === 1 ? "symbol" : "symbols"}` : ""}</span>}
+              : <span className="mw-foot-note">{list ? `${used} ${used === 1 ? "symbol" : "symbols"}` : ""}
+                {list && asOf && <span data-testid="mw-as-of"> · {asOf}</span>}</span>}
           </div>
         </>
       )}

@@ -7,6 +7,7 @@ import { useCompanyScope } from "../lib/useCompanyScope";
 import { ago, fmtDate, fmtTime, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { LIVE_ROWS, useRowQuotes } from "../lib/rowQuotes";
+import { readRows, shownOrder } from "../lib/rowReads";
 import { REGION_NAME, screenCap, useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
 import { CalendarFilters, NO_CAL, SIZE_NAME, calCount, keepFilters, keptFilters, type CalFilters, type Facets } from "../components/CalendarFilters";
@@ -43,8 +44,6 @@ interface Implied { pct: number; strike: number; expiry: string; straddle: numbe
 
 const KEEP = "stratlab.results.filters.v1";
 const MORE_ROWS = 50;                // rows "Show more" adds to a day
-const READ_ROUNDS = 4;               // times a company answered "pending" is asked again before its cell shows a dash
-const READ_PAUSE_MS = 2500;
 export const NO_FILTERS: Filters = { ...NO_CAL, sort: "cap", purpose: "" };
 const SORT_NAME: Record<string, string> = {
   cap: "Market value, largest first", name: "Company name", move: "Usual move on a results day", sales: "Revenue growth, a year on", profit: "Profit growth, a year on",
@@ -107,67 +106,60 @@ export function ResultsPage() {
     return () => { live = false; clearTimeout(t); };
   }, [region, scope, q, openDay, dayRows, tries, filters]);
 
-  // ---- what is read for the rows in view (the first LIVE_ROWS), and nothing for the rest ----
-  const inView = useMemo(() => (data?.weeks ?? []).flatMap((w) => w.rows).slice(0, LIVE_ROWS), [data]);
-  const symbols = useMemo(() => [...new Set(inView.map((r) => r.symbol))], [inView]);
-  const { quotes, quoteAt, live: isLive } = useRowQuotes(region, symbols);
+  // ---- what is read for the rows on the page, in the order a person sees them (LIVE4-001: the first 48 in the list's order were read, which
+  // were often the folded days gone by, so today's rows and every row "Show 50 more" added sat on "Reading" for good) ----
+  const shown = useMemo(() => (data ? shownOrder(data.weeks, data.today) : []), [data]);
+  const symbols = useMemo(() => [...new Set(shown.map((r) => r.symbol))], [shown]);
+  const quoted = useMemo(() => symbols.slice(0, LIVE_ROWS), [symbols]);
+  const { quotes, quoteAt, live: isLive } = useRowQuotes(region, quoted);
   const [moves, setMoves] = useState<Record<string, MovesAnswer | null>>({});
   const [implied, setImplied] = useState<Record<string, Implied | null>>({});
-  const stamp = useRef(0);
-  const pick = (sym: string) => inView.find((r) => r.symbol === sym);
-
-  // the two extra columns are read at the same time, in small parts; a company the server could not get to in time (its price source busy,
-  // or the call's few seconds spent) comes back "pending" and is asked again a few times, then shows a dash (owner, 5 Nov: both columns sat on
-  // "Reading" for minutes: the options column waited for every earlier-moves call, and those queued behind the broker's jobs)
+  // false once the server says option prices can't be read now (the broker not connected): the column is hidden and one line says why
+  const [optionsOn, setOptionsOn] = useState(true);
+  const asked = useRef({ moves: new Set<string>(), implied: new Set<string>() });
+  const gen = useRef(0);
+  // another market starts from nothing; a longer list of the same market keeps what was read and reads only the rows that are new
   useEffect(() => {
-    stamp.current += 1;
-    setMoves({}); setImplied({});
+    gen.current += 1;
+    asked.current = { moves: new Set(), implied: new Set() };
+    setMoves({}); setImplied({}); setOptionsOn(true);
+    return () => { gen.current += 1; };
+  }, [region]);
+
+  // the two extra columns are read at the same time, a few calls at once; a company the server could not get to in time (its price source
+  // busy, or the call's few seconds spent) comes back "pending" and is asked again until READ_DEADLINE_MS, when what is left shows a dash
+  // (owner, 5 Nov: never a cell stuck on its loading bar)
+  useEffect(() => {
     if (!symbols.length) return;
-    const ticket = stamp.current;
-    const alive = () => ticket === stamp.current;
-    const fill = <T,>(set: (f: (cur: Record<string, T | null>) => Record<string, T | null>) => void, list: string[], got: Record<string, T | null> = {}) =>
-      set((cur) => ({ ...cur, ...Object.fromEntries(list.map((s) => [s, got[s] ?? null])) }));
-    /** Ask for `list` in parts of `size`; what comes back pending is asked again after a pause, up to READ_ROUNDS times. */
-    async function readAll<T>(list: string[], size: number, ask: (part: string[]) => Promise<{ got: Record<string, T | null>; pending: string[] }>,
-      set: (f: (cur: Record<string, T | null>) => Record<string, T | null>) => void) {
-      let todo = list;
-      for (let round = 0; todo.length && round < READ_ROUNDS && alive(); round += 1) {
-        if (round) await new Promise((ok) => setTimeout(ok, READ_PAUSE_MS));
-        const again: string[] = [];
-        for (let i = 0; i < todo.length && alive(); i += size) {
-          const part = todo.slice(i, i + size);
-          try {
-            const { got, pending } = await ask(part);
-            if (!alive()) return;
-            const wait = new Set(pending);
-            again.push(...part.filter((s) => wait.has(s)));
-            fill(set, part.filter((s) => !wait.has(s)), got);
-          } catch { if (alive()) fill(set, part); }
-        }
-        todo = again;
-      }
-      if (alive() && todo.length) fill(set, todo);
+    const ticket = gen.current;
+    const alive = () => ticket === gen.current;
+    const newMoves = symbols.filter((s) => !asked.current.moves.has(s));
+    newMoves.forEach((s) => asked.current.moves.add(s));
+    const merge = <T,>(set: (f: (cur: Record<string, T | null>) => Record<string, T | null>) => void) =>
+      (got: Record<string, T | null>) => set((cur) => ({ ...cur, ...got }));
+    // earlier moves: twelve companies a call (the server reads six price histories a call and answers the rest at once from what it keeps)
+    if (newMoves.length) {
+      void readRows<MovesAnswer>(newMoves, async (part) => {
+        const r = await api<{ moves?: Record<string, MovesAnswer | null>; pending?: string[] }>(`/research/results/moves?region=${region}&symbols=${part.map(encodeURIComponent).join(",")}`);
+        return { got: r.moves ?? {}, pending: r.pending ?? [] };
+      }, merge(setMoves), { size: 12, parallel: 3, alive });
     }
-    // earlier moves: six companies a call (the server reads that many price histories at a time)
-    void readAll<MovesAnswer>(symbols, 6, async (part) => {
-      const r = await api<{ moves?: Record<string, MovesAnswer | null>; pending?: string[] }>(`/research/results/moves?region=${region}&symbols=${part.map(encodeURIComponent).join(",")}`);
-      return { got: r.moves ?? {}, pending: r.pending ?? [] };
-    }, setMoves);
-    // the move the options price in: the stocks with futures and options, a day at a time, eight a call
+    // the move the options price in: the stocks with futures and options, eight a call, each day's stocks to that day's expiry
     if (region === "IN") {
       const byDay = new Map<string, string[]>();
-      for (const s of symbols) { const r = pick(s); if (r?.fo) byDay.set(r.date, [...(byDay.get(r.date) ?? []), s]); }
-      void (async () => {
-        for (const [day, list] of byDay) {
-          if (!alive()) return;
-          await readAll<Implied>(list, 8, async (part) => {
-            const r = await api<{ implied?: Record<string, Implied | null>; pending?: string[] }>(`/research/results/implied?symbols=${part.map(encodeURIComponent).join(",")}&day=${day}`);
-            return { got: r.implied ?? {}, pending: r.pending ?? [] };
-          }, setImplied);
-        }
-      })();
+      for (const r of shown) {
+        if (!r.fo || asked.current.implied.has(r.symbol)) continue;
+        asked.current.implied.add(r.symbol);
+        byDay.set(r.date, [...(byDay.get(r.date) ?? []), r.symbol]);
+      }
+      for (const [day, list] of byDay) {
+        void readRows<Implied>(list, async (part) => {
+          const r = await api<{ implied?: Record<string, Implied | null>; pending?: string[]; available?: boolean }>(`/research/results/implied?symbols=${part.map(encodeURIComponent).join(",")}&day=${day}`);
+          if (r.available === false && alive()) setOptionsOn(false);
+          return { got: r.implied ?? {}, pending: r.pending ?? [] };
+        }, merge(setImplied), { size: 8, parallel: 1, alive });
+      }
     }
-    return () => { stamp.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbols.join(","), region]);
 
@@ -183,6 +175,7 @@ export function ResultsPage() {
   const n = filterCount(filters);
   const cur = region === "IN" ? "INR" : "USD";
   const anyFo = region === "IN" && !!data?.weeks.some((w) => w.rows.some((r) => r.fo));
+  const showImplied = anyFo && optionsOn;
 
   const columns: Column<ResultRow>[] = [
     // two lines a row (owner, 5 Nov: "still shit ui", rows stacked company, name, purpose and filing link four lines high): the symbol and
@@ -198,7 +191,7 @@ export function ResultsPage() {
             {r.fo && <span className="k-note k-muted">F&amp;O</span>}
             {r.name && <span className="k-note k-muted res-name" title={r.name}>{r.name}</span>}
           </span>
-          <span className="k-note k-muted res-sub" title={r.out ? `${purpose} · Filed ${resultDay(r.out.at)}: ${r.out.title}${numbers}` : purpose}>
+          <span className={`k-note k-muted res-sub${!r.out && !r.when && /^financial results$/i.test(r.purpose.trim()) ? " res-plain" : ""}`} title={r.out ? `${purpose} · Filed ${resultDay(r.out.at)}: ${r.out.title}${numbers}` : purpose}>
             {purpose}
             {r.out && <> · {r.out.url
               ? <a className="link res-filed" href={safeHref(r.out.url)} target="_blank" rel="noopener noreferrer">Filed {resultDay(r.out.at)} ↗</a>
@@ -206,19 +199,22 @@ export function ResultsPage() {
           </span>
         </span>);
     } },
-    { key: "cap", header: "Market value", numeric: true, cell: (r) => (r.cap == null ? <span className="k-muted">–</span> : <span title={r.band ? `${SIZE_NAME[r.band]} company` : undefined}>{screenCap(r.cap, r.region)}</span>) },
-    { key: "px", header: "Price now", numeric: true, cell: (r) => {
+    // LIVE4-010: short headers that stay on one line at 1440 (the (i) says the rest); on a phone each company is two short lines (the table's
+    // `compact`): the symbol with the price and the day's move at its right, then the usual move and what the options imply; market value,
+    // revenue and profit stay on the desktop table and the company page (a fifth figure ran the line onto a third)
+    { key: "cap", header: "Market value", numeric: true, phone: false, cell: (r) => (r.cap == null ? <span className="k-muted">–</span> : <span title={r.band ? `${SIZE_NAME[r.band]} company` : undefined}>{screenCap(r.cap, r.region)}</span>) },
+    { key: "px", header: "Price", numeric: true, brief: true, csvHeader: "Price now", cell: (r) => {
       const x = quotes[r.symbol];
       if (x?.price != null) return <span title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur)}</span>;
       return r.last == null ? <span className="k-muted">–</span> : <span className="k-muted" title={r.last_at ? `Last close, ${resultDay(r.last_at)}` : "Last close"}>{price(r.last, cur)}</span>;
     } },
-    { key: "day", header: "Day", numeric: true, cell: (r) => {
+    { key: "day", header: "Day", numeric: true, brief: true, cell: (r) => {
       const x = quotes[r.symbol];
       return x?.change_pct == null ? <span className="k-muted">–</span> : <Signed value={x.change_pct}>{pct(x.change_pct, 2)}</Signed>;
     } },
-    { key: "rev", header: "Revenue YoY", numeric: true, info: "The latest reported quarter's revenue against the same quarter a year before (YoY), from the company's results as the app keeps them. Hover a figure for the quarters compared.", cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} /> },
-    { key: "pat", header: "Profit YoY", numeric: true, info: "The latest reported quarter's net profit against the same quarter a year before. A quarter that came after a loss has no growth figure.", cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} /> },
-    { key: "mv", header: "Past results-day moves", wrap: true, info: "The change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
+    { key: "rev", header: "Revenue", csvHeader: "Revenue YoY", numeric: true, phone: false, info: "Year on year (YoY): the latest reported quarter's revenue against the same quarter a year before (YoY), from the company's results as the app keeps them. Hover a figure for the quarters compared.", cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} /> },
+    { key: "pat", header: "Profit", csvHeader: "Profit YoY", numeric: true, phone: false, info: "Year on year: the latest reported quarter's net profit against the same quarter a year before. A quarter that came after a loss has no growth figure.", cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} /> },
+    { key: "mv", header: "Usual move", cardLabel: "Usual move", csvHeader: "Past results-day moves", wrap: true, info: "Past results-day moves: the change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
       const a = moves[r.symbol], m = a?.moves ?? r.moves;
       const since = a?.since;
       if (!m && !since) return a === undefined ? <Working inline label="Reading earlier results days" /> : <span className="k-muted">–</span>;
@@ -231,7 +227,7 @@ export function ResultsPage() {
           {m && <span className="k-note res-moves" title="The latest four, newest first, in %">{m.last.map((v, i) => <Move key={i} v={v} bare />)}</span>}
         </span>);
     } },
-    ...(anyFo ? [{ key: "im", header: "Options imply", numeric: true, info: "For stocks with futures and options: the price of the at-the-money call and put together, as a share of the stock's price, for the first expiry on or after the results day. Read from the broker's option prices while it is connected.", cell: (r: ResultRow) => {
+    ...(showImplied ? [{ key: "im", header: "Options imply", cardLabel: "Implied", csvHeader: "Options imply", numeric: true, info: "For stocks with futures and options: the price of the at-the-money call and put together, as a share of the stock's price, for the first expiry on or after the results day. Read from the broker's option prices while it is connected.", cell: (r: ResultRow) => {
       if (!r.fo) return <span className="k-muted">–</span>;
       const i = implied[r.symbol];
       if (i === undefined) return <Working inline label="Reading the option prices" />;
@@ -297,7 +293,7 @@ export function ResultsPage() {
           return (
             <div key={d} className="inv-day" data-testid="results-day">
               <span className="k-eyebrow">{dayHeading(d, info.count, data.today)}</span>
-              <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`} columns={columns} stack phonePage={10} />
+              <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`} columns={columns} stack compact phonePage={10} />
               {info.count > info.shown && (
                 <div className="k-row">
                   <span className="k-note">Showing {info.shown} of {info.count.toLocaleString("en-IN")} on {resultDay(d)}.</span>
@@ -321,9 +317,10 @@ export function ResultsPage() {
       })}
       {data && !empty && (
         <p className="k-note" data-testid="results-prices">
-          {isLive ? `Prices as of ${fmtTime(quoteAt!, { tz: marketTz(region), zone: true })}, read for the first ${Math.min(symbols.length, LIVE_ROWS)} companies in view and again each minute while the market trades.`
+          {isLive ? `Prices as of ${fmtTime(quoteAt!, { tz: marketTz(region), zone: true })}, read for ${symbols.length > LIVE_ROWS ? `the first ${LIVE_ROWS} of the ${symbols.length}` : `the ${symbols.length}`} companies shown and again each minute while the market trades.`
             : symbols.length ? `Prices are each company's last close${data.weeks.flatMap((w) => w.rows).find((r) => r.last_at)?.last_at ? `, ${resultDay(data.weeks.flatMap((w) => w.rows).find((r) => r.last_at)!.last_at!)}` : ""}; the market is not trading now.` : ""}
-          {" "}Past results-day moves are from the app's own daily prices; "Options imply" is the at-the-money straddle over the price. Facts, not a forecast.
+          {" "}Past results-day moves are from the app's own daily prices{showImplied ? `; "Options imply" is the at-the-money straddle over the price` : ""}.
+          {anyFo && !optionsOn ? " Option prices can't be read right now, so the move they imply is not shown." : ""} Facts, not a forecast.
         </p>
       )}
       {data && data.more > 0 && <p className="k-note">Each day shows its first {data.day_rows ?? 25} companies, yours first; {data.more.toLocaleString("en-IN")} more are a click away under their day, or find a company by name.</p>}

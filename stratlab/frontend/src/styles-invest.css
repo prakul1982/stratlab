@@ -153,10 +153,14 @@ a.inv-theme:hover { border-color: var(--ink); }
 .inv-rows { display: flex; flex-direction: column; }
 .inv-row { display: grid; gap: 4px; padding: var(--s3) 0; border-top: 1px solid var(--line); min-width: 0; overflow-wrap: anywhere; }
 .inv-rows > .inv-row:first-child { border-top: 0; padding-top: 0; }
-.inv-day { display: flex; flex-direction: column; gap: var(--s2); }
+.inv-day { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s2); }
+.inv-day > * { grid-column: 1 / -1; }
+/* LIVE4-010: the day's Download CSV sits on the day's heading line, not on a row of its own over every day's table */
+.inv-day > .k-eyebrow:has(+ .k-tbl-tools) { grid-column: 1; }
+.inv-day > .k-eyebrow + .k-tbl-tools { grid-column: 2; margin-bottom: 0; }
 /* a day's table of results or corporate actions has eight columns: its headers may take two lines, so every column fits the card (owner, 5 Nov:
    the options column sat past the card's edge) */
-.inv-day .k-table thead th { white-space: normal; }
+.inv-day .k-table thead th { white-space: nowrap; }   /* LIVE4-010: short headers on one line, the (i) beside the words ("Revenue / YoY" wrapped under its (i)) */
 /* the days side by side where there is room, in the order they come (across, then down): one column of them left a wide card two-thirds empty (UI-FIX-1, R2) */
 /* VR1-105: rows two across where there is room (past corporate actions), each a block of its own, no rule between */
 .inv-alert { display: flex; justify-content: space-between; align-items: center; gap: var(--s3) var(--s4); flex-wrap: wrap; padding: var(--s3) 0; border-top: 1px solid var(--line); }
@@ -205,11 +209,18 @@ a.inv-theme:hover { border-color: var(--ink); }
 .res-moves { display: flex; flex-wrap: wrap; gap: 0 8px; }
 /* a results row is two lines (owner, 5 Nov): the symbol, its tags and the name, then the meeting and a small filing link; what is longer than
    the column ends in an ellipsis, the whole of it in the tooltip */
-.res-co { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; min-width: 8rem; max-width: 14rem; line-height: 1.4; }
+.res-co { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; min-width: 8rem; max-width: 19rem; line-height: 1.4; }
 .res-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .res-sub { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .res-filed { font-size: inherit; }
 .res-mv { display: grid; gap: 0; line-height: 1.4; }
 .res-mv-top { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .res-mv .res-moves { flex-wrap: nowrap; white-space: nowrap; gap: 0 6px; }
-@media (max-width: 640px) { .res-co { max-width: none; } }
+@media (max-width: 640px) {
+  .res-co { max-width: none; }
+  /* LIVE4-010: a compact phone row: the usual move without its four arrows (the company page has them), no plain "Financial Results" line */
+  .k-tbl-wrap.compact .res-moves, .k-tbl-wrap.compact .res-plain, .k-tbl-wrap.compact .res-name { display: none; }
+  .k-tbl-wrap.compact .res-sub { white-space: normal; }   /* a meeting about more than results says so in full, under the symbol */
+  .k-tbl-wrap.compact .res-mv { display: inline-flex; gap: 6px; }
+  .k-tbl-wrap.compact .res-co { min-width: 0; }
+}

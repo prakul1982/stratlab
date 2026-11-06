@@ -15,7 +15,7 @@ test("R80-001: the Pro card and the FAQ say the same about backtesting options",
   const opt = FAQ.find((f) => f.q === "Can I backtest options?");
   assert.match(opt.a[0], /^One contract at a time\. On Pro, a notebook can backtest a single listed futures or options contract/);
   assert.doesNotMatch(opt.a[0], /^No\./);
-  const plans = read("src/lib/plans.ts");
+  const plans = read("src/lib/plans.ts") + read("src/lib/planFeatures.ts");          // LIVE4-020: the full lists are in their own file
   assert.match(plans, /in notebooks, each backtested on its own past prices/);
   assert.match(plans, /Options paper trading on your own rules' signals, strikes picked by delta or premium/);        // reworded in DK-003
 });

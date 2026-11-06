@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { BROAD_GROUP, breadthApi, cardDates, cardFigures, count, savedPick, share, withLive, type BreadthView } from "../lib/breadth";
+import { BROAD_GROUP, breadthApi, cardFigures, cardTable, savedPick, withLive, type BreadthView, type CardRow } from "../lib/breadth";
 import { homeRegion } from "../lib/homeMarket";
 import { Panel } from "./Research";
 import { AsOf, PanelSkel } from "./ui";
-import { FactTable } from "./kit";
+import { DataTable, type Column } from "./kit";
 import { marketTz } from "../lib/format";
 import { useMarketRefresh } from "../lib/marketLive";
 
@@ -30,7 +30,12 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
     breadthApi.live(group).then((x) => setD((cur) => withLive(cur, x, group))).catch(() => undefined);
   }, region === "IN" && d !== null && d !== "error");
   const f = d && d !== "error" ? cardFigures(d) : null;
-  const dates = d && d !== "error" ? cardDates(d) : null;
+  const table = d && d !== "error" ? cardTable(d) : null;
+  const columns: Column<CardRow>[] = table ? [
+    { key: "k", header: "Measure", rowHeader: true, cell: (r) => r.k },
+    { key: "now", header: table.nowHead, numeric: true, brief: true, cell: (r) => r.now ?? <span className="k-muted">At the close</span> },
+    ...(table.beforeHead ? [{ key: "before", header: table.beforeHead, numeric: true, cell: (r: CardRow) => r.before ?? "–" }] : []),
+  ] : [];
   // the page opens on the group this card shows (or, before it has loaded, on this market), not the reader's own market
   const page = d && d !== "error" ? `/invest/breadth?group=${encodeURIComponent(d.group.id)}` : `/invest/breadth?region=${region}`;
   return (
@@ -42,15 +47,10 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
           <div className="k-stack" data-testid="breadth-card" data-live={f.live ? "1" : "0"}>
             {/* VR5-002: "Live as of 15:30 IST" says it is live: no second "Live" pill beside it */}
             <span className="eyebrow">{d.group.name} · <span data-testid="breadth-card-when">{f.when}</span></span>
-            {/* TABLE-SWEEP (owner, 29 Oct: "stat tiles with 'vs yesterday' lines" are a table): the three counts as rows, the day once in
-                the figures' header; the year's highs and lows keep the close's day beside them while the counts are live (R38) */}
-            <FactTable label={`Market breadth, ${d.group.name}`} itemHead="Measure" figureHead={dates?.counts ?? "Latest"} noteHead="Day" numeric noteUnder rows={[
-              { id: "adv", k: "Rose / fell", v: `${count(f.adv)} / ${count(f.dec)}` },
-              { id: "pct50", k: "Above 50-day average", v: share(f.pct50) },
-              ...(f.live
-                ? (d.today ? [{ id: "hl", k: "52-week highs / lows", v: `${count(d.today.highs.value)} / ${count(d.today.lows.value)}`, n: dates?.highs }] : [])
-                : [{ id: "hl", k: "52-week highs / lows", v: `${count(f.highs)} / ${count(f.lows)}` }]),
-            ]} />
+            {/* TABLE-SWEEP (owner, 29 Oct: "stat tiles with 'vs yesterday' lines" are a table): the three counts as rows; LIVE4-008: the newest
+                count and the close before it each in a column headed with its day, so no figure sits under another day's header */}
+            {/* on a phone two short lines a measure (the newest count at the right, the close before under it), not a card each */}
+            {table && <DataTable stack compact label={`Market breadth, ${d.group.name}`} columns={columns} rows={table.rows} rowKey={(r) => r.id} />}
             {!f.live && <AsOf parts={[["Prices", d.as_of]]} tz={marketTz(d.group.region)} />}
           </div>
         )}

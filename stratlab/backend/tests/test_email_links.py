@@ -84,8 +84,9 @@ def page_for(path: str) -> str | None:
 
 # ---------- the API ----------
 def api_routes() -> list[re.Pattern]:
-    return [re.compile("^" + re.sub(r"\{[^}]+\}", "[^/]+", r.path) + "$") for r in main.app.routes if hasattr(r, "methods")
-            and "GET" in r.methods]
+    from app.route_list import every_route         # included routers too (newer FastAPI keeps them unflattened; LIVE4-016)
+    return [re.compile("^" + re.sub(r"\{[^}]+\}", "[^/]+", r.path) + "$") for r in every_route(main.app.routes)
+            if getattr(r, "methods", None) and "GET" in r.methods]
 
 
 @lru_cache(maxsize=None)

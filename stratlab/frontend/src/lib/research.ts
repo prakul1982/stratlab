@@ -20,7 +20,9 @@ export interface SeriesPoint { y: string; v: number }
 export interface Company {
   region: Region; symbol: string; name: string; exchange: string | null; currency: string; logo: string | null;
   website: string | null; industry: string | null; facts: { label: string; value: string }[];
-  market_cap: number | null; cap_note?: string | null; quote: Quote | null; range52: { low: number | null; high: number | null; since?: string | null; traded_from?: string | null };
+  market_cap: number | null; cap_note?: string | null;
+  /** the figures are the company's last stored ones (the fundamentals source busy): when they were worked out, or true (LIVE4-004) */
+  figures_kept?: string | true; quote: Quote | null; range52: { low: number | null; high: number | null; since?: string | null; traded_from?: string | null };
   /** a company that no longer trades (merged or delisted): what became of it (DD-012) */ delisted?: import("./researchFormat").Delisted | null;
   margins: { gross: number | null; operating: number | null; net: number | null } | null;
   metrics: MetricGroup[];
@@ -208,10 +210,14 @@ export interface MoodSectorRow { name: string; label: string; change_pct: number
 export interface MoodQuoteRow { label: string; symbol: string; tag: string; price: number; change_pct: number | null; day: string | null; same_day: boolean | null }
 export interface PulseMood {
   pending?: boolean; region: Region; is_open: boolean; today: string; levels_at: string | null; read_at?: string | null;
+  /** a copy from before the open or close, answered while the fresh read goes on (LIVE4-024) */
+  refreshing?: boolean;
   headline: string; lines: string[];
   compare: { index: string; avg_abs: number; days: number; ratio: number; words: string } | null;
   breadth: { group: string; live: boolean; day: string | null; close_day: string | null; prev_day: string | null; adv: number | null; dec: number | null; unch: number | null;
-    stocks: number | null; highs: number | null; lows: number | null; ratio: number | null; rows: MoodBreadthRow[] } | null;
+    stocks: number | null; highs: number | null; lows: number | null; ratio: number | null; rows: MoodBreadthRow[];
+    /** the live count's quarter-hour, "12:15" IST (LIVE4-005) */
+    at?: string | null } | null;
   sectors: { rows: MoodSectorRow[]; up: number; down: number; unchanged: number; of: number; leader: string; laggard: string } | null;
   /** One table for each index of the market (NIFTY 50 and SENSEX; the S&P 500); `est_total` and `actual` (India) say what the companies add up to and what the index moved. */
   movers: { index: string; adding: MoodMover[]; taking: MoodMover[]; of: number; note: string; est_total?: number | null; actual?: number | null }[] | null;
@@ -227,9 +233,14 @@ export interface CompareAI {
 }
 export interface WatchItem { region: Region; symbol: string; name: string | null }
 
-/** How often, and how many times, a company page asks again for a read being written behind it (about two minutes). */
-export const AI_POLL_MS = 3000;
-export const AI_POLLS = 40;
+/** How often, and how many times, a company page asks again for a read being written behind it (about two minutes): after 1.5 s and
+ * 3 s, then every 5 s (LIVE4-022: five asks in 14 s). */
+export const AI_POLL_MS = 5000;
+export const AI_POLLS = 24;
+export const AI_FIRST_POLLS = [1500, 3000];
+
+/** The read being waited for, per company: a second caller (the page opened again, another panel) shares it instead of polling too. */
+const aiWaits = new Map<string, { wait: Promise<CompanyAI>; alive: Set<() => boolean> }>();
 
 export const researchApi = {
   /** The page asks lean: the price, header and tables first; the news, encyclopedia entry and peers come from `companyMore` (R10O-009). */
@@ -238,16 +249,26 @@ export const researchApi = {
   /** The AI read, or an Error saying why there is none (an answer of "unavailable" is a 200 on the wire, so a page opening is never a failed request). */
   companyAI: async (r: Region, s: string, refresh = false, alive: () => boolean = () => true): Promise<CompanyAI> => {
     const base = `/research/company/${r}/${encodeURIComponent(s)}/ai`;
+    const key = `${r}:${s}`;
+    const shared = !refresh ? aiWaits.get(key) : undefined;
+    if (shared) { shared.alive.add(alive); return shared.wait; }
+    const watchers = new Set([alive]);
+    const anyAlive = () => [...watchers].some((f) => f());
     // the page never waits on its read: a read not written yet is written behind the page and asked for again every few
     // seconds (R8O-007: company pages settled in 8 to 30 s); "Refresh" asks and waits, as asked
-    for (let i = 0; ; i++) {
-      const got = await api<CompanyAI | { unavailable: true; message: string } | { pending: true }>(refresh ? `${base}?refresh=true` : `${base}?background=true`);
-      if ("unavailable" in got) throw new Error(got.message);
-      if (!("pending" in got)) return got;
-      if (!alive()) throw new Error("left the page");
-      if (i >= AI_POLLS) throw new Error("The AI service is busy. Ask again in a minute.");
-      await new Promise((ok) => setTimeout(ok, i === 0 ? 800 : i === 1 ? 1600 : AI_POLL_MS));      // a quick read shows quickly
-    }
+    const wait = (async () => {
+      for (let i = 0; ; i++) {
+        const got = await api<CompanyAI | { unavailable: true; message: string } | { pending: true }>(refresh ? `${base}?refresh=true` : `${base}?background=true`);
+        if ("unavailable" in got) throw new Error(got.message);
+        if (!("pending" in got)) return got;
+        if (!(refresh ? alive() : anyAlive())) throw new Error("left the page");
+        if (i >= AI_POLLS) throw new Error("The AI service is busy. Ask again in a minute.");
+        await new Promise((ok) => setTimeout(ok, AI_FIRST_POLLS[i] ?? AI_POLL_MS));      // a quick read shows quickly
+      }
+    })();
+    if (refresh) return wait;
+    aiWaits.set(key, { wait, alive: watchers });
+    try { return await wait; } finally { if (aiWaits.get(key)?.wait === wait) aiWaits.delete(key); }
   },
   chart: (r: Region, s: string, range: string) =>
     api<{ currency: string; source: string; candles: { t: string; c: number }[] }>(`/research/chart/${r}/${encodeURIComponent(s)}?range=${range}`),

@@ -298,12 +298,20 @@ def ipo_listed(row: dict) -> dict | None:
     first trading day in the last 50 days (an older first day is another company of a like name): None while it isn't listed."""
     if not kite.ready():
         return None
-    inst = (kite.equity(row["symbol"]) if row.get("symbol") else None) or kite.equity_by_name(row.get("name") or "")
-    if not inst:
-        return None
-    bars = kite.history(inst["token"], "1d", 50, store=False)
-    return {"symbol": inst.get("symbol"), "exchange": inst.get("exchange"), "code": inst.get("bse_code"),
-            "first": str(bars[0]["t"])[:10] if bars else None}
+    found = [x for x in ((kite.equity(row["symbol"]) if row.get("symbol") else None), kite.equity_by_name(row.get("name") or "")) if x]
+    # a name the broker shortened ("CARVER ROBOW" for Carver Roboweld Limited, LIVE4-003): taken only with a first trading day after
+    # the bidding closed, so an older company of a like name is never taken for the issue
+    found += kite.equities_named_like(row.get("name") or "")
+    seen = set()
+    for inst in found:
+        if inst["token"] in seen or len(seen) >= 3:
+            continue
+        seen.add(inst["token"])
+        bars = kite.history(inst["token"], "1d", 50, store=False)
+        first = str(bars[0]["t"])[:10] if bars else None
+        if first and first > (row.get("close") or ""):
+            return {"symbol": inst.get("symbol"), "exchange": inst.get("exchange"), "code": inst.get("bse_code"), "first": first}
+    return None
 
 
 ipo.setup(lambda: filings_feed, lambda: us_market_calendar, lambda: (_gemini, _anthropic), lambda: markets.providers["US"].yahoo,
@@ -2629,7 +2637,7 @@ def results_moves(region: str = "IN", symbols: str = Query("", max_length=400), 
     """What each company's price did over its earlier results days (the close after the results day against the close before it),
     from its daily prices, kept once worked out. Up to 12 companies; the prices of 6 are read in one call, the rest on the next."""
     r = research_routes.region_of(region)
-    throttle(profile, "results_moves", 30, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
+    throttle(profile, "results_moves", 90, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
     pending: list[str] = []
     got = results_calendar.moves_for(r, _symbols_arg(symbols, r, 12), pending=pending)
     return research_routes.ok({"moves": got, "pending": list(dict.fromkeys(pending))})
@@ -2639,10 +2647,12 @@ def results_moves(region: str = "IN", symbols: str = Query("", max_length=400), 
 def results_implied(symbols: str = Query("", max_length=200), day: str = "", profile=Depends(current_profile)):
     """For stocks with futures and options (India): the move their options price in to the first expiry on or after the results
     day, from the at-the-money straddle. Up to 8 stocks; none without the broker's option prices."""
-    throttle(profile, "results_implied", 20, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
+    throttle(profile, "results_implied", 40, 60, "That's a lot of reads in a minute. Wait a moment and try again.")
     pending: list[str] = []
     got = results_calendar.implied_for(_symbols_arg(symbols, "IN", 8), day[:10] or None, pending=pending)
-    return research_routes.ok({"implied": got, "pending": list(dict.fromkeys(pending))})
+    # `available`: whether option prices can be read at all now (the broker connected); without them the page hides the column and
+    # says so in one line, instead of a dash in every row (LIVE4-002)
+    return research_routes.ok({"implied": got, "pending": list(dict.fromkeys(pending)), "available": bool(kite.ready())})
 
 
 @app.get("/research/results/{region}/{symbol}")
@@ -3292,6 +3302,7 @@ suggester = suggest.Suggester({"IN": _india_suggestions, "US": lambda: suggest.u
 KiteService.names_fn = staticmethod(lambda: _isin["map"])
 Research.local_search = staticmethod(lambda q, region: suggester.search_ranked(q, region, 10))
 Research.nse_twin = staticmethod(lambda code: _quiet(nse_twin_of, code))     # 500325 opens RELIANCE (DD-003)
+Research.kept_facts = staticmethod(lambda r, s: _quiet(stock_page_store.peek, r, s))    # a busy fundamentals source: the stored figures (LIVE4-004)
 
 
 @app.get("/suggest/companies")
@@ -5330,18 +5341,51 @@ def breadth_load(region: str, symbol: str, days: int, max_wait: float | None = N
     return markets.provider(region).history({"token": symbol}, "1d", days)
 
 
+STOCK_OPTIONS = "NFO"                  # the exchange segment NSE's stock options are listed under in the broker's instrument list
+
+
 def results_options(symbol: str, day: str | None) -> dict | None:
     """The first expiry of a stock's options on or after a results day, and the move its at-the-money straddle prices in."""
     if not kite.ready():
         return None
-    expiries = [e for e in options_data.expiries("NSE", symbol) if not day or e >= day]
+    # stock options are listed under the derivatives segment, "NFO" (the instrument list's exchange), never "NSE": asked for "NSE"
+    # every stock had no expiry and the column was blank for every F&O name (LIVE4-002)
+    expiries = [e for e in options_data.expiries(STOCK_OPTIONS, symbol) if not day or e >= day]
     if not expiries:
         return None
-    return results_calendar.straddle_move(options_data.chain("NSE", symbol, expiries[0], around=1))
+    return results_calendar.straddle_move(options_data.chain(STOCK_OPTIONS, symbol, expiries[0], around=1))
+
+
+def results_options_many(symbols: list[str], day: str | None) -> dict[str, dict | None]:
+    """results_options for several stocks in two quote calls (every stock's price, then every at-the-money call and put), not two
+    per stock: the broker answers one quote call a second, so eight stocks read one by one took the call's whole time (LIVE4-002)."""
+    out: dict[str, dict | None] = {s: None for s in symbols}
+    if not kite.ready():
+        return out
+    picks = {}
+    for s in symbols:
+        expiries = [e for e in options_data.expiries(STOCK_OPTIONS, s) if not day or e >= day]
+        c = options_data.contracts(STOCK_OPTIONS, s, expiries[0]) if expiries else None
+        if c and c.strikes:
+            picks[s] = c
+    if not picks:
+        return out
+    spot_keys = {s: options_data.spot_key(STOCK_OPTIONS, s) for s in picks}
+    spots = options_data.quotes([k for k in spot_keys.values() if k])
+    legs = {}
+    for s, c in picks.items():
+        spot = (spots.get(spot_keys[s] or "") or {}).get("ltp")
+        if spot:
+            atm = c.atm(spot)
+            legs[s] = (spot, atm, c.key("CE", atm), c.key("PE", atm), c.expiry)
+    q = options_data.quotes([k for v in legs.values() for k in v[2:4] if k])
+    for s, (spot, atm, ce, pe, expiry) in legs.items():
+        out[s] = results_calendar.straddle_move({"spot": spot, "expiry": expiry, "rows": [{"strike": atm, "ce": q.get(ce or ""), "pe": q.get(pe or "")}]})
+    return out
 
 
 # the results page's reads wait at most 3 s for a broker turn: behind a job's queue they come back "pending" and are asked again
-results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options)
+results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options, options_many=results_options_many)
 
 
 def breadth_index(region: str, symbol: str, days: int) -> list[dict]:
@@ -7085,11 +7129,44 @@ def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
 
 
 PLATFORM_RUN = "platform-check-run"
+PLATFORM_BUILD_RUN = "platform-check-build"
+PLATFORM_BUILD_AFTER = timedelta(minutes=20)      # a new build is checked once it has been up this long (its caches warm, its jobs started)
+
+
+def platform_build_due(now: datetime) -> str | None:
+    """The running build when the kept check result is another build's and this server has been up PLATFORM_BUILD_AFTER: a deploy
+    after the day's check time is checked the same day, not the next afternoon (LIVE4-023: the live build had no check of its own
+    from its deploy at 03:27 IST, Admin showing the old build's). None otherwise, and when the build isn't known (a local run)."""
+    build = build_info.info()["short"]
+    if not build:
+        return None
+    try:
+        started = datetime.fromisoformat(build_info.STARTED_AT)
+        last = json.loads(db.get_setting(PLATFORM_LAST) or "null") or {}
+    except (ValueError, TypeError):
+        return None
+    if now < started + PLATFORM_BUILD_AFTER or last.get("build") == build:
+        return None
+    return build
 
 
 def platform_pass(now: datetime) -> bool | None:
-    """The day's check if it is due (PLATFORM_AT has passed) and hasn't run: a restart after that time still runs it.
+    """The day's check if it is due (PLATFORM_AT has passed) and hasn't run: a restart after that time still runs it. A new build
+    is checked once too, whatever the time (platform_build_due).
     None: another container leads (asked again soon); True: it failed (asked again in an hour); False: done or not due."""
+    build = platform_build_due(now)
+    if build:
+        if not leader.leading():
+            return None
+        run = run_marks.claim(PLATFORM_BUILD_RUN, build)
+        if run is not None:
+            try:
+                daily_platform_check()
+            except Exception as e:
+                print("platform check of the new build failed:", e)
+                db.delete_setting(PLATFORM_BUILD_RUN)
+                return True
+            run.done()
     at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
     if now < at:
         return False
@@ -7124,7 +7201,7 @@ def platform_job():
         at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
         if at <= now:
             at += timedelta(days=1)
-        time.sleep(max(1, min(3600, (at - now).total_seconds())))
+        time.sleep(max(1, min(600, (at - now).total_seconds())))       # ten minutes at most: a new build is checked soon after its wait
 
 
 def platform_issue(out: dict | None) -> "autofix.Check":

@@ -72,7 +72,8 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   await expect(days.first().locator(".k-eyebrow")).toContainText("today · 4 companies");
   expect(await page.evaluate(() => new Date().toISOString().slice(0, 10)), "the page's clock is the world's").toBe(E2E_NOW.slice(0, 10));
   if (!phone) {
-    for (const h of ["Company", "Market value", "Price now", "Day", "Revenue YoY", "Profit YoY", "Past results-day moves", "Options imply"])
+    // LIVE4-010: short headers that fit one line at 1440 (the (i) says "year on year" and "past results-day moves")
+    for (const h of ["Company", "Market value", "Price", "Day", "Revenue", "Profit", "Usual move", "Options imply"])
       await expect(today.getByRole("columnheader").filter({ hasText: h }).first()).toBeVisible();
   }
   await expect(today.getByRole("row")).toHaveCount(5);                      // the header and four companies
@@ -82,8 +83,12 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   await expect(reliance).toContainText(/[+−]\d/);
   await expect(reliance).toContainText("F&O");
   await expect(reliance.getByText(/^±\d+\.\d%$/).first()).toBeVisible({ timeout: 30_000 });      // the usual move, once the prices were read
-    await expect(reliance.getByText(/^[▲▼]\d+\.\d$/).first()).toBeVisible();                   // the latest moves: arrow and figure (the heading says percent)
+  // the latest moves: arrow and figure (the heading says percent); a phone's two-line row keeps only their average (LIVE4-010)
+  if (!phone) await expect(reliance.getByText(/^[▲▼]\d+\.\d$/).first()).toBeVisible();
   await expect(reliance.getByText(/^±\d+\.\d%$/)).toHaveCount(2, { timeout: 30_000 });             // ...and the move the options price in
+  // LIVE4-001: every row's earlier moves and implied move end in a figure or a dash within 20 s, none left on its loading bar
+  await expect(page.getByText("Reading earlier results days")).toHaveCount(0, { timeout: 20_000 });
+  await expect(page.getByText("Reading the option prices")).toHaveCount(0, { timeout: 20_000 });
   // the price column says when it was read, or that it is the last close
   await expect(page.getByTestId("results-prices")).toContainText(/Prices as of \d|last close/);
   await sane(page, errors);

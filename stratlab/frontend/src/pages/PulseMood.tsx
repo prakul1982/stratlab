@@ -1,13 +1,16 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useLiveRefresh } from "../lib/liveRefresh";
-import { fmtDate, pct, safeHref } from "../lib/format";
+import { fmtDate, fmtTime, marketTz, pct, safeHref } from "../lib/format";
 import { newsWhen } from "../lib/researchFormat";
 import { researchApi, type MoodBreadthRow, type NewsItem, type PulseAI, type PulseMood, type Region } from "../lib/research";
-import { crore, moverRows, movedBy, pairable, riskLevel, sectorCount, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
-import { Card, CardHead, DataTable, Delta, EmptyState, Skeleton, type Column } from "../components/kit";
+import { keepMood, keptMood, moodStale } from "../lib/moodCache";
+import { companyRows, crore, moverRows, movedBy, pairable, riskLevel, sectorCount, sessionHeader, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
+import { Card, CardHead, DataTable, Delta, EmptyState, Skeleton, Working, type Column } from "../components/kit";
+import { sparseNotes } from "../components/kit/DataTable";
 
-/* The Market pulse's tables (MOOD-1). Every block that shows figures or records is a table with a header row, numbers
+/* The Market pulse's tables (MOOD-1). On a phone the tables of figures are DataTable's `compact` rows (LIVE4-010/007: Mood was 16,604px
+ * on a phone, a card of labelled figures a row): the name with its day's figures at the right, the rest in one line under it. Every block that shows figures or records is a table with a header row, numbers
  * right-aligned and a ▲/▼ with a sign for a change; on a phone each row is a card (DataTable's stack). The words above them
  * come from the same payload (intel/mood.py), so a line and its table agree. Facts only: no advice, no forecast. */
 
@@ -16,31 +19,46 @@ const chg = (v: number | null | undefined) => (v == null ? "–" : <Delta value=
 
 /** The mood as the server read it, again each minute while the market trades; `pending` until its first read is back. */
 export function usePulseMood(region: Region) {
-  const [mood, setMood] = useState<PulseMood | null>(null);
+  // the last read at once (this session's, else this device's), a fresh one read behind it; the loading bar only when there is none
+  const [mood, setMood] = useState<PulseMood | null>(() => keptMood(region));
   const [error, setError] = useState<string | null>(null);
   const [again, setAgain] = useState(0);
   useEffect(() => {
-    let live = true, tries = 0;
+    let live = true, tries = 0, fresher = 0;
     let next: ReturnType<typeof setTimeout> | undefined;
-    setMood(null); setError(null);
+    const shown = keptMood(region);
+    setMood(shown); setError(null);
     const load = () => researchApi.pulseMood(region).then((d) => {
       if (!live) return;
-      if (d.pending) { if (tries++ < 20) next = setTimeout(load, 3000); else setError("The market's figures are taking longer than usual."); return; }
+      if (d.pending) {
+        if (tries++ < 20) next = setTimeout(load, 3000);
+        else if (!keptMood(region)) setError("The market's figures are taking longer than usual.");
+        return;
+      }
+      keepMood(region, d);
       setMood(d);
-    }).catch((e) => { if (live) setError((e as Error).message || "The market's figures couldn't be read."); });
+      // an old copy (the server's last read from before a restart, or from before the open or close): asked again for the fresh one
+      if (moodStale(d) && fresher++ < 8) next = setTimeout(load, 4000);
+    }).catch((e) => { if (live && !keptMood(region)) setError((e as Error).message || "The market's figures couldn't be read."); });
     load();
     return () => { live = false; if (next) clearTimeout(next); };
   }, [region, again]);
-  useLiveRefresh(!!mood?.is_open, () => { researchApi.pulseMood(region).then((d) => { if (!d.pending) setMood((cur) => (cur ? d : cur)); }).catch(() => undefined); });
-  return { mood, error, retry: () => setAgain((n) => n + 1) };
+  useLiveRefresh(!!mood?.is_open, () => { researchApi.pulseMood(region).then((d) => { if (!d.pending) { keepMood(region, d); setMood((cur) => (cur ? d : cur)); } }).catch(() => undefined); });
+  return { mood, error, retry: () => setAgain((n) => n + 1), updating: moodStale(mood) };
 }
 
 /** The headline and its few lines, each from one of the tables below. */
-export function MoodCard({ m, region }: { m: PulseMood; region: Region }) {
+export function MoodCard({ m, region, updating = false }: { m: PulseMood; region: Region;
+  /** an older read shown while a fresh one is read behind it: its read time says when, with the kit's small bar beside it (LIVE4-024) */
+  updating?: boolean }) {
+  const tz = region === "IN" ? "Asia/Kolkata" : "America/New_York";
+  const readDay = m.read_at ? new Date(m.read_at).toLocaleDateString("en-CA", { timeZone: tz }) : null;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+  const readAt = m.read_at ? `${readDay !== today ? `${fmtDate(readDay!, { weekday: true, year: false })}, ` : ""}${fmtTime(m.read_at, { tz: marketTz(region), zone: true })}` : "";
   return (
     <Card testId="pulse-mood-card">
       <CardHead title="The mood" info="One short headline and a few lines, each worked out from the tables below with one rounding, so a line and its table cannot disagree. Facts about today, not a forecast. The index levels are in the first table."
-        actions={m.read_at ? <span className="k-note">Read {new Date(m.read_at).toLocaleTimeString(region === "IN" ? "en-IN" : "en-US", { hour: "2-digit", minute: "2-digit", timeZone: region === "IN" ? "Asia/Kolkata" : "America/New_York" })}</span> : undefined} />
+        actions={m.read_at ? <span className="k-row k-note" data-testid="pulse-mood-read">Read {readAt}{updating && <Working inline label="Reading the market again" />}</span> : undefined} />   {/* with its zone (LIVE4-007) */}
       {m.headline ? <p className="inv-summary" data-testid="pulse-mood"><b>{m.headline}</b></p> : <p className="k-small k-muted">The tables below are the day's figures; their summary isn't available right now.</p>}
       {m.lines.length > 0 && <ul className="k-list" data-testid="pulse-mood-lines">{m.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
     </Card>
@@ -52,55 +70,57 @@ export function BreadthTable({ b }: { b: NonNullable<PulseMood["breadth"]> }) {
   const cols: Column<MoodBreadthRow>[] = [
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <><b>{r.label}</b><span className="k-sub-line">{r.means}</span></> },
     // live, the 52-week highs and lows are counted at the close: their cell says so rather than standing empty (owner, 5 Nov)
-    { key: "now", header: b.live ? "Today" : day(b.day), numeric: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted">At the close</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
+    // the live count's own quarter-hour in its header, so Mood's count and Breadth's are each labelled with their round (LIVE4-005)
+    { key: "now", header: b.live ? (b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted">At the close</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
     { key: "prev", header: day(b.prev_day) || "Day before", numeric: true, cell: (r) => (r.before == null ? "–" : r.kind === "share" ? `${r.before.toFixed(1)}%` : whole(r.before)) },
     { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
   ];
   return (
     <Card testId="pulse-breadth">
       <CardHead title={`How many stocks took part · ${b.group}`} info={`The stocks of ${b.group} counted ${when}${b.live ? " (a count every quarter hour from live prices; the 52-week highs and lows come with the close)" : ""}. Every stock counts once, whatever its size.`} />
-      <DataTable stack label={`Breadth of ${b.group}`} columns={cols} rows={b.rows} rowKey={(r) => r.key} />
-      {b.ratio != null && <p className="k-note">{whole(b.adv)} rose to {whole(b.dec)} fell: {b.ratio.toFixed(2)} to 1, of {whole(b.stocks)} stocks.</p>}
+      <DataTable stack compact label={`Breadth of ${b.group}`} columns={cols} rows={b.rows} rowKey={(r) => r.key} />
+      {b.ratio != null && <p className="k-note">{whole(b.adv)} rose to {whole(b.dec)} fell: {b.ratio.toFixed(2)} to 1, of {whole(b.stocks)} stocks{b.live && b.at ? `, in the ${b.at} IST count` : ""}.</p>}
     </Card>
   );
 }
 
-export function SectorsTable({ s }: { s: NonNullable<PulseMood["sectors"]> }) {
+export function SectorsTable({ s, closedDay }: { s: NonNullable<PulseMood["sectors"]>; closedDay?: string | null }) {
   type Row = (typeof s.rows)[number];
   const cols: Column<Row>[] = [
     { key: "n", header: "Sector index", rowHeader: true, cell: (r) => r.label },
-    { key: "d", header: "Today", numeric: true, cell: (r) => chg(r.change_pct) },
+    { key: "d", header: sessionHeader(closedDay, day), numeric: true, brief: true, cell: (r) => chg(r.change_pct) },
     { key: "w", header: "1 week", numeric: true, cell: (r) => chg(r.w1) },
     { key: "m", header: "1 month", numeric: true, cell: (r) => chg(r.m1) },
-    { key: "by", header: "Moved by", wrap: true, cell: (r) => (r.movers.length ? movedBy(r.movers, (v) => pct(v, 2)) : "–") },
+    { key: "by", header: "Moved by", wrap: true, phone: false, cell: (r) => (r.movers.length ? movedBy(r.movers, (v) => pct(v, 2)) : "–") },
   ];
   return (
     <Card testId="pulse-sectors">
       <CardHead title="Sectors" info="Each sector index's move today, over the last 5 and 21 sessions (against today's level), and the two of its largest companies that moved most, from their market value and today's move." />
       <p className="k-small" data-testid="pulse-sector-count">{sectorCount(s)}.</p>
-      <DataTable csv="sector indices" stack label="Sector indices, best first" columns={cols} rows={s.rows} rowKey={(r) => r.name} />
+      <DataTable csv="sector indices" stack compact label="Sector indices, best first" columns={cols} rows={s.rows} rowKey={(r) => r.name} />
     </Card>
   );
 }
 
-export function MoversTable({ m }: { m: NonNullable<PulseMood["movers"]>[number] }) {
+export function MoversTable({ m, closedDay }: { m: NonNullable<PulseMood["movers"]>[number]; closedDay?: string | null }) {
   const rows = moverRows(m);
   const cols: Column<(typeof rows)[number]>[] = [
     { key: "n", header: "Company", rowHeader: true, cell: (r) => r.name ?? r.symbol },
-    { key: "c", header: "Move today", numeric: true, cell: (r) => chg(r.change_pct) },
+    { key: "c", header: closedDay ? `Move on ${day(closedDay)}` : "Move today", numeric: true, brief: true, cell: (r) => chg(r.change_pct) },
     { key: "p", header: "Points", numeric: true, cell: (r) => <Delta value={r.points}>{signedPoints(r.points)}</Delta> },
   ];
   return (
     <Card testId="pulse-movers" label={`What moved the ${m.index}`}>
       <CardHead title={`What moved the ${m.index}`} info="The companies adding the most points to the index and taking the most from it today. Points are estimated from each company's market value against the index's total, so they differ a little from the exchange's own free-float figures." />
-      <DataTable stack label={`Companies that moved the ${m.index} most`} columns={cols} rows={rows} rowKey={(r) => r.symbol}
+      <DataTable stack compact label={`Companies that moved the ${m.index} most`} columns={cols} rows={rows} rowKey={(r) => r.symbol}
         foot={m.est_total != null && m.actual != null ? { n: "All its companies, estimated", c: "", p: <span>{signedPoints(m.est_total)}</span> } : undefined} />
       {m.actual != null && <p className="k-note" data-testid="pulse-movers-actual">The {m.index} itself moved {signedPoints(m.actual)} points.</p>}
     </Card>
   );
 }
 
-export function FlowsTable({ f }: { f: NonNullable<PulseMood["flows"]> }) {
+/** `source`: the AI read's line on where its FII/DII figures come from, under the table it is about (LIVE4-006: it sat under the headlines read). */
+export function FlowsTable({ f, source }: { f: NonNullable<PulseMood["flows"]>; source?: string | null }) {
   type Row = (typeof f.rows)[number];
   const net = (v: number) => <Delta value={v}>{crore(v)}</Delta>;
   const cols: Column<Row>[] = [
@@ -111,8 +131,9 @@ export function FlowsTable({ f }: { f: NonNullable<PulseMood["flows"]> }) {
   return (
     <Card testId="pulse-flows">
       <CardHead title="FII and DII, cash market" info={f.note} />
-      <DataTable stack label="FII and DII net buying, last five days" columns={cols} rows={[...f.rows].reverse()} rowKey={(r) => r.day}
+      <DataTable stack compact label="FII and DII net buying, last five days" columns={cols} rows={[...f.rows].reverse()} rowKey={(r) => r.day}
         foot={{ d: `${f.rows.length}-day total`, f: net(f.fii_total), i: net(f.dii_total) }} />
+      {source && <p className="k-note" data-testid="pulse-flows-source">{source}</p>}
     </Card>
   );
 }
@@ -120,13 +141,13 @@ export function FlowsTable({ f }: { f: NonNullable<PulseMood["flows"]> }) {
 export function RiskTable({ r }: { r: NonNullable<PulseMood["risk"]> }) {
   const cols: Column<(typeof r.rows)[number]>[] = [
     { key: "n", header: "Measure", rowHeader: true, cell: (x) => x.label },
-    { key: "p", header: "Level", numeric: true, cell: (x) => riskLevel(x) },
-    { key: "c", header: "Change", numeric: true, cell: (x) => chg(x.change_pct) },
+    { key: "p", header: "Level", numeric: true, brief: true, cell: (x) => riskLevel(x) },
+    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => chg(x.change_pct) },
   ];
   return (
     <Card testId="pulse-risk">
       <CardHead title="Volatility, currencies and rates" info="The volatility index, the rupee, crude oil, gold, the US 10-year yield and the dollar index, with the move since the previous close." />
-      <DataTable stack label="Volatility, currencies and rates" columns={cols} rows={r.rows} rowKey={(x) => x.symbol} />
+      <DataTable stack compact label="Volatility, currencies and rates" columns={cols} rows={r.rows} rowKey={(x) => x.symbol} />
     </Card>
   );
 }
@@ -135,13 +156,13 @@ export function GlobalTable({ g, region }: { g: NonNullable<PulseMood["global"]>
   const cols: Column<(typeof g.rows)[number]>[] = [
     { key: "n", header: "Market", rowHeader: true, cell: (x) => x.label },
     { key: "a", header: "Area", cell: (x) => x.tag },
-    { key: "c", header: "Move", numeric: true, cell: (x) => chg(x.change_pct) },
+    { key: "c", header: "Move", numeric: true, brief: true, cell: (x) => chg(x.change_pct) },
     { key: "s", header: "Session", cell: (x) => (x.same_day === false && x.day ? `on ${day(x.day)}` : "today") },
   ];
   return (
     <Card testId="pulse-global">
       <CardHead title={region === "IN" ? "Other markets" : "Markets overseas"} info={region === "IN" ? "Asian and European markets and US futures: their latest session's move." : "The latest session of the Asian and European markets, and India's."} />
-      <DataTable stack label="Other markets" columns={cols} rows={g.rows} rowKey={(x) => x.symbol} />
+      <DataTable stack compact label="Other markets" columns={cols} rows={g.rows} rowKey={(x) => x.symbol} />
     </Card>
   );
 }
@@ -155,13 +176,13 @@ export function CalendarTable({ c }: { c: NonNullable<PulseMood["calendar"]> }) 
   ];
   const cols: Column<Row>[] = [
     { key: "w", header: "When", rowHeader: true, cell: (r) => r.when },
-    { key: "k", header: "Type", cell: (r) => r.kind },
+    { key: "k", header: "Type", brief: true, cell: (r) => r.kind },
     { key: "d", header: "Details", wrap: true, cell: (r) => r.what },
   ];
   return (
     <Card testId="pulse-calendar">
       <CardHead title="Coming up" info="Results due from the largest companies in the next seven days, IPOs open now, and the economic events on the app's calendar." />
-      <DataTable stack label="Results, IPOs and events this week" columns={cols} rows={rows} rowKey={(r) => r.key} />
+      <DataTable stack compact label="Results, IPOs and events this week" columns={cols} rows={rows} rowKey={(r) => r.key} />
     </Card>
   );
 }
@@ -179,15 +200,15 @@ export function IndexTable({ indices, missing, dayText, whenOf }: { indices: { n
   const level = (i: Row) => i.price.toLocaleString(i.name.includes("NIFTY") || i.name === "SENSEX" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cols: Column<Row>[] = [
     { key: "n", header: "Index", rowHeader: true, cell: (i) => i.name },
-    { key: "l", header: "Level", numeric: true, cell: level },
-    { key: "c", header: "Change", numeric: true, cell: (i) => (i.change_pct == null ? "–" : <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta>) },
+    { key: "l", header: "Level", numeric: true, brief: true, cell: level },
+    { key: "c", header: "Change", numeric: true, brief: true, cell: (i) => (i.change_pct == null ? "–" : <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta>) },
     { key: "h", header: "Against 52-week high", numeric: true, cell: (i) => (i.from_high_pct == null ? "–" : i.from_high_pct > -0.5 ? "near its high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below`) },
     { key: "w", header: "As of", cell: (i) => <span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{whenOf(i)}</span> },
   ];
   void dayText;
   return (
     <>
-      <DataTable stack label="Index levels" columns={cols} rows={indices} rowKey={(i) => i.name} />
+      <DataTable stack compact label="Index levels" columns={cols} rows={indices} rowKey={(i) => i.name} />
       {!!missing?.length && <p className="k-small k-muted" data-testid="index-missing">{missing.join(", ")} couldn't load.</p>}
     </>
   );
@@ -204,7 +225,7 @@ export function HotTable({ ai, region }: { ai: PulseAI; region: Region }) {
   return (
     <Card testId="pulse-hot">
       <CardHead title="Companies in today's headlines" />
-      <DataTable stack label="Companies named in today's headlines" columns={cols} rows={ai.hot} rowKey={(h) => h.ticker + h.name} />
+      <DataTable stack label="Companies named in today's headlines" columns={cols} rows={companyRows(ai.hot)} rowKey={(h) => h.ticker + h.name} />
     </Card>
   );
 }
@@ -244,17 +265,24 @@ export function ThemesTable({ ai, region }: { ai: PulseAI; region: Region }) {
 export function HeadlinesTable({ items, ai }: { items: NewsItem[]; ai: PulseAI | null }) {
   const sorted = [...items].sort((a, b) => (b.at ? Date.parse(b.at) : -Infinity) - (a.at ? Date.parse(a.at) : -Infinity));
   const story = ai?.story ?? null;
+  // the main story marks a column only when most headlines carry it; else it is a line under the ones that do (LIVE4-006: "–" in 12 of 14 rows)
+  const marked = story ? sorted.filter((n) => storyOf(story, n.headline)).length : 0;
+  const under = !!story && sparseNotes(marked, sorted.length);
   const cols: Column<NewsItem>[] = [
-    { key: "h", header: "Headline", rowHeader: true, wrap: true, cell: (n) => <a className="link" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">{n.headline} ↗</a> },
-    ...(story ? [{ key: "s", header: "Main story", cell: (n: NewsItem) => storyOf(story, n.headline) ?? "–" } as Column<NewsItem>] : []),
+    { key: "h", header: "Headline", rowHeader: true, wrap: true, cell: (n) => {
+      const mark = under ? storyOf(story, n.headline) : null;
+      return <><a className="link" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">{n.headline} ↗</a>{mark && <span className="k-sub-line" data-testid="pulse-story-mark">Main story: {mark}</span>}</>;
+    } },
+    ...(story && !under ? [{ key: "s", header: "Main story", cell: (n: NewsItem) => storyOf(story, n.headline) ?? "–" } as Column<NewsItem>] : []),
     { key: "src", header: "Source", cell: (n) => n.source ?? "–" },
     { key: "w", header: "When", cell: (n) => newsWhen(n.at) ?? "–" },
   ];
-  if (!items.length) return <EmptyState title="No headlines yet today">They are read again every few minutes.</EmptyState>;
+  // a read written from the last session's headlines stands above an empty list: the list says it has nothing newer (LIVE4-007)
+  if (!items.length) return <EmptyState title={ai ? "No newer headlines yet" : "No headlines yet today"}>{ai ? "The read above was written from the last session's headlines. New ones are read every few minutes." : "They are read again every few minutes."}</EmptyState>;
   return (
     <>
-      <DataTable stack label="Today's headlines" columns={cols} rows={sorted} rowKey={(n, i) => `${i}-${n.headline}`} />
-      {story && <p className="k-note" data-testid="pulse-story">The main story in today's headlines: {story.label}, {story.n} of {story.of} (marked above).</p>}
+      <DataTable stack compact label="Today's headlines" columns={cols} rows={sorted} rowKey={(n, i) => `${i}-${n.headline}`} />
+      {story && <p className="k-note" data-testid="pulse-story">The main story in today's headlines: {story.label}, {story.n} of {story.of} (marked above{under ? " under each headline it counts" : ""}).</p>}
     </>
   );
 }

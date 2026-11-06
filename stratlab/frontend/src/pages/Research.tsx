@@ -34,6 +34,7 @@ import { NamedHoldersPanel } from "../components/NamedHolders";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
+import { companyRows } from "../lib/pulseMood";
 import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
@@ -340,6 +341,7 @@ function CompanyView() {
           <div className="k-stack inv-head-cap">
             {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
             {c.market_cap == null && c.cap_note && <p className="k-small k-muted" data-cap-check>{c.cap_note}</p>}
+            {c.figures_kept && <p className="k-small k-muted" data-figures-kept>{typeof c.figures_kept === "string" ? `Figures as of ${fmtDate(c.figures_kept.slice(0, 10))}` : "Last stored figures"}; the latest couldn't be read just now.</p>}
           </div>
           <div className="k-stack inv-head-price">
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} since={c.range52.since} tradedFrom={c.range52.traded_from} currency={ccy} compact />
@@ -393,7 +395,7 @@ function CompanyView() {
       {c.metrics.length > 0 && (
         <Card id="co-numbers">
           <CardHead title="Key numbers" info={HELP.researchMetrics} actions={<Link className="btn quiet sm" to={deepTo}>10 years in the deep dive →</Link>} />
-          <MetricsGrid groups={c.metrics} currency={ccy} industry={c.industry} />
+          <MetricsGrid groups={c.metrics} currency={ccy} industry={c.industry ?? (c.bank ? "bank" : null)} />   {/* India's pages have no industry name: a lender is still a bank's spans (LIVE4-013) */}
         </Card>
       )}
 
@@ -492,7 +494,7 @@ export function PulsePage() {
   const [region, setRegion] = useRegion();
   const levels = usePulse(region);
   const data = levels.data;
-  const { mood, error: moodErr, retry: moodRetry } = usePulseMood(region);
+  const { mood, error: moodErr, retry: moodRetry, updating: moodUpdating } = usePulseMood(region);
   const [ai, setAi] = useState<PulseAI | null>(null);
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -518,13 +520,13 @@ export function PulsePage() {
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><PulseLevels p={levels} /></Card>
       {/* the mood and every table under it come from one read of the figures (mood.py): a line and its table cannot disagree (MOOD-1) */}
-      {mood ? <MoodCard m={mood} region={region} /> : moodErr
+      {mood ? <MoodCard m={mood} region={region} updating={moodUpdating} /> : moodErr
         ? <Card><ErrorState title="The market's figures couldn't be read" action={{ label: "Try again", onClick: moodRetry }}>{moodErr}</ErrorState></Card> : <MoodSkeleton />}
       {mood?.breadth && <BreadthTable b={mood.breadth} />}
-      {mood?.sectors && <SectorsTable s={mood.sectors} />}
-      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} />)}
+      {mood?.sectors && <SectorsTable s={mood.sectors} closedDay={pulseClosedDay(data?.indices)} />}
+      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} closedDay={pulseClosedDay(data?.indices)} />)}
       {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
-        left={mood.flows ? <FlowsTable f={mood.flows} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
+        left={mood.flows ? <FlowsTable f={mood.flows} source={ai?.flows_source} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
       {mood?.global && <GlobalTable g={mood.global} region={region} />}
       {mood?.calendar && <CalendarTable c={mood.calendar} />}
       <Card>
@@ -540,11 +542,12 @@ export function PulsePage() {
           : (
             <>
               {ai.tone && <p className="inv-summary" data-testid="pulse-tone">{ai.tone}</p>}
-              {ai.flows_source && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
+              {/* the FII/DII source line goes under the FII table (LIVE4-006); without that table it stays here */}
+              {ai.flows_source && !mood?.flows && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
             </>
           )}
       </Card>
-      {ai && ai.hot.length > 0 && <HotTable ai={ai} region={region} />}
+      {ai && companyRows(ai.hot).length > 0 && <HotTable ai={ai} region={region} />}
       {ai && ai.flows.length > 0 && <TopicsTable ai={ai} />}
       {ai && ai.themes.length > 0 && <ThemesTable ai={ai} region={region} />}
       {data && <Card><CardHead title="Headlines" /><HeadlinesTable items={data.headlines} ai={ai} /></Card>}

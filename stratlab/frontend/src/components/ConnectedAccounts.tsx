@@ -129,7 +129,7 @@ function InboxCard({ c, set, load }: P) {
 
   return (
     <Card id="inbox" label="Statement inbox">
-      <CardHead title="Statement inbox" info="Your monthly statements from NSDL, CDSL, CAMS, KFintech and MF Central can reach StratLab by themselves. Set up one email filter, once, and your holdings and mutual funds update every month. Each statement is read and then thrown away: only the holdings and transactions are kept."
+      <CardHead title="Statement inbox" info="Your statements from NSDL, CDSL, CAMS, KFintech and MF Central can reach StratLab by themselves (the depositories send one each month you trade, every six months otherwise). Set up one email filter, once, and your holdings and mutual funds update with each one. Each statement is read and then thrown away: only the holdings and transactions are kept."
         actions={<Badge tone={i.address ? "ok" : "plain"}>{!i.ready ? "Not set up yet" : i.address ? "On" : "Off"}</Badge>} />
       {!i.ready && <p className="k-small k-muted">The inbox isn't set up yet. You can still upload a statement below.</p>}
       {i.ready && !i.address && (
@@ -241,7 +241,8 @@ function BrokersCard({ c, set }: P) {
     try { set(await api<Conn>(`/connect/${b.path}`, { method: "DELETE" })); setAsking(null); notify(`${b.name} is disconnected and its stored login is deleted.`); }
     catch (e) { fail(e); } finally { setBusy(null); }
   };
-  const closed = rows.filter((b) => !b.available);
+  // only the rows whose badge says "Not open yet": a row not set up on the site says so itself (LIVE4-015: the note showed with no such row)
+  const closed = rows.filter((b) => b.configured !== false && !b.available);
   const columns: Column<BrokerRow>[] = [
     { key: "name", header: "Broker", rowHeader: true, cell: (b) => <b>{b.name}</b> },
     { key: "status", header: "Status", wrap: true, cell: (b) => {
@@ -268,7 +269,7 @@ function BrokersCard({ c, set }: P) {
         Dhan says when), so after that you log in once more. Refresh reads the holdings again while the login lasts.</>} />
       <DataTable label="Broker logins" columns={columns} rows={rows} rowKey={(b) => b.key} rowAttrs={(b) => ({ id: b.id, "data-testid": `broker-${b.key}` })} />
       {busy && <Working small label={`${busy.what}…`} />}
-      {closed.length > 0 && <p className="k-small k-muted">{closed.length === rows.length ? "None of these is open for your account yet." : "A broker marked not open isn't available for your account yet."} Upload your broker's holdings file in My Holdings meanwhile.</p>}
+      {closed.length > 0 && <p className="k-small k-muted">{closed.length === rows.length ? "None of these is open for your account yet." : `A broker marked "Not open yet" isn't available for your account yet.`} Upload your broker's holdings file in My Holdings meanwhile.</p>}
       {asking && <ConfirmDialog title={`Disconnect ${asking.name}?`} confirmLabel="Disconnect" busy={!!busy} onClose={() => setAsking(null)} onConfirm={() => void drop(asking)}>
         Its stored login is deleted. Holdings already read stay in My Holdings. You can connect again any time.</ConfirmDialog>}
     </Card>

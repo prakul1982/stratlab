@@ -190,6 +190,33 @@ def test_a_mixed_day_names_who_went_which_way():
     assert grounding.mood_line(mixed) == mood.headline_of(mixed, None, None)       # one wording, wherever it is asked for
 
 
+def test_the_mood_word_agrees_with_the_breadth_and_sectors_it_shows():
+    """LIVE4-005: all three indices up while 388 of 500 stocks fell and 9 of 16 sector indices fell read "Mildly positive"."""
+    sec = {"up": 7, "down": 9, "unchanged": 0, "of": 16, "rows": []}
+    weak = {"adv": 111, "dec": 388, "unch": 1, "stocks": 500, "group": "NIFTY 500"}
+    assert mood.headline_of(IN, sec, None, weak) == "Mixed: all three indices up on the day, but 388 of 500 NIFTY 500 stocks fell and 9 of 16 sector indices fell."
+    # breadth alone, or sectors alone, against the indices is enough to say "Mixed"
+    assert mood.headline_of(IN, None, None, weak) == "Mixed: all three indices up on the day, but 388 of 500 NIFTY 500 stocks fell."
+    assert mood.headline_of(IN, sec, None, None) == "Mixed: all three indices up on the day, but 9 of 16 sector indices fell."
+    # a down day with most stocks rising, the same way round
+    down = [{**i, "change_pct": -abs(i["change_pct"])} for i in IN]
+    assert mood.headline_of(down, None, None, {**weak, "adv": 400, "dec": 99}).startswith("Mixed: all three indices down on the day, but 400 of 500")
+    # breadth that agrees keeps the plain word, and the counts it states pass the page's own check
+    strong = {**weak, "adv": 388, "dec": 111}
+    assert mood.headline_of(IN, None, None, strong).startswith("Mildly positive: all three indices up")
+    p = full_payload()
+    p["headline"] = mood.headline_of(IN, sec | {"rows": p["sectors"]["rows"], "up": p["sectors"]["up"], "down": p["sectors"]["down"], "of": p["sectors"]["of"]}, None, weak)
+    assert mood.verify(p) == []
+    assert grounding.mood_line(IN, None, None, weak) == mood.headline_of(IN, None, None, weak)
+
+
+def test_the_live_breadth_carries_its_own_quarter_hour():
+    """LIVE4-005: the live count says which quarter-hour it is, so Mood and Breadth side by side are not two unlabelled counts."""
+    b = mood.breadth_block(TODAY, {"adv": 111, "dec": 388, "unch": 1, "pct20": 40.0, "pct50": 40.8, "pct200": 42.8, "at": "12:15"}, "NIFTY 500", "2026-10-29")
+    assert b["live"] is True and b["at"] == "12:15"
+    assert mood.breadth_block(TODAY, None, "NIFTY 500", "2026-10-29")["at"] is None
+
+
 # ---------- an AI line stands on a headline or a figure, and agrees with the sector table ----------
 SECTORS = {"up": 15, "down": 1, "unchanged": 0, "of": 16,
            "rows": [{"name": "NIFTY BANK", "label": "Nifty Bank", "change_pct": 0.54}, {"name": "NIFTY FIN SERVICE", "label": "Nifty Financial Services", "change_pct": 0.31},
@@ -369,6 +396,7 @@ def test_a_copy_from_before_the_close_is_not_served_as_live_after_it(monkeypatch
     # close (owner's live check, 5 Nov); a kept copy from the other side of the open or the close waits for the fresh read
     from app.intel import company
     m = mood.Mood(object())
+    m._seeded.add("IN")                  # this server's own reads only, not a copy another test kept in the database (LIVE4-024)
     builds = []
     monkeypatch.setattr(m, "build", lambda region: builds.append(region) or {"is_open": company.market_open(region), "n": len(builds)})
     monkeypatch.setattr(company, "market_open", lambda region, now=None: True)
@@ -379,3 +407,23 @@ def test_a_copy_from_before_the_close_is_not_served_as_live_after_it(monkeypatch
     assert after["is_open"] is False and builds == ["IN", "IN"]
     again, _ = m.get("IN", 5.0)                                    # and that fresh copy is kept as usual
     assert again["n"] == 2 and len(builds) == 2
+
+
+def test_us_names_read_as_names_and_one_point_is_a_point():
+    """LIVE4-007: "ELI LILLY &", "COSTCO WHOLESALE" and "added about 1 points" on the US Mood."""
+    assert mood.short_name("ELI LILLY & CO", us=True) == "Eli Lilly"
+    assert mood.short_name("JPMORGAN CHASE & CO", us=True) == "JPMorgan Chase"
+    assert mood.short_name("COSTCO WHOLESALE CORP /NEW", us=True) == "Costco Wholesale"
+    assert mood.short_name("ITC LTD") == "ITC"                                   # India's names keep their own case
+    assert mood.short_name("Reliance Industries Limited") == "Reliance Industries"
+    assert mood.short_name("Procter & Gamble Company") == "Procter & Gamble"
+    assert mood.points(1) == "1 point" and mood.points(36) == "36 points" and mood.points(1.2) == "1 point"
+    p = {"movers": [{"index": "S&P 500", "adding": [{"name": "Costco Wholesale", "points": 1.0}], "taking": [{"name": "NVIDIA", "points": -1.0}]}]}
+    assert mood.lines_of(p) == ["Costco Wholesale added about 1 point to the S&P 500 and NVIDIA took off about 1 point."]
+
+
+def test_after_the_close_the_compare_line_is_about_the_last_session():
+    """LIVE4-007: "Today's move in the S&P 500 is 5.2 times…" on a page about the last close."""
+    c = mood.compare_today("S&P 500", -4.36, {"avg_abs": 0.84, "days": 20})
+    assert mood.lines_of({"compare": c, "is_open": True})[0].startswith("Today's move in the S&P 500 is ")
+    assert mood.lines_of({"compare": c, "is_open": False})[0].startswith("The last session's move in the S&P 500 was 5.2 times its 20-day average daily move")
