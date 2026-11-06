@@ -94,3 +94,37 @@ test("R15 #15: the deep dive has no Holders and deals card", async ({ page }) =>
   await expect(page.getByRole("heading", { name: "Holders and deals" })).toHaveCount(0);
   await sane(page, errors);
 });
+
+test("R15 #16, #17: Market today's mood: the headlines read sits under the mood; FII/DII and Volatility are coloured text, one height", async ({ page }, info) => {
+  // five days of flows (the fake world has one), so the two tables pair up side by side as on the live site
+  await page.route((u) => u.href.startsWith(API) && u.pathname === "/research/pulse/mood", async (r) => {
+    const res = await r.fetch();
+    const d = await res.json();
+    if (d.flows?.rows?.length) {
+      const one = d.flows.rows[0];
+      d.flows.rows = ["2026-10-22", "2026-10-23", "2026-10-26", "2026-10-27", one.day].map((day, i) => ({ ...one, day, fii: one.fii + i * 311, dii: one.dii - i * 207 }));
+    }
+    await r.fulfill({ response: res, json: d });
+  });
+  const errors = await open(page, "/research/pulse", "FII and DII, cash market");
+  // #17: "What the headlines say" right after the mood card, before the tables
+  const order = await page.locator("main h2").allInnerTexts();
+  const said = order.findIndex((t) => t.startsWith("What the headlines say"));
+  const flows = order.findIndex((t) => t.startsWith("FII and DII"));
+  expect(said, order.join(" | ")).toBeGreaterThan(-1);
+  expect(said).toBeLessThan(flows);
+  expect(said).toBeLessThan(order.findIndex((t) => t.startsWith("Volatility")));
+  // #16: no pills, coloured figures, a bold total, and the two cards one height side by side
+  for (const id of ["pulse-flows", "pulse-risk"]) {
+    await expect(page.getByTestId(id).locator(".k-delta")).toHaveCount(0);
+    await expect(page.getByTestId(id).locator("td .k-up, td .k-down").first()).toBeVisible();
+  }
+  const total = page.getByTestId("pulse-flows").locator("tfoot td").first();
+  expect(Number(await total.evaluate((el) => getComputedStyle(el).fontWeight))).toBeGreaterThanOrEqual(600);
+  if (info.project.name === "desktop") {
+    const [a, b] = [await page.getByTestId("pulse-flows").boundingBox(), await page.getByTestId("pulse-risk").boundingBox()];
+    expect(Math.abs(a!.y - b!.y)).toBeLessThan(2);
+    expect(Math.abs(a!.height - b!.height)).toBeLessThan(2);
+  }
+  await sane(page, errors);
+});

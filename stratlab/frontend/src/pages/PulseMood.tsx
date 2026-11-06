@@ -6,7 +6,7 @@ import { newsWhen } from "../lib/researchFormat";
 import { researchApi, type MoodBreadthRow, type NewsItem, type PulseAI, type PulseMood, type Region } from "../lib/research";
 import { keepMood, keptMood, moodStale } from "../lib/moodCache";
 import { companyRows, crore, moverRows, movedBy, pairable, riskLevel, sectorCount, sessionHeader, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
-import { Card, CardHead, DataTable, Delta, EmptyState, Skeleton, Working, type Column } from "../components/kit";
+import { Card, CardHead, DataTable, Delta, EmptyState, Signed, Skeleton, Working, type Column } from "../components/kit";
 import { sparseNotes } from "../components/kit/DataTable";
 
 /* The Market pulse's tables (MOOD-1). On a phone the tables of figures are DataTable's `compact` rows (LIVE4-010/007: Mood was 16,604px
@@ -126,7 +126,8 @@ export function MoversTable({ m, closedDay }: { m: NonNullable<PulseMood["movers
 /** `source`: the AI read's line on where its FII/DII figures come from, under the table it is about (LIVE4-006: it sat under the headlines read). */
 export function FlowsTable({ f, source }: { f: NonNullable<PulseMood["flows"]>; source?: string | null }) {
   type Row = (typeof f.rows)[number];
-  const net = (v: number) => <Delta value={v}>{crore(v)}</Delta>;
+  // R15 #16 (owner, 7 Nov: "fix ui"): coloured figures as in the other tables, not a pill each
+  const net = (v: number) => <Signed value={v}>{crore(v)}</Signed>;
   const cols: Column<Row>[] = [
     { key: "d", header: "Day", rowHeader: true, cell: (r) => day(r.day) },
     { key: "f", header: "FII net", numeric: true, cell: (r) => net(r.fii) },
@@ -146,7 +147,7 @@ export function RiskTable({ r }: { r: NonNullable<PulseMood["risk"]> }) {
   const cols: Column<(typeof r.rows)[number]>[] = [
     { key: "n", header: "Measure", rowHeader: true, cell: (x) => x.label },
     { key: "p", header: "Level", numeric: true, brief: true, cell: (x) => riskLevel(x) },
-    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => chg(x.change_pct) },
+    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => <Signed value={x.change_pct} fmt={(v) => pct(v, 2)} /> },
   ];
   return (
     <Card testId="pulse-risk">
@@ -193,7 +194,8 @@ export function CalendarTable({ c }: { c: NonNullable<PulseMood["calendar"]> }) 
 
 /** Two tables side by side only when their rows are as many; otherwise one above the other. */
 export function Pair({ left, right, nl, nr }: { left: ReactNode; right: ReactNode; nl: number; nr: number }) {
-  if (pairable(nl, nr)) return <div className="k-cols">{left}{right}</div>;
+  // the two cards side by side are one height (R15 #16: one ended 50px above the other)
+  if (pairable(nl, nr)) return <div className="k-cols k-cols-even">{left}{right}</div>;
   return <>{left}{right}</>;
 }
 

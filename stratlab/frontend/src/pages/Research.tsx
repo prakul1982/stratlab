@@ -522,23 +522,17 @@ export function PulsePage() {
       {/* the mood and every table under it come from one read of the figures (mood.py): a line and its table cannot disagree (MOOD-1) */}
       {mood ? <MoodCard m={mood} region={region} updating={moodUpdating} /> : moodErr
         ? <Card><ErrorState title="The market's figures couldn't be read" action={{ label: "Try again", onClick: moodRetry }}>{moodErr}</ErrorState></Card> : <MoodSkeleton />}
-      {mood?.breadth && <BreadthTable b={mood.breadth} open={mood.is_open !== false} />}
-      {mood?.sectors && <SectorsTable s={mood.sectors} closedDay={pulseClosedDay(data?.indices)} />}
-      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} closedDay={pulseClosedDay(data?.indices)} />)}
-      {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
-        left={mood.flows ? <FlowsTable f={mood.flows} source={ai?.flows_source} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
-      {mood?.global && <GlobalTable g={mood.global} region={region} />}
-      {mood?.calendar && <CalendarTable c={mood.calendar} />}
+      {/* R15 #17 (owner, 7 Nov): what the headlines say sits with the mood, at the top, not under every table */}
       <Card>
         <CardHead title="What the headlines say" info={HELP.researchPulse}
           actions={ai && !aiErr ? <><span className="k-note">Written {writtenAt(ai.generated_at, marketTz(region))}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
         {aiErr ? (
           <div className="k-row ai-read-off" role="status">
-            <span className="k-small k-muted">No AI read of the headlines right now{aiReason(aiErr)} The tables above don't depend on it.</span>
+            <span className="k-small k-muted">No AI read of the headlines right now{aiReason(aiErr)} The tables below don't depend on it.</span>
             {!aiLimited(aiErr) && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Asking…" : "Ask again"}</button>}
           </div>
         ) : !ai ? <Skeleton label="Reading the headlines" lines={2} />
-          : aiNothing ? <p className="k-small k-muted" data-testid="pulse-ai-none">Nothing in today's headlines held up against the figures above, so there is no AI summary.</p>
+          : aiNothing ? <p className="k-small k-muted" data-testid="pulse-ai-none">Nothing in today's headlines held up against the market's figures, so there is no AI summary.</p>
           : (
             <>
               {ai.tone && <p className="inv-summary" data-testid="pulse-tone">{ai.tone}</p>}
@@ -547,6 +541,13 @@ export function PulsePage() {
             </>
           )}
       </Card>
+      {mood?.breadth && <BreadthTable b={mood.breadth} open={mood.is_open !== false} />}
+      {mood?.sectors && <SectorsTable s={mood.sectors} closedDay={pulseClosedDay(data?.indices)} />}
+      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} closedDay={pulseClosedDay(data?.indices)} />)}
+      {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
+        left={mood.flows ? <FlowsTable f={mood.flows} source={ai?.flows_source} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
+      {mood?.global && <GlobalTable g={mood.global} region={region} />}
+      {mood?.calendar && <CalendarTable c={mood.calendar} />}
       {ai && companyRows(ai.hot).length > 0 && <HotTable ai={ai} region={region} />}
       {ai && ai.flows.length > 0 && <TopicsTable ai={ai} />}
       {ai && ai.themes.length > 0 && <ThemesTable ai={ai} region={region} />}
