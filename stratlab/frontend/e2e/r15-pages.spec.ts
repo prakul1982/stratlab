@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { open, sane } from "./pages-kit";
+import { HOLDINGS_FILES, MF, open, sane } from "./pages-kit";
 
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 
@@ -162,5 +162,66 @@ test("R15 #13: Find a company's search spans its card, the chips under it", asyn
   const card = page.locator("section.k-card").filter({ has: page.getByRole("heading", { name: "Find a company" }) });
   const [c, box] = [await card.boundingBox(), await card.getByRole("combobox").or(card.locator("input")).first().boundingBox()];
   expect(box!.width).toBeGreaterThan(c!.width * 0.85);
+  await sane(page, errors);
+});
+
+test("R15 #4: Holdings' import is one row, the upload and a chip a connected broker; a chip reads it now with the loading bar; Add or Start again once a file is picked", async ({ page }, info) => {
+  // two brokers connected (the fake world's owner has none): the page's own reply with them put in
+  await page.route((u) => u.href.startsWith(API) && u.pathname === "/holdings", async (r) => {
+    if (r.request().method() !== "GET") return r.fallback();
+    const res = await r.fetch();
+    const d = await res.json();
+    d.zerodha = { live: true, count: 13, read_at: "2026-10-27T22:00:00+05:30" };
+    d.brokers = [{ key: "upstox", name: "Upstox", live: true, count: 3, read_at: "2026-10-28T10:55:00+05:30" }, { key: "dhan", name: "Dhan", live: false, count: 2, read_at: "2026-10-28T01:00:00+05:30" }];
+    await r.fulfill({ response: res, json: d });
+  });
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((ok) => { release = ok; });
+  await page.route((u) => u.href.startsWith(API) && u.pathname === "/connect/upstox/refresh", async (r) => { await held; await r.fulfill({ json: { count: 3 } }); });
+  const errors = await open(page, "/holdings", "Import from your broker");
+  const card = page.locator("section.k-card").filter({ has: page.getByRole("heading", { name: "Import from your broker" }) });
+  const upload = card.locator("label.k-upload");
+  const up = card.getByTestId("upstox-refresh");
+  await expect(up).toContainText("Upstox");
+  await expect(card.getByTestId("zerodha-refresh")).toContainText("Zerodha");
+  await expect(card.getByTestId("dhan-refresh")).toContainText("Dhan");
+  if (info.project.name === "desktop") {
+    const [a, b] = [await upload.boundingBox(), await up.boundingBox()];
+    expect(Math.abs((a!.y + a!.height / 2) - (b!.y + b!.height / 2)), "the chips sit on the upload button's row").toBeLessThan(6);
+  }
+  // no Add / Start again before a file is picked
+  await expect(card.getByRole("radio", { name: "Add to my holdings" })).toHaveCount(0);
+  // a tap on a chip reads that broker, its loading bar in the chip meanwhile
+  await up.getByRole("button", { name: "Read from Upstox now" }).click();
+  await expect(up.getByTestId("cell-working")).toBeVisible();
+  release();
+  await expect(page.getByText("Read 3 holdings from Upstox.")).toBeVisible({ timeout: 15_000 });
+  await expect(up.getByTestId("cell-working")).toHaveCount(0);
+  // a file picked: its name with Add (chosen) or Start again, Read and Cancel
+  await card.getByLabel("Holdings file").setInputFiles(HOLDINGS_FILES + "upstox_holdings.csv");
+  const pending = card.getByTestId("holdings-pending");
+  await expect(pending).toContainText("upstox_holdings.csv");
+  await expect(pending.getByRole("radio", { name: "Add to my holdings" })).toBeChecked();
+  await pending.getByRole("button", { name: "Cancel" }).click();
+  await expect(card.getByRole("radio", { name: "Add to my holdings" })).toHaveCount(0);
+  await sane(page, errors);
+});
+
+test("R15 #6: Mutual funds' upload is one row (pick, read, the files so far); the file's choices come once it is picked", async ({ page }, info) => {
+  const errors = await open(page, "/money/mutual-funds", "Upload your statement");
+  const form = page.getByRole("form", { name: "Upload your statement" });
+  const pick = form.locator("label.k-upload");
+  const read = form.getByRole("button", { name: "Read my funds" });
+  await expect(read).toBeDisabled();
+  if (info.project.name === "desktop") {
+    const [a, b] = [await pick.boundingBox(), await read.boundingBox()];
+    expect(Math.abs(a!.y - b!.y), "pick and read on one row").toBeLessThan(6);
+  }
+  await expect(page.getByRole("radio", { name: "Add to my funds" })).toHaveCount(0);
+  await expect(page.getByText("Pick your statement first.")).toHaveCount(0);       // the hint is the button's title now
+  await form.getByLabel("CAS PDF or CSV file").setInputFiles(MF + "synthetic_cas.pdf");
+  await expect(form.getByTestId("mf-picked")).toContainText("synthetic_cas.pdf");
+  await expect(form.getByLabel("PDF password")).toBeVisible();
+  await expect(read).toBeEnabled();
   await sane(page, errors);
 });

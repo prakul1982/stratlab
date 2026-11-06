@@ -149,7 +149,8 @@ test("LIVE1B-015: nothing held says so first; no empty tiles or table", () => {
 
 test("LIVE1B-016, 018, 049: the 'pick first' hint goes after a read, the choice goes back to Add, a wrong password is said under its box", () => {
   const p = read("src/pages/money/MutualFundsPage.tsx");
-  assert.match(p, /\{!picked && !result && <span className="k-note">Pick your statement first\./);
+  // R15 #6 (changed on purpose): the hint is the greyed-out button's title, now that the button sits in the one compact row
+  assert.match(p, /title=\{picked \? undefined : "Pick your statement first\./);
   assert.match(p, /setMode\("add"\);/);
   assert.match(p, /const passwordProblem = isPdf && problem && \/password\/i\.test\(problem\) \? problem : null;/);
   assert.match(p, /label="PDF password"[^\n]*error=\{passwordProblem\}/);

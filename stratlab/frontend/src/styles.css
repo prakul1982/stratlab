@@ -94,7 +94,8 @@ h1.eyebrow { font-weight: 400; }
 .btn:hover { color: var(--on-ink); filter: brightness(1.12); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 /* VR1-150: a disabled main button was the main button at half strength, a muddy grey-beige that read as a grey secondary one: it is an empty outline with muted words instead */
-.btn:disabled:not(.quiet):not(.blue):not(.outline) { opacity: 1; background: transparent; border: 1px dashed var(--dash); color: var(--muted); }
+/* R15 #19 (owner, 7 Nov: "Start session" was "a dashed ghost"): a solid, muted button, the same shape as the rest, never a dashed outline */
+.btn:disabled:not(.quiet):not(.blue):not(.outline) { opacity: 1; background: var(--chip); border: 1px solid var(--line-2); color: var(--muted); }
 /* LIVE1B-016, 047: a button that is working (it says "Adding…") keeps its fill, dimmed: the dashed outline is for one that cannot be pressed yet */
 .btn:disabled[aria-busy="true"]:not(.quiet):not(.blue):not(.outline):not(.danger) { opacity: .6; background: var(--ink); border: 1px solid var(--ink); color: var(--on-ink); cursor: progress; }
 .btn.blue { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
@@ -1741,6 +1742,21 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-chip.add { border-style: dashed; color: var(--blue-ink); }
 /* a remembered custom choice: its chip and a small × that forgets it (the pair is one rounded shape) */
+/* R15: a connected source as a chip ("● Zerodha · 13 h ago ↻"), in a row with the upload button (Holdings, Mutual funds) */
+.k-source { display: inline-flex; align-items: center; gap: 8px; flex: none; max-width: 100%; }
+.k-source-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; }
+.k-source-chip.static { cursor: default; }
+.k-source-chip.static:hover { border-color: var(--line-2); }
+.k-source-chip:disabled { cursor: progress; opacity: 1; }
+.k-source-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.k-source-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--up); flex: none; }
+.k-source.off .k-source-dot { background: var(--muted); }
+.k-source-go { color: var(--muted); font-size: 13px; }
+.k-source-chip .k-working.inline { width: 28px; }
+.k-source-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.k-source-row > .k-field { flex: 0 1 300px; }
+.mf-upload { display: flex; flex-direction: column; gap: 12px; }
+.mf-picked { align-items: flex-end; }
 .k-chip-mine { display: inline-flex; flex: none; align-items: stretch; }
 .k-chip-mine > .k-chip { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-right: 8px; }
 .k-chip-x { flex: none; height: 32px; min-width: 28px; padding: 0 8px 0 4px; border: 1px solid var(--line-2, var(--line)); border-left-width: 0; border-radius: 0 999px 999px 0; background: var(--card); color: var(--muted); cursor: pointer; font: inherit; }

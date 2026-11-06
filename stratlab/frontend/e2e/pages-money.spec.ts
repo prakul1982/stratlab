@@ -30,8 +30,10 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await expect(table.getByRole("columnheader", { name: "Trend", exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Recent filings")).toBeVisible();
   expect(await page.locator("main").innerText()).not.toMatch(/\b(buy|sell|accumulate|avoid)\b/i);
-  await page.getByRole("radio", { name: "Add to my holdings" }).click();
+  // R15 #4: Add or Start again once the file is picked, then Read this file
   await page.locator("input[type=file]").setInputFiles(HOLDINGS_FILES + "groww_holdings_statement.xlsx");
+  await page.getByRole("radio", { name: "Add to my holdings" }).click();
+  await page.getByRole("button", { name: "Read this file" }).click();
   await expect(page.getByText("Read as a Groww file")).toBeVisible({ timeout: 30_000 });   // matching a first file reads the stock lists
   const missed = page.getByRole("table", { name: "Lines that couldn't be matched" });
   await expect(missed.getByText(/INE000X01000/)).toBeVisible();

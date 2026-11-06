@@ -9,7 +9,8 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 test("MONEY-2: a holdings file adds by default, and Start again asks first, naming the count it replaces", () => {
   const p = read("src/pages/HoldingsPage.tsx");
   assert.match(p, /useState<"replace" \| "add">\("add"\)/);
-  assert.match(p, /if \(how === "replace" && rows\.some\(\(r\) => !isUS\(r\)\)\) \{ setReplacing\(f\)/);
+  // R15 #4 (changed on purpose): the choice shows once a file is picked, and is asked then
+  assert.match(p, /if \(mode === "replace" && rows\.some\(\(r\) => !isUS\(r\)\)\) \{ setReplacing\(f\)/);
   assert.match(p, /title="Start again with this file\?" confirmLabel="Replace my holdings"/);
   assert.match(p, /This replaces your \{held\}/);
 });

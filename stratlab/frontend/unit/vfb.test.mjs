@@ -123,7 +123,8 @@ test("VR1-140, VR1-149, VR1-150, VR1-151: Money home's figures and tiles, label 
   // Money's other tools are rows of one table in a fold since 5 Nov (owner), not tiles in rows of four
   assert.match(read("src/pages/SpaceHomes.tsx"), /<MoreTools id="money-tools" title="More in Money" rows=\{tools\} \/>/);
   assert.match(css, /\.k-stat-k \.info \{ margin-block: -4px; \}/);
-  assert.match(css, /\.btn:disabled:not\(\.quiet\):not\(\.blue\):not\(\.outline\) \{ opacity: 1; background: transparent; border: 1px dashed var\(--dash\);/);
+  // R15 #19 (owner, 7 Nov, changed on purpose): a solid muted button, not a dashed ghost
+  assert.match(css, /\.btn:disabled:not\(\.quiet\):not\(\.blue\):not\(\.outline\) \{ opacity: 1; background: var\(--chip\); border: 1px solid var\(--line-2\); color: var\(--muted\); \}/);
   assert.match(read("src/pages/money/RatesPage.tsx"), /className="k-page rates-page"/);
   assert.match(css, /\.rates-page \.k-table th\.k-wrap\[scope="row"\] \{ min-width: 260px; \}/);
 });

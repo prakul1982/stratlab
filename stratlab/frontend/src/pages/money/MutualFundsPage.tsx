@@ -214,21 +214,28 @@ export function MutualFundsPage() {
       <Card>
         <CardHead title="Upload your statement"
           info={<>Ask CAMS or KFintech for the <b>detailed</b> Consolidated Account Statement (with transactions), from the date of your first investment, and upload the PDF as it was emailed to you, with its password. The PDF is opened in memory to read your transactions; neither the file nor the password is kept. Or upload a CSV with the columns Date, Scheme, ISIN or AMFI code, Units, Amount and Type (purchase, SIP, redemption, switch in or out, dividend, stamp duty or STT).</>}
-          actions={schemes.length > 0 ? <Seg label="What the file does" options={[{ value: "add", label: "Add to my funds" }, { value: "replace", label: "Start again with this file" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} /> : undefined} />
-        <div className="k-row">
-          <UploadButton quiet label={picked ? "Pick another file" : "Pick CAS PDF or CSV"} busy={busy} accept=".pdf,.csv,application/pdf,text/csv" ariaLabel="CAS PDF or CSV file"
-            onFiles={(files, reset) => { resetFile.current = reset; setPicked(files?.[0] ?? null); }} />
-          {picked && <span className="k-small k-any">{picked.name}</span>}
-        </div>
-        <FormGrid onSubmit={(e) => { e.preventDefault(); void send(); }}>
-          {isPdf && <Field label="PDF password" type="password" value={password} autoComplete="off" spellCheck={false} placeholder="As set when you asked for it, often your PAN" error={passwordProblem}
-            onChange={(e) => { setPassword(e.target.value); if (passwordProblem) clearProblem(); }} aria-label="PDF password" />}
-          <FormActions>
-            <button type="submit" className="btn" disabled={busy || !picked}>{busy ? "Reading…" : "Read my funds"}</button>
-            {/* a greyed-out button says what it is waiting for (R1-057) */}
-            {!picked && !result && <span className="k-note">Pick your statement first. A PDF asks for its password here once picked.</span>}
-          </FormActions>
-        </FormGrid>
+          />
+        {/* R15 #6 (owner, 7 Nov: the same compact style as Holdings): one row, the pick and the read with the files read so far beside them;
+            the file's name, its password (a PDF) and Add or Start again come once a file is picked */}
+        <form className="mf-upload" aria-label="Upload your statement" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+          <div className="k-source-row">
+            <UploadButton quiet label={picked ? "Pick another file" : "Pick CAS PDF or CSV"} busy={busy} accept=".pdf,.csv,application/pdf,text/csv" ariaLabel="CAS PDF or CSV file"
+              onFiles={(files, reset) => { resetFile.current = reset; setPicked(files?.[0] ?? null); if (files?.[0]) setMode("add"); }} />
+            {/* a greyed-out button says what it is waiting for (R1-057), in its title now that it sits in the row */}
+            <button type="submit" className="btn" disabled={busy || !picked} title={picked ? undefined : "Pick your statement first. A PDF asks for its password once picked."}>{busy ? "Reading…" : "Read my funds"}</button>
+            {view && view.files.length > 0 && (
+              <span className="k-note" data-testid="mf-files">{(view.txns - (view.charge_lines ?? 0)).toLocaleString("en-IN")} transactions{view.charge_lines ? ` and ${view.charge_lines.toLocaleString("en-IN")} stamp duty or tax lines` : ""} from {view.files.length} file{view.files.length === 1 ? "" : "s"}{view.updated_at ? ` · ${ago(view.updated_at)}` : ""}</span>
+            )}
+          </div>
+          {picked && (
+            <div className="k-source-row mf-picked" data-testid="mf-picked">
+              <span className="k-small k-any"><b>{picked.name}</b></span>
+              {isPdf && <Field label="PDF password" type="password" value={password} autoComplete="off" spellCheck={false} placeholder="As set when you asked for it, often your PAN" error={passwordProblem}
+                onChange={(e) => { setPassword(e.target.value); if (passwordProblem) clearProblem(); }} aria-label="PDF password" />}
+              {schemes.length > 0 && <Seg label="What the file does" options={[{ value: "add", label: "Add to my funds" }, { value: "replace", label: "Start again with this file" }]} value={mode} onChange={(m) => setMode(m as typeof mode)} />}
+            </div>
+          )}
+        </form>
         <UploadProblem problem={passwordProblem ? null : problem} />
         {result && (
           <div className="k-stack" role="status">
@@ -243,9 +250,6 @@ export function MutualFundsPage() {
               <DataTable label="Lines left out" phonePage={10} columns={problemCols} rows={result.problems.map((p, i) => ({ ...p, i }))} rowKey={(p) => String(p.i)} />
             )}
           </div>
-        )}
-        {view && view.files.length > 0 && (
-          <p className="k-note">{(view.txns - (view.charge_lines ?? 0)).toLocaleString("en-IN")} transactions{view.charge_lines ? ` and ${view.charge_lines.toLocaleString("en-IN")} stamp duty or tax lines` : ""} from {view.files.length} file{view.files.length === 1 ? "" : "s"}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}</p>
         )}
         {/* the statement can come by itself: the inbox of Settings → Connected accounts, offered where the upload is (owner, 5 Nov) */}
         <InboxNote />
