@@ -133,11 +133,13 @@ test("the list tabs are reached with the arrow keys and keep their row when the 
 test("a stock starred on a company page and one added in the panel are both on the first list", async ({ page, request }, info) => {
   test.skip(info.project.name === "phone", "desktop only: the panel floats over the page it follows");
   const auth = { Authorization: `Bearer ${WHO.admin.access_token}` };
-  const { errors } = await open(page, "/", "admin", OPEN_FLOAT);
+  // docked beside the page (from 1600), so it stays from page to page; a floating one shuts on another page since LIVE5-006 (mw1-watch)
+  await page.setViewportSize({ width: 1700, height: 1000 });
+  const { errors } = await open(page, "/", "admin", { ...OPEN_FLOAT, mode: "dock" });
   const mw = panel(page);
   await expect(mw).toBeVisible();
   await expect(mw.getByText("Your watchlist is empty")).toBeVisible();
-  // the panel is open while a company page (a client-side move, the panel stays) stars a stock
+  // the panel is open while a company page (a client-side move, the docked panel stays) stars a stock
   await page.evaluate(() => { history.pushState({}, "", "/research/IN/INFY"); window.dispatchEvent(new PopStateEvent("popstate")); });
   await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
   await page.getByRole("button", { name: /^Watch\b/ }).first().click();

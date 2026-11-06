@@ -101,10 +101,16 @@ test("a page still loading is already a main landmark with a heading (R6V-013)",
 });
 
 test("the landing's drawings stay inside their cards at phone width (R6V-006)", async ({ page }) => {
+  // R14 (owner: the landing was 13,000 px on a phone): under 640 px the check cards drop their drawings, so nothing can run past a card
+  // there; the drawings are checked at the narrowest width that still shows them
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = await open(page, "/");
   const cards = page.locator(".lp-checks .lp-card");
   await expect(cards.first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".lp-checks .lp-art").first()).toBeHidden();
+  await noSideways(page);
+  await page.setViewportSize({ width: 660, height: 900 });
+  await expect(page.locator(".lp-checks .lp-art").first()).toBeVisible();
   for (const card of await cards.all()) {
     const [c, art] = [await card.boundingBox(), await card.locator(".lp-art").boundingBox()];
     expect(art!.x + art!.width, "a drawing runs past its card").toBeLessThanOrEqual(c!.x + c!.width + 0.5);

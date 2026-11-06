@@ -107,7 +107,8 @@ test("LIVE5-006/007: Market Watch says the last close's day once its markets are
   const visitor = readFileSync(new URL("../src/visitor/VisitorApp.tsx", import.meta.url), "utf8");
   assert.match(visitor, /\{userId && <PublicMarkets userId=\{userId\} \/>\}/);
   const launcher = readFileSync(new URL("../src/components/watch/Launcher.tsx", import.meta.url), "utf8");
-  assert.match(launcher, /if \(shown && shapeOf\(layout, window\.innerWidth\) !== "dock"\) close\(\);/);
+  // a redirect ("/" to the person's home, a replace) is not another page: a panel open at load stays
+  assert.match(launcher, /if \(how !== "REPLACE" && shown && shapeOf\(layout, window\.innerWidth\) !== "dock"\) close\(\);/);
   const css = readFileSync(new URL("../src/components/watch/launcher.css", import.meta.url), "utf8");
   assert.match(css, /@media \(max-width: 900px\) \{\n  \.mw-launch\.app, \.mw-launch\.public \{ display: none; \}/);
 });

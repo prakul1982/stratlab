@@ -72,9 +72,11 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   await expect(days.first().locator(".k-eyebrow")).toContainText("today · 4 companies");
   expect(await page.evaluate(() => new Date().toISOString().slice(0, 10)), "the page's clock is the world's").toBe(E2E_NOW.slice(0, 10));
   if (!phone) {
-    // LIVE4-010: short headers that fit one line at 1440 (the (i) says "year on year" and "past results-day moves")
-    for (const h of ["Company", "Market value", "Price", "Day", "Revenue", "Profit", "Usual move", "Options imply"])
+    // LIVE4-010: short headers that fit one line at 1440 (the (i) says "year on year" and "past results-day moves"); LIVE5-002 (changed on
+    // purpose): revenue and profit share one "Quarter" column, a line each, and "Options imply" is "Implied", so the table fits 1280
+    for (const h of ["Company", "Market value", "Price", "Day", "Quarter", "Usual move", "Implied"])
       await expect(today.getByRole("columnheader").filter({ hasText: h }).first()).toBeVisible();
+    await expect(today.getByRole("columnheader").filter({ hasText: /^(Revenue|Profit)$/ })).toHaveCount(0);
   }
   await expect(today.getByRole("row")).toHaveCount(5);                      // the header and four companies
   // the figures: a market value, the latest quarter against a year before with its sign, a usual move that was read in
@@ -82,6 +84,7 @@ test("results calendar: a table a day with live prices, the latest quarter, earl
   await expect(reliance).toContainText(/₹1\d\.\d\d lakh cr/);
   await expect(reliance).toContainText(/[+−]\d/);
   await expect(reliance).toContainText("F&O");
+  if (!phone) { await expect(reliance.locator(".res-q")).toContainText("Rev"); await expect(reliance.locator(".res-q")).toContainText("Profit"); }
   await expect(reliance.getByText(/^±\d+\.\d%$/).first()).toBeVisible({ timeout: 30_000 });      // the usual move, once the prices were read
   // the latest moves: arrow and figure (the heading says percent); a phone's two-line row keeps only their average (LIVE4-010)
   if (!phone) await expect(reliance.getByText(/^[▲▼]\d+\.\d$/).first()).toBeVisible();

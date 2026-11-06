@@ -366,7 +366,11 @@ test("the cookie banner is named and described, comes first for the keyboard, an
       const e = document.activeElement as HTMLElement | null, c = document.querySelector("[data-testid=consent]");
       if (!e || e === document.body || !c || e.closest("[data-testid=consent]")) return null;
       const a = e.getBoundingClientRect(), b = c.getBoundingClientRect();
-      return a.bottom > b.top && a.top < b.bottom && a.right > b.left && a.left < b.right ? `${e.tagName}.${e.className} "${(e.textContent ?? "").trim().slice(0, 20)}"` : null;
+      if (!(a.bottom > b.top && a.top < b.bottom && a.right > b.left && a.left < b.right)) return null;
+      // overlapping is not hidden: the stop is hidden only when the banner is what shows at its middle (R14: in the app the banner is a
+      // band at the top of the page, and the skip links, focused, are drawn above it at z-index 100)
+      const top = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, (a.left + a.right) / 2)), Math.min(innerHeight - 1, Math.max(0, (a.top + a.bottom) / 2)));
+      return top && c.contains(top) && !e.contains(top) ? `${e.tagName}.${e.className} "${(e.textContent ?? "").trim().slice(0, 20)}"` : null;
     });
     if (s) under.push(s);
   }
