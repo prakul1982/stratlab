@@ -4945,6 +4945,8 @@ CHART_BUILDS_PER_MINUTE = 30           # series read from the sources a minute, 
 CHART_BUILDS_PER_ADDRESS = 12          # ...and from one address
 chart_cache = TTLCache(max_items=400, max_bytes=8 * 1024 * 1024)          # a series is ~6 KB of numbers
 chart_reads = Window()
+CHART_FAILED = {"failed": True}        # kept in chart_cache for a read that failed (not "no prices")
+CHART_FAILED_TTL = 60
 chart_locks: dict[str, threading.Lock] = {}
 chart_lock_guard = threading.Lock()
 
@@ -4953,7 +4955,11 @@ def stock_page_series(region: str, co: dict) -> dict:
     """A company's daily closes for the chart: the page's own candles (stock_page_bars: the last year as the exchange printed
     it, so the chart's end is the page's price) and, before them, up to five years from the broker's or the price source's
     history, read without being kept (a long read of every company viewed would fill their caches). A long read that fails
-    leaves the last year and a bit, with the longer ranges out. {} when there are no candles."""
+    leaves the last year and a bit, with the longer ranges out. {} when there are no candles.
+    India while the broker's feed is offline (a restart before its morning login, R17-001: HDFCBANK's chart was a 404 from a
+    06:00 IST deploy until the 08:00 login): the public price history's daily closes instead, the same five years."""
+    if region == "IN" and not _broker_ready():
+        return stock_pages.chart_series(stock_pages.closed_bars(india_close_history(co), region))
     recent = stock_pages.closed_bars(stock_page_bars(region, co), region)
     if not recent:
         return {}
@@ -4991,6 +4997,25 @@ def stock_page_series(region: str, co: dict) -> dict:
         except Exception as ex:
             print("stock chart: adjustments not read:", region, co.get("sym"), str(ex)[:120])
     return series
+
+
+def _broker_ready() -> bool:
+    prov = markets.provider("IN")
+    try:
+        return bool(prov and prov.ready())
+    except Exception:
+        return False
+
+
+def india_close_history(co: dict) -> list[dict]:
+    """An Indian company's daily candles up to the last close from the public price history (prices as traded, no broker
+    scaling to undo), the last one's close the exchange's official close when it is known. Raises when that source fails."""
+    bars = research_hub.yahoo.chart(yahoo_in_symbol(co["sym"], co), "1d", stock_pages.CHART_READ_DAYS, exact=True)["candles"]
+    try:
+        bars = official_close.overlay_bars(list(bars), co["bse"] or co["sym"])
+    except Exception as e:                           # the candles as they are rather than none
+        print("official close for the chart:", co.get("sym"), str(e)[:120])
+    return bars
 
 
 def _chart_ttl(region: str) -> int:
@@ -5034,9 +5059,16 @@ def stock_prices(region: str, symbol: str, request: Request):
                 try:
                     series = stock_page_series(r, co)
                 except Exception as ex:
+                    # a source that failed is asked again within the minute, and never kept by the edge (R17-001): the
+                    # visitor's chart offers its retry rather than "no chart for this company"
                     print("stock chart: no series:", r, sym, str(ex)[:120])
-                    series = {}
-                chart_cache.set(key, series, _chart_ttl(r) if series else 120)
+                    chart_cache.set(key, CHART_FAILED, CHART_FAILED_TTL)
+                    series = CHART_FAILED
+                else:
+                    chart_cache.set(key, series, _chart_ttl(r) if series else 120)
+    if series is CHART_FAILED or series == CHART_FAILED:
+        return JSONResponse({"detail": {"code": "unavailable", "message": "Prices can't be read right now. Try again in a minute."}},
+                            status_code=503, headers={"Retry-After": "60", "Cache-Control": "no-store"})
     if not series:
         return missing
     return JSONResponse({"currency": "USD" if r == "US" else "INR", **series}, headers={"Cache-Control": stock_pages.CHART_SERIES_CACHE})

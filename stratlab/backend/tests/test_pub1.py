@@ -140,8 +140,27 @@ def test_a_company_with_no_page_or_no_prices_is_a_cached_404(w, monkeypatch):
     monkeypatch.setattr(main, "stock_page_bars", lambda region, co: [])
     r = c.get("/stocks/in/ONGC/prices.json")
     assert r.status_code == 404 and "s-maxage=300" in r.headers["cache-control"]
+    # a failed read is no crash, and no "no prices" either (R17-001, changed on purpose): a 503 the edge never keeps, kept here
+    # only a minute, so the chart's retry finds the prices once the source is back
     monkeypatch.setattr(main, "stock_page_bars", lambda region, co: (_ for _ in ()).throw(RuntimeError("a source is down")))
-    assert c.get("/stocks/in/NTPC/prices.json").status_code == 404                # a failed read is the same, not a crash
+    r = c.get("/stocks/in/NTPC/prices.json")
+    assert r.status_code == 503 and r.headers["cache-control"] == "no-store" and r.json()["detail"]["code"] == "unavailable"
+    assert main.chart_cache.get("IN:NTPC") == main.CHART_FAILED and main.CHART_FAILED_TTL <= 60
+    assert not PROVIDERS.search(r.text)
+
+
+def test_the_chart_is_drawn_while_the_broker_is_offline(w, monkeypatch):
+    # R17-001: after a restart before the broker's morning login every Indian chart was a 404 for two hours
+    kite = main.markets.providers["IN"].kite
+    monkeypatch.setattr(kite, "access_token", None)
+    assert not main.markets.providers["IN"].ready()
+    monkeypatch.setattr(kite, "history", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the broker is offline")))
+    r = w["client"].get("/stocks/in/HDFCBANK/prices.json")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["currency"] == "INR" and len(j["t"]) == len(j["c"]) > 200 and all(c > 0 for c in j["c"])
+    assert j["t"][-1] - j["t"][0] >= 1700                                          # the same five years, from the next source
+    assert "s-maxage=3600" in r.headers["cache-control"]
 
 
 def test_a_failed_long_read_leaves_the_last_year(w, monkeypatch):
