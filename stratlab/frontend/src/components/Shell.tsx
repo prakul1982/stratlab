@@ -292,12 +292,13 @@ export function Shell({ children }: { children: ReactNode }) {
         </button>
       </div>
       <nav ref={sideScroll} className="side-groups" aria-label="Main" data-fade={fade}>
-        {/* Themes, one of StratLab's best tools (owner, 7 Nov: "buried" in Invest), highlighted on the menu's first row in every space and
+        {/* Themes, one of StratLab's best tools (owner, 7 Nov: "buried" in Invest), highlighted on the menu's first row in My space and Invest and
             in the phone's drawer, beside the space's home: no row of its own, so the menu still fits a 1280x800 laptop unscrolled (IA-2).
             It stays in Invest's menu too, where its breadcrumb puts it; that entry is the one highlighted item on its page (ui-lint R7) */}
         <div className="side-list side-home">
           <NavLink to={homeOf(space)} end><Compass size={16} />{homeLabel}</NavLink>
-          <Link to={THEMES} className="side-feature" title="Themes: map a sector or trend and see the listed companies linked to it"><Compass size={16} />Themes</Link>
+          {/* owner, 7 Nov: on My space and Invest only, where people research; Trade and Money stay as they were */}
+          {(space === "invest" || space === "mine") && <Link to={THEMES} className="side-feature" title="Themes: map a sector or trend and see the listed companies linked to it"><Compass size={16} />Themes</Link>}
         </div>
         {spaceGroups ?? minePart}
       </nav>

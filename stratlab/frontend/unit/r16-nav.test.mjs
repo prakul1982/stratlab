@@ -12,7 +12,8 @@ test("R16: the menu's first row, in every space, carries the highlighted Themes 
   assert.match(shell, /export const THEMES = "\/research\/themes";/);
   // the first row of the scrolling menu, before the space's own entries, so every space (and the phone's drawer) shows it; it shares
   // the home link's row, so the menu is no taller (IA-2: a 1280x800 laptop's menu doesn't scroll)
-  assert.match(shell, /<div className="side-list side-home">\s*<NavLink to=\{homeOf\(space\)\} end>[^\n]*\n\s*<Link to=\{THEMES\} className="side-feature"[^>]*><Compass size=\{16\} \/>Themes<\/Link>/);
+  // owner, 7 Nov (changed on purpose): on My space and Invest only, not Trade or Money
+  assert.match(shell, /<div className="side-list side-home">\s*<NavLink to=\{homeOf\(space\)\} end>[^\n]*\n[^\n]*\n\s*\{\(space === "invest" \|\| space === "mine"\) && <Link to=\{THEMES\} className="side-feature"[^>]*><Compass size=\{16\} \/>Themes<\/Link>\}/);
   const nav = shell.slice(shell.indexOf('<nav ref={sideScroll} className="side-groups"'));
   assert.ok(nav.indexOf('className="side-feature"') < nav.indexOf("{spaceGroups ?? minePart}"));
   // never marked current: on the Themes page Invest's own entry is the one highlighted item (ui-lint R7)
